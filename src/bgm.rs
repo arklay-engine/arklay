@@ -170,7 +170,7 @@ fn advance_ramp(game: &mut GameState) {
 }
 
 /// The three tracks the original loads muted and later fades up with the
-/// scripted volume opcodes.
+/// scripted volume opcodes: `Se_01`, `Se_4d` and `Se_42`.
 const MUTED_SEEDS: [crate::music::TrackId; 3] = [0x101, 0x10E, 0x107];
 
 /// Whether `track` is one of the three muted seed tracks.
