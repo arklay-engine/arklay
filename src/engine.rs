@@ -4157,21 +4157,15 @@ impl GameSession {
     /// menu. It starts on its setup state: the first
     /// [`GameSession::tick_examine`] runs the setup and the first intro frame
     /// together. A viewer that cannot open hands the menu straight back.
-    fn open_item_view(&mut self, pack: &Pack, item: u8, menu: bool) {
+    fn open_item_view(&mut self, pack: &Pack, item: u8) {
         let quantity = self
             .menu_slot()
             .and_then(|slot| self.game.inventory.get(slot))
             .map_or(0, |stack| stack.quantity);
-        let mut args = vec![
+        let args = [
             ("item", ScreenArg::Int(i64::from(item))),
             ("quantity", ScreenArg::Int(i64::from(quantity))),
         ];
-        if menu {
-            // The radio tab and CHECK open the viewer over the live pause
-            // menu; the reference draws that overlay on the panel's black,
-            // not on the standalone viewer's navy.
-            args.push(("menu", ScreenArg::Bool(true)));
-        }
         let screen = {
             let mut cx = self.ui_context(pack);
             ui::lua_screen::LuaScreen::open_screen(
@@ -4206,7 +4200,7 @@ impl GameSession {
             return;
         }
         if let MenuEvent::ViewItem(item) = self.tick_menu_screen(pack) {
-            self.open_item_view(pack, item, true);
+            self.open_item_view(pack, item);
         }
         let Some(mut viewer) = self.examine.take() else {
             return;
@@ -4891,7 +4885,7 @@ impl GameSession {
             MenuEvent::CloseSilent => self.begin_menu_close_silent(),
             // CHECK's slide-out finished: the viewer starts. The slide's own
             // frames run through `tick_examine`, which handles this itself.
-            MenuEvent::ViewItem(item) => self.open_item_view(pack, item, true),
+            MenuEvent::ViewItem(item) => self.open_item_view(pack, item),
             MenuEvent::Tab(cursor) => self.handle_tab(pack, cursor),
         }
     }
@@ -4930,7 +4924,7 @@ impl GameSession {
                     self.play_character_bank_cue(pack, sfx::UI_RADIO, 7);
                     self.begin_menu_close(pack);
                 } else {
-                    self.open_item_view(pack, ITEM_COMM_RADIO, true);
+                    self.open_item_view(pack, ITEM_COMM_RADIO);
                 }
             }
             _ => self.close_menu(),
@@ -5835,6 +5829,17 @@ impl GameSession {
             // `cursor | 2` (the EXIT tab), which the menu draws as its tab
             // highlight; the greyed-out Map/File/Radio tabs are never
             // published.
+            // The item viewer animates the menu's clear colour
+            // (`g_spriteAnimB`), the navy around its model.
+            let backdrop = self
+                .examine
+                .as_deref()
+                .or_else(|| {
+                    self.pickup_view
+                        .as_ref()
+                        .and_then(|pickup| pickup.screen.as_deref())
+                })
+                .map_or(0, |viewer| viewer.value("backdrop"));
             let box_owns_cursor = self
                 .item_box
                 .as_ref()
@@ -5859,7 +5864,7 @@ impl GameSession {
                     cues: std::cell::RefCell::new(Vec::new()),
                     game: Some(game),
                 };
-                screen.signal_with("present", (show_cursor, show_item_name), &cx);
+                screen.signal_with("present", (show_cursor, show_item_name, backdrop), &cx);
                 screen.draw(&cx, framebuffer);
             }
         }
@@ -7328,7 +7333,7 @@ impl App {
         session.seed_menu_capture();
         session.game.add_item(ITEM_KNIFE, 0);
         session.open_menu(&self.pack);
-        session.open_item_view(&self.pack, ITEM_KNIFE, false);
+        session.open_item_view(&self.pack, ITEM_KNIFE);
         self.start_session(session);
         Ok(())
     }
@@ -23374,7 +23379,7 @@ off_0010:
             )
             .unwrap();
         settle_menu_fade(&mut session, &pack);
-        session.open_item_view(&pack, 0x37, true);
+        session.open_item_view(&pack, 0x37);
         idle_until(&mut session, &pack, 0x80, |session| {
             session
                 .examine

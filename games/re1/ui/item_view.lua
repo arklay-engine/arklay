@@ -73,12 +73,11 @@ local ITEM_NAME_Y = 0xBA
 -- inner edge.
 local VIEWPORT = { 32, 24, 160, 104 }
 -- The navy backdrop's blue behind the resting model (Classic REbirth shows
--- srgb(0, 0, 32) there while the viewer is up). The viewer is the screen's
--- clear colour `(0, 0, g_spriteAnimB)`: the intro ramps the blue up as
--- `0x20 - (timer >> 1)` and the exit back down as `timer >> 1`. The viewer
--- opened over the pause menu is an overlay on the panel's black instead: the
--- reference's radio/CHECK view draws the same model, but its viewport is
--- black there.
+-- srgb(0, 0, 32) there while the viewer is up). It is the menu screen's
+-- clear colour `(0, 0, g_spriteAnimB)`, which the viewer animates in every
+-- mode: the intro ramps the blue up as `0x20 - (timer >> 1)` and the exit
+-- back down as `timer >> 1`. The screen publishes it as `backdrop` for the
+-- inventory panel under it, which clears to it behind its masks.
 local BACKDROP_BLUE = 0x20
 -- The red book, the second doom book and the medal the first one becomes.
 local ITEM_RED_BOOK = 0x3E
@@ -341,13 +340,13 @@ local function publish(api)
     api:set("item", s.item)
     api:set("ready", s.stage == "display" and s.action == "turn")
     api:set("settled", s.settled)
+    api:set("backdrop", s.backdrop)
 end
 
 function M.open(api, args)
     s.item = args.item or 0
     s.quantity = args.quantity or 0
     s.pickup = args.pickup or false
-    s.menu = args.menu or false
     -- The examine viewer draws on black, so a wider aspect gives it a wider
     -- canvas; the pickup viewer draws in the inventory panel, which asks for
     -- the canvas itself.
@@ -435,8 +434,8 @@ function M.draw(api)
     -- one: the model goes behind the frame over the viewport's backdrop,
     -- which also lets the GPU renderer draw it at full resolution.
     if s.stage ~= "setup" and s.stage ~= "closed" then
-        local blue = s.menu and 0 or s.backdrop
-        api:fill_rect(ox + VIEWPORT[1], oy + VIEWPORT[2], VIEWPORT[3], VIEWPORT[4], 0, 0, blue)
+        api:fill_rect(ox + VIEWPORT[1], oy + VIEWPORT[2], VIEWPORT[3], VIEWPORT[4],
+            0, 0, s.backdrop)
     end
     draw_model(api)
     if s.pickup then

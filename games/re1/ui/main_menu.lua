@@ -17,7 +17,9 @@
 -- * `view_closed(api)`, `reselect(api)`, `move_cursor(api, cursor)`: the
 --   item viewer closed, re-read the item under the cursor, follow the item
 --   box's cursor;
--- * `present(api, show_cursor, show_name)`: what the next draw shows.
+-- * `present(api, show_cursor, show_name, backdrop)`: what the next draw
+--   shows; `backdrop` is the item viewer's blue for the screen's clear
+--   colour (0 without a viewer).
 --
 -- After `tick` and `update` the engine reads `event` (and `event_id`):
 -- `1` close the menu (the engine plays the exit's cancel cue), `2` close it
@@ -297,10 +299,12 @@ function M.move_cursor(api, cursor)
     publish(api)
 end
 
---- What the next draw shows: the cursors, and the item-name line.
-function M.present(_api, show_cursor, show_name)
+--- What the next draw shows: the cursors, the item-name line and the
+--- clear colour's blue.
+function M.present(_api, show_cursor, show_name, backdrop)
     s.show_cursor = show_cursor
     s.show_name = show_name
+    s.backdrop = backdrop or 0
 end
 
 -- START: the next top tab (map, file, radio, exit), skipping the radio
@@ -638,6 +642,12 @@ function M.draw(api)
         return
     end
     api:fill_rect(0, 0, api:width(), api:height(), 0, 0, 0)
+    -- The menu runs as a standalone screen whose clear colour is
+    -- `(0, 0, g_spriteAnimB)`: navy while the item viewer is up. The border
+    -- masks leave it showing only around the viewport.
+    if (s.backdrop or 0) > 0 then
+        api:fill_rect(ox, oy, 320, 240, 0, 0, s.backdrop)
+    end
     if (s.mode ~= NAVIGATION or s.closing) and s.view_slide & 8 == 0 then
         draw_submenu(api, status, ox, oy)
     end
