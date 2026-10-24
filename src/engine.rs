@@ -398,8 +398,7 @@ pub fn run_with_options(
         let load_start = Instant::now();
         let mut loaded = load_room(&pack, id)?;
         let mut game = new_game_state(&pack, id, &loaded.room);
-        crate::lua::seed_initial_state(&pack, &mut game, id.player_flag);
-        clear_item_box(&mut game);
+        seed_fresh_state(&pack, &mut game);
         game.player_options = player_options;
         let mut player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
@@ -2232,8 +2231,7 @@ impl GameSession {
     fn from_room(pack: &Pack, id: RoomId, save_dir: &Path) -> Result<Box<Self>> {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
-        crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
-        clear_item_box(&mut game);
+        seed_fresh_state(pack, &mut game);
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir)?;
@@ -6281,6 +6279,13 @@ fn clear_item_box(game: &mut game::GameState) {
     game.item_box = [game::InventoryItem::default(); game::ITEM_BOX_SLOTS];
 }
 
+/// Seed a fresh non-new-game state with the shipped initial data, then empty
+/// the item box (new games keep the two shipped Handgun Ammo stacks).
+fn seed_fresh_state(pack: &Pack, game: &mut game::GameState) {
+    crate::lua::seed_initial_state(pack, game, game.id.player_flag);
+    clear_item_box(game);
+}
+
 /// Apply the selected character's playable start: the model-id and
 /// selected-character bytes, full health, the character's maximum, the BioCard
 /// health copy and the `0x10` status byte.
@@ -9356,8 +9361,7 @@ pub fn simulate_door(
 ) -> Result<SimulatedDoor> {
     let mut loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
-    clear_item_box(&mut game);
+    seed_fresh_state(pack, &mut game);
     let mut player_state = player::spawn(id, &loaded.room);
     run_room_init(&mut loaded, &mut game);
     drain_mask_toggles(&mut loaded.room, &mut game);
@@ -9552,8 +9556,7 @@ pub fn simulate_room_with_input(
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
-    clear_item_box(&mut game);
+    seed_fresh_state(pack, &mut game);
     let player_state = player::spawn(id, &loaded.room);
     game.sync_entity_from_player(&player_state);
     simulate_loaded(pack, loaded, game, player_state, ticks, input)
@@ -9571,8 +9574,7 @@ pub fn simulate_room_seeded(
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
-    clear_item_box(&mut game);
+    seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
     }
@@ -9594,8 +9596,7 @@ pub fn simulate_room_prepared(
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
-    clear_item_box(&mut game);
+    seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
     }
@@ -9622,8 +9623,7 @@ pub fn simulate_room_with_movie(
 ) -> Result<SimulatedMovie> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
-    clear_item_box(&mut game);
+    seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
     }
