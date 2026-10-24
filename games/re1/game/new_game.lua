@@ -1,7 +1,7 @@
 -- The new-game start inventory (`SetInitialItems`).
 --
--- The engine runs this chunk once when a new game starts, after the
--- `bio_card.dat` copy, with the scratch state's `api` and the selected
+-- The engine runs this chunk once when a new game starts, after
+-- `game/initial_state.lua`, with the scratch state's `api` and the selected
 -- character (`0` Chris, `1` Jill). The player's inventory is already empty
 -- and, for Jill, the two partner slots her eight-slot run overlaps are
 -- cleared. A mod replaces the start items by shipping its own

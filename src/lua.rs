@@ -18,7 +18,8 @@
 //! `api:message`, `api:log`) plus the coarser state-authoring methods the
 //! CLI's `--setup-script`/`--save-out` oracle seam uses (inventory slots, the
 //! item box, player health/position/character, room identity/camera, FILE and
-//! item-use flags, raw flag banks and state bytes). Methods use Lua's colon
+//! item-use flags, raw flag banks, state bytes and the static room-music
+//! tables). Methods use Lua's colon
 //! syntax (`api:flag_set(0, 1, true)`); `docs/modding.md` is the full table.
 //!
 //! The sandbox loads only the base, `string` and `table` libraries, so `os`,
@@ -37,8 +38,8 @@ mod imp {
 
     use anyhow::Result;
     use mlua::{
-        FromLuaMulti, Function, HookTriggers, Lua, LuaOptions, StdLib, UserData, UserDataMethods,
-        Value, VmState,
+        FromLuaMulti, Function, HookTriggers, Lua, LuaOptions, StdLib, Table, UserData,
+        UserDataMethods, Value, VmState,
     };
 
     use crate::budget;
@@ -592,6 +593,75 @@ mod imp {
                 Ok(())
             });
 
+            // `set_music_group(group, { { track, loop }, ... })` defines one
+            // preset of up to three tracks. The track id names `bgm/<id:03x>`;
+            // the group id is a logical preset, not a file.
+            methods.add_method_mut(
+                "set_music_group",
+                |_lua, game, (group, tracks): (u8, Table)| {
+                    let mut value = crate::music::MusicGroup::default();
+                    for (count, entry) in tracks.sequence_values::<Table>().enumerate() {
+                        let entry = entry?;
+                        if count >= crate::game::BGM_CHANNELS {
+                            return Err(mlua::Error::RuntimeError(
+                                "a music group has at most three tracks".to_string(),
+                            ));
+                        }
+                        let track: u16 = entry.get(1)?;
+                        let looped: Option<bool> = entry.get(2)?;
+                        value.tracks[count] = Some(track);
+                        value.loops[count] = looped.unwrap_or(false);
+                    }
+                    game.music
+                        .set_group(group, value)
+                        .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
+                },
+            );
+
+            // `set_room_music(stage, room, { group, ... })` replaces a room's
+            // up-to-four group variants. Stage is the 1-based RDT digit.
+            methods.add_method_mut(
+                "set_room_music",
+                |_lua, game, (stage, room, groups): (u8, u8, Table)| {
+                    if !(1..=crate::state::RoomId::MAX_STAGE).contains(&stage) {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "music stage {stage} is out of range"
+                        )));
+                    }
+                    if room > crate::state::RoomId::MAX_ROOM {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "music room {room:#04x} is out of range"
+                        )));
+                    }
+                    let groups = groups
+                        .sequence_values::<u8>()
+                        .collect::<mlua::Result<Vec<_>>>()?;
+                    game.music
+                        .set_room(usize::from(stage - 1), usize::from(room), &groups)
+                        .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
+                },
+            );
+
+            // `set_room_music_state(stage, room, state)` writes the saved
+            // per-room byte (group variant, mode and channel mask).
+            methods.add_method_mut(
+                "set_room_music_state",
+                |_lua, game, (stage, room, state): (u8, u8, u8)| {
+                    if !(1..=crate::state::RoomId::MAX_STAGE).contains(&stage) {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "music stage {stage} is out of range"
+                        )));
+                    }
+                    if room > crate::state::RoomId::MAX_ROOM {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "music room {room:#04x} is out of range"
+                        )));
+                    }
+                    game.room_bgm[usize::from(stage - 1) * 32 + usize::from(room)] = state;
+                    Ok(())
+                },
+            );
+
             methods.add_method_mut(
                 "set_state_byte",
                 |_lua, game, (index, value): (usize, u8)| {
@@ -652,7 +722,6 @@ mod imp {
 
 pub use imp::LuaVm;
 
-#[cfg(test)]
 pub(crate) use imp::run_chunk;
 pub(crate) use imp::{Budget, new_sandboxed_state};
 
@@ -669,11 +738,11 @@ pub const NEW_GAME_ENTRY: &str = "game/new_game.lua";
 
 /// Seed a new game's start inventory from the pack's [`NEW_GAME_ENTRY`].
 ///
-/// The chunk is called as `(api, character)` over the live new-game state. A
-/// pack without the entry (one converted before it existed) runs the
-/// checked-in copy; a mod's script that fails is logged and the checked-in
-/// copy runs instead, over a re-cleared inventory, so a new game always
-/// starts with items.
+/// The chunk is called as `(api, character)` over the live new-game state,
+/// after [`seed_initial_state`]. A pack without the entry runs the checked-in
+/// copy; a mod's script that fails is logged and the checked-in copy runs
+/// instead, over a re-cleared inventory, so a new game always starts with
+/// items.
 pub fn seed_new_game_inventory(
     pack: &crate::pack::Pack,
     game: &mut crate::game::GameState,
@@ -699,6 +768,52 @@ pub fn seed_new_game_inventory(
     }
     if let Err(err) = imp::run_chunk(game, builtin, NEW_GAME_ENTRY, character) {
         eprintln!("[lua] built-in {NEW_GAME_ENTRY}: {err}");
+    }
+}
+
+/// Seed the shipped fresh-state data from the pack's
+/// [`crate::music::INITIAL_STATE_ENTRY`].
+///
+/// A new game keeps the item box it writes; direct room/headless boots clear
+/// the box afterwards. The chunk runs over a snapshot of the state; a failing
+/// pack script is rolled back and the embedded copy runs instead, so a broken
+/// mod cannot leave a half-written room-BGM table or item box behind.
+pub fn seed_initial_state(
+    pack: &crate::pack::Pack,
+    game: &mut crate::game::GameState,
+    character: u8,
+) {
+    let builtin = GAME_SCRIPTS
+        .iter()
+        .find(|(entry, _)| *entry == crate::music::INITIAL_STATE_ENTRY)
+        .map(|(_, source)| source.as_bytes())
+        .expect("build.rs embeds game/initial_state.lua");
+    let before = game.clone();
+    if pack.contains(crate::music::INITIAL_STATE_ENTRY) {
+        match pack.read(crate::music::INITIAL_STATE_ENTRY) {
+            Ok(bytes) => {
+                match imp::run_chunk(game, &bytes, crate::music::INITIAL_STATE_ENTRY, character) {
+                    Ok(()) => return,
+                    Err(err) => {
+                        eprintln!("[lua] {err}; using the shipped new-game state");
+                        *game = before.clone();
+                    }
+                }
+            }
+            Err(err) => {
+                eprintln!(
+                    "[lua] cannot read {}: {err:#}",
+                    crate::music::INITIAL_STATE_ENTRY
+                );
+                *game = before.clone();
+            }
+        }
+    }
+    if let Err(err) = imp::run_chunk(game, builtin, crate::music::INITIAL_STATE_ENTRY, character) {
+        eprintln!(
+            "[lua] built-in {}: {err}",
+            crate::music::INITIAL_STATE_ENTRY
+        );
     }
 }
 
@@ -851,6 +966,25 @@ mod tests {
             .map(|(path, data)| (path.as_str(), data.as_slice()))
             .collect();
         pack(&borrowed)
+    }
+
+    #[test]
+    fn music_api_builds_groups_rooms_and_state() {
+        let source = br#"
+            local api = ...
+            api:set_music_group(0x0B, { { 0x013, true } })
+            api:set_music_group(0x09, {})
+            api:set_room_music(1, 0x00, { 0x0B, 0x09 })
+            api:set_room_music_state(1, 0x00, 0x40)
+        "#;
+        let mut game = GameState::default();
+        run_chunk(&mut game, source, "music.lua", 0).unwrap();
+        assert_eq!(game.music.group(0x0B).unwrap().tracks[0], Some(0x013));
+        assert!(game.music.group(0x0B).unwrap().loops[0]);
+        assert_eq!(game.music.group(0x09).unwrap().tracks, [None; 3]);
+        assert_eq!(game.music.group_for(0, 0x00, 0x08), Some(0x0B));
+        assert_eq!(game.music.group_for(0, 0x00, 0x09), Some(0x09));
+        assert_eq!(game.room_bgm[0], 0x40);
     }
 
     #[test]

@@ -99,8 +99,8 @@ no-combat scope of the engine is unchanged and is covered by
     an `api:save_to(path)` that writes a `savedatN.dat`. The sandbox stays
     path-free: the CLI leaves `--setup-script <file.lua>` and
     `--save-out <path>` as the oracle/authoring seam, so the script authors
-    state through the `api` and the engine (which already owns the pack's
-    bio-card prefix) does the one file write. Likewise `--load <path>` and the
+    state through the `api` and the engine (which owns the hardcoded
+    BioCard prefix) does the one file write. Likewise `--load <path>` and the
     reference's `--test-load <path>` take paths from the command line only.
     All three flags are documented as test-only seams, not mod-facing ones;
     a normal mod pack cannot reach them.

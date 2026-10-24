@@ -8,7 +8,7 @@ before. What follows is what the milestone's tools deliberately do not prove.
 ## `verify`
 
 - **Classification is by path.** `room/*.rdt`, `roommask/*.bmp`,
-  `language/*.txt`, `map/tables.bin`, `data/bio_card.dat` and `manifest.toml`
+  `language/*.txt`, `map/tables.bin` and `manifest.toml`
   are matched by prefix/name, everything else by extension. A known format
   under an unknown name is counted opaque; `--strict` turns that into a
   failure. This is deliberate: future pack entries must not be able to break

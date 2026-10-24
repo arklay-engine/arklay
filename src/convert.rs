@@ -5,7 +5,7 @@
 //! two levels below the root), stores every `ROOM####.RDT`, converts the camera
 //! backgrounds of every distinct room once, converts the room mask pages of
 //! every camera that has sprite groups, copies the door animations named by the
-//! door type table, copies the `BGM_*.WAV` music files, the 68 named sound
+//! door type table, copies the numbered music tracks, the named sound
 //! effects, the four player models plus the two no-weapon locomotion clips,
 //! the fifteen scripted character (NPC) models, the 33 effect-sheet TIMs, the
 //! `core00` weapon-effect metadata and the `KAGE.TIM` player-shadow coverage
@@ -529,7 +529,6 @@ pub fn convert_game_observed(
     let (font_count, font_bytes) = copy_font(&fonts, &mut writer, &mut progress)?;
     let (ui_count, ui_bytes) = copy_ui_art(&data, &mut writer, &mut progress, jobs)?;
     let (item_count, item_bytes) = copy_item_art(&data, &mut writer, &mut progress, jobs)?;
-    let (data_count, data_bytes) = copy_bio_card(&data, &mut writer, &mut progress)?;
     let (demo_count, demo_bytes) = copy_demos(&data, &mut writer, &mut progress)?;
     let (core_count, core_bytes) = copy_core_effects(&data, &mut writer, &mut progress, jobs)?;
     let (shadow_count, shadow_bytes) = copy_shadow(&data, &mut writer, &mut progress)?;
@@ -665,7 +664,6 @@ pub fn convert_game_observed(
         writeln!(report, "font: {font_count} entries, {font_bytes} bytes")?;
         writeln!(report, "ui: {ui_count} entries, {ui_bytes} bytes")?;
         writeln!(report, "item: {item_count} entries, {item_bytes} bytes")?;
-        writeln!(report, "data: {data_count} entries, {data_bytes} bytes")?;
         writeln!(report, "demo: {demo_count} entries, {demo_bytes} bytes")?;
         writeln!(report, "core00: {core_count} entries, {core_bytes} bytes")?;
         writeln!(
@@ -761,7 +759,8 @@ pub(crate) fn roommask_bmp(source: &str, compressed: &[u8]) -> Result<Vec<u8>> {
         .with_context(|| format!("failed to encode room mask {source} as BMP"))
 }
 
-/// Add every `BGM_*.WAV` in the sound directory; returns entry count and bytes.
+/// Add every music track named by [`music::MUSIC_TRACKS`] as
+/// `bgm/<track id:03x>.wav`.
 fn copy_music(
     sound: &Option<PathBuf>,
     writer: &mut PackWriter,
@@ -772,16 +771,29 @@ fn copy_music(
         return Ok((0, 0));
     };
 
+    let index = index_dir(sound)?;
     let mut files = Vec::new();
-    for entry in read_dir_sorted(sound)? {
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else {
-            continue;
-        };
-        let Some(path) = music::pack_path(name) else {
-            continue;
-        };
-        files.push((path, entry.path()));
+    let mut missing = Vec::new();
+    for &(id, source) in music::MUSIC_TRACKS {
+        let file = format!("{}.wav", source.to_ascii_lowercase());
+        if let Some(path) = index.get(&file) {
+            files.push((music::bgm_entry(id), path.clone()));
+        } else {
+            missing.push(source);
+        }
+    }
+    if !missing.is_empty() {
+        let shown = missing
+            .iter()
+            .take(4)
+            .copied()
+            .collect::<Vec<_>>()
+            .join(", ");
+        eprintln!(
+            "warning: missing {} music track(s): {shown}{}",
+            missing.len(),
+            if missing.len() > 4 { ", ..." } else { "" }
+        );
     }
 
     copy_raw_files(files, "bgm", writer, progress, jobs)
@@ -806,10 +818,8 @@ fn copy_se(
     let index = index_dir(sound)?;
     let mut files = Vec::new();
     let mut missing = Vec::new();
-    // The named sound effects plus the non-`Bgm_*` group tracks (the muted
-    // seeds, the lab cues and `V110_00`) the three-channel BGM engine reads
-    // from `se/`.
-    for name in sfx::SE_NAMES.iter().copied().chain(music::se_track_names()) {
+    // The named one-shot sound effects.
+    for name in sfx::SE_NAMES.iter() {
         let file = format!("{}.wav", name.to_ascii_lowercase());
         match index.get(&file) {
             Some(path) => files.push((format!("se/{file}"), path.clone())),
@@ -1127,26 +1137,6 @@ fn copy_item_art(
     Ok((count, bytes))
 }
 
-/// Add the raw `data/bio_card.dat` save prefix.
-fn copy_bio_card(
-    data: &DataPlan,
-    writer: &mut PackWriter,
-    progress: &mut Progress,
-) -> Result<(usize, usize)> {
-    let Some(source) = &data.bio_card else {
-        return Ok((0, 0));
-    };
-    let raw = fs::read(source).with_context(|| format!("failed to read {}", source.display()))?;
-    progress.begin("data", 1);
-    let bytes = raw.len();
-    writer
-        .add(BIO_CARD_ENTRY, raw)
-        .with_context(|| format!("failed to add {BIO_CARD_ENTRY}"))?;
-    progress.advance(BIO_CARD_ENTRY);
-    progress.end_phase();
-    Ok((1, bytes))
-}
-
 /// Add the raw attract-demo reels as `demo/<hex>.dat`, where the name is the
 /// reel's hex number, so the title can enumerate them without a hard-coded
 /// count.
@@ -1312,12 +1302,8 @@ pub(crate) fn bake_item_atlas(pix: &[u8], rows: usize, palette: &Texture8) -> Re
     })
 }
 
-/// Pack entry of the save prefix.
-pub(crate) const BIO_CARD_ENTRY: &str = "data/bio_card.dat";
 /// The attract-demo reels (raw), packed under `demo/<hex>.dat`.
 pub(crate) const DEMO_FILES: [&str; 4] = ["PDEMO0.DAT", "PDEMO1.DAT", "PDEMO2.DAT", "PDEMO3.DAT"];
-/// Shipped name of the save prefix.
-pub(crate) const BIO_CARD_FILE: &str = "BIO_CARD.DAT";
 /// Shipped name of the item-icon palette TIM.
 pub(crate) const STATUS_FILE: &str = "STATUS.TIM";
 /// Shipped name of the player-shadow coverage TIM.
@@ -1365,8 +1351,6 @@ struct DataPlan {
     items: Vec<ItemAsset>,
     /// `STATUS.TIM`, the item-atlas palette.
     palette: Option<PathBuf>,
-    /// `BIO_CARD.DAT`.
-    bio_card: Option<PathBuf>,
     /// `PDEMO0..3.DAT`, the attract-demo reels, in index order. Missing
     /// entries are skipped (a pack may ship fewer reels).
     demos: Vec<Option<PathBuf>>,
@@ -1480,7 +1464,7 @@ fn resolve_data_assets(data: Option<&Path>) -> Result<DataPlan> {
     let Some(dir) = data else {
         return Ok(DataPlan {
             warnings: vec![format!(
-                "no data directory found; {} UI art file(s), {} item atlas(es), {}, {} and {BIO_CARD_ENTRY} will be missing",
+                "no data directory found; {} UI art file(s), {} item atlas(es), {} and {} will be missing",
                 UI_ASSETS.len(),
                 ITEM_ASSETS.len(),
                 crate::shadow::KAGE_ENTRY,
@@ -1528,7 +1512,6 @@ fn resolve_data_assets(data: Option<&Path>) -> Result<DataPlan> {
         }
     }
 
-    plan.bio_card = index.get(&BIO_CARD_FILE.to_ascii_lowercase()).cloned();
     plan.demos = DEMO_FILES
         .iter()
         .map(|file| index.get(&file.to_ascii_lowercase()).cloned())
@@ -1560,9 +1543,6 @@ fn resolve_data_assets(data: Option<&Path>) -> Result<DataPlan> {
             missing_items.len(),
             missing_items.join(", ")
         ));
-    }
-    if plan.bio_card.is_none() {
-        plan.warnings.push(format!("missing {BIO_CARD_ENTRY}"));
     }
     if plan.shadow.is_none() {
         plan.warnings.push(format!(
@@ -2488,7 +2468,6 @@ fn conversion_phase_count(
     phases += u64::from(item_m1.is_some()); // door
     phases += u64::from(fonts.primary.is_some()); // font
     phases += u64::from(data.palette.is_some() && !data.items.is_empty()); // item
-    phases += u64::from(data.bio_card.is_some()); // data
     phases += u64::from(data.demos.iter().any(Option::is_some)); // demo
     phases += u64::from(data.shadow.is_some()); // shadow
     phases += 3 * u64::from(item_m2.is_some()); // item, file, map
@@ -3247,7 +3226,7 @@ mod tests {
     fn write_se_files(root: &Path) {
         let sound = root.join("sound");
         fs::create_dir_all(&sound).unwrap();
-        for name in sfx::SE_NAMES.iter().copied().chain(music::se_track_names()) {
+        for name in sfx::SE_NAMES.iter() {
             fs::write(
                 sound.join(format!("{}.WAV", name.to_ascii_uppercase())),
                 name.as_bytes(),
@@ -3874,7 +3853,7 @@ mod tests {
         assert!(pack.contains("roomcut/100_000.bmp"));
         assert!(pack.contains("roomcut/600_000.bmp"));
         assert!(pack.contains("bgm/013.wav"));
-        assert!(pack.contains("bgm/024_00.wav"));
+        assert!(pack.contains("bgm/200.wav"));
         assert!(pack.contains("bgm/002.wav"));
         assert!(!pack.contains("bgm/000.wav"));
         assert!(pack.contains("se/ft_wda.wav"));
@@ -3939,11 +3918,7 @@ mod tests {
         assert_eq!(count("roomcut/"), 2);
         assert_eq!(count("roommask/"), 0);
         assert_eq!(count("bgm/"), 3);
-        assert_eq!(
-            count("se/"),
-            sfx::SE_NAMES.len() + music::se_track_names().len(),
-            "one pack entry per named effect and per non-Bgm group track"
-        );
+        assert_eq!(count("se/"), sfx::SE_NAMES.len());
         assert_eq!(count("door/"), 34);
         assert_eq!(
             count("player/"),
@@ -4811,13 +4786,11 @@ mod tests {
         let data = root.path.join("install/DATA");
         fs::create_dir_all(&data).unwrap();
         fs::write(data.join("STATUS.TIM"), b"tim").unwrap();
-        fs::write(data.join("BIO_CARD.DAT"), b"card").unwrap();
         fs::write(data.join("ITEM_ALL.PIX"), b"pix").unwrap();
 
         let plan = resolve_data_assets(Some(&data)).unwrap();
         assert_eq!(plan.items.len(), 1, "only ITEM_ALL.PIX is present");
         assert!(plan.palette.is_some());
-        assert!(plan.bio_card.is_some());
         assert!(plan.shadow.is_none());
         assert_eq!(plan.ui.len(), 1, "STATUS.TIM is also a raw UI entry");
         assert_eq!(
@@ -4887,7 +4860,6 @@ mod tests {
             vec![1u8; items::ICON_ROW_BYTES * items::ITEM_ALL_ROWS],
         )
         .unwrap();
-        fs::write(data.join("BIO_CARD.DAT"), vec![0u8; 0x41C]).unwrap();
         fs::write(data.join("KAGE.TIM"), b"KAGE.TIM").unwrap();
         for (_, file, kind) in UI_ASSETS {
             if file.eq_ignore_ascii_case(STATUS_FILE) {
@@ -4909,9 +4881,7 @@ mod tests {
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("ui/"), UI_ASSETS.len() + crate::ui::UI_SCRIPTS.len());
         assert_eq!(count("item/"), 1);
-        assert_eq!(count("data/"), 1);
         assert_eq!(count("shadow/"), 1);
-        assert_eq!(pack.read("data/bio_card.dat").unwrap().len(), 0x41C);
         assert_eq!(
             pack.read(crate::shadow::KAGE_ENTRY).unwrap(),
             b"KAGE.TIM".as_slice()
@@ -4978,7 +4948,6 @@ mod tests {
         assert!(plan.warnings.is_empty(), "{:?}", plan.warnings);
         assert_eq!(plan.ui.len(), UI_ASSETS.len());
         assert_eq!(plan.items.len(), ITEM_ASSETS.len());
-        assert!(plan.bio_card.is_some());
         assert!(plan.shadow.is_some());
 
         // The same conversion the pack writer performs, checked for counts.
@@ -4986,14 +4955,11 @@ mod tests {
         let mut progress = Progress::new("test", 1);
         let (ui_count, _) = copy_ui_art(&plan, &mut writer, &mut progress, 1).unwrap();
         let (item_count, _) = copy_item_art(&plan, &mut writer, &mut progress, 1).unwrap();
-        let (data_count, _) = copy_bio_card(&plan, &mut writer, &mut progress).unwrap();
         let (shadow_count, _) = copy_shadow(&plan, &mut writer, &mut progress).unwrap();
         assert_eq!(ui_count, UI_ASSETS.len());
         assert_eq!(item_count, ITEM_ASSETS.len());
-        assert_eq!(data_count, 1);
         assert_eq!(shadow_count, 1);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-        assert_eq!(pack.read(BIO_CARD_ENTRY).unwrap().len(), 0x41C);
         assert_eq!(
             pack.read(crate::shadow::KAGE_ENTRY).unwrap(),
             fs::read(plan.shadow.as_ref().unwrap()).unwrap()
@@ -5418,12 +5384,8 @@ mod tests {
         // One mask page per camera that carries sprite groups; stages 6/7
         // reuse the stage 1/2 pages.
         assert_eq!(count("roommask/"), 601);
-        assert_eq!(count("bgm/"), 61);
-        assert_eq!(
-            count("se/"),
-            sfx::SE_NAMES.len() + music::se_track_names().len(),
-            "one pack entry per named effect and per non-Bgm group track"
-        );
+        assert_eq!(count("bgm/"), crate::music::MUSIC_TRACKS.len());
+        assert_eq!(count("se/"), sfx::SE_NAMES.len());
         assert_eq!(count("door/"), 34);
         assert_eq!(
             count("enemy/"),

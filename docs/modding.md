@@ -177,16 +177,18 @@ is exact.
 | FILE pages | `file/file000`, `file/file001`, `file/filei*`, `file/textm_*`, `file/arror`, `file/en/filem_l0_00` … `file/en/filem_00_03` (also `file/de/`, `file/fr/`) | webp, png, bmp, tim | the shipped page's; a converted `filem` page carries its black key at index 0 |
 | room effect sheets | `effspr/esp000`, `effspr/esp2xx` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
 | player shadow | `shadow/kage` | webp, png, bmp, tim | the shipped page's; an RGBA page's alpha is the coverage |
-| BGM | `bgm/013`, `bgm/024_00` | ogg, wav | any |
-| sound effect | `se/a_mcn03`, `se/chain1`, `se/v110_00` | ogg, wav | any |
+| BGM | `bgm/013`, `bgm/100` | ogg, wav | any |
+| sound effect | `se/a_mcn03`, `se/ft_wda` | ogg, wav | any |
 | voice | `voice/01_09` | ogg, wav | any |
 | film | `movie/oj`, `movie/capcom`, `movie/ed1` | mp4, avi | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' names without their extensions: `roomcut` and
 `roommask` use `{stage}{room:02X}_{camera:03}` (`RoomId::cut_stem`), `bgm` uses
-`{id:03x}` plus an optional `_{variant:02}` (`music::pack_path`), `voice` uses
-the 1-based stage row and the lowercase hex id (`voice::entry_path`), and
-everything else is the literal name `arklay list` prints.
+the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
+stage row and the lowercase hex id (`voice::entry_path`), and everything else
+is the literal name `arklay list` prints. Music tracks, including the former
+`Se_*` group layers, are all `bgm/<track id>`; the converter owns the only
+name-to-id table.
 
 ### Mismatch behaviour
 
@@ -383,14 +385,40 @@ The checked-in `mods/hd/` is the replacement-format reference: a 2x PNG room
 background, a UI page shipped as both PNG and WebP, and an OGG Vorbis BGM
 track, with no game assets either.
 
+## Room music
+
+The room-BGM tables are static game data, loaded once when the session starts
+from `game/music.lua` before the first room:
+
+```lua
+local api = ...
+
+api:set_music_group(0x0B, {
+    { 0x013, true },   -- bgm/013, looping
+})
+
+api:set_room_music(1, 0x00, { 0x0B })
+```
+
+A room row holds up to four group ids; the saved state byte's low three bits
+select one. Each group has up to three track ids and a loop flag per channel;
+all tracks are `bgm/<track id:03x>` in the pack. There are no `Bgm_*`/`Se_*`
+names in the runtime or Lua: the converter maps the original `Sound/` files to
+numeric ids.
+
+The shipped new-game state lives in `game/initial_state.lua`. It writes the
+224 per-room state bytes (`set_room_music_state`), the two starting item-box
+stacks, the room-item bank and the remembered pick-up quantities. Save loads
+restore their own `room_bgm` bytes and do not run this file.
+
 ## The new-game start inventory
 
 The items a new game starts with come from the Lua chunk `game/new_game.lua`,
 not from the engine. The base pack carries the shipped one
 (`games/re1/game/new_game.lua`); a mod replaces the start items by shipping its
-own entry at the same path. The chunk runs once per new game, after the
-`bio_card.dat` copy, as `local api, character = ...` with `character` `0` for
-Chris and `1` for Jill. The player's inventory is already empty when it runs
+own entry at the same path. The chunk runs once per new game, after
+`game/initial_state.lua`, as `local api, character = ...` with `character` `0`
+for Chris and `1` for Jill. The player's inventory is already empty when it runs
 (for Jill the two partner slots her eight-slot run overlaps are cleared too),
 so it only needs `api:set_item_slot` and `api:set_partner_slot`:
 
@@ -423,7 +451,7 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `roomcut/*.bmp`, `roommask/*.bmp` (copied to stages 6/7 where the room exists) |
 | `ENEMY/*.EMD`, `PLAYERS/*.EMW`, `PLAYERS/*.TMD` | `enemy/*`, `player/*` |
 | `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `voice/*` record playing the file |
-| `DATA/*` (UI art, item icons, `BIO_CARD.DAT`, demos, effects) | `ui/*`, `item/*`, `data/*`, `demo/*`, `shadow/*` |
+| `DATA/*` (UI art, item icons, demos, effects) | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
 | `ITEM_M1/*.DOR`, `effspr/*.TIM` | `door/*`, `effspr/*` |
 | `TEXT/ROOM_###.xml` | `ROOM_###_TEXT_##` keys in `language/en-US.txt` |
 | BioRand `init.xml` | `game/new_game.lua` (the start inventory above) |
@@ -555,6 +583,9 @@ exist (Lua colon syntax):
 | `api:set_item_use_flag(item[, value])` | Set/clear a key/special/chemical item-use flag. |
 | `api:set_flag_bank(bank, bytes)` | Overwrite a bank's raw bytes, from a string or a sequence table. |
 | `api:set_state_byte(index, value)` | Write one BioCard state-image byte. |
+| `api:set_music_group(group, { { track, loop }, ... })` | Define one preset of up to three numeric music tracks; empty groups are silent. |
+| `api:set_room_music(stage, room, { group, ... })` | Replace a room's up-to-four group variants (stage is the 1-based RDT digit). |
+| `api:set_room_music_state(stage, room, state)` | Write the saved per-room music state byte (variant, mode and channel mask). |
 | `api:kill_event(slot)` | Deactivate a running event slot. |
 | `api:message(id)` | Request a room/global message. |
 | `api:register_save_screen(entry)` | Run `entry` (a pack path) as the save/load screen instead of the ported original; `nil` restores the original. See [Screen scripts](#screen-scripts). |

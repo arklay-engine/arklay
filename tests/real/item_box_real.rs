@@ -6,7 +6,7 @@
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must carry
 //! the slice-5/6 art (`ui/itemboxn.tim`, the menu sheets, `item/item_all.bmp`,
-//! `font/font.tim`) and `data/bio_card.dat`; a stale pack fails rather than
+//! `font/font.tim`); a stale pack fails rather than
 //! silently skipping.
 //!
 //! The first test deposits a stack in room 1001, changes rooms, withdraws it
@@ -21,7 +21,7 @@ use arklay::engine;
 use arklay::game::{GameState, InventoryItem};
 use arklay::pack::Pack;
 use arklay::rdt;
-use arklay::save::{SAVE_PREFIX_ENTRY, SaveFile};
+use arklay::save::SaveFile;
 use arklay::state::RoomId;
 
 const SPRAY: u8 = 0x41;
@@ -93,10 +93,7 @@ fn real_item_box_deposit_survives_room_changes_and_a_save_round_trip() {
     assert!(!game.has_item(GREEN_HERB));
 
     // The whole block round-trips through the save format.
-    let prefix = pack
-        .read(SAVE_PREFIX_ENTRY)
-        .expect("bio_card.dat in the pack");
-    let file = SaveFile::from_state_with_prefix(&game, &prefix).unwrap();
+    let file = SaveFile::from_state(&game);
     let parsed = SaveFile::from_bytes(&file.to_bytes()).unwrap();
     let mut restored = GameState::default();
     parsed.apply_to(&mut restored);
@@ -107,7 +104,7 @@ fn real_item_box_deposit_survives_room_changes_and_a_save_round_trip() {
     // The room-flag save block carries the file bits too: 0x82 + 3 = 0x85 is
     // the room-flags word at byte 16, MSB-first bit 5, i.e. byte 19 bit 2.
     game.set_file_collected(3, true);
-    let file = SaveFile::from_state_with_prefix(&game, &prefix).unwrap();
+    let file = SaveFile::from_state(&game);
     assert!(file.room_flags[19] & 0x04 != 0, "0x85 lands in byte 19");
     let restored = SaveFile::from_bytes(&file.to_bytes()).unwrap();
     let mut state = GameState::default();

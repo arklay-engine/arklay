@@ -40,7 +40,7 @@ pub fn start_volume_ramp(game: &mut GameState, channel: u8, delta: i8, frames: u
     if game.bgm.state & (8u16 << index) == 0 {
         return;
     }
-    if game.bgm.channels[index].name.is_none() {
+    if game.bgm.channels[index].track.is_none() {
         return;
     }
     game.bgm.ramp = crate::game::VolumeRamp {
@@ -61,7 +61,7 @@ pub fn build_snd_fade_tbl(game: &mut GameState, steps: i8) {
     game.bgm.fade.dist_steps = dist_steps;
     game.bgm.fade.kind = 0x7F;
     for (index, bank) in game.bgm.channels.iter().enumerate() {
-        game.bgm.fade.steps[index] = if bank.name.is_none() || dist_steps == 0 {
+        game.bgm.fade.steps[index] = if bank.track.is_none() || dist_steps == 0 {
             0
         } else {
             ((-10000 - bank.volume) / dist_steps).max(0)
@@ -103,7 +103,7 @@ fn advance_fade(game: &mut GameState) {
             // The final `UpdateSoundFade(-1)` nudge and the end of the fade.
             -1 => {
                 for bank in &mut game.bgm.channels {
-                    if bank.name.is_some() {
+                    if bank.track.is_some() {
                         bank.volume = (bank.volume - 1).clamp(-9999, -1);
                     }
                 }
@@ -122,7 +122,7 @@ fn advance_fade(game: &mut GameState) {
         if game.bgm.fade.steps[index] <= 0 {
             continue;
         }
-        if bank.name.is_some() {
+        if bank.track.is_some() {
             let mut volume = bank.volume;
             if volume == 2000 {
                 volume = -9999;
@@ -151,7 +151,7 @@ fn advance_ramp(game: &mut GameState) {
         game.bgm.ramp = crate::game::VolumeRamp::default();
         return;
     };
-    if bank.name.is_none() {
+    if bank.track.is_none() {
         return;
     }
     let mut volume = bank.volume;
@@ -171,13 +171,11 @@ fn advance_ramp(game: &mut GameState) {
 
 /// The three tracks the original loads muted and later fades up with the
 /// scripted volume opcodes.
-const MUTED_SEEDS: [&str; 3] = ["Se_01", "Se_4d", "Se_42"];
+const MUTED_SEEDS: [crate::music::TrackId; 3] = [0x101, 0x10E, 0x107];
 
-/// Whether `name` is one of the three muted seed tracks.
-fn is_muted_seed(name: &str) -> bool {
-    MUTED_SEEDS
-        .iter()
-        .any(|seed| seed.eq_ignore_ascii_case(name))
+/// Whether `track` is one of the three muted seed tracks.
+fn is_muted_seed(track: crate::music::TrackId) -> bool {
+    MUTED_SEEDS.contains(&track)
 }
 
 /// Decoded BGM wav cache, keyed by pack path.
@@ -188,55 +186,33 @@ pub struct BgmCache {
 }
 
 impl BgmCache {
-    /// Load and parse the track for the group-track `name`, caching hits and
-    /// misses.
-    ///
-    /// `Bgm_*` names resolve through [`music::pack_path`]; every other group
-    /// track (the `Se_*` tracks and the mixed dialogue `V110_00`) lives in the
-    /// install's `sound/` directory and is read from `se/`, which conversion
-    /// always packs for every group-track name.
-    ///
-    /// Both candidates resolve by *stem*, so a mod may replace either with
-    /// OGG Vorbis as well as WAV.
-    pub fn load(&mut self, pack: &Pack, name: &str) -> Option<audio::Wav> {
-        let mut candidates: Vec<String> = Vec::new();
-        if let Some(path) = music::pack_path(name) {
-            candidates.push(assets::stem(&path).to_string());
+    /// Load and parse the `bgm/<id:03x>` track for `track`, caching hits and
+    /// misses. The entry resolves by *stem*, so a mod may replace it with OGG
+    /// Vorbis as well as WAV.
+    pub fn load(&mut self, pack: &Pack, track: crate::music::TrackId) -> Option<audio::Wav> {
+        let stem = assets::stem(&music::bgm_entry(track)).to_string();
+        if let Some(wav) = self.wavs.get(&stem) {
+            return Some(wav.clone());
         }
-        let se = format!("se/{}", name.to_ascii_lowercase());
-        if !candidates.iter().any(|path| path == &se) {
-            candidates.push(se);
+        if self.missing.contains(&stem) {
+            return None;
         }
-
-        for stem in &candidates {
-            if let Some(wav) = self.wavs.get(stem) {
-                return Some(wav.clone());
-            }
-        }
-        for stem in &candidates {
-            if self.missing.contains(stem) {
-                continue;
-            }
-            let Ok(Some(asset)) = pack.read_asset(stem, AssetClass::Audio) else {
-                continue;
-            };
-            match assets::decode_audio(&asset) {
-                Ok(wav) => {
-                    self.wavs.insert(stem.clone(), wav.clone());
-                    return Some(wav);
-                }
-                Err(err) => {
-                    eprintln!("warning: invalid BGM track {}: {err:#}", asset.path());
-                }
-            }
-        }
-        if let Some(first) = candidates.first() {
-            eprintln!("warning: missing BGM track {first}.wav");
-        }
-        for stem in candidates {
+        let Ok(Some(asset)) = pack.read_asset(&stem, AssetClass::Audio) else {
+            eprintln!("warning: missing BGM track {stem}.wav");
             self.missing.insert(stem);
+            return None;
+        };
+        match assets::decode_audio(&asset) {
+            Ok(wav) => {
+                self.wavs.insert(stem, wav.clone());
+                Some(wav)
+            }
+            Err(err) => {
+                eprintln!("warning: invalid BGM track {}: {err:#}", asset.path());
+                self.missing.insert(stem);
+                None
+            }
         }
-        None
     }
 }
 
@@ -272,9 +248,11 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
         return slept;
     }
 
-    let new_group = music::group_for(stage, room, target);
-    let old_group =
-        from.and_then(|from| music::group_for(stage, usize::from(from.room), previous as u8));
+    let new_group = game.music.group_for(stage, room, target);
+    let old_group = from.and_then(|from| {
+        game.music
+            .group_for(stage, usize::from(from.room), previous as u8)
+    });
 
     // A different track is coming and something is playing: tear the old banks
     // down before the switch below.
@@ -306,7 +284,7 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
                     if changed & bit == 0 {
                         continue;
                     }
-                    if game.bgm.channels[index].name.is_none() {
+                    if game.bgm.channels[index].track.is_none() {
                         continue;
                     }
                     if u16::from(effective) & bit != 0 {
@@ -362,8 +340,8 @@ pub fn init_room_sleep(game: &GameState, id: RoomId) -> u8 {
 /// Load the group's three channel banks for `state` (an already-decoded game
 /// state byte, with the type bits still present).
 ///
-/// Every bank is destroyed first; the group's track names and whole-buffer
-/// loop flags come from the existing music tables, and the three tracks the
+/// Every bank is destroyed first; the group's track ids and whole-buffer
+/// loop flags come from the loaded music tables, and the three tracks the
 /// original loads muted start at `-9999` millibels. The stage-2 room-7
 /// special case drops the third channel unless Jill's exact flag combination
 /// holds.
@@ -375,23 +353,29 @@ fn load_and_start(game: &mut GameState, id: RoomId, state: u8) {
 
     let stage = usize::from(id.stage.saturating_sub(1));
     let room = usize::from(id.room);
-    let group = music::group_for(stage, room, state);
+    let Some(group) = game
+        .music
+        .group_for(stage, room, state)
+        .and_then(|group| game.music.group(group))
+    else {
+        for channel in &mut game.bgm.channels {
+            *channel = BgmChannelState::default();
+        }
+        return;
+    };
 
     for (index, channel) in game.bgm.channels.iter_mut().enumerate() {
         *channel = BgmChannelState::default();
         if index >= slot_count {
             continue;
         }
-        let Some(group) = group else {
-            continue;
-        };
-        let Some(name) = music::GROUP_TRACKS[usize::from(group)][index] else {
+        let Some(track) = group.tracks[index] else {
             continue;
         };
         *channel = BgmChannelState {
-            name: Some(name),
-            looping: music::GROUP_LOOPS[usize::from(group)][index],
-            volume: if is_muted_seed(name) { -9999 } else { -1 },
+            track: Some(track),
+            looping: group.loops[index],
+            volume: if is_muted_seed(track) { -9999 } else { -1 },
             pan: 0,
             pan_pair: (0, 0),
             restart: false,
@@ -422,7 +406,7 @@ fn start_secondary_slots(game: &mut GameState, state: u8) {
         if state & (8 << index) == 0 {
             continue;
         }
-        if game.bgm.channels[index].name.is_some() {
+        if game.bgm.channels[index].track.is_some() {
             game.bgm.channels[index].restart = true;
         }
         game.bgm.state |= 8 << index;
@@ -499,8 +483,8 @@ pub fn apply_live(
         let bank = game.bgm.channels[index];
         if bank.pending_load {
             game.bgm.channels[index].pending_load = false;
-            if let Some(name) = bank.name
-                && let Some(wav) = cache.load(pack, name)
+            if let Some(track) = bank.track
+                && let Some(wav) = cache.load(pack, track)
             {
                 mixer.play_bgm_channel(index, wav, bank.looping);
                 mixer.set_bgm_channel_volume(index, sfx::volume_gain(bank.volume));
@@ -526,7 +510,7 @@ pub fn apply_live(
             mixer.stop_bgm_channel(index);
         }
         let bank = game.bgm.channels[index];
-        if bank.name.is_some() {
+        if bank.track.is_some() {
             mixer.set_bgm_channel_volume(index, sfx::volume_gain(bank.volume));
             mixer.set_bgm_channel_pan(index, sfx::pan_from_raw(bank.pan));
         }
@@ -539,7 +523,9 @@ mod tests {
     use crate::state::RoomState;
 
     fn game_for(id: RoomId) -> GameState {
-        GameState::new(id, &RoomState::default())
+        let mut game = GameState::new(id, &RoomState::default());
+        game.music = crate::music::load_builtin();
+        game
     }
 
     /// Store `value` in the room's BGM row (the `room_bgm_state_set` write).
@@ -548,17 +534,17 @@ mod tests {
         game.room_bgm[stage * 32 + usize::from(id.room)] = value;
     }
 
-    fn names(game: &GameState) -> Vec<Option<&'static str>> {
+    fn names(game: &GameState) -> Vec<Option<crate::music::TrackId>> {
         game.bgm
             .channels
             .iter()
-            .map(|channel| channel.name)
+            .map(|channel| channel.track)
             .collect()
     }
 
-    fn mark_loaded(game: &mut GameState, name: &'static str) {
+    fn mark_loaded(game: &mut GameState, track: crate::music::TrackId) {
         game.bgm.channels[0] = BgmChannelState {
-            name: Some(name),
+            track: Some(track),
             looping: true,
             volume: 0,
             pan: 0,
@@ -581,12 +567,12 @@ mod tests {
             "nothing to fade out"
         );
         assert_eq!(game.bgm.state, 0x08);
-        assert_eq!(names(&game)[0], Some("Bgm_13"));
+        assert_eq!(names(&game)[0], Some(0x013));
         assert!(game.bgm.channels[0].pending_load);
         assert!(game.bgm.channels[0].restart, "bit 3 starts the channel");
         assert!(game.bgm.channels[0].looping);
         assert_eq!(game.bgm.channels[0].volume, -1);
-        assert!(game.bgm.channels[1].name.is_none());
+        assert!(game.bgm.channels[1].track.is_none());
     }
 
     #[test]
@@ -595,15 +581,15 @@ mod tests {
         let mut game = game_for(id);
         set_row(&mut game, id, 0x10);
         game.bgm.state = 0x08;
-        mark_loaded(&mut game, "Bgm_13");
+        mark_loaded(&mut game, 0x013);
         // `from` is the same room, so the resolved group is unchanged.
         assert_eq!(update_room_bgm(&mut game, id, Some(id)), 0);
         assert_eq!(game.bgm.state, 0x10);
-        assert_eq!(game.bgm.channels[0].name, Some("Bgm_13"));
+        assert_eq!(game.bgm.channels[0].track, Some(0x013));
         assert!(!game.bgm.channels[0].restart, "channel 0's bit cleared");
         assert!(!game.bgm.channels[0].pending_load, "no reload happened");
         assert!(
-            game.bgm.channels[1].name.is_none(),
+            game.bgm.channels[1].track.is_none(),
             "channel 1 was not loaded"
         );
     }
@@ -617,7 +603,7 @@ mod tests {
         let from = RoomId::parse("1060").unwrap();
         set_row(&mut game, id, 0x08);
         game.bgm.state = 0x08;
-        mark_loaded(&mut game, "Bgm_00");
+        mark_loaded(&mut game, 0x000);
         // The teardown before the switch and the type-0 reload each run
         // `bgm_fade_out_all`, exactly like the original.
         assert_eq!(
@@ -626,8 +612,8 @@ mod tests {
         );
         assert_eq!(game.bgm.state, 0x08);
         assert_eq!(
-            game.bgm.channels[0].name,
-            Some("Bgm_13"),
+            game.bgm.channels[0].track,
+            Some(0x013),
             "the new group's bank replaced the old one"
         );
         assert!(game.bgm.channels[0].pending_load);
@@ -641,7 +627,7 @@ mod tests {
         set_row(&mut game, id, 0x40);
         update_room_bgm(&mut game, id, None);
         assert_eq!(game.bgm.state, 0x40);
-        assert_eq!(names(&game)[0], Some("Bgm_13"));
+        assert_eq!(names(&game)[0], Some(0x013));
         assert!(game.bgm.channels[0].pending_load);
         assert!(
             !game.bgm.channels[0].restart,
@@ -658,7 +644,7 @@ mod tests {
         game.bgm.state = 0xFF;
         assert_eq!(update_room_bgm(&mut game, id, None), FADE_OUT_ALL_FRAMES);
         assert_eq!(game.bgm.state, 0x08);
-        assert_eq!(names(&game)[0], Some("Bgm_13"));
+        assert_eq!(names(&game)[0], Some(0x013));
         assert!(game.bgm.channels[0].restart);
     }
 
@@ -674,7 +660,7 @@ mod tests {
             game.bgm
                 .channels
                 .iter()
-                .all(|channel| channel.name.is_none())
+                .all(|channel| channel.track.is_none())
         );
     }
 
@@ -704,7 +690,7 @@ mod tests {
         let mut game = game_for(id);
         set_row(&mut game, id, 0xFF);
         game.bgm.state = 0x08;
-        mark_loaded(&mut game, "Bgm_13");
+        mark_loaded(&mut game, 0x013);
         assert_eq!(
             update_room_bgm(&mut game, id, Some(id)),
             FADE_OUT_ALL_FRAMES
@@ -714,7 +700,7 @@ mod tests {
             game.bgm
                 .channels
                 .iter()
-                .all(|channel| channel.name.is_none())
+                .all(|channel| channel.track.is_none())
         );
     }
 
@@ -736,10 +722,7 @@ mod tests {
         let mut game = game_for(id);
         set_row(&mut game, id, 0x09);
         update_room_bgm(&mut game, id, None);
-        assert_eq!(
-            names(&game),
-            vec![Some("Bgm_10"), Some("Bgm_11"), Some("Bgm_12")]
-        );
+        assert_eq!(names(&game), vec![Some(0x010), Some(0x011), Some(0x012)]);
         let loops: Vec<bool> = game
             .bgm
             .channels
@@ -756,10 +739,7 @@ mod tests {
         let mut game = game_for(id);
         set_row(&mut game, id, 0x08);
         update_room_bgm(&mut game, id, None);
-        assert_eq!(
-            names(&game),
-            vec![Some("Bgm_00"), Some("Se_01"), Some("Bgm_05")]
-        );
+        assert_eq!(names(&game), vec![Some(0x000), Some(0x101), Some(0x005)]);
         assert_eq!(game.bgm.channels[0].volume, -1);
         assert_eq!(game.bgm.channels[1].volume, -9999);
         assert_eq!(game.bgm.channels[2].volume, -1);
@@ -776,8 +756,9 @@ mod tests {
         // track is the muted Se_01 seed.
         let id = RoomId::parse("1050").unwrap();
         let mut game = game_for(id);
+        set_row(&mut game, id, 0x10);
         update_room_bgm(&mut game, id, None);
-        assert_eq!(game.bgm.channels[1].name, Some("Se_01"));
+        assert_eq!(game.bgm.channels[1].track, Some(0x101));
         assert_eq!(game.bgm.channels[1].volume, -9999, "the seed loads muted");
 
         // The script pairs a `snd_pan_vol_set` set on channel 1; it must replace the
@@ -821,24 +802,24 @@ mod tests {
         // Chris never keeps it.
         let (id, mut chris) = courtyard_game(0, &[0x48, 0x5C]);
         update_room_bgm(&mut chris, id, None);
-        assert_eq!(chris.bgm.channels[0].name, Some("Se_44"));
-        assert_eq!(chris.bgm.channels[1].name, Some("Bgm_3a"));
-        assert!(chris.bgm.channels[2].name.is_none());
+        assert_eq!(chris.bgm.channels[0].track, Some(0x109));
+        assert_eq!(chris.bgm.channels[1].track, Some(0x03a));
+        assert!(chris.bgm.channels[2].track.is_none());
 
         // Jill without both flags drops it.
         let (id, mut jill) = courtyard_game(1, &[0x48]);
         update_room_bgm(&mut jill, id, None);
-        assert!(jill.bgm.channels[2].name.is_none());
+        assert!(jill.bgm.channels[2].track.is_none());
 
         // Jill with 0x55 set drops it too.
         let (id, mut jill) = courtyard_game(1, &[0x48, 0x5C, 0x55]);
         update_room_bgm(&mut jill, id, None);
-        assert!(jill.bgm.channels[2].name.is_none());
+        assert!(jill.bgm.channels[2].track.is_none());
 
         // Jill with 0x48 and 0x5C set and 0x55 clear keeps V110_00.
         let (id, mut jill) = courtyard_game(1, &[0x48, 0x5C]);
         update_room_bgm(&mut jill, id, None);
-        assert_eq!(jill.bgm.channels[2].name, Some("V110_00"));
+        assert_eq!(jill.bgm.channels[2].track, Some(0x118));
         assert!(!jill.bgm.channels[2].looping);
         assert!(jill.bgm.channels[2].pending_load);
     }
@@ -855,16 +836,18 @@ mod tests {
         (path, pack)
     }
 
-    /// An on-disk pack carrying one `se/{name}.wav` entry.
-    fn pack_with_se(name: &str, bytes: &[u8]) -> (std::path::PathBuf, Pack) {
-        let path =
-            std::env::temp_dir().join(format!("arklay-bgm-{}-{name}.akpak", std::process::id()));
+    /// An on-disk pack carrying one `bgm/<track id>.wav` entry.
+    fn pack_with_se(track: crate::music::TrackId, bytes: &[u8]) -> (std::path::PathBuf, Pack) {
+        let path = std::env::temp_dir().join(format!(
+            "arklay-bgm-{}-{track:03x}.akpak",
+            std::process::id()
+        ));
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
         let mut writer = crate::pack::PackWriter::new();
         writer
-            .add(&format!("se/{name}.wav"), bytes.to_vec())
+            .add(&crate::music::bgm_entry(track), bytes.to_vec())
             .unwrap();
         writer.write(&path).unwrap();
         let pack = Pack::open(&path).unwrap();
@@ -900,11 +883,11 @@ mod tests {
         // the channel falls silent. The mixer wrapper used to force every
         // channel to loop, so the drain sound restarted forever after the
         // action's cutscene.
-        let (_path, pack) = pack_with_se("se_4b", &wav_bytes(&[100, 200, 300, 400]));
+        let (_path, pack) = pack_with_se(0x10c, &wav_bytes(&[100, 200, 300, 400]));
         let id = RoomId::parse("411").unwrap();
         let mut game = game_for(id);
         game.bgm.channels[1] = BgmChannelState {
-            name: Some("Se_4b"),
+            track: Some(0x10c),
             looping: false,
             volume: -1,
             pan: 0,
@@ -942,7 +925,7 @@ mod tests {
         let id = RoomId::parse("1000").unwrap();
         let mut game = game_for(id);
         game.bgm.state = 0x10;
-        game.bgm.channels[1].name = Some("Se_01");
+        game.bgm.channels[1].track = Some(0x101);
         game.bgm.channels[1].volume = -9999;
         start_volume_ramp(&mut game, 1, 95, 30);
         assert_eq!(game.bgm.ramp.direction, (95 / 30) * 0x4E);
@@ -969,9 +952,9 @@ mod tests {
         let (_path, pack) = empty_pack("fade");
         let id = RoomId::parse("1000").unwrap();
         let mut game = game_for(id);
-        game.bgm.channels[0].name = Some("Bgm_13");
+        game.bgm.channels[0].track = Some(0x013);
         game.bgm.channels[0].volume = -1;
-        game.bgm.channels[1].name = Some("Se_01");
+        game.bgm.channels[1].track = Some(0x101);
         game.bgm.channels[1].volume = -1;
         game.bgm.state = 0x08 | 0x10;
         build_snd_fade_tbl(&mut game, -5);
@@ -999,7 +982,7 @@ mod tests {
             apply_live(&mut None, &mut game, &mut cache, &pack);
         }
         assert!(!game.bgm.fade.active());
-        assert!(game.bgm.channels.iter().all(|bank| bank.name.is_none()));
+        assert!(game.bgm.channels.iter().all(|bank| bank.track.is_none()));
     }
 
     #[test]
@@ -1062,7 +1045,7 @@ mod tests {
         // The live state says channel 0 is enabled and loaded, then a 0xFF
         // room target fades everything out.
         game.bgm.state = 0x08;
-        game.bgm.channels[0].name = Some("Bgm_13");
+        game.bgm.channels[0].track = Some(0x013);
         set_row(&mut game, id, 0xFF);
         update_room_bgm(&mut game, id, Some(id));
         assert!(game.bgm.stop_all, "the fade armed the mixer tear-down edge");

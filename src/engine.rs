@@ -398,12 +398,9 @@ pub fn run_with_options(
         let load_start = Instant::now();
         let mut loaded = load_room(&pack, id)?;
         let mut game = new_game_state(&pack, id, &loaded.room);
+        crate::lua::seed_initial_state(&pack, &mut game, id.player_flag);
+        clear_item_box(&mut game);
         game.player_options = player_options;
-        seed_room_items(&mut game);
-        // The arbitrary-room boot seeds the selected character's start block
-        // like the interactive `from_room` path, so a headless run starts with
-        // a live character rather than a zeroed one.
-        seed_start_health(&mut game, id.player_flag);
         let mut player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         run_room_init(&mut loaded, &mut game);
@@ -413,7 +410,7 @@ pub fn run_with_options(
         run_setup_chunk(lua.as_ref(), &mut game, authoring.setup_script)?;
         game.sync_player(&mut player_state);
         if let Some(path) = authoring.save_out {
-            write_save_file(&pack, &game, path)?;
+            write_save_file(&game, path)?;
             return Ok(());
         }
         drain_mask_toggles(&mut loaded.room, &mut game);
@@ -881,11 +878,8 @@ fn run_setup_chunk(
 /// The `--save-out` half of [`run_setup_chunk`]: the same
 /// [`save::SaveFile::from_state`] capture the typewriter screen writes, so the
 /// file loads through `--load` here and `--test-load` in the reference.
-fn write_save_file(pack: &Pack, game: &game::GameState, path: &Path) -> Result<()> {
-    let file = match pack.read(save::SAVE_PREFIX_ENTRY) {
-        Ok(prefix) => save::SaveFile::from_state_with_prefix(game, &prefix)?,
-        Err(_) => save::SaveFile::from_state(game),
-    };
+fn write_save_file(game: &game::GameState, path: &Path) -> Result<()> {
+    let file = save::SaveFile::from_state(game);
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -2030,14 +2024,15 @@ pub const NEW_GAME_POS_Z: i32 = 5000;
 pub const NEW_GAME_ANGLE: u16 = 3072;
 /// New-game starting health: Chris then Jill.
 pub const NEW_GAME_HEALTH: [i16; 2] = [140, 96];
-/// Fallback new-game start room (stage 1, the main hall) when the pack ships
-/// no `data/bio_card.dat`. The shipped card names the real start room; this is
-/// the same room the original's card carries.
+/// New-game start room (stage 1, the main hall), the shipped card's room.
 pub const NEW_GAME_ROOM: u8 = 0x06;
-/// New-game carried room-pickup quantities (BioCard 0x20C..0x20E): ROOM1160's
-/// shotgun shells and ROOM30B0/ROOM3080's flamethrower fuel.
+/// Test fixture mirroring `initial_state.lua`: the three carried room-pickup
+/// quantities (BioCard 0x20C..0x20E).
+#[doc(hidden)]
 pub const NEW_GAME_PICKUP_QUANTITIES: [u8; 3] = [7, 240, 240];
-/// The shipped 32-byte room-items flag pattern: bit set = item still there.
+/// Test fixture mirroring `initial_state.lua`: the shipped 32-byte
+/// room-items flag pattern (bit set = item still there).
+#[doc(hidden)]
 pub const NEW_GAME_ROOM_ITEMS: [u8; 32] = [
     0xFF, 0xFF, 0xFF, 0xBF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF7, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -2100,7 +2095,7 @@ impl GameSession {
     /// items and room-item flags, then the room init/main/event VMs.
     fn new(pack: &Pack, character: u8, save_dir: &Path) -> Result<Box<Self>> {
         let character = character & 1;
-        let id = new_game_id(pack, character);
+        let id = new_game_id(character);
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
         seed_new_game(pack, &mut game, character);
@@ -2168,6 +2163,7 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
         seed_new_game(pack, &mut game, reel.character);
+        clear_item_box(&mut game);
         // The attract branch sets the mode bit before the room loads, so every
         // script and entity driver sees it, and seeds the PRNG as game_loop
         // does for attract playback.
@@ -2236,8 +2232,8 @@ impl GameSession {
     fn from_room(pack: &Pack, id: RoomId, save_dir: &Path) -> Result<Box<Self>> {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
-        seed_room_items(&mut game);
-        seed_start_health(&mut game, id.player_flag);
+        crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
+        clear_item_box(&mut game);
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir)?;
@@ -2636,7 +2632,7 @@ impl GameSession {
         mixer.stop_voice();
         mixer.stop_all_bgm();
         for channel in &mut self.game.bgm.channels {
-            if channel.name.is_some() {
+            if channel.track.is_some() {
                 channel.pending_load = true;
             }
         }
@@ -4570,7 +4566,7 @@ impl GameSession {
             return;
         }
         self.render(pack);
-        let file = self.snapshot_save(pack);
+        let file = self.snapshot_save();
         let mut cx = self.ui_context(pack);
         let screen = ui::save_load::open_save_screen(
             self.game.save_screen.as_deref(),
@@ -4586,19 +4582,10 @@ impl GameSession {
         self.play_ui_cue_names(pack, cues);
     }
 
-    /// Capture the current game state as a save block with the bio-card
-    /// prefix, when the pack carries one.
-    fn snapshot_save(&self, pack: &Pack) -> save::SaveFile {
-        let Ok(prefix) = pack.read(save::SAVE_PREFIX_ENTRY) else {
-            return save::SaveFile::from_state(&self.game);
-        };
-        match save::SaveFile::from_state_with_prefix(&self.game, &prefix) {
-            Ok(file) => file,
-            Err(err) => {
-                eprintln!("warning: invalid {0}: {err:#}", save::SAVE_PREFIX_ENTRY);
-                save::SaveFile::from_state(&self.game)
-            }
-        }
+    /// Capture the current game state as a save block with the hardcoded
+    /// BioCard prefix.
+    fn snapshot_save(&self) -> save::SaveFile {
+        save::SaveFile::from_state(&self.game)
     }
 
     /// Run the `--setup-script` authoring chunk over the freshly booted
@@ -4621,8 +4608,8 @@ impl GameSession {
     /// The `--save-out` authoring seam: the same capture the typewriter save
     /// screen writes, so the file loads through `--load` and the reference's
     /// `--test-load`.
-    fn write_save(&self, pack: &Pack, path: &Path) -> Result<()> {
-        write_save_file(pack, &self.game, path)
+    fn write_save(&self, _pack: &Pack, path: &Path) -> Result<()> {
+        write_save_file(&self.game, path)
     }
 
     /// The session's UI context for a screen that runs over the frozen room.
@@ -6288,23 +6275,19 @@ impl GameSession {
     }
 }
 
-/// Apply the shipped new-game room-items bank: bit set = the item is still in
-/// its room. Every boot that is not loading a save starts from this pattern,
-/// so a directly booted room's `item_aot_set` sites register instead of
-/// reading as already taken.
-fn seed_room_items(game: &mut game::GameState) {
-    game.flags[7]
-        .bytes_mut()
-        .copy_from_slice(&NEW_GAME_ROOM_ITEMS);
+/// Direct room/headless boots start with an empty item box, unlike a new game
+/// (whose shipped two Handgun Ammo stacks come from `initial_state.lua`).
+fn clear_item_box(game: &mut game::GameState) {
+    game.item_box = [game::InventoryItem::default(); game::ITEM_BOX_SLOTS];
 }
 
 /// Apply the selected character's playable start: the model-id and
 /// selected-character bytes, full health, the character's maximum, the BioCard
 /// health copy and the `0x10` status byte.
 ///
-/// `InitializeGame` writes these after the BioCard copy on every new game; the
-/// arbitrary-room boot seeds the same block so a directly booted room starts
-/// with a live character rather than a zeroed one.
+/// `InitializeGame` writes these after the new-game state on every new game;
+/// the arbitrary-room boot seeds the same block so a directly booted room
+/// starts with a live character rather than a zeroed one.
 fn seed_start_health(game: &mut game::GameState, character: u8) {
     let character = character & 1;
     game.state_bytes[usize::from(game::STATE_BYTE_CHARACTER_MODEL)] = character;
@@ -6438,46 +6421,19 @@ fn entry_spot_free(room: &RoomState, pos: [i32; 3]) -> bool {
         })
 }
 
-/// The shipped new-game card (`data/bio_card.dat`), when the pack carries one.
-///
-/// `InitializeGame` loads this file and memcpys its 1052 bytes over the
-/// BioCard block on every new game; the port reads it for the same purpose.
-fn bio_card(pack: &Pack) -> Option<save::SaveFile> {
-    let bytes = pack.read(save::SAVE_PREFIX_ENTRY).ok()?;
-    match save::SaveFile::from_bytes(&bytes) {
-        Ok(card) => Some(card),
-        Err(err) => {
-            eprintln!("warning: invalid {}: {err:#}", save::SAVE_PREFIX_ENTRY);
-            None
-        }
-    }
-}
-
-/// The new-game identity: the shipped card's stage/room (its stage byte is
-/// 0-based, the port's is the RDT file digit), else the main hall.
-fn new_game_id(pack: &Pack, character: u8) -> RoomId {
-    let fallback = RoomId {
+/// The new-game identity: the shipped card's start room is the main hall.
+fn new_game_id(character: u8) -> RoomId {
+    RoomId {
         stage: 1,
         room: NEW_GAME_ROOM,
         player_flag: character & 1,
-    };
-    let Some(card) = bio_card(pack) else {
-        return fallback;
-    };
-    let stage = card.stage.saturating_add(1);
-    if stage > RoomId::MAX_STAGE || card.room > RoomId::MAX_ROOM {
-        return fallback;
-    }
-    RoomId {
-        stage,
-        room: card.room,
-        player_flag: character & 1,
     }
 }
 
-/// Apply the shipped new-game state: the `bio_card.dat` copy
-/// (`InitializeGame`'s 1052-byte memcpy), then `SetInitialItems` and the
-/// explicit overrides that follow it.
+/// Apply the character-specific new-game seed over the fresh state:
+/// `SetInitialItems`, the save counter and the Jill first-run flags. The
+/// room-BGM bytes, item box and room-item bank come from
+/// `game/initial_state.lua`, which `new_game_state` already ran.
 fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
     let character = character & 1;
     // `TestHooks_StartNewGame` (and the character-select hand-off it mirrors)
@@ -6486,29 +6442,12 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
     if character == 1 {
         game.apply_flag(5, game::MSF_CHAR_VARIANT, 0);
     }
-    let card = bio_card(pack);
-    if let Some(card) = &card {
-        card.apply_new_game_card(game);
-        // The card copy restates the room bytes; the port's state image uses
-        // the 1-based stage digit, so put the identity back.
-        game.state_bytes[0] = game.id.stage;
-        game.state_bytes[1] = game.id.room;
-    }
-    // `InitializeGame` writes the selected character into the model-id and
-    // selected-character bytes after the card copy, then seeds the playable
-    // start health; the arbitrary-room boot applies the same block.
+    // The fresh state's item box, room items, pickup quantities and room-BGM
+    // bytes come from `game/initial_state.lua`. `InitializeGame` then seeds the
+    // playable start health and the save counter.
+    crate::lua::seed_initial_state(pack, game, character);
     seed_start_health(game, character);
-    seed_room_items(game);
-    // The three carried room-pickup quantities SetInitialItems seeds
-    // (BioCard 0x20C..0x20E): ROOM1160's shotgun shells and the two
-    // flamethrower rooms' fuel.
-    game.state_bytes[0x0C] = NEW_GAME_PICKUP_QUANTITIES[0];
-    game.state_bytes[0x0D] = NEW_GAME_PICKUP_QUANTITIES[1];
-    game.state_bytes[0x0E] = NEW_GAME_PICKUP_QUANTITIES[2];
-    // The shipped card starts the counter at 1 (its save screen shows that
-    // first count); a pack without one falls back to 0.
-    game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] =
-        card.as_ref().map_or(0, |card| card.saves);
+    game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] = 1;
     // `InitializeGame` zeroes the play timer on a new game.
     game.state_bytes[0x24..0x28].fill(0);
     // `SetInitialItems` writes the character's whole slot run (six for Chris,
@@ -6548,7 +6487,7 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
 fn build_next_cycle_save(pack: &Pack, flow: &EndingFlow) -> Result<save::SaveFile> {
     let stats = flow.stats;
     let character = stats.character & 1;
-    let id = new_game_id(pack, character);
+    let id = new_game_id(character);
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
     seed_new_game(pack, &mut game, character);
@@ -6592,16 +6531,7 @@ fn build_next_cycle_save(pack: &Pack, flow: &EndingFlow) -> Result<save::SaveFil
         0,
     );
 
-    let Ok(prefix) = pack.read(save::SAVE_PREFIX_ENTRY) else {
-        return Ok(save::SaveFile::from_state(&game));
-    };
-    match save::SaveFile::from_state_with_prefix(&game, &prefix) {
-        Ok(file) => Ok(file),
-        Err(err) => {
-            eprintln!("warning: invalid {0}: {err:#}", save::SAVE_PREFIX_ENTRY);
-            Ok(save::SaveFile::from_state(&game))
-        }
-    }
+    Ok(save::SaveFile::from_state(&game))
 }
 
 /// Which screen `--ui` boots or the app opens first.
@@ -9426,6 +9356,8 @@ pub fn simulate_door(
 ) -> Result<SimulatedDoor> {
     let mut loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
+    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
+    clear_item_box(&mut game);
     let mut player_state = player::spawn(id, &loaded.room);
     run_room_init(&mut loaded, &mut game);
     drain_mask_toggles(&mut loaded.room, &mut game);
@@ -9620,7 +9552,8 @@ pub fn simulate_room_with_input(
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    seed_room_items(&mut game);
+    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
+    clear_item_box(&mut game);
     let player_state = player::spawn(id, &loaded.room);
     game.sync_entity_from_player(&player_state);
     simulate_loaded(pack, loaded, game, player_state, ticks, input)
@@ -9638,7 +9571,8 @@ pub fn simulate_room_seeded(
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    seed_room_items(&mut game);
+    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
+    clear_item_box(&mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
     }
@@ -9660,7 +9594,8 @@ pub fn simulate_room_prepared(
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    seed_room_items(&mut game);
+    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
+    clear_item_box(&mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
     }
@@ -9687,7 +9622,8 @@ pub fn simulate_room_with_movie(
 ) -> Result<SimulatedMovie> {
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
-    seed_room_items(&mut game);
+    crate::lua::seed_initial_state(pack, &mut game, id.player_flag);
+    clear_item_box(&mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
     }
@@ -9756,7 +9692,7 @@ pub fn simulate_new_game(
     input: player::Input,
 ) -> Result<SimulatedRoom> {
     let character = character & 1;
-    let id = new_game_id(pack, character);
+    let id = new_game_id(character);
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
     seed_new_game(pack, &mut game, character);
@@ -10349,7 +10285,7 @@ fn play_snd3d_requests(
         );
         if play.bgm {
             if let Some(bank) = game.bgm.channels.first_mut()
-                && bank.name.is_some()
+                && bank.track.is_some()
             {
                 bank.pan = play.raw_pan;
                 bank.restart = true;
@@ -11423,11 +11359,14 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
     })
 }
 
-/// Build a fresh game state for `id`/`room` with the pack's global weapon-FX
-/// metadata installed, so script effect spawns resolve both the room's
-/// declared sprites and the `core00` types.
+/// Build a fresh game state for `id`/`room` with the pack's static music
+/// tables and global weapon-FX metadata installed, so room entry and script
+/// effect spawns resolve both the room's declared sprites and the `core00`
+/// types.
 fn new_game_state(pack: &Pack, id: RoomId, room: &RoomState) -> game::GameState {
     let mut game = game::GameState::new(id, room);
+    game.music = crate::music::load(pack);
+    seed_start_health(&mut game, id.player_flag);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
     if pack.contains(effects::room::CORE_ESP_ENTRY) || pack.contains(effects::room::CORE_ETM_ENTRY)
@@ -14145,8 +14084,11 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
 /// running engine goes through [`bgm::BgmCache`] instead.
 #[cfg(test)]
 fn load_room_music(pack: &Pack, id: RoomId) -> Option<audio::Wav> {
-    let (name, _looping) = crate::music::primary_track(id)?;
-    let path = crate::music::pack_path(name)?;
+    let tables = crate::music::load(pack);
+    let stage = usize::from(id.stage.checked_sub(1)?);
+    let group = tables.group_for(stage, usize::from(id.room), 0x08)?;
+    let track = tables.group(group)?.tracks.into_iter().flatten().next()?;
+    let path = crate::music::bgm_entry(track);
     match pack.read(&path) {
         Ok(bytes) => match audio::parse_wav(&bytes) {
             Ok(wav) => Some(wav),
@@ -17609,7 +17551,7 @@ mod tests {
             pos: point(0, 0),
         });
         // Bank 4 pans and restarts BGM channel 0 when a bank is loaded.
-        game.bgm.channels[0].name = Some("Bgm_13");
+        game.bgm.channels[0].track = Some(0x013);
         game.snd3d_requests.push(game::Snd3dRequest {
             bank: 4,
             id: 23,
@@ -18084,46 +18026,11 @@ mod tests {
                 bmp_bytes.clone(),
             )
             .unwrap();
-        writer
-            .add(save::SAVE_PREFIX_ENTRY, synthetic_bio_card())
-            .unwrap();
         for (entry, bytes) in extra {
             writer.add(entry, bytes.to_vec()).unwrap();
         }
         writer.write(&pack_path).unwrap();
         pack_path
-    }
-
-    /// A serialized bio card carrying the shipped new-game fields: the main
-    /// hall, the starting item box and the counter at 1.
-    fn synthetic_bio_card() -> Vec<u8> {
-        let mut card = save::SaveFile {
-            room: NEW_GAME_ROOM,
-            saves: 1,
-            total_held: 2,
-            ..save::SaveFile::default()
-        };
-        card.item_box[0] = game::InventoryItem {
-            id: ITEM_HANDGUN_AMMO,
-            quantity: 15,
-        };
-        card.item_box[1] = game::InventoryItem {
-            id: ITEM_HANDGUN_AMMO,
-            quantity: 15,
-        };
-        card.player_slots[0] = game::InventoryItem {
-            id: ITEM_KNIFE,
-            quantity: 0,
-        };
-        card.player_slots[1] = game::InventoryItem {
-            id: ITEM_FIRST_AID_SPRAY,
-            quantity: 1,
-        };
-        card.player_slots[6] = game::InventoryItem {
-            id: ITEM_BERETTA,
-            quantity: 15,
-        };
-        card.to_bytes().to_vec()
     }
 
     fn confirm_input() -> UiInput {
@@ -19733,7 +19640,7 @@ mod tests {
         session.game.room_bgm[usize::from(source.room)] = 0x08;
         bgm::update_room_bgm(&mut session.game, source, None);
         assert_eq!(session.game.bgm.state, 0x08);
-        assert_eq!(session.game.bgm.channels[0].name, Some("Bgm_13"));
+        assert_eq!(session.game.bgm.channels[0].track, Some(0x013));
 
         trigger_test_door(&pack, &mut session);
 
@@ -19761,8 +19668,8 @@ mod tests {
                     "the destination BGM state must wait for the animation's end"
                 );
                 assert_eq!(
-                    session.game.bgm.channels[0].name,
-                    Some("Bgm_13"),
+                    session.game.bgm.channels[0].track,
+                    Some(0x013),
                     "the outgoing room's track must keep playing under the door"
                 );
             }
@@ -19784,8 +19691,8 @@ mod tests {
         );
         assert_eq!(session.game.bgm.state, 0x08);
         assert_eq!(
-            session.game.bgm.channels[0].name,
-            Some("Bgm_00"),
+            session.game.bgm.channels[0].track,
+            Some(0x000),
             "the destination's group is selected on the animation's final frame"
         );
     }
@@ -19886,7 +19793,7 @@ mod tests {
                     session.game.bgm.state, 0x08,
                     "a camera-only record must not re-run the handoff early"
                 );
-                assert_eq!(session.game.bgm.channels[0].name, Some("Bgm_13"));
+                assert_eq!(session.game.bgm.channels[0].track, Some(0x013));
             }
             if session.transition_finished {
                 break;
@@ -19900,8 +19807,8 @@ mod tests {
             "the camera-only handoff runs on the animation's final frame"
         );
         assert_eq!(
-            session.game.bgm.channels[0].name,
-            Some("Bgm_13"),
+            session.game.bgm.channels[0].track,
+            Some(0x013),
             "the same group keeps its loaded bank"
         );
     }
@@ -20344,7 +20251,7 @@ mod tests {
         );
         assert!(mixer.active_sfx() > 0);
         session.music = Some(mixer);
-        session.game.bgm.channels[0].name = Some("main00");
+        session.game.bgm.channels[0].track = Some(0x999);
         session.game.bgm.channels[0].pending_load = false;
         session.set_skips_enabled(true);
         session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
@@ -23195,7 +23102,7 @@ off_0010:
         assert!(has(items::ITEM_MINIMI), "Chris's sub-four-hour gun");
 
         // The flags round-trip through the scenario bank.
-        let id = new_game_id(&pack, 0);
+        let id = new_game_id(0);
         let loaded = load_room(&pack, id).unwrap();
         let mut state = new_game_state(&pack, id, &loaded.room);
         file.apply_to(&mut state);
@@ -24890,7 +24797,7 @@ off_0010:
                 session.game.state_bytes[usize::from(game::STATE_BYTE_CHARACTER_MODEL)],
                 character
             );
-            // The card's item box carries two Handgun Ammo stacks of 15.
+            // `initial_state.lua` puts two Handgun Ammo stacks of 15 in the box.
             for slot in 0..2 {
                 assert_eq!(session.game.item_box[slot].id, ITEM_HANDGUN_AMMO);
                 assert_eq!(session.game.item_box[slot].quantity, 15);
@@ -25149,7 +25056,7 @@ off_0010:
                 session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)],
                 1
             );
-            // The card's item box carries two Handgun Ammo stacks of 15.
+            // `initial_state.lua` puts two Handgun Ammo stacks of 15 in the box.
             assert_eq!(session.game.item_box[0].id, ITEM_HANDGUN_AMMO);
             assert_eq!(session.game.item_box[0].quantity, 15);
             assert_eq!(session.game.item_box[1].id, ITEM_HANDGUN_AMMO);
@@ -25207,8 +25114,7 @@ off_0010:
 
         let dir = TempDir::new();
         let saves = dir.0.join("saves");
-        let card = pack.read(save::SAVE_PREFIX_ENTRY).unwrap();
-        let file = save::SaveFile::from_state_with_prefix(&session.game, &card).unwrap();
+        let file = save::SaveFile::from_state(&session.game);
         save::save(&saves, 3, &file).unwrap();
 
         let parsed = save::load(&saves, 3).unwrap();

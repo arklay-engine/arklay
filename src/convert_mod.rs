@@ -887,17 +887,19 @@ fn classify_players(name: &str) -> Class {
 
 /// `sound/`: BGM tracks and the named effects.
 fn classify_sound(file: &str) -> Class {
-    if let Some(path) = crate::music::pack_path(file) {
-        return raw(path);
-    }
     let lower = file.to_ascii_lowercase();
     let Some(stem) = lower.strip_suffix(".wav") else {
         return Class::Unmapped;
     };
+    if let Some(&(id, _)) = crate::music::MUSIC_TRACKS
+        .iter()
+        .find(|(_, name)| name.eq_ignore_ascii_case(stem))
+    {
+        return raw(crate::music::bgm_entry(id));
+    }
     let known = crate::sfx::SE_NAMES
         .iter()
         .copied()
-        .chain(crate::music::se_track_names())
         .any(|name| name.eq_ignore_ascii_case(stem));
     if !known {
         return Class::Unmapped;
@@ -970,9 +972,6 @@ fn classify_data(name: &str, stem: &str, extension: &str) -> Class {
         if file.eq_ignore_ascii_case(name) {
             return converted(entry, Convert::ItemAtlas(rows));
         }
-    }
-    if name.eq_ignore_ascii_case(convert::BIO_CARD_FILE) {
-        return raw(convert::BIO_CARD_ENTRY);
     }
     if let Some(index) = convert::DEMO_FILES
         .iter()
@@ -1525,6 +1524,8 @@ mod tests {
             "mod_biorand/players/ws210.tmd",
             "mod_biorand/sound/BGM_13.wav",
             "mod_biorand/sound/BGM_24A.wav",
+            "mod_biorand/sound/SE_01.wav",
+            "mod_biorand/sound/CHAIN1.wav",
             "mod_biorand/data/statface.tim",
             "mod_biorand/data/title.pix",
             "mod_biorand/type.png",
@@ -1569,7 +1570,9 @@ mod tests {
             "player/ws210.tmd"
         );
         assert_eq!(one(&map, "mod_biorand/sound/BGM_13.wav"), "bgm/013.wav");
-        assert_eq!(one(&map, "mod_biorand/sound/BGM_24A.wav"), "bgm/024_00.wav");
+        assert_eq!(one(&map, "mod_biorand/sound/BGM_24A.wav"), "bgm/200.wav");
+        assert_eq!(one(&map, "mod_biorand/sound/SE_01.wav"), "bgm/101.wav");
+        assert_eq!(one(&map, "mod_biorand/sound/CHAIN1.wav"), "bgm/100.wav");
         assert_eq!(
             one(&map, "mod_biorand/data/statface.tim"),
             "ui/statface.tim"

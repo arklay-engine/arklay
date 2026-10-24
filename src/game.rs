@@ -26,7 +26,6 @@ use crate::effects;
 use crate::items;
 use crate::message::{MessageAction, MessageInput, MessageWindow};
 use crate::movie;
-use crate::music;
 use crate::objects::{self, CollisionEdit, LightEdit, ObjectTable};
 use crate::player::PlayerState;
 use crate::scd::host::{EventRequest, ScdHost, StepResult};
@@ -669,10 +668,9 @@ pub struct DeskFlow {
 /// edges the engine consumes when it reconciles the mixer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BgmChannelState {
-    /// Loaded track basename (a `GROUP_TRACKS` entry), `None` when no bank is
-    /// loaded.
-    pub name: Option<&'static str>,
-    /// Whole-buffer loop flag from `GROUP_LOOPS`.
+    /// Loaded track id (`bgm/<id:03x>`), `None` when no bank is loaded.
+    pub track: Option<crate::music::TrackId>,
+    /// Whole-buffer loop flag from the group preset.
     pub looping: bool,
     /// DirectSound millibel volume; the three muted seeds start at -9999 and
     /// a stopped channel resets to -1, matching the original.
@@ -3382,9 +3380,13 @@ pub struct GameState {
     /// BGM state.
     pub bgm: BgmState,
     /// The per-stage/room BGM state table (BioCard 0x33C, `g_roomBgmState`).
-    /// Seeded from [`music::ROOM_STATE`] on a new game and restored from a
-    /// save; `room_bgm_state_set` writes it at `stage0 * 32 + room`.
+    /// Seeded to "no music" and written by `game/initial_state.lua` on a new
+    /// game, restored from a save, or changed by `room_bgm_state_set` at
+    /// `stage0 * 32 + room`.
     pub room_bgm: [u8; ROOM_BGM_LEN],
+    /// Static music groups and room rows loaded from `game/music.lua`.
+    /// Runtime-only; the save block carries just [`GameState::room_bgm`].
+    pub music: crate::music::MusicTables,
     /// Voice-line state behind the `voice_play` wait handshake.
     pub voice: VoiceState,
     /// Film state behind the `movie_on` request handshake.
@@ -3778,7 +3780,8 @@ impl Default for GameState {
             short_message_flags: 0xFFFF,
             message: MessageWindow::default(),
             bgm: BgmState::default(),
-            room_bgm: [0; ROOM_BGM_LEN],
+            room_bgm: [0xFF; ROOM_BGM_LEN],
+            music: crate::music::MusicTables::default(),
             voice: VoiceState::default(),
             fmv: FmvState::default(),
             inventory: Vec::new(),
@@ -3931,9 +3934,6 @@ impl GameState {
         state.state_bytes[0] = id.stage;
         state.state_bytes[1] = id.room;
         state.set_camera_cut(0);
-        // A new game starts from the shipped 224-byte per-room BGM table
-        // (BioCard 0x33C); a save load replaces it from the block.
-        state.room_bgm = music::ROOM_STATE;
         state.state_bytes[STATE_BYTE_CHARACTER as usize] = id.player_flag & 1;
         // `GameInit` parks the special-room-light state at -1 so no overlay
         // draws until a script arms one.
@@ -9359,7 +9359,7 @@ impl ScdHost for ScdGameHost<'_> {
                 let volume = operand_i8(operands, 2);
                 if let Some(bank) = self.state.bgm.channels.get_mut(usize::from(channel)) {
                     bank.pan_pair = (pan as u8, volume as u8);
-                    if bank.name.is_some() {
+                    if bank.track.is_some() {
                         bank.volume = crate::sfx::pan_volume(i32::from(pan), i32::from(volume))
                             .clamp(-9999, -1);
                     }
@@ -9381,7 +9381,7 @@ impl ScdHost for ScdGameHost<'_> {
             0x15 => {
                 let channel = operand_u8(operands, 0);
                 if let Some(bank) = self.state.bgm.channels.get_mut(usize::from(channel))
-                    && bank.name.is_some()
+                    && bank.track.is_some()
                 {
                     bank.restart = true;
                 }
@@ -9422,7 +9422,7 @@ impl ScdHost for ScdGameHost<'_> {
                     for index in 0..BGM_CHANNELS {
                         if self.state.bgm.state & (8u16 << index) != 0
                             && let Some(bank) = self.state.bgm.channels.get_mut(index)
-                            && bank.name.is_some()
+                            && bank.track.is_some()
                         {
                             bank.restart = true;
                         }
@@ -10258,8 +10258,8 @@ mod tests {
         // value 0xFF marks "no music" as a whole, not an all-bits mask).
         state.bgm.state = 0;
         // A loaded bank on channels 0 and 2; channel 1 is empty.
-        state.bgm.channels[0].name = Some("Bgm_13");
-        state.bgm.channels[2].name = Some("Se_42");
+        state.bgm.channels[0].track = Some(0x013);
+        state.bgm.channels[2].track = Some(0x107);
         {
             let mut host = ScdGameHost::new(&mut state);
             assert_eq!(
@@ -10296,7 +10296,7 @@ mod tests {
     #[test]
     fn bgm_bank_shifts_save_and_restore_the_mask() {
         let mut state = game();
-        state.bgm.channels[0].name = Some("Bgm_13");
+        state.bgm.channels[0].track = Some(0x013);
         state.bgm.state = 0x08 | 0x20;
         // The room's target state byte is not 0xFF, so both handlers act.
         state.bgm.target = 0x28;
@@ -10321,7 +10321,7 @@ mod tests {
         let mut state = game();
         state.bgm.target = 0xFF;
         state.bgm.state = 0x08;
-        state.bgm.channels[0].name = Some("Bgm_13");
+        state.bgm.channels[0].track = Some(0x013);
         let mut host = ScdGameHost::new(&mut state);
         assert_eq!(
             host.on_sound(op(0x4B), &operands(&[0])),
@@ -10343,7 +10343,7 @@ mod tests {
     #[test]
     fn snd_pan_vol_set_stores_the_pair_and_sets_the_volume() {
         let mut state = game();
-        state.bgm.channels[1].name = Some("Se_01");
+        state.bgm.channels[1].track = Some(0x101);
         state.bgm.channels[1].volume = -9999;
         {
             let mut host = ScdGameHost::new(&mut state);
@@ -10380,7 +10380,7 @@ mod tests {
     fn bgm_volume_ramp_arms_only_enabled_loaded_channels() {
         let mut state = game();
         state.bgm.state = 0x10;
-        state.bgm.channels[1].name = Some("Se_01");
+        state.bgm.channels[1].track = Some(0x101);
         {
             let mut host = ScdGameHost::new(&mut state);
             assert_eq!(
@@ -10406,9 +10406,9 @@ mod tests {
     #[test]
     fn snd_fade_set_builds_the_step_table() {
         let mut state = game();
-        state.bgm.channels[0].name = Some("Bgm_13");
+        state.bgm.channels[0].track = Some(0x013);
         state.bgm.channels[0].volume = -1;
-        state.bgm.channels[1].name = Some("Se_01");
+        state.bgm.channels[1].track = Some(0x101);
         state.bgm.channels[1].volume = -9999;
         {
             let mut host = ScdGameHost::new(&mut state);
