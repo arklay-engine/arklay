@@ -87,6 +87,7 @@ const SPRITE_FRAG: &[u8] = include_bytes!("shaders/sprite.frag.spv");
 const COMPOSITE_VERT: &[u8] = include_bytes!("shaders/composite.vert.spv");
 const COMPOSITE_FRAG: &[u8] = include_bytes!("shaders/composite.frag.spv");
 const OVERLAY_FRAG: &[u8] = include_bytes!("shaders/overlay.frag.spv");
+const UI_FRAG: &[u8] = include_bytes!("shaders/ui.frag.spv");
 const IVM_VERT: &[u8] = include_bytes!("shaders/ivm.vert.spv");
 
 /// Scene frames an unused upload stays resident before it is released.
@@ -195,6 +196,8 @@ struct Pipelines {
     model_blend: *mut SDL_GPUGraphicsPipeline,
     /// Present-only: built for the swapchain's format.
     composite: *mut SDL_GPUGraphicsPipeline,
+    /// Present-only: a UI layer blended over the composite.
+    ui: *mut SDL_GPUGraphicsPipeline,
 }
 
 /// The target an overlay's model ([`htexture::QuadImage::Model`]) renders
@@ -251,6 +254,12 @@ pub struct GpuRenderer {
     /// image `layer_black` holds alone, so a film frame shown across several
     /// presents is uploaded once.
     layer_image: Option<u64>,
+    /// The UI layer presented over the frame (the F1 debug menu at a wider
+    /// aspect), premultiplied; null until one is presented.
+    ui_texture: *mut SDL_GPUTexture,
+    ui_size: (u32, u32),
+    /// Whether the present being recorded draws `ui_texture`.
+    ui_shown: bool,
     sprite_buffer: *mut SDL_GPUBuffer,
     sprite_capacity: u32,
     /// The scene with a frame's 2D replacements drawn over it
@@ -326,6 +335,7 @@ impl GpuRenderer {
         // caller applies `set_vsync` for an explicit off preference.
         let format = unsafe { SDL_GetGPUSwapchainTextureFormat(renderer.device, window) };
         renderer.pipelines.composite = renderer.composite_pipeline(format)?;
+        renderer.pipelines.ui = renderer.ui_pipeline(format)?;
         Ok(renderer)
     }
 
@@ -411,6 +421,7 @@ impl GpuRenderer {
                 model_opaque: std::ptr::null_mut(),
                 model_blend: std::ptr::null_mut(),
                 composite: std::ptr::null_mut(),
+                ui: std::ptr::null_mut(),
             },
             sampler: std::ptr::null_mut(),
             linear: std::ptr::null_mut(),
@@ -422,6 +433,9 @@ impl GpuRenderer {
             layer_transfer: std::ptr::null_mut(),
             layer_size: (0, 0),
             layer_image: None,
+            ui_texture: std::ptr::null_mut(),
+            ui_size: (0, 0),
+            ui_shown: false,
             sprite_buffer: std::ptr::null_mut(),
             sprite_capacity: 0,
             overlay_target: std::ptr::null_mut(),
@@ -951,6 +965,22 @@ impl GpuRenderer {
             &[],
             SDL_GPU_CULLMODE_NONE,
             false,
+            None,
+            format,
+            SDL_GPU_SAMPLECOUNT_1,
+        )
+    }
+
+    fn ui_pipeline(&self, format: SDL_GPUTextureFormat) -> Result<*mut SDL_GPUGraphicsPipeline> {
+        let vertex = self.shader(COMPOSITE_VERT, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0)?;
+        let fragment = self.shader(UI_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0)?;
+        self.pipeline(
+            vertex.shader,
+            fragment.shader,
+            0,
+            &[],
+            SDL_GPU_CULLMODE_NONE,
+            true,
             None,
             format,
             SDL_GPU_SAMPLECOUNT_1,
@@ -1796,10 +1826,22 @@ impl GpuRenderer {
     ///
     /// `black` is the frame drawn over a black scene and `white` the same
     /// frame over a white one; `None` (a screen with no gameplay scene under
-    /// it) shows `black` as is.
-    pub fn present(&mut self, black: &Framebuffer, white: Option<&Framebuffer>) -> Result<()> {
+    /// it) shows `black` as is. `ui`, a premultiplied RGBA canvas of the
+    /// aspect's full size (the F1 debug menu at a wider aspect), is blended
+    /// over the result across the rectangle that canvas fits.
+    pub fn present(
+        &mut self,
+        black: &Framebuffer,
+        white: Option<&Framebuffer>,
+        ui: Option<&Framebuffer>,
+    ) -> Result<()> {
         if self.window.is_null() || self.pipelines.composite.is_null() {
             bail!("the GPU renderer has no window to present to");
+        }
+        self.ui_shown = false;
+        if let Some(ui) = ui {
+            self.upload_ui(ui)?;
+            self.ui_shown = true;
         }
         // A 320x240 frame, or a wider aspect's full-height canvas (which
         // never shows the gameplay scene, so it has a white layer only for
@@ -1885,6 +1927,7 @@ impl GpuRenderer {
         {
             bail!("unexpected {width}x{height} image of {} bytes", rgba.len());
         }
+        self.ui_shown = false;
         let shown = video::shown(frame.width, frame.height, frame.view);
         let layers = if self.layer_image == Some(serial) && self.layer_size == (width, height) {
             Layers::Kept
@@ -1903,6 +1946,49 @@ impl GpuRenderer {
         )?;
         self.layer_image = Some(serial);
         Ok(())
+    }
+
+    /// Upload `ui` into `ui_texture`, recreating it on a size change.
+    fn upload_ui(&mut self, ui: &Framebuffer) -> Result<()> {
+        let size = (ui.width, ui.height);
+        if size.0 == 0
+            || size.1 == 0
+            || size.0 > video::MAX_CANVAS_WIDTH
+            || ui.rgba.len() != size.0 as usize * size.1 as usize * 4
+        {
+            bail!(
+                "unexpected {}x{} UI layer of {} bytes",
+                size.0,
+                size.1,
+                ui.rgba.len()
+            );
+        }
+        if self.ui_texture.is_null() || self.ui_size != size {
+            if !self.ui_texture.is_null() {
+                unsafe { SDL_ReleaseGPUTexture(self.device, self.ui_texture) };
+                self.ui_texture = std::ptr::null_mut();
+            }
+            self.ui_texture = self.texture(
+                SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                size.0,
+                size.1,
+                SDL_GPU_TEXTUREUSAGE_SAMPLER,
+            )?;
+            self.ui_size = size;
+        }
+        let command = self.command_buffer()?;
+        let copy = unsafe { SDL_BeginGPUCopyPass(command) };
+        if copy.is_null() {
+            unsafe { SDL_CancelGPUCommandBuffer(command) };
+            bail!("SDL_BeginGPUCopyPass failed: {}", sdl_error());
+        }
+        let uploaded = self.upload_texture(copy, self.ui_texture, size.0, size.1, &ui.rgba);
+        unsafe { SDL_EndGPUCopyPass(copy) };
+        if let Err(err) = uploaded {
+            unsafe { SDL_CancelGPUCommandBuffer(command) };
+            return Err(err);
+        }
+        Self::submit(command)
     }
 
     /// Draw `overlay_target` for a `layer_w` x `layer_h` frame: the scene
@@ -2533,8 +2619,38 @@ impl GpuRenderer {
                     SDL_SetGPUScissor(pass, &scissor);
                     SDL_BindGPUFragmentSamplers(pass, 0, samplers.as_ptr(), 3);
                     SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
-                    SDL_EndGPURenderPass(pass);
                 }
+                if self.ui_shown && !self.pipelines.ui.is_null() {
+                    // The canvas fills the rectangle a frame of its shape
+                    // fits, which a wider aspect's band shares.
+                    let fit = video::fit_size(width, height, self.ui_size.0, self.ui_size.1);
+                    let viewport = SDL_GPUViewport {
+                        x: fit.x as f32,
+                        y: fit.y as f32,
+                        w: fit.width as f32,
+                        h: fit.height as f32,
+                        min_depth: 0.0,
+                        max_depth: 1.0,
+                    };
+                    let scissor = SDL_Rect {
+                        x: fit.x as i32,
+                        y: fit.y as i32,
+                        w: fit.width as i32,
+                        h: fit.height as i32,
+                    };
+                    let sampler = SDL_GPUTextureSamplerBinding {
+                        texture: self.ui_texture,
+                        sampler: self.linear,
+                    };
+                    unsafe {
+                        SDL_BindGPUGraphicsPipeline(pass, self.pipelines.ui);
+                        SDL_SetGPUViewport(pass, &viewport);
+                        SDL_SetGPUScissor(pass, &scissor);
+                        SDL_BindGPUFragmentSamplers(pass, 0, &sampler, 1);
+                        SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+                    }
+                }
+                unsafe { SDL_EndGPURenderPass(pass) };
             }
         }
         Ok(())
@@ -2753,6 +2869,7 @@ impl Drop for GpuRenderer {
                 self.pipelines.model_opaque,
                 self.pipelines.model_blend,
                 self.pipelines.composite,
+                self.pipelines.ui,
             ];
             for pipeline in pipelines.into_iter().filter(|p| !p.is_null()) {
                 SDL_ReleaseGPUGraphicsPipeline(self.device, pipeline);
@@ -2760,6 +2877,7 @@ impl Drop for GpuRenderer {
             let textures = [
                 self.layer_black,
                 self.layer_white,
+                self.ui_texture,
                 self.no_hd,
                 self.no_hd_rows,
                 self.overlay_target,

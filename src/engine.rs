@@ -44,7 +44,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 
-use sdl3_sys::blendmode::SDL_BLENDMODE_NONE;
+use sdl3_sys::blendmode::{SDL_BLENDMODE_BLEND_PREMULTIPLIED, SDL_BLENDMODE_NONE};
 use sdl3_sys::error::SDL_GetError;
 use sdl3_sys::events::{
     SDL_EVENT_GAMEPAD_ADDED, SDL_EVENT_GAMEPAD_AXIS_MOTION, SDL_EVENT_GAMEPAD_BUTTON_DOWN,
@@ -1051,6 +1051,9 @@ enum Backend {
     /// so it is destroyed before its renderer.
     Software {
         texture: FrameTexture,
+        /// The F1 debug menu's layer at a wider aspect, blended over the
+        /// frame; created the first time one is presented.
+        ui: Option<FrameTexture>,
         renderer: RendererHandle,
     },
     /// The SDL_GPU device, which owns the window's swapchain.
@@ -1297,7 +1300,11 @@ impl Display {
         if !unsafe { SDL_SetRenderDrawColor(renderer.0, 0, 0, 0, 255) } {
             bail!("SDL_SetRenderDrawColor failed: {}", sdl_error());
         }
-        Ok(Backend::Software { texture, renderer })
+        Ok(Backend::Software {
+            texture,
+            ui: None,
+            renderer,
+        })
     }
 
     /// The GPU renderer, when the window uses one.
@@ -1352,17 +1359,34 @@ impl Display {
 
     /// Upload the framebuffer and draw it scaled to the window.
     fn present(&mut self, framebuffer: &Framebuffer) -> Result<()> {
-        self.present_layers(framebuffer, None)
+        self.present_layers(framebuffer, None, None)
     }
 
     /// Present a frame whose overlays were drawn over the GPU scene: `black`
     /// over a black scene and `white` over a white one (see
     /// [`GameSession::render_layers`]). `white == None` shows `black` alone.
+    /// `ui`, a premultiplied canvas of the aspect's full size (the F1 debug
+    /// menu at a wider aspect), is blended over the frame.
     /// A GPU failure here drops this frame and continues in software.
-    fn present_layers(&mut self, black: &Framebuffer, white: Option<&Framebuffer>) -> Result<()> {
+    fn present_layers(
+        &mut self,
+        black: &Framebuffer,
+        white: Option<&Framebuffer>,
+        ui: Option<&Framebuffer>,
+    ) -> Result<()> {
         match &mut self.backend {
-            Backend::Software { texture, renderer } => present(renderer.0, texture, black),
-            Backend::Gpu(gpu) => match gpu.present(black, white) {
+            Backend::Software {
+                texture,
+                ui: ui_texture,
+                renderer,
+            } => {
+                present(renderer.0, texture, black)?;
+                match ui {
+                    Some(ui) => present_ui_layer(renderer.0, ui_texture, ui),
+                    None => Ok(()),
+                }
+            }
+            Backend::Gpu(gpu) => match gpu.present(black, white, ui) {
                 Ok(()) => Ok(()),
                 Err(err) => self.fall_back_to_software(&err),
             },
@@ -1380,7 +1404,9 @@ impl Display {
         film: &crate::hdfilm::VideoFrame,
     ) -> Result<()> {
         match &mut self.backend {
-            Backend::Software { texture, renderer } => present(renderer.0, texture, frame),
+            Backend::Software {
+                texture, renderer, ..
+            } => present(renderer.0, texture, frame),
             Backend::Gpu(gpu) => {
                 let size = (film.width, film.height);
                 match gpu.present_image(frame, &film.rgba, size, film.serial) {
@@ -1435,7 +1461,10 @@ impl Display {
                 height
             );
         }
-        let Backend::Software { texture, renderer } = &mut self.backend else {
+        let Backend::Software {
+            texture, renderer, ..
+        } = &mut self.backend
+        else {
             bail!("the launcher needs the software renderer");
         };
         let texture = texture.fit(renderer.0, width, height)?;
@@ -1815,6 +1844,13 @@ struct GameSession {
     /// scene (see [`GameSession::render_layers`]). Like `framebuffer`, it
     /// persists so a frozen frame keeps drawing over the last one.
     framebuffer_white: Option<Framebuffer>,
+    /// The F1 debug menu at a wider aspect: a premultiplied RGBA canvas of
+    /// the aspect's full width and height, presented over the room's band
+    /// (see [`GameSession::draw_ui_layer`]). `None` at 4:3, where the menu
+    /// draws into `framebuffer` as before.
+    ui_layer: Option<Framebuffer>,
+    /// The debug menu drawn over white, kept for the next frame.
+    ui_white: Framebuffer,
     /// The band a wider aspect presents (see [`GameSession::follow_view`]);
     /// the whole frame at 4:3.
     view: video::View,
@@ -2295,6 +2331,8 @@ impl GameSession {
             lua,
             framebuffer: Framebuffer::new(),
             framebuffer_white: None,
+            ui_layer: None,
+            ui_white: Framebuffer::default(),
             view: video::aspect().centred(),
             view_cut: None,
             view_prev: video::View::default(),
@@ -5480,6 +5518,43 @@ impl GameSession {
     fn render(&mut self, pack: &Pack) {
         self.framebuffer.hd = None;
         self.render_pass(pack, ScenePass::Software);
+        self.draw_ui_layer();
+    }
+
+    /// Draw the F1 debug menu into [`GameSession::ui_layer`] at a wider
+    /// aspect, so it fills the aspect's whole width and height over the
+    /// room's band instead of fitting inside the band. The menu is drawn
+    /// over black and over white, and the difference is its coverage, so
+    /// its dark panel lets the room show through.
+    fn draw_ui_layer(&mut self) {
+        let Some(debug_menu) = self
+            .debug_menu
+            .as_mut()
+            .filter(|_| !video::aspect().is_standard())
+        else {
+            self.ui_layer = None;
+            return;
+        };
+        let width = video::aspect().canvas_width();
+        let mut black = self.ui_layer.take().unwrap_or_default();
+        for (layer, backdrop) in [(&mut black, 0), (&mut self.ui_white, 255)] {
+            layer.resize(width, HEIGHT as u32);
+            layer.rgba.fill(backdrop);
+            debug_menu.draw(
+                layer,
+                self.font.as_ref(),
+                &self.text,
+                self.item_icons.as_ref(),
+                &self.game,
+            );
+        }
+        black.take_coverage(&self.ui_white);
+        self.ui_layer = Some(black);
+    }
+
+    /// The debug menu's layer, while it is drawn over a wider aspect's band.
+    fn ui_layer(&self) -> Option<&Framebuffer> {
+        self.ui_layer.as_ref()
     }
 
     /// Render the frame for the GPU backend: the scene is recorded on `gpu`
@@ -5501,6 +5576,7 @@ impl GameSession {
         // the same one.
         let menu_fade = self.menu_fade_draw;
         self.render_pass(pack, ScenePass::Record(gpu));
+        self.draw_ui_layer();
         if let Some(overlay) = self.framebuffer.hd.as_mut() {
             overlay.scene = self.gpu_scene_visible;
         }
@@ -5534,18 +5610,21 @@ impl GameSession {
             None => self.framebuffer.resize(WIDTH as u32, HEIGHT as u32),
         }
         // The loading narration and the films present the centred band; the
-        // room and its overlays the band following the player. The F1 debug
-        // menu, a door transition (drawn on black) and a screen on black
+        // room, its overlays and the F1 debug menu the band following the
+        // player. A door transition (drawn on black) and a screen on black
         // without a canvas (a mod's screen that predates `canvas`) are laid
         // out for 240 rows, so while one is up the whole 4:3 frame is
         // presented, pillarboxed, instead of cropped.
         if canvas.is_none() {
-            self.framebuffer.view = if self.debug_menu.is_some()
-                || self.transition.is_some()
-                || self.screen_on_black(|_| true)
-            {
+            self.framebuffer.view = if self.transition.is_some() || self.screen_on_black(|_| true) {
                 video::View::default()
-            } else if self.boot_message.is_some() || self.movie.is_some() {
+            } else if self.boot_message.is_some()
+                || self.movie.is_some()
+                || self.view.height != video::aspect().height()
+            {
+                // A band of another aspect's height is the frozen room's
+                // after the debug menu's DISPLAY tool changed the aspect: it
+                // is followed again once the room resumes.
                 video::aspect().centred()
             } else {
                 // A frame drawn between ticks blends the band's pan too.
@@ -5955,8 +6034,13 @@ impl GameSession {
             self.framebuffer.fade_to_black(alpha);
         }
         // The debug overlay is drawn last so it stays legible over the frozen
-        // frame and any message the room raised before it opened.
-        if let Some(debug_menu) = self.debug_menu.as_mut() {
+        // frame and any message the room raised before it opened. A wider
+        // aspect draws it into its own layer instead (`draw_ui_layer`).
+        if let Some(debug_menu) = self
+            .debug_menu
+            .as_mut()
+            .filter(|_| video::aspect().is_standard())
+        {
             let Self {
                 framebuffer,
                 font,
@@ -7760,6 +7844,15 @@ impl App {
         &self.framebuffer
     }
 
+    /// The layer presented over the frame: the F1 debug menu at a wider
+    /// aspect.
+    fn ui_layer(&self) -> Option<&Framebuffer> {
+        match &self.mode {
+            Mode::Play(session) => session.ui_layer(),
+            _ => None,
+        }
+    }
+
     /// The HD film frame on screen, if a film playing now is an HD
     /// replacement: the GPU backend presents it at its own resolution.
     #[cfg(feature = "hd")]
@@ -8545,14 +8638,14 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             if let Some(film) = app.hd_frame() {
                 display.present_film(app.frame(), film)?;
             } else {
-                display.present_layers(app.frame(), app.white_frame())?;
+                display.present_layers(app.frame(), app.white_frame(), app.ui_layer())?;
             }
             #[cfg(not(feature = "hd"))]
-            display.present_layers(app.frame(), app.white_frame())?;
+            display.present_layers(app.frame(), app.white_frame(), app.ui_layer())?;
         } else {
             app.draw();
             clock.frame_drawn(draw);
-            display.present(app.frame())?;
+            display.present_layers(app.frame(), None, app.ui_layer())?;
         }
         display.show()?;
         app.post_present();
@@ -13823,6 +13916,73 @@ fn present(
     Ok(())
 }
 
+/// Blend `ui`, a premultiplied RGBA canvas of the aspect's full size, over
+/// the frame [`present`] drew: it fills the same fitted rectangle, which a
+/// wider aspect's band and its canvas share.
+fn present_ui_layer(
+    renderer: *mut SDL_Renderer,
+    slot: &mut Option<FrameTexture>,
+    ui: &Framebuffer,
+) -> Result<()> {
+    if ui.rgba.len() != ui.width as usize * ui.height as usize * 4 || ui.width == 0 {
+        bail!(
+            "UI layer is {} bytes, expected {}x{}x4",
+            ui.rgba.len(),
+            ui.width,
+            ui.height
+        );
+    }
+    let texture = match slot {
+        Some(texture) => texture.fit(renderer, ui.width, ui.height)?,
+        None => {
+            slot.insert(FrameTexture::new(renderer, ui.width, ui.height)?)
+                .handle
+                .0
+        }
+    };
+    if !unsafe { SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND_PREMULTIPLIED) } {
+        bail!("SDL_SetTextureBlendMode failed: {}", sdl_error());
+    }
+    if !unsafe {
+        SDL_UpdateTexture(
+            texture,
+            std::ptr::null(),
+            ui.rgba.as_ptr().cast::<c_void>(),
+            ui.width as i32 * 4,
+        )
+    } {
+        bail!("SDL_UpdateTexture failed: {}", sdl_error());
+    }
+    let (mut width, mut height) = (0, 0);
+    if !unsafe { SDL_GetCurrentRenderOutputSize(renderer, &mut width, &mut height) } {
+        bail!("SDL_GetCurrentRenderOutputSize failed: {}", sdl_error());
+    }
+    let viewport = video::fit_size(
+        width.max(1) as u32,
+        height.max(1) as u32,
+        ui.width,
+        ui.height,
+    );
+    let mode = if viewport.is_whole_zoom_of_size(ui.width, ui.height) {
+        SDL_SCALEMODE_NEAREST
+    } else {
+        SDL_SCALEMODE_PIXELART
+    };
+    if !unsafe { SDL_SetTextureScaleMode(texture, mode) } {
+        bail!("SDL_SetTextureScaleMode failed: {}", sdl_error());
+    }
+    let destination = SDL_FRect {
+        x: viewport.x as f32,
+        y: viewport.y as f32,
+        w: viewport.width as f32,
+        h: viewport.height as f32,
+    };
+    if !unsafe { SDL_RenderTexture(renderer, texture, std::ptr::null(), &destination) } {
+        bail!("SDL_RenderTexture failed: {}", sdl_error());
+    }
+    Ok(())
+}
+
 /// Size and place `window` for `graphics` on `display`: borderless fullscreen
 /// there, or the `window_width` x `window_height` window centred on it. A
 /// window too large for the display shrinks to the largest whole multiple of
@@ -16528,10 +16688,20 @@ mod tests {
             layer.fill_rect([10, 10, 40, 40], [200, 30, 30, 255]);
             layer.fade_to_black(128);
         }
+        // A wider aspect's UI layer (the F1 debug menu) blends over both,
+        // and its size can change with the aspect.
+        let mut ui = Framebuffer::with_size(427, HEIGHT as u32);
+        ui.blend_black_rect([24, 16, 379, 208], 200);
+        let wider = Framebuffer::with_size(384, HEIGHT as u32);
         for _ in 0..3 {
-            display.present_layers(&black, Some(&white)).unwrap();
-            display.present_layers(&black, None).unwrap();
+            display.present_layers(&black, Some(&white), None).unwrap();
+            display.present_layers(&black, None, None).unwrap();
+            display
+                .present_layers(&black, Some(&white), Some(&ui))
+                .unwrap();
+            display.present_layers(&black, None, Some(&wider)).unwrap();
         }
+        assert!(display.gpu().is_some(), "the UI layer presents on the GPU");
         // Frames with HD 2D replacements, over the scene and on a wider
         // canvas, keep presenting on the GPU.
         let replacement = std::sync::Arc::new(crate::htexture::Replacement {
@@ -16562,7 +16732,7 @@ mod tests {
             }
             for _ in 0..2 {
                 display
-                    .present_layers(layer_black, Some(layer_white))
+                    .present_layers(layer_black, Some(layer_white), None)
                     .unwrap();
             }
             assert!(display.gpu().is_some());
@@ -16607,7 +16777,7 @@ mod tests {
             layer.hd.as_mut().unwrap().scene = false;
         }
         for _ in 0..2 {
-            display.present_layers(&black, Some(&white)).unwrap();
+            display.present_layers(&black, Some(&white), None).unwrap();
         }
         assert!(display.gpu().is_some());
         black.hd = None;
@@ -16627,7 +16797,7 @@ mod tests {
             display.present_film(&black, &film).unwrap();
             display.present_film(&black, &film).unwrap();
             assert!(display.gpu().is_some());
-            display.present_layers(&black, Some(&white)).unwrap();
+            display.present_layers(&black, Some(&white), None).unwrap();
         }
 
         // A GPU failure hands the window to the software backend, which
@@ -16636,7 +16806,7 @@ mod tests {
             .fall_back_to_software(&anyhow::anyhow!("simulated device loss"))
             .unwrap();
         assert!(display.gpu().is_none());
-        display.present_layers(&black, Some(&white)).unwrap();
+        display.present_layers(&black, Some(&white), None).unwrap();
         display.show().unwrap();
     }
 
@@ -23556,6 +23726,52 @@ off_0010:
             .unwrap();
         session.render(&pack);
         assert_eq!(session.frame().view.height, 180);
+        video::set_aspect(video::Aspect::default());
+    }
+
+    /// At a wider aspect the F1 debug menu keeps the gameplay band under it
+    /// and draws into its own layer of the aspect's full width and height:
+    /// clear beyond its panel and see-through dark inside it. After its
+    /// DISPLAY tool changes the aspect the frozen room presents the new
+    /// aspect's band at once, and at 4:3 the menu draws into the frame.
+    #[test]
+    fn a_wide_debug_menu_keeps_the_band() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        video::set_aspect(video::Aspect::parse("16:9").unwrap());
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        settle_control(&mut session, &pack);
+        let band = session.view;
+        assert_eq!(band.height, 180);
+        session.render(&pack);
+        let room = session.frame().rgba.clone();
+        session.open_debug_menu(&pack);
+        session.render(&pack);
+        let frame = session.frame();
+        assert_eq!((frame.width, frame.height), (320, 240));
+        assert_eq!(frame.view, band);
+        assert_eq!(frame.rgba, room, "the menu leaves the room's frame alone");
+        let ui = session.ui_layer().expect("the debug menu's layer");
+        assert_eq!((ui.width, ui.height), (427, 240));
+        let pixel = |x: usize, y: usize| &ui.rgba[(y * 427 + x) * 4..][..4];
+        assert_eq!(pixel(4, 120), [0, 0, 0, 0], "clear beside the panel");
+        assert_eq!(pixel(400, 20), [0, 0, 0, 200], "the panel spans the width");
+
+        video::set_aspect(video::Aspect::default());
+        session.render(&pack);
+        assert_eq!(session.frame().view, video::View::default());
+        assert!(session.ui_layer().is_none());
+        assert_ne!(
+            session.frame().rgba,
+            room,
+            "4:3 draws the menu in the frame"
+        );
+        video::set_aspect(video::Aspect::parse("16:10").unwrap());
+        session.render(&pack);
+        assert_eq!(
+            session.frame().view,
+            video::Aspect::parse("16:10").unwrap().centred()
+        );
         video::set_aspect(video::Aspect::default());
     }
 

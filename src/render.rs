@@ -1008,6 +1008,23 @@ impl Framebuffer {
         }
     }
 
+    /// Turn this frame, drawn over black, into a premultiplied RGBA layer
+    /// using `white`, the same drawing over white: every overlay operation
+    /// is affine in the pixel underneath, so how much of the backdrop shows
+    /// through is `white - black`, and the colour drawn on top is `black`.
+    /// The channels share one coverage (the largest), which is exact for
+    /// the opaque art and black blends a UI layer is made of.
+    pub fn take_coverage(&mut self, white: &Framebuffer) {
+        let over_white = white.rgba.as_chunks::<4>().0;
+        for (pixel, over_white) in self.rgba.as_chunks_mut::<4>().0.iter_mut().zip(over_white) {
+            let shows = (0..3)
+                .map(|channel| over_white[channel].saturating_sub(pixel[channel]))
+                .max()
+                .unwrap_or(0);
+            pixel[3] = 255 - shows;
+        }
+    }
+
     /// Make this a black `width` x `height` frame unless it already has that
     /// size; its view becomes the whole frame either way.
     pub fn resize(&mut self, width: u32, height: u32) {

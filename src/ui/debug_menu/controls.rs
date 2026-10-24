@@ -16,7 +16,7 @@
 //! is refused ([`Bindings::lockout`]), so the screen can never lock itself
 //! out.
 
-use super::{BODY_Y, PANEL_RIGHT, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
+use super::{BODY_Y, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
 use crate::controls::{ACTIONS, Action, Bindings};
 use crate::render::Tint;
 use crate::ui::UiInput;
@@ -256,7 +256,7 @@ impl ControlsEditor {
             labels.push((encode(pen, "+"), tint));
         }
         let gap = pen.font.metrics.glyph_w;
-        let budget = PANEL_RIGHT - x;
+        let budget = pen.right - x;
         let width = |labels: &[(Vec<u8>, Tint)]| -> i32 {
             labels
                 .iter()
@@ -271,7 +271,7 @@ impl ControlsEditor {
         }
         let mut pen_x = x;
         for (bytes, tint) in &labels[first..] {
-            let room = PANEL_RIGHT - pen_x;
+            let room = pen.right - pen_x;
             if room <= 0 {
                 break;
             }
@@ -283,7 +283,7 @@ impl ControlsEditor {
     /// The status line: the capture prompt, a one-shot note, or the selected
     /// binding's conflicts.
     fn draw_status(&self, pen: &mut Pen) {
-        let width = PANEL_RIGHT - TEXT_LEFT;
+        let width = pen.right - TEXT_LEFT;
         if let Some(left) = self.capture {
             let mut line = pen.text.ui("UI_CONTROLS_PRESS").to_vec();
             line.extend(encode(pen, &format!(" {}", left.div_ceil(60))));

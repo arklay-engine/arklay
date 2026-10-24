@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{BODY_Y, PANEL_RIGHT, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
+use super::{BODY_Y, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
 use crate::pack::Pack;
 use crate::render::Tint;
 use crate::state::RoomId;
@@ -20,8 +20,6 @@ pub const STAGE_COLUMNS: usize = RoomId::MAX_STAGE as usize;
 pub const VISIBLE_COLUMNS: usize = 3;
 /// Rows a column shows before it scrolls vertically.
 pub const VISIBLE_ROWS: usize = 8;
-/// One column's width in pixels.
-const COLUMN_WIDTH: i32 = (PANEL_RIGHT - TEXT_LEFT) / VISIBLE_COLUMNS as i32;
 /// The column labels' language keys, by stage digit.
 pub const STAGE_LABELS: [&str; STAGE_COLUMNS] = [
     "UI_DEBUG_STAGE_1",
@@ -242,22 +240,24 @@ impl RoomSelect {
     /// Draw the visible columns and the footer.
     pub(super) fn draw(&self, pen: &mut Pen) {
         let glyph_w = pen.font.metrics.glyph_w;
+        // The columns share the panel's width, which grows with the frame.
+        let column_width = (pen.right - TEXT_LEFT) / VISIBLE_COLUMNS as i32;
         for (slot, column) in (self.scroll_column..STAGE_COLUMNS)
             .take(VISIBLE_COLUMNS)
             .enumerate()
         {
-            let x = TEXT_LEFT + slot as i32 * COLUMN_WIDTH;
+            let x = TEXT_LEFT + slot as i32 * column_width;
             let label_tint = if column == self.column {
                 Tint::Yellow
             } else {
                 Tint::Grey
             };
             let label = pen.text.ui(STAGE_LABELS[column]);
-            pen.fit(x, BODY_Y, label_tint, label, COLUMN_WIDTH - 4);
+            pen.fit(x, BODY_Y, label_tint, label, column_width - 4);
             let rooms = &self.columns[column];
             if rooms.is_empty() {
                 let empty = pen.text.ui("UI_DEBUG_NO_ROOMS");
-                pen.fit(x + 10, BODY_Y + 16, Tint::Grey, empty, COLUMN_WIDTH - 14);
+                pen.fit(x + 10, BODY_Y + 16, Tint::Grey, empty, column_width - 14);
                 continue;
             }
             let scroll = self.scroll_rows[column];
@@ -285,7 +285,7 @@ impl RoomSelect {
                     } else {
                         Tint::Grey
                     };
-                    pen.fit(name_x, y, tint, name, x + COLUMN_WIDTH - 2 - name_x);
+                    pen.fit(name_x, y, tint, name, x + column_width - 2 - name_x);
                 }
             }
         }
@@ -296,7 +296,7 @@ impl RoomSelect {
             pen.ascii(TEXT_LEFT, footer_y, Tint::Yellow, &id);
             if let Some(name) = pen.text.room_name(&id) {
                 let x = TEXT_LEFT + 4 * glyph_w;
-                pen.fit(x, footer_y, Tint::White, name, PANEL_RIGHT - x);
+                pen.fit(x, footer_y, Tint::White, name, pen.right - x);
             }
         }
     }
