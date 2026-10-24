@@ -12,7 +12,7 @@
 //! audited bits of `ref/docs/SCENARIO_FLAGS.md`; they are debug identifiers,
 //! not translated text.
 
-use super::{BODY_Y, PANEL_RIGHT, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
+use super::{BODY_Y, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
 use crate::game::{GameState, ROOM_FLAG_FILE_BASE, ROOM_FLAG_MAP_BASE, STAGE_ROOM_FLAG_OFFSETS};
 use crate::render::Tint;
 use crate::ui::UiInput;
@@ -370,7 +370,7 @@ impl FlagEditor {
         pen.bytes(TEXT_LEFT, BODY_Y, Tint::Yellow, header);
         let position = format!("{}/{}", self.group + 1, GROUPS.len());
         let glyph_w = pen.font.metrics.glyph_w;
-        pen.ascii(PANEL_RIGHT - 5 * glyph_w, BODY_Y, Tint::Grey, &position);
+        pen.ascii(pen.right - 5 * glyph_w, BODY_Y, Tint::Grey, &position);
         let scroll = self.scroll[self.group];
         for row in (scroll..usize::from(group.count)).take(VISIBLE_ROWS) {
             let y = BODY_Y + 18 + (row - scroll) as i32 * ROW_HEIGHT;
@@ -389,7 +389,7 @@ impl FlagEditor {
                 if set { "1" } else { "0" },
             );
             let name_x = TEXT_LEFT + 5 * glyph_w;
-            let width = PANEL_RIGHT - name_x;
+            let width = pen.right - name_x;
             match flag_name(&group, sel) {
                 FlagName::None => {}
                 FlagName::Static(name) => pen.ascii_fit(name_x, y, name_tint, name, width),

@@ -47,12 +47,13 @@ use crate::video;
 
 /// One text row's height in pixels (the font's glyph height).
 const ROW_HEIGHT: i32 = font::GLYPH_HEIGHT;
-/// The dark panel's rectangle.
-const PANEL: [i32; 4] = [24, 16, 272, 208];
-/// The panel's inner right edge.
-const PANEL_RIGHT: i32 = PANEL[0] + PANEL[2] - 8;
+/// The dark panel's left edge and top; it keeps the same margin from the
+/// right of a frame of any width, so a wider aspect's canvas widens it.
+const PANEL_ORIGIN: [i32; 2] = [24, 16];
+/// The dark panel's height.
+const PANEL_HEIGHT: i32 = 208;
 /// The title's baseline.
-const TITLE_Y: i32 = PANEL[1] + 8;
+const TITLE_Y: i32 = PANEL_ORIGIN[1] + 8;
 /// The first body row.
 const BODY_Y: i32 = 44;
 /// Left edge of a row's text; the cursor sits 16 px to its left.
@@ -510,11 +511,13 @@ impl DebugMenu {
         icons: Option<&ItemIcons>,
         game: &GameState,
     ) {
-        framebuffer.blend_black_rect(PANEL, 200);
+        let panel = panel(framebuffer.width);
+        framebuffer.blend_black_rect(panel, 200);
         let Some(font) = font else {
             return;
         };
         let mut pen = Pen {
+            right: panel[0] + panel[2] - 8,
             framebuffer,
             font,
             text,
@@ -533,7 +536,7 @@ impl DebugMenu {
             self.inventory.draw(&mut pen, game);
             return;
         }
-        pen.bytes(PANEL[0] + 12, TITLE_Y, Tint::White, text.ui(title));
+        pen.bytes(PANEL_ORIGIN[0] + 12, TITLE_Y, Tint::White, text.ui(title));
         match self.tool {
             None => self.draw_main(&mut pen),
             Some(Tool::Rooms) => self.rooms.draw(&mut pen),
@@ -549,13 +552,13 @@ impl DebugMenu {
         }
         for (line, key) in hints.iter().enumerate() {
             let hint = pen.text.ui(key);
-            let x = PANEL[0] + 12;
+            let x = PANEL_ORIGIN[0] + 12;
             pen.fit(
                 x,
                 HINT_Y + line as i32 * ROW_HEIGHT,
                 Tint::Grey,
                 hint,
-                PANEL_RIGHT - x,
+                pen.right - x,
             );
         }
     }
@@ -600,7 +603,7 @@ impl DebugMenu {
             BODY_Y + 3 * ROW_HEIGHT,
             Tint::Grey,
             note,
-            PANEL_RIGHT - TEXT_LEFT,
+            pen.right - TEXT_LEFT,
         );
     }
 
@@ -637,7 +640,7 @@ impl DebugMenu {
             BODY_Y + 3 * ROW_HEIGHT,
             Tint::Grey,
             note,
-            PANEL_RIGHT - TEXT_LEFT,
+            pen.right - TEXT_LEFT,
         );
     }
 
@@ -671,7 +674,7 @@ impl DebugMenu {
             // much wider than ON/OFF, and a fixed column overflows the panel
             // with the wide Japanese glyphs.
             let value_x = TEXT_LEFT + (label.len() as i32 + 1) * pen.font.metrics.glyph_w;
-            pen.fit(value_x, y, tint, pen.text.ui(value), PANEL_RIGHT - value_x);
+            pen.fit(value_x, y, tint, pen.text.ui(value), pen.right - value_x);
         }
     }
 
@@ -693,9 +696,16 @@ impl DebugMenu {
             };
             pen.ascii(TEXT_LEFT, y, tint, &format!("{id}"));
             let x = TEXT_LEFT + 2 * pen.font.metrics.glyph_w;
-            pen.fit(x, y, tint, pen.text.ui(key), PANEL_RIGHT - x);
+            pen.fit(x, y, tint, pen.text.ui(key), pen.right - x);
         }
     }
+}
+
+/// The dark panel's `[x, y, w, h]` in a frame `width` pixels wide: 24 px
+/// in from both sides (`[24, 16, 272, 208]` at 320).
+fn panel(width: u32) -> [i32; 4] {
+    let [x, y] = PANEL_ORIGIN;
+    [x, y, width as i32 - 2 * x, PANEL_HEIGHT]
 }
 
 /// Draw a plain list of language keys with the cursor on `cursor`.
@@ -718,6 +728,8 @@ struct Pen<'a> {
     text: &'a Text,
     icons: Option<&'a ItemIcons>,
     tight: bool,
+    /// The panel's inner right edge, where clipped text stops.
+    right: i32,
 }
 
 impl Pen<'_> {
@@ -766,7 +778,7 @@ impl Pen<'_> {
 
     /// Draw `item`'s real name, or its hex id when it has none.
     fn item_name(&mut self, x: i32, y: i32, tint: Tint, item: u8) {
-        self.item_name_fit(x, y, tint, item, PANEL_RIGHT - x);
+        self.item_name_fit(x, y, tint, item, self.right - x);
     }
 
     /// [`Pen::item_name`] clipped to `max_width` pixels.

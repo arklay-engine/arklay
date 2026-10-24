@@ -263,15 +263,19 @@ impl InventoryEditor {
 /// The picker: a full-screen grid of icons with the highlighted id and name
 /// in a footer.
 fn draw_picker(pen: &mut Pen, picker: &Picker) {
-    pen.framebuffer.blend_black_rect([0, 0, 320, 240], 200);
+    let (width, height) = (pen.framebuffer.width, pen.framebuffer.height);
+    pen.framebuffer
+        .blend_black_rect([0, 0, width as i32, height as i32], 200);
+    // The 320 px grid and its text are centred in a wider frame.
+    let left = (width as i32 - 320).max(0) / 2;
     let title = pen.text.ui("UI_DEBUG_PICKER_TITLE");
-    pen.bytes(12, TITLE_Y - 16, Tint::White, title);
+    pen.bytes(left + 12, TITLE_Y - 16, Tint::White, title);
     let first = picker.scroll_row * PICKER_COLUMNS;
     let last = (first + PICKER_VISIBLE_ROWS * PICKER_COLUMNS).min(PICKER_CELLS);
     for cell in first..last {
         let column = (cell % PICKER_COLUMNS) as i32;
         let row = (cell / PICKER_COLUMNS - picker.scroll_row) as i32;
-        let x = column * 40;
+        let x = left + column * 40;
         let y = PICKER_Y + row * PICKER_ROW_HEIGHT;
         if cell == 0 {
             let empty = pen.text.ui("UI_DEBUG_EMPTY");
@@ -287,18 +291,18 @@ fn draw_picker(pen: &mut Pen, picker: &Picker) {
     let item = picker.item();
     if item == 0 {
         let empty = pen.text.ui("UI_DEBUG_EMPTY");
-        pen.bytes(12, footer_y, Tint::Yellow, empty);
+        pen.bytes(left + 12, footer_y, Tint::Yellow, empty);
     } else {
-        pen.ascii(12, footer_y, Tint::Yellow, &format!("{item:02X}"));
+        pen.ascii(left + 12, footer_y, Tint::Yellow, &format!("{item:02X}"));
         pen.item_name(
-            12 + 4 * pen.font.metrics.glyph_w,
+            left + 12 + 4 * pen.font.metrics.glyph_w,
             footer_y,
             Tint::White,
             item,
         );
     }
     let hint = pen.text.ui("UI_DEBUG_HINT_PICKER");
-    pen.bytes(12, footer_y + 18, Tint::Grey, hint);
+    pen.bytes(left + 12, footer_y + 18, Tint::Grey, hint);
 }
 
 #[cfg(test)]
