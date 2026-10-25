@@ -50,12 +50,15 @@ use sdl3_sys::events::{
     SDL_EVENT_GAMEPAD_ADDED, SDL_EVENT_GAMEPAD_AXIS_MOTION, SDL_EVENT_GAMEPAD_BUTTON_DOWN,
     SDL_EVENT_GAMEPAD_BUTTON_UP, SDL_EVENT_GAMEPAD_REMOVED, SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_UP,
     SDL_EVENT_KEYBOARD_REMOVED, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_MOUSE_BUTTON_UP,
-    SDL_EVENT_MOUSE_WHEEL, SDL_EVENT_QUIT, SDL_EVENT_WINDOW_DISPLAY_CHANGED,
-    SDL_EVENT_WINDOW_FOCUS_LOST, SDL_Event, SDL_PollEvent,
+    SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_WHEEL, SDL_EVENT_QUIT,
+    SDL_EVENT_WINDOW_DISPLAY_CHANGED, SDL_EVENT_WINDOW_FOCUS_LOST, SDL_Event, SDL_PollEvent,
 };
 use sdl3_sys::gamepad::{
-    SDL_AddGamepadMappingsFromFile, SDL_CloseGamepad, SDL_Gamepad, SDL_GamepadAxis,
-    SDL_GamepadButton, SDL_GetGamepadAxis, SDL_GetGamepadButton, SDL_GetGamepads, SDL_OpenGamepad,
+    SDL_AddGamepadMappingsFromFile, SDL_CloseGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER,
+    SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_NORTH,
+    SDL_GAMEPAD_BUTTON_START, SDL_Gamepad, SDL_GamepadAxis, SDL_GamepadButton, SDL_GamepadType,
+    SDL_GetGamepadAxis, SDL_GetGamepadButton, SDL_GetGamepadTypeForID, SDL_GetGamepads,
+    SDL_OpenGamepad,
 };
 use sdl3_sys::hints::{SDL_HINT_RENDER_DRIVER, SDL_HINT_VIDEO_DRIVER, SDL_SetHint};
 use sdl3_sys::init::{
@@ -64,7 +67,7 @@ use sdl3_sys::init::{
 use sdl3_sys::joystick::SDL_JoystickID;
 use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_NONE, SDL_KMOD_SHIFT, SDLK_COMMA, SDLK_PERIOD};
 use sdl3_sys::main::SDL_SetMainReady;
-use sdl3_sys::mouse::SDL_MOUSEWHEEL_FLIPPED;
+use sdl3_sys::mouse::{SDL_BUTTON_LEFT, SDL_MOUSEWHEEL_FLIPPED};
 use sdl3_sys::pixels::SDL_PIXELFORMAT_ABGR8888;
 use sdl3_sys::rect::{SDL_FRect, SDL_Rect};
 use sdl3_sys::render::{
@@ -75,13 +78,14 @@ use sdl3_sys::render::{
     SDL_UpdateTexture,
 };
 use sdl3_sys::scancode::{
-    SDL_SCANCODE_F2, SDL_SCANCODE_F3, SDL_SCANCODE_F8, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_RETURN,
-    SDL_Scancode,
+    SDL_SCANCODE_1, SDL_SCANCODE_3, SDL_SCANCODE_E, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F2,
+    SDL_SCANCODE_F3, SDL_SCANCODE_F8, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_Q, SDL_SCANCODE_R,
+    SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB, SDL_Scancode,
 };
 use sdl3_sys::stdinc::SDL_free;
 use sdl3_sys::surface::{
-    SDL_ConvertSurface, SDL_DestroySurface, SDL_SCALEMODE_NEAREST, SDL_SCALEMODE_PIXELART,
-    SDL_Surface,
+    SDL_ConvertSurface, SDL_DestroySurface, SDL_SCALEMODE_LINEAR, SDL_SCALEMODE_NEAREST,
+    SDL_SCALEMODE_PIXELART, SDL_Surface,
 };
 use sdl3_sys::timer::{SDL_DelayNS, SDL_GetTicksNS};
 use sdl3_sys::video::{
@@ -109,6 +113,7 @@ use crate::enemy;
 use crate::font;
 use crate::game;
 use crate::gpu::GpuRenderer;
+use crate::gui;
 use crate::items;
 use crate::lua;
 use crate::mask;
@@ -1050,6 +1055,10 @@ enum Backend {
         /// The F1 debug menu's layer at a wider aspect, blended over the
         /// frame; created the first time one is presented.
         ui: Option<FrameTexture>,
+        /// The native-resolution GUI's layer, drawn one-to-one over the
+        /// whole window; created the first time one is presented, with the
+        /// [`gui::Canvas::serial`] it holds.
+        native: Option<(FrameTexture, u64)>,
         renderer: RendererHandle,
     },
     /// The SDL_GPU device, which owns the window's swapchain.
@@ -1140,7 +1149,11 @@ impl Display {
         };
         let backend = match gpu {
             Some(gpu) => Backend::Gpu(Box::new(gpu)),
-            None => Self::software_backend(window.0, graphics.vsync)?,
+            None => {
+                // What is in force, for the in-game menu to show.
+                graphics.renderer = RendererKind::Software;
+                Self::software_backend(window.0, graphics.vsync)?
+            }
         };
         Ok(Self {
             backend,
@@ -1299,6 +1312,7 @@ impl Display {
         Ok(Backend::Software {
             texture,
             ui: None,
+            native: None,
             renderer,
         })
     }
@@ -1370,24 +1384,58 @@ impl Display {
         white: Option<&Framebuffer>,
         ui: Option<&Framebuffer>,
     ) -> Result<()> {
+        self.present_frame(black, white, ui, None)
+    }
+
+    /// [`Display::present_layers`] with the native-resolution GUI's canvas
+    /// (the in-game menu) drawn one-to-one over the whole window last.
+    fn present_frame(
+        &mut self,
+        black: &Framebuffer,
+        white: Option<&Framebuffer>,
+        ui: Option<&Framebuffer>,
+        native: Option<&gui::Canvas>,
+    ) -> Result<()> {
         match &mut self.backend {
             Backend::Software {
                 texture,
                 ui: ui_texture,
+                native: native_texture,
                 renderer,
             } => {
                 present(renderer.0, texture, black)?;
-                match ui {
-                    Some(ui) => present_ui_layer(renderer.0, ui_texture, ui),
+                if let Some(ui) = ui {
+                    present_ui_layer(renderer.0, ui_texture, ui)?;
+                }
+                match native {
+                    Some(canvas) => present_native_layer(renderer.0, native_texture, canvas),
                     None => Ok(()),
                 }
             }
-            Backend::Gpu(gpu) => match gpu.present(black, white, ui) {
-                Ok(()) => Ok(()),
-                Err(err) => self.fall_back_to_software(&err),
-            },
+            Backend::Gpu(gpu) => {
+                let result = gpu
+                    .set_native(native)
+                    .and_then(|()| gpu.present(black, white, ui));
+                match result {
+                    Ok(()) => Ok(()),
+                    Err(err) => self.fall_back_to_software(&err),
+                }
+            }
             Backend::None => bail!("display has no renderer"),
         }
+    }
+
+    /// Recreate the backend `graphics` selects even when it is the one
+    /// already running, so a GPU scene's render scale and MSAA take effect.
+    fn rebuild_renderer(&mut self, graphics: Graphics) -> Result<()> {
+        let old = std::mem::replace(&mut self.backend, Backend::None);
+        if let Backend::Gpu(mut gpu) = old {
+            gpu.release_window();
+            drop(gpu);
+        } else {
+            drop(old);
+        }
+        self.set_renderer(graphics)
     }
 
     /// Present an HD film frame at its own resolution on the GPU backend in
@@ -1405,6 +1453,9 @@ impl Display {
             } => present(renderer.0, texture, frame),
             Backend::Gpu(gpu) => {
                 let size = (film.width, film.height);
+                if let Err(err) = gpu.set_native(None) {
+                    return self.fall_back_to_software(&err);
+                }
                 match gpu.present_image(frame, &film.rgba, size, film.serial) {
                     Ok(()) => Ok(()),
                     Err(err) => self.fall_back_to_software(&err),
@@ -1962,6 +2013,19 @@ struct GameSession {
     return_title: Option<Box<ui::lua_screen::LuaScreen>>,
     /// A confirmed return to the title screen, taken once by the app.
     return_title_requested: bool,
+    /// Whether the native in-game menu ([`gui::SystemMenu`], which the app
+    /// owns and draws) is up: the room is frozen and the game sounds are
+    /// paused while it is.
+    system_menu_open: bool,
+    /// Escape asked for the in-game menu (or a load screen it opened was
+    /// backed out of); taken once by the app.
+    system_menu_requested: bool,
+    /// The open load screen came from the in-game menu, so backing out
+    /// returns to it.
+    load_from_system_menu: bool,
+    /// The slot the last typewriter save wrote, taken once by the app as
+    /// the in-game menu's restart point.
+    saved_slot: Option<usize>,
     /// A save the debug menu's LOAD GAME picked, taken once by the app.
     load_requested: Option<LoadRequest>,
     /// An ending id the debug menu's CLEAR GAME picked, taken once by the app.
@@ -2380,6 +2444,10 @@ impl GameSession {
             aspect_changed: None,
             return_title: None,
             return_title_requested: false,
+            system_menu_open: false,
+            system_menu_requested: false,
+            load_from_system_menu: false,
+            saved_slot: None,
             load_requested: None,
             clear_game_requested: None,
             attract: None,
@@ -2820,6 +2888,10 @@ impl GameSession {
         mut input: player::Input,
         mut action: bool,
     ) -> Result<()> {
+        // The native in-game menu owns the frozen tick; the app drives it.
+        if self.system_menu_open {
+            return Ok(());
+        }
         // The attract reel owns the pad while it plays: the recorded word
         // replaces the live input exactly like the original's InputSystem
         // overwrite, and any live button ends the playback (the watchdog
@@ -3052,6 +3124,13 @@ impl GameSession {
         // opens the pause menu.
         if self.debug_menu_enabled && ui.debug_menu {
             self.open_debug_menu(pack);
+            return Ok(());
+        }
+        // Escape asks the app for the native in-game menu; an attract reel
+        // ends on the press instead. An open message window keeps Escape as
+        // its cancel (a pickup's Yes/No), so the menu waits for it to close.
+        if ui.system_menu && self.attract.is_none() && !self.game.message.active {
+            self.system_menu_requested = true;
             return Ok(());
         }
         // The action button in a letterboxed scene starts the cutscene skip
@@ -3501,6 +3580,7 @@ impl GameSession {
             || self.debug_menu.is_some()
             || self.return_title.is_some()
             || self.computer.is_some()
+            || self.system_menu_open
     }
 
     /// One frozen tick of the active film: advance it against the wall clock
@@ -4025,6 +4105,46 @@ impl GameSession {
         };
         menu.set_frame_rate(self.frame_rate);
         self.debug_menu = Some(menu);
+    }
+
+    /// Freeze the room under the native in-game menu and hold its sounds.
+    fn open_system_menu(&mut self) {
+        self.system_menu_open = true;
+        if let Some(mixer) = &mut self.music {
+            mixer.set_device_paused(true);
+        }
+    }
+
+    /// Hand the room back from the in-game menu, its sounds carrying on
+    /// where they stopped.
+    fn close_system_menu(&mut self) {
+        if !std::mem::take(&mut self.system_menu_open) {
+            return;
+        }
+        if let Some(mixer) = &mut self.music {
+            mixer.set_device_paused(false);
+        }
+    }
+
+    /// The in-game menu's LOAD GAME: the load screen over the frozen room,
+    /// returning to the menu when backed out of.
+    fn open_system_load(&mut self, pack: &Pack) {
+        self.close_system_menu();
+        self.render(pack);
+        let mut cx = self.ui_context(pack);
+        let screen = ui::save_load::open_load_screen(self.game.save_screen.as_deref(), &mut cx);
+        let cues = cx.cues.into_inner();
+        match screen {
+            Ok(screen) => {
+                self.save_screen = Some(screen);
+                self.load_from_system_menu = true;
+            }
+            Err(err) => {
+                eprintln!("warning: load screen unavailable: {err:#}");
+                self.system_menu_requested = true;
+            }
+        }
+        self.play_ui_cue_names(pack, cues);
     }
 
     /// Take the debug menu's pending LOAD GAME choice.
@@ -4661,6 +4781,7 @@ impl GameSession {
         };
         if let Some(request) = request {
             self.save_screen = None;
+            self.load_from_system_menu = false;
             self.load_requested = Some(request);
             return;
         }
@@ -4673,8 +4794,16 @@ impl GameSession {
                 self.game.consume_ink_ribbon();
             }
             self.game.increment_saves();
+            if outcome.slot.is_some() {
+                self.saved_slot = outcome.slot;
+            }
         }
         self.save_screen = None;
+        // Backing out of the in-game menu's LOAD GAME returns to the menu.
+        if std::mem::take(&mut self.load_from_system_menu) {
+            self.system_menu_requested = true;
+            return;
+        }
         // The screen does not fade itself: the reference's `LoadSaveGameState`
         // returns to `check_typewriter_state` case 3, which fades the room back
         // in from the black the hand-off left (`counter 0xf000`, the `0x7FFF`
@@ -6747,6 +6876,19 @@ struct App {
     player_options: player::Options,
     /// The active post-film ending sequence, or `None` outside one.
     ending: Option<EndingFlow>,
+    /// The native in-game menu over a frozen session, driven per presented
+    /// frame by the interactive loop.
+    system_menu: Option<Box<gui::SystemMenu>>,
+    /// Where the in-game menu's RESTART goes: the save last loaded or
+    /// written, else the new game this run started.
+    restart_point: Option<RestartPoint>,
+}
+
+/// The in-game menu's RESTART target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RestartPoint {
+    Save(LoadRequest),
+    NewGame { character: u8 },
 }
 
 /// How one app tick ended.
@@ -6798,6 +6940,8 @@ impl App {
             debug_menu: true,
             player_options: player::Options::default(),
             ending: None,
+            system_menu: None,
+            restart_point: None,
         }
     }
 
@@ -7188,6 +7332,7 @@ impl App {
     fn start_new_game(&mut self, character: u8) -> Result<()> {
         let session = GameSession::new(&self.pack, character, &self.save_dir)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_NEW_GAME);
+        self.restart_point = Some(RestartPoint::NewGame { character });
         Ok(())
     }
 
@@ -7195,7 +7340,40 @@ impl App {
     /// See [`Self::start_new_game`] for why this is not inlined into `apply`.
     fn continue_from_slot(&mut self, slot: usize) -> Result<()> {
         let file = save::load(&self.save_dir, slot)?;
-        self.continue_from_file(file)
+        self.continue_from_file(file)?;
+        self.restart_point = Some(RestartPoint::Save(LoadRequest::Slot(slot)));
+        Ok(())
+    }
+
+    /// Continue from the save file at `path` (a Lua screen's chosen file).
+    fn continue_from_path(&mut self, path: &Path) -> Result<()> {
+        let file = save::load_file(path)?;
+        self.continue_from_file(file)?;
+        self.restart_point = Some(RestartPoint::Save(LoadRequest::File(path.to_path_buf())));
+        Ok(())
+    }
+
+    /// The in-game menu's RESTART: reload the save last loaded or written,
+    /// else start the run's new game over.
+    fn restart(&mut self) -> Result<()> {
+        let character = match &self.mode {
+            Mode::Play(session) => session.game.player_choice().character,
+            _ => 0,
+        };
+        let result = match self.restart_point.clone() {
+            Some(RestartPoint::Save(LoadRequest::Slot(slot))) => self.continue_from_slot(slot),
+            Some(RestartPoint::Save(LoadRequest::File(path))) => self.continue_from_path(&path),
+            Some(RestartPoint::NewGame { character }) => self.start_new_game(character),
+            None => self.start_new_game(character),
+        };
+        // A failed load leaves the frozen session and its menu up, so the
+        // player can pick something else; anything else replaced the session.
+        let menu_still_owned =
+            matches!(&self.mode, Mode::Play(session) if session.system_menu_open);
+        if result.is_ok() || !menu_still_owned {
+            self.system_menu = None;
+        }
+        result
     }
 
     /// Continue from a parsed save block (a Lua screen's chosen file).
@@ -7399,6 +7577,52 @@ impl App {
         Ok(())
     }
 
+    /// Switch the display language (`None` follows the system's) for the
+    /// app's screens and the running session: the strings and the font sheet
+    /// reload, so the next message, item name or menu draws in it.
+    fn set_language(&mut self, language: Option<&str>) {
+        if self.pack.language() == language {
+            return;
+        }
+        self.pack.set_language(language);
+        self.text = Text::load(&self.pack, language);
+        self.font = font::load_session(&self.pack, self.text.script());
+        if let Mode::Play(session) = &mut self.mode {
+            session.text = self.text.clone();
+            session.font = self.font.clone();
+        }
+        warm_gui_fonts(language);
+    }
+
+    /// The in-game menu's canvas, when it is up, for the present.
+    fn native_layer(&self) -> Option<&gui::Canvas> {
+        self.system_menu.as_deref().map(gui::SystemMenu::canvas)
+    }
+
+    /// Whether the session asked for the in-game menu; taken once.
+    fn take_system_menu_request(&mut self) -> bool {
+        match &mut self.mode {
+            Mode::Play(session) => std::mem::take(&mut session.system_menu_requested),
+            _ => false,
+        }
+    }
+
+    /// Put `menu` up over the session, freezing it.
+    fn open_system_menu(&mut self, menu: gui::SystemMenu) {
+        if let Mode::Play(session) = &mut self.mode {
+            session.open_system_menu();
+            self.system_menu = Some(Box::new(menu));
+        }
+    }
+
+    /// Take the in-game menu down and hand the session back.
+    fn close_system_menu(&mut self) {
+        self.system_menu = None;
+        if let Mode::Play(session) = &mut self.mode {
+            session.close_system_menu();
+        }
+    }
+
     /// Apply a completed screen action.
     fn apply(&mut self, action: ScreenAction) -> Result<AppFlow> {
         match action {
@@ -7433,10 +7657,7 @@ impl App {
             ScreenAction::LoadGame { slot } => {
                 self.continue_from_slot(slot)?;
             }
-            ScreenAction::LoadFile(path) => {
-                let file = save::load_file(&path)?;
-                self.continue_from_file(file)?;
-            }
+            ScreenAction::LoadFile(path) => self.continue_from_path(&path)?,
             ScreenAction::Title => self.open_title()?,
             ScreenAction::Attract => {
                 // The title's idle timeout: play the next entry of the pack's
@@ -7554,6 +7775,7 @@ impl App {
         let mut death_finished = false;
         let mut load_request = None;
         let mut clear_game = None;
+        let mut saved_slot = None;
         {
             let App { pack, mode, .. } = self;
             let Mode::Play(session) = mode else {
@@ -7574,17 +7796,19 @@ impl App {
                 return_title = session.take_return_title_request();
                 death_finished = session.death.finished;
                 load_request = session.take_load_request();
+                saved_slot = session.saved_slot.take();
                 clear_game = session
                     .take_clear_game_request()
                     .map(|id| (id, session.ending_flow(id)));
             }
         }
+        if let Some(slot) = saved_slot {
+            self.restart_point = Some(RestartPoint::Save(LoadRequest::Slot(slot)));
+        }
         if let Some(request) = load_request {
             let outcome = match &request {
                 LoadRequest::Slot(slot) => self.continue_from_slot(*slot),
-                LoadRequest::File(path) => {
-                    save::load_file(path).and_then(|file| self.continue_from_file(file))
-                }
+                LoadRequest::File(path) => self.continue_from_path(path),
             };
             if let Err(err) = outcome {
                 match &request {
@@ -8520,6 +8744,8 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     app.set_bindings(input.bindings().clone());
     let mut event = SDL_Event::default();
     let mut clock = LoopClock::new(display.frame_rate(), stats);
+    warm_gui_fonts(app.pack.language());
+    crate::audio::set_volumes(crate::config::Config::load_default().0.game.volumes());
     loop {
         let mut cut_delta = 0i32;
         let mut speed_delta = 0i32;
@@ -8548,6 +8774,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         if let Some(aspect) = app.take_aspect_change() {
             display.set_aspect(aspect);
         }
+        drive_system_menu(app, display, &mut input, &mut clock)?;
         app.set_frame_rate(display.frame_rate());
         app.update_window_title(display.window)?;
 
@@ -8573,6 +8800,10 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         };
         app.set_tween_alpha(alpha);
         let draw = Instant::now();
+        if let Some(menu) = app.system_menu.as_mut() {
+            let (width, height) = display.drawable_size();
+            menu.draw(width, height);
+        }
         if let Some(gpu) = display.gpu() {
             app.draw_layers(gpu);
             clock.frame_drawn(draw);
@@ -8580,17 +8811,294 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             if let Some(film) = app.hd_frame() {
                 display.present_film(app.frame(), film)?;
             } else {
-                display.present_layers(app.frame(), app.white_frame(), app.ui_layer())?;
+                display.present_frame(
+                    app.frame(),
+                    app.white_frame(),
+                    app.ui_layer(),
+                    app.native_layer(),
+                )?;
             }
             #[cfg(not(feature = "hd"))]
-            display.present_layers(app.frame(), app.white_frame(), app.ui_layer())?;
+            display.present_frame(
+                app.frame(),
+                app.white_frame(),
+                app.ui_layer(),
+                app.native_layer(),
+            )?;
         } else {
             app.draw();
             clock.frame_drawn(draw);
-            display.present_layers(app.frame(), None, app.ui_layer())?;
+            display.present_frame(app.frame(), None, app.ui_layer(), app.native_layer())?;
         }
         display.show()?;
         app.post_present();
+    }
+}
+
+/// One presented frame of the native in-game menu: open it when the session
+/// asked, feed it this frame's GUI input and carry out what it requests.
+/// Input the menu sees never reaches the game.
+fn drive_system_menu(
+    app: &mut App,
+    display: &mut Display,
+    input: &mut InputState,
+    clock: &mut LoopClock,
+) -> Result<()> {
+    let mut events = input.take_gui_events();
+    if !matches!(app.mode, Mode::Play(_)) {
+        app.system_menu = None;
+    }
+    if app.take_system_menu_request() {
+        match gui::SystemMenu::new(menu_settings(app, display)) {
+            Ok(menu) => app.open_system_menu(menu),
+            Err(err) => eprintln!("warning: in-game menu unavailable: {err:#}"),
+        }
+        return Ok(());
+    }
+    let Some(menu) = app.system_menu.as_mut() else {
+        return Ok(());
+    };
+    // F8 and Alt+Enter change the window under the open menu.
+    if let Some(&graphics) = display.graphics()
+        && graphics != menu.settings().graphics
+    {
+        menu.set_settings(gui::Settings {
+            graphics,
+            ..menu.settings().clone()
+        });
+    }
+    // SDL reports the pointer in window coordinates; the canvas is in pixels.
+    let (window_width, window_height) = display.window_size();
+    let (width, height) = display.drawable_size();
+    let scale_x = width as f32 / window_width.max(1) as f32;
+    let scale_y = height as f32 / window_height.max(1) as f32;
+    for event in &mut events {
+        if let gui::GuiEvent::PointerMove { x, y }
+        | gui::GuiEvent::PointerDown { x, y }
+        | gui::GuiEvent::PointerUp { x, y } = event
+        {
+            *x *= scale_x;
+            *y *= scale_y;
+        }
+    }
+    let requests = menu.handle(&events);
+    input.discard_presses();
+    for request in requests {
+        match request {
+            gui::MenuRequest::Resume => app.close_system_menu(),
+            gui::MenuRequest::Restart => {
+                if let Err(err) = app.restart() {
+                    eprintln!("warning: restart failed: {err:#}");
+                }
+            }
+            gui::MenuRequest::LoadGame => {
+                app.system_menu = None;
+                let App { pack, mode, .. } = app;
+                if let Mode::Play(session) = mode {
+                    session.open_system_load(pack);
+                }
+            }
+            gui::MenuRequest::Quit => {
+                app.system_menu = None;
+                if let Mode::Play(session) = &mut app.mode {
+                    session.close_system_menu();
+                    session.return_title_requested = true;
+                }
+            }
+            gui::MenuRequest::Settings(settings) => {
+                apply_menu_settings(app, display, clock, settings);
+            }
+            gui::MenuRequest::Sound(sound) => app.play_ui_cues(vec![match sound {
+                gui::Sound::Cursor => ui::UiCue::Cursor,
+                gui::Sound::Decide => ui::UiCue::Decide,
+                gui::Sound::Cancel => ui::UiCue::Cancel,
+            }]),
+        }
+    }
+    Ok(())
+}
+
+/// Load the system faces the in-game menu needs for `language`'s strings
+/// ahead of its first frame.
+fn warm_gui_fonts(language: Option<&str>) {
+    let tag = crate::language::resolve_tag(language);
+    gui::text::warm(gui::locale::Locale::new(&tag).characters());
+}
+
+/// The button labels of the controller with instance id `device`. An
+/// unknown or generic controller gets Xbox's, SDL's own default layout.
+fn pad_style(device: u32) -> gui::PadStyle {
+    match unsafe { SDL_GetGamepadTypeForID(SDL_JoystickID(device)) } {
+        SDL_GamepadType::PS3 | SDL_GamepadType::PS4 | SDL_GamepadType::PS5 => {
+            gui::PadStyle::PlayStation
+        }
+        SDL_GamepadType::NINTENDO_SWITCH_PRO
+        | SDL_GamepadType::NINTENDO_SWITCH_JOYCON_LEFT
+        | SDL_GamepadType::NINTENDO_SWITCH_JOYCON_RIGHT
+        | SDL_GamepadType::NINTENDO_SWITCH_JOYCON_PAIR
+        | SDL_GamepadType::GAMECUBE => gui::PadStyle::Nintendo,
+        _ => gui::PadStyle::Xbox,
+    }
+}
+
+/// The options the in-game menu starts from: the live window's, the run's
+/// gameplay options and language and the rest of `arklay.toml`.
+fn menu_settings(app: &App, display: &Display) -> gui::Settings {
+    let (config, _) = crate::config::Config::load_default();
+    let mut game = config.game;
+    game.quick_turn = app.player_options.quick_turn;
+    game.tactical_reload = app.player_options.tactical_reload;
+    gui::Settings {
+        graphics: display.graphics().copied().unwrap_or(config.graphics),
+        game,
+        language: app.pack.language().map(str::to_string),
+    }
+}
+
+/// What `arklay.toml` keeps after the menu changed `before` into `after`:
+/// the file's own values with only the settings the change touched replaced
+/// (the window's by what took effect, `graphics`), so a run's command-line
+/// overrides (`--quick-turn`, `--language`, `--renderer`) stay out of it.
+fn persisted_options(
+    file: crate::config::Config,
+    before: &gui::Settings,
+    after: &gui::Settings,
+    graphics: Graphics,
+) -> (Graphics, Option<String>, crate::config::Game) {
+    macro_rules! take_changed {
+        ($saved:ident, $section:ident, $source:expr, [$($field:ident),*]) => {
+            $(if before.$section.$field != after.$section.$field {
+                $saved.$field = $source.$field;
+            })*
+        };
+    }
+    let mut saved_graphics = file.graphics;
+    saved_graphics.display = graphics.display;
+    take_changed!(
+        saved_graphics,
+        graphics,
+        graphics,
+        [
+            renderer,
+            fullscreen,
+            window_width,
+            window_height,
+            render_scale,
+            msaa,
+            vsync,
+            frame_rate,
+            aspect
+        ]
+    );
+    // Every `[game]` field is listed: a new one must be added here too.
+    let crate::config::Game {
+        quick_turn: _,
+        tactical_reload: _,
+        ui_font: _,
+        menu_sounds: _,
+        button_style: _,
+        music_volume: _,
+        ambient_volume: _,
+        effects_volume: _,
+        voice_volume: _,
+    } = after.game;
+    let mut saved_game = file.game;
+    take_changed!(
+        saved_game,
+        game,
+        after.game,
+        [
+            quick_turn,
+            tactical_reload,
+            ui_font,
+            menu_sounds,
+            button_style,
+            music_volume,
+            ambient_volume,
+            effects_volume,
+            voice_volume
+        ]
+    );
+    let language = if before.language != after.language {
+        after.language.clone()
+    } else {
+        file.language
+    };
+    (saved_graphics, language, saved_game)
+}
+
+/// Apply an options change from the in-game menu to the window, the clock
+/// and the session, persist it to `arklay.toml` and hand the menu back what
+/// actually took effect.
+fn apply_menu_settings(
+    app: &mut App,
+    display: &mut Display,
+    clock: &mut LoopClock,
+    settings: gui::Settings,
+) {
+    let before = menu_settings(app, display);
+    let wanted = settings.graphics;
+    if let Some(old) = display.graphics().copied() {
+        if (wanted.renderer, wanted.render_scale, wanted.msaa)
+            != (old.renderer, old.render_scale, old.msaa)
+        {
+            let mut graphics = old;
+            graphics.renderer = wanted.renderer;
+            graphics.render_scale = wanted.render_scale;
+            graphics.msaa = wanted.msaa;
+            if let Err(err) = display.rebuild_renderer(graphics) {
+                eprintln!("warning: renderer not changed: {err:#}");
+            }
+        }
+        if wanted.vsync != old.vsync
+            && let Err(err) = display.set_vsync(wanted.vsync)
+        {
+            eprintln!("warning: vsync not applied: {err:#}");
+        }
+        if (wanted.fullscreen, wanted.window_width, wanted.window_height)
+            != (old.fullscreen, old.window_width, old.window_height)
+        {
+            // The window shrinks to fit its display; the menu is handed back
+            // the size it got.
+            let mut graphics = display.graphics().copied().unwrap_or(old);
+            graphics.fullscreen = wanted.fullscreen;
+            graphics.window_width = wanted.window_width;
+            graphics.window_height = wanted.window_height;
+            display.apply_window_options(graphics);
+        }
+        if wanted.aspect != old.aspect {
+            display.set_aspect(wanted.aspect);
+        }
+        if wanted.frame_rate != old.frame_rate {
+            display.set_frame_rate(wanted.frame_rate);
+            clock.set_rate(wanted.frame_rate);
+        }
+    }
+    let graphics = display.graphics().copied().unwrap_or(wanted);
+    app.player_options.quick_turn = settings.game.quick_turn;
+    app.player_options.tactical_reload = settings.game.tactical_reload;
+    if let Mode::Play(session) = &mut app.mode {
+        session.game.player_options = app.player_options;
+    }
+    app.set_language(settings.language.as_deref());
+    crate::audio::set_volumes(settings.game.volumes());
+    let path = crate::config::Config::default_path();
+    let (file, _) = crate::config::Config::load_default();
+    let (saved_graphics, saved_language, saved_game) =
+        persisted_options(file, &before, &settings, graphics);
+    if let Err(err) = crate::config::Config::save_options(
+        &path,
+        &saved_graphics,
+        saved_language.as_deref(),
+        saved_game,
+    ) {
+        eprintln!("warning: options not saved: {err:#}");
+    }
+    if let Some(menu) = app.system_menu.as_mut() {
+        menu.set_settings(gui::Settings {
+            graphics,
+            ..settings
+        });
     }
 }
 
@@ -10521,10 +11029,30 @@ fn poll_events(
             }
         } else if kind == SDL_EVENT_KEY_UP {
             input.key_up(unsafe { event.key.scancode });
+        } else if kind == SDL_EVENT_MOUSE_MOTION {
+            let motion = unsafe { event.motion };
+            input.push_gui_event(gui::GuiEvent::PointerMove {
+                x: motion.x,
+                y: motion.y,
+            });
         } else if kind == SDL_EVENT_MOUSE_BUTTON_DOWN {
-            input.source_down(0, Source::Mouse(unsafe { event.button.button }), false);
+            let button = unsafe { event.button };
+            if i32::from(button.button) == SDL_BUTTON_LEFT {
+                input.push_gui_event(gui::GuiEvent::PointerDown {
+                    x: button.x,
+                    y: button.y,
+                });
+            }
+            input.source_down(0, Source::Mouse(button.button), false);
         } else if kind == SDL_EVENT_MOUSE_BUTTON_UP {
-            input.source_up(0, Source::Mouse(unsafe { event.button.button }));
+            let button = unsafe { event.button };
+            if i32::from(button.button) == SDL_BUTTON_LEFT {
+                input.push_gui_event(gui::GuiEvent::PointerUp {
+                    x: button.x,
+                    y: button.y,
+                });
+            }
+            input.source_up(0, Source::Mouse(button.button));
         } else if kind == SDL_EVENT_MOUSE_WHEEL {
             // The integer deltas are whole notches (SDL accumulates a
             // touchpad's fractional scroll into them), so smooth scrolling
@@ -12089,6 +12617,12 @@ const KEY_PAGE_LEFT: u32 = Action::PageLeft.bit();
 const KEY_PAGE_RIGHT: u32 = Action::PageRight.bit();
 const KEY_F1: u32 = controls::DEBUG_MENU_BIT;
 const KEY_F9: u32 = controls::RETURN_TITLE_BIT;
+/// Escape (whatever else it is bound to) or the gamepad's Start: the native
+/// in-game menu.
+const KEY_SYSTEM: u32 = controls::SYSTEM_MENU_BIT;
+/// The most GUI events kept between frames; a loop that never drains them
+/// (the font sampler) cannot grow the queue without bound.
+const MAX_GUI_EVENTS: usize = 256;
 
 /// A scripted per-tick input playback for the oracle (`--input`).
 ///
@@ -12223,6 +12757,10 @@ struct InputState {
     captured: Option<controls::Source>,
     /// The open gamepads (none for a scripted or test latch).
     pads: Gamepads,
+    /// Navigation and pointer events for the native GUI, in arrival order
+    /// (key repeats included) and pointer positions in window coordinates;
+    /// drained every presented frame by [`Self::take_gui_events`].
+    gui_events: Vec<gui::GuiEvent>,
 }
 
 /// One fixed tick of latched input, split into the shapes its consumers want.
@@ -12298,13 +12836,108 @@ impl InputState {
         }
         let mask = self.bindings.mask(source);
         self.held |= mask;
+        self.gui_keys(device, source, mask, repeat);
         if !repeat {
+            if source == controls::Source::key(SDL_SCANCODE_ESCAPE) {
+                self.pressed |= KEY_SYSTEM;
+            }
             self.pressed |= mask;
             self.any_pressed = true;
             if self.captured.is_none() && source.reserved_bit().is_none() {
                 self.captured = Some(source);
             }
         }
+    }
+
+    /// Queue the GUI commands a source going down raises. The tab, sub-tab
+    /// and reset keys are fixed (their hints name them), Escape always backs
+    /// out, and everything else navigates through the player's bindings.
+    /// Only directions repeat while held.
+    fn gui_keys(&mut self, device: u32, source: controls::Source, mask: u32, repeat: bool) {
+        use controls::Source;
+        use gui::GuiKey as Key;
+        let kind = if device == 0 {
+            gui::Device::Keyboard
+        } else {
+            gui::Device::Gamepad(pad_style(device))
+        };
+        let fixed = match source {
+            Source::Mouse(_) => return,
+            Source::Wheel(wheel) => {
+                let notch = match wheel {
+                    controls::Wheel::Up => 1.0,
+                    controls::Wheel::Down => -1.0,
+                    _ => return,
+                };
+                self.push_gui_event(gui::GuiEvent::Wheel(notch));
+                return;
+            }
+            Source::Key(code) => [
+                (SDL_SCANCODE_ESCAPE, Key::Cancel),
+                (SDL_SCANCODE_Q, Key::TabPrev),
+                (SDL_SCANCODE_E, Key::TabNext),
+                (SDL_SCANCODE_1, Key::SubPrev),
+                (SDL_SCANCODE_3, Key::SubNext),
+                (SDL_SCANCODE_TAB, Key::ResetAll),
+                (SDL_SCANCODE_R, Key::ResetGroup),
+            ]
+            .into_iter()
+            .find(|(scancode, _)| scancode.0 == code)
+            .map(|(_, key)| key),
+            Source::PadAxis(axis, true) if axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER.0 => {
+                Some(Key::SubPrev)
+            }
+            Source::PadAxis(axis, true) if axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER.0 => {
+                Some(Key::SubNext)
+            }
+            Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_NORTH.0 => {
+                Some(Key::ResetGroup)
+            }
+            Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_BACK.0 => Some(Key::ResetAll),
+            Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_START.0 => Some(Key::Cancel),
+            _ => None,
+        };
+        if let Some(key) = fixed {
+            if !repeat {
+                self.push_gui_event(gui::GuiEvent::Key(key, kind));
+            }
+            return;
+        }
+        let bound = [
+            (KEY_UP, Key::Up, true),
+            (KEY_DOWN, Key::Down, true),
+            (KEY_LEFT, Key::Left, true),
+            (KEY_RIGHT, Key::Right, true),
+            (KEY_CONFIRM, Key::Confirm, false),
+            (KEY_CANCEL, Key::Cancel, false),
+            (KEY_PAGE_LEFT, Key::TabPrev, false),
+            (KEY_PAGE_RIGHT, Key::TabNext, false),
+        ];
+        for (bit, key, repeats) in bound {
+            if mask & bit != 0 && (repeats || !repeat) {
+                self.push_gui_event(gui::GuiEvent::Key(key, kind));
+            }
+        }
+    }
+
+    fn push_gui_event(&mut self, event: gui::GuiEvent) {
+        if self.gui_events.len() >= MAX_GUI_EVENTS {
+            self.gui_events.remove(0);
+        }
+        self.gui_events.push(event);
+    }
+
+    /// Drain the GUI events since the last frame.
+    fn take_gui_events(&mut self) -> Vec<gui::GuiEvent> {
+        std::mem::take(&mut self.gui_events)
+    }
+
+    /// Drop the presses latched since the last tick, so input the GUI
+    /// consumed never reaches the game; held levels stay.
+    fn discard_presses(&mut self) {
+        self.pressed = 0;
+        self.any_pressed = false;
+        self.captured = None;
     }
 
     /// Latch a source going up. A pending press is left alone: a tap released
@@ -12368,6 +13001,11 @@ impl InputState {
         self.pressed = 0;
         self.any_pressed = false;
         self.captured = None;
+        self.gui_events.clear();
+        // The button's release may never arrive once focus is gone; a held
+        // slider drag must not outlive it.
+        self.gui_events
+            .push(gui::GuiEvent::PointerUp { x: -1.0, y: -1.0 });
     }
 
     /// The held word including presses not yet consumed by a tick.
@@ -12423,6 +13061,7 @@ impl InputState {
                 start: pressed & KEY_START != 0,
                 debug_menu: pressed & KEY_F1 != 0,
                 return_title: pressed & KEY_F9 != 0,
+                system_menu: pressed & KEY_SYSTEM != 0,
                 any: std::mem::take(&mut self.any_pressed),
                 captured: self.captured.take(),
             },
@@ -13902,6 +14541,64 @@ fn present(
     Ok(())
 }
 
+/// Blend the native GUI canvas, premultiplied and at the window's pixel
+/// size, over the whole render output.
+fn present_native_layer(
+    renderer: *mut SDL_Renderer,
+    slot: &mut Option<(FrameTexture, u64)>,
+    canvas: &gui::Canvas,
+) -> Result<()> {
+    let (width, height) = (canvas.width, canvas.height);
+    if width == 0 || height == 0 || canvas.rgba.len() != width as usize * height as usize * 4 {
+        bail!(
+            "GUI layer is {} bytes, expected {width}x{height}x4",
+            canvas.rgba.len()
+        );
+    }
+    let (texture, serial) = match slot {
+        Some((texture, serial)) => (texture.fit(renderer, width, height)?, serial),
+        None => {
+            let (texture, serial) = slot.insert((FrameTexture::new(renderer, width, height)?, 0));
+            (texture.handle.0, serial)
+        }
+    };
+    // A canvas resized (so a texture recreated) is a new serial too.
+    let stale = *serial != canvas.serial;
+    if !unsafe { SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND_PREMULTIPLIED) } {
+        bail!("SDL_SetTextureBlendMode failed: {}", sdl_error());
+    }
+    if !unsafe { SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR) } {
+        bail!("SDL_SetTextureScaleMode failed: {}", sdl_error());
+    }
+    if stale {
+        if !unsafe {
+            SDL_UpdateTexture(
+                texture,
+                std::ptr::null(),
+                canvas.rgba.as_ptr().cast::<c_void>(),
+                width as i32 * 4,
+            )
+        } {
+            bail!("SDL_UpdateTexture failed: {}", sdl_error());
+        }
+        *serial = canvas.serial;
+    }
+    let (mut out_width, mut out_height) = (0, 0);
+    if !unsafe { SDL_GetCurrentRenderOutputSize(renderer, &mut out_width, &mut out_height) } {
+        bail!("SDL_GetCurrentRenderOutputSize failed: {}", sdl_error());
+    }
+    let destination = SDL_FRect {
+        x: 0.0,
+        y: 0.0,
+        w: out_width.max(1) as f32,
+        h: out_height.max(1) as f32,
+    };
+    if !unsafe { SDL_RenderTexture(renderer, texture, std::ptr::null(), &destination) } {
+        bail!("SDL_RenderTexture failed: {}", sdl_error());
+    }
+    Ok(())
+}
+
 /// Blend `ui`, a premultiplied RGBA canvas of the aspect's full size, over
 /// the frame [`present`] drew: it fills the same fitted rectangle, which a
 /// wider aspect's band and its canvas share.
@@ -14261,6 +14958,41 @@ mod tests {
         SDL_SCANCODE_RSHIFT, SDL_SCANCODE_SPACE, SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_X,
         SDL_SCANCODE_Z,
     };
+
+    #[test]
+    fn menu_saves_only_what_it_changed_over_the_file() {
+        let mut file = crate::config::Config {
+            language: Some("en".to_string()),
+            ..Default::default()
+        };
+        file.game.quick_turn = true;
+        file.graphics.vsync = true;
+        // The run overrode quick turn, the language and the renderer.
+        let mut before = gui::Settings {
+            graphics: file.graphics,
+            game: file.game,
+            language: Some("fr".to_string()),
+        };
+        before.game.quick_turn = false;
+        before.graphics.renderer = RendererKind::Software;
+        let mut after = before.clone();
+        after.game.music_volume = 40;
+        after.graphics.vsync = false;
+        let (graphics, language, game) =
+            persisted_options(file.clone(), &before, &after, after.graphics);
+        assert!(game.quick_turn);
+        assert_eq!(game.music_volume, 40);
+        assert_eq!(language.as_deref(), Some("en"));
+        assert_eq!(graphics.renderer, file.graphics.renderer);
+        assert!(!graphics.vsync);
+
+        let mut after = before.clone();
+        after.language = Some("de".to_string());
+        after.game.quick_turn = true;
+        let (_, language, game) = persisted_options(file, &before, &after, after.graphics);
+        assert_eq!(language.as_deref(), Some("de"));
+        assert!(game.quick_turn);
+    }
 
     struct TempDir(std::path::PathBuf);
 
@@ -15752,6 +16484,77 @@ mod tests {
             session.item_box.is_some(),
             "the box opens without a box in the room"
         );
+    }
+
+    #[test]
+    fn escape_requests_the_system_menu_which_freezes_the_room() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        debug_press(&mut session, &pack, |ui| ui.system_menu = true);
+        assert!(std::mem::take(&mut session.system_menu_requested));
+        session.open_system_menu();
+        assert!(session.room_frozen());
+        let frame = session.game.frame;
+        debug_press(&mut session, &pack, |ui| ui.debug_menu = true);
+        assert!(session.debug_menu.is_none(), "the menu owns the tick");
+        assert_eq!(session.game.frame, frame, "the room does not advance");
+        session.close_system_menu();
+        assert!(!session.room_frozen());
+    }
+
+    #[test]
+    fn gui_keys_follow_the_bindings_and_the_fixed_keys() {
+        use gui::{Device, GuiEvent, GuiKey};
+        let mut input = InputState::default();
+        input.key_down(SDL_SCANCODE_UP, false);
+        input.key_down(SDL_SCANCODE_UP, true);
+        input.key_down(SDL_SCANCODE_RETURN, false);
+        input.key_down(SDL_SCANCODE_RETURN, true);
+        input.key_down(SDL_SCANCODE_ESCAPE, false);
+        input.key_down(SDL_SCANCODE_Q, false);
+        input.key_down(SDL_SCANCODE_TAB, false);
+        let key = |key| GuiEvent::Key(key, Device::Keyboard);
+        assert_eq!(
+            input.take_gui_events(),
+            [
+                key(GuiKey::Up),
+                key(GuiKey::Up),
+                key(GuiKey::Confirm),
+                key(GuiKey::Cancel),
+                key(GuiKey::TabPrev),
+                key(GuiKey::ResetAll),
+            ],
+            "directions repeat, the rest do not; Escape cancels once"
+        );
+        assert!(input.take_gui_events().is_empty(), "drained");
+        let tick = input.tick();
+        assert!(
+            tick.ui.system_menu && tick.ui.start,
+            "the game still sees its presses"
+        );
+        input.key_down(SDL_SCANCODE_ESCAPE, false);
+        input.discard_presses();
+        assert!(!input.tick().ui.system_menu, "a press the GUI took is gone");
+
+        // The pad's Start is the fixed menu button (and backs out of it);
+        // north is the game's START.
+        let start = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+        let north = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_NORTH.0);
+        input.take_gui_events();
+        input.source_down(7, start, false);
+        assert_eq!(
+            input.take_gui_events(),
+            [GuiEvent::Key(
+                GuiKey::Cancel,
+                Device::Gamepad(gui::PadStyle::Xbox)
+            )]
+        );
+        let tick = input.tick();
+        assert!(tick.ui.system_menu && !tick.ui.start);
+        input.source_down(7, north, false);
+        let tick = input.tick();
+        assert!(tick.ui.start && !tick.ui.system_menu);
     }
 
     #[test]
@@ -18275,6 +19078,7 @@ mod tests {
                 SDL_SCANCODE_ESCAPE,
                 UiInput {
                     cancel: true,
+                    system_menu: true,
                     ..UiInput::default()
                 },
             ),

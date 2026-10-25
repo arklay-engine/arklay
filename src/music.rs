@@ -169,6 +169,28 @@ pub fn load_builtin() -> MusicTables {
     }
 }
 
+/// What a BGM track carries, which picks the player volume it follows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TrackKind {
+    #[default]
+    Music,
+    /// A background sound that is not music (rain, machinery).
+    Ambient,
+    /// A spoken line played on a BGM bank.
+    Voice,
+}
+
+/// The kind of `track`: the converter numbers the original's `Se_*` room
+/// loops (and the chain) `0x100..`, `V110_00`'s line `0x118` after them, and
+/// the `Bgm_*` music below and above.
+pub fn track_kind(track: TrackId) -> TrackKind {
+    match track {
+        0x118 => TrackKind::Voice,
+        0x100..=0x1FF => TrackKind::Ambient,
+        _ => TrackKind::Music,
+    }
+}
+
 /// Original `Sound/` track basename -> pack track id (`bgm/<id:03x>`).
 /// Conversion-time only; the engine and Lua see ids.
 pub const MUSIC_TRACKS: &[(u16, &str)] = &[
@@ -273,6 +295,20 @@ mod tests {
         assert_eq!(bgm_entry(0x013), "bgm/013.wav");
         assert_eq!(bgm_entry(0x100), "bgm/100.wav");
         assert_eq!(bgm_entry(0x200), "bgm/200.wav");
+    }
+
+    #[test]
+    fn tracks_are_music_ambient_or_voice_by_name() {
+        for &(id, name) in MUSIC_TRACKS {
+            let kind = if name.starts_with("Se_") || name == "chain1" {
+                TrackKind::Ambient
+            } else if name.starts_with('V') {
+                TrackKind::Voice
+            } else {
+                TrackKind::Music
+            };
+            assert_eq!(track_kind(id), kind, "{name}");
+        }
     }
 
     fn pack_with_music(source: &str) -> Pack {

@@ -5,8 +5,9 @@
 //! directly. Each input source is looked up in [`Bindings`], which maps it to
 //! the [`Action`]s it drives; an action may carry any number of bindings from
 //! any device (aim on `C`, the right mouse button and the left trigger at
-//! once). The port-only debug inputs (F1 or the gamepad's back button for the
-//! debug menu, F9 return to title) are fixed and can never be bound: see
+//! once). The port-only inputs (F1 or the gamepad's back button for the
+//! debug menu, F9 return to title, the gamepad's start button for the
+//! in-game menu) are fixed and can never be bound: see
 //! [`Source::reserved_bit`].
 //!
 //! Bindings persist in `arklay.toml`'s `[bindings]` table as one array of
@@ -30,9 +31,9 @@ use std::fmt;
 use anyhow::{Result, bail};
 use sdl3_sys::gamepad::{
     SDL_GAMEPAD_AXIS_COUNT, SDL_GAMEPAD_AXIS_INVALID, SDL_GAMEPAD_BUTTON_BACK,
-    SDL_GAMEPAD_BUTTON_COUNT, SDL_GAMEPAD_BUTTON_INVALID, SDL_GamepadAxis, SDL_GamepadButton,
-    SDL_GetGamepadAxisFromString, SDL_GetGamepadButtonFromString, SDL_GetGamepadStringForAxis,
-    SDL_GetGamepadStringForButton,
+    SDL_GAMEPAD_BUTTON_COUNT, SDL_GAMEPAD_BUTTON_INVALID, SDL_GAMEPAD_BUTTON_START,
+    SDL_GamepadAxis, SDL_GamepadButton, SDL_GetGamepadAxisFromString,
+    SDL_GetGamepadButtonFromString, SDL_GetGamepadStringForAxis, SDL_GetGamepadStringForButton,
 };
 use sdl3_sys::keyboard::{SDL_GetScancodeFromName, SDL_GetScancodeName};
 use sdl3_sys::scancode::{
@@ -87,6 +88,9 @@ pub const ACTIONS: [Action; 12] = [
 pub const DEBUG_MENU_BIT: u32 = 1 << 16;
 /// The fixed F9 return-to-title bit.
 pub const RETURN_TITLE_BIT: u32 = 1 << 17;
+/// The fixed in-game menu bit: the gamepad's Start button (Escape raises it
+/// too, on top of its bindings).
+pub const SYSTEM_MENU_BIT: u32 = 1 << 18;
 
 impl Action {
     /// The action's bit in an input word (the `--input` script word and the
@@ -200,14 +204,17 @@ impl Source {
     }
 
     /// The fixed port-only bit a reserved input raises (F1 or the gamepad's
-    /// back button for the debug menu, F9), or `None` for a source that can
-    /// be bound.
+    /// back button for the debug menu, F9, the gamepad's start button for
+    /// the in-game menu), or `None` for a source that can be bound.
     pub fn reserved_bit(self) -> Option<u32> {
         match self {
             Source::Key(code) if code == SDL_SCANCODE_F1.0 => Some(DEBUG_MENU_BIT),
             Source::Key(code) if code == SDL_SCANCODE_F9.0 => Some(RETURN_TITLE_BIT),
             Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_BACK.0 => {
                 Some(DEBUG_MENU_BIT)
+            }
+            Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_START.0 => {
+                Some(SYSTEM_MENU_BIT)
             }
             _ => None,
         }
@@ -219,8 +226,19 @@ impl Source {
         Source::parse(&self.to_string()).is_ok_and(|parsed| parsed == self)
     }
 
-    /// Parse a `[bindings]` source name.
+    /// Parse a `[bindings]` source name; a reserved input is an error.
     pub fn parse(text: &str) -> Result<Self> {
+        let source = Self::parse_any(text)?;
+        if source.reserved_bit().is_some() {
+            bail!("`{text}` is reserved for the port's fixed inputs");
+        }
+        Ok(source)
+    }
+
+    /// Parse a source name, reserved inputs included: a config written
+    /// before an input became reserved (`pad:start`) still loads, and
+    /// [`Bindings::set`] drops the reserved source.
+    pub fn parse_any(text: &str) -> Result<Self> {
         let Some((device, name)) = text.split_once(':') else {
             bail!("`{text}` is not `device:name`");
         };
@@ -283,9 +301,6 @@ impl Source {
             }
             other => bail!("unknown input device `{other}`"),
         };
-        if source.reserved_bit().is_some() {
-            bail!("`{text}` is reserved for the port's debug keys");
-        }
         Ok(source)
     }
 
@@ -387,15 +402,16 @@ pub struct Bindings {
 impl Default for Bindings {
     /// The shipped layout: the README's keyboard controls plus a gamepad
     /// layout (d-pad and left stick move, south confirms, east cancels, west
-    /// runs, the triggers aim and fire, the shoulders page, start opens the
-    /// inventory). No mouse input is bound by default.
+    /// runs, the triggers aim and fire, the shoulders page, north opens the
+    /// inventory; start is the fixed in-game menu button). No mouse input is
+    /// bound by default.
     fn default() -> Self {
         use sdl3_sys::gamepad::{
             SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY,
             SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_GAMEPAD_BUTTON_DPAD_DOWN,
             SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
             SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
-            SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_START,
+            SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH,
             SDL_GAMEPAD_BUTTON_WEST,
         };
         let key = Source::key;
@@ -476,7 +492,7 @@ impl Default for Bindings {
             ),
             (
                 Action::Start,
-                vec![key(SDL_SCANCODE_TAB), pad(SDL_GAMEPAD_BUTTON_START)],
+                vec![key(SDL_SCANCODE_TAB), pad(SDL_GAMEPAD_BUTTON_NORTH)],
             ),
             (
                 Action::PageLeft,

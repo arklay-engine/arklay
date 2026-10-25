@@ -2479,7 +2479,7 @@ fn step_language(config: &mut Config, delta: isize) {
 }
 
 /// The window-size presets matching `aspect`'s frame shape.
-fn resolution_presets(aspect: video::Aspect) -> &'static [(u32, u32)] {
+pub(crate) fn resolution_presets(aspect: video::Aspect) -> &'static [(u32, u32)] {
     if aspect.is_standard() {
         &RESOLUTIONS_STANDARD
     } else {
@@ -2499,7 +2499,7 @@ fn resolution_label(graphics: &video::Graphics) -> String {
 }
 
 /// `SYSTEM`, then every shipped language tag in a stable, familiar order.
-fn language_choices() -> Vec<Option<String>> {
+pub(crate) fn language_choices() -> Vec<Option<String>> {
     let mut tags: Vec<String> = crate::language::LANGUAGE_FILES
         .iter()
         .filter_map(|(entry, _)| {
@@ -2535,7 +2535,7 @@ fn language_rank(tag: &str) -> u8 {
     }
 }
 
-fn language_name(tag: &str) -> &str {
+pub(crate) fn language_name(tag: &str) -> &str {
     match tag {
         "en-US" => "ENGLISH",
         "ja-JP" => "JAPANESE",

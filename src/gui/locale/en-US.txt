@@ -1,0 +1,125 @@
+# The in-game menu and options screen strings (see src/gui/locale.rs).
+# `{}` is replaced by a value.
+
+menu.restart = "Restart"
+menu.load_game = "Load Game"
+menu.options = "Options"
+menu.quit = "Quit"
+menu.restart_question = "Restart from previous save?"
+menu.quit_question = "Quit the game and return to the main menu?"
+menu.unsaved_note = "(Any unsaved data will be lost.)"
+
+dialog.yes = "Yes"
+dialog.no = "No"
+
+hint.select = "Select"
+hint.back = "Back"
+hint.reset_all = "Reset All"
+hint.reset_page = "Reset Subcategory"
+
+options.title = "OPTIONS"
+options.reset_all_question = "Reset every option to its default?"
+options.reset_page_question = "Reset this page's options to their defaults?"
+options.default = "(Default: {})"
+
+category.controls = "CONTROLS"
+category.graphics = "GRAPHICS"
+category.audio = "AUDIO"
+category.interface = "INTERFACE"
+category.language = "LANGUAGE"
+
+page.basic = "Basic Settings"
+page.display = "Display"
+page.rendering = "Rendering"
+page.general = "General"
+page.language = "Language"
+
+group.character_controls = "Character Controls"
+group.when_aiming = "When Aiming"
+group.controller = "Controller"
+group.display = "Display"
+group.renderer = "Renderer"
+group.text = "Text"
+group.volume = "Volume"
+group.menus = "Menus"
+
+choice.off = "Off"
+choice.on = "On"
+
+quick_turn.label = "Quick Turn"
+quick_turn.description = "Turn 180 degrees in place by pressing Run while walking backwards."
+quick_turn.off = "The original controls."
+quick_turn.on = "Backward + Run turns the character around."
+
+tactical_reload.label = "Tactical Reload"
+tactical_reload.description = "Reload a partially loaded weapon without emptying it first."
+tactical_reload.off = "Weapons reload only when empty."
+tactical_reload.on = "Hold Run while aiming to reload."
+
+button_style.label = "Button Style"
+button_style.description = "The controller buttons the hints show."
+button_style.auto = "Auto"
+button_style.auto_note = "Match the controller in use."
+
+fullscreen.label = "Display Mode"
+fullscreen.description = "Run the game in a window or borderless fullscreen. Alt+Enter also toggles this."
+fullscreen.window = "Window"
+fullscreen.fullscreen = "Fullscreen"
+
+resolution.label = "Resolution"
+resolution.description = "The size of the game window. Fullscreen uses the display's size."
+
+aspect.label = "Aspect Ratio"
+aspect.description = "The shape of the picture. Wider ratios crop the original 4:3 frame and follow the player vertically."
+
+vsync.label = "V-Sync"
+vsync.description = "Wait for the display to refresh before showing each frame."
+vsync.off = "Lower latency; the picture may tear."
+vsync.on = "No tearing; frames wait for the display."
+
+frame_rate.label = "Frame Rate"
+frame_rate.description = "Frames shown per second. The game itself always runs at 30 updates per second; higher rates smooth motion between them."
+frame_rate.value = "{} FPS"
+
+renderer.label = "Renderer"
+renderer.description = "How the game is drawn."
+renderer.software = "Software"
+renderer.software_note = "The original 320x240 picture, scaled up."
+renderer.gpu = "GPU"
+renderer.gpu_note = "Models at the display's resolution, with HD replacements."
+
+render_scale.label = "Render Scale"
+render_scale.description = "The resolution 3D models are drawn at, as a percentage of the screen. GPU renderer only."
+
+msaa.label = "Anti-Aliasing"
+msaa.description = "Smooths the edges of 3D models. Higher settings cost more. GPU renderer only."
+msaa.value = "{}x MSAA"
+
+ui_font.label = "Menu Font"
+ui_font.description = "The typeface these menus are drawn with."
+ui_font.modern = "Modern"
+ui_font.modern_note = "A clean sans-serif face."
+ui_font.retro = "Retro"
+ui_font.retro_note = "A pixel face in keeping with the original."
+
+music_volume.label = "Background Music"
+music_volume.description = "The volume of the music."
+
+ambient_volume.label = "Ambient Effects"
+ambient_volume.description = "The volume of the background sounds that aren't music: rain, wind, machinery."
+
+effects_volume.label = "Sound Effects"
+effects_volume.description = "The volume of footsteps, gunfire, creatures, doors and the menus' sounds."
+
+voice_volume.label = "Voice"
+voice_volume.description = "The volume of the characters' voices."
+
+menu_sounds.label = "Menu Sounds"
+menu_sounds.description = "Play sounds when moving through and choosing in these menus."
+menu_sounds.off = "Silent menus."
+menu_sounds.on = "Cursor, confirm and cancel sounds."
+
+language.label = "Text Language"
+language.description = "The language of the game's text and of these menus."
+language.system = "System"
+language.system_note = "Follow the system language ({})."

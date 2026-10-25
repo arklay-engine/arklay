@@ -1,0 +1,124 @@
+# Textes du menu en jeu et de l'écran des options (voir src/gui/locale.rs).
+
+menu.restart = "Recommencer"
+menu.load_game = "Charger une partie"
+menu.options = "Options"
+menu.quit = "Quitter"
+menu.restart_question = "Reprendre depuis la dernière sauvegarde ?"
+menu.quit_question = "Quitter la partie et revenir au menu principal ?"
+menu.unsaved_note = "(Toute progression non sauvegardée sera perdue.)"
+
+dialog.yes = "Oui"
+dialog.no = "Non"
+
+hint.select = "Choisir"
+hint.back = "Retour"
+hint.reset_all = "Tout réinitialiser"
+hint.reset_page = "Réinitialiser la page"
+
+options.title = "OPTIONS"
+options.reset_all_question = "Rétablir toutes les options par défaut ?"
+options.reset_page_question = "Rétablir les options de cette page par défaut ?"
+options.default = "(Par défaut : {})"
+
+category.controls = "COMMANDES"
+category.graphics = "GRAPHISMES"
+category.audio = "AUDIO"
+category.interface = "INTERFACE"
+category.language = "LANGUE"
+
+page.basic = "Réglages de base"
+page.display = "Affichage"
+page.rendering = "Rendu"
+page.general = "Général"
+page.language = "Langue"
+
+group.character_controls = "Contrôle du personnage"
+group.when_aiming = "En visant"
+group.controller = "Manette"
+group.display = "Affichage"
+group.renderer = "Moteur de rendu"
+group.text = "Texte"
+group.volume = "Volume"
+group.menus = "Menus"
+
+choice.off = "Non"
+choice.on = "Oui"
+
+quick_turn.label = "Demi-tour rapide"
+quick_turn.description = "Faire demi-tour sur place en appuyant sur Courir en reculant."
+quick_turn.off = "Les commandes d'origine."
+quick_turn.on = "Reculer + Courir fait faire demi-tour au personnage."
+
+tactical_reload.label = "Rechargement tactique"
+tactical_reload.description = "Recharger une arme partiellement chargée sans la vider d'abord."
+tactical_reload.off = "Les armes ne se rechargent qu'une fois vides."
+tactical_reload.on = "Maintenez Courir en visant pour recharger."
+
+button_style.label = "Style des boutons"
+button_style.description = "Les boutons de manette affichés dans les aides."
+button_style.auto = "Auto"
+button_style.auto_note = "Selon la manette utilisée."
+
+fullscreen.label = "Mode d'affichage"
+fullscreen.description = "Jouer en fenêtre ou en plein écran sans bordure. Alt+Entrée permet aussi de basculer."
+fullscreen.window = "Fenêtre"
+fullscreen.fullscreen = "Plein écran"
+
+resolution.label = "Résolution"
+resolution.description = "La taille de la fenêtre du jeu. Le plein écran utilise la taille de l'écran."
+
+aspect.label = "Format d'image"
+aspect.description = "Les proportions de l'image. Les formats plus larges recadrent l'image 4:3 d'origine et suivent le joueur verticalement."
+
+vsync.label = "Synchro verticale"
+vsync.description = "Attendre le rafraîchissement de l'écran avant d'afficher chaque image."
+vsync.off = "Latence réduite ; l'image peut se déchirer."
+vsync.on = "Pas de déchirement ; les images attendent l'écran."
+
+frame_rate.label = "Fréquence d'images"
+frame_rate.description = "Images affichées par seconde. Le jeu tourne toujours à 30 mises à jour par seconde ; une fréquence plus élevée fluidifie le mouvement entre elles."
+frame_rate.value = "{} IPS"
+
+renderer.label = "Moteur de rendu"
+renderer.description = "La façon dont le jeu est dessiné."
+renderer.software = "Logiciel"
+renderer.software_note = "L'image 320x240 d'origine, agrandie."
+renderer.gpu = "GPU"
+renderer.gpu_note = "Modèles à la résolution de l'écran, avec remplacements HD."
+
+render_scale.label = "Échelle de rendu"
+render_scale.description = "La résolution des modèles 3D, en pourcentage de l'écran. Moteur GPU uniquement."
+
+msaa.label = "Anticrénelage"
+msaa.description = "Adoucit les contours des modèles 3D. Les réglages élevés sont plus coûteux. Moteur GPU uniquement."
+msaa.value = "MSAA {}x"
+
+ui_font.label = "Police des menus"
+ui_font.description = "La police utilisée par ces menus."
+ui_font.modern = "Moderne"
+ui_font.modern_note = "Une police sans empattement épurée."
+ui_font.retro = "Rétro"
+ui_font.retro_note = "Une police pixel fidèle à l'original."
+
+music_volume.label = "Musique"
+music_volume.description = "Le volume de la musique."
+
+ambient_volume.label = "Sons d'ambiance"
+ambient_volume.description = "Le volume des sons de fond qui ne sont pas de la musique : pluie, vent, machines."
+
+effects_volume.label = "Effets sonores"
+effects_volume.description = "Le volume des pas, des tirs, des créatures, des portes et des sons des menus."
+
+voice_volume.label = "Voix"
+voice_volume.description = "Le volume des voix des personnages."
+
+menu_sounds.label = "Sons des menus"
+menu_sounds.description = "Joue des sons lors des déplacements et des choix dans ces menus."
+menu_sounds.off = "Menus silencieux."
+menu_sounds.on = "Sons de curseur, de validation et d'annulation."
+
+language.label = "Langue du texte"
+language.description = "La langue des textes du jeu et de ces menus."
+language.system = "Système"
+language.system_note = "Suivre la langue du système ({})."

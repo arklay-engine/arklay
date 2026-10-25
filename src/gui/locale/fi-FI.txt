@@ -1,0 +1,124 @@
+# Pelivalikon ja asetusnäytön tekstit (katso src/gui/locale.rs).
+
+menu.restart = "Aloita alusta"
+menu.load_game = "Lataa peli"
+menu.options = "Asetukset"
+menu.quit = "Lopeta"
+menu.restart_question = "Aloitetaanko viimeisimmästä tallennuksesta?"
+menu.quit_question = "Lopetetaanko peli ja palataan päävalikkoon?"
+menu.unsaved_note = "(Tallentamattomat tiedot menetetään.)"
+
+dialog.yes = "Kyllä"
+dialog.no = "Ei"
+
+hint.select = "Valitse"
+hint.back = "Takaisin"
+hint.reset_all = "Palauta kaikki"
+hint.reset_page = "Palauta sivu"
+
+options.title = "ASETUKSET"
+options.reset_all_question = "Palautetaanko kaikki asetukset oletusarvoihin?"
+options.reset_page_question = "Palautetaanko tämän sivun asetukset oletusarvoihin?"
+options.default = "(Oletus: {})"
+
+category.controls = "OHJAUS"
+category.graphics = "GRAFIIKKA"
+category.audio = "ÄÄNI"
+category.interface = "KÄYTTÖLIITTYMÄ"
+category.language = "KIELI"
+
+page.basic = "Perusasetukset"
+page.display = "Näyttö"
+page.rendering = "Piirto"
+page.general = "Yleiset"
+page.language = "Kieli"
+
+group.character_controls = "Hahmon ohjaus"
+group.when_aiming = "Tähdättäessä"
+group.controller = "Peliohjain"
+group.display = "Näyttö"
+group.renderer = "Piirtäjä"
+group.text = "Teksti"
+group.volume = "Äänenvoimakkuus"
+group.menus = "Valikot"
+
+choice.off = "Pois"
+choice.on = "Päällä"
+
+quick_turn.label = "Pikakäännös"
+quick_turn.description = "Käänny 180 astetta paikallaan painamalla juoksua peruuttaessa."
+quick_turn.off = "Alkuperäinen ohjaus."
+quick_turn.on = "Taakse + juoksu kääntää hahmon ympäri."
+
+tactical_reload.label = "Taktinen lataus"
+tactical_reload.description = "Lataa osittain ladattu ase tyhjentämättä sitä ensin."
+tactical_reload.off = "Aseet ladataan vain tyhjinä."
+tactical_reload.on = "Pidä juoksua pohjassa tähdätessä ladataksesi."
+
+button_style.label = "Painikkeiden tyyli"
+button_style.description = "Vihjeissä näytettävät peliohjaimen painikkeet."
+button_style.auto = "Automaattinen"
+button_style.auto_note = "Käytössä olevan ohjaimen mukaan."
+
+fullscreen.label = "Näyttötila"
+fullscreen.description = "Pelaa ikkunassa tai reunattomassa koko näytön tilassa. Myös Alt+Enter vaihtaa tilaa."
+fullscreen.window = "Ikkuna"
+fullscreen.fullscreen = "Koko näyttö"
+
+resolution.label = "Tarkkuus"
+resolution.description = "Peli-ikkunan koko. Koko näytön tila käyttää näytön kokoa."
+
+aspect.label = "Kuvasuhde"
+aspect.description = "Kuvan muoto. Leveämmät kuvasuhteet rajaavat alkuperäistä 4:3-kuvaa ja seuraavat pelaajaa pystysuunnassa."
+
+vsync.label = "Pystytahdistus"
+vsync.description = "Odota näytön päivitystä ennen jokaisen kuvan näyttämistä."
+vsync.off = "Pienempi viive; kuva voi repeillä."
+vsync.on = "Ei repeilyä; kuvat odottavat näyttöä."
+
+frame_rate.label = "Kuvataajuus"
+frame_rate.description = "Näytettävät kuvat sekunnissa. Peli itse päivittyy aina 30 kertaa sekunnissa; suuremmat taajuudet pehmentävät liikettä päivitysten välillä."
+frame_rate.value = "{} FPS"
+
+renderer.label = "Piirtäjä"
+renderer.description = "Miten peli piirretään."
+renderer.software = "Ohjelmisto"
+renderer.software_note = "Alkuperäinen 320x240-kuva suurennettuna."
+renderer.gpu = "GPU"
+renderer.gpu_note = "Mallit näytön tarkkuudella, HD-korvaavilla tekstuureilla."
+
+render_scale.label = "Piirtotarkkuus"
+render_scale.description = "3D-mallien piirtotarkkuus prosentteina näytöstä. Vain GPU-piirtäjä."
+
+msaa.label = "Reunanpehmennys"
+msaa.description = "Pehmentää 3D-mallien reunoja. Korkeammat asetukset ovat raskaampia. Vain GPU-piirtäjä."
+msaa.value = "{}x MSAA"
+
+ui_font.label = "Valikkofontti"
+ui_font.description = "Kirjasin, jolla nämä valikot piirretään."
+ui_font.modern = "Moderni"
+ui_font.modern_note = "Selkeä pääteetön kirjasin."
+ui_font.retro = "Retro"
+ui_font.retro_note = "Alkuperäisen henkeen sopiva pikselikirjasin."
+
+music_volume.label = "Taustamusiikki"
+music_volume.description = "Musiikin äänenvoimakkuus."
+
+ambient_volume.label = "Ympäristöäänet"
+ambient_volume.description = "Muiden taustaäänten kuin musiikin voimakkuus: sade, tuuli, koneet."
+
+effects_volume.label = "Äänitehosteet"
+effects_volume.description = "Askelten, laukausten, olentojen, ovien ja valikkoäänten voimakkuus."
+
+voice_volume.label = "Puhe"
+voice_volume.description = "Hahmojen puheen äänenvoimakkuus."
+
+menu_sounds.label = "Valikkoäänet"
+menu_sounds.description = "Soita ääniä liikuttaessa ja valittaessa näissä valikoissa."
+menu_sounds.off = "Hiljaiset valikot."
+menu_sounds.on = "Kursorin, vahvistuksen ja peruutuksen äänet."
+
+language.label = "Tekstin kieli"
+language.description = "Pelin tekstien ja näiden valikoiden kieli."
+language.system = "Järjestelmä"
+language.system_note = "Seuraa järjestelmän kieltä ({})."

@@ -1,0 +1,124 @@
+# Строки игрового меню и экрана настроек (см. src/gui/locale.rs).
+
+menu.restart = "Начать заново"
+menu.load_game = "Загрузить игру"
+menu.options = "Настройки"
+menu.quit = "Выйти"
+menu.restart_question = "Начать заново с последнего сохранения?"
+menu.quit_question = "Выйти из игры и вернуться в главное меню?"
+menu.unsaved_note = "(Несохранённые данные будут потеряны.)"
+
+dialog.yes = "Да"
+dialog.no = "Нет"
+
+hint.select = "Выбрать"
+hint.back = "Назад"
+hint.reset_all = "Сбросить всё"
+hint.reset_page = "Сбросить страницу"
+
+options.title = "НАСТРОЙКИ"
+options.reset_all_question = "Сбросить все настройки по умолчанию?"
+options.reset_page_question = "Сбросить настройки этой страницы по умолчанию?"
+options.default = "(По умолчанию: {})"
+
+category.controls = "УПРАВЛЕНИЕ"
+category.graphics = "ГРАФИКА"
+category.audio = "ЗВУК"
+category.interface = "ИНТЕРФЕЙС"
+category.language = "ЯЗЫК"
+
+page.basic = "Основные"
+page.display = "Экран"
+page.rendering = "Отрисовка"
+page.general = "Общие"
+page.language = "Язык"
+
+group.character_controls = "Управление персонажем"
+group.when_aiming = "При прицеливании"
+group.controller = "Геймпад"
+group.display = "Экран"
+group.renderer = "Рендерер"
+group.text = "Текст"
+group.volume = "Громкость"
+group.menus = "Меню"
+
+choice.off = "Выкл."
+choice.on = "Вкл."
+
+quick_turn.label = "Быстрый разворот"
+quick_turn.description = "Разворот на 180 градусов на месте нажатием бега при движении назад."
+quick_turn.off = "Оригинальное управление."
+quick_turn.on = "Назад + бег разворачивает персонажа."
+
+tactical_reload.label = "Тактическая перезарядка"
+tactical_reload.description = "Перезарядка частично заряженного оружия без опустошения магазина."
+tactical_reload.off = "Оружие перезаряжается только пустым."
+tactical_reload.on = "Удерживайте бег при прицеливании, чтобы перезарядить."
+
+button_style.label = "Стиль кнопок"
+button_style.description = "Кнопки геймпада, показываемые в подсказках."
+button_style.auto = "Авто"
+button_style.auto_note = "Как у используемого геймпада."
+
+fullscreen.label = "Режим экрана"
+fullscreen.description = "Игра в окне или в полноэкранном режиме без рамки. Также переключается клавишами Alt+Enter."
+fullscreen.window = "Окно"
+fullscreen.fullscreen = "Полный экран"
+
+resolution.label = "Разрешение"
+resolution.description = "Размер окна игры. В полноэкранном режиме используется размер экрана."
+
+aspect.label = "Соотношение сторон"
+aspect.description = "Форма изображения. Более широкие форматы обрезают исходный кадр 4:3 и следуют за игроком по вертикали."
+
+vsync.label = "Вертикальная синхронизация"
+vsync.description = "Ждать обновления экрана перед показом каждого кадра."
+vsync.off = "Меньше задержка; возможны разрывы изображения."
+vsync.on = "Без разрывов; кадры ждут экран."
+
+frame_rate.label = "Частота кадров"
+frame_rate.description = "Кадров в секунду. Сама игра всегда обновляется 30 раз в секунду; более высокая частота сглаживает движение между обновлениями."
+frame_rate.value = "{} кадр/с"
+
+renderer.label = "Рендерер"
+renderer.description = "Способ отрисовки игры."
+renderer.software = "Программный"
+renderer.software_note = "Исходное изображение 320x240, увеличенное."
+renderer.gpu = "GPU"
+renderer.gpu_note = "Модели в разрешении экрана, с заменами в HD."
+
+render_scale.label = "Масштаб отрисовки"
+render_scale.description = "Разрешение 3D-моделей в процентах от экрана. Только для рендерера GPU."
+
+msaa.label = "Сглаживание"
+msaa.description = "Сглаживает края 3D-моделей. Высокие значения требовательнее. Только для рендерера GPU."
+msaa.value = "MSAA {}x"
+
+ui_font.label = "Шрифт меню"
+ui_font.description = "Шрифт, которым отображаются эти меню."
+ui_font.modern = "Современный"
+ui_font.modern_note = "Чистый шрифт без засечек."
+ui_font.retro = "Ретро"
+ui_font.retro_note = "Пиксельный шрифт в духе оригинала."
+
+music_volume.label = "Музыка"
+music_volume.description = "Громкость музыки."
+
+ambient_volume.label = "Звуки окружения"
+ambient_volume.description = "Громкость фоновых звуков, которые не являются музыкой: дождь, ветер, механизмы."
+
+effects_volume.label = "Звуковые эффекты"
+effects_volume.description = "Громкость шагов, выстрелов, существ, дверей и звуков меню."
+
+voice_volume.label = "Голоса"
+voice_volume.description = "Громкость голосов персонажей."
+
+menu_sounds.label = "Звуки меню"
+menu_sounds.description = "Воспроизводить звуки при перемещении и выборе в этих меню."
+menu_sounds.off = "Меню без звука."
+menu_sounds.on = "Звуки курсора, подтверждения и отмены."
+
+language.label = "Язык текста"
+language.description = "Язык текстов игры и этих меню."
+language.system = "Системный"
+language.system_note = "Как в системе ({})."
