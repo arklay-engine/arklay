@@ -454,15 +454,29 @@ fn refill_quantity(weapon: u8, quantity: u8) -> u8 {
     }
 }
 
-/// Whether a weapon's quantity byte means an empty clip. The flamethrower
-/// keeps its whole fuel count in the byte, while every other weapon sets the
-/// high bit as the volley latch and counts rounds in the low seven bits.
-fn clip_is_empty(weapon: u8, quantity: u8) -> bool {
+/// The rounds a weapon's quantity byte holds. The flamethrower keeps its
+/// whole fuel count in the byte, while every other weapon sets the high bit
+/// as the volley latch and counts rounds in the low seven bits.
+pub fn clip_rounds(weapon: u8, quantity: u8) -> u8 {
     if weapon == ITEM_FLAMETHROWER {
-        quantity == 0
+        quantity
     } else {
-        quantity & 0x7F == 0
+        quantity & 0x7F
     }
+}
+
+/// Whether a weapon's quantity byte means an empty clip.
+fn clip_is_empty(weapon: u8, quantity: u8) -> bool {
+    clip_rounds(weapon, quantity) == 0
+}
+
+/// Whether `weapon` refills its own empty clip rather than spending
+/// ammunition: the special machine guns, and the rocket launcher once its
+/// infinite scenario flag is set.
+pub fn refills_itself(game: &GameState, weapon: u8) -> bool {
+    weapon >= SPECIAL_WEAPON_MIN
+        || (weapon == 10
+            && game.flags[usize::from(BANK_SCENARIO)].bit(SCENARIO_FLAG_INF_R_LAUNCHER))
 }
 
 /// Top the equipped weapon's clip up to [`clip_capacity`]. Topping a normal
@@ -582,13 +596,7 @@ pub fn weapon_autoaim_check(game: &mut GameState) -> u8 {
     if quantity & 0x7F != 0 {
         return quantity & 0x7F;
     }
-    let infinite_launcher =
-        weapon == 10 && game.flags[usize::from(BANK_SCENARIO)].bit(SCENARIO_FLAG_INF_R_LAUNCHER);
-    if infinite_launcher {
-        game.inventory[index].quantity = 4;
-        return 4;
-    }
-    if weapon < SPECIAL_WEAPON_MIN {
+    if !refills_itself(game, weapon) {
         return 0;
     }
     game.inventory[index].quantity = 4;

@@ -34,6 +34,8 @@
 //!   only rendering, the camera-switch cull and effect attach compose the SCA
 //!   parent chain.
 
+mod debug_hud;
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
 use std::path::{Path, PathBuf};
@@ -79,8 +81,8 @@ use sdl3_sys::render::{
 };
 use sdl3_sys::scancode::{
     SDL_SCANCODE_1, SDL_SCANCODE_3, SDL_SCANCODE_E, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F2,
-    SDL_SCANCODE_F3, SDL_SCANCODE_F8, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_Q, SDL_SCANCODE_R,
-    SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB, SDL_Scancode,
+    SDL_SCANCODE_F3, SDL_SCANCODE_F6, SDL_SCANCODE_F8, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_Q,
+    SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB, SDL_Scancode,
 };
 use sdl3_sys::stdinc::SDL_free;
 use sdl3_sys::surface::{
@@ -1005,12 +1007,11 @@ impl LoopClock {
     }
 
     /// Step the gameplay speed one notch up (`delta` > 0, F3) or down (F2),
-    /// clamped to the range in [`crate::speed`]. Reports real changes to the
-    /// terminal so the current speed is discoverable.
-    fn step_speed(&mut self, delta: i32) {
-        if self.speed.step(delta) {
-            eprintln!("speed: {:.1}x", self.speed.multiplier());
-        }
+    /// clamped to the range in [`crate::speed`], returning the multiplier
+    /// now in force.
+    fn step_speed(&mut self, delta: i32) -> f64 {
+        self.speed.step(delta);
+        self.speed.multiplier()
     }
 
     /// The tick interval at the current speed: `tick_ms` divided by the
@@ -8910,24 +8911,23 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     let mut event = SDL_Event::default();
     let mut clock = LoopClock::new(display.frame_rate(), stats);
     warm_gui_fonts(app.pack.language());
-    crate::audio::set_volumes(crate::config::Config::load_default().0.game.volumes());
+    let game_options = crate::config::Config::load_default().0.game;
+    crate::audio::set_volumes(game_options.volumes());
+    let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
     loop {
-        let mut cut_delta = 0i32;
-        let mut speed_delta = 0i32;
-        if poll_events(
-            &mut event,
-            &mut input,
-            &mut cut_delta,
-            &mut speed_delta,
-            Some(display),
-        ) {
+        let mut keys = PortKeys::default();
+        if poll_events(&mut event, &mut input, &mut keys, Some(display)) {
             return clock.report();
         }
-        if cut_delta != 0 {
-            app.step_camera_cut(cut_delta);
+        if keys.cut_delta != 0 {
+            app.step_camera_cut(keys.cut_delta);
         }
-        if speed_delta != 0 {
-            clock.step_speed(speed_delta);
+        if keys.speed_delta != 0 {
+            let speed = clock.step_speed(keys.speed_delta);
+            hud.notify("speed", format!("Game speed {speed:.1}x"));
+        }
+        for _ in 0..keys.debug_overlay {
+            hud.cycle();
         }
         if let Some(bindings) = app.take_bindings_change() {
             input.apply_bindings_change(bindings);
@@ -8969,33 +8969,27 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             let (width, height) = display.drawable_size();
             menu.draw(width, height);
         }
+        hud.draw(app, display, &clock, &input);
         if let Some(gpu) = display.gpu() {
             app.draw_layers(gpu);
             clock.frame_drawn(draw);
+            let native = hud.layer().or(app.native_layer());
             #[cfg(feature = "hd")]
             if let Some(film) = app.hd_frame() {
                 display.present_film(app.frame(), film)?;
             } else {
-                display.present_frame(
-                    app.frame(),
-                    app.white_frame(),
-                    app.ui_layer(),
-                    app.native_layer(),
-                )?;
+                display.present_frame(app.frame(), app.white_frame(), app.ui_layer(), native)?;
             }
             #[cfg(not(feature = "hd"))]
-            display.present_frame(
-                app.frame(),
-                app.white_frame(),
-                app.ui_layer(),
-                app.native_layer(),
-            )?;
+            display.present_frame(app.frame(), app.white_frame(), app.ui_layer(), native)?;
         } else {
             app.draw();
             clock.frame_drawn(draw);
-            display.present_frame(app.frame(), None, app.ui_layer(), app.native_layer())?;
+            let native = hud.layer().or(app.native_layer());
+            display.present_frame(app.frame(), None, app.ui_layer(), native)?;
         }
         display.show()?;
+        hud.frame_presented();
         app.post_present();
     }
 }
@@ -9426,17 +9420,10 @@ fn run_font_ui(pack_path: &Path, capture: Option<&Path>, mods: &ModOptions) -> R
     }
 
     let mut event = SDL_Event::default();
-    let mut cut_delta = 0i32;
-    let mut speed_delta = 0i32;
+    let mut keys = PortKeys::default();
     let mut input = InputState::default();
     loop {
-        if poll_events(
-            &mut event,
-            &mut input,
-            &mut cut_delta,
-            &mut speed_delta,
-            None,
-        ) {
+        if poll_events(&mut event, &mut input, &mut keys, None) {
             return Ok(());
         }
         present(renderer, &mut texture, &framebuffer)?;
@@ -11136,8 +11123,19 @@ fn play_entity_sounds(
     }
 }
 
+/// The port-only keys one [`poll_events`] pass saw.
+#[derive(Debug, Default)]
+struct PortKeys {
+    /// The shift+`,`/`.` camera-cut step.
+    cut_delta: i32,
+    /// The F2/F3 game speed step.
+    speed_delta: i32,
+    /// F6 presses: each steps the debug overlay's mode.
+    debug_overlay: u32,
+}
+
 /// Poll every queued SDL event into `input`, reporting whether the user quit
-/// and accumulating the shift+`,`/`.` camera-cut step.
+/// and accumulating the port-only keys into `keys`.
 ///
 /// Input transitions are latched here rather than sampled from
 /// `SDL_GetKeyboardState` later, because the render loop runs at the display's
@@ -11148,8 +11146,7 @@ fn play_entity_sounds(
 fn poll_events(
     event: &mut SDL_Event,
     input: &mut InputState,
-    cut_delta: &mut i32,
-    speed_delta: &mut i32,
+    keys: &mut PortKeys,
     mut display: Option<&mut Display>,
 ) -> bool {
     use controls::{Source, Wheel};
@@ -11163,12 +11160,18 @@ fn poll_events(
             let scancode = unsafe { event.key.scancode };
             let modifiers = unsafe { event.key.r#mod };
             let repeat = unsafe { event.key.repeat };
-            // F2/F3 slow down and speed up the simulation (see LoopClock).
-            // They are fixed port-only keys like F8, so they never reach the
-            // action bindings.
+            // F2/F3 slow down and speed up the simulation (see LoopClock),
+            // and F6 steps the debug overlay. They are fixed port-only keys
+            // like F8, so they never reach the action bindings.
             if matches!(scancode, SDL_SCANCODE_F2 | SDL_SCANCODE_F3) {
                 if !repeat {
-                    *speed_delta += if scancode == SDL_SCANCODE_F3 { 1 } else { -1 };
+                    keys.speed_delta += if scancode == SDL_SCANCODE_F3 { 1 } else { -1 };
+                }
+                continue;
+            }
+            if scancode == SDL_SCANCODE_F6 {
+                if !repeat {
+                    keys.debug_overlay += 1;
                 }
                 continue;
             }
@@ -11191,9 +11194,9 @@ fn poll_events(
             input.key_down(scancode, repeat);
             if modifiers & SDL_KMOD_SHIFT != SDL_KMOD_NONE {
                 if key == SDLK_COMMA {
-                    *cut_delta -= 1;
+                    keys.cut_delta -= 1;
                 } else if key == SDLK_PERIOD {
-                    *cut_delta += 1;
+                    keys.cut_delta += 1;
                 }
             }
         } else if kind == SDL_EVENT_KEY_UP {

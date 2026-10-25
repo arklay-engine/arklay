@@ -50,6 +50,12 @@ pub enum Role {
     DialogTitle,
     /// A dialog's secondary line.
     DialogBody,
+    /// The F6 debug HUD's lines.
+    Debug,
+    /// The F6 debug HUD's section headings.
+    DebugHeading,
+    /// A corner notice (the game speed).
+    Notice,
 }
 
 /// The palette.
@@ -122,6 +128,9 @@ impl Theme {
             Role::Menu => (Face::Regular, 44.0),
             Role::DialogTitle => (Face::Regular, 38.0),
             Role::DialogBody => (Face::Regular, 30.0),
+            Role::Debug => (Face::Regular, 22.0),
+            Role::DebugHeading => (Face::Bold, 22.0),
+            Role::Notice => (Face::Regular, 30.0),
         };
         let px = self.u(units);
         match self.family {
