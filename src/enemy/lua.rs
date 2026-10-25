@@ -2676,9 +2676,12 @@ mod imp {
                 Ok(crate::enemy::anim::blend_step(api.entity()))
             });
 
-            // The un-collided `Add_speedXZ` step (the follow driver resolves
-            // room collision in its own tail). The rotated vector is stored on
-            // the entity, exactly like the original's `speed` SVECTOR.
+            // The un-collided `Add_speedXZ` step. State 9 resolves room
+            // collision in its own tail; state 8 has no collision pass in the
+            // original, so a scripted walk crosses geometry exactly like the
+            // reference. A per-step pre-check would freeze a run across the
+            // banister. The rotated vector is stored on the entity, exactly
+            // like the original's `speed` SVECTOR.
             methods.add_method_mut("move", |_lua, api, (offset, distance): (i64, i64)| {
                 crate::enemy::walk::advance_xz(api.entity_mut(), offset as u16, distance as i16);
                 Ok(())
@@ -5812,6 +5815,94 @@ end
         let anchored = game.entities[1].pos;
         assert!(host.update(&mut game, &RoomState::default(), &pack, 1, &clips));
         assert_eq!(game.entities[1].pos, anchored, "the anchor is stable");
+    }
+
+    /// A state-8 scripted walk must cross a room obstruction exactly like the
+    /// native driver. The original steps with the un-collided `Add_speedXZ`;
+    /// rolling each step back at the pre-check freezes the walk forever when
+    /// the scripted target is on the far side of the banister.
+    #[test]
+    fn npc_state_eight_walk_crosses_a_blocking_boundary() {
+        use crate::model::{Clip, ClipFrame};
+        use crate::state::CollisionRect;
+
+        let source = |path: &str| {
+            crate::enemy::ENEMY_SCRIPTS
+                .iter()
+                .find(|(entry, _)| *entry == path)
+                .unwrap_or_else(|| panic!("the checked-in {path}"))
+                .1
+        };
+        let pack = pack(&[
+            ("enemy/em24.lua", source("enemy/em24.lua")),
+            ("enemy/lib/npc.lua", source("enemy/lib/npc.lua")),
+        ]);
+        let clips = vec![Clip {
+            frames: vec![ClipFrame {
+                keyframe: 0,
+                timing: 1,
+            }],
+        }];
+
+        // The 2F hall banister: a blocking rect between the character and its
+        // scripted target.
+        let mut room = RoomState::default();
+        room.collision.quadrants[0].push(CollisionRect {
+            x_min: 900,
+            z_min: 0,
+            x_max: 1100,
+            z_max: 2000,
+            kind: 1,
+            flags: 0x300,
+        });
+
+        let mut game = GameState::default();
+        {
+            let entity = &mut game.entities[1];
+            entity.id = 0x24;
+            entity.set_active(true);
+            entity.set_state(8);
+            entity.action_behavior = 3;
+            entity.action_state = 3;
+            entity.animation_id = 8;
+            entity.move_speed_current = 0xD2;
+            entity.angle = 0;
+            entity.scd_timer = 0x40;
+            entity.scd_anim_param = 0x21;
+            entity.sca_radius = 422;
+            entity.unk_c6 = 2000;
+            entity.unk_c8 = 0;
+        }
+        let mut scripted = game.clone();
+        let mut host = LuaEnemyHost::new();
+        for tick in 0..20 {
+            let target = crate::enemy::live_look_at_target(&game, 1);
+            crate::enemy::update_entity(&mut game, 1, &room, &clips, target);
+            assert!(
+                host.update(&mut scripted, &room, &pack, 1, &clips),
+                "tick {tick}: script did not run"
+            );
+            assert_eq!(
+                game.entities[1], scripted.entities[1],
+                "tick {tick}: native vs scripted"
+            );
+        }
+        // The original and the reference have no state-8 room-collision pass,
+        // so the un-collided step crosses the rect; the old per-step pre-check
+        // froze the walk at its near face (x = 418 with the 422 radius).
+        assert!(
+            scripted.entities[1].pos[0] > 1100,
+            "the walk crossed the obstruction: {:?}",
+            scripted.entities[1].pos
+        );
+        assert_eq!(
+            scripted.entities[1].action_behavior, 0,
+            "the scripted walk completed instead of hanging on the boundary"
+        );
+        assert!(
+            scripted.flags[usize::from(crate::game::BANK_SYSTEM)].bit(0x21),
+            "the completion flag the event script waits on was raised"
+        );
     }
 
     /// The ported NPC state-9 follow/pathfind driver must match the native

@@ -1006,16 +1006,14 @@ pub fn leg_reach(
         sfx::integer_sqrt(dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz))) as u16;
 }
 
-/// The NPC state-8 scripted walks: `Add_speedXZ` with a pre-move collision
-/// probe.
+/// An `Add_speedXZ` step followed by a pre-move collision probe.
 ///
-/// The original's NPC state-8 handlers have no end-of-frame room resolve at
-/// all, so an un-collided step can walk a scripted character straight through
-/// geometry with nothing to push it back out. The port keeps the pre-check +
-/// rollback for the NPC drivers only (documented deviation); the player's
-/// state-8 driver moves un-collided and resolves in its own tail
-/// ([`crate::player_script`]), and state 9 mirrors the original's un-collided
-/// move and resolves in its own tail.
+/// The original's NPC state-8 handlers have no room-collision pass at all, so
+/// the state-8 scripted driver (`crate::enemy::scd` and the Lua NPC script)
+/// moves un-collided like the reference; state 9 mirrors the original's
+/// un-collided move and resolves in its own tail. The state-1 idle walk-01 is
+/// the one scripted walk that keeps the original's save/probe/restore, and it
+/// uses this helper.
 pub fn advance_xz_blocked(room: &RoomState, entity: &mut Entity, offset: u16, distance: i16) {
     let _ = try_advance_xz(room, entity, offset, distance);
 }
