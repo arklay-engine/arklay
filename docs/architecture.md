@@ -42,6 +42,7 @@ responsibility.
 | `state` | Runtime | `RoomId`, `RoomState` (cuts, zones, collisions, lights), `Image` |
 | `controls` | Runtime | The logical action map: every action the game reads and the physical keyboard, mouse and gamepad bindings to it |
 | `speed` | Runtime | The F2/F3 gameplay speed multiplier on the fixed-tick interval (1x..3x) |
+| `process_stats` | Runtime | The process's memory and CPU use for the F6 debug HUD |
 | `combat` | Runtime | Shared combat tables (weapon hit ranges and damage) and the weapon-damage pipeline |
 | `weapons` | Runtime | The player weapon runtime: aim, fire, reload and the held-weapon FX |
 | `player` | Runtime | Player locomotion, input mapping, collision, reach probes, camera cuts |

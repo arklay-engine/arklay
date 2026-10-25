@@ -54,6 +54,7 @@ pub mod pack;
 pub mod paths;
 pub mod player;
 pub mod player_script;
+pub mod process_stats;
 pub mod progress;
 pub mod raster;
 pub mod rdt;

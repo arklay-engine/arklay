@@ -347,7 +347,8 @@ unless the matching positive flag is passed, and always leaves
 | `Shift` + `,` | Previous camera cut |
 | `Shift` + `.` | Next camera cut |
 | `F1` (gamepad Back / Select) | Port-only debug tools: freeze the room and open the tool list (room select, inventory, player, flags, cheats, save/load, item box, clear game, controls, display); Esc backs out one level, F1 closes |
-| `F2`, `F3` | Port-only game speed: F2 steps down and F3 up, 1x to 3x in 0.5x steps |
+| `F2`, `F3` | Port-only game speed: F2 steps down and F3 up, 1x to 3x in 0.5x steps; the new speed shows briefly in the bottom-left corner |
+| `F6` | Port-only debug HUD: steps through full information (engine, FPS, resolution, memory, CPU, pack, mods, room, player, boss), a compact player panel (health, condition, ammo) with the boss's health, the FPS alone in the top-right corner, and off |
 | `F9` | Return-to-title prompt: a second F9 returns to the title screen, any other key cancels |
 
 Every action except the fixed inputs (`F1` and the gamepad's Back
