@@ -1753,6 +1753,76 @@ const CUTSCENE_SKIP_BURST: std::time::Duration = std::time::Duration::from_milli
 /// the suspension takes hold.
 const MENU_CLOSE_FREEZE_FRAMES: u8 = 4;
 
+/// The tallest the DIED screen's HD backdrop is baked: a 4K scene. A taller
+/// scene target stretches the bake.
+const DEATH_BACKDROP_MAX_HEIGHT: u32 = 2160;
+
+/// The background of the DIED screen's GPU scene: the frame the script drew
+/// before the corpse, with any HD art captured over it baked in at the scene
+/// target's size ([`crate::htexture::Overlay::flatten`]), so the background's
+/// nearest sampling maps it pixel for pixel. The bake is redone only when the
+/// frame, its art or the target changes, and the images persist so the GPU
+/// keeps their upload.
+#[derive(Default)]
+struct DeathBackdrop {
+    /// The 320x240 frame drawn so far.
+    frame: Image,
+    /// The frame `hd` was baked from.
+    baked: Image,
+    /// The quads baked into `hd`.
+    quads: Vec<crate::htexture::Quad>,
+    /// `baked` with the HD art over it.
+    hd: Option<Image>,
+}
+
+impl DeathBackdrop {
+    /// Snapshot `band`, the frame's rows from `top` on, and return the
+    /// background to record into a `target` (`[width, height]`) scene: the
+    /// frame, or the bake when HD art was captured over it. `None` when the
+    /// art cannot be baked (a model, a blended punch).
+    fn update(&mut self, band: &Framebuffer, top: u32, target: (u32, u32)) -> Option<&Image> {
+        let (width, height) = (WIDTH as u32, HEIGHT as u32);
+        let top = (top as usize).min(height as usize);
+        let stride = width as usize * 4;
+        self.frame.width = width;
+        self.frame.height = height;
+        self.frame.rgba.clear();
+        self.frame.rgba.resize(stride * height as usize, 0);
+        let rows = (band.height as usize).min(height as usize - top);
+        self.frame.rgba[top * stride..(top + rows) * stride]
+            .copy_from_slice(&band.rgba[..rows * stride]);
+        let Some(overlay) = band
+            .hd
+            .as_deref()
+            .filter(|overlay| !overlay.quads.is_empty())
+        else {
+            return Some(&self.frame);
+        };
+        let (target_w, target_h) = target;
+        let out_h = target_h.clamp(1, DEATH_BACKDROP_MAX_HEIGHT);
+        let out = [
+            (u64::from(target_w) * u64::from(out_h) / u64::from(target_h.max(1))).max(1) as u32,
+            out_h,
+        ];
+        let current = self.hd.as_ref().is_some_and(|hd| {
+            [hd.width, hd.height] == out
+                && self.quads.len() == overlay.quads.len()
+                && self
+                    .quads
+                    .iter()
+                    .zip(&overlay.quads)
+                    .all(|(a, b)| a.same_draw(b))
+                && self.baked.rgba == self.frame.rgba
+        });
+        if !current {
+            self.hd = Some(overlay.flatten(&self.frame, out)?);
+            self.quads.clone_from(&overlay.quads);
+            self.baked.clone_from(&self.frame);
+        }
+        self.hd.as_ref()
+    }
+}
+
 /// Which of [`GameSession::render_pass`]'s variants draws the scene.
 enum ScenePass<'g> {
     /// The software rasterizer draws it into the framebuffer.
@@ -1910,6 +1980,10 @@ struct GameSession {
     /// Whether the persisted framebuffers show the GPU scene: set by a frame
     /// that recorded one and cleared by any frame that covered it.
     gpu_scene_visible: bool,
+    /// The DIED screen's art under the corpse, the background of the GPU
+    /// scene the corpse is recorded in (see
+    /// [`GameSession::render_death_screen`]).
+    death_backdrop: DeathBackdrop,
     /// Whether the last [`GameSession::render_layers`] drew the white layer:
     /// the frame shows the GPU scene or 2D art drawn on the GPU.
     layered: bool,
@@ -2397,6 +2471,7 @@ impl GameSession {
             view_cut: None,
             view_prev: video::View::default(),
             gpu_scene_visible: false,
+            death_backdrop: DeathBackdrop::default(),
             layered: false,
             gpu_room: None,
             titled_cut: usize::MAX,
@@ -3554,6 +3629,7 @@ impl GameSession {
     /// title.
     fn finish_death(&mut self) {
         self.death_screen = None;
+        self.death_backdrop = DeathBackdrop::default();
         self.death.finished = true;
         self.sprite_anim_intensity = 0;
         self.game.message.set_menu_choice_id(0);
@@ -5396,7 +5472,15 @@ impl GameSession {
     /// Draw the DIED screen. The script draws the backdrop, the strip and the
     /// overlays; the engine supplies the corpse, posed at the fall's terminal
     /// frame, through the screen's fixed camera.
-    fn render_death_screen(&mut self, pack: &Pack) {
+    ///
+    /// On the GPU (`pass` [`ScenePass::Record`]) the corpse is recorded as the
+    /// frame's GPU scene, so it renders at the window's resolution with any
+    /// HD skin the pack carries: whatever the script drew before it becomes
+    /// the scene's background and the overlay is left as the hole the scene
+    /// shows through, so the overlays drawn after it land on top as they do
+    /// in software. The white pass leaves the same hole. Returns whether the
+    /// frame shows a GPU scene.
+    fn render_death_screen(&mut self, pack: &Pack, pass: ScenePass<'_>) -> bool {
         let Self {
             death_screen,
             save_dir,
@@ -5406,10 +5490,11 @@ impl GameSession {
             loaded,
             player,
             framebuffer,
+            death_backdrop,
             ..
         } = self;
         let Some(screen) = death_screen.as_mut() else {
-            return;
+            return false;
         };
         let cx = UiContext {
             pack,
@@ -5420,9 +5505,30 @@ impl GameSession {
             cues: std::cell::RefCell::new(Vec::new()),
             game: Some(game),
         };
+        // The script draws into the presented band (see
+        // [`Framebuffer::with_view`]), whose row 0 is the frame's `top`.
+        let top = framebuffer.band_top();
+        let white = matches!(pass, ScenePass::White);
+        let mut gpu = match pass {
+            ScenePass::Record(gpu) => Some(gpu),
+            _ => None,
+        };
+        let mut scene_shown = false;
         let mut draw_actor = |name: &str, camera: &Camera, framebuffer: &mut Framebuffer| {
             if name != "player" {
                 return false;
+            }
+            // The black pass recorded the corpse: this pass only leaves the
+            // same hole.
+            if white {
+                framebuffer.fill_rect(
+                    [0, 0, framebuffer.width as i32, framebuffer.height as i32],
+                    [255, 255, 255, 255],
+                );
+                if let Some(overlay) = framebuffer.hd.as_mut() {
+                    overlay.drop_quads();
+                }
+                return true;
             }
             let Some(assets) = loaded.player_assets.as_ref() else {
                 return false;
@@ -5437,6 +5543,53 @@ impl GameSession {
             let mut joints = crate::anim::joint_matrices(&assets.emd.skeleton, &keyframe, &entity);
             apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
             let lighting = Lighting::from_room(&loaded.room);
+            if let Some(gpu) = gpu
+                .as_deref_mut()
+                .filter(|_| !scene_shown && framebuffer.width == WIDTH as u32)
+                && let Some(background) = death_backdrop.update(framebuffer, top, gpu.scene_size())
+            {
+                let mut camera = *camera;
+                camera.screen[1] += top as i32;
+                let meshes = [EntityMesh {
+                    mesh: &assets.emd.mesh,
+                    texture: &assets.emd.texture,
+                    joints: &joints,
+                    tint: [255; 3],
+                    blend_weight: None,
+                    hidden_joints: game.entities[0].joint_flags,
+                    light_pos: None,
+                    per_joint_light: false,
+                    complex_object: None,
+                    aliased_light: false,
+                    light_rotation: None,
+                    joint_colours: crate::render::NO_JOINT_COLOURS,
+                }];
+                let scene = render::GameplayScene {
+                    background: Some(background),
+                    origin: [0, 0],
+                    colour: [255; 3],
+                    meshes: &meshes,
+                    shadows: &[],
+                    camera: &camera,
+                    lighting: &lighting,
+                    mask_layer: None,
+                    effect_layer: None,
+                    mirror_from: meshes.len(),
+                    mirror: None,
+                };
+                match gpu.record_scene(&scene, Some(pack)) {
+                    Ok(()) => {
+                        // The HD art drawn so far is in the background now.
+                        framebuffer.clear();
+                        if let Some(overlay) = framebuffer.hd.as_mut() {
+                            overlay.drop_quads();
+                        }
+                        scene_shown = true;
+                        return true;
+                    }
+                    Err(err) => warn_gpu_scene_failed(&err),
+                }
+            }
             framebuffer.draw_model_hidden(
                 &assets.emd.mesh,
                 &assets.emd.texture,
@@ -5448,9 +5601,11 @@ impl GameSession {
             true
         };
         screen.draw_with_actors(&cx, framebuffer, Some(&mut draw_actor));
+        let scene_shown = scene_shown || white;
         if let Some((color, alpha)) = screen.overlay() {
             framebuffer.fade_to_color(color, alpha);
         }
+        scene_shown
     }
 
     /// Request the loading narration `id` (a global message) and hold the room
@@ -5816,7 +5971,11 @@ impl GameSession {
         // The DIED screen owns the frame while it is up: the static backdrop,
         // the spinning corpse, the wavy strip and the screen's own fades.
         if self.death_screen.is_some() {
-            self.render_death_screen(pack);
+            let pass = match pass {
+                ScenePass::White if !scene_shown => ScenePass::Software,
+                pass => pass,
+            };
+            self.gpu_scene_visible = self.render_death_screen(pack, pass);
             return;
         }
         // While the menu is up the room is frozen: keep the frame it was
@@ -17730,6 +17889,101 @@ mod tests {
             drawn += 1;
         }
         assert!(drawn > 0);
+    }
+
+    /// The DIED screen's corpse is recorded as the GPU scene over the
+    /// screen's backdrop, and the layers composited over it match the
+    /// software frame. Needs `ARKLAY_RE1_PACK` and a SPIR-V capable GPU;
+    /// skips without a GPU. `ARKLAY_GPU_TEST_DUMP`, `ARKLAY_GPU_TEST_SCALE`
+    /// and `ARKLAY_GPU_TEST_MODS` work as in
+    /// `gpu_scene_matches_software_in_real_rooms`.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn gpu_death_screen_records_the_corpse_as_the_scene() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let Ok(_sdl) = SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let scale = std::env::var("ARKLAY_GPU_TEST_SCALE")
+            .ok()
+            .and_then(|scale| scale.parse().ok())
+            .unwrap_or(1);
+        let mut gpu = match GpuRenderer::offscreen(scale) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let (gpu_width, gpu_height) = gpu.scene_size();
+        let scale = gpu_width / WIDTH as u32;
+        let mods: Vec<std::path::PathBuf> = std::env::var("ARKLAY_GPU_TEST_MODS")
+            .map(|mods| std::env::split_paths(&mods).collect())
+            .unwrap_or_default();
+        let pack = Pack::open_layered(Path::new(&path), &mods).unwrap();
+        let save_dir = TempDir::new();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("106").unwrap(), &save_dir.0).unwrap();
+        session.game.apply_player_hurt(i16::MAX, 0);
+        // Run into the screen until its strip has settled.
+        let mut screen_ticks = 0;
+        for _ in 0..600 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            if session.death_screen.is_some() {
+                screen_ticks += 1;
+                if screen_ticks == 120 {
+                    break;
+                }
+            }
+        }
+        assert_eq!(screen_ticks, 120, "the DIED screen opens");
+        session.render(&pack);
+        let software = session.framebuffer.rgba.clone();
+        session.render_layers(&pack, &mut gpu);
+        assert!(session.gpu_scene_visible, "the corpse is the GPU scene");
+        let black = session.framebuffer.rgba.clone();
+        let white = session.white_frame().expect("the white layer").rgba.clone();
+        let hardware = gpu.read_scene().unwrap();
+        if let Ok(dir) = std::env::var("ARKLAY_GPU_TEST_DUMP") {
+            for (name, rgba, width, height) in [
+                ("software", &software, WIDTH as u32, HEIGHT as u32),
+                ("gpu", &hardware, gpu_width, gpu_height),
+            ] {
+                let image = Image {
+                    width,
+                    height,
+                    rgba: rgba.clone(),
+                };
+                capture_bmp(&image, &Path::new(&dir).join(format!("died-{name}.bmp"))).unwrap();
+            }
+        }
+        // The composite at each pixel centre: `black + scene * (white -
+        // black)`.
+        let mut holes = 0;
+        let different = (0..(WIDTH * HEIGHT) as usize)
+            .filter(|&index| {
+                let (x, y) = (index as u32 % WIDTH as u32, index as u32 / WIDTH as u32);
+                let offset =
+                    (((y * scale + scale / 2) * gpu_width + x * scale + scale / 2) * 4) as usize;
+                let pixel = index * 4;
+                holes += usize::from(white[pixel] != black[pixel]);
+                (0..3).any(|c| {
+                    let (b, w) = (f32::from(black[pixel + c]), f32::from(white[pixel + c]));
+                    let shown = b + f32::from(hardware[offset + c]) * (w - b) / 255.0;
+                    (shown - f32::from(software[pixel + c])).abs() > 48.0
+                })
+            })
+            .count();
+        let total = (WIDTH * HEIGHT) as usize;
+        eprintln!("DIED screen: {different} of {total} pixels differ, {holes} show the scene");
+        assert!(holes * 2 > total, "the scene shows through the overlay");
+        assert!(different * 10 < total, "{different} pixels differ");
     }
 
     #[test]

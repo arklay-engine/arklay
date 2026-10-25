@@ -277,7 +277,7 @@ impl Framebuffer {
     /// place, so 4:3 frames are drawn exactly as before.
     pub fn with_view<R>(&mut self, draw: impl FnOnce(&mut Framebuffer) -> R) -> R {
         let view = self.view;
-        if view.is_full() || self.width != WIDTH || self.height != HEIGHT {
+        if !self.lends_band() {
             return draw(self);
         }
         let stride = self.width as usize * 4;
@@ -290,6 +290,17 @@ impl Framebuffer {
         self.rgba[start..end].copy_from_slice(&band.rgba);
         self.return_hd(band.hd, [0, view.top as i32]);
         result
+    }
+
+    /// Whether [`Framebuffer::with_view`] lends a band rather than the
+    /// whole frame.
+    fn lends_band(&self) -> bool {
+        !self.view.is_full() && self.width == WIDTH && self.height == HEIGHT
+    }
+
+    /// The frame row [`Framebuffer::with_view`]'s framebuffer starts at.
+    pub fn band_top(&self) -> u32 {
+        if self.lends_band() { self.view.top } else { 0 }
     }
 
     /// Run `draw` on the 320 x `rows` frame a fixed 4:3 layout draws in:
@@ -1370,6 +1381,11 @@ impl Framebuffer {
         }
         let width = self.width as usize;
         let mut punch = Self::punching(&mut self.hd);
+        if blend != SpriteBlend::Opaque
+            && let Some(overlay) = punch.as_deref_mut()
+        {
+            overlay.blended = true;
+        }
         for y in start_y..end_y {
             let Ok(offset_y) = i32::try_from(
                 (i64::from(y) - i64::from(dst_y)) * i64::from(src_h) / i64::from(dst_h),

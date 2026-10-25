@@ -295,6 +295,22 @@ pub struct Quad {
     pub clip: [i32; 4],
 }
 
+impl Quad {
+    /// Whether `other` draws the same image in the same place.
+    pub fn same_draw(&self, other: &Quad) -> bool {
+        let same_image = match (&self.image, &other.image) {
+            (QuadImage::Art(a), QuadImage::Art(b)) => Arc::ptr_eq(a, b),
+            (QuadImage::Model(a), QuadImage::Model(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        };
+        same_image
+            && self.dst == other.dst
+            && self.uv == other.uv
+            && self.colour == other.colour
+            && self.clip == other.clip
+    }
+}
+
 /// What a [`Quad`] draws.
 #[derive(Clone, Debug)]
 pub enum QuadImage {
@@ -370,6 +386,9 @@ pub struct Overlay {
     /// Per frame pixel, row-major: one more than the index of the quad that
     /// punched it last, or `0`.
     pub coverage: Vec<u16>,
+    /// Whether a punch was blended with what lay under it (a half or
+    /// darkened sprite), so its hole is not the plain hole grey.
+    pub blended: bool,
 }
 
 impl Overlay {
@@ -387,6 +406,7 @@ impl Overlay {
         self.punching = false;
         self.offset = [0, 0];
         self.scene = false;
+        self.blended = false;
         self.resize(size);
     }
 
@@ -407,6 +427,80 @@ impl Overlay {
         let quad = self.quads.len().min(usize::from(u16::MAX)) as u16;
         self.coverage[y as usize * self.size[0] as usize + x as usize] = quad;
     }
+
+    /// The frame these quads paint over `base` (the software frame,
+    /// `size` texels), drawn on the CPU at `out` (`[width, height]`) as the
+    /// GPU draws them into a target that size: each pixel takes the quad its
+    /// coverage names, filtered linearly, times the draw's colour and
+    /// blended by its alpha, and `base` shows where no quad wrote. `None`
+    /// when a quad is a model, which only the GPU renders, or a punch was
+    /// blended, whose result depends on the scene under it.
+    pub fn flatten(&self, base: &Image, out: [u32; 2]) -> Option<Image> {
+        let [width, height] = self.size;
+        let [out_w, out_h] = out;
+        if base.width != width
+            || base.height != height
+            || base.rgba.len() < width as usize * height as usize * 4
+            || out_w == 0
+            || out_h == 0
+            || self.blended
+        {
+            return None;
+        }
+        let arts: Vec<(&Quad, &Replacement)> = self
+            .quads
+            .iter()
+            .map(|quad| match &quad.image {
+                QuadImage::Art(art) => Some((quad, art.as_ref())),
+                QuadImage::Model(_) => None,
+            })
+            .collect::<Option<_>>()?;
+        // Frame pixels per output pixel.
+        let (step_x, step_y) = (width as f32 / out_w as f32, height as f32 / out_h as f32);
+        let mut rgba = vec![0; out_w as usize * out_h as usize * 4];
+        for (y, row) in rgba.chunks_exact_mut(out_w as usize * 4).enumerate() {
+            // The pixel centre, in frame pixels.
+            let py = (y as f32 + 0.5) * step_y;
+            let frame_y = (py as u32).min(height - 1);
+            for (x, pixel) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                let px = (x as f32 + 0.5) * step_x;
+                let frame_x = (px as u32).min(width - 1);
+                let at = (frame_y * width + frame_x) as usize;
+                pixel.copy_from_slice(&base.rgba[at * 4..at * 4 + 4]);
+                let Some((quad, art)) = (self.coverage[at] as usize)
+                    .checked_sub(1)
+                    .and_then(|index| arts.get(index))
+                else {
+                    continue;
+                };
+                let [x0, y0, x1, y1] = quad.dst;
+                let [u0, v0, u1, v1] = quad.uv;
+                let u = u0 + (px - x0) / (x1 - x0) * (u1 - u0);
+                let v = v0 + (py - y0) / (y1 - y0) * (v1 - v0);
+                let texel = sample_linear(&art.image, u, v);
+                let alpha = texel[3];
+                for channel in 0..3 {
+                    let source = (texel[channel] * quad.colour[channel]).min(1.0);
+                    let below = f32::from(pixel[channel]) / 255.0;
+                    let mixed = source * alpha + below * (1.0 - alpha);
+                    pixel[channel] = (mixed * 255.0).round() as u8;
+                }
+            }
+        }
+        Some(Image {
+            width: out_w,
+            height: out_h,
+            rgba,
+        })
+    }
+
+    /// Forget the quads captured so far and their coverage: the caller has
+    /// drawn them itself ([`Overlay::flatten`]).
+    pub fn drop_quads(&mut self) {
+        self.quads.clear();
+        self.coverage.fill(0);
+        self.blended = false;
+    }
 }
 
 impl Clone for Overlay {
@@ -426,7 +520,30 @@ impl Clone for Overlay {
         self.scene = source.scene;
         self.size = source.size;
         self.coverage.clone_from(&source.coverage);
+        self.blended = source.blended;
     }
+}
+
+/// `image` at normalised `(u, v)` through a linear, clamp-to-edge sampler
+/// (the overlay's), as `0..=1` RGBA.
+fn sample_linear(image: &Image, u: f32, v: f32) -> [f32; 4] {
+    let (width, height) = (image.width as usize, image.height as usize);
+    if width == 0 || height == 0 || image.rgba.len() < width * height * 4 {
+        return [0.0; 4];
+    }
+    let fx = (u * width as f32 - 0.5).clamp(0.0, (width - 1) as f32);
+    let fy = (v * height as f32 - 0.5).clamp(0.0, (height - 1) as f32);
+    let (x0, y0) = (fx.floor() as usize, fy.floor() as usize);
+    let (x1, y1) = ((x0 + 1).min(width - 1), (y0 + 1).min(height - 1));
+    let (tx, ty) = (fx - x0 as f32, fy - y0 as f32);
+    let texel = |x: usize, y: usize, channel: usize| {
+        f32::from(image.rgba[(y * width + x) * 4 + channel]) / 255.0
+    };
+    std::array::from_fn(|channel| {
+        let top = texel(x0, y0, channel) * (1.0 - tx) + texel(x1, y0, channel) * tx;
+        let bottom = texel(x0, y1, channel) * (1.0 - tx) + texel(x1, y1, channel) * tx;
+        top * (1.0 - ty) + bottom * ty
+    })
 }
 
 /// Decode the HD image at `path`.
@@ -837,6 +954,64 @@ mod tests {
         let decoded = replacement(&pack, &candidates, String::new).unwrap();
         assert_eq!(decoded.frame, [4, 4]);
         assert_eq!(decoded.image.width, 2);
+    }
+
+    #[test]
+    fn flattening_paints_each_quad_only_where_it_punched() {
+        // A 2x1 frame of grey whose left texel a 2x2 HD quad replaced: the
+        // red top row over the green bottom one, at twice the frame's detail.
+        let art = Arc::new(Replacement {
+            image: Image {
+                width: 2,
+                height: 2,
+                rgba: [
+                    [255, 0, 0, 255],
+                    [255, 0, 0, 255],
+                    [0, 255, 0, 255],
+                    [0, 255, 0, 255],
+                ]
+                .concat(),
+            },
+            frame: [1, 1],
+        });
+        let mut overlay = Overlay::new(0, [2, 1]);
+        overlay.quads.push(Quad {
+            image: art.into(),
+            dst: [0.0, 0.0, 1.0, 1.0],
+            uv: [0.0, 0.0, 1.0, 1.0],
+            colour: [1.0; 3],
+            clip: [0, 0, 2, 1],
+        });
+        overlay.cover(0, 0);
+        let base = Image {
+            width: 2,
+            height: 1,
+            rgba: [128, 128, 128, 255].repeat(2),
+        };
+        let flat = overlay.flatten(&base, [4, 2]).unwrap();
+        assert_eq!((flat.width, flat.height), (4, 2));
+        let pixel = |x: usize, y: usize| &flat.rgba[(y * 4 + x) * 4..][..4];
+        assert_eq!(pixel(0, 0), [255, 0, 0, 255]);
+        assert_eq!(pixel(1, 1), [0, 255, 0, 255]);
+        // The right texel kept the software frame.
+        assert_eq!(pixel(3, 0), [128, 128, 128, 255]);
+        // A target that is not a whole multiple maps each pixel centre to
+        // the frame texel under it, as the GPU's coverage lookup does.
+        let odd = overlay.flatten(&base, [3, 2]).unwrap();
+        assert_eq!(&odd.rgba[..4], [255, 0, 0, 255]);
+        assert_eq!(&odd.rgba[8..12], [128, 128, 128, 255]);
+        // A mismatched base is refused rather than misread.
+        assert!(overlay.flatten(&flat, [4, 2]).is_none());
+        // So is a blended punch, whose hole depends on the scene under it.
+        overlay.blended = true;
+        assert!(overlay.flatten(&base, [4, 2]).is_none());
+
+        overlay.drop_quads();
+        assert!(overlay.quads.is_empty());
+        assert_eq!(
+            overlay.flatten(&base, [4, 2]).unwrap().rgba,
+            [128, 128, 128, 255].repeat(8)
+        );
     }
 
     #[test]
