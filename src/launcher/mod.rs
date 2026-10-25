@@ -555,7 +555,7 @@ impl Launcher {
                 .iter()
                 .find(|pack| pack.id.eq_ignore_ascii_case("re1")),
             config,
-            &mod_dirs(),
+            &Config::mod_dirs(),
         );
         Ok(Self {
             screen: if packs.is_empty() {
@@ -1817,7 +1817,7 @@ impl Launcher {
 
     fn refresh_mods(&mut self) {
         let pack = self.re1_pack().cloned();
-        self.mods = scan_mods(pack.as_ref(), &self.config, &mod_dirs());
+        self.mods = scan_mods(pack.as_ref(), &self.config, &Config::mod_dirs());
         if self.mods_index >= self.mods.len() {
             self.mods_index = self.mods.len().saturating_sub(1);
         }
@@ -1999,7 +1999,7 @@ impl Launcher {
                 disabled: self.config.mods.disabled.clone(),
                 order: self.config.mods.order.clone(),
             },
-            global_dirs: mod_dirs(),
+            global_dirs: Config::mod_dirs(),
         };
         let player_options = player::Options {
             quick_turn: self.config.game.quick_turn,
@@ -2646,20 +2646,6 @@ fn scan_packs() -> Vec<PackRow> {
             .then_with(|| a.file.cmp(&b.file))
     });
     packs
-}
-
-/// The extra mod directories scanned for every game, before the pack's own
-/// sibling `mods/` directory.
-fn mod_dirs() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = paths::data_roots()
-        .iter()
-        .map(|root| paths::mods_dir(root))
-        .collect();
-    let legacy = Config::default_mods_dir();
-    if !dirs.iter().any(|dir| dir == &legacy) {
-        dirs.push(legacy);
-    }
-    dirs
 }
 
 /// Discover the mods for `pack`, filtered to its base id and ordered by the

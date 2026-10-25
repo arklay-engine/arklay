@@ -228,10 +228,11 @@ cargo run -- re1.akpak --mod hd.akpak --room 100 --ticks 120 --capture hd.bmp
 # A clean vanilla run: no --mod and no discovery
 cargo run -- re1.akpak --no-mods --room 100
 
-# Every mod in the pack's sibling mods/ and in <config dir>/mods applies
-# automatically. Only top-level *.akpak files and mod directories are
-# candidates; the per-user directory is %APPDATA%\arklay\mods on Windows and
-# <XDG config>/arklay/mods elsewhere. `[mods]` in arklay.toml enables,
+# Every mod the launcher finds applies automatically: the pack's sibling
+# mods/, each data root's mods/ (on Windows %LOCALAPPDATA%\arklay\mods, the
+# roaming %APPDATA%\arklay\mods and the install directory's) and the legacy
+# <config dir>/mods. Only top-level *.akpak files and mod directories are
+# candidates. `[mods]` in arklay.toml enables,
 # disables and orders them by manifest id (see docs/modding.md).
 cargo run -- re1.akpak --room 100
 

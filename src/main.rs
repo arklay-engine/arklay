@@ -1034,7 +1034,7 @@ fn main() -> Result<()> {
                     disabled: config.mods.disabled.clone(),
                     order: config.mods.order.clone(),
                 },
-                global_dirs: vec![arklay::config::Config::default_mods_dir()],
+                global_dirs: arklay::config::Config::mod_dirs(),
             };
             let trace_options = arklay::trace::TraceOptions {
                 path: cli.trace.as_deref(),

@@ -296,6 +296,22 @@ impl Config {
         Self::dir().join(MODS_DIR_NAME)
     }
 
+    /// The extra mod directories scanned for every game, after the pack's
+    /// own sibling `mods/` directory: each data root's `mods/`, then the
+    /// legacy [`Config::default_mods_dir`]. The launcher and a command-line
+    /// run both discover through this list.
+    pub fn mod_dirs() -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = crate::paths::data_roots()
+            .iter()
+            .map(|root| crate::paths::mods_dir(root))
+            .collect();
+        let legacy = Self::default_mods_dir();
+        if !dirs.contains(&legacy) {
+            dirs.push(legacy);
+        }
+        dirs
+    }
+
     /// Read the configuration file, never failing: a missing file is the
     /// default configuration, and anything wrong with it (an unreadable file,
     /// a bad line or value) is a warning while that part keeps its default.
