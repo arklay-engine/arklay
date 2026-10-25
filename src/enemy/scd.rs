@@ -24,13 +24,13 @@
 //! proceeds. A handler that finishes clears `action_behavior`/`action_state`
 //! unless the `act_anim_seq` collision flag bit 7 asks it to keep running.
 //!
-//! The movement handlers step with the original's un-collided `Add_speedXZ`;
-//! [`update`] then runs one room collision pass over the tick's movement,
-//! anchored at the pre-dispatch position, exactly like the player's scripted
-//! state-8 tail. A scripted path that clips geometry slides along it instead
-//! of freezing the whole step (a pre-check that rolled the step back could
-//! deadlock a script waiting on the walk's completion bit, e.g. Barry's run
-//! to the blood in room 105).
+//! The movement handlers step with the original's un-collided `Add_speedXZ`.
+//! `npc_state8_action_update` has no room-collision pass in the reference
+//! (0x0047a490 only runs the handler, its flag-1 repeat and the held-weapon
+//! anchor), so neither does this driver: a scripted path may cross geometry
+//! exactly as the original's does. A pre-check that rolled each step back
+//! deadlocked scripts waiting on the walk's completion bit (e.g. Barry running
+//! past the 2F banister, or his run to the blood in room 105).
 
 use std::rc::Rc;
 
@@ -131,7 +131,6 @@ const FLAME_CUE_TICKS: u16 = 0x0F;
 /// behaviour handler and then runs it a second time when `scd_entity_flags`
 /// bit 1 is set, re-reading `action_behavior` for the repeat.
 pub fn update(game: &mut GameState, slot: usize, room: &RoomState, clips: &[Clip]) {
-    let prev_pos = game.entities[slot].pos;
     let behavior = game.entities[slot].action_behavior;
     if behavior >= 11 {
         // The original reports the NULL table slot and dispatches nothing; the
@@ -152,27 +151,10 @@ pub fn update(game: &mut GameState, slot: usize, room: &RoomState, clips: &[Clip
         let hand = usize::from((game.entities[slot].flags >> 3) & 1);
         crate::enemy::walk::entity_update_weapon_joint(game, clips, slot, hand);
     }
-    // The handlers move with the un-collided `Add_speedXZ`, so this tail is
-    // the scripted driver's only room-collision pass: it pushes the character
-    // out of any obstruction the step crossed and rolls back to the
-    // pre-dispatch position when still stuck, the same shape the player's
-    // scripted animation tail uses.
-    let entity = &game.entities[slot];
-    let resolution = crate::player::resolve_collision_full(
-        &room.collision,
-        prev_pos,
-        entity.pos,
-        i32::from(entity.sca_radius),
-        entity.collision_flags,
-    );
-    if let Some(bkp) = resolution.entity_bkp {
-        game.entity_bkp = bkp;
-    }
-    game.entities[slot].pos = resolution.pos;
-    // The render-pass equivalent: compose and store the pose's joint worlds
-    // after the collision tail, so the next tick's `EntityUpdateWeaponJoint`
-    // (and the effect pass) reads the previous frame's pose, exactly like the
-    // original's render pass between two updates.
+    // The render-pass equivalent: compose and store the pose's joint worlds,
+    // so the next tick's `EntityUpdateWeaponJoint` (and the effect pass) reads
+    // the previous frame's pose, exactly like the original's render pass
+    // between two updates.
     let worlds = game.entity_anims[slot].joint_worlds(&game.entities[slot], clips);
     if !worlds.is_empty() {
         game.joint_worlds[slot] = worlds;

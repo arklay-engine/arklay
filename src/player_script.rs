@@ -35,7 +35,8 @@
 //! step; `scripted_animation` then runs the room collision pass over the
 //! tick's movement, pushing the player out of any obstruction the step
 //! crossed. The NPC state-8 drivers in [`crate::enemy::scd`] use the same
-//! un-collided step and tail.
+//! un-collided step, but have no collision pass: the reference's
+//! `npc_state8_action_update` has none either.
 //!
 //! # Documented deviations from the original
 //!

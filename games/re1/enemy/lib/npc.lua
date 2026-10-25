@@ -399,7 +399,8 @@ local function scd_handler_01(e)
 end
 
 -- Behaviour 2 walk phase: step at the 0x5D pace with a footstep on frames 8
--- and 0x16, finishing inside 150 units.
+-- and 0x16, finishing inside 150 units. The state-8 walk steps un-collided
+-- (`Add_speedXZ`), like the original, which has no room-collision pass here.
 local function scd_02_walk(e)
     local frame = e.animation_frame_id
     if frame == 8 or frame == 0x16 then
@@ -408,7 +409,7 @@ local function scd_02_walk(e)
     e:apply_walk_speed(0x5D)
     e:rotate_toward_target(e.unk_c6, e.unk_c8, e.scd_timer)
     e:advance_anim(0x200, e.flags & 1 ~= 0)
-    e:try_move(0, i16(e.move_speed_current))
+    e:move(0, i16(e.move_speed_current))
     if e:xz_distance_to(e.unk_c6, e.unk_c8) < 0x96 then
         scd_finish_walk(e)
     end
@@ -439,7 +440,8 @@ local function scd_handler_02(e)
 end
 
 -- Behaviour 3 run phase: footsteps on frames 0 and 10, finishing inside 250
--- units (collision bit 7 finishes immediately instead of decelerating).
+-- units (collision bit 7 finishes immediately instead of decelerating). The
+-- state-8 walk steps un-collided (`Add_speedXZ`), like the original.
 local function scd_03_walk(e)
     local frame = e.animation_frame_id
     if frame == 0 or frame == 10 then
@@ -447,7 +449,7 @@ local function scd_03_walk(e)
     end
     e:rotate_toward_target(e.unk_c6, e.unk_c8, e.scd_timer)
     e:advance_anim(0x200, e.flags & 1 ~= 0)
-    e:try_move(0, i16(e.move_speed_current))
+    e:move(0, i16(e.move_speed_current))
     if e:xz_distance_to(e.unk_c6, e.unk_c8) < 0xFA then
         e.action_state = 4
         if e.collision_flags & 0x80 ~= 0 then
@@ -466,7 +468,7 @@ local function scd_03_stop(e)
         e.action_state = 6
     end
     e.move_speed_current = e.move_speed_current - 0x1E
-    e:try_move(0, i16(e.move_speed_current))
+    e:move(0, i16(e.move_speed_current))
 end
 
 -- Behaviour 3: turn, run to the target, decelerate, then signal.
@@ -516,7 +518,7 @@ local function scd_backward_step(e)
     e:rotate_toward_target(e.unk_c6, e.unk_c8, e.scd_timer)
     e.angle = e.angle - 0x800
     e:advance_anim(0x200, e.flags & 1 ~= 0)
-    e:try_move(0x800, i16(e.move_speed_current))
+    e:move(0x800, i16(e.move_speed_current))
     if e:xz_distance_to(e.unk_c6, e.unk_c8) < 100 then
         scd_finish_walk(e)
     end
@@ -814,6 +816,11 @@ end
 -- re-reading the behaviour byte for the repeat. Flag bit 2 re-anchors the
 -- entity against the previous frame's held-weapon chain end (bit 3 selects the
 -- hand). An out-of-range behaviour is reported before any dispatch.
+--
+-- The handlers move with the un-collided `Add_speedXZ`, like the original
+-- (0x0047a490 has no room-collision pass). Do not add a per-step pre-check:
+-- rolling the step back freezes a scripted run that crosses the banister and
+-- the event waits forever on its completion bit.
 local function scd(e)
     local behavior = e.action_behavior
     if behavior >= 11 then

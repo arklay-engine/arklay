@@ -1,5 +1,5 @@
-//! Real-asset actor and state-8 tests: the scripted actor run, the native
-//! scripted walk against shipped room collision, and a corpus smoke run.
+//! Real-asset actor and state-8 tests: the scripted actor run, the un-collided
+//! scripted walk across shipped room collision, and a corpus smoke run.
 //!
 //! Run with:
 //! `TMPDIR=$PWD/target/tmp-test ARKLAY_RE1_ROOT=/path/to/re1 ARKLAY_RE1_PACK=/path/to/re1.akpak cargo test --profile test-release --test real actor_real:: -- --ignored`
@@ -85,7 +85,7 @@ fn real_room20d0_actor_run_completes_and_records_the_waypoints() {
 
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
-fn real_room20d0_state8_walk_reaches_the_scripted_waypoint() {
+fn real_room20d0_state8_walk_crosses_shipped_collision() {
     let Some((_root, pack_path)) = common::asset_env() else {
         return;
     };
@@ -102,36 +102,35 @@ fn real_room20d0_state8_walk_reaches_the_scripted_waypoint() {
     let model = emd::parse(&pack.read("enemy/em27.emd").unwrap()).unwrap();
     let mut game = arklay::game::GameState::default();
     let mut richard = sim.game.entities[slot];
-    // ROOM20D0's own walk script: behaviour 3, target (7380, 2440), turn step
-    // 0x20 and completion parameter 0x21.
+    // Richard starts at (8300, 3600). Walk him straight east through the
+    // shipped wall at x = 12150..14022, z = 576..5598 to a point beyond it.
+    // The reference's state-8 handlers have no room-collision pass, so the
+    // un-collided Add_speedXZ crosses the wall; the old pre-check stopped at
+    // its near face and the event never got its completion bit.
+    richard.pos = [8300, 0, 3600];
     richard.action_behavior = 3;
     richard.action_state = 0;
-    richard.unk_c6 = 7380;
-    richard.unk_c8 = 2440;
-    richard.scd_timer = 0x20;
+    richard.angle = 0;
+    richard.unk_c6 = 14200;
+    richard.unk_c8 = 3600;
+    richard.scd_timer = 0x40;
     richard.scd_anim_param = 0x21;
     richard.collision_flags = 0;
     game.entities[slot] = richard;
     game.entities[slot].set_active(true);
 
-    let target = [7380, 0, 2440];
+    let target = [14200, 0, 3600];
     let mut min_distance = i32::MAX;
+    let mut crossed_collision = false;
     let mut completed = false;
     for _ in 0..600 {
         enemy::scd::update(&mut game, slot, &sim.room, &model.clips);
         let entity = game.entities[slot];
-        // State 8 has no end-of-frame resolve, so the port keeps the walk
-        // layer's pre-check + rollback for this driver: the scripted walk
-        // slides against walls instead of crossing them.
-        assert!(
-            !player::position_blocked(
-                &sim.room,
-                entity.pos,
-                i32::from(entity.sca_radius),
-                entity.collision_flags,
-            ),
-            "the walk crossed a collision rect at {:?}",
-            entity.pos
+        crossed_collision |= player::position_blocked(
+            &sim.room,
+            entity.pos,
+            i32::from(entity.sca_radius),
+            entity.collision_flags,
         );
         min_distance = min_distance.min(enemy::walk::xz_distance_to(&entity, target));
         if entity.action_behavior == 0 {
@@ -139,6 +138,7 @@ fn real_room20d0_state8_walk_reaches_the_scripted_waypoint() {
             break;
         }
     }
+    assert!(crossed_collision, "the walk never reached the shipped wall");
     assert!(completed, "the scripted walk never finished");
     assert!(
         min_distance < 0xFA,
@@ -215,8 +215,16 @@ fn real_corpus_rooms_tick_and_keep_moved_characters_in_bounds() {
             }
             moved += 1;
             let radius = i32::from(entity.sca_radius);
+            // State-8 scripted walks are un-collided in the reference; only
+            // the other drivers are expected to stay out of collision.
             assert!(
-                !player::position_blocked(&sim.room, entity.pos, radius, entity.collision_flags),
+                entity.state() == 8
+                    || !player::position_blocked(
+                        &sim.room,
+                        entity.pos,
+                        radius,
+                        entity.collision_flags,
+                    ),
                 "{id:?} slot {slot} moved into collision at {:?}",
                 entity.pos
             );
@@ -371,10 +379,9 @@ fn real_room1051_cut2_barry_completes_the_scripted_run() {
 
     // The cut-2 beat sends Barry on a scripted run from (30700, 9200) to the
     // blood pool at (7000, 12400). The state-8 handlers step with the
-    // un-collided `Add_speedXZ` and the driver resolves the room collision
-    // after dispatch, so the run slides along the furniture; before the fix
-    // the pre-check rolled every step back at ~(26748, 9714) and the whole
-    // scene stalled behind it.
+    // un-collided `Add_speedXZ`, like the reference, so the run crosses the
+    // furniture; before the fix the pre-check rolled every step back at
+    // ~(26748, 9714) and the whole scene stalled behind it.
     let sim = simulate_room(&pack, id, 400, player::Input::default()).unwrap();
     let barry = sim.game.entities[1];
     assert!(
