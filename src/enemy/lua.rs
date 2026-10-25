@@ -5834,7 +5834,7 @@ end
                 .1
         };
         let pack = pack(&[
-            ("enemy/em24.lua", source("enemy/em24.lua")),
+            ("enemy/em22.lua", source("enemy/em22.lua")),
             ("enemy/lib/npc.lua", source("enemy/lib/npc.lua")),
         ]);
         let clips = vec![Clip {
@@ -5859,7 +5859,7 @@ end
         let mut game = GameState::default();
         {
             let entity = &mut game.entities[1];
-            entity.id = 0x24;
+            entity.id = 0x22;
             entity.set_active(true);
             entity.set_state(8);
             entity.action_behavior = 3;
