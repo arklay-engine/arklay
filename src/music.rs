@@ -260,13 +260,6 @@ pub const MUSIC_TRACKS: &[(u16, &str)] = &[
     (0x201, "Bgm_24b"),
 ];
 
-/// The original `Sound/` basename for a track id.
-pub fn track_source(track: TrackId) -> Option<&'static str> {
-    MUSIC_TRACKS
-        .iter()
-        .find_map(|&(id, name)| (id == track).then_some(name))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,6 +273,34 @@ mod tests {
         assert_eq!(bgm_entry(0x013), "bgm/013.wav");
         assert_eq!(bgm_entry(0x100), "bgm/100.wav");
         assert_eq!(bgm_entry(0x200), "bgm/200.wav");
+    }
+
+    fn pack_with_music(source: &str) -> Pack {
+        let mut writer = crate::pack::PackWriter::new();
+        writer.add(MUSIC_ENTRY, source.as_bytes().to_vec()).unwrap();
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn pack_music_entry_overrides_builtin_and_invalid_falls_back() {
+        let custom = r#"
+            local api = ...
+            api:set_music_group(0x01, { { 0x013, true } })
+            api:set_room_music(1, 0x00, { 0x01 })
+        "#;
+        let tables = load(&pack_with_music(custom));
+        assert_eq!(tables.group(0x01).unwrap().tracks[0], Some(0x013));
+        assert_eq!(tables.group_for(0, 0x00, 0x08), Some(0x01));
+        assert_eq!(tables.group_for(0, 0x00, 0x40), Some(0x01));
+
+        // An undefined group reference makes the pack table invalid; the
+        // built-in copy is used instead.
+        let invalid = r#"
+            local api = ...
+            api:set_room_music(1, 0x00, { 0x02 })
+        "#;
+        let tables = load(&pack_with_music(invalid));
+        assert_eq!(tables.group_for(0, 0x00, 0x40), Some(0x0B));
     }
 
     #[test]
@@ -297,6 +318,16 @@ mod tests {
             tables.group(0x00).unwrap().tracks,
             [Some(0x000), Some(0x101), Some(0x005)]
         );
+        // Group 0x18 has a gap in the source slots: Bgm_05 is slot 2 and
+        // loops even though slot 1 is empty.
+        assert_eq!(
+            tables.group(0x18).unwrap().tracks,
+            [Some(0x018), Some(0x005), None]
+        );
+        assert_eq!(tables.group(0x18).unwrap().loops, [true, true, false]);
+        assert_eq!(tables.group(0x2a).unwrap().tracks, [None; 3]);
+        assert_eq!(tables.group(0x38).unwrap().tracks, [None; 3]);
+        assert_eq!(tables.group_for(5, 0x03, 0x08), Some(0x18));
         assert_eq!(tables.group_for(0, 0x00, 0x41), Some(0x0F));
     }
 }

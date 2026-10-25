@@ -969,6 +969,17 @@ mod tests {
     }
 
     #[test]
+    fn a_broken_initial_state_falls_back_to_the_embedded_copy() {
+        let pack = pack(&[(crate::music::INITIAL_STATE_ENTRY, b"error('boom')")]);
+        let mut game = GameState::default();
+        seed_initial_state(&pack, &mut game, 0);
+        assert_eq!(game.room_bgm[0], 0x40);
+        assert_eq!(game.item_box[0].id, 0x0B);
+        assert_eq!(game.item_box[0].quantity, 15);
+        assert_eq!(game.flags[7].bytes()[3], 0xBF);
+    }
+
+    #[test]
     fn music_api_builds_groups_rooms_and_state() {
         let source = br#"
             local api = ...

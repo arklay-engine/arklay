@@ -2162,7 +2162,6 @@ impl GameSession {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
         seed_new_game(pack, &mut game, reel.character);
-        clear_item_box(&mut game);
         // The attract branch sets the mode bit before the room loads, so every
         // script and entity driver sees it, and seeds the PRNG as game_loop
         // does for attract playback.
@@ -4606,7 +4605,7 @@ impl GameSession {
     /// The `--save-out` authoring seam: the same capture the typewriter save
     /// screen writes, so the file loads through `--load` and the reference's
     /// `--test-load`.
-    fn write_save(&self, _pack: &Pack, path: &Path) -> Result<()> {
+    fn write_save(&self, path: &Path) -> Result<()> {
         write_save_file(&self.game, path)
     }
 
@@ -6484,8 +6483,8 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
 /// (`EndingScreen.cpp:1049-1130`).
 ///
 /// The card is a fresh new-game state, not a snapshot of the finished game:
-/// the shipped `bio_card.dat` copy, the selected character's start health, the
-/// initial item set, a zeroed save counter, then the unlocks the clear grants -
+/// `game/initial_state.lua` and the selected character's start health, then
+/// the unlocks the clear grants -
 /// the infinite rocket launcher (a no-save run or an already-infinite one), the
 /// special key (held, or granted by the epilogue), the under-four-hour machine
 /// gun - and the second-playthrough flag.
@@ -8390,7 +8389,7 @@ fn apply_authoring(app: &mut App, authoring: Authoring<'_>) -> Result<bool> {
     let Some(path) = authoring.save_out else {
         return Ok(false);
     };
-    session.write_save(&app.pack, path)?;
+    session.write_save(path)?;
     Ok(true)
 }
 

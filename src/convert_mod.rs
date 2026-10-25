@@ -16,7 +16,7 @@
 //! | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `roomcut/*.bmp`, `roommask/*.bmp` |
 //! | `ENEMY/*.EMD`, `PLAYERS/*` | `enemy/*`, `player/*` |
 //! | `sound/*.wav`, `voice/*.wav` | `bgm/*`, `se/*`, `voice/*` |
-//! | `DATA/*` | `ui/*`, `item/*`, `data/*`, `demo/*`, `shadow/*` |
+//! | `DATA/*` | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
 //! | `TEXT/ROOM_###.xml` | `language/en-US.txt` room keys |
 //! | `init.xml` (BioRand start inventory) | `game/new_game.lua` |
 //! | `type.png` (BioRand save background) | `ui/type00.png` |
@@ -755,9 +755,9 @@ fn classify(relative: &str, mod_roots: &[String]) -> Class {
     // Files a mod folder carries at its own root.
     match name {
         "init.xml" => converted(crate::lua::NEW_GAME_ENTRY, Convert::StartInventory),
-        "bgm_tbl.xml" => Class::Unsupported(
-            "the room music table is not converted yet; rooms keep the base game's music",
-        ),
+        "bgm_tbl.xml" => {
+            Class::Unsupported("BioRand bgm_tbl.xml is not converted yet; use game/music.lua")
+        }
         "type.png" => raw("ui/type00.png"),
         _ => mapped,
     }
@@ -953,7 +953,7 @@ fn classify_movie(stem: &str, extension: &str) -> Class {
     }
 }
 
-/// `DATA/`: UI art, item atlases, the new-game card, demos and effects.
+/// `DATA/`: UI art, item atlases, demos and effects.
 fn classify_data(name: &str, stem: &str, extension: &str) -> Class {
     for &(entry, file, kind) in convert::UI_ASSETS {
         let file = file.to_ascii_lowercase();

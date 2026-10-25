@@ -411,6 +411,9 @@ The shipped new-game state lives in `game/initial_state.lua`. It writes the
 stacks, the room-item bank and the remembered pick-up quantities. Save loads
 restore their own `room_bgm` bytes and do not run this file.
 
+Both files are whole-file replacements, like `game/new_game.lua`: a mod that
+ships one must reproduce every group, room row or state byte it wants to keep.
+
 ## The new-game start inventory
 
 The items a new game starts with come from the Lua chunk `game/new_game.lua`,
