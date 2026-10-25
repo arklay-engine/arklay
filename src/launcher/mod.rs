@@ -22,16 +22,24 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, TryRecvError};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 use sdl3_sys::dialog::SDL_ShowOpenFolderDialog;
 use sdl3_sys::events::{
+    SDL_EVENT_GAMEPAD_ADDED, SDL_EVENT_GAMEPAD_BUTTON_DOWN, SDL_EVENT_GAMEPAD_REMOVED,
     SDL_EVENT_KEY_DOWN, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_QUIT, SDL_EVENT_WINDOW_EXPOSED,
     SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, SDL_EVENT_WINDOW_RESIZED,
     SDL_Event, SDL_PollEvent, SDL_WaitEventTimeout,
 };
-use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_CTRL, SDL_Keymod};
+use sdl3_sys::gamepad::{
+    SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, SDL_GAMEPAD_BUTTON_BACK,
+    SDL_GAMEPAD_BUTTON_DPAD_DOWN, SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
+    SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
+    SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_START,
+    SDL_GAMEPAD_BUTTON_WEST, SDL_GamepadAxis, SDL_GamepadButton,
+};
+use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_CTRL, SDL_KMOD_NONE, SDL_Keymod};
 use sdl3_sys::mouse::SDL_BUTTON_LEFT;
 use sdl3_sys::scancode::{
     SDL_SCANCODE_A, SDL_SCANCODE_B, SDL_SCANCODE_D, SDL_SCANCODE_DOWN, SDL_SCANCODE_EQUALS,
@@ -43,7 +51,7 @@ use sdl3_sys::scancode::{
 use crate::build_info;
 use crate::config::{Config, Mods};
 use crate::convert::{self, CONVERT_VERSION};
-use crate::engine::{self, Display, ModOptions};
+use crate::engine::{self, Display, Gamepads, ModOptions};
 use crate::logging;
 use crate::manifest;
 use crate::modding;
@@ -72,6 +80,69 @@ impl Color {
 
     const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
+    }
+}
+
+/// The deflection that starts a gamepad menu direction.
+const PAD_DEADZONE: i16 = 16_000;
+/// The pause before a held direction repeats.
+const PAD_INITIAL_DELAY: Duration = Duration::from_millis(350);
+/// The interval between repeats while a direction is held.
+const PAD_REPEAT_DELAY: Duration = Duration::from_millis(110);
+
+/// One axis direction with press-repeat timing.
+#[derive(Default)]
+struct PadAxis {
+    direction: i8,
+    next: Option<Instant>,
+}
+
+impl PadAxis {
+    /// Fold a direction reading into a menu step. A new direction fires at
+    /// once; a held one repeats after [`PAD_INITIAL_DELAY`], then every
+    /// [`PAD_REPEAT_DELAY`].
+    fn poll(&mut self, value: i8, now: Instant) -> Option<i8> {
+        if value != self.direction {
+            self.direction = value;
+            self.next = None;
+            if value != 0 {
+                self.next = Some(now + PAD_INITIAL_DELAY);
+                return Some(value);
+            }
+            return None;
+        }
+        if value != 0 && self.next.is_none_or(|next| now >= next) {
+            self.next = Some(now + PAD_REPEAT_DELAY);
+            return Some(value);
+        }
+        None
+    }
+}
+
+/// A stick or D-pad direction: the D-pad wins, then the stick past the
+/// deadzone.
+fn pad_direction(
+    pads: &Gamepads,
+    axis: SDL_GamepadAxis,
+    negative: SDL_GamepadButton,
+    positive: SDL_GamepadButton,
+) -> i8 {
+    if pads.button(positive) {
+        1
+    } else if pads.button(negative) {
+        -1
+    } else {
+        pad_axis_direction(pads.axis(axis))
+    }
+}
+
+fn pad_axis_direction(value: i16) -> i8 {
+    if value <= -PAD_DEADZONE {
+        -1
+    } else if value >= PAD_DEADZONE {
+        1
+    } else {
+        0
     }
 }
 
@@ -466,6 +537,9 @@ struct Launcher {
     confirm_cancel: bool,
     dialog: Option<Arc<DialogState>>,
     capture_progress: Option<ProgressState>,
+    pads: Gamepads,
+    pad_x: PadAxis,
+    pad_y: PadAxis,
     frame: Frame,
     grid: Grid,
     hits: Vec<(usize, usize)>,
@@ -523,6 +597,9 @@ impl Launcher {
             confirm_cancel: false,
             dialog: None,
             capture_progress: None,
+            pads: Gamepads::default(),
+            pad_x: PadAxis::default(),
+            pad_y: PadAxis::default(),
             frame: Frame::new(width, height),
             grid: Grid::new(width, height)?,
             hits: Vec::new(),
@@ -600,6 +677,14 @@ impl Launcher {
             }
             Screen::Message => "ENTER BACK",
         };
+        let pad_hint = match self.screen {
+            Screen::Mods => "PAD  D-PAD/STICK MOVE   A TOGGLE   LB/RB REORDER   B BACK",
+            Screen::Install => "PAD  A INSTALL   X SOURCE   B BACK",
+            Screen::Progress => "PAD  A CONFIRM   B CANCEL",
+            Screen::Message => "PAD  A/B BACK",
+            _ => "PAD  D-PAD/STICK MOVE   A SELECT   B BACK",
+        };
+        self.grid.draw(&mut self.frame, 23, 2, pad_hint, Color::DIM);
         self.grid.draw(&mut self.frame, 24, 2, hint, Color::DIM);
     }
 
@@ -1107,6 +1192,75 @@ impl Launcher {
         for (col, value) in cells {
             self.grid.draw(&mut self.frame, row, *col, value, color);
         }
+    }
+
+    /// Fold the D-pad and left stick into keyboard navigation steps.
+    fn poll_pad_navigation(&mut self, display: &mut Display) -> bool {
+        let x = pad_direction(
+            &self.pads,
+            SDL_GAMEPAD_AXIS_LEFTX,
+            SDL_GAMEPAD_BUTTON_DPAD_LEFT,
+            SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
+        );
+        let y = pad_direction(
+            &self.pads,
+            SDL_GAMEPAD_AXIS_LEFTY,
+            SDL_GAMEPAD_BUTTON_DPAD_UP,
+            SDL_GAMEPAD_BUTTON_DPAD_DOWN,
+        );
+        let now = Instant::now();
+        let mut changed = false;
+        if let Some(direction) = self.pad_x.poll(x, now) {
+            self.key(
+                if direction < 0 {
+                    SDL_SCANCODE_LEFT
+                } else {
+                    SDL_SCANCODE_RIGHT
+                },
+                SDL_KMOD_NONE,
+                display,
+            );
+            changed = true;
+        }
+        if let Some(direction) = self.pad_y.poll(y, now) {
+            self.key(
+                if direction < 0 {
+                    SDL_SCANCODE_UP
+                } else {
+                    SDL_SCANCODE_DOWN
+                },
+                SDL_KMOD_NONE,
+                display,
+            );
+            changed = true;
+        }
+        changed
+    }
+
+    /// Handle one gamepad button. Returns true when the launcher should close.
+    fn gamepad_button(&mut self, button: u8, display: &mut Display) -> bool {
+        let button = i32::from(button);
+        if button == SDL_GAMEPAD_BUTTON_SOUTH.0 || button == SDL_GAMEPAD_BUTTON_START.0 {
+            return self.key(SDL_SCANCODE_RETURN, SDL_KMOD_NONE, display);
+        }
+        if button == SDL_GAMEPAD_BUTTON_EAST.0 || button == SDL_GAMEPAD_BUTTON_BACK.0 {
+            return self.key(SDL_SCANCODE_ESCAPE, SDL_KMOD_NONE, display);
+        }
+        if button == SDL_GAMEPAD_BUTTON_WEST.0 {
+            return match self.screen {
+                Screen::Install => self.key(SDL_SCANCODE_B, SDL_KMOD_NONE, display),
+                Screen::Mods => self.key(SDL_SCANCODE_O, SDL_KMOD_NONE, display),
+                _ => false,
+            };
+        }
+        if self.screen == Screen::Mods {
+            if button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER.0 {
+                self.move_mod(-1);
+            } else if button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER.0 {
+                self.move_mod(1);
+            }
+        }
+        false
     }
 
     /// Handle one key press. Returns true when the launcher should close.
@@ -1755,6 +1909,8 @@ impl Launcher {
             self.show_message("PACK ERROR", &[error], Screen::Play);
             return false;
         }
+        // Hand the pads to the game's input latch; it opens its own handles.
+        self.pads = Gamepads::default();
         display.note_window_size();
         let mut graphics = self.config.graphics;
         if let Some(current) = display.graphics().cloned() {
@@ -1765,6 +1921,7 @@ impl Launcher {
         }
         video::set_aspect(graphics.aspect);
         if let Err(err) = display.set_renderer(graphics) {
+            self.pads.refresh();
             self.show_message("GAME FAILED", &[&format!("{err:#}")], Screen::Play);
             return false;
         }
@@ -1803,6 +1960,7 @@ impl Launcher {
             Ok(()) => true,
             Err(err) => {
                 logging::write(&format!("game failed: {err:#}"));
+                self.pads.refresh();
                 let mut software = graphics;
                 software.renderer = RendererKind::Software;
                 let _ = display.set_renderer(software);
@@ -2023,6 +2181,9 @@ impl Launcher {
             {
                 dirty = true;
             }
+            if self.poll_pad_navigation(display) {
+                dirty = true;
+            }
             if dirty {
                 let (width, height) = display.drawable_size();
                 if width > 0
@@ -2073,6 +2234,16 @@ impl Launcher {
                         }
                         dirty = true;
                     }
+                } else if kind == SDL_EVENT_GAMEPAD_ADDED {
+                    self.pads.open(unsafe { event.gdevice.which });
+                } else if kind == SDL_EVENT_GAMEPAD_REMOVED {
+                    self.pads.close(unsafe { event.gdevice.which });
+                } else if kind == SDL_EVENT_GAMEPAD_BUTTON_DOWN {
+                    if self.gamepad_button(unsafe { event.gbutton.button }, display) {
+                        self.save_window(display);
+                        return Ok(());
+                    }
+                    dirty = true;
                 } else if kind == SDL_EVENT_MOUSE_BUTTON_DOWN {
                     if unsafe { event.button.button } == SDL_BUTTON_LEFT as u8 {
                         // Mouse events are in window coordinates; the frame
@@ -2620,6 +2791,9 @@ pub fn run() -> Result<()> {
         display.drawable_size()
     };
     let mut launcher = Launcher::new(&config, width, height)?;
+    if capture.is_none() {
+        launcher.pads.init();
+    }
     launcher.clear_available_if_current();
     launcher.maybe_start_check();
     // Headless checkpoints use this to exercise the install path without a
@@ -2667,6 +2841,25 @@ mod tests {
         assert_eq!(truncate("short", 10), "short");
         assert_eq!(truncate("a long value", 8), "a lon...");
         assert_eq!(truncate("abcdef", 3), "...");
+    }
+
+    #[test]
+    fn pad_axes_latch_and_repeat() {
+        let start = Instant::now();
+        let mut axis = PadAxis::default();
+        assert_eq!(axis.poll(1, start), Some(1));
+        assert_eq!(axis.poll(1, start + Duration::from_millis(100)), None);
+        assert_eq!(axis.poll(1, start + PAD_INITIAL_DELAY), Some(1));
+        assert_eq!(
+            axis.poll(1, start + PAD_INITIAL_DELAY + PAD_REPEAT_DELAY),
+            Some(1)
+        );
+        assert_eq!(axis.poll(0, start + PAD_INITIAL_DELAY), None);
+        assert_eq!(axis.poll(-1, start + PAD_INITIAL_DELAY), Some(-1));
+        assert_eq!(axis.poll(0, start + PAD_INITIAL_DELAY), None);
+        assert_eq!(pad_axis_direction(PAD_DEADZONE - 1), 0);
+        assert_eq!(pad_axis_direction(PAD_DEADZONE), 1);
+        assert_eq!(pad_axis_direction(-PAD_DEADZONE), -1);
     }
 
     #[test]

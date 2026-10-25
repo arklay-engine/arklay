@@ -41,6 +41,11 @@ change back to `arklay.toml`. MODS shows the application order: the top row is
 applied first (lowest priority) and the bottom row last (highest); Ctrl+Down
 moves a mod toward higher priority.
 
+The launcher also takes a gamepad. The D-pad or left stick moves, A/Start
+confirms and B/Back goes back. On MODS, X opens the folder and LB/RB moves the
+selected mod toward lower/higher priority; on INSTALL, X opens the source folder
+picker.
+
 Updates publish a small `build.json` next to the platform binary. `release`
 follows the latest normal release; `nightly` follows the rolling pre-release
 that CI replaces on every push to `main`. The launcher verifies the download's

@@ -54,7 +54,8 @@ use sdl3_sys::events::{
     SDL_EVENT_WINDOW_FOCUS_LOST, SDL_Event, SDL_PollEvent,
 };
 use sdl3_sys::gamepad::{
-    SDL_AddGamepadMappingsFromFile, SDL_CloseGamepad, SDL_Gamepad, SDL_OpenGamepad,
+    SDL_AddGamepadMappingsFromFile, SDL_CloseGamepad, SDL_Gamepad, SDL_GamepadAxis,
+    SDL_GamepadButton, SDL_GetGamepadAxis, SDL_GetGamepadButton, SDL_GetGamepads, SDL_OpenGamepad,
 };
 use sdl3_sys::hints::{SDL_HINT_RENDER_DRIVER, SDL_HINT_VIDEO_DRIVER, SDL_SetHint};
 use sdl3_sys::init::{SDL_INIT_GAMEPAD, SDL_INIT_VIDEO, SDL_Init, SDL_InitSubSystem, SDL_Quit};
@@ -10580,11 +10581,11 @@ fn poll_events(
 
 /// The gamepads open for input, by joystick instance id.
 ///
-/// SDL reports every pad already connected as an `SDL_EVENT_GAMEPAD_ADDED`
-/// once the gamepad subsystem starts, and later ones as they are plugged in,
-/// so opening on that event covers both start-up and hot-plug.
+/// SDL reports connected pads as `SDL_EVENT_GAMEPAD_ADDED` and later plug-ins
+/// the same way; `init` also enumerates the current set so a second user (the
+/// launcher handing over to the game) still finds them.
 #[derive(Default)]
-struct Gamepads {
+pub(crate) struct Gamepads {
     open: Vec<(SDL_JoystickID, *mut SDL_Gamepad)>,
 }
 
@@ -10593,7 +10594,7 @@ impl Gamepads {
     /// mapping database, `SDL_GAMECONTROLLERCONFIG`, plus an optional
     /// `gamecontrollerdb.txt` beside `arklay.toml`. A failure only costs the
     /// pads; the keyboard and mouse still work.
-    fn init() {
+    pub(crate) fn init(&mut self) {
         if !unsafe { SDL_InitSubSystem(SDL_INIT_GAMEPAD) } {
             eprintln!("warning: gamepads unavailable: {}", sdl_error());
             return;
@@ -10605,9 +10606,25 @@ impl Gamepads {
         {
             eprintln!("warning: failed to read {}: {}", db.display(), sdl_error());
         }
+        self.refresh();
     }
 
-    fn open(&mut self, which: SDL_JoystickID) {
+    /// Open every gamepad SDL currently reports. `init` handles the first
+    /// batch; this also restores the launcher's pads after a failed Play or
+    /// when another part of the process already started the subsystem.
+    pub(crate) fn refresh(&mut self) {
+        let mut count = 0;
+        let ids = unsafe { SDL_GetGamepads(&mut count) };
+        if ids.is_null() {
+            return;
+        }
+        for index in 0..count.max(0) as usize {
+            self.open(unsafe { *ids.add(index) });
+        }
+        unsafe { SDL_free(ids.cast()) };
+    }
+
+    pub(crate) fn open(&mut self, which: SDL_JoystickID) {
         if self.open.iter().any(|&(id, _)| id == which) {
             return;
         }
@@ -10619,13 +10636,29 @@ impl Gamepads {
         }
     }
 
-    fn close(&mut self, which: SDL_JoystickID) {
+    pub(crate) fn close(&mut self, which: SDL_JoystickID) {
         self.open.retain(|&(id, pad)| {
             if id == which {
                 unsafe { SDL_CloseGamepad(pad) };
             }
             id != which
         });
+    }
+
+    /// The value of `axis` on the most-deflected open pad.
+    pub(crate) fn axis(&self, axis: SDL_GamepadAxis) -> i16 {
+        self.open
+            .iter()
+            .map(|&(_, pad)| unsafe { SDL_GetGamepadAxis(pad, axis) })
+            .max_by_key(|value| value.unsigned_abs())
+            .unwrap_or(0)
+    }
+
+    /// Whether any open pad holds `button`.
+    pub(crate) fn button(&self, button: SDL_GamepadButton) -> bool {
+        self.open
+            .iter()
+            .any(|&(_, pad)| unsafe { SDL_GetGamepadButton(pad, button) })
     }
 }
 
@@ -12212,9 +12245,10 @@ impl InputState {
     /// bindings from `arklay.toml` (the defaults when it has none, or when
     /// it cannot be read; the launch already reported its warnings).
     fn interactive() -> Self {
-        Gamepads::init();
         let (config, _) = crate::config::Config::load_default();
-        Self::new(config.bindings_or_default())
+        let mut state = Self::new(config.bindings_or_default());
+        state.pads.init();
+        state
     }
 
     /// The action map in use.
