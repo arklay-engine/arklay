@@ -58,7 +58,9 @@ use sdl3_sys::gamepad::{
     SDL_GamepadButton, SDL_GetGamepadAxis, SDL_GetGamepadButton, SDL_GetGamepads, SDL_OpenGamepad,
 };
 use sdl3_sys::hints::{SDL_HINT_RENDER_DRIVER, SDL_HINT_VIDEO_DRIVER, SDL_SetHint};
-use sdl3_sys::init::{SDL_INIT_GAMEPAD, SDL_INIT_VIDEO, SDL_Init, SDL_InitSubSystem, SDL_Quit};
+use sdl3_sys::init::{
+    SDL_INIT_GAMEPAD, SDL_INIT_VIDEO, SDL_Init, SDL_InitSubSystem, SDL_Quit, SDL_QuitSubSystem,
+};
 use sdl3_sys::joystick::SDL_JoystickID;
 use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_NONE, SDL_KMOD_SHIFT, SDLK_COMMA, SDLK_PERIOD};
 use sdl3_sys::main::SDL_SetMainReady;
@@ -10587,6 +10589,7 @@ fn poll_events(
 #[derive(Default)]
 pub(crate) struct Gamepads {
     open: Vec<(SDL_JoystickID, *mut SDL_Gamepad)>,
+    initialized: bool,
 }
 
 impl Gamepads {
@@ -10595,9 +10598,12 @@ impl Gamepads {
     /// `gamecontrollerdb.txt` beside `arklay.toml`. A failure only costs the
     /// pads; the keyboard and mouse still work.
     pub(crate) fn init(&mut self) {
-        if !unsafe { SDL_InitSubSystem(SDL_INIT_GAMEPAD) } {
-            eprintln!("warning: gamepads unavailable: {}", sdl_error());
-            return;
+        if !self.initialized {
+            if !unsafe { SDL_InitSubSystem(SDL_INIT_GAMEPAD) } {
+                eprintln!("warning: gamepads unavailable: {}", sdl_error());
+                return;
+            }
+            self.initialized = true;
         }
         let db = crate::config::Config::dir().join("gamecontrollerdb.txt");
         if db.is_file()
@@ -10609,9 +10615,9 @@ impl Gamepads {
         self.refresh();
     }
 
-    /// Open every gamepad SDL currently reports. `init` handles the first
-    /// batch; this also restores the launcher's pads after a failed Play or
-    /// when another part of the process already started the subsystem.
+    /// Open every gamepad SDL currently reports. `init` calls this for the
+    /// first batch; a caller can repeat it after re-owning the subsystem
+    /// without changing the subsystem's refcount.
     pub(crate) fn refresh(&mut self) {
         let mut count = 0;
         let ids = unsafe { SDL_GetGamepads(&mut count) };
@@ -10666,6 +10672,9 @@ impl Drop for Gamepads {
     fn drop(&mut self) {
         for (_, pad) in self.open.drain(..) {
             unsafe { SDL_CloseGamepad(pad) };
+        }
+        if self.initialized {
+            unsafe { SDL_QuitSubSystem(SDL_INIT_GAMEPAD) };
         }
     }
 }

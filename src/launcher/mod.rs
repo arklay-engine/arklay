@@ -29,15 +29,16 @@ use sdl3_sys::dialog::SDL_ShowOpenFolderDialog;
 use sdl3_sys::events::{
     SDL_EVENT_GAMEPAD_ADDED, SDL_EVENT_GAMEPAD_BUTTON_DOWN, SDL_EVENT_GAMEPAD_REMOVED,
     SDL_EVENT_KEY_DOWN, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_QUIT, SDL_EVENT_WINDOW_EXPOSED,
-    SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, SDL_EVENT_WINDOW_RESIZED,
-    SDL_Event, SDL_PollEvent, SDL_WaitEventTimeout,
+    SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_FOCUS_LOST,
+    SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, SDL_EVENT_WINDOW_RESIZED, SDL_Event, SDL_PollEvent,
+    SDL_WaitEventTimeout,
 };
 use sdl3_sys::gamepad::{
     SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, SDL_GAMEPAD_BUTTON_BACK,
     SDL_GAMEPAD_BUTTON_DPAD_DOWN, SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
     SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
     SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_START,
-    SDL_GAMEPAD_BUTTON_WEST, SDL_GamepadAxis, SDL_GamepadButton,
+    SDL_GAMEPAD_BUTTON_WEST,
 };
 use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_CTRL, SDL_KMOD_NONE, SDL_Keymod};
 use sdl3_sys::mouse::SDL_BUTTON_LEFT;
@@ -85,9 +86,12 @@ impl Color {
 
 /// The deflection that starts a gamepad menu direction.
 const PAD_DEADZONE: i16 = 16_000;
-/// The pause before a held direction repeats.
+/// The deflection a held direction releases at (hysteresis, so a stick
+/// resting near the threshold does not chatter).
+const PAD_RELEASE: i16 = 12_000;
+/// The pause before a held vertical direction repeats.
 const PAD_INITIAL_DELAY: Duration = Duration::from_millis(350);
-/// The interval between repeats while a direction is held.
+/// The interval between repeats while a vertical direction is held.
 const PAD_REPEAT_DELAY: Duration = Duration::from_millis(110);
 
 /// One axis direction with press-repeat timing.
@@ -98,51 +102,31 @@ struct PadAxis {
 }
 
 impl PadAxis {
-    /// Fold a direction reading into a menu step. A new direction fires at
-    /// once; a held one repeats after [`PAD_INITIAL_DELAY`], then every
-    /// [`PAD_REPEAT_DELAY`].
-    fn poll(&mut self, value: i8, now: Instant) -> Option<i8> {
-        if value != self.direction {
-            self.direction = value;
-            self.next = None;
-            if value != 0 {
-                self.next = Some(now + PAD_INITIAL_DELAY);
-                return Some(value);
-            }
-            return None;
+    /// Fold an axis reading into a menu step. A new direction fires at once;
+    /// with `repeat`, a held one repeats after [`PAD_INITIAL_DELAY`], then
+    /// every [`PAD_REPEAT_DELAY`].
+    fn poll(&mut self, value: i16, now: Instant, repeat: bool) -> Option<i8> {
+        let direction = if value >= PAD_DEADZONE {
+            1
+        } else if value <= -PAD_DEADZONE {
+            -1
+        } else if self.direction > 0 && value >= PAD_RELEASE {
+            1
+        } else if self.direction < 0 && value <= -PAD_RELEASE {
+            -1
+        } else {
+            0
+        };
+        if direction != self.direction {
+            self.direction = direction;
+            self.next = (direction != 0 && repeat).then(|| now + PAD_INITIAL_DELAY);
+            return (direction != 0).then_some(direction);
         }
-        if value != 0 && self.next.is_none_or(|next| now >= next) {
+        if repeat && direction != 0 && self.next.is_none_or(|next| now >= next) {
             self.next = Some(now + PAD_REPEAT_DELAY);
-            return Some(value);
+            return Some(direction);
         }
         None
-    }
-}
-
-/// A stick or D-pad direction: the D-pad wins, then the stick past the
-/// deadzone.
-fn pad_direction(
-    pads: &Gamepads,
-    axis: SDL_GamepadAxis,
-    negative: SDL_GamepadButton,
-    positive: SDL_GamepadButton,
-) -> i8 {
-    if pads.button(positive) {
-        1
-    } else if pads.button(negative) {
-        -1
-    } else {
-        pad_axis_direction(pads.axis(axis))
-    }
-}
-
-fn pad_axis_direction(value: i16) -> i8 {
-    if value <= -PAD_DEADZONE {
-        -1
-    } else if value >= PAD_DEADZONE {
-        1
-    } else {
-        0
     }
 }
 
@@ -540,6 +524,7 @@ struct Launcher {
     pads: Gamepads,
     pad_x: PadAxis,
     pad_y: PadAxis,
+    pad_focused: bool,
     frame: Frame,
     grid: Grid,
     hits: Vec<(usize, usize)>,
@@ -600,6 +585,7 @@ impl Launcher {
             pads: Gamepads::default(),
             pad_x: PadAxis::default(),
             pad_y: PadAxis::default(),
+            pad_focused: true,
             frame: Frame::new(width, height),
             grid: Grid::new(width, height)?,
             hits: Vec::new(),
@@ -678,13 +664,31 @@ impl Launcher {
             Screen::Message => "ENTER BACK",
         };
         let pad_hint = match self.screen {
-            Screen::Mods => "PAD  D-PAD/STICK MOVE   A TOGGLE   LB/RB REORDER   B BACK",
-            Screen::Install => "PAD  A INSTALL   X SOURCE   B BACK",
-            Screen::Progress => "PAD  A CONFIRM   B CANCEL",
+            Screen::Main => "PAD  D-PAD/STICK MOVE   A SELECT   B QUIT",
+            Screen::Play => "PAD  A SELECT   B BACK",
+            Screen::Install => {
+                if self.source.is_none() {
+                    "PAD  X SOURCE   B BACK"
+                } else if self.re1_pack().is_some() {
+                    "PAD  A REBUILD   X SOURCE   B BACK"
+                } else {
+                    "PAD  A INSTALL   X SOURCE   B BACK"
+                }
+            }
+            Screen::Update | Screen::Options => {
+                "PAD  D-PAD/STICK MOVE   LEFT/RIGHT CHANGE   A SELECT   B BACK"
+            }
+            Screen::Mods => "PAD  D-PAD/STICK MOVE   A TOGGLE   X FOLDER   LB/RB REORDER   B BACK",
+            Screen::Progress => {
+                if self.confirm_cancel {
+                    "PAD  A CANCEL INSTALL   B KEEP GOING"
+                } else {
+                    "PAD  B CANCEL"
+                }
+            }
             Screen::Message => "PAD  A/B BACK",
-            _ => "PAD  D-PAD/STICK MOVE   A SELECT   B BACK",
         };
-        self.grid.draw(&mut self.frame, 23, 2, pad_hint, Color::DIM);
+        self.grid.draw(&mut self.frame, 2, 2, pad_hint, Color::DIM);
         self.grid.draw(&mut self.frame, 24, 2, hint, Color::DIM);
     }
 
@@ -851,13 +855,13 @@ impl Launcher {
         let (status, status_color) = if self.dialog.is_some() {
             ("WAITING FOR FOLDER PICKER...", Color::DIM)
         } else if self.source.is_none() {
-            ("RESIDENT EVIL NOT FOUND - PRESS B", Color::AMBER)
+            ("RESIDENT EVIL NOT FOUND - B/X", Color::AMBER)
         } else if !self
             .source
             .as_ref()
             .is_some_and(|source| source.path.is_dir())
         {
-            ("SOURCE FOLDER IS MISSING - PRESS B", Color::AMBER)
+            ("SOURCE FOLDER MISSING - B/X", Color::AMBER)
         } else if pack.is_none() {
             ("READY - ABOUT 486 MB", Color::BODY)
         } else if pack.as_ref().is_some_and(|pack| pack.stale) {
@@ -1194,23 +1198,45 @@ impl Launcher {
         }
     }
 
-    /// Fold the D-pad and left stick into keyboard navigation steps.
+    /// Wait at most 100 ms, or less when a held stick is close to repeating.
+    fn pad_wait(&self) -> i32 {
+        if !self.pad_focused {
+            return 100;
+        }
+        let now = Instant::now();
+        let mut wait = 100;
+        for next in [self.pad_x.next, self.pad_y.next].into_iter().flatten() {
+            let remaining = next.saturating_duration_since(now).as_millis();
+            wait = wait.min(remaining.clamp(1, 100) as i32);
+        }
+        wait
+    }
+
+    /// Fold the left stick into keyboard navigation steps. The D-pad is
+    /// handled as button edges, so a quick tap is never missed by polling.
     fn poll_pad_navigation(&mut self, display: &mut Display) -> bool {
-        let x = pad_direction(
-            &self.pads,
-            SDL_GAMEPAD_AXIS_LEFTX,
-            SDL_GAMEPAD_BUTTON_DPAD_LEFT,
-            SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
-        );
-        let y = pad_direction(
-            &self.pads,
-            SDL_GAMEPAD_AXIS_LEFTY,
-            SDL_GAMEPAD_BUTTON_DPAD_UP,
-            SDL_GAMEPAD_BUTTON_DPAD_DOWN,
-        );
+        if !self.pad_focused {
+            return false;
+        }
+        let x = if self.pads.button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) {
+            i16::MAX
+        } else if self.pads.button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) {
+            i16::MIN
+        } else {
+            self.pads.axis(SDL_GAMEPAD_AXIS_LEFTX)
+        };
+        let y = if self.pads.button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
+            i16::MAX
+        } else if self.pads.button(SDL_GAMEPAD_BUTTON_DPAD_UP) {
+            i16::MIN
+        } else {
+            self.pads.axis(SDL_GAMEPAD_AXIS_LEFTY)
+        };
         let now = Instant::now();
         let mut changed = false;
-        if let Some(direction) = self.pad_x.poll(x, now) {
+        // Horizontal changes are one-shot: holding left on UPDATE or OPTIONS
+        // must not keep flipping a setting.
+        if let Some(direction) = self.pad_x.poll(x, now, false) {
             self.key(
                 if direction < 0 {
                     SDL_SCANCODE_LEFT
@@ -1222,7 +1248,7 @@ impl Launcher {
             );
             changed = true;
         }
-        if let Some(direction) = self.pad_y.poll(y, now) {
+        if let Some(direction) = self.pad_y.poll(y, now, true) {
             self.key(
                 if direction < 0 {
                     SDL_SCANCODE_UP
@@ -1239,19 +1265,54 @@ impl Launcher {
 
     /// Handle one gamepad button. Returns true when the launcher should close.
     fn gamepad_button(&mut self, button: u8, display: &mut Display) -> bool {
+        if !self.pad_focused {
+            return false;
+        }
         let button = i32::from(button);
-        if button == SDL_GAMEPAD_BUTTON_SOUTH.0 || button == SDL_GAMEPAD_BUTTON_START.0 {
-            return self.key(SDL_SCANCODE_RETURN, SDL_KMOD_NONE, display);
-        }
-        if button == SDL_GAMEPAD_BUTTON_EAST.0 || button == SDL_GAMEPAD_BUTTON_BACK.0 {
-            return self.key(SDL_SCANCODE_ESCAPE, SDL_KMOD_NONE, display);
-        }
-        if button == SDL_GAMEPAD_BUTTON_WEST.0 {
-            return match self.screen {
-                Screen::Install => self.key(SDL_SCANCODE_B, SDL_KMOD_NONE, display),
-                Screen::Mods => self.key(SDL_SCANCODE_O, SDL_KMOD_NONE, display),
-                _ => false,
-            };
+        let mut dpad = None;
+        let scancode = match button {
+            b if b == SDL_GAMEPAD_BUTTON_DPAD_UP.0 => {
+                dpad = Some((false, -1));
+                Some(SDL_SCANCODE_UP)
+            }
+            b if b == SDL_GAMEPAD_BUTTON_DPAD_DOWN.0 => {
+                dpad = Some((false, 1));
+                Some(SDL_SCANCODE_DOWN)
+            }
+            b if b == SDL_GAMEPAD_BUTTON_DPAD_LEFT.0 => {
+                dpad = Some((true, -1));
+                Some(SDL_SCANCODE_LEFT)
+            }
+            b if b == SDL_GAMEPAD_BUTTON_DPAD_RIGHT.0 => {
+                dpad = Some((true, 1));
+                Some(SDL_SCANCODE_RIGHT)
+            }
+            b if b == SDL_GAMEPAD_BUTTON_SOUTH.0 || b == SDL_GAMEPAD_BUTTON_START.0 => {
+                Some(SDL_SCANCODE_RETURN)
+            }
+            b if b == SDL_GAMEPAD_BUTTON_EAST.0 || b == SDL_GAMEPAD_BUTTON_BACK.0 => {
+                Some(SDL_SCANCODE_ESCAPE)
+            }
+            b if b == SDL_GAMEPAD_BUTTON_WEST.0 => match self.screen {
+                Screen::Install => Some(SDL_SCANCODE_B),
+                Screen::Mods => Some(SDL_SCANCODE_O),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some(scancode) = scancode {
+            let closed = self.key(scancode, SDL_KMOD_NONE, display);
+            if let Some((horizontal, direction)) = dpad {
+                let state = if horizontal {
+                    &mut self.pad_x
+                } else {
+                    &mut self.pad_y
+                };
+                state.direction = direction;
+                // Horizontal directions stay one-shot; vertical ones repeat.
+                state.next = (!horizontal).then(|| Instant::now() + PAD_INITIAL_DELAY);
+            }
+            return closed;
         }
         if self.screen == Screen::Mods {
             if button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER.0 {
@@ -1820,7 +1881,7 @@ impl Launcher {
         let Some(source) = self.source.clone() else {
             self.show_message(
                 "RESIDENT EVIL NOT FOUND",
-                &["Use B to choose the folder that holds the game."],
+                &["Dismiss, then press B (or X on a pad) to choose the game folder."],
                 self.screen,
             );
             return;
@@ -1921,7 +1982,7 @@ impl Launcher {
         }
         video::set_aspect(graphics.aspect);
         if let Err(err) = display.set_renderer(graphics) {
-            self.pads.refresh();
+            self.pads.init();
             self.show_message("GAME FAILED", &[&format!("{err:#}")], Screen::Play);
             return false;
         }
@@ -1960,7 +2021,7 @@ impl Launcher {
             Ok(()) => true,
             Err(err) => {
                 logging::write(&format!("game failed: {err:#}"));
-                self.pads.refresh();
+                self.pads.init();
                 let mut software = graphics;
                 software.renderer = RendererKind::Software;
                 let _ = display.set_renderer(software);
@@ -2181,9 +2242,6 @@ impl Launcher {
             {
                 dirty = true;
             }
-            if self.poll_pad_navigation(display) {
-                dirty = true;
-            }
             if dirty {
                 let (width, height) = display.drawable_size();
                 if width > 0
@@ -2197,7 +2255,10 @@ impl Launcher {
                 display.show()?;
                 dirty = false;
             }
-            if !unsafe { SDL_WaitEventTimeout(&mut event, 100) } {
+            if !unsafe { SDL_WaitEventTimeout(&mut event, self.pad_wait()) } {
+                if self.poll_pad_navigation(display) {
+                    dirty = true;
+                }
                 continue;
             }
             loop {
@@ -2258,10 +2319,21 @@ impl Launcher {
                         self.click(x, y, display);
                         dirty = true;
                     }
+                } else if kind == SDL_EVENT_WINDOW_FOCUS_LOST {
+                    // Do not keep polling or repeating a direction while
+                    // another window owns the input.
+                    self.pad_focused = false;
+                    self.pad_x = PadAxis::default();
+                    self.pad_y = PadAxis::default();
+                    dirty = true;
+                } else if kind == SDL_EVENT_WINDOW_FOCUS_GAINED {
+                    self.pad_focused = true;
+                    self.pad_x = PadAxis::default();
+                    self.pad_y = PadAxis::default();
+                    dirty = true;
                 } else if kind == SDL_EVENT_WINDOW_RESIZED
                     || kind == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED
                     || kind == SDL_EVENT_WINDOW_EXPOSED
-                    || kind == SDL_EVENT_WINDOW_FOCUS_GAINED
                 {
                     if kind == SDL_EVENT_WINDOW_RESIZED {
                         display.note_window_size();
@@ -2272,6 +2344,9 @@ impl Launcher {
                 if !unsafe { SDL_PollEvent(&mut event) } {
                     break;
                 }
+            }
+            if self.poll_pad_navigation(display) {
+                dirty = true;
             }
         }
     }
@@ -2846,20 +2921,54 @@ mod tests {
     #[test]
     fn pad_axes_latch_and_repeat() {
         let start = Instant::now();
-        let mut axis = PadAxis::default();
-        assert_eq!(axis.poll(1, start), Some(1));
-        assert_eq!(axis.poll(1, start + Duration::from_millis(100)), None);
-        assert_eq!(axis.poll(1, start + PAD_INITIAL_DELAY), Some(1));
+        let mut repeat = PadAxis::default();
+        assert_eq!(repeat.poll(PAD_DEADZONE, start, true), Some(1));
         assert_eq!(
-            axis.poll(1, start + PAD_INITIAL_DELAY + PAD_REPEAT_DELAY),
+            repeat.poll(PAD_DEADZONE, start + Duration::from_millis(100), true),
+            None
+        );
+        assert_eq!(
+            repeat.poll(PAD_DEADZONE, start + PAD_INITIAL_DELAY, true),
             Some(1)
         );
-        assert_eq!(axis.poll(0, start + PAD_INITIAL_DELAY), None);
-        assert_eq!(axis.poll(-1, start + PAD_INITIAL_DELAY), Some(-1));
-        assert_eq!(axis.poll(0, start + PAD_INITIAL_DELAY), None);
-        assert_eq!(pad_axis_direction(PAD_DEADZONE - 1), 0);
-        assert_eq!(pad_axis_direction(PAD_DEADZONE), 1);
-        assert_eq!(pad_axis_direction(-PAD_DEADZONE), -1);
+        assert_eq!(
+            repeat.poll(
+                PAD_DEADZONE,
+                start + PAD_INITIAL_DELAY + PAD_REPEAT_DELAY,
+                true
+            ),
+            Some(1)
+        );
+
+        // Inside the release band the direction stays latched; crossing it
+        // releases without a step, and a reverse press steps immediately.
+        let mut hysteresis = PadAxis::default();
+        assert_eq!(hysteresis.poll(PAD_DEADZONE, start, true), Some(1));
+        assert_eq!(
+            hysteresis.poll(PAD_RELEASE, start + Duration::from_millis(50), true),
+            None
+        );
+        assert_eq!(
+            hysteresis.poll(PAD_RELEASE - 1, start + Duration::from_millis(50), true),
+            None
+        );
+        assert_eq!(
+            hysteresis.poll(PAD_DEADZONE - 1, start + Duration::from_millis(50), true),
+            None
+        );
+        assert_eq!(
+            hysteresis.poll(-PAD_DEADZONE, start + Duration::from_millis(50), true),
+            Some(-1)
+        );
+
+        // One-shot directions fire on the edge and never repeat.
+        let mut once = PadAxis::default();
+        assert_eq!(once.poll(PAD_DEADZONE, start, false), Some(1));
+        assert_eq!(
+            once.poll(PAD_DEADZONE, start + PAD_INITIAL_DELAY, false),
+            None
+        );
+        assert_eq!(once.poll(0, start + PAD_INITIAL_DELAY, false), None);
     }
 
     #[test]
