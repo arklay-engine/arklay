@@ -436,13 +436,20 @@ fn condition(state: &GameState) -> (String, Tone) {
     }
 }
 
+/// The weapon the player has equipped and carries, if any. This reads the
+/// equipped item rather than `equipped_weapon_id`, which keeps a weapon
+/// even when nothing is equipped.
+fn equipped_weapon(state: &GameState) -> Option<u8> {
+    state
+        .equipped
+        .filter(|&item| crate::weapons::is_weapon(item))
+        .filter(|&item| state.inventory.iter().any(|stack| stack.id == item))
+}
+
 /// The equipped weapon's ammo (`clip / capacity · spare`) and its colour,
 /// for a weapon that takes ammunition.
 fn ammo(state: &GameState) -> Option<(String, Tone)> {
-    let weapon = state.equipped_weapon_id;
-    if weapon == 0 || !crate::weapons::is_weapon(weapon) {
-        return None;
-    }
+    let weapon = equipped_weapon(state)?;
     let capacity = crate::weapons::clip_capacity(weapon);
     if capacity <= 1 {
         return None;
@@ -524,8 +531,7 @@ fn player_section(state: &GameState, text: &crate::text::Text, input: &InputStat
         ),
     );
 
-    let weapon = state.equipped_weapon_id;
-    if weapon != 0 && crate::weapons::is_weapon(weapon) {
+    if let Some(weapon) = equipped_weapon(state) {
         let name = text
             .item_name(u16::from(weapon))
             .map(|bytes| text.decode(bytes))
@@ -640,7 +646,14 @@ mod tests {
     #[test]
     fn the_ammo_ignores_the_volley_latch() {
         let mut state = GameState::default();
+        assert_eq!(ammo(&state), None, "nothing equipped");
         state.equipped_weapon_id = 2;
+        state.inventory = vec![crate::game::InventoryItem {
+            id: 2,
+            quantity: 15,
+        }];
+        assert_eq!(ammo(&state), None, "a weapon held but not equipped");
+        state.equipped = Some(2);
         state.inventory = vec![crate::game::InventoryItem {
             id: 2,
             quantity: 0x80 | 14,
