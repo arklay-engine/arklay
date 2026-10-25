@@ -47,10 +47,16 @@ fn room_scripts(root: &Path, room: &str) -> Scripts {
 }
 
 /// A fresh state with the room's init script run, the way the engine boots it.
+fn game_state(id: RoomId) -> GameState {
+    let mut game = GameState::new(id, &RoomState::default());
+    game.music = arklay::music::load_builtin();
+    game
+}
+
 fn init_room(root: &Path, room: &str) -> GameState {
     let scripts = room_scripts(root, room);
     let id = RoomId::parse(room).unwrap();
-    let mut game = GameState::new(id, &RoomState::default());
+    let mut game = game_state(id);
     let mut vm = CommandVm::new(&scripts);
     let mut host = ScdGameHost::new(&mut game);
     vm.run_init(&mut host);
@@ -191,7 +197,7 @@ fn room_1000_stalls_on_f7_while_a_line_plays() {
 
     // The scripted run: the first voice_play raises the wait bit, and the F7 that
     // follows must hold until the engine clears it.
-    let mut game = GameState::new(id, &RoomState::default());
+    let mut game = game_state(id);
     {
         let mut vm = CommandVm::new(&scripts);
         let mut host = ScdGameHost::new(&mut game);
@@ -272,7 +278,7 @@ fn a_voice_less_run_advances_past_the_first_wait() {
     };
     let scripts = room_scripts(&root, "1000");
     let id = RoomId::parse("1000").unwrap();
-    let mut game = GameState::new(id, &RoomState::default());
+    let mut game = game_state(id);
     {
         let mut vm = CommandVm::new(&scripts);
         let mut host = ScdGameHost::new(&mut game);
@@ -315,21 +321,24 @@ fn the_courtyard_group_loads_v110_00_as_the_third_channel() {
         return;
     };
     let chris = RoomId::parse("3070").unwrap();
-    let mut game = GameState::new(chris, &RoomState::default());
+    let mut game = game_state(chris);
     // The room's own table row points at group 0x26 for entry 0.
     game.room_bgm[2 * 32 + 0x07] = 0x08;
     bgm::update_room_bgm(&mut game, chris, None);
-    assert_eq!(game.bgm.channels[0].name, Some("Se_44"));
-    assert_eq!(game.bgm.channels[1].name, Some("Bgm_3a"));
-    assert!(game.bgm.channels[2].name.is_none(), "Chris drops channel 3");
+    assert_eq!(game.bgm.channels[0].track, Some(0x109));
+    assert_eq!(game.bgm.channels[1].track, Some(0x03a));
+    assert!(
+        game.bgm.channels[2].track.is_none(),
+        "Chris drops channel 3"
+    );
 
     let jill = RoomId::parse("3071").unwrap();
-    let mut game = GameState::new(jill, &RoomState::default());
+    let mut game = game_state(jill);
     game.room_bgm[2 * 32 + 0x07] = 0x08;
     game.flags[1].apply(0x48, 0);
     game.flags[1].apply(0x5C, 0);
     bgm::update_room_bgm(&mut game, jill, None);
-    assert_eq!(game.bgm.channels[2].name, Some("V110_00"));
+    assert_eq!(game.bgm.channels[2].track, Some(0x118));
     assert!(!game.bgm.channels[2].looping);
     assert!(game.bgm.channels[2].pending_load);
 }
@@ -342,12 +351,12 @@ fn rooms_1000_and_1001_share_the_bgm_group_without_a_restart() {
     };
     let chris = RoomId::parse("1000").unwrap();
     let jill = RoomId::parse("1001").unwrap();
-    let mut game = GameState::new(chris, &RoomState::default());
+    let mut game = game_state(chris);
     // Both variants share room 0's row; a type-0 state on group entry 0 is
     // Bgm_13. Once loaded, crossing to the sibling variant keeps the bank.
     game.room_bgm[0] = 0x08;
     bgm::update_room_bgm(&mut game, chris, None);
-    assert_eq!(game.bgm.channels[0].name, Some("Bgm_13"));
+    assert_eq!(game.bgm.channels[0].track, Some(0x013));
     assert!(game.bgm.channels[0].pending_load);
     // Simulate the engine having loaded and started the bank.
     game.bgm.channels[0].pending_load = false;
@@ -355,7 +364,7 @@ fn rooms_1000_and_1001_share_the_bgm_group_without_a_restart() {
 
     bgm::update_room_bgm(&mut game, jill, Some(chris));
     assert_eq!(game.bgm.state, 0x08);
-    assert_eq!(game.bgm.channels[0].name, Some("Bgm_13"));
+    assert_eq!(game.bgm.channels[0].track, Some(0x013));
     assert!(
         !game.bgm.channels[0].pending_load,
         "the same group does not reload the bank"
@@ -371,7 +380,7 @@ fn room_10f_toggles_its_scripted_bgm_channels() {
     };
     let scripts = room_scripts(&root, "10F0");
     let id = RoomId::parse("10F0").unwrap();
-    let mut game = GameState::new(id, &RoomState::default());
+    let mut game = game_state(id);
     {
         let mut vm = CommandVm::new(&scripts);
         let mut host = ScdGameHost::new(&mut game);
@@ -443,7 +452,7 @@ fn a_save_after_room_bgm_state_set_reloads_the_modified_table() {
     // what the save captures, not the shipped constant at that slot.
     let game = init_room(&root, "1001");
     assert_eq!(game.room_bgm[0], 9, "the init script's write is live");
-    assert_ne!(game.room_bgm[0], arklay::music::ROOM_STATE[0]);
+    assert_ne!(game.room_bgm[0], 0x40);
 
     let file = SaveFile::from_state(&game);
     assert_eq!(file.room_bgm[0], 9);
@@ -664,7 +673,7 @@ fn room_105s_3d_se_sites_resolve_through_the_room_and_character_banks() {
     };
     let scripts = room_scripts(&root, "1051");
     let id = RoomId::parse("1051").unwrap();
-    let mut game = GameState::new(id, &RoomState::default());
+    let mut game = game_state(id);
     {
         let mut host = ScdGameHost::new(&mut game);
         let op = command_op(0x17).unwrap();
@@ -752,7 +761,8 @@ fn room_1050s_muted_seed_fades_up_on_the_scripted_volume() {
     };
     let scripts = room_scripts(&root, "1050");
     let id = RoomId::parse("1050").unwrap();
-    let mut game = GameState::new(id, &RoomState::default());
+    let mut game = game_state(id);
+    game.room_bgm[usize::from(id.stage - 1) * 32 + usize::from(id.room)] = 0x10;
     {
         let mut vm = CommandVm::new(&scripts);
         let mut host = ScdGameHost::new(&mut game);
@@ -760,8 +770,8 @@ fn room_1050s_muted_seed_fades_up_on_the_scripted_volume() {
     }
     bgm::update_room_bgm(&mut game, id, None);
     assert_eq!(
-        game.bgm.channels[1].name,
-        Some("Se_01"),
+        game.bgm.channels[1].track,
+        Some(0x101),
         "room 1050's group loads the muted seed on channel 1"
     );
     assert_eq!(game.bgm.channels[1].volume, -9999);
@@ -799,7 +809,8 @@ fn room_3030s_fade_and_pan_volume_move_the_channel_gains() {
     let pack = Pack::open(&pack_path).unwrap();
     let scripts = room_scripts(&root, "3030");
     let id = RoomId::parse("3030").unwrap();
-    let mut game = GameState::new(id, &RoomState::default());
+    let mut game = game_state(id);
+    game.room_bgm[usize::from(id.stage - 1) * 32 + usize::from(id.room)] = 0x08;
     {
         let mut vm = CommandVm::new(&scripts);
         let mut host = ScdGameHost::new(&mut game);
@@ -807,7 +818,7 @@ fn room_3030s_fade_and_pan_volume_move_the_channel_gains() {
     }
     bgm::update_room_bgm(&mut game, id, None);
     assert!(
-        game.bgm.channels[0].name.is_some(),
+        game.bgm.channels[0].track.is_some(),
         "room 3030 loads its first BGM bank"
     );
 
@@ -855,7 +866,7 @@ fn room_3030s_fade_and_pan_volume_move_the_channel_gains() {
     // its channel's bank was torn down.
     let index = usize::from(game.bgm.ramp.channel);
     let ramp_done =
-        !game.bgm.ramp.active() || index >= 3 || game.bgm.channels[index].name.is_none();
+        !game.bgm.ramp.active() || index >= 3 || game.bgm.channels[index].track.is_none();
     assert!(
         ramp_done,
         "the scripted ramp finishes or its bank is destroyed"
@@ -872,14 +883,8 @@ fn the_room_and_character_names_are_packed() {
     let names = character_sfx_names();
     assert_eq!(names.len(), 31, "the character tables name 31 sounds");
     let mut missing = Vec::new();
-    // Every named sound the room tables and the shared tables reference: the
-    // full per-room table, the character table and the BGM group tracks.
-    for name in sfx::SE_NAMES
-        .iter()
-        .copied()
-        .chain(names.iter().copied())
-        .chain(arklay::music::se_track_names())
-    {
+    // Every named sound the room tables and the shared tables reference.
+    for name in sfx::SE_NAMES.iter().copied().chain(names.iter().copied()) {
         let path = format!("se/{}.wav", name.to_ascii_lowercase());
         if !pack.contains(&path) {
             missing.push(path);
@@ -891,9 +896,13 @@ fn the_room_and_character_names_are_packed() {
     );
     assert_eq!(
         pack.paths().filter(|path| path.starts_with("se/")).count(),
-        sfx::SE_NAMES.len() + arklay::music::se_track_names().len(),
-        "the pack carries every named effect and BGM group track"
+        sfx::SE_NAMES.len(),
+        "the pack carries every named effect"
     );
+    for &(id, _) in arklay::music::MUSIC_TRACKS {
+        let path = arklay::music::bgm_entry(id);
+        assert!(pack.contains(&path), "missing music track {path}");
+    }
 }
 
 #[test]
@@ -945,26 +954,25 @@ fn conversion_packs_the_referenced_voice_lines_in_the_single_pack() {
         .exists()
     );
 
-    // The same pack gained the full room-table sound set, the 31 character
-    // SFX and the non-Bgm BGM group tracks (the muted seeds among them).
+    // The same pack gained the full room-table/character sound set and every
+    // numeric BGM group track.
     assert_eq!(
         pack.paths().filter(|path| path.starts_with("se/")).count(),
-        sfx::SE_NAMES.len() + arklay::music::se_track_names().len(),
-        "every named effect and BGM group track is packed"
+        sfx::SE_NAMES.len(),
+        "every named effect is packed"
     );
     let mut se_missing = Vec::new();
-    for name in sfx::SE_NAMES
-        .iter()
-        .copied()
-        .chain(character_sfx_names())
-        .chain(arklay::music::se_track_names())
-    {
+    for name in sfx::SE_NAMES.iter().copied().chain(character_sfx_names()) {
         let path = format!("se/{}.wav", name.to_ascii_lowercase());
         if !pack.contains(&path) {
             se_missing.push(path);
         }
     }
     assert!(se_missing.is_empty(), "missing se entries: {se_missing:?}");
+    for &(id, _) in arklay::music::MUSIC_TRACKS {
+        let path = arklay::music::bgm_entry(id);
+        assert!(pack.contains(&path), "missing music track {path}");
+    }
 
     let _ = fs::remove_file(&out);
 }

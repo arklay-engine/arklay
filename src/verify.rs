@@ -70,8 +70,6 @@ pub enum Format {
     MapTables,
     /// `data/combat.bin`, the shared combat table blob.
     Combat,
-    /// `data/bio_card.dat`, the save prefix.
-    BioCard,
     /// `movie/*.avi`, a film: the shipped Cinepak/PCM or an H.264/AAC
     /// replacement.
     Avi,
@@ -106,7 +104,6 @@ impl Format {
             Self::Language => "language",
             Self::MapTables => "maptables",
             Self::Combat => "combat",
-            Self::BioCard => "biocard",
             Self::Avi => "avi",
             Self::Mp4 => "mp4",
             Self::Lua => "lua",
@@ -144,9 +141,6 @@ pub fn classify(path: &str) -> Format {
     }
     if lower == "data/combat.bin" {
         return Format::Combat;
-    }
-    if lower == "data/bio_card.dat" {
-        return Format::BioCard;
     }
     if lower.starts_with("room/") && lower.ends_with(".rdt") {
         return match lower
@@ -433,15 +427,6 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
         Format::Combat => {
             crate::combat::CombatTables::parse(data)?;
         }
-        Format::BioCard => {
-            if data.len() < crate::save::PREFIX_LEN {
-                bail!(
-                    "bio-card prefix is {} bytes; {} are required",
-                    data.len(),
-                    crate::save::PREFIX_LEN
-                );
-            }
-        }
         Format::Avi => {
             let avi = crate::avi::Avi::parse_any(data.to_vec())?;
             if avi.format().video_codec.eq_ignore_ascii_case(b"cvid") {
@@ -535,7 +520,6 @@ mod tests {
         assert_eq!(classify("Language/JA-JP.TXT"), Format::Language);
         assert_eq!(classify("map/tables.bin"), Format::MapTables);
         assert_eq!(classify("data/combat.bin"), Format::Combat);
-        assert_eq!(classify("data/bio_card.dat"), Format::BioCard);
         assert_eq!(classify("movie/00.avi"), Format::Avi);
         assert_eq!(classify("movie/OJ.mp4"), Format::Mp4);
         assert_eq!(classify("enemy/em13.lua"), Format::Lua);

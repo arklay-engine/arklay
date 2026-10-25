@@ -65,7 +65,7 @@ responsibility.
 | `sfx` | Runtime | Per-room sound-name tables, enemy sound-set resolution and footstep resolution |
 | `voice` | Runtime | Voice pack-entry naming (`voice/<row>_<id>.wav`) and the stage-to-row selector |
 | `voice_table` | Tooling | The shipped per-stage voice-line name tables `convert-game` renames into pack entries |
-| `music` | Runtime | Room BGM tables and track path naming |
+| `music` | Runtime | Room music tables loaded from the pack, track ids and path naming |
 | `movie` | Runtime | The film table, `movie_on` hand-off and the playback session |
 | `ending` | Runtime | Ending-row selection and its film chain |
 | `lua` | Runtime | Sandboxed Lua 5.4 hooks, always compiled in |
@@ -368,7 +368,7 @@ claims about the original.
 | Lua source | `lua::LuaVm::load`, `lua::verify_source` | 16 MiB VM, source-size cap | `lua` unit tests, `fuzz/lua`, `arklay verify` |
 | Map tables | `ui/map.lua` `parse_tables` (size/magic also checked by `arklay verify`) | fixed blob size/magic | `ui::lua_screen` screen tests |
 | Combat tables | `combat::CombatTables::parse` | fixed blob size/magic/version, `MAX_COMBAT_TABLE_BYTES` (64 KiB) | `combat` unit tests, `tests/real/combat_real.rs`, `tests/torture`, `fuzz/combat` |
-| BioCard prefix | `data/bio_card.dat` | 0x200 required | `save` unit tests, `arklay verify` |
+| BioCard prefix | `save::BIOCARD_PREFIX` (hardcoded) | fixed 0x200 constant | `save` unit tests |
 | `roomcut`/`roommask` image | `assets::decode_picture` (`bmp`/`png`/`webp`/`tim`/`pix`) | BMP/TIM/PNG/WebP caps, `MAX_PIXELS` | `arklay verify`, `tests/soak_real.rs`, `tests/real/hd_real.rs` |
 | PNG replacement | `assets::decode_image_bytes("png", ..)` | `MAX_PIXELS` (4096x4096), decoder allocation cap | `assets` unit tests, `tests/torture`, `fuzz/png` |
 | WebP replacement | `assets::decode_image_bytes("webp", ..)` | `MAX_PIXELS`, decoder memory cap | `assets` unit tests, `tests/torture`, `fuzz/webp` |

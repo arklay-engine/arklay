@@ -190,7 +190,7 @@ fn hd_pack_swaps_a_background_a_ui_page_and_a_bgm_track() {
     // The BGM stem resolves to the OGG and decodes to the stream's own 22.05
     // kHz mono 16-bit PCM; dropping the layer gives the shipped WAV back.
     let mut cache = BgmCache::default();
-    let wav = cache.load(&layered, "Bgm_13").expect("the OGG decodes");
+    let wav = cache.load(&layered, 0x013).expect("the OGG decodes");
     assert_eq!(wav.sample_rate, 22050);
     assert_eq!(wav.channels, 1);
     assert_eq!(wav.format, arklay::audio::WavFormat::S16Le);
@@ -200,7 +200,7 @@ fn hd_pack_swaps_a_background_a_ui_page_and_a_bgm_track() {
         "half a second of audio: {samples} samples"
     );
     let mut vanilla_cache = BgmCache::default();
-    let vanilla_wav = vanilla_cache.load(&base, "Bgm_13").expect("the WAV loads");
+    let vanilla_wav = vanilla_cache.load(&base, 0x013).expect("the WAV loads");
     assert_ne!(vanilla_wav.data, wav.data, "the OGG replaced the WAV");
 
     // `arklay verify` on the layered view classifies the replacements by their
