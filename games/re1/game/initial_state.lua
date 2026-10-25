@@ -154,4 +154,3 @@ api:set_flag_bank(7, {
 api:set_state_byte(0x0C, 7)
 api:set_state_byte(0x0D, 240)
 api:set_state_byte(0x0E, 240)
-
