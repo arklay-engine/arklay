@@ -24,7 +24,8 @@
 --
 -- The model renders with the viewer's three fixed lights over a dim
 -- ambient. The intro ramps the lights up from black and the exit ramps them
--- back down; the screen itself never fades. While the model rests,
+-- back down; the screen itself never fades, but the viewport behind the
+-- model ramps from black to navy and back with them. While the model rests,
 -- left/right turn it about the screen's vertical axis and up/down tip it,
 -- `0x20` 12-bit units per 30 Hz frame while the key is held.
 
@@ -71,12 +72,13 @@ local ITEM_NAME_Y = 0xBA
 -- model is drawn behind the frame, so nothing of it shows past the frame's
 -- inner edge.
 local VIEWPORT = { 32, 24, 160, 104 }
--- The standalone viewer's navy backdrop behind the examine model, `{r, g, b}`
--- (Classic REbirth shows srgb(0, 0, 32) there while the viewer is up). The
--- viewer opened over the pause menu is an overlay on the panel's black
--- instead: the reference's radio/CHECK view draws the same model, but its
--- viewport is black there.
-local BACKDROP = { 0, 0, 0x20 }
+-- The navy backdrop's blue behind the resting model (Classic REbirth shows
+-- srgb(0, 0, 32) there while the viewer is up). It is the menu screen's
+-- clear colour `(0, 0, g_spriteAnimB)`, which the viewer animates in every
+-- mode: the intro ramps the blue up as `0x20 - (timer >> 1)` and the exit
+-- back down as `timer >> 1`. The screen publishes it as `backdrop` for the
+-- inventory panel under it, which clears to it behind its masks.
+local BACKDROP_BLUE = 0x20
 -- The red book, the second doom book and the medal the first one becomes.
 local ITEM_RED_BOOK = 0x3E
 local ITEM_DOOM_BOOK_2 = 0x3F
@@ -150,6 +152,7 @@ local function step_intro()
     s.roll = s.roll + INTRO_ROLL_STEP
     s.timer = s.timer - 1
     s.light = (0xFF - (s.timer << 2)) & 0xFF
+    s.backdrop = BACKDROP_BLUE - (s.timer >> 1)
     mask_angles()
     latch_render()
     if s.timer > 0 then
@@ -166,6 +169,7 @@ local function step_out()
     s.yaw = s.yaw - INTRO_YAW_STEP
     s.roll = s.roll - INTRO_ROLL_STEP
     s.light = ((s.timer << 2) - 1) & 0xFF
+    s.backdrop = s.timer >> 1
     mask_angles()
 end
 
@@ -336,13 +340,13 @@ local function publish(api)
     api:set("item", s.item)
     api:set("ready", s.stage == "display" and s.action == "turn")
     api:set("settled", s.settled)
+    api:set("backdrop", s.backdrop)
 end
 
 function M.open(api, args)
     s.item = args.item or 0
     s.quantity = args.quantity or 0
     s.pickup = args.pickup or false
-    s.menu = args.menu or false
     -- The examine viewer draws on black, so a wider aspect gives it a wider
     -- canvas; the pickup viewer draws in the inventory panel, which asks for
     -- the canvas itself.
@@ -356,6 +360,7 @@ function M.open(api, args)
     s.obj0_sca = nil
     s.obj0_draw = nil
     s.light = 0
+    s.backdrop = 0
     s.held = {}
     s.arrows = false
     s.show_name = false
@@ -412,10 +417,8 @@ local function draw_model(api)
     for index, pos in ipairs(LIGHTS) do
         sources[index] = { pos = pos, color = { s.light, s.light, s.light } }
     end
-    if not s.pickup then
-        local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
-        api:clip(ox + VIEWPORT[1], oy + VIEWPORT[2], VIEWPORT[3], VIEWPORT[4])
-    end
+    local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
+    api:clip(ox + VIEWPORT[1], oy + VIEWPORT[2], VIEWPORT[3], VIEWPORT[4])
     api:draw_ivm(s.model, {
         joints = { root },
         objects = objects,
@@ -427,10 +430,12 @@ end
 
 function M.draw(api)
     local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
-    if not s.pickup and s.stage ~= "setup" and s.stage ~= "closed" then
-        local backdrop = s.menu and { 0, 0, 0 } or BACKDROP
+    -- The pick-up viewer draws over the inventory panel like the examine
+    -- one: the model goes behind the frame over the viewport's backdrop,
+    -- which also lets the GPU renderer draw it at full resolution.
+    if s.stage ~= "setup" and s.stage ~= "closed" then
         api:fill_rect(ox + VIEWPORT[1], oy + VIEWPORT[2], VIEWPORT[3], VIEWPORT[4],
-            backdrop[1], backdrop[2], backdrop[3])
+            0, 0, s.backdrop)
     end
     draw_model(api)
     if s.pickup then
