@@ -51,6 +51,11 @@ quick_turn.description = "Turn 180 degrees in place by pressing Run while walkin
 quick_turn.off = "The original controls."
 quick_turn.on = "Backward + Run turns the character around."
 
+analog_movement.label = "Analog Movement"
+analog_movement.description = "Move in the left stick's direction on screen, like the remake."
+analog_movement.off = "The left stick uses the tank controls."
+analog_movement.on = "The character moves where the left stick points."
+
 tactical_reload.label = "Tactical Reload"
 tactical_reload.description = "Reload a partially loaded weapon without emptying it first."
 tactical_reload.off = "Weapons reload only when empty."

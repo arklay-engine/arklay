@@ -270,6 +270,7 @@ impl AttractState {
                 aim_pressed: false,
                 slow_motion: false,
                 message_blocked: false,
+                analog: None,
             },
             action,
             ui: UiInput::default(),

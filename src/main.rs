@@ -947,6 +947,9 @@ fn main() -> Result<()> {
                     config.game.tactical_reload,
                     tracing || cli.input.is_some(),
                 ),
+                // A scripted run has no stick; keep it off like the other
+                // options so the traces never depend on it.
+                analog_movement: config.game.analog_movement && !(tracing || cli.input.is_some()),
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {
@@ -1034,7 +1037,7 @@ fn main() -> Result<()> {
                     disabled: config.mods.disabled.clone(),
                     order: config.mods.order.clone(),
                 },
-                global_dirs: vec![arklay::config::Config::default_mods_dir()],
+                global_dirs: arklay::config::Config::mod_dirs(),
             };
             let trace_options = arklay::trace::TraceOptions {
                 path: cli.trace.as_deref(),

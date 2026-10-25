@@ -228,10 +228,11 @@ cargo run -- re1.akpak --mod hd.akpak --room 100 --ticks 120 --capture hd.bmp
 # A clean vanilla run: no --mod and no discovery
 cargo run -- re1.akpak --no-mods --room 100
 
-# Every mod in the pack's sibling mods/ and in <config dir>/mods applies
-# automatically. Only top-level *.akpak files and mod directories are
-# candidates; the per-user directory is %APPDATA%\arklay\mods on Windows and
-# <XDG config>/arklay/mods elsewhere. `[mods]` in arklay.toml enables,
+# Every mod the launcher finds applies automatically: the pack's sibling
+# mods/, each data root's mods/ (on Windows %LOCALAPPDATA%\arklay\mods, the
+# roaming %APPDATA%\arklay\mods and the install directory's) and the legacy
+# <config dir>/mods. Only top-level *.akpak files and mod directories are
+# candidates. `[mods]` in arklay.toml enables,
 # disables and orders them by manifest id (see docs/modding.md).
 cargo run -- re1.akpak --room 100
 
@@ -283,6 +284,7 @@ capture still keeps them off so its output is unchanged. The in-game menu
 [game]
 quick_turn = true      # BACKWARD + RUN turns the player 180 degrees
 tactical_reload = true # AIM + RUN reloads the equipped gun
+analog_movement = true # the left stick moves relative to the camera
 ui_font = "modern"     # the menus' face: "modern" or "retro"
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
 button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation", "nintendo"
@@ -315,14 +317,25 @@ fall physics (the shotgun and the two Pythons have no such mesh, and this
 applies to the empty-clip reload too). `--tactical-reload` and
 `--no-tactical-reload` override the setting for one run.
 
-A `--trace` or `--input` run leaves both settings off unless the matching
-positive flag is passed, so existing traces stay byte-identical.
+`analog_movement` is the port's camera-relative stick movement, like the
+RE1 remake's alternate controls: pushing the gamepad's left stick moves the
+player toward that direction on screen, turning quickly toward it (a
+reversal takes four ticks). A full push runs and a partial push walks
+(holding RUN runs either way). A push held across a camera cut keeps
+steering by the previous camera until the stick turns away from it, so the
+walk does not double back over the cut line. The keyboard and the D-pad keep
+the tank controls, and aiming and the menus still read the stick as
+directions. Turn it off for tank controls on the stick too.
+
+A `--trace` or `--input` run leaves quick turn and tactical reload off
+unless the matching positive flag is passed, and always leaves
+`analog_movement` off, so existing traces stay byte-identical.
 
 ### Controls
 
 | Key | Gamepad | Action |
 | --- | --- | --- |
-| Arrow keys | D-pad, left stick | Move / menu selection |
+| Arrow keys | D-pad, left stick | Move (tank controls; the left stick moves relative to the camera, see `analog_movement`) / menu selection |
 | `Space`, `Return` | South (A / Cross) | Confirm / action / dismiss a message; skips the loading narration and a letterboxed cutscene |
 | `C` | Left trigger | Aim the equipped weapon (hold) |
 | `Z` | Right trigger | Fire / reload with the weapon aimed |

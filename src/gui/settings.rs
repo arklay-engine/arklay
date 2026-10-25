@@ -189,6 +189,13 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         def(
             text,
+            "analog_movement",
+            CHARACTER,
+            on_off(text, "analog_movement"),
+            i32::from(game_default.analog_movement),
+        ),
+        def(
+            text,
             "tactical_reload",
             AIMING,
             on_off(text, "tactical_reload"),
@@ -407,6 +414,7 @@ pub fn value(id: &str, settings: &Settings) -> i32 {
     match id {
         "quick_turn" => i32::from(settings.game.quick_turn),
         "tactical_reload" => i32::from(settings.game.tactical_reload),
+        "analog_movement" => i32::from(settings.game.analog_movement),
         "fullscreen" => i32::from(graphics.fullscreen),
         "resolution" => resolutions(graphics)
             .iter()
@@ -453,6 +461,7 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
     match id {
         "quick_turn" => settings.game.quick_turn = on,
         "tactical_reload" => settings.game.tactical_reload = on,
+        "analog_movement" => settings.game.analog_movement = on,
         "fullscreen" => graphics.fullscreen = on,
         "resolution" => {
             if let Some(&(width, height)) = resolutions(graphics).get(index) {

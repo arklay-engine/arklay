@@ -50,6 +50,11 @@ quick_turn.description = "Käänny 180 astetta paikallaan painamalla juoksua per
 quick_turn.off = "Alkuperäinen ohjaus."
 quick_turn.on = "Taakse + juoksu kääntää hahmon ympäri."
 
+analog_movement.label = "Analoginen liike"
+analog_movement.description = "Liiku vasemman sauvan suuntaan ruudulla, kuten uusioversiossa."
+analog_movement.off = "Vasen sauva käyttää tankkiohjausta."
+analog_movement.on = "Hahmo liikkuu sinne, minne vasen sauva osoittaa."
+
 tactical_reload.label = "Taktinen lataus"
 tactical_reload.description = "Lataa osittain ladattu ase tyhjentämättä sitä ensin."
 tactical_reload.off = "Aseet ladataan vain tyhjinä."

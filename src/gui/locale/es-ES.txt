@@ -50,6 +50,11 @@ quick_turn.description = "Gira 180 grados en el sitio pulsando Correr mientras c
 quick_turn.off = "Los controles originales."
 quick_turn.on = "Atrás + Correr da la vuelta al personaje."
 
+analog_movement.label = "Movimiento analógico"
+analog_movement.description = "Muévete en la dirección del stick izquierdo en pantalla, como en el remake."
+analog_movement.off = "El stick izquierdo usa el control tipo tanque."
+analog_movement.on = "El personaje se mueve hacia donde apunta el stick izquierdo."
+
 tactical_reload.label = "Recarga táctica"
 tactical_reload.description = "Recarga un arma parcialmente cargada sin vaciarla antes."
 tactical_reload.off = "Las armas solo se recargan cuando están vacías."
