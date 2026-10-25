@@ -50,6 +50,11 @@ quick_turn.description = "Girarsi di 180 gradi sul posto premendo Corsa mentre s
 quick_turn.off = "I comandi originali."
 quick_turn.on = "Indietro + Corsa fa girare il personaggio."
 
+analog_movement.label = "Movimento analogico"
+analog_movement.description = "Muoversi nella direzione della levetta sinistra sullo schermo, come nel remake."
+analog_movement.off = "La levetta sinistra usa i controlli a carro armato."
+analog_movement.on = "Il personaggio si muove dove punta la levetta sinistra."
+
 tactical_reload.label = "Ricarica tattica"
 tactical_reload.description = "Ricaricare un'arma parzialmente carica senza prima svuotarla."
 tactical_reload.off = "Le armi si ricaricano solo quando sono scariche."

@@ -50,6 +50,11 @@ quick_turn.description = "Faire demi-tour sur place en appuyant sur Courir en re
 quick_turn.off = "Les commandes d'origine."
 quick_turn.on = "Reculer + Courir fait faire demi-tour au personnage."
 
+analog_movement.label = "Déplacement analogique"
+analog_movement.description = "Se déplacer dans la direction du stick gauche à l'écran, comme dans le remake."
+analog_movement.off = "Le stick gauche utilise les commandes tank."
+analog_movement.on = "Le personnage va là où pointe le stick gauche."
+
 tactical_reload.label = "Rechargement tactique"
 tactical_reload.description = "Recharger une arme partiellement chargée sans la vider d'abord."
 tactical_reload.off = "Les armes ne se rechargent qu'une fois vides."

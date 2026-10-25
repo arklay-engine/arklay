@@ -27,6 +27,7 @@
 //! [game]
 //! quick_turn = true      # BACKWARD + RUN turns the player 180 degrees
 //! tactical_reload = true # AIM + RUN reloads a partially loaded gun
+//! analog_movement = true # the left stick moves relative to the camera
 //! ui_font = "modern"     # the menus' face: "modern" or "retro"
 //! menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
@@ -211,6 +212,10 @@ pub struct Game {
     /// clip is not full and the matching ammunition item is held. On by
     /// default.
     pub tactical_reload: bool,
+    /// Camera-relative movement on the left analog stick (the RE1 remake's
+    /// alternate controls); the keyboard and the d-pad keep the tank
+    /// controls. On by default.
+    pub analog_movement: bool,
     /// The face the native-resolution menus draw with: `"modern"` (the
     /// default) or `"retro"`.
     pub ui_font: crate::gui::FontFamily,
@@ -236,6 +241,7 @@ impl Default for Game {
         Self {
             quick_turn: true,
             tactical_reload: true,
+            analog_movement: true,
             ui_font: crate::gui::FontFamily::Modern,
             menu_sounds: true,
             button_style: None,
@@ -966,6 +972,13 @@ fn parse_game_line(
                 _ => bail!("line {line}: `tactical_reload` expects true or false"),
             };
         }
+        "analog_movement" => {
+            game.analog_movement = match value {
+                "true" => true,
+                "false" => false,
+                _ => bail!("line {line}: `analog_movement` expects true or false"),
+            };
+        }
         "ui_font" => {
             game.ui_font = match parse_quoted(value, line)?.as_str() {
                 "modern" => crate::gui::FontFamily::Modern,
@@ -1018,6 +1031,9 @@ fn render_game(game: &Game) -> String {
     }
     if game.tactical_reload != defaults.tactical_reload {
         out.push_str(&format!("tactical_reload = {}\n", game.tactical_reload));
+    }
+    if game.analog_movement != defaults.analog_movement {
+        out.push_str(&format!("analog_movement = {}\n", game.analog_movement));
     }
     if game.ui_font != defaults.ui_font {
         let name = match game.ui_font {
@@ -1721,6 +1737,7 @@ mod tests {
         let game = Game {
             quick_turn: true,
             tactical_reload: true,
+            analog_movement: false,
             ui_font: crate::gui::FontFamily::Retro,
             menu_sounds: false,
             button_style: Some(crate::gui::PadStyle::Nintendo),

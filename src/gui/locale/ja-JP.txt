@@ -50,6 +50,11 @@ quick_turn.description = "後退中にダッシュボタンを押すと、その
 quick_turn.off = "オリジナルの操作です。"
 quick_turn.on = "後退＋ダッシュで振り向きます。"
 
+analog_movement.label = "アナログ移動"
+analog_movement.description = "リメイク版のように、左スティックを倒した画面上の方向へ移動します。"
+analog_movement.off = "左スティックはラジコン操作です。"
+analog_movement.on = "左スティックを倒した方向へ移動します。"
+
 tactical_reload.label = "タクティカルリロード"
 tactical_reload.description = "弾が残っている武器を、撃ち切らずにリロードします。"
 tactical_reload.off = "弾切れのときだけリロードします。"

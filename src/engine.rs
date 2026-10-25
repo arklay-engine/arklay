@@ -55,10 +55,10 @@ use sdl3_sys::events::{
 };
 use sdl3_sys::gamepad::{
     SDL_AddGamepadMappingsFromFile, SDL_CloseGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER,
-    SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_NORTH,
-    SDL_GAMEPAD_BUTTON_START, SDL_Gamepad, SDL_GamepadAxis, SDL_GamepadButton, SDL_GamepadType,
-    SDL_GetGamepadAxis, SDL_GetGamepadButton, SDL_GetGamepadTypeForID, SDL_GetGamepads,
-    SDL_OpenGamepad,
+    SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER,
+    SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_START, SDL_Gamepad,
+    SDL_GamepadAxis, SDL_GamepadButton, SDL_GamepadType, SDL_GetGamepadAxis, SDL_GetGamepadButton,
+    SDL_GetGamepadTypeForID, SDL_GetGamepads, SDL_OpenGamepad,
 };
 use sdl3_sys::hints::{SDL_HINT_RENDER_DRIVER, SDL_HINT_VIDEO_DRIVER, SDL_SetHint};
 use sdl3_sys::init::{
@@ -2979,7 +2979,8 @@ impl GameSession {
             || input.run
             || input.action_held
             || input.aim
-            || input.fire;
+            || input.fire
+            || input.analog.is_some();
         if let Some(attract) = self.attract.as_mut() {
             // The playback gate opens when the room-entry fade's accumulator
             // drops below one (the reference's `g_message_flags` bit 0x200),
@@ -3269,6 +3270,11 @@ impl GameSession {
         }
         if self.game.dpad_blanked & 0x8 != 0 {
             input.right = false;
+        }
+        // A still-held blanked direction keeps the stick that drives it off
+        // the player too.
+        if self.game.dpad_blanked != 0 {
+            input.analog = None;
         }
         // The message freeze is applied inside the room tick, at the original's
         // point: the scripts still see the raw pad this frame, and the player's
@@ -9107,6 +9113,7 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
     let mut game = config.game;
     game.quick_turn = app.player_options.quick_turn;
     game.tactical_reload = app.player_options.tactical_reload;
+    game.analog_movement = app.player_options.analog_movement;
     gui::Settings {
         graphics: display.graphics().copied().unwrap_or(config.graphics),
         game,
@@ -9153,6 +9160,7 @@ fn persisted_options(
     let crate::config::Game {
         quick_turn: _,
         tactical_reload: _,
+        analog_movement: _,
         ui_font: _,
         menu_sounds: _,
         button_style: _,
@@ -9169,6 +9177,7 @@ fn persisted_options(
         [
             quick_turn,
             tactical_reload,
+            analog_movement,
             ui_font,
             menu_sounds,
             button_style,
@@ -9236,6 +9245,7 @@ fn apply_menu_settings(
     let graphics = display.graphics().copied().unwrap_or(wanted);
     app.player_options.quick_turn = settings.game.quick_turn;
     app.player_options.tactical_reload = settings.game.tactical_reload;
+    app.player_options.analog_movement = settings.game.analog_movement;
     if let Mode::Play(session) = &mut app.mode {
         session.game.player_options = app.player_options;
     }
@@ -12904,6 +12914,9 @@ struct InputState {
     sources: Vec<(u32, controls::Source)>,
     /// Each open gamepad axis's latched direction, keyed by device and axis.
     axes: HashMap<(u32, i32), i8>,
+    /// Each open gamepad's raw left stick (`x` right, `y` down), for the
+    /// analog movement.
+    sticks: HashMap<u32, [i16; 2]>,
     /// Action bits currently down, for continuous movement.
     held: u32,
     /// Action bits that went down since the last tick; consumed by
@@ -12937,6 +12950,8 @@ const AXIS_PRESS: i16 = 16_000;
 /// The deflection a latched direction holds down to (hysteresis, so a stick
 /// resting near the threshold does not chatter).
 const AXIS_RELEASE: i16 = 12_000;
+/// The left stick's radial dead zone for the analog movement.
+const STICK_DEAD_ZONE: i32 = 12_000;
 
 impl InputState {
     /// A latch resolving through `bindings`.
@@ -13124,6 +13139,11 @@ impl InputState {
 
     /// Latch a gamepad axis reading as a direction press or release.
     fn axis_motion(&mut self, device: u32, axis: i32, value: i16) {
+        if axis == SDL_GAMEPAD_AXIS_LEFTX.0 {
+            self.sticks.entry(device).or_default()[0] = value;
+        } else if axis == SDL_GAMEPAD_AXIS_LEFTY.0 {
+            self.sticks.entry(device).or_default()[1] = value;
+        }
         let state = self.axes.get(&(device, axis)).copied().unwrap_or(0);
         let next = if value >= AXIS_PRESS || (state > 0 && value > AXIS_RELEASE) {
             1
@@ -13148,6 +13168,7 @@ impl InputState {
     fn device_removed(&mut self, device: u32) {
         self.sources.retain(|&(held, _)| held != device);
         self.axes.retain(|&(held, _), _| held != device);
+        self.sticks.remove(&device);
         self.refresh_held();
     }
 
@@ -13156,6 +13177,7 @@ impl InputState {
     fn clear(&mut self) {
         self.sources.clear();
         self.axes.clear();
+        self.sticks.clear();
         self.held = 0;
         self.pressed = 0;
         self.any_pressed = false;
@@ -13202,6 +13224,7 @@ impl InputState {
                 lock_drop: false,
                 slow_motion: false,
                 message_blocked: false,
+                analog: self.stick(),
             },
             action: active & KEY_CONFIRM != 0,
             ui: UiInput {
@@ -13227,6 +13250,15 @@ impl InputState {
         }
     }
 
+    /// The most deflected left stick past the dead zone, if any.
+    fn stick(&self) -> Option<[i16; 2]> {
+        self.sticks
+            .values()
+            .copied()
+            .filter(|&stick| player::stick_deflection(stick) >= i64::from(STICK_DEAD_ZONE).pow(2))
+            .max_by_key(|&stick| player::stick_deflection(stick))
+    }
+
     /// Latch the scripted held word for one tick and consume its edges.
     ///
     /// The word is the full set of keys down during the tick, exactly what the
@@ -13238,6 +13270,8 @@ impl InputState {
         self.held = down;
         self.pressed = edge;
         self.any_pressed = edge != 0;
+        // A scripted word has no stick; this guards a latch that saw one.
+        self.sticks.clear();
         self.tick()
     }
 }
@@ -23774,6 +23808,20 @@ off_0010:
         // The pad's axis state went with it: a fresh push presses again.
         input.axis_motion(7, SDL_GAMEPAD_AXIS_LEFTY.0, i16::MAX);
         assert!(input.tick().ui.down);
+    }
+
+    #[test]
+    fn the_left_stick_reaches_the_player_past_its_dead_zone() {
+        let mut input = InputState::default();
+        input.axis_motion(7, SDL_GAMEPAD_AXIS_LEFTX.0, 9000);
+        input.axis_motion(7, SDL_GAMEPAD_AXIS_LEFTY.0, -9000);
+        assert_eq!(input.tick().player.analog, Some([9000, -9000]));
+        input.axis_motion(7, SDL_GAMEPAD_AXIS_LEFTX.0, 2000);
+        assert_eq!(input.tick().player.analog, None, "inside the dead zone");
+        input.axis_motion(7, SDL_GAMEPAD_AXIS_LEFTX.0, 30000);
+        assert_eq!(input.tick().player.analog, Some([30000, -9000]));
+        input.device_removed(7);
+        assert_eq!(input.tick().player.analog, None, "the pad went with it");
     }
 
     #[test]

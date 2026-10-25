@@ -159,6 +159,11 @@ pub struct Options {
     /// clip is not full and the matching ammunition item is held. Off by
     /// default.
     pub tactical_reload: bool,
+    /// Port-only camera-relative movement on the left analog stick (the
+    /// RE1 remake's alternate controls): the player walks or runs in the
+    /// stick's direction on screen, turning quickly toward it. The keyboard
+    /// and the d-pad keep the tank controls. Off by default.
+    pub analog_movement: bool,
 }
 
 /// Keyboard state for one tick.
@@ -203,7 +208,42 @@ pub struct Input {
     /// idle settle from blending into the breathe loop (the original's
     /// `player_behavior_00_idle` gate).
     pub message_blocked: bool,
+    /// The left analog stick's deflection, SDL's raw axis values (`x` right,
+    /// `y` down), while it is pushed past the dead zone. With
+    /// [`Options::analog_movement`] it replaces the direction keys for the
+    /// free locomotion; the aim, the scripted actions and the menus still
+    /// read the direction bits the stick also latches.
+    pub analog: Option<[i16; 2]>,
 }
+
+/// The camera an analog push is steered relative to.
+///
+/// A camera cut while the stick is held keeps the previous camera's frame, so
+/// a push across a cut line does not flip the walk back over it; the new
+/// camera takes over once the stick turns away from the held direction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnalogHold {
+    /// The camera's look direction as a 12-bit yaw.
+    camera_yaw: u16,
+    /// The stick's on-screen direction when the hold was taken, clockwise
+    /// from up.
+    stick_angle: u16,
+}
+
+/// The analog stick's turn per tick toward its direction (45 degrees): a
+/// reversal takes four ticks, quick enough to feel immediate while still
+/// smoothing the stick's small wobbles.
+const ANALOG_TURN: u16 = 0x200;
+/// How far the stick must turn from the held direction before a new
+/// camera's frame takes over (45 degrees).
+const ANALOG_REFRAME: u16 = 0x200;
+/// A camera counts as changed when its look direction moves more than this.
+const ANALOG_CAMERA_EPSILON: u16 = 0x10;
+/// The stick deflection that runs without the RUN button, like the remake.
+const ANALOG_RUN: i32 = 28_000;
+/// The deflection a run holds down to (hysteresis, so a push resting near
+/// the threshold does not flicker between the run and the walk).
+const ANALOG_RUN_RELEASE: i32 = 24_000;
 
 /// A footstep sound request emitted when a locomotion clip is about to apply
 /// a contact frame.
@@ -650,6 +690,9 @@ pub struct PlayerState {
     sounds: Vec<PlayerSound>,
     /// Footstep events emitted since the last [`PlayerState::take_footsteps`].
     footsteps: Vec<Footstep>,
+    /// The camera the held analog push steers by; `None` while the stick is
+    /// released.
+    pub analog_hold: Option<AnalogHold>,
 }
 
 /// Spawn in the middle of the first walkable zone (or the origin when none).
@@ -718,6 +761,7 @@ pub fn spawn(id: RoomId, room: &RoomState) -> PlayerState {
         stairs_shadow_sample: false,
         sounds: Vec::new(),
         footsteps: Vec::new(),
+        analog_hold: None,
     }
 }
 
@@ -771,6 +815,10 @@ pub fn update_with_options(
     player.input = input;
     player.idle_trace = None;
     player.trace_state = None;
+    // The analog stick's camera-relative target. The hold is refreshed even
+    // on the ticks a locked action or the run's stop owns, so a release there
+    // never leaves an old camera's frame behind.
+    let analog = analog_target(player, room, input, options);
     // The push bit raised by `tick_objects` last tick forces the push
     // behaviour this tick, the original's one-frame hand-off.
     if player.object_push && player.locked == LockedAction::None {
@@ -785,7 +833,7 @@ pub fn update_with_options(
     // The run's stop segment owns the tick until its four decelerating ticks
     // have played; no input cancels it (the original's action_state 3).
     if player.run_stop_ticks != 0 {
-        run_stop_tick(player, room, emd_clips, emw_clips, room_clips);
+        run_stop_tick(player, room, emd_clips, emw_clips, room_clips, analog);
         return;
     }
     // A finished stop hands control back to idle on the next tick, which must
@@ -794,6 +842,30 @@ pub fn update_with_options(
         player.fresh_entry = false;
         player.behavior = BEHAVIOR_ENTRY;
     }
+
+    // The analog push drives forward (a walk, or a run on a full push or
+    // with the modifier) toward the stick's direction, the facing turned
+    // below. The object push probe reads the forward from `player.input`, so
+    // a push toward a box at any screen direction still counts.
+    let input = match (analog, input.analog) {
+        (Some(_), Some(stick)) => {
+            let threshold = if matches!(player.behavior, BEHAVIOR_RUN | BEHAVIOR_RUN_ENTRY) {
+                ANALOG_RUN_RELEASE
+            } else {
+                ANALOG_RUN
+            };
+            Input {
+                up: true,
+                down: false,
+                left: false,
+                right: false,
+                run: input.run || stick_deflection(stick) >= i64::from(threshold).pow(2),
+                ..input
+            }
+        }
+        _ => input,
+    };
+    player.input = input;
 
     // The walk frame the released run handed back to. The release tick drew
     // the run pose (its `Joint_move` ran before the hand-off write); this tick
@@ -915,7 +987,7 @@ pub fn update_with_options(
         && !input.up
     {
         player.run_stop_ticks = RUN_STOP_TICKS;
-        run_stop_tick(player, room, emd_clips, emw_clips, room_clips);
+        run_stop_tick(player, room, emd_clips, emw_clips, room_clips, analog);
         return;
     }
 
@@ -933,9 +1005,12 @@ pub fn update_with_options(
     }
 
     // The stair/ladder climb behaviour locks the facing towards its target;
-    // otherwise the input steers the walk as usual.
+    // otherwise the input steers the walk as usual. The analog stick turns
+    // quickly toward its direction.
     player.angle = if player.stairs.climbing {
         player.stairs.locked_angle & 0x0FFF
+    } else if let Some(target) = analog {
+        turn_toward(player.angle, target, ANALOG_TURN)
     } else {
         turned_angle(player.angle, behavior, input)
     };
@@ -1148,6 +1223,7 @@ fn run_stop_tick(
     emd_clips: &[Clip],
     emw_clips: &[Clip],
     room_clips: &[Clip],
+    analog: Option<u16>,
 ) {
     if player.run_stop_ticks == RUN_STOP_TICKS {
         player.set_clip(ClipSource::Emd, SETTLE_CLIP);
@@ -1166,8 +1242,13 @@ fn run_stop_tick(
     } else {
         Some((0x0D, 3, ticks))
     };
+    // The analog stick steers the stop toward its direction, not by the
+    // direction bits it also latches.
     if !player.stairs.climbing {
-        player.angle = turned_angle(player.angle, BEHAVIOR_RUN, player.input);
+        player.angle = match analog {
+            Some(target) => turn_toward(player.angle, target, ANALOG_TURN),
+            None => turned_angle(player.angle, BEHAVIOR_RUN, player.input),
+        };
     }
     // 16-bit wrap, then the movement reads the *signed* speed: the exit tick
     // is the original's backwards -30 step, not a stopped one.
@@ -2066,6 +2147,76 @@ fn ladder_walk_away_start(player: &mut PlayerState) {
     player.move_speed_current = LADDER_WALK_AWAY_SPEED as u16;
     player.attack_direction = LADDER_WALK_AWAY_TICKS as i8;
     player.set_clip(ClipSource::Emw, WALK_CLIP);
+}
+
+/// The facing the analog stick asks for this tick: the stick's on-screen
+/// direction carried into the world through the held camera, or `None` when
+/// the option is off, the stick is released or the camera looks straight
+/// down (each of which also drops the hold).
+fn analog_target(
+    player: &mut PlayerState,
+    room: &RoomState,
+    input: Input,
+    options: Options,
+) -> Option<u16> {
+    let stick = input.analog.filter(|_| options.analog_movement);
+    let cut = room.cuts.get(room.current_cut);
+    let (Some([x, y]), Some(cut)) = (stick, cut) else {
+        player.analog_hold = None;
+        return None;
+    };
+    let (dx, dz) = (cut.look_at[0] - cut.pos[0], cut.look_at[2] - cut.pos[2]);
+    if dx == 0 && dz == 0 {
+        player.analog_hold = None;
+        return None;
+    }
+    let stick_angle = yaw_units(f64::from(x).atan2(-f64::from(y)));
+    let camera_yaw = yaw_units(f64::from(-dz).atan2(f64::from(dx)));
+    let hold = match player.analog_hold {
+        Some(hold)
+            if angle_distance(hold.camera_yaw, camera_yaw) > ANALOG_CAMERA_EPSILON
+                && angle_distance(hold.stick_angle, stick_angle) <= ANALOG_REFRAME =>
+        {
+            hold
+        }
+        _ => AnalogHold {
+            camera_yaw,
+            stick_angle,
+        },
+    };
+    player.analog_hold = Some(hold);
+    // Screen right is the camera's yaw plus a quarter turn, so the clockwise
+    // stick angle adds straight onto it.
+    Some(hold.camera_yaw.wrapping_add(stick_angle) & 0x0FFF)
+}
+
+/// The squared length of a raw stick reading (`i64`: a corner push of
+/// `-32768` on both axes overflows `i32`).
+pub fn stick_deflection([x, y]: [i16; 2]) -> i64 {
+    i64::from(x).pow(2) + i64::from(y).pow(2)
+}
+
+/// Radians as a 12-bit yaw.
+fn yaw_units(radians: f64) -> u16 {
+    ((radians * (2048.0 / std::f64::consts::PI)).round() as i32 & 0x0FFF) as u16
+}
+
+/// The unsigned distance between two 12-bit yaws, `0..=0x800`.
+fn angle_distance(a: u16, b: u16) -> u16 {
+    let delta = a.wrapping_sub(b) & 0x0FFF;
+    delta.min(0x1000 - delta)
+}
+
+/// Turn `angle` toward `target` by at most `step` the shorter way round.
+fn turn_toward(angle: u16, target: u16, step: u16) -> u16 {
+    let delta = target.wrapping_sub(angle) & 0x0FFF;
+    if delta.min(0x1000 - delta) <= step {
+        target & 0x0FFF
+    } else if delta < 0x800 {
+        angle.wrapping_add(step) & 0x0FFF
+    } else {
+        angle.wrapping_sub(step) & 0x0FFF
+    }
 }
 
 /// The original's `entity_rotate_toward_target` for the ladder approach: turn
@@ -3282,6 +3433,7 @@ mod tests {
             stairs_shadow_sample: false,
             sounds: Vec::new(),
             footsteps: Vec::new(),
+            analog_hold: None,
         }
     }
 
@@ -5994,5 +6146,256 @@ mod tests {
         assert_eq!(quadrant(&collision, 99, 200), 1);
         assert_eq!(quadrant(&collision, 100, 199), 2);
         assert_eq!(quadrant(&collision, 99, 199), 3);
+    }
+
+    /// A room whose cut 0 looks down +Z and cut 1 down +X.
+    fn analog_room() -> RoomState {
+        RoomState {
+            cuts: vec![
+                crate::state::Cut {
+                    pos: [0, 0, -5000],
+                    look_at: [0, 0, 0],
+                    ..Default::default()
+                },
+                crate::state::Cut {
+                    index: 1,
+                    pos: [-5000, 0, 0],
+                    look_at: [0, 0, 0],
+                    ..Default::default()
+                },
+            ],
+            ..RoomState::default()
+        }
+    }
+
+    fn analog_step(player: &mut PlayerState, room: &RoomState, clips: &[Clip], stick: [i16; 2]) {
+        update_with_options(
+            player,
+            room,
+            clips,
+            clips,
+            &[],
+            Input {
+                analog: Some(stick),
+                ..Input::default()
+            },
+            Options {
+                analog_movement: true,
+                ..Options::default()
+            },
+        );
+    }
+
+    #[test]
+    fn a_full_analog_push_runs_and_a_partial_one_walks() {
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        let mut player = player_at(1000, 1000);
+        player.angle = 0xC00;
+        for _ in 0..4 {
+            analog_step(&mut player, &room, &emw, [0, -32767]);
+        }
+        assert_eq!(player.behavior, BEHAVIOR_RUN);
+        // Inside the hysteresis band the run holds.
+        analog_step(&mut player, &room, &emw, [0, -26000]);
+        assert_eq!(player.behavior, BEHAVIOR_RUN);
+
+        let mut player = player_at(1000, 1000);
+        player.angle = 0xC00;
+        for _ in 0..4 {
+            analog_step(&mut player, &room, &emw, [0, -20000]);
+        }
+        assert_eq!(player.behavior, BEHAVIOR_WALK);
+        // The RUN button still runs a partial push.
+        for _ in 0..4 {
+            update_with_options(
+                &mut player,
+                &room,
+                &emw,
+                &emw,
+                &[],
+                Input {
+                    analog: Some([0, -20000]),
+                    run: true,
+                    ..Input::default()
+                },
+                Options {
+                    analog_movement: true,
+                    ..Options::default()
+                },
+            );
+        }
+        assert_eq!(player.behavior, BEHAVIOR_RUN);
+    }
+
+    #[test]
+    fn analog_stick_walks_toward_its_direction_on_screen() {
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        // Up on the stick is away from the camera (+Z), right is screen right
+        // (+X); the facing turns there and the walk follows it.
+        for (stick, angle, axis) in [([0, -20000], 0xC00, 2), ([20000, 0], 0, 0)] {
+            let mut player = player_at(1000, 1000);
+            player.angle = 0x800;
+            for _ in 0..20 {
+                analog_step(&mut player, &room, &emw, stick);
+            }
+            assert_eq!(player.angle, angle, "{stick:?}");
+            assert_eq!(player.behavior, BEHAVIOR_WALK, "{stick:?}");
+            assert!(
+                player.pos[axis] > 1000 + 200,
+                "{stick:?} moved {:?}",
+                player.pos
+            );
+        }
+    }
+
+    #[test]
+    fn analog_reversal_turns_by_the_capped_step() {
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        let mut player = player_at(1000, 1000);
+        player.angle = 0x400;
+        let ticks = 0x800u16.div_ceil(ANALOG_TURN);
+        for tick in 1..ticks {
+            analog_step(&mut player, &room, &emw, [0, -20000]);
+            assert_eq!(
+                angle_distance(player.angle, 0x400),
+                ANALOG_TURN * tick,
+                "tick {tick}"
+            );
+        }
+        analog_step(&mut player, &room, &emw, [0, -20000]);
+        assert_eq!(player.angle, 0xC00);
+    }
+
+    #[test]
+    fn turn_toward_snaps_inside_a_step_and_wraps() {
+        assert_eq!(turn_toward(0, 0x80, 0x100), 0x80);
+        assert_eq!(turn_toward(0, 0x300, 0x100), 0x100);
+        assert_eq!(turn_toward(0, 0xD00, 0x100), 0xF00);
+        assert_eq!(turn_toward(0xF80, 0x40, 0x100), 0x40);
+    }
+
+    #[test]
+    fn analog_push_keeps_the_previous_camera_across_a_cut() {
+        let mut room = analog_room();
+        let (_, emw) = shipped_clips();
+        let mut player = player_at(1000, 1000);
+        player.angle = 0xC00;
+        analog_step(&mut player, &room, &emw, [0, -32767]);
+        assert_eq!(player.angle, 0xC00);
+
+        // The cut flips to the +X camera; the held push still walks +Z.
+        room.current_cut = 1;
+        for _ in 0..4 {
+            analog_step(&mut player, &room, &emw, [3000, -32767]);
+            assert_eq!(player.angle, 0xC00 + yaw_units(3000f64.atan2(32767.0)));
+        }
+        // Turning the stick right reframes on the new camera: screen right of
+        // a +X look is -Z.
+        for _ in 0..12 {
+            analog_step(&mut player, &room, &emw, [32767, 0]);
+        }
+        assert_eq!(player.angle, 0x400);
+        // A release drops the hold.
+        update_with_options(
+            &mut player,
+            &room,
+            &emw,
+            &emw,
+            &[],
+            Input::default(),
+            Options {
+                analog_movement: true,
+                ..Options::default()
+            },
+        );
+        assert_eq!(player.analog_hold, None);
+    }
+
+    #[test]
+    fn a_corner_push_does_not_overflow_the_deflection() {
+        assert_eq!(stick_deflection([-32768, -32768]), 2 * 32768 * 32768);
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        let mut player = player_at(1000, 1000);
+        analog_step(&mut player, &room, &emw, [-32768, -32768]);
+        assert!(player.input.run, "a corner push is a full push");
+    }
+
+    #[test]
+    fn a_sideways_analog_push_counts_as_forward_for_the_push_probe() {
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        let mut player = player_at(1000, 1000);
+        analog_step(&mut player, &room, &emw, [20000, 0]);
+        assert!(player.input.up && !player.input.right);
+    }
+
+    #[test]
+    fn the_run_stop_steers_by_the_stick_and_drops_a_released_hold() {
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        let mut player = player_at(1000, 1000);
+        player.angle = 0xC00;
+        for _ in 0..4 {
+            analog_step(&mut player, &room, &emw, [0, -32767]);
+        }
+        assert_eq!(player.behavior, BEHAVIOR_RUN);
+        // A release opens the stop and drops the hold.
+        update_with_options(
+            &mut player,
+            &room,
+            &emw,
+            &emw,
+            &[],
+            Input::default(),
+            Options {
+                analog_movement: true,
+                ..Options::default()
+            },
+        );
+        assert_ne!(player.run_stop_ticks, 0);
+        assert_eq!(player.analog_hold, None);
+        // A stick pushed right during the stop turns toward +X, not by the
+        // tank run turn.
+        let before = player.angle;
+        update_with_options(
+            &mut player,
+            &room,
+            &emw,
+            &emw,
+            &[],
+            Input {
+                analog: Some([20000, 0]),
+                right: true,
+                ..Input::default()
+            },
+            Options {
+                analog_movement: true,
+                ..Options::default()
+            },
+        );
+        assert_eq!(player.angle, turn_toward(before, 0, ANALOG_TURN));
+    }
+
+    #[test]
+    fn analog_stick_is_ignored_with_the_option_off() {
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        let mut player = player_at(1000, 1000);
+        step(
+            &mut player,
+            &room,
+            &emw,
+            Input {
+                analog: Some([0, -32767]),
+                ..Input::default()
+            },
+        );
+        assert_eq!(player.behavior, BEHAVIOR_IDLE);
+        assert_eq!(player.pos, [1000, 0, 1000]);
+        assert_eq!(player.analog_hold, None);
     }
 }

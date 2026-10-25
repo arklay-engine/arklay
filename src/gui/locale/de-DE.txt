@@ -50,6 +50,11 @@ quick_turn.description = "Beim Rückwärtsgehen mit Rennen auf der Stelle um 180
 quick_turn.off = "Die ursprüngliche Steuerung."
 quick_turn.on = "Rückwärts + Rennen dreht die Figur um."
 
+analog_movement.label = "Analoge Bewegung"
+analog_movement.description = "Sich in die Richtung des linken Sticks auf dem Bildschirm bewegen, wie im Remake."
+analog_movement.off = "Der linke Stick nutzt die Panzersteuerung."
+analog_movement.on = "Die Figur läuft dorthin, wohin der linke Stick zeigt."
+
 tactical_reload.label = "Taktisches Nachladen"
 tactical_reload.description = "Eine teilweise geladene Waffe nachladen, ohne sie zuerst leer zu schießen."
 tactical_reload.off = "Waffen werden nur leer nachgeladen."

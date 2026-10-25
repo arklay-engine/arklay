@@ -50,6 +50,11 @@ quick_turn.description = "Разворот на 180 градусов на мес
 quick_turn.off = "Оригинальное управление."
 quick_turn.on = "Назад + бег разворачивает персонажа."
 
+analog_movement.label = "Аналоговое движение"
+analog_movement.description = "Движение в направлении левого стика на экране, как в ремейке."
+analog_movement.off = "Левый стик использует танковое управление."
+analog_movement.on = "Персонаж идёт туда, куда указывает левый стик."
+
 tactical_reload.label = "Тактическая перезарядка"
 tactical_reload.description = "Перезарядка частично заряженного оружия без опустошения магазина."
 tactical_reload.off = "Оружие перезаряжается только пустым."

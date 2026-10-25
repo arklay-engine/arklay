@@ -756,6 +756,11 @@ pub fn update(
     input: Input,
 ) {
     player.input = input;
+    // A stick released while the weapon machine owns the tick drops the
+    // analog camera hold, exactly like a release during the locomotion.
+    if input.analog.is_none() {
+        player.analog_hold = None;
+    }
     if player.weapon.behavior == 0 {
         if !try_enter(game, player, clips) {
             crate::player::update_with_options(
