@@ -440,8 +440,10 @@ override them.
 Left out: the CR runtime and its configuration (`.dll`, `.exe`, `.asi`, `.ini`,
 `.conf`, `.cfg`, `.txt`, logs), `savedata/`, the Director's Cut `_bio1dc/`
 textures, BioRand's `biorand.dat`, and every converted file identical to the
-base pack's entry. Files the engine cannot use yet (BioRand's `bgm_tbl.xml` and
-room sound `tables/`) and files no entry reads are listed as warnings.
+base pack's entry. BioRand's room sound `tables/` are skipped because each
+enemy carries its own sounds, so those tables are no longer needed. Files the
+engine cannot use yet (BioRand's `bgm_tbl.xml`) and files no entry reads are
+listed as warnings.
 
 The base pack (`--base`, else `games/re1.akpak` under the data roots) decides
 the stage 6/7 copies and the unchanged-file pruning; without one both are

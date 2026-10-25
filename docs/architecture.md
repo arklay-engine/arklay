@@ -62,7 +62,7 @@ responsibility.
 | `config` | Runtime | The user configuration file (`arklay.toml`): `save_dir`, `language`, `[bindings]`, `[game]`, `[graphics]` and `[mods]`; the default `<config dir>/save` and `<config dir>/mods` locations |
 | `audio` | Runtime | WAV parsing and the single SDL3 software mixer used for SE, voice, BGM and film audio |
 | `bgm` | Runtime | The three-channel music state machine, ramps and channel hand-off |
-| `sfx` | Runtime | Per-room sound-name tables and footstep resolution |
+| `sfx` | Runtime | Per-room sound-name tables, enemy sound-set resolution and footstep resolution |
 | `voice` | Runtime | Voice pack-entry naming (`voice/<row>_<id>.wav`) and the stage-to-row selector |
 | `voice_table` | Tooling | The shipped per-stage voice-line name tables `convert-game` renames into pack entries |
 | `music` | Runtime | Room BGM tables and track path naming |

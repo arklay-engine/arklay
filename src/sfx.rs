@@ -5,6 +5,12 @@
 //! slot: the footstep window (columns 36..=47), the enemy-AI columns the
 //! entity sounds index and the item/UI columns the scripts address directly.
 //!
+//! Enemy cues are named per enemy instead: each script declares its sound set
+//! (and the sets it inherits through `sounds`), and [`enemy_sound_stems`]
+//! resolves a slot to `enemy/<set>_<slot>.wav`, with an optional style
+//! variant. The room table's enemy-AI columns are only what the converter
+//! reads to choose each enemy's default set.
+//!
 //! A footstep zone (parsed from the RDT's `.flr` table) packs a surface type
 //! in the high byte of its lookup result and a sound offset in the low byte.
 //! The offset plus the entity sound type names the column inside the room row.
