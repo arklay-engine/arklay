@@ -260,6 +260,14 @@ pub struct GpuRenderer {
     ui_size: (u32, u32),
     /// Whether the present being recorded draws `ui_texture`.
     ui_shown: bool,
+    /// The native-resolution GUI layer ([`crate::gui::Canvas`]), drawn
+    /// one-to-one over the whole window above everything else.
+    native_texture: *mut SDL_GPUTexture,
+    native_size: (u32, u32),
+    /// The [`crate::gui::Canvas::serial`] `native_texture` holds.
+    native_serial: u64,
+    /// Whether the next present draws `native_texture`.
+    native_shown: bool,
     sprite_buffer: *mut SDL_GPUBuffer,
     sprite_capacity: u32,
     /// The scene with a frame's 2D replacements drawn over it
@@ -436,6 +444,10 @@ impl GpuRenderer {
             ui_texture: std::ptr::null_mut(),
             ui_size: (0, 0),
             ui_shown: false,
+            native_texture: std::ptr::null_mut(),
+            native_size: (0, 0),
+            native_serial: 0,
+            native_shown: false,
             sprite_buffer: std::ptr::null_mut(),
             sprite_capacity: 0,
             overlay_target: std::ptr::null_mut(),
@@ -1948,6 +1960,66 @@ impl GpuRenderer {
         Ok(())
     }
 
+    /// Set the native GUI layer the next present draws over the whole
+    /// window, uploading it; `None` draws none.
+    pub fn set_native(&mut self, canvas: Option<&crate::gui::Canvas>) -> Result<()> {
+        self.native_shown = false;
+        let Some(canvas) = canvas else {
+            return Ok(());
+        };
+        let size = (canvas.width, canvas.height);
+        if size.0 == 0
+            || size.1 == 0
+            || size.0 > MAX_SCENE_SIDE
+            || size.1 > MAX_SCENE_SIDE
+            || canvas.rgba.len() != size.0 as usize * size.1 as usize * 4
+        {
+            bail!(
+                "unexpected {}x{} GUI layer of {} bytes",
+                size.0,
+                size.1,
+                canvas.rgba.len()
+            );
+        }
+        if !self.native_texture.is_null()
+            && self.native_size == size
+            && self.native_serial == canvas.serial
+        {
+            // The texture already holds this frame.
+            self.native_shown = true;
+            return Ok(());
+        }
+        if self.native_texture.is_null() || self.native_size != size {
+            if !self.native_texture.is_null() {
+                unsafe { SDL_ReleaseGPUTexture(self.device, self.native_texture) };
+                self.native_texture = std::ptr::null_mut();
+            }
+            self.native_texture = self.texture(
+                SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                size.0,
+                size.1,
+                SDL_GPU_TEXTUREUSAGE_SAMPLER,
+            )?;
+            self.native_size = size;
+        }
+        let command = self.command_buffer()?;
+        let copy = unsafe { SDL_BeginGPUCopyPass(command) };
+        if copy.is_null() {
+            unsafe { SDL_CancelGPUCommandBuffer(command) };
+            bail!("SDL_BeginGPUCopyPass failed: {}", sdl_error());
+        }
+        let uploaded = self.upload_texture(copy, self.native_texture, size.0, size.1, &canvas.rgba);
+        unsafe { SDL_EndGPUCopyPass(copy) };
+        if let Err(err) = uploaded {
+            unsafe { SDL_CancelGPUCommandBuffer(command) };
+            return Err(err);
+        }
+        Self::submit(command)?;
+        self.native_serial = canvas.serial;
+        self.native_shown = true;
+        Ok(())
+    }
+
     /// Upload `ui` into `ui_texture`, recreating it on a size change.
     fn upload_ui(&mut self, ui: &Framebuffer) -> Result<()> {
         let size = (ui.width, ui.height);
@@ -2650,6 +2722,35 @@ impl GpuRenderer {
                         SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
                     }
                 }
+                if self.native_shown && !self.pipelines.ui.is_null() {
+                    // Drawn at the canvas's own size from the top left, so
+                    // a canvas matching the swapchain maps texel for pixel.
+                    let viewport = SDL_GPUViewport {
+                        x: 0.0,
+                        y: 0.0,
+                        w: self.native_size.0 as f32,
+                        h: self.native_size.1 as f32,
+                        min_depth: 0.0,
+                        max_depth: 1.0,
+                    };
+                    let scissor = SDL_Rect {
+                        x: 0,
+                        y: 0,
+                        w: width.min(self.native_size.0) as i32,
+                        h: height.min(self.native_size.1) as i32,
+                    };
+                    let sampler = SDL_GPUTextureSamplerBinding {
+                        texture: self.native_texture,
+                        sampler: self.linear,
+                    };
+                    unsafe {
+                        SDL_BindGPUGraphicsPipeline(pass, self.pipelines.ui);
+                        SDL_SetGPUViewport(pass, &viewport);
+                        SDL_SetGPUScissor(pass, &scissor);
+                        SDL_BindGPUFragmentSamplers(pass, 0, &sampler, 1);
+                        SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+                    }
+                }
                 unsafe { SDL_EndGPURenderPass(pass) };
             }
         }
@@ -2878,6 +2979,7 @@ impl Drop for GpuRenderer {
                 self.layer_black,
                 self.layer_white,
                 self.ui_texture,
+                self.native_texture,
                 self.no_hd,
                 self.no_hd_rows,
                 self.overlay_target,

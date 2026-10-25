@@ -78,6 +78,8 @@ pub struct UiInput {
     /// F9: the in-game return-to-title prompt's edge. A second F9 confirms
     /// the return and any other key cancels.
     pub return_title: bool,
+    /// Escape: opens the native in-game menu during free play.
+    pub system_menu: bool,
     /// Any key went down this tick.
     pub any: bool,
     /// The first bindable input pressed this tick, whatever it is bound to:

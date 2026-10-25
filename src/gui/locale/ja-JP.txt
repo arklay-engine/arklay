@@ -1,0 +1,124 @@
+# ゲーム内メニューとオプション画面の文字列（src/gui/locale.rs を参照）。
+
+menu.restart = "リスタート"
+menu.load_game = "ロード"
+menu.options = "オプション"
+menu.quit = "ゲーム終了"
+menu.restart_question = "前回のセーブからやり直しますか？"
+menu.quit_question = "ゲームを終了してメインメニューに戻りますか？"
+menu.unsaved_note = "（セーブしていないデータは失われます）"
+
+dialog.yes = "はい"
+dialog.no = "いいえ"
+
+hint.select = "決定"
+hint.back = "戻る"
+hint.reset_all = "すべて初期化"
+hint.reset_page = "この項目を初期化"
+
+options.title = "オプション"
+options.reset_all_question = "すべての設定を初期値に戻しますか？"
+options.reset_page_question = "このページの設定を初期値に戻しますか？"
+options.default = "（初期値：{}）"
+
+category.controls = "操作"
+category.graphics = "グラフィック"
+category.audio = "サウンド"
+category.interface = "インターフェース"
+category.language = "言語"
+
+page.basic = "基本設定"
+page.display = "ディスプレイ"
+page.rendering = "描画"
+page.general = "全般"
+page.language = "言語"
+
+group.character_controls = "キャラクター操作"
+group.when_aiming = "構え中"
+group.controller = "コントローラー"
+group.display = "ディスプレイ"
+group.renderer = "レンダラー"
+group.text = "テキスト"
+group.volume = "音量"
+group.menus = "メニュー"
+
+choice.off = "オフ"
+choice.on = "オン"
+
+quick_turn.label = "クイックターン"
+quick_turn.description = "後退中にダッシュボタンを押すと、その場で180度振り向きます。"
+quick_turn.off = "オリジナルの操作です。"
+quick_turn.on = "後退＋ダッシュで振り向きます。"
+
+tactical_reload.label = "タクティカルリロード"
+tactical_reload.description = "弾が残っている武器を、撃ち切らずにリロードします。"
+tactical_reload.off = "弾切れのときだけリロードします。"
+tactical_reload.on = "構え中にダッシュボタンを押し続けるとリロードします。"
+
+button_style.label = "ボタン表示"
+button_style.description = "ヒントに表示するコントローラーのボタンです。"
+button_style.auto = "自動"
+button_style.auto_note = "使用中のコントローラーに合わせます。"
+
+fullscreen.label = "表示モード"
+fullscreen.description = "ウィンドウまたはボーダーレスのフルスクリーンで表示します。Alt+Enter でも切り替えられます。"
+fullscreen.window = "ウィンドウ"
+fullscreen.fullscreen = "フルスクリーン"
+
+resolution.label = "解像度"
+resolution.description = "ゲームウィンドウの大きさです。フルスクリーンではディスプレイの大きさを使います。"
+
+aspect.label = "アスペクト比"
+aspect.description = "画面の縦横比です。横長の比率ではオリジナルの 4:3 の画面を切り取り、プレイヤーを縦方向に追従します。"
+
+vsync.label = "垂直同期"
+vsync.description = "ディスプレイの更新を待ってから各フレームを表示します。"
+vsync.off = "遅延が少なくなりますが、画面が乱れることがあります。"
+vsync.on = "画面が乱れません。フレームはディスプレイを待ちます。"
+
+frame_rate.label = "フレームレート"
+frame_rate.description = "1秒間に表示するフレーム数です。ゲーム自体は常に毎秒30回更新され、高いレートではその間の動きが滑らかになります。"
+frame_rate.value = "{} FPS"
+
+renderer.label = "レンダラー"
+renderer.description = "ゲームの描画方法です。"
+renderer.software = "ソフトウェア"
+renderer.software_note = "オリジナルの 320x240 の画面を拡大します。"
+renderer.gpu = "GPU"
+renderer.gpu_note = "モデルをディスプレイの解像度で描画し、HD素材を使用します。"
+
+render_scale.label = "描画スケール"
+render_scale.description = "3Dモデルを描画する解像度（画面に対する割合）です。GPUレンダラーのみ。"
+
+msaa.label = "アンチエイリアス"
+msaa.description = "3Dモデルの輪郭を滑らかにします。高い設定ほど負荷が増えます。GPUレンダラーのみ。"
+msaa.value = "{}x MSAA"
+
+ui_font.label = "メニューフォント"
+ui_font.description = "このメニューで使う書体です。"
+ui_font.modern = "モダン"
+ui_font.modern_note = "すっきりとしたゴシック体です。"
+ui_font.retro = "レトロ"
+ui_font.retro_note = "オリジナルに合わせたドット書体です。"
+
+music_volume.label = "BGM"
+music_volume.description = "音楽の音量です。"
+
+ambient_volume.label = "環境音"
+ambient_volume.description = "雨や風、機械の音など、音楽以外の背景音の音量です。"
+
+effects_volume.label = "効果音"
+effects_volume.description = "足音、銃声、クリーチャー、ドア、メニューの音の音量です。"
+
+voice_volume.label = "ボイス"
+voice_volume.description = "キャラクターの声の音量です。"
+
+menu_sounds.label = "メニューサウンド"
+menu_sounds.description = "このメニューで移動や決定をしたときに音を鳴らします。"
+menu_sounds.off = "メニューの音を鳴らしません。"
+menu_sounds.on = "カーソル、決定、キャンセルの音を鳴らします。"
+
+language.label = "言語"
+language.description = "ゲームのテキストとこのメニューの言語です。"
+language.system = "システム"
+language.system_note = "システムの言語（{}）に従います。"

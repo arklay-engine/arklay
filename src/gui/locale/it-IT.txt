@@ -1,0 +1,124 @@
+# Testi del menu di gioco e della schermata delle opzioni (vedi src/gui/locale.rs).
+
+menu.restart = "Ricomincia"
+menu.load_game = "Carica partita"
+menu.options = "Opzioni"
+menu.quit = "Esci"
+menu.restart_question = "Ricominciare dall'ultimo salvataggio?"
+menu.quit_question = "Uscire dalla partita e tornare al menu principale?"
+menu.unsaved_note = "(I dati non salvati andranno persi.)"
+
+dialog.yes = "Sì"
+dialog.no = "No"
+
+hint.select = "Seleziona"
+hint.back = "Indietro"
+hint.reset_all = "Ripristina tutto"
+hint.reset_page = "Ripristina pagina"
+
+options.title = "OPZIONI"
+options.reset_all_question = "Ripristinare tutte le opzioni ai valori predefiniti?"
+options.reset_page_question = "Ripristinare le opzioni di questa pagina ai valori predefiniti?"
+options.default = "(Predefinito: {})"
+
+category.controls = "COMANDI"
+category.graphics = "GRAFICA"
+category.audio = "AUDIO"
+category.interface = "INTERFACCIA"
+category.language = "LINGUA"
+
+page.basic = "Impostazioni di base"
+page.display = "Schermo"
+page.rendering = "Rendering"
+page.general = "Generale"
+page.language = "Lingua"
+
+group.character_controls = "Controllo del personaggio"
+group.when_aiming = "Durante la mira"
+group.controller = "Controller"
+group.display = "Schermo"
+group.renderer = "Renderer"
+group.text = "Testo"
+group.volume = "Volume"
+group.menus = "Menu"
+
+choice.off = "No"
+choice.on = "Sì"
+
+quick_turn.label = "Giravolta rapida"
+quick_turn.description = "Girarsi di 180 gradi sul posto premendo Corsa mentre si cammina all'indietro."
+quick_turn.off = "I comandi originali."
+quick_turn.on = "Indietro + Corsa fa girare il personaggio."
+
+tactical_reload.label = "Ricarica tattica"
+tactical_reload.description = "Ricaricare un'arma parzialmente carica senza prima svuotarla."
+tactical_reload.off = "Le armi si ricaricano solo quando sono scariche."
+tactical_reload.on = "Tieni premuto Corsa mentre miri per ricaricare."
+
+button_style.label = "Stile dei tasti"
+button_style.description = "I tasti del controller mostrati nei suggerimenti."
+button_style.auto = "Auto"
+button_style.auto_note = "In base al controller in uso."
+
+fullscreen.label = "Modalità schermo"
+fullscreen.description = "Gioca in finestra o a schermo intero senza bordi. Anche Alt+Invio cambia modalità."
+fullscreen.window = "Finestra"
+fullscreen.fullscreen = "Schermo intero"
+
+resolution.label = "Risoluzione"
+resolution.description = "La dimensione della finestra di gioco. Lo schermo intero usa la dimensione dello schermo."
+
+aspect.label = "Proporzioni"
+aspect.description = "La forma dell'immagine. Le proporzioni più larghe ritagliano l'immagine 4:3 originale e seguono il giocatore in verticale."
+
+vsync.label = "V-Sync"
+vsync.description = "Attende l'aggiornamento dello schermo prima di mostrare ogni fotogramma."
+vsync.off = "Latenza minore; l'immagine può strapparsi."
+vsync.on = "Nessuno strappo; i fotogrammi attendono lo schermo."
+
+frame_rate.label = "Frequenza fotogrammi"
+frame_rate.description = "Fotogrammi mostrati al secondo. Il gioco funziona sempre a 30 aggiornamenti al secondo; frequenze più alte rendono più fluido il movimento tra di essi."
+frame_rate.value = "{} FPS"
+
+renderer.label = "Renderer"
+renderer.description = "Il modo in cui il gioco viene disegnato."
+renderer.software = "Software"
+renderer.software_note = "L'immagine originale 320x240, ingrandita."
+renderer.gpu = "GPU"
+renderer.gpu_note = "Modelli alla risoluzione dello schermo, con sostituzioni HD."
+
+render_scale.label = "Scala di rendering"
+render_scale.description = "La risoluzione dei modelli 3D, in percentuale dello schermo. Solo renderer GPU."
+
+msaa.label = "Anti-aliasing"
+msaa.description = "Ammorbidisce i bordi dei modelli 3D. Le impostazioni più alte sono più pesanti. Solo renderer GPU."
+msaa.value = "MSAA {}x"
+
+ui_font.label = "Carattere dei menu"
+ui_font.description = "Il carattere con cui sono disegnati questi menu."
+ui_font.modern = "Moderno"
+ui_font.modern_note = "Un carattere pulito senza grazie."
+ui_font.retro = "Retrò"
+ui_font.retro_note = "Un carattere pixel in linea con l'originale."
+
+music_volume.label = "Musica"
+music_volume.description = "Il volume della musica."
+
+ambient_volume.label = "Effetti ambientali"
+ambient_volume.description = "Il volume dei suoni di sottofondo che non sono musica: pioggia, vento, macchinari."
+
+effects_volume.label = "Effetti sonori"
+effects_volume.description = "Il volume di passi, spari, creature, porte e dei suoni dei menu."
+
+voice_volume.label = "Voci"
+voice_volume.description = "Il volume delle voci dei personaggi."
+
+menu_sounds.label = "Suoni dei menu"
+menu_sounds.description = "Riproduce suoni quando ci si muove e si sceglie in questi menu."
+menu_sounds.off = "Menu silenziosi."
+menu_sounds.on = "Suoni di cursore, conferma e annullamento."
+
+language.label = "Lingua del testo"
+language.description = "La lingua dei testi del gioco e di questi menu."
+language.system = "Sistema"
+language.system_note = "Segui la lingua del sistema ({})."

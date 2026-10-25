@@ -487,6 +487,7 @@ pub fn apply_live(
                 && let Some(wav) = cache.load(pack, track)
             {
                 mixer.play_bgm_channel(index, wav, bank.looping);
+                mixer.set_bgm_channel_kind(index, music::track_kind(track));
                 mixer.set_bgm_channel_volume(index, sfx::volume_gain(bank.volume));
                 mixer.set_bgm_channel_pan(index, sfx::pan_from_raw(bank.pan));
                 if !enabled {

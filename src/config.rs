@@ -27,6 +27,14 @@
 //! [game]
 //! quick_turn = true      # BACKWARD + RUN turns the player 180 degrees
 //! tactical_reload = true # AIM + RUN reloads a partially loaded gun
+//! ui_font = "modern"     # the menus' face: "modern" or "retro"
+//! menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
+//! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
+//!                        # or "nintendo"
+//! music_volume = 100     # levels in percent (0..100): the music, the
+//! ambient_volume = 100   # ambient loops (rain, machinery), the sound
+//! effects_volume = 100   # effects and the voices
+//! voice_volume = 100
 //!
 //! # The interactive window (see `crate::video`); a key left out keeps its
 //! # default. F8 and Alt+Enter rewrite `fullscreen` and the window size, and
@@ -203,6 +211,24 @@ pub struct Game {
     /// clip is not full and the matching ammunition item is held. On by
     /// default.
     pub tactical_reload: bool,
+    /// The face the native-resolution menus draw with: `"modern"` (the
+    /// default) or `"retro"`.
+    pub ui_font: crate::gui::FontFamily,
+    /// Whether the in-game menu plays its cursor, confirm and cancel sounds.
+    /// On by default.
+    pub menu_sounds: bool,
+    /// The controller glyphs the menus draw; `None` (`"auto"`, the default)
+    /// follows the controller in use.
+    pub button_style: Option<crate::gui::PadStyle>,
+    /// The music's level, 0..=100 percent.
+    pub music_volume: u8,
+    /// The ambient loops' level (rain, machinery: the room tracks that are
+    /// sounds rather than music), 0..=100 percent.
+    pub ambient_volume: u8,
+    /// The sound effects' level, 0..=100 percent.
+    pub effects_volume: u8,
+    /// The voices' level, 0..=100 percent.
+    pub voice_volume: u8,
 }
 
 impl Default for Game {
@@ -210,6 +236,25 @@ impl Default for Game {
         Self {
             quick_turn: true,
             tactical_reload: true,
+            ui_font: crate::gui::FontFamily::Modern,
+            menu_sounds: true,
+            button_style: None,
+            music_volume: 100,
+            ambient_volume: 100,
+            effects_volume: 100,
+            voice_volume: 100,
+        }
+    }
+}
+
+impl Game {
+    /// The volume settings as mixer gains.
+    pub fn volumes(&self) -> crate::audio::Volumes {
+        crate::audio::Volumes {
+            music: crate::audio::percent_gain(self.music_volume),
+            ambient: crate::audio::percent_gain(self.ambient_volume),
+            effects: crate::audio::percent_gain(self.effects_volume),
+            voice: crate::audio::percent_gain(self.voice_volume),
         }
     }
 }
@@ -619,9 +664,13 @@ fn parse_binding_line(
     bound.push(action);
     let mut sources = Vec::new();
     for name in parse_string_array(value, line)? {
-        let source = Source::parse(&name)
+        // An input reserved since the file was written is dropped, not an
+        // error, so the rest of the file still loads and saves.
+        let source = Source::parse_any(&name)
             .with_context(|| format!("line {line}: bad binding for `{key}`"))?;
-        sources.push(source);
+        if source.reserved_bit().is_none() {
+            sources.push(source);
+        }
     }
     if let Some(bindings) = config.bindings.as_mut() {
         bindings.set(action, sources);
@@ -901,6 +950,44 @@ fn parse_game_line(
                 _ => bail!("line {line}: `tactical_reload` expects true or false"),
             };
         }
+        "ui_font" => {
+            game.ui_font = match parse_quoted(value, line)?.as_str() {
+                "modern" => crate::gui::FontFamily::Modern,
+                "retro" => crate::gui::FontFamily::Retro,
+                _ => bail!("line {line}: `ui_font` expects \"modern\" or \"retro\""),
+            };
+        }
+        "menu_sounds" => {
+            game.menu_sounds = match value {
+                "true" => true,
+                "false" => false,
+                _ => bail!("line {line}: `menu_sounds` expects true or false"),
+            };
+        }
+        "button_style" => {
+            game.button_style = match parse_quoted(value, line)?.as_str() {
+                "auto" => None,
+                "xbox" => Some(crate::gui::PadStyle::Xbox),
+                "playstation" => Some(crate::gui::PadStyle::PlayStation),
+                "nintendo" => Some(crate::gui::PadStyle::Nintendo),
+                _ => bail!(
+                    "line {line}: `button_style` expects \"auto\", \"xbox\", \"playstation\" or \"nintendo\""
+                ),
+            };
+        }
+        "music_volume" | "ambient_volume" | "effects_volume" | "voice_volume" => {
+            let volume = value
+                .parse::<u8>()
+                .ok()
+                .filter(|volume| *volume <= 100)
+                .ok_or_else(|| anyhow::anyhow!("line {line}: `{key}` expects 0 to 100"))?;
+            *match key {
+                "music_volume" => &mut game.music_volume,
+                "ambient_volume" => &mut game.ambient_volume,
+                "effects_volume" => &mut game.effects_volume,
+                _ => &mut game.voice_volume,
+            } = volume;
+        }
         other => bail!("line {line}: unknown key `{other}`"),
     }
     Ok(())
@@ -915,6 +1002,43 @@ fn render_game(game: &Game) -> String {
     }
     if game.tactical_reload != defaults.tactical_reload {
         out.push_str(&format!("tactical_reload = {}\n", game.tactical_reload));
+    }
+    if game.ui_font != defaults.ui_font {
+        let name = match game.ui_font {
+            crate::gui::FontFamily::Modern => "modern",
+            crate::gui::FontFamily::Retro => "retro",
+        };
+        out.push_str(&format!("ui_font = \"{name}\"\n"));
+    }
+    if game.menu_sounds != defaults.menu_sounds {
+        out.push_str(&format!("menu_sounds = {}\n", game.menu_sounds));
+    }
+    if game.button_style != defaults.button_style {
+        let name = match game.button_style {
+            None => "auto",
+            Some(crate::gui::PadStyle::Xbox) => "xbox",
+            Some(crate::gui::PadStyle::PlayStation) => "playstation",
+            Some(crate::gui::PadStyle::Nintendo) => "nintendo",
+        };
+        out.push_str(&format!("button_style = \"{name}\"\n"));
+    }
+    for (key, volume, default) in [
+        ("music_volume", game.music_volume, defaults.music_volume),
+        (
+            "ambient_volume",
+            game.ambient_volume,
+            defaults.ambient_volume,
+        ),
+        (
+            "effects_volume",
+            game.effects_volume,
+            defaults.effects_volume,
+        ),
+        ("voice_volume", game.voice_volume, defaults.voice_volume),
+    ] {
+        if volume != default {
+            out.push_str(&format!("{key} = {volume}\n"));
+        }
     }
     out
 }
@@ -1224,7 +1348,6 @@ mod tests {
         for text in [
             "[bindings]\nnope = [\"key:C\"]\n",
             "[bindings]\naim = [\"key:NoSuchKey\"]\n",
-            "[bindings]\naim = [\"key:F1\"]\n",
             "[bindings]\naim = [\"key:C\" \"key:Z\"]\n",
             "[bindings]\naim = [\"key:C\"\n",
             "[bindings]\nsave_dir = \"/tmp\"\n",
@@ -1236,6 +1359,20 @@ mod tests {
         ] {
             assert!(Config::parse(text).is_err(), "{text:?} must be rejected");
         }
+    }
+
+    #[test]
+    fn reserved_inputs_in_old_bindings_are_dropped() {
+        // `pad:start` was bindable before it opened the in-game menu.
+        let config =
+            Config::parse("[bindings]\nstart = [\"key:Tab\", \"pad:start\"]\naim = [\"key:F1\"]\n")
+                .unwrap();
+        let bindings = config.bindings.unwrap();
+        assert_eq!(
+            bindings.get(Action::Start),
+            [Source::parse("key:Tab").unwrap()]
+        );
+        assert!(bindings.get(Action::Aim).is_empty());
     }
 
     #[test]
@@ -1568,6 +1705,13 @@ mod tests {
         let game = Game {
             quick_turn: true,
             tactical_reload: true,
+            ui_font: crate::gui::FontFamily::Retro,
+            menu_sounds: false,
+            button_style: Some(crate::gui::PadStyle::Nintendo),
+            music_volume: 40,
+            ambient_volume: 0,
+            effects_volume: 100,
+            voice_volume: 85,
         };
         Config::save_options(&path, &graphics, Some("ja-JP"), game).unwrap();
         let text = fs::read_to_string(&path).unwrap();

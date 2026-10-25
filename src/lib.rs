@@ -27,6 +27,7 @@ pub mod examine;
 pub mod font;
 pub mod game;
 pub mod gpu;
+pub mod gui;
 pub mod hash;
 #[cfg(feature = "hd")]
 pub mod hdfilm;

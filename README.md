@@ -68,7 +68,9 @@ Data resolves by precedence:
 - `ARKLAY_CONFIG_DIR` relocates configuration and saves
 
 The launcher's text face is [Departure Mono](https://github.com/rektdeckard/departure-mono),
-MIT licensed; the notice is in `assets/DepartureMono-LICENSE`.
+MIT licensed; the notice is in `assets/DepartureMono-LICENSE`. The in-game
+menu's modern face is [Barlow](https://github.com/jpt/barlow), under the SIL
+Open Font License; the notice is in `assets/Barlow-LICENSE`.
 
 ## Usage
 
@@ -272,13 +274,22 @@ would not shrink also stays raw.
 
 ### Gameplay options
 
-`arklay.toml` also reads a `[game]` table of optional behaviours. Both are on
-by default; a trace or capture still keeps them off so its output is unchanged.
+`arklay.toml` also reads a `[game]` table of optional behaviours and the
+in-game menu's options. The two gameplay options are on by default; a trace or
+capture still keeps them off so its output is unchanged. The in-game menu
+(Esc, or the gamepad's Start) edits the same table and writes it back.
 
 ```toml
 [game]
 quick_turn = true      # BACKWARD + RUN turns the player 180 degrees
 tactical_reload = true # AIM + RUN reloads the equipped gun
+ui_font = "modern"     # the menus' face: "modern" or "retro"
+menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
+button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation", "nintendo"
+music_volume = 100     # volumes in percent (0 to 100): music,
+ambient_volume = 100   # ambient loops (rain, machinery),
+effects_volume = 100   # sound effects
+voice_volume = 100     # and voices
 ```
 
 `quick_turn` enables Classic REbirth's quick turn: while walking backward
@@ -315,7 +326,8 @@ positive flag is passed, so existing traces stay byte-identical.
 | `Space`, `Return` | South (A / Cross) | Confirm / action / dismiss a message; skips the loading narration and a letterboxed cutscene |
 | `C` | Left trigger | Aim the equipped weapon (hold) |
 | `Z` | Right trigger | Fire / reload with the weapon aimed |
-| `Tab` | Start | START: open/close the inventory (pause menu), cycle the top tabs |
+| `Tab` | North (Y / Triangle) | START: open/close the inventory (pause menu), cycle the top tabs |
+| `Esc` | Start | Open/close the in-game menu (restart, load game, options, quit) |
 | `[`, `]` | Left / right shoulder | L1/R1: page the item box |
 | `X`, `Backspace`, `Esc` | East (B / Circle) | Cancel (menus, character select, load screen) |
 | `Shift` | West (X / Square) | Run (hold) |
@@ -325,8 +337,8 @@ positive flag is passed, so existing traces stay byte-identical.
 | `F2`, `F3` | Port-only game speed: F2 steps down and F3 up, 1x to 3x in 0.5x steps |
 | `F9` | Return-to-title prompt: a second F9 returns to the title screen, any other key cancels |
 
-Every action except the fixed debug inputs (`F1` and the gamepad's Back
-button, `F9`) can be rebound, with any number of keyboard, mouse (buttons and
+Every action except the fixed inputs (`F1` and the gamepad's Back
+button, `F9`, the gamepad's Start) can be rebound, with any number of keyboard, mouse (buttons and
 wheel) and gamepad bindings each. The CONTROLS tool in the `F1` menu lists the
 actions: up/down pick one, left/right pick a binding slot (the last slot adds
 a new one), confirm captures the next key, button, wheel notch or

@@ -19,18 +19,20 @@
 
 use std::ffi::{CStr, c_int};
 use std::ptr;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use anyhow::{Context, Result, bail};
 use sdl3_sys::audio::{
     SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, SDL_AUDIO_S16LE, SDL_AudioSpec, SDL_AudioStream,
     SDL_ClearAudioStream, SDL_DestroyAudioStream, SDL_GetAudioStreamQueued,
-    SDL_GetCurrentAudioDriver, SDL_OpenAudioDeviceStream, SDL_PutAudioStreamData,
-    SDL_ResumeAudioStreamDevice,
+    SDL_GetCurrentAudioDriver, SDL_OpenAudioDeviceStream, SDL_PauseAudioStreamDevice,
+    SDL_PutAudioStreamData, SDL_ResumeAudioStreamDevice,
 };
 use sdl3_sys::init::{SDL_INIT_AUDIO, SDL_InitSubSystem};
 
 use crate::budget;
 use crate::engine::SdlHandle;
+use crate::music::TrackKind;
 
 /// Sample rate of every mixer voice and of the output stream.
 pub const SAMPLE_RATE: u32 = 22050;
@@ -42,6 +44,67 @@ const TARGET_QUEUED_FRAMES: usize = 2048;
 const MAX_RENDER_FRAMES: usize = 8192;
 /// Bytes per output frame: two 16-bit channels.
 const BYTES_PER_FRAME: usize = 4;
+
+/// The player's level for each kind of game sound, as linear gains applied
+/// on top of each sound's own. The film audio is not scaled.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Volumes {
+    /// The BGM channels carrying music.
+    pub music: f32,
+    /// The BGM channels carrying an ambient loop (see
+    /// [`crate::music::track_kind`]).
+    pub ambient: f32,
+    /// The one-shot pool: gameplay cues and the menus' cues.
+    pub effects: f32,
+    /// The voice (dialogue) channel and a spoken BGM track.
+    pub voice: f32,
+}
+
+impl Default for Volumes {
+    fn default() -> Self {
+        Self {
+            music: 1.0,
+            ambient: 1.0,
+            effects: 1.0,
+            voice: 1.0,
+        }
+    }
+}
+
+/// The gain for a 0..=100 volume setting. The curve is squared so equal
+/// steps sound roughly equally loud.
+pub fn percent_gain(percent: u8) -> f32 {
+    let level = f32::from(percent.min(100)) / 100.0;
+    level * level
+}
+
+/// The volumes every [`Mixer`] renders with, as `f32` bits (music, ambient,
+/// effects, voice); 1.0 until [`set_volumes`].
+static VOLUMES: [AtomicU32; 4] = [const { AtomicU32::new(0x3F80_0000) }; 4];
+
+/// Set the volumes every mixer renders with from its next update. Audio
+/// already queued on a device (about a tenth of a second) keeps its level.
+pub fn set_volumes(volumes: Volumes) {
+    let gains = [
+        volumes.music,
+        volumes.ambient,
+        volumes.effects,
+        volumes.voice,
+    ];
+    for (slot, gain) in VOLUMES.iter().zip(gains) {
+        slot.store(gain.max(0.0).to_bits(), Ordering::Relaxed);
+    }
+}
+
+fn volumes() -> Volumes {
+    let gain = |index: usize| f32::from_bits(VOLUMES[index].load(Ordering::Relaxed));
+    Volumes {
+        music: gain(0),
+        ambient: gain(1),
+        effects: gain(2),
+        voice: gain(3),
+    }
+}
 
 /// PCM sample format of a parsed WAV file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -351,6 +414,8 @@ pub(crate) struct BgmChannel {
     pan: f32,
     looping: bool,
     playing: bool,
+    /// What the track carries, which picks the player volume it follows.
+    kind: TrackKind,
 }
 
 impl BgmChannel {
@@ -362,6 +427,7 @@ impl BgmChannel {
             pan: 0.0,
             looping,
             playing: true,
+            kind: TrackKind::Music,
         }
     }
 }
@@ -403,6 +469,9 @@ pub(crate) struct MixState {
     paused_bgm: [bool; 3],
     /// Whether the voice bank was sounding when a film paused it.
     paused_voice: bool,
+    /// The player's levels; [`Mixer::update`] refreshes them before each
+    /// render.
+    volumes: Volumes,
 }
 
 impl MixState {
@@ -417,6 +486,7 @@ impl MixState {
             game_paused: false,
             paused_bgm: [false; 3],
             paused_voice: false,
+            volumes: Volumes::default(),
         }
     }
 
@@ -473,6 +543,13 @@ impl MixState {
     pub(crate) fn set_bgm_channel_pan(&mut self, index: usize, pan: f32) {
         if let Some(channel) = self.bgm_channels.get_mut(index).and_then(Option::as_mut) {
             channel.pan = pan.clamp(-1.0, 1.0);
+        }
+    }
+
+    /// Say what BGM channel `index`'s loaded track carries.
+    pub(crate) fn set_bgm_channel_kind(&mut self, index: usize, kind: TrackKind) {
+        if let Some(channel) = self.bgm_channels.get_mut(index).and_then(Option::as_mut) {
+            channel.kind = kind;
         }
     }
 
@@ -691,6 +768,7 @@ impl MixState {
     /// handles overlapping banks. A paused mixer skips the game sounds but
     /// still renders the film.
     pub(crate) fn render(&mut self, frames: usize, out: &mut Vec<u8>) {
+        let volumes = self.volumes;
         for _ in 0..frames {
             let mut left = 0.0f32;
             let mut right = 0.0f32;
@@ -708,7 +786,12 @@ impl MixState {
                             continue;
                         }
                     }
-                    let sample = f32::from(channel.pcm[channel.pos]) * channel.gain;
+                    let player = match channel.kind {
+                        TrackKind::Music => volumes.music,
+                        TrackKind::Ambient => volumes.ambient,
+                        TrackKind::Voice => volumes.voice,
+                    };
+                    let sample = f32::from(channel.pcm[channel.pos]) * channel.gain * player;
                     let (l, r) = pan_gains(channel.pan);
                     left += sample * l;
                     right += sample * r;
@@ -725,7 +808,7 @@ impl MixState {
                 if let Some(voice) = &mut self.voice
                     && voice.pos < voice.pcm.len()
                 {
-                    let sample = f32::from(voice.pcm[voice.pos]) * voice.gain;
+                    let sample = f32::from(voice.pcm[voice.pos]) * voice.gain * volumes.voice;
                     let (l, r) = pan_gains(voice.pan);
                     left += sample * l;
                     right += sample * r;
@@ -742,7 +825,7 @@ impl MixState {
                     if voice.pos >= voice.pcm.len() {
                         continue;
                     }
-                    let sample = f32::from(voice.pcm[voice.pos]) * voice.gain;
+                    let sample = f32::from(voice.pcm[voice.pos]) * voice.gain * volumes.effects;
                     let (l, r) = pan_gains(voice.pan);
                     left += sample * l;
                     right += sample * r;
@@ -885,6 +968,12 @@ impl Mixer {
     /// Set BGM channel `index`'s pan (-1 left, 1 right).
     pub fn set_bgm_channel_pan(&mut self, index: usize, pan: f32) {
         self.state.set_bgm_channel_pan(index, pan);
+    }
+
+    /// Say what BGM channel `index`'s loaded track carries, which picks the
+    /// player volume it follows.
+    pub fn set_bgm_channel_kind(&mut self, index: usize, kind: TrackKind) {
+        self.state.set_bgm_channel_kind(index, kind);
     }
 
     /// Whether BGM channel `index` is currently sounding.
@@ -1070,6 +1159,7 @@ impl Mixer {
         }
 
         let mut pcm = Vec::with_capacity(frames * BYTES_PER_FRAME);
+        self.state.volumes = volumes();
         self.state.render(frames, &mut pcm);
         let Ok(len) = c_int::try_from(pcm.len()) else {
             return;
@@ -1111,6 +1201,18 @@ impl Mixer {
     /// Alias for [`Mixer::set_bgm_volume`].
     pub fn set_volume(&mut self, gain: f32) {
         self.set_bgm_volume(gain);
+    }
+
+    /// Hold (or release) the device in place: everything sounding stops
+    /// where it is and carries on from the same sample, for a pause overlay.
+    /// The queue stays topped up, so [`Mixer::update`] renders nothing more
+    /// while it is held.
+    pub fn set_device_paused(&mut self, paused: bool) {
+        if paused {
+            let _ = unsafe { SDL_PauseAudioStreamDevice(self.stream) };
+        } else {
+            self.resume();
+        }
     }
 
     /// Resume the device, ignoring failure: audio is best-effort.
@@ -1894,5 +1996,40 @@ mod tests {
             "{samples:?}"
         );
         assert!(state.voice_playing());
+    }
+
+    #[test]
+    fn player_volumes_scale_each_kind_of_sound() {
+        let mut state = MixState::new();
+        state.volumes = Volumes {
+            music: 0.5,
+            ambient: 0.25,
+            effects: 0.0,
+            voice: 2.0,
+        };
+        let level = |state: &mut MixState| {
+            let mut out = Vec::new();
+            state.render(1, &mut out);
+            out_samples(&out)[0]
+        };
+        state.play_bgm_channel(0, vec![1000, 1000], true);
+        assert_eq!(level(&mut state), 500, "music");
+        state.set_bgm_channel_kind(0, TrackKind::Ambient);
+        assert_eq!(level(&mut state), 250, "ambient");
+        state.set_bgm_channel_kind(0, TrackKind::Voice);
+        assert_eq!(level(&mut state), 2000, "a spoken track");
+        state.stop_all_bgm();
+        state.play_sfx(vec![1000, 1000], 1.0, 0.0);
+        assert_eq!(level(&mut state), 0, "effects");
+        state.play_voice(vec![1000, 1000], 1.0, 0.0);
+        assert_eq!(level(&mut state), 2000, "voice");
+    }
+
+    #[test]
+    fn volume_percent_is_a_squared_curve() {
+        assert_eq!(percent_gain(0), 0.0);
+        assert_eq!(percent_gain(50), 0.25);
+        assert_eq!(percent_gain(100), 1.0);
+        assert_eq!(percent_gain(200), 1.0);
     }
 }

@@ -1,0 +1,124 @@
+# Texte des Spielmenüs und des Optionsbildschirms (siehe src/gui/locale.rs).
+
+menu.restart = "Neustart"
+menu.load_game = "Spiel laden"
+menu.options = "Optionen"
+menu.quit = "Beenden"
+menu.restart_question = "Vom letzten Speicherstand neu starten?"
+menu.quit_question = "Das Spiel beenden und zum Hauptmenü zurückkehren?"
+menu.unsaved_note = "(Nicht gespeicherte Daten gehen verloren.)"
+
+dialog.yes = "Ja"
+dialog.no = "Nein"
+
+hint.select = "Auswählen"
+hint.back = "Zurück"
+hint.reset_all = "Alles zurücksetzen"
+hint.reset_page = "Seite zurücksetzen"
+
+options.title = "OPTIONEN"
+options.reset_all_question = "Alle Optionen auf die Standardwerte zurücksetzen?"
+options.reset_page_question = "Die Optionen dieser Seite auf die Standardwerte zurücksetzen?"
+options.default = "(Standard: {})"
+
+category.controls = "STEUERUNG"
+category.graphics = "GRAFIK"
+category.audio = "AUDIO"
+category.interface = "OBERFLÄCHE"
+category.language = "SPRACHE"
+
+page.basic = "Grundeinstellungen"
+page.display = "Anzeige"
+page.rendering = "Darstellung"
+page.general = "Allgemein"
+page.language = "Sprache"
+
+group.character_controls = "Figurensteuerung"
+group.when_aiming = "Beim Zielen"
+group.controller = "Controller"
+group.display = "Anzeige"
+group.renderer = "Renderer"
+group.text = "Text"
+group.volume = "Lautstärke"
+group.menus = "Menüs"
+
+choice.off = "Aus"
+choice.on = "An"
+
+quick_turn.label = "Schnelle Drehung"
+quick_turn.description = "Beim Rückwärtsgehen mit Rennen auf der Stelle um 180 Grad drehen."
+quick_turn.off = "Die ursprüngliche Steuerung."
+quick_turn.on = "Rückwärts + Rennen dreht die Figur um."
+
+tactical_reload.label = "Taktisches Nachladen"
+tactical_reload.description = "Eine teilweise geladene Waffe nachladen, ohne sie zuerst leer zu schießen."
+tactical_reload.off = "Waffen werden nur leer nachgeladen."
+tactical_reload.on = "Beim Zielen Rennen gedrückt halten, um nachzuladen."
+
+button_style.label = "Tastensymbole"
+button_style.description = "Die Controller-Tasten, die die Hinweise zeigen."
+button_style.auto = "Automatisch"
+button_style.auto_note = "Passend zum verwendeten Controller."
+
+fullscreen.label = "Anzeigemodus"
+fullscreen.description = "Im Fenster oder randlosen Vollbild spielen. Auch mit Alt+Eingabe umschaltbar."
+fullscreen.window = "Fenster"
+fullscreen.fullscreen = "Vollbild"
+
+resolution.label = "Auflösung"
+resolution.description = "Die Größe des Spielfensters. Der Vollbildmodus nutzt die Größe des Bildschirms."
+
+aspect.label = "Seitenverhältnis"
+aspect.description = "Die Form des Bildes. Breitere Formate beschneiden das ursprüngliche 4:3-Bild und folgen der Figur vertikal."
+
+vsync.label = "V-Sync"
+vsync.description = "Vor jedem Bild auf die Aktualisierung des Bildschirms warten."
+vsync.off = "Geringere Latenz; das Bild kann zerreißen."
+vsync.on = "Kein Zerreißen; Bilder warten auf den Bildschirm."
+
+frame_rate.label = "Bildrate"
+frame_rate.description = "Angezeigte Bilder pro Sekunde. Das Spiel selbst läuft immer mit 30 Aktualisierungen pro Sekunde; höhere Raten glätten die Bewegung dazwischen."
+frame_rate.value = "{} FPS"
+
+renderer.label = "Renderer"
+renderer.description = "Wie das Spiel gezeichnet wird."
+renderer.software = "Software"
+renderer.software_note = "Das ursprüngliche 320x240-Bild, hochskaliert."
+renderer.gpu = "GPU"
+renderer.gpu_note = "Modelle in Bildschirmauflösung, mit HD-Ersatz."
+
+render_scale.label = "Renderskalierung"
+render_scale.description = "Die Auflösung der 3D-Modelle in Prozent des Bildschirms. Nur GPU-Renderer."
+
+msaa.label = "Kantenglättung"
+msaa.description = "Glättet die Kanten der 3D-Modelle. Höhere Stufen kosten mehr Leistung. Nur GPU-Renderer."
+msaa.value = "{}x MSAA"
+
+ui_font.label = "Menüschrift"
+ui_font.description = "Die Schrift, mit der diese Menüs gezeichnet werden."
+ui_font.modern = "Modern"
+ui_font.modern_note = "Eine klare serifenlose Schrift."
+ui_font.retro = "Retro"
+ui_font.retro_note = "Eine Pixelschrift im Stil des Originals."
+
+music_volume.label = "Hintergrundmusik"
+music_volume.description = "Die Lautstärke der Musik."
+
+ambient_volume.label = "Umgebungsgeräusche"
+ambient_volume.description = "Die Lautstärke der Hintergrundgeräusche, die keine Musik sind: Regen, Wind, Maschinen."
+
+effects_volume.label = "Soundeffekte"
+effects_volume.description = "Die Lautstärke von Schritten, Schüssen, Kreaturen, Türen und den Menütönen."
+
+voice_volume.label = "Stimmen"
+voice_volume.description = "Die Lautstärke der Stimmen der Figuren."
+
+menu_sounds.label = "Menütöne"
+menu_sounds.description = "Spielt Töne beim Bewegen und Auswählen in diesen Menüs."
+menu_sounds.off = "Stumme Menüs."
+menu_sounds.on = "Töne für Cursor, Bestätigen und Abbrechen."
+
+language.label = "Textsprache"
+language.description = "Die Sprache der Spieltexte und dieser Menüs."
+language.system = "System"
+language.system_note = "Der Systemsprache folgen ({})."
