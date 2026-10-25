@@ -164,7 +164,7 @@ impl Canvas {
         self.reset(width, height);
         let [r, g, b, a] = premultiply(color, u32::from(color.a)).map(|c| c as u8);
         if a != 0 {
-            for pixel in self.rgba.chunks_exact_mut(4) {
+            for pixel in self.rgba.as_chunks_mut::<4>().0 {
                 pixel.copy_from_slice(&[r, g, b, a]);
             }
         }
@@ -242,7 +242,7 @@ impl Canvas {
             );
             let row = self.row(y, span.x0, span.x1);
             let last = row.len() / 4 - 1;
-            for (index, pixel) in row.chunks_exact_mut(4).enumerate() {
+            for (index, pixel) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 let edge = match index {
                     0 => left,
                     _ if index == last => right,
@@ -289,18 +289,23 @@ impl Canvas {
             let row = self.row(y, span.x0, span.x1);
             match axis {
                 Axis::Horizontal if cy >= 1.0 => {
-                    for (pixel, &(_, _, source)) in row.chunks_exact_mut(4).zip(&columns) {
+                    for (pixel, &(_, _, source)) in
+                        row.as_chunks_mut::<4>().0.iter_mut().zip(&columns)
+                    {
                         over(pixel, source);
                     }
                 }
                 Axis::Horizontal => {
-                    for (pixel, &(color, cx, _)) in row.chunks_exact_mut(4).zip(&columns) {
+                    for (pixel, &(color, cx, _)) in
+                        row.as_chunks_mut::<4>().0.iter_mut().zip(&columns)
+                    {
                         over(pixel, premultiply(color, coverage_alpha(color.a, cx * cy)));
                     }
                 }
                 Axis::Vertical => {
                     let inner = premultiply(row_color, coverage_alpha(row_color.a, cy));
-                    for (pixel, &(_, cx, _)) in row.chunks_exact_mut(4).zip(&columns) {
+                    for (pixel, &(_, cx, _)) in row.as_chunks_mut::<4>().0.iter_mut().zip(&columns)
+                    {
                         if cx >= 1.0 {
                             over(pixel, inner);
                         } else {
@@ -332,7 +337,7 @@ impl Canvas {
             let row_cover = span.row_coverage(y);
             let x0 = span.x0;
             let row = self.row(y, span.x0, span.x1);
-            for (index, pixel) in row.chunks_exact_mut(4).enumerate() {
+            for (index, pixel) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 let x = x0 + index;
                 let dx = ((x as f32 + 0.5 - cx).abs() - half_w).max(0.0);
                 // Signed distance to the rounded outline, + inside.
@@ -406,7 +411,7 @@ impl Canvas {
                 }
             }
             let row = self.row(y, span.x0, span.x1);
-            for (pixel, &cover) in row.chunks_exact_mut(4).zip(&coverage) {
+            for (pixel, &cover) in row.as_chunks_mut::<4>().0.iter_mut().zip(&coverage) {
                 let alpha = coverage_alpha(color.a, cover);
                 if alpha != 0 {
                     over(pixel, premultiply(color, alpha));
@@ -446,7 +451,7 @@ impl Canvas {
             let source = (py - y) as usize * width + (cx0 - x) as usize;
             let coverage = &mask[source..source + (cx1 - cx0) as usize];
             let row = self.row(py as usize, cx0 as usize, cx1 as usize);
-            for (pixel, &cover) in row.chunks_exact_mut(4).zip(coverage) {
+            for (pixel, &cover) in row.as_chunks_mut::<4>().0.iter_mut().zip(coverage) {
                 if cover != 0 {
                     let alpha = div255(opacity * u32::from(cover));
                     over(pixel, premultiply(color, alpha));
