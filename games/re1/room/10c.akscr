@@ -91,10 +91,10 @@ proc init
 #if MANSION1
     snd_pan_vol_set(BGM_SUB_1, 110, 110);
 #else
-#if STEAM
-    snd_pan_vol_set(BGM_SUB_1, 110, 110);
-#else
+#if JPN
     snd_pan_vol_set(BGM_SUB_1, 90, 90);
+#else
+    snd_pan_vol_set(BGM_SUB_1, 110, 110);
 #endif
 #endif
 #if CHRIS
@@ -145,10 +145,10 @@ proc main
 #if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 110, 110);
 #else
-#if STEAM
-        snd_pan_vol_set(BGM_SUB_1, 110, 110);
-#else
+#if JPN
         snd_pan_vol_set(BGM_SUB_1, 90, 90);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 110, 110);
 #endif
 #endif
     }
@@ -157,10 +157,10 @@ proc main
 #if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 50, 50);
 #else
-#if STEAM
-        snd_pan_vol_set(BGM_SUB_1, 50, 50);
-#else
+#if JPN
         snd_pan_vol_set(BGM_SUB_1, 5, 5);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 50, 50);
 #endif
 #endif
     }
@@ -169,10 +169,10 @@ proc main
 #if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 50, 50);
 #else
-#if STEAM
-        snd_pan_vol_set(BGM_SUB_1, 50, 50);
-#else
+#if JPN
         snd_pan_vol_set(BGM_SUB_1, 5, 5);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 50, 50);
 #endif
 #endif
     }
@@ -181,10 +181,10 @@ proc main
 #if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 50, 50);
 #else
-#if STEAM
-        snd_pan_vol_set(BGM_SUB_1, 50, 50);
-#else
+#if JPN
         snd_pan_vol_set(BGM_SUB_1, 5, 5);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 50, 50);
 #endif
 #endif
     }

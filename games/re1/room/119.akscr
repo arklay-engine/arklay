@@ -32,6 +32,7 @@
 #define VO_00C_20 0x64
 #define VO_00C_21 0x65
 #define VO_00C_22 0x66
+#if MANSION2
 
 proc init
 {
@@ -276,14 +277,14 @@ event on_enter_3
 #if CHRIS
     sleep(56);
 #else
-#if STEAM
-    sleep(56);
-#else
+#if JPN
     do
     {
         evt_next();
     }
     while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+#else
+    sleep(56);
 #endif
 #endif
     sleep(10);
@@ -331,3 +332,4 @@ event on_enter_3_sub1
     act_flag_op(EF_SET, EF_0010);
     act_finish();
 }
+#endif

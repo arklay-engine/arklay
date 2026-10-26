@@ -578,7 +578,7 @@ event from_main_2
         bgm_play(BGM_SUB_2);
     }
     sleep(3);
-#if STEAM
+#if !JPN
     run
     {
         bgm_stop(BGM_SUB_1);

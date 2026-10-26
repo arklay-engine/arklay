@@ -176,12 +176,12 @@ fn emit_language_files() {
 
 /// Compile the checked-in room scripts under `games/re1/room/` into the SCD
 /// bytecode `convert-game` packs as `scd/<id>.scd`, one container per RDT
-/// variant and release, each beside the digest of its `AUTHENTIC` build: a
+/// variant and region, each beside the digest of its `AUTHENTIC` build: a
 /// container only replaces an RDT's own scripts when that digest proves they
-/// are the ones the script was written from. Where both releases build the
-/// same `AUTHENTIC` bytecode the Steam container stands for both.
+/// are the ones the script was written from. Where regions build the same
+/// `AUTHENTIC` bytecode the first one's container stands for them all.
 fn emit_room_scripts() {
-    use scd::akscr::preprocess::{Variant, includes_from, room_variants};
+    use scd::akscr::preprocess::{Region, Variant, includes_from, room_variants};
 
     let root = manifest_dir().join("games/re1/room");
     for watched in [
@@ -243,22 +243,26 @@ fn emit_room_scripts() {
                     .digest();
                 (original, compile(&text, variant, path))
             };
-            let steam = build(Variant::for_room(id));
-            let mediakite = build(Variant::for_room(id).mediakite());
-            let releases = if mediakite.0 == steam.0 {
-                assert!(
-                    mediakite.1 == steam.1,
-                    "{} as {id:04X}: both releases build the same `AUTHENTIC` bytecode \
-                     but different fixed bytecode; `#if STEAM` may only hold lines where \
-                     the releases' own scripts differ",
-                    path.display()
-                );
-                vec![("", steam)]
-            } else {
-                vec![("", steam), ("-mediakite", mediakite)]
-            };
-            for (suffix, (original, container)) in releases {
-                let file = scd_dir.join(format!("{id:04x}{suffix}.scd"));
+            // One build per distinct `AUTHENTIC` digest, the first region's.
+            let mut releases: Vec<(String, (u64, Vec<u8>))> = Vec::new();
+            for region in Region::ALL {
+                let (original, container) = build(Variant::for_room(id).in_region(region));
+                if let Some((first, (_, first_container))) =
+                    releases.iter().find(|(_, (other, _))| *other == original)
+                {
+                    assert!(
+                        *first_container == container,
+                        "{} as {id:04X}: regions {first} and {region} build the same \
+                         `AUTHENTIC` bytecode but different fixed bytecode; a region's \
+                         `#if` may only hold lines where the regions' own scripts differ",
+                        path.display()
+                    );
+                    continue;
+                }
+                releases.push((region.to_string(), (original, container)));
+            }
+            for (region, (original, container)) in releases {
+                let file = scd_dir.join(format!("{id:04x}-{}.scd", region.to_lowercase()));
                 std::fs::write(&file, container).expect("failed to write room bytecode");
                 writeln!(
                     out,

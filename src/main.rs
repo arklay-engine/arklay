@@ -518,30 +518,44 @@ enum ScdAction {
         #[arg(long)]
         authentic: bool,
 
-        /// Compile for the original Mediakite PC release rather than the
-        /// Steam/GOG release (`#if STEAM`)
-        #[arg(long)]
-        mediakite: bool,
+        /// Region to compile for: usa (English), jpn (Japanese, including
+        /// the original Mediakite release) or eur (French and German); it
+        /// picks the `#if USA` / `#if JPN` / `#if EUR` lines
+        #[arg(long, value_name = "REGION", value_parser = parse_region)]
+        region: Option<arklay::scd::akscr::Region>,
     },
 
     /// Export every room of a pack as one merged .akscr script per room
     /// (both players, and both mansion visits for stages 1 and 2), naming
     /// game data from the `inc/*.akinc` files beside the output directory
     ExportRooms {
-        /// Game pack to read
-        #[arg(value_name = "PACK")]
-        pack: PathBuf,
+        /// Game packs to read, each optionally prefixed by its region
+        /// (`jpn=jpn.akpak`; usa when not given); the lines the regions
+        /// differ in go under `#if USA` / `#if JPN` / `#if EUR`
+        #[arg(value_name = "[REGION=]PACK", required = true, value_parser = parse_region_pack)]
+        packs: Vec<(arklay::scd::akscr::Region, PathBuf)>,
 
         /// Directory to write `<room>.akscr` into (e.g. `103.akscr`)
         #[arg(long, short)]
         out: PathBuf,
-
-        /// A pack of the original Mediakite PC release to merge with `PACK`,
-        /// which must then be the Steam/GOG release, writing where they
-        /// differ under `#if STEAM` (swapped packs invert every block)
-        #[arg(long, value_name = "PACK")]
-        mediakite: Option<PathBuf>,
     },
+}
+
+/// Parse a region name such as `jpn`.
+fn parse_region(text: &str) -> Result<arklay::scd::akscr::Region, String> {
+    arklay::scd::akscr::Region::parse(text)
+        .ok_or_else(|| format!("`{text}` is not a region: expected usa, jpn or eur"))
+}
+
+/// Parse a pack path with an optional region prefix (`jpn=jpn.akpak`).
+fn parse_region_pack(text: &str) -> Result<(arklay::scd::akscr::Region, PathBuf), String> {
+    let prefixed = text
+        .split_once('=')
+        .and_then(|(region, path)| Some((arklay::scd::akscr::Region::parse(region)?, path)));
+    Ok(match prefixed {
+        Some((region, path)) => (region, PathBuf::from(path)),
+        None => (arklay::scd::akscr::Region::Usa, PathBuf::from(text)),
+    })
 }
 
 /// Parse a hex RDT id such as `1030`.
@@ -591,7 +605,7 @@ fn build_scd(
     out: &Path,
     room: Option<u16>,
     authentic: bool,
-    mediakite: bool,
+    region: Option<arklay::scd::akscr::Region>,
 ) -> Result<()> {
     let text =
         fs::read_to_string(input).with_context(|| format!("failed to read {}", input.display()))?;
@@ -601,8 +615,8 @@ fn build_scd(
     if authentic && room.is_none() {
         bail!("--authentic needs --room");
     }
-    if mediakite && room.is_none() {
-        bail!("--mediakite needs --room");
+    if region.is_some() && room.is_none() {
+        bail!("--region needs --room");
     }
     let assembled = if script {
         let dir = input.parent().unwrap_or(Path::new("."));
@@ -613,8 +627,8 @@ fn build_scd(
                 if authentic {
                     variant = variant.authentic();
                 }
-                if mediakite {
-                    variant = variant.mediakite();
+                if let Some(region) = region {
+                    variant = variant.in_region(region);
                 }
                 variant
             }),
@@ -642,32 +656,30 @@ fn build_scd(
     Ok(())
 }
 
-/// Decompile every room RDT in `pack` and write one merged `.akscr` per room
-/// into `out`, merged with the Mediakite release's `mediakite` pack if given.
-fn export_rooms(pack: &Path, out: &Path, mediakite: Option<&Path>) -> Result<()> {
+/// Decompile every room RDT in each region's pack and write one merged
+/// `.akscr` per room into `out`.
+fn export_rooms(packs: &[(arklay::scd::akscr::Region, PathBuf)], out: &Path) -> Result<()> {
     fs::create_dir_all(out).with_context(|| format!("failed to create {}", out.display()))?;
     let names = arklay::scd::akscr::load_names(out)?;
-    let rooms = decompile_rooms(pack, &names)?;
-    let merged = match mediakite {
-        Some(mediakite) => {
-            arklay::scd::akscr::merge_releases(&rooms, &decompile_rooms(mediakite, &names)?)?
-        }
-        None => arklay::scd::akscr::merge_rooms(&rooms)?,
-    };
+    let rooms = packs
+        .iter()
+        .map(|(region, pack)| Ok((*region, decompile_rooms(pack, &names)?)))
+        .collect::<Result<Vec<_>>>()?;
+    let merged = arklay::scd::akscr::merge_regions(
+        &rooms
+            .iter()
+            .map(|(region, rooms)| (*region, rooms))
+            .collect::<Vec<_>>(),
+    )?;
     for (base, text) in &merged {
         let path = out.join(format!("{base:03x}.akscr"));
         arklay::atomic::write(&path, text.as_bytes())
             .with_context(|| format!("failed to write {}", path.display()))?;
     }
-    let releases = if mediakite.is_some() {
-        " per release"
-    } else {
-        ""
-    };
     println!(
-        "exported {} rooms ({} RDTs{releases}) to {}",
+        "exported {} rooms ({} RDTs) to {}",
         merged.len(),
-        rooms.len(),
+        rooms.iter().map(|(_, rooms)| rooms.len()).sum::<usize>(),
         out.display()
     );
     Ok(())
@@ -1060,13 +1072,9 @@ fn main() -> Result<()> {
                 out,
                 room,
                 authentic,
-                mediakite,
-            } => build_scd(&input, &out, room, authentic, mediakite),
-            ScdAction::ExportRooms {
-                pack,
-                out,
-                mediakite,
-            } => export_rooms(&pack, &out, mediakite.as_deref()),
+                region,
+            } => build_scd(&input, &out, room, authentic, region),
+            ScdAction::ExportRooms { packs, out } => export_rooms(&packs, &out),
         },
         Some(Command::Mod { action }) => match action {
             ModAction::Build { dir, out, base } => build_mod_pack(&dir, &out, base.as_deref()),
@@ -1552,7 +1560,7 @@ mod tests {
         )
         .unwrap();
 
-        build_scd(&input, &out, None, false, false).unwrap();
+        build_scd(&input, &out, None, false, None).unwrap();
 
         let bytes = fs::read(&out).unwrap();
         let scripts = arklay::scd::reader::parse(&bytes).unwrap();

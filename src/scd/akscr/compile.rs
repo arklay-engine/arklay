@@ -10,7 +10,7 @@ use anyhow::{Result, bail};
 use std::collections::HashMap;
 
 use super::layout;
-use super::preprocess::{Loader, Variant, no_includes, preprocess};
+use super::preprocess::{Loader, Region, Variant, no_includes, preprocess};
 use crate::budget;
 use crate::scd::asm::{self, Arg, Assembled, InsnSrc, Item, ItemKind, Source};
 use crate::scd::disasm::{ACTOR_SIG, CONTROL_SIG, EVENT_TOP_SIG, TWEEN_SIG};
@@ -88,8 +88,8 @@ pub(super) fn section_bytes(
         jill: false,
         mansion: None,
         authentic,
-        // The decompiler checks one RDT's section, which holds no `STEAM`.
-        steam: true,
+        // The decompiler checks one RDT's section, which holds no region.
+        region: Region::Usa,
     };
     let kept: Vec<&str> = super::preprocess::kept_lines(text, Some(variant))?
         .into_iter()

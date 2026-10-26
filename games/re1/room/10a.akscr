@@ -271,14 +271,14 @@ event from_main_2
     wait_message();
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_21);
-#if STEAM
+#if JPN
+    sleep(56);
+#else
     do
     {
         evt_next();
     }
     while (ck(FG_STATUS, F_STATUS_0E, TRUE));
-#else
-    sleep(56);
 #endif
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_22);

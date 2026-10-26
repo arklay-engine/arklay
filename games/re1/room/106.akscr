@@ -141,17 +141,10 @@ proc init
         aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
 #else
-#if MANSION2
-#if !STEAM
-    if (ck(FG_COMMON, F_COMMON_0B, FALSE))
-#else
+#if MANSION1
     if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
-#endif
-#else
-    if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
-#endif
     {
-#if STEAM
+#if USA
         item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
 #else
         item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
@@ -161,6 +154,27 @@ proc init
     {
         aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
+#else
+#if JPN
+    if (ck(FG_COMMON, F_COMMON_0B, FALSE))
+    {
+        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    }
+#else
+    if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+    {
+        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    }
+#endif
+#endif
 #endif
     if (ck(FG_COMMON, F_COMMON_03, TRUE))
     {
@@ -220,13 +234,13 @@ proc init
 #if MANSION1
         evt_exec(0, TASK_00, on_enter_3);
 #else
-#if STEAM
+#if !JPN
         evt_exec(0, TASK_00, on_enter_3);
 #endif
 #endif
         set(FG_COMMON, F_COMMON_03, TRUE);
 #if MANSION2
-#if !STEAM
+#if JPN
         evt_exec(0, TASK_00, on_enter_3);
 #endif
 #endif
@@ -3347,7 +3361,9 @@ event from_main_10
         }
     }
 #else
-#if STEAM
+#if JPN
+    aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
+#else
     run
     {
         if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
@@ -3359,8 +3375,6 @@ event from_main_10
             aot_reset(AOT_05_ITEM, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         }
     }
-#else
-    aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
 #endif
 #endif
     message(24, 0);

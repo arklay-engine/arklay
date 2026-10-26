@@ -121,7 +121,7 @@ proc init
         }
     }
 #endif
-#if STEAM
+#if USA
     item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 2, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
 #else
     item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 3, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
@@ -393,10 +393,15 @@ event on_aot_02_message_sub1
 {
     run
     {
+#if !EUR
         se_play_3d(SND_BANK_ROOM, SE_18_SW_PUSH, 0, SND_AT_POINT, 0, 3200, 1800);
+#endif
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_05);
         set(FG_ROOM, F_ROOM_0A, TRUE);
+#if EUR
+        se_play_3d(SND_BANK_ROOM, SE_18_SW_PUSH, 0, SND_AT_POINT, 0, 3200, 1800);
+#endif
     }
     sleep(10);
     evt_fork(TASK_02, on_aot_02_message_sub1_sub1, 0);
@@ -921,22 +926,40 @@ event on_aot_02_message_sub1_sub1
     se_play_3d(SND_BANK_ROOM, SE_19_AQUARIUM, 0, SND_AT_POINT, 0, 7470, 5980);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
+#if EUR
+    tw_set_pos(0, 5, 0);
+    for (240)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+#else
     tw_set_pos(0, 10, 0);
     for (120)
     {
         tw_pos_add();
         evt_next();
     }
+#endif
     tw_end();
     set(FG_ROOM, F_ROOM_02, TRUE);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
+#if EUR
+    tw_set_pos(0, 5, 0);
+    for (10)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+#else
     tw_set_pos(0, 10, 0);
     for (5)
     {
         tw_pos_add();
         evt_next();
     }
+#endif
     tw_end();
     evt_finish();
 }

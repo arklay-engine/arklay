@@ -7,27 +7,30 @@
 //! which variants hold it. Lines every variant in scope holds are written
 //! plainly. Each run of the others is grown to whole statements (balanced
 //! braces, an `if` with its `else`, a header with its block) and split on
-//! the mansion, the player or the release, whichever writes fewer lines (on
-//! a tie, in that order), into `#if` / `#else` / `#endif` blocks. A section
+//! the mansion, the player or a region, whichever writes fewer lines (on a
+//! tie, in that order), into `#if` / `#else` / `#endif` blocks. A section
 //! header alone may differ.
 
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
-use super::preprocess::{Variant, kept_lines_with, merged_id};
+use super::preprocess::{Region, Variant, kept_lines_with, merged_id};
+
+/// One bit per merge input.
+type Mask = u16;
 
 /// One merged line and the variants (bit per input) that hold it.
 #[derive(Clone, Copy)]
 struct Entry<'a> {
     line: &'a str,
-    mask: u8,
+    mask: Mask,
     /// A section header (`event event_03`), which may differ on its own.
     header: bool,
 }
 
 impl<'a> Entry<'a> {
-    fn new(line: &'a str, mask: u8) -> Self {
+    fn new(line: &'a str, mask: Mask) -> Self {
         Self {
             line,
             mask,
@@ -122,7 +125,7 @@ fn likeness(group: &Group, unit: &Unit) -> Option<u32> {
 
 /// Align the units of one variant (bit `bit`) against the merged groups,
 /// pairing the alike ones in order.
-fn align_units<'a>(groups: Vec<Group<'a>>, units: Vec<Unit<'a>>, bit: u8) -> Vec<Group<'a>> {
+fn align_units<'a>(groups: Vec<Group<'a>>, units: Vec<Unit<'a>>, bit: Mask) -> Vec<Group<'a>> {
     let (rows, cols) = (groups.len(), units.len());
     let width = cols + 1;
     let mut likeness_of = vec![None; rows * cols];
@@ -199,9 +202,9 @@ fn align_units<'a>(groups: Vec<Group<'a>>, units: Vec<Unit<'a>>, bit: u8) -> Vec
 /// Merge the scripts of `variants` (each variant once) into a single script
 /// whose preprocessed text is each input again.
 ///
-/// A variant whose script is its other release's, word for word, shares that
-/// release's input, so the releases differ only where their scripts do. At
-/// most eight inputs remain.
+/// A variant whose script is another region's, word for word, shares that
+/// region's input, so the regions differ only where their scripts do. At
+/// most sixteen inputs remain.
 pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
     ensure!(!variants.is_empty(), "merge takes at least one variant");
     for (index, (variant, _)) in variants.iter().enumerate() {
@@ -211,21 +214,19 @@ pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
     }
     let mut inputs: Vec<(Vec<Variant>, &str)> = Vec::new();
     for &(variant, text) in variants {
-        let twin = Variant {
-            steam: !variant.steam,
-            ..variant
-        };
+        let twin = |kind: &Variant| kind.in_region(variant.region) == variant;
         match inputs
             .iter_mut()
-            .find(|(kinds, other)| *other == text && kinds.contains(&twin))
+            .find(|(kinds, other)| *other == text && kinds.iter().any(twin))
         {
             Some((kinds, _)) => kinds.push(variant),
             None => inputs.push((vec![variant], text)),
         }
     }
     ensure!(
-        inputs.len() <= 8,
-        "merge takes at most eight distinct scripts, not {}",
+        inputs.len() <= Mask::BITS as usize,
+        "merge takes at most {} distinct scripts, not {}",
+        Mask::BITS,
         inputs.len()
     );
 
@@ -238,7 +239,7 @@ pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
         .flat_map(|group| group.headers.into_iter().chain(group.body))
         .collect();
 
-    let all = u8::MAX >> (8 - inputs.len());
+    let all = Mask::MAX >> (Mask::BITS as usize - inputs.len());
     let kinds: Vec<Vec<Variant>> = inputs.into_iter().map(|(kinds, _)| kinds).collect();
     let mut out = String::new();
     for line in emit(&entries, all, &kinds) {
@@ -268,7 +269,7 @@ fn weight(line: &str) -> u32 {
 }
 
 /// Align `lines` (bit `bit`) against the merged `entries`.
-fn align<'a>(entries: Vec<Entry<'a>>, lines: &[&'a str], bit: u8) -> Vec<Entry<'a>> {
+fn align<'a>(entries: Vec<Entry<'a>>, lines: &[&'a str], bit: Mask) -> Vec<Entry<'a>> {
     let (n, m) = (entries.len(), lines.len());
     // Common prefix and suffix first: they keep the table small.
     let mut prefix = 0;
@@ -356,18 +357,26 @@ fn align<'a>(entries: Vec<Entry<'a>>, lines: &[&'a str], bit: u8) -> Vec<Entry<'
 }
 
 /// The symbol pairs a context can split on: (mask of the first half, its
-/// symbol, the second half's symbol). An input in either half has all its
-/// variants there, so an input both releases share blocks the `STEAM`
-/// split; its variants differ from the others in the mansion or the player,
-/// which split first.
-fn splits(ctx: u8, kinds: &[Vec<Variant>]) -> Vec<(u8, &'static str, &'static str)> {
-    let half = |pick: &dyn Fn(Variant) -> bool| -> u8 {
+/// symbol, the second half's symbol). A region splits from the rest. An
+/// input in either half has all its variants there, so an input two regions
+/// share stays out of a split between them; its variants differ from the
+/// others in the mansion, the player or a third region, which split first.
+fn splits(ctx: Mask, kinds: &[Vec<Variant>]) -> Vec<(Mask, &'static str, &'static str)> {
+    let half = |pick: &dyn Fn(Variant) -> bool| -> Mask {
         kinds
             .iter()
             .enumerate()
             .filter(|&(_, kinds)| kinds.iter().all(|&kind| pick(kind)))
             .fold(0, |mask, (bit, _)| mask | (1 << bit))
             & ctx
+    };
+    let region = |region: Region, a, b| {
+        (
+            half(&|kind| kind.region == region),
+            half(&|kind| kind.region != region),
+            a,
+            b,
+        )
     };
     let mut splits = Vec::new();
     for (first, second, a, b) in [
@@ -383,12 +392,9 @@ fn splits(ctx: u8, kinds: &[Vec<Variant>]) -> Vec<(u8, &'static str, &'static st
             "CHRIS",
             "JILL",
         ),
-        (
-            half(&|kind| kind.steam),
-            half(&|kind| !kind.steam),
-            "STEAM",
-            "!STEAM",
-        ),
+        region(Region::Usa, "USA", "!USA"),
+        region(Region::Jpn, "JPN", "!JPN"),
+        region(Region::Eur, "EUR", "!EUR"),
     ] {
         if first != 0 && second != 0 && first | second == ctx {
             splits.push((first, a, b));
@@ -398,7 +404,7 @@ fn splits(ctx: u8, kinds: &[Vec<Variant>]) -> Vec<(u8, &'static str, &'static st
 }
 
 /// The lines of `entries` for the variants in `ctx`.
-fn emit(entries: &[Entry], ctx: u8, kinds: &[Vec<Variant>]) -> Vec<String> {
+fn emit(entries: &[Entry], ctx: Mask, kinds: &[Vec<Variant>]) -> Vec<String> {
     let live: Vec<Entry> = entries
         .iter()
         .filter(|entry| entry.mask & ctx != 0)
@@ -461,14 +467,16 @@ fn continues(line: &str) -> bool {
 }
 
 /// The variant bits in `ctx`.
-fn bits(ctx: u8) -> impl Iterator<Item = u8> {
-    (0..8).map(|bit| 1 << bit).filter(move |bit| ctx & bit != 0)
+fn bits(ctx: Mask) -> impl Iterator<Item = Mask> {
+    (0..Mask::BITS)
+        .map(|bit| 1 << bit)
+        .filter(move |bit| ctx & bit != 0)
 }
 
 /// For one variant: whether its first line in `live[start..end]` or its
 /// first line after it continues an earlier statement, and whether its
 /// braces close past `start` or stay open at `end`.
-fn breaks(live: &[Entry], start: usize, end: usize, bit: u8) -> (bool, bool, bool) {
+fn breaks(live: &[Entry], start: usize, end: usize, bit: Mask) -> (bool, bool, bool) {
     let held = |entry: &&Entry| entry.mask & bit != 0;
     let continued = live[start..end]
         .iter()
@@ -501,13 +509,13 @@ fn breaks(live: &[Entry], start: usize, end: usize, bit: u8) -> (bool, bool, boo
 /// Whether a block can start at `live[start]` and end before `live[end]`:
 /// each variant in `ctx` sees balanced braces that never close past the
 /// start, and no statement crosses either end.
-fn contained(live: &[Entry], start: usize, end: usize, ctx: u8) -> bool {
+fn contained(live: &[Entry], start: usize, end: usize, ctx: Mask) -> bool {
     bits(ctx).all(|bit| breaks(live, start, end, bit) == (false, false, false))
 }
 
 /// Grow `live[start..end]` until it holds whole statements for every
 /// variant in `ctx`.
-fn contain(live: &[Entry], mut start: usize, mut end: usize, ctx: u8) -> (usize, usize) {
+fn contain(live: &[Entry], mut start: usize, mut end: usize, ctx: Mask) -> (usize, usize) {
     loop {
         let (mut back, mut forward) = (false, false);
         for bit in bits(ctx) {
@@ -534,7 +542,7 @@ fn contain(live: &[Entry], mut start: usize, mut end: usize, ctx: u8) -> (usize,
 /// Write a run of lines not every variant in `ctx` holds as `#if` blocks.
 /// The run is cut where its lines change from differing on one symbol pair
 /// to the other, and the cuts that give the shortest text are kept.
-fn split(run: &[Entry], ctx: u8, kinds: &[Vec<Variant>]) -> Vec<String> {
+fn split(run: &[Entry], ctx: Mask, kinds: &[Vec<Variant>]) -> Vec<String> {
     let pairs = splits(ctx, kinds);
     // Which pair each line differs on alone, if just one.
     let class = |entry: &Entry| {
@@ -587,9 +595,9 @@ fn split(run: &[Entry], ctx: u8, kinds: &[Vec<Variant>]) -> Vec<String> {
 /// text.
 fn split_block(
     run: &[Entry],
-    ctx: u8,
+    ctx: Mask,
     kinds: &[Vec<Variant>],
-    pairs: &[(u8, &'static str, &'static str)],
+    pairs: &[(Mask, &'static str, &'static str)],
 ) -> Vec<String> {
     let mut best: Option<Vec<String>> = None;
     for &(first, a, b) in pairs {
@@ -618,7 +626,7 @@ fn split_block(
         }
     }
     // A run only exists when `ctx` holds variants that differ, and those
-    // always differ in the mansion, the player or the release.
+    // always differ in the mansion, the player or the region.
     best.expect("a run of differing lines has a symbol to split on")
 }
 
@@ -636,29 +644,23 @@ pub fn merge_rooms(rooms: &BTreeMap<u16, String>) -> Result<BTreeMap<u16, String
     )
 }
 
-/// [`merge_rooms`] over both releases: `steam` and `mediakite` hold each
-/// release's per-RDT scripts, and the lines they differ in go under
-/// `#if STEAM`.
-pub fn merge_releases(
-    steam: &BTreeMap<u16, String>,
-    mediakite: &BTreeMap<u16, String>,
+/// [`merge_rooms`] over several regions, each with its per-RDT scripts: the
+/// lines they differ in go under `#if USA`, `#if JPN` or `#if EUR`. A region
+/// may hold RDTs the others lack.
+pub fn merge_regions(
+    regions: &[(Region, &BTreeMap<u16, String>)],
 ) -> Result<BTreeMap<u16, String>> {
-    if let Some(id) = steam.keys().find(|id| !mediakite.contains_key(id)) {
-        bail!("RDT {id:04X} has scripts in the Steam release but not the Mediakite one");
+    for (index, (region, _)) in regions.iter().enumerate() {
+        ensure!(
+            regions[..index].iter().all(|(other, _)| other != region),
+            "region {region} given twice"
+        );
     }
-    if let Some(id) = mediakite.keys().find(|id| !steam.contains_key(id)) {
-        bail!("RDT {id:04X} has scripts in the Mediakite release but not the Steam one");
-    }
-    merge_variants(
-        steam
+    merge_variants(regions.iter().flat_map(|&(region, rooms)| {
+        rooms
             .iter()
-            .map(|(&id, text)| (id, Variant::for_room(id), text.as_str()))
-            .chain(
-                mediakite
-                    .iter()
-                    .map(|(&id, text)| (id, Variant::for_room(id).mediakite(), text.as_str())),
-            ),
-    )
+            .map(move |(&id, text)| (id, Variant::for_room(id).in_region(region), text.as_str()))
+    }))
 }
 
 /// Merge `(RDT id, variant, script)` triples into one script per room.

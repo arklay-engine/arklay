@@ -16,6 +16,7 @@
 #define ENEMY_01_ZOMBIE_LAB 0x01
 #define IMDL_00 0x00
 #define MSG_THERE_IS_A_LADDER 0x00
+#if MANSION2
 
 proc init
 {
@@ -53,3 +54,4 @@ event on_aot_02
     }
     evt_finish();
 }
+#endif

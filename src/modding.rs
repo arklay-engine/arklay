@@ -117,7 +117,7 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
                 .with_context(|| format!("failed to read {}", source.display()))?;
             let dir = source.parent().unwrap_or(Path::new("."));
             let load = crate::scd::akscr::includes_from(dir);
-            let mut by_release = false;
+            let mut by_region = Vec::new();
             for id in crate::scd::akscr::room_variants(base) {
                 let variant = crate::scd::akscr::Variant::for_room(id);
                 let compile = |variant| {
@@ -126,14 +126,22 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
                         .with_context(|| format!("failed to compile {relative} for room {id:04X}"))
                 };
                 let container = compile(variant)?;
-                by_release |= compile(variant.mediakite())? != container;
+                for region in crate::scd::akscr::Region::ALL {
+                    if !by_region.contains(&region)
+                        && compile(variant.in_region(region))? != container
+                    {
+                        by_region.push(region);
+                    }
+                }
                 let output = format!("{prefix}{id:04x}.scd");
                 push_entry(&mut entries, &mut outputs, output, container, relative)?;
             }
-            if by_release {
+            if !by_region.is_empty() {
+                let regions: Vec<&str> = by_region.iter().map(|region| region.symbol()).collect();
                 warnings.push(format!(
-                    "{relative} builds differently for the Mediakite release (`#if STEAM`); the \
-                     mod packs the Steam/GOG build, which runs on either release"
+                    "{relative} builds differently for {}; the mod packs the USA build, which \
+                     runs on every region",
+                    regions.join(" and ")
                 ));
             }
             continue;
@@ -338,8 +346,8 @@ fn scd_source_output(relative: &str) -> Option<String> {
 /// A merged room script `scd/<room>.akscr` (three hex digits, e.g.
 /// `scd/103.akscr`): the `scd/` prefix as written and the room id. It builds
 /// `scd/<id>.scd` for every player and mansion variant of the room, for the
-/// Steam/GOG release (`#if STEAM`): a mod's script has no build per release,
-/// so the build warns when the Mediakite one would differ.
+/// USA region (`#if USA`): a mod's script has no build per region, so the
+/// build warns when another region's would differ.
 fn merged_scd_source(relative: &str) -> Option<(&str, u16)> {
     let (prefix, name) = relative.split_at_checked(4)?;
     if !prefix.eq_ignore_ascii_case("scd/") {
@@ -587,8 +595,8 @@ mod tests {
     }
 
     #[test]
-    fn a_merged_room_script_by_release_warns() {
-        let dir = TempDir::new("scd-release");
+    fn a_merged_room_script_by_region_warns() {
+        let dir = TempDir::new("scd-region");
         let source = dir.path.join("source");
         write(
             &source.join("manifest.toml"),
@@ -596,14 +604,14 @@ mod tests {
         );
         write(
             &source.join("scd/514.akscr"),
-            b"#version 1\nproc main noreturn\n{\n#if !STEAM\n    nop(1);\n#endif\n}\n",
+            b"#version 1\nproc main noreturn\n{\n#if JPN\n    nop(1);\n#endif\n}\n",
         );
 
         let summary = build_mod(&source, &dir.path.join("demo.akpak"), None).unwrap();
         assert_eq!(summary.warnings.len(), 1, "{:?}", summary.warnings);
         assert!(
             summary.warnings[0].contains("scd/514.akscr")
-                && summary.warnings[0].contains("Mediakite"),
+                && summary.warnings[0].contains("for JPN;"),
             "{:?}",
             summary.warnings
         );
