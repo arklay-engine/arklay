@@ -398,6 +398,10 @@ pub struct GpuRenderer {
     /// Whether the swapchain uses mailbox, which never waits for vsync; the
     /// caller's frame pacing ([`crate::pacer`]) then sets the present rate.
     mailbox: bool,
+    /// Make the next [`GpuRenderer::record_scene`] fail, for the tests of
+    /// what a failed scene does.
+    #[cfg(test)]
+    pub(crate) fail_next_scene: bool,
 }
 
 impl GpuRenderer {
@@ -581,6 +585,8 @@ impl GpuRenderer {
             retiring: false,
             fresh: Vec::new(),
             mailbox: false,
+            #[cfg(test)]
+            fail_next_scene: false,
         };
         // From here a failure drops `renderer`, which releases whatever was
         // created so far.
@@ -1818,6 +1824,10 @@ impl GpuRenderer {
     /// carries. The result persists until the next call, so a frozen frame
     /// (the pause menu) keeps compositing it.
     pub fn record_scene(&mut self, scene: &GameplayScene<'_>, pack: Option<&Pack>) -> Result<()> {
+        #[cfg(test)]
+        if std::mem::take(&mut self.fail_next_scene) {
+            bail!("simulated scene failure");
+        }
         self.follow_window()?;
         self.frame += 1;
         self.fresh.clear();
