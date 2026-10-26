@@ -221,6 +221,8 @@ struct Pipelines {
     /// The masks' keys into `mask_keys` (depth only).
     mask_keys: *mut SDL_GPUGraphicsPipeline,
     sprite: *mut SDL_GPUGraphicsPipeline,
+    /// [`Pipelines::sprite`] writing depth: the F4 debug geometry.
+    sprite_depth: *mut SDL_GPUGraphicsPipeline,
     /// The scene and a frame's 2D replacements into `overlay_target`.
     overlay: *mut SDL_GPUGraphicsPipeline,
     /// An overlay's projected models into their [`ModelTarget`]s.
@@ -527,6 +529,7 @@ impl GpuRenderer {
                 mesh_blend: std::ptr::null_mut(),
                 mask_keys: std::ptr::null_mut(),
                 sprite: std::ptr::null_mut(),
+                sprite_depth: std::ptr::null_mut(),
                 overlay: std::ptr::null_mut(),
                 model_opaque: std::ptr::null_mut(),
                 model_blend: std::ptr::null_mut(),
@@ -1067,6 +1070,8 @@ impl GpuRenderer {
             SDL_GPU_SAMPLECOUNT_1,
         )?;
         self.pipelines.sprite = sprite(self, (depth_format, false), Some(colour), self.samples)?;
+        self.pipelines.sprite_depth =
+            sprite(self, (depth_format, true), Some(colour), self.samples)?;
         let model_attributes = [
             attribute(0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, 0),
             attribute(1, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 16),
@@ -1859,7 +1864,12 @@ impl GpuRenderer {
             }
             let sprites = scene::scene_sprites(scene);
             let mut sprite_textures = HashMap::new();
-            for run in sprites.before.iter().chain(&sprites.after) {
+            for run in sprites
+                .before
+                .iter()
+                .chain(&sprites.after)
+                .chain(sprites.debug.iter().map(|(run, _)| run))
+            {
                 let key = run.image as *const Image as usize;
                 if let std::collections::hash_map::Entry::Vacant(slot) = sprite_textures.entry(key)
                     && let Some(texture) =
@@ -2083,6 +2093,14 @@ impl GpuRenderer {
         }
 
         draw_sprites(pass, self.pipelines.sprite, self.mask_keys, &sprites.after);
+        for (run, write) in &sprites.debug {
+            let pipeline = if *write {
+                self.pipelines.sprite_depth
+            } else {
+                self.pipelines.sprite
+            };
+            draw_sprites(pass, pipeline, self.mask_keys, std::slice::from_ref(run));
+        }
         unsafe { SDL_EndGPURenderPass(pass) };
         Ok(())
     }
@@ -3356,6 +3374,7 @@ impl Drop for GpuRenderer {
                 self.pipelines.mesh_blend,
                 self.pipelines.mask_keys,
                 self.pipelines.sprite,
+                self.pipelines.sprite_depth,
                 self.pipelines.overlay,
                 self.pipelines.model_opaque,
                 self.pipelines.model_blend,
@@ -3545,6 +3564,7 @@ mod tests {
             effect_layer: None,
             mirror_from: meshes.len(),
             mirror: None,
+            debug: &[],
         };
         let mut software = Framebuffer::new();
         scene.draw(&mut software);
@@ -3636,6 +3656,7 @@ mod tests {
                 effect_layer: None,
                 mirror_from: 0,
                 mirror: None,
+                debug: &[],
             };
             gpu.record_scene(&scene, None).unwrap();
             assert_eq!(gpu.resident_counts().2, 1);
@@ -3754,6 +3775,7 @@ mod tests {
             effect_layer: None,
             mirror_from: meshes.len(),
             mirror: None,
+            debug: &[],
         };
         // Where the cube is: what its original draw changes.
         let mut draw = |scene: &GameplayScene<'_>, pack: Option<&Pack>| {
@@ -3900,6 +3922,7 @@ mod tests {
             effect_layer: None,
             mirror_from: 0,
             mirror: None,
+            debug: &[],
         };
         gpu.record_scene(&scene, None).unwrap();
         let replacement = |rgba: [u8; 4]| {

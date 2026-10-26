@@ -779,7 +779,7 @@ fn yaw_rotate(yaw: i16, v: [i16; 3]) -> [i16; 3] {
 /// `ProjectEffectSprite` (0x0040aa50): the stored camera (`g_RoomCameraData`,
 /// pre-scaled by 4) rotates `(x, -y, z)` with 32-bit sums truncated toward
 /// zero (`MulMatrixVec3`) before the camera translation joins them.
-fn project(camera: &Camera, fov: i32, world: [i32; 3]) -> (i16, i16, i32) {
+pub(crate) fn project(camera: &Camera, fov: i32, world: [i32; 3]) -> (i16, i16, i32) {
     let (matrix, translation) = crate::render::ref_camera(camera);
     let point = [world[0], world[1].wrapping_neg(), world[2]];
     let out: [i32; 3] = std::array::from_fn(|row| {

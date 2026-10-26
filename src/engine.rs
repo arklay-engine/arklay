@@ -35,6 +35,7 @@
 //!   parent chain.
 
 mod debug_hud;
+mod debug_view;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -67,9 +68,10 @@ use sdl3_sys::init::{
     SDL_INIT_GAMEPAD, SDL_INIT_VIDEO, SDL_Init, SDL_InitSubSystem, SDL_Quit, SDL_QuitSubSystem,
 };
 use sdl3_sys::joystick::SDL_JoystickID;
+use sdl3_sys::keyboard::SDL_GetModState;
 use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_NONE, SDL_KMOD_SHIFT, SDLK_COMMA, SDLK_PERIOD};
 use sdl3_sys::main::SDL_SetMainReady;
-use sdl3_sys::mouse::{SDL_BUTTON_LEFT, SDL_MOUSEWHEEL_FLIPPED};
+use sdl3_sys::mouse::{SDL_BUTTON_LEFT, SDL_BUTTON_MIDDLE, SDL_MOUSEWHEEL_FLIPPED};
 use sdl3_sys::pixels::SDL_PIXELFORMAT_ABGR8888;
 use sdl3_sys::rect::{SDL_FRect, SDL_Rect};
 use sdl3_sys::render::{
@@ -81,8 +83,8 @@ use sdl3_sys::render::{
 };
 use sdl3_sys::scancode::{
     SDL_SCANCODE_1, SDL_SCANCODE_3, SDL_SCANCODE_E, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F2,
-    SDL_SCANCODE_F3, SDL_SCANCODE_F6, SDL_SCANCODE_F8, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_Q,
-    SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB, SDL_Scancode,
+    SDL_SCANCODE_F3, SDL_SCANCODE_F4, SDL_SCANCODE_F6, SDL_SCANCODE_F8, SDL_SCANCODE_KP_ENTER,
+    SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB, SDL_Scancode,
 };
 use sdl3_sys::stdinc::SDL_free;
 use sdl3_sys::surface::{
@@ -93,7 +95,7 @@ use sdl3_sys::timer::{SDL_DelayNS, SDL_GetTicksNS};
 use sdl3_sys::video::{
     SDL_CreateWindow, SDL_DestroyWindow, SDL_DisplayID, SDL_GetDisplayForWindow,
     SDL_GetDisplayName, SDL_GetDisplayUsableBounds, SDL_GetDisplays, SDL_GetPrimaryDisplay,
-    SDL_GetWindowBordersSize, SDL_GetWindowPixelDensity, SDL_GetWindowSize,
+    SDL_GetWindowBordersSize, SDL_GetWindowFromID, SDL_GetWindowPixelDensity, SDL_GetWindowSize,
     SDL_GetWindowSizeInPixels, SDL_SetWindowFullscreen, SDL_SetWindowFullscreenMode,
     SDL_SetWindowMinimumSize, SDL_SetWindowPosition, SDL_SetWindowResizable, SDL_SetWindowSize,
     SDL_SetWindowTitle, SDL_ShowWindow, SDL_SyncWindow, SDL_WINDOW_HIDDEN,
@@ -5673,6 +5675,7 @@ impl GameSession {
                     effect_layer: None,
                     mirror_from: meshes.len(),
                     mirror: None,
+                    debug: &[],
                 };
                 match gpu.record_scene(&scene, Some(pack)) {
                     Ok(()) => {
@@ -9100,6 +9103,10 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         for _ in 0..keys.debug_overlay {
             hud.cycle();
         }
+        for _ in 0..keys.render_mode {
+            let mode = debug_view::cycle();
+            hud.notify("render", format!("Render mode: {}", mode.label()));
+        }
         if let Some(bindings) = app.take_bindings_change() {
             input.apply_bindings_change(bindings);
         }
@@ -11411,6 +11418,8 @@ struct PortKeys {
     speed_delta: i32,
     /// F6 presses: each steps the debug overlay's mode.
     debug_overlay: u32,
+    /// F4 presses: each steps the debug render mode.
+    render_mode: u32,
 }
 
 /// Poll every queued SDL event into `input`, reporting whether the user quit
@@ -11440,8 +11449,9 @@ fn poll_events(
             let modifiers = unsafe { event.key.r#mod };
             let repeat = unsafe { event.key.repeat };
             // F2/F3 slow down and speed up the simulation (see LoopClock),
-            // and F6 steps the debug overlay. They are fixed port-only keys
-            // like F8, so they never reach the action bindings.
+            // F4 steps the debug render mode and F6 the debug overlay. They
+            // are fixed port-only keys like F8, so they never reach the
+            // action bindings.
             if matches!(scancode, SDL_SCANCODE_F2 | SDL_SCANCODE_F3) {
                 if !repeat {
                     keys.speed_delta += if scancode == SDL_SCANCODE_F3 { 1 } else { -1 };
@@ -11451,6 +11461,13 @@ fn poll_events(
             if scancode == SDL_SCANCODE_F6 {
                 if !repeat {
                     keys.debug_overlay += 1;
+                }
+                continue;
+            }
+            // F4 cycles the debug render modes (see `debug_view`).
+            if scancode == SDL_SCANCODE_F4 {
+                if !repeat {
+                    keys.render_mode += 1;
                 }
                 continue;
             }
@@ -11482,12 +11499,25 @@ fn poll_events(
             input.key_up(unsafe { event.key.scancode });
         } else if kind == SDL_EVENT_MOUSE_MOTION {
             let motion = unsafe { event.motion };
+            if debug_view::mouse_captured() {
+                let mut height = 0;
+                let mut width = 0;
+                let window = unsafe { SDL_GetWindowFromID(motion.windowID) };
+                if !window.is_null() {
+                    unsafe { SDL_GetWindowSize(window, &mut width, &mut height) };
+                }
+                let shift = unsafe { SDL_GetModState() } & SDL_KMOD_SHIFT != SDL_KMOD_NONE;
+                debug_view::mouse_motion([motion.xrel, motion.yrel], height as f32, shift);
+            }
             input.push_gui_event(gui::GuiEvent::PointerMove {
                 x: motion.x,
                 y: motion.y,
             });
         } else if kind == SDL_EVENT_MOUSE_BUTTON_DOWN {
             let button = unsafe { event.button };
+            if i32::from(button.button) == SDL_BUTTON_MIDDLE && debug_view::middle_button(true) {
+                continue;
+            }
             if i32::from(button.button) == SDL_BUTTON_LEFT {
                 input.push_gui_event(gui::GuiEvent::PointerDown {
                     x: button.x,
@@ -11497,6 +11527,9 @@ fn poll_events(
             input.source_down(0, Source::Mouse(button.button), false);
         } else if kind == SDL_EVENT_MOUSE_BUTTON_UP {
             let button = unsafe { event.button };
+            if i32::from(button.button) == SDL_BUTTON_MIDDLE && debug_view::middle_button(false) {
+                continue;
+            }
             if i32::from(button.button) == SDL_BUTTON_LEFT {
                 input.push_gui_event(gui::GuiEvent::PointerUp {
                     x: button.x,
@@ -11515,6 +11548,10 @@ fn poll_events(
                 1
             };
             let (x, y) = (wheel.integer_x * sign, wheel.integer_y * sign);
+            if debug_view::mouse_captured() {
+                debug_view::mouse_wheel(y);
+                continue;
+            }
             for (delta, positive, negative) in
                 [(y, Wheel::Up, Wheel::Down), (x, Wheel::Right, Wheel::Left)]
             {
@@ -12145,16 +12182,34 @@ fn build_effect_quads(
         if effect.anim_id == 0 || effects::behaviour::hidden(effect) {
             continue;
         }
+        // The tick projected the effect by the cut's camera; the free camera
+        // projects its world point again.
+        let unculled = debug_view::unculled();
+        let reprojected;
+        let effect = if unculled && effect.flags() & 0x0002 != 0 {
+            let (x, y, depth) =
+                effects::behaviour::project(camera, camera.fov, effect.pos.map(i32::from));
+            let mut copy = *effect;
+            copy.screen = [x, y];
+            copy.proj_depth = depth;
+            copy.depth_scaled = ((depth as u16) << 2) as i16;
+            reprojected = copy;
+            &reprojected
+        } else {
+            effect
+        };
         if (effect.proj_depth as u32) & 0xFFFFFFF0 > effects::behaviour::PROJECTED_DEPTH_CULL as u32
         {
             continue;
         }
-        if !effects::behaviour::in_switch_zone(
-            room,
-            room.current_cut,
-            i32::from(effect.pos[0]),
-            i32::from(effect.pos[2]),
-        ) {
+        if !unculled
+            && !effects::behaviour::in_switch_zone(
+                room,
+                room.current_cut,
+                i32::from(effect.pos[0]),
+                i32::from(effect.pos[2]),
+            )
+        {
             continue;
         }
         let Some(sprite_type) = effect.sprite else {
@@ -13811,7 +13866,7 @@ fn visible_objects<'a>(
         // The camera-switch cull uses the composed world translation, the
         // original's `is_entity_in_switch_zone(record + 0x54)`.
         let mut world = objects::world_matrix(objects, slot, player_pos, player_angle);
-        if !enemy::in_camera_zone(room, camera, world.t) {
+        if !debug_view::unculled() && !enemy::in_camera_zone(room, camera, world.t) {
             continue;
         }
         if object_render_skipped(room, camera, record) {
@@ -13827,6 +13882,7 @@ fn visible_objects<'a>(
         // the eye (GTE `t[2] < 0`), unless the room pins it to the fixed
         // ordering-table slot instead of sorting by depth.
         if !object_fixed_depth(room, record)
+            && !debug_view::unculled()
             && view
                 .as_ref()
                 .is_some_and(|view| view.view_position(world.t)[2] < 0)
@@ -13872,7 +13928,7 @@ fn visible_items<'a>(
         };
         let world =
             objects::item_world_matrix(items, objects, lighting, slot, player_pos, player_angle);
-        if !enemy::in_camera_zone(room, camera, world.t) {
+        if !debug_view::unculled() && !enemy::in_camera_zone(room, camera, world.t) {
             continue;
         }
         visible.push((asset, record, world, slot));
@@ -13981,6 +14037,9 @@ fn joint_hidden_mask(
     joint_flags: u32,
     joints: &[anim::Mat4x3],
 ) -> u32 {
+    if debug_view::unculled() {
+        return joint_flags;
+    }
     let mut hidden = joint_flags;
     for (index, joint) in joints.iter().enumerate() {
         if index >= 32 {
@@ -14082,6 +14141,7 @@ fn render_frame_on(
     let shake = game.screen_shake();
     let mut camera = Camera::from_cut(cut);
     camera.screen = game.screen_offset();
+    let camera = debug_view::camera(camera, id);
     let lighting = Lighting::from_room(room);
 
     let page = if cut.masks.is_empty() || cut.mask_active == 0 {
@@ -14227,7 +14287,7 @@ fn render_frame_on(
         // queues its ground quad - except the tail segment, whose own quad the
         // original's whole-body shadow pass never reaches.
         let yawn_segment = matches!(entity.id, 0x0D | 0x12) && entity.behavior_flags == 1;
-        let shadow_gate = entity.has_enter_switch_zone & 0x7F != 0
+        let shadow_gate = (entity.has_enter_switch_zone & 0x7F != 0 || debug_view::unculled())
             && !(yawn_segment && entity.yawn_joint == 0x0E);
         // An entity queues its own ground quad whenever it entered the current
         // camera's switch zone: characters read the per-character tint and
@@ -14330,7 +14390,7 @@ fn render_frame_on(
             entity.id,
             entity.behavior_flags,
         ));
-        npc_zone_gate.push(entity.has_enter_switch_zone & 0x7F != 0);
+        npc_zone_gate.push(entity.has_enter_switch_zone & 0x7F != 0 || debug_view::unculled());
         npc_lights.push((entity.pos, matches!(entity.id, 0x0D | 0x12)));
     }
 
@@ -14601,7 +14661,7 @@ fn render_frame_on(
         let Some(clone) = clone else {
             continue;
         };
-        if !clone.live || clone.entity.has_enter_switch_zone == 0 {
+        if !clone.live || (clone.entity.has_enter_switch_zone == 0 && !debug_view::unculled()) {
             continue;
         }
         if clone.entity.status_flags == 0
@@ -14698,7 +14758,9 @@ fn render_frame_on(
             // The heart's `live` bit already carries the owner's switch-zone
             // entry (its own draw gate); the plant companions are gated on the
             // companion's own zone membership instead.
-            || (!heart && !enemy::in_camera_zone(room, room.current_cut, companion.entity.pos))
+            || (!heart
+                && !debug_view::unculled()
+                && !enemy::in_camera_zone(room, room.current_cut, companion.entity.pos))
         {
             continue;
         }
@@ -14884,7 +14946,12 @@ fn render_frame_on(
         plane: i32::from(game.mirror.plane),
         extent_min: game.mirror.extent_min,
         extent_max: game.mirror.extent_max,
-        camera_pos: cut.pos,
+        // The free camera's eye, when it draws the frame.
+        camera_pos: if debug_view::unculled() {
+            camera.from
+        } else {
+            cut.pos
+        },
         camera: camera.mirrored(game.mirror_axis_x(), i32::from(game.mirror.plane)),
     });
     // The display origin pans the background; in gameplay it is the frame's
@@ -14898,8 +14965,37 @@ fn render_frame_on(
         shake
     };
     let global_colour = [255; 3];
+    let render_mode = debug_view::mode();
+    let debug_line = if gpu.is_some() {
+        debug_view::GPU_LINE
+    } else {
+        debug_view::SOFTWARE_LINE
+    };
+    let debug_triangles = match render_mode.collision() {
+        Some(solid) => debug_view::collision_triangles(
+            &room.collision,
+            &game.room_actions,
+            &camera,
+            DEBUG_FLOOR_Y,
+            player_state.pos,
+            solid,
+            debug_line,
+        ),
+        None if render_mode == debug_view::RenderMode::AotOverlay => {
+            debug_view::aot_triangles(&game.room_actions, &camera, DEBUG_FLOOR_Y, debug_line)
+        }
+        None => Vec::new(),
+    };
+    let background = if render_mode.background() {
+        cut.background.as_ref()
+    } else if render_mode.collision().is_some() {
+        Some(debug_view::collision_backdrop())
+    } else {
+        None
+    };
+    let layer = layer.filter(|_| render_mode.masks());
     let scene = render::GameplayScene {
-        background: cut.background.as_ref(),
+        background,
         background_generation: None,
         origin: display_origin,
         colour: global_colour,
@@ -14911,6 +15007,7 @@ fn render_frame_on(
         effect_layer: Some(&effect_layer),
         mirror_from: visible.len() + visible_item_models.len(),
         mirror: mirror.as_ref(),
+        debug: &debug_triangles,
     };
     let on_gpu = match gpu {
         Some(gpu) => match gpu.record_scene(&scene, Some(pack)) {
@@ -14930,8 +15027,14 @@ fn render_frame_on(
         }
     };
     draw_special_light(framebuffer, game, id, room.current_cut);
+    if !on_gpu && !debug_triangles.is_empty() {
+        debug_view::draw_software(framebuffer, &debug_triangles, &meshes, &camera);
+    }
     on_gpu
 }
+
+/// The floor height the F4 debug views draw the collision and AOTs at.
+const DEBUG_FLOOR_Y: i32 = 0;
 
 /// Report a failed GPU scene once per run; the frame falls back to software.
 fn warn_gpu_scene_failed(err: &anyhow::Error) {
