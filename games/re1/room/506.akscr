@@ -1,31 +1,38 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_1E 0x1E
+
 proc init
 {
-    door_aot_set(0, 13800, 1900, 3300, 2000, 10, 12, 13, 64, 0, RDT_005, 21600, 0, 21000, 1024, UNLOCKED, 129);
+    door_aot_set(0, 13800, 1900, 3300, 2000, 10, 12, 13, 64, 0, ROOM_505_O_PASSAGE, 21600, 0, 21000, 1024, UNLOCKED, 129);
     aot_set(1, 16000, 7600, 1000, 1200, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
-    item_aot_set(2, 9160, 7640, 1800, 1800, ITEM_SLIDES, 1, 0, 255, 76, 39, 0, 0, 92, 33, 0, 0, 179, 129, 1, 0);
+    item_aot_set(2, 9160, 7640, 1800, 1800, ITEM_2B_PUZZLE_SLIDES, 1, 0, 255, 76, 39, 0, 0, 92, 33, 0, 0, 179, 129, 1, 0);
     aot_set(3, 16800, 5700, 900, 1700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(4, 2100, 2900, 900, 1700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
     aot_set(6, 2500, 1700, 4000, 1300, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     aot_set(7, 11800, 9300, 4000, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     aot_set(8, 8200, 5200, 5000, 2300, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     aot_set(9, 1900, 10000, 8900, 1200, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    set(FG_ROOM, 30, 0);
+    set(FG_ROOM, FLAG_ROOM_1E, TRUE);
     obj(0, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(2, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (ck(FG_STATUS, 8, 1))
+    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        enemy(ENEMY_COMPUTER_HANDS_RIGHT_, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16564, -1242, 8322, 0, 0, 0, 0);
-        enemy(ENEMY_COMPUTER_HANDS_LEFT_, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16564, -1242, 9022, 1, 0, 0, 0);
+        enemy(ENEMY_15_PROP_COMPUTER_HANDS_RIGHT, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16564, -1242, 8322, 0, 0, 0, 0);
+        enemy(ENEMY_14_PROP_COMPUTER_HANDS_LEFT, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16564, -1242, 9022, 1, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_COMPUTER_HANDS_RIGHT_, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16660, -1242, 8482, 0, 0, 0, 0);
-        enemy(ENEMY_COMPUTER_HANDS_LEFT_, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16660, -1242, 8894, 1, 0, 0, 0);
+        enemy(ENEMY_15_PROP_COMPUTER_HANDS_RIGHT, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16660, -1242, 8482, 0, 0, 0, 0);
+        enemy(ENEMY_14_PROP_COMPUTER_HANDS_LEFT, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16660, -1242, 8894, 1, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, 43, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, FALSE))
     {
         room_bgm_state_set(4, 6, 8);
     }
@@ -47,7 +54,7 @@ event event_00
     {
         if (cmpb(5, 0, 0))
         {
-            set(FG_SCENARIO, 32, 0);
+            set(FG_SCENARIO, FLAG_SCENARIO_20, TRUE);
         }
     }
     evt_finish();

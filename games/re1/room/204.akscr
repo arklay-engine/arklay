@@ -1,55 +1,64 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_00 0x00
+#define FLAG_ROOM_01 0x01
+#define FLAG_ROOM_18 0x18
+
 proc init
 {
-    door_aot_set(0, 900, 2900, 1900, 1600, 1, 0, 3, 1, 0, RDT_003, 31200, -2885, 20500, 2048, UNLOCKED, 129);
-    door_aot_set(1, 16600, 11000, 2200, 2200, 11, 1, 9, 5, 206, RDT_005, 16000, 0, 7300, 2048, ITEM_ARMOR_KEY, 129);
-    door_aot_set(2, 2300, 19300, 2000, 2100, 0, 0, 0, 4, 64, RDT_006, 3000, 0, 2600, 3072, UNLOCKED, 129);
+    door_aot_set(0, 900, 2900, 1900, 1600, 1, 0, 3, 1, 0, ROOM_203_HALL_2F, 31200, -2885, 20500, 2048, UNLOCKED, 129);
+    door_aot_set(1, 16600, 11000, 2200, 2200, 11, 1, 9, 5, 206, ROOM_205_ARMOR_ROOM, 16000, 0, 7300, 2048, ITEM_34_KEY_MANSION_ARMOR, 129);
+    door_aot_set(2, 2300, 19300, 2000, 2100, 0, 0, 0, 4, 64, ROOM_206_DOLL_ROOM, 3000, 0, 2600, 3072, UNLOCKED, 129);
 #if CHRIS
-    door_aot_set(3, 12300, 19200, 2400, 2200, 0, 0, 0, 7, 150, RDT_007, 3000, 0, 3600, 3072, LOCKED, 129);
+    door_aot_set(3, 12300, 19200, 2400, 2200, 0, 0, 0, 7, 150, ROOM_207_2F_RIGHT_STAIRS, 3000, 0, 3600, 3072, LOCKED, 129);
 #else
-    door_aot_set(3, 12300, 19200, 2400, 2200, 0, 0, 0, 7, 150, RDT_007, 3000, 0, 3800, 3072, LOCKED, 129);
+    door_aot_set(3, 12300, 19200, 2400, 2200, 0, 0, 0, 7, 150, ROOM_207_2F_RIGHT_STAIRS, 3000, 0, 3800, 3072, LOCKED, 129);
 #endif
-    door_aot_set(4, 11400, 1100, 2100, 1600, 0, 0, 0, 7, 141, RDT_00D, 3000, 0, 12600, 1024, ITEM_ARMOR_KEY, 129);
+    door_aot_set(4, 11400, 1100, 2100, 1600, 0, 0, 0, 7, 141, ROOM_20D_PILLAR_PASSAGE, 3000, 0, 12600, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
 #if CHRIS
 #if MANSION1
-    enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 109, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 168, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
-    if (ck(FG_SCENARIO, 5, 1))
+    enemy(ENEMY_11_ZOMBIE_LAB, 0, 109, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    enemy(ENEMY_11_ZOMBIE_LAB, 0, 168, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_05, FALSE))
     {
-        set(FG_SCENARIO, 5, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_05, TRUE);
     }
 #else
-    enemy(ENEMY_HUNTER, 32, 110, 1, 2, 0, 0, 0, 0, 0, 0, 0, 10000, 0, 0, 0, 0);
-    enemy(ENEMY_HUNTER, 32, 169, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
-    if (ck(FG_COMMON, 103, 0) && ck(FG_ENEMY, 111, 1) && cmpb(3, 0, 6))
+    enemy(ENEMY_06_HUNTER, 32, 110, 1, 2, 0, 0, 0, 0, 0, 0, 0, 10000, 0, 0, 0, 0);
+    enemy(ENEMY_06_HUNTER, 32, 169, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+    if (ck(FG_COMMON, FLAG_COMMON_67, TRUE) && ck(FG_ENEMY, FLAG_ENEMY_6F, FALSE) && cmpb(3, 0, 6))
     {
-        set(FG_COMMON, 107, 0);
-        set(FG_COMMON, 108, 0);
+        set(FG_COMMON, FLAG_COMMON_6B, TRUE);
+        set(FG_COMMON, FLAG_COMMON_6C, TRUE);
     }
 #endif
 #else
 #if MANSION2
-    enemy(ENEMY_HUNTER, 2, 110, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    enemy(ENEMY_06_HUNTER, 2, 110, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #endif
-    if (ck(FG_COMMON, 95, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_5F, TRUE))
     {
-        set(FG_COMMON, 94, 0);
+        set(FG_COMMON, FLAG_COMMON_5E, TRUE);
     }
 #if MANSION1
-    enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 109, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 168, 1, 2, 0, 0, 0, 0, 0, 0, 0, 10000, 1, 0, 0, 0);
+    enemy(ENEMY_11_ZOMBIE_LAB, 0, 109, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    enemy(ENEMY_11_ZOMBIE_LAB, 0, 168, 1, 2, 0, 0, 0, 0, 0, 0, 0, 10000, 1, 0, 0, 0);
 #endif
-    set(FG_COMMON, 79, 0);
+    set(FG_COMMON, FLAG_COMMON_4F, TRUE);
 #endif
 }
 
 proc main
 {
 #if MANSION1
-    if (ck(FG_ROOM, 24, 1))
+    if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
     {
-        set(FG_ROOM, 24, 0);
+        set(FG_ROOM, FLAG_ROOM_18, TRUE);
         if (cmpb(3, 0, 3))
         {
             pos_set(0, 0, 0, 0, 5500, 0, 18500);
@@ -68,9 +77,9 @@ proc main
     }
 #else
 #if CHRIS
-    if (ck(FG_ROOM, 24, 1))
+    if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
     {
-        set(FG_ROOM, 24, 0);
+        set(FG_ROOM, FLAG_ROOM_18, TRUE);
         if (cmpb(3, 0, 3))
         {
             pos_set(0, 0, 0, 0, 5500, 0, 18500);
@@ -87,15 +96,15 @@ proc main
             pos_set(1, 0, 2048, 0, 19000, 0, 18500);
         }
     }
-    if (ck(FG_COMMON, 107, 0) && ck(FG_COMMON, 192, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_6B, TRUE) && ck(FG_COMMON, FLAG_COMMON_C0, FALSE))
     {
-        set(FG_COMMON, 192, 0);
+        set(FG_COMMON, FLAG_COMMON_C0, TRUE);
         voice_play(1, 93, 0);
     }
 #else
-    if (ck(FG_ROOM, 24, 1))
+    if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
     {
-        set(FG_ROOM, 24, 0);
+        set(FG_ROOM, FLAG_ROOM_18, TRUE);
         if (cmpb(3, 0, 3))
         {
             pos_set(0, 0, 2048, 0, 19000, 0, 3500);
@@ -111,22 +120,22 @@ proc main
     }
 #endif
 #endif
-    if (ck(FG_COMMON, 98, 0) && ck(FG_SCENARIO, 77, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_4D, FALSE))
     {
-        set(FG_STATUS, 22, 0);
-        set(FG_SCENARIO, 77, 0);
+        set(FG_STATUS, FLAG_STATUS_16, TRUE);
+        set(FG_SCENARIO, FLAG_SCENARIO_4D, TRUE);
     }
-    if (ck(FG_STATUS, 22, 1) && ck(FG_ROOM, 1, 0))
+    if (ck(FG_STATUS, FLAG_STATUS_16, FALSE) && ck(FG_ROOM, FLAG_ROOM_01, TRUE))
     {
-        set(FG_6, 24, 0);
-        set(FG_6, 25, 0);
+        set(FG_6, FLAG_6_18, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
     }
-    if (ck(FG_STATUS, 22, 1) && ck(FG_ROOM, 0, 0))
+    if (ck(FG_STATUS, FLAG_STATUS_16, FALSE) && ck(FG_ROOM, FLAG_ROOM_00, TRUE))
     {
-        set(FG_ROOM, 1, 0);
+        set(FG_ROOM, FLAG_ROOM_01, TRUE);
     }
-    if (ck(FG_STATUS, 22, 0) && ck(FG_ROOM, 0, 1))
+    if (ck(FG_STATUS, FLAG_STATUS_16, TRUE) && ck(FG_ROOM, FLAG_ROOM_00, FALSE))
     {
-        set(FG_ROOM, 0, 0);
+        set(FG_ROOM, FLAG_ROOM_00, TRUE);
     }
 }

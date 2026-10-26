@@ -1,30 +1,40 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_3B 0x3B
+#define FLAG_ROOM_3C 0x3C
+#define FLAG_ROOM_3D 0x3D
+#define FLAG_ROOM_3E 0x3E
+
 proc init
 {
-    door_aot_set(0, 0, 4700, 2650, 4100, 9, 0, 4, 7, 0, RDT_006, 30700, 0, 12400, 2048, UNLOCKED, 129);
-    door_aot_set(1, 15400, 2900, 2300, 2600, 2, 0, 0, 1, 137, RDT_008, 3400, 0, 4000, 0, ITEM_SWORD_KEY, 129);
-    if (cmpb(9, 0, 3) && ck(FG_ITEM, 145, 0))
+    door_aot_set(0, 0, 4700, 2650, 4100, 9, 0, 4, 7, 0, ROOM_106_MAIN_HALL, 30700, 0, 12400, 2048, UNLOCKED, 129);
+    door_aot_set(1, 15400, 2900, 2300, 2600, 2, 0, 0, 1, 137, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, ITEM_33_KEY_MANSION_SWORD, 129);
+    if (cmpb(9, 0, 3) && ck(FG_ITEM, FLAG_ITEM_91, TRUE))
     {
-        item_aot_set(2, 0, 0, 0, 0, ITEM_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
+        item_aot_set(2, 0, 0, 0, 0, ITEM_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
         eml_rot(0, 58, 253, 0, 0);
         aot_set(5, 7950, 5500, 2700, 2300, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
     }
-    else if (ck(FG_ITEM, 145, 0))
+    else if (ck(FG_ITEM, FLAG_ITEM_91, TRUE))
     {
-        item_aot_set(2, 0, 0, 0, 0, ITEM_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
+        item_aot_set(2, 0, 0, 0, 0, ITEM_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
         eml_rot(0, 58, 253, 0, 0);
         aot_set(5, 7950, 5500, 2700, 2300, SCE_EVENT, 0, 9, 0, event_00, 0, 0, 0);
     }
-    if (cmpb(9, 0, 3) && ck(FG_ITEM, 39, 0))
+    if (cmpb(9, 0, 3) && ck(FG_ITEM, FLAG_ITEM_27, TRUE))
     {
-        item_aot_set(131, 12880, 12830, 1800, 1800, ITEM_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 0, 0, 0);
+        item_aot_set(131, 12880, 12830, 1800, 1800, ITEM_2F_TOOL_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 0, 0, 0);
         eml_rot(1, 0, 0, 182, 3);
         aot_set(4, 12880, 12830, 1800, 1800, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
     }
     else
     {
-        item_aot_set(131, 12880, 12830, 1800, 1800, ITEM_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 129, 0, 0);
+        item_aot_set(131, 12880, 12830, 1800, 1800, ITEM_2F_TOOL_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 129, 0, 0);
         eml_rot(1, 0, 0, 182, 3);
     }
     aot_set(6, 7300, 6000, 500, 1800, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
@@ -41,13 +51,13 @@ proc init
     aot_set(17, 13700, 6000, 1600, 1700, SCE_USEITEM, 65, 4, 0, 59, 0, 1, 0);
     obj(64, 65, 255, 12500, 0, 4600, 0, 29, 1, 0, 0, 227, 254, 0, 0, 213, 2, 132, 3, 222, 3, 32, 3);
     obj(1, 1, 255, 14345, 0, 8795, 2048, 0, 0, 28, 2, 0, 0, 228, 253, 28, 2, 8, 7, 26, 4, 70, 5);
-    if (ck(FG_SCENARIO, 0, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
-        enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 3, 145, 1, 2, 0, 0, 45, 0, 0, 17670, 0, 13522, 0, 0, 0, 0);
+        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 3, 145, 1, 2, 0, 0, 45, 0, 0, 17670, 0, 13522, 0, 0, 0, 0);
     }
-    if (ck(FG_STATUS, 8, 0))
+    if (ck(FG_STATUS, FLAG_STATUS_08, TRUE))
     {
-        set(FG_COMMON, 79, 0);
+        set(FG_COMMON, FLAG_COMMON_4F, TRUE);
     }
 }
 
@@ -55,9 +65,9 @@ proc main
 {
     if (cmpb(9, 5, 3))
     {
-        if (ck(FG_ITEM, 145, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_91, TRUE))
         {
-            if (ck(FG_STATUS, 24, 0))
+            if (ck(FG_STATUS, FLAG_STATUS_18, TRUE))
             {
                 aot_delete(5, SCE_EVENT, 129);
             }
@@ -67,9 +77,9 @@ proc main
             }
         }
     }
-    else if (ck(FG_ITEM, 145, 0))
+    else if (ck(FG_ITEM, FLAG_ITEM_91, TRUE))
     {
-        if (ck(FG_STATUS, 24, 0))
+        if (ck(FG_STATUS, FLAG_STATUS_18, TRUE))
         {
             aot_delete(5, SCE_MESSAGE, 129);
         }
@@ -80,9 +90,9 @@ proc main
     }
     if (cmpb(2, 0, 3))
     {
-        set(FG_MAP, 29, 0);
+        set(FG_MAP, FLAG_MAP_1D, TRUE);
     }
-    if (ck(FG_ROOM, 62, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_3E, TRUE))
     {
         aot_delete(15, SCE_MESSAGE, 129);
     }
@@ -90,7 +100,7 @@ proc main
     {
         aot_delete(15, SCE_MESSAGE, 0);
     }
-    if (ck(FG_ROOM, 61, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_3D, TRUE))
     {
         aot_delete(12, SCE_MESSAGE, 129);
     }
@@ -98,7 +108,7 @@ proc main
     {
         aot_delete(12, SCE_MESSAGE, 0);
     }
-    if (ck(FG_ROOM, 60, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_3C, TRUE))
     {
         aot_delete(11, SCE_MESSAGE, 129);
     }
@@ -106,7 +116,7 @@ proc main
     {
         aot_delete(11, SCE_MESSAGE, 0);
     }
-    if (ck(FG_ROOM, 59, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_3B, TRUE))
     {
         aot_delete(16, SCE_MESSAGE, 129);
     }

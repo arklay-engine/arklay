@@ -5,8 +5,16 @@
 //! second (stages 6/7). The symbols are `CHRIS`, `JILL`, `MANSION1` and
 //! `MANSION2`; blocks nest. A room outside the mansion defines neither
 //! mansion symbol.
+//!
+//! `#define NAME value` names a number (or another name) for the arguments
+//! that follow, and `#include "inc/items.akinc"` reads defines from a file;
+//! an include file holds only directives, comments and blank lines, and each
+//! file is read once.
 
-use anyhow::{Result, bail};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, bail};
 
 /// The defined symbols.
 pub const SYMBOLS: [&str; 4] = ["CHRIS", "JILL", "MANSION1", "MANSION2"];
@@ -144,9 +152,56 @@ pub(super) fn kept_lines(text: &str, variant: Option<Variant>) -> Result<Vec<(us
     Ok(kept)
 }
 
+/// Reads the text of an `#include` path.
+pub type Loader<'a> = &'a dyn Fn(&str) -> Result<String>;
+
+/// A loader for scripts given as text alone: any `#include` is an error.
+pub fn no_includes(path: &str) -> Result<String> {
+    bail!("`#include \"{path}\"` needs the script's location to resolve it")
+}
+
+/// A loader for a script in `dir`: an include path resolves against `dir`
+/// and then each directory above it, so `room/103.akscr` finds
+/// `inc/items.akinc` beside `room/`.
+pub fn includes_from(dir: &Path) -> impl Fn(&str) -> Result<String> + use<> {
+    let dir = dir.to_path_buf();
+    move |path: &str| {
+        let relative = Path::new(path);
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir))
+        {
+            bail!("include path `{path}` must be relative and stay below the script");
+        }
+        let mut search: Option<&Path> = Some(&dir);
+        while let Some(base) = search {
+            let candidate: PathBuf = base.join(relative);
+            if candidate.is_file() {
+                return std::fs::read_to_string(&candidate)
+                    .with_context(|| format!("failed to read {}", candidate.display()));
+            }
+            search = base.parent();
+        }
+        bail!("include `{path}` not found from {}", dir.display())
+    }
+}
+
+/// A preprocessed script: the text to parse and the names it defined.
+pub struct Preprocessed {
+    pub text: String,
+    pub defines: HashMap<String, i64>,
+}
+
 /// Resolve the directives for `variant`. Dropped and directive lines become
 /// blank, so line numbers in later errors still point into the source.
-pub fn preprocess(text: &str, variant: Option<Variant>) -> Result<String> {
+pub fn preprocess(text: &str, variant: Option<Variant>, load: Loader) -> Result<Preprocessed> {
+    let mut state = State {
+        defines: HashMap::new(),
+        included: HashSet::new(),
+        variant,
+        load,
+    };
     let kept = kept_lines(text, variant)?;
     let mut out = String::with_capacity(text.len());
     let mut next = 1usize;
@@ -155,9 +210,105 @@ pub fn preprocess(text: &str, variant: Option<Variant>) -> Result<String> {
             out.push('\n');
             next += 1;
         }
-        out.push_str(line);
+        if !state
+            .directive(line)
+            .with_context(|| format!("line {line_no}"))?
+        {
+            out.push_str(line);
+        }
         out.push('\n');
         next += 1;
     }
-    Ok(out)
+    Ok(Preprocessed {
+        text: out,
+        defines: state.defines,
+    })
+}
+
+struct State<'a> {
+    defines: HashMap<String, i64>,
+    included: HashSet<String>,
+    variant: Option<Variant>,
+    load: Loader<'a>,
+}
+
+impl State<'_> {
+    /// Apply an `#include` or `#define` line; `false` for any other line.
+    fn directive(&mut self, line: &str) -> Result<bool> {
+        let trimmed = line.trim();
+        if let Some(rest) = word(trimmed, "#include") {
+            let path = rest
+                .strip_prefix('"')
+                .and_then(|rest| rest.strip_suffix('"'))
+                .filter(|path| !path.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("expected `#include \"path\"`"))?;
+            if self.included.insert(path.to_string()) {
+                let text = (self.load)(path)?;
+                self.include(&text)
+                    .with_context(|| format!("in `{path}`"))?;
+            }
+            return Ok(true);
+        }
+        if let Some(rest) = word(trimmed, "#define") {
+            let mut parts = rest.split_whitespace();
+            let (Some(name), Some(value), None) = (parts.next(), parts.next(), parts.next()) else {
+                bail!("expected `#define NAME value`");
+            };
+            if !crate::scd::asm::is_identifier(name) {
+                bail!("`{name}` is not a valid name");
+            }
+            let value = match parse_number(value) {
+                Some(value) => value,
+                None => *self.defines.get(value).ok_or_else(|| {
+                    anyhow::anyhow!("`{value}` is not a number or a defined name")
+                })?,
+            };
+            if let Some(previous) = self.defines.insert(name.to_string(), value)
+                && previous != value
+            {
+                bail!("`{name}` is already defined as {previous}");
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Read an include file's defines.
+    fn include(&mut self, text: &str) -> Result<()> {
+        for (line_no, line) in kept_lines(text, self.variant)? {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("//") {
+                continue;
+            }
+            if !self
+                .directive(line)
+                .with_context(|| format!("line {line_no}"))?
+            {
+                bail!("line {line_no}: an include file holds only `#define` and `#include` lines");
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `rest` after a directive `word` and whitespace.
+fn word<'a>(line: &'a str, word: &str) -> Option<&'a str> {
+    let rest = line.strip_prefix(word)?;
+    (rest.is_empty() || rest.starts_with(char::is_whitespace)).then(|| rest.trim())
+}
+
+/// A decimal or `0x` hex number, optionally negative.
+pub(super) fn parse_number(text: &str) -> Option<i64> {
+    let (negative, digits) = match text.strip_prefix('-') {
+        Some(digits) => (true, digits),
+        None => (false, text),
+    };
+    let value = match digits
+        .strip_prefix("0x")
+        .or_else(|| digits.strip_prefix("0X"))
+    {
+        Some(hex) => i64::from_str_radix(hex, 16).ok()?,
+        None => digits.parse().ok()?,
+    };
+    Some(if negative { -value } else { value })
 }

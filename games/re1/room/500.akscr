@@ -1,12 +1,17 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 0, 8000, 2500, 3300, 11, 1, 11, 3, 156, RDT_001, 30000, 0, 3500, 2048, ITEM_LAB_KEY_1_, 129);
-    door_aot_set(1, 7500, 2400, 1600, 1700, 0, 14, 20, 64, 0, RDT_310, 0, 0, 0, 2048, UNLOCKED, 129);
-    door_aot_set(2, 3200, 5900, 2100, 1700, 1, 11, 26, 64, 0, RDT_002, 5300, 0, 11200, 1024, UNLOCKED, 129);
+    door_aot_set(0, 0, 8000, 2500, 3300, 11, 1, 11, 3, 156, ROOM_501_HELIPORT_PASSAGE, 30000, 0, 3500, 2048, ITEM_37_KEY_LAB_MASTER, 129);
+    door_aot_set(1, 7500, 2400, 1600, 1700, 0, 14, 20, 64, 0, STAGE_3 | ROOM_310_COURT_TO_LABO, 0, 0, 0, 2048, UNLOCKED, 129);
+    door_aot_set(2, 3200, 5900, 2100, 1700, 1, 11, 26, 64, 0, ROOM_502_LADDER_ROOM, 5300, 0, 11200, 1024, UNLOCKED, 129);
     aot_set(3, 2000, 11500, 1000, 2000, SCE_EVENT, 129, 9, 0, event_03, 0, 0, 0);
-    if (ck(FG_COMMON, 74, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_4A, FALSE))
     {
         effect_tracked(10, 16, 0, 160, 15, 184, 242, 122, 43, 0, 0);
     }
@@ -14,22 +19,22 @@ proc init
     {
         effect(10, 24, 0, 160, 15, 184, 242, 122, 43, 0, 0);
     }
-    if (ck(FG_SCENARIO, 55, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE))
     {
-        if (ck(FG_COMMON, 75, 0))
+        if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
         {
 #if CHRIS
-            enemy(ENEMY_JILL_STARS_, 2, 255, 1, 2, 0, 0, 1024, 0, 0, 6100, 0, 9200, 0, 0, 0, 0);
+            enemy(ENEMY_21_NPC_JILL, 2, 255, 1, 2, 0, 0, 1024, 0, 0, 6100, 0, 9200, 0, 0, 0, 0);
 #else
-            enemy(ENEMY_CHRIS_STARS_, 2, 255, 1, 2, 0, 0, 1730, 0, 0, 6040, 0, 10070, 0, 0, 0, 0);
+            enemy(ENEMY_20_NPC_CHRIS, 2, 255, 1, 2, 0, 0, 1730, 0, 0, 6040, 0, 10070, 0, 0, 0, 0);
 #endif
             evt_exec(0, 9, event_00);
         }
 #if JILL
-        if (ck(FG_COMMON, 192, 1))
+        if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE))
         {
-            enemy(ENEMY_BARRY_STARS_, 4, 255, 1, 2, 0, 0, 500, 0, 0, 3680, 0, 11310, 1, 0, 0, 0);
-            if (ck(FG_COMMON, 81, 1))
+            enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 500, 0, 0, 3680, 0, 11310, 1, 0, 0, 0);
+            if (ck(FG_COMMON, FLAG_COMMON_51, FALSE))
             {
                 evt_exec(0, 9, event_02);
             }
@@ -39,7 +44,7 @@ proc init
             }
         }
 #endif
-        if (ck(FG_SCENARIO, 43, 0))
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE))
         {
             aot_reset(1, SCE_MESSAGE, 129, 130, 255, 0);
         }
@@ -48,7 +53,7 @@ proc init
             aot_reset(1, SCE_MESSAGE, 129, 132, 255, 0);
         }
 #if JILL
-        set(FG_COMMON, 78, 0);
+        set(FG_COMMON, FLAG_COMMON_4E, TRUE);
 #endif
     }
     aot_reset(2, SCE_EVENT, 129, 9, event_05, 0);
@@ -56,11 +61,11 @@ proc init
 
 proc main
 {
-    if (ck(FG_COMMON, 74, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_4A, FALSE))
     {
-        if (ck(FG_LOCK, 28, 0))
+        if (ck(FG_LOCK, FLAG_LOCK_1C, TRUE))
         {
-            set(FG_COMMON, 74, 0);
+            set(FG_COMMON, FLAG_COMMON_4A, TRUE);
             effect_kill_a(0);
             effect(10, 24, 0, 160, 15, 184, 242, 122, 43, 0, 0);
         }
@@ -86,8 +91,8 @@ event event_02
     sleep(1);
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
         cutnext(2);
     }
     sleep(20);
@@ -127,12 +132,12 @@ event event_02
     {
         cutcurr(0);
         cut_auto(0);
-        set(FG_STATUS, 15, 1);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     }
     sleep(20);
     run
     {
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
         eml_state(0, 1, 8);
     }
     evt_finish();
@@ -142,7 +147,7 @@ event event_03
 {
     run
     {
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
         cutnext(4);
     }
     sleep(20);
@@ -156,7 +161,7 @@ event event_03
     {
         cutnext(2);
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -165,14 +170,14 @@ event event_04
 {
     run
     {
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
     }
     sleep(5);
     run
     {
         effect_kill_a(0);
         effect(10, 24, 0, 160, 15, 184, 242, 122, 43, 0, 0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }

@@ -7,24 +7,29 @@
 
 use anyhow::{Result, bail};
 
-use super::preprocess::{Variant, preprocess};
+use std::collections::HashMap;
+
+use super::preprocess::{Loader, Variant, no_includes, preprocess};
 use crate::budget;
 use crate::scd::asm::{self, Arg, Assembled, InsnSrc, Item, ItemKind, Source};
 use crate::scd::disasm::{ACTOR_SIG, CONTROL_SIG, EVENT_TOP_SIG, TWEEN_SIG};
 
-/// Compile `.akscr` source into the SCD IR. The script must not use `#if`;
-/// see [`compile_variant`].
+/// Compile `.akscr` source into the SCD IR. The script must not use `#if`
+/// or `#include`; see [`compile_with`].
 pub fn compile(text: &str) -> Result<Assembled> {
-    compile_preprocessed(&preprocess(text, None)?)
+    compile_with(text, None, &no_includes)
 }
 
 /// Compile the `variant` of a merged `.akscr` script into the SCD IR.
 pub fn compile_variant(text: &str, variant: Variant) -> Result<Assembled> {
-    compile_preprocessed(&preprocess(text, Some(variant))?)
+    compile_with(text, Some(variant), &no_includes)
 }
 
-fn compile_preprocessed(text: &str) -> Result<Assembled> {
-    let sections = parse(text)?;
+/// Compile a script for `variant` (required when it uses `#if`), reading
+/// its `#include` files through `load`.
+pub fn compile_with(text: &str, variant: Option<Variant>, load: Loader) -> Result<Assembled> {
+    let preprocessed = preprocess(text, variant, load)?;
+    let sections = parse(&preprocessed.text, &preprocessed.defines)?;
     let mut source = Source::default();
     let mut pad_events = Vec::new();
     let mut init_done = false;
@@ -70,15 +75,15 @@ fn compile_preprocessed(text: &str) -> Result<Assembled> {
     asm::assemble_source(&source, &pad_events)
 }
 
-/// Compile a single section (with or without the `#version` line) and return
-/// the bytes of its block or event stream.
-pub(super) fn section_bytes(text: &str) -> Result<Vec<u8>> {
+/// Compile a single section (with or without the `#version` line), naming
+/// with `defines`, and return the bytes of its block or event stream.
+pub(super) fn section_bytes(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<u8>> {
     let text = if text.trim_start().starts_with('#') {
         text.to_string()
     } else {
         format!("#version 1\n{text}")
     };
-    let sections = parse(&text)?;
+    let sections = parse(&text, defines)?;
     let [section] = sections.as_slice() else {
         bail!("expected exactly one section");
     };
@@ -325,10 +330,81 @@ impl Stmt {
     }
 }
 
-fn parse(text: &str) -> Result<Vec<Section>> {
+/// Names the compiler itself knows: the engine's flag groups, room action
+/// types, work variables and door lock states, and `event_XX`.
+fn is_engine_name(name: &str) -> bool {
+    asm::is_engine_constant(name)
+        || name
+            .strip_prefix("event_")
+            .is_some_and(|hex| hex.len() == 2 && u8::from_str_radix(hex, 16).is_ok())
+}
+
+/// Replace each defined name in an `asm` line with its value.
+fn substitute(line: &str, defines: &HashMap<String, i64>) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        match defines.get(word.as_str()) {
+            Some(value) => out.push_str(&value.to_string()),
+            None => out.push_str(word),
+        }
+        word.clear();
+    };
+    for ch in line.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            word.push(ch);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(ch);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
+/// The values of the compiler's own names: `ck` / `set` truth values (the
+/// engine's 0 is true) and `set`'s toggle.
+const BUILTINS: [(&str, i64); 3] = [("TRUE", 0), ("FALSE", 1), ("TOGGLE", 2)];
+
+fn parse(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<Section>> {
     budget::check_len(text.len(), budget::MAX_TEXT_BYTES, "script size")?;
     let tokens = lex(text)?;
-    let mut parser = Parser { tokens, pos: 0 };
+    let mut defines = defines.clone();
+    for (name, value) in BUILTINS {
+        defines.entry(name.to_string()).or_insert(value);
+    }
+    // Event names stand for their index, so any event may name any other.
+    let mut depth = 0usize;
+    let mut events = 0i64;
+    for pair in tokens.windows(2) {
+        match &pair[0].tok {
+            Tok::Punct("{") => depth += 1,
+            Tok::Punct("}") => depth = depth.saturating_sub(1),
+            Tok::Ident(word) if depth == 0 && word == "event" => {
+                if let Tok::Ident(name) = &pair[1].tok {
+                    // A generic `event_XX` is index XX wherever it stands.
+                    let index = name
+                        .strip_prefix("event_")
+                        .filter(|hex| hex.len() == 2)
+                        .and_then(|hex| i64::from_str_radix(hex, 16).ok())
+                        .unwrap_or(events);
+                    if defines.insert(name.clone(), index).is_some() {
+                        bail!(
+                            "line {}: event name `{name}` is already defined",
+                            pair[1].line
+                        );
+                    }
+                    events += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut parser = Parser {
+        tokens,
+        pos: 0,
+        defines,
+    };
     parser.version()?;
     let mut sections = Vec::new();
     while parser.peek().tok != Tok::Eof {
@@ -340,6 +416,8 @@ fn parse(text: &str) -> Result<Vec<Section>> {
 struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    /// `#define`s, the builtins and the event names.
+    defines: HashMap<String, i64>,
 }
 
 impl Parser {
@@ -407,10 +485,12 @@ impl Parser {
     fn expect_int(&mut self) -> Result<i64> {
         let negative = self.eat_punct("-");
         let token = self.next();
-        match token.tok {
-            Tok::Num(value) => Ok(if negative { -value } else { value }),
-            _ => self.error(&token, "a number"),
-        }
+        let value = match &token.tok {
+            Tok::Num(value) => *value,
+            Tok::Ident(name) if self.defines.contains_key(name) => self.defines[name],
+            _ => return self.error(&token, "a number"),
+        };
+        Ok(if negative { -value } else { value })
     }
 
     fn version(&mut self) -> Result<()> {
@@ -446,13 +526,16 @@ impl Parser {
             }
             "event" => {
                 let (name, name_token) = self.expect_ident()?;
-                let index = name
-                    .strip_prefix("event_")
-                    .filter(|hex| hex.len() == 2)
-                    .and_then(|hex| u8::from_str_radix(hex, 16).ok());
-                match index {
-                    Some(index) => SectionKind::Event(index),
-                    None => return self.error(&name_token, "an event name `event_XX`"),
+                // A generic `event_XX` name must sit at index XX.
+                if let Some(hex) = name.strip_prefix("event_").filter(|hex| hex.len() == 2)
+                    && let Ok(index) = u8::from_str_radix(hex, 16)
+                {
+                    SectionKind::Event(index)
+                } else {
+                    match u8::try_from(self.defines[&name]) {
+                        Ok(index) => SectionKind::Event(index),
+                        Err(_) => return self.error(&name_token, "at most 256 events"),
+                    }
                 }
             }
             _ => return self.error(&token, "`proc` or `event`"),
@@ -484,7 +567,13 @@ impl Parser {
         let token = self.next();
         let (line, col) = (token.line, token.col);
         let word = match &token.tok {
-            Tok::Asm(lines) => return Ok(Stmt::Asm(lines.clone())),
+            Tok::Asm(lines) => {
+                let lines = lines
+                    .iter()
+                    .map(|(line_no, line)| (*line_no, substitute(line, &self.defines)))
+                    .collect();
+                return Ok(Stmt::Asm(lines));
+            }
             Tok::Ident(word) => word.clone(),
             _ => return self.error(&token, "a statement"),
         };
@@ -625,10 +714,19 @@ impl Parser {
     }
 
     fn argument(&mut self) -> Result<Arg> {
-        if let Tok::Ident(name) = &self.peek().tok {
-            let name = name.clone();
+        let token = self.peek().clone();
+        if let Tok::Ident(name) = &token.tok
+            && !self.defines.contains_key(name)
+        {
             self.pos += 1;
-            return Ok(Arg::Symbol(name));
+            if !is_engine_name(name) {
+                bail!(
+                    "line {}, column {}: unknown name `{name}` (is an `#include` missing?)",
+                    token.line,
+                    token.col
+                );
+            }
+            return Ok(Arg::Symbol(name.clone()));
         }
         let value = self.expect_int()?;
         if self.eat_punct("|") {

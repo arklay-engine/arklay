@@ -1,10 +1,15 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 11100, 20500, 3200, 3800, 12, 1, 11, 3, 0, RDT_00C, 12700, 0, 2500, 3072, UNLOCKED, 129);
-    door_aot_set(1, 21100, 4800, 1500, 2100, 0, 1, 11, 3, 0, RDT_010, 22000, 0, 16500, 1024, UNLOCKED, 129);
-    if (ck(FG_SCENARIO, 46, 1))
+    door_aot_set(0, 11100, 20500, 3200, 3800, 12, 1, 11, 3, 0, ROOM_50C_FRONT_OF_ELEVATOR, 12700, 0, 2500, 3072, UNLOCKED, 129);
+    door_aot_set(1, 21100, 4800, 1500, 2100, 0, 1, 11, 3, 0, ROOM_510_MAZE_B, 22000, 0, 16500, 1024, UNLOCKED, 129);
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_2E, FALSE))
     {
         aot_set(2, 1528, 3494, 1050, 1800, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
     }
@@ -12,7 +17,7 @@ proc init
     {
         aot_set(2, 1528, 3494, 950, 1800, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, 43, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE))
     {
         room_bgm_state_set(4, 15, 57);
     }
@@ -20,16 +25,16 @@ proc init
     {
         room_bgm_state_set(4, 15, 8);
     }
-    if (ck(FG_STATUS, 8, 1))
+    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        enemy(ENEMY_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
-        enemy(ENEMY_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
-        enemy(ENEMY_CHIMERA, 2, 178, 1, 2, 0, 0, 3128, 0, 0, 16093, 0, 4892, 2, 0, 0, 0);
+        enemy(ENEMY_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
+        enemy(ENEMY_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
+        enemy(ENEMY_09_CHIMERA, 2, 178, 1, 2, 0, 0, 3128, 0, 0, 16093, 0, 4892, 2, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
-        enemy(ENEMY_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
+        enemy(ENEMY_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
+        enemy(ENEMY_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
     }
     evt_exec(0, 9, event_03);
     evt_exec(0, 9, event_04);
@@ -37,7 +42,7 @@ proc init
 
 event event_00
 {
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
     message(128, 255);
     do
     {
@@ -63,8 +68,8 @@ event event_01
     se_play_3d(2, 23, 0, 1, 0, 0, 0);
     run
     {
-        set(FG_6, 23, 0);
-        set(FG_SCENARIO, 46, 0);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_SCENARIO, FLAG_SCENARIO_2E, TRUE);
         aot_reset(2, SCE_MESSAGE, 129, 129, 255, 0);
     }
     evt_finish();
@@ -72,7 +77,7 @@ event event_01
 
 event event_02
 {
-    set(FG_6, 23, 0);
+    set(FG_6, FLAG_6_17, TRUE);
     evt_finish();
 }
 

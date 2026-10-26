@@ -1,9 +1,19 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_01 0x01
+#define FLAG_ROOM_02 0x02
+#define FLAG_ROOM_20 0x20
+#define FLAG_ROOM_22 0x22
+
 proc init
 {
-    door_aot_set(0, 4700, 2700, 1800, 2300, 3, 1, 8, 0, 0, RDT_00A, 2400, 0, 11900, 0, UNLOCKED, 129);
-    door_aot_set(1, 8000, 24500, 1500, 2100, 2, 1, 8, 0, 151, RDT_01B, 3500, 0, 6600, 0, UNLOCKED, 129);
+    door_aot_set(0, 4700, 2700, 1800, 2300, 3, 1, 8, 0, 0, ROOM_10A_BACK_PASSAGE, 2400, 0, 11900, 0, UNLOCKED, 129);
+    door_aot_set(1, 8000, 24500, 1500, 2100, 2, 1, 8, 0, 151, ROOM_11B_STORE_ROOM, 3500, 0, 6600, 0, UNLOCKED, 129);
 #if MANSION1
     aot_set(2, 6500, 27200, 2000, 1000, SCE_USEITEM, 129, 4, 0, 32, 0, 1, 0);
     aot_set(3, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 19, 0, 1, 0);
@@ -13,18 +23,18 @@ proc init
 #else
     aot_set(2, 6500, 27200, 2000, 1000, SCE_EVENT, 129, 0, 0, event_00, 0, 0, 0);
 #if CHRIS
-    if (ck(FG_SCENARIO, 127, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_7F, FALSE))
     {
-        item_aot_set(3, 6500, 27200, 2000, 1000, ITEM_4D, 1, 0, 255, 177, 18, 0, 0, 30, 35, 0, 0, 59, 129, 0, 0);
+        item_aot_set(3, 6500, 27200, 2000, 1000, ITEM_4D_TOOL_RADIO, 1, 0, 255, 177, 18, 0, 0, 30, 35, 0, 0, 59, 129, 0, 0);
         aot_reset(6, SCE_NONE, 0, 0, 0, 0);
-        set(FG_STATUS, 29, 0);
+        set(FG_STATUS, FLAG_STATUS_1D, TRUE);
     }
 #endif
 #endif
     obj(0, 47, 255, 7010, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(128, 0, 0, 0, 4);
 #if MANSION1
-    if (ck(FG_SCENARIO, 105, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_69, FALSE))
     {
         objtbl_b_set(0, 0, 0);
     }
@@ -32,7 +42,7 @@ proc init
     obj(1, 47, 255, 8040, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(129, 0, 0, 0, 4);
 #if MANSION1
-    if (ck(FG_SCENARIO, 107, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_6B, FALSE))
     {
         objtbl_b_set(0, 1, 0);
     }
@@ -40,7 +50,7 @@ proc init
     obj(2, 47, 255, 7540, -2390, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(130, 0, 0, 0, 4);
 #if MANSION1
-    if (ck(FG_SCENARIO, 106, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_6A, FALSE))
     {
         objtbl_b_set(0, 2, 0);
     }
@@ -48,27 +58,27 @@ proc init
     obj(3, 47, 255, 7530, -1900, 27220, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(131, 0, 0, 0, 4);
 #if MANSION1
-    if (ck(FG_SCENARIO, 108, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_6C, FALSE))
     {
         objtbl_b_set(0, 3, 0);
     }
-    enemy(ENEMY_CERBERUS, 3, 46, 1, 2, 0, 0, 1536, 0, 0, 6500, 0, 24860, 0, 0, 0, 0);
+    enemy(ENEMY_02_DOG_CERBERUS, 3, 46, 1, 2, 0, 0, 1536, 0, 0, 6500, 0, 24860, 0, 0, 0, 0);
 #else
 #if CHRIS
-    if (ck(FG_SCENARIO, 23, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_17, TRUE))
     {
-        enemy(ENEMY_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, 0, 0, 0, 0);
     }
-    if (ck(FG_COMMON, 33, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_21, TRUE))
     {
-        set(FG_COMMON, 33, 1);
-        if (ck(FG_COMMON, 34, 0))
+        set(FG_COMMON, FLAG_COMMON_21, FALSE);
+        if (ck(FG_COMMON, FLAG_COMMON_22, TRUE))
         {
             plw_anim(2, 40, 0);
             setw(4, 0, 0);
             evt_exec(0, 9, event_03);
         }
-        if (ck(FG_COMMON, 54, 0))
+        if (ck(FG_COMMON, FLAG_COMMON_36, TRUE))
         {
             plw_anim(2, 40, 0);
             setw(4, 0, 0);
@@ -76,9 +86,9 @@ proc init
         }
     }
 #else
-    if (ck(FG_SCENARIO, 23, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_17, TRUE))
     {
-        enemy(ENEMY_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, 0, 0, 0, 0);
     }
 #endif
 #endif
@@ -87,9 +97,9 @@ proc init
 #if MANSION1
 proc main
 {
-    if (ck(FG_ROOM, 32, 0) && ck(FG_ROOM, 1, 1))
+    if (ck(FG_ROOM, FLAG_ROOM_20, TRUE) && ck(FG_ROOM, FLAG_ROOM_01, FALSE))
     {
-        if (ck(FG_SCENARIO, 105, 0) && ck(FG_SCENARIO, 106, 0) && ck(FG_SCENARIO, 107, 0) && ck(FG_SCENARIO, 108, 0))
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_69, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6C, TRUE))
         {
             evt_exec(0, 0, event_01);
         }
@@ -98,29 +108,29 @@ proc main
             evt_exec(0, 0, event_00);
         }
     }
-    if (testitem(ITEM_SUN_CREST))
+    if (testitem(ITEM_2E_PUZZLE_CREST_SUN))
     {
-        set(FG_ROOM, 1, 0);
+        set(FG_ROOM, FLAG_ROOM_01, TRUE);
         evt_exec(0, 0, event_03);
     }
-    if (testitem(ITEM_MOON_CREST))
+    if (testitem(ITEM_2C_PUZZLE_CREST_MOON))
     {
-        set(FG_ROOM, 1, 0);
+        set(FG_ROOM, FLAG_ROOM_01, TRUE);
         evt_exec(0, 0, event_04);
     }
-    if (testitem(ITEM_STAR_CREST))
+    if (testitem(ITEM_2D_PUZZLE_CREST_STAR))
     {
-        set(FG_ROOM, 1, 0);
+        set(FG_ROOM, FLAG_ROOM_01, TRUE);
         evt_exec(0, 0, event_05);
     }
-    if (testitem(ITEM_WIND_CREST))
+    if (testitem(ITEM_29_PUZZLE_CREST_WIND))
     {
-        set(FG_ROOM, 1, 0);
+        set(FG_ROOM, FLAG_ROOM_01, TRUE);
         evt_exec(0, 0, event_06);
     }
-    if (ck(FG_LOCK, 23, 1) && ck(FG_SCENARIO, 105, 0) && ck(FG_SCENARIO, 106, 0) && ck(FG_SCENARIO, 107, 0) && ck(FG_SCENARIO, 108, 0))
+    if (ck(FG_LOCK, FLAG_LOCK_17, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_69, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6C, TRUE))
     {
-        set(FG_LOCK, 23, 0);
+        set(FG_LOCK, FLAG_LOCK_17, TRUE);
         evt_exec(0, 1, event_07);
     }
 }
@@ -129,11 +139,11 @@ proc main
 #if CHRIS
 proc main
 {
-    if (ck(FG_SCENARIO, 127, 1) && cmpb(2, 0, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_7F, FALSE) && cmpb(2, 0, 1))
     {
-        set(FG_SCENARIO, 127, 0);
-        set(FG_STATUS, 29, 1);
-        set(FG_6, 23, 1);
+        set(FG_SCENARIO, FLAG_SCENARIO_7F, TRUE);
+        set(FG_STATUS, FLAG_STATUS_1D, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
         dir_set(0, 0, 996, 0, 2888, 0, 12473);
         evt_exec(0, 0, event_01);
     }
@@ -181,8 +191,8 @@ event event_03
 {
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
     }
     evt_next();
     evt_next();
@@ -191,14 +201,14 @@ event event_03
         se_play_3d(2, 23, 0, 0, 0, 7027, 27234);
         cutnext(4);
         objtbl_b_set(0, 0, 47);
-        set(FG_SCENARIO, 105, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_69, TRUE);
     }
     sleep(40);
     run
     {
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
-        set(FG_ROOM, 1, 1);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_ROOM, FLAG_ROOM_01, FALSE);
         cutcurr(0);
     }
     evt_finish();
@@ -208,8 +218,8 @@ event event_04
 {
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
     }
     evt_next();
     evt_next();
@@ -218,14 +228,14 @@ event event_04
         se_play_3d(2, 23, 0, 0, 0, 8117, 27234);
         cutnext(4);
         objtbl_b_set(0, 1, 47);
-        set(FG_SCENARIO, 107, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_6B, TRUE);
     }
     sleep(40);
     run
     {
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
-        set(FG_ROOM, 1, 1);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_ROOM, FLAG_ROOM_01, FALSE);
         cutcurr(0);
     }
     evt_finish();
@@ -235,8 +245,8 @@ event event_05
 {
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
     }
     evt_next();
     evt_next();
@@ -245,14 +255,14 @@ event event_05
         se_play_3d(2, 23, 0, 0, 0, 7597, 27234);
         cutnext(4);
         objtbl_b_set(0, 2, 47);
-        set(FG_SCENARIO, 106, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_6A, TRUE);
     }
     sleep(40);
     run
     {
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
-        set(FG_ROOM, 1, 1);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_ROOM, FLAG_ROOM_01, FALSE);
         cutcurr(0);
     }
     evt_finish();
@@ -262,8 +272,8 @@ event event_06
 {
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
     }
     evt_next();
     evt_next();
@@ -272,14 +282,14 @@ event event_06
         se_play_3d(2, 23, 0, 0, 0, 7597, 27234);
         cutnext(4);
         objtbl_b_set(0, 3, 47);
-        set(FG_SCENARIO, 108, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_6C, TRUE);
     }
     sleep(40);
     run
     {
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
-        set(FG_ROOM, 1, 1);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_ROOM, FLAG_ROOM_01, FALSE);
         cutcurr(0);
     }
     evt_finish();
@@ -290,16 +300,16 @@ event event_07
     evt_disable(0);
     run
     {
-        set(FG_6, 29, 1);
-        set(FG_6, 23, 1);
-        set(FG_ROOM, 1, 1);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_ROOM, FLAG_ROOM_01, FALSE);
     }
     sleep(30);
     run
     {
         cutcurr(0);
-        set(FG_6, 29, 0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_17, TRUE);
         se_play_3d(2, 24, 0, 0, 0, 8500, 24600);
     }
     evt_finish();
@@ -314,13 +324,13 @@ event event_01
     act_anim_seq(17154, 14346, 553);
     act_reset();
     sleep(10);
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 2, 1));
-    set(FG_ROOM, 2, 1);
+    while (ck(FG_ROOM, FLAG_ROOM_02, FALSE));
+    set(FG_ROOM, FLAG_ROOM_02, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(19, 4785, 0, 8990, 192, 64);
@@ -339,7 +349,7 @@ event event_01
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 34, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_22, FALSE));
     act_anim_flags(0 | 9, 32 | 2, 0 | 0);
     sleep(25);
     act_reset();
@@ -369,10 +379,10 @@ event event_01
     act_reset();
     run
     {
-        set(FG_ITEM, 59, 1);
-        set(FG_STATUS, 15, 1);
-        set(FG_6, 23, 0);
-        set(FG_STATUS, 29, 1);
+        set(FG_ITEM, FLAG_ITEM_3B, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, FLAG_STATUS_1D, FALSE);
     }
     evt_finish();
 }
@@ -394,7 +404,7 @@ event event_02
 
 event event_03
 {
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 2496, 0, 4500, 0, 4100);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -405,8 +415,8 @@ event event_03
     run
     {
         bgm_play(1);
-        set(FG_6, 29, 1);
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
         evt_exec(0, 9, event_04);
         voice_play(1, 84, 0);
         message(6, 0);
@@ -428,14 +438,14 @@ event event_03
     run
     {
         cut_auto(0);
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_STATUS, 15, 1);
+    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     evt_finish();
 }
 
@@ -466,7 +476,7 @@ event event_04
 
 event event_05
 {
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 2496, 0, 4500, 0, 4100);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -477,8 +487,8 @@ event event_05
     run
     {
         bgm_play(1);
-        set(FG_6, 29, 1);
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
         evt_exec(0, 9, event_06);
         voice_play(1, 100, 0);
         message(8, 0);
@@ -495,15 +505,15 @@ event event_05
     run
     {
         cut_auto(0);
-        set(FG_6, 29, 0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(51, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, 15, 1);
+    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     evt_finish();
 }
 

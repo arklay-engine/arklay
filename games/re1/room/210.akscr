@@ -1,13 +1,22 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_0F 0x0F
+#define FLAG_ROOM_1E 0x1E
+#define FLAG_ROOM_1F 0x1F
+
 proc init
 {
-    door_aot_set(0, 3200, 2200, 2400, 2100, 1, 0, 7, 1, 0, RDT_00E, 9400, -1402, 3300, 2048, UNLOCKED, 129);
-    item_aot_set(1, 3712, 23040, 1792, 2000, ITEM_MOON_CREST, 1, 0, 255, 62, 18, 0, 0, 80, 95, 0, 0, 129, 0, 32, 128);
+    door_aot_set(0, 3200, 2200, 2400, 2100, 1, 0, 7, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 9400, -1402, 3300, 2048, UNLOCKED, 129);
+    item_aot_set(1, 3712, 23040, 1792, 2000, ITEM_2C_PUZZLE_CREST_MOON, 1, 0, 255, 62, 18, 0, 0, 80, 95, 0, 0, 129, 0, 32, 128);
     eml_rot(0, 158, 12, 0, 0);
-    item_aot_set(2, 3840, 13568, 1280, 1500, ITEM_SHELLS, 7, 1, 255, 18, 17, 252, 249, 40, 55, 80, 251, 130, 129, 0, 0);
+    item_aot_set(2, 3840, 13568, 1280, 1500, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 18, 17, 252, 249, 40, 55, 80, 251, 130, 129, 0, 0);
     aot_set(3, 2300, 4500, 2000, 1300, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    if (ck(FG_ITEM, 129, 0))
+    if (ck(FG_ITEM, FLAG_ITEM_81, TRUE))
     {
         aot_set(4, 3712, 23040, 1792, 2000, SCE_EVENT, 129, 9, 0, event_01, 0, 0, 0);
     }
@@ -15,23 +24,23 @@ proc init
     {
         aot_set(4, 3712, 23040, 1792, 2000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, 0, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
-        if (ck(FG_SCENARIO, 16, 1))
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_10, FALSE))
         {
-            enemy(ENEMY_YAWN_1, 128, 24, 1, 2, 0, 0, 0, 0, 0, 4500, 0, 24500, 0, 0, 0, 0);
+            enemy(ENEMY_0D_SNAKE_YAWN_1, 128, 24, 1, 2, 0, 0, 0, 0, 0, 4500, 0, 24500, 0, 0, 0, 0);
         }
         else
         {
-            enemy(ENEMY_YAWN_1, 2, 24, 1, 2, 0, 0, 1024, 0, 0, 11000, 0, 10000, 0, 0, 0, 0);
-            set(FG_ROOM, 30, 0);
-            if (ck(FG_ENEMY, 24, 1))
+            enemy(ENEMY_0D_SNAKE_YAWN_1, 2, 24, 1, 2, 0, 0, 1024, 0, 0, 11000, 0, 10000, 0, 0, 0, 0);
+            set(FG_ROOM, FLAG_ROOM_1E, TRUE);
+            if (ck(FG_ENEMY, FLAG_ENEMY_18, FALSE))
             {
                 evt_exec(0, 9, event_02);
             }
         }
     }
-    if (ck(FG_ENEMY, 24, 1))
+    if (ck(FG_ENEMY, FLAG_ENEMY_18, FALSE))
     {
         room_bgm_state_set(1, 16, 64);
     }
@@ -39,35 +48,35 @@ proc init
     {
         room_bgm_state_set(1, 16, 255);
     }
-    set(FG_STATUS, 29, 0);
+    set(FG_STATUS, FLAG_STATUS_1D, TRUE);
 }
 
 proc main
 {
-    if (ck(FG_SCENARIO, 0, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
-        if (ck(FG_ENEMY, 24, 0))
+        if (ck(FG_ENEMY, FLAG_ENEMY_18, TRUE))
         {
-            if (ck(FG_STATUS, 8, 1))
+            if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
             {
-                set(FG_COMMON, 38, 0);
+                set(FG_COMMON, FLAG_COMMON_26, TRUE);
             }
-            if (ck(FG_ROOM, 15, 0))
+            if (ck(FG_ROOM, FLAG_ROOM_0F, TRUE))
             {
-                set(FG_ROOM, 15, 1);
+                set(FG_ROOM, FLAG_ROOM_0F, FALSE);
                 bgm_volume_ramp(0, 161, 30);
             }
         }
-        if (ck(FG_ROOM, 30, 1) && ck(FG_ENEMY, 24, 1) && cmpb(2, 0, 2))
+        if (ck(FG_ROOM, FLAG_ROOM_1E, FALSE) && ck(FG_ENEMY, FLAG_ENEMY_18, FALSE) && cmpb(2, 0, 2))
         {
-            set(FG_ROOM, 30, 0);
-            set(FG_STATUS, 29, 1);
+            set(FG_ROOM, FLAG_ROOM_1E, TRUE);
+            set(FG_STATUS, FLAG_STATUS_1D, FALSE);
             evt_exec(0, 9, event_00);
         }
     }
-    if (ck(FG_ROOM, 31, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_1F, TRUE))
     {
-        set(FG_ROOM, 31, 1);
+        set(FG_ROOM, FLAG_ROOM_1F, FALSE);
         cutnext(4);
     }
 }
@@ -77,8 +86,8 @@ event event_00
     run
     {
         bgm_play(0);
-        set(FG_ROOM, 15, 0);
-        set(FG_6, 23, 1);
+        set(FG_ROOM, FLAG_ROOM_0F, TRUE);
+        set(FG_6, FLAG_6_17, FALSE);
         cutnext(4);
         dir_set(0, 0, 0, 0, 11130, 0, 2640);
     }
@@ -91,7 +100,7 @@ event event_00
     {
         cutnext(1);
         dir_set(0, 0, 2910, 0, 11434, 0, 8043);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -101,23 +110,23 @@ event event_01
 {
     run
     {
-        set(FG_STATUS, 29, 1);
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
+        set(FG_STATUS, FLAG_STATUS_1D, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
         cutnext(5);
     }
     sleep(30);
     run
     {
-        set(FG_ROOM, 31, 0);
-        set(FG_6, 23, 0);
+        set(FG_ROOM, FLAG_ROOM_1F, TRUE);
+        set(FG_6, FLAG_6_17, TRUE);
         aot_on(1, SCE_ITEM, 0);
     }
     sleep(1);
     run
     {
-        set(FG_6, 23, 1);
-        if (ck(FG_ITEM, 129, 1))
+        set(FG_6, FLAG_6_17, FALSE);
+        if (ck(FG_ITEM, FLAG_ITEM_81, FALSE))
         {
             aot_reset(4, SCE_MESSAGE, 129, 129, 255, 0);
         }
@@ -126,8 +135,8 @@ event event_01
     run
     {
         cut_auto(0);
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
     }
     evt_finish();
 }
@@ -136,6 +145,6 @@ event event_02
 {
     sleep(1);
     bgm_play(0);
-    set(FG_ROOM, 15, 0);
+    set(FG_ROOM, FLAG_ROOM_0F, TRUE);
     evt_finish();
 }

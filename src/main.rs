@@ -515,7 +515,8 @@ enum ScdAction {
     },
 
     /// Export every room of a pack as one merged .akscr script per room
-    /// (both players, and both mansion visits for stages 1 and 2)
+    /// (both players, and both mansion visits for stages 1 and 2), naming
+    /// game data from the `inc/*.akinc` files beside the output directory
     ExportRooms {
         /// Game pack to read
         #[arg(value_name = "PACK")]
@@ -576,13 +577,12 @@ fn build_scd(input: &Path, out: &Path, room: Option<u16>) -> Result<()> {
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("akscr"));
     let assembled = if script {
-        match room {
-            Some(id) => arklay::scd::akscr::compile_variant(
-                &text,
-                arklay::scd::akscr::Variant::for_room(id),
-            ),
-            None => arklay::scd::akscr::compile(&text),
-        }
+        let dir = input.parent().unwrap_or(Path::new("."));
+        arklay::scd::akscr::compile_with(
+            &text,
+            room.map(arklay::scd::akscr::Variant::for_room),
+            &arklay::scd::akscr::includes_from(dir),
+        )
         .with_context(|| format!("failed to compile {}", input.display()))?
     } else {
         if room.is_some() {
@@ -609,6 +609,8 @@ fn build_scd(input: &Path, out: &Path, room: Option<u16>) -> Result<()> {
 /// into `out`.
 fn export_rooms(pack: &Path, out: &Path) -> Result<()> {
     let pack = Pack::open(pack).with_context(|| format!("failed to open {}", pack.display()))?;
+    fs::create_dir_all(out).with_context(|| format!("failed to create {}", out.display()))?;
+    let names = arklay::scd::akscr::load_names(out)?;
     let mut rooms = std::collections::BTreeMap::new();
     for entry in pack.entries() {
         let path = entry.path();
@@ -624,10 +626,9 @@ fn export_rooms(pack: &Path, out: &Path) -> Result<()> {
         let Ok(scripts) = arklay::scd::reader::parse(&data) else {
             continue;
         };
-        rooms.insert(id, arklay::scd::akscr::decompile(&scripts));
+        rooms.insert(id, arklay::scd::akscr::decompile_with(&scripts, &names, id));
     }
     let merged = arklay::scd::akscr::merge_rooms(&rooms)?;
-    fs::create_dir_all(out).with_context(|| format!("failed to create {}", out.display()))?;
     for (base, text) in &merged {
         let path = out.join(format!("{base:03x}.akscr"));
         arklay::atomic::write(&path, text.as_bytes())

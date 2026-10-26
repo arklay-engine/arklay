@@ -1,12 +1,19 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_20 0x20
+
 proc init
 {
-    door_aot_set(0, 10900, 3500, 1300, 1000, 0, 0, 30, 5, 0, RDT_016, 3000, 0, 3600, 0, UNLOCKED, 129);
-    set(FG_STATUS, 29, 0);
+    door_aot_set(0, 10900, 3500, 1300, 1000, 0, 0, 30, 5, 0, ROOM_216_LIBRARY_A, 3000, 0, 3600, 0, UNLOCKED, 129);
+    set(FG_STATUS, FLAG_STATUS_1D, TRUE);
     aot_set(1, 400, 8200, 3200, 1900, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
     aot_set(2, 3600, 8200, 1700, 1900, SCE_USEITEM, 65, 4, 0, 32, 0, 1, 0);
-    if (ck(FG_SCENARIO, 104, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_68, FALSE))
     {
         aot_set(3, 3400, 14130, 100, 100, SCE_EVENT, 68, 9, 0, event_01, 0, 0, 0);
     }
@@ -15,7 +22,7 @@ proc init
         aot_set(3, 3400, 14130, 100, 100, SCE_EVENT, 0, 9, 0, event_01, 0, 0, 0);
     }
     aot_set(4, 2900, 13700, 1000, 1000, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    item_aot_set(5, 9780, 13010, 1800, 1800, ITEM_MO_DISK, 1, 0, 255, 202, 42, 84, 252, 238, 52, 0, 0, 77, 129, 0, 0);
+    item_aot_set(5, 9780, 13010, 1800, 1800, ITEM_28_PUZZLE_MO_DISK, 1, 0, 255, 202, 42, 84, 252, 238, 52, 0, 0, 77, 129, 0, 0);
     aot_set(7, 5700, 6100, 2600, 3000, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
     aot_set(8, 6100, 2500, 2000, 1400, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(9, 2100, 1500, 10000, 1500, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
@@ -23,7 +30,7 @@ proc init
     aot_set(11, 1700, 10100, 1200, 5900, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
     aot_set(12, 1300, 14300, 6600, 1300, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
     aot_set(13, 8500, 11000, 2500, 500, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    if (ck(FG_SCENARIO, 104, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_68, FALSE))
     {
         obj(0, 1, 255, 5250, 0, 4910, 0, 0, 0, 0, 0, 0, 0, 0, 0, 184, 1, 188, 7, 32, 3, 32, 3);
         obj(1, 33, 255, 8460, 0, 13440, 2048, 48, 253, 0, 0, 208, 2, 0, 0, 28, 2, 72, 18, 26, 4, 8, 7);
@@ -33,12 +40,12 @@ proc init
         obj(0, 1, 255, 3500, 0, 14210, 0, 0, 0, 0, 0, 0, 0, 0, 0, 184, 1, 188, 7, 32, 3, 32, 3);
         obj(1, 33, 255, 8460, 0, 16150, 2048, 48, 253, 0, 0, 208, 2, 0, 0, 28, 2, 72, 18, 26, 4, 8, 7);
     }
-    set(FG_STATUS, 60, 0);
+    set(FG_STATUS, FLAG_STATUS_3C, TRUE);
 }
 
 proc main
 {
-    if (ck(FG_ROOM, 32, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_20, TRUE))
     {
         aot_delete(1, SCE_EVENT, 129);
     }
@@ -46,7 +53,7 @@ proc main
     {
         aot_delete(1, SCE_NONE, 0);
     }
-    if (ck(FG_SCENARIO, 65, 0) && ck(FG_SCENARIO, 104, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_41, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_68, FALSE))
     {
         aot_delete(4, SCE_MESSAGE, 129);
     }
@@ -54,12 +61,12 @@ proc main
     {
         aot_delete(4, SCE_NONE, 0);
     }
-    if (cmpb(2, 0, 2) && ck(FG_SCENARIO, 65, 1))
+    if (cmpb(2, 0, 2) && ck(FG_SCENARIO, FLAG_SCENARIO_41, FALSE))
     {
         bank_bit(255);
         bank_bit(7);
     }
-    if (cmpb(2, 0, 4) && ck(FG_SCENARIO, 65, 1))
+    if (cmpb(2, 0, 4) && ck(FG_SCENARIO, FLAG_SCENARIO_41, FALSE))
     {
         bank_bit(255);
         bank_bit(4);
@@ -83,7 +90,7 @@ event event_00
     sleep(1);
     run
     {
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
         message(133, 255);
     }
     do
@@ -96,9 +103,9 @@ event event_00
         if (cmpb(5, 0, 0))
         {
             se_play_3d(2, 23, 0, 1, 0, 0, 0);
-            set(FG_SCENARIO, 65, 2);
+            set(FG_SCENARIO, FLAG_SCENARIO_41, TOGGLE);
         }
-        if (ck(FG_SCENARIO, 65, 1))
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_41, FALSE))
         {
             aot_switch(0, 7, 1);
         }
@@ -106,7 +113,7 @@ event event_00
         {
             aot_switch(0, 7, 0);
         }
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -117,9 +124,9 @@ event event_01
     {
         aot_delete(3, SCE_NONE, 0);
         objtbl_b_set(0, 0, 1);
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
-        set(FG_SCENARIO, 104, 0);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_SCENARIO, FLAG_SCENARIO_68, TRUE);
     }
     sleep(30);
     evt_fork(9, event_02, 0);
@@ -130,9 +137,9 @@ event event_01
     {
         cutnext(4);
         cut_auto(0);
-        set(FG_6, 23, 0);
-        set(FG_STATUS, 15, 1);
-        if (ck(FG_SCENARIO, 65, 1))
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_41, FALSE))
         {
             aot_switch(0, 4, 1);
         }

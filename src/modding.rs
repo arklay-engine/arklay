@@ -105,12 +105,21 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
         {
             continue;
         }
+        // Include files only feed the scripts that `#include` them.
+        if relative
+            .rsplit_once('.')
+            .is_some_and(|(_, extension)| extension.eq_ignore_ascii_case("akinc"))
+        {
+            continue;
+        }
         if let Some((prefix, base)) = merged_scd_source(relative) {
             let text = fs::read_to_string(source)
                 .with_context(|| format!("failed to read {}", source.display()))?;
             for id in crate::scd::akscr::room_variants(base) {
                 let variant = crate::scd::akscr::Variant::for_room(id);
-                let container = crate::scd::akscr::compile_variant(&text, variant)
+                let dir = source.parent().unwrap_or(Path::new("."));
+                let load = crate::scd::akscr::includes_from(dir);
+                let container = crate::scd::akscr::compile_with(&text, Some(variant), &load)
                     .and_then(|assembled| assembled.to_container())
                     .with_context(|| format!("failed to compile {relative} for room {id:04X}"))?;
                 let output = format!("{prefix}{id:04x}.scd");
@@ -283,7 +292,8 @@ pub fn assemble_scd(source: &Path) -> Result<Vec<u8>> {
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("akscr"));
     let assembled = if script {
-        crate::scd::akscr::compile(&text)
+        let dir = source.parent().unwrap_or(Path::new("."));
+        crate::scd::akscr::compile_with(&text, None, &crate::scd::akscr::includes_from(dir))
             .with_context(|| format!("failed to compile {}", source.display()))?
     } else {
         crate::scd::asm::assemble(&text)

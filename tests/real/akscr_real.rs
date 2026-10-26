@@ -37,14 +37,15 @@ fn event_bytes(stream: &Stream) -> Vec<u8> {
     bytes
 }
 
+/// The checked-in room scripts, beside their `inc/` include files.
+fn room_dir() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room")
+}
+
 /// Compile `text` (for `variant`, if given) into a standalone container and
-/// decode it back.
+/// decode it back, reading includes as a script in `games/re1/room` would.
 fn compile(text: &str, variant: Option<akscr::Variant>) -> Scripts {
-    let assembled = match variant {
-        Some(variant) => akscr::compile_variant(text, variant),
-        None => akscr::compile(text),
-    };
-    let container = assembled
+    let container = akscr::compile_with(text, variant, &akscr::includes_from(&room_dir()))
         .and_then(|assembled| assembled.to_container())
         .unwrap();
     reader::parse(&container).unwrap()
@@ -86,7 +87,8 @@ fn every_room_script_compiles_to_identical_bytecode() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let checked_in = Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room");
+    let checked_in = room_dir();
+    let names = akscr::load_names(&checked_in).unwrap();
 
     let mut originals = BTreeMap::new();
     let mut texts = BTreeMap::new();
@@ -108,7 +110,7 @@ fn every_room_script_compiles_to_identical_bytecode() {
             );
             continue;
         };
-        let text = akscr::decompile(&original);
+        let text = akscr::decompile_with(&original, &names, id);
         assert_identical(path, &original, &compile(&text, None));
         texts.insert(id, text);
         originals.insert(id, original);

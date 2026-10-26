@@ -221,7 +221,7 @@ off_C:
 ",
     );
     assert!(
-        text.contains("else\n    {\n        require(ck(FG_COMMON, 2, 1));"),
+        text.contains("else\n    {\n        require(ck(FG_COMMON, 2, FALSE));"),
         "{text}"
     );
     assert!(text.contains("proc main noreturn"), "{text}");
@@ -483,6 +483,138 @@ event event_01
     );
 }
 
+#[test]
+fn includes_and_defines_name_values() {
+    let load = |path: &str| -> anyhow::Result<String> {
+        assert_eq!(path, "inc/flags.akinc");
+        Ok(
+            "// flags\n#define FLAG_COMMON_A4 0xA4\n#define FLAG_ALIAS FLAG_COMMON_A4\n"
+                .to_string(),
+        )
+    };
+    let text = "#version 1
+#include \"inc/flags.akinc\"
+#include \"inc/flags.akinc\"
+#define SEVEN 7
+proc main noreturn
+{
+    set(FG_COMMON, FLAG_COMMON_A4, TOGGLE);
+    set(FG_COMMON, FLAG_ALIAS, TRUE);
+    nop(SEVEN);
+}
+";
+    let container = compile_with(text, None, &load)
+        .unwrap()
+        .to_container()
+        .unwrap();
+    assert_eq!(
+        block_bytes(&reader::parse(&container).unwrap().main[0]),
+        [0x05, 0x01, 0xA4, 0x02, 0x05, 0x01, 0xA4, 0x00, 0x0E, 0x07]
+    );
+
+    // Game data has no built-in names; a missing include names the problem.
+    let error =
+        compile_error("#version 1\nproc main\n{\n    set(FG_COMMON, FLAG_COMMON_A4, TRUE);\n}\n");
+    assert!(
+        error.contains("`FLAG_COMMON_A4`") && error.contains("#include"),
+        "{error}"
+    );
+    let error = compile_error("#version 1\nproc main\n{\n    testitem(ITEM_SWORD_KEY);\n}\n");
+    assert!(error.contains("`ITEM_SWORD_KEY`"), "{error}");
+    let error = compile_error("#version 1\n#include \"inc/x.akinc\"\n");
+    assert!(error.contains("#include"), "{error}");
+    let bad = |include: &'static str| {
+        move |_: &str| -> anyhow::Result<String> { Ok(include.to_string()) }
+    };
+    for include in ["proc main\n", "#define A\n", "#define A 1\n#define A 2\n"] {
+        let text = "#version 1\n#include \"inc/x.akinc\"\n";
+        assert!(
+            compile_with(text, None, &bad(include)).is_err(),
+            "{include}"
+        );
+    }
+}
+
+#[test]
+fn events_take_names_that_stand_for_their_index() {
+    let text = "#version 1
+event opening
+{
+    evt_exec(0, 6, door_knock);
+    evt_finish();
+}
+
+event door_knock
+{
+    evt_exec(0, 6, opening);
+    evt_finish();
+}
+";
+    let scripts = round(text);
+    assert_eq!(
+        event_bytes(&scripts.events[0])[..6],
+        [0x07, 0x06, 0x14, 0x00, 0x06, 0x01]
+    );
+    assert_eq!(
+        event_bytes(&scripts.events[1])[..6],
+        [0x07, 0x06, 0x14, 0x00, 0x06, 0x00]
+    );
+    assert!(
+        compile_error(
+            "#version 1\nevent a\n{\n    evt_finish();\n}\nevent a\n{\n    evt_finish();\n}\n"
+        )
+        .contains("already defined")
+    );
+}
+
+#[test]
+fn include_names_decompile_game_data() {
+    let names = Names::parse(&[(
+        "inc/game.akinc".to_string(),
+        "#define ITEM_33_KEY_SWORD 0x33
+#define STAGE_2 0x40
+#define ROOM_101_STAIRS 0x01
+#define ROOM_201_HALL 0x01
+#define FLAG_COMMON_A4 0xA4
+#define FLAG_STATUS_08 0x08
+"
+        .to_string(),
+    )])
+    .unwrap();
+    let source = ".version 1
+
+.init
+.block
+    testitem                ITEM_SWORD_KEY
+    set                     FG_COMMON, 164, 0
+    set                     FG_STATUS, 8, 2
+    set                     FG_ROOM, 3, 1
+    nop                     0
+";
+    let container = asm::assemble(source).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&container).unwrap();
+    let text = decompile_with(&scripts, &names, 0x6010);
+    for expected in [
+        "#include \"inc/game.akinc\"",
+        "#define FLAG_ROOM_03 0x03",
+        "require(testitem(ITEM_33_KEY_SWORD));",
+        "set(FG_COMMON, FLAG_COMMON_A4, TRUE);",
+        "set(FG_STATUS, FLAG_STATUS_08, TOGGLE);",
+        "set(FG_ROOM, FLAG_ROOM_03, FALSE);",
+    ] {
+        assert!(text.contains(expected), "{expected}\n{text}");
+    }
+    assert_eq!(
+        names.door_target(1, 0x01).as_deref(),
+        Some("ROOM_101_STAIRS")
+    );
+    assert_eq!(
+        names.door_target(1, 0x41).as_deref(),
+        Some("STAGE_2 | ROOM_201_HALL")
+    );
+    assert_eq!(names.door_target(1, 0x45).as_deref(), Some("STAGE_2 | 5"));
+}
+
 /// Every checked-in room script compiles for each of its variants.
 #[test]
 fn checked_in_room_scripts_compile() {
@@ -502,8 +634,9 @@ fn checked_in_room_scripts_compile() {
         let text = std::fs::read_to_string(&path).unwrap();
         let stem = path.file_stem().unwrap().to_string_lossy();
         let base = u16::from_str_radix(&stem, 16).unwrap();
+        let load = includes_from(&dir);
         for id in room_variants(base) {
-            if let Err(error) = compile_variant(&text, Variant::for_room(id))
+            if let Err(error) = compile_with(&text, Some(Variant::for_room(id)), &load)
                 .and_then(|assembled| assembled.to_container())
             {
                 panic!("{} as {id:04X}: {error:#}", path.display());

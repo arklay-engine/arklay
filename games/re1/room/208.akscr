@@ -1,43 +1,52 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_18 0x18
+#define FLAG_ROOM_19 0x19
+#define FLAG_ROOM_1A 0x1A
+
 proc init
 {
-    door_aot_set(0, 900, 3400, 1700, 1900, 2, 0, 0, 9, 0, RDT_009, 9100, 0, 7700, 2048, UNLOCKED, 129);
-    door_aot_set(1, 5700, 6400, 1400, 1200, 2, 0, 29, 5, 0, RDT_007, 17000, 0, 11300, 3072, UNLOCKED, 129);
-    door_aot_set(2, 10200, 4000, 1400, 1100, 1, 0, 0, 7, 0, RDT_00A, 2600, 0, 5500, 0, UNLOCKED, 129);
+    door_aot_set(0, 900, 3400, 1700, 1900, 2, 0, 0, 9, 0, ROOM_209_BEDROOM, 9100, 0, 7700, 2048, UNLOCKED, 129);
+    door_aot_set(1, 5700, 6400, 1400, 1200, 2, 0, 29, 5, 0, ROOM_207_2F_RIGHT_STAIRS, 17000, 0, 11300, 3072, UNLOCKED, 129);
+    door_aot_set(2, 10200, 4000, 1400, 1100, 1, 0, 0, 7, 0, ROOM_20A_STUDY_ROOM, 2600, 0, 5500, 0, UNLOCKED, 129);
     aot_set(3, 1000, 3900, 1100, 1200, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
-    if (ck(FG_SCENARIO, 0, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
-        if (ck(FG_SCENARIO, 5, 0))
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_05, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_RESEARCHER_, 4, 23, 1, 2, 0, 0, 3072, 0, 0, 6000, 0, 3300, 0, 0, 0, 0);
+            enemy(ENEMY_11_ZOMBIE_LAB, 4, 23, 1, 2, 0, 0, 3072, 0, 0, 6000, 0, 3300, 0, 0, 0, 0);
         }
         else
         {
-            if (ck(FG_ENEMY, 20, 1))
+            if (ck(FG_ENEMY, FLAG_ENEMY_14, FALSE))
             {
                 aot_delete(0, SCE_NONE, 129);
                 aot_delete(3, SCE_EVENT, 129);
             }
             else
             {
-                require(ck(FG_ENEMY, 19, 1));
+                require(ck(FG_ENEMY, FLAG_ENEMY_13, FALSE));
                 aot_delete(0, SCE_NONE, 129);
                 aot_delete(3, SCE_EVENT, 129);
             }
-            enemy(ENEMY_ZOMBIE_RESEARCHER_, 4, 23, 1, 2, 0, 0, 0, 0, 0, 20000, 0, 20000, 0, 0, 0, 0);
+            enemy(ENEMY_11_ZOMBIE_LAB, 4, 23, 1, 2, 0, 0, 0, 0, 0, 20000, 0, 20000, 0, 0, 0, 0);
         }
     }
 }
 
 proc main
 {
-    if (ck(FG_SCENARIO, 0, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
-        if (ck(FG_ROOM, 24, 1) && ck(FG_SCENARIO, 5, 1))
+        if (ck(FG_ROOM, FLAG_ROOM_18, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_05, FALSE))
         {
             evt_exec(0, 9, event_02);
-            set(FG_ROOM, 24, 0);
+            set(FG_ROOM, FLAG_ROOM_18, TRUE);
         }
     }
 }
@@ -48,19 +57,19 @@ event event_00
     {
         aot_delete(0, SCE_DOOR, 129);
         aot_delete(3, SCE_NONE, 129);
-        set(FG_SCENARIO, 5, 0);
-        set(FG_ENEMY, 23, 0);
-        if (ck(FG_ENEMY, 20, 1))
+        set(FG_SCENARIO, FLAG_SCENARIO_05, TRUE);
+        set(FG_ENEMY, FLAG_ENEMY_17, TRUE);
+        if (ck(FG_ENEMY, FLAG_ENEMY_14, FALSE))
         {
-            set(FG_ENEMY, 20, 0);
-            set(FG_ENEMY, 23, 1);
+            set(FG_ENEMY, FLAG_ENEMY_14, TRUE);
+            set(FG_ENEMY, FLAG_ENEMY_17, FALSE);
             evt_exec(0, 9, event_01);
         }
         else
         {
-            require(ck(FG_ENEMY, 19, 1));
-            set(FG_ENEMY, 19, 0);
-            set(FG_ENEMY, 23, 1);
+            require(ck(FG_ENEMY, FLAG_ENEMY_13, FALSE));
+            set(FG_ENEMY, FLAG_ENEMY_13, TRUE);
+            set(FG_ENEMY, FLAG_ENEMY_17, FALSE);
             evt_exec(0, 9, event_01);
         }
     }
@@ -70,7 +79,7 @@ event event_00
 event event_01
 {
     evt_fork(9, event_03, 0);
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_seq(38918, 31752, 6421);
@@ -81,11 +90,11 @@ event event_01
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     act_reset();
     evt_nop();
     se_play_3d(0, 0, 0, 0, 0, 6400, 6300);
-    set(FG_ROOM, 25, 1);
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -96,17 +105,17 @@ event event_01
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     act_reset();
     evt_nop();
     run
     {
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_1D, TRUE);
         pos_set(0, 0, 1600, 0, 5900, 0, 6100);
         se_play_3d(0, 1, 0, 0, 0, 6400, 6300);
         eml_state(0, 0, 0, 0);
         cutnext(0);
-        set(FG_ROOM, 26, 0);
+        set(FG_ROOM, FLAG_ROOM_1A, TRUE);
     }
     sleep(30);
     cutcurr(0);
@@ -114,14 +123,14 @@ event event_01
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_6, 23, 0);
+    set(FG_6, FLAG_6_17, TRUE);
     evt_finish();
 }
 
 event event_02
 {
     sleep(3);
-    set(FG_6, 29, 1);
+    set(FG_6, FLAG_6_1D, FALSE);
     evt_finish();
 }
 
@@ -137,7 +146,7 @@ event event_03
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 26, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_1A, FALSE));
     act_motion(16);
     act_nop();
     act_nop();

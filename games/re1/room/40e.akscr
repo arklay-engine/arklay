@@ -1,47 +1,55 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_20 0x20
+#define FLAG_ROOM_21 0x21
+
 proc init
 {
 #if JILL
-    set(FG_STATUS, 28, 0);
+    set(FG_STATUS, FLAG_STATUS_1C, TRUE);
 #endif
-    door_aot_set(0, 29700, 15100, 3700, 4800, 12, 1, 10, 8, 0, RDT_00D, 18000, 0, 3500, 0, UNLOCKED, 129);
-    door_aot_set(1, 29700, 27200, 3700, 3200, 1, 1, 12, 7, 0, RDT_00F, 2800, 0, 12300, 0, UNLOCKED, 129);
-    if (ck(FG_LOCK, 36, 1))
+    door_aot_set(0, 29700, 15100, 3700, 4800, 12, 1, 10, 8, 0, ROOM_40D_UNDER_PASSAGE, 18000, 0, 3500, 0, UNLOCKED, 129);
+    door_aot_set(1, 29700, 27200, 3700, 3200, 1, 1, 12, 7, 0, ROOM_40F_SECURITY_ROOM, 2800, 0, 12300, 0, UNLOCKED, 129);
+    if (ck(FG_LOCK, FLAG_LOCK_24, FALSE))
     {
         aot_set(2, 0, 25400, 2500, 3000, SCE_EVENT, 129, 5, 0, event_05, 0, 0, 0);
     }
     else
     {
-        door_aot_set(2, 0, 25400, 2500, 3000, 3, 1, 11, 3, 0, RDT_010, 9100, 0, 3100, 2048, UNLOCKED, 129);
+        door_aot_set(2, 0, 25400, 2500, 3000, 3, 1, 11, 3, 0, ROOM_410_ARMS_STOREHOUSE, 9100, 0, 3100, 2048, UNLOCKED, 129);
     }
-    door_aot_set(3, 0, 22400, 2500, 2500, 3, 1, 11, 3, 171, RDT_011, 8200, 0, 10800, 2048, ITEM_C_ROOM_KEY, 129);
+    door_aot_set(3, 0, 22400, 2500, 2500, 3, 1, 11, 3, 171, ROOM_411_CONTROL_ROOM, 8200, 0, 10800, 2048, ITEM_3B_KEY_CONTROL_ROOM, 129);
 #if CHRIS
     aot_set(4, 14500, 8000, 6500, 2700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
     aot_set(5, 7500, 8000, 7000, 2700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(6, 7500, 24000, 13500, 1000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    if (ck(FG_SCENARIO, 35, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
         aot_set(7, 0, 0, 32000, 32000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
         obj(0, 31, 255, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(1, 31, 255, 16330, -1850, 26850, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(2, 31, 255, 4090, -1850, 16430, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(3, 31, 255, 16230, -1850, 5470, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        enemy(ENEMY_NEPTUNE, 0, 57, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 15600, 0, 0, 0, 0);
-        enemy(ENEMY_NEPTUNE, 2, 12, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 14600, 1, 0, 0, 0);
-        enemy(ENEMY_NEPTUNE, 2, 13, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 13600, 2, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 0, 57, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 15600, 0, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 2, 12, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 14600, 1, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 2, 13, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 13600, 2, 0, 0, 0);
         evt_exec(0, 4, event_04);
     }
     else
     {
-        enemy(ENEMY_NEPTUNE, 1, 57, 1, 2, 0, 0, 3257, 0, 0, 26833, 0, 17000, 0, 0, 0, 0);
-        enemy(ENEMY_NEPTUNE, 3, 12, 1, 2, 0, 0, 0, 0, 0, 24833, 0, 14000, 1, 0, 0, 0);
-        enemy(ENEMY_NEPTUNE, 3, 13, 1, 2, 0, 0, 512, 0, 0, 25833, 0, 11000, 2, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 1, 57, 1, 2, 0, 0, 3257, 0, 0, 26833, 0, 17000, 0, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 3, 12, 1, 2, 0, 0, 0, 0, 0, 24833, 0, 14000, 1, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 3, 13, 1, 2, 0, 0, 512, 0, 0, 25833, 0, 11000, 2, 0, 0, 0);
     }
 #else
     aot_set(4, 7000, 1000, 6000, 8000, SCE_USEITEM, 65, 4, 0, 32, 0, 1, 0);
     aot_set(5, 1400, 23600, 6000, 8000, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
-    if (ck(FG_COMMON, 9, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_09, TRUE))
     {
         aot_reset(4, SCE_NONE, 0, 0, 0, 0);
         aot_reset(5, SCE_NONE, 0, 0, 0, 0);
@@ -49,7 +57,7 @@ proc init
     aot_set(6, 14500, 8000, 6500, 2700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
     aot_set(7, 7500, 8000, 7000, 2700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(8, 7500, 24000, 13500, 1000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    if (ck(FG_SCENARIO, 35, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
         aot_set(9, 0, 0, 32000, 32000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
         obj(0, 31, 255, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -58,26 +66,26 @@ proc init
         obj(3, 31, 255, 16230, -1850, 5470, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         evt_exec(0, 4, event_04);
     }
-    if (ck(FG_SCENARIO, 35, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
-        if (ck(FG_COMMON, 9, 1))
+        if (ck(FG_COMMON, FLAG_COMMON_09, FALSE))
         {
-            enemy(ENEMY_NEPTUNE, 128, 57, 1, 2, 0, 0, 848, 0, 0, 4060, -32000, 15600, 0, 0, 0, 0);
-            enemy(ENEMY_NEPTUNE, 130, 12, 1, 2, 0, 0, 848, 0, 0, 4060, -32000, 14600, 1, 0, 0, 0);
-            enemy(ENEMY_NEPTUNE, 130, 13, 1, 2, 0, 0, 848, 0, 0, 4060, -32000, 13600, 2, 0, 0, 0);
+            enemy(ENEMY_0B_SHARK_NEPTUNE, 128, 57, 1, 2, 0, 0, 848, 0, 0, 4060, -32000, 15600, 0, 0, 0, 0);
+            enemy(ENEMY_0B_SHARK_NEPTUNE, 130, 12, 1, 2, 0, 0, 848, 0, 0, 4060, -32000, 14600, 1, 0, 0, 0);
+            enemy(ENEMY_0B_SHARK_NEPTUNE, 130, 13, 1, 2, 0, 0, 848, 0, 0, 4060, -32000, 13600, 2, 0, 0, 0);
         }
         else
         {
-            enemy(ENEMY_NEPTUNE, 0, 57, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 15600, 0, 0, 0, 0);
-            enemy(ENEMY_NEPTUNE, 2, 12, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 14600, 1, 0, 0, 0);
-            enemy(ENEMY_NEPTUNE, 2, 13, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 13600, 2, 0, 0, 0);
+            enemy(ENEMY_0B_SHARK_NEPTUNE, 0, 57, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 15600, 0, 0, 0, 0);
+            enemy(ENEMY_0B_SHARK_NEPTUNE, 2, 12, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 14600, 1, 0, 0, 0);
+            enemy(ENEMY_0B_SHARK_NEPTUNE, 2, 13, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 13600, 2, 0, 0, 0);
         }
     }
     else
     {
-        enemy(ENEMY_NEPTUNE, 1, 57, 1, 2, 0, 0, 3257, 0, 0, 26833, 0, 17000, 0, 0, 0, 0);
-        enemy(ENEMY_NEPTUNE, 3, 12, 1, 2, 0, 0, 0, 0, 0, 26833, 0, 14000, 1, 0, 0, 0);
-        enemy(ENEMY_NEPTUNE, 3, 13, 1, 2, 0, 0, 512, 0, 0, 26833, 0, 11000, 2, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 1, 57, 1, 2, 0, 0, 3257, 0, 0, 26833, 0, 17000, 0, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 3, 12, 1, 2, 0, 0, 0, 0, 0, 26833, 0, 14000, 1, 0, 0, 0);
+        enemy(ENEMY_0B_SHARK_NEPTUNE, 3, 13, 1, 2, 0, 0, 512, 0, 0, 26833, 0, 11000, 2, 0, 0, 0);
     }
 #endif
 }
@@ -85,9 +93,9 @@ proc init
 #if JILL
 proc main
 {
-    if (ck(FG_COMMON, 9, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_09, FALSE))
     {
-        if (ck(FG_ROOM, 32, 0))
+        if (ck(FG_ROOM, FLAG_ROOM_20, TRUE))
         {
             pos_set(0, 0, 848, 0, 4060, 0, 15600);
             pos_set(1, 0, 848, 0, 4060, 0, 16600);
@@ -97,9 +105,9 @@ proc main
             eml_state(0, 2, 0, 2);
             aot_reset(4, SCE_NONE, 0, 0, 0, 0);
             aot_reset(5, SCE_NONE, 0, 0, 0, 0);
-            set(FG_COMMON, 9, 0);
+            set(FG_COMMON, FLAG_COMMON_09, TRUE);
         }
-        if (ck(FG_ROOM, 33, 0))
+        if (ck(FG_ROOM, FLAG_ROOM_21, TRUE))
         {
             dir_set(0, 0, 2048, 0, 2800, 0, 26960);
             pos_set(0, 0, 2056, 0, 14136, 0, 27209);
@@ -110,7 +118,7 @@ proc main
             eml_state(0, 2, 0, 2);
             aot_reset(4, SCE_NONE, 0, 0, 0, 0);
             aot_reset(5, SCE_NONE, 0, 0, 0, 0);
-            set(FG_COMMON, 9, 0);
+            set(FG_COMMON, FLAG_COMMON_09, TRUE);
             evt_exec(0, 7, event_06);
         }
     }

@@ -1,30 +1,39 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_00 0x00
+#define FLAG_ROOM_01 0x01
+#define FLAG_ROOM_02 0x02
+
 proc init
 {
-    door_aot_set(0, 23400, 800, 2000, 1700, 1, 0, 0, 1, 0, RDT_008, 25000, 0, 25300, 1024, UNLOCKED, 129);
+    door_aot_set(0, 23400, 800, 2000, 1700, 1, 0, 0, 1, 0, ROOM_108_L_PASSAGE, 25000, 0, 25300, 1024, UNLOCKED, 129);
 #if MANSION1
-    door_aot_set(1, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 196, RDT_014, 10030, 0, 23449, 1024, ITEM_ARMOR_KEY, 129);
-    door_aot_set(2, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 64, RDT_013, 2800, 0, 2400, 3072, UNLOCKED, 129);
-    door_aot_set(3, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 64, RDT_015, 2500, 0, 4900, 0, UNLOCKED, 129);
+    door_aot_set(1, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 196, ROOM_114_BOILER, 10030, 0, 23449, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
+    door_aot_set(2, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 64, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, 129);
+    door_aot_set(3, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 64, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, 129);
 #else
-    door_aot_set(1, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 132, RDT_014, 10030, 0, 23449, 1024, ITEM_ARMOR_KEY, 129);
-    door_aot_set(2, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 0, RDT_013, 2800, 0, 2400, 3072, UNLOCKED, 129);
-    door_aot_set(3, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 0, RDT_015, 2500, 0, 4900, 0, UNLOCKED, 129);
+    door_aot_set(1, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 132, ROOM_114_BOILER, 10030, 0, 23449, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
+    door_aot_set(2, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 0, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, 129);
+    door_aot_set(3, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 0, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, 129);
 #endif
-    door_aot_set(4, 0, 7300, 2600, 2500, 6, 0, 0, 1, 0, RDT_00A, 15200, 0, 3900, 2048, UNLOCKED, 129);
-    item_aot_set(5, 20406, 1524, 1800, 1800, ITEM_GREEN_HERB, 1, 0, 255, 58, 83, 0, 0, 120, 9, 0, 0, 111, 129, 1, 0);
+    door_aot_set(4, 0, 7300, 2600, 2500, 6, 0, 0, 1, 0, ROOM_10A_BACK_PASSAGE, 15200, 0, 3900, 2048, UNLOCKED, 129);
+    item_aot_set(5, 20406, 1524, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 58, 83, 0, 0, 120, 9, 0, 0, 111, 129, 1, 0);
 #if MANSION2
     aot_set(6, 12600, 2800, 7400, 8700, SCE_USEITEM, 65, 4, 0, 2, 0, 1, 0);
 #endif
     obj(0, 15, 255, 7590, 0, 8680, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if MANSION1
 #if JILL
-    enemy(ENEMY_BARRY_STARS_, 0, 255, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 34, 24, 0);
-    if (ck(FG_COMMON, 32, 0))
+    enemy(ENEMY_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 34, 24, 0);
+    if (ck(FG_COMMON, FLAG_COMMON_20, TRUE))
     {
         evt_exec(0, 9, event_01);
-        if (ck(FG_COMMON, 33, 1))
+        if (ck(FG_COMMON, FLAG_COMMON_21, FALSE))
         {
             evt_exec(0, 9, event_00);
             cut_auto(1);
@@ -33,51 +42,51 @@ proc init
     }
 #endif
 #else
-    if (ck(FG_SCENARIO, 94, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_5E, TRUE))
     {
-        enemy(ENEMY_HUNTER, 18, 118, 1, 2, 0, 0, 1536, 0, 0, 15565, 0, 12166, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 18, 118, 1, 2, 0, 0, 1536, 0, 0, 15565, 0, 12166, 0, 0, 0, 0);
     }
     else
     {
         if (cmpb(3, 0, 10))
         {
-            set(FG_ROOM, 0, 0);
+            set(FG_ROOM, FLAG_ROOM_00, TRUE);
         }
         if (cmpb(3, 0, 21))
         {
-            set(FG_ROOM, 0, 0);
+            set(FG_ROOM, FLAG_ROOM_00, TRUE);
         }
         if (cmpb(3, 0, 8))
         {
-            set(FG_ROOM, 1, 0);
+            set(FG_ROOM, FLAG_ROOM_01, TRUE);
         }
         if (cmpb(3, 0, 19))
         {
-            set(FG_ROOM, 1, 0);
+            set(FG_ROOM, FLAG_ROOM_01, TRUE);
         }
         if (cmpb(3, 0, 20))
         {
-            set(FG_ROOM, 1, 0);
+            set(FG_ROOM, FLAG_ROOM_01, TRUE);
         }
     }
-    if (ck(FG_ROOM, 0, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_00, TRUE))
     {
-        enemy(ENEMY_HUNTER, 136, 118, 1, 2, 0, 0, 3600, 0, 0, 20824, 0, 7524, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 136, 118, 1, 2, 0, 0, 3600, 0, 0, 20824, 0, 7524, 0, 0, 0, 0);
     }
-    if (ck(FG_ROOM, 1, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_01, TRUE))
     {
 #if CHRIS
-        enemy(ENEMY_HUNTER, 137, 118, 1, 2, 0, 0, 0, 0, 0, 12733, 0, 14086, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 137, 118, 1, 2, 0, 0, 0, 0, 0, 12733, 0, 14086, 0, 0, 0, 0);
 #else
-        enemy(ENEMY_HUNTER, 153, 118, 1, 2, 0, 0, 0, 0, 0, 12733, 0, 14086, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 153, 118, 1, 2, 0, 0, 0, 0, 0, 12733, 0, 14086, 0, 0, 0, 0);
 #endif
     }
     room_bgm_state_set(5, 9, 255);
 #if CHRIS
-    if (ck(FG_COMMON, 33, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_21, TRUE))
     {
-        set(FG_COMMON, 33, 1);
-        if (ck(FG_COMMON, 34, 0))
+        set(FG_COMMON, FLAG_COMMON_21, FALSE);
+        if (ck(FG_COMMON, FLAG_COMMON_22, TRUE))
         {
             plw_anim(2, 40, 0);
             setw(4, 0, 0);
@@ -86,7 +95,7 @@ proc init
             setb(2, 7, 0);
             evt_exec(0, 9, event_01);
         }
-        if (ck(FG_COMMON, 54, 0))
+        if (ck(FG_COMMON, FLAG_COMMON_36, TRUE))
         {
             plw_anim(2, 40, 0);
             setw(4, 0, 0);
@@ -97,7 +106,7 @@ proc init
         }
     }
 #else
-    if (ck(FG_COMMON, 32, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_20, TRUE))
     {
         evt_exec(0, 9, event_01);
     }
@@ -110,16 +119,16 @@ proc main
 #if MANSION1
     return;
 #else
-    if (ck(FG_SCENARIO, 94, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_5E, FALSE))
     {
-        if (ck(FG_ROOM, 0, 0) && ck(FG_ROOM, 2, 0))
+        if (ck(FG_ROOM, FLAG_ROOM_00, TRUE) && ck(FG_ROOM, FLAG_ROOM_02, TRUE))
         {
-            set(FG_SCENARIO, 94, 0);
+            set(FG_SCENARIO, FLAG_SCENARIO_5E, TRUE);
             eml_state(0, 0, 0, 8);
         }
-        if (ck(FG_ROOM, 1, 0) && cmpb(2, 0, 3))
+        if (ck(FG_ROOM, FLAG_ROOM_01, TRUE) && cmpb(2, 0, 3))
         {
-            set(FG_SCENARIO, 94, 0);
+            set(FG_SCENARIO, FLAG_SCENARIO_5E, TRUE);
             eml_state(0, 0, 0, 9);
         }
     }
@@ -150,20 +159,20 @@ event event_00
 #endif
 {
 #if CHRIS
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 650, 0, 5300, 0, 7160);
 #else
     run
     {
-        set(FG_COMMON, 33, 0);
-        set(FG_STATUS, 15, 0);
+        set(FG_COMMON, FLAG_COMMON_21, TRUE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
         dir_set(0, 0, 2400, 0, 6800, 0, 7300);
         pos_set(0, 0, 400, 0, 4800, 0, 8900);
     }
 #endif
     sleep(1);
 #if JILL
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -207,9 +216,9 @@ event event_00
 #if CHRIS
 #if MANSION2
         bgm_play(1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_1D, FALSE);
 #endif
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
         evt_exec(0, 9, event_02);
         voice_play(1, 84, 0);
         message(4, 0);
@@ -268,12 +277,12 @@ event event_00
 #if CHRIS
         dir_set(0, 0, 1194, 0, 5520, 0, 8360);
 #else
-        set(FG_STATUS, 15, 1);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
 #endif
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
 #if MANSION2
 #if CHRIS
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_1D, TRUE);
 #endif
 #endif
     }
@@ -282,7 +291,7 @@ event event_00
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_STATUS, 15, 1);
+    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
 #endif
     evt_finish();
 }
@@ -328,7 +337,7 @@ event event_01
 #if CHRIS
 event event_03
 {
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 650, 0, 5300, 0, 7160);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -340,9 +349,9 @@ event event_03
     {
 #if MANSION2
         bgm_play(1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_1D, FALSE);
 #endif
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
         evt_exec(0, 9, event_04);
 #if MANSION1
         voice_play(1, 99, 0);
@@ -359,7 +368,7 @@ event event_03
     {
         evt_next();
     }
-    while (ck(FG_STATUS, 14, 0));
+    while (ck(FG_STATUS, FLAG_STATUS_0E, TRUE));
     sleep(10);
 #endif
     voice_play(1, 101, 0);
@@ -374,9 +383,9 @@ event event_03
     {
         dir_set(0, 0, 1194, 0, 5520, 0, 8360);
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
 #if MANSION2
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_1D, TRUE);
 #endif
     }
     evt_work_set(WK_PLAYER, 0);
@@ -384,7 +393,7 @@ event event_03
     act_motion_path(51, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, 15, 1);
+    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     evt_finish();
 }
 #else

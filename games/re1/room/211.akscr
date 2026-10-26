@@ -1,10 +1,17 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_18 0x18
+
 proc init
 {
-    door_aot_set(0, 0, 0, 2500, 4200, 1, 0, 0, 1, 0, RDT_003, 31500, -2885, 8000, 2048, UNLOCKED, 129);
-    door_aot_set(1, 3600, 11500, 2000, 2500, 0, 0, 6, 4, 0, RDT_012, 19600, 0, 27000, 0, UNLOCKED, 129);
-    if (ck(FG_COMMON, 66, 0))
+    door_aot_set(0, 0, 0, 2500, 4200, 1, 0, 0, 1, 0, ROOM_203_HALL_2F, 31500, -2885, 8000, 2048, UNLOCKED, 129);
+    door_aot_set(1, 3600, 11500, 2000, 2500, 0, 0, 6, 4, 0, ROOM_212_TERRACE, 19600, 0, 27000, 0, UNLOCKED, 129);
+    if (ck(FG_COMMON, FLAG_COMMON_42, TRUE))
     {
         room_bgm_state_set(1, 17, 255);
         aot_set(2, 3800, 10000, 600, 1000, SCE_MESSAGE, 129, 129, 0, 69, 1, 0, 0);
@@ -17,9 +24,9 @@ proc init
         aot_set(3, 2500, 11000, 900, 2000, SCE_EVENT, 129, 9, 0, event_01, 0, 0, 0);
     }
     aot_set(4, 2500, 7600, 900, 2000, SCE_EVENT, 129, 9, 0, event_02, 0, 0, 0);
-    if (ck(FG_STATUS, 8, 1))
+    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        item_aot_set(5, 2000, 400, 1700, 1700, ITEM_SMALL_KEY, 1, 0, 255, 84, 11, 28, 248, 244, 6, 0, 0, 149, 129, 0, 134);
+        item_aot_set(5, 2000, 400, 1700, 1700, ITEM_3D_KEY_DESK, 1, 0, 255, 84, 11, 28, 248, 244, 6, 0, 0, 149, 129, 0, 134);
         eml_rot(0, 0, 0, 0, 8);
     }
 }
@@ -27,7 +34,7 @@ proc init
 event event_00
 {
     sleep(1);
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -35,7 +42,7 @@ event event_00
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, 24, 1);
+    set(FG_ROOM, FLAG_ROOM_18, FALSE);
     message(129, 325);
     do
     {
@@ -49,9 +56,9 @@ event event_00
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, 24, 1);
+    set(FG_ROOM, FLAG_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, 23, 0);
+    set(FG_6, FLAG_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -64,7 +71,7 @@ event event_00
 event event_01
 {
     sleep(1);
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -72,7 +79,7 @@ event event_01
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, 24, 1);
+    set(FG_ROOM, FLAG_ROOM_18, FALSE);
     message(128, 325);
     do
     {
@@ -86,9 +93,9 @@ event event_01
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, 24, 1);
+    set(FG_ROOM, FLAG_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, 23, 0);
+    set(FG_6, FLAG_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -101,7 +108,7 @@ event event_01
 event event_02
 {
     sleep(1);
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -109,7 +116,7 @@ event event_02
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, 24, 1);
+    set(FG_ROOM, FLAG_ROOM_18, FALSE);
     message(130, 325);
     do
     {
@@ -123,9 +130,9 @@ event event_02
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, 24, 1);
+    set(FG_ROOM, FLAG_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, 23, 0);
+    set(FG_6, FLAG_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();

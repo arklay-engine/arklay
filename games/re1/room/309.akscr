@@ -1,56 +1,61 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 1900, 25800, 2100, 1900, 3, 1, 8, 0, 0, RDT_008, 12600, 0, 27300, 2048, UNLOCKED, 129);
-    door_aot_set(1, 0, 3500, 2400, 1900, 3, 1, 8, 0, 0, RDT_008, 11000, 0, 3300, 2048, UNLOCKED, 129);
-    door_aot_set(2, 13900, 0, 2100, 2600, 0, 1, 8, 0, 0, RDT_00A, 4100, 0, 20000, 1024, UNLOCKED, 129);
+    door_aot_set(0, 1900, 25800, 2100, 1900, 3, 1, 8, 0, 0, ROOM_308_BRANCH_PASSAGE, 12600, 0, 27300, 2048, UNLOCKED, 129);
+    door_aot_set(1, 0, 3500, 2400, 1900, 3, 1, 8, 0, 0, ROOM_308_BRANCH_PASSAGE, 11000, 0, 3300, 2048, UNLOCKED, 129);
+    door_aot_set(2, 13900, 0, 2100, 2600, 0, 1, 8, 0, 0, ROOM_30A_ENRICO_ROOM, 4100, 0, 20000, 1024, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(132, 25000, 19000, 1000, 1000, ITEM_SHELLS, 7, 1, 255, 156, 99, 174, 247, 44, 76, 0, 0, 202, 129, 0, 0);
-    item_aot_set(133, 25000, 20900, 1000, 1000, ITEM_F_AID_SPRAY, 1, 0, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
+    item_aot_set(132, 25000, 19000, 1000, 1000, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 156, 99, 174, 247, 44, 76, 0, 0, 202, 129, 0, 0);
+    item_aot_set(133, 25000, 20900, 1000, 1000, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 0, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
 #else
-    item_aot_set(131, 25000, 19000, 1000, 1000, ITEM_EXPLOSIVE_ROUNDS, 6, 0, 255, 156, 99, 174, 247, 44, 76, 0, 0, 45, 129, 0, 0);
-    item_aot_set(132, 25000, 20900, 1000, 1000, ITEM_F_AID_SPRAY, 1, 1, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
-    if (ck(FG_COMMON, 88, 0) && ck(FG_COMMON, 72, 1))
+    item_aot_set(131, 25000, 19000, 1000, 1000, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 0, 255, 156, 99, 174, 247, 44, 76, 0, 0, 45, 129, 0, 0);
+    item_aot_set(132, 25000, 20900, 1000, 1000, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 1, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
+    if (ck(FG_COMMON, FLAG_COMMON_58, TRUE) && ck(FG_COMMON, FLAG_COMMON_48, FALSE))
     {
-        if (ck(FG_COMMON, 83, 0))
+        if (ck(FG_COMMON, FLAG_COMMON_53, TRUE))
         {
-            enemy(ENEMY_BARRY_3, 4, 255, 1, 2, 0, 0, 3200, 0, 0, 12460, 0, 2570, 0, 0, 0, 0);
+            enemy(ENEMY_2D_NPC_BARRY_3, 4, 255, 1, 2, 0, 0, 3200, 0, 0, 12460, 0, 2570, 0, 0, 0, 0);
         }
-        else if (ck(FG_COMMON, 87, 0))
+        else if (ck(FG_COMMON, FLAG_COMMON_57, TRUE))
         {
-            enemy(ENEMY_BARRY_3, 4, 255, 1, 2, 0, 0, 1112, 0, 0, 6165, 0, 27740, 0, 0, 0, 0);
+            enemy(ENEMY_2D_NPC_BARRY_3, 4, 255, 1, 2, 0, 0, 1112, 0, 0, 6165, 0, 27740, 0, 0, 0, 0);
         }
         else
         {
-            enemy(ENEMY_BARRY_3, 4, 255, 1, 2, 0, 0, 3232, 0, 0, 3920, 0, 2790, 0, 0, 0, 0);
+            enemy(ENEMY_2D_NPC_BARRY_3, 4, 255, 1, 2, 0, 0, 3232, 0, 0, 3920, 0, 2790, 0, 0, 0, 0);
         }
-        set(FG_COMMON, 87, 1);
-        set(FG_COMMON, 83, 1);
+        set(FG_COMMON, FLAG_COMMON_57, FALSE);
+        set(FG_COMMON, FLAG_COMMON_53, FALSE);
         aot_reset(0, SCE_EVENT, 129, 9, event_03, 0);
         evt_exec(0, 9, event_04);
     }
-    if (ck(FG_COMMON, 89, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_59, TRUE))
     {
-        enemy(ENEMY_HUNTER, 192, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 1, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 192, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 1, 0, 0, 0);
         aot_reset(2, SCE_EVENT, 129, 9, event_00, 0);
     }
-    if (ck(FG_COMMON, 90, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_5A, TRUE))
     {
-        enemy(ENEMY_BARRY_3, 4, 255, 1, 2, 0, 0, 1112, 0, 0, 6165, 0, 27740, 0, 0, 0, 0);
-        enemy(ENEMY_HUNTER, 192, 255, 1, 2, 0, 0, 3192, 0, 0, 4300, 0, 16300, 1, 0, 0, 0);
+        enemy(ENEMY_2D_NPC_BARRY_3, 4, 255, 1, 2, 0, 0, 1112, 0, 0, 6165, 0, 27740, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 192, 255, 1, 2, 0, 0, 3192, 0, 0, 4300, 0, 16300, 1, 0, 0, 0);
         evt_exec(0, 9, event_00);
         aot_reset(0, SCE_EVENT, 129, 9, event_03, 0);
     }
 #endif
-    if (ck(FG_COMMON, 72, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_48, TRUE))
     {
 #if CHRIS
-        enemy(ENEMY_HUNTER, 0, 78, 1, 2, 0, 0, 0, 0, 0, 7750, 0, 4760, 0, 0, 0, 0);
-        enemy(ENEMY_HUNTER, 0, 79, 1, 2, 0, 0, 0, 0, 0, 9760, 0, 18180, 1, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 0, 78, 1, 2, 0, 0, 0, 0, 0, 7750, 0, 4760, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 0, 79, 1, 2, 0, 0, 0, 0, 0, 9760, 0, 18180, 1, 0, 0, 0);
 #else
-        enemy(ENEMY_HUNTER, 0, 78, 1, 2, 0, 0, 0, 0, 0, 7750, 0, 4760, 1, 0, 0, 0);
-        enemy(ENEMY_HUNTER, 0, 79, 1, 2, 0, 0, 0, 0, 0, 9760, 0, 18180, 2, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 0, 78, 1, 2, 0, 0, 0, 0, 0, 7750, 0, 4760, 1, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 0, 79, 1, 2, 0, 0, 0, 0, 0, 9760, 0, 18180, 2, 0, 0, 0);
 #endif
     }
     aot_set(7, 25600, 16400, 2000, 10100, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
@@ -62,13 +67,13 @@ event event_00
     sleep(1);
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
-        if (ck(FG_COMMON, 89, 0))
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        if (ck(FG_COMMON, FLAG_COMMON_59, TRUE))
         {
             evt_exec(0, 9, event_02);
         }
-        if (ck(FG_COMMON, 90, 0))
+        if (ck(FG_COMMON, FLAG_COMMON_5A, TRUE))
         {
             evt_exec(0, 9, event_01);
         }
@@ -80,10 +85,10 @@ event event_01
 {
     run
     {
-        set(FG_COMMON, 90, 1);
+        set(FG_COMMON, FLAG_COMMON_5A, FALSE);
         cutnext(4);
         dir_set(0, 0, 384, 0, 6840, 0, 26510);
-        set(FG_COMMON, 88, 0);
+        set(FG_COMMON, FLAG_COMMON_58, TRUE);
         se_play_3d(2, 7, 0, 2, 1, 0, 0);
     }
     sleep(1);
@@ -251,7 +256,7 @@ event event_01
     wait_message();
     run
     {
-        set(FG_STATUS, 15, 1);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -272,7 +277,7 @@ event event_01
     sleep(10);
     run
     {
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
         eml_state(0, 0, 8);
     }
     evt_finish();
@@ -282,7 +287,7 @@ event event_02
 {
     run
     {
-        set(FG_COMMON, 89, 1);
+        set(FG_COMMON, FLAG_COMMON_59, FALSE);
         cutnext(0);
         dir_set(0, 0, 2048, 0, 13940, 0, 3120);
         pos_set(0, 0, 2200, 0, 15400, 0, 4000);
@@ -411,12 +416,12 @@ event event_02
     run
     {
         cut_auto(0);
-        set(FG_STATUS, 15, 1);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     }
     sleep(10);
     run
     {
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
         aot_on(2, SCE_DOOR, 0);
     }
     evt_finish();
@@ -426,7 +431,7 @@ event event_03
 {
     run
     {
-        set(FG_COMMON, 87, 0);
+        set(FG_COMMON, FLAG_COMMON_57, TRUE);
         aot_on(0, SCE_DOOR, 0);
     }
     evt_finish();

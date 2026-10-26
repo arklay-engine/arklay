@@ -1,19 +1,24 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 8100, 3200, 1800, 1300, 3, 0, 0, 4, 0, RDT_001, 15000, 0, 17500, 0, UNLOCKED, 129);
+    door_aot_set(0, 8100, 3200, 1800, 1300, 3, 0, 0, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, 129);
     aot_set(1, 8200, 5100, 1000, 1000, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
     aot_set(2, 4450, 10680, 1000, 1500, SCE_EVENT, 129, 9, 0, event_04, 0, 0, 0);
-    item_aot_set(3, 1820, 9520, 1000, 1000, ITEM_SHELLS, 7, 0, 255, 16, 9, 80, 251, 36, 39, 0, 8, 29, 129, 0, 0);
-    item_aot_set(4, 3900, 7500, 1700, 1600, ITEM_62, 0, 1, 255, 242, 18, 70, 251, 244, 31, 180, 251, 116, 129, 0, 0);
+    item_aot_set(3, 1820, 9520, 1000, 1000, ITEM_0C_AMMO_SHOTGUN, 7, 0, 255, 16, 9, 80, 251, 36, 39, 0, 8, 29, 129, 0, 0);
+    item_aot_set(4, 3900, 7500, 1700, 1600, ITEM_62_FILE_ORDERS, 0, 1, 255, 242, 18, 70, 251, 244, 31, 180, 251, 116, 129, 0, 0);
     eml_rot(1, 124, 1, 232, 8);
-    item_aot_set(5, 0, 0, 10, 10, ITEM_RED_JEWEL, 1, 2, 255, 8, 32, 198, 233, 50, 55, 0, 0, 30, 129, 0, 0);
+    item_aot_set(5, 0, 0, 10, 10, ITEM_22_PUZZLE_JEWEL_RED, 1, 2, 255, 8, 32, 198, 233, 50, 55, 0, 0, 30, 129, 0, 0);
     eml_rot(2, 0, 0, 0, 252);
     setbyte(2, 0, 0);
-    item_aot_set(6, 1780, 7820, 1000, 1500, ITEM_MAGNUM_ROUNDS, 6, 3, 255, 232, 8, 80, 251, 160, 35, 0, 0, 200, 129, 0, 0);
+    item_aot_set(6, 1780, 7820, 1000, 1500, ITEM_0E_AMMO_MAGNUM, 6, 3, 255, 232, 8, 80, 251, 160, 35, 0, 0, 200, 129, 0, 0);
     obj(0, 65, 255, 6720, 0, 10440, 0, 64, 2, 0, 0, 192, 253, 0, 0, 28, 2, 132, 3, 232, 3, 28, 2);
-    if (ck(FG_COMMON, 68, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_44, FALSE))
     {
         cutnext(4);
         evt_exec(0, 9, event_03);
@@ -21,7 +26,7 @@ proc init
     else
     {
         msg_list(0, 18, 38, 248, 243, 248, 25, 56, 56, 56, 0, 200, 45, 169, 38, 22, 244, 80, 28, 56, 56, 56, 0, 112, 43, 11, 39, 72, 244, 8, 25, 180, 180, 180, 0, 160, 35, 160, 1, 160, 1, 160, 1);
-        if (ck(FG_ITEM, 30, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_1E, TRUE))
         {
             effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
@@ -35,7 +40,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_STATUS, 24, 0))
+    if (ck(FG_STATUS, FLAG_STATUS_18, TRUE))
     {
         aot_delete(2, SCE_EVENT, 129);
         aot_delete(3, SCE_ITEM, 0);
@@ -49,19 +54,19 @@ proc main
         aot_delete(4, SCE_DOCUMENT, 129);
         aot_delete(5, SCE_ITEM, 129);
     }
-    if (ck(FG_ITEM, 30, 1))
+    if (ck(FG_ITEM, FLAG_ITEM_1E, FALSE))
     {
         aot_delete(2, SCE_NONE, 0);
     }
-    if (ck(FG_ITEM, 29, 1))
+    if (ck(FG_ITEM, FLAG_ITEM_1D, FALSE))
     {
         aot_delete(3, SCE_NONE, 0);
     }
-    if (ck(FG_ITEM, 116, 1))
+    if (ck(FG_ITEM, FLAG_ITEM_74, FALSE))
     {
         aot_delete(4, SCE_NONE, 0);
     }
-    if (ck(FG_ITEM, 200, 1))
+    if (ck(FG_ITEM, FLAG_ITEM_C8, FALSE))
     {
         aot_delete(5, SCE_NONE, 0);
     }
@@ -70,7 +75,7 @@ proc main
 event event_00
 {
     sleep(1);
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
     message(128, 0);
     do
     {
@@ -82,7 +87,7 @@ event event_00
         if (cmpb(5, 0, 0))
         {
             se_play_3d(2, 23, 0, 0, 0, 8200, 5100);
-            if (ck(FG_COMMON, 68, 1))
+            if (ck(FG_COMMON, FLAG_COMMON_44, FALSE))
             {
                 if (cmpb(2, 0, 4))
                 {
@@ -119,12 +124,12 @@ event event_01
 {
     run
     {
-        if (ck(FG_ITEM, 30, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_1E, TRUE))
         {
             effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
         msg_list(0, 18, 38, 248, 243, 248, 25, 56, 56, 56, 0, 200, 45, 169, 38, 22, 244, 80, 28, 56, 56, 56, 0, 112, 43, 11, 39, 72, 244, 8, 25, 180, 180, 180, 0, 160, 35, 160, 1, 160, 1, 160, 1);
-        set(FG_COMMON, 68, 0);
+        set(FG_COMMON, FLAG_COMMON_44, TRUE);
     }
     evt_chain(3);
     evt_finish();
@@ -134,11 +139,11 @@ event event_02
 {
     run
     {
-        if (ck(FG_ITEM, 30, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_1E, TRUE))
         {
             effect_kill_a(0);
         }
-        set(FG_COMMON, 68, 1);
+        set(FG_COMMON, FLAG_COMMON_44, FALSE);
     }
     timer_setup(2, 0, 0, 0, 0);
     sleep(1);
@@ -167,7 +172,7 @@ event event_03
     run
     {
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -177,8 +182,8 @@ event event_04
     sleep(1);
     run
     {
-        set(FG_6, 23, 1);
-        if (ck(FG_COMMON, 68, 1))
+        set(FG_6, FLAG_6_17, FALSE);
+        if (ck(FG_COMMON, FLAG_COMMON_44, FALSE))
         {
             cutnext(7);
             evt_exec(0, 9, event_05);
@@ -213,7 +218,7 @@ event event_05
     run
     {
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -245,14 +250,14 @@ event event_07
 {
     run
     {
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
         aot_on(5, SCE_ITEM, 0);
     }
     evt_next();
     evt_nop();
     run
     {
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
     }
     sleep(1);
     evt_chain(8);
@@ -264,7 +269,7 @@ event event_08
     evt_disable(7);
     run
     {
-        if (ck(FG_ITEM, 30, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_1E, TRUE))
         {
             effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
@@ -276,7 +281,7 @@ event event_08
     run
     {
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }

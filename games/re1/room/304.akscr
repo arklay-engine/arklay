@@ -1,33 +1,38 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    set(FG_STATUS, 29, 0);
-    door_aot_set(0, 29200, 2600, 2000, 2600, 1, 8, 15, 64, 0, RDT_002, 3500, 0, 23300, 0, UNLOCKED, 129);
-    door_aot_set(1, 3500, 30200, 1500, 1600, 1, 0, 3, 1, 0, RDT_400, 3600, 0, 9900, 3072, UNLOCKED, 129);
+    set(FG_STATUS, FLAG_STATUS_1D, TRUE);
+    door_aot_set(0, 29200, 2600, 2000, 2600, 1, 8, 15, 64, 0, ROOM_302_FALLS, 3500, 0, 23300, 0, UNLOCKED, 129);
+    door_aot_set(1, 3500, 30200, 1500, 1600, 1, 0, 3, 1, 0, STAGE_4 | ROOM_400_ENTER_PASSAGE, 3600, 0, 9900, 3072, UNLOCKED, 129);
     aot_set(2, 0, 0, 32000, 32000, SCE_USEITEM, 65, 9, 0, 63, 0, 1, 0);
     aot_reset(2, SCE_NONE, 0, 0, 0, 0);
-    item_aot_set(3, 27900, 5200, 1700, 1000, ITEM_GREEN_HERB, 1, 0, 255, 90, 110, 0, 0, 24, 21, 0, 0, 193, 129, 1, 0);
-    item_aot_set(4, 27900, 5200, 1700, 1000, ITEM_GREEN_HERB, 1, 1, 255, 72, 113, 0, 0, 24, 21, 0, 0, 194, 129, 1, 0);
-    item_aot_set(5, 27900, 1800, 1700, 800, ITEM_BLUE_HERB, 1, 2, 255, 90, 110, 0, 0, 96, 9, 0, 0, 195, 129, 1, 0);
-    item_aot_set(6, 27900, 1800, 1700, 800, ITEM_BLUE_HERB, 1, 3, 255, 72, 113, 0, 0, 96, 9, 0, 0, 196, 129, 1, 0);
-    if (ck(FG_SCENARIO, 0, 1))
+    item_aot_set(3, 27900, 5200, 1700, 1000, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 90, 110, 0, 0, 24, 21, 0, 0, 193, 129, 1, 0);
+    item_aot_set(4, 27900, 5200, 1700, 1000, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 72, 113, 0, 0, 24, 21, 0, 0, 194, 129, 1, 0);
+    item_aot_set(5, 27900, 1800, 1700, 800, ITEM_45_HEAL_HERB_BLUE, 1, 2, 255, 90, 110, 0, 0, 96, 9, 0, 0, 195, 129, 1, 0);
+    item_aot_set(6, 27900, 1800, 1700, 800, ITEM_45_HEAL_HERB_BLUE, 1, 3, 255, 72, 113, 0, 0, 96, 9, 0, 0, 196, 129, 1, 0);
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
-        enemy(ENEMY_CERBERUS, 12, 53, 1, 2, 0, 0, 672, 0, 0, 25657, 0, 11984, 0, 0, 0, 0);
-        enemy(ENEMY_CERBERUS, 12, 54, 1, 2, 0, 0, 336, 0, 0, 19483, 0, 16862, 1, 0, 0, 0);
-        if (ck(FG_STATUS, 8, 1))
+        enemy(ENEMY_02_DOG_CERBERUS, 12, 53, 1, 2, 0, 0, 672, 0, 0, 25657, 0, 11984, 0, 0, 0, 0);
+        enemy(ENEMY_02_DOG_CERBERUS, 12, 54, 1, 2, 0, 0, 336, 0, 0, 19483, 0, 16862, 1, 0, 0, 0);
+        if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
         {
-            enemy(ENEMY_CERBERUS, 12, 55, 1, 2, 0, 0, 3920, 0, 0, 4200, 0, 21000, 2, 0, 0, 0);
+            enemy(ENEMY_02_DOG_CERBERUS, 12, 55, 1, 2, 0, 0, 3920, 0, 0, 4200, 0, 21000, 2, 0, 0, 0);
         }
     }
-    if (ck(FG_SCENARIO, 0, 0) && ck(FG_SCENARIO, 24, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_18, FALSE))
     {
-        if (ck(FG_SCENARIO, 127, 0))
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_7F, TRUE))
         {
             aot_reset(2, SCE_USEITEM, 65, 9, 63, 1);
             evt_exec(0, 0, event_00);
         }
-        set(FG_SCENARIO, 24, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_18, TRUE);
     }
     if (cmpb(3, 0, 2))
     {
@@ -37,15 +42,15 @@ proc init
     {
         snd_pan_vol_set(1, 35, 35);
     }
-    if (ck(FG_SCENARIO, 0, 0) && ck(FG_STATUS, 8, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, TRUE) && ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        set(FG_COMMON, 58, 0);
+        set(FG_COMMON, FLAG_COMMON_3A, TRUE);
     }
 }
 
 proc main
 {
-    if (testitem(ITEM_4D))
+    if (testitem(ITEM_4D_TOOL_RADIO))
     {
         evt_exec(0, 1, event_01);
     }
@@ -95,9 +100,9 @@ event event_00
 event event_01
 {
     evt_disable(0);
-    set(FG_6, 23, 1);
+    set(FG_6, FLAG_6_17, FALSE);
     sleep(10);
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
 #if CHRIS
     voice_play(1, 34, 0);
     message(0, 0);
@@ -150,9 +155,9 @@ event event_01
     run
     {
         sys_multi(7);
-        set(FG_6, 23, 0);
-        set(FG_STATUS, 15, 1);
-        set(FG_STATUS, 17, 0);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_STATUS, FLAG_STATUS_11, TRUE);
         aot_reset(2, SCE_NONE, 0, 0, 0, 0);
     }
     evt_finish();

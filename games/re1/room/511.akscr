@@ -1,23 +1,30 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_19 0x19
+
 proc init
 {
-    door_aot_set(0, 11300, 15800, 3000, 2900, 12, 1, 11, 3, 0, RDT_010, 12200, 0, 2500, 3072, UNLOCKED, 129);
+    door_aot_set(0, 11300, 15800, 3000, 2900, 12, 1, 11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, 129);
     aot_set(1, 17700, 8300, 2100, 1600, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
     aot_set(2, 5800, 4400, 2100, 1700, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
 #if CHRIS
-    if (ck(FG_COMMON, 90, 0) && ck(FG_SCENARIO, 43, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_5A, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_2B, FALSE))
     {
         aot_set(3, 6000, 3600, 1000, 1000, SCE_MESSAGE, 129, 135, 0, 69, 0, 0, 0);
-        enemy(ENEMY_REBECCA_STARS_, 0, 255, 1, 2, 0, 0, 3072, 0, 0, 6500, 0, 4100, 0, 32, 1, 0);
+        enemy(ENEMY_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 3072, 0, 0, 6500, 0, 4100, 0, 32, 1, 0);
         evt_exec(0, 9, event_04);
     }
 #else
-    if (ck(FG_COMMON, 192, 1) && ck(FG_COMMON, 91, 0) && ck(FG_SCENARIO, 55, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE) && ck(FG_COMMON, FLAG_COMMON_5B, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE))
     {
         aot_set(3, 8500, 3226, 1000, 1000, SCE_MESSAGE, 129, 130, 0, 71, 0, 0, 0);
-        enemy(ENEMY_WESKER_STARS_, 2, 255, 1, 2, 0, 0, 2000, 0, 0, 9000, 0, 3726, 0, 0, 0, 0);
-        enemy(ENEMY_CHIMERA, 3, 181, 1, 2, 0, 0, 2048, 0, 0, 10600, 0, 4000, 1, 0, 0, 0);
+        enemy(ENEMY_24_NPC_WESKER, 2, 255, 1, 2, 0, 0, 2000, 0, 0, 9000, 0, 3726, 0, 0, 0, 0);
+        enemy(ENEMY_09_CHIMERA, 3, 181, 1, 2, 0, 0, 2048, 0, 0, 10600, 0, 4000, 1, 0, 0, 0);
     }
 #endif
     evt_exec(0, 9, event_02);
@@ -26,7 +33,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_SCENARIO, 43, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE))
     {
         aot_reset(2, SCE_MESSAGE, 129, 128, 69, 0);
     }
@@ -34,11 +41,11 @@ proc main
     {
         aot_reset(2, SCE_MESSAGE, 129, 129, 69, 0);
     }
-    if (ck(FG_SCENARIO, 45, 0) && ck(FG_SCENARIO, 46, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_2D, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_2E, TRUE))
     {
         aot_reset(1, SCE_MESSAGE, 129, 134, 69, 0);
     }
-    else if (ck(FG_SCENARIO, 45, 1))
+    else if (ck(FG_SCENARIO, FLAG_SCENARIO_2D, FALSE))
     {
         aot_reset(1, SCE_EVENT, 129, 9, event_00, 0);
     }
@@ -52,9 +59,9 @@ event event_00
 {
     run
     {
-        set(FG_6, 29, 1);
-        set(FG_6, 25, 1);
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
         message(131, 70);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -74,14 +81,14 @@ event event_00
         if (cmpb(5, 0, 0))
         {
             evt_exec(0, 9, event_01);
-            set(FG_SCENARIO, 45, 0);
+            set(FG_SCENARIO, FLAG_SCENARIO_2D, TRUE);
         }
     }
     run
     {
-        set(FG_6, 29, 0);
-        set(FG_6, 25, 0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -90,16 +97,16 @@ event event_01
 {
     run
     {
-        set(FG_6, 29, 1);
-        set(FG_6, 25, 1);
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
     }
     sleep(10);
     se_play_3d(2, 23, 0, 1, 0, 0, 0);
     sleep(10);
     run
     {
-        if (ck(FG_SCENARIO, 46, 0))
+        if (ck(FG_SCENARIO, FLAG_SCENARIO_2E, TRUE))
         {
             message(134, 70);
         }
@@ -115,9 +122,9 @@ event event_01
     while (cmpb(5, 2, 128));
     run
     {
-        set(FG_6, 29, 0);
-        set(FG_6, 25, 0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -158,144 +165,144 @@ event event_03
 event event_04
 {
     sleep(1);
-    set(FG_ROOM, 25, 1);
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     evt_fork(9, event_07, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     sleep(30);
     for (2)
     {
-        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
         evt_fork(9, event_05, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, 25, 1));
+        while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     }
     evt_nop();
     sleep(10);
     for (3)
     {
-        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
         evt_fork(9, event_05, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, 25, 1));
+        while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     }
     evt_nop();
     sleep(20);
     for (6)
     {
-        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
         evt_fork(9, event_05, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, 25, 1));
+        while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     }
     evt_nop();
     sleep(10);
     for (2)
     {
-        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
         evt_fork(9, event_05, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, 25, 1));
+        while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
         sleep(2);
     }
     evt_nop();
     sleep(30);
-    set(FG_ROOM, 25, 1);
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     evt_fork(9, event_08, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
-    set(FG_ROOM, 25, 1);
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     evt_fork(9, event_06, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     sleep(1);
-    set(FG_ROOM, 25, 1);
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     evt_fork(9, event_07, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     sleep(30);
     for (5)
     {
-        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
         evt_fork(9, event_05, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, 25, 1));
+        while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     }
     evt_nop();
     sleep(10);
     for (3)
     {
-        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
         evt_fork(9, event_05, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, 25, 1));
+        while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     }
     evt_nop();
     sleep(10);
-    set(FG_ROOM, 25, 1);
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     evt_fork(9, event_05, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     sleep(10);
     for (3)
     {
-        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
         evt_fork(9, event_05, 0);
         do
         {
             evt_next();
         }
-        while (ck(FG_ROOM, 25, 1));
+        while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     }
     evt_nop();
     sleep(40);
-    set(FG_ROOM, 25, 1);
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     evt_fork(9, event_0A, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
-    set(FG_ROOM, 25, 1);
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
+    set(FG_ROOM, FLAG_ROOM_19, FALSE);
     evt_fork(9, event_0C, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     evt_chain(4);
     evt_finish();
 }
@@ -320,7 +327,7 @@ event event_05
     act_nop();
     act_reset();
     evt_nop();
-    set(FG_ROOM, 25, 0);
+    set(FG_ROOM, FLAG_ROOM_19, TRUE);
     evt_finish();
 }
 
@@ -333,7 +340,7 @@ event event_06
     sleep(15);
     act_idle();
     act_reset();
-    set(FG_ROOM, 25, 0);
+    set(FG_ROOM, FLAG_ROOM_19, TRUE);
     evt_finish();
 }
 
@@ -346,7 +353,7 @@ event event_07
     sleep(8);
     act_idle();
     act_reset();
-    set(FG_ROOM, 25, 0);
+    set(FG_ROOM, FLAG_ROOM_19, TRUE);
     evt_finish();
 }
 
@@ -360,7 +367,7 @@ event event_08
     sleep(260);
     act_idle();
     act_reset();
-    set(FG_ROOM, 25, 0);
+    set(FG_ROOM, FLAG_ROOM_19, TRUE);
     evt_finish();
 }
 
@@ -390,7 +397,7 @@ event event_0A
     sleep(100);
     act_idle();
     act_reset();
-    set(FG_ROOM, 25, 0);
+    set(FG_ROOM, FLAG_ROOM_19, TRUE);
     evt_finish();
 }
 
@@ -417,6 +424,6 @@ event event_0C
     sleep(30);
     act_idle();
     act_reset();
-    set(FG_ROOM, 25, 0);
+    set(FG_ROOM, FLAG_ROOM_19, TRUE);
     evt_finish();
 }

@@ -7,25 +7,59 @@
 //! a section that does not reproduce exactly is re-rendered as one `asm`
 //! block, so the output always compiles back to identical bytecode.
 
+use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
+
+use super::names::Names;
+use super::preprocess::merged_id;
 use crate::scd::akscr::compile;
-use crate::scd::disasm::{EventState, format_insn, next_event_state, render_run};
+use crate::scd::disasm::{COMMAND_SIG, EventState, format_insn, next_event_state, render_run};
 use crate::scd::ir::{Block, Decoded, Insn, Scripts, Stream, StreamKind};
 use crate::scd::opcode::command_width;
 
-/// Render the `.akscr` source of every stream.
+/// Render the `.akscr` source of every stream, with numbers for game data.
 pub fn decompile(scripts: &Scripts) -> String {
+    decompile_with(scripts, &Names::default(), 0x1000)
+}
+
+/// Render the `.akscr` source of every stream of RDT `room`, naming game
+/// data with `names` and `#include`-ing the files they come from.
+pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
+    let mut defines = names.defines().clone();
+    for bit in 0..=u8::MAX {
+        defines.insert(room_flag(bit), i64::from(bit));
+    }
+    let ctx = Ctx {
+        names,
+        stage: (merged_id(room) >> 8) as u8,
+        defines,
+        room_flags: RefCell::default(),
+    };
     let mut sections: Vec<String> = Vec::new();
     for block in &scripts.init {
-        sections.push(block_section("init", block));
+        sections.push(block_section(&ctx, "init", block));
     }
     for block in &scripts.main {
-        sections.push(block_section("main", block));
+        sections.push(block_section(&ctx, "main", block));
     }
     for stream in &scripts.events {
-        sections.push(event_section(stream));
+        sections.push(event_section(&ctx, stream));
     }
 
     let mut out = String::from("#version 1\n");
+    if !names.includes().is_empty() {
+        out.push('\n');
+        for path in names.includes() {
+            out.push_str(&format!("#include \"{path}\"\n"));
+        }
+    }
+    let room_flags = ctx.room_flags.borrow();
+    if !room_flags.is_empty() {
+        out.push('\n');
+        for &bit in room_flags.iter() {
+            out.push_str(&format!("#define {} 0x{bit:02X}\n", room_flag(bit)));
+        }
+    }
     for section in sections {
         out.push('\n');
         out.push_str(&section);
@@ -33,10 +67,29 @@ pub fn decompile(scripts: &Scripts) -> String {
     out
 }
 
+/// The generated name of a room's own flag bit.
+fn room_flag(bit: u8) -> String {
+    format!("FLAG_ROOM_{bit:02X}")
+}
+
+/// The naming context of one room.
+struct Ctx<'n> {
+    names: &'n Names,
+    /// The room's stage (stages 6/7 as 1/2), for stage-relative door targets.
+    stage: u8,
+    /// Every name a section may use, for verifying it.
+    defines: HashMap<String, i64>,
+    /// The room flag bits named so far, defined at the top of the script.
+    room_flags: RefCell<BTreeSet<u8>>,
+}
+
+/// The flag group of the room's own flags.
+const FG_ROOM: u8 = 4;
+
 /// One `proc init`/`proc main` section, verified against the block's bytes.
-fn block_section(name: &str, block: &Block) -> String {
+fn block_section(ctx: &Ctx, name: &str, block: &Block) -> String {
     let original = stream_bytes(&block.insns, &block.trailing);
-    let mut writer = Writer::default();
+    let mut writer = Writer::new(ctx);
     let header = format!("proc {name}");
     if block.trailing.is_empty()
         && let Some(body) = structure_block(&block.insns)
@@ -46,16 +99,16 @@ fn block_section(name: &str, block: &Block) -> String {
         writer.asm_block(&header, &block.insns, &block.trailing, block.offset + 2);
     }
     let text = writer.finish();
-    if compile::section_bytes(&text).ok().as_deref() == Some(original.as_slice()) {
+    if compile::section_bytes(&text, &ctx.defines).ok().as_deref() == Some(original.as_slice()) {
         return text;
     }
-    let mut writer = Writer::default();
+    let mut writer = Writer::new(ctx);
     writer.asm_block(&header, &block.insns, &block.trailing, block.offset + 2);
     writer.finish()
 }
 
 /// One `event event_XX` section, verified against the stream's bytes.
-fn event_section(stream: &Stream) -> String {
+fn event_section(ctx: &Ctx, stream: &Stream) -> String {
     let StreamKind::Event(index) = stream.kind else {
         return String::new();
     };
@@ -64,8 +117,8 @@ fn event_section(stream: &Stream) -> String {
         header.push_str(" nopad");
     }
     let original = stream_bytes(&stream.insns, &stream.trailing);
-    let mut writer = Writer::default();
-    if let Some(body) = EventParser::new(&stream.insns).parse_all() {
+    let mut writer = Writer::new(ctx);
+    if let Some(body) = EventParser::new(ctx, &stream.insns).parse_all() {
         writer.line(&header);
         writer.open();
         writer.events(&body);
@@ -77,10 +130,10 @@ fn event_section(stream: &Stream) -> String {
         writer.event_asm(&header, stream);
     }
     let text = writer.finish();
-    if compile::section_bytes(&text).ok().as_deref() == Some(original.as_slice()) {
+    if compile::section_bytes(&text, &ctx.defines).ok().as_deref() == Some(original.as_slice()) {
         return text;
     }
-    let mut writer = Writer::default();
+    let mut writer = Writer::new(ctx);
     writer.event_asm(&header, stream);
     writer.finish()
 }
@@ -293,6 +346,7 @@ enum Evt<'a> {
 
 /// Recursive-descent structurer over one event stream.
 struct EventParser<'a> {
+    ctx: &'a Ctx<'a>,
     insns: &'a [Insn],
     /// The sub-ISA state before each instruction.
     states: Vec<EventState>,
@@ -300,7 +354,7 @@ struct EventParser<'a> {
 }
 
 impl<'a> EventParser<'a> {
-    fn new(insns: &'a [Insn]) -> Self {
+    fn new(ctx: &'a Ctx<'a>, insns: &'a [Insn]) -> Self {
         let mut states = Vec::with_capacity(insns.len());
         let mut state = EventState::Top;
         for insn in insns {
@@ -308,6 +362,7 @@ impl<'a> EventParser<'a> {
             state = next_event_state(state, insn);
         }
         Self {
+            ctx,
             insns,
             states,
             index: 0,
@@ -354,14 +409,14 @@ impl<'a> EventParser<'a> {
                         self.index += 2;
                     }
                     _ => {
-                        body.push(Evt::Line(statement(insn, state)));
+                        body.push(Evt::Line(statement(self.ctx, insn, state)));
                         self.index += 1;
                     }
                 },
                 Decoded::Event(op) if op.op == 0x06 => body.push(self.parse_run()?),
                 Decoded::Event(op) if op.op == 0x07 => body.push(self.parse_single(insn)?),
                 Decoded::Event(_) | Decoded::Actor(_) | Decoded::Tween(_) => {
-                    body.push(Evt::Line(statement(insn, state)));
+                    body.push(Evt::Line(statement(self.ctx, insn, state)));
                     self.index += 1;
                 }
                 _ => return None,
@@ -430,7 +485,7 @@ impl<'a> EventParser<'a> {
         if op.op <= 0x03 {
             return None;
         }
-        let call = call_text(command, EventState::Top);
+        let call = call_text(self.ctx, command, EventState::Top);
         let exact = command_width(&command.bytes) == Some(command.bytes.len())
             && usize::from(head.bytes[1]) == command.bytes.len() + 2;
         self.index += 2;
@@ -442,15 +497,70 @@ impl<'a> EventParser<'a> {
     }
 }
 
-/// `name(args)` for one instruction.
-fn call_text(insn: &Insn, state: EventState) -> String {
-    let (name, args) = format_insn(insn, state, None);
+/// `name(args)` for one instruction, naming game data through `ctx`.
+fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
+    let (name, mut args) = format_insn(insn, state, None);
+    if let Decoded::Command(op) = insn.decoded
+        && op.width.is_some()
+        && let Some((_, params)) = COMMAND_SIG
+            .get(usize::from(op.op))
+            .and_then(|signature| signature.split_once(':'))
+    {
+        let byte = |position: usize| insn.bytes.get(position).copied().unwrap_or(0);
+        let mut position = 1;
+        for (index, kind) in params.bytes().enumerate() {
+            let value = byte(position);
+            let named = match (op.op, index, kind) {
+                // `ck` / `set`: the flag bit within its group, and the state.
+                (0x04 | 0x05, 1, _) => {
+                    let group = byte(1);
+                    if group == FG_ROOM {
+                        ctx.room_flags.borrow_mut().insert(value);
+                        Some(room_flag(value))
+                    } else {
+                        ctx.names.flag(group, value).map(str::to_string)
+                    }
+                }
+                (0x04 | 0x05, 2, _) => match value {
+                    0 => Some("TRUE".to_string()),
+                    1 => Some("FALSE".to_string()),
+                    2 if op.op == 0x05 => Some("TOGGLE".to_string()),
+                    _ => None,
+                },
+                (_, _, b't') if !matches!(value, 0 | 254 | 255) => Some(
+                    ctx.names
+                        .item(value)
+                        .map_or_else(|| value.to_string(), str::to_string),
+                ),
+                (_, _, b'e') => Some(
+                    ctx.names
+                        .enemy(value)
+                        .map_or_else(|| value.to_string(), str::to_string),
+                ),
+                (_, _, b'r') => Some(
+                    ctx.names
+                        .door_target(ctx.stage, value)
+                        .unwrap_or_else(|| value.to_string()),
+                ),
+                _ => None,
+            };
+            if let Some(named) = named
+                && let Some(arg) = args.get_mut(index)
+            {
+                *arg = named;
+            }
+            position += match kind {
+                b'U' | b'I' => 2,
+                _ => 1,
+            };
+        }
+    }
     format!("{name}({})", args.join(", "))
 }
 
 /// `name(args);` for one instruction.
-fn statement(insn: &Insn, state: EventState) -> String {
-    format!("{};", call_text(insn, state))
+fn statement(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
+    format!("{};", call_text(ctx, insn, state))
 }
 
 // ---------------------------------------------------------------------------
@@ -458,13 +568,21 @@ fn statement(insn: &Insn, state: EventState) -> String {
 // ---------------------------------------------------------------------------
 
 /// Indented line writer.
-#[derive(Default)]
-struct Writer {
+struct Writer<'a> {
+    ctx: &'a Ctx<'a>,
     lines: Vec<String>,
     indent: usize,
 }
 
-impl Writer {
+impl<'a> Writer<'a> {
+    fn new(ctx: &'a Ctx<'a>) -> Self {
+        Self {
+            ctx,
+            lines: Vec::new(),
+            indent: 0,
+        }
+    }
+
     fn line(&mut self, text: &str) {
         if text.is_empty() {
             self.lines.push(String::new());
@@ -542,10 +660,11 @@ impl Writer {
     fn commands(&mut self, body: &[Cmd]) {
         for cmd in body {
             match cmd {
-                Cmd::Call(insn) => self.line(&statement(insn, EventState::Top)),
-                Cmd::Require(insn) => {
-                    self.line(&format!("require({});", call_text(insn, EventState::Top)))
-                }
+                Cmd::Call(insn) => self.line(&statement(self.ctx, insn, EventState::Top)),
+                Cmd::Require(insn) => self.line(&format!(
+                    "require({});",
+                    call_text(self.ctx, insn, EventState::Top)
+                )),
                 Cmd::Return => self.line("return;"),
                 Cmd::StrayEndif(insn) => self.asm(std::slice::from_ref(*insn), &[], insn.offset),
                 Cmd::If { .. } => self.if_chain(cmd, "if"),
@@ -566,7 +685,7 @@ impl Writer {
         };
         let expression = conditions
             .iter()
-            .map(|insn| call_text(insn, EventState::Top))
+            .map(|insn| call_text(self.ctx, insn, EventState::Top))
             .collect::<Vec<_>>()
             .join(" && ");
         self.line(&format!("{keyword} ({expression})"));
@@ -606,7 +725,7 @@ impl Writer {
                     self.close();
                     self.line(&format!(
                         "while ({});",
-                        call_text(condition, EventState::Top)
+                        call_text(self.ctx, condition, EventState::Top)
                     ));
                 }
             }

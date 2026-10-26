@@ -1,30 +1,35 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 3800, 10500, 2500, 2000, 3, 0, 0, 4, 129, RDT_015, 6000, 0, 2500, 3072, UNLOCKED, 129);
-    item_aot_set(1, 10200, 5700, 1400, 1400, ITEM_SHOTGUN, 7, 0, 255, 208, 42, 2, 244, 90, 25, 0, 12, 0, 129, 0, 0);
+    door_aot_set(0, 3800, 10500, 2500, 2000, 3, 0, 0, 4, 129, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, 129);
+    item_aot_set(1, 10200, 5700, 1400, 1400, ITEM_03_WEAPON_SHOTGUN, 7, 0, 255, 208, 42, 2, 244, 90, 25, 0, 12, 0, 129, 0, 0);
     swap_var(1, 1, 12);
-    item_aot_set(2, 0, 0, 0, 0, ITEM_BROKEN_SHOTGUN, 1, 1, 255, 208, 42, 2, 244, 90, 25, 0, 12, 1, 129, 0, 0);
+    item_aot_set(2, 0, 0, 0, 0, ITEM_1C_PUZZLE_BROKEN_SHOTGUN, 1, 1, 255, 208, 42, 2, 244, 90, 25, 0, 12, 1, 129, 0, 0);
     obj(0, 1, 255, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(5, 9820, 5340, 2000, 2000, SCE_NONE, 1, 9, 0, 1, 0, 1, 0);
     aot_set(6, 9820, 5340, 2000, 2000, SCE_NONE, 129, 9, 0, 5, 0, 0, 0);
     aot_set(7, 3800, 10500, 2500, 2000, SCE_NONE, 129, 128, 0, 255, 0, 0, 0);
     aot_set(8, 9500, 1300, 2000, 1900, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(9, 0, 5000, 3600, 3200, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    if (ck(FG_ITEM, 1, 1) && ck(FG_ITEM, 0, 1))
+    if (ck(FG_ITEM, FLAG_ITEM_01, FALSE) && ck(FG_ITEM, FLAG_ITEM_00, FALSE))
     {
         evt_exec(0, 0, event_02);
         aot_delete(5, SCE_USEITEM, 1);
         aot_delete(6, SCE_EVENT, 129);
     }
-    if (ck(FG_STATUS, 8, 1) && ck(FG_COMMON, 32, 0))
+    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE) && ck(FG_COMMON, FLAG_COMMON_20, TRUE))
     {
         evt_exec(0, 9, event_06);
         aot_delete(0, SCE_NONE, 129);
         aot_delete(7, SCE_MESSAGE, 129);
     }
-    if (ck(FG_STATUS, 8, 0) && ck(FG_COMMON, 41, 0))
+    if (ck(FG_STATUS, FLAG_STATUS_08, TRUE) && ck(FG_COMMON, FLAG_COMMON_29, TRUE))
     {
         evt_exec(0, 9, event_06);
         aot_delete(0, SCE_NONE, 129);
@@ -34,52 +39,52 @@ proc init
 
 proc main
 {
-    if (testpickup(ITEM_SHOTGUN))
+    if (testpickup(ITEM_03_WEAPON_SHOTGUN))
     {
         evt_exec(0, 9, event_00);
     }
-    if (ck(FG_STATUS, 8, 1))
+    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        if (testitem(ITEM_SHOTGUN))
+        if (testitem(ITEM_03_WEAPON_SHOTGUN))
         {
-            set(FG_ITEM, 0, 0);
+            set(FG_ITEM, FLAG_ITEM_00, TRUE);
             setbyte(0, 1, 0);
             evt_exec(0, 9, event_01);
             evt_exec(0, 9, event_03);
-            set(FG_COMMON, 32, 1);
+            set(FG_COMMON, FLAG_COMMON_20, FALSE);
             aot_delete(0, SCE_DOOR, 129);
             aot_delete(7, SCE_NONE, 129);
         }
-        if (testitem(ITEM_BROKEN_SHOTGUN))
+        if (testitem(ITEM_1C_PUZZLE_BROKEN_SHOTGUN))
         {
-            set(FG_ITEM, 1, 0);
+            set(FG_ITEM, FLAG_ITEM_01, TRUE);
             setbyte(1, 1, 0);
             evt_exec(0, 9, event_01);
             evt_exec(0, 9, event_04);
-            set(FG_COMMON, 32, 1);
+            set(FG_COMMON, FLAG_COMMON_20, FALSE);
             aot_delete(0, SCE_DOOR, 129);
             aot_delete(7, SCE_NONE, 129);
         }
     }
     else
     {
-        if (testitem(ITEM_SHOTGUN))
+        if (testitem(ITEM_03_WEAPON_SHOTGUN))
         {
-            set(FG_ITEM, 0, 0);
+            set(FG_ITEM, FLAG_ITEM_00, TRUE);
             setbyte(0, 1, 0);
             evt_exec(0, 9, event_01);
             evt_exec(0, 9, event_03);
-            set(FG_COMMON, 41, 1);
+            set(FG_COMMON, FLAG_COMMON_29, FALSE);
             aot_delete(0, SCE_DOOR, 129);
             aot_delete(7, SCE_NONE, 129);
         }
-        if (testitem(ITEM_BROKEN_SHOTGUN))
+        if (testitem(ITEM_1C_PUZZLE_BROKEN_SHOTGUN))
         {
-            set(FG_ITEM, 1, 0);
+            set(FG_ITEM, FLAG_ITEM_01, TRUE);
             setbyte(1, 1, 0);
             evt_exec(0, 9, event_01);
             evt_exec(0, 9, event_04);
-            set(FG_COMMON, 41, 1);
+            set(FG_COMMON, FLAG_COMMON_29, FALSE);
             aot_delete(0, SCE_DOOR, 129);
             aot_delete(7, SCE_NONE, 129);
         }
@@ -484,10 +489,10 @@ event event_05
 {
     run
     {
-        require(item_ck(ITEM_SHOTGUN));
+        require(item_ck(ITEM_03_WEAPON_SHOTGUN));
         swap_var(2, 1, 12);
         setb(6, 3, 0);
-        set(FG_STATUS, 18, 0);
+        set(FG_STATUS, FLAG_STATUS_12, TRUE);
     }
     evt_finish();
 }

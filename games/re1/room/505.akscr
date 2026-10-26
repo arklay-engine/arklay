@@ -1,17 +1,22 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 1600, 22700, 3800, 6200, 0, 9, 25, 96, 0, RDT_003, 19100, 0, 16600, 3072, UNLOCKED, 129);
-    door_aot_set(1, 20300, 21300, 2400, 2200, 10, 12, 13, 64, 0, RDT_006, 15200, 0, 4300, 2712, UNLOCKED, 129);
-    door_aot_set(2, 15700, 4300, 2800, 1500, 9, 1, 13, 6, 173, RDT_007, 12100, 0, 2500, 3072, LOCKED, 129);
-    door_aot_set(3, 0, 16100, 2700, 3400, 9, 1, 12, 7, 0, RDT_008, 19500, 0, 3500, 2048, UNLOCKED, 129);
-    door_aot_set(4, 22600, 2200, 2700, 2300, 7, 1, 12, 7, 157, RDT_00C, 2500, 0, 17300, 0, ITEM_LAB_KEY_2_, 129);
+    door_aot_set(0, 1600, 22700, 3800, 6200, 0, 9, 25, 96, 0, ROOM_503_STAIRS, 19100, 0, 16600, 3072, UNLOCKED, 129);
+    door_aot_set(1, 20300, 21300, 2400, 2200, 10, 12, 13, 64, 0, ROOM_506_SMALL_LABORATORY, 15200, 0, 4300, 2712, UNLOCKED, 129);
+    door_aot_set(2, 15700, 4300, 2800, 1500, 9, 1, 13, 6, 173, ROOM_507_MORTUARY, 12100, 0, 2500, 3072, LOCKED, 129);
+    door_aot_set(3, 0, 16100, 2700, 3400, 9, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 19500, 0, 3500, 2048, UNLOCKED, 129);
+    door_aot_set(4, 22600, 2200, 2700, 2300, 7, 1, 12, 7, 157, ROOM_50C_FRONT_OF_ELEVATOR, 2500, 0, 17300, 0, ITEM_3C_KEY_LAB_POWER_ROOM, 129);
 #if JILL
-    item_aot_set(5, 10520, 1390, 1000, 1000, ITEM_INK_RIBBON, 3, 0, 255, 12, 43, 0, 0, 98, 7, 0, 0, 201, 129, 1, 0);
+    item_aot_set(5, 10520, 1390, 1000, 1000, ITEM_2F_TOOL_INK_RIBBON, 3, 0, 255, 12, 43, 0, 0, 98, 7, 0, 0, 201, 129, 1, 0);
 #endif
     aot_set(6, 10600, 1000, 1000, 1000, SCE_EVENT, 129, 9, 0, event_01, 0, 0, 0);
-    if (ck(FG_LOCK, 29, 0))
+    if (ck(FG_LOCK, FLAG_LOCK_1D, TRUE))
     {
         effect(10, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
     }
@@ -19,59 +24,59 @@ proc init
     {
         effect_tracked(10, 16, 0, 228, 87, 40, 241, 252, 8, 0, 0);
     }
-    if (ck(FG_SCENARIO, 55, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, FALSE))
     {
-        enemy(ENEMY_ZOMBIE_NAKED_, 4, 63, 1, 2, 0, 0, 15, 0, 0, 4174, 0, 12125, 0, 0, 0, 0);
-        if (ck(FG_ENEMY, 63, 0))
+        enemy(ENEMY_01_ZOMBIE_NAKED, 4, 63, 1, 2, 0, 0, 15, 0, 0, 4174, 0, 12125, 0, 0, 0, 0);
+        if (ck(FG_ENEMY, FLAG_ENEMY_3F, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 64, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, 0, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 64, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, 0, 0, 0, 0);
         }
-        if (ck(FG_ENEMY, 64, 0))
+        if (ck(FG_ENEMY, FLAG_ENEMY_40, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 65, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, 0, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 65, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, 0, 0, 0, 0);
         }
     }
-    if (ck(FG_SCENARIO, 55, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, FALSE))
     {
-        enemy(ENEMY_ZOMBIE_NAKED_, 4, 66, 1, 2, 0, 0, 495, 0, 0, 11847, 0, 3599, 1, 0, 0, 0);
-        if (ck(FG_ENEMY, 66, 0))
+        enemy(ENEMY_01_ZOMBIE_NAKED, 4, 66, 1, 2, 0, 0, 495, 0, 0, 11847, 0, 3599, 1, 0, 0, 0);
+        if (ck(FG_ENEMY, FLAG_ENEMY_42, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 67, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, 1, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 67, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, 1, 0, 0, 0);
         }
-        if (ck(FG_ENEMY, 67, 0))
+        if (ck(FG_ENEMY, FLAG_ENEMY_43, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 68, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, 1, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 68, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, 1, 0, 0, 0);
         }
     }
-    if (ck(FG_SCENARIO, 55, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, FALSE))
     {
-        enemy(ENEMY_ZOMBIE_NAKED_, 4, 69, 1, 2, 0, 0, 2871, 0, 0, 11775, 0, 1457, 2, 0, 0, 0);
-        if (ck(FG_ENEMY, 69, 0))
+        enemy(ENEMY_01_ZOMBIE_NAKED, 4, 69, 1, 2, 0, 0, 2871, 0, 0, 11775, 0, 1457, 2, 0, 0, 0);
+        if (ck(FG_ENEMY, FLAG_ENEMY_45, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 70, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, 2, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 70, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, 2, 0, 0, 0);
         }
-        if (ck(FG_ENEMY, 70, 0))
+        if (ck(FG_ENEMY, FLAG_ENEMY_46, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 71, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, 2, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 71, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, 2, 0, 0, 0);
         }
     }
 #if CHRIS
-    if (ck(FG_SCENARIO, 55, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, FALSE))
     {
-        enemy(ENEMY_ZOMBIE_NAKED_, 4, 72, 1, 2, 0, 0, 3103, 0, 0, 21765, 0, 10142, 3, 0, 0, 0);
-        if (ck(FG_ENEMY, 72, 0))
+        enemy(ENEMY_01_ZOMBIE_NAKED, 4, 72, 1, 2, 0, 0, 3103, 0, 0, 21765, 0, 10142, 3, 0, 0, 0);
+        if (ck(FG_ENEMY, FLAG_ENEMY_48, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 73, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 73, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
         }
-        if (ck(FG_ENEMY, 73, 0))
+        if (ck(FG_ENEMY, FLAG_ENEMY_49, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 74, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 74, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
         }
     }
-    if (ck(FG_COMMON, 92, 1) && ck(FG_SCENARIO, 55, 0) && ck(FG_COMMON, 192, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_5C, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE) && ck(FG_COMMON, FLAG_COMMON_C0, FALSE))
     {
         evt_exec(0, 9, event_00);
-        set(FG_COMMON, 92, 0);
+        set(FG_COMMON, FLAG_COMMON_5C, TRUE);
         room_bgm_state_set(4, 0, 57);
         room_bgm_state_set(4, 1, 56);
         room_bgm_state_set(4, 2, 57);
@@ -94,36 +99,36 @@ proc init
         room_bgm_state_set(4, 19, 57);
         room_bgm_state_set(4, 20, 58);
         room_bgm_state_set(4, 21, 56);
-        set(FG_SCENARIO, 43, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE);
     }
 #else
-    if (ck(FG_SCENARIO, 55, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, FALSE))
     {
-        enemy(ENEMY_ZOMBIE_NAKED_, 4, 72, 1, 2, 0, 0, 3103, 0, 0, 21765, 0, 10142, 3, 0, 0, 0);
-        if (ck(FG_ENEMY, 72, 0))
+        enemy(ENEMY_01_ZOMBIE_NAKED, 4, 72, 1, 2, 0, 0, 3103, 0, 0, 21765, 0, 10142, 3, 0, 0, 0);
+        if (ck(FG_ENEMY, FLAG_ENEMY_48, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 73, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 73, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
         }
-        if (ck(FG_ENEMY, 73, 0))
+        if (ck(FG_ENEMY, FLAG_ENEMY_49, TRUE))
         {
-            enemy(ENEMY_ZOMBIE_NAKED_, 4, 74, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
+            enemy(ENEMY_01_ZOMBIE_NAKED, 4, 74, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, 3, 0, 0, 0);
         }
     }
 #endif
-    if (ck(FG_SCENARIO, 55, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE))
     {
-        enemy(ENEMY_CHIMERA, 3, 164, 1, 2, 0, 0, 0, 0, 0, 13100, 0, 3070, 0, 0, 0, 1);
-        enemy(ENEMY_CHIMERA, 3, 165, 1, 2, 0, 0, 2072, 0, 0, 10250, 0, 18760, 1, 0, 0, 1);
+        enemy(ENEMY_09_CHIMERA, 3, 164, 1, 2, 0, 0, 0, 0, 0, 13100, 0, 3070, 0, 0, 0, 1);
+        enemy(ENEMY_09_CHIMERA, 3, 165, 1, 2, 0, 0, 2072, 0, 0, 10250, 0, 18760, 1, 0, 0, 1);
     }
 }
 
 proc main
 {
-    if (ck(FG_SCENARIO, 99, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_63, FALSE))
     {
-        if (ck(FG_LOCK, 29, 0))
+        if (ck(FG_LOCK, FLAG_LOCK_1D, TRUE))
         {
-            set(FG_SCENARIO, 99, 0);
+            set(FG_SCENARIO, FLAG_SCENARIO_63, TRUE);
             effect_kill_a(0);
             effect(10, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
         }
@@ -135,10 +140,10 @@ event event_00
     sleep(1);
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
     }
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     run
     {
         snd_pan_vol_set(1, 112, 112);
@@ -200,12 +205,12 @@ event event_00
     act_reset();
     evt_nop();
     cut_auto(0);
-    set(FG_STATUS, 15, 1);
+    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     run
     {
         room_bgm_state_set(4, 5, 57);
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
     }
     evt_finish();
 }
@@ -214,8 +219,8 @@ event event_01
 {
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -240,8 +245,8 @@ event event_01
     evt_nop();
     run
     {
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
     }
     evt_finish();
 }

@@ -84,12 +84,17 @@
 mod compile;
 mod decompile;
 mod merge;
+mod names;
 mod preprocess;
 
-pub use compile::{compile, compile_variant};
-pub use decompile::decompile;
+pub use compile::{compile, compile_variant, compile_with};
+pub use decompile::{decompile, decompile_with};
 pub use merge::{merge, merge_rooms};
-pub use preprocess::{SYMBOLS, Variant, merged_id, preprocess, room_variants};
+pub use names::{Names, load_names};
+pub use preprocess::{
+    Loader, Preprocessed, SYMBOLS, Variant, includes_from, merged_id, no_includes, preprocess,
+    room_variants,
+};
 
 #[cfg(test)]
 mod tests;

@@ -1,32 +1,37 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 2500, 2400, 1000, 1300, 3, 0, 0, 7, 150, RDT_004, 13000, 0, 19200, 1024, LOCK, 129);
-    door_aot_set(1, 16900, 9500, 1900, 1700, 1, 0, 29, 5, 208, RDT_008, 6500, 0, 6300, 1024, ITEM_ARMOR_KEY, 129);
-    door_aot_set(2, 29800, 3000, 700, 1700, 0, 0, 4, 4, 64, RDT_00B, 7800, 0, 8000, 1024, UNLOCKED, 129);
-    door_aot_set(3, 5995, 18200, 2605, 2100, 1, 5, 23, 96, 0, RDT_10B, 2900, 0, 19000, 2048, UNLOCKED, 129);
+    door_aot_set(0, 2500, 2400, 1000, 1300, 3, 0, 0, 7, 150, ROOM_204_C_PASSAGE, 13000, 0, 19200, 1024, LOCK, 129);
+    door_aot_set(1, 16900, 9500, 1900, 1700, 1, 0, 29, 5, 208, ROOM_208_DEER_ROOM, 6500, 0, 6300, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
+    door_aot_set(2, 29800, 3000, 700, 1700, 0, 0, 4, 4, 64, ROOM_20B_FRONT_LESSON_ROOM, 7800, 0, 8000, 1024, UNLOCKED, 129);
+    door_aot_set(3, 5995, 18200, 2605, 2100, 1, 5, 23, 96, 0, STAGE_1 | ROOM_10B_1F_RIGHT_STAIRS, 2900, 0, 19000, 2048, UNLOCKED, 129);
     aot_set(4, 800, 10400, 1900, 1700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(5, 8600, 13600, 2000, 3300, SCE_6, 129, 1, 0, 0, 0, 0, 0);
     aot_set(8, 8600, 13600, 2000, 1000, SCE_EVENT, 129, 9, 0, event_01, 0, 0, 0);
     aot_set(9, 8600, 15900, 2000, 1000, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
-    if (ck(FG_SCENARIO, 0, 1))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
-        enemy(ENEMY_ZOMBIE_RESEARCHER_, 4, 19, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, 0, 0, 0, 0);
-        enemy(ENEMY_ZOMBIE_RESEARCHER_, 8, 20, 1, 2, 0, 0, 2341, 0, 0, 13775, 0, 12089, 1, 0, 0, 0);
-        if (ck(FG_STATUS, 8, 1))
+        enemy(ENEMY_11_ZOMBIE_LAB, 4, 19, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, 0, 0, 0, 0);
+        enemy(ENEMY_11_ZOMBIE_LAB, 8, 20, 1, 2, 0, 0, 2341, 0, 0, 13775, 0, 12089, 1, 0, 0, 0);
+        if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
         {
-            enemy(ENEMY_ZOMBIE_RESEARCHER_, 8, 175, 1, 2, 0, 0, 2579, 0, 0, 31491, 0, 9874, 2, 0, 0, 0);
+            enemy(ENEMY_11_ZOMBIE_LAB, 8, 175, 1, 2, 0, 0, 2579, 0, 0, 31491, 0, 9874, 2, 0, 0, 0);
         }
-        if (ck(FG_COMMON, 98, 0) && ck(FG_COMMON, 97, 0) && ck(FG_COMMON, 99, 0))
+        if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_61, TRUE) && ck(FG_COMMON, FLAG_COMMON_63, TRUE))
         {
-            set(FG_COMMON, 102, 0);
+            set(FG_COMMON, FLAG_COMMON_66, TRUE);
         }
     }
     else
     {
-        enemy(ENEMY_HUNTER, 18, 21, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, 0, 0, 0, 0);
-        enemy(ENEMY_HUNTER, 18, 22, 1, 2, 0, 0, 0, 0, 0, 21600, 0, 11700, 1, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 18, 21, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, 0, 0, 0, 0);
+        enemy(ENEMY_06_HUNTER, 18, 22, 1, 2, 0, 0, 0, 0, 0, 21600, 0, 11700, 1, 0, 0, 0);
     }
     aot_delete(5, SCE_NONE, 129);
 }

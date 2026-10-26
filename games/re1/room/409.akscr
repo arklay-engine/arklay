@@ -1,43 +1,54 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_00 0x00
+#define FLAG_ROOM_01 0x01
+#define FLAG_ROOM_02 0x02
+#define FLAG_ROOM_18 0x18
+#define FLAG_ROOM_19 0x19
+
 proc init
 {
-    door_aot_set(0, 9600, 2300, 1800, 1700, 2, 0, 7, 1, 0, RDT_008, 8500, 0, 10200, 0, UNLOCKED, 129);
+    door_aot_set(0, 9600, 2300, 1800, 1700, 2, 0, 7, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 8500, 0, 10200, 0, UNLOCKED, 129);
 #if CHRIS
     if (cmpb(9, 5, 3))
     {
-        item_aot_set(1, 0, 0, 1, 1, ITEM_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 0);
-        item_aot_set(2, 0, 0, 1, 1, ITEM_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 0);
-        item_aot_set(3, 0, 0, 1, 1, ITEM_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 0);
-        item_aot_set(4, 0, 0, 1, 1, ITEM_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 0);
+        item_aot_set(1, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 0);
+        item_aot_set(2, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 0);
+        item_aot_set(3, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 0);
+        item_aot_set(4, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 0);
     }
     else
     {
-        item_aot_set(1, 4300, 1500, 1100, 1500, ITEM_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 132);
-        item_aot_set(2, 1900, 5400, 1200, 1000, ITEM_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 132);
-        item_aot_set(3, 5100, 6000, 2200, 1100, ITEM_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 132);
-        item_aot_set(4, 2200, 2800, 850, 500, ITEM_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 132);
+        item_aot_set(1, 4300, 1500, 1100, 1500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 132);
+        item_aot_set(2, 1900, 5400, 1200, 1000, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 132);
+        item_aot_set(3, 5100, 6000, 2200, 1100, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 132);
+        item_aot_set(4, 2200, 2800, 850, 500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 132);
     }
 #else
-    item_aot_set(1, 4300, 1500, 1100, 1500, ITEM_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 16, 132);
-    item_aot_set(2, 1900, 5400, 1200, 1000, ITEM_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 16, 132);
-    item_aot_set(3, 5100, 6000, 2200, 1100, ITEM_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 16, 132);
-    item_aot_set(4, 2200, 2800, 850, 500, ITEM_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 16, 132);
+    item_aot_set(1, 4300, 1500, 1100, 1500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 16, 132);
+    item_aot_set(2, 1900, 5400, 1200, 1000, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 16, 132);
+    item_aot_set(3, 5100, 6000, 2200, 1100, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 16, 132);
+    item_aot_set(4, 2200, 2800, 850, 500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 16, 132);
 #endif
-    item_aot_set(5, 0, 0, 1, 1, ITEM_WATER, 1, 4, 255, 0, 0, 0, 0, 0, 0, 0, 0, 64, 129, 0, 0);
-    item_aot_set(6, 0, 0, 1, 1, ITEM_UMB_NO_2, 1, 5, 255, 0, 0, 0, 0, 0, 0, 0, 0, 65, 129, 0, 0);
-    item_aot_set(7, 0, 0, 1, 1, ITEM_UMB_NO_4, 1, 6, 255, 0, 0, 0, 0, 0, 0, 0, 0, 66, 129, 0, 0);
+    item_aot_set(5, 0, 0, 1, 1, ITEM_14_CHEMICAL_WATER, 1, 4, 255, 0, 0, 0, 0, 0, 0, 0, 0, 64, 129, 0, 0);
+    item_aot_set(6, 0, 0, 1, 1, ITEM_15_CHEMICAL_UMB_2, 1, 5, 255, 0, 0, 0, 0, 0, 0, 0, 0, 65, 129, 0, 0);
+    item_aot_set(7, 0, 0, 1, 1, ITEM_16_CHEMICAL_UMB_4, 1, 6, 255, 0, 0, 0, 0, 0, 0, 0, 0, 66, 129, 0, 0);
 #if CHRIS
     aot_set(8, 5900, 1400, 1100, 1500, SCE_MESSAGE, 129, 132, 0, 77, 0, 0, 0);
     aot_set(9, 3000, 1500, 1200, 600, SCE_MESSAGE, 129, 128, 0, 77, 0, 0, 0);
     aot_set(10, 9800, 4400, 700, 1700, SCE_MESSAGE, 129, 129, 0, 77, 0, 0, 0);
     aot_set(11, 7300, 6000, 2200, 1100, SCE_MESSAGE, 129, 136, 0, 77, 0, 0, 0);
     aot_set(12, 1900, 3500, 1200, 1900, SCE_MESSAGE, 129, 137, 0, 77, 0, 0, 0);
-    if (ck(FG_COMMON, 61, 0) && ck(FG_SCENARIO, 0, 0) && ck(FG_COMMON, 58, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_3D, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_00, TRUE) && ck(FG_COMMON, FLAG_COMMON_3A, FALSE))
     {
-        enemy(ENEMY_REBECCA_STARS_, 0, 255, 1, 2, 0, 0, 1300, 0, 0, 7446, 0, 5874, 0, 42, 0, 0);
+        enemy(ENEMY_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 1300, 0, 0, 7446, 0, 5874, 0, 42, 0, 0);
         evt_exec(0, 9, event_05);
-        if (ck(FG_COMMON, 59, 1))
+        if (ck(FG_COMMON, FLAG_COMMON_3B, FALSE))
         {
             aot_set(13, 6548, 4974, 1800, 1800, SCE_EVENT, 129, 9, 0, event_06, 0, 0, 0);
         }
@@ -48,19 +59,19 @@ proc init
     }
     if (cmpb(9, 5, 3))
     {
-        if (ck(FG_ITEM, 60, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_3C, TRUE))
         {
             aot_set(14, 4300, 1500, 1100, 1500, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
-        if (ck(FG_ITEM, 61, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_3D, TRUE))
         {
             aot_set(15, 1900, 5400, 1200, 1000, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
-        if (ck(FG_ITEM, 62, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_3E, TRUE))
         {
             aot_set(16, 5100, 6000, 2200, 1100, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
-        if (ck(FG_ITEM, 63, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_3F, TRUE))
         {
             aot_set(17, 2200, 2800, 850, 500, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
@@ -76,13 +87,13 @@ proc init
 
 proc main
 {
-    set(FG_ITEM, 64, 0);
-    set(FG_ITEM, 65, 0);
-    set(FG_ITEM, 66, 0);
+    set(FG_ITEM, FLAG_ITEM_40, TRUE);
+    set(FG_ITEM, FLAG_ITEM_41, TRUE);
+    set(FG_ITEM, FLAG_ITEM_42, TRUE);
 #if CHRIS
     if (cmpb(9, 0, 3))
     {
-        if (item_ck(ITEM_EMPTY_BOTTLE))
+        if (item_ck(ITEM_13_CHEMICAL_EMPTY_BOTTLE))
         {
             aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
             aot_reset(11, SCE_EVENT, 129, 9, event_01, 0);
@@ -95,7 +106,7 @@ proc main
             aot_reset(12, SCE_MESSAGE, 129, 137, 77, 0);
         }
     }
-    else if (ck(FG_ITEM, 78, 1))
+    else if (ck(FG_ITEM, FLAG_ITEM_4E, FALSE))
     {
         aot_reset(11, SCE_MESSAGE, 129, 152, 77, 0);
         aot_reset(12, SCE_MESSAGE, 129, 153, 77, 0);
@@ -105,28 +116,28 @@ proc main
         aot_reset(11, SCE_NONE, 129, 152, 77, 0);
         aot_reset(12, SCE_NONE, 129, 153, 77, 0);
     }
-    if (ck(FG_SCENARIO, 22, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_16, TRUE))
     {
-        if (ck(FG_ROOM, 24, 1))
+        if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
         {
             evt_exec(0, 9, event_03);
         }
-        else if (ck(FG_ROOM, 0, 0))
+        else if (ck(FG_ROOM, FLAG_ROOM_00, TRUE))
         {
             evt_exec(0, 9, event_03);
         }
-        set(FG_SCENARIO, 22, 1);
-        set(FG_ROOM, 24, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_16, FALSE);
+        set(FG_ROOM, FLAG_ROOM_18, TRUE);
     }
-    if (ck(FG_ROOM, 1, 0))
+    if (ck(FG_ROOM, FLAG_ROOM_01, TRUE))
     {
-        set(FG_ROOM, 1, 1);
+        set(FG_ROOM, FLAG_ROOM_01, FALSE);
         evt_exec(0, 9, event_04);
     }
 #else
-    if (ck(FG_ITEM, 78, 0))
+    if (ck(FG_ITEM, FLAG_ITEM_4E, TRUE))
     {
-        if (item_ck(ITEM_EMPTY_BOTTLE))
+        if (item_ck(ITEM_13_CHEMICAL_EMPTY_BOTTLE))
         {
             aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
         }
@@ -137,7 +148,7 @@ proc main
         aot_delete(11, SCE_NONE, 129);
         aot_delete(12, SCE_NONE, 129);
     }
-    else if (item_ck(ITEM_EMPTY_BOTTLE))
+    else if (item_ck(ITEM_13_CHEMICAL_EMPTY_BOTTLE))
     {
         aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
         aot_reset(11, SCE_EVENT, 129, 9, event_01, 0);
@@ -149,18 +160,18 @@ proc main
         aot_reset(11, SCE_MESSAGE, 129, 136, 77, 0);
         aot_reset(12, SCE_MESSAGE, 129, 137, 77, 0);
     }
-    if (ck(FG_SCENARIO, 22, 0))
+    if (ck(FG_SCENARIO, FLAG_SCENARIO_16, TRUE))
     {
-        if (ck(FG_ROOM, 24, 1))
+        if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
         {
             evt_exec(0, 9, event_03);
         }
-        else if (ck(FG_ROOM, 0, 0))
+        else if (ck(FG_ROOM, FLAG_ROOM_00, TRUE))
         {
             evt_exec(0, 9, event_03);
         }
-        set(FG_SCENARIO, 22, 1);
-        set(FG_ROOM, 24, 0);
+        set(FG_SCENARIO, FLAG_SCENARIO_16, FALSE);
+        set(FG_ROOM, FLAG_ROOM_18, TRUE);
     }
 #endif
 }
@@ -169,10 +180,10 @@ event event_00
 {
     run
     {
-        set(FG_6, 31, 1);
-        set(FG_6, 25, 1);
-        set(FG_6, 29, 1);
-        set(FG_6, 28, 1);
+        set(FG_6, FLAG_6_1F, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_1C, FALSE);
         message(133, 0);
     }
     do
@@ -184,13 +195,13 @@ event event_00
     {
         if (cmpb(5, 0, 0))
         {
-            remove_item(ITEM_EMPTY_BOTTLE);
+            remove_item(ITEM_13_CHEMICAL_EMPTY_BOTTLE);
             give_item(5, 4, 0);
         }
-        set(FG_6, 31, 0);
-        set(FG_6, 25, 0);
-        set(FG_6, 29, 0);
-        set(FG_6, 28, 0);
+        set(FG_6, FLAG_6_1F, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_1C, TRUE);
     }
     evt_finish();
 }
@@ -199,10 +210,10 @@ event event_01
 {
     run
     {
-        set(FG_6, 31, 1);
-        set(FG_6, 25, 1);
-        set(FG_6, 29, 1);
-        set(FG_6, 28, 1);
+        set(FG_6, FLAG_6_1F, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_1C, FALSE);
         message(134, 0);
     }
     do
@@ -214,13 +225,13 @@ event event_01
     {
         if (cmpb(5, 0, 0))
         {
-            remove_item(ITEM_EMPTY_BOTTLE);
+            remove_item(ITEM_13_CHEMICAL_EMPTY_BOTTLE);
             give_item(6, 4, 0);
         }
-        set(FG_6, 31, 0);
-        set(FG_6, 25, 0);
-        set(FG_6, 29, 0);
-        set(FG_6, 28, 0);
+        set(FG_6, FLAG_6_1F, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_1C, TRUE);
     }
     evt_finish();
 }
@@ -229,10 +240,10 @@ event event_02
 {
     run
     {
-        set(FG_6, 31, 1);
-        set(FG_6, 25, 1);
-        set(FG_6, 29, 1);
-        set(FG_6, 28, 1);
+        set(FG_6, FLAG_6_1F, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_1C, FALSE);
         message(135, 0);
     }
     do
@@ -244,13 +255,13 @@ event event_02
     {
         if (cmpb(5, 0, 0))
         {
-            remove_item(ITEM_EMPTY_BOTTLE);
+            remove_item(ITEM_13_CHEMICAL_EMPTY_BOTTLE);
             give_item(7, 4, 0);
         }
-        set(FG_6, 31, 0);
-        set(FG_6, 25, 0);
-        set(FG_6, 29, 0);
-        set(FG_6, 28, 0);
+        set(FG_6, FLAG_6_1F, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_1C, TRUE);
     }
     evt_finish();
 }
@@ -259,10 +270,10 @@ event event_03
 {
     run
     {
-        set(FG_ROOM, 25, 1);
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
-        set(FG_6, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -282,7 +293,7 @@ event event_03
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 25, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -291,7 +302,7 @@ event event_03
     evt_nop();
     run
     {
-        if (ck(FG_ROOM, 2, 0))
+        if (ck(FG_ROOM, FLAG_ROOM_02, TRUE))
         {
             timer_setup(3, 64, 6, 6, 0);
         }
@@ -299,10 +310,10 @@ event event_03
         {
             timer_setup(3, 176, 4, 6, 0);
         }
-        set(FG_ROOM, 25, 1);
-        set(FG_6, 23, 0);
-        set(FG_6, 31, 1);
-        set(FG_6, 25, 1);
+        set(FG_ROOM, FLAG_ROOM_19, FALSE);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1F, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
     }
     sleep(20);
     setw(2, 0, 0);
@@ -314,9 +325,9 @@ event event_03
     while (cmpb(5, 2, 128));
     run
     {
-        set(FG_6, 31, 0);
-        set(FG_6, 25, 0);
-        set(FG_6, 29, 0);
+        set(FG_6, FLAG_6_1F, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
         sys_multi(8, 320);
     }
     evt_finish();
@@ -357,9 +368,9 @@ event event_06
     run
     {
         cutnext(0);
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
-        set(FG_COMMON, 59, 0);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_COMMON, FLAG_COMMON_3B, TRUE);
     }
     evt_fork(9, event_07, 0);
     voice_play(1, 59, 0);
@@ -491,9 +502,9 @@ event event_0A
     run
     {
         aot_reset(13, SCE_EVENT, 129, 9, event_16, 0);
-        set(FG_STATUS, 15, 1);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -619,8 +630,8 @@ event event_11
     run
     {
         cutnext(0);
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     }
     evt_fork(9, event_14, 0);
     voice_play(1, 66, 0);
@@ -670,9 +681,9 @@ event event_12
     run
     {
         aot_reset(13, SCE_EVENT, 129, 9, event_15, 0);
-        set(FG_STATUS, 15, 1);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -688,9 +699,9 @@ event event_13
     run
     {
         aot_reset(13, SCE_EVENT, 129, 9, event_16, 0);
-        set(FG_STATUS, 15, 1);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, 23, 0);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
@@ -727,9 +738,9 @@ event event_15
 {
     run
     {
-        set(FG_STATUS, 15, 0);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
         cutnext(0);
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
     }
     evt_fork(9, event_17, 0);
     voice_play(1, 67, 0);
@@ -738,8 +749,8 @@ event event_15
     run
     {
         cut_auto(0);
-        set(FG_6, 23, 0);
-        set(FG_STATUS, 15, 1);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     }
     evt_finish();
 }
@@ -749,8 +760,8 @@ event event_16
     run
     {
         cutnext(0);
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     }
     evt_fork(9, event_17, 0);
     voice_play(1, 69, 0);
@@ -759,8 +770,8 @@ event event_16
     run
     {
         cut_auto(0);
-        set(FG_6, 23, 0);
-        set(FG_STATUS, 15, 1);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
     }
     evt_finish();
 }

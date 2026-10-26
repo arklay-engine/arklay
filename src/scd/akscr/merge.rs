@@ -587,6 +587,9 @@ fn split_block(
 /// Merge per-RDT scripts (keyed by RDT id, e.g. `0x1030`) into one script
 /// per room, keyed by [`merged_id`] (e.g. `0x103` for 1030, 1031, 6030 and
 /// 6031).
+///
+/// The variants' `#define` lines are pooled first: a define changes no
+/// bytecode, so every variant gets them all and they need no `#if`.
 pub fn merge_rooms(rooms: &BTreeMap<u16, String>) -> Result<BTreeMap<u16, String>> {
     let mut groups: BTreeMap<u16, Vec<(Variant, &str)>> = BTreeMap::new();
     for (&id, text) in rooms {
@@ -598,8 +601,54 @@ pub fn merge_rooms(rooms: &BTreeMap<u16, String>) -> Result<BTreeMap<u16, String
     groups
         .into_iter()
         .map(|(base, variants)| {
+            let mut defines: Vec<&str> = variants
+                .iter()
+                .flat_map(|(_, text)| text.lines().filter(|line| line.starts_with("#define ")))
+                .collect();
+            defines.sort_unstable();
+            defines.dedup();
+            let texts: Vec<String> = variants
+                .iter()
+                .map(|(_, text)| with_defines(text, &defines))
+                .collect();
+            let variants: Vec<(Variant, &str)> = variants
+                .iter()
+                .zip(&texts)
+                .map(|((variant, _), text)| (*variant, text.as_str()))
+                .collect();
             let merged = merge(&variants).with_context(|| format!("room {base:03X}"))?;
             Ok((base, merged))
         })
         .collect()
+}
+
+/// `text` with its `#define` block replaced by `defines`, after the
+/// `#include` lines (or the `#version` line).
+fn with_defines(text: &str, defines: &[&str]) -> String {
+    let mut lines: Vec<&str> = Vec::new();
+    let mut previous_blank = false;
+    for line in text.lines() {
+        if line.starts_with("#define ") {
+            continue;
+        }
+        // Dropping the block leaves two blank lines where it stood.
+        let blank = line.is_empty();
+        if blank && previous_blank {
+            continue;
+        }
+        previous_blank = blank;
+        lines.push(line);
+    }
+    if !defines.is_empty() {
+        let at = lines
+            .iter()
+            .rposition(|line| line.starts_with("#include ") || line.starts_with("#version "))
+            .map_or(0, |index| index + 1);
+        let mut block = vec![""];
+        block.extend_from_slice(defines);
+        lines.splice(at..at, block);
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
 }

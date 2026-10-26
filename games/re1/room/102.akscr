@@ -1,31 +1,36 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
 #if MANSION1
-    door_aot_set(0, 2500, 9400, 1700, 2000, 1, 0, 29, 5, 0, RDT_001, 15000, 0, 18800, 3072, UNLOCKED, 129);
+    door_aot_set(0, 2500, 9400, 1700, 2000, 1, 0, 29, 5, 0, ROOM_101_1F_LEFT_STAIRS, 15000, 0, 18800, 3072, UNLOCKED, 129);
 #else
-    door_aot_set(0, 2900, 9000, 1200, 1300, 1, 0, 29, 5, 0, RDT_001, 15000, 0, 18800, 3072, UNLOCKED, 129);
+    door_aot_set(0, 2900, 9000, 1200, 1300, 1, 0, 29, 5, 0, ROOM_101_1F_LEFT_STAIRS, 15000, 0, 18800, 3072, UNLOCKED, 129);
 #endif
-    item_aot_set(1, 6500, 9100, 500, 900, ITEM_BROKEN_SHOTGUN, 1, 0, 255, 184, 26, 54, 247, 198, 37, 48, 248, 48, 129, 0, 0);
+    item_aot_set(1, 6500, 9100, 500, 900, ITEM_1C_PUZZLE_BROKEN_SHOTGUN, 1, 0, 255, 184, 26, 54, 247, 198, 37, 48, 248, 48, 129, 0, 0);
     eml_rot(0, 156, 255, 180, 251);
 #if MANSION1
-    item_aot_set(2, 0, 0, 0, 0, ITEM_SHELLS, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 0, 0, 0);
+    item_aot_set(2, 0, 0, 0, 0, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 0, 0, 0);
 #else
-    item_aot_set(2, 0, 0, 0, 0, ITEM_SHELLS, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 129, 0, 0);
+    item_aot_set(2, 0, 0, 0, 0, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 129, 0, 0);
 #endif
     eml_rot(1, 0, 0, 180, 251);
     setbyte(1, 0, 0);
-    item_aot_set(3, 4540, 8470, 1800, 1800, ITEM_CLIP, 15, 2, 255, 64, 21, 204, 247, 154, 36, 0, 0, 50, 129, 0, 0);
+    item_aot_set(3, 4540, 8470, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 2, 255, 64, 21, 204, 247, 154, 36, 0, 0, 50, 129, 0, 0);
     aot_set(4, 2000, 2237, 1750, 700, SCE_HIKIDASHI, 129, 30, 0, 2, 0, 3, 0);
 #if MANSION2
-    if (ck(FG_STATUS, 8, 1))
+    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        if (ck(FG_COMMON, 47, 0))
+        if (ck(FG_COMMON, FLAG_COMMON_2F, TRUE))
         {
-            set(FG_COMMON, 48, 0);
-            set(FG_COMMON, 192, 0);
-            set(FG_COMMON, 47, 1);
+            set(FG_COMMON, FLAG_COMMON_30, TRUE);
+            set(FG_COMMON, FLAG_COMMON_C0, TRUE);
+            set(FG_COMMON, FLAG_COMMON_2F, FALSE);
             evt_exec(0, 9, event_01);
         }
     }
@@ -45,10 +50,10 @@ event event_00
 
 event event_01
 {
-    set(FG_STATUS, 15, 0);
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     sleep(1);
-    set(FG_6, 23, 1);
-    set(FG_6, 29, 1);
+    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, FLAG_6_1D, FALSE);
     voice_play(1, 133, 0);
     wait_message();
     evt_fork(9, event_02, 0);
@@ -56,9 +61,9 @@ event event_01
     run
     {
         cut_auto(0);
-        set(FG_STATUS, 15, 1);
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
     }
     evt_finish();
 }

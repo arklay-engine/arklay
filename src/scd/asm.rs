@@ -2155,12 +2155,26 @@ fn constant_maps() -> &'static ConstantMaps {
     })
 }
 
-/// Resolve one named-constant argument.
+/// Whether `name` is one of the engine's own constants: a flag group, room
+/// action type, work variable or door lock state (not an item, enemy or
+/// room, which a game names itself).
+pub(crate) fn is_engine_constant(name: &str) -> bool {
+    let maps = constant_maps();
+    maps.flag.contains_key(name)
+        || maps.sce.contains_key(name)
+        || maps.work.contains_key(name)
+        || matches!(name, "UNLOCKED" | "LOCK" | "LOCKED")
+}
+
+/// Resolve one named-constant argument. A `hi | lo` pair (a stage and a
+/// room) combines into one byte.
 fn constant_value(kind: char, arg: &Arg) -> Result<u8> {
     let maps = constant_maps();
     match arg {
         Arg::Num(value) => u8::try_from(*value)
             .map_err(|_| anyhow::anyhow!("constant value {value} is out of range")),
+        Arg::Bits(high, low) => u8::try_from(*high | *low)
+            .map_err(|_| anyhow::anyhow!("constant value {high} | {low} is out of range")),
         Arg::Symbol(name) => {
             let map = match kind {
                 'f' => &maps.flag,

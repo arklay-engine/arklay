@@ -1,51 +1,60 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
+#define FLAG_ROOM_00 0x00
+#define FLAG_ROOM_02 0x02
+#define FLAG_ROOM_05 0x05
+
 proc init
 {
-    door_aot_set(0, 7700, 9800, 1300, 1800, 1, 0, 28, 3, 0, RDT_003, 2700, 0, 10800, 0, UNLOCKED, 129);
-    if (ck(FG_ITEM, 146, 0))
+    door_aot_set(0, 7700, 9800, 1300, 1800, 1, 0, 28, 3, 0, ROOM_103_F_PASSAGE, 2700, 0, 10800, 0, UNLOCKED, 129);
+    if (ck(FG_ITEM, FLAG_ITEM_92, TRUE))
     {
-        item_aot_set(1, 3550, 7140, 1800, 1800, ITEM_CLIP, 15, 0, 255, 98, 17, 168, 253, 104, 31, 0, 0, 146, 129, 0, 0);
+        item_aot_set(1, 3550, 7140, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 98, 17, 168, 253, 104, 31, 0, 0, 146, 129, 0, 0);
     }
-    if (ck(FG_COMMON, 96, 0))
+    if (ck(FG_COMMON, FLAG_COMMON_60, TRUE))
     {
-        if (ck(FG_ITEM, 5, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_05, TRUE))
         {
 #if CHRIS
-            item_aot_set(2, 1400, 1900, 1800, 1800, ITEM_SHELLS, 7, 1, 255, 252, 8, 0, 0, 240, 10, 156, 253, 5, 129, 1, 0);
+            item_aot_set(2, 1400, 1900, 1800, 1800, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 252, 8, 0, 0, 240, 10, 156, 253, 5, 129, 1, 0);
 #else
-            item_aot_set(2, 1400, 1900, 1800, 1800, ITEM_SHELLS, 7, 1, 255, 252, 8, 0, 0, 240, 10, 0, 2, 5, 129, 1, 0);
+            item_aot_set(2, 1400, 1900, 1800, 1800, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 252, 8, 0, 0, 240, 10, 0, 2, 5, 129, 1, 0);
 #endif
         }
-        if (ck(FG_ITEM, 4, 0))
+        if (ck(FG_ITEM, FLAG_ITEM_04, TRUE))
         {
 #if CHRIS
-            item_aot_set(3, 6200, 2300, 1800, 1800, ITEM_61, 1, 2, 255, 16, 29, 15, 251, 184, 11, 0, 2, 4, 129, 0, 0);
+            item_aot_set(3, 6200, 2300, 1800, 1800, ITEM_61_FILE_KEEPERS_DIARY, 1, 2, 255, 16, 29, 15, 251, 184, 11, 0, 2, 4, 129, 0, 0);
 #else
-            item_aot_set(3, 6200, 2300, 1800, 1800, ITEM_61, 1, 2, 255, 16, 29, 15, 251, 184, 11, 156, 253, 4, 129, 0, 0);
+            item_aot_set(3, 6200, 2300, 1800, 1800, ITEM_61_FILE_KEEPERS_DIARY, 1, 2, 255, 16, 29, 15, 251, 184, 11, 156, 253, 4, 129, 0, 0);
 #endif
         }
         aot_set(4, 10, 10, 10, 10, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
         obj(0, 45, 255, 3000, 0, 5980, 3036, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(1, 45, 255, 3000, -4320, 1900, 864, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        if (ck(FG_ENEMY, 3, 1))
+        if (ck(FG_ENEMY, FLAG_ENEMY_03, FALSE))
         {
-            enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 0, 3, 0, 2, 0, 0, 512, 0, 0, 2320, 0, 4000, 0, 0, 0, 0);
+            enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 3, 0, 2, 0, 0, 512, 0, 0, 2320, 0, 4000, 0, 0, 0, 0);
         }
     }
-    if (ck(FG_COMMON, 96, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_60, FALSE))
     {
-        item_aot_set(2, 1400, 1900, 1800, 1800, ITEM_SHELLS, 7, 1, 255, 252, 8, 0, 0, 240, 10, 156, 253, 5, 129, 0, 0);
+        item_aot_set(2, 1400, 1900, 1800, 1800, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 252, 8, 0, 0, 240, 10, 156, 253, 5, 129, 0, 0);
         aot_reset(2, SCE_NONE, 129, 0, 0, 0);
-        item_aot_set(3, 6200, 2300, 1800, 1800, ITEM_61, 1, 2, 255, 16, 29, 15, 251, 184, 11, 0, 2, 4, 129, 0, 0);
+        item_aot_set(3, 6200, 2300, 1800, 1800, ITEM_61_FILE_KEEPERS_DIARY, 1, 2, 255, 16, 29, 15, 251, 184, 11, 0, 2, 4, 129, 0, 0);
         aot_reset(3, SCE_EVENT, 129, 0, event_00, 0);
         aot_set(4, 10, 10, 10, 10, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
         obj(0, 45, 255, 3000, 0, 5980, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(1, 45, 255, 3000, -4320, 1900, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if CHRIS
-        enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 128, 3, 0, 2, 0, 0, 512, 0, 0, 25000, -10000, 25000, 0, 0, 0, 0);
+        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 128, 3, 0, 2, 0, 0, 512, 0, 0, 25000, -10000, 25000, 0, 0, 0, 0);
 #else
-        enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 128, 3, 0, 2, 0, 0, 512, 0, 0, 15000, -10000, 3950, 0, 0, 0, 0);
+        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 128, 3, 0, 2, 0, 0, 512, 0, 0, 15000, -10000, 3950, 0, 0, 0, 0);
 #endif
     }
     aot_set(5, 4400, 12700, 2400, 1800, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
@@ -54,15 +63,15 @@ proc init
 
 proc main
 {
-    if (ck(FG_COMMON, 96, 0) && ck(FG_ROOM, 0, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_60, TRUE) && ck(FG_ROOM, FLAG_ROOM_00, FALSE))
     {
-        set(FG_ROOM, 0, 0);
+        set(FG_ROOM, FLAG_ROOM_00, TRUE);
         inst_cfg(3, 8, 3, 232, 3, 254, 21, 136, 19, 88, 27);
         inst_cfg(3, 9, 3, 232, 3, 100, 0, 136, 19, 96, 9);
     }
-    if (ck(FG_ENEMY, 3, 0) && ck(FG_ROOM, 5, 1))
+    if (ck(FG_ENEMY, FLAG_ENEMY_03, TRUE) && ck(FG_ROOM, FLAG_ROOM_05, FALSE))
     {
-        set(FG_ROOM, 5, 0);
+        set(FG_ROOM, FLAG_ROOM_05, TRUE);
         evt_exec(0, 4, event_04);
     }
 }
@@ -71,8 +80,8 @@ event event_00
 {
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -83,7 +92,7 @@ event event_00
     {
         evt_next();
     }
-    while (ck(FG_ROOM, 2, 1));
+    while (ck(FG_ROOM, FLAG_ROOM_02, FALSE));
     act_idle();
     act_nop();
     act_motion_path(19, 7900, 64236, 3300, 32, 32);
@@ -121,8 +130,8 @@ event event_00
     evt_nop();
     run
     {
-        set(FG_COMMON, 96, 0);
-        set(FG_6, 29, 0);
+        set(FG_COMMON, FLAG_COMMON_60, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
 #if MANSION1
         eml_state(0, 0, 3, 1);
 #endif
@@ -155,8 +164,8 @@ event event_00
     sleep(29);
     run
     {
-        set(FG_STATUS, 15, 1);
-        set(FG_6, 23, 0);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, FLAG_6_17, TRUE);
     }
     sleep(16);
     run
@@ -349,9 +358,9 @@ event event_05
 {
     run
     {
-        set(FG_6, 23, 1);
-        set(FG_6, 29, 1);
-        set(FG_6, 28, 1);
+        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_1C, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -385,9 +394,9 @@ event event_05
     evt_nop();
     run
     {
-        set(FG_6, 23, 0);
-        set(FG_6, 29, 0);
-        set(FG_6, 28, 0);
+        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_1C, TRUE);
     }
     evt_finish();
 }

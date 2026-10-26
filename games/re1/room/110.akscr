@@ -1,22 +1,27 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 9900, 2000, 2500, 2700, 9, 0, 0, 1, 147, RDT_004, 31800, 0, 3300, 2048, LOCK, 129);
-    door_aot_set(1, 0, 9200, 2500, 2700, 0, 0, 0, 1, 0, RDT_21C, 3800, 0, 10000, 2048, UNLOCKED, 129);
+    door_aot_set(0, 9900, 2000, 2500, 2700, 9, 0, 0, 1, 147, ROOM_104_TEA_ROOM, 31800, 0, 3300, 2048, LOCK, 129);
+    door_aot_set(1, 0, 9200, 2500, 2700, 0, 0, 0, 1, 0, STAGE_2 | ROOM_21C_UNDER_KITCHEN, 3800, 0, 10000, 2048, UNLOCKED, 129);
     aot_set(2, 4500, 9300, 4348, 3500, SCE_5, 129, 0, 0, 0, 0, 0, 0);
     aot_set(3, 11151, 9300, 4148, 3500, SCE_5, 129, 0, 0, 0, 0, 0, 0);
     aot_set(4, 8030, 8400, 500, 4400, SCE_EVENT, 65, 9, 0, event_00, 0, 0, 0);
     aot_set(5, 11049, 8400, 500, 4400, SCE_EVENT, 65, 9, 0, event_01, 0, 0, 0);
     aot_set(6, 15100, 6200, 1700, 2300, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    set(FG_STATUS, 29, 0);
+    set(FG_STATUS, FLAG_STATUS_1D, TRUE);
 }
 
 proc main
 {
     if (cmpb(2, 0, 0))
     {
-        set(FG_MAP, 62, 0);
+        set(FG_MAP, FLAG_MAP_3E, TRUE);
     }
 }
 

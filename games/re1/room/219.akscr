@@ -1,17 +1,22 @@
 #version 1
 
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/rooms.akinc"
+
 proc init
 {
-    door_aot_set(0, 7800, 2000, 1000, 1800, 2, 0, 6, 1, 0, RDT_013, 9800, 0, 2900, 0, UNLOCKED, 129);
+    door_aot_set(0, 7800, 2000, 1000, 1800, 2, 0, 6, 1, 0, ROOM_213_FRONT_ELEVATOR, 9800, 0, 2900, 0, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(1, 1800, 3200, 1100, 800, ITEM_SHELLS, 7, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
-    item_aot_set(2, 3200, 4100, 600, 1400, ITEM_SHELLS, 7, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
+    item_aot_set(1, 1800, 3200, 1100, 800, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
+    item_aot_set(2, 3200, 4100, 600, 1400, ITEM_0C_AMMO_SHOTGUN, 7, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
 #else
-    item_aot_set(1, 1800, 3200, 1100, 800, ITEM_EXPLOSIVE_ROUNDS, 6, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
-    item_aot_set(2, 3200, 4100, 600, 1400, ITEM_EXPLOSIVE_ROUNDS, 6, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
+    item_aot_set(1, 1800, 3200, 1100, 800, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
+    item_aot_set(2, 3200, 4100, 600, 1400, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
 #endif
-    item_aot_set(3, 0, 0, 1, 1, ITEM_BATTERY, 1, 0, 255, 90, 10, 124, 252, 40, 10, 0, 0, 57, 129, 0, 0);
-    if (ck(FG_ITEM, 57, 0))
+    item_aot_set(3, 0, 0, 1, 1, ITEM_27_PUZZLE_BATTERY, 1, 0, 255, 90, 10, 124, 252, 40, 10, 0, 0, 57, 129, 0, 0);
+    if (ck(FG_ITEM, FLAG_ITEM_39, TRUE))
     {
         aot_set(4, 2200, 1500, 1000, 1900, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
     }
@@ -19,7 +24,7 @@ proc init
 
 proc main
 {
-    if (testpickup(ITEM_BATTERY))
+    if (testpickup(ITEM_27_PUZZLE_BATTERY))
     {
         aot_delete(4, SCE_NONE, 129);
     }
@@ -29,10 +34,10 @@ event event_00
 {
     run
     {
-        set(FG_6, 31, 1);
-        set(FG_6, 25, 1);
-        set(FG_6, 29, 1);
-        set(FG_6, 28, 1);
+        set(FG_6, FLAG_6_1F, FALSE);
+        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, FLAG_6_1C, FALSE);
         message(128, 0);
     }
     do
@@ -42,10 +47,10 @@ event event_00
     while (cmpb(5, 2, 128));
     run
     {
-        set(FG_6, 31, 0);
-        set(FG_6, 25, 0);
-        set(FG_6, 29, 0);
-        set(FG_6, 28, 0);
+        set(FG_6, FLAG_6_1F, TRUE);
+        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, FLAG_6_1C, TRUE);
         aot_on(3, SCE_ITEM, 0);
     }
     evt_finish();
