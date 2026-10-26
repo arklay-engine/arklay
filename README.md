@@ -36,10 +36,11 @@ the same window (closing the game window ends the process), discovers mods
 across the data roots and remembers their enable/disable state and order, and
 checks the release and nightly update tracks. The OPTIONS screen edits the
 renderer, widescreen, resolution, fullscreen, V-Sync, language, GPU render
-scale and MSAA, frame rate, quick turn and tactical reload, writing every
-change back to `arklay.toml`. MODS shows the application order: the top row is
-applied first (lowest priority) and the bottom row last (highest); Ctrl+Down
-moves a mod toward higher priority.
+scale and MSAA, frame rate, auto aim, blood, quick turn and tactical reload,
+the controller preset and vibration, the menu text size, the volumes and
+the subtitle options, writing every change back to `arklay.toml`. MODS shows
+the application order: the top row is applied first (lowest priority) and the
+bottom row last (highest); Ctrl+Down moves a mod toward higher priority.
 
 The launcher also takes a gamepad. The D-pad or left stick moves and changes
 OPTIONS/UPDATE values left and right; A/Start confirms; B/Back backs out,
@@ -283,7 +284,7 @@ would not shrink also stays raw.
 ### Gameplay options
 
 `arklay.toml` also reads a `[game]` table of optional behaviours and the
-in-game menu's options. The two gameplay options are on by default; a trace or
+in-game menu's options. The gameplay options are on by default; a trace or
 capture still keeps them off so its output is unchanged. The in-game menu
 (Esc, or the gamepad's Start) edits the same table and writes it back.
 
@@ -292,6 +293,8 @@ capture still keeps them off so its output is unchanged. The in-game menu
 quick_turn = true      # BACKWARD + RUN turns the player 180 degrees
 tactical_reload = true # AIM + RUN reloads the equipped gun
 analog_movement = true # the left stick moves relative to the camera
+auto_aim = true        # raising a weapon locks on to the nearest enemy
+blood = true           # blood billboards, spurts and pools
 ui_font = "modern"     # the menus' face: "modern" or "retro"
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
 button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation", "nintendo"
@@ -300,6 +303,18 @@ ambient_volume = 100   # ambient loops (rain, machinery),
 effects_volume = 100   # sound effects
 voice_volume = 100     # and voices
 ```
+
+`auto_aim` locks a raised weapon on to the nearest enemy in front of the
+player, as the original does; turn it off to aim where the player faces, like
+the original USA release. `blood` controls the engine's blood billboards,
+spurts and pools; a room script's own effect spawns are untouched. Neither
+option has a per-run command-line flag; set them in `arklay.toml` or the
+in-game menu.
+
+The Language › Subtitles options (`subtitles`, `subtitle_size`,
+`subtitle_background`, `subtitle_color`, `speaker_names`, `speaker_name_color`)
+are persisted and editable in the menu, but subtitles are not drawn yet; see
+issue #187.
 
 `quick_turn` enables Classic REbirth's quick turn: while walking backward
 (including the back diagonals), pressing RUN turns the player 180 degrees in
@@ -417,7 +432,11 @@ aspect = "4:3"     # "16:9" or "16:10": crop the frame to the wider shape
 render_scale = 100 # GPU only: the 3D scene's resolution, % of the screen area it fills (25..400)
 msaa = 4           # GPU only: anti-aliasing samples per pixel (1, 2, 4 or 8)
 frame_rate = 120   # presented frames per second, 30..1000 (default 30)
+hdr = true         # request HDR output when the display supports it
 ```
+
+`hdr` is stored and editable in the menu, but the game still presents SDR
+until HDR output is implemented; see issue #188.
 
 `frame_rate` only changes presentation: the game always simulates at the
 original's 30 Hz, so input timing, scripts and traces are identical at every
