@@ -1,0 +1,45 @@
+// Enemy and character types for `enemy(...)`.
+// EM_<id>_[<category>_]<name>; ids never change. Only zombies, spiders,
+// NPCs and props take a category.
+
+#define EM_00_ZOMBIE_GROUNDSKEEPER 0x00
+#define EM_01_ZOMBIE_NAKED 0x01
+#define EM_02_CERBERUS 0x02
+#define EM_03_SPIDER_WEB_SPINNER 0x03
+#define EM_04_SPIDER_BLACK_TIGER 0x04
+#define EM_05_CROW 0x05
+#define EM_06_HUNTER 0x06
+#define EM_07_WASP 0x07
+#define EM_08_PLANT_42 0x08
+#define EM_09_CHIMERA 0x09
+#define EM_0A_ADDER 0x0A
+#define EM_0B_NEPTUNE 0x0B
+#define EM_0C_TYRANT_1 0x0C
+#define EM_0D_YAWN_1 0x0D
+#define EM_0E_PLANT_42_ROOTS 0x0E
+#define EM_0F_PLANT_FOUNTAIN 0x0F
+#define EM_10_TYRANT_2 0x10
+#define EM_11_ZOMBIE_LAB 0x11
+#define EM_12_YAWN_2 0x12
+#define EM_13_PROP_COBWEB 0x13
+#define EM_14_PROP_COMPUTER_HANDS_LEFT 0x14
+#define EM_15_PROP_COMPUTER_HANDS_RIGHT 0x15
+#define EM_20_NPC_CHRIS 0x20
+#define EM_21_NPC_JILL 0x21
+#define EM_22_NPC_BARRY 0x22
+#define EM_23_NPC_REBECCA 0x23
+#define EM_24_NPC_WESKER 0x24
+#define EM_25_NPC_KENNETH_1 0x25
+#define EM_26_NPC_FORREST 0x26
+#define EM_27_NPC_RICHARD 0x27
+#define EM_28_NPC_ENRICO 0x28
+#define EM_29_NPC_KENNETH_2 0x29
+#define EM_2A_NPC_BARRY_2 0x2A
+#define EM_2B_NPC_BARRY_2_STARS 0x2B
+#define EM_2C_NPC_REBECCA_2 0x2C
+#define EM_2D_NPC_BARRY_3 0x2D
+#define EM_2E_NPC_WESKER_2 0x2E
+#define EM_2F_NPC_CHRIS_JACKET 0x2F
+#define EM_30_NPC_JILL_BLACK_SHIRT 0x30
+#define EM_31_NPC_CHRIS_JACKET_2 0x31
+#define EM_32_NPC_JILL_RED_SHIRT 0x32

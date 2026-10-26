@@ -1,0 +1,113 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_USEITEM 0x03
+#define AOT_04_MESSAGE 0x04
+#define ENEMY_00_CHIMERA 0x00
+#define ENEMY_01_CHIMERA 0x01
+#define ENEMY_02_CHIMERA 0x02
+#define FX_1F 0x1F
+#define IMDL_00 0x00
+#define SE_18_STEAM_A 0x18
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_5A, SAT_MANUAL | SAT_PLAYER, 0);
+    aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, SAT_PLAYER, 9, 0, 13, 0, 1, 0);
+    aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_61, SPAWN_FORCE, 1, 0, 2500, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_62, SPAWN_FORCE, 1, 0, 3500, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+#if CHRIS
+    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B3, SPAWN_FORCE, 1, 0, 144, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
+#endif
+    evt_exec(0, TASK_09, on_enter);
+    evt_exec(0, TASK_09, on_enter_2);
+    evt_exec(0, TASK_09, on_enter_3);
+}
+
+proc main
+{
+    if (ck(FG_ITEM, F_ITEM_5A, TRUE))
+    {
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
+        aot_reset(AOT_03_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 13, 1);
+    }
+    else
+    {
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
+        aot_reset(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+    }
+    if (testitem(IT_28_KEY_MO_DISK))
+    {
+        evt_exec(0, TASK_09, from_main);
+    }
+}
+
+event from_main
+{
+    sleep(1);
+    aot_on(AOT_02_ITEM, SCE_DOCUMENT, 0);
+    evt_finish();
+}
+
+event on_enter
+{
+    sleep(171);
+    run
+    {
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 18300, 9400);
+    }
+    for (8)
+    {
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 18300, -2800, 9400, 2640);
+        sleep(3);
+    }
+    evt_nop();
+    evt_chain(1);
+    evt_finish();
+}
+
+event on_enter_2
+{
+    sleep(285);
+    run
+    {
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 9300, 1600);
+    }
+    for (8)
+    {
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 9300, -2200, 1600, 3300);
+        sleep(3);
+    }
+    evt_nop();
+    evt_chain(2);
+    evt_finish();
+}
+
+event on_enter_3
+{
+    sleep(349);
+    run
+    {
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 8000, 8600);
+    }
+    for (8)
+    {
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 8000, -3400, 8600, 2200);
+        sleep(3);
+    }
+    evt_chain(3);
+    evt_finish();
+}

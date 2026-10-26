@@ -1,0 +1,338 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_EVENT 0x01
+#define AOT_02_EVENT 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_MESSAGE 0x09
+#define AOT_0A_MESSAGE 0x0A
+#define AOT_0B_MESSAGE 0x0B
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_03 0x03
+#define CAM_04 0x04
+#define CAM_05 0x05
+#define CAM_07 0x07
+#define FX_0C 0x0C
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define IMDL_03 0x03
+#define MSG_NOTHING_IMPORTANT 0x01
+#define MSG_THERE_IS_A_SWITCH 0x00
+#define MSG_WILL_YOU_TRY_AND_TAKE_OUT 0x02
+#define OBJ_00 0x00
+#define SE_17_SW_BTN 0x17
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 8100, 3200, 1800, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_EVENT, 8200, 5100, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
+    aot_set(AOT_02_EVENT, 4450, 10680, 1000, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
+    item_aot_set(AOT_03_ITEM, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 2320, -1200, 10020, 2048, F_ITEM_1D, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_04_ITEM, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, IMDL_01, SCA_NONE, 4850, -1210, 8180, -1100, F_ITEM_74, SAT_MANUAL | SAT_PLAYER, 0);
+    eml_rot(IMDL_01, 380, 2280);
+    item_aot_set(AOT_05_ITEM, 0, 0, 10, 10, IT_22_KEY_JEWEL_RED, 1, IMDL_02, SCA_NONE, 8200, -5690, 14130, 0, F_ITEM_1E, SAT_MANUAL | SAT_PLAYER, 0);
+    eml_rot(IMDL_02, 0, -1024);
+    setbyte(2, 0, 0);
+    item_aot_set(AOT_06_ITEM, 1780, 7820, 1000, 1500, IT_0E_AMMO_MAGNUM, 6, IMDL_03, SCA_NONE, 2280, -1200, 9120, 0, F_ITEM_C8, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 6720, 0, 10440, 0, 576, 0, -576, 0, 540, 900, 1000, 540);
+    if (ck(FG_COMMON, F_COMMON_44, FALSE))
+    {
+        cutnext(CAM_04);
+        evt_exec(0, TASK_09, on_enter);
+    }
+    else
+    {
+        msg_list(0, 9746, -3080, 6648, 56, 56, 56, LIGHT_KIND_00, 11720, 9897, -3050, 7248, 56, 56, 56, LIGHT_KIND_00, 11120, 9995, -3000, 6408, 180, 180, 180, LIGHT_KIND_00, 9120, 416, 416, 416);
+        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        {
+            effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
+        }
+    }
+    aot_set(AOT_07_MESSAGE, 5500, 5200, 1100, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 3600, 11500, 3500, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 7100, 11500, 1800, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 1500, 10900, 2000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 2200, 7500, 300, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+}
+
+proc main
+{
+    if (ck(FG_STATUS, F_STATUS_18, TRUE))
+    {
+        aot_delete(AOT_02_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_03_ITEM, SCE_ITEM, 0);
+        aot_delete(AOT_04_ITEM, SCE_DOCUMENT, 0);
+        aot_delete(AOT_05_ITEM, SCE_ITEM, 0);
+    }
+    else
+    {
+        aot_delete(AOT_02_EVENT, SCE_EVENT, 0);
+        aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_04_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+    }
+    if (ck(FG_ITEM, F_ITEM_1E, FALSE))
+    {
+        aot_delete(AOT_02_EVENT, SCE_NONE, 0);
+    }
+    if (ck(FG_ITEM, F_ITEM_1D, FALSE))
+    {
+        aot_delete(AOT_03_ITEM, SCE_NONE, 0);
+    }
+    if (ck(FG_ITEM, F_ITEM_74, FALSE))
+    {
+        aot_delete(AOT_04_ITEM, SCE_NONE, 0);
+    }
+    if (ck(FG_ITEM, F_ITEM_C8, FALSE))
+    {
+        aot_delete(AOT_05_ITEM, SCE_NONE, 0);
+    }
+}
+
+event on_aot_01
+{
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 0); // "There's a switch. Will you push it? ...Nothing important."
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
+        {
+            se_play_3d(SND_BANK_ROOM, SE_17_SW_BTN, 0, SND_AT_POINT, 0, 8200, 5100);
+            if (ck(FG_COMMON, F_COMMON_44, FALSE))
+            {
+                if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
+                {
+                    cutnext(CAM_00);
+                }
+                else
+                {
+                    cutnext(CAM_01);
+                }
+                evt_exec(0, TASK_09, on_aot_01_sub1);
+            }
+            else
+            {
+                if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
+                {
+                    cutnext(CAM_04);
+                }
+                else
+                {
+                    cutnext(CAM_05);
+                }
+                evt_exec(0, TASK_09, on_aot_01_sub2);
+            }
+        }
+        else
+        {
+            evt_exec(0, TASK_09, on_enter);
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_01_sub1
+{
+    run
+    {
+        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        {
+            effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
+        }
+        msg_list(0, 9746, -3080, 6648, 56, 56, 56, LIGHT_KIND_00, 11720, 9897, -3050, 7248, 56, 56, 56, LIGHT_KIND_00, 11120, 9995, -3000, 6408, 180, 180, 180, LIGHT_KIND_00, 9120, 416, 416, 416);
+        set(FG_COMMON, F_COMMON_44, TRUE);
+    }
+    evt_chain(3);
+    evt_finish();
+}
+
+event on_aot_01_sub2
+{
+    run
+    {
+        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        {
+            effect_kill_a(0);
+        }
+        set(FG_COMMON, F_COMMON_44, FALSE);
+    }
+    timer_setup(LIGHT_FADE_VEIL, 0, 0);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, 0, 0);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, 0, 0);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    run
+    {
+        timer_setup(LIGHT_FADE_VEIL, -10000, FADE_R | FADE_G | FADE_B);
+        msg_list(0, 9746, -3080, 6648, 200, 200, 200, LIGHT_KIND_00, 6400, 5297, -3050, 8048, 200, 200, 200, LIGHT_KIND_00, 6640, 5235, -3000, 7248, 200, 200, 200, LIGHT_KIND_00, 6640, 1328, 832, 368);
+    }
+    evt_chain(3);
+    evt_finish();
+}
+
+event on_enter
+{
+    sleep(5);
+    run
+    {
+        cut_auto(CUT_FREE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_02
+{
+    sleep(1);
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        if (ck(FG_COMMON, F_COMMON_44, FALSE))
+        {
+            cutnext(CAM_07);
+            evt_exec(0, TASK_09, on_aot_02_sub1);
+        }
+        else
+        {
+            cutnext(CAM_03);
+            setbyte(2, 1, 0);
+            effect_kill_a(0);
+            msg_list(0, 5800, -3080, 10700, 255, 255, 255, LIGHT_KIND_00, 6640, 5800, -3050, 10700, 255, 255, 255, LIGHT_KIND_00, 6640, 5800, -3000, 10700, 255, 255, 255, LIGHT_KIND_00, 6640, 1400, 1400, 1400);
+            evt_exec(0, TASK_09, on_aot_02_sub2);
+            evt_exec(0, TASK_07, on_aot_02_sub3);
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub1
+{
+    sleep(50);
+    message(MSG_NOTHING_IMPORTANT, 0); // "...Nothing important."
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        cutcurr(0);
+    }
+    sleep(1);
+    run
+    {
+        cut_auto(CUT_FREE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub2
+{
+    sleep(50);
+    message(MSG_WILL_YOU_TRY_AND_TAKE_OUT | MSG_FAST, 0); // "Will you try and take out the eyeball? It looks as if it's alive."
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
+        {
+            evt_exec(0, TASK_09, on_aot_02_sub2_sub1);
+        }
+        else
+        {
+            evt_exec(0, TASK_09, on_aot_02_sub2_sub2);
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub2_sub1
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        aot_on(AOT_05_ITEM, SCE_ITEM, 0);
+    }
+    evt_next();
+    evt_nop();
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    }
+    sleep(1);
+    evt_chain(8);
+    evt_finish();
+}
+
+event on_aot_02_sub2_sub2
+{
+    evt_disable(TASK_07);
+    run
+    {
+        if (ck(FG_ITEM, F_ITEM_1E, TRUE))
+        {
+            effect_tracked(FX_0C, FX_ROW_19, FX_AT_WORLD, 5200, 61536, 12100, 0);
+        }
+        setbyte(2, 0, 0);
+        cutcurr(0);
+        msg_list(0, 9746, -3080, 6648, 56, 56, 56, LIGHT_KIND_00, 11720, 9897, -3050, 7248, 56, 56, 56, LIGHT_KIND_00, 11120, 9995, -3000, 6408, 180, 180, 180, LIGHT_KIND_00, 9120, 416, 416, 416);
+    }
+    sleep(1);
+    run
+    {
+        cut_auto(CUT_FREE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub3
+{
+    for (40)
+    {
+        evt_work_set(WK_AOT, IMDL_02);
+        evt_tween_begin_alt();
+        tw_set_rot(20, 0, 0);
+        tw_rot_add();
+        tw_nop();
+        tw_end();
+        evt_nop();
+        sleep(1);
+    }
+    evt_nop();
+    sleep(60);
+    evt_chain(9);
+    evt_finish();
+}

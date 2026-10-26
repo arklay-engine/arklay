@@ -1,0 +1,129 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_EVENT 0x02
+#define ENEMY_00_CHIMERA 0x00
+#define ENEMY_01_CHIMERA 0x01
+#define ENEMY_02_CHIMERA 0x02
+#define FX_1F 0x1F
+#define MSG_A_POWER_PANEL 0x00
+#define SE_17_CONPANE 0x17
+#define SE_18 0x18
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 11100, 20500, 3200, 3800, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50C_FRONT_OF_ELEVATOR, 12700, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 21100, 4800, 1500, 2100, 0, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_510_MAZE_B, 22000, 0, 16500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_SCENARIO, F_SCENARIO_2E, FALSE))
+    {
+        aot_set(AOT_02_EVENT, 1528, 3494, 1050, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
+    }
+    else
+    {
+        aot_set(AOT_02_EVENT, 1528, 3494, 950, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    }
+    if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+    {
+        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+    }
+    else
+    {
+        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_MAIN_ON);
+    }
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    {
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_78, SPAWN_FORCE, 2, 0, 3072, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_79, SPAWN_FORCE, 2, 0, 1152, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B2, SPAWN_FORCE, 2, 0, 3128, 0, 16093, 0, 4892, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
+    }
+    else
+    {
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_78, SPAWN_FORCE, 2, 0, 3072, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_79, SPAWN_FORCE, 2, 0, 1152, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+    }
+    evt_exec(0, TASK_09, on_enter);
+    evt_exec(0, TASK_09, on_enter_2);
+}
+
+event on_aot_02
+{
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    message(MSG_A_POWER_PANEL | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "A power panel. Some areas do not have power. Will you activate the blacked-out areas? It shows the power supply status."
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
+        {
+            evt_exec(0, TASK_09, on_aot_02_sub1);
+        }
+        else
+        {
+            evt_exec(0, TASK_09, on_aot_02_sub2);
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub1
+{
+    se_play_3d(SND_BANK_ROOM, SE_17_CONPANE, 0, SND_AT_PLAYER, 0, 0, 0);
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_2E, TRUE);
+        aot_reset(AOT_02_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub2
+{
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    evt_finish();
+}
+
+event on_enter
+{
+    sleep(119);
+    run
+    {
+        se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 7600, 9900);
+    }
+    for (8)
+    {
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 7600, -4300, 9900, 1870);
+        sleep(3);
+    }
+    evt_nop();
+    evt_chain(3);
+    evt_finish();
+}
+
+event on_enter_2
+{
+    sleep(240);
+    run
+    {
+        se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 13100, 10600);
+    }
+    for (8)
+    {
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 13100, -2400, 10600, 3850);
+        sleep(3);
+    }
+    evt_chain(4);
+    evt_finish();
+}

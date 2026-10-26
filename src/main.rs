@@ -489,7 +489,8 @@ enum ScdAction {
         /// Input RDT file
         rdt: PathBuf,
 
-        /// Output file: .s for disassembly, .bio for decompilation
+        /// Output file: .s for disassembly, .bio for decompilation, .akscr
+        /// for a script that compiles back to identical bytecode
         #[arg(long, short)]
         out: PathBuf,
 
@@ -498,15 +499,46 @@ enum ScdAction {
         list: bool,
     },
 
-    /// Assemble a text .s source into a standalone .scd container
+    /// Assemble a text .s source or compile an .akscr script into a
+    /// standalone .scd container
     Build {
-        /// Input .s source
+        /// Input .s or .akscr source
         input: PathBuf,
 
         /// Output .scd container
         #[arg(long, value_name = "PATH")]
         out: PathBuf,
+
+        /// RDT id (hex, e.g. 1030) to compile a merged `#if` script for
+        #[arg(long, value_name = "ID", value_parser = parse_room_id)]
+        room: Option<u16>,
+
+        /// Compile the original game's exact bytecode (`#if AUTHENTIC`)
+        /// rather than the fixed version of its quirks
+        #[arg(long)]
+        authentic: bool,
     },
+
+    /// Export every room of a pack as one merged .akscr script per room
+    /// (both players, and both mansion visits for stages 1 and 2), naming
+    /// game data from the `inc/*.akinc` files beside the output directory
+    ExportRooms {
+        /// Game pack to read
+        #[arg(value_name = "PACK")]
+        pack: PathBuf,
+
+        /// Directory to write `<room>.akscr` into (e.g. `103.akscr`)
+        #[arg(long, short)]
+        out: PathBuf,
+    },
+}
+
+/// Parse a hex RDT id such as `1030`.
+fn parse_room_id(text: &str) -> Result<u16, String> {
+    u16::from_str_radix(text, 16)
+        .ok()
+        .filter(|_| text.len() == 4)
+        .ok_or_else(|| format!("`{text}` is not a four-digit hex room id such as 1030"))
 }
 
 /// Export an RDT's SCD streams to `out` (`.s` disassembly or `.bio`
@@ -524,8 +556,10 @@ fn export_scd(rdt: &std::path::Path, out: &std::path::Path, list: bool) -> Resul
         arklay::scd::decomp::render(&scripts, &data)
     } else if extension.eq_ignore_ascii_case("s") {
         arklay::scd::disasm::render(&scripts, &data)
+    } else if extension.eq_ignore_ascii_case("akscr") {
+        arklay::scd::akscr::decompile(&scripts)
     } else {
-        bail!("output `{}` must end in .s or .bio", out.display());
+        bail!("output `{}` must end in .s, .bio or .akscr", out.display());
     };
     arklay::atomic::write(out, text.as_bytes())
         .with_context(|| format!("failed to write {}", out.display()))?;
@@ -539,12 +573,39 @@ fn export_scd(rdt: &std::path::Path, out: &std::path::Path, list: bool) -> Resul
     Ok(())
 }
 
-/// Assemble a text `.s` source into a standalone `.scd` container.
-fn build_scd(input: &Path, out: &Path) -> Result<()> {
+/// Assemble a text `.s` source or compile an `.akscr` script into a
+/// standalone `.scd` container.
+fn build_scd(input: &Path, out: &Path, room: Option<u16>, authentic: bool) -> Result<()> {
     let text =
         fs::read_to_string(input).with_context(|| format!("failed to read {}", input.display()))?;
-    let assembled = arklay::scd::asm::assemble(&text)
-        .with_context(|| format!("failed to assemble {}", input.display()))?;
+    let script = input
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("akscr"));
+    if authentic && room.is_none() {
+        bail!("--authentic needs --room");
+    }
+    let assembled = if script {
+        let dir = input.parent().unwrap_or(Path::new("."));
+        arklay::scd::akscr::compile_with(
+            &text,
+            room.map(|room| {
+                let variant = arklay::scd::akscr::Variant::for_room(room);
+                if authentic {
+                    variant.authentic()
+                } else {
+                    variant
+                }
+            }),
+            &arklay::scd::akscr::includes_from(dir),
+        )
+        .with_context(|| format!("failed to compile {}", input.display()))?
+    } else {
+        if room.is_some() {
+            bail!("--room only applies to .akscr scripts");
+        }
+        arklay::scd::asm::assemble(&text)
+            .with_context(|| format!("failed to assemble {}", input.display()))?
+    };
     let container = assembled
         .to_container()
         .with_context(|| format!("failed to lay out {}", input.display()))?;
@@ -555,6 +616,44 @@ fn build_scd(input: &Path, out: &Path) -> Result<()> {
         input.display(),
         out.display(),
         container.len()
+    );
+    Ok(())
+}
+
+/// Decompile every room RDT in `pack` and write one merged `.akscr` per room
+/// into `out`.
+fn export_rooms(pack: &Path, out: &Path) -> Result<()> {
+    let pack = Pack::open(pack).with_context(|| format!("failed to open {}", pack.display()))?;
+    fs::create_dir_all(out).with_context(|| format!("failed to create {}", out.display()))?;
+    let names = arklay::scd::akscr::load_names(out)?;
+    let mut rooms = std::collections::BTreeMap::new();
+    for entry in pack.entries() {
+        let path = entry.path();
+        let Some(id) = path
+            .strip_prefix("room/")
+            .and_then(|name| name.strip_suffix(".rdt"))
+            .and_then(|stem| parse_room_id(stem).ok())
+        else {
+            continue;
+        };
+        let data = pack.read(path)?;
+        // The stub RDTs of unused room slots carry no scripts.
+        let Ok(scripts) = arklay::scd::reader::parse(&data) else {
+            continue;
+        };
+        rooms.insert(id, arklay::scd::akscr::decompile_with(&scripts, &names, id));
+    }
+    let merged = arklay::scd::akscr::merge_rooms(&rooms)?;
+    for (base, text) in &merged {
+        let path = out.join(format!("{base:03x}.akscr"));
+        arklay::atomic::write(&path, text.as_bytes())
+            .with_context(|| format!("failed to write {}", path.display()))?;
+    }
+    println!(
+        "exported {} rooms ({} RDTs) to {}",
+        merged.len(),
+        rooms.len(),
+        out.display()
     );
     Ok(())
 }
@@ -915,7 +1014,13 @@ fn main() -> Result<()> {
         Some(Command::Verify { pack, mods, strict }) => verify_pack(&pack, &mods, strict),
         Some(Command::Scd { action }) => match action {
             ScdAction::Export { rdt, out, list } => export_scd(&rdt, &out, list),
-            ScdAction::Build { input, out } => build_scd(&input, &out),
+            ScdAction::Build {
+                input,
+                out,
+                room,
+                authentic,
+            } => build_scd(&input, &out, room, authentic),
+            ScdAction::ExportRooms { pack, out } => export_rooms(&pack, &out),
         },
         Some(Command::Mod { action }) => match action {
             ModAction::Build { dir, out, base } => build_mod_pack(&dir, &out, base.as_deref()),
@@ -1401,7 +1506,7 @@ mod tests {
         )
         .unwrap();
 
-        build_scd(&input, &out).unwrap();
+        build_scd(&input, &out, None, false).unwrap();
 
         let bytes = fs::read(&out).unwrap();
         let scripts = arklay::scd::reader::parse(&bytes).unwrap();

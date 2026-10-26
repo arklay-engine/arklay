@@ -1,0 +1,41 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_TYPEWRITER 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_06_ITEMBOX 0x06
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define IMDL_03 0x03
+#define OBJ_00 0x00
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 700, 2800, 1900, 1700, 1, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_50C_FRONT_OF_ELEVATOR, 14300, 0, 17700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_TYPEWRITER, 2000, 8500, 1800, 2200, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    item_aot_set(AOT_02_ITEM, 8000, 8000, 1400, 1400, IT_44_HEAL_HERB_GREEN, 1, IMDL_00, SCA_NONE, 8700, 0, 8700, 0, F_ITEM_E8, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_03_ITEM, 4700, 8000, 1400, 1400, IT_45_HEAL_HERB_BLUE, 1, IMDL_01, SCA_NONE, 5400, 0, 8700, 0, F_ITEM_E9, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    {
+        item_aot_set(ITEM_ALT_ROT | AOT_04_ITEM, 8000, 4100, 1400, 1400, IT_0E_AMMO_MAGNUM, 6, IMDL_02, SCA_NONE, 8700, -2200, 4800, 0, F_ITEM_EA, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        item_aot_set(ITEM_ALT_ROT | AOT_04_ITEM, 8000, 4100, 1400, 1400, IT_12_AMMO_GRENADE_FLAME, 6, IMDL_02, SCA_NONE, 8700, -2200, 4800, 0, F_ITEM_EA, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    item_aot_set(AOT_05_ITEM, 8000, 5800, 1400, 1400, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 8700, -2510, 6500, 0, F_ITEM_EB, SAT_MANUAL | SAT_PLAYER, 0);
+    aot_set(AOT_06_ITEMBOX, 7100, 1900, 1800, 2900, SCE_ITEMBOX, SAT_MANUAL | SAT_PLAYER, 5, 0, 0, 0, 0, 0);
+    obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 9100, -1440, 3000, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
+}

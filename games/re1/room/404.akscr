@@ -1,0 +1,72 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_MESSAGE 0x02
+#define AOT_03_MESSAGE 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_05_MESSAGE 0x05
+#define AOT_06_MESSAGE 0x06
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_ITEM 0x08
+#define AOT_09_MESSAGE 0x09
+#define ENEMY_00_SPIDER_WEB_SPINNER 0x00
+#define ENEMY_01_SPIDER_WEB_SPINNER 0x01
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 10300, 10900, 900, 4200, 11, DOOR_SND_00_DR_WD, DOOR_05_DOOR05, 1, 0, ROOM_400_ENTER_PASSAGE, 20200, 0, 12600, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 7790, 8560, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 9000, -1800, 9300, 0, F_ITEM_7F, SAT_MANUAL | SAT_PLAYER, 0);
+    aot_set(AOT_02_MESSAGE, 11100, 27400, 2200, 2900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_MESSAGE, 8300, 27400, 1500, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 4000, 21200, 1500, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 4600, 24000, 1500, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 6000, 21200, 1500, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 4600, 18100, 1500, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_B6, TRUE))
+    {
+        item_aot_set(AOT_08_ITEM, 0, 0, 0, 0, IT_2F_KEY_INK_RIBBON, 2, IMDL_01, SCA_NONE, 11930, -1800, 5320, 0, F_ITEM_B6, 0, 0);
+        aot_set(AOT_09_MESSAGE, 10690, 5280, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    }
+    else
+    {
+        item_aot_set(AOT_08_ITEM, 10690, 5280, 1800, 1800, IT_2F_KEY_INK_RIBBON, 2, IMDL_01, SCA_NONE, 11930, -1800, 5320, 0, F_ITEM_B6, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_1E, TRUE))
+        {
+            obj(OBJ_00, OF_ACTIVE, SCA_NONE, 5630, -1600, 21630, -950, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5700, -1670, 21430, -2048, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
+        else
+        {
+            obj(OBJ_00, OF_ACTIVE, SCA_NONE, 5880, -1600, 21580, -390, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5480, -1670, 21430, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
+    }
+    else if (ck(FG_SCENARIO, F_SCENARIO_1E, TRUE))
+    {
+        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 5900, -1600, 21340, 380, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5700, -1670, 21430, -2048, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    else
+    {
+        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 5540, -1600, 21090, 3030, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01, OF_ACTIVE, SCA_NONE, 5610, -1670, 21430, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    enemy(EM_03_SPIDER_WEB_SPINNER, EB_02, F_ENEMY_7C, SPAWN_FORCE, 2, 0, 888, 0, 14100, 0, 24900, ENEMY_00_SPIDER_WEB_SPINNER, ANIM_00, 0, EVAR_00);
+    enemy(EM_03_SPIDER_WEB_SPINNER, EB_02, F_ENEMY_7D, SPAWN_FORCE, 2, 0, 2912, 0, 13822, 0, 8082, ENEMY_01_SPIDER_WEB_SPINNER, ANIM_00, 0, EVAR_00);
+}

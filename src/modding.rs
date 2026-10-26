@@ -105,6 +105,28 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
         {
             continue;
         }
+        // Include files only feed the scripts that `#include` them.
+        if relative
+            .rsplit_once('.')
+            .is_some_and(|(_, extension)| extension.eq_ignore_ascii_case("akinc"))
+        {
+            continue;
+        }
+        if let Some((prefix, base)) = merged_scd_source(relative) {
+            let text = fs::read_to_string(source)
+                .with_context(|| format!("failed to read {}", source.display()))?;
+            for id in crate::scd::akscr::room_variants(base) {
+                let variant = crate::scd::akscr::Variant::for_room(id);
+                let dir = source.parent().unwrap_or(Path::new("."));
+                let load = crate::scd::akscr::includes_from(dir);
+                let container = crate::scd::akscr::compile_with(&text, Some(variant), &load)
+                    .and_then(|assembled| assembled.to_container())
+                    .with_context(|| format!("failed to compile {relative} for room {id:04X}"))?;
+                let output = format!("{prefix}{id:04x}.scd");
+                push_entry(&mut entries, &mut outputs, output, container, relative)?;
+            }
+            continue;
+        }
         if let Some(assembled) = scd_source_output(relative) {
             let container = assemble_scd(source)?;
             push_entry(&mut entries, &mut outputs, assembled, container, relative)?;
@@ -261,18 +283,29 @@ fn is_mod_candidate(path: &Path) -> bool {
     path.is_dir() && path.join(manifest::ENTRY).is_file()
 }
 
-/// Assemble a text `.s` source into a standalone `.scd` container.
+/// Assemble a text `.s` source, or compile an `.akscr` script, into a
+/// standalone `.scd` container.
 pub fn assemble_scd(source: &Path) -> Result<Vec<u8>> {
     let text = fs::read_to_string(source)
         .with_context(|| format!("failed to read {}", source.display()))?;
-    let assembled = crate::scd::asm::assemble(&text)
-        .with_context(|| format!("failed to assemble {}", source.display()))?;
+    let script = source
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("akscr"));
+    let assembled = if script {
+        let dir = source.parent().unwrap_or(Path::new("."));
+        crate::scd::akscr::compile_with(&text, None, &crate::scd::akscr::includes_from(dir))
+            .with_context(|| format!("failed to compile {}", source.display()))?
+    } else {
+        crate::scd::asm::assemble(&text)
+            .with_context(|| format!("failed to assemble {}", source.display()))?
+    };
     assembled
         .to_container()
         .with_context(|| format!("failed to lay out {}", source.display()))
 }
 
-/// The pack entry a `scd/<stem>.s` source assembles into, if it is one.
+/// The pack entry a `scd/<stem>.s` or `scd/<stem>.akscr` source builds into,
+/// if it is one.
 fn scd_source_output(relative: &str) -> Option<String> {
     if !relative
         .get(..4)
@@ -280,15 +313,30 @@ fn scd_source_output(relative: &str) -> Option<String> {
     {
         return None;
     }
-    let stem = relative.strip_suffix(".s").or_else(|| {
+    let stem = [".s", ".akscr"].iter().find_map(|suffix| {
         relative
-            .get(..relative.len().checked_sub(2)?)
-            .filter(|stem| relative[stem.len()..].eq_ignore_ascii_case(".s"))
+            .get(..relative.len().checked_sub(suffix.len())?)
+            .filter(|stem| relative[stem.len()..].eq_ignore_ascii_case(suffix))
     })?;
     if stem.len() <= 4 {
         return None;
     }
     Some(format!("{stem}.scd"))
+}
+
+/// A merged room script `scd/<room>.akscr` (three hex digits, e.g.
+/// `scd/103.akscr`): the `scd/` prefix as written and the room id. It builds
+/// `scd/<id>.scd` for every player and mansion variant of the room.
+fn merged_scd_source(relative: &str) -> Option<(&str, u16)> {
+    let (prefix, name) = relative.split_at_checked(4)?;
+    if !prefix.eq_ignore_ascii_case("scd/") {
+        return None;
+    }
+    let (stem, extension) = name.split_at_checked(3)?;
+    if !extension.eq_ignore_ascii_case(".akscr") || !stem.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some((prefix, u16::from_str_radix(stem, 16).ok()?))
 }
 
 /// Add one built entry, rejecting two sources that map to the same path.
@@ -478,6 +526,53 @@ mod tests {
     }
 
     #[test]
+    fn merged_room_scripts_build_every_variant() {
+        let dir = TempDir::new("scd-merged");
+        let source = dir.path.join("source");
+        write(
+            &source.join("manifest.toml"),
+            mod_manifest_text("demo", "re1").as_bytes(),
+        );
+        write(
+            &source.join("scd/103.akscr"),
+            b"#version 1\nproc main noreturn\n{\n#if JILL\n    nop(1);\n#endif\n#if MANSION2\n    nop(2);\n#endif\n}\n",
+        );
+
+        let out = dir.path.join("demo.akpak");
+        let summary = build_mod(&source, &out, None).unwrap();
+        assert_eq!(
+            summary
+                .entries
+                .iter()
+                .map(|(path, _)| path.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "manifest.toml",
+                "scd/1030.scd",
+                "scd/1031.scd",
+                "scd/6030.scd",
+                "scd/6031.scd"
+            ]
+        );
+
+        let pack = Pack::open(&out).unwrap();
+        for (path, expected) in [
+            ("scd/1030.scd", &[][..]),
+            ("scd/1031.scd", &[0x0E, 0x01][..]),
+            ("scd/6030.scd", &[0x0E, 0x02][..]),
+            ("scd/6031.scd", &[0x0E, 0x01, 0x0E, 0x02][..]),
+        ] {
+            let scripts = crate::scd::reader::parse(&pack.read(path).unwrap()).unwrap();
+            let bytes: Vec<u8> = scripts.main[0]
+                .insns
+                .iter()
+                .flat_map(|insn| insn.bytes.iter().copied())
+                .collect();
+            assert_eq!(bytes, expected, "{path}");
+        }
+    }
+
+    #[test]
     fn a_broken_scd_source_fails_the_build() {
         let dir = TempDir::new("scd-broken");
         let source = dir.path.join("source");
@@ -510,9 +605,24 @@ mod tests {
             scd_source_output("scd/sub/room.s").as_deref(),
             Some("scd/sub/room.scd")
         );
+        assert_eq!(
+            scd_source_output("scd/1000.AKSCR").as_deref(),
+            Some("scd/1000.scd")
+        );
         assert_eq!(scd_source_output("lua/demo.s"), None);
+        assert_eq!(scd_source_output("scd/.akscr"), None);
         assert_eq!(scd_source_output("scd/.s"), None);
         assert_eq!(scd_source_output("scd/1000.scd"), None);
+    }
+
+    #[test]
+    fn merged_room_scripts_are_recognised() {
+        assert_eq!(merged_scd_source("scd/103.akscr"), Some(("scd/", 0x103)));
+        assert_eq!(merged_scd_source("SCD/20A.AKSCR"), Some(("SCD/", 0x20A)));
+        assert_eq!(merged_scd_source("scd/1030.akscr"), None);
+        assert_eq!(merged_scd_source("scd/10x.akscr"), None);
+        assert_eq!(merged_scd_source("scd/103.s"), None);
+        assert_eq!(merged_scd_source("lua/103.akscr"), None);
     }
 
     #[test]

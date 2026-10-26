@@ -1,0 +1,146 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define OBJ_00 0x00
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 3, DOOR_SND_0E_EV_FTN, DOOR_14_ELE02, 64, 0, ROOM_305_FOUNTAIN, 24100, 4320, 13100, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 2, DOOR_SND_0E_EV_FTN, DOOR_14_ELE02, 64, 0, STAGE_5 | ROOM_500_UNDER_FOUNTAIN, 9800, 0, 3400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    obj(OBJ_00, OF_ACTIVE, SCA_PLAYER, 450, 180, 110, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_305_FOUNTAIN))
+    {
+        dir_set(0, 0, 1024, 0, 21300, 4100, 13200);
+        evt_exec(0, TASK_09, on_enter_2);
+    }
+    else
+    {
+        dir_set(0, 0, 1024, 0, 21300, 10000, 13200);
+        evt_exec(0, TASK_09, on_enter);
+    }
+}
+
+event on_enter
+{
+    evt_next();
+    evt_nop();
+    bgm_play(BGM_SUB_1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    for (120)
+    {
+        spd_add(-40);
+        evt_work_set(WK_PLAYER, 0);
+        evt_tween_begin_alt();
+        tw_set_pos(0, -40, 0);
+        tw_pos_add();
+        tw_end();
+        evt_next();
+        evt_nop();
+    }
+    evt_nop();
+    for (50)
+    {
+        spd_add(-20);
+        evt_work_set(WK_PLAYER, 0);
+        evt_tween_begin_alt();
+        tw_set_pos(0, -15, 0);
+        tw_pos_add();
+        tw_end();
+        evt_next();
+        evt_nop();
+    }
+    evt_nop();
+    for (10)
+    {
+        spd_add(-1);
+        evt_work_set(WK_PLAYER, 0);
+        evt_tween_begin_alt();
+        tw_set_pos(0, -1, 0);
+        tw_pos_add();
+        tw_end();
+        evt_next();
+        evt_nop();
+    }
+    evt_nop();
+    run
+    {
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            setb(B_CHARACTER_MODEL, 0, 0);
+        }
+        else
+        {
+            setb(B_CHARACTER_MODEL, 1, 0);
+        }
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_enter_2
+{
+    evt_next();
+    evt_nop();
+    bgm_play(BGM_SUB_1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    for (10)
+    {
+        spd_add(1);
+        evt_work_set(WK_PLAYER, 0);
+        evt_tween_begin_alt();
+        tw_set_pos(0, 1, 0);
+        tw_pos_add();
+        tw_end();
+        evt_next();
+        evt_nop();
+    }
+    evt_nop();
+    for (50)
+    {
+        spd_add(20);
+        evt_work_set(WK_PLAYER, 0);
+        evt_tween_begin_alt();
+        tw_set_pos(0, 15, 0);
+        tw_pos_add();
+        tw_end();
+        evt_next();
+        evt_nop();
+    }
+    evt_nop();
+    for (120)
+    {
+        spd_add(40);
+        evt_work_set(WK_PLAYER, 0);
+        evt_tween_begin_alt();
+        tw_set_pos(0, 40, 0);
+        tw_pos_add();
+        tw_end();
+        evt_next();
+        evt_nop();
+    }
+    evt_nop();
+    run
+    {
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            setb(B_CHARACTER_MODEL, 4, 0);
+        }
+        else
+        {
+            setb(B_CHARACTER_MODEL, 5, 0);
+        }
+        aot_on(AOT_01_DOOR, SCE_DOOR, 0);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}

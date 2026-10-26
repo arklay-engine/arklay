@@ -1,0 +1,53 @@
+// Door records: `door_aot_set`'s sound pair (DOOR_SND_*) and animation
+// (DOOR_*), named from the files they load.
+
+#define DOOR_SND_00_DR_WD 0x00
+#define DOOR_SND_01_DR_MTL 0x01
+#define DOOR_SND_02_DR_BRK 0x02
+#define DOOR_SND_03_DR_REB 0x03
+#define DOOR_SND_04_ST_WCP 0x04
+#define DOOR_SND_05_ST_WD 0x05
+#define DOOR_SND_06_EV_MV 0x06
+#define DOOR_SND_07_EV_NEW 0x07
+#define DOOR_SND_08_DR_GAT 0x08
+#define DOOR_SND_09_ST_MTL 0x09
+#define DOOR_SND_0A_EV_OLD 0x0A
+#define DOOR_SND_0B_LADDER 0x0B
+#define DOOR_SND_0C_DR_AIR 0x0C
+#define DOOR_SND_0D_EV_LAB 0x0D
+#define DOOR_SND_0E_EV_FTN 0x0E
+
+#define DOOR_00_DOOR00 0x00
+#define DOOR_01_DOOR01 0x01
+#define DOOR_02_DOOR02 0x02
+#define DOOR_03_DOOR03 0x03
+#define DOOR_04_DOOR04 0x04
+#define DOOR_05_DOOR05 0x05
+#define DOOR_06_DOOR06 0x06
+#define DOOR_07_DOOR07 0x07
+#define DOOR_08_DOOR08 0x08
+#define DOOR_09_DOOR09 0x09
+#define DOOR_0A_DOOR10 0x0A
+#define DOOR_0B_DOOR11 0x0B
+#define DOOR_0C_DOOR12 0x0C
+#define DOOR_0D_DOOR13 0x0D
+#define DOOR_0E_DOOR14 0x0E
+#define DOOR_0F_MON 0x0F
+#define DOOR_10_ELE03 0x10
+#define DOOR_11_ELE01 0x11
+#define DOOR_12_ELE01A 0x12
+#define DOOR_13_ELE01B 0x13
+#define DOOR_14_ELE02 0x14
+#define DOOR_15_ELE04 0x15
+#define DOOR_16_KAI01 0x16
+#define DOOR_17_KAI03 0x17
+#define DOOR_18_KAI02 0x18
+#define DOOR_19_KAI04 0x19
+#define DOOR_1A_LAD00 0x1A
+#define DOOR_1B_LAD01 0x1B
+#define DOOR_1C_DOOR00K 0x1C
+#define DOOR_1D_DOOR01K 0x1D
+#define DOOR_1E_DOOR03K 0x1E
+#define DOOR_1F_DOOR05K 0x1F
+#define DOOR_20_DOOR06K 0x20
+#define DOOR_21_DOOR15 0x21

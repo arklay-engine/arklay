@@ -445,7 +445,10 @@ arklay re1.akpak --mod fr.akpak --language fr-FR --room 100
 `arklay mod build <dir> --out <pack.akpak>` builds a mod from a directory:
 `manifest.toml` is required and packed, every other file maps to a pack entry
 equal to its directory-relative path, and a `scd/<stem>.s` source is assembled
-into `scd/<stem>.scd` (the `.s` itself is not packed). `--base <base.akpak>`
+into `scd/<stem>.scd` (the `.s` itself is not packed); a `scd/<stem>.akscr`
+script is compiled the same way, and a merged room script named by three hex
+digits (`scd/103.akscr`) is compiled once per variant, into `scd/1030.scd`,
+`scd/1031.scd`, `scd/6030.scd` and `scd/6031.scd`. `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
 its own class (the previous section) is an override, not a new file. PNG, WebP
@@ -584,6 +587,272 @@ listing. The assembler accepts exactly the disassembler's grammar, including
 operand constants and the variable-width commands; a script override replaces
 the whole room's init/main/event scripts, so a demo room's vanilla doors and
 events are inert.
+
+## `.akscr` room scripts
+
+`arklay scd export ROOM1000.RDT --out 1000.akscr` decompiles a room's scripts
+to structured code, and `arklay scd build 1000.akscr --out scd/1000.scd`
+compiles it back. Every room of the shipped game decompiles to a script that
+compiles to byte-identical init, main and event streams.
+
+`arklay scd export-rooms re1.akpak --out games/re1/room` writes one merged
+script per room, covering both players and, for stages 1 and 2, the second
+mansion visit (stages 6 and 7): `103.akscr` holds RDTs 1030, 1031, 6030 and
+6031. Where the variants differ, `#if` blocks pick the lines:
+
+```c
+#if CHRIS
+    voice_play(1, 28, 0);
+#else
+    voice_play(1, 92, 0);
+#endif
+#if MANSION2
+    set(FG_ROOM, F_ROOM_04, FALSE);
+#endif
+```
+
+`CHRIS` and `JILL` follow the player digit, `MANSION1` and `MANSION2` the
+stage (neither is defined outside the mansion); blocks nest. The
+directives work on whole lines; the exporter keeps whole statements inside
+each block (balanced braces, an `if` with its `else`), lining up each
+variant's events by content, so only a section header such as
+`event event_01` / `event event_04` stands alone in a block. `arklay scd build 103.akscr --room 6031 --out
+scd/6031.scd` compiles one variant; a script without a variant must not use
+`#if`. The merged scripts are checked in under `games/re1/room/` and are
+maintained by hand from there: the real-data tests build each one for every
+variant and compare it with the original RDT's bytecode, so a rename or
+restructure is safe as long as the `AUTHENTIC` build still matches.
+
+`AUTHENTIC` keeps the original game's exact bytecode where the shipped data
+has a quirk with no structured form, and its `#else` holds the fixed version.
+A build uses the fixed version unless asked for the original (`scd build
+--room 1051 --authentic`); built as `AUTHENTIC`, every script compiles to its
+RDTs' exact bytecode, which the real-data tests check.
+
+```c
+#if AUTHENTIC
+    run noreturn
+    {
+        asm
+        {
+                if                      off_28672 + 1
+                ...
+        }
+    }
+#else
+    run
+    {
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+        {
+            set(FG_ROOM, F_ROOM_02, TRUE);
+        }
+    }
+#endif
+```
+
+The exporter fixes two quirks this way, each behaving as the original does:
+an `if` whose skip lands one byte past its `endif` (the original runs the
+`endif`'s zero operand byte as `end`, so it ends the block either way), and
+an `endif` that closes no `if` (the block's `end` resets the branch stack it
+unbalances, so the fixed version drops it).
+
+The exporter names what it can from the `*.akinc` files in the nearest `inc/`
+directory at or above `--out`, and from the English text beside it
+(`language/en-US.txt`):
+
+- items (`IT_0B_AMMO_HANDGUN`, `IT_2F_KEY_INK_RIBBON`), enemies
+  (`EM_11_ZOMBIE_LAB`, `EM_0A_ADDER`), flags
+  (`F_SCENARIO_0A`, a bit of `FG_SCENARIO`), door sounds and animations
+  (`DOOR_SND_01_DR_MTL`, `DOOR_16_KAI01`) and films (`MOVIE_05_DM1`) by the
+  define's prefix; `door_aot_set`'s lock is `DOOR_LOCKED | F_LOCK_12`, the
+  `FG_LOCK` bit that unlocks it; a door
+  target is a room of the same stage (`ROOM_106_MAIN_HALL`) or
+  `STAGE_2 | ROOM_201_..` for another;
+- each AOT index the room sets up, as a local `#define AOT_05_ITEM 0x05` named
+  after its first non-`SCE_NONE` type, and each `FG_ROOM` bit as
+  `F_ROOM_xx`;
+- events after what starts them: `on_aot_05_item` for an AOT's event,
+  `on_enter` from `proc init`, `from_main` from `proc main`, `<parent>_sub1`
+  for an event another starts, with `_2` and so on for repeats; an event
+  nothing refers to stays `event_XX`;
+- message ids from their English text, the first sentence at up to six
+  words (`MSG_IT_IS_LOCKED`), adding the next sentence and then the id where
+  two would share a name. The global messages (id `0x40` and up) are in
+  `inc/messages.akinc` and a room's own are defined in its script;
+  `MSG_.. | MSG_FAST` asks for the fast reveal, and the full text follows as
+  a comment. A message without text that follows a voice line is named after
+  the line (`MSG_VO_104_02`);
+- each enemy slot the room fills, `#define ENEMY_02_CROW 0x02` after the type
+  `enemy` puts there, for `evt_work_set(WK_ENEMY, ..)`, `eml_state` and the
+  other commands on a slot; an AOT or enemy slot the room never sets up is
+  `AOT_05` or `ENEMY_04`;
+- each voice line the room plays, `#define VO_104_02 0x09` after the line's
+  file;
+- the room's objects (`OBJ_02`), cameras (`CAM_03`, for `cutnext` and the
+  `B_CAMERA`/`B_CUT` state bytes), effects (`FX_25`), item models (`IMDL_01`,
+  for `item_aot_set`, `eml_rot`, `objtbl_b_set` and `evt_work_set(WK_AOT, ..)`,
+  which selects an item model), collision records (`COL_08`), camera zones
+  (`ZONE_0D`), sprites (`SPR_02`) and effect parents on an enemy slot
+  (`FX_AT_ENEMY_01`) as local placeholder defines, and its sounds after the
+  bank `se_play_3d` plays from:
+  `SE_17_SPRAY` from the room's sound table (`SE_17` where the room's
+  variants play different files), `SE_DOOR_00`, `SE_WEAPON_xx`, `SE_PL_xx`
+  and `SE_BGM_xx` for the banks that depend on the door, weapon or character;
+- engine values with the compiler's own names (below).
+
+Every id, enum and flag argument gets a name, even one whose meaning is not
+known yet (`B_0A`, `TASK_09`, `OBJ_02`), so it can be renamed once it is;
+only plain quantities (positions, angles, counts, frames, volumes) stay
+numbers, along with a few values whose meaning is still unknown (filed as
+issues), padding bytes, and a zero for "no flags".
+
+The commands the `.s` disassembler prints byte by byte, or with words split
+into bytes, take one argument per field the engine reads, at its width:
+`obj`, `item_aot_set`, `enemy`, `effect`, `effect_tracked`, `effect_kill_b`,
+`timer_setup`, `voice_play`, `setw`, `inst_cfg`, `msg_list`, `eml_pos`,
+`eml_rot`, `obj_xfm`, `plw_anim`, `model_op`, `objtbl_b_set`, `ck_anim`,
+`ck_bits`, `ck_counter`, `ck_tween`, `ck_item_count`, `ck_last_item`,
+`aot_switch`, `msgnode_set`, `snd_pan_vol_set`, `bgm_volume_ramp`,
+`task_kill`, `spd_set`, `spd_add`, `swap_var`, `mass_mask`, `costume_set`,
+`costume_ck`, and the `act_motion`, `act_motion_path`, `act_anim_seq`,
+`act_anim_flags`, `act_anim_set`, `act_flag_op`, `act_param_set`,
+`tw_set_pos`, `tw_set_rot`, `tw_abs_pos`, `tw_set_field`, `tw_set_sel` and
+`tw_abs_rot` event instructions. For example `enemy` is type, behaviour,
+guard flag, spawn, hit records, pitch, yaw, roll, x, y, z, slot, animation,
+frame and variant, and `act_anim_seq` is behaviour, walk target x and z, and
+the room flag raised when the animation ends. The compiler packs the fields
+back into the bytes, so `asm { }` keeps the `.s` shapes.
+
+These names are a starting point for hand renaming; re-exporting overwrites
+hand edits, so the checked-in RE1 scripts are no longer re-exported.
+
+```c
+#version 1
+
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+
+#define AOT_02_EVENT 0x02
+#define F_ROOM_02 0x02
+#define MSG_THERE_IS_A_BLOOD_STAIN_ON 0x02
+
+proc init
+{
+    if (ck(FG_COMMON, F_COMMON_A4, TRUE) && ck(FG_STATUS, F_STATUS_08, FALSE))
+    {
+        set(FG_COMMON, F_COMMON_A9, TRUE);
+        message(MSG_THERE_IS_A_BLOOD_STAIN_ON, 0); // "There's a blood stain on the floor."
+    }
+    else if (ck(FG_ROOM, F_ROOM_02, FALSE))
+    {
+        require(testitem(IT_33_KEY_MANSION_SWORD));
+        return;
+    }
+    evt_exec(0, 6, on_enter);
+}
+
+event on_enter
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    }
+    evt_exec(0, 6, on_enter_sub1);
+    sleep(30);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_STATUS, 14, 0));
+    for (4)
+    {
+        evt_next();
+    }
+    wait_message();
+    evt_finish();
+}
+```
+
+- `proc init` and `proc main` hold one command block each (repeat the section
+  for a container with several blocks); `event NAME` sections are numbered in
+  order from 0, any name standing for its event's number (`event_XX` always
+  means XX). `//` starts a comment.
+- A command is `name(args);` with the disassembler's mnemonics, the engine's
+  constant names (`FG_*`, `SCE_*`, `WK_*`, `UNLOCKED`/`LOCK`/`LOCKED`) and
+  values ORed together with `|`. `TRUE` is 0, `FALSE` 1 and `TOGGLE` 2, as
+  `ck` and `set` read their last argument: `ck(.., TRUE)` passes when the bit
+  is set. The compiler also names these engine values:
+
+  | Names | For |
+  | --- | --- |
+  | `CMP_EQ` `CMP_GT` `CMP_GE` `CMP_LT` `CMP_LE` `CMP_NE` | `cmpb` / `cmpw` comparisons, the state on the left |
+  | `B_ROOM` `B_CAMERA` `B_PREV_ROOM` `B_CUT` `B_MENU_CHOICE` `B_SELECTED_ITEM` `B_TOTAL_HELD` `B_LIGHT_R` `B_CHARACTER_MODEL` `B_FWD_AOT` `B_ENT_AOT` `B_USED_ITEM` `B_PICKED_ITEM` `B_SAVES` `B_EQUIPPED` `B_CHARACTER` `B_HEALTH_STATUS` | `cmpb` / `setb` state bytes |
+  | `W_LIGHT_STATE` `W_LIGHT_DELTA` `W_RANDOM` `W_DPAD_HELD` `W_DPAD_PRESSED` | `cmpw` / `setw` state words |
+  | `SAT_PLAYER` `SAT_OBJECT` `SAT_UNDER` `SAT_MANUAL` | AOT trigger flags: the player or an object, at its feet rather than its reach, on the action button |
+  | `MSG_FAST` | `message`: show the text at once |
+  | `RUN_PLAYER` `RUN_ENTITIES` `RUN_MONSTERS` `RUN_EFFECTS` `RUN_READY` `RUN_CONTROLS` `RUN_DEMO` | the systems that run each frame (`FG_RUN`); `message`'s second argument stops these while the window is open |
+  | `VOICE_PLAY` `VOICE_STOP` | `voice_play` |
+  | `SND_BANK_DOOR` `SND_BANK_WEAPON` `SND_BANK_ROOM` `SND_BANK_PLAYER` `SND_BANK_BGM` | `se_play_3d`: the sound bank |
+  | `SND_AT_POINT` `SND_AT_PLAYER` `SND_AT_ENEMY` `SND_NO_POS` | `se_play_3d`: where the sound plays |
+  | `BGM_MAIN` `BGM_SUB_1` `BGM_SUB_2` | the music channel of `bgm_play`, `bgm_stop`, `bgm_volume_ramp` and `snd_pan_vol_set` |
+  | `BGM_MAIN_ON` `BGM_SUB_1_ON` `BGM_SUB_2_ON` `BGM_RELOAD` `BGM_RESTART` `BGM_OFF` | `room_bgm_state_set`: the channels to start, the load type, no music; the low three bits pick the room's music group |
+  | `DOOR_LOCKED` `DOOR_LOCK_40` | `door_aot_set`'s lock byte, ORed with the `FG_LOCK` bit |
+  | `EML_BEHAVIOUR` `EML_REVIVE` `EML_ACTION` `EML_STATUS` `EML_ANGLE` `EML_BLEND_RESET` `EML_JOINTS` `EML_ACTION_STATE` | `eml_state` sub-commands |
+  | `EML_STATUS_SET` `EML_STATUS_OR` `EML_STATUS_XOR` | `eml_state(.., EML_STATUS, EML_STATUS_OR \| 2)`: how the bits apply |
+  | `SYS_UNEQUIP` `SYS_HIT` `SYS_PLAYER_FLAGS` `SYS_FORCE_ACTION` `SYS_ANGLE` `SYS_CLEAR_8C` `SYS_IDLE` `SYS_HEALTH_STATUS` `SYS_JOINTS` `SYS_E0_40` | `sys_multi` sub-commands, all on the player |
+  | `SYS_SET` `SYS_OR` `SYS_XOR`, `PLF_xx`, `HS_LOCKED` `HS_xx` | `sys_multi(SYS_PLAYER_FLAGS, SYS_OR \| PLF_04)` and `SYS_HEALTH_STATUS`: how the player or health-status bits apply, and which |
+  | `SYS_ON` `SYS_OFF`, `HIT_xx`, `JOINT_xxxx` | `sys_multi`'s `SYS_E0_40` switch, `SYS_HIT` kind and `SYS_JOINTS` mask (also `eml_state(.., EML_JOINTS, ..)`) |
+  | `OBJ_PUSH_GRUNT` `OBJ_TEX_QUEUE` | `obj`'s slot byte, ORed with the object |
+  | `OF_ACTIVE` `OF_INTANGIBLE` `OF_NO_FLOOR_PROBE` `OF_NO_COLLISION` `OF_NOT_PUSHABLE` `OF_CLIMBABLE` `OF_xx` | object and item model flags (`obj`, `objtbl_b_set`) |
+  | `SCA_NONE` `SCA_PLAYER` `SCA_ENEMY` | what an object or item model is attached to: nothing, the player, `SCA_ENEMY \| ENEMY_xx`, or an object (`OBJ_xx`) |
+  | `ITEM_ALT_ROT`, `ITEM_SPARKLE` `ITEM_FX_1`..`ITEM_FX_F` `ITEM_REACH` | `item_aot_set`: the AOT byte's alternate rotation, and the flags word (the pick-up sparkle, its effect, the reach animation; the sparkle's height stays a number) |
+  | `NO_FLAG`, `SPAWN_RESTORE` `SPAWN_FORCE`, `EB_xx`, `EVAR_xx` | `enemy`: no guard flag, whether a saved enemy is restored, the behaviour byte (also `eml_state(.., EML_BEHAVIOUR, ..)`) and the model variant |
+  | `ANIM_xx`, `AB_xx` `AB_ADDITIVE`, `PLW_xx` | an animation clip, an action behaviour (`act_anim_seq`, `act_anim_set`, `eml_state(.., EML_ACTION, ..)`), `plw_anim`'s action state |
+  | `MOTION_TARGET` `MOTION_xx`, `LOOK_AT_PLAYER` `LOOK_AT_ENEMY` `LOOK_AT_OBJ` `LOOK_AT_ITEM` | `act_motion`'s mode; `MOTION_TARGET` follows a live target instead of a position |
+  | `EF_OR` `EF_SET` `EF_XOR`, `EF_xxxx`, `AFL_xx` | `act_flag_op`'s mode and entity flags; `act_anim_flags`' flags (shifted down two bits) |
+  | `TW_STATE` `TW_IGNORE` `TW_BEHAVIOUR` `TW_ACTION_STATE` `TW_HEALTH_LO` `TW_HEALTH_HI` `TW_HIT_STATE` | `tw_set_field`: the state byte to write |
+  | `TW_POS_X` `TW_POS_Y` `TW_POS_Z` `TW_HEALTH` `TW_TARGET_X` `TW_TARGET_Z` | `tw_set_sel`: the value to write |
+  | `FX_ROW_xx`, `FX_AT_WORLD` `FX_AT_PLAYER` `FX_AT_OBJ` | an effect's animation row (`effect`, `effect_kill_b`) and what it is attached to (`FX_AT_OBJ \| OBJ_xx`, or `FX_AT_ENEMY_xx`) |
+  | `LIGHT_FADE_VEIL` `LIGHT_FADE_HALF` `LIGHT_FADE_xx`, `FADE_R` `FADE_G` `FADE_B` | `timer_setup`: how the special room light draws, and its channels |
+  | `LIGHT_xx`, `LIGHT_KIND_xx` | one of the room's lights (`obj_xfm`), a light's kind (`msg_list`) |
+  | `COL_LIST_xx`, `CF_x` | `inst_cfg`: the collision list and the flags it sets |
+  | `TBL_OBJ` `TBL_ITEM`, `ROT_OBJ` | `objtbl_b_set`'s table; `eml_rot(ROT_OBJ \| OBJ_xx, ..)` rotates an object, otherwise an item model |
+  | `DIST_ENEMY` `DIST_OBJ` `DIST_ITEM` | `ck_counter`: what the distance is measured to |
+  | `SPR_ON` `SPR_OFF`, `IGRP_ANY` `IGRP_xx`, `PAD_xxxx` | `aot_switch`, `ck_item_count`'s item group, `ck_bits`' d-pad buttons |
+  | `XFER_SAVE` `XFER_RESTORE` `XFER_HELD`, `MASK_OR` `MASK_CLEAR` `MASK_XOR` `FXF_xxxx` | `swap_var`'s direction; `mass_mask`'s mode and effect flags |
+  | `ENT_PLAYER` `ENT_xx`, `CUT_FREE` `CUT_LOCKED`, `MODEL_OP_xx`, `COSTUME_xx` | `spd_set`'s entity, `cut_auto`, `model_op`'s form, the costume |
+
+  Values without a known meaning have placeholder names: every state byte and
+  word (`B_0A`, `W_04`), `eml_state` sub-command (`EML_08`), `sys_multi`
+  sub-command (`SYS_02`), event slot of `evt_exec`, `evt_fork`,
+  `evt_disable` and `task_kill` (`TASK_09`), every unnamed bit of the
+  trigger flags (`SAT_02`) and run word (`RUN_0010`), and the `xx` forms in
+  the table above.
+- `#define NAME value` names a number (or an earlier name) and
+  `#include "inc/items.akinc"` reads a file of defines, resolved against the
+  script's directory and then each directory above it. Game data has no
+  built-in names: a game names its items, enemies, rooms and flags in
+  `inc/*.akinc`, and an unknown name is an error.
+- `if (a && b) { } else { }` (and `else if`) takes condition commands.
+  `require(cond);` is a condition outside an `if` head: when false it leaves
+  the enclosing `if` body, or ends the block at the top level.
+- `return;` is `end 0`. Every block ends in an implicit `end 0` unless the
+  section (`proc init noreturn`) or `run` block (`run noreturn`) says
+  otherwise.
+- In an event, `evt_*`/`act_*`/`tw_*` mnemonics are event-VM instructions and
+  any other call is a command run through `evt_single`; `single(N) name(...)`
+  forces the payload length. `run { }` is an inline command block
+  (`evt_block`), `for (N) { }` is `evt_for`/`evt_fornext`,
+  `do { } while (cond);` is `evt_do`/`evt_dountil`, `sleep(N);` waits N frames
+  and `wait_message();` waits for the message window or voice line.
+- An event ending in `evt_finish` is zero-padded to four bytes unless its
+  header says `nopad` (`event event_05 nopad`); `raw(...)` as the last
+  statement gives any other trailing bytes.
+- `asm { }` (the braces on their own lines) embeds `.s` assembly verbatim. The
+  decompiler uses it only where the shipped bytecode has no structured form,
+  such as an `if` that jumps into the middle of an instruction, and then
+  under `#if AUTHENTIC` beside a fixed version.
 
 ## Lua hooks
 

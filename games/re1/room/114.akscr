@@ -1,0 +1,113 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_09_MESSAGE 0x09
+#define AOT_0A_USEITEM 0x0A
+#define CAM_00 0x00
+#define CAM_02 0x02
+#define ENEMY_00 0x00
+#define ENEMY_01 0x01
+#define ENEMY_02_ZOMBIE_LAB 0x02
+#define F_ROOM_00 0x00
+#define F_ROOM_3E 0x3E
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define IMDL_03 0x03
+#define IMDL_04 0x04
+#define IMDL_05 0x05
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 10500, 22812, 978, 1596, 1, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_109_TRAP_PASSAGE, 24300, 0, 7600, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 18600, 11900, 1500, 2400, IT_44_HEAL_HERB_GREEN, 1, IMDL_00, SCA_NONE, 18886, 0, 14300, 0, F_ITEM_0A, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_02_ITEM, 18600, 11900, 1500, 2400, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 18886, 0, 13850, 0, F_ITEM_DD, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_03_ITEM, 18600, 11900, 1500, 2400, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 18886, 0, 13370, 0, F_ITEM_DE, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_04_ITEM, 18600, 11900, 1500, 2400, IT_44_HEAL_HERB_GREEN, 1, IMDL_03, SCA_NONE, 18886, 0, 12910, 0, F_ITEM_DF, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_05_ITEM, 12000, 14100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_04, SCA_NONE, 13216, 0, 15450, 0, F_ITEM_E0, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_06_ITEM, 12000, 14100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, IMDL_05, SCA_NONE, 12766, 0, 15450, 0, F_ITEM_E1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    aot_set(AOT_09_MESSAGE, 13700, 14100, 2600, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_USEITEM, 13700, 13100, 2600, 1200, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_04, FALSE))
+        {
+            enemy(EM_02_CERBERUS, EB_01, F_ENEMY_04, SPAWN_FORCE, 2, 0, 0, 0, 4000, 0, 21696, ENEMY_00, ANIM_00, 0, EVAR_00);
+            enemy(EM_02_CERBERUS, EB_80, F_ENEMY_05, SPAWN_FORCE, 2, 0, 2400, 0, 22000, 0, 9800, ENEMY_01, ANIM_00, 0, EVAR_00);
+            evt_exec(0, TASK_09, on_enter);
+            evt_exec(0, TASK_09, on_enter_2);
+        }
+        else
+        {
+            enemy(EM_02_CERBERUS, EB_08, F_ENEMY_04, SPAWN_FORCE, 2, 0, 2800, 0, 10000, 0, 13500, ENEMY_00, ANIM_00, 0, EVAR_00);
+            enemy(EM_02_CERBERUS, EB_08, F_ENEMY_05, SPAWN_FORCE, 2, 0, 1700, 0, 18800, 0, 13200, ENEMY_01, ANIM_00, 0, EVAR_00);
+        }
+    }
+    else
+    {
+        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_06, SPAWN_FORCE, 2, 0, 3184, 0, 8018, 0, 17483, ENEMY_00, ANIM_00, 0, EVAR_00);
+        enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_07, SPAWN_FORCE, 2, 0, 2048, 0, 10560, 0, 14947, ENEMY_01, ANIM_00, 0, EVAR_00);
+        enemy(EM_11_ZOMBIE_LAB, EB_01, F_ENEMY_08, SPAWN_FORCE, 2, 0, 2128, 0, 18370, 0, 13340, ENEMY_02_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+    }
+}
+
+proc main
+{
+    if (ck(FG_ROOM, F_ROOM_3E, TRUE))
+    {
+        aot_delete(AOT_09_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        aot_delete(AOT_09_MESSAGE, SCE_MESSAGE, 0);
+    }
+}
+
+event on_enter
+{
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_00, FALSE));
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_CAMERA, CMP_NE, CAM_00));
+    eml_state(0, ENEMY_00, EML_BEHAVIOUR, EB_06);
+    set(FG_SCENARIO, F_SCENARIO_04, TRUE);
+    evt_finish();
+}
+
+event on_enter_2
+{
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_CAMERA, CMP_NE, CAM_02));
+    sleep(1);
+    run
+    {
+        eml_state(0, ENEMY_00, EML_BEHAVIOUR, EB_80);
+        eml_state(0, ENEMY_01, EML_BEHAVIOUR, EB_06);
+        set(FG_ROOM, F_ROOM_00, TRUE);
+        pos_set(ENEMY_00, 0, 400, 0, 4000, 0, 28110);
+    }
+    evt_finish();
+}

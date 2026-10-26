@@ -1,0 +1,294 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_SAVE 0x02
+#define AOT_03_EVENT 0x03
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_02 0x02
+#define CAM_03 0x03
+#define CAM_04 0x04
+#define ENEMY_00 0x00
+#define ENEMY_01 0x01
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define OBJ_02 0x02
+#define OBJ_03 0x03
+#define SE_17_BRK_STN 0x17
+#define SE_18 0x18
+#define SE_19 0x19
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 5000, 14100, 2300, 3100, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_201_2F_LEFT_STAIRS, 18100, 0, 2700, 2560, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 31000, 6900, 2800, 3300, 9, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_203_HALL_2F, 3400, -2885, 17000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_SCENARIO, F_SCENARIO_0B, FALSE))
+    {
+        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 23263, 0, 3510, 3072, 0, 0, 0, 0, 512, 0, 512, 408);
+        aot_set(AOT_03_EVENT, 16863, 4440, 1250, 501, SCE_EVENT, SAT_UNDER | SAT_OBJECT, 0, 0, on_aot_03, 0, 0, 0);
+        aot_set(AOT_02_SAVE, 16863, 3000, 1250, 4900, SCE_SAVE, SAT_UNDER | SAT_OBJECT, 0, 0, 0, 0, 0, 0);
+    }
+#if CHRIS
+    if (ck(FG_COMMON, F_COMMON_A7, TRUE))
+    {
+        obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+    }
+    if (ck(FG_COMMON, F_COMMON_A8, TRUE))
+    {
+        obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+    }
+    if (ck(FG_COMMON, F_COMMON_A8, TRUE))
+    {
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+    }
+    else
+    {
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+    }
+#else
+    if (ck(FG_COMMON, F_COMMON_AA, TRUE))
+    {
+        obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+    }
+    if (ck(FG_COMMON, F_COMMON_AB, TRUE))
+    {
+        obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
+    }
+    if (ck(FG_COMMON, F_COMMON_AB, TRUE))
+    {
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+    }
+    else
+    {
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
+    }
+#endif
+    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+    {
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_01, F_ENEMY_20, SPAWN_FORCE, 2, 0, 2932, 0, 16416, 0, 2384, ENEMY_00, ANIM_00, 0, EVAR_00);
+#if CHRIS
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_21, SPAWN_FORCE, 2, 0, 432, 0, 23542, 0, 13672, ENEMY_01, ANIM_00, 0, EVAR_00);
+#else
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_21, SPAWN_FORCE, 2, 0, 432, 0, 24594, 0, 13672, ENEMY_01, ANIM_00, 0, EVAR_00);
+#endif
+    }
+    if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
+    {
+#if CHRIS
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9B, SPAWN_FORCE, 2, 0, 2276, 0, 2172, 0, 6217, ENEMY_00, ANIM_00, 0, EVAR_00);
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9C, SPAWN_FORCE, 2, 0, 3872, 0, 23354, 0, 14662, ENEMY_01, ANIM_00, 0, EVAR_00);
+#else
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9B, SPAWN_FORCE, 2, 0, 2932, 0, 10768, 0, 2932, ENEMY_00, ANIM_00, 0, EVAR_00);
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9C, SPAWN_FORCE, 2, 0, 1680, 0, 20081, 0, 14326, ENEMY_01, ANIM_00, 0, EVAR_00);
+#endif
+    }
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
+    {
+        snd_pan_vol_set(BGM_SUB_1, 75, 35);
+    }
+    else
+    {
+        snd_pan_vol_set(BGM_SUB_1, 30, 65);
+    }
+}
+
+proc main noreturn
+{
+    if (ck(FG_SCENARIO, F_SCENARIO_0B, FALSE))
+    {
+        if (cmpb(B_ENT_AOT, CMP_EQ, 3))
+        {
+            objtbl_b_set(TBL_OBJ, OBJ_00, OF_NO_FLOOR_PROBE | OF_ACTIVE);
+        }
+        else
+        {
+            objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+        }
+    }
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
+    {
+        snd_pan_vol_set(BGM_SUB_1, 75, 35);
+    }
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+    {
+        snd_pan_vol_set(BGM_SUB_1, 60, 90);
+    }
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+    {
+        snd_pan_vol_set(BGM_SUB_1, 30, 65);
+    }
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+    {
+        snd_pan_vol_set(BGM_SUB_1, 30, 90);
+    }
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
+    {
+        snd_pan_vol_set(BGM_SUB_1, 15, 65);
+    }
+}
+
+event on_aot_03
+{
+    aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
+    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    set(FG_SCENARIO, F_SCENARIO_0B, TRUE);
+    cutnext(CAM_04);
+    evt_work_set(WK_OBJ, OBJ_00);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 0, 5);
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 1);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 3);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 6);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 9);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 11);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 13);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 15);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 18);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 21);
+    tw_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 7);
+    tw_set_rot(0, 0, 23);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 9);
+    tw_set_rot(0, 0, 25);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 11);
+    tw_set_rot(0, 0, 27);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 14);
+    tw_set_rot(0, 0, 30);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 18);
+    tw_set_rot(0, 0, 33);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 22);
+    tw_set_rot(0, 0, 35);
+    tw_set_sel(TW_POS_Y, 9);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 26);
+    tw_set_rot(0, 0, 37);
+    tw_set_sel(TW_POS_Y, 39);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 29);
+    tw_set_rot(0, 0, 39);
+    tw_set_sel(TW_POS_Y, 88);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 32);
+    tw_set_rot(0, 0, 42);
+    tw_set_sel(TW_POS_Y, 156);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 25);
+    tw_set_rot(0, 0, 45);
+    tw_set_sel(TW_POS_Y, 245);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 0, 38);
+    tw_set_rot(0, 0, 47);
+    tw_set_sel(TW_POS_Y, 352);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 480);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 627);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 793);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 980);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 1185);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 1411);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 1656);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 1920);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 2205);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 2508);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 2832);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 3175);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 3537);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 3920);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 4321);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 4743);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 5184);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 5644);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_sel(TW_POS_Y, 5900);
+    tw_pos_rot_add();
+    evt_next();
+    tw_abs_pos(0, 30000, 0, 30000);
+    tw_end();
+    evt_nop();
+    sleep(3);
+    cutcurr(0);
+    se_play_3d(SND_BANK_ROOM, SE_17_BRK_STN, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_PLAYER, 0, 0, 0);
+    evt_finish();
+}

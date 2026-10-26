@@ -1,0 +1,154 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_DOOR 0x03
+#define AOT_04_DOOR 0x04
+#define ENEMY_00_HUNTER 0x00
+#define ENEMY_00_ZOMBIE_LAB 0x00
+#define ENEMY_01_HUNTER 0x01
+#define ENEMY_01_ZOMBIE_LAB 0x01
+#define F_ROOM_00 0x00
+#define F_ROOM_01 0x01
+#define F_ROOM_18 0x18
+#define VO_A00_00 0x5D
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 900, 2900, 1900, 1600, 1, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_203_HALL_2F, 31200, -2885, 20500, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 16600, 11000, 2200, 2200, 11, DOOR_SND_01_DR_MTL, DOOR_09_DOOR09, 5, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_0E, ROOM_205_ARMOR_ROOM, 16000, 0, 7300, 2048, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 2300, 19300, 2000, 2100, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCK_40, ROOM_206_DOLL_ROOM, 3000, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+#if CHRIS
+    door_aot_set(AOT_03_DOOR, 12300, 19200, 2400, 2200, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, DOOR_LOCKED | F_LOCK_16, ROOM_207_2F_RIGHT_STAIRS, 3000, 0, 3600, 3072, LOCKED, SAT_MANUAL | SAT_PLAYER);
+#else
+    door_aot_set(AOT_03_DOOR, 12300, 19200, 2400, 2200, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, DOOR_LOCKED | F_LOCK_16, ROOM_207_2F_RIGHT_STAIRS, 3000, 0, 3800, 3072, LOCKED, SAT_MANUAL | SAT_PLAYER);
+#endif
+    door_aot_set(AOT_04_DOOR, 11400, 1100, 2100, 1600, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, DOOR_LOCKED | F_LOCK_0D, ROOM_20D_PILLAR_PASSAGE, 3000, 0, 12600, 1024, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+#if CHRIS
+#if MANSION1
+    enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+    enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+    if (ck(FG_SCENARIO, F_SCENARIO_05, FALSE))
+    {
+        set(FG_SCENARIO, F_SCENARIO_05, TRUE);
+    }
+#else
+    enemy(EM_06_HUNTER, EB_20, F_ENEMY_6E, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+    enemy(EM_06_HUNTER, EB_20, F_ENEMY_A9, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+    if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_ENEMY, F_ENEMY_6F, FALSE) && cmpb(B_PREV_ROOM, CMP_EQ, ROOM_206_DOLL_ROOM))
+    {
+        set(FG_COMMON, F_COMMON_6B, TRUE);
+        set(FG_COMMON, F_COMMON_6C, TRUE);
+    }
+#endif
+#else
+#if MANSION2
+    enemy(EM_06_HUNTER, EB_02, F_ENEMY_6E, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+#endif
+    if (ck(FG_COMMON, F_COMMON_5F, TRUE))
+    {
+        set(FG_COMMON, F_COMMON_5E, TRUE);
+    }
+#if MANSION1
+    enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_6D, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+    enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_A8, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 10000, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+#endif
+    set(FG_COMMON, F_COMMON_4F, TRUE);
+#endif
+}
+
+proc main
+{
+#if MANSION1
+    if (ck(FG_ROOM, F_ROOM_18, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_18, TRUE);
+        if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
+        {
+            pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
+            pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_20D_PILLAR_PASSAGE))
+        {
+            pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 18500);
+            pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else
+        {
+            pos_set(ENEMY_00_ZOMBIE_LAB, 0, 0, 0, 5500, 0, 3500);
+            pos_set(ENEMY_01_ZOMBIE_LAB, 0, 2048, 0, 19000, 0, 18500);
+        }
+    }
+#else
+#if CHRIS
+    if (ck(FG_ROOM, F_ROOM_18, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_18, TRUE);
+        if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 18500);
+            pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_20D_PILLAR_PASSAGE))
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 18500);
+            pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 0, 0, 5500, 0, 3500);
+            pos_set(ENEMY_01_HUNTER, 0, 2048, 0, 19000, 0, 18500);
+        }
+    }
+    if (ck(FG_COMMON, F_COMMON_6B, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
+    {
+        set(FG_COMMON, F_COMMON_C0, TRUE);
+        voice_play(VOICE_PLAY, VO_A00_00);
+    }
+#else
+    if (ck(FG_ROOM, F_ROOM_18, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_18, TRUE);
+        if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_20D_PILLAR_PASSAGE))
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else
+        {
+            pos_set(ENEMY_00_HUNTER, 0, 2048, 0, 19000, 0, 18500);
+        }
+    }
+#endif
+#endif
+    if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_SCENARIO, F_SCENARIO_4D, FALSE))
+    {
+        set(FG_STATUS, F_STATUS_16, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_4D, TRUE);
+    }
+    if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_01, TRUE))
+    {
+        set(FG_RUN, F_RUN_18, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+    }
+    if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_00, TRUE))
+    {
+        set(FG_ROOM, F_ROOM_01, TRUE);
+    }
+    if (ck(FG_STATUS, F_STATUS_16, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_00, TRUE);
+    }
+}

@@ -115,7 +115,16 @@ impl Assembled {
 pub fn assemble(text: &str) -> Result<Assembled> {
     budget::check_len(text.len(), budget::MAX_TEXT_BYTES, "SCD source size")?;
     let source = parse_source(text)?;
+    assemble_source(&source, &[])
+}
 
+/// Assemble already-parsed source items into the SCD IR.
+///
+/// Event `n` is padded when `pad_events[n]` is set: a stream that ends in
+/// `evt_finish` gets zero bytes up to a multiple of four, the alignment the
+/// shipped event tables keep between scripts; the padding re-decodes as the
+/// stream's trailing data.
+pub(crate) fn assemble_source(source: &Source, pad_events: &[bool]) -> Result<Assembled> {
     let mut finished: Vec<Finished> = Vec::new();
     for block in &source.init {
         finished.push(finish_block(block, false)?);
@@ -125,8 +134,9 @@ pub fn assemble(text: &str) -> Result<Assembled> {
         finished.push(finish_block(block, false)?);
     }
     let main_count = finished.len() - init_count;
-    for items in &source.events {
-        finished.push(finish_block(items, true)?);
+    for (index, items) in source.events.iter().enumerate() {
+        let pad = pad_events.get(index).copied().unwrap_or(false);
+        finished.push(finish_event(items, pad)?);
     }
 
     let init_bodies: Vec<Vec<u8>> = finished[..init_count]
@@ -179,6 +189,43 @@ pub fn assemble(text: &str) -> Result<Assembled> {
         }
     }
     Ok(assembled)
+}
+
+/// Assemble one init/main block (`event == false`) or event stream and return
+/// its body bytes, applying the event padding rule of [`assemble_source`].
+pub(crate) fn assemble_stream(items: &[Item], event: bool, pad_events: bool) -> Result<Vec<u8>> {
+    let stream = if event {
+        finish_event(items, pad_events)?
+    } else {
+        finish_block(items, false)?
+    };
+    Ok(stream.body)
+}
+
+/// Plan, emit and verify one event stream, padding it when asked.
+///
+/// The padding is decided from the plan, before the re-decode check: an
+/// inline command at the end of the stream may read into the padding bytes.
+fn finish_event(items: &[Item], pad_events: bool) -> Result<Finished> {
+    let planned = build_plan(items, true)?;
+    let misaligned = planned.total % 4;
+    let finished_event = planned
+        .items
+        .last()
+        .and_then(PlannedItem::decoded)
+        .is_some_and(|decoded| matches!(decoded, Decoded::Control(op) if op.op == 0xFF));
+    if !pad_events || misaligned == 0 || !finished_event {
+        return emit_planned(&planned);
+    }
+    let mut padded = items.to_vec();
+    let line = padded.last().map_or(planned.line, |item| item.line);
+    padded.push(Item {
+        labels: Vec::new(),
+        kind: ItemKind::Db(vec![0; 4 - misaligned]),
+        line,
+        col: 1,
+    });
+    finish_block(&padded, true)
 }
 
 /// Add `base` to every instruction offset and jump target of `insns`.
@@ -321,7 +368,7 @@ fn event_body(stream: &Stream) -> Result<Vec<u8>> {
 
 /// One source-level operand expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Arg {
+pub(crate) enum Arg {
     /// A plain integer (`31`, `0x1F`, `-3`).
     Num(i64),
     /// A bit-packed actor form (`32 | 16`).
@@ -334,27 +381,27 @@ enum Arg {
 
 /// One instruction source line.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct InsnSrc {
-    mnemonic: String,
-    args: Vec<Arg>,
-    line: usize,
-    col: usize,
+pub(crate) struct InsnSrc {
+    pub(crate) mnemonic: String,
+    pub(crate) args: Vec<Arg>,
+    pub(crate) line: usize,
+    pub(crate) col: usize,
 }
 
 /// One parsed line item.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum ItemKind {
+pub(crate) enum ItemKind {
     Insn(InsnSrc),
     Db(Vec<u8>),
 }
 
 /// An item plus the labels defined on its offset.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Item {
-    labels: Vec<String>,
-    kind: ItemKind,
-    line: usize,
-    col: usize,
+pub(crate) struct Item {
+    pub(crate) labels: Vec<String>,
+    pub(crate) kind: ItemKind,
+    pub(crate) line: usize,
+    pub(crate) col: usize,
 }
 
 /// Which section is currently being parsed.
@@ -367,10 +414,10 @@ enum Section {
 
 /// The parsed `.s` source: init/main blocks and event item streams.
 #[derive(Debug, Default)]
-struct Source {
-    init: Vec<Vec<Item>>,
-    main: Vec<Vec<Item>>,
-    events: Vec<Vec<Item>>,
+pub(crate) struct Source {
+    pub(crate) init: Vec<Vec<Item>>,
+    pub(crate) main: Vec<Vec<Item>>,
+    pub(crate) events: Vec<Vec<Item>>,
 }
 
 /// Parse every line of `text` into sections, blocks and items.
@@ -508,50 +555,12 @@ fn parse_source(text: &str) -> Result<Source> {
             );
         };
 
-        // A label definition may share its line with an instruction.
-        let mut rest = line;
-        let mut rest_col = indent;
-        while let Some((name, tail)) = split_label_definition(rest) {
-            pending_labels.push(name.to_string());
-            let consumed = rest.len() - tail.len();
-            rest = tail.trim_start();
-            rest_col += consumed + (tail.len() - tail.trim_start().len());
+        if let Some(item) = parse_item_line(raw, line_no, &mut pending_labels)? {
+            if matches!(current, Some(Section::Init | Section::Main)) {
+                block_started = true;
+            }
+            items.push(item);
         }
-        if rest.is_empty() {
-            continue;
-        }
-
-        let mnemonic_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
-        let mnemonic = &rest[..mnemonic_end];
-        let column = rest_col + 1;
-        if matches!(current, Some(Section::Init | Section::Main)) {
-            block_started = true;
-        }
-        if mnemonic == "db" {
-            let payload = parse_db_args(rest, mnemonic_end, line_no, rest_col)?;
-            items.push(Item {
-                labels: std::mem::take(&mut pending_labels),
-                kind: ItemKind::Db(payload),
-                line: line_no,
-                col: column,
-            });
-            continue;
-        }
-        if !is_identifier(mnemonic) {
-            bail!("line {line_no}, column {column}: invalid mnemonic `{mnemonic}`");
-        }
-        let args = parse_args(rest, mnemonic_end, line_no, rest_col)?;
-        items.push(Item {
-            labels: std::mem::take(&mut pending_labels),
-            kind: ItemKind::Insn(InsnSrc {
-                mnemonic: mnemonic.to_string(),
-                args,
-                line: line_no,
-                col: column,
-            }),
-            line: line_no,
-            col: column,
-        });
     }
 
     if !pending_labels.is_empty() {
@@ -566,6 +575,57 @@ fn parse_source(text: &str) -> Result<Source> {
         bail!("missing `.version 1`");
     }
     Ok(source)
+}
+
+/// Parse one instruction line: optional `name:` label definitions followed by
+/// an optional instruction or `db` item. Labels without an instruction stay in
+/// `pending_labels` for the next item.
+pub(crate) fn parse_item_line(
+    raw: &str,
+    line_no: usize,
+    pending_labels: &mut Vec<String>,
+) -> Result<Option<Item>> {
+    let indent = raw.len() - raw.trim_start().len();
+    // A label definition may share its line with an instruction.
+    let mut rest = raw.trim();
+    let mut rest_col = indent;
+    while let Some((name, tail)) = split_label_definition(rest) {
+        pending_labels.push(name.to_string());
+        let consumed = rest.len() - tail.len();
+        rest = tail.trim_start();
+        rest_col += consumed + (tail.len() - tail.trim_start().len());
+    }
+    if rest.is_empty() {
+        return Ok(None);
+    }
+
+    let mnemonic_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let mnemonic = &rest[..mnemonic_end];
+    let column = rest_col + 1;
+    if mnemonic == "db" {
+        let payload = parse_db_args(rest, mnemonic_end, line_no, rest_col)?;
+        return Ok(Some(Item {
+            labels: std::mem::take(pending_labels),
+            kind: ItemKind::Db(payload),
+            line: line_no,
+            col: column,
+        }));
+    }
+    if !is_identifier(mnemonic) {
+        bail!("line {line_no}, column {column}: invalid mnemonic `{mnemonic}`");
+    }
+    let args = parse_args(rest, mnemonic_end, line_no, rest_col)?;
+    Ok(Some(Item {
+        labels: std::mem::take(pending_labels),
+        kind: ItemKind::Insn(InsnSrc {
+            mnemonic: mnemonic.to_string(),
+            args,
+            line: line_no,
+            col: column,
+        }),
+        line: line_no,
+        col: column,
+    }))
 }
 
 /// Move the current section's items into place and reset the accumulator.
@@ -613,7 +673,7 @@ fn split_label_definition(line: &str) -> Option<(&str, &str)> {
 }
 
 /// True when `text` is an identifier (label or constant name).
-fn is_identifier(text: &str) -> bool {
+pub(crate) fn is_identifier(text: &str) -> bool {
     let mut chars = text.chars();
     match chars.next() {
         Some(ch) if ch.is_ascii_alphabetic() || ch == '_' => {}
@@ -654,7 +714,7 @@ fn parse_args(line: &str, start: usize, line_no: usize, col_base: usize) -> Resu
 }
 
 /// Parse one operand expression.
-fn parse_arg(piece: &str, line_no: usize, column: usize) -> Result<Arg> {
+pub(crate) fn parse_arg(piece: &str, line_no: usize, column: usize) -> Result<Arg> {
     let text = piece.trim();
     if text.is_empty() {
         bail!("line {line_no}, column {column}: empty argument");
@@ -1015,7 +1075,8 @@ fn plan_evt_block(
     _op: &'static Op,
     planned: &mut Vec<PlannedItem>,
 ) -> Result<usize> {
-    let declared = single_int(src)?;
+    // No argument asks for the rebuilt chain length.
+    let declared = optional_int(src)?;
     let mut chain = 2usize;
     let mut cursor = index + 1;
     let mut terminated = false;
@@ -1032,7 +1093,17 @@ fn plan_evt_block(
         if sub.mnemonic != "evt_block_sub" {
             break;
         }
-        let size = single_int(sub)?;
+        // No argument asks for the size of the following body.
+        let size = match optional_int(sub)? {
+            Some(size) => size,
+            None => {
+                let body_end = (cursor + 1..items.len())
+                    .find(|&index| is_sub_block(&items[index]))
+                    .unwrap_or(items.len());
+                let body = plan_command_items(&items[cursor + 1..body_end])?;
+                body.iter().map(PlannedItem::size).sum::<usize>() as i64 + 2
+            }
+        };
         if size < 0 || size > i64::from(u16::MAX) {
             bail!(
                 "line {}, column {}: `evt_block_sub` size {size} does not fit 16 bits",
@@ -1089,6 +1160,7 @@ fn plan_evt_block(
             src.col
         );
     }
+    let declared = declared.unwrap_or(chain as i64);
     if declared < 0 || declared as usize != chain {
         bail!(
             "line {}, column {}: `evt_block` payload {declared} does not match its \
@@ -1122,7 +1194,23 @@ fn plan_evt_single(
     src: &InsnSrc,
     planned: &mut Vec<PlannedItem>,
 ) -> Result<usize> {
-    let payload = single_int(src)?;
+    // No argument asks for the inline command's natural width.
+    let payload = match optional_int(src)? {
+        Some(payload) => payload,
+        None => {
+            let natural = match items.get(index + 1).map(|item| &item.kind) {
+                Some(ItemKind::Insn(inline)) => match resolve_command(&inline.mnemonic) {
+                    Some(op) => {
+                        encode_insn(Table::Command, op, inline, &OperandContext::placeholder())?
+                            .len()
+                    }
+                    None => 0,
+                },
+                _ => 0,
+            };
+            natural as i64 + 2
+        }
+    };
     if !(4..=255).contains(&payload) {
         bail!(
             "line {}, column {}: `evt_single` payload {payload} must be 4-255 to hold \
@@ -1538,7 +1626,7 @@ fn decoded_op(decoded: &Decoded) -> &'static Op {
 }
 
 /// Look up a command-VM mnemonic, accepting the original-tool display names.
-fn resolve_command(mnemonic: &str) -> Option<&'static Op> {
+pub(crate) fn resolve_command(mnemonic: &str) -> Option<&'static Op> {
     COMMAND_OPS.iter().find(|op| {
         if op.width == Some(0) {
             return false;
@@ -1932,6 +2020,7 @@ fn encode_label_target(
 fn argument_int(arg: &Arg, _op: &Op, src: &InsnSrc) -> Result<i64> {
     match arg {
         Arg::Num(value) => Ok(*value),
+        Arg::Bits(high, low) => Ok(*high | *low),
         _ => bail!(
             "line {}, column {}: `{}` needs a numeric argument, found `{arg:?}`",
             src.line,
@@ -1988,6 +2077,15 @@ fn range_i16(value: i64, line: usize, col: usize) -> Result<i16> {
     i16::try_from(value).map_err(|_| {
         anyhow::anyhow!("line {line}, column {col}: signed word value {value} is out of range")
     })
+}
+
+/// The integer argument of a pseudo instruction whose argument may be left
+/// out for the assembler to compute.
+fn optional_int(src: &InsnSrc) -> Result<Option<i64>> {
+    if src.args.is_empty() {
+        return Ok(None);
+    }
+    single_int(src).map(Some)
 }
 
 /// One integer argument of a single-argument pseudo instruction.
@@ -2058,12 +2156,44 @@ fn constant_maps() -> &'static ConstantMaps {
     })
 }
 
-/// Resolve one named-constant argument.
+/// Whether `name` is one of the engine's own constants: a flag group, room
+/// action type, work variable or door lock state (not an item, enemy or
+/// room, which a game names itself).
+pub(crate) fn is_engine_constant(name: &str) -> bool {
+    let maps = constant_maps();
+    maps.flag.contains_key(name)
+        || maps.sce.contains_key(name)
+        || maps.work.contains_key(name)
+        || matches!(name, "UNLOCKED" | "LOCK" | "LOCKED")
+}
+
+/// The value of one of the engine's own constants ([`is_engine_constant`]).
+pub(crate) fn engine_constant(name: &str) -> Option<i64> {
+    let maps = constant_maps();
+    let value = maps
+        .flag
+        .get(name)
+        .or_else(|| maps.sce.get(name))
+        .or_else(|| maps.work.get(name))
+        .copied()
+        .or(match name {
+            "UNLOCKED" => Some(0),
+            "LOCK" => Some(254),
+            "LOCKED" => Some(255),
+            _ => None,
+        })?;
+    Some(i64::from(value))
+}
+
+/// Resolve one named-constant argument. A `hi | lo` pair (a stage and a
+/// room) combines into one byte.
 fn constant_value(kind: char, arg: &Arg) -> Result<u8> {
     let maps = constant_maps();
     match arg {
         Arg::Num(value) => u8::try_from(*value)
             .map_err(|_| anyhow::anyhow!("constant value {value} is out of range")),
+        Arg::Bits(high, low) => u8::try_from(*high | *low)
+            .map_err(|_| anyhow::anyhow!("constant value {high} | {low} is out of range")),
         Arg::Symbol(name) => {
             let map = match kind {
                 'f' => &maps.flag,

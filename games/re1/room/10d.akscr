@@ -1,0 +1,551 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_SAVE 0x01
+#define AOT_02_USEITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define CAM_01 0x01
+#define F_ROOM_18 0x18
+#define F_ROOM_19 0x19
+#define F_ROOM_1A 0x1A
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define MSG_IT_READS_SOME_TIGERS_HAVE_A 0x00
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define OBJ_02 0x02
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 4600, 1800, 1800, 900, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_103_F_PASSAGE, 8600, 0, 15000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_SAVE, 3000, 3556, 1600, 1400, SCE_SAVE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_USEITEM, 3000, 3556, 1600, 1400, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 26, 0, 1, 0);
+    item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM, 3300, 4292, 1280, 800, IT_29_KEY_CREST_WIND, 1, IMDL_00, OBJ_00, -450, -1550, 530, 0, F_ITEM_AE, SAT_MANUAL | SAT_UNDER, ITEM_REACH);
+    eml_rot(IMDL_00, 0, 0);
+    item_aot_set(AOT_04_ITEM, 3300, 3300, 1280, 800, IT_05_WEAPON_MAGNUM, 6, IMDL_01, OBJ_00, -450, -1500, -360, 1020, F_ITEM_AF, SAT_MANUAL | SAT_UNDER, ITEM_REACH);
+    obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 3505, 0, 4145, 0, 0, 576, 0, -576, 600, 544, 600, 1000);
+    obj(OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 510, -2300, 130, -60, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(ROT_OBJ | OBJ_01, 170, -60);
+    obj(OBJ_02, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 510, -2310, -110, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(ROT_OBJ | OBJ_02, -80, 230);
+    if (ck(FG_SCENARIO, F_SCENARIO_0C, FALSE))
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_0E, FALSE))
+        {
+            eml_pos(OBJ_02, 0, 0, 0, 0, -30000, 0);
+        }
+    }
+    if (ck(FG_SCENARIO, F_SCENARIO_0D, FALSE))
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_0F, FALSE))
+        {
+            eml_pos(OBJ_01, 0, 0, 0, 0, -30000, 0);
+        }
+    }
+    if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))
+    {
+        objtbl_b_set(TBL_ITEM, IMDL_01, OF_ACTIVE);
+        aot_reset(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 1, 0);
+        aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
+        evt_exec(0, TASK_09, on_enter_2);
+    }
+    if (ck(FG_SCENARIO, F_SCENARIO_0F, TRUE))
+    {
+        objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
+        aot_reset(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+        aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
+        evt_exec(0, TASK_09, on_enter);
+    }
+}
+
+proc main
+{
+    if (ck(FG_ROOM, F_ROOM_18, FALSE))
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))
+        {
+            if (cmpb(B_PICKED_ITEM, CMP_EQ, IT_05_WEAPON_MAGNUM))
+            {
+                aot_delete(AOT_02_USEITEM, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER);
+                set(FG_ROOM, F_ROOM_18, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_0E, FALSE);
+                cutnext(CAM_01);
+                set(FG_SCENARIO, F_SCENARIO_0C, TRUE);
+                evt_exec(0, TASK_09, from_main_4);
+            }
+            return;
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_0F, TRUE))
+        {
+            if (cmpb(B_PICKED_ITEM, CMP_EQ, IT_29_KEY_CREST_WIND))
+            {
+                aot_delete(AOT_02_USEITEM, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER);
+                set(FG_ROOM, F_ROOM_18, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_0F, FALSE);
+                cutnext(CAM_01);
+                set(FG_SCENARIO, F_SCENARIO_0D, TRUE);
+                evt_exec(0, TASK_09, from_main_2);
+            }
+            return;
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_0C, FALSE))
+        {
+            if (cmpb(B_FWD_AOT, CMP_EQ, 2))
+            {
+                set(FG_9, F_9_07, TRUE);
+            }
+            if (cmpb(B_USED_ITEM, CMP_EQ, IT_22_KEY_JEWEL_RED))
+            {
+                objtbl_b_set(TBL_ITEM, IMDL_01, OF_ACTIVE);
+                aot_reset(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 1, 0);
+                eml_pos(OBJ_02, -80, 0, 230, 510, -2310, -110);
+                cutnext(CAM_01);
+                set(FG_ROOM, F_ROOM_18, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_0E, TRUE);
+                evt_exec(0, TASK_09, from_main_3);
+                aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
+                set(FG_ROOM, F_ROOM_19, FALSE);
+            }
+        }
+        if (ck(FG_SCENARIO, F_SCENARIO_0D, FALSE))
+        {
+            if (cmpb(B_FWD_AOT, CMP_EQ, 2))
+            {
+                set(FG_9, F_9_06, TRUE);
+            }
+            if (cmpb(B_USED_ITEM, CMP_EQ, IT_21_KEY_JEWEL_BLUE))
+            {
+                objtbl_b_set(TBL_ITEM, IMDL_00, OF_ACTIVE);
+                aot_reset(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+                eml_pos(OBJ_01, 170, -60, -60, 510, -2300, 130);
+                cutnext(CAM_01);
+                set(FG_ROOM, F_ROOM_18, TRUE);
+                set(FG_SCENARIO, F_SCENARIO_0F, TRUE);
+                evt_exec(0, TASK_09, from_main);
+                aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
+                set(FG_ROOM, F_ROOM_19, FALSE);
+            }
+        }
+    }
+    if (ck(FG_ROOM, F_ROOM_18, FALSE))
+    {
+        if (ck(FG_ROOM, F_ROOM_19, FALSE))
+        {
+            if (ck(FG_ROOM, F_ROOM_1A, TRUE))
+            {
+                cutnext(CAM_01);
+                message(MSG_IT_READS_SOME_TIGERS_HAVE_A | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It reads “Some tigers have a red eye and a blue eye"."
+                set(FG_ROOM, F_ROOM_19, TRUE);
+            }
+        }
+        else if (cmpb(B_MENU_CHOICE, CMP_LT, 128))
+        {
+            set(FG_ROOM, F_ROOM_19, FALSE);
+            set(FG_ROOM, F_ROOM_1A, FALSE);
+            cutcurr(0);
+        }
+    }
+}
+
+event from_main
+{
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    bgm_play(BGM_MAIN);
+    evt_work_set(WK_OBJ, OBJ_00);
+    evt_tween_begin_alt();
+    tw_set_rot(0, 1, 0);
+    for (7)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 2, 0);
+    for (6)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 3, 0);
+    for (4)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 4, 0);
+    for (3)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 5, 0);
+    for (195)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 4, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 3, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -5, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_nop();
+    tw_end();
+    set(FG_ROOM, F_ROOM_18, FALSE);
+    cutcurr(0);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    bgm_stop(BGM_MAIN);
+    evt_finish();
+}
+
+event from_main_2
+{
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    bgm_play(BGM_MAIN);
+    evt_work_set(WK_OBJ, OBJ_00);
+    evt_tween_begin_alt();
+    tw_set_rot(0, -1, 0);
+    for (7)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -2, 0);
+    for (6)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -3, 0);
+    for (4)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -4, 0);
+    for (3)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -5, 0);
+    for (195)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -4, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -3, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 5, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_nop();
+    tw_end();
+    bgm_stop(BGM_MAIN);
+    cutcurr(0);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    evt_next();
+    evt_nop();
+    set(FG_ROOM, F_ROOM_18, FALSE);
+    evt_finish();
+}
+
+event from_main_3
+{
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    bgm_play(BGM_MAIN);
+    evt_work_set(WK_OBJ, OBJ_00);
+    evt_tween_begin_alt();
+    tw_set_rot(0, -1, 0);
+    for (7)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -2, 0);
+    for (6)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -3, 0);
+    for (4)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -4, 0);
+    for (3)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -5, 0);
+    for (195)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, -4, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -3, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 5, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_nop();
+    tw_end();
+    set(FG_ROOM, F_ROOM_18, FALSE);
+    cutcurr(0);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    bgm_stop(BGM_MAIN);
+    evt_finish();
+}
+
+event from_main_4
+{
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    bgm_play(BGM_MAIN);
+    evt_work_set(WK_OBJ, OBJ_00);
+    evt_tween_begin_alt();
+    tw_set_rot(0, 1, 0);
+    for (7)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 2, 0);
+    for (6)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 3, 0);
+    for (4)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 4, 0);
+    for (3)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 5, 0);
+    for (195)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 4, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 3, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -5, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 2, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 0, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, -1, 0);
+    tw_rot_add();
+    evt_next();
+    tw_nop();
+    tw_end();
+    bgm_stop(BGM_MAIN);
+    cutcurr(0);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    evt_next();
+    evt_nop();
+    set(FG_ROOM, F_ROOM_18, FALSE);
+    evt_finish();
+}
+
+event on_enter
+{
+    evt_work_set(WK_OBJ, OBJ_00);
+    evt_tween_begin_alt();
+    tw_abs_rot(0, 0, 1024, 0);
+    evt_next();
+    tw_end();
+    evt_finish();
+}
+
+event on_enter_2
+{
+    evt_work_set(WK_OBJ, OBJ_00);
+    evt_tween_begin_alt();
+    tw_abs_rot(0, 0, 3072, 0);
+    evt_next();
+    tw_end();
+    evt_finish();
+}

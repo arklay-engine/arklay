@@ -1,0 +1,81 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define F_ROOM_18 0x18
+
+proc init
+{
+    set(FG_STATUS, F_STATUS_3D, TRUE);
+    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_213_FRONT_ELEVATOR, 16000, 0, 7600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_21C_UNDER_KITCHEN, 19600, 0, 6800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    dir_set(0, 0, 0, 0, 2500, 0, 3300);
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_213_FRONT_ELEVATOR))
+    {
+        evt_exec(0, TASK_09, on_enter);
+    }
+    else
+    {
+        evt_exec(0, TASK_09, on_enter_2);
+    }
+}
+
+event on_enter
+{
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    evt_fork(TASK_09, on_enter_sub1, 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_18, FALSE));
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        aot_on(AOT_01_DOOR, SCE_DOOR, 0);
+    }
+    evt_finish();
+}
+
+event on_enter_2
+{
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    evt_fork(TASK_09, on_enter_sub1, 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_18, FALSE));
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+    }
+    evt_finish();
+}
+
+event on_enter_sub1
+{
+    bgm_play(BGM_MAIN);
+    sleep(5);
+    set(FG_STATUS, F_STATUS_3E, TRUE);
+    sleep(10);
+    set(FG_STATUS, F_STATUS_3E, FALSE);
+    sleep(150);
+    set(FG_STATUS, F_STATUS_3E, TRUE);
+    sleep(40);
+    set(FG_STATUS, F_STATUS_3E, FALSE);
+    sleep(30);
+    set(FG_ROOM, F_ROOM_18, TRUE);
+    evt_finish();
+}

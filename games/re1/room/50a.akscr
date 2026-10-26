@@ -1,0 +1,377 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_EVENT 0x02
+#define AOT_03_EVENT 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_05_USEITEM 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_07_ITEM 0x07
+#define AOT_08_ITEM 0x08
+#define AOT_0A_MESSAGE 0x0A
+#define AOT_0B_MESSAGE 0x0B
+#define CAM_00 0x00
+#define CAM_02 0x02
+#define CAM_03 0x03
+#define CAM_04 0x04
+#define CAM_06 0x06
+#define CAM_07 0x07
+#define F_ROOM_18 0x18
+#define F_ROOM_19 0x19
+#define F_ROOM_1A 0x1A
+#define F_ROOM_1B 0x1B
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define IMDL_03 0x03
+#define MSG_JOHN 0x01
+#define MSG_THERE_IS_A_SWITCH 0x00
+#define OBJ_00 0x00
+#define SE_17_SW_BTN 0x17
+#define ZONE_16 0x16
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 10100, 10400, 1300, 1200, 3, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_508_DOUBLE_LOCK, 18400, 0, 2400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 10800, 5000, 2200, 1000, IT_68_FILE_RESEARCHERS_LETTER, 1, IMDL_00, SCA_NONE, 11880, -1500, 5020, 0, F_ITEM_51, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00, OF_ACTIVE, SCA_NONE, 8200, 0, 2252, 3072, 0, -270, 0, 270, 270, 4680, 1350, 630);
+    aot_set(AOT_02_EVENT, 8200, 1600, 600, 600, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
+    aot_set(AOT_03_EVENT, 8200, 10500, 1300, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 1100, 4500, 1000, 3500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 130, 0, 68, 1, 0, 0);
+    aot_set(AOT_05_USEITEM, 7000, 700, 3000, 2300, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 27, 0, 1, 0);
+    item_aot_set(AOT_06_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_01, SCA_NONE, 0, 0, 0, 0, F_ITEM_A3, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_07_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_E5, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_08_ITEM, 2100, 4200, 1000, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_03, SCA_NONE, 2600, 0, 4500, 0, F_ITEM_A4, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    aot_set(AOT_0A_MESSAGE, 6500, 9600, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 68, 1, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 3500, 10600, 900, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 68, 1, 0, 0);
+    eml_rot(IMDL_00, 2042, 0);
+    scene_setup(0, 6400, 8600, 12000);
+    set(FG_STATUS, F_STATUS_1F, TRUE);
+}
+
+proc main
+{
+    if (ck(FG_ROOM, F_ROOM_1B, FALSE))
+    {
+        aot_delete(AOT_02_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        aot_delete(AOT_02_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        set(FG_ROOM, F_ROOM_1B, FALSE);
+    }
+    if (ck(FG_ROOM, F_ROOM_19, TRUE))
+    {
+        msgnode_set(ZONE_16, CAM_06, CAM_07);
+    }
+    else
+    {
+        msgnode_set(ZONE_16, CAM_06, CAM_03);
+    }
+    if (testpickup(IT_68_FILE_RESEARCHERS_LETTER))
+    {
+        evt_exec(0, TASK_09, from_main);
+    }
+    aot_delete(AOT_04_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
+    {
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+    }
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_07))
+    {
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+    }
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+    {
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
+    }
+}
+
+event on_aot_02
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(15);
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "There's a switch. Will you push it? John. ADA..."
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
+        {
+            se_play_3d(SND_BANK_ROOM, SE_17_SW_BTN, 0, SND_AT_PLAYER, 0, 0, 0);
+            if (ck(FG_ROOM, F_ROOM_19, FALSE))
+            {
+                evt_exec(0, TASK_09, on_aot_02_sub1);
+                set(FG_ROOM, F_ROOM_19, TRUE);
+            }
+            else
+            {
+                evt_exec(0, TASK_09, on_aot_02_sub2);
+                set(FG_ROOM, F_ROOM_19, FALSE);
+            }
+        }
+        else
+        {
+            set(FG_RUN, F_RUN_PLAYER, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub1
+{
+    run
+    {
+        setw(W_LIGHT_STATE, 0);
+        timer_setup(LIGHT_FADE_01, 1000, FADE_B);
+    }
+    sleep(10);
+    run
+    {
+        setw(W_LIGHT_DELTA, 0);
+        setw(W_LIGHT_STATE, 10000);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_02_sub2
+{
+    run
+    {
+        setw(W_LIGHT_STATE, 10000);
+        setw(W_LIGHT_DELTA, -1000);
+    }
+    sleep(10);
+    run
+    {
+        setw(W_LIGHT_DELTA, 0);
+        setw(W_LIGHT_STATE, 0);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_03
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(15);
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "There's a switch. Will you push it? John. ADA..."
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
+        {
+            se_play_3d(SND_BANK_ROOM, SE_17_SW_BTN, 0, SND_AT_PLAYER, 0, 0, 0);
+            if (ck(FG_ROOM, F_ROOM_18, FALSE))
+            {
+                evt_exec(0, TASK_09, on_aot_03_sub1);
+                set(FG_ROOM, F_ROOM_18, TRUE);
+            }
+            else
+            {
+                evt_exec(0, TASK_09, on_aot_03_sub2);
+                set(FG_ROOM, F_ROOM_18, FALSE);
+            }
+        }
+        else
+        {
+            set(FG_RUN, F_RUN_PLAYER, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_03_sub1
+{
+    run
+    {
+        cut_auto(CUT_LOCKED);
+        cutnext(CAM_04);
+        cut_auto(CUT_FREE);
+        msg_list(0, 7838, -2000, 8543, 255, 255, 255, LIGHT_KIND_00, 7640, 8560, -2000, 5560, 117, 117, 116, LIGHT_KIND_00, 7564, 6000, -2000, 5700, 117, 117, 116, LIGHT_KIND_00, 6840, 992, 1168, 1008);
+    }
+    sleep(1);
+    run
+    {
+        if (ck(FG_ROOM, F_ROOM_19, TRUE))
+        {
+            evt_exec(0, TASK_09, on_aot_03_sub1_sub1);
+        }
+        else
+        {
+            evt_exec(0, TASK_09, on_aot_03_sub1_sub2);
+        }
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
+    run
+    {
+        set(FG_ROOM, F_ROOM_1A, FALSE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_03_sub2
+{
+    run
+    {
+        cut_auto(CUT_LOCKED);
+        cutnext(CAM_00);
+        cut_auto(CUT_FREE);
+        msg_list(0, 2858, -4800, 6473, 255, 255, 255, LIGHT_KIND_00, 8280, 8200, -6000, 7200, 128, 128, 150, LIGHT_KIND_00, 7960, 5800, 0, 4300, 72, 72, 128, LIGHT_KIND_00, 6040, 800, 848, 704);
+    }
+    run
+    {
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+    }
+    evt_finish();
+}
+
+event event_06
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(15);
+    evt_finish();
+}
+
+event on_aot_03_sub1_sub1
+{
+    run
+    {
+        set(FG_ROOM, F_ROOM_1A, FALSE);
+        timer_setup(LIGHT_FADE_01, 10000, FADE_B);
+    }
+    sleep(2);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    timer_setup(LIGHT_FADE_01, 10000, FADE_B);
+    sleep(2);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    timer_setup(LIGHT_FADE_01, 10000, FADE_B);
+    sleep(2);
+    run
+    {
+        setw(W_LIGHT_DELTA, 0);
+        if (ck(FG_ROOM, F_ROOM_19, TRUE))
+        {
+            setw(W_LIGHT_STATE, 10000);
+        }
+        else
+        {
+            setw(W_LIGHT_STATE, 0);
+        }
+        set(FG_ROOM, F_ROOM_1A, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_03_sub1_sub2
+{
+    run
+    {
+        set(FG_ROOM, F_ROOM_1A, FALSE);
+        require(cmpw(8, W_1C, CMP_GE, 0));
+        return;
+    }
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, 0, 0);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, 0, 0);
+    sleep(1);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    run
+    {
+        timer_setup(LIGHT_FADE_VEIL, -10000, FADE_R | FADE_G | FADE_B);
+        set(FG_ROOM, F_ROOM_1A, TRUE);
+    }
+    evt_finish();
+}
+
+event from_main
+{
+    sleep(1);
+    message(MSG_JOHN | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "John. ADA..."
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    evt_finish();
+}

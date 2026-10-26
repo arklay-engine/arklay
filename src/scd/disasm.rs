@@ -287,6 +287,15 @@ fn render_with(scripts: &Scripts, style: Style) -> String {
     emitter.finish()
 }
 
+/// Render one instruction run plus its trailing bytes as `.s` lines, with
+/// `off_XXXX` labels for the jumps that land inside the run. `start` is the
+/// run's offset when it has no instructions.
+pub(super) fn render_run(insns: &[Insn], trailing: &[u8], start: usize) -> Vec<String> {
+    let mut emitter = Emitter::new(Style::Assembly);
+    emit_insns(&mut emitter, insns, trailing, start);
+    emitter.finish().lines().map(str::to_string).collect()
+}
+
 /// One instruction or trailing chunk covered by the label planner.
 struct Atom {
     offset: usize,

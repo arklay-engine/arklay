@@ -1,0 +1,102 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_08_EVENT 0x08
+#define CAM_04 0x04
+#define ENEMY_00 0x00
+#define ENEMY_01 0x01
+#define ENEMY_02 0x02
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define MSG_IT_IS_ELECTRONICALLY_LOCKED 0x00
+#define MSG_THERE_IS_A_PLATE 0x01
+#define SE_14_DM_GACHA 0x14
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 26000, 5900, 1800, 2300, 3, DOOR_SND_01_DR_MTL, DOOR_0A_DOOR10, 8, 0, ROOM_502_LADDER_ROOM, 5600, 0, 3100, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 6600, 13600, 3800, 2800, 8, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_504_CONFERENCE_ROOM, 7300, 0, 13800, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 18100, 13995, 2800, 2605, 1, DOOR_SND_09_ST_MTL, DOOR_19_KAI04, 96, 0, ROOM_505_O_PASSAGE, 3500, 0, 23100, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_03_ITEM, 2330, 15950, 1000, 1000, IT_28_KEY_MO_DISK, 1, IMDL_00, SCA_NONE, 2690, -1250, 16450, 0, F_ITEM_B0, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_04_ITEM, 16700, 7600, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 17200, 0, 8100, 0, F_ITEM_B1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_05_ITEM, 16700, 8500, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 17200, 0, 9000, 0, F_ITEM_B2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+    {
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_A0, SPAWN_FORCE, 2, 0, 1024, 0, 16050, 0, 16450, ENEMY_00, ANIM_00, 0, EVAR_00);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_A1, SPAWN_FORCE, 2, 0, 0, 0, 16050, 0, 3550, ENEMY_01, ANIM_00, 0, EVAR_00);
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_B0, SPAWN_FORCE, 2, 0, 3971, 0, 3500, 0, 16841, ENEMY_02, ANIM_00, 0, EVAR_00);
+        }
+    }
+    else
+    {
+        enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_A2, SPAWN_FORCE, 2, 0, 3475, 0, 23684, 0, 2872, ENEMY_00, ANIM_00, 0, EVAR_00);
+        enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_A3, SPAWN_FORCE, 2, 0, 3831, 0, 15161, 0, 7764, ENEMY_01, ANIM_00, 0, EVAR_00);
+        enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_B1, SPAWN_FORCE, 2, 0, 3541, 0, 16473, 0, 12762, ENEMY_02, ANIM_00, 0, EVAR_00);
+    }
+    if (ck(FG_LOCK, F_LOCK_25, FALSE))
+    {
+        aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01_door, 0);
+    }
+    aot_set(AOT_08_EVENT, 10000, 15500, 2000, 500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_08, 0, 0, 0);
+    set(FG_ENEMY, F_ENEMY_52, FALSE);
+    set(FG_ENEMY, F_ENEMY_53, FALSE);
+    set(FG_COMMON, F_COMMON_4E, FALSE);
+}
+
+event on_aot_08
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        cutnext(CAM_04);
+    }
+    sleep(20);
+    run
+    {
+        message(MSG_THERE_IS_A_PLATE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a plate. “Visual Data Room""
+    }
+    wait_message();
+    run
+    {
+        cutcurr(0);
+        cut_auto(CUT_FREE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_aot_01_door
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_POINT, 0, 7300, 13800);
+    }
+    sleep(20);
+    run
+    {
+        message(MSG_IT_IS_ELECTRONICALLY_LOCKED | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's electronically locked."
+    }
+    wait_message();
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}

@@ -1,0 +1,73 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_05_MESSAGE 0x05
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 0, 5200, 2600, 2400, 1, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_11A_ROOFED_PASSAGE, 7700, 0, 25500, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 8800, 4300, 1700, 3200, 11, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, STAGE_3 | ROOM_300_FIRST_HOUSE_OUT, 27300, 0, 5600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
+    {
+        item_aot_set(AOT_02_ITEM, 8100, 8500, 1300, 1800, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 9200, -1460, 9200, 0, F_ITEM_22, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        aot_set(AOT_02_ITEM, 8100, 8500, 1300, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 69, 0, 0, 0);
+    }
+    item_aot_set(AOT_03_ITEM, 5000, 1200, 1300, 1600, IT_1D_KEY_CRANK_SQUARE, 0, IMDL_01, SCA_NONE, 0, 0, 0, 0, F_ITEM_23, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 4050, 0, 7500, 3072, 576, 0, -576, 0, 540, 900, 540, 1000);
+    obj(OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 5660, -4180, 2144, 1168, 0, 0, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 1700, 8700, 2800, 900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 7400, 1400, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 69, 0, 0, 0);
+}
+
+proc main
+{
+    if (ck(FG_STATUS, F_STATUS_18, TRUE))
+    {
+        aot_delete(AOT_02_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_04_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        if (ck(FG_ITEM, F_ITEM_22, TRUE) && ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+        }
+        else
+        {
+            aot_reset(AOT_02_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
+        }
+        aot_delete(AOT_03_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
+    }
+    if (ck(FG_ITEM, F_ITEM_23, FALSE))
+    {
+        aot_delete(AOT_03_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE);
+    }
+    else
+    {
+        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
+    }
+}

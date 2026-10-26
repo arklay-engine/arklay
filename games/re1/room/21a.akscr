@@ -1,0 +1,55 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_EVENT 0x02
+#define AOT_03_ITEM 0x03
+#define ENEMY_00_ZOMBIE_LAB 0x00
+#define ENEMY_01_ZOMBIE_LAB 0x01
+#define IMDL_00 0x00
+#define MSG_THERE_IS_A_LADDER 0x00
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 29300, 2900, 3000, 2100, 0, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_20C_LESSON_ROOM, 20300, 0, 3500, 0, UNLOCKED, 0);
+    door_aot_set(AOT_01_DOOR, 200, 2800, 1900, 1500, 2, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 7, 0, ROOM_21B_UNDER_PASSAGE_2, 27500, 0, 12600, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_02_EVENT, 29300, 2900, 3000, 2100, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
+    item_aot_set(AOT_03_ITEM, 28000, 11500, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, IMDL_00, SCA_NONE, 28500, 0, 12000, 0, F_ITEM_DB, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_80, SPAWN_FORCE, 2, 0, 1711, 0, 27742, 0, 13736, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_01);
+    enemy(EM_11_ZOMBIE_LAB, EB_00, F_ENEMY_B4, SPAWN_FORCE, 2, 0, 3344, 0, 12764, 0, 2397, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_01);
+}
+
+event on_aot_02
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        message(MSG_THERE_IS_A_LADDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a ladder. Will you climb it?"
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
+        {
+            aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        }
+        else
+        {
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        }
+    }
+    evt_finish();
+}
