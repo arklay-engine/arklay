@@ -320,6 +320,12 @@ impl Source {
         }
     }
 
+    /// The source's name without its device (`Left Shift`, `left`), as the
+    /// key configuration screen draws a key.
+    pub fn short_name(self) -> String {
+        self.name().1
+    }
+
     /// The `(device, name)` pair of the source's `device:name` form.
     fn name(self) -> (&'static str, String) {
         match self {

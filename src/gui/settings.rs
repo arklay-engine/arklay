@@ -23,6 +23,8 @@ pub struct Settings {
     /// The connected displays' names in SDL's order, for the monitor choice
     /// (`graphics.display` is 1-based into it).
     pub displays: Vec<String>,
+    /// The action map the key configuration screen edits.
+    pub bindings: crate::controls::Bindings,
 }
 
 /// The two common shapes first, then the rarer ones.
@@ -292,6 +294,7 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
     const AIMING: (&str, &str, &str) = ("controls", "basic", "when_aiming");
     const BUTTONS: (&str, &str, &str) = ("controls", "controller", "button_settings");
     const FUNCTIONS: (&str, &str, &str) = ("controls", "controller", "function_settings");
+    const KEYBOARD: (&str, &str, &str) = ("controls", "keyboard_mouse", "keyboard_mouse_settings");
     const HUD: (&str, &str, &str) = ("hud", "hud", "");
     const DISPLAY: (&str, &str, &str) = ("graphics", "display", "");
     const IMAGE: (&str, &str, &str) = ("graphics", "image", "");
@@ -354,6 +357,8 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
             FUNCTIONS,
             named::<Vibration>(text, "vibration"),
         ),
+        // Opens the key configuration screen; it has no value.
+        row("key_config", KEYBOARD, OptionKind::Link),
         row(
             "ui_font",
             HUD,
@@ -723,6 +728,7 @@ mod tests {
                 let wanted = match option.kind {
                     OptionKind::Choice(_) => position,
                     OptionKind::Slider { min, step, .. } => min + position * step,
+                    OptionKind::Link => 0,
                 };
                 // Custom is what the quality rows add up to, not a choice
                 // of its own.
@@ -756,7 +762,7 @@ mod tests {
         for option in defs(&settings(), &Locale::default()) {
             let choices = match &option.kind {
                 OptionKind::Choice(choices) => choices.clone(),
-                OptionKind::Slider { .. } => Vec::new(),
+                OptionKind::Slider { .. } | OptionKind::Link => Vec::new(),
             };
             for shown in [
                 &option.category,

@@ -43,6 +43,8 @@ pub enum OptionKind {
         /// Appended to the shown number (`%`).
         suffix: &'static str,
     },
+    /// A row that opens a screen of its own; it has no value.
+    Link,
 }
 
 /// One option.
@@ -68,6 +70,7 @@ impl OptionDef {
         match &self.kind {
             OptionKind::Choice(choices) => value.clamp(0, choices.len().max(1) as i32 - 1),
             OptionKind::Slider { min, max, .. } => value.clamp(*min, *max),
+            OptionKind::Link => 0,
         }
     }
 
@@ -76,6 +79,7 @@ impl OptionDef {
         match &self.kind {
             OptionKind::Choice(_) => self.clamp(value + delta),
             OptionKind::Slider { step, .. } => self.clamp(value + delta * step.max(&1)),
+            OptionKind::Link => 0,
         }
     }
 
@@ -87,6 +91,7 @@ impl OptionDef {
                 .map(|choice| choice.label.clone())
                 .unwrap_or_default(),
             OptionKind::Slider { suffix, .. } => format!("{value}{suffix}"),
+            OptionKind::Link => String::new(),
         }
     }
 
@@ -95,6 +100,7 @@ impl OptionDef {
         match &self.kind {
             OptionKind::Choice(choices) => choices.len(),
             OptionKind::Slider { min, max, step, .. } => ((max - min) / step.max(&1)) as usize + 1,
+            OptionKind::Link => 1,
         }
     }
 }

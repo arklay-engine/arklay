@@ -9080,7 +9080,14 @@ fn drive_system_menu(
             *y *= scale_y;
         }
     }
-    let requests = menu.handle(&events);
+    // A key being captured is the first raw press after the frame that
+    // started it, so the press that started it is never taken for it.
+    let captured = input.captured.take();
+    let requests = if menu.capturing() {
+        captured.map_or_else(Vec::new, |source| menu.capture(source))
+    } else {
+        menu.handle(&events)
+    };
     input.discard_presses();
     for request in requests {
         match request {
@@ -9105,7 +9112,7 @@ fn drive_system_menu(
                 }
             }
             gui::MenuRequest::Settings(settings) => {
-                apply_menu_settings(app, display, input, clock, settings);
+                apply_menu_settings(app, display, input, clock, *settings);
             }
             gui::MenuRequest::Sound(sound) => app.play_ui_cues(vec![match sound {
                 gui::Sound::Cursor => ui::UiCue::Cursor,
@@ -9155,6 +9162,7 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
         game,
         language: app.pack.language().map(str::to_string),
         displays: display_names(),
+        bindings: app.bindings.clone(),
     }
 }
 
@@ -9317,13 +9325,17 @@ fn apply_menu_settings(
     app.player_options.no_auto_aim = !settings.game.auto_aim;
     app.player_options.no_blood = !settings.game.blood;
     app.vibration = settings.game.vibration;
-    if settings.game.control_type != before.game.control_type {
-        let bindings = input
-            .bindings()
+    let mut settings = settings;
+    if settings.bindings != before.bindings {
+        input.apply_bindings_change(settings.bindings.clone());
+        app.set_bindings(settings.bindings.clone());
+    } else if settings.game.control_type != before.game.control_type {
+        settings.bindings = settings
+            .bindings
             .clone()
             .with_control_type(settings.game.control_type);
-        input.apply_bindings_change(bindings.clone());
-        app.set_bindings(bindings);
+        input.apply_bindings_change(settings.bindings.clone());
+        app.set_bindings(settings.bindings.clone());
     }
     if let Mode::Play(session) = &mut app.mode {
         session.game.player_options = app.player_options;
@@ -15277,6 +15289,7 @@ mod tests {
             game: file.game,
             language: Some("fr".to_string()),
             displays: Vec::new(),
+            bindings: controls::Bindings::default(),
         };
         before.game.quick_turn = false;
         before.graphics.renderer = RendererKind::Software;

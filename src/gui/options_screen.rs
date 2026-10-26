@@ -24,6 +24,8 @@ const GROUP_GAP: f32 = 24.0;
 pub enum OptionsEvent {
     /// Option `index` now holds `value`.
     Changed { index: usize, value: i32 },
+    /// Link option `index` was chosen: open its screen.
+    Open { index: usize },
     /// Leave the screen.
     Back,
 }
@@ -202,6 +204,13 @@ impl OptionsScreen {
             return;
         };
         let def = &self.defs[index];
+        // A link has no value; choosing it opens its screen.
+        if def.kind == OptionKind::Link {
+            if wrap && !def.disabled {
+                events.push(OptionsEvent::Open { index });
+            }
+            return;
+        }
         let current = self.values[index];
         let mut next = def.step(current, delta);
         if wrap
@@ -543,11 +552,13 @@ impl OptionsScreen {
                     }
                 }
             }
-            y += p.line_height(Role::Body) * 0.6;
-            let default = self
-                .text
-                .format("options.default", def.value_label(def.default));
-            p.paragraph(Role::Body, desc_left, y, width, palette::TEXT, &default);
+            if def.kind != OptionKind::Link {
+                y += p.line_height(Role::Body) * 0.6;
+                let default = self
+                    .text
+                    .format("options.default", def.value_label(def.default));
+                p.paragraph(Role::Body, desc_left, y, width, palette::TEXT, &default);
+            }
         }
 
         // Hints.
@@ -684,6 +695,7 @@ impl OptionsScreen {
                     Hit::Track(row, track_left, track_right),
                 ));
             }
+            OptionKind::Link => p.link_icon(right_arrow, cy, 30.0, arrows),
         }
         if value != def.default {
             p.diamond(rect.right() + u(16.0), cy, 7.0, Color::WHITE);

@@ -1,6 +1,6 @@
 //! The in-game menu: an overlay over the frozen game with Restart, Load
-//! Game, Options and Quit down the left side, their confirmation dialogs and
-//! the options screen.
+//! Game, Options and Quit down the left side, their confirmation dialogs,
+//! the options screen and the key configuration screen it opens.
 //!
 //! The menu owns its canvas and faces and draws at the window's native
 //! resolution. It never touches the game: every decision comes back as a
@@ -13,6 +13,7 @@ use anyhow::Result;
 use super::canvas::{Axis, Canvas, Color, Rect};
 use super::dialog::{Dialog, DialogResult};
 use super::input::{Device, GuiEvent, GuiKey, Sound};
+use super::key_config::{KeyConfigEvent, KeyConfigScreen};
 use super::locale::Locale;
 use super::options_screen::{OptionsEvent, OptionsScreen};
 use super::settings::{self, Settings};
@@ -32,7 +33,7 @@ pub enum MenuRequest {
     /// Return to the title screen.
     Quit,
     /// The options changed; apply and persist these settings.
-    Settings(Settings),
+    Settings(Box<Settings>),
     /// Play a feedback sound.
     Sound(Sound),
 }
@@ -41,11 +42,13 @@ pub enum MenuRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct View {
     /// How deep the menu is: 0 the item list, 1 its dialog, 2 the options, 3
-    /// the options' dialog.
+    /// the options' dialog, 4 the key configuration, 5 its dialog or a key
+    /// being captured.
     depth: u8,
     selected: usize,
     dialog: Option<usize>,
     options: Option<(usize, usize, usize, Option<usize>)>,
+    keys: Option<(usize, usize, usize, bool, Option<usize>)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +78,8 @@ pub struct SystemMenu {
     hint_hits: Vec<(Rect, GuiKey)>,
     dialog: Option<(Dialog, Item)>,
     options: Option<OptionsScreen>,
+    /// The key configuration, over the options.
+    key_config: Option<KeyConfigScreen>,
     /// The device of the last key, as detected; [`Self::shown_device`]
     /// applies the button-style setting.
     device: Device,
@@ -100,6 +105,7 @@ impl SystemMenu {
             hint_hits: Vec::new(),
             dialog: None,
             options: None,
+            key_config: None,
             device: Device::Keyboard,
             opened: Instant::now(),
             dirty: true,
@@ -146,6 +152,11 @@ impl SystemMenu {
             }
         }
         let device = self.shown_device();
+        if let Some(screen) = &mut self.key_config {
+            screen.set_locale(self.text.clone());
+            screen.set_device(device);
+            screen.set_bindings(self.settings.bindings.clone());
+        }
         if let Some(screen) = &mut self.options {
             screen.set_device(device);
             let defs = settings::defs(&self.settings, &self.text);
@@ -166,6 +177,49 @@ impl SystemMenu {
         let mut screen = OptionsScreen::new(defs, values, self.text.clone());
         screen.set_device(self.shown_device());
         self.options = Some(screen);
+    }
+
+    fn open_key_config(&mut self) {
+        let mut screen = KeyConfigScreen::new(self.settings.bindings.clone(), self.text.clone());
+        screen.set_device(self.shown_device());
+        self.key_config = Some(screen);
+    }
+
+    /// Whether the key configuration waits for a key: the owner hands the
+    /// next raw press to [`Self::capture`] instead of feeding events.
+    pub fn capturing(&self) -> bool {
+        self.key_config
+            .as_ref()
+            .is_some_and(KeyConfigScreen::capturing)
+    }
+
+    /// Bind the raw press the key configuration waited for.
+    pub fn capture(&mut self, source: crate::controls::Source) -> Vec<MenuRequest> {
+        let mut requests = Vec::new();
+        let before = self.view();
+        if let Some(screen) = &mut self.key_config {
+            let events = screen.capture(source);
+            self.key_config_events(events, &mut requests);
+            self.dirty = true;
+        }
+        if let Some(sound) = self.sound(before, &requests)
+            && self.settings.game.menu_volume > 0
+        {
+            requests.push(MenuRequest::Sound(sound));
+        }
+        requests
+    }
+
+    fn key_config_events(&mut self, events: Vec<KeyConfigEvent>, requests: &mut Vec<MenuRequest>) {
+        for event in events {
+            match event {
+                KeyConfigEvent::Back => self.key_config = None,
+                KeyConfigEvent::Changed(bindings) => {
+                    self.settings.bindings = *bindings;
+                    requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
+                }
+            }
+        }
     }
 
     /// The device the hints draw for: a controller shows the configured
@@ -205,16 +259,20 @@ impl SystemMenu {
 
     fn view(&self) -> View {
         let options = self.options.as_ref().map(OptionsScreen::cursor);
+        let keys = self.key_config.as_ref().map(KeyConfigScreen::cursor);
         View {
-            depth: match (&options, &self.dialog) {
-                (Some((.., Some(_))), _) => 3,
-                (Some(_), _) => 2,
-                (None, Some(_)) => 1,
-                (None, None) => 0,
+            depth: match (&keys, &options, &self.dialog) {
+                (Some((.., true, _) | (.., Some(_))), ..) => 5,
+                (Some(_), ..) => 4,
+                (None, Some((.., Some(_))), _) => 3,
+                (None, Some(_), _) => 2,
+                (None, None, Some(_)) => 1,
+                (None, None, None) => 0,
             },
             selected: self.selected,
             dialog: self.dialog.as_ref().map(|(dialog, _)| dialog.selected),
             options,
+            keys,
         }
     }
 
@@ -251,15 +309,26 @@ impl SystemMenu {
     }
 
     fn handle_one(&mut self, event: GuiEvent, requests: &mut Vec<MenuRequest>) {
+        if let Some(screen) = &mut self.key_config {
+            let events = screen.handle(event);
+            self.key_config_events(events, requests);
+            return;
+        }
         if let Some(screen) = &mut self.options {
             for result in screen.handle(event) {
                 match result {
                     OptionsEvent::Back => self.options = None,
+                    OptionsEvent::Open { index } => {
+                        let defs = settings::defs(&self.settings, &self.text);
+                        if defs.get(index).is_some_and(|def| def.id == "key_config") {
+                            self.open_key_config();
+                        }
+                    }
                     OptionsEvent::Changed { index, value } => {
                         let defs = settings::defs(&self.settings, &self.text);
                         if let Some(def) = defs.get(index) {
                             settings::apply(&def.id, value, &mut self.settings);
-                            requests.push(MenuRequest::Settings(self.settings.clone()));
+                            requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
                         }
                     }
                 }
@@ -352,7 +421,7 @@ impl SystemMenu {
         }
         self.dirty = false;
         self.drawn_appear = appear;
-        let shade = if self.options.is_some() {
+        let shade = if self.options.is_some() || self.key_config.is_some() {
             palette::SCREEN_SHADE
         } else {
             palette::MENU_SHADE.fade(appear)
@@ -366,6 +435,10 @@ impl SystemMenu {
             fonts: &mut self.fonts,
             theme,
         };
+        if let Some(screen) = &mut self.key_config {
+            screen.draw(&mut p);
+            return true;
+        }
         if let Some(screen) = &mut self.options {
             screen.draw(&mut p);
             return true;
@@ -703,6 +776,26 @@ mod tests {
             shot(&mut menu, &format!("options_{tag}"), 1920, 1080);
             menu.handle(&[key(GuiKey::Cancel), key(GuiKey::Up), key(GuiKey::Up)]);
         }
+        // The key configuration, from its link row.
+        let mut menu = self::menu();
+        menu.skip_intro();
+        menu.handle(&[
+            key(GuiKey::Down),
+            key(GuiKey::Down),
+            key(GuiKey::Confirm),
+            key(GuiKey::SubNext),
+            key(GuiKey::SubNext),
+        ]);
+        shot(&mut menu, "options_keyboard", 1920, 1080);
+        menu.handle(&[key(GuiKey::Confirm)]);
+        shot(&mut menu, "keys", 1920, 1080);
+        menu.handle(&[key(GuiKey::Down), key(GuiKey::Right), key(GuiKey::Confirm)]);
+        shot(&mut menu, "keys_capture", 1920, 1080);
+        menu.capture(crate::controls::Source::Mouse(3));
+        shot(&mut menu, "keys_mouse", 1920, 1080);
+        menu.handle(&[key(GuiKey::TabNext), key(GuiKey::Up)]);
+        shot(&mut menu, "keys_menu", 1920, 1080);
+        shot(&mut menu, "keys_4x3", 1024, 768);
     }
 
     #[test]

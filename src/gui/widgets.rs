@@ -198,7 +198,8 @@ impl Painter<'_> {
         rect
     }
 
-    fn key_cap_width(&mut self, label: &str) -> f32 {
+    /// The width [`Painter::key_cap`] would draw.
+    pub fn key_cap_width(&mut self, label: &str) -> f32 {
         let style = self.style(Role::KeyCap);
         let text_width = self.fonts.measure(style, label);
         let height = self.u(32.0);
@@ -491,6 +492,45 @@ impl Painter<'_> {
                 (tip + inward, cy),
                 (back + inward, cy + h),
                 (back, cy + h),
+            ],
+            color,
+        );
+    }
+
+    /// The external-link mark `size` units square centred on `(cx, cy)`: a
+    /// box open at its top-right corner with an arrow leaving through it.
+    pub fn link_icon(&mut self, cx: f32, cy: f32, size: f32, color: Color) {
+        let side = self.u(size);
+        let t = self.u(3.0).max(1.2);
+        let (left, top) = (cx - side / 2.0, cy - side / 2.0);
+        let (right, bottom) = (left + side, top + side);
+        let gap = side * 0.45;
+        // The box: left and bottom whole, top and right stopping short of
+        // the corner.
+        self.canvas.fill_rect(Rect::new(left, top, t, side), color);
+        self.canvas
+            .fill_rect(Rect::new(left, bottom - t, side, t), color);
+        self.canvas
+            .fill_rect(Rect::new(left, top, side - gap, t), color);
+        self.canvas
+            .fill_rect(Rect::new(right - t, top + gap, t, side - gap), color);
+        // The arrow: a head in the corner and a shaft back towards the
+        // middle.
+        let head = side * 0.42;
+        self.canvas.fill_polygon(
+            &[(right, top), (right, top + head), (right - head, top)],
+            color,
+        );
+        // Offset across the 45° shaft by half its thickness.
+        let half = t / 2.0 * std::f32::consts::FRAC_1_SQRT_2;
+        let (tip_x, tip_y) = (right - head * 0.4, top + head * 0.4);
+        let (tail_x, tail_y) = (cx - side * 0.05, cy + side * 0.05);
+        self.canvas.fill_polygon(
+            &[
+                (tip_x - half, tip_y - half),
+                (tip_x + half, tip_y + half),
+                (tail_x + half, tail_y + half),
+                (tail_x - half, tail_y - half),
             ],
             color,
         );

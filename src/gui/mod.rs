@@ -22,6 +22,7 @@
 pub mod canvas;
 pub mod dialog;
 pub mod input;
+pub mod key_config;
 pub mod locale;
 pub mod options;
 pub mod options_screen;
