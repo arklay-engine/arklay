@@ -336,13 +336,7 @@ impl PackWriter {
             .checked_add(toc_len)
             .context("pack table of contents is too large")?;
 
-        let mut order: Vec<(String, usize)> = self
-            .entries
-            .iter()
-            .enumerate()
-            .map(|(index, entry)| (entry.path.to_ascii_lowercase(), index))
-            .collect();
-        order.sort_by(|a, b| a.0.cmp(&b.0));
+        let order = pack_order(self.entries.iter().map(|entry| entry.path.as_str()));
 
         let mut data_start = paths_start;
         for (_, index) in &order {
@@ -430,17 +424,37 @@ fn write_atomically(path: &Path, write: impl FnOnce(&mut File) -> Result<()>) ->
     let temp = crate::atomic::temp_path(path)?;
     let mut file =
         File::create(&temp).with_context(|| format!("failed to write pack {}", path.display()))?;
-    let result =
-        write(&mut file).with_context(|| format!("failed to write pack {}", path.display()));
+    // Removes the temporary file on every way out short of the rename, a
+    // panic included.
+    let mut cleanup = RemoveOnDrop(Some(&temp));
+    write(&mut file).with_context(|| format!("failed to write pack {}", path.display()))?;
     drop(file);
-    if let Err(err) = result {
-        let _ = std::fs::remove_file(&temp);
-        return Err(err);
+    std::fs::rename(&temp, path)
+        .with_context(|| format!("failed to move the written pack into {}", path.display()))?;
+    cleanup.0 = None;
+    Ok(())
+}
+
+/// Removes the file it names, if any, when dropped.
+struct RemoveOnDrop<'a>(Option<&'a Path>);
+
+impl Drop for RemoveOnDrop<'_> {
+    fn drop(&mut self) {
+        if let Some(path) = self.0 {
+            let _ = std::fs::remove_file(path);
+        }
     }
-    std::fs::rename(&temp, path).with_context(|| {
-        let _ = std::fs::remove_file(&temp);
-        format!("failed to move the written pack into {}", path.display())
-    })
+}
+
+/// Entry indices in pack order, each with the ASCII-lowercased path it is
+/// sorted by.
+fn pack_order<'a>(paths: impl Iterator<Item = &'a str>) -> Vec<(String, usize)> {
+    let mut order: Vec<(String, usize)> = paths
+        .enumerate()
+        .map(|(index, path)| (path.to_ascii_lowercase(), index))
+        .collect();
+    order.sort_by(|a, b| a.0.cmp(&b.0));
+    order
 }
 
 /// Write the pack header for `entry_count` entries.
@@ -509,12 +523,7 @@ pub fn stream_pack(
         }
     }
     let entry_count = u32::try_from(paths.len()).context("too many pack entries")?;
-    let mut order: Vec<(String, usize)> = paths
-        .iter()
-        .enumerate()
-        .map(|(index, entry)| (entry.to_ascii_lowercase(), index))
-        .collect();
-    order.sort_by(|a, b| a.0.cmp(&b.0));
+    let order = pack_order(paths.iter().map(String::as_str));
 
     let toc_len = paths
         .len()
@@ -638,6 +647,16 @@ impl InFlight {
     }
 }
 
+/// Closes an [`InFlight`] when dropped, so a writer that stops for any
+/// reason, a panic included, releases a producer waiting for room.
+struct CloseOnDrop<'a>(&'a InFlight);
+
+impl Drop for CloseOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.close();
+    }
+}
+
 /// Produce, compress and append every entry of `order` to `out`, whose data
 /// area starts at `data_start`, returning where each one landed in `order`
 /// order.
@@ -659,7 +678,7 @@ fn stream_entries(
 ) -> Result<Vec<StoredEntry>> {
     use std::sync::mpsc::sync_channel;
 
-    let jobs = jobs.max(1);
+    let jobs = jobs.clamp(1, order.len().max(1));
     let max_entries = jobs * 2;
     let in_flight = InFlight::default();
     let (work_tx, work_rx) = sync_channel::<(usize, Vec<u8>)>(jobs);
@@ -681,8 +700,14 @@ fn stream_entries(
                     };
                     let entry = &paths[order[position].1];
                     let plain_len = data.len();
-                    let stored = compress_streamed(entry, data, keep_raw)
-                        .with_context(|| format!("failed to zstd-compress {entry}"));
+                    // A panic becomes this entry's error: the writer waits
+                    // for every position in order, so a worker that died
+                    // holding one would stall the whole pack.
+                    let stored = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        compress_streamed(entry, data, keep_raw)
+                    }))
+                    .unwrap_or_else(|_| Err(anyhow!("compression panicked")))
+                    .with_context(|| format!("failed to zstd-compress {entry}"));
                     if done_tx.send((position, plain_len, stored)).is_err() {
                         return;
                     }
@@ -693,9 +718,8 @@ fn stream_entries(
 
         let in_flight = &in_flight;
         let writer = scope.spawn(move || {
-            let written = write_in_order(order.len(), done_rx, in_flight, out, data_start);
-            in_flight.close();
-            written
+            let _close = CloseOnDrop(in_flight);
+            write_in_order(order.len(), done_rx, in_flight, out, data_start)
         });
 
         // Produce on this thread; a closed channel or in-flight count means a
@@ -2678,6 +2702,50 @@ mod tests {
         ];
         assert!(stream(&out, &duplicate, 2).is_err());
         assert!(stream(&out, &[("../x".to_string(), vec![1])], 2).is_err());
+        assert_eq!(std::fs::read_dir(&dir.path).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_panicking_compression_fails_the_pack_instead_of_hanging() {
+        let dir = TempDir::new("stream-worker-panic");
+        let out = dir.join("out.akpak");
+        let entries: Vec<(String, Vec<u8>)> = (0..50u32)
+            .map(|index| (format!("e{index:03}.bin"), vec![index as u8; 512]))
+            .collect();
+        let paths: Vec<String> = entries.iter().map(|(path, _)| path.clone()).collect();
+        let err = stream_pack(
+            &out,
+            &paths,
+            2,
+            |path| {
+                assert!(path != "e010.bin", "keep_raw panicked");
+                false
+            },
+            |index| Ok(entries[index].1.clone()),
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("e010.bin"), "{err:#}");
+        assert_eq!(std::fs::read_dir(&dir.path).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_panicking_producer_leaves_no_temporary_file() {
+        let dir = TempDir::new("stream-produce-panic");
+        let out = dir.join("out.akpak");
+        let paths = vec!["a.bin".to_string(), "b.bin".to_string()];
+        let panicked = std::panic::catch_unwind(|| {
+            stream_pack(
+                &out,
+                &paths,
+                2,
+                |_| false,
+                |index| {
+                    assert!(index == 0, "produce panicked");
+                    Ok(vec![1; 64])
+                },
+            )
+        });
+        assert!(panicked.is_err());
         assert_eq!(std::fs::read_dir(&dir.path).unwrap().count(), 0);
     }
 

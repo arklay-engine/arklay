@@ -48,6 +48,11 @@ const BASE_ID: &str = convert::BASE_PACK_ID;
 /// The language file CR room text is written to.
 const TEXT_ENTRY: &str = "language/en-US.txt";
 
+/// Bytes of base-overriding entries kept in memory between planning, which
+/// produces them to compare with the base, and writing; an entry beyond the
+/// budget is produced again when written instead.
+const PLANNED_BYTES: usize = 64 << 20;
+
 /// Directories whose contents are never packed: CR's save folder and the
 /// Director's Cut texture set the RE1 HD packs carry beside the main one.
 const SKIPPED_DIRS: &[&str] = &["savedata", "_bio1dc"];
@@ -185,9 +190,16 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     // Settle every entry before writing any: the pack's table of contents and
     // path list come first, so the entry set must be final. Only an override
     // the base already has is produced here, to drop it when it changes
-    // nothing; it is produced again when written, and every other file is read
-    // once, as it streams into the pack.
+    // nothing; its bytes are kept for the write while they fit
+    // `PLANNED_BYTES`, and every other file is read once, as it streams into
+    // the pack.
+    eprintln!(
+        "planning {} file(s) from {}",
+        plan.targets.len(),
+        options.input.display()
+    );
     let mut unchanged = 0usize;
+    let mut kept_bytes = 0usize;
     let mut texts: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut palette = None;
     let mut pack_entries: Vec<(String, Source)> = Vec::new();
@@ -232,6 +244,11 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
                 unchanged += 1;
                 continue;
             }
+            if kept_bytes + data.len() <= PLANNED_BYTES {
+                kept_bytes += data.len();
+                pack_entries.push((entry.clone(), Source::Ready(data)));
+                continue;
+            }
         }
         pack_entries.push((entry.clone(), Source::Planned(planned)));
     }
@@ -268,11 +285,7 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    eprintln!(
-        "converting {} entries from {}",
-        pack_entries.len(),
-        options.input.display()
-    );
+    eprintln!("writing {} entries", pack_entries.len());
     let entries = pack_entries.len();
     let mut bytes = 0usize;
     let paths: Vec<String> = pack_entries
@@ -296,8 +309,7 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
                 }
                 Some(Source::Ready(data)) => Ok(data),
                 None => unreachable!("each pack entry is produced once"),
-            }
-            .with_context(|| format!("failed to add {}", paths[index]))?;
+            }?;
             bytes += data.len();
             Ok(data)
         },
@@ -319,7 +331,8 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
 enum Source<'a> {
     /// A mod file, read and converted as the entry is written.
     Planned(&'a Planned),
-    /// Bytes built while planning: the language file and the manifest.
+    /// Bytes built while planning: the language file, the manifest and
+    /// overrides compared with the base.
     Ready(Vec<u8>),
 }
 
@@ -1826,14 +1839,24 @@ mod tests {
 
     #[test]
     fn converting_a_mod_streams_only_the_entries_that_change_the_base() {
-        let dir = std::env::temp_dir().join(format!("arklay-convert-mod-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let dir = TempDir(
+            std::env::temp_dir().join(format!("arklay-convert-mod-{}", std::process::id())),
+        );
+        let _ = fs::remove_dir_all(&dir.0);
+        let dir = &dir.0;
         let input = dir.join("mod");
         fs::create_dir_all(input.join("mod_test/STAGE1")).unwrap();
         fs::create_dir_all(input.join("mod_test/TEXT")).unwrap();
         fs::write(input.join("mod_test/manifest.txt"), "Test Mod\n").unwrap();
         fs::write(input.join("mod_test/STAGE1/ROOM1000.RDT"), b"same").unwrap();
         fs::write(input.join("mod_test/STAGE1/ROOM1010.RDT"), b"changed").unwrap();
+        fs::write(input.join("mod_test/STAGE1/ROOM1020.RDT"), b"new").unwrap();
         fs::write(
             input.join("mod_test/TEXT/ROOM_100.xml"),
             "<Strings><Text>Hello</Text></Strings>",
@@ -1859,12 +1882,21 @@ mod tests {
         })
         .unwrap();
         assert_eq!(summary.unchanged, 1);
-        assert_eq!(summary.entries, 3);
+        assert_eq!(summary.entries, 4);
         let pack = Pack::open(&out).unwrap();
         let mut paths: Vec<&str> = pack.entries().map(|entry| entry.path()).collect();
         paths.sort_unstable();
-        assert_eq!(paths, [TEXT_ENTRY, manifest::ENTRY, "room/1010.rdt"]);
+        assert_eq!(
+            paths,
+            [
+                TEXT_ENTRY,
+                manifest::ENTRY,
+                "room/1010.rdt",
+                "room/1020.rdt"
+            ]
+        );
         assert_eq!(*pack.read("room/1010.rdt").unwrap(), *b"changed");
+        assert_eq!(*pack.read("room/1020.rdt").unwrap(), *b"new");
         let language = pack.read(TEXT_ENTRY).unwrap();
         assert!(String::from_utf8_lossy(&language).contains("Hello"));
         assert_eq!(
@@ -1874,6 +1906,5 @@ mod tests {
                 .map(|path| pack.read(path).unwrap().len())
                 .sum::<usize>()
         );
-        let _ = fs::remove_dir_all(&dir);
     }
 }
