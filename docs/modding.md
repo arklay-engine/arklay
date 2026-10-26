@@ -314,9 +314,26 @@ loader's surface held before the upload. An RE-ENHANCE pack ships the loader's
 `cache/ROOM*.dat` lists, little-endian words of each room's hashes in load order,
 and each camera's mask sits immediately before its background. `htexture` reads
 those lists and pairs a mask with the background hash that follows it. Together
-with the 131 that name themselves, this resolves 407 of the pack's 436 masks from
-an unmodified `hires/` tree. The other 29 are rooms or cameras the lists do not
-cover (#157).
+with the 131 that name themselves, this resolves 407 of the 431 masks RE-ENHANCE
+v2.0 ships.
+
+The rest belong to rooms or cameras the lists do not cover, so `htexture` pairs
+them by shape. Each mask under a `mask/` directory that no camera uses yet is
+reduced to one texel per original texel (a texel is drawn when most of the HD
+texels over it are at least half opaque). Its coverage is then compared with the
+mask page of every camera still missing one, within the original page's extent. A
+mask whose intersection over union with one camera is at least 0.9, and at least
+0.05 ahead of every other camera, is paired with that camera's background. Cameras
+with identical pages share a match, and a camera whose page is identical to one that
+already has its mask takes that mask. Cameras whose coverage matches but whose page
+art differs still compete, so a mask that fits both is left unpaired. On the 131 masks that name themselves, the rule
+picks the right camera for 130 and abstains on the last. It never picks a wrong
+one. It pairs all 24 remaining masks, so all 431 resolve from an unmodified
+`hires/` tree. Three cameras (`306_002`, `406_005`, `407_001`) have no mask in the
+pack. Matching runs once, when the pack's `htexture/` table is first built, and
+only for a pack with a `mask/` directory. It is spread over every core and takes
+about 0.7 to 0.9 seconds on 8 threads; most of that is hashing each camera's page
+and background.
 
 Some 2D art stays software: map room highlighting (drawn through a palette lookup),
 the fonts, and the raw save screen (`TYPE00.TIM`), whose hash matches no file in
