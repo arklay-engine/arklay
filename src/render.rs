@@ -2173,6 +2173,7 @@ impl DoorScene {
             effect_layer: None,
             mirror_from: meshes.len(),
             mirror: None,
+            debug: &[],
         }
     }
 }
@@ -2385,6 +2386,22 @@ pub struct GameplayScene<'a> {
     pub effect_layer: Option<&'a EffectLayer<'a>>,
     pub mirror_from: usize,
     pub mirror: Option<&'a MirrorPass>,
+    /// Debug triangles drawn over the scene, depth tested against the meshes
+    /// ([`DebugVertex`]); empty outside the F4 debug views. The GPU renderer
+    /// draws them; the software path leaves them to its caller.
+    pub debug: &'a [DebugVertex],
+}
+
+/// One corner of a debug triangle: a logical 320x240 screen position, the
+/// view depth it sits at and a straight RGBA colour. `write` triangles write
+/// depth, so the debug geometry occludes itself (and the meshes drawn
+/// behind it); the others only test it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DebugVertex {
+    pub position: [f32; 2],
+    pub depth: f32,
+    pub colour: [u8; 4],
+    pub write: bool,
 }
 
 impl GameplayScene<'_> {
@@ -4352,6 +4369,72 @@ fn mul_unorm8(a: u8, b: u8) -> u32 {
 /// runs it on an RGBA8 target: both terms in unorm8, added with saturation.
 fn blend_unorm8(source: u8, destination: u8, alpha: u8) -> u8 {
     (mul_unorm8(source, alpha) + mul_unorm8(destination, 255 - alpha)).min(255) as u8
+}
+
+/// The nearest view depth of `meshes` at each pixel of a `width` x `height`
+/// frame (`f32::INFINITY` where none draws), for debug overlays that depth
+/// test against the scene's models.
+pub fn mesh_depth(meshes: &[EntityMesh<'_>], camera: &Camera, width: u32, height: u32) -> Vec<f32> {
+    let (w, h) = (width as i32, height as i32);
+    let mut depth = vec![f32::INFINITY; width as usize * height as usize];
+    let mut triangles: Vec<Triangle> = Vec::new();
+    for mesh in meshes {
+        for (index, (object, joint)) in mesh.mesh.objects.iter().zip(mesh.joints).enumerate() {
+            if !mesh.joint_visible(index) {
+                continue;
+            }
+            collect_triangles(
+                object,
+                joint,
+                camera,
+                None,
+                None,
+                false,
+                0,
+                [255; 3],
+                None,
+                None,
+                false,
+                &mut triangles,
+            );
+        }
+    }
+    for triangle in &triangles {
+        let [a, b, c] = &triangle.raster;
+        let area = (b.position[0] - a.position[0]) * (c.position[1] - a.position[1])
+            - (c.position[0] - a.position[0]) * (b.position[1] - a.position[1]);
+        if area.abs() < 1e-6 {
+            continue;
+        }
+        let xs = [a.position[0], b.position[0], c.position[0]];
+        let ys = [a.position[1], b.position[1], c.position[1]];
+        let x0 = (xs.iter().copied().fold(f32::MAX, f32::min).floor() as i32).max(0);
+        let x1 = (xs.iter().copied().fold(f32::MIN, f32::max).ceil() as i32).min(w - 1);
+        let y0 = (ys.iter().copied().fold(f32::MAX, f32::min).floor() as i32).max(0);
+        let y1 = (ys.iter().copied().fold(f32::MIN, f32::max).ceil() as i32).min(h - 1);
+        let inv = [1.0 / a.w.max(1.0), 1.0 / b.w.max(1.0), 1.0 / c.w.max(1.0)];
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let p = [x as f32 + 0.5, y as f32 + 0.5];
+                let edge = |s: &RasterVertex, t: &RasterVertex| {
+                    (t.position[0] - s.position[0]) * (p[1] - s.position[1])
+                        - (p[0] - s.position[0]) * (t.position[1] - s.position[1])
+                };
+                let l0 = edge(b, c) / area;
+                let l1 = edge(c, a) / area;
+                let l2 = edge(a, b) / area;
+                if l0 < 0.0 || l1 < 0.0 || l2 < 0.0 {
+                    continue;
+                }
+                let z = 1.0 / (l0 * inv[0] + l1 * inv[1] + l2 * inv[2]);
+                let slot = &mut depth[y as usize * width as usize + x as usize];
+                if z < *slot {
+                    *slot = z;
+                }
+            }
+        }
+    }
+    depth
 }
 
 #[cfg(test)]

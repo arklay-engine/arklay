@@ -489,6 +489,9 @@ pub struct Sprites<'a> {
     pub mask_keys: Option<SpriteRun<'a>>,
     pub before: Vec<SpriteRun<'a>>,
     pub after: Vec<SpriteRun<'a>>,
+    /// The F4 debug triangles after everything, each run with whether it
+    /// writes depth.
+    pub debug: Vec<(SpriteRun<'a>, bool)>,
 }
 
 /// A logical pixel position to normalized device coordinates.
@@ -666,6 +669,33 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                 quad.key as f32 - 1.0,
             );
             sprites.after.extend(sprites.run(page, first));
+        }
+    }
+
+    // The F4 debug triangles last, over everything but behind nearer meshes.
+    if !scene.debug.is_empty() {
+        static WHITE: std::sync::LazyLock<Image> = std::sync::LazyLock::new(|| Image {
+            width: 1,
+            height: 1,
+            rgba: vec![255; 4],
+        });
+        for group in scene.debug.chunk_by(|a, b| a.write == b.write) {
+            let first = sprites.vertices.len();
+            for vertex in group {
+                let [x, y] = vertex.position;
+                let [nx, ny] = ndc(x, y);
+                let w = vertex.depth.max(1.0);
+                sprites.vertices.push(SpriteVertex {
+                    clip: [nx * w, ny * w, render::depth_ndc(w) * w, w],
+                    uv: [0.0, 0.0],
+                    colour: vertex.colour.map(|channel| f32::from(channel) / 255.0),
+                    mode: SPRITE_TEXTURED,
+                    key: NEVER_MASKED,
+                });
+            }
+            if let Some(run) = sprites.run(&WHITE, first) {
+                sprites.debug.push((run, group[0].write));
+            }
         }
     }
     sprites
