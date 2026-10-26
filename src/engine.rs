@@ -1807,8 +1807,7 @@ impl DeathBackdrop {
     /// background to record into a `target` (`[width, height]`) scene: the
     /// frame, or the bake and its generation when HD art was captured over
     /// it. Art that cannot be baked (a model, a blended punch) leaves the
-    /// frame without its HD art. A band wider than 4:3 gives its centred
-    /// 320 columns, the space the screen's camera projects into.
+    /// frame without its HD art.
     fn update(
         &mut self,
         band: &Framebuffer,
@@ -1822,22 +1821,18 @@ impl DeathBackdrop {
         self.frame.height = height;
         self.frame.rgba.clear();
         self.frame.rgba.resize(stride * height as usize, 0);
+        // The DIED screen never asks for a wider canvas: a wider aspect
+        // only shortens its band.
+        debug_assert_eq!(band.width, width, "the DIED screen draws in 4:3 columns");
         let rows = (band.height as usize).min(height as usize - top);
-        let band_stride = band.width as usize * 4;
-        let columns = (band.width as usize).min(width as usize) * 4;
-        let left = (band.width.saturating_sub(width) / 2) as usize * 4;
-        for row in 0..rows {
-            let from = row * band_stride + left;
-            let Some(source) = band.rgba.get(from..from + columns) else {
-                break;
-            };
-            let to = (top + row) * stride;
-            self.frame.rgba[to..to + columns].copy_from_slice(source);
-        }
+        let Some(source) = band.rgba.get(..rows * stride) else {
+            return (&self.frame, None);
+        };
+        self.frame.rgba[top * stride..(top + rows) * stride].copy_from_slice(source);
         let Some(overlay) = band
             .hd
             .as_deref()
-            .filter(|overlay| !overlay.quads.is_empty() && band.width == width)
+            .filter(|overlay| !overlay.quads.is_empty())
         else {
             return (&self.frame, None);
         };
@@ -5942,6 +5937,11 @@ impl GameSession {
     /// Hand the session to the software backend: the next frames are drawn
     /// by [`GameSession::render`].
     fn use_software(&mut self) {
+        // The GPU frames left the framebuffer without the room: a menu open
+        // over it draws the frozen room once more, now in software.
+        if self.gpu_backend && self.menu.is_some() {
+            self.freeze_room_frame = true;
+        }
         self.gpu_backend = false;
         self.gpu_scene_visible = false;
         self.layered = false;
@@ -6007,11 +6007,14 @@ impl GameSession {
         // The pause-menu fade is consumed as it draws; the white pass draws
         // the same one, and a frame that fails is redrawn with it.
         let menu_fade = self.menu_fade_draw;
+        let failed = |session: &mut Self, err| {
+            session.menu_fade_draw = menu_fade;
+            session.gpu_scene_visible = false;
+            session.layered = false;
+            Err(err)
+        };
         if let Err(err) = self.render_pass(pack, ScenePass::Record(gpu)) {
-            self.menu_fade_draw = menu_fade;
-            self.gpu_scene_visible = false;
-            self.layered = false;
-            return Err(err);
+            return failed(self, err);
         }
         self.draw_ui_layer();
         if let Some(overlay) = self.framebuffer.hd.as_mut() {
@@ -6026,7 +6029,9 @@ impl GameSession {
             let drawn = self.render_pass(pack, ScenePass::White);
             std::mem::swap(&mut self.framebuffer, &mut white);
             self.framebuffer_white = Some(white);
-            drawn?;
+            if let Err(err) = drawn {
+                return failed(self, err);
+            }
         }
         self.freeze_room_frame = false;
         Ok(())
@@ -18498,11 +18503,33 @@ mod tests {
         assert!(session.white_frame().is_some(), "the overlay is layered");
     }
 
+    /// Room 106 after a minute of idle ticks with the pause menu opening
+    /// over it, and the frame a software-only session draws for it.
+    fn paused_room_and_its_software_frame(
+        pack: &Pack,
+        save_dir: &Path,
+    ) -> (Box<GameSession>, Vec<u8>) {
+        let session = || {
+            let mut session =
+                GameSession::from_room(pack, RoomId::parse("106").unwrap(), save_dir).unwrap();
+            for _ in 0..60 {
+                session
+                    .tick(pack, UiInput::default(), player::Input::default(), false)
+                    .unwrap();
+            }
+            session
+        };
+        let mut software = session();
+        software.begin_menu_open(pack);
+        software.render(pack);
+        (session(), software.framebuffer.rgba.clone())
+    }
+
     /// A scene the GPU fails to record is an error, not a frame drawn in
     /// software: the session hands itself to the software backend, which
-    /// draws the frame the GPU would have (the room, not a frozen or black
-    /// frame). Needs `ARKLAY_RE1_PACK` and a SPIR-V capable GPU; skips
-    /// without a GPU.
+    /// draws the frame a software-only session would (the room under the
+    /// menu, not a frozen black frame). Needs `ARKLAY_RE1_PACK` and a
+    /// SPIR-V capable GPU; skips without a GPU.
     #[test]
     #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
     fn gpu_scene_failure_switches_the_session_to_software() {
@@ -18523,13 +18550,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let save_dir = TempDir::new();
-        let mut session =
-            GameSession::from_room(&pack, RoomId::parse("106").unwrap(), &save_dir.0).unwrap();
-        for _ in 0..60 {
-            session
-                .tick(&pack, UiInput::default(), player::Input::default(), false)
-                .unwrap();
-        }
+        let (mut session, software) = paused_room_and_its_software_frame(&pack, &save_dir.0);
         session.render_layers(&pack, &mut gpu).unwrap();
         assert!(session.gpu_scene_visible, "the room is the GPU scene");
         // The pause menu opens over a room frame still to be drawn.
@@ -18547,8 +18568,44 @@ mod tests {
         session.render(&pack);
         assert!(!session.freeze_room_frame);
         assert!(
-            session.framebuffer.rgba.iter().any(|&byte| byte != 0),
-            "the software backend draws the room under the menu"
+            session.framebuffer.rgba == software,
+            "the software backend draws the frame a software session does"
+        );
+    }
+
+    /// A switch to the software backend after the GPU drew the frozen room
+    /// (a present failing while the menu is up) draws that room again in
+    /// software: the GPU frames left none in the framebuffer.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn a_later_switch_to_software_redraws_the_frozen_room() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let Ok(_sdl) = SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let save_dir = TempDir::new();
+        let (mut session, software) = paused_room_and_its_software_frame(&pack, &save_dir.0);
+        session.begin_menu_open(&pack);
+        session.render_layers(&pack, &mut gpu).unwrap();
+        session.render_layers(&pack, &mut gpu).unwrap();
+        assert!(!session.freeze_room_frame, "the room is frozen on the GPU");
+        session.use_software();
+        session.render(&pack);
+        assert!(
+            session.framebuffer.rgba == software,
+            "the software backend draws the frozen room under the menu"
         );
     }
 
