@@ -549,13 +549,17 @@ fn parse_region(text: &str) -> Result<arklay::scd::akscr::Region, String> {
 
 /// Parse a pack path with an optional region prefix (`jpn=jpn.akpak`).
 fn parse_region_pack(text: &str) -> Result<(arklay::scd::akscr::Region, PathBuf), String> {
-    let prefixed = text
-        .split_once('=')
-        .and_then(|(region, path)| Some((arklay::scd::akscr::Region::parse(region)?, path)));
-    Ok(match prefixed {
-        Some((region, path)) => (region, PathBuf::from(path)),
-        None => (arklay::scd::akscr::Region::Usa, PathBuf::from(text)),
-    })
+    use arklay::scd::akscr::Region;
+    let Some((prefix, path)) = text.split_once('=') else {
+        return Ok((Region::Usa, PathBuf::from(text)));
+    };
+    let region = Region::parse(prefix).ok_or_else(|| {
+        format!("{prefix:?} is not a region; use usa, jpn or eur (French and German are eur)")
+    })?;
+    if path.is_empty() {
+        return Err(format!("{prefix}= needs a pack path"));
+    }
+    Ok((region, PathBuf::from(path)))
 }
 
 /// Parse a hex RDT id such as `1030`.
@@ -676,10 +680,14 @@ fn export_rooms(packs: &[(arklay::scd::akscr::Region, PathBuf)], out: &Path) -> 
         arklay::atomic::write(&path, text.as_bytes())
             .with_context(|| format!("failed to write {}", path.display()))?;
     }
+    let rdts: Vec<String> = rooms
+        .iter()
+        .map(|(region, rooms)| format!("{} {region} RDTs", rooms.len()))
+        .collect();
     println!(
-        "exported {} rooms ({} RDTs) to {}",
+        "exported {} rooms ({}) to {}",
         merged.len(),
-        rooms.iter().map(|(_, rooms)| rooms.len()).sum::<usize>(),
+        rdts.join(", "),
         out.display()
     );
     Ok(())

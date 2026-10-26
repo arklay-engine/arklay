@@ -126,8 +126,10 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
                         .with_context(|| format!("failed to compile {relative} for room {id:04X}"))
                 };
                 let container = compile(variant)?;
+                // `variant` is the USA build; check every other region.
                 for region in crate::scd::akscr::Region::ALL {
-                    if !by_region.contains(&region)
+                    if region != crate::scd::akscr::Region::Usa
+                        && !by_region.contains(&region)
                         && compile(variant.in_region(region))? != container
                     {
                         by_region.push(region);

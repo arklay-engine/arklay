@@ -5700,16 +5700,17 @@ mod tests {
 
         let pack = crate::pack::Pack::open(&out).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("room/"), 348);
-        // Every RDT with scripts runs its checked-in room script (the other 28
-        // are the stubs of unused room slots), except, in the original PC
-        // release, the 37 rooms the Steam release's scripts fix.
-        let scripts = count("scd/");
-        assert!(matches!(scripts, 283 | 320), "{scripts} room scripts");
-        // One cut set per distinct room; stages 6/7 reuse the stage 1/2 pak
-        // files (620 distinct paks) but still name their cuts with their own
+        // Every RDT with scripts runs its checked-in room script. USA and JPN
+        // leave 28 unused room slots as stubs without scripts; the French and
+        // German (EUR) installs fill most of them with leftover RDTs and add
+        // rooms 313 and 412. One cut set per distinct room; stages 6/7 reuse
+        // the stage 1/2 pak files but still name their cuts with their own
         // room id, e.g. roomcut/600_000.bmp.
-        assert_eq!(count("roomcut/"), 842);
+        let counts = (count("room/"), count("scd/"), count("roomcut/"));
+        assert!(
+            matches!(counts, (348, 320, 842) | (352, 351, 920)),
+            "{counts:?} rooms, room scripts and cuts"
+        );
         // One mask page per camera that carries sprite groups; stages 6/7
         // reuse the stage 1/2 pages.
         assert_eq!(count("roommask/"), 601);

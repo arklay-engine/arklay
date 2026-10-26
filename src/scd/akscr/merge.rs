@@ -214,6 +214,7 @@ pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
     }
     let mut inputs: Vec<(Vec<Variant>, &str)> = Vec::new();
     for &(variant, text) in variants {
+        // The same player and mansion variant, in another region.
         let twin = |kind: &Variant| kind.in_region(variant.region) == variant;
         match inputs
             .iter_mut()

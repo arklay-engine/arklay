@@ -244,11 +244,11 @@ fn emit_room_scripts() {
                 (original, compile(&text, variant, path))
             };
             // One build per distinct `AUTHENTIC` digest, the first region's.
-            let mut releases: Vec<(String, (u64, Vec<u8>))> = Vec::new();
+            let mut builds: Vec<(Region, (u64, Vec<u8>))> = Vec::new();
             for region in Region::ALL {
                 let (original, container) = build(Variant::for_room(id).in_region(region));
                 if let Some((first, (_, first_container))) =
-                    releases.iter().find(|(_, (other, _))| *other == original)
+                    builds.iter().find(|(_, (other, _))| *other == original)
                 {
                     assert!(
                         *first_container == container,
@@ -259,10 +259,10 @@ fn emit_room_scripts() {
                     );
                     continue;
                 }
-                releases.push((region.to_string(), (original, container)));
+                builds.push((region, (original, container)));
             }
-            for (region, (original, container)) in releases {
-                let file = scd_dir.join(format!("{id:04x}-{}.scd", region.to_lowercase()));
+            for (region, (original, container)) in builds {
+                let file = scd_dir.join(format!("{id:04x}-{}.scd", region.symbol().to_lowercase()));
                 std::fs::write(&file, container).expect("failed to write room bytecode");
                 writeln!(
                     out,
