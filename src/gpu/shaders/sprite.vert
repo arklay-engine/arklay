@@ -6,14 +6,17 @@ layout(location = 0) in vec4 in_clip;
 layout(location = 1) in vec2 in_uv;
 layout(location = 2) in vec4 in_colour;
 layout(location = 3) in uint in_mode;
+layout(location = 4) in float in_key;     // painter's key a mask hides at, or -1
 
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) flat out vec4 out_colour;
 layout(location = 2) flat out uint out_mode;
+layout(location = 3) flat out float out_key;
 
 void main() {
     gl_Position = in_clip;
     out_uv = in_uv;
     out_colour = in_colour;
     out_mode = in_mode;
+    out_key = in_key;
 }

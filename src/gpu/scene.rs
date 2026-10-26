@@ -5,15 +5,20 @@
 //! The conventions mirror the software rasterizer in [`crate::render`]:
 //!
 //! * A mesh vertex is stored with the input Y conjugation already applied
-//!   (`D v`, or `v` for a raw-Y packet), so a joint maps it with the rows
-//!   `(R0, t0)`, `(-R1, t1)`, `(R2, t2)` exactly like `fixed_mul`.
-//! * The cut camera projects `sx = vx*fov/vz + 160 + shake_x` and
-//!   `sy = 120 + shake_y - vy*fov/vz`; the shader writes that as a clip-space
-//!   position with `w = vz`, so the hardware divide reproduces it.
-//! * Depth is the hyperbolic `far * (vz - near) / ((far - near) * vz)` with
-//!   `near = 2 * fov`, the software near plane. Sprites without geometry
-//!   (masks, effects, shadows) take the same mapping of their painter's key,
-//!   which is a view-Z in the same units.
+//!   (`D v`, or `v` for a raw-Y packet), and each joint's uniform rows are
+//!   the reference's object view transform (`CompMatrix` of the stored
+//!   camera and the joint, with the shake tilt), the same terms
+//!   `collect_triangles` projects through.
+//! * The shader projects `sx = 160 + shake_x + vx * (fov / vz)` and
+//!   `sy = 120 + shake_y - vy * (fov / vz)` like the software, then maps
+//!   them through the reference's ortho matrix with `w = vz`.
+//! * Every vertex carries its packet's corners, so a packet with any corner
+//!   inside the near limit (`max(2 * fov, 1)`) is dropped whole and a packet
+//!   is culled on its first three corners, as in software.
+//! * Depth is the reference's linear ramp `TmdDepthNdc` written as `z / w`,
+//!   so it interpolates linearly in screen space like llvmpipe's. Sprites
+//!   without geometry (masks, effects) take the same mapping of their
+//!   painter's key, which is a view-Z in the same units.
 
 use crate::anim::Mat4x3;
 use crate::model::{Texture8, Tmd};
@@ -27,19 +32,23 @@ use crate::state::Image;
 pub const LOGICAL_WIDTH: f32 = 320.0;
 /// The logical frame the software rasterizer draws.
 pub const LOGICAL_HEIGHT: f32 = 240.0;
-/// The far plane of the depth mapping, in view-Z units; comfortably past any
-/// room (the 16-bit world never reaches it).
-pub const FAR_PLANE: f32 = 1_048_576.0;
 /// The joints one draw can address: the software path's `hidden_joints` mask
 /// is 32 bits, and no shipped model has more objects.
 pub const MAX_JOINTS: usize = 32;
 
+/// `in_packed` bits 16..22: which of `MeshVertex::corners` are the
+/// triangle's three, two bits each (for its painter's key).
+const PACKED_TRIANGLE_SHIFT: u32 = 16;
 /// `in_packed` bit: the packet is semi-transparent (ABE or the TMD flag).
 const PACKED_BLEND: u32 = 1 << 24;
 /// `in_packed` bit: an untextured packet painting its colour word.
 const PACKED_UNTEXTURED: u32 = 1 << 25;
+/// `in_packed` bits 26..29: the corner's `uv_nudge` (`TmdPrim::uv_nudge`).
+const PACKED_NUDGE_SHIFT: u32 = 26;
+/// `in_packed` bits 29..31: which of `MeshVertex::corners` the vertex is.
+const PACKED_CORNER_SHIFT: u32 = 29;
 
-/// One mesh corner in the static vertex buffer (48 bytes).
+/// One mesh corner in the static vertex buffer (84 bytes).
 /// A `repr(C)` type made only of 4-byte scalars, with no padding, so its
 /// bytes can be uploaded as they are.
 ///
@@ -61,15 +70,21 @@ unsafe impl Plain for [f32; 4] {}
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MeshVertex {
-    /// Stored vertex with the input Y conjugation applied.
-    pub position: [f32; 3],
+    /// Every corner of the vertex's packet, stored with the input Y
+    /// conjugation applied: the three the software culls the packet on (a
+    /// quad's first fan triangle), then a quad's remaining corner (the first
+    /// again for a triangle). The vertex is `corners[corner]`; the shader
+    /// drops the whole packet when any corner is inside the near limit or the
+    /// packet faces away, exactly like `collect_triangles`.
+    pub corners: [[f32; 3]; 4],
     /// Stored normal with its Y negated (the reference's `PSXObjVtx` form).
     pub normal: [f32; 3],
     /// Texel coordinates including the packet's texture-page offset.
     pub uv: [f32; 2],
     /// An untextured packet's colour word / 1024; white otherwise.
     pub colour: [f32; 3],
-    /// `joint | palette_row << 8 | blend << 24 | untextured << 25`.
+    /// `joint | palette_row << 8 | triangle_corners << 16 | blend << 24 |
+    /// untextured << 25 | uv_nudge << 26 | corner << 29`.
     pub packed: u32,
 }
 
@@ -94,10 +109,29 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
     for (joint, object) in mesh.objects.iter().enumerate() {
         let joint = joint.min(0xFF) as u32;
         for prim in &object.prims {
-            let corners = prim
+            // The packet's corners in the order the shader tests them.
+            let ring = match prim.quad {
+                Some(quad) => [quad[0], quad[1], quad[3], quad[2]],
+                None => [
+                    prim.vertices[0],
+                    prim.vertices[1],
+                    prim.vertices[2],
+                    prim.vertices[0],
+                ],
+            };
+            let Some(ring_positions) = ring
+                .iter()
+                .map(|&index| object.vertices.get(usize::from(index)))
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            let Some(slots) = prim
                 .vertices
-                .map(|index| object.vertices.get(usize::from(index)));
-            let [Some(v0), Some(v1), Some(v2)] = corners else {
+                .iter()
+                .map(|vertex| ring.iter().position(|index| index == vertex))
+                .collect::<Option<Vec<_>>>()
+            else {
                 continue;
             };
             let mut normals = prim
@@ -123,19 +157,27 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
             let colour = prim
                 .flat_color
                 .map_or([1.0; 3], |colour| colour.map(|c| f32::from(c) / 1024.0));
-            let mut packed = joint | (row & 0xFFFF) << 8;
+            let triangle = slots.iter().enumerate().fold(0, |bits, (corner, &slot)| {
+                bits | (slot as u32) << (2 * corner)
+            });
+            let mut packed = joint | (row & 0xFF) << 8 | triangle << PACKED_TRIANGLE_SHIFT;
             if blend {
                 packed |= PACKED_BLEND;
             }
             if prim.flat_color.is_some() {
                 packed |= PACKED_UNTEXTURED;
             }
-            let target = if blend { &mut blended } else { &mut opaque };
-            for (corner, vertex) in [v0, v1, v2].into_iter().enumerate() {
+            let corners: [[f32; 3]; 4] = std::array::from_fn(|corner| {
+                let vertex = ring_positions[corner];
                 let y = if prim.raw_y { vertex[1] } else { -vertex[1] };
+                [f32::from(vertex[0]), f32::from(y), f32::from(vertex[2])]
+            });
+            let target = if blend { &mut blended } else { &mut opaque };
+            for (corner, &slot) in slots.iter().enumerate() {
                 let normal = normals[corner].unwrap_or(substitute);
+                let nudge = u32::from(prim.uv_nudge[corner] & 7);
                 target.push(MeshVertex {
-                    position: [f32::from(vertex[0]), f32::from(y), f32::from(vertex[2])],
+                    corners,
                     normal: [
                         f32::from(normal[0]),
                         -f32::from(normal[1]),
@@ -146,7 +188,9 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
                         f32::from(prim.uv[corner][1]) + page_y,
                     ],
                     colour,
-                    packed,
+                    packed: packed
+                        | nudge << PACKED_NUDGE_SHIFT
+                        | (slot as u32) << PACKED_CORNER_SHIFT,
                 });
             }
         }
@@ -163,17 +207,15 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DrawUniforms {
-    pub view: [[f32; 4]; 3],
     /// `fov, shake_x, shake_y, near`.
     pub projection: [f32; 4],
-    /// `far, 0, 0, 0`.
-    pub depth: [f32; 4],
     pub ambient: [f32; 4],
     pub light_colour: [[f32; 4]; 3],
     pub tint: [f32; 4],
-    /// `hidden_joints, 0, 0, 0`.
+    /// `hidden_joints, mode (`DRAW_*`), texture width, texture height`.
     pub flags: [u32; 4],
-    /// Per joint: the three world rows, then the three light vectors.
+    /// Per joint: the three rows of the reference's object view transform
+    /// (`render::object_view`), then the three light vectors.
     pub joints: [[f32; 4]; MAX_JOINTS * 6],
 }
 
@@ -191,27 +233,26 @@ impl DrawUniforms {
     }
 }
 
-/// The view rows and projection terms shared by every draw through `camera`.
-fn camera_terms(camera: &Camera) -> ([[f32; 4]; 3], [f32; 4]) {
-    let view = std::array::from_fn(|row| {
-        let r = camera.view[row];
-        [
-            r[0] as f32 / 4096.0,
-            r[1] as f32 / 4096.0,
-            r[2] as f32 / 4096.0,
-            camera.trans[row] as f32,
-        ]
-    });
+/// The projection terms shared by every draw through `camera`: `fov`, the
+/// shake offset and the software's near limit.
+fn camera_terms(camera: &Camera) -> [f32; 4] {
     let fov = camera.fov as f32;
-    (
-        view,
-        [
-            fov,
-            camera.screen[0] as f32,
-            camera.screen[1] as f32,
-            2.0 * fov,
-        ],
-    )
+    [
+        fov,
+        camera.screen[0] as f32,
+        camera.screen[1] as f32,
+        (2.0 * fov).max(1.0),
+    ]
+}
+
+/// The view-space point `mesh.vert` computes for a vertex-buffer position
+/// through one joint's rows.
+#[cfg(test)]
+fn view_point(rows: &[[f32; 4]], position: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|row| {
+        let r = rows[row];
+        r[0] * position[0] + r[1] * position[1] + r[2] * position[2] + r[3]
+    })
 }
 
 /// The per-joint light vector the shader dots with the stored normal.
@@ -245,11 +286,43 @@ fn light_vector(
     out
 }
 
+/// `flags.y` of a mesh draw: [`DRAW_CULL`] unless it is the mirror copy, and
+/// a transparent record's [`DRAW_RECORD`] bits.
+fn draw_mode(blend_weight: Option<u8>, cull: bool) -> u32 {
+    let mut mode = if cull { DRAW_CULL } else { 0 };
+    if let Some(weight) = blend_weight {
+        mode |= DRAW_RECORD;
+        if weight != 0 {
+            mode |= DRAW_RECORD_BLENDS;
+        }
+    }
+    mode
+}
+
+/// Which vertices of a mesh's buffer the pass draws, as `(first, count)` of
+/// `vertex_count` with the blended packets from `blend_start`: the opaque
+/// pass draws them all (its shader drops the blending texels), the blend pass
+/// the blended packets, or every packet of a blending record and none of a
+/// record at weight zero.
+pub fn pass_range(
+    blend_weight: Option<u8>,
+    blend_pass: bool,
+    blend_start: u32,
+    vertex_count: u32,
+) -> (u32, u32) {
+    match (blend_pass, blend_weight) {
+        (false, _) | (true, Some(1..)) => (0, vertex_count),
+        (true, Some(0)) => (0, 0),
+        (true, None) => (blend_start, vertex_count - blend_start),
+    }
+}
+
 /// The uniform block of one mesh draw through `camera`.
 ///
 /// `room_object` selects the room pass's light rotation (the software
 /// `room_object` flag; never set for the mirror copy). `mirror` hides the
-/// joints the mirror probe rejects, on top of the mesh's own hidden joints.
+/// joints the mirror probe rejects, on top of the mesh's own hidden joints,
+/// and draws unculled like the software's reflection.
 pub fn draw_uniforms(
     camera: &Camera,
     mesh: &EntityMesh<'_>,
@@ -257,7 +330,7 @@ pub fn draw_uniforms(
     room_object: bool,
     mirror: Option<&MirrorPass>,
 ) -> DrawUniforms {
-    let (view, projection) = camera_terms(camera);
+    let projection = camera_terms(camera);
     let stored = stored_camera_matrix(camera.from, camera.look_at);
     let mut joints = [[0.0f32; 4]; MAX_JOINTS * 6];
     let mut hidden = 0u32;
@@ -271,14 +344,14 @@ pub fn draw_uniforms(
             continue;
         };
         let base = index * 6;
+        let (rotation, translation, _) = render::object_view(camera, joint);
         for row in 0..3 {
-            let sign = if row == 1 { -1.0 } else { 1.0 };
-            let r = joint.r[row];
+            let r = rotation[row];
             joints[base + row] = [
-                sign * r[0] as f32 / 4096.0,
-                sign * r[1] as f32 / 4096.0,
-                sign * r[2] as f32 / 4096.0,
-                joint.t[row] as f32,
+                r[0] as f32,
+                r[1] as f32,
+                r[2] as f32,
+                translation[row] as f32,
             ];
         }
         for (slot, source) in light.sources.iter().enumerate() {
@@ -287,9 +360,7 @@ pub fn draw_uniforms(
     }
     let ambient = light.ambient.map(|channel| channel as f32);
     DrawUniforms {
-        view,
         projection,
-        depth: [FAR_PLANE, 0.0, 0.0, 0.0],
         ambient: [ambient[0], ambient[1], ambient[2], 0.0],
         light_colour: light.sources.map(|source| {
             let colour = source
@@ -303,48 +374,62 @@ pub fn draw_uniforms(
             f32::from(mesh.tint[2]),
             0.0,
         ],
-        flags: [hidden, 0, 0, 0],
+        flags: [
+            hidden,
+            draw_mode(mesh.blend_weight, mirror.is_none()),
+            mesh.texture.width,
+            mesh.texture.height,
+        ],
         joints,
     }
 }
 
 /// The clip-space position `mesh.vert` computes for a view-space point, for
-/// tests and the CPU-side sprite path.
+/// tests: the software's float projection (`RefProjection::project`) mapped
+/// through the reference's ortho matrix and premultiplied by `w = vz`, with
+/// the linear depth ramp of `TmdDepthNdc`.
 pub fn clip_position(view: [f32; 3], fov: f32, shake: [f32; 2]) -> [f32; 4] {
-    let near = 2.0 * fov;
+    let iz = fov / view[2];
+    let sx = 160.0 + shake[0] + view[0] * iz;
+    let sy = 120.0 + shake[1] - view[1] * iz;
+    let w = view[2];
     [
-        (view[0] * fov + shake[0] * view[2]) / 160.0,
-        (view[1] * fov - shake[1] * view[2]) / 120.0,
-        FAR_PLANE * (view[2] - near) / (FAR_PLANE - near),
-        view[2],
+        (sx * (2.0 / LOGICAL_WIDTH) - 1.0) * w,
+        (1.0 - sy * (2.0 / LOGICAL_HEIGHT)) * w,
+        render::depth_ndc(w) * w,
+        w,
     ]
 }
 
-/// The normalized depth of a painter's key (a view-Z), clamped to the depth
-/// range: the depth a mesh fragment at that view-Z would have.
-pub fn key_depth(key: u32, fov: i32) -> f32 {
-    let near = 2.0 * fov as f32;
-    let z = key as f32;
-    if z <= near {
-        return 0.0;
-    }
-    (FAR_PLANE * (z - near) / ((FAR_PLANE - near) * z)).clamp(0.0, 1.0)
+/// The normalized depth of a painter's key (a view-Z): the depth a mesh
+/// fragment at that view-Z would have (`TmdDepthNdc`).
+pub fn key_depth(key: u32) -> f32 {
+    render::depth_ndc(key as f32)
 }
 
 /// The fragment-stage uniform block of a mesh draw (`mesh.frag`'s
-/// `Material`): `x` the background weight of a blended texel, `y` the pass
-/// (0 opaque, 1 blend).
+/// `Material`): `x` the alpha of a blended texel, `render::blend_alpha`
+/// rounded to unorm8 as the software blend rounds it, `y` the pass (0
+/// opaque, 1 blend).
 pub fn material(blend_weight: Option<u8>, blend_pass: bool) -> [f32; 4] {
-    let weight = f32::from(blend_weight.unwrap_or(0x80)) / 256.0;
-    [weight, if blend_pass { 1.0 } else { 0.0 }, 0.0, 0.0]
+    let alpha = (render::blend_alpha(blend_weight) * 255.0).round_ties_even() / 255.0;
+    [alpha, if blend_pass { 1.0 } else { 0.0 }, 0.0, 0.0]
 }
+
+/// `flags.y` bit: cull packets facing away.
+pub const DRAW_CULL: u32 = 1;
+/// `flags.y` bit: the mesh is a transparent record (`EntityMesh::blend_weight`):
+/// every packet is full-bright and blends by [`DRAW_RECORD_BLENDS`] alone.
+pub const DRAW_RECORD: u32 = 2;
+/// `flags.y` bit: a record's packets all blend (a non-zero weight).
+pub const DRAW_RECORD_BLENDS: u32 = 4;
 
 /// `sprite.frag` modes.
 pub const SPRITE_TEXTURED: u32 = 0;
 pub const SPRITE_SHADOW: u32 = 1;
 pub const SPRITE_BACKGROUND: u32 = 2;
 
-/// One screen-space sprite corner (44 bytes).
+/// One screen-space sprite corner (48 bytes).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpriteVertex {
@@ -352,6 +437,23 @@ pub struct SpriteVertex {
     pub uv: [f32; 2],
     pub colour: [f32; 4],
     pub mode: u32,
+    /// The painter's key at or behind which a mask hides the sprite
+    /// ([`NEVER_MASKED`] for none); see [`MASK_KEY_RANGE`].
+    pub key: f32,
+}
+
+/// A sprite key no mask hides.
+pub const NEVER_MASKED: f32 = -1.0;
+
+/// The mask-key target's scale: a D16 depth of `key / MASK_KEY_RANGE`
+/// stores a mask's integer painter's key exactly, and the cleared 1.0 is "no
+/// mask". A mask key past the range (none ships one; `fade` buckets top out
+/// at 65520) clamps just under it.
+pub const MASK_KEY_RANGE: f32 = 65535.0;
+
+/// The mask-key target depth of a mask's painter's key.
+pub fn mask_key_depth(key: u32) -> f32 {
+    key.min(MASK_KEY_RANGE as u32 - 1) as f32 / MASK_KEY_RANGE
 }
 
 /// A contiguous run of sprite triangles sampling one image.
@@ -360,9 +462,6 @@ pub struct SpriteRun<'a> {
     pub image: &'a Image,
     pub first: u32,
     pub count: u32,
-    /// Masks write depth so the meshes behind them are hidden; everything else
-    /// only tests it.
-    pub depth_write: bool,
     /// The camera background a mask run's page belongs to, which names the
     /// mask's HD replacement when its own hash doesn't
     /// ([`crate::htexture::HdTable::paired_masks`]).
@@ -374,9 +473,20 @@ pub struct SpriteRun<'a> {
 
 /// The frame's sprites: `before` draws ahead of the meshes (background,
 /// masks, shadows), `after` behind them (the effect billboards).
+/// `mask_keys` draws first into the mask-key target: the masks again, each
+/// at [`mask_key_depth`] of its key, so the target keeps the nearest mask's
+/// key per pixel.
+///
+/// That target stands in for the painter's sort where a mask is involved:
+/// the software sorts shadows, triangles, masks and effects (submitted in
+/// that order) stably far to near, so a mask paints over a shadow or
+/// triangle whose key is at or behind its own and over an effect strictly
+/// behind it. Meshes, shadows and effects drop a fragment whose key the
+/// target says a mask covers, and the masks write no scene depth.
 #[derive(Debug, Default)]
 pub struct Sprites<'a> {
     pub vertices: Vec<SpriteVertex>,
+    pub mask_keys: Option<SpriteRun<'a>>,
     pub before: Vec<SpriteRun<'a>>,
     pub after: Vec<SpriteRun<'a>>,
 }
@@ -391,7 +501,15 @@ fn ndc(x: f32, y: f32) -> [f32; 2] {
 
 impl<'a> Sprites<'a> {
     /// Append one screen rectangle as two triangles.
-    fn push_rect(&mut self, rect: [f32; 4], uv: [f32; 4], depth: f32, colour: [f32; 4], mode: u32) {
+    fn push_rect(
+        &mut self,
+        rect: [f32; 4],
+        uv: [f32; 4],
+        depth: f32,
+        colour: [f32; 4],
+        mode: u32,
+        key: f32,
+    ) {
         let [x0, y0, x1, y1] = rect;
         let corner = |x: f32, y: f32, u: f32, v: f32| {
             let [nx, ny] = ndc(x, y);
@@ -400,6 +518,7 @@ impl<'a> Sprites<'a> {
                 uv: [u, v],
                 colour,
                 mode,
+                key,
             }
         };
         let a = corner(x0, y0, uv[0], uv[1]);
@@ -410,13 +529,12 @@ impl<'a> Sprites<'a> {
     }
 
     /// Close the vertices pushed since `first` into a run.
-    fn run(&self, image: &'a Image, first: usize, depth_write: bool) -> Option<SpriteRun<'a>> {
+    fn run(&self, image: &'a Image, first: usize) -> Option<SpriteRun<'a>> {
         let count = self.vertices.len() - first;
         (count > 0).then_some(SpriteRun {
             image,
             first: first as u32,
             count: count as u32,
-            depth_write,
             background: None,
             generation: None,
         })
@@ -449,35 +567,50 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
             1.0,
             [colour[0], colour[1], colour[2], 1.0],
             SPRITE_BACKGROUND,
+            NEVER_MASKED,
         );
-        let run = sprites.run(image, first, false).map(|run| SpriteRun {
+        let run = sprites.run(image, first).map(|run| SpriteRun {
             generation: scene.background_generation,
             ..run
         });
         sprites.before.extend(run);
     }
 
-    // The masks are opaque cut-outs at their painter's key; they write depth
-    // so the model fragments behind them fail the test.
+    // The masks are opaque cut-outs, far to near; their keys go to the
+    // mask-key target first.
     if let Some(layer) = scene.mask_layer {
-        let first = sprites.vertices.len();
-        for quad in render::mask_quads(layer, camera.screen) {
-            let (x, y) = (quad.pos.0 as f32, quad.pos.1 as f32);
-            let (w, h) = (quad.size.0 as f32, quad.size.1 as f32);
-            let (u, v) = (quad.uv.0 as f32, quad.uv.1 as f32);
-            sprites.push_rect(
-                [x, y, x + w, y + h],
-                [u, v, u + w, v + h],
-                key_depth(quad.key, camera.fov),
-                [1.0; 4],
-                SPRITE_TEXTURED,
-            );
+        let mut quads = render::mask_quads(layer, camera.screen);
+        quads.sort_by_key(|quad| std::cmp::Reverse(quad.key));
+        for keys in [true, false] {
+            let first = sprites.vertices.len();
+            for quad in &quads {
+                let (x, y) = (quad.pos.0 as f32, quad.pos.1 as f32);
+                let (w, h) = (quad.size.0 as f32, quad.size.1 as f32);
+                let (u, v) = (quad.uv.0 as f32, quad.uv.1 as f32);
+                let depth = if keys {
+                    mask_key_depth(quad.key)
+                } else {
+                    key_depth(quad.key)
+                };
+                sprites.push_rect(
+                    [x, y, x + w, y + h],
+                    [u, v, u + w, v + h],
+                    depth,
+                    [1.0; 4],
+                    SPRITE_TEXTURED,
+                    NEVER_MASKED,
+                );
+            }
+            let run = sprites.run(layer.page, first).map(|run| SpriteRun {
+                background: scene.background,
+                ..run
+            });
+            if keys {
+                sprites.mask_keys = run;
+            } else {
+                sprites.before.extend(run);
+            }
         }
-        let run = sprites.run(layer.page, first, true).map(|run| SpriteRun {
-            background: scene.background,
-            ..run
-        });
-        sprites.before.extend(run);
     }
 
     // The shadows keep their perspective-correct UVs: each projected corner
@@ -487,7 +620,7 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
     shadows.sort_by_key(|poly| std::cmp::Reverse(poly.key));
     for poly in &shadows {
         let first = sprites.vertices.len();
-        let depth = key_depth(poly.key, camera.fov);
+        let depth = key_depth(poly.key);
         let corner = |vertex: &crate::raster::GlVertex| {
             let w = vertex.w;
             let [nx, ny] = ndc(vertex.x, vertex.y);
@@ -496,14 +629,13 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                 uv: [vertex.u, vertex.v],
                 colour: vertex.color,
                 mode: SPRITE_SHADOW,
+                key: poly.key as f32,
             }
         };
         for triangle in &poly.triangles {
             sprites.vertices.extend(triangle.iter().map(corner));
         }
-        sprites
-            .before
-            .extend(sprites.run(poly.texture, first, false));
+        sprites.before.extend(sprites.run(poly.texture, first));
     }
 
     // The effect billboards draw after the meshes, far to near, with the
@@ -522,38 +654,62 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
             let (x, y) = (quad.pos[0] as f32, quad.pos[1] as f32);
             let (u, v) = (f32::from(quad.uv[0]), f32::from(quad.uv[1]));
             let source = quad.source.map(|size| f32::from(size.max(1)));
-            let tint = quad.tint.map(|channel| f32::from(channel) / 255.0);
-            let alpha = if quad.blend & 0x80 != 0 { 0.5 } else { 1.0 };
+            let (tint, alpha) = quad.colour();
             sprites.push_rect(
                 [x, y, x + quad.size[0] as f32, y + quad.size[1] as f32],
                 [u, v, u + source[0], v + source[1]],
-                key_depth(quad.key, camera.fov),
+                key_depth(quad.key),
                 [tint[0], tint[1], tint[2], alpha],
                 SPRITE_TEXTURED,
+                // An effect follows the masks in the submission order, so a
+                // mask only covers one strictly behind it.
+                quad.key as f32 - 1.0,
             );
-            sprites.after.extend(sprites.run(page, first, false));
+            sprites.after.extend(sprites.run(page, first));
         }
     }
     sprites
 }
 
-/// The palette texture of an indexed page: 256 entries per row, the STP flag
-/// in alpha. Rows past the end are padded black (the software lookup's
-/// out-of-range colour).
+/// The palette texture of an indexed page: 256 entries per row, alpha set
+/// where a blending packet blends the entry. That is every entry of a row
+/// without a knock-out twin ([`Texture8::has_knockout_twin`]) and only the
+/// STP entries of one with it, whose twin paints the rest back opaque. Rows
+/// past the end are padded black (the software lookup's out-of-range
+/// colour).
 pub fn palette_rgba(texture: &Texture8) -> (u32, Vec<u8>) {
     let rows = texture
         .palettes
         .len()
         .div_ceil(crate::model::PALETTE_ROW_LEN)
         .max(1);
+    // `has_knockout_twin` per row from one histogram of the page.
+    let mut histogram = [0usize; 256];
+    for &index in &texture.indices {
+        histogram[usize::from(index)] += 1;
+    }
+    let twins: Vec<bool> = (0..rows)
+        .map(|row| {
+            let (mut stp, mut opaque) = (0usize, 0usize);
+            for (index, &count) in histogram.iter().enumerate() {
+                if texture.palette_stp(row, index as u8) {
+                    stp += count;
+                } else if index != 0 {
+                    opaque += count;
+                }
+            }
+            stp > 0 && opaque > stp
+        })
+        .collect();
     let mut rgba = vec![0u8; rows * crate::model::PALETTE_ROW_LEN * 4];
     for (index, entry) in texture.palettes.iter().enumerate() {
         let stp = texture.stp.get(index).copied().unwrap_or(false);
+        let blends = stp || !twins[index / crate::model::PALETTE_ROW_LEN];
         rgba[index * 4..index * 4 + 4].copy_from_slice(&[
             entry[0],
             entry[1],
             entry[2],
-            if stp { 255 } else { 0 },
+            if blends { 255 } else { 0 },
         ]);
     }
     (rows as u32, rgba)
@@ -702,6 +858,11 @@ mod tests {
         }
     }
 
+    /// The vertex's own position among its packet's corners.
+    fn position(vertex: &MeshVertex) -> [f32; 3] {
+        vertex.corners[(vertex.packed >> PACKED_CORNER_SHIFT & 3) as usize]
+    }
+
     #[test]
     fn mesh_vertices_put_blend_packets_last_and_drop_bad_indices() {
         let built = mesh_vertices(&mesh());
@@ -709,46 +870,134 @@ mod tests {
         assert_eq!(built.vertices.len(), 9);
         assert_eq!(built.blend_start, 6);
         let first = built.vertices[0];
-        assert_eq!(first.position, [10.0, -20.0, 30.0]);
+        assert_eq!(position(&first), [10.0, -20.0, 30.0]);
         assert_eq!(first.normal, [0.0, 4096.0, 0.0]);
         // Page 1 of the low row: +128 on u, +256 on v; palette row 1.
         assert_eq!(first.uv, [129.0, 258.0]);
-        assert_eq!((first.packed >> 8) & 0xFFFF, 1);
+        assert_eq!((first.packed >> 8) & 0xFF, 1);
         assert_eq!(first.packed & PACKED_BLEND, 0);
+        // A triangle packet's fourth corner repeats its first.
+        assert_eq!(first.corners[3], first.corners[0]);
+        assert_eq!(position(&built.vertices[2]), [70.0, -80.0, 90.0]);
         // The raw-Y packet keeps the stored Y.
-        assert_eq!(built.vertices[3].position, [10.0, 20.0, 30.0]);
+        assert_eq!(position(&built.vertices[3]), [10.0, 20.0, 30.0]);
         assert_ne!(built.vertices[6].packed & PACKED_BLEND, 0);
+    }
+
+    #[test]
+    fn quad_halves_carry_the_whole_packet_and_their_nudges() {
+        // A quad's ring (0, 1, 3, 2) fans into (0, 1, 3) and (0, 3, 2).
+        let quad = [0u16, 1, 2, 3];
+        let mut halves = [prim([0, 1, 3]), prim([0, 3, 2])];
+        for half in &mut halves {
+            half.quad = Some(quad);
+        }
+        halves[0].uv_nudge = [0, 5, 0];
+        let tmd = Tmd {
+            objects: vec![TmdObject {
+                vertices: vec![[0, 0, 0], [100, 0, 0], [0, 100, 0], [100, 100, 0]],
+                normals: vec![[0, -4096, 0]],
+                prims: halves.to_vec(),
+            }],
+        };
+        let built = mesh_vertices(&tmd);
+        assert_eq!(built.vertices.len(), 6);
+        // Every vertex lists the quad's culled corners (0, 1, 3), then 2.
+        let ring = [
+            [0.0, 0.0, 0.0],
+            [100.0, 0.0, 0.0],
+            [100.0, -100.0, 0.0],
+            [0.0, -100.0, 0.0],
+        ];
+        for vertex in &built.vertices {
+            assert_eq!(vertex.corners, ring);
+        }
+        let slots: Vec<u32> = built
+            .vertices
+            .iter()
+            .map(|vertex| vertex.packed >> PACKED_CORNER_SHIFT & 3)
+            .collect();
+        assert_eq!(slots, [0, 1, 2, 0, 2, 3]);
+        assert_eq!(built.vertices[1].packed >> PACKED_NUDGE_SHIFT & 7, 5);
+        assert_eq!(built.vertices[0].packed >> PACKED_NUDGE_SHIFT & 7, 0);
+        // A quad with a corner out of range is dropped whole.
+        let mut broken = tmd.clone();
+        broken.objects[0].vertices.pop();
+        assert!(mesh_vertices(&broken).vertices.is_empty());
     }
 
     #[test]
     fn clip_position_reproduces_the_software_projection() {
         let mut camera = Camera::from_points([1200, -1800, 6000], [0, -900, 0], 600);
         camera.screen = [2, -1];
-        let (view, projection) = camera_terms(&camera);
-        for world in [[0, -900, 0], [300, -1200, -500], [-700, 0, 900]] {
-            let expected = camera.project(world).unwrap();
-            let world_f = world.map(|value| value as f32);
-            let v: [f32; 3] = std::array::from_fn(|row| {
-                view[row][0] * world_f[0]
-                    + view[row][1] * world_f[1]
-                    + view[row][2] * world_f[2]
-                    + view[row][3]
+        let projection = camera_terms(&camera);
+        let mut joint = identity();
+        joint.r = crate::anim::rotation_matrix(300, 1200, 50);
+        joint.t = [100, -400, 250];
+        let texture = Texture8 {
+            width: 256,
+            height: 256,
+            indices: vec![],
+            palettes: vec![],
+            stp: vec![],
+        };
+        let tmd = mesh();
+        let joints = [joint];
+        let entity = EntityMesh {
+            mesh: &tmd,
+            texture: &texture,
+            joints: &joints,
+            tint: [255; 3],
+            blend_weight: None,
+            hidden_joints: 0,
+            light_pos: None,
+            per_joint_light: false,
+            light_rotation: None,
+            joint_colours: crate::render::NO_JOINT_COLOURS,
+            complex_object: None,
+            aliased_light: false,
+        };
+        let light = Lighting {
+            ambient: [0; 3],
+            lights: Default::default(),
+        }
+        .latched([0; 3]);
+        let uniforms = draw_uniforms(&camera, &entity, &light, false, None);
+        assert_eq!(uniforms.flags, [!1, DRAW_CULL, 256, 256]);
+        assert_eq!(projection[3], 1200.0);
+        let (rotation, translation, near) = render::object_view(&camera, &joint);
+        assert_eq!(near, 1200.0);
+        for stored in [[0i16, 900, 0], [300, 1200, -500], [-700, 0, 900]] {
+            // The vertex buffer's conjugated position.
+            let position = [
+                f32::from(stored[0]),
+                -f32::from(stored[1]),
+                f32::from(stored[2]),
+            ];
+            // `RefProjection::project` in doubles.
+            let p = position.map(f64::from);
+            let [vx, vy, vz] = std::array::from_fn(|row| {
+                let m = rotation[row];
+                m[0] * p[0] + m[1] * p[1] + m[2] * p[2] + translation[row]
             });
+            let expected = [162.0 + vx * 600.0 / vz, 119.0 - vy * 600.0 / vz];
+            let v = view_point(&uniforms.joints[..3], position);
             let clip = clip_position(v, projection[0], [projection[1], projection[2]]);
             let sx = (clip[0] / clip[3] + 1.0) * 160.0;
             let sy = (1.0 - clip[1] / clip[3]) * 120.0;
             assert!(
-                (sx - expected[0] as f32).abs() <= 1.0,
+                (f64::from(sx) - expected[0]).abs() < 1e-2,
                 "{sx} vs {expected:?}"
             );
             assert!(
-                (sy - expected[1] as f32).abs() <= 1.0,
+                (f64::from(sy) - expected[1]).abs() < 1e-2,
                 "{sy} vs {expected:?}"
             );
+            // The depth is the software's linear ramp, as is a painter's key
+            // at the same view-Z.
             let depth = clip[2] / clip[3];
-            assert!((0.0..=1.0).contains(&depth));
-            // A painter's key at the same view-Z lands at the same depth.
-            assert!((key_depth(v[2] as u32, camera.fov) - depth).abs() < 1e-4);
+            assert!((depth - render::depth_ndc(vz as f32)).abs() < 1e-6);
+            assert!((key_depth(vz as u32) - depth).abs() < 1e-4);
         }
     }
 
@@ -878,17 +1127,47 @@ mod tests {
     }
 
     #[test]
-    fn palette_carries_stp_in_alpha() {
+    fn palette_alpha_marks_the_entries_a_blending_packet_blends() {
+        // Row 0: entry 2 is STP; the page's opaque texels (index 1)
+        // outnumber its STP ones, so the row has a knock-out twin and only
+        // entry 2 blends. Row 1: entry 1 is STP and outnumbers entry 2, so
+        // there is no twin and every entry blends.
+        let mut palettes = vec![[10, 20, 30, 255]; 2 * crate::model::PALETTE_ROW_LEN];
+        palettes[1] = [40, 50, 60, 255];
+        let mut stp = vec![false; 2 * crate::model::PALETTE_ROW_LEN];
+        stp[2] = true;
+        stp[crate::model::PALETTE_ROW_LEN + 1] = true;
         let texture = Texture8 {
-            width: 1,
+            width: 4,
             height: 1,
-            indices: vec![1],
-            palettes: vec![[10, 20, 30, 255], [40, 50, 60, 255]],
-            stp: vec![false, true],
+            indices: vec![1, 1, 2, 0],
+            palettes,
+            stp,
         };
+        assert!(texture.has_knockout_twin(0));
+        assert!(!texture.has_knockout_twin(1));
         let (rows, rgba) = palette_rgba(&texture);
-        assert_eq!(rows, 1);
-        assert_eq!(&rgba[..8], &[10, 20, 30, 0, 40, 50, 60, 255]);
-        assert_eq!(rgba.len(), 256 * 4);
+        assert_eq!(rows, 2);
+        assert_eq!(rgba.len(), 2 * 256 * 4);
+        assert_eq!(
+            &rgba[..12],
+            &[10, 20, 30, 0, 40, 50, 60, 0, 10, 20, 30, 255]
+        );
+        let row1 = 256 * 4;
+        assert!(rgba[row1..].chunks(4).all(|entry| entry[3] == 255));
+    }
+
+    #[test]
+    fn transparent_records_override_the_packet_blend() {
+        assert_eq!(draw_mode(None, true), DRAW_CULL);
+        assert_eq!(draw_mode(Some(0), false), DRAW_RECORD);
+        assert_eq!(
+            draw_mode(Some(0x33), true),
+            DRAW_CULL | DRAW_RECORD | DRAW_RECORD_BLENDS
+        );
+        assert_eq!(pass_range(None, false, 6, 9), (0, 9));
+        assert_eq!(pass_range(None, true, 6, 9), (6, 3));
+        assert_eq!(pass_range(Some(0x80), true, 6, 9), (0, 9));
+        assert_eq!(pass_range(Some(0), true, 6, 9), (0, 0));
     }
 }

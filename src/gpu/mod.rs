@@ -18,14 +18,20 @@
 //!   everything ([`GpuRenderer::release_residency`]). Indexed texture pages,
 //!   palettes and RGBA images (backgrounds, mask, shadow and effect pages) are
 //!   cached the same way.
-//! * Per draw, only the joint matrices, the camera, the latched lights and the
-//!   tint/blend travel as uniforms; `mesh.vert` skins rigidly, lights each
-//!   corner like `reference_vertex_shade` and projects through the cut camera.
-//!   `mesh.frag` looks up the CLUT row in the shader, with the STP bit in the
-//!   palette's alpha.
-//! * Visibility is a depth buffer rather than the painter's list: masks write
-//!   depth at their painter's key (a view-Z), shadows and effects test against
-//!   it, opaque mesh texels write it and STP texels blend in a second pass.
+//! * Per draw, only each object's view transform (the software's
+//!   `RefProjection`), the latched lights and the tint/blend travel as
+//!   uniforms; `mesh.vert` drops and culls whole packets like the software,
+//!   lights each corner like `reference_vertex_shade` and projects with the
+//!   software's linear depth, so lavapipe rasterizes the same pixels.
+//!   `mesh.frag` looks up the CLUT row in the shader, with "blends under a
+//!   blending packet" in the palette's alpha.
+//! * Visibility between meshes is a depth buffer; opaque mesh texels write
+//!   it and blending texels blend in a second pass. Against masks it is the
+//!   painter's sort: a depth-only pass first keeps the nearest mask's key per
+//!   pixel, and a mesh triangle or shadow whose key is at or behind it (an
+//!   effect: behind it) is discarded (see [`scene::Sprites`]). The keys are
+//!   per pixel, so with MSAA a mask's edge is not antialiased against what
+//!   it hides.
 //!
 //! * A pack's HD replacements ([`crate::htexture`]) are looked up as an image
 //!   or page is uploaded, from the hash of the pixels it would otherwise
@@ -208,14 +214,13 @@ struct ImageTexture {
 
 /// The renderer's pipelines.
 struct Pipelines {
+    /// Both mesh pipelines are unculled: `mesh.vert` culls whole packets
+    /// like the software path (and leaves the mirror copy unculled).
     mesh_opaque: *mut SDL_GPUGraphicsPipeline,
     mesh_blend: *mut SDL_GPUGraphicsPipeline,
-    /// The mirror copy is drawn unculled (its reflected X scale reverses the
-    /// winding), like the software path.
-    mesh_opaque_unculled: *mut SDL_GPUGraphicsPipeline,
-    mesh_blend_unculled: *mut SDL_GPUGraphicsPipeline,
-    sprite_write: *mut SDL_GPUGraphicsPipeline,
-    sprite_test: *mut SDL_GPUGraphicsPipeline,
+    /// The masks' keys into `mask_keys` (depth only).
+    mask_keys: *mut SDL_GPUGraphicsPipeline,
+    sprite: *mut SDL_GPUGraphicsPipeline,
     /// The scene and a frame's 2D replacements into `overlay_target`.
     overlay: *mut SDL_GPUGraphicsPipeline,
     /// An overlay's projected models into their [`ModelTarget`]s.
@@ -305,6 +310,11 @@ pub struct GpuRenderer {
     /// The multisampled colour target; null without MSAA.
     scene_samples: *mut SDL_GPUTexture,
     scene_depth: *mut SDL_GPUTexture,
+    /// The nearest mask's painter's key per scene pixel (see
+    /// [`scene::Sprites`]), single-sampled at the scene's size.
+    mask_keys: *mut SDL_GPUTexture,
+    /// A 1x1 cleared `mask_keys` (no mask) for the draws outside the scene.
+    no_mask_keys: *mut SDL_GPUTexture,
     layer_black: *mut SDL_GPUTexture,
     layer_white: *mut SDL_GPUTexture,
     /// The persistent staging buffer of both overlay layers, cycled per
@@ -515,10 +525,8 @@ impl GpuRenderer {
             pipelines: Pipelines {
                 mesh_opaque: std::ptr::null_mut(),
                 mesh_blend: std::ptr::null_mut(),
-                mesh_opaque_unculled: std::ptr::null_mut(),
-                mesh_blend_unculled: std::ptr::null_mut(),
-                sprite_write: std::ptr::null_mut(),
-                sprite_test: std::ptr::null_mut(),
+                mask_keys: std::ptr::null_mut(),
+                sprite: std::ptr::null_mut(),
                 overlay: std::ptr::null_mut(),
                 model_opaque: std::ptr::null_mut(),
                 model_blend: std::ptr::null_mut(),
@@ -530,6 +538,8 @@ impl GpuRenderer {
             scene_colour: std::ptr::null_mut(),
             scene_samples: std::ptr::null_mut(),
             scene_depth: std::ptr::null_mut(),
+            mask_keys: std::ptr::null_mut(),
+            no_mask_keys: std::ptr::null_mut(),
             layer_black: std::ptr::null_mut(),
             layer_white: std::ptr::null_mut(),
             layer_transfer: std::ptr::null_mut(),
@@ -605,6 +615,7 @@ impl GpuRenderer {
             SDL_GPU_TEXTUREUSAGE_SAMPLER,
         )?;
         renderer.ensure_overlay_lut(LUT_ROWS)?;
+        renderer.no_mask_keys = renderer.mask_key_texture(1, 1)?;
         renderer.build_scene_pipelines()?;
         renderer.clear_scene()?;
         Ok(renderer)
@@ -725,6 +736,7 @@ impl GpuRenderer {
             SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
             self.samples,
         )?;
+        self.mask_keys = self.mask_key_texture(width, height)?;
         Ok(())
     }
 
@@ -735,6 +747,7 @@ impl GpuRenderer {
             &mut self.scene_colour,
             &mut self.scene_samples,
             &mut self.scene_depth,
+            &mut self.mask_keys,
         ] {
             if !texture.is_null() {
                 unsafe { SDL_ReleaseGPUTexture(self.device, *texture) };
@@ -778,6 +791,18 @@ impl GpuRenderer {
     /// The scene target's size in pixels.
     pub fn scene_size(&self) -> (u32, u32) {
         self.scene_size
+    }
+
+    /// A sampled D16 target for the masks' keys ([`scene::MASK_KEY_RANGE`]).
+    fn mask_key_texture(&self, width: u32, height: u32) -> Result<*mut SDL_GPUTexture> {
+        self.texture(
+            SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+            width,
+            height,
+            SDL_GPUTextureUsageFlags(
+                SDL_GPU_TEXTUREUSAGE_SAMPLER.0 | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET.0,
+            ),
+        )
     }
 
     fn texture(
@@ -880,7 +905,7 @@ impl GpuRenderer {
         cull: SDL_GPUCullMode,
         blend: bool,
         depth: Option<(SDL_GPUTextureFormat, bool)>,
-        colour_format: SDL_GPUTextureFormat,
+        colour_format: Option<SDL_GPUTextureFormat>,
         samples: SDL_GPUSampleCount,
     ) -> Result<*mut SDL_GPUGraphicsPipeline> {
         let buffer = SDL_GPUVertexBufferDescription {
@@ -904,7 +929,7 @@ impl GpuRenderer {
             SDL_GPUColorTargetBlendState::default()
         };
         let colour_target = SDL_GPUColorTargetDescription {
-            format: colour_format,
+            format: colour_format.unwrap_or(SDL_GPU_TEXTUREFORMAT_INVALID),
             blend_state,
         };
         let (depth_format, depth_stencil_state) = match depth {
@@ -951,8 +976,12 @@ impl GpuRenderer {
             },
             depth_stencil_state,
             target_info: SDL_GPUGraphicsPipelineTargetInfo {
-                color_target_descriptions: &colour_target,
-                num_color_targets: 1,
+                color_target_descriptions: if colour_format.is_some() {
+                    &colour_target
+                } else {
+                    std::ptr::null()
+                },
+                num_color_targets: u32::from(colour_format.is_some()),
                 depth_stencil_format: depth_format,
                 has_depth_stencil_target: depth.is_some(),
                 ..Default::default()
@@ -979,58 +1008,65 @@ impl GpuRenderer {
         let mesh_attributes = [
             attribute(0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 0),
             attribute(1, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 12),
-            attribute(2, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 24),
-            attribute(3, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 32),
-            attribute(4, SDL_GPU_VERTEXELEMENTFORMAT_UINT, 44),
+            attribute(2, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 24),
+            attribute(3, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 36),
+            attribute(4, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 48),
+            attribute(5, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 60),
+            attribute(6, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 68),
+            attribute(7, SDL_GPU_VERTEXELEMENTFORMAT_UINT, 80),
         ];
         let sprite_attributes = [
             attribute(0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, 0),
             attribute(1, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 16),
             attribute(2, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, 24),
             attribute(3, SDL_GPU_VERTEXELEMENTFORMAT_UINT, 40),
+            attribute(4, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT, 44),
         ];
         let mesh_stride = std::mem::size_of::<MeshVertex>() as u32;
         let sprite_stride = std::mem::size_of::<SpriteVertex>() as u32;
         let colour = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 
         let mesh_vert = self.shader(MESH_VERT, SDL_GPU_SHADERSTAGE_VERTEX, 0, 1)?;
-        let mesh_frag = self.shader(MESH_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 4, 1)?;
+        let mesh_frag = self.shader(MESH_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 5, 1)?;
         let sprite_vert = self.shader(SPRITE_VERT, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0)?;
-        let sprite_frag = self.shader(SPRITE_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1)?;
-        let mesh = |this: &Self, cull, blend, write| {
+        let sprite_frag = self.shader(SPRITE_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 2, 1)?;
+        let mesh = |this: &Self, blend, write| {
             this.pipeline(
                 mesh_vert.shader,
                 mesh_frag.shader,
                 mesh_stride,
                 &mesh_attributes,
-                cull,
+                SDL_GPU_CULLMODE_NONE,
                 blend,
                 Some((depth_format, write)),
-                colour,
+                Some(colour),
                 this.samples,
             )
         };
-        let sprite = |this: &Self, write| {
+        let sprite = |this: &Self, depth, colour: Option<SDL_GPUTextureFormat>, samples| {
             this.pipeline(
                 sprite_vert.shader,
                 sprite_frag.shader,
                 sprite_stride,
                 &sprite_attributes,
                 SDL_GPU_CULLMODE_NONE,
-                true,
-                Some((depth_format, write)),
+                colour.is_some(),
+                Some(depth),
                 colour,
-                this.samples,
+                samples,
             )
         };
         // Each pipeline is stored as soon as it exists, so a later failure
         // still releases it (via `Drop`).
-        self.pipelines.mesh_opaque = mesh(self, SDL_GPU_CULLMODE_BACK, false, true)?;
-        self.pipelines.mesh_blend = mesh(self, SDL_GPU_CULLMODE_BACK, true, false)?;
-        self.pipelines.mesh_opaque_unculled = mesh(self, SDL_GPU_CULLMODE_NONE, false, true)?;
-        self.pipelines.mesh_blend_unculled = mesh(self, SDL_GPU_CULLMODE_NONE, true, false)?;
-        self.pipelines.sprite_write = sprite(self, true)?;
-        self.pipelines.sprite_test = sprite(self, false)?;
+        self.pipelines.mesh_opaque = mesh(self, false, true)?;
+        self.pipelines.mesh_blend = mesh(self, true, false)?;
+        self.pipelines.mask_keys = sprite(
+            self,
+            (SDL_GPU_TEXTUREFORMAT_D16_UNORM, true),
+            None,
+            SDL_GPU_SAMPLECOUNT_1,
+        )?;
+        self.pipelines.sprite = sprite(self, (depth_format, false), Some(colour), self.samples)?;
         let model_attributes = [
             attribute(0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, 0),
             attribute(1, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 16),
@@ -1049,7 +1085,7 @@ impl GpuRenderer {
                 SDL_GPU_CULLMODE_NONE,
                 blend,
                 Some((depth_format, write)),
-                colour,
+                Some(colour),
                 this.samples,
             )
         };
@@ -1064,7 +1100,7 @@ impl GpuRenderer {
             SDL_GPU_CULLMODE_NONE,
             true,
             None,
-            colour,
+            Some(colour),
             SDL_GPU_SAMPLECOUNT_1,
         )?;
         Ok(())
@@ -1084,7 +1120,7 @@ impl GpuRenderer {
             SDL_GPU_CULLMODE_NONE,
             false,
             None,
-            format,
+            Some(format),
             SDL_GPU_SAMPLECOUNT_1,
         )
     }
@@ -1100,7 +1136,7 @@ impl GpuRenderer {
             SDL_GPU_CULLMODE_NONE,
             true,
             None,
-            format,
+            Some(format),
             SDL_GPU_SAMPLECOUNT_1,
         )
     }
@@ -1140,6 +1176,24 @@ impl GpuRenderer {
         if !pass.is_null() {
             unsafe { SDL_EndGPURenderPass(pass) };
         }
+        // No mask anywhere.
+        let keys = SDL_GPUDepthStencilTargetInfo {
+            texture: self.no_mask_keys,
+            clear_depth: 1.0,
+            load_op: SDL_GPU_LOADOP_CLEAR,
+            store_op: SDL_GPU_STOREOP_STORE,
+            stencil_load_op: SDL_GPU_LOADOP_DONT_CARE,
+            stencil_store_op: SDL_GPU_STOREOP_DONT_CARE,
+            ..Default::default()
+        };
+        let pass = unsafe { SDL_BeginGPURenderPass(command, std::ptr::null(), 0, &keys) };
+        if pass.is_null() {
+            let error = sdl_error();
+            // Submit what was recorded; the failure is the error reported.
+            let _ = Self::submit(command);
+            bail!("SDL_BeginGPURenderPass failed: {error}");
+        }
+        unsafe { SDL_EndGPURenderPass(pass) };
         Self::submit(command)
     }
 
@@ -1870,12 +1924,10 @@ impl GpuRenderer {
             cycle: true,
             ..Default::default()
         };
-        let pass = unsafe { SDL_BeginGPURenderPass(command, &colour, 1, &depth) };
-        if pass.is_null() {
-            bail!("SDL_BeginGPURenderPass failed: {}", sdl_error());
-        }
-
-        let draw_sprites = |runs: &[SpriteRun<'_>]| {
+        let draw_sprites = |pass: *mut SDL_GPURenderPass,
+                            pipeline: *mut SDL_GPUGraphicsPipeline,
+                            mask_keys: *mut SDL_GPUTexture,
+                            runs: &[SpriteRun<'_>]| {
             if self.sprite_buffer.is_null() {
                 return;
             }
@@ -1888,15 +1940,16 @@ impl GpuRenderer {
                 else {
                     continue;
                 };
-                let pipeline = if run.depth_write {
-                    self.pipelines.sprite_write
-                } else {
-                    self.pipelines.sprite_test
-                };
-                let sampler = SDL_GPUTextureSamplerBinding {
-                    texture: texture.texture,
-                    sampler: self.sampler,
-                };
+                let samplers = [
+                    SDL_GPUTextureSamplerBinding {
+                        texture: texture.texture,
+                        sampler: self.sampler,
+                    },
+                    SDL_GPUTextureSamplerBinding {
+                        texture: mask_keys,
+                        sampler: self.sampler,
+                    },
+                ];
                 let scale = [texture.scale[0], texture.scale[1], 0.0, 0.0];
                 unsafe {
                     SDL_BindGPUGraphicsPipeline(pass, pipeline);
@@ -1907,72 +1960,105 @@ impl GpuRenderer {
                         std::mem::size_of_val(&scale) as u32,
                     );
                     SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
-                    SDL_BindGPUFragmentSamplers(pass, 0, &sampler, 1);
+                    SDL_BindGPUFragmentSamplers(pass, 0, samplers.as_ptr(), samplers.len() as u32);
                     SDL_DrawGPUPrimitives(pass, run.count, 1, run.first, 0);
                 }
             }
         };
-        draw_sprites(&sprites.before);
+
+        // The masks' keys first, into their own depth-only target.
+        let keys = SDL_GPUDepthStencilTargetInfo {
+            texture: self.mask_keys,
+            clear_depth: 1.0,
+            load_op: SDL_GPU_LOADOP_CLEAR,
+            store_op: SDL_GPU_STOREOP_STORE,
+            stencil_load_op: SDL_GPU_LOADOP_DONT_CARE,
+            stencil_store_op: SDL_GPU_STOREOP_DONT_CARE,
+            cycle: true,
+            ..Default::default()
+        };
+        let pass = unsafe { SDL_BeginGPURenderPass(command, std::ptr::null(), 0, &keys) };
+        if pass.is_null() {
+            bail!("SDL_BeginGPURenderPass failed: {}", sdl_error());
+        }
+        draw_sprites(
+            pass,
+            self.pipelines.mask_keys,
+            self.no_mask_keys,
+            sprites.mask_keys.as_slice(),
+        );
+        unsafe { SDL_EndGPURenderPass(pass) };
+
+        let pass = unsafe { SDL_BeginGPURenderPass(command, &colour, 1, &depth) };
+        if pass.is_null() {
+            bail!("SDL_BeginGPURenderPass failed: {}", sdl_error());
+        }
+        draw_sprites(pass, self.pipelines.sprite, self.mask_keys, &sprites.before);
 
         // The opaque texels of every mesh, then the mirror copy, then the
         // STP texels of the blended packets in the same order.
         let lights: Vec<_> = scene
             .meshes
             .iter()
-            .map(|mesh| scene.lighting.latched(root_position(mesh.joints)))
+            .map(|mesh| {
+                scene
+                    .lighting
+                    .latched(mesh.light_pos.unwrap_or(root_position(mesh.joints)))
+            })
             .collect();
         let lights = &lights;
-        for blend_pass in [false, true] {
-            let primary = scene.meshes.iter().enumerate().map(|(index, mesh)| {
-                (
-                    index,
+        let primary = scene.meshes.iter().enumerate().map(|(index, mesh)| {
+            (
+                index,
+                mesh,
+                scene::draw_uniforms(
+                    scene.camera,
                     mesh,
-                    scene::draw_uniforms(
-                        scene.camera,
+                    &lights[index],
+                    index < scene.mirror_from,
+                    None,
+                ),
+            )
+        });
+        let mirrored = scene.mirror.into_iter().flat_map(|mirror| {
+            scene
+                .meshes
+                .iter()
+                .enumerate()
+                .skip(scene.mirror_from)
+                .map(move |(index, mesh)| {
+                    (
+                        index,
                         mesh,
-                        &lights[index],
-                        index < scene.mirror_from,
-                        None,
-                    ),
-                    false,
-                )
-            });
-            let mirrored =
-                scene.mirror.into_iter().flat_map(|mirror| {
-                    scene.meshes.iter().enumerate().skip(scene.mirror_from).map(
-                        move |(index, mesh)| {
-                            (
-                                index,
-                                mesh,
-                                scene::draw_uniforms(
-                                    &mirror.camera,
-                                    mesh,
-                                    &lights[index],
-                                    false,
-                                    Some(mirror),
-                                ),
-                                true,
-                            )
-                        },
+                        scene::draw_uniforms(
+                            &mirror.camera,
+                            mesh,
+                            &lights[index],
+                            false,
+                            Some(mirror),
+                        ),
                     )
-                });
-            for (index, mesh, uniforms, unculled) in primary.chain(mirrored) {
+                })
+        });
+        let draws: Vec<_> = primary.chain(mirrored).collect();
+        for blend_pass in [false, true] {
+            for &(index, mesh, ref uniforms) in &draws {
                 let Some((buffer, page)) = meshes[index] else {
                     continue;
                 };
-                let (first, count) = if blend_pass {
-                    (buffer.blend_start, buffer.vertex_count - buffer.blend_start)
-                } else {
-                    (0, buffer.vertex_count)
-                };
+                let (first, count) = scene::pass_range(
+                    mesh.blend_weight,
+                    blend_pass,
+                    buffer.blend_start,
+                    buffer.vertex_count,
+                );
                 if buffer.buffer.is_null() || count == 0 || uniforms.flags[0] == u32::MAX {
                     continue;
                 }
-                let pipeline = match (blend_pass, unculled) {
-                    (false, false) => self.pipelines.mesh_opaque,
-                    (true, false) => self.pipelines.mesh_blend,
-                    (false, true) => self.pipelines.mesh_opaque_unculled,
-                    (true, true) => self.pipelines.mesh_blend_unculled,
+                let pipeline = if blend_pass {
+                    self.pipelines.mesh_blend
+                } else {
+                    self.pipelines.mesh_opaque
                 };
                 let mut material = scene::material(mesh.blend_weight, blend_pass);
                 let hd = if page.hd.is_null() {
@@ -1985,10 +2071,10 @@ impl GpuRenderer {
                     command,
                     pass,
                     pipeline,
-                    &uniforms,
+                    uniforms,
                     material,
                     buffer.buffer,
-                    [page.indices, page.palette, hd[0], hd[1]],
+                    [page.indices, page.palette, hd[0], hd[1], self.mask_keys],
                     self.sampler,
                     first,
                     count,
@@ -1996,7 +2082,7 @@ impl GpuRenderer {
             }
         }
 
-        draw_sprites(&sprites.after);
+        draw_sprites(pass, self.pipelines.sprite, self.mask_keys, &sprites.after);
         unsafe { SDL_EndGPURenderPass(pass) };
         Ok(())
     }
@@ -2440,12 +2526,13 @@ impl GpuRenderer {
         } else {
             [page.hd, page.hd_rows]
         };
-        let samplers = [page.indices, page.palette, hd[0], hd[1]].map(|texture| {
-            SDL_GPUTextureSamplerBinding {
-                texture,
-                sampler: self.sampler,
-            }
-        });
+        let samplers =
+            [page.indices, page.palette, hd[0], hd[1], self.no_mask_keys].map(|texture| {
+                SDL_GPUTextureSamplerBinding {
+                    texture,
+                    sampler: self.sampler,
+                }
+            });
         for blend_pass in [false, true] {
             let pipeline = if blend_pass {
                 self.pipelines.model_blend
@@ -3122,7 +3209,7 @@ fn draw_mesh(
     uniforms: &DrawUniforms,
     material: [f32; 4],
     buffer: *mut SDL_GPUBuffer,
-    textures: [*mut SDL_GPUTexture; 4],
+    textures: [*mut SDL_GPUTexture; 5],
     sampler: *mut SDL_GPUSampler,
     first: u32,
     count: u32,
@@ -3167,6 +3254,7 @@ fn overlay_vertices(
         uv: [u, v],
         colour,
         mode,
+        key: scene::NEVER_MASKED,
     };
     let rectangle = |dst: [f32; 4], uv: [f32; 4], colour: [f32; 4], mode: u32| {
         let [x0, y0, x1, y1] = dst;
@@ -3266,10 +3354,8 @@ impl Drop for GpuRenderer {
             let pipelines = [
                 self.pipelines.mesh_opaque,
                 self.pipelines.mesh_blend,
-                self.pipelines.mesh_opaque_unculled,
-                self.pipelines.mesh_blend_unculled,
-                self.pipelines.sprite_write,
-                self.pipelines.sprite_test,
+                self.pipelines.mask_keys,
+                self.pipelines.sprite,
                 self.pipelines.overlay,
                 self.pipelines.model_opaque,
                 self.pipelines.model_blend,
@@ -3286,6 +3372,7 @@ impl Drop for GpuRenderer {
                 self.native_texture,
                 self.no_hd,
                 self.no_hd_rows,
+                self.no_mask_keys,
                 self.overlay_target,
                 self.overlay_coverage,
                 self.overlay_lut,
@@ -4020,8 +4107,8 @@ mod tests {
                 corner(-1.0, -1.0, depth, shade),
             ]
         };
-        let mut vertices = half(0.5, [255.0, 0.0, 0.0]).to_vec();
-        vertices.extend(half(0.9, [0.0, 255.0, 0.0]));
+        let mut vertices = half(0.5, [1.0, 0.0, 0.0]).to_vec();
+        vertices.extend(half(0.9, [0.0, 1.0, 0.0]));
         let quad = |vertices: Vec<htexture::ModelVertex>| htexture::Quad {
             image: htexture::QuadImage::Model(Arc::new(htexture::Model {
                 ivm: ivm.clone(),
@@ -4120,7 +4207,7 @@ mod tests {
         let corner = |x: f32, y: f32| htexture::ModelVertex {
             clip: [x, y, 0.5, 1.0],
             uv: [0.0, 0.0],
-            shade: [255.0; 3],
+            shade: [1.0; 3],
             packed: 0,
         };
         let vertices = vec![corner(-1.0, 1.0), corner(1.0, 1.0), corner(-1.0, -1.0)];

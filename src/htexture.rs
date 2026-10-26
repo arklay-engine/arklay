@@ -865,9 +865,9 @@ pub struct ModelVertex {
     /// Clip-space position over the quad: `x`, `y` and the linear depth,
     /// all times `w`, the view Z.
     pub clip: [f32; 4],
-    /// Texel coordinates in the model's page.
+    /// Normalised texture coordinates in the model's page.
     pub uv: [f32; 2],
-    /// The lit colour in `0..=255`; `255` keeps the texel as stored.
+    /// The lit colour in `0..=1`; `1` keeps the texel as stored.
     pub shade: [f32; 3],
     /// `palette_row << 8 | blend << 24 | untextured << 25`, as `mesh.frag`
     /// reads it.
