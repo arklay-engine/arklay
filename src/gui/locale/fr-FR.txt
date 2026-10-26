@@ -274,7 +274,6 @@ keys.capture = "Appuyez sur une touche ou un bouton de la souris à attribuer. �
 keys.waiting = "Appuyez sur une touche"
 keys.keep_one = "{} a besoin de sa propre touche du clavier."
 keys.unsaveable = "Cette touche ne peut pas être enregistrée. Choisissez-en une autre."
-keys.reserved = "Cette touche est réservée."
 keys.reset_question = "Rétablir les touches par défaut du clavier et de la souris ?"
 
 specs.cpu = "Processeur"

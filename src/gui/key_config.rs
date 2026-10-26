@@ -234,19 +234,18 @@ impl KeyConfigScreen {
         true
     }
 
-    /// Feed the raw press that ends a capture. Escape or a gamepad press
+    /// Feed the raw press that ends a capture, with where the pointer went
+    /// down if it did. Escape, a gamepad press or a click on the cancel hint
     /// cancels; a key bound elsewhere moves here.
-    pub fn capture(&mut self, source: Source) -> Vec<KeyConfigEvent> {
+    pub fn capture(&mut self, source: Source, click: Option<(f32, f32)>) -> Vec<KeyConfigEvent> {
         let mut events = Vec::new();
         if !self.capturing {
             return events;
         }
         self.capturing = false;
-        if source.is_pad() || source == Source::key(SDL_SCANCODE_ESCAPE) {
-            return events;
-        }
-        if source.reserved_bit().is_some() {
-            self.note = Some(self.text.get("keys.reserved").to_string());
+        let on_cancel = source == Source::Mouse(1)
+            && click.is_some_and(|(x, y)| matches!(self.hit(x, y), Some(Hit::Key(GuiKey::Cancel))));
+        if on_cancel || source.is_pad() || source == Source::key(SDL_SCANCODE_ESCAPE) {
             return events;
         }
         if !source.round_trips() {
@@ -606,10 +605,8 @@ impl KeyConfigScreen {
             ]
         };
         let rects = p.hint_bar(w / 2.0, u(1040.0), self.device, &hints);
-        if !self.capturing {
-            for (rect, &(key, _)) in rects.into_iter().zip(&hints) {
-                self.hits.push((rect, Hit::Key(key)));
-            }
+        for (rect, &(key, _)) in rects.into_iter().zip(&hints) {
+            self.hits.push((rect, Hit::Key(key)));
         }
 
         if let Some(dialog) = &mut self.dialog {
@@ -1325,7 +1322,7 @@ mod tests {
         // Move Forward's first key: Z, which was Fire's.
         screen.handle(key(GuiKey::Confirm));
         assert!(screen.capturing());
-        let bindings = changed(screen.capture(Source::key(SDL_SCANCODE_Z)));
+        let bindings = changed(screen.capture(Source::key(SDL_SCANCODE_Z), None));
         assert!(!screen.capturing());
         assert_eq!(bindings.get(Action::Up)[0], Source::key(SDL_SCANCODE_Z));
         assert!(
@@ -1349,7 +1346,7 @@ mod tests {
         let mut screen = screen();
         screen.handle(key(GuiKey::Right));
         screen.handle(key(GuiKey::Confirm));
-        let bindings = changed(screen.capture(Source::Mouse(3)));
+        let bindings = changed(screen.capture(Source::Mouse(3), None));
         assert_eq!(
             keys(&bindings, Action::Up),
             [Source::key(SDL_SCANCODE_UP), Source::Mouse(3)]
@@ -1361,7 +1358,7 @@ mod tests {
         let mut screen = screen();
         for source in [Source::key(SDL_SCANCODE_ESCAPE), Source::PadButton(0)] {
             screen.handle(key(GuiKey::Confirm));
-            assert!(screen.capture(source).is_empty());
+            assert!(screen.capture(source, None).is_empty());
             assert!(!screen.capturing());
         }
         assert_eq!(screen.bindings, Bindings::default());
@@ -1428,5 +1425,30 @@ mod tests {
         });
         assert!(screen.capturing());
         assert_eq!((screen.row, screen.column), (2, 1));
+    }
+
+    #[test]
+    fn clicking_the_cancel_hint_cancels_a_capture() {
+        let mut screen = screen();
+        let mut canvas = Canvas::new(1920, 1080);
+        let mut fonts = Fonts::new().unwrap();
+        screen.handle(key(GuiKey::Confirm));
+        screen.draw(&mut Painter {
+            canvas: &mut canvas,
+            fonts: &mut fonts,
+            theme: Theme::new(1920, 1080, FontFamily::Modern),
+        });
+        let (rect, _) = *screen
+            .hits
+            .iter()
+            .find(|(_, hit)| *hit == Hit::Key(GuiKey::Cancel))
+            .unwrap();
+        let click = Some((rect.center_x(), rect.center_y()));
+        assert!(screen.capture(Source::Mouse(1), click).is_empty());
+        assert!(!screen.capturing());
+        // Another button pressed over it binds.
+        screen.handle(key(GuiKey::Right));
+        screen.handle(key(GuiKey::Confirm));
+        changed(screen.capture(Source::Mouse(3), click));
     }
 }

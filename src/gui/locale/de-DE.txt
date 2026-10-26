@@ -274,7 +274,6 @@ keys.capture = "Eine Taste oder Maustaste zum Belegen drücken. Esc bricht ab."
 keys.waiting = "Taste drücken"
 keys.keep_one = "{} braucht eine eigene Tastaturtaste."
 keys.unsaveable = "Diese Taste kann nicht gespeichert werden. Bitte eine andere wählen."
-keys.reserved = "Diese Taste ist reserviert."
 keys.reset_question = "Tastatur und Maus auf die Standardbelegung zurücksetzen?"
 
 specs.cpu = "CPU"

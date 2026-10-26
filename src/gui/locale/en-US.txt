@@ -275,7 +275,6 @@ keys.capture = "Press a key or mouse button to bind. Esc cancels."
 keys.waiting = "Press a key"
 keys.keep_one = "{} needs a keyboard key of its own."
 keys.unsaveable = "That key cannot be saved. Choose another."
-keys.reserved = "That key is reserved."
 keys.reset_question = "Reset the keyboard and mouse to the default keys?"
 
 specs.cpu = "CPU"

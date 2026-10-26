@@ -34,7 +34,9 @@
 //! menu_text_size = "standard" # "small", "standard", "large"
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
 //!                        # or "nintendo"
-//! control_type = "a"     # the gamepad layout preset: "a", "b" or "c"
+//! control_type = "a"     # the gamepad layout preset last picked in the
+//!                        # menu: "a", "b" or "c"; picking one rewrites the
+//!                        # pad sources in [bindings], which is what's used
 //! vibration = "normal"   # "off", "weak", "normal" or "strong"
 //! master_volume = 100    # levels in percent (0..100): everything, then the
 //! music_volume = 100     # music, the ambient loops (rain, machinery), the
@@ -390,7 +392,9 @@ pub struct Game {
     /// The controller glyphs the menus draw; `None` (`"auto"`, the default)
     /// follows the controller in use.
     pub button_style: Option<crate::gui::PadStyle>,
-    /// The gamepad layout preset.
+    /// The gamepad layout preset last picked in the menu. Picking one
+    /// rewrites the pad sources in `[bindings]`; the bindings, not this,
+    /// drive the input, so pad rebinds made since are kept.
     pub control_type: ControlType,
     /// How strongly the controller rumbles.
     pub vibration: Vibration,
@@ -1194,7 +1198,13 @@ fn parse_game_line(
                 _ => bail!("line {line}: `ui_font` expects \"modern\" or \"retro\""),
             };
         }
-        "menu_text_size" => game.menu_text_size = named(key, value, line)?,
+        "menu_text_size" => {
+            // The largest size was once "extra_large".
+            game.menu_text_size = match parse_quoted(value, line)?.as_str() {
+                "extra_large" => TextSize::Large,
+                _ => named(key, value, line)?,
+            };
+        }
         // The on/off switch the menu volume replaced: off is silence.
         "menu_sounds" => {
             if !boolean()? {
@@ -1580,6 +1590,25 @@ mod tests {
         let config = Config::parse("save_dir = 'C:\\temp\\a#b'\n").unwrap();
         assert_eq!(config.save_dir.as_deref(), Some(Path::new("C:\\temp\\a#b")));
         assert!(Config::parse("save_dir = 'unterminated\n").is_err());
+    }
+
+    #[test]
+    fn the_old_extra_large_text_size_is_the_largest() {
+        let config = Config::parse(
+            "[game]
+menu_text_size = \"extra_large\"
+",
+        )
+        .unwrap();
+        assert_eq!(config.game.menu_text_size, TextSize::Large);
+        assert!(
+            Config::parse(
+                "[game]
+menu_text_size = \"huge\"
+"
+            )
+            .is_err()
+        );
     }
 
     #[test]

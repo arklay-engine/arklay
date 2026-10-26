@@ -611,7 +611,10 @@ impl OptionsScreen {
         {
             let top = u(560.0).max(text_end + u(30.0));
             let area = Rect::new(desc_left, top, right - desc_left, u(990.0) - top);
-            pad_diagram::draw(p, area, pad.style, &pad.bindings, &self.text);
+            // A long description in large text can leave no room for it.
+            if area.h > u(120.0) {
+                pad_diagram::draw(p, area, pad.style, &pad.bindings, &self.text);
+            }
         }
 
         // Hints.

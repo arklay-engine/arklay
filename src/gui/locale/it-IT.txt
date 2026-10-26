@@ -274,7 +274,6 @@ keys.capture = "Premi un tasto o un pulsante del mouse da assegnare. Esc per ann
 keys.waiting = "Premi un tasto"
 keys.keep_one = "{} ha bisogno di un tasto della tastiera tutto suo."
 keys.unsaveable = "Questo tasto non può essere salvato. Scegline un altro."
-keys.reserved = "Questo tasto è riservato."
 keys.reset_question = "Ripristinare i tasti predefiniti di tastiera e mouse?"
 
 specs.cpu = "CPU"

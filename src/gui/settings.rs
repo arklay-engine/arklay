@@ -638,7 +638,13 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
         }
     }
     match id {
-        "control_type" => set(&mut game.control_type, index),
+        // The preset's pad sources go with it, so every request carries
+        // bindings that match its control type.
+        "control_type" => {
+            set(&mut game.control_type, index);
+            settings.bindings =
+                std::mem::take(&mut settings.bindings).with_control_type(game.control_type);
+        }
         "vibration" => set(&mut game.vibration, index),
         "menu_text_size" => set(&mut game.menu_text_size, index),
         "subtitle_size" => set(&mut game.subtitle_size, index),
@@ -732,6 +738,19 @@ mod tests {
             displays: vec!["Left".into(), "Right".into()],
             ..Settings::default()
         }
+    }
+
+    #[test]
+    fn a_control_type_brings_its_pad_layout() {
+        let mut settings = settings();
+        // Two steps before the engine sees either: each carries its preset.
+        apply("control_type", 1, &mut settings);
+        apply("control_type", 2, &mut settings);
+        assert_eq!(settings.game.control_type, ControlType::C);
+        assert_eq!(
+            settings.bindings,
+            crate::controls::Bindings::default().with_control_type(ControlType::C)
+        );
     }
 
     #[test]

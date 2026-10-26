@@ -274,7 +274,6 @@ keys.capture = "Pulsa una tecla o un botón del ratón para asignarlo. Esc cance
 keys.waiting = "Pulsa una tecla"
 keys.keep_one = "{} necesita una tecla propia del teclado."
 keys.unsaveable = "Esa tecla no se puede guardar. Elige otra."
-keys.reserved = "Esa tecla está reservada."
 keys.reset_question = "¿Restablecer las teclas predeterminadas del teclado y el ratón?"
 
 specs.cpu = "CPU"

@@ -220,7 +220,6 @@ struct ModelRun {
     slot: usize,
 }
 
-/// The SDL_GPU device, its pipelines and the resident uploads.
 /// A GPU's self-description, each part `None` when the driver keeps it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GpuInfo {
@@ -230,6 +229,34 @@ pub struct GpuInfo {
     pub api: Option<String>,
 }
 
+/// What `device` reports of itself; the strings are copied out.
+fn device_info(device: *mut SDL_GPUDevice) -> GpuInfo {
+    let string = |props: sdl3_sys::properties::SDL_PropertiesID, name: *const std::ffi::c_char| {
+        let value =
+            unsafe { sdl3_sys::properties::SDL_GetStringProperty(props, name, std::ptr::null()) };
+        (!value.is_null())
+            .then(|| {
+                unsafe { std::ffi::CStr::from_ptr(value) }
+                    .to_string_lossy()
+                    .trim()
+                    .to_string()
+            })
+            .filter(|value| !value.is_empty())
+    };
+    let props = unsafe { SDL_GetGPUDeviceProperties(device) };
+    let api = unsafe { SDL_GetGPUDeviceDriver(device) };
+    GpuInfo {
+        name: string(props, SDL_PROP_GPU_DEVICE_NAME_STRING),
+        driver_version: string(props, SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING),
+        api: (!api.is_null()).then(|| {
+            unsafe { std::ffi::CStr::from_ptr(api) }
+                .to_string_lossy()
+                .into_owned()
+        }),
+    }
+}
+
+/// The SDL_GPU device, its pipelines and the resident uploads.
 pub struct GpuRenderer {
     device: *mut SDL_GPUDevice,
     /// The claimed window; null for an offscreen renderer.
@@ -422,33 +449,14 @@ impl GpuRenderer {
         if device.is_null() {
             return None;
         }
-        let string = |props: sdl3_sys::properties::SDL_PropertiesID,
-                      name: *const std::ffi::c_char| {
-            let value = unsafe {
-                sdl3_sys::properties::SDL_GetStringProperty(props, name, std::ptr::null())
-            };
-            (!value.is_null())
-                .then(|| {
-                    unsafe { std::ffi::CStr::from_ptr(value) }
-                        .to_string_lossy()
-                        .trim()
-                        .to_string()
-                })
-                .filter(|value| !value.is_empty())
-        };
-        let props = unsafe { SDL_GetGPUDeviceProperties(device) };
-        let api = unsafe { SDL_GetGPUDeviceDriver(device) };
-        let info = GpuInfo {
-            name: string(props, SDL_PROP_GPU_DEVICE_NAME_STRING),
-            driver_version: string(props, SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING),
-            api: (!api.is_null()).then(|| {
-                unsafe { std::ffi::CStr::from_ptr(api) }
-                    .to_string_lossy()
-                    .into_owned()
-            }),
-        };
+        let info = device_info(device);
         unsafe { SDL_DestroyGPUDevice(device) };
         Some(info)
+    }
+
+    /// What this renderer's device reports of itself.
+    pub fn info(&self) -> GpuInfo {
+        device_info(self.device)
     }
 
     fn create(scene_size: (u32, u32), render_scale: u32, msaa: u32) -> Result<Self> {

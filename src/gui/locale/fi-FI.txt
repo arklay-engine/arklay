@@ -274,7 +274,6 @@ keys.capture = "Paina sidottavaa näppäintä tai hiiren painiketta. Esc peruutt
 keys.waiting = "Paina näppäintä"
 keys.keep_one = "{} tarvitsee oman näppäimistön näppäimen."
 keys.unsaveable = "Tätä näppäintä ei voi tallentaa. Valitse toinen."
-keys.reserved = "Tämä näppäin on varattu."
 keys.reset_question = "Palautetaanko näppäimistön ja hiiren oletusnäppäimet?"
 
 specs.cpu = "Suoritin"

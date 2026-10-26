@@ -274,7 +274,6 @@ keys.capture = "割り当てるキーかマウスボタンを押してくださ�
 keys.waiting = "キーを押してください"
 keys.keep_one = "{}には専用のキーボードのキーが必要です。"
 keys.unsaveable = "そのキーは保存できません。別のキーを選んでください。"
-keys.reserved = "そのキーは予約されています。"
 keys.reset_question = "キーボードとマウスを初期設定に戻しますか？"
 
 specs.cpu = "CPU"

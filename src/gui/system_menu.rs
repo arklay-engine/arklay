@@ -253,12 +253,17 @@ impl SystemMenu {
             .is_some_and(KeyConfigScreen::capturing)
     }
 
-    /// Bind the raw press the key configuration waited for.
-    pub fn capture(&mut self, source: crate::controls::Source) -> Vec<MenuRequest> {
+    /// Bind the raw press the key configuration waited for; `click` is
+    /// where the pointer went down this frame, if it did.
+    pub fn capture(
+        &mut self,
+        source: crate::controls::Source,
+        click: Option<(f32, f32)>,
+    ) -> Vec<MenuRequest> {
         let mut requests = Vec::new();
         let before = self.view();
         if let Some(screen) = &mut self.key_config {
-            let events = screen.capture(source);
+            let events = screen.capture(source, click);
             self.key_config_events(events, &mut requests);
             self.dirty = true;
         }
@@ -851,7 +856,7 @@ mod tests {
         shot(&mut menu, "keys", 1920, 1080);
         menu.handle(&[key(GuiKey::Down), key(GuiKey::Right), key(GuiKey::Confirm)]);
         shot(&mut menu, "keys_capture", 1920, 1080);
-        menu.capture(crate::controls::Source::Mouse(3));
+        menu.capture(crate::controls::Source::Mouse(3), None);
         shot(&mut menu, "keys_mouse", 1920, 1080);
         menu.handle(&[key(GuiKey::TabNext), key(GuiKey::Up)]);
         shot(&mut menu, "keys_menu", 1920, 1080);

@@ -9084,7 +9084,11 @@ fn drive_system_menu(
     // started it, so the press that started it is never taken for it.
     let captured = input.captured.take();
     let requests = if menu.capturing() {
-        captured.map_or_else(Vec::new, |source| menu.capture(source))
+        let click = events.iter().find_map(|event| match *event {
+            gui::GuiEvent::PointerDown { x, y } => Some((x, y)),
+            _ => None,
+        });
+        captured.map_or_else(Vec::new, |source| menu.capture(source, click))
     } else {
         menu.handle(&events)
     };
@@ -9163,19 +9167,23 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
         language: app.pack.language().map(str::to_string),
         displays: display_names(),
         bindings: app.bindings.clone(),
-        system: system_info(),
+        system: system_info(display),
     }
 }
 
-/// The machine, for the options' PC Specs row; looked up once, as the GPU
-/// is probed with a device of its own.
-fn system_info() -> gui::settings::SystemInfo {
+/// The machine, for the options' PC Specs row; looked up once. The GPU is
+/// the live renderer's, or, under the software renderer, probed with a
+/// device of its own.
+fn system_info(display: &Display) -> gui::settings::SystemInfo {
     static INFO: std::sync::OnceLock<gui::settings::SystemInfo> = std::sync::OnceLock::new();
     INFO.get_or_init(|| gui::settings::SystemInfo {
         cpu: cpu_brand(),
         cpu_cores: unsafe { sdl3_sys::cpuinfo::SDL_GetNumLogicalCPUCores() }.max(0) as u32,
         ram_mb: unsafe { sdl3_sys::cpuinfo::SDL_GetSystemRAM() }.max(0) as u32,
-        gpu: GpuRenderer::probe().unwrap_or_default(),
+        gpu: match &display.backend {
+            Backend::Gpu(gpu) => gpu.info(),
+            Backend::Software { .. } | Backend::None => GpuRenderer::probe().unwrap_or_default(),
+        },
     })
     .clone()
 }
@@ -9367,15 +9375,8 @@ fn apply_menu_settings(
     app.player_options.no_auto_aim = !settings.game.auto_aim;
     app.player_options.no_blood = !settings.game.blood;
     app.vibration = settings.game.vibration;
-    let mut settings = settings;
+    // A control type change arrives with its preset already in the bindings.
     if settings.bindings != before.bindings {
-        input.apply_bindings_change(settings.bindings.clone());
-        app.set_bindings(settings.bindings.clone());
-    } else if settings.game.control_type != before.game.control_type {
-        settings.bindings = settings
-            .bindings
-            .clone()
-            .with_control_type(settings.game.control_type);
         input.apply_bindings_change(settings.bindings.clone());
         app.set_bindings(settings.bindings.clone());
     }
