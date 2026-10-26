@@ -54,6 +54,9 @@ unsafe impl Plain for SpriteVertex {}
 unsafe impl Plain for crate::htexture::ModelVertex {}
 // SAFETY: a bare integer.
 unsafe impl Plain for u16 {}
+// SAFETY: plain scalars and arrays of them, with no padding.
+unsafe impl Plain for u8 {}
+unsafe impl Plain for [f32; 4] {}
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -619,6 +619,9 @@ impl Quad {
         let same_image = match (&self.image, &other.image) {
             (QuadImage::Art(a), QuadImage::Art(b)) => Arc::ptr_eq(a, b),
             (QuadImage::Model(a), QuadImage::Model(b)) => Arc::ptr_eq(a, b),
+            (QuadImage::Recoloured(a), QuadImage::Recoloured(b)) => {
+                Arc::ptr_eq(&a.art, &b.art) && Arc::ptr_eq(&a.indices, &b.indices) && a.lut == b.lut
+            }
             _ => false,
         };
         same_image
@@ -637,6 +640,200 @@ pub enum QuadImage {
     /// A model the GPU renders at its own resolution first: the examine
     /// viewer's item ([`crate::render::Framebuffer::draw_ivm_captured`]).
     Model(Arc<Model>),
+    /// A pack's HD image of an indexed page, recoloured per texel by the
+    /// original's index (the map's room highlighting).
+    Recoloured(Arc<Recoloured>),
+}
+
+/// An indexed page's texel indices, shared by its recoloured draws.
+#[derive(Debug)]
+pub struct Indices {
+    pub width: u32,
+    pub height: u32,
+    /// Row-major, `width * height`.
+    pub texels: Vec<u8>,
+}
+
+impl Indices {
+    /// The index at original texel `(x, y)`, clamped to the page.
+    pub fn at(&self, x: i32, y: i32) -> u8 {
+        if self.width == 0 || self.height == 0 {
+            return 0;
+        }
+        let x = x.clamp(0, self.width as i32 - 1) as usize;
+        let y = y.clamp(0, self.height as i32 - 1) as usize;
+        self.texels
+            .get(y * self.width as usize + x)
+            .copied()
+            .unwrap_or(0)
+    }
+}
+
+/// How an HD texel whose original index draws through a palette lookup
+/// takes the lookup's colour: `hd * scale + luma(hd) * luma + flat`, each
+/// channel clamped to `0..=1`.
+///
+/// A lookup that scales the palette colour (a tint, or the colour kept as it
+/// is) scales the HD texel alike, keeping its own colours. One that swaps in
+/// another colour (the map's red current room) keeps the HD texel's
+/// brightness relative to the palette colour's, so its detail shows through
+/// in the new colour. Either way an HD texel of the palette colour comes out
+/// as the lookup's colour.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Recolour {
+    pub scale: [f32; 3],
+    pub luma: [f32; 3],
+    pub flat: [f32; 3],
+}
+
+/// The Rec. 601 luma weights the recolouring measures brightness with.
+pub const LUMA: [f32; 3] = [0.299, 0.587, 0.114];
+
+/// The furthest a channel of a scaled palette colour may land from the
+/// lookup's and still count as a tint: the lookups round each channel.
+const TINT_TOLERANCE: f32 = 2.5 / 255.0;
+
+/// The dimmest palette colour a swapped colour keeps an HD texel's
+/// brightness against; a darker one would turn the slightest HD detail into a
+/// large gain, so it draws the colour flat.
+const MIN_LUMA: f32 = 2.0 / 255.0;
+
+impl Recolour {
+    /// The recolouring that draws palette colour `palette` as `colour`.
+    pub fn of(palette: [u8; 3], colour: [u8; 3]) -> Self {
+        let p = palette.map(|channel| f32::from(channel) / 255.0);
+        let c = colour.map(|channel| f32::from(channel) / 255.0);
+        let none = [0.0; 3];
+        let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        let pp = dot(p, p);
+        if pp == 0.0 {
+            // Nothing of a black texel's colour to keep.
+            return Self {
+                scale: none,
+                luma: none,
+                flat: c,
+            };
+        }
+        let k = dot(c, p) / pp;
+        if (0..3).all(|channel| (k * p[channel] - c[channel]).abs() <= TINT_TOLERANCE) {
+            return Self {
+                scale: [k; 3],
+                luma: none,
+                flat: none,
+            };
+        }
+        let brightness = dot(p, LUMA);
+        if brightness < MIN_LUMA {
+            // Too dark to measure an HD texel's brightness against.
+            return Self {
+                scale: none,
+                luma: none,
+                flat: c,
+            };
+        }
+        Self {
+            scale: none,
+            luma: c.map(|channel| channel / brightness),
+            flat: none,
+        }
+    }
+
+    /// The recolourings of a lookup drawing `palette` as `colours`, by
+    /// index.
+    pub fn lut(
+        palette: &[[u8; 3]; 256],
+        colours: &[Option<[u8; 3]>; 256],
+    ) -> [Option<Recolour>; 256] {
+        std::array::from_fn(|index| colours[index].map(|colour| Self::of(palette[index], colour)))
+    }
+
+    /// The one scale every entry of a lookup drawing `palette` as `colours`
+    /// tints its colour by, black palette colours aside (they say nothing of
+    /// the scale); `None` when an entry swaps its colour.
+    pub fn common_tint(palette: &[[u8; 3]; 256], colours: &[Option<[u8; 3]>; 256]) -> Option<f32> {
+        let unit = |rgb: [u8; 3]| rgb.map(|channel| f32::from(channel) / 255.0);
+        let pairs: Vec<([f32; 3], [f32; 3])> = palette
+            .iter()
+            .zip(colours)
+            .filter(|(p, _)| **p != [0; 3])
+            .filter_map(|(p, c)| c.map(|c| (unit(*p), unit(c))))
+            .collect();
+        // The least-squares scale over every entry, so a dark channel's
+        // rounding weighs no more than it moves the colour.
+        let (cp, pp) = pairs.iter().fold((0.0, 0.0), |(cp, pp), (p, c)| {
+            (
+                cp + p[0] * c[0] + p[1] * c[1] + p[2] * c[2],
+                pp + p[0] * p[0] + p[1] * p[1] + p[2] * p[2],
+            )
+        });
+        if pp == 0.0 {
+            return None;
+        }
+        let k = cp / pp;
+        pairs
+            .iter()
+            .all(|(p, c)| {
+                (0..3).all(|channel| (k * p[channel] - c[channel]).abs() <= TINT_TOLERANCE)
+            })
+            .then_some(k)
+    }
+
+    /// [`Recolour::lut`] for a draw whose HD art covers its whole rect: the
+    /// clear entries and black palette colours take the lookup's
+    /// [`Recolour::common_tint`]; `None` without one.
+    pub fn whole(
+        palette: &[[u8; 3]; 256],
+        colours: &[Option<[u8; 3]>; 256],
+    ) -> Option<[Option<Recolour>; 256]> {
+        let k = Self::common_tint(palette, colours)?;
+        let tint = Self {
+            scale: [k; 3],
+            luma: [0.0; 3],
+            flat: [0.0; 3],
+        };
+        Some(std::array::from_fn(|index| match colours[index] {
+            Some(colour) if palette[index] != [0; 3] => Some(Self::of(palette[index], colour)),
+            _ => Some(tint),
+        }))
+    }
+
+    /// The colour HD texel `hd` (`0..=1` RGB) takes.
+    pub fn apply(&self, hd: [f32; 3]) -> [f32; 3] {
+        let brightness = hd[0] * LUMA[0] + hd[1] * LUMA[1] + hd[2] * LUMA[2];
+        std::array::from_fn(|channel| {
+            (hd[channel] * self.scale[channel]
+                + brightness * self.luma[channel]
+                + self.flat[channel])
+                .clamp(0.0, 1.0)
+        })
+    }
+}
+
+/// An HD image drawn in place of an indexed page through a palette lookup:
+/// each pixel takes the recolouring of the original texel under it, and an
+/// index without one stays clear.
+#[derive(Debug)]
+pub struct Recoloured {
+    pub art: Arc<Replacement>,
+    /// The original page's indices: frame texel `(x, y)` is page texel
+    /// `(x, y)`.
+    pub indices: Arc<Indices>,
+    pub lut: [Option<Recolour>; 256],
+}
+
+impl Recoloured {
+    /// The recoloured texel of `art` at normalised `(u, v)`; `None` where
+    /// the original texel is clear.
+    pub fn sample(&self, u: f32, v: f32) -> Option<[f32; 4]> {
+        let [fw, fh] = self.art.frame.map(|side| side as f32);
+        let index = self
+            .indices
+            .at((u * fw).floor() as i32, (v * fh).floor() as i32);
+        let recolour = self.lut[usize::from(index)]?;
+        let [r, g, b, a] = sample_linear(&self.art.image, u, v);
+        let [r, g, b] = recolour.apply([r, g, b]);
+        Some([r, g, b, a])
+    }
 }
 
 impl From<Arc<Replacement>> for QuadImage {
@@ -769,14 +966,13 @@ impl Overlay {
         {
             return None;
         }
-        let arts: Vec<(&Quad, &Replacement)> = self
+        if self
             .quads
             .iter()
-            .map(|quad| match &quad.image {
-                QuadImage::Art(art) => Some((quad, art.as_ref())),
-                QuadImage::Model(_) => None,
-            })
-            .collect::<Option<_>>()?;
+            .any(|quad| matches!(quad.image, QuadImage::Model(_)))
+        {
+            return None;
+        }
         // Frame pixels per output pixel.
         let (step_x, step_y) = (width as f32 / out_w as f32, height as f32 / out_h as f32);
         let mut rgba = vec![0; out_w as usize * out_h as usize * 4];
@@ -789,9 +985,9 @@ impl Overlay {
                 let frame_x = (px as u32).min(width - 1);
                 let at = (frame_y * width + frame_x) as usize;
                 pixel.copy_from_slice(&base.rgba[at * 4..at * 4 + 4]);
-                let Some((quad, art)) = (self.coverage[at] as usize)
+                let Some(quad) = (self.coverage[at] as usize)
                     .checked_sub(1)
-                    .and_then(|index| arts.get(index))
+                    .and_then(|index| self.quads.get(index))
                 else {
                     continue;
                 };
@@ -799,7 +995,14 @@ impl Overlay {
                 let [u0, v0, u1, v1] = quad.uv;
                 let u = u0 + (px - x0) / (x1 - x0) * (u1 - u0);
                 let v = v0 + (py - y0) / (y1 - y0) * (v1 - v0);
-                let texel = sample_linear(&art.image, u, v);
+                let texel = match &quad.image {
+                    QuadImage::Art(art) => sample_linear(&art.image, u, v),
+                    QuadImage::Recoloured(recoloured) => match recoloured.sample(u, v) {
+                        Some(texel) => texel,
+                        None => continue,
+                    },
+                    QuadImage::Model(_) => continue,
+                };
                 let alpha = texel[3];
                 for channel in 0..3 {
                     let source = (texel[channel] * quad.colour[channel]).min(1.0);
@@ -1380,6 +1583,139 @@ mod tests {
             overlay.flatten(&base, [4, 2]).unwrap().rgba,
             [128, 128, 128, 255].repeat(8)
         );
+    }
+
+    #[test]
+    fn a_recolouring_draws_its_palette_colour_as_the_lookups() {
+        let close = |got: [f32; 3], want: [u8; 3]| {
+            got.iter()
+                .zip(want)
+                .all(|(&g, w)| (g * 255.0 - f32::from(w)).abs() <= 2.5)
+        };
+        let unit = |rgb: [u8; 3]| rgb.map(|channel| f32::from(channel) / 255.0);
+        // The map's half-bright plan, its red current room, a black texel
+        // given a colour, and a colour kept as it is.
+        let cases = [
+            ([0x20, 0x68, 0x00], [0x10, 0x34, 0x00]),
+            ([0x20, 0x68, 0x00], [0x7C, 0x00, 0x00]),
+            ([0, 0, 0], [0x10, 0x20, 0x30]),
+            ([0xB0, 0xB0, 0xB0], [0xB0, 0xB0, 0xB0]),
+        ];
+        for (palette, colour) in cases {
+            let recolour = Recolour::of(palette, colour);
+            assert!(
+                close(recolour.apply(unit(palette)), colour),
+                "{palette:?} -> {colour:?}: {recolour:?}"
+            );
+        }
+        // A tint scales an HD texel's own colours...
+        let tint = Recolour::of([0x20, 0x68, 0x00], [0x10, 0x34, 0x00]);
+        assert_eq!(tint.luma, [0.0; 3]);
+        assert!(close(
+            tint.apply(unit([0x80, 0x40, 0xFF])),
+            [0x40, 0x20, 0x80]
+        ));
+        // ...a swapped colour keeps its brightness: a darker HD outline
+        // inside the room draws a darker red.
+        let swap = Recolour::of([0x20, 0x68, 0x00], [0x7C, 0x00, 0x00]);
+        assert_eq!(swap.scale, [0.0; 3]);
+        let outline = swap.apply(unit([0x10, 0x34, 0x00]));
+        assert!(close(outline, [0x3E, 0x00, 0x00]), "{outline:?}");
+        // ...and a black texel has no brightness to keep.
+        let flat = Recolour::of([0, 0, 0], [0x10, 0x20, 0x30]);
+        assert!(close(flat.apply([1.0; 3]), [0x10, 0x20, 0x30]));
+    }
+
+    #[test]
+    fn a_whole_lookup_draws_its_clear_texels_in_its_common_tint() {
+        let mut palette = [[0u8; 3]; 256];
+        let mut colours = [None; 256];
+        // Half of a green, of a grey and of a dark channel that rounds
+        // unevenly, with a black palette colour kept black.
+        for (index, p) in [
+            (1, [0x20, 0x68, 0x00]),
+            (2, [0xB0, 0xB0, 0xB0]),
+            (3, [9, 0x40, 0x80]),
+        ] {
+            palette[index] = p;
+            colours[index] = Some(p.map(|channel| (u16::from(channel) * 0x80 / 0xFF) as u8));
+        }
+        colours[4] = Some([0, 0, 0]);
+        let k = Recolour::common_tint(&palette, &colours).unwrap();
+        assert!((k - 0.5).abs() < 0.02, "{k}");
+        let whole = Recolour::whole(&palette, &colours).unwrap();
+        assert_eq!(whole[0].unwrap().scale, [k; 3]);
+        assert_eq!(whole[4].unwrap().scale, [k; 3]);
+        assert_eq!(whole[1], Recolour::lut(&palette, &colours)[1]);
+        // A colour drawn black is hidden, not a tint to extend.
+        palette[5] = [0x80; 3];
+        colours[5] = Some([0, 0, 0]);
+        assert!(Recolour::whole(&palette, &colours).is_none());
+        // So is a swapped colour.
+        colours[5] = Some([0x7C, 0, 0]);
+        assert!(Recolour::common_tint(&palette, &colours).is_none());
+        assert!(Recolour::common_tint(&[[0; 3]; 256], &[None; 256]).is_none());
+    }
+
+    #[test]
+    fn a_colour_swapped_for_a_near_black_one_draws_flat() {
+        let swap = Recolour::of([0, 0, 8], [0x7C, 0, 0]);
+        assert_eq!(swap.flat, [0x7C as f32 / 255.0, 0.0, 0.0]);
+        assert_eq!(swap.apply([1.0; 3]), swap.flat);
+    }
+
+    #[test]
+    fn flattening_recolours_a_quad_by_its_originals_indices() {
+        // A 2x1 page: index 1 tinted to half, index 2 recoloured red, an HD
+        // image at twice the detail.
+        let art = Arc::new(Replacement {
+            image: Image {
+                width: 4,
+                height: 2,
+                rgba: [200, 100, 50, 255].repeat(8),
+            },
+            frame: [2, 1],
+        });
+        let mut lut = [None; 256];
+        lut[1] = Some(Recolour::of([200, 100, 50], [100, 50, 25]));
+        lut[2] = Some(Recolour::of([200, 100, 50], [255, 0, 0]));
+        let recoloured = |texels: Vec<u8>| Recoloured {
+            art: art.clone(),
+            indices: Arc::new(Indices {
+                width: 2,
+                height: 1,
+                texels,
+            }),
+            lut,
+        };
+        let flatten = |texels: Vec<u8>| {
+            let mut overlay = Overlay::new(0, [2, 1]);
+            overlay.quads.push(Quad {
+                image: QuadImage::Recoloured(Arc::new(recoloured(texels))),
+                dst: [0.0, 0.0, 2.0, 1.0],
+                uv: [0.0, 0.0, 1.0, 1.0],
+                colour: [1.0; 3],
+                clip: [0, 0, 2, 1],
+            });
+            overlay.cover(0, 0);
+            overlay.cover(1, 0);
+            let base = Image {
+                width: 2,
+                height: 1,
+                rgba: [9, 9, 9, 255].repeat(2),
+            };
+            overlay.flatten(&base, [4, 2]).unwrap().rgba
+        };
+        let flat = flatten(vec![1, 2]);
+        let pixel = |x: usize, y: usize| &flat[(y * 4 + x) * 4..][..4];
+        assert_eq!(pixel(0, 0), [100, 50, 25, 255]);
+        assert_eq!(pixel(1, 1), [100, 50, 25, 255]);
+        assert_eq!(pixel(2, 0), [255, 0, 0, 255]);
+        assert_eq!(pixel(3, 1), [255, 0, 0, 255]);
+        // An index without a recolouring stays clear.
+        let clear = flatten(vec![0, 2]);
+        assert_eq!(&clear[..4], [9, 9, 9, 255]);
+        assert_eq!(&clear[8..12], [255, 0, 0, 255]);
     }
 
     #[test]

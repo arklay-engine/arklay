@@ -480,13 +480,14 @@ end
 
 --- Blit one browser sprite. The original's page search rejects a sprite
 --- whose rect leaves the loaded page, which is what makes the wrapped
---- floor-glyph `texV` disappear.
-local function blit(api, art, rect, mul, ox, oy)
+--- floor-glyph `texV` disappear. `whole` lets an HD page cover the whole
+--- rect, for the labels it redraws in its own lettering.
+local function blit(api, art, rect, mul, ox, oy, whole)
     local width, height = api:art_size(art)
     if rect.u + rect.w > width or rect.v + rect.h > height then
         return
     end
-    api:page_lut(art, rect.u, rect.v, rect.w, rect.h, ox + rect.x, oy + rect.y, browser_lut(api, art, mul))
+    api:page_lut(art, rect.u, rect.v, rect.w, rect.h, ox + rect.x, oy + rect.y, browser_lut(api, art, mul), whole)
 end
 
 local function with(rect, field, value)
@@ -522,10 +523,10 @@ local function draw_browser(api, ox, oy)
             blit(api, art, SPRITES[layout], layout == s.layout and MUL_FULL or MUL_HALF, ox, oy)
         end
     end
-    blit(api, art, with(SPRITES[4], "v", (s.layout * 0x10 + 0x48) & 0xFF), MUL_FULL, ox, oy)
+    blit(api, art, with(SPRITES[4], "v", (s.layout * 0x10 + 0x48) & 0xFF), MUL_FULL, ox, oy, true)
     local offset = s.tables.layout_offset[s.layout] or 0
     local glyph_v = (((6 - room_index() - offset) & 0xFF) * 0x10) & 0xFF
-    blit(api, art, with(SPRITES[5], "v", glyph_v), MUL_FULL, ox, oy)
+    blit(api, art, with(SPRITES[5], "v", glyph_v), MUL_FULL, ox, oy, true)
     -- `MAP_HL_COUNT`: bit 4 set for the dim half of its 64-frame cycle.
     local blink = ((s.ticks + 1) & 0x30) ~= 0
     local flags = move_flags(api, s.layout, room_index())
