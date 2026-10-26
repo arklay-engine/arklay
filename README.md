@@ -36,11 +36,12 @@ the same window (closing the game window ends the process), discovers mods
 across the data roots and remembers their enable/disable state and order, and
 checks the release and nightly update tracks. The OPTIONS screen edits the
 renderer, widescreen, resolution, fullscreen, V-Sync, language, GPU render
-scale and MSAA, frame rate, auto aim, blood, quick turn and tactical reload,
-the controller preset and vibration, the menu text size, the volumes and
-the subtitle options, writing every change back to `arklay.toml`. MODS shows
-the application order: the top row is applied first (lowest priority) and the
-bottom row last (highest); Ctrl+Down moves a mod toward higher priority.
+scale and MSAA, frame rate, quick turn and tactical reload, writing every
+change back to `arklay.toml`; booting the game and opening the in-game menu
+reaches the rest (see "Gameplay options" and the `[graphics]` table). MODS
+shows the application order: the top row is applied first (lowest priority)
+and the bottom row last (highest); Ctrl+Down moves a mod toward higher
+priority.
 
 The launcher also takes a gamepad. The D-pad or left stick moves and changes
 OPTIONS/UPDATE values left and right; A/Start confirms; B/Back backs out,
