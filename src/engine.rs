@@ -26216,8 +26216,9 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
-        // At full health the green herb's USE is refused; the menu reports
-        // the refusal as 0xf7 + the heal category (7).
+        // Authentic mode refuses the green herb at full health; the menu
+        // reports the refusal as 0xf7 + the heal category (7).
+        session.game.player_options.authentic = true;
         session.game.entities[0].health = session.game.max_health;
         session.game.add_item(ITEM_GREEN_HERB, 1);
 

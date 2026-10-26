@@ -163,6 +163,12 @@ struct Cli {
     #[arg(long, requires = "pack", conflicts_with = "fmv")]
     no_tactical_reload: bool,
 
+    /// Play by the original's item rules where the port is more lenient: a
+    /// healing item is refused at full health, and a blue herb when the
+    /// player is not poisoned. Off by default; `arklay.toml` has no key for it
+    #[arg(long, requires = "pack")]
+    authentic: bool,
+
     /// Render one frame to a file and exit (headless testing)
     #[arg(long, value_name = "FILE", requires = "pack")]
     capture: Option<PathBuf>,
@@ -953,6 +959,7 @@ fn main() -> Result<()> {
                 // A scripted run keeps the original's aim and blood.
                 no_auto_aim: !(config.game.auto_aim || tracing || cli.input.is_some()),
                 no_blood: !(config.game.blood || tracing || cli.input.is_some()),
+                authentic: cli.authentic,
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {
@@ -1241,6 +1248,14 @@ mod tests {
             Cli::try_parse_from(["arklay", "game.akpak", "--fmv", "0", "--no-tactical-reload"])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn the_cli_turns_authentic_mode_on_only_when_asked() {
+        let cli = Cli::try_parse_from(["arklay", "game.akpak"]).unwrap();
+        assert!(!cli.authentic);
+        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--authentic"]).unwrap();
+        assert!(cli.authentic);
     }
 
     #[test]

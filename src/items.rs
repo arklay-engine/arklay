@@ -302,6 +302,30 @@ pub fn record(item: u8) -> Option<ItemRecord> {
 pub const ITEM_RED_BOOK: u8 = 0x3E;
 /// The item id of the first-aid spray (the zoom path's upper bound).
 pub const ITEM_FIRST_AID_SPRAY: u8 = 0x41;
+/// The item id of the green herb (`G`).
+pub const ITEM_GREEN_HERB: u8 = 0x44;
+/// The item id of the blue herb, the poison cure.
+pub const ITEM_BLUE_HERB: u8 = 0x45;
+/// The item id of the green and red herb mix (`GR`).
+pub const ITEM_GREEN_RED_HERB: u8 = 0x46;
+/// The item id of the two green herbs mix (`GG`).
+pub const ITEM_GREEN_GREEN_HERB: u8 = 0x47;
+/// The item id of the green and blue herb mix (`GB`).
+pub const ITEM_GREEN_BLUE_HERB: u8 = 0x48;
+/// The item id of the three green herbs mix (`GGG`).
+pub const ITEM_GREEN_GREEN_GREEN_HERB: u8 = 0x4A;
+
+/// The heal items the menu takes at full health outside authentic mode, where
+/// the original refuses them: the first-aid spray and the `G`, `GR`, `GG`, `GB`
+/// and `GGG` herbs. At full health they heal nothing and are used up.
+pub const FULL_HEALTH_ITEMS: [u8; 6] = [
+    ITEM_FIRST_AID_SPRAY,
+    ITEM_GREEN_HERB,
+    ITEM_GREEN_RED_HERB,
+    ITEM_GREEN_GREEN_HERB,
+    ITEM_GREEN_BLUE_HERB,
+    ITEM_GREEN_GREEN_GREEN_HERB,
+];
 
 /// Offset of the item-examine combo table inside [`ITEM_LOOKUP`].
 pub const EXAMINE_COMBOS_OFFSET: usize = 0x16B;

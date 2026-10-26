@@ -564,6 +564,7 @@ exist (Lua colon syntax):
 | Method | Effect |
 | --- | --- |
 | `api:room()` | The three-digit room id, read-only. |
+| `api:authentic()` | Whether the run was started with `--authentic` (the original's item rules), read-only. |
 | `api:flag_get(bank, bit)` | Whether a flag bit is set. |
 | `api:flag_set(bank, bit[, value])` | Set (default) or clear a flag bit. |
 | `api:item_count(item)` | Total held quantity. |
@@ -822,6 +823,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:item_box(slot)` | The id and quantity of item-box slot `slot`. |
 | `api:player_health()` | The player's health, maximum health and status byte (poison bits `0x22`). |
 | `api:character()` | The portrait's character index (`0` Chris, `1` Jill, `2`/`3` the alternates). |
+| `api:authentic()` | Whether the run was started with `--authentic` (the original's item rules). |
 | `api:has_radio()` | Whether the radio tab is live. |
 | `api:equipped()` | The equipped item, `0` for none. |
 | `api:item_count(item)` | How many of `item` the inventory holds. |

@@ -3673,7 +3673,9 @@ fn main_menu_a_herb_heal_updates_health_and_state() {
 
 #[test]
 fn main_menu_heal_refusals_do_not_consume() {
+    // Authentic mode refuses a green herb at full health, as the original does.
     let mut game = menu_game();
+    game.player_options.authentic = true;
     game.add_item(0x44, 1);
     let mut menu = Menu::open(game);
     menu.confirm();
@@ -3681,6 +3683,19 @@ fn main_menu_heal_refusals_do_not_consume() {
     assert_eq!(menu.game.message.id, Some(0xF7 + 7), "the heal refusal");
     assert_eq!(menu.game.inventory.len(), 1, "the herb was not consumed");
     assert_eq!(menu.game.last_used_item, None);
+}
+
+#[test]
+fn main_menu_full_health_herbs_are_used_up_outside_authentic_mode() {
+    let mut game = menu_game();
+    game.add_item(0x44, 1);
+    let mut menu = Menu::open(game);
+    menu.confirm();
+    menu.confirm_action();
+    assert_ne!(menu.game.message.id, Some(0xF7 + 7), "no refusal message");
+    assert!(menu.game.inventory.is_empty(), "the herb was used up");
+    assert_eq!(menu.game.last_used_item, Some(0x44));
+    assert_eq!(menu.game.entities[0].health, 96, "it heals nothing");
 }
 
 #[test]

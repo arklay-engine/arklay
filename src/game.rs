@@ -5867,7 +5867,9 @@ impl GameState {
     /// Apply the menu USE action for `item`, exactly as the original's
     /// category dispatch does:
     ///
-    /// - heal items run the heal table and update health/status;
+    /// - heal items run the heal table and update health/status; outside
+    ///   authentic mode one with no effect is still used up (see
+    ///   [`Self::accepts_ineffective_heal`]);
     /// - key, special and chemical items need their per-item use flag;
     /// - books only accept the red book, with flag bit `0x23`;
     /// - weapons, ammo, the empty bottle and unusable ids do nothing.
@@ -5909,7 +5911,7 @@ impl GameState {
                         _ => {}
                     }
                 }
-                if healed || cured {
+                if healed || cured || self.accepts_ineffective_heal(item) {
                     UseResult::Used { healed, cured }
                 } else {
                     UseResult::Unusable
@@ -5945,6 +5947,21 @@ impl GameState {
             },
             _ => UseResult::Unusable,
         }
+    }
+
+    /// Whether a heal item with no effect this use is still used up.
+    ///
+    /// The original refuses these. Outside authentic mode the menu takes the
+    /// [`items::FULL_HEALTH_ITEMS`] at full health, and a blue herb while the
+    /// player is not poisoned; the use changes nothing but consumes the item.
+    fn accepts_ineffective_heal(&self, item: u8) -> bool {
+        if self.player_options.authentic {
+            return false;
+        }
+        if item == items::ITEM_BLUE_HERB {
+            return self.health_status & 0x22 == 0;
+        }
+        items::FULL_HEALTH_ITEMS.contains(&item) && self.entities[0].health >= self.max_health
     }
 
     /// Apply the menu MOVE/combine between the cursor and target slots.
@@ -15808,9 +15825,17 @@ mod tests {
             }
         );
         assert_eq!(state.entities[0].health, 20 + 96 / 3);
-        // A spray at full health does nothing and stays in the inventory.
+        // A spray at full health does nothing but is used up outside
+        // authentic mode (the authentic refusal is tested below).
         state.entities[0].health = 96;
-        assert_eq!(state.use_item(0x41), UseResult::Unusable);
+        assert_eq!(
+            state.use_item(0x41),
+            UseResult::Used {
+                healed: false,
+                cured: false
+            }
+        );
+        assert_eq!(state.entities[0].health, 96);
 
         // Poison cures clear their bit and reach the BioCard byte.
         state.set_health_status(0x22);
@@ -15843,6 +15868,93 @@ mod tests {
         // setb on the health-status byte mirrors into the field too.
         state.set_byte(STATE_BYTE_HEALTH_STATUS, 0x10);
         assert_eq!(state.health_status, 0x10);
+    }
+
+    #[test]
+    fn full_health_items_are_used_up_without_effect_outside_authentic_mode() {
+        let mut state = game();
+        state.max_health = 96;
+        state.entities[0].health = 96;
+        state.set_health_status(0);
+        for item in items::FULL_HEALTH_ITEMS {
+            assert_eq!(
+                state.use_item(item),
+                UseResult::Used {
+                    healed: false,
+                    cured: false
+                },
+                "item {item:#04x} at full health"
+            );
+        }
+        assert_eq!(state.entities[0].health, 96);
+
+        // A blue herb is used up while the player is not poisoned, at any health.
+        state.entities[0].health = 20;
+        assert_eq!(
+            state.use_item(items::ITEM_BLUE_HERB),
+            UseResult::Used {
+                healed: false,
+                cured: false
+            }
+        );
+        assert_eq!(state.entities[0].health, 20);
+
+        // Poisoned, the blue herb still refuses the 0x20 poison it cannot cure.
+        state.set_health_status(0x20);
+        assert_eq!(state.use_item(items::ITEM_BLUE_HERB), UseResult::Unusable);
+        state.set_health_status(0x02);
+        assert_eq!(
+            state.use_item(items::ITEM_BLUE_HERB),
+            UseResult::Used {
+                healed: false,
+                cured: true
+            }
+        );
+    }
+
+    #[test]
+    fn authentic_mode_refuses_full_health_items_and_an_unpoisoned_blue_herb() {
+        let mut state = game();
+        state.max_health = 96;
+        state.entities[0].health = 96;
+        state.set_health_status(0);
+        state.player_options.authentic = true;
+        for item in items::FULL_HEALTH_ITEMS {
+            assert_eq!(
+                state.use_item(item),
+                UseResult::Unusable,
+                "item {item:#04x} at full health"
+            );
+        }
+        assert_eq!(state.use_item(items::ITEM_BLUE_HERB), UseResult::Unusable);
+
+        // Below full health the heals still apply in authentic mode.
+        state.entities[0].health = 20;
+        assert_eq!(
+            state.use_item(items::ITEM_GREEN_HERB),
+            UseResult::Used {
+                healed: true,
+                cured: false
+            }
+        );
+        assert_eq!(state.entities[0].health, 20 + 96 / 3);
+    }
+
+    #[test]
+    fn heal_items_outside_the_full_health_list_stay_refused() {
+        let mut state = game();
+        state.max_health = 96;
+        state.entities[0].health = 96;
+        state.set_health_status(0);
+        // The serum and red herb do not heal, and the green+red+blue and
+        // green+green+blue mixes heal but are not in the full-health list.
+        for item in [0x42, 0x43, 0x49, 0x4B] {
+            assert_eq!(
+                state.use_item(item),
+                UseResult::Unusable,
+                "item {item:#04x}"
+            );
+        }
     }
 
     #[test]
