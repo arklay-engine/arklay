@@ -365,6 +365,14 @@ and keeps the originals.
   A menu page is hashed unstretched with black kept as `0x000001`, in a 256 x 256
   window, or at its own size when smaller. A `.PIX` screen is hashed like a `bgd`
   but with shift widening.
+- A page drawn through a palette lookup (the map's backdrop, browser and floor
+  plans, with their visited and current rooms) takes the replacement of its
+  unmodified page, CLUT row 0. The GPU keeps the original's indices and recolours
+  each HD pixel by the index under it, as the lookup does: an index the lookup
+  drops stays clear, one it tints tints the HD pixel, and one it swaps for another
+  colour (the red current room) takes that colour at the HD pixel's brightness. The
+  PC game instead uploads the map page with its CLUT already edited for the rooms
+  visited, so its hashes change with every visit and no pack can name them all.
 
 Some masks cannot be named from their own texels: their hash depends on what the
 loader's surface held before the upload. An RE-ENHANCE pack ships the loader's
@@ -392,9 +400,8 @@ only for a pack with a `mask/` directory. It is spread over every core and takes
 about 0.7 to 0.9 seconds on 8 threads; most of that is hashing each camera's page
 and background.
 
-Some 2D art stays software: map room highlighting (drawn through a palette lookup),
-the fonts, and the raw save screen (`TYPE00.TIM`), whose hash matches no file in
-the RE1 HD pack. The title screen finds a match (#132).
+Some 2D art stays software: the fonts, and the raw save screen (`TYPE00.TIM`), whose
+hash matches no file in the RE1 HD pack. The title screen finds a match (#132).
 
 A texture with no replacement is reported once on stderr, with every hash that was
 tried:

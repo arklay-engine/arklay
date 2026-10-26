@@ -1012,6 +1012,95 @@ fn page_sprite_mirrored_whole_punches_the_keyed_clear_texels_too() {
 }
 
 #[test]
+fn page_lut_recolours_its_hd_page_by_the_originals_indices() {
+    use crate::pack::PackWriter;
+
+    // [`test_tim`]'s 8x4 page of index 1 (blue), its first four texels
+    // indices 1, 0, 2, 0.
+    let mut tim = test_tim();
+    let pixels = tim.len() - 16;
+    tim[pixels..pixels + 2].copy_from_slice(&0x0201u16.to_le_bytes());
+    let source = r#"
+function update(api, input) end
+
+function draw(api)
+api:page_lut(api:indexed_page("art/plan"), 0, 0, 8, 4, 10, 20, { [1] = 0x800000 })
+end
+"#;
+    let build = |hd: Option<(u32, Vec<u8>)>| {
+        let mut writer = PackWriter::new();
+        writer
+            .add("screen/save.lua", source.as_bytes().to_vec())
+            .unwrap();
+        writer.add("art/plan.tim", tim.clone()).unwrap();
+        if let Some((hash, bytes)) = hd {
+            writer
+                .add(&format!("htexture/misc/{hash:08X}.bmp"), bytes)
+                .unwrap();
+        }
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    };
+    let crate::assets::Artwork::Indexed(page) =
+        crate::ui::load_page(&build(None), "art/plan").unwrap()
+    else {
+        panic!("an indexed page");
+    };
+    let candidate = crate::htexture::page_candidates(&page, 0)[0];
+    let hd = crate::bmp::encode_to_vec(&crate::state::Image {
+        width: 32,
+        height: 16,
+        rgba: [0, 0, 255, 255].repeat(32 * 16),
+    })
+    .unwrap();
+    let pack: &'static Pack = Box::leak(Box::new(build(Some((candidate.hash, hd)))));
+    let fixture = Fixture {
+        pack,
+        text: Text::load(pack, Some("en-US")),
+        font: test_font(),
+        dir: TempDir::new("hd-page-lut"),
+    };
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let pixel = |framebuffer: &crate::render::Framebuffer, x: usize, y: usize| {
+        let index = (y * 320 + x) * 4;
+        [
+            framebuffer.rgba[index],
+            framebuffer.rgba[index + 1],
+            framebuffer.rgba[index + 2],
+        ]
+    };
+
+    // Without a capture the lookup draws in software.
+    let plain = draw(&mut screen, &cx);
+    assert_eq!(pixel(&plain, 10, 20), [0x80, 0, 0]);
+    assert_eq!(pixel(&plain, 11, 20), [0; 3]);
+
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(255);
+    screen.draw(&cx, &mut framebuffer);
+    // Only the texels the lookup draws are punched.
+    assert_eq!(pixel(&framebuffer, 10, 20), [255; 3]);
+    assert_eq!(pixel(&framebuffer, 11, 20), [0; 3]);
+    assert_eq!(pixel(&framebuffer, 12, 20), [0; 3]);
+    assert_eq!(pixel(&framebuffer, 17, 23), [255; 3]);
+    let quads = framebuffer.hd_quads();
+    assert_eq!(quads.len(), 1);
+    let [fw, fh] = candidate.frame.map(|v| v as f32);
+    assert_eq!(quads[0].dst, [10.0, 20.0, 18.0, 24.0]);
+    assert_eq!(quads[0].uv, [0.0, 0.0, 8.0 / fw, 4.0 / fh]);
+    assert_eq!(quads[0].colour, [1.0; 3]);
+    let crate::htexture::QuadImage::Recoloured(recoloured) = &quads[0].image else {
+        panic!("not a recoloured quad");
+    };
+    assert_eq!(recoloured.art.image.width, 32);
+    assert_eq!(recoloured.indices.texels[..4], [1, 0, 2, 0]);
+    assert!(recoloured.lut[0].is_none() && recoloured.lut[2].is_none());
+    // The page's blue draws as the lookup's red.
+    let red = recoloured.lut[1].unwrap().apply([0.0, 0.0, 1.0]);
+    assert!((red[0] - 128.0 / 255.0).abs() < 0.01 && red[1] == 0.0 && red[2] == 0.0);
+}
+
+#[test]
 fn replaced_entry_art_leaves_a_hole_and_a_quad_while_capturing() {
     let pixel = |framebuffer: &crate::render::Framebuffer, x: usize, y: usize| {
         let index = (y * 320 + x) * 4;

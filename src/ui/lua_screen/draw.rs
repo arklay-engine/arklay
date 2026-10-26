@@ -88,6 +88,9 @@ pub(super) struct Assets {
     /// `STAITEM` page. An old pack has no per-item icons, so every item crops
     /// the same sheet instead of decoding it again.
     item_sources: RefCell<HashMap<String, Arc<Image>>>,
+    /// The texel indices of each indexed page a recoloured HD draw
+    /// (`api:page_lut`) used, shared by its draws.
+    indices: RefCell<HashMap<usize, Arc<htexture::Indices>>>,
 }
 
 /// A looked-up HD replacement of screen art; `None` when the pack has none.
@@ -169,6 +172,7 @@ impl Assets {
         self.by_key.retain(|_, &mut held| held != handle);
         self.hd.get_mut().retain(|&(held, _), _| held != handle);
         self.hd_names.get_mut().remove(&handle);
+        self.indices.get_mut().remove(&handle);
     }
 
     /// Register the named HD keys `handle`'s art answers to, most specific
@@ -200,6 +204,25 @@ impl Assets {
     /// The handle `key`'s art was loaded under, if it is still live.
     fn handle(&self, key: &str) -> Option<usize> {
         self.by_key.get(key).copied()
+    }
+
+    /// The texel indices of indexed page `handle`, copied once.
+    fn indices(&self, handle: usize) -> mlua::Result<Arc<htexture::Indices>> {
+        if let Some(found) = self.indices.borrow().get(&handle) {
+            return Ok(found.clone());
+        }
+        let Artwork::Indexed(texture) = self.page(handle)? else {
+            return Err(mlua::Error::RuntimeError(format!(
+                "art handle {handle} is not an indexed page"
+            )));
+        };
+        let indices = Arc::new(htexture::Indices {
+            width: texture.width,
+            height: texture.height,
+            texels: texture.indices.clone(),
+        });
+        self.indices.borrow_mut().insert(handle, indices.clone());
+        Ok(indices)
     }
 
     fn get(&self, handle: usize) -> mlua::Result<&Asset> {
@@ -1050,15 +1073,33 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         },
     );
 
-    // `page_lut(page, sx, sy, w, h, dx, dy, lut)`: an unscaled indexed-page
-    // rect drawn through `lut`, a table of opaque `0xRRGGBB` colours keyed by
-    // texel index; an index without an entry is transparent,
+    // `page_lut(page, sx, sy, w, h, dx, dy, lut[, whole])`: an unscaled
+    // indexed-page rect drawn through `lut`, a table of opaque `0xRRGGBB`
+    // colours keyed by texel index; an index without an entry is transparent,
     // index 0 included. The screens composite remapped palettes with it (the
-    // map's tinted and room-highlighted plans).
+    // map's tinted and room-highlighted plans). With `whole`, a lookup that
+    // tints every index alike lets an HD replacement cover the whole rect,
+    // as `page_sprite_mirrored`'s does, for art the HD page redraws.
+    #[allow(clippy::type_complexity)]
     methods.add_method_mut(
         "page_lut",
-        |_lua, api, (handle, sx, sy, w, h, dx, dy, lut): (usize, i32, i32, i32, i32, i32, i32, Table)| {
-            let Artwork::Indexed(texture) = api.host.assets.page(handle)? else {
+        |_lua,
+         api,
+         (handle, sx, sy, w, h, dx, dy, lut, whole): (
+            usize,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            Table,
+            Option<bool>,
+        )| {
+            let Api {
+                host, framebuffer, ..
+            } = api;
+            let Artwork::Indexed(texture) = host.assets.page(handle)? else {
                 return Err(mlua::Error::RuntimeError(format!(
                     "art handle {handle} is not an indexed page"
                 )));
@@ -1069,13 +1110,49 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
                     *colour = Some([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8]);
                 }
             }
-            let framebuffer = api.framebuffer.as_deref_mut().ok_or_else(no_draw)?;
-            framebuffer.draw_indexed_sprite_lut(
-                texture,
-                rect(sx, sy, w, h),
-                rect(dx, dy, w, h),
-                &colours,
-            );
+            let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
+            let (src, dst) = (rect(sx, sy, w, h), rect(dx, dy, w, h));
+            let draw = |framebuffer: &mut Framebuffer| {
+                framebuffer.draw_indexed_sprite_lut(texture, src, dst, &colours);
+            };
+            // The HD page through CLUT row 0, recoloured on the GPU by the
+            // original's indices, so the lookup applies at its resolution.
+            match hd_art(&host.assets, api.cx.pack, framebuffer, handle, 0) {
+                Some(art) => {
+                    let (corners, uv) = sprite_quad(&art, src, dst, [false; 2]);
+                    let palette = std::array::from_fn(|index| {
+                        let [r, g, b, _] = texture.palette(0, index as u8);
+                        [r, g, b]
+                    });
+                    let whole = match whole {
+                        Some(true) => htexture::Recolour::whole(&palette, &colours),
+                        _ => None,
+                    };
+                    let (lut, whole) = match whole {
+                        Some(lut) => (lut, true),
+                        None => (htexture::Recolour::lut(&palette, &colours), false),
+                    };
+                    let draw = |framebuffer: &mut Framebuffer| {
+                        if whole {
+                            framebuffer.punch_rect(dst);
+                        }
+                        draw(framebuffer);
+                    };
+                    let recoloured = htexture::Recoloured {
+                        art,
+                        indices: host.assets.indices(handle)?,
+                        lut,
+                    };
+                    framebuffer.draw_replaced(
+                        htexture::QuadImage::Recoloured(Arc::new(recoloured)),
+                        corners,
+                        uv,
+                        [1.0; 3],
+                        draw,
+                    );
+                }
+                None => draw(framebuffer),
+            }
             Ok(())
         },
     );

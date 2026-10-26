@@ -92,6 +92,11 @@ const IVM_VERT: &[u8] = include_bytes!("shaders/ivm.vert.spv");
 
 /// Scene frames an unused upload stays resident before it is released.
 pub const EVICT_AFTER_FRAMES: u64 = 300;
+
+/// The rows of `overlay.frag`'s `lut` per recoloured quad: each index's
+/// [`htexture::Recolour`] scale (alpha 1 when the index draws), luma weight
+/// and flat colour.
+const LUT_ROWS: u32 = 3;
 /// The largest accepted offscreen resolution multiplier.
 pub const MAX_SCALE: u32 = 8;
 /// The largest scene target side, whatever the window and `render_scale`.
@@ -350,6 +355,15 @@ pub struct GpuRenderer {
     /// last drawn in. Unlike the scene's uploads they outlive gameplay, so
     /// menus and title screens do not upload them every frame.
     overlay_images: HashMap<usize, (Arc<htexture::Replacement>, *mut SDL_GPUTexture, u64)>,
+    /// The recoloured quads' original page indices as `R8_UINT` textures,
+    /// by [`htexture::Indices`], kept like `overlay_images`.
+    overlay_indices: HashMap<usize, (Arc<htexture::Indices>, *mut SDL_GPUTexture, u64)>,
+    /// The frame's recolourings, [`LUT_ROWS`] rows of 256 per recoloured
+    /// quad (`overlay.frag`'s `lut`), and the rows it holds.
+    overlay_lut: *mut SDL_GPUTexture,
+    overlay_lut_rows: u32,
+    /// Bound in place of the indices for a quad that is not recoloured.
+    no_indices: *mut SDL_GPUTexture,
     /// The presented frame count the overlay's eviction runs on.
     overlay_frame: u64,
     /// Whether an overlay failure has been reported; it is not repeated
@@ -541,6 +555,10 @@ impl GpuRenderer {
             overlay_coverage: std::ptr::null_mut(),
             overlay_coverage_size: [0, 0],
             overlay_images: HashMap::new(),
+            overlay_indices: HashMap::new(),
+            overlay_lut: std::ptr::null_mut(),
+            overlay_lut_rows: 0,
+            no_indices: std::ptr::null_mut(),
             overlay_frame: 0,
             overlay_warned: false,
             meshes: HashMap::new(),
@@ -580,6 +598,13 @@ impl GpuRenderer {
             1,
             SDL_GPU_TEXTUREUSAGE_SAMPLER,
         )?;
+        renderer.no_indices = renderer.texture(
+            SDL_GPU_TEXTUREFORMAT_R8_UINT,
+            1,
+            1,
+            SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        )?;
+        renderer.ensure_overlay_lut(LUT_ROWS)?;
         renderer.build_scene_pipelines()?;
         renderer.clear_scene()?;
         Ok(renderer)
@@ -1030,7 +1055,7 @@ impl GpuRenderer {
         };
         self.pipelines.model_opaque = model(self, false, true)?;
         self.pipelines.model_blend = model(self, true, false)?;
-        let overlay_frag = self.shader(OVERLAY_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 2, 1)?;
+        let overlay_frag = self.shader(OVERLAY_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 4, 1)?;
         self.pipelines.overlay = self.pipeline(
             sprite_vert.shader,
             overlay_frag.shader,
@@ -2270,7 +2295,14 @@ impl GpuRenderer {
             // Their uploads were cancelled with the command buffer.
             self.forget_fresh();
             for key in fresh {
-                if let Some((_, texture, _)) = self.overlay_images.remove(&key) {
+                let texture = match self.overlay_images.remove(&key) {
+                    Some((_, texture, _)) => Some(texture),
+                    None => self
+                        .overlay_indices
+                        .remove(&key)
+                        .map(|(_, texture, _)| texture),
+                };
+                if let Some(texture) = texture {
                     unsafe { SDL_ReleaseGPUTexture(self.device, texture) };
                 }
             }
@@ -2447,20 +2479,73 @@ impl GpuRenderer {
         if frame.saturating_sub(self.model_frame) > EVICT_AFTER_FRAMES {
             self.release_model_targets();
         }
-        if self.overlay_images.is_empty() {
-            return;
+        fn release_stale<T>(
+            device: *mut SDL_GPUDevice,
+            frame: u64,
+            textures: &mut HashMap<usize, (T, *mut SDL_GPUTexture, u64)>,
+        ) {
+            textures.retain(|_, (_, texture, last_used)| {
+                let keep = frame.saturating_sub(*last_used) <= EVICT_AFTER_FRAMES;
+                if !keep {
+                    unsafe { SDL_ReleaseGPUTexture(device, *texture) };
+                }
+                keep
+            });
         }
-        let stale: Vec<usize> = self
-            .overlay_images
-            .iter()
-            .filter(|(_, (_, _, last_used))| frame.saturating_sub(*last_used) > EVICT_AFTER_FRAMES)
-            .map(|(&key, _)| key)
-            .collect();
-        for key in stale {
-            if let Some((_, texture, _)) = self.overlay_images.remove(&key) {
-                unsafe { SDL_ReleaseGPUTexture(self.device, texture) };
-            }
+        release_stale(self.device, frame, &mut self.overlay_images);
+        release_stale(self.device, frame, &mut self.overlay_indices);
+    }
+
+    /// Upload `indices` for this frame's recoloured quads unless they are
+    /// resident, noting a new texture in `fresh`.
+    fn ensure_overlay_indices(
+        &mut self,
+        copy: *mut SDL_GPUCopyPass,
+        indices: &Arc<htexture::Indices>,
+        fresh: &mut Vec<usize>,
+    ) -> Result<()> {
+        let key = Arc::as_ptr(indices) as usize;
+        if let Some(entry) = self.overlay_indices.get_mut(&key) {
+            entry.2 = self.overlay_frame;
+            return Ok(());
         }
+        let (width, height) = (indices.width.max(1), indices.height.max(1));
+        let mut texels = indices.texels.clone();
+        texels.resize(width as usize * height as usize, 0);
+        let texture = self.texture(
+            SDL_GPU_TEXTUREFORMAT_R8_UINT,
+            width,
+            height,
+            SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        )?;
+        if let Err(err) = self.upload_texture(copy, texture, width, height, as_bytes(&texels)) {
+            unsafe { SDL_ReleaseGPUTexture(self.device, texture) };
+            return Err(err);
+        }
+        self.overlay_indices
+            .insert(key, (indices.clone(), texture, self.overlay_frame));
+        fresh.push(key);
+        Ok(())
+    }
+
+    /// Make `overlay_lut` hold at least `rows` rows.
+    fn ensure_overlay_lut(&mut self, rows: u32) -> Result<()> {
+        if !self.overlay_lut.is_null() && self.overlay_lut_rows >= rows {
+            return Ok(());
+        }
+        let rows = rows.next_power_of_two().max(LUT_ROWS);
+        let texture = self.texture(
+            SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT,
+            crate::model::PALETTE_ROW_LEN as u32,
+            rows,
+            SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        )?;
+        if !self.overlay_lut.is_null() {
+            unsafe { SDL_ReleaseGPUTexture(self.device, self.overlay_lut) };
+        }
+        self.overlay_lut = texture;
+        self.overlay_lut_rows = rows;
+        Ok(())
     }
 
     /// Record [`GpuRenderer::draw_overlay`]'s uploads and pass into
@@ -2479,9 +2564,15 @@ impl GpuRenderer {
         let uploads = (|| -> Result<(Vec<SpriteVertex>, Vec<Option<ModelRun>>)> {
             let mut models = Vec::new();
             let mut model_vertices = Vec::new();
+            let mut lut = Vec::new();
             for quad in &overlay.quads {
                 let replacement = match &quad.image {
                     htexture::QuadImage::Art(replacement) => replacement,
+                    htexture::QuadImage::Recoloured(recoloured) => {
+                        self.ensure_overlay_indices(copy, &recoloured.indices, fresh)?;
+                        lut.extend(lut_texels(&recoloured.lut));
+                        &recoloured.art
+                    }
                     htexture::QuadImage::Model(model) => {
                         let page = self.ensure_page(
                             copy,
@@ -2527,6 +2618,12 @@ impl GpuRenderer {
                     .insert(key, (replacement.clone(), texture, self.overlay_frame));
                 fresh.push(key);
             }
+            if !lut.is_empty() {
+                let rows = (lut.len() / crate::model::PALETTE_ROW_LEN) as u32;
+                self.ensure_overlay_lut(rows)?;
+                let width = crate::model::PALETTE_ROW_LEN as u32;
+                self.upload_texture(copy, self.overlay_lut, width, rows, as_bytes(&lut))?;
+            }
             let [cover_w, cover_h] = overlay.size;
             self.upload_texture(
                 copy,
@@ -2570,7 +2667,7 @@ impl GpuRenderer {
         let (target_w, target_h) = self.overlay_size;
         let model_quads = overlay.quads.iter().filter_map(|quad| match &quad.image {
             htexture::QuadImage::Model(model) => Some((quad, model)),
-            htexture::QuadImage::Art(_) => None,
+            htexture::QuadImage::Art(_) | htexture::QuadImage::Recoloured(_) => None,
         });
         for ((quad, model), run) in model_quads.zip(&models) {
             let Some(run) = *run else {
@@ -2621,34 +2718,52 @@ impl GpuRenderer {
         let coverage_scale = [
             overlay.size[0] as f32 / target_w as f32,
             overlay.size[1] as f32 / target_h as f32,
-            0.0,
-            0.0,
         ];
         unsafe {
             SDL_BindGPUGraphicsPipeline(pass, self.pipelines.overlay);
-            SDL_PushGPUFragmentUniformData(
-                command,
-                0,
-                coverage_scale.as_ptr().cast::<c_void>(),
-                std::mem::size_of_val(&coverage_scale) as u32,
-            );
             SDL_SetGPUViewport(pass, &viewport);
             if !vertices.is_empty() {
                 SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
             }
         }
-        let draw = |texture: *mut SDL_GPUTexture, first: u32, scissor: SDL_Rect| {
+        // `recolour`: the original's index texture, its frame and the first
+        // of its `lut` rows, for a recoloured quad.
+        let draw = |texture: *mut SDL_GPUTexture,
+                    recolour: Option<(*mut SDL_GPUTexture, [u32; 2], u32)>,
+                    first: u32,
+                    scissor: SDL_Rect| {
+            let (indices, [frame_w, frame_h], lut_row) =
+                recolour.unwrap_or((self.no_indices, [0, 0], 0));
+            let uniforms: [f32; 8] = [
+                coverage_scale[0],
+                coverage_scale[1],
+                frame_w as f32,
+                frame_h as f32,
+                lut_row as f32,
+                0.0,
+                0.0,
+                0.0,
+            ];
+            let nearest = |texture| SDL_GPUTextureSamplerBinding {
+                texture,
+                sampler: self.sampler,
+            };
             let samplers = [
                 SDL_GPUTextureSamplerBinding {
                     texture,
                     sampler: self.linear,
                 },
-                SDL_GPUTextureSamplerBinding {
-                    texture: self.overlay_coverage,
-                    sampler: self.sampler,
-                },
+                nearest(self.overlay_coverage),
+                nearest(indices),
+                nearest(self.overlay_lut),
             ];
             unsafe {
+                SDL_PushGPUFragmentUniformData(
+                    command,
+                    0,
+                    uniforms.as_ptr().cast::<c_void>(),
+                    std::mem::size_of_val(&uniforms) as u32,
+                );
                 SDL_SetGPUScissor(pass, &scissor);
                 SDL_BindGPUFragmentSamplers(pass, 0, samplers.as_ptr(), samplers.len() as u32);
                 SDL_DrawGPUPrimitives(pass, 6, 1, first, 0);
@@ -2662,23 +2777,36 @@ impl GpuRenderer {
                 w: target_w as i32,
                 h: target_h as i32,
             };
-            draw(self.scene_colour, 0, whole);
+            draw(self.scene_colour, None, 0, whole);
             first = 6;
         }
         let mut models = models.iter();
+        let mut lut_row = 0;
+        let art = |image: &Arc<htexture::Replacement>| {
+            self.overlay_images
+                .get(&(Arc::as_ptr(image) as usize))
+                .map(|(_, texture, _)| *texture)
+        };
         for quad in &overlay.quads {
             let scissor = overlay_scissor(quad.clip, (layer_w, layer_h), (target_w, target_h));
+            let mut recolour = None;
             let texture = match &quad.image {
-                htexture::QuadImage::Art(image) => self
-                    .overlay_images
-                    .get(&(Arc::as_ptr(image) as usize))
-                    .map(|(_, texture, _)| *texture),
+                htexture::QuadImage::Art(image) => art(image),
+                htexture::QuadImage::Recoloured(recoloured) => {
+                    let indices = self
+                        .overlay_indices
+                        .get(&(Arc::as_ptr(&recoloured.indices) as usize))
+                        .map(|(_, texture, _)| *texture);
+                    recolour = indices.map(|indices| (indices, recoloured.art.frame, lut_row));
+                    lut_row += LUT_ROWS;
+                    art(&recoloured.art).filter(|_| recolour.is_some())
+                }
                 htexture::QuadImage::Model(_) => models
                     .next()
                     .and_then(|run| run.map(|run| self.model_targets[run.slot].colour)),
             };
             if let (Some(scissor), Some(texture)) = (scissor, texture) {
-                draw(texture, first, scissor);
+                draw(texture, recolour, first, scissor);
             }
             first += 6;
         }
@@ -3098,6 +3226,27 @@ fn overlay_scissor(
     })
 }
 
+/// A recoloured quad's [`LUT_ROWS`] rows of `overlay.frag`'s `lut`.
+fn lut_texels(lut: &[Option<htexture::Recolour>; 256]) -> Vec<[f32; 4]> {
+    let row = |texel: fn(&htexture::Recolour) -> [f32; 4]| {
+        lut.iter()
+            .map(move |entry| entry.as_ref().map_or([0.0; 4], texel))
+    };
+    row(|recolour| {
+        let [r, g, b] = recolour.scale;
+        [r, g, b, 1.0]
+    })
+    .chain(row(|recolour| {
+        let [r, g, b] = recolour.luma;
+        [r, g, b, 0.0]
+    }))
+    .chain(row(|recolour| {
+        let [r, g, b] = recolour.flat;
+        [r, g, b, 0.0]
+    }))
+    .collect()
+}
+
 /// A slice of plain `repr(C)` vertices as bytes.
 fn as_bytes<T: scene::Plain>(values: &[T]) -> &[u8] {
     // SAFETY: `Plain` types have no padding, so every byte is initialised.
@@ -3139,11 +3288,16 @@ impl Drop for GpuRenderer {
                 self.no_hd_rows,
                 self.overlay_target,
                 self.overlay_coverage,
+                self.overlay_lut,
+                self.no_indices,
             ];
             for texture in textures.into_iter().filter(|t| !t.is_null()) {
                 SDL_ReleaseGPUTexture(self.device, texture);
             }
             for (_, (_, texture, _)) in std::mem::take(&mut self.overlay_images) {
+                SDL_ReleaseGPUTexture(self.device, texture);
+            }
+            for (_, (_, texture, _)) in std::mem::take(&mut self.overlay_indices) {
                 SDL_ReleaseGPUTexture(self.device, texture);
             }
             self.release_model_targets();
@@ -3745,6 +3899,81 @@ mod tests {
         gpu.overlay_frame += 1;
         gpu.evict_overlay_images();
         assert!(gpu.overlay_images.is_empty());
+    }
+
+    /// A recoloured quad takes each original texel's recolouring, and an
+    /// index without one stays clear.
+    #[test]
+    fn gpu_overlay_recolours_a_quad_by_its_originals_indices() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        // A 3x1 page of indices 1, 2 and 0 under a 6x2 HD image, each
+        // original texel 100 pixels wide: index 1 tinted to half, index 2
+        // swapped for red, index 0 clear.
+        let art = Arc::new(htexture::Replacement {
+            image: Image {
+                width: 6,
+                height: 2,
+                rgba: [200, 100, 50, 255].repeat(12),
+            },
+            frame: [3, 1],
+        });
+        let mut lut = [None; 256];
+        lut[1] = Some(htexture::Recolour::of([200, 100, 50], [100, 50, 25]));
+        lut[2] = Some(htexture::Recolour::of([200, 100, 50], [255, 0, 0]));
+        let recoloured = htexture::Recoloured {
+            art,
+            indices: Arc::new(htexture::Indices {
+                width: 3,
+                height: 1,
+                texels: vec![1, 2, 0],
+            }),
+            lut,
+        };
+        let mut overlay = htexture::Overlay {
+            quads: vec![htexture::Quad {
+                image: htexture::QuadImage::Recoloured(Arc::new(recoloured)),
+                dst: [0.0, 0.0, 300.0, 240.0],
+                uv: [0.0, 0.0, 1.0, 1.0],
+                colour: [1.0; 3],
+                clip: [0, 0, 320, 240],
+            }],
+            scene: false,
+            ..htexture::Overlay::new(0, [LAYER_WIDTH, LAYER_HEIGHT])
+        };
+        for y in 0..LAYER_HEIGHT as usize {
+            for x in 0..300 {
+                overlay.coverage[y * LAYER_WIDTH as usize + x] = 1;
+            }
+        }
+        gpu.draw_overlay(&overlay, (LAYER_WIDTH, LAYER_HEIGHT))
+            .unwrap();
+        let size = gpu.overlay_size;
+        assert_eq!(size, (LAYER_WIDTH, LAYER_HEIGHT));
+        let pixels = gpu.read_texture(gpu.overlay_target, size).unwrap();
+        let at = |x: usize, y: usize| {
+            let i = (y * LAYER_WIDTH as usize + x) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+        let near =
+            |got: [u8; 3], want: [u8; 3]| got.iter().zip(want).all(|(&g, w)| g.abs_diff(w) <= 2);
+        for (x, want) in [(50, [100, 50, 25]), (150, [255, 0, 0]), (250, [0, 0, 0])] {
+            assert!(near(at(x, 100), want), "({x}, 100) is {:?}", at(x, 100));
+        }
+        assert_eq!(gpu.overlay_indices.len(), 1);
+        gpu.overlay_frame += EVICT_AFTER_FRAMES + 1;
+        gpu.evict_overlay_images();
+        assert!(gpu.overlay_indices.is_empty());
     }
 
     /// A model quad renders into its own target at the overlay's resolution,
