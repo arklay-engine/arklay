@@ -257,9 +257,12 @@ cargo run -- scd export ROOM1000.RDT --out 1000.akscr
 cargo run -- scd build 1000.akscr --out scd/1000.scd
 
 # Export every room as one merged script (players and mansion visits under
-# #if CHRIS/JILL/MANSION1/MANSION2) and compile one variant of it
+# #if CHRIS/JILL/MANSION1/MANSION2, and with --mediakite the Steam/GOG and
+# Mediakite releases under #if STEAM) and compile one variant of it
 cargo run -- scd export-rooms re1.akpak --out games/re1/room
+cargo run -- scd export-rooms steam.akpak --mediakite mediakite.akpak --out games/re1/room
 cargo run -- scd build games/re1/room/103.akscr --room 6031 --out scd/6031.scd
+cargo run -- scd build games/re1/room/103.akscr --room 6031 --mediakite --out scd/6031.scd
 ```
 
 `docs/modding.md` documents the manifest grammar, the replacement formats and

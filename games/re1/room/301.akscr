@@ -578,10 +578,12 @@ event from_main_2
         bgm_play(BGM_SUB_2);
     }
     sleep(3);
+#if STEAM
     run
     {
         bgm_stop(BGM_SUB_1);
     }
+#endif
     set(FG_STATUS, F_STATUS_11, TRUE);
     evt_work_set(WK_OBJ, OBJ_06);
     evt_tween_begin_alt();

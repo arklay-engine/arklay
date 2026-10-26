@@ -271,11 +271,15 @@ event from_main_2
     wait_message();
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_21);
+#if STEAM
     do
     {
         evt_next();
     }
     while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+#else
+    sleep(56);
+#endif
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_22);
     message(MSG_VO_00C_22, 0);

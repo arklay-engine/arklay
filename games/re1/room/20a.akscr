@@ -121,7 +121,11 @@ proc init
         }
     }
 #endif
+#if STEAM
     item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 2, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
+#else
+    item_aot_set(AOT_09_ITEM, 1000, 6600, 1300, 1600, IT_2F_KEY_INK_RIBBON, 3, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_B8, SAT_MANUAL | SAT_PLAYER, 0);
+#endif
     obj(OBJ_00, OF_ACTIVE, SCA_NONE, 7470, 0, 5850, 2048, 0, 930, 0, -930, 240, 10000, 640, 1170);
     if (ck(FG_SCENARIO, F_SCENARIO_12, TRUE))
     {

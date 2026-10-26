@@ -10,6 +10,12 @@
 //! data has a quirk: `#if AUTHENTIC` keeps the original, its `#else` holds
 //! the fixed version a build uses by default.
 //!
+//! `STEAM` picks the release: the Steam/GOG release defines it, the original
+//! Mediakite PC release does not. The two ship different scripts in a few
+//! rooms, and `#if STEAM` blocks hold every such difference.
+//!
+//! `#if !SYMBOL` takes the block when `SYMBOL` is not defined.
+//!
 //! `#define NAME value` names a number (or another name) for the arguments
 //! that follow, and `#include "inc/items.akinc"` reads defines from a file;
 //! an include file holds only directives, comments and blank lines, and each
@@ -21,7 +27,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 /// The defined symbols.
-pub const SYMBOLS: [&str; 5] = ["CHRIS", "JILL", "MANSION1", "MANSION2", "AUTHENTIC"];
+pub const SYMBOLS: [&str; 6] = [
+    "CHRIS",
+    "JILL",
+    "MANSION1",
+    "MANSION2",
+    "AUTHENTIC",
+    "STEAM",
+];
 
 /// The room variant a script is compiled for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -34,10 +47,14 @@ pub struct Variant {
     /// Compile the original game's exact bytecode rather than the fixed
     /// version of its quirks.
     pub authentic: bool,
+    /// Compile for the Steam/GOG release rather than the original Mediakite
+    /// PC release.
+    pub steam: bool,
 }
 
 impl Variant {
-    /// The variant of RDT `id` (`0x1030` is stage 1, room 03, player 0).
+    /// The variant of RDT `id` (`0x1030` is stage 1, room 03, player 0), for
+    /// the Steam/GOG release.
     pub fn for_room(id: u16) -> Self {
         let stage = id >> 12;
         Self {
@@ -48,6 +65,15 @@ impl Variant {
                 _ => None,
             },
             authentic: false,
+            steam: true,
+        }
+    }
+
+    /// This variant for the original Mediakite PC release.
+    pub fn mediakite(self) -> Self {
+        Self {
+            steam: false,
+            ..self
         }
     }
 
@@ -67,6 +93,7 @@ impl Variant {
             "MANSION1" => Some(self.mansion == Some(1)),
             "MANSION2" => Some(self.mansion == Some(2)),
             "AUTHENTIC" => Some(self.authentic),
+            "STEAM" => Some(self.steam),
             _ => None,
         }
     }
@@ -164,13 +191,18 @@ pub(super) fn kept_lines_with<'a>(
                          (e.g. `scd build --room 1030`)"
                     );
                 };
-                let Some(defined) = variant.defines(symbol) else {
+                let (negated, name) = match symbol.strip_prefix('!') {
+                    Some(name) => (true, name),
+                    None => (false, symbol),
+                };
+                let Some(defined) = variant.defines(name) else {
                     bail!(
-                        "line {line_no}: unknown symbol `{symbol}` (expected one of {})",
+                        "line {line_no}: unknown symbol `{symbol}` (expected one of {}, \
+                         or `!` before one)",
                         SYMBOLS.join(", ")
                     );
                 };
-                stack.push(Some((defined, false)));
+                stack.push(Some((defined != negated, false)));
             }
             Directive::Else => match stack.last_mut() {
                 Some(None) => {

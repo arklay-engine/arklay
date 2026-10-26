@@ -2,6 +2,7 @@ use super::*;
 use crate::scd::asm;
 use crate::scd::ir::{Block, Scripts, Stream};
 use crate::scd::reader;
+use std::collections::BTreeMap;
 
 /// Compile `text` as the original game's bytecode (`AUTHENTIC`), lay it
 /// out as a container and decode it back.
@@ -466,6 +467,81 @@ fn merged_scripts_reproduce_every_variant() {
 }
 
 #[test]
+fn steam_picks_the_release() {
+    let text = "#version 1
+proc main noreturn
+{
+#if STEAM
+    nop(1);
+#else
+    nop(2);
+#endif
+#if !STEAM
+    nop(3);
+#endif
+#if !JILL
+    nop(4);
+#endif
+}
+";
+    let nops = |variant: Variant| -> Vec<u8> {
+        let container = compile_variant(text, variant)
+            .unwrap()
+            .to_container()
+            .unwrap();
+        block_bytes(&reader::parse(&container).unwrap().main[0])
+            .chunks(2)
+            .map(|insn| insn[1])
+            .collect()
+    };
+    assert_eq!(nops(Variant::for_room(0x1030)), [1, 4]);
+    assert_eq!(nops(Variant::for_room(0x1031).mediakite()), [2, 3]);
+    assert_eq!(
+        nops(Variant::for_room(0x1030).mediakite().authentic()),
+        [2, 3, 4]
+    );
+    let unknown = format!(
+        "{:#}",
+        compile_variant("#version 1\n#if !GOG\n#endif\n", Variant::for_room(0x1030)).unwrap_err()
+    );
+    assert!(unknown.contains("`!GOG`"), "{unknown}");
+}
+
+#[test]
+fn merged_releases_differ_under_steam() {
+    let rooms = |second: &str| -> BTreeMap<u16, String> {
+        [
+            (
+                0x1030,
+                "#version 1\n\nproc main\n{\n    nop(1);\n    nop(2);\n}\n",
+            ),
+            (0x1031, second),
+        ]
+        .into_iter()
+        .map(|(id, text)| (id, text.to_string()))
+        .collect()
+    };
+    let steam = rooms("#version 1\n\nproc main\n{\n    nop(1);\n    nop(3);\n}\n");
+    let mediakite = rooms("#version 1\n\nproc main\n{\n    nop(1);\n    nop(4);\n}\n");
+    let merged = merge_releases(&steam, &mediakite).unwrap();
+    // Chris's script is the same in both releases, so only Jill's differs.
+    assert_eq!(
+        merged[&0x103],
+        "#version 1\n\nproc main\n{\n    nop(1);\n#if CHRIS\n    nop(2);\n#else\n\
+         #if STEAM\n    nop(3);\n#else\n    nop(4);\n#endif\n#endif\n}\n"
+    );
+    // Releases with the same scripts merge as one.
+    assert_eq!(
+        merge_releases(&steam, &steam).unwrap(),
+        merge_rooms(&steam).unwrap()
+    );
+    let mut missing = mediakite.clone();
+    missing.remove(&0x1031);
+    let error = format!("{:#}", merge_releases(&steam, &missing).unwrap_err());
+    assert!(error.contains("1031"), "{error}");
+}
+
+#[test]
 fn merged_blocks_hold_whole_statements() {
     let chris = "#version 1
 
@@ -845,7 +921,13 @@ fn checked_in_room_scripts_compile() {
         let base = u16::from_str_radix(&stem, 16).unwrap();
         let load = includes_from(&dir);
         for id in room_variants(base) {
-            for variant in [Variant::for_room(id), Variant::for_room(id).authentic()] {
+            let steam = Variant::for_room(id);
+            for variant in [
+                steam,
+                steam.authentic(),
+                steam.mediakite(),
+                steam.mediakite().authentic(),
+            ] {
                 if let Err(error) = compile_with(&text, Some(variant), &load)
                     .and_then(|assembled| assembled.to_container())
                 {

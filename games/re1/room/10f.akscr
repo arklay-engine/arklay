@@ -1490,7 +1490,13 @@ event from_main_2
 #if CHRIS
 event event_05
 {
+#if MANSION1
+#if STEAM
     bgm_play(BGM_SUB_1);
+#endif
+#else
+    bgm_play(BGM_SUB_1);
+#endif
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
     act_anim_flags(ANIM_37, F_ROOM_20, 0);
@@ -1543,8 +1549,10 @@ event event_05
     evt_nop();
     sleep(10);
 #if MANSION1
+#if STEAM
     evt_nop();
     evt_work_set(22, 1);
+#endif
 #else
     bgm_stop(BGM_SUB_1);
 #endif
