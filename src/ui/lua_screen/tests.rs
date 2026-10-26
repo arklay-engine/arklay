@@ -927,8 +927,8 @@ fn capture_entry_art(
     (framebuffer, candidate.frame)
 }
 
-/// A 4x4 4bpp TIM whose only drawn texel is the blue top-left one; the rest
-/// are colour `0x0000`, the keyed-clear texel.
+/// [`test_tim`]'s page with only its top-left texel blue; the rest are
+/// colour `0x0000`, the keyed-clear texel.
 fn keyed_tim() -> Vec<u8> {
     let mut bytes = test_tim();
     let pixels = bytes.len() - 16;

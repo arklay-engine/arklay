@@ -898,9 +898,9 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     // `page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, clut,
     // brightness, mirror_u, mirror_v[, whole])`: a sheet region flipped per
     // axis. With `whole`, an HD replacement covers the region's keyed-clear
-    // texels too, its own alpha saying what shows: for art whose HD version
-    // is redrawn rather than upscaled, which the original's opaque texels
-    // would cut to pieces.
+    // texels too and its own alpha says what shows. That suits art the HD
+    // page redraws rather than upscales: cut to the original's drawn texels,
+    // it would come out in pieces.
     #[allow(clippy::type_complexity)]
     methods.add_method_mut(
         "page_sprite_mirrored",
