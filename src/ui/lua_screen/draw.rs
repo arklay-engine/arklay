@@ -839,9 +839,8 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     // joint chain `objects[i]`, and every object past the list the one
     // composed `joints` chain. `screen` offsets the projection centre,
     // which sits at the layout's centre (see [`band_centre`]).
-    // While the GPU renderer captures the frame, a model clipped to a rect
-    // of one flat colour renders on the GPU over that colour
-    // ([`Framebuffer::draw_ivm_captured`]).
+    // While the GPU renderer draws the frame, the model renders on the GPU,
+    // cut to the clip rect ([`Framebuffer::draw_ivm_captured`]).
     methods.add_method_mut("draw_ivm", |_lua, api, (handle, spec): (usize, Table)| {
         let Api {
             host, framebuffer, ..

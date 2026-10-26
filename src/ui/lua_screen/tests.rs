@@ -800,7 +800,7 @@ end
 }
 
 #[test]
-fn replaced_art_leaves_a_hole_and_a_quad_while_capturing() {
+fn replaced_art_is_recorded_as_an_hd_item_where_it_draws() {
     use crate::pack::PackWriter;
 
     let source = r#"
@@ -852,39 +852,37 @@ end
         ]
     };
 
-    // Without a capture the original art draws.
+    // Without a list the original art draws.
     let plain = draw(&mut screen, &cx);
     assert_eq!(pixel(&plain, 10, 20), [255, 0, 0]);
 
-    for hole in [0, 255] {
+    {
         let mut framebuffer = crate::render::Framebuffer::new();
-        framebuffer.capture_hd(hole);
+        framebuffer.record();
         screen.draw(&cx, &mut framebuffer);
-        assert_eq!(pixel(&framebuffer, 10, 20), [hole; 3]);
-        assert_eq!(pixel(&framebuffer, 49, 59), [hole; 3]);
-        assert_eq!(pixel(&framebuffer, 50, 60), [0; 3]);
-        let quads = framebuffer.hd_quads();
+        assert!(hd_covers(&framebuffer, 10, 20));
+        assert!(hd_covers(&framebuffer, 49, 59));
+        assert!(!hd_covers(&framebuffer, 50, 60));
+        let quads = hd_quads(&framebuffer);
         assert_eq!(quads.len(), 1);
         let [fw, fh] = candidate.frame.map(|v| v as f32);
         assert_eq!(quads[0].dst, [10.0, 20.0, 50.0, 60.0]);
         assert_eq!(quads[0].uv, [0.0, 0.0, 4.0 / fw, 4.0 / fh]);
         assert_eq!(quads[0].colour, [1.0; 3]);
-        assert_eq!(quads[0].clip, [0, 0, 320, 240]);
-        let crate::htexture::QuadImage::Art(image) = &quads[0].image else {
+        assert_eq!(quads[0].clip, [10, 20, 40, 40]);
+        let crate::draw2d::Kind::Art(image) = &quads[0].image else {
             panic!("a model quad");
         };
         assert_eq!(image.image.width, 8);
     }
 }
 
-/// The frame the `draw` body leaves on a `size` framebuffer capturing for
-/// `hole`, with `art/bg.bmp` (`art`) replaced by an 8x8 blue BMP, and the
+/// The frame the `draw` body records on a `size` framebuffer, with `art/bg.bmp` (`art`) replaced by an 8x8 blue BMP, and the
 /// replaced art's frame.
 fn capture_entry_art(
     body: &str,
     art: Vec<u8>,
     size: [u32; 2],
-    hole: u8,
 ) -> (crate::render::Framebuffer, [u32; 2]) {
     use crate::pack::PackWriter;
 
@@ -922,7 +920,7 @@ fn capture_entry_art(
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::with_size(size[0], size[1]);
-    framebuffer.capture_hd(hole);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     (framebuffer, candidate.frame)
 }
@@ -938,7 +936,7 @@ fn keyed_tim() -> Vec<u8> {
 }
 
 #[test]
-fn page_sprite_mirrored_whole_punches_the_keyed_clear_texels_too() {
+fn page_sprite_mirrored_whole_shows_its_art_over_the_keyed_clear_texels_too() {
     use crate::pack::PackWriter;
 
     let build = |source: &str, hd: Option<(u32, Vec<u8>)>| {
@@ -966,9 +964,9 @@ fn page_sprite_mirrored_whole_punches_the_keyed_clear_texels_too() {
         rgba: [0, 255, 0, 255].repeat(64),
     })
     .unwrap();
-    // The punched texels of the 4x4 region drawn at (10, 20), with and
+    // The texels of the 4x4 region drawn at (10, 20) the art shows on, with and
     // without `whole`.
-    let punched = |whole: &str, hole: u8| {
+    let punched = |whole: &str| {
         let source = format!(
             "function update(api, input) end\nfunction draw(api)\n\
              api:page_sprite_mirrored(api:page(\"art/keyed\"), 0, 0, 4, 4, 10, 20, 4, 4, 0, 0, \
@@ -985,15 +983,14 @@ fn page_sprite_mirrored_whole_punches_the_keyed_clear_texels_too() {
         let mut screen = fixture.load();
         let cx = fixture.context();
         let mut framebuffer = crate::render::Framebuffer::new();
-        framebuffer.capture_hd(hole);
+        framebuffer.record();
         screen.draw(&cx, &mut framebuffer);
-        assert_eq!(framebuffer.hd_quads().len(), 1);
-        assert_eq!(framebuffer.hd_quads()[0].dst, [10.0, 20.0, 14.0, 24.0]);
+        assert_eq!(hd_quads(&framebuffer).len(), 1);
+        assert_eq!(hd_quads(&framebuffer)[0].dst, [10.0, 20.0, 14.0, 24.0]);
         let mut texels = Vec::new();
         for y in 20..24 {
             for x in 10..14 {
-                let index = (y * 320 + x) * 4;
-                if framebuffer.rgba[index..index + 3] == [hole; 3] {
+                if hd_covers(&framebuffer, x, y) {
                     texels.push((x, y));
                 }
             }
@@ -1003,12 +1000,12 @@ fn page_sprite_mirrored_whole_punches_the_keyed_clear_texels_too() {
     let rect: Vec<_> = (20..24)
         .flat_map(|y| (10..14).map(move |x| (x, y)))
         .collect();
-    // The hole grey of 255 can't be mistaken for the black the frame starts
-    // as; a plain draw punches its one drawn texel, a whole draw every texel
-    // of the region, so redrawn HD art isn't cut to the original's shape.
-    assert_eq!(punched("", 255), [(10, 20)]);
-    assert_eq!(punched(", false", 255), [(10, 20)]);
-    assert_eq!(punched(", true", 255), rect);
+    // A plain draw shows its art on its one drawn texel, a whole draw on
+    // every texel of the region, so redrawn HD art isn't cut to the
+    // original's shape.
+    assert_eq!(punched(""), [(10, 20)]);
+    assert_eq!(punched(", false"), [(10, 20)]);
+    assert_eq!(punched(", true"), rect);
 }
 
 #[test]
@@ -1070,26 +1067,26 @@ end
         ]
     };
 
-    // Without a capture the lookup draws in software.
+    // Without a list the lookup draws in software.
     let plain = draw(&mut screen, &cx);
     assert_eq!(pixel(&plain, 10, 20), [0x80, 0, 0]);
     assert_eq!(pixel(&plain, 11, 20), [0; 3]);
 
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(255);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
-    // Only the texels the lookup draws are punched.
-    assert_eq!(pixel(&framebuffer, 10, 20), [255; 3]);
-    assert_eq!(pixel(&framebuffer, 11, 20), [0; 3]);
-    assert_eq!(pixel(&framebuffer, 12, 20), [0; 3]);
-    assert_eq!(pixel(&framebuffer, 17, 23), [255; 3]);
-    let quads = framebuffer.hd_quads();
+    // The art shows only on the texels the lookup draws.
+    assert!(hd_covers(&framebuffer, 10, 20));
+    assert!(!hd_covers(&framebuffer, 11, 20));
+    assert!(!hd_covers(&framebuffer, 12, 20));
+    assert!(hd_covers(&framebuffer, 17, 23));
+    let quads = hd_quads(&framebuffer);
     assert_eq!(quads.len(), 1);
     let [fw, fh] = candidate.frame.map(|v| v as f32);
     assert_eq!(quads[0].dst, [10.0, 20.0, 18.0, 24.0]);
     assert_eq!(quads[0].uv, [0.0, 0.0, 8.0 / fw, 4.0 / fh]);
     assert_eq!(quads[0].colour, [1.0; 3]);
-    let crate::htexture::QuadImage::Recoloured(recoloured) = &quads[0].image else {
+    let crate::draw2d::Kind::Recoloured(recoloured) = &quads[0].image else {
         panic!("not a recoloured quad");
     };
     assert_eq!(recoloured.art.image.width, 32);
@@ -1101,36 +1098,27 @@ end
 }
 
 #[test]
-fn replaced_entry_art_leaves_a_hole_and_a_quad_while_capturing() {
-    let pixel = |framebuffer: &crate::render::Framebuffer, x: usize, y: usize| {
-        let index = (y * 320 + x) * 4;
-        [
-            framebuffer.rgba[index],
-            framebuffer.rgba[index + 1],
-            framebuffer.rgba[index + 2],
-        ]
-    };
+fn replaced_entry_art_is_recorded_as_an_hd_item_where_it_draws() {
     let full = crate::render::brightness_scale(2);
     let sprite_colour = [f32::from(full) / 255.0; 3];
-    for hole in [0, 255] {
+    {
         // A region stretched over a larger rect.
         let (framebuffer, frame) = capture_entry_art(
             r#"api:sprite_region("art/bg.bmp", 0, 0, 4, 4, 10, 20, 40, 40)"#,
             test_bmp(),
             [320, 240],
-            hole,
         );
         let [fw, fh] = frame.map(|v| v as f32);
-        assert_eq!(pixel(&framebuffer, 10, 20), [hole; 3]);
-        assert_eq!(pixel(&framebuffer, 49, 59), [hole; 3]);
-        assert_eq!(pixel(&framebuffer, 50, 60), [0; 3]);
-        let quads = framebuffer.hd_quads();
+        assert!(hd_covers(&framebuffer, 10, 20));
+        assert!(hd_covers(&framebuffer, 49, 59));
+        assert!(!hd_covers(&framebuffer, 50, 60));
+        let quads = hd_quads(&framebuffer);
         assert_eq!(quads.len(), 1);
         assert_eq!(quads[0].dst, [10.0, 20.0, 50.0, 60.0]);
         assert_eq!(quads[0].uv, [0.0, 0.0, 4.0 / fw, 4.0 / fh]);
         assert_eq!(quads[0].colour, sprite_colour);
-        assert_eq!(quads[0].clip, [0, 0, 320, 240]);
-        let crate::htexture::QuadImage::Art(image) = &quads[0].image else {
+        assert_eq!(quads[0].clip, [10, 20, 40, 40]);
+        let crate::draw2d::Kind::Art(image) = &quads[0].image else {
             panic!("a model quad");
         };
         assert_eq!(image.image.width, 8);
@@ -1140,11 +1128,10 @@ fn replaced_entry_art_leaves_a_hole_and_a_quad_while_capturing() {
             r#"api:sprite("art/bg.bmp", 10, 20)"#,
             test_bmp(),
             [320, 240],
-            hole,
         );
-        assert_eq!(pixel(&framebuffer, 13, 23), [hole; 3]);
-        assert_eq!(pixel(&framebuffer, 14, 24), [0; 3]);
-        let quads = framebuffer.hd_quads();
+        assert!(hd_covers(&framebuffer, 13, 23));
+        assert!(!hd_covers(&framebuffer, 14, 24));
+        let quads = hd_quads(&framebuffer);
         assert_eq!(quads.len(), 1);
         assert_eq!(quads[0].dst, [10.0, 20.0, 14.0, 24.0]);
         assert_eq!(quads[0].uv, [0.0, 0.0, 4.0 / fw, 4.0 / fh]);
@@ -1157,11 +1144,10 @@ fn replaced_entry_art_leaves_a_hole_and_a_quad_while_capturing() {
 api:background("art/bg.bmp", {colour = "#FF8000", blend = "half"})"##,
             test_bmp(),
             [320, 240],
-            hole,
         );
-        assert_eq!(pixel(&framebuffer, 0, 0), [hole; 3]);
-        assert_eq!(pixel(&framebuffer, 319, 239), [hole; 3]);
-        let quads = framebuffer.hd_quads();
+        assert!(hd_covers(&framebuffer, 0, 0));
+        assert!(hd_covers(&framebuffer, 319, 239));
+        let quads = hd_quads(&framebuffer);
         assert_eq!(quads.len(), 1);
         assert_eq!(quads[0].dst, [0.0, 0.0, 320.0, 240.0]);
         assert_eq!(quads[0].uv, [0.0, 0.0, 4.0 / fw, 4.0 / fh]);
@@ -1173,10 +1159,9 @@ api:background("art/bg.bmp", {colour = "#FF8000", blend = "half"})"##,
             r#"api:sprite("art/bg.bmp", 10, 20, {blend = "half"})"#,
             test_bmp(),
             [320, 240],
-            hole,
         );
-        assert!(framebuffer.hd_quads().is_empty());
-        assert_ne!(pixel(&framebuffer, 10, 20), [hole; 3]);
+        assert!(hd_quads(&framebuffer).is_empty());
+        assert!(!hd_covers(&framebuffer, 10, 20));
 
         // A frame-sized background is copied one to one, on a wide frame too.
         let wide = crate::bmp::encode_to_vec(&crate::state::Image {
@@ -1186,15 +1171,11 @@ api:background("art/bg.bmp", {colour = "#FF8000", blend = "half"})"##,
         })
         .unwrap();
         let (framebuffer, frame) =
-            capture_entry_art(r#"api:background("art/bg.bmp")"#, wide, [400, 240], hole);
+            capture_entry_art(r#"api:background("art/bg.bmp")"#, wide, [400, 240]);
         let [fw, fh] = frame.map(|v| v as f32);
-        let wide_pixel = |x: usize, y: usize| {
-            let index = (y * 400 + x) * 4;
-            framebuffer.rgba[index..index + 3].to_vec()
-        };
-        assert_eq!(wide_pixel(0, 0), [hole; 3]);
-        assert_eq!(wide_pixel(399, 239), [hole; 3]);
-        let quads = framebuffer.hd_quads();
+        assert!(hd_covers(&framebuffer, 0, 0));
+        assert!(hd_covers(&framebuffer, 399, 239));
+        let quads = hd_quads(&framebuffer);
         assert_eq!(quads.len(), 1);
         assert_eq!(quads[0].dst, [0.0, 0.0, 400.0, 240.0]);
         assert_eq!(quads[0].uv, [0.0, 0.0, 400.0 / fw, 240.0 / fh]);
@@ -1232,6 +1213,75 @@ fn sample_item_tmd() -> Vec<u8> {
     tmd
 }
 
+/// An HD item a recorded frame drew, as these tests compare it.
+#[derive(Debug, Clone)]
+struct HdQuad {
+    image: crate::draw2d::Kind,
+    /// `[x0, y0, x1, y1]`.
+    dst: [f32; 4],
+    uv: [f32; 4],
+    colour: [f32; 3],
+    /// `[x, y, w, h]`.
+    clip: [i32; 4],
+}
+
+/// The HD art, recoloured pages and models `framebuffer` recorded, in
+/// order.
+fn hd_quads(framebuffer: &crate::render::Framebuffer) -> Vec<HdQuad> {
+    use crate::draw2d::Kind;
+    let Some(list) = framebuffer.list() else {
+        return Vec::new();
+    };
+    list.items
+        .iter()
+        .filter(|item| {
+            matches!(
+                item.kind,
+                Kind::Art(_) | Kind::Recoloured(_) | Kind::Model(_)
+            )
+        })
+        .map(|item| {
+            let [x0, y0, x1, y1] = item.clip;
+            let [r, g, b, _] = item.colour;
+            HdQuad {
+                image: item.kind.clone(),
+                dst: item.rect,
+                uv: item.uv,
+                colour: [r, g, b],
+                clip: [x0, y0, x1 - x0, y1 - y0],
+            }
+        })
+        .collect()
+}
+
+/// Whether the HD items `framebuffer` recorded draw at frame pixel
+/// `(x, y)`, as `draw2d.frag` keeps them: within the clip and, for a
+/// masked item, on an opaque texel of the original art.
+fn hd_covers(framebuffer: &crate::render::Framebuffer, x: i32, y: i32) -> bool {
+    use crate::draw2d::{Kind, MASKED};
+    let Some(list) = framebuffer.list() else {
+        return false;
+    };
+    list.items.iter().any(|item| {
+        let [x0, y0, x1, y1] = item.clip;
+        let inside = (x0..x1).contains(&x) && (y0..y1).contains(&y);
+        let hd = matches!(
+            item.kind,
+            Kind::Art(_) | Kind::Recoloured(_) | Kind::Model(_)
+        );
+        if !inside || !hd {
+            return false;
+        }
+        if item.map.flags & MASKED == 0 {
+            return true;
+        }
+        let [u, v] = item.map.texel(x, y);
+        let [ax, ay] = [u + item.map.atlas[0], v + item.map.atlas[1]];
+        let offset = (ay as usize * crate::draw2d::ATLAS_WIDTH as usize + ax as usize) * 4 + 3;
+        list.atlas.texels.get(offset) == Some(&255)
+    })
+}
+
 /// Build a pack of art entries and a test screen, leaked for the
 /// fixture's `'static` borrow.
 fn art_pack(label: &str, source: &str, entries: Vec<(&str, Vec<u8>)>) -> Fixture {
@@ -1254,8 +1304,8 @@ fn art_pack(label: &str, source: &str, entries: Vec<(&str, Vec<u8>)>) -> Fixture
     }
 }
 
-fn one_quad(framebuffer: &crate::render::Framebuffer) -> crate::htexture::Quad {
-    let quads = framebuffer.hd_quads();
+fn one_quad(framebuffer: &crate::render::Framebuffer) -> HdQuad {
+    let quads = hd_quads(framebuffer);
     assert_eq!(quads.len(), 1, "expected one HD quad, got {quads:?}");
     quads[0].clone()
 }
@@ -1316,13 +1366,13 @@ end
     assert_eq!(pixel(&plain, 11, 21), [255, 0, 0]);
 
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     assert_eq!(pixel(&framebuffer, 11, 21), [0, 0, 0]);
     let quad = one_quad(&framebuffer);
     assert_eq!(quad.dst, [10.0, 20.0, 50.0, 50.0]);
     assert_eq!(quad.uv, [0.0, 0.0, 1.0, 1.0]);
-    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+    let crate::draw2d::Kind::Art(image) = &quad.image else {
         panic!("an icon quad");
     };
     assert_eq!((image.image.width, image.image.height), (80, 60));
@@ -1357,10 +1407,10 @@ end
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     let quad = one_quad(&framebuffer);
-    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+    let crate::draw2d::Kind::Art(image) = &quad.image else {
         panic!("an icon quad");
     };
     assert_eq!((image.image.width, image.image.height), (80, 60));
@@ -1409,10 +1459,10 @@ end
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     let quad = one_quad(&framebuffer);
-    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+    let crate::draw2d::Kind::Art(image) = &quad.image else {
         panic!("an icon quad");
     };
     assert_eq!((image.image.width, image.image.height), (80, 60));
@@ -1452,10 +1502,10 @@ end
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     let quad = one_quad(&framebuffer);
-    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+    let crate::draw2d::Kind::Art(image) = &quad.image else {
         panic!("a page quad");
     };
     assert_eq!((image.image.width, image.image.height), (8, 8));
@@ -1485,10 +1535,10 @@ end
         let mut screen = fixture.load();
         let cx = fixture.context();
         let mut framebuffer = crate::render::Framebuffer::new();
-        framebuffer.capture_hd(0);
+        framebuffer.record();
         screen.draw(&cx, &mut framebuffer);
         let quad = one_quad(&framebuffer);
-        let crate::htexture::QuadImage::Art(image) = &quad.image else {
+        let crate::draw2d::Kind::Art(image) = &quad.image else {
             panic!("an icon quad");
         };
         (image.image.width, image.image.height)
@@ -1579,10 +1629,10 @@ end
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     let quad = one_quad(&framebuffer);
-    let crate::htexture::QuadImage::Model(model) = &quad.image else {
+    let crate::draw2d::Kind::Model(model) = &quad.image else {
         panic!("a model quad");
     };
     let page = model.page.as_ref().expect("the named page replacement");
@@ -1681,10 +1731,10 @@ end
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     let quad = one_quad(&framebuffer);
-    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+    let crate::draw2d::Kind::Art(image) = &quad.image else {
         panic!("an icon quad");
     };
     assert_eq!((image.image.width, image.image.height), (80, 60));
@@ -1729,10 +1779,10 @@ end
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     let quad = one_quad(&framebuffer);
-    let crate::htexture::QuadImage::Model(model) = &quad.image else {
+    let crate::draw2d::Kind::Model(model) = &quad.image else {
         panic!("a model quad");
     };
     let page = model.page.as_ref().expect("the hash page replacement");
@@ -1773,10 +1823,10 @@ end
     let mut screen = fixture.load();
     let cx = fixture.context();
     let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.capture_hd(0);
+    framebuffer.record();
     screen.draw(&cx, &mut framebuffer);
     let quad = one_quad(&framebuffer);
-    let crate::htexture::QuadImage::Model(model) = &quad.image else {
+    let crate::draw2d::Kind::Model(model) = &quad.image else {
         panic!("a model quad");
     };
     assert!(model.page.is_none(), "no texture means no HD page");

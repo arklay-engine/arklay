@@ -1827,7 +1827,7 @@ mod tests {
     }
 
     #[test]
-    fn a_captured_frame_draws_covered_glyphs_as_hd_quads() {
+    fn a_recorded_frame_draws_covered_glyphs_as_hd_items() {
         let probe = Font::new(sheet_with_ink(&[]));
         let glyph = steps(b"\x20", probe.metrics)[0];
         let mut font = Font::new(sheet_with_ink(&[(glyph.u, glyph.v, 0, 13)]));
@@ -1838,20 +1838,24 @@ mod tests {
         let tint = Tint::Rgb(255, 128, 0);
         let mut plain = Framebuffer::new();
         font.draw_text(&mut plain, 10, 20, tint, 0, b"\x20", false);
-        assert!(plain.hd_quads().is_empty());
+        assert!(plain.list().is_none());
 
         let mut framebuffer = Framebuffer::new();
-        framebuffer.capture_hd(0);
+        framebuffer.record();
         font.draw_text(&mut framebuffer, 10, 20, tint, 0, b"\x20", false);
-        let quads = framebuffer.hd_quads();
-        assert_eq!(quads.len(), 1);
+        let items = &framebuffer.list().unwrap().items;
+        assert_eq!(items.len(), 1);
+        assert!(matches!(items[0].kind, crate::draw2d::Kind::Art(_)));
         let [u, v, w, h] = [glyph.u, glyph.v, glyph.width, glyph.height].map(|v| v as f32);
-        assert_eq!(quads[0].dst, [10.0, 20.0, 10.0 + w, 20.0 + h]);
+        assert_eq!(items[0].rect, [10.0, 20.0, 10.0 + w, 20.0 + h]);
         assert_eq!(
-            quads[0].uv,
+            items[0].uv,
             [u / 256.0, v / 256.0, (u + w) / 256.0, (v + h) / 256.0]
         );
         let scale = f32::from(crate::render::brightness_scale(0)) / 255.0;
-        assert_eq!(quads[0].colour, [1.0 * scale, 128.0 / 255.0 * scale, 0.0]);
+        assert_eq!(
+            items[0].colour,
+            [1.0 * scale, 128.0 / 255.0 * scale, 0.0, 1.0]
+        );
     }
 }

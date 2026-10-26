@@ -18,6 +18,7 @@ pub mod convert;
 pub mod convert_mod;
 pub mod demo;
 pub mod door;
+pub mod draw2d;
 pub mod effects;
 pub mod emd;
 pub mod ending;

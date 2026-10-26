@@ -412,8 +412,8 @@ presenting does the same mid-game.
   | Stage | Software | GPU |
   |---|---|---|
   | Backgrounds, masks, models, shadows, effects | 320x240 | `W`x`H` times `render_scale`%, `msaa` samples, resolved and filtered bilinearly to `W`x`H` |
-  | Sprites, UI, messages, fades | 320x240 | 320x240 (the two software layers) |
-  | To the screen | the 320x240 frame scaled to `W`x`H` | the layers scaled to `W`x`H`, composited over the scene |
+  | Sprites, UI, messages, fades | 320x240 | the scene's resolution, each frame pixel's texel (the 2D pass) |
+  | To the screen | the 320x240 frame scaled to `W`x`H` | the 2D pass's target scaled to `W`x`H` |
 
   **Aspect.** `[graphics] aspect` (`--aspect`, F1 DISPLAY) picks the
   presented shape; `"4:3"` is the default and the only one traces, the oracle
@@ -428,15 +428,16 @@ presenting does the same mid-game.
   screens lay out in the band, or ask for a full-height canvas of the aspect's
   width (427x240 at 16:9) that replaces the frame while they are up (the pause
   menu and its sub-screens). A door transition (drawn on black) presents the
-  whole 4:3 frame, pillarboxed. Both backends accept the canvas. The GPU path
-  resizes its overlay layers to match, while the scene targets keep covering
-  the 4:3 frame. The F1 debug menu keeps the room's band and draws into a
-  separate layer of the canvas's size (`GameSession::draw_ui_layer`): drawn
-  over black and over white, the difference becomes a premultiplied alpha,
-  and both backends blend the layer over the fitted rectangle after the
-  frame (`ui.frag` on the GPU). Its text is software, without HD glyphs.
+  whole 4:3 frame, pillarboxed. Both backends accept the canvas. The GPU's 2D
+  pass draws it at its own width, while the scene targets keep covering the
+  4:3 frame. The F1 debug menu keeps the room's band and draws into a
+  separate layer of the canvas's size (`GameSession::draw_ui_layer`): on the
+  GPU a 2D pass drawn into a clear target; in software drawn over black and
+  over white, the difference becoming a premultiplied alpha. Both backends
+  blend the layer over the fitted rectangle after the frame (`ui.frag` on the
+  GPU).
 
-  A 320x240 layer reaches the viewport with nearest sampling at a whole
+  A 320x240 frame reaches the viewport with nearest sampling at a whole
   zoom (always, windowed) and with sharp (pixel-art) sampling at a fractional
   one, so every source pixel keeps one width and only the screen pixel that
   straddles two blends them (`SDL_SCALEMODE_PIXELART` in software, the same
@@ -460,15 +461,26 @@ presenting does the same mid-game.
   what it draws (the player, shared pages) and everything else is released at
   once. Leaving gameplay (the title, a film, the ending screens) releases
   everything, and a recording that fails forgets the entries it created.
-- **Overlays.** The menus, messages and fades stay software. The session
-  draws its overlays twice, over a black and over a white scene; every
-  overlay operation is affine in the pixel underneath, so the composite shows
-  `black + scene * (white - black)` (`GameSession::render_layers`).
+- **2D.** The backends are separate: under the GPU the framebuffer records
+  its 2D primitives (sprites, glyphs, rects, fades, lines, backgrounds, image
+  copies) as a list of items instead of writing pixels (`draw2d`,
+  `Framebuffer::record`), and the scene is an item of the list where the
+  frame shows it (`Framebuffer::show_scene`; the DIED screen's corpse is a
+  scene with no background, so what the script drew under it shows). The
+  GPU draws the items in order into a target at the scene's resolution. A
+  sprite's texels are decoded into the frame's atlas and sampled per frame
+  pixel with the software's integer nearest mapping, so at one target pixel
+  per frame pixel the pass draws the software frame's pixels, its blends
+  within one unit (`gpu::tests::gpu_2d_pass_matches_the_software_frame`). The
+  pack's HD art replaces the items its original draw recorded, kept to their
+  opaque texels, and the examine viewer's model renders into a clear target
+  of its own. A frozen frame (the room under a menu) starts from the items
+  drawn up to its mark. The software 3D rasterizer is never reached from the
+  GPU backend: a scene the GPU fails to record or present switches the whole
+  run to the software backend.
 - **Known differences** from the software frame: per-pixel depth instead of
   per-packet sorting, hardware near-plane clipping instead of dropping a
-  crossing packet, float shading instead of the GTE's truncation, and
-  saturating overlays (a subtractive fade) become multiplicative over the
-  scene. `engine::tests::gpu_scene_matches_software_in_real_rooms` bounds the
+  crossing packet, and float shading instead of the GTE's truncation. `engine::tests::gpu_scene_matches_software_in_real_rooms` bounds the
   difference on real rooms.
 
 ## Engine invariants

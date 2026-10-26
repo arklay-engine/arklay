@@ -35,6 +35,7 @@
 
 use crate::anim;
 use crate::assets::Artwork;
+use crate::draw2d::DrawList;
 use crate::mask;
 use crate::model::{Texture8, Tmd, TmdObject};
 use crate::state::{Cut, Image, Light, RoomId, RoomState};
@@ -68,9 +69,10 @@ pub struct Framebuffer {
     /// frame at 4:3. Drawing ignores it: the scene stays in 4:3 space, and
     /// screen-space layers draw through [`Framebuffer::with_view`].
     pub view: crate::video::View,
-    /// The HD replacements of 2D art this frame drew, while the GPU renderer
-    /// captures them ([`Framebuffer::draw_replaced`]).
-    pub hd: Option<Box<crate::htexture::Overlay>>,
+    /// The frame's 2D drawing, while the GPU renderer draws it
+    /// ([`Framebuffer::record`]): the 2D primitives append to the list
+    /// instead of writing `rgba`.
+    pub list: Option<Box<DrawList>>,
 }
 
 impl Default for Framebuffer {
@@ -249,7 +251,7 @@ impl Framebuffer {
             rgba: vec![0; (WIDTH * HEIGHT * 4) as usize],
             clip: None,
             view: crate::video::View::default(),
-            hd: None,
+            list: None,
         }
     }
 
@@ -265,7 +267,7 @@ impl Framebuffer {
                 height,
                 pan: 0,
             },
-            hd: None,
+            list: None,
         }
     }
 
@@ -284,11 +286,16 @@ impl Framebuffer {
         let start = view.top as usize * stride;
         let end = start + view.height as usize * stride;
         let mut band = Framebuffer::with_size(self.width, view.height);
-        band.rgba.copy_from_slice(&self.rgba[start..end]);
-        band.hd = self.lend_hd([0, view.top as i32]);
+        let shift = [0, view.top as i32];
+        band.list = self.lend_list(shift);
+        if band.list.is_none() {
+            band.rgba.copy_from_slice(&self.rgba[start..end]);
+        }
         let result = draw(&mut band);
-        self.rgba[start..end].copy_from_slice(&band.rgba);
-        self.return_hd(band.hd, [0, view.top as i32]);
+        if band.list.is_none() {
+            self.rgba[start..end].copy_from_slice(&band.rgba);
+        }
+        self.return_list(band.list, shift);
         result
     }
 
@@ -316,65 +323,154 @@ impl Framebuffer {
         let rows = self.height as usize;
         let mut screen = Framebuffer::with_size(WIDTH, self.height);
         let span = WIDTH as usize * 4;
-        for row in 0..rows {
+        let shift = [left as i32, 0];
+        screen.list = self.lend_list(shift);
+        let pixels = screen.list.is_none();
+        for row in (0..rows).filter(|_| pixels) {
             let start = row * stride + left * 4;
             screen.rgba[row * span..(row + 1) * span]
                 .copy_from_slice(&self.rgba[start..start + span]);
         }
-        screen.hd = self.lend_hd([left as i32, 0]);
         let result = draw(&mut screen);
-        for row in 0..rows {
+        let pixels = screen.list.is_none();
+        for row in (0..rows).filter(|_| pixels) {
             let start = row * stride + left * 4;
             self.rgba[start..start + span]
                 .copy_from_slice(&screen.rgba[row * span..(row + 1) * span]);
         }
-        self.return_hd(screen.hd, [left as i32, 0]);
+        self.return_list(screen.list, shift);
         result
     }
 
-    /// The HD capture, moved to a framebuffer drawn `shift` pixels into this
+    /// The draw list, moved to a framebuffer drawn `shift` pixels into this
     /// one.
-    fn lend_hd(&mut self, shift: [i32; 2]) -> Option<Box<crate::htexture::Overlay>> {
-        self.hd.take().map(|mut overlay| {
-            overlay.offset = [overlay.offset[0] + shift[0], overlay.offset[1] + shift[1]];
-            overlay
+    fn lend_list(&mut self, shift: [i32; 2]) -> Option<Box<DrawList>> {
+        self.list.take().map(|mut list| {
+            list.offset = [list.offset[0] + shift[0], list.offset[1] + shift[1]];
+            list
         })
     }
 
-    /// Take back the capture [`Framebuffer::lend_hd`] lent.
-    fn return_hd(&mut self, hd: Option<Box<crate::htexture::Overlay>>, shift: [i32; 2]) {
-        self.hd = hd.map(|mut overlay| {
-            overlay.offset = [overlay.offset[0] - shift[0], overlay.offset[1] - shift[1]];
-            overlay
+    /// Take back the list [`Framebuffer::lend_list`] lent.
+    fn return_list(&mut self, list: Option<Box<DrawList>>, shift: [i32; 2]) {
+        self.list = list.map(|mut list| {
+            list.offset = [list.offset[0] - shift[0], list.offset[1] - shift[1]];
+            list
         });
     }
 
-    /// Start capturing this frame's 2D replacements for the pass whose hole
-    /// grey is `hole` (see [`crate::htexture::Overlay`]); the previous
-    /// frame's are dropped.
-    pub fn capture_hd(&mut self, hole: u8) {
+    /// Record this frame's 2D drawing for the GPU renderer instead of
+    /// drawing its pixels ([`crate::draw2d`]). A list already recording
+    /// keeps what it holds, so a frozen frame can be drawn over again
+    /// ([`DrawList::rewind`]).
+    pub fn record(&mut self) {
         let size = [self.width, self.height];
-        match self.hd.as_mut() {
-            Some(overlay) => overlay.reset(hole, size),
-            None => self.hd = Some(Box::new(crate::htexture::Overlay::new(hole, size))),
+        match self.list.as_mut() {
+            Some(list) if list.size == size => {}
+            Some(list) => {
+                list.size = size;
+                list.reset();
+            }
+            None => self.list = Some(Box::new(DrawList::new(size))),
         }
     }
 
-    /// Whether 2D replacements are being captured.
+    /// Draw pixels again, as the software backend does.
+    pub fn stop_recording(&mut self) {
+        self.list = None;
+    }
+
+    /// Whether the GPU renderer draws this frame's 2D, so a caller can draw
+    /// a pack's HD art in place of the original's.
     pub fn captures_hd(&self) -> bool {
-        self.hd.is_some()
+        self.list.is_some()
     }
 
-    /// The 2D replacements this frame captured.
-    pub fn hd_quads(&self) -> &[crate::htexture::Quad] {
-        self.hd.as_ref().map_or(&[], |overlay| &overlay.quads)
+    /// The draw list this frame records into.
+    pub fn list(&self) -> Option<&DrawList> {
+        self.list.as_deref()
     }
 
-    /// Draw `image` in place of the software art `draw` paints: `draw` runs
-    /// with each texel it writes replaced by the capture's hole grey, and
-    /// the quad, `dst` (`[x0, y0, x1, y1]` in this framebuffer) sampling
-    /// `uv`, is queued for the GPU, cut to the clip rect. Without a capture
-    /// `draw` simply runs.
+    /// The draw list this frame records into.
+    pub fn list_mut(&mut self) -> Option<&mut DrawList> {
+        self.list.as_deref_mut()
+    }
+
+    /// Show the gameplay scene the GPU recorded: it covers the frame's
+    /// centred 4:3 columns, over what was drawn before (a scene recorded
+    /// without a background lets that show) and under what is drawn after.
+    /// Without a list it does nothing; the software path draws its scene
+    /// itself.
+    pub fn show_scene(&mut self) {
+        let (width, height) = (self.width as i32, self.height as i32);
+        let Some(list) = self.list.as_deref_mut() else {
+            return;
+        };
+        let [x, y] = list.offset;
+        let left = (list.size[0] as i32 - WIDTH as i32) / 2;
+        list.push(crate::draw2d::Item {
+            kind: crate::draw2d::Kind::Scene,
+            rect: [
+                left as f32,
+                0.0,
+                (left + WIDTH as i32) as f32,
+                HEIGHT as f32,
+            ],
+            uv: [0.0, 0.0, 1.0, 1.0],
+            clip: [x, y, x + width, y + height],
+            colour: [1.0; 4],
+            map: crate::draw2d::Map::default(),
+        });
+    }
+
+    /// The frame rect `[x0, y0, x1, y1]` of `rect` (`[x0, y0, x1, y1]` in
+    /// this framebuffer) cut to the framebuffer and, when `clipped`, to the
+    /// clip rect; `None` when nothing is left.
+    fn visible(&self, rect: [i32; 4], clipped: bool) -> Option<[i32; 4]> {
+        let [mut x0, mut y0, mut x1, mut y1] = rect;
+        x0 = x0.max(0);
+        y0 = y0.max(0);
+        x1 = x1.min(self.width as i32);
+        y1 = y1.min(self.height as i32);
+        if let Some([clip_x, clip_y, clip_w, clip_h]) = self.clip.filter(|_| clipped) {
+            x0 = x0.max(clip_x);
+            y0 = y0.max(clip_y);
+            x1 = x1.min(clip_x.saturating_add(clip_w));
+            y1 = y1.min(clip_y.saturating_add(clip_h));
+        }
+        (x0 < x1 && y0 < y1).then_some([x0, y0, x1, y1])
+    }
+
+    /// Record a solid `colour` over `rect` (`[x0, y0, x1, y1]`, cut to the
+    /// framebuffer but not the clip rect, as the rect primitives are);
+    /// `true` when a list took it.
+    fn record_solid(&mut self, rect: [i32; 4], colour: [f32; 4]) -> bool {
+        let visible = self.visible(rect, false);
+        let Some(list) = self.list.as_deref_mut() else {
+            return false;
+        };
+        let Some(rect) = visible else {
+            return true;
+        };
+        let [x, y] = list.offset;
+        let rect = [rect[0] + x, rect[1] + y, rect[2] + x, rect[3] + y];
+        list.push(crate::draw2d::Item {
+            kind: crate::draw2d::Kind::Solid,
+            rect: rect.map(|side| side as f32),
+            uv: [0.0; 4],
+            clip: rect,
+            colour,
+            map: crate::draw2d::Map::default(),
+        });
+        true
+    }
+
+    /// Draw `image` in place of the software art `draw` paints: with a
+    /// list, the items `draw` records become `image`'s quad (`dst`,
+    /// `[x0, y0, x1, y1]` in this framebuffer, sampling `uv`, times
+    /// `colour`) kept to the texels the original art draws, so the HD art
+    /// shows exactly where the original did, in the original's place in the
+    /// frame. Without a list `draw` simply runs.
     pub fn draw_replaced(
         &mut self,
         image: impl Into<crate::htexture::QuadImage>,
@@ -383,77 +479,118 @@ impl Framebuffer {
         colour: [f32; 3],
         draw: impl FnOnce(&mut Framebuffer),
     ) {
-        let Some(overlay) = self.hd.as_mut() else {
+        let Some(list) = self.list.as_deref_mut() else {
             draw(self);
             return;
         };
-        let [x, y] = overlay.offset;
-        let (mut x0, mut y0) = (0, 0);
-        let (mut x1, mut y1) = (self.width as i32, self.height as i32);
-        if let Some([clip_x, clip_y, clip_w, clip_h]) = self.clip {
-            x0 = x0.max(clip_x);
-            y0 = y0.max(clip_y);
-            x1 = x1.min(clip_x.saturating_add(clip_w));
-            y1 = y1.min(clip_y.saturating_add(clip_h));
-        }
-        if x0 < x1 && y0 < y1 {
-            let (fx, fy) = (x as f32, y as f32);
-            overlay.quads.push(crate::htexture::Quad {
-                image: image.into(),
-                dst: [dst[0] + fx, dst[1] + fy, dst[2] + fx, dst[3] + fy],
-                uv,
-                colour,
-                clip: [x0 + x, y0 + y, x1 - x0, y1 - y0],
-            });
-        }
-        overlay.punching = true;
+        let outer = list.replacing.replace(list.items.len());
         draw(self);
-        if let Some(overlay) = self.hd.as_mut() {
-            overlay.punching = false;
-        }
-    }
-
-    /// Punch the whole of `dst` (`[x, y, w, h]`, cut to the clip rect) for
-    /// the draw being replaced, transparent texels included: for art the PC
-    /// game drew as one textured quad, whose HD replacement's own alpha says
-    /// what shows. Outside [`Framebuffer::draw_replaced`] it does nothing.
-    pub fn punch_rect(&mut self, dst: [i32; 4]) {
-        let [x, y, width, height] = dst;
-        let (mut x0, mut y0) = (x.max(0), y.max(0));
-        let mut x1 = x.saturating_add(width).min(self.width as i32);
-        let mut y1 = y.saturating_add(height).min(self.height as i32);
-        if let Some([clip_x, clip_y, clip_w, clip_h]) = self.clip {
-            x0 = x0.max(clip_x);
-            y0 = y0.max(clip_y);
-            x1 = x1.min(clip_x.saturating_add(clip_w));
-            y1 = y1.min(clip_y.saturating_add(clip_h));
-        }
-        let width = self.width as usize;
-        let Some(overlay) = Self::punching(&mut self.hd) else {
+        let Some(list) = self.list.as_deref_mut() else {
             return;
         };
-        for row in y0..y1 {
-            for column in x0..x1 {
-                let offset = (row as usize * width + column as usize) * 4;
-                if let Some(pixel) = self.rgba.get_mut(offset..offset + 3) {
-                    pixel.fill(overlay.hole);
-                    overlay.cover(column, row);
-                }
+        let start = std::mem::replace(&mut list.replacing, outer).unwrap_or(0);
+        let kind = crate::draw2d::Kind::from(image.into());
+        let [x, y] = list.offset.map(|side| side as f32);
+        let [x0, y0, x1, y1] = [dst[0] + x, dst[1] + y, dst[2] + x, dst[3] + y];
+        let [u0, v0, u1, v1] = uv;
+        let at = |px: f32, py: f32| {
+            [
+                u0 + (px - x0) / (x1 - x0) * (u1 - u0),
+                v0 + (py - y0) / (y1 - y0) * (v1 - v0),
+            ]
+        };
+        // A punched rect already shows the art on every pixel it covers, so
+        // the sprites inside one would draw it again over itself.
+        let punches: Vec<[i32; 4]> = list.items[start..]
+            .iter()
+            .filter(|item| item.map.flags & crate::draw2d::PUNCH != 0)
+            .map(|item| item.clip)
+            .collect();
+        if !punches.is_empty() {
+            let mut index = 0;
+            list.items.retain(|item| {
+                index += 1;
+                let [x0, y0, x1, y1] = item.clip;
+                index <= start
+                    || !matches!(item.kind, crate::draw2d::Kind::Sprite)
+                    || !punches.iter().any(|punch| {
+                        punch[0] <= x0 && punch[1] <= y0 && x1 <= punch[2] && y1 <= punch[3]
+                    })
+            });
+        }
+        for item in list.items.iter_mut().skip(start) {
+            let punch = item.map.flags & crate::draw2d::PUNCH != 0;
+            if !punch && !matches!(item.kind, crate::draw2d::Kind::Sprite) {
+                continue;
+            }
+            let [rx0, ry0, rx1, ry1] = item.rect;
+            let [ua, va] = at(rx0, ry0);
+            let [ub, vb] = at(rx1, ry1);
+            item.kind = kind.clone();
+            item.uv = [ua, va, ub, vb];
+            let [r, g, b, a] = item.colour;
+            item.colour = if punch {
+                [colour[0], colour[1], colour[2], 1.0]
+            } else {
+                [colour[0] * r, colour[1] * g, colour[2] * b, a]
+            };
+            if punch {
+                item.map.flags &= !crate::draw2d::PUNCH;
+            } else {
+                item.map.flags |= crate::draw2d::MASKED;
             }
         }
     }
 
-    /// The capture of the draw being replaced, which writes its hole grey
-    /// in place of its texels and [`crate::htexture::Overlay::cover`]s them.
-    fn punching(
-        hd: &mut Option<Box<crate::htexture::Overlay>>,
-    ) -> Option<&mut crate::htexture::Overlay> {
-        hd.as_deref_mut().filter(|overlay| overlay.punching)
+    /// Cover the whole of `dst` (`[x, y, w, h]`, cut to the clip rect) with
+    /// the HD art of the draw being replaced, transparent texels included:
+    /// for art the PC game drew as one textured quad, whose HD
+    /// replacement's own alpha says what shows. Outside
+    /// [`Framebuffer::draw_replaced`] it does nothing.
+    pub fn punch_rect(&mut self, dst: [i32; 4]) {
+        let [x, y, width, height] = dst;
+        let rect = [x, y, x.saturating_add(width), y.saturating_add(height)];
+        let visible = self.visible(rect, true);
+        let Some(list) = self
+            .list
+            .as_deref_mut()
+            .filter(|list| list.replacing.is_some())
+        else {
+            return;
+        };
+        let Some(rect) = visible else {
+            return;
+        };
+        let [x, y] = list.offset;
+        let rect = [rect[0] + x, rect[1] + y, rect[2] + x, rect[3] + y];
+        list.push(crate::draw2d::Item {
+            kind: crate::draw2d::Kind::Solid,
+            rect: rect.map(|side| side as f32),
+            uv: [0.0; 4],
+            clip: rect,
+            colour: [0.0; 4],
+            map: crate::draw2d::Map {
+                flags: crate::draw2d::PUNCH,
+                ..crate::draw2d::Map::default()
+            },
+        });
     }
 
     /// Fill the whole framebuffer black.
     pub fn clear(&mut self) {
-        self.rgba.fill(0);
+        let (width, height) = (self.width, self.height);
+        match self.list.as_deref_mut() {
+            // The whole frame starts over.
+            Some(list) if list.offset == [0, 0] && list.size == [width, height] => {
+                let offset = list.offset;
+                list.reset();
+                list.offset = offset;
+            }
+            Some(_) => {
+                self.record_solid([0, 0, width as i32, height as i32], [0.0, 0.0, 0.0, 1.0]);
+            }
+            None => self.rgba.fill(0),
+        }
     }
 
     /// Clip subsequent sprite draws to `rect` (`[x, y, w, h]`); `None` clears
@@ -469,17 +606,38 @@ impl Framebuffer {
 
     /// Copy `image` to the top-left corner, clipping to both images' bounds.
     pub fn blit(&mut self, image: &Image) {
-        let rows = image.height.min(self.height) as usize;
-        let columns = image.width.min(self.width) as usize;
+        self.blit_rgba(image.width, image.height, &image.rgba);
+    }
+
+    /// [`Framebuffer::blit`] of a `width` x `height` RGBA image's rows
+    /// (a film frame); rows `rgba` is short of draw nothing.
+    pub fn blit_rgba(&mut self, width: u32, height: u32, rgba: &[u8]) {
+        let rows = height.min(self.height) as usize;
+        let columns = width.min(self.width) as usize;
         if rows == 0 || columns == 0 {
             return;
         }
-        let source_stride = image.width as usize * 4;
+        if let Some(list) = self.list.as_deref_mut() {
+            let [x, y] = list.offset;
+            let map = crate::draw2d::Map {
+                dst: [x, y, width as i32, height as i32],
+                src: [width as i32, height as i32],
+                ..crate::draw2d::Map::default()
+            };
+            let visible = [x, y, x + columns as i32, y + rows as i32];
+            list.sprite(map, visible, [1.0; 4], |u, v| {
+                let offset = (v as usize * width as usize + u as usize) * 4;
+                rgba.get(offset..offset + 4)
+                    .map(|texel| [texel[0], texel[1], texel[2], 255])
+            });
+            return;
+        }
+        let source_stride = width as usize * 4;
         let target_stride = self.width as usize * 4;
         for row in 0..rows {
             let source_start = row * source_stride;
             let source_end = source_start + columns * 4;
-            let Some(source) = image.rgba.get(source_start..source_end) else {
+            let Some(source) = rgba.get(source_start..source_end) else {
                 break;
             };
             let target_start = row * target_stride;
@@ -516,7 +674,25 @@ impl Framebuffer {
         // the frame. The origin is the display-image origin in logical pixels,
         // applied before the texture-space sampling, and the fragment centre
         // (`(2x + 1) / 2`) is the reference's GL rasterisation.
-        let mut punch = Self::punching(&mut self.hd);
+        if let Some(list) = self.list.as_deref_mut() {
+            let [x, y] = list.offset;
+            let map = crate::draw2d::Map {
+                dst: [origin[0] + x, origin[1] + y, WIDTH as i32, HEIGHT as i32],
+                src: [image.width as i32, image.height as i32],
+                atlas: [0, 0],
+                flags: crate::draw2d::CENTRED,
+            };
+            let visible = [x, y, x + self.width as i32, y + self.height as i32];
+            list.sprite(map, visible, [1.0; 4], |u, v| {
+                let offset = (v as usize * image.width as usize + u as usize) * 4;
+                let texel = image.rgba.get(offset..offset + 4)?;
+                let mix = |channel: usize| {
+                    (u32::from(texel[channel]) * u32::from(colour[channel]) / 255) as u8
+                };
+                Some([mix(0), mix(1), mix(2), 255])
+            });
+            return;
+        }
         let scale_x = i64::from(image.width);
         let scale_y = i64::from(image.height);
         let frame_w = WIDTH as i64;
@@ -537,16 +713,9 @@ impl Framebuffer {
                 let Some(slot) = self.rgba.get_mut(offset..offset + 4) else {
                     continue;
                 };
-                if let Some(overlay) = punch.as_deref_mut() {
-                    overlay.cover(x as i32, y as i32);
-                }
                 for channel in 0..3 {
-                    slot[channel] = match punch.as_ref().map(|overlay| overlay.hole) {
-                        Some(grey) => grey,
-                        None => {
-                            (u32::from(texel[channel]) * u32::from(colour[channel]) / 255) as u8
-                        }
-                    };
+                    slot[channel] =
+                        (u32::from(texel[channel]) * u32::from(colour[channel]) / 255) as u8;
                 }
                 slot[3] = 255;
             }
@@ -1013,9 +1182,11 @@ impl Framebuffer {
             self.resize(other.width, other.height);
         }
         if self.rgba.len() == other.rgba.len() {
-            self.rgba.copy_from_slice(&other.rgba);
+            if other.list.is_none() {
+                self.rgba.copy_from_slice(&other.rgba);
+            }
             self.view = other.view;
-            self.hd.clone_from(&other.hd);
+            self.list.clone_from(&other.list);
         }
     }
 
@@ -1024,7 +1195,8 @@ impl Framebuffer {
     /// is affine in the pixel underneath, so how much of the backdrop shows
     /// through is `white - black`, and the colour drawn on top is `black`.
     /// The channels share one coverage (the largest), which is exact for
-    /// the opaque art and black blends a UI layer is made of.
+    /// the opaque art and black blends a UI layer is made of. The software
+    /// backend's UI layer; the GPU's draws its list into a clear target.
     pub fn take_coverage(&mut self, white: &Framebuffer) {
         let over_white = white.rgba.as_chunks::<4>().0;
         for (pixel, over_white) in self.rgba.as_chunks_mut::<4>().0.iter_mut().zip(over_white) {
@@ -1040,12 +1212,13 @@ impl Framebuffer {
     /// size; its view becomes the whole frame either way.
     pub fn resize(&mut self, width: u32, height: u32) {
         if (self.width, self.height) != (width, height) {
-            let mut hd = self.hd.take();
+            let mut list = self.list.take();
             *self = Self::with_size(width, height);
-            if let Some(overlay) = hd.as_mut() {
-                overlay.resize([width, height]);
+            if let Some(list) = list.as_mut() {
+                list.size = [width, height];
+                list.reset();
             }
-            self.hd = hd;
+            self.list = list;
         }
         self.view = crate::video::View::default();
     }
@@ -1060,6 +1233,13 @@ impl Framebuffer {
             return;
         }
         if alpha == 0 {
+            return;
+        }
+        let (width, height) = (self.width as i32, self.height as i32);
+        if self.record_solid(
+            [0, 0, width, height],
+            [1.0, 1.0, 1.0, f32::from(alpha) / 255.0],
+        ) {
             return;
         }
         let target: u8 = 255;
@@ -1087,6 +1267,13 @@ impl Framebuffer {
     /// truncation diverges ~60% of a fading screen by one LSB.
     pub fn fade_to_black_weighted(&mut self, alpha: u8) {
         if alpha == 0 {
+            return;
+        }
+        let (width, height) = (self.width as i32, self.height as i32);
+        if self.record_solid(
+            [0, 0, width, height],
+            [0.0, 0.0, 0.0, f32::from(alpha) / 255.0],
+        ) {
             return;
         }
         if alpha == 255 {
@@ -1128,6 +1315,10 @@ impl Framebuffer {
             self.fill_rect(dst, [0, 0, 0, 255]);
             return;
         }
+        let rect = [x, y, x.saturating_add(width), y.saturating_add(height)];
+        if self.record_solid(rect, [0.0, 0.0, 0.0, f32::from(alpha) / 255.0]) {
+            return;
+        }
         let start_x = x.max(0) as u32;
         let start_y = y.max(0) as u32;
         let end_x = x.saturating_add(width).min(self.width as i32).max(0) as u32;
@@ -1164,6 +1355,10 @@ impl Framebuffer {
             self.fill_rect(dst, [0, 0, 0, 255]);
             return;
         }
+        let rect = [x, y, x.saturating_add(width), y.saturating_add(height)];
+        if self.record_solid(rect, [0.0, 0.0, 0.0, f32::from(alpha) / 255.0]) {
+            return;
+        }
         let start_x = x.max(0) as u32;
         let start_y = y.max(0) as u32;
         let end_x = x.saturating_add(width).min(self.width as i32).max(0) as u32;
@@ -1184,6 +1379,11 @@ impl Framebuffer {
     /// Fill a rectangle with `color`, clipped to the framebuffer.
     pub fn fill_rect(&mut self, dst: [i32; 4], color: [u8; 4]) {
         let [x, y, width, height] = dst;
+        let rect = [x, y, x.saturating_add(width), y.saturating_add(height)];
+        let [r, g, b, _] = color.map(|channel| f32::from(channel) / 255.0);
+        if self.record_solid(rect, [r, g, b, 1.0]) {
+            return;
+        }
         let start_x = x.max(0) as u32;
         let start_y = y.max(0) as u32;
         let end_x = x.saturating_add(width).min(self.width as i32).max(0) as u32;
@@ -1238,6 +1438,12 @@ impl Framebuffer {
         let right = (i128::from(x0.max(x1)) + 1).clamp(0, i128::from(self.width) - 1) as i32;
         let top = (i128::from(y0.min(y1)) - 1).clamp(0, i128::from(self.height) - 1) as i32;
         let bottom = (i128::from(y0.max(y1)) + 1).clamp(0, i128::from(self.height) - 1) as i32;
+        // The GPU pass takes the pixels as a sprite of the box: the line's
+        // own raster rule, which a scaled target could not reproduce.
+        let mut plotted = self
+            .list
+            .is_some()
+            .then(|| vec![false; ((right - left + 1) * (bottom - top + 1)) as usize]);
         for y in top..=bottom {
             for x in left..=right {
                 let ex = 2 * i128::from(x) + 1 - ax;
@@ -1259,8 +1465,26 @@ impl Framebuffer {
                 if cross2 == len2 && !(if cross > 0 { plus_edge } else { minus_edge }) {
                     continue;
                 }
-                self.plot_line_pixel(x, y, color);
+                match plotted.as_mut() {
+                    Some(plotted) => {
+                        plotted[((y - top) * (right - left + 1) + x - left) as usize] = true;
+                    }
+                    None => self.plot_line_pixel(x, y, color),
+                }
             }
+        }
+        if let (Some(plotted), Some(list)) = (plotted, self.list.as_deref_mut()) {
+            let [x, y] = list.offset;
+            let (width, height) = (right - left + 1, bottom - top + 1);
+            let map = crate::draw2d::Map {
+                dst: [left + x, top + y, width, height],
+                src: [width, height],
+                ..crate::draw2d::Map::default()
+            };
+            let visible = [left + x, top + y, right + 1 + x, bottom + 1 + y];
+            list.sprite(map, visible, [1.0; 4], |u, v| {
+                plotted[(v * width + u) as usize].then_some([color[0], color[1], color[2], 255])
+            });
         }
     }
 
@@ -1286,6 +1510,11 @@ impl Framebuffer {
         }
         if alpha == 255 {
             self.fill_rect(dst, [color[0], color[1], color[2], 255]);
+            return;
+        }
+        let rect = [x, y, x.saturating_add(width), y.saturating_add(height)];
+        let [r, g, b] = color.map(|channel| f32::from(channel) / 255.0);
+        if self.record_solid(rect, [r, g, b, f32::from(alpha) / 255.0]) {
             return;
         }
         let start_x = x.max(0) as u32;
@@ -1379,13 +1608,26 @@ impl Framebuffer {
         if start_x >= end_x || start_y >= end_y {
             return;
         }
-        let width = self.width as usize;
-        let mut punch = Self::punching(&mut self.hd);
-        if blend != SpriteBlend::Opaque
-            && let Some(overlay) = punch.as_deref_mut()
-        {
-            overlay.blended = true;
+        if let Some(list) = self.list.as_deref_mut() {
+            let [x, y] = list.offset;
+            let map = crate::draw2d::Map {
+                dst: [dst_x + x, dst_y + y, dst_w, dst_h],
+                src: [src_w, src_h],
+                atlas: [0, 0],
+                flags: (u32::from(mirror[0]) * crate::draw2d::MIRROR_X)
+                    | (u32::from(mirror[1]) * crate::draw2d::MIRROR_Y),
+            };
+            let visible = [start_x + x, start_y + y, end_x + x, end_y + y];
+            let colour = match blend {
+                SpriteBlend::Opaque => [1.0; 4],
+                SpriteBlend::Half => [1.0, 1.0, 1.0, 0.5],
+                SpriteBlend::HalfVariant => [1.0, 1.0, 1.0, 127.0 / 256.0],
+                SpriteBlend::BlackAlpha(alpha) => [0.0, 0.0, 0.0, f32::from(alpha) / 255.0],
+            };
+            list.sprite(map, visible, colour, |u, v| sample(src_x + u, src_y + v));
+            return;
         }
+        let width = self.width as usize;
         for y in start_y..end_y {
             let Ok(offset_y) = i32::try_from(
                 (i64::from(y) - i64::from(dst_y)) * i64::from(src_h) / i64::from(dst_h),
@@ -1411,10 +1653,6 @@ impl Framebuffer {
                 let Some(mut pixel) = sample(tex_x, tex_y) else {
                     continue;
                 };
-                if let Some(overlay) = punch.as_deref_mut() {
-                    pixel[..3].fill(overlay.hole);
-                    overlay.cover(x, y);
-                }
                 let offset = (y as usize * width + x as usize) * 4;
                 let Some(slot) = self.rgba.get_mut(offset..offset + 4) else {
                     continue;
@@ -1604,13 +1842,11 @@ impl Framebuffer {
         self.rasterize_triangles(&ivm.texture, triangles);
     }
 
-    /// [`Framebuffer::draw_ivm`], but while the GPU renderer captures this
-    /// frame ([`Framebuffer::capture_hd`]) a model clipped to a rect of one
-    /// flat colour that no earlier HD quad covers is queued for the GPU
-    /// instead ([`crate::htexture::QuadImage::Model`]): it renders at the
-    /// window's resolution over that colour, cut to the clip rect, and the
-    /// rect is punched for it. Anything else under the model (art, an HD
-    /// quad, a gradient) keeps it on the software path, which draws over it.
+    /// [`Framebuffer::draw_ivm`], but while the GPU renderer draws the
+    /// frame ([`Framebuffer::record`]) the model is queued for it instead
+    /// ([`crate::draw2d::Kind::Model`]): it renders at the window's
+    /// resolution into a target of its own, cut to the clip rect, and is
+    /// drawn over what the frame drew before it.
     pub fn draw_ivm_captured(
         &mut self,
         ivm: &std::sync::Arc<crate::ivm::Ivm>,
@@ -1619,23 +1855,24 @@ impl Framebuffer {
         light: Option<&EntityLight>,
         page: Option<std::sync::Arc<crate::htexture::Replacement>>,
     ) {
-        let Some((rect, backdrop)) = self.model_backdrop() else {
+        if self.list.is_none() {
             self.draw_ivm(ivm, joints, camera, light);
+            return;
+        }
+        let Some(visible) = self.visible([0, 0, self.width as i32, self.height as i32], true)
+        else {
             return;
         };
         let mut triangles: Vec<Triangle> = Vec::new();
         for (object, joint) in ivm.objects.iter().zip(joints) {
             collect_ivm_triangles(object, joint, camera, light, true, &mut triangles);
         }
-        // Nothing to draw leaves the backdrop as it is, as the software
-        // path would.
         if triangles.is_empty() || ivm.texture.width == 0 || ivm.texture.height == 0 {
             return;
         }
         triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
-        let overlay = self.hd.as_mut().expect("model_backdrop requires a capture");
-        let [x, y, width, height] = rect;
-        let [offset_x, offset_y] = overlay.offset;
+        let [x0, y0, x1, y1] = visible;
+        let (width, height) = ((x1 - x0) as f32, (y1 - y0) as f32);
         let vertices = triangles
             .iter()
             .flat_map(|triangle| {
@@ -1645,8 +1882,8 @@ impl Framebuffer {
                 std::array::from_fn::<_, 3, _>(|corner| {
                     let vertex = &triangle.raster[corner];
                     let w = vertex.w;
-                    let ndc_x = (vertex.position[0] - x as f32) / width as f32 * 2.0 - 1.0;
-                    let ndc_y = 1.0 - (vertex.position[1] - y as f32) / height as f32 * 2.0;
+                    let ndc_x = (vertex.position[0] - x0 as f32) / width * 2.0 - 1.0;
+                    let ndc_y = 1.0 - (vertex.position[1] - y0 as f32) / height * 2.0;
                     crate::htexture::ModelVertex {
                         clip: [ndc_x * w, ndc_y * w, depth_ndc(w) * w, w],
                         uv: stored_uv(vertex, triangle.uv_nudge[corner], &ivm.texture),
@@ -1656,65 +1893,34 @@ impl Framebuffer {
                 })
             })
             .collect();
-        let (x0, y0) = ((x + offset_x) as f32, (y + offset_y) as f32);
-        overlay.quads.push(crate::htexture::Quad {
-            image: crate::htexture::QuadImage::Model(std::sync::Arc::new(crate::htexture::Model {
+        let list = self.list.as_deref_mut().expect("checked above");
+        let [x, y] = list.offset;
+        let rect = [x0 + x, y0 + y, x1 + x, y1 + y];
+        list.push(crate::draw2d::Item {
+            kind: crate::draw2d::Kind::Model(std::sync::Arc::new(crate::htexture::Model {
                 ivm: ivm.clone(),
                 vertices,
-                backdrop,
                 page,
             })),
-            dst: [x0, y0, x0 + width as f32, y0 + height as f32],
+            rect: rect.map(|side| side as f32),
             uv: [0.0, 0.0, 1.0, 1.0],
-            colour: [1.0; 3],
-            clip: [x + offset_x, y + offset_y, width, height],
+            clip: rect,
+            colour: [1.0; 4],
+            map: crate::draw2d::Map::default(),
         });
-        overlay.punching = true;
-        self.punch_rect(rect);
-        if let Some(overlay) = self.hd.as_mut() {
-            overlay.punching = false;
-        }
     }
 
-    /// The clip rect, cut to the framebuffer, and its colour when a capture
-    /// is running, the rect is one flat colour and no HD quad covers any of
-    /// it: where [`Framebuffer::draw_ivm_captured`] hands its model to the
-    /// GPU. The model's target is cleared to that colour, so it could not
-    /// show a quad under it.
-    fn model_backdrop(&self) -> Option<([i32; 4], [u8; 3])> {
-        let overlay = self.hd.as_ref()?;
-        let [x, y, width, height] = self.clip?;
-        let (x0, y0) = (x.max(0), y.max(0));
-        let x1 = x.saturating_add(width).min(self.width as i32);
-        let y1 = y.saturating_add(height).min(self.height as i32);
-        if x0 >= x1 || y0 >= y1 {
-            return None;
-        }
-        let stride = self.width as usize * 4;
-        let pixel = |column: i32, row: i32| {
-            let offset = row as usize * stride + column as usize * 4;
-            [
-                self.rgba[offset],
-                self.rgba[offset + 1],
-                self.rgba[offset + 2],
-            ]
-        };
-        let covered = |column: i32, row: i32| {
-            let (x, y) = (column + overlay.offset[0], row + overlay.offset[1]);
-            x >= 0
-                && y >= 0
-                && (x as u32) < overlay.size[0]
-                && (y as u32) < overlay.size[1]
-                && overlay.coverage[y as usize * overlay.size[0] as usize + x as usize] != 0
-        };
-        let backdrop = pixel(x0, y0);
-        let flat = (y0..y1).all(|row| {
-            (x0..x1).all(|column| pixel(column, row) == backdrop && !covered(column, row))
-        });
-        flat.then_some(([x0, y0, x1 - x0, y1 - y0], backdrop))
+    /// The software 3D rasterizer is the software backend's: a framebuffer
+    /// recording the GPU's 2D pass never reaches it.
+    fn assert_software_3d(&self) {
+        debug_assert!(
+            self.list.is_none(),
+            "the software 3D rasterizer under the GPU backend"
+        );
     }
 
     fn rasterize_triangles(&mut self, texture: &Texture8, mut triangles: Vec<Triangle>) {
+        self.assert_software_3d();
         triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
@@ -1873,6 +2079,7 @@ impl Framebuffer {
     /// pipeline with bilinear sampling, depth tested but never written, and
     /// alpha-blended by the texel's coverage times the vertex colour.
     fn rasterize_shadow(&mut self, poly: &ShadowPoly, depth: &[u32]) {
+        self.assert_software_3d();
         let texture = poly.texture;
         if texture.width == 0 || texture.height == 0 {
             return;
@@ -1909,6 +2116,7 @@ impl Framebuffer {
     /// (zero alpha, the page's black key colour) is a hole: it leaves the
     /// framebuffer pixel underneath untouched.
     fn rasterize_mask(&mut self, page: &Image, quad: &MaskQuad) {
+        self.assert_software_3d();
         if page.width == 0 || page.height == 0 || quad.size.0 == 0 || quad.size.1 == 0 {
             return;
         }
@@ -1963,6 +2171,7 @@ impl Framebuffer {
     /// alpha), an RGB multiply from the spawn's tint record and a half blend
     /// when the blend record calls for one.
     fn rasterize_effect(&mut self, page: &Image, quad: &EffectQuad) {
+        self.assert_software_3d();
         if page.width == 0 || page.height == 0 || quad.size[0] <= 0 || quad.size[1] <= 0 {
             return;
         }
@@ -4495,7 +4704,7 @@ mod tests {
     }
 
     #[test]
-    fn a_punched_rect_covers_clear_texels_within_the_clip() {
+    fn a_punched_rect_covers_its_rect_within_the_clip_with_unmasked_art() {
         let replacement = std::sync::Arc::new(crate::htexture::Replacement {
             image: Image {
                 width: 1,
@@ -4508,27 +4717,32 @@ mod tests {
         // Outside a replaced draw the rect is left alone.
         framebuffer.punch_rect([0, 0, 4, 4]);
         assert_eq!(&framebuffer.rgba[..4], &[0, 0, 0, 0]);
+        framebuffer.record();
+        framebuffer.punch_rect([0, 0, 4, 4]);
+        assert!(framebuffer.list().unwrap().items.is_empty());
 
-        framebuffer.capture_hd(255);
         framebuffer.set_clip_rect(Some([12, 0, 100, 100]));
         framebuffer.draw_replaced(
-            replacement,
+            replacement.clone(),
             [10.0, 10.0, 14.0, 13.0],
             [0.0, 0.0, 1.0, 1.0],
             [1.0; 3],
             |framebuffer| framebuffer.punch_rect([10, 10, 4, 3]),
         );
-        let overlay = framebuffer.hd.as_ref().unwrap();
-        let covered = (0..240 * 320).filter(|&i| overlay.coverage[i] == 1).count();
-        assert_eq!(covered, 2 * 3);
-        assert_eq!(overlay.coverage[10 * 320 + 11], 0);
-        assert_eq!(overlay.coverage[12 * 320 + 13], 1);
-        let offset = (12 * 320 + 13) * 4;
-        assert_eq!(&framebuffer.rgba[offset..offset + 3], &[255; 3]);
+        let items = &framebuffer.list().unwrap().items;
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        assert!(matches!(&item.kind, crate::draw2d::Kind::Art(art)
+                if std::sync::Arc::ptr_eq(art, &replacement)));
+        assert_eq!(item.rect, [12.0, 10.0, 14.0, 13.0]);
+        assert_eq!(item.clip, [12, 10, 14, 13]);
+        assert_eq!(item.uv, [0.5, 0.0, 1.0, 1.0]);
+        assert_eq!(item.colour, [1.0; 4]);
+        assert_eq!(item.map.flags, 0, "the art's own alpha says what shows");
     }
 
     #[test]
-    fn a_replaced_draw_punches_its_hole_and_queues_a_frame_quad() {
+    fn a_replaced_draw_becomes_its_art_where_the_original_draws() {
         let replacement = std::sync::Arc::new(crate::htexture::Replacement {
             image: Image {
                 width: 1,
@@ -4542,7 +4756,7 @@ mod tests {
             height: 1,
             rgba: vec![200, 100, 50, 255],
         };
-        // Without a capture the art itself draws.
+        // Without a list the art itself draws.
         let mut plain = Framebuffer::new();
         plain.draw_replaced(
             replacement.clone(),
@@ -4552,12 +4766,12 @@ mod tests {
             |framebuffer| framebuffer.draw_background(&art, [0, 0], [255; 3]),
         );
         assert_eq!(&plain.rgba[..4], &[200, 100, 50, 255]);
-        assert!(plain.hd_quads().is_empty());
+        assert!(plain.list().is_none());
 
-        // A canvas's 4:3 screen draws 53 columns in; the quad lands in
+        // A canvas's 4:3 screen draws 53 columns in; the items land in
         // canvas pixels, cut to the screen's clip.
         let mut canvas = Framebuffer::with_size(426, 240);
-        canvas.capture_hd(255);
+        canvas.record();
         canvas.with_screen(|screen| {
             screen.draw_replaced(
                 replacement.clone(),
@@ -4572,29 +4786,39 @@ mod tests {
                 [0.0, 0.0, 64.0, 64.0],
                 [0.0, 0.0, 1.0, 1.0],
                 [0.5; 3],
+                |framebuffer| framebuffer.punch_rect([0, 0, 64, 64]),
+            );
+            // A replaced draw drawing nothing adds nothing.
+            screen.draw_replaced(
+                replacement.clone(),
+                [0.0, 0.0, 64.0, 64.0],
+                [0.0, 0.0, 1.0, 1.0],
+                [1.0; 3],
                 |_| {},
             );
         });
-        let at = |x: usize| &canvas.rgba[x * 4..x * 4 + 4];
-        assert_eq!(at(52), &[0, 0, 0, 0]);
-        assert_eq!(at(53), &[255, 255, 255, 255]);
-        assert_eq!(at(372), &[255, 255, 255, 255]);
-        let overlay = canvas.hd.as_ref().unwrap();
-        assert_eq!(overlay.offset, [0, 0]);
-        assert!(!overlay.punching);
-        // The background's texels are marked as the first quad's.
-        assert_eq!(overlay.size, [426, 240]);
-        assert_eq!(overlay.coverage[52], 0);
-        assert_eq!(overlay.coverage[53], 1);
-        assert_eq!(overlay.coverage[239 * 426 + 372], 1);
-        assert_eq!(overlay.coverage[239 * 426 + 373], 0);
-        let quads = canvas.hd_quads();
-        assert_eq!(quads.len(), 2);
-        assert_eq!(quads[0].dst, [53.0, 0.0, 373.0, 240.0]);
-        assert_eq!(quads[0].clip, [53, 0, 320, 240]);
-        assert_eq!(quads[1].dst, [53.0, 0.0, 117.0, 64.0]);
-        assert_eq!(quads[1].clip, [63, 20, 30, 40]);
-        assert_eq!(quads[1].colour, [0.5; 3]);
+        let list = canvas.list().unwrap();
+        assert_eq!(list.offset, [0, 0]);
+        assert_eq!(list.replacing, None);
+        assert_eq!(list.items.len(), 2);
+        let [background, punched] = [&list.items[0], &list.items[1]];
+        assert!(matches!(background.kind, crate::draw2d::Kind::Art(_)));
+        assert_eq!(background.rect, [53.0, 0.0, 373.0, 240.0]);
+        assert_eq!(background.uv, [0.0, 0.0, 1.0, 1.0]);
+        // Kept to the background's texels.
+        assert_eq!(
+            background.map.flags,
+            crate::draw2d::CENTRED | crate::draw2d::MASKED
+        );
+        assert_eq!(background.map.dst, [53, 0, 320, 240]);
+        assert!(matches!(punched.kind, crate::draw2d::Kind::Art(_)));
+        assert_eq!(punched.rect, [63.0, 20.0, 93.0, 60.0]);
+        assert_eq!(punched.clip, [63, 20, 93, 60]);
+        assert_eq!(
+            punched.uv,
+            [10.0 / 64.0, 20.0 / 64.0, 40.0 / 64.0, 60.0 / 64.0]
+        );
+        assert_eq!(punched.colour, [0.5, 0.5, 0.5, 1.0]);
     }
 
     fn identity() -> anim::Mat4x3 {
@@ -6927,8 +7151,7 @@ mod tests {
     }
 
     #[test]
-    fn a_captured_ivm_draw_over_a_flat_clip_goes_to_the_gpu() {
-        use crate::htexture::QuadImage;
+    fn a_recorded_ivm_draw_is_a_model_item_over_its_clip() {
         use crate::ivm::{Ivm, IvmObject, IvmPrim, IvmPrimKind};
         let model = std::sync::Arc::new(Ivm {
             texture: solid_texture([255, 255, 255, 255]),
@@ -6968,30 +7191,27 @@ mod tests {
 
         let mut framebuffer = Framebuffer::new();
         navy(&mut framebuffer);
-        framebuffer.capture_hd(255);
-        framebuffer.hd.as_mut().unwrap().offset = [8, 0];
+        framebuffer.record();
+        framebuffer.list_mut().unwrap().offset = [8, 0];
         framebuffer.set_clip_rect(Some(clip));
         framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
-        // The clip is punched whole and the model queued over its navy.
-        assert_eq!(pixel(&framebuffer, 150, 110), [255; 3]);
-        assert_eq!(pixel(&framebuffer, 169, 129), [255; 3]);
-        assert_eq!(pixel(&framebuffer, 149, 110), [0, 0, 0x20]);
-        let overlay = framebuffer.hd.as_ref().unwrap();
-        assert_eq!(overlay.coverage[110 * 320 + 158], 1);
-        assert_eq!(overlay.coverage[110 * 320 + 157], 0);
-        let [quad] = &overlay.quads[..] else {
-            panic!("expected one quad, got {}", overlay.quads.len());
+        // Nothing is drawn in software: the model is an item over the clip,
+        // drawn over whatever the frame drew under it.
+        assert_eq!(pixel(&framebuffer, 160, 120), [0, 0, 0x20]);
+        let items = &framebuffer.list().unwrap().items;
+        let [item] = &items[..] else {
+            panic!("expected one item, got {}", items.len());
         };
-        assert_eq!(quad.dst, [158.0, 110.0, 178.0, 130.0]);
-        assert_eq!(quad.clip, [158, 110, 20, 20]);
-        let QuadImage::Model(queued) = &quad.image else {
-            panic!("an art quad");
+        assert_eq!(item.rect, [158.0, 110.0, 178.0, 130.0]);
+        assert_eq!(item.clip, [158, 110, 178, 130]);
+        assert_eq!(item.uv, [0.0, 0.0, 1.0, 1.0]);
+        let crate::draw2d::Kind::Model(queued) = &item.kind else {
+            panic!("not a model item");
         };
         assert!(std::sync::Arc::ptr_eq(&queued.ivm, &model));
-        assert_eq!(queued.backdrop, [0, 0, 0x20]);
         assert_eq!(queued.vertices.len(), 3);
         // Untextured, and the triangle spans the whole clip: its corners
-        // land outside the quad's clip space.
+        // land outside the item's clip space.
         assert!(
             queued
                 .vertices
@@ -7003,55 +7223,24 @@ mod tests {
             w > 0.0 && (x / w).abs().max((y / w).abs()) > 1.0
         }));
 
-        // Over art that is not one colour the software draws it.
-        let mut framebuffer = Framebuffer::new();
-        navy(&mut framebuffer);
-        framebuffer.rgba[(120 * 320 + 160) * 4] = 1;
-        framebuffer.capture_hd(255);
-        framebuffer.set_clip_rect(Some(clip));
-        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
-        assert!(framebuffer.hd_quads().is_empty());
-        assert_eq!(pixel(&framebuffer, 150, 110), [255; 3]);
-        assert_eq!(
-            framebuffer.hd.as_ref().unwrap().coverage[110 * 320 + 150],
-            0
-        );
-
-        // So it does over an earlier HD quad, which the model's backdrop
-        // would hide.
-        let mut framebuffer = Framebuffer::new();
-        navy(&mut framebuffer);
-        framebuffer.capture_hd(255);
-        framebuffer.hd.as_mut().unwrap().coverage[129 * 320 + 169] = 1;
-        framebuffer.set_clip_rect(Some(clip));
-        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
-        assert!(framebuffer.hd_quads().is_empty());
-        assert_eq!(pixel(&framebuffer, 150, 110), [255; 3]);
-
-        // So it does without a capture.
+        // Without a list the software draws it.
         let mut framebuffer = Framebuffer::new();
         navy(&mut framebuffer);
         framebuffer.set_clip_rect(Some(clip));
         framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
         assert_eq!(pixel(&framebuffer, 160, 120), [255; 3]);
+        assert_eq!(pixel(&framebuffer, 149, 110), [0, 0, 0x20]);
 
-        // A model with nothing to draw queues nothing and leaves the
-        // backdrop unpunched.
+        // A model with nothing to draw records nothing.
         let empty = std::sync::Arc::new(Ivm {
             texture: solid_texture([255, 255, 255, 255]),
             objects: Vec::new(),
         });
         let mut framebuffer = Framebuffer::new();
-        navy(&mut framebuffer);
-        framebuffer.capture_hd(255);
+        framebuffer.record();
         framebuffer.set_clip_rect(Some(clip));
         framebuffer.draw_ivm_captured(&empty, &[], &straight_camera(), None, None);
-        assert!(framebuffer.hd_quads().is_empty());
-        assert_eq!(pixel(&framebuffer, 160, 120), [0, 0, 0x20]);
-        assert_eq!(
-            framebuffer.hd.as_ref().unwrap().coverage[120 * 320 + 160],
-            0
-        );
+        assert!(framebuffer.list().unwrap().items.is_empty());
     }
 
     #[test]
