@@ -735,7 +735,8 @@ impl Presentation {
                 shadows,
                 effect_cache,
                 &mut self.tween,
-            );
+            )
+            .expect("the software scene cannot fail");
             self.render.record_frame(start.elapsed());
         }
         game.joint_worlds[0] = exact_joints;
@@ -1805,13 +1806,14 @@ impl DeathBackdrop {
     /// Snapshot `band`, the frame's rows from `top` on, and return the
     /// background to record into a `target` (`[width, height]`) scene: the
     /// frame, or the bake and its generation when HD art was captured over
-    /// it. `None` when the art cannot be baked (a model, a blended punch).
+    /// it. Art that cannot be baked (a model, a blended punch) leaves the
+    /// frame without its HD art.
     fn update(
         &mut self,
         band: &Framebuffer,
         top: u32,
         target: (u32, u32),
-    ) -> Option<(&Image, Option<ImageGeneration>)> {
+    ) -> (&Image, Option<ImageGeneration>) {
         let (width, height) = (WIDTH as u32, HEIGHT as u32);
         let top = (top as usize).min(height as usize);
         let stride = width as usize * 4;
@@ -1819,15 +1821,20 @@ impl DeathBackdrop {
         self.frame.height = height;
         self.frame.rgba.clear();
         self.frame.rgba.resize(stride * height as usize, 0);
+        // The DIED screen never asks for a wider canvas: a wider aspect
+        // only shortens its band.
+        debug_assert_eq!(band.width, width, "the DIED screen draws in 4:3 columns");
         let rows = (band.height as usize).min(height as usize - top);
-        self.frame.rgba[top * stride..(top + rows) * stride]
-            .copy_from_slice(&band.rgba[..rows * stride]);
+        let Some(source) = band.rgba.get(..rows * stride) else {
+            return (&self.frame, None);
+        };
+        self.frame.rgba[top * stride..(top + rows) * stride].copy_from_slice(source);
         let Some(overlay) = band
             .hd
             .as_deref()
             .filter(|overlay| !overlay.quads.is_empty())
         else {
-            return Some((&self.frame, None));
+            return (&self.frame, None);
         };
         let (target_w, target_h) = target;
         let out_h = target_h.clamp(1, DEATH_BACKDROP_MAX_HEIGHT);
@@ -1846,13 +1853,18 @@ impl DeathBackdrop {
                 && self.baked.rgba == self.frame.rgba
         });
         if !current {
-            self.hd = Some((overlay.flatten(&self.frame, out)?, ImageGeneration::next()));
+            let Some(flat) = overlay.flatten(&self.frame, out) else {
+                self.hd = None;
+                return (&self.frame, None);
+            };
+            self.hd = Some((flat, ImageGeneration::next()));
             self.quads.clone_from(&overlay.quads);
             self.baked.clone_from(&self.frame);
         }
-        self.hd
-            .as_ref()
-            .map(|(hd, generation)| (hd, Some(*generation)))
+        match &self.hd {
+            Some((hd, generation)) => (hd, Some(*generation)),
+            None => (&self.frame, None),
+        }
     }
 }
 
@@ -2017,6 +2029,9 @@ struct GameSession {
     /// drawn yet: the next frame draws the room once, through the same
     /// renderer as every other frame, and the menu then keeps it frozen.
     freeze_room_frame: bool,
+    /// Whether the GPU backend draws this session ([`GameSession::render_layers`]);
+    /// [`GameSession::render`], the software frame, is refused while it does.
+    gpu_backend: bool,
     /// The DIED screen's art under the corpse, the background of the GPU
     /// scene the corpse is recorded in (see
     /// [`GameSession::render_death_screen`]).
@@ -2554,6 +2569,7 @@ impl GameSession {
             view_prev: video::View::default(),
             gpu_scene_visible: false,
             freeze_room_frame: false,
+            gpu_backend: false,
             death_backdrop: DeathBackdrop::default(),
             layered: false,
             gpu_room: None,
@@ -5572,9 +5588,16 @@ impl GameSession {
     /// HD skin the pack carries: whatever the script drew before it becomes
     /// the scene's background and the overlay is left as the hole the scene
     /// shows through, so the overlays drawn after it land on top as they do
-    /// in software. The white pass leaves the same hole. Returns whether the
-    /// frame shows a GPU scene.
-    fn render_death_screen(&mut self, pack: &Pack, pass: ScenePass<'_>) -> bool {
+    /// in software. The white pass leaves the same hole where the black pass
+    /// (`scene_shown`) recorded one. The GPU passes never reach the software
+    /// rasterizer: a recording failure is an error. Returns whether the frame
+    /// shows a GPU scene.
+    fn render_death_screen(
+        &mut self,
+        pack: &Pack,
+        pass: ScenePass<'_>,
+        scene_shown: bool,
+    ) -> Result<bool> {
         let Self {
             death_screen,
             save_dir,
@@ -5588,7 +5611,7 @@ impl GameSession {
             ..
         } = self;
         let Some(screen) = death_screen.as_mut() else {
-            return false;
+            return Ok(false);
         };
         let cx = UiContext {
             authentic: game.player_options.authentic,
@@ -5604,11 +5627,13 @@ impl GameSession {
         // [`Framebuffer::with_view`]), whose row 0 is the frame's `top`.
         let top = framebuffer.band_top();
         let white = matches!(pass, ScenePass::White);
+        let software = matches!(pass, ScenePass::Software);
         let mut gpu = match pass {
             ScenePass::Record(gpu) => Some(gpu),
             _ => None,
         };
-        let mut scene_shown = false;
+        let mut recorded = false;
+        let mut failure = None;
         let mut draw_actor = |name: &str, camera: &Camera, framebuffer: &mut Framebuffer| {
             if name != "player" {
                 return false;
@@ -5616,6 +5641,9 @@ impl GameSession {
             // The black pass recorded the corpse: this pass only leaves the
             // same hole.
             if white {
+                if !scene_shown {
+                    return false;
+                }
                 framebuffer.fill_rect(
                     [0, 0, framebuffer.width as i32, framebuffer.height as i32],
                     [255, 255, 255, 255],
@@ -5638,71 +5666,78 @@ impl GameSession {
             let mut joints = crate::anim::joint_matrices(&assets.emd.skeleton, &keyframe, &entity);
             apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
             let lighting = Lighting::from_room(&loaded.room);
-            if let Some(gpu) = gpu
-                .as_deref_mut()
-                .filter(|_| !scene_shown && framebuffer.width == WIDTH as u32)
-                && let Some((background, background_generation)) =
-                    death_backdrop.update(framebuffer, top, gpu.scene_size())
-            {
-                let mut camera = *camera;
-                camera.screen[1] += top as i32;
-                let meshes = [EntityMesh {
-                    mesh: &assets.emd.mesh,
-                    texture: &assets.emd.texture,
-                    joints: &joints,
-                    tint: [255; 3],
-                    blend_weight: None,
-                    hidden_joints: game.entities[0].joint_flags,
-                    light_pos: None,
-                    per_joint_light: false,
-                    complex_object: None,
-                    aliased_light: false,
-                    light_rotation: None,
-                    joint_colours: crate::render::NO_JOINT_COLOURS,
-                }];
-                let scene = render::GameplayScene {
-                    background: Some(background),
-                    background_generation,
-                    origin: [0, 0],
-                    colour: [255; 3],
-                    meshes: &meshes,
-                    shadows: &[],
-                    camera: &camera,
-                    lighting: &lighting,
-                    mask_layer: None,
-                    effect_layer: None,
-                    mirror_from: meshes.len(),
-                    mirror: None,
-                };
-                match gpu.record_scene(&scene, Some(pack)) {
-                    Ok(()) => {
-                        // The HD art drawn so far is in the background now.
-                        framebuffer.clear();
-                        if let Some(overlay) = framebuffer.hd.as_mut() {
-                            overlay.drop_quads();
-                        }
-                        scene_shown = true;
-                        return true;
-                    }
-                    Err(err) => warn_gpu_scene_failed(&err),
-                }
+            if software {
+                framebuffer.draw_model_hidden(
+                    &assets.emd.mesh,
+                    &assets.emd.texture,
+                    &joints,
+                    camera,
+                    &lighting,
+                    game.entities[0].joint_flags,
+                );
+                return true;
             }
-            framebuffer.draw_model_hidden(
-                &assets.emd.mesh,
-                &assets.emd.texture,
-                &joints,
-                camera,
-                &lighting,
-                game.entities[0].joint_flags,
-            );
+            // The frame's one GPU scene is the corpse; a script drawing it
+            // again, or after a failure, draws nothing more.
+            let Some(gpu) = gpu
+                .as_deref_mut()
+                .filter(|_| !recorded && failure.is_none())
+            else {
+                return false;
+            };
+            let (background, background_generation) =
+                death_backdrop.update(framebuffer, top, gpu.scene_size());
+            let mut camera = *camera;
+            camera.screen[1] += top as i32;
+            let meshes = [EntityMesh {
+                mesh: &assets.emd.mesh,
+                texture: &assets.emd.texture,
+                joints: &joints,
+                tint: [255; 3],
+                blend_weight: None,
+                hidden_joints: game.entities[0].joint_flags,
+                light_pos: None,
+                per_joint_light: false,
+                complex_object: None,
+                aliased_light: false,
+                light_rotation: None,
+                joint_colours: crate::render::NO_JOINT_COLOURS,
+            }];
+            let scene = render::GameplayScene {
+                background: Some(background),
+                background_generation,
+                origin: [0, 0],
+                colour: [255; 3],
+                meshes: &meshes,
+                shadows: &[],
+                camera: &camera,
+                lighting: &lighting,
+                mask_layer: None,
+                effect_layer: None,
+                mirror_from: meshes.len(),
+                mirror: None,
+            };
+            if let Err(err) = gpu.record_scene(&scene, Some(pack)) {
+                failure = Some(err);
+                return false;
+            }
+            // The HD art drawn so far is in the background now.
+            framebuffer.clear();
+            if let Some(overlay) = framebuffer.hd.as_mut() {
+                overlay.drop_quads();
+            }
+            recorded = true;
             true
         };
         screen.draw_with_actors(&cx, framebuffer, Some(&mut draw_actor));
-        let scene_shown = scene_shown || white;
+        if let Some(err) = failure {
+            return Err(err);
+        }
+        let shown = if white { scene_shown } else { recorded };
         if let Some((color, alpha)) = screen.overlay() {
             framebuffer.fade_to_color(color, alpha);
         }
-        scene_shown
+        Ok(shown)
     }
 
     /// Request the loading narration `id` (a global message) and hold the room
@@ -5877,11 +5912,39 @@ impl GameSession {
     /// menu and then the message window drawn on top. The message is painted
     /// after the scene (and outside the transition path) so it is never
     /// covered by the menu and never dimmed by a fade or door overlay.
+    ///
+    /// This is the software backend's frame. A session that the GPU backend
+    /// draws ([`GameSession::render_layers`]) never takes it: the frame
+    /// would silently switch renderers. [`App::draw`], the software
+    /// backend's entry, hands the session back to software first.
     fn render(&mut self, pack: &Pack) {
+        if self.gpu_backend {
+            debug_assert!(false, "a software frame drawn under the GPU backend");
+            static WARNED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !WARNED.swap(true, Ordering::Relaxed) {
+                eprintln!("warning: a software frame was asked for under the GPU backend");
+            }
+            return;
+        }
         self.framebuffer.hd = None;
-        self.render_pass(pack, ScenePass::Software);
+        self.render_pass(pack, ScenePass::Software)
+            .expect("the software pass cannot fail");
         self.draw_ui_layer();
         self.freeze_room_frame = false;
+    }
+
+    /// Hand the session to the software backend: the next frames are drawn
+    /// by [`GameSession::render`].
+    fn use_software(&mut self) {
+        // The GPU frames left the framebuffer without the room: a menu open
+        // over it draws the frozen room once more, now in software.
+        if self.gpu_backend && self.menu.is_some() {
+            self.freeze_room_frame = true;
+        }
+        self.gpu_backend = false;
+        self.gpu_scene_visible = false;
+        self.layered = false;
     }
 
     /// Draw the F1 debug menu into [`GameSession::ui_layer`] at a wider
@@ -5933,12 +5996,26 @@ impl GameSession {
     /// 2D art the pack replaces in HD, and the examine viewer's model, are
     /// drawn on the GPU too ([`crate::htexture::Overlay`]); a frame with any
     /// is layered even when it shows no scene.
-    fn render_layers(&mut self, pack: &Pack, gpu: &mut GpuRenderer) {
+    ///
+    /// Nothing here reaches the software rasterizer: a scene the GPU fails to
+    /// record is an error, and the caller switches the whole session to the
+    /// software backend ([`GameSession::use_software`]) and redraws the frame
+    /// there, rather than drawing one frame in software.
+    fn render_layers(&mut self, pack: &Pack, gpu: &mut GpuRenderer) -> Result<()> {
+        self.gpu_backend = true;
         self.framebuffer.capture_hd(0);
         // The pause-menu fade is consumed as it draws; the white pass draws
-        // the same one.
+        // the same one, and a frame that fails is redrawn with it.
         let menu_fade = self.menu_fade_draw;
-        self.render_pass(pack, ScenePass::Record(gpu));
+        let failed = |session: &mut Self, err| {
+            session.menu_fade_draw = menu_fade;
+            session.gpu_scene_visible = false;
+            session.layered = false;
+            Err(err)
+        };
+        if let Err(err) = self.render_pass(pack, ScenePass::Record(gpu)) {
+            return failed(self, err);
+        }
         self.draw_ui_layer();
         if let Some(overlay) = self.framebuffer.hd.as_mut() {
             overlay.scene = self.gpu_scene_visible;
@@ -5949,11 +6026,15 @@ impl GameSession {
             let mut white = self.framebuffer_white.take().unwrap_or_default();
             std::mem::swap(&mut self.framebuffer, &mut white);
             self.framebuffer.capture_hd(255);
-            self.render_pass(pack, ScenePass::White);
+            let drawn = self.render_pass(pack, ScenePass::White);
             std::mem::swap(&mut self.framebuffer, &mut white);
             self.framebuffer_white = Some(white);
+            if let Err(err) = drawn {
+                return failed(self, err);
+            }
         }
         self.freeze_room_frame = false;
+        Ok(())
     }
 
     /// The frame drawn over a white scene, when the last
@@ -5962,7 +6043,7 @@ impl GameSession {
         self.framebuffer_white.as_ref().filter(|_| self.layered)
     }
 
-    fn render_pass(&mut self, pack: &Pack, pass: ScenePass<'_>) {
+    fn render_pass(&mut self, pack: &Pack, pass: ScenePass<'_>) -> Result<()> {
         // The white pass redraws over the black pass's GPU scene, if it showed.
         let scene_shown = self.gpu_scene_visible;
         // A wider aspect's canvas replaces the 320x240 frame while a screen
@@ -6018,7 +6099,7 @@ impl GameSession {
                 ],
                 [0, 0, 0, 255],
             );
-            return;
+            return Ok(());
         }
         // The screens below replace the whole frame, scene included.
         if self.boot_message.is_some()
@@ -6050,31 +6131,23 @@ impl GameSession {
                 } = self;
                 framebuffer.with_screen(|screen| game.message.draw(screen, font, text));
             }
-            return;
+            return Ok(());
         }
         if let Some(movie) = &self.movie {
             let rgba = movie.frame_rgba();
             self.framebuffer.rgba.copy_from_slice(rgba);
-            return;
+            return Ok(());
         }
         if let Some(transition) = &self.transition {
-            let pass = match pass {
-                ScenePass::White if !scene_shown => ScenePass::Software,
-                pass => pass,
-            };
             self.gpu_scene_visible =
-                render_transition_on(&mut self.framebuffer, pass, pack, transition);
-            return;
+                render_transition_on(&mut self.framebuffer, pass, scene_shown, pack, transition)?;
+            return Ok(());
         }
         // The DIED screen owns the frame while it is up: the static backdrop,
         // the spinning corpse, the wavy strip and the screen's own fades.
         if self.death_screen.is_some() {
-            let pass = match pass {
-                ScenePass::White if !scene_shown => ScenePass::Software,
-                pass => pass,
-            };
-            self.gpu_scene_visible = self.render_death_screen(pack, pass);
-            return;
+            self.gpu_scene_visible = self.render_death_screen(pack, pass, scene_shown)?;
+            return Ok(());
         }
         // While the menu is up the room is frozen: keep the frame it was
         // opened over instead of re-rendering the scene, then draw the menu
@@ -6097,6 +6170,9 @@ impl GameSession {
             self.gpu_scene_visible = false;
         } else if self.menu.is_none() || (self.freeze_room_frame && !fade_hides_room) {
             match pass {
+                // The black pass showed no scene (the room has no camera
+                // cut): nothing lies under the overlays.
+                ScenePass::White if !scene_shown => self.framebuffer.clear(),
                 // The scene was recorded by the black pass; this pass only
                 // redraws what lies over it.
                 ScenePass::White => {
@@ -6133,7 +6209,7 @@ impl GameSession {
                         &mut self.shadows,
                         &mut self.effect_pages,
                         &mut self.tween,
-                    );
+                    )?;
                 }
             }
             // The cutscene letterbox bars sit on the scene after the
@@ -6181,7 +6257,7 @@ impl GameSession {
                 };
                 screen.draw(&cx, framebuffer);
             }
-            return;
+            return Ok(());
         }
         // The menu is hidden while the opening fade-out darkens the frozen
         // frame and while the closing fade runs; it is revealed for the
@@ -6469,6 +6545,7 @@ impl GameSession {
                 screen.draw(&cx, framebuffer);
             }
         }
+        Ok(())
     }
 
     /// The canvas width a wider aspect gives the frame while a visible
@@ -8274,6 +8351,9 @@ impl App {
                 framebuffer.fade_overlay(screen.overlay());
             }
             Mode::Play(session) => {
+                // This is the software backend's frame, whichever backend
+                // drew the session before.
+                session.use_software();
                 session.render(pack);
                 framebuffer.copy_from(session.frame());
             }
@@ -8285,16 +8365,19 @@ impl App {
 
     /// [`App::draw`] for the GPU backend: a game session renders its two
     /// overlay layers over the GPU scene (see [`GameSession::render_layers`]);
-    /// every other screen draws as usual.
-    fn draw_layers(&mut self, gpu: &mut GpuRenderer) {
+    /// every other screen draws as usual. A scene the GPU fails to record is
+    /// an error: the caller drops the GPU backend and draws with
+    /// [`App::draw`] instead.
+    fn draw_layers(&mut self, gpu: &mut GpuRenderer) -> Result<()> {
         if let Mode::Play(session) = &mut self.mode {
-            session.render_layers(&self.pack, gpu);
+            session.render_layers(&self.pack, gpu)?;
             self.framebuffer.copy_from(session.frame());
         } else {
             // Gameplay has ended (or yielded to a film): its uploads go.
             gpu.release_residency();
             self.draw_app_layers();
         }
+        Ok(())
     }
 
     /// Draw an app screen's frame, and draw it again over white when it
@@ -9141,8 +9224,17 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             menu.draw(width, height);
         }
         hud.draw(app, display, &clock, &input);
-        if let Some(gpu) = display.gpu() {
-            app.draw_layers(gpu);
+        // A frame the GPU fails to draw switches the whole run to the
+        // software backend, which then draws it; no frame mixes the two.
+        let gpu_drawn = match display.gpu().map(|gpu| app.draw_layers(gpu)) {
+            Some(Ok(())) => true,
+            Some(Err(err)) => {
+                display.fall_back_to_software(&err)?;
+                false
+            }
+            None => false,
+        };
+        if gpu_drawn {
             clock.frame_drawn(draw);
             let native = hud.layer().or(app.native_layer());
             #[cfg(feature = "hd")]
@@ -10082,18 +10174,29 @@ fn transition_frame(session: &TransitionMode) -> Option<(&door::Dor, door::vm::F
 
 /// [`render_transition`] for one of [`GameSession::render_pass`]'s passes:
 /// the GPU draws the door so its page takes the pack's HD replacement, and
-/// the fade overlays it in both passes. Returns whether the GPU scene shows.
+/// the fade overlays it in both passes. The GPU passes never reach the
+/// software rasterizer: a recording failure is an error. `scene_shown` is
+/// whether the black pass showed a scene, for the white pass. Returns
+/// whether the GPU scene shows.
 fn render_transition_on(
     framebuffer: &mut Framebuffer,
     pass: ScenePass<'_>,
+    scene_shown: bool,
     pack: &Pack,
     session: &TransitionMode,
-) -> bool {
+) -> Result<bool> {
     let gpu = match pass {
-        ScenePass::Software => None,
-        ScenePass::Record(gpu) => Some(gpu),
+        ScenePass::Software => {
+            render_transition(framebuffer, session);
+            return Ok(false);
+        }
+        ScenePass::Record(gpu) => gpu,
         ScenePass::White => {
             framebuffer.clear();
+            // Without a scene the black pass drew only black.
+            if !scene_shown {
+                return Ok(false);
+            }
             framebuffer.fill_rect(
                 [0, 0, framebuffer.width as i32, framebuffer.height as i32],
                 [255, 255, 255, 255],
@@ -10101,27 +10204,18 @@ fn render_transition_on(
             if let Some((_, frame)) = transition_frame(session) {
                 render::draw_fade_overlay(framebuffer, &frame.fade);
             }
-            return true;
+            return Ok(true);
         }
     };
-    let (Some(gpu), Some((dor, frame))) = (gpu, transition_frame(session)) else {
-        render_transition(framebuffer, session);
-        return false;
+    framebuffer.clear();
+    let Some((dor, frame)) = transition_frame(session) else {
+        return Ok(false);
     };
     let door = render::DoorScene::new(&frame);
     let meshes = door.meshes(dor);
-    match gpu.record_scene(&door.scene(&meshes), Some(pack)) {
-        Ok(()) => {
-            framebuffer.clear();
-            render::draw_fade_overlay(framebuffer, &frame.fade);
-            true
-        }
-        Err(err) => {
-            warn_gpu_scene_failed(&err);
-            render::draw_door_scene(framebuffer, dor, &frame);
-            false
-        }
-    }
+    gpu.record_scene(&door.scene(&meshes), Some(pack))?;
+    render::draw_fade_overlay(framebuffer, &frame.fade);
+    Ok(true)
 }
 
 /// Tear the transition down: swap in the destination room and place the
@@ -14057,16 +14151,18 @@ fn render_frame(
         shadows,
         effect_cache,
         &mut Tween::default(),
-    );
+    )
+    .expect("the software scene cannot fail");
 }
 
-/// [`render_frame`], drawing the scene with `gpu` when given.
+/// [`render_frame`], recording the scene on `gpu` when given.
 ///
 /// The GPU path leaves the framebuffer black with only the special-light
 /// overlay on it (the session composites it over the GPU scene) and returns
-/// `true`. It returns `false` when the frame has no GPU scene: there is no
-/// camera cut, or recording failed and the scene was drawn in software
-/// instead.
+/// `true`; it never reaches the software rasterizer, so a recording failure
+/// is an error for the caller (see [`GameSession::render_layers`]). It
+/// returns `false` when the frame has no scene: there is no camera cut, or
+/// `gpu` is `None` and the software rasterizer drew it.
 #[allow(clippy::too_many_arguments)]
 fn render_frame_on(
     framebuffer: &mut Framebuffer,
@@ -14082,10 +14178,10 @@ fn render_frame_on(
     shadows: &mut ShadowCache,
     effect_cache: &mut EffectPageCache,
     tween: &mut Tween,
-) -> bool {
+) -> Result<bool> {
     let Some(cut) = room.cuts.get(room.current_cut) else {
         framebuffer.clear();
-        return false;
+        return Ok(false);
     };
     // Every moving thing below is recorded exactly and drawn between the
     // previous tick and this one (a no-op unless the render rate tweens).
@@ -14928,32 +15024,18 @@ fn render_frame_on(
         mirror: mirror.as_ref(),
     };
     let on_gpu = match gpu {
-        Some(gpu) => match gpu.record_scene(&scene, Some(pack)) {
-            Ok(()) => {
-                framebuffer.clear();
-                true
-            }
-            Err(err) => {
-                warn_gpu_scene_failed(&err);
-                scene.draw(framebuffer);
-                false
-            }
-        },
+        Some(gpu) => {
+            gpu.record_scene(&scene, Some(pack))?;
+            framebuffer.clear();
+            true
+        }
         None => {
             scene.draw(framebuffer);
             false
         }
     };
     draw_special_light(framebuffer, game, id, room.current_cut);
-    on_gpu
-}
-
-/// Report a failed GPU scene once per run; the frame falls back to software.
-fn warn_gpu_scene_failed(err: &anyhow::Error) {
-    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if !WARNED.swap(true, Ordering::Relaxed) {
-        eprintln!("warning: GPU scene failed ({err:#}); drawing it in software");
-    }
+    Ok(on_gpu)
 }
 
 /// The special-room-light overlay (`0x1C`): a full-screen saturated tint
@@ -15488,7 +15570,7 @@ mod tests {
         let mut backdrop = DeathBackdrop::default();
         let mut band = Framebuffer::new();
         // No captured art: the 320x240 frame, which the GPU fingerprints.
-        let (frame, generation) = backdrop.update(&band, 0, (640, 480)).unwrap();
+        let (frame, generation) = backdrop.update(&band, 0, (640, 480));
         assert_eq!((frame.width, frame.height, generation), (320, 240, None));
 
         band.capture_hd(0);
@@ -15510,7 +15592,7 @@ mod tests {
         });
         overlay.cover(0, 0);
         let mut bake = |band: &Framebuffer, target| {
-            let (hd, generation) = backdrop.update(band, 0, target).unwrap();
+            let (hd, generation) = backdrop.update(band, 0, target);
             ([hd.width, hd.height], generation.expect("a bake is tagged"))
         };
         let (size, first) = bake(&band, (640, 480));
@@ -18316,21 +18398,24 @@ mod tests {
                 &mut session.effect_pages,
             );
             let mut overlay = Framebuffer::new();
-            assert!(render_frame_on(
-                &mut overlay,
-                Some(&mut gpu),
-                &pack,
-                session.loaded.id,
-                &session.loaded.room,
-                &session.player,
-                &mut session.game,
-                session.loaded.player_assets.as_ref(),
-                &mut session.npc_models,
-                &mut session.masks,
-                &mut session.shadows,
-                &mut session.effect_pages,
-                &mut Tween::default(),
-            ));
+            assert!(
+                render_frame_on(
+                    &mut overlay,
+                    Some(&mut gpu),
+                    &pack,
+                    session.loaded.id,
+                    &session.loaded.room,
+                    &session.player,
+                    &mut session.game,
+                    session.loaded.player_assets.as_ref(),
+                    &mut session.npc_models,
+                    &mut session.masks,
+                    &mut session.shadows,
+                    &mut session.effect_pages,
+                    &mut Tween::default(),
+                )
+                .unwrap()
+            );
             let hardware = gpu.read_scene().unwrap();
             if let Ok(dir) = std::env::var("ARKLAY_GPU_TEST_DUMP") {
                 for (name, rgba, width, height) in [
@@ -18406,16 +18491,136 @@ mod tests {
                 .tick(&pack, UiInput::default(), player::Input::default(), false)
                 .unwrap();
         }
-        session.render_layers(&pack, &mut gpu);
+        session.render_layers(&pack, &mut gpu).unwrap();
         assert!(session.gpu_scene_visible, "the room is the GPU scene");
         session.begin_menu_open(&pack);
         assert!(session.menu.is_some(), "the menu opens");
-        session.render_layers(&pack, &mut gpu);
+        session.render_layers(&pack, &mut gpu).unwrap();
         assert!(
             session.gpu_scene_visible,
             "the frame the menu opens on keeps the GPU scene"
         );
         assert!(session.white_frame().is_some(), "the overlay is layered");
+    }
+
+    /// Room 106 after a minute of idle ticks with the pause menu opening
+    /// over it, and the frame a software-only session draws for it.
+    fn paused_room_and_its_software_frame(
+        pack: &Pack,
+        save_dir: &Path,
+    ) -> (Box<GameSession>, Vec<u8>) {
+        let session = || {
+            let mut session =
+                GameSession::from_room(pack, RoomId::parse("106").unwrap(), save_dir).unwrap();
+            for _ in 0..60 {
+                session
+                    .tick(pack, UiInput::default(), player::Input::default(), false)
+                    .unwrap();
+            }
+            session
+        };
+        let mut software = session();
+        software.begin_menu_open(pack);
+        software.render(pack);
+        (session(), software.framebuffer.rgba.clone())
+    }
+
+    /// A scene the GPU fails to record is an error, not a frame drawn in
+    /// software: the session hands itself to the software backend, which
+    /// draws the frame a software-only session would (the room under the
+    /// menu, not a frozen black frame). Needs `ARKLAY_RE1_PACK` and a
+    /// SPIR-V capable GPU; skips without a GPU.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn gpu_scene_failure_switches_the_session_to_software() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let Ok(_sdl) = SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let save_dir = TempDir::new();
+        let (mut session, software) = paused_room_and_its_software_frame(&pack, &save_dir.0);
+        session.render_layers(&pack, &mut gpu).unwrap();
+        assert!(session.gpu_scene_visible, "the room is the GPU scene");
+        // The pause menu opens over a room frame still to be drawn.
+        session.begin_menu_open(&pack);
+        gpu.fail_next_scene = true;
+        let err = session.render_layers(&pack, &mut gpu).unwrap_err();
+        assert!(format!("{err:#}").contains("simulated scene failure"));
+        assert!(!session.gpu_scene_visible);
+        assert!(session.white_frame().is_none(), "no layered frame is left");
+        assert!(
+            session.freeze_room_frame,
+            "the room frame is still to be drawn"
+        );
+        session.use_software();
+        session.render(&pack);
+        assert!(!session.freeze_room_frame);
+        assert!(
+            session.framebuffer.rgba == software,
+            "the software backend draws the frame a software session does"
+        );
+    }
+
+    /// A switch to the software backend after the GPU drew the frozen room
+    /// (a present failing while the menu is up) draws that room again in
+    /// software: the GPU frames left none in the framebuffer.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn a_later_switch_to_software_redraws_the_frozen_room() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let Ok(_sdl) = SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let save_dir = TempDir::new();
+        let (mut session, software) = paused_room_and_its_software_frame(&pack, &save_dir.0);
+        session.begin_menu_open(&pack);
+        session.render_layers(&pack, &mut gpu).unwrap();
+        session.render_layers(&pack, &mut gpu).unwrap();
+        assert!(!session.freeze_room_frame, "the room is frozen on the GPU");
+        session.use_software();
+        session.render(&pack);
+        assert!(
+            session.framebuffer.rgba == software,
+            "the software backend draws the frozen room under the menu"
+        );
+    }
+
+    /// A session the GPU backend draws refuses a software frame: one would
+    /// silently switch renderers for that frame.
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "a software frame drawn under the GPU backend")]
+    fn software_frame_is_refused_under_the_gpu_backend() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.render(&pack);
+        session.gpu_backend = true;
+        session.render(&pack);
     }
 
     /// The DIED screen's corpse is recorded as the GPU scene over the
@@ -18472,7 +18677,7 @@ mod tests {
         assert_eq!(screen_ticks, 120, "the DIED screen opens");
         session.render(&pack);
         let software = session.framebuffer.rgba.clone();
-        session.render_layers(&pack, &mut gpu);
+        session.render_layers(&pack, &mut gpu).unwrap();
         assert!(session.gpu_scene_visible, "the corpse is the GPU scene");
         let black = session.framebuffer.rgba.clone();
         let white = session.white_frame().expect("the white layer").rgba.clone();
