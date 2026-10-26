@@ -6768,10 +6768,7 @@ fn entry_door(doors: &[Option<game::Door>; game::ROOM_ACTION_SLOTS]) -> Option<g
 fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let rdt_bytes = &*pack.read(&id.rdt_entry())?;
     let room = rdt::parse(rdt_bytes, id)?;
-    let scripts = match pack.read(&id.scd_entry()) {
-        Ok(bytes) => scd::reader::parse(&bytes)?,
-        Err(_) => scd::reader::parse(rdt_bytes)?,
-    };
+    let (scripts, _) = room_scripts(pack, id, rdt_bytes)?;
     let mut game = game::GameState::new(id, &room);
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
@@ -12332,8 +12329,37 @@ fn select_effect_page(
 pub enum ScriptSource {
     /// The scripts embedded in the room's RDT.
     Rdt,
-    /// A standalone `scd/{id}.scd` override from a layered pack.
+    /// A standalone `scd/{id}.scd` container.
     Override,
+}
+
+/// Where room `id` takes its scripts from: a `scd/{id}.scd` container
+/// (`convert-game` packs the checked-in room scripts as these, and a mod can
+/// ship its own) unless the RDT comes from a later layer than it, so a mod
+/// that replaces an RDT keeps that RDT's scripts.
+pub fn script_source(pack: &Pack, id: RoomId) -> ScriptSource {
+    match (
+        pack.depth_of(&id.scd_entry()),
+        pack.depth_of(&id.rdt_entry()),
+    ) {
+        (Some(scd), rdt) if rdt.is_none_or(|rdt| scd >= rdt) => ScriptSource::Override,
+        _ => ScriptSource::Rdt,
+    }
+}
+
+/// Room `id`'s scripts, from where [`script_source`] says, given its RDT.
+pub fn room_scripts(
+    pack: &Pack,
+    id: RoomId,
+    rdt_bytes: &[u8],
+) -> Result<(scd::ir::Scripts, ScriptSource)> {
+    let source = script_source(pack, id);
+    let scripts = match source {
+        ScriptSource::Override => scd::reader::parse(&pack.read(&id.scd_entry())?)
+            .with_context(|| format!("invalid SCD override {}", id.scd_entry()))?,
+        ScriptSource::Rdt => scd::reader::parse(rdt_bytes).context("invalid room SCD scripts")?,
+    };
+    Ok((scripts, source))
 }
 
 /// Everything loaded for one room, so a transition can load the next room with
@@ -12349,8 +12375,7 @@ struct LoadedRoom {
 /// Load `id` from `pack`: RDT, camera backgrounds, SCD scripts and player
 /// assets.
 ///
-/// A layered pack's `scd/{id}.scd` standalone container overrides the RDT's
-/// embedded scripts; without one the RDT bytes are parsed exactly as before.
+/// The scripts come from [`room_scripts`].
 fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
     let rdt_bytes = &*pack.read(&id.rdt_entry())?;
     let mut room = rdt::parse(rdt_bytes, id)?;
@@ -12370,17 +12395,7 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
                 .with_context(|| format!("invalid {}", asset.path()))?,
         );
     }
-    let (scripts, script_source) = match pack.read(&id.scd_entry()) {
-        Ok(bytes) => (
-            scd::reader::parse(&bytes)
-                .with_context(|| format!("invalid SCD override {}", id.scd_entry()))?,
-            ScriptSource::Override,
-        ),
-        Err(_) => (
-            scd::reader::parse(rdt_bytes).context("invalid room SCD scripts")?,
-            ScriptSource::Rdt,
-        ),
-    };
+    let (scripts, script_source) = room_scripts(pack, id, rdt_bytes)?;
     let player_assets = load_player_assets(pack, id);
     Ok(LoadedRoom {
         id,
@@ -27841,6 +27856,47 @@ off_0010:
         .unwrap()
         .to_container()
         .unwrap()
+    }
+
+    #[test]
+    fn a_mod_rdt_keeps_its_scripts_over_a_lower_scd() {
+        use crate::manifest;
+
+        let dir = TempDir::new();
+        let id = RoomId::parse("1000").unwrap();
+        let write = |name: &str, kind: manifest::PackKind, entries: &[String]| {
+            let manifest = manifest::Manifest {
+                kind,
+                base: (kind == manifest::PackKind::Mod).then(|| "base".to_string()),
+                ..manifest::Manifest::base(name)
+            };
+            let mut writer = PackWriter::new();
+            writer
+                .add(manifest::ENTRY, manifest.render().into_bytes())
+                .unwrap();
+            for entry in entries {
+                writer.add(entry, vec![0]).unwrap();
+            }
+            let path = dir.0.join(format!("{name}.akpak"));
+            writer.write(&path).unwrap();
+            path
+        };
+        let (rdt, scd) = (id.rdt_entry(), id.scd_entry());
+        let base = write(
+            "base",
+            manifest::PackKind::Base,
+            &[rdt.clone(), scd.clone()],
+        );
+        for (layer, expected) in [
+            (vec![], ScriptSource::Override),
+            (vec![rdt.clone()], ScriptSource::Rdt),
+            (vec![rdt.clone(), scd.clone()], ScriptSource::Override),
+            (vec![scd.clone()], ScriptSource::Override),
+        ] {
+            let layer = write("layer", manifest::PackKind::Mod, &layer);
+            let pack = Pack::open_layered(&base, &[layer]).unwrap();
+            assert_eq!(script_source(&pack, id), expected);
+        }
     }
 
     #[test]

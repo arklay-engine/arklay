@@ -1323,6 +1323,17 @@ impl Pack {
         self.lookup.contains_key(&key).then_some(self)
     }
 
+    /// How deep in the layers the copy of `path` that wins sits: 0 for the
+    /// base, `n` for the `n`th mod applied, `None` without one.
+    pub fn depth_of(&self, path: &str) -> Option<usize> {
+        let key = path.to_ascii_lowercase();
+        (0..self.overlays.len())
+            .rev()
+            .find(|&index| self.overlays[index].lookup.contains_key(&key))
+            .map(|index| index + 1)
+            .or_else(|| self.lookup.contains_key(&key).then_some(0))
+    }
+
     /// Whether an entry with this path exists, ignoring ASCII case.
     pub fn contains(&self, path: &str) -> bool {
         self.winner(path).is_some()
@@ -2265,6 +2276,9 @@ mod tests {
         let layered = Pack::open_layered(&base, std::slice::from_ref(&layer)).unwrap();
         assert_eq!(&*layered.read("x.txt").unwrap(), b"layer");
         assert_eq!(layered.layer_of("x.txt"), Some(layer.as_path()));
+        assert_eq!(layered.depth_of("X.TXT"), Some(1));
+        assert_eq!(layered.depth_of("missing.txt"), None);
+        assert_eq!(Pack::open(&base).unwrap().depth_of("x.txt"), Some(0));
         assert!(layered.warnings().is_empty());
     }
 

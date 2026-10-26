@@ -16,7 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use arklay::bgm::BgmCache;
-use arklay::engine::{ScriptSource, simulate_room};
+use arklay::engine::simulate_room;
 use arklay::pack::{AssetClass, Pack};
 use arklay::player;
 use arklay::state::RoomId;
@@ -137,8 +137,11 @@ fn hd_pack_swaps_a_background_a_ui_page_and_a_bgm_track() {
     // checkerboard covers the middle.
     let id = RoomId::parse("1000").unwrap();
     let run = simulate_room(&layered, id, 120, player::Input::default()).unwrap();
-    assert_eq!(run.script_source, ScriptSource::Rdt);
     let vanilla = simulate_room(&base, id, 120, player::Input::default()).unwrap();
+    assert_eq!(
+        run.script_source, vanilla.script_source,
+        "an HD layer leaves the room's scripts alone"
+    );
     assert_ne!(run.frame.rgba, vanilla.frame.rgba);
     let repeat = simulate_room(&layered, id, 120, player::Input::default()).unwrap();
     assert_eq!(

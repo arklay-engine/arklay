@@ -365,18 +365,9 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
                     );
                 }
             }
-            // The engine prefers a standalone `scd/{id}.scd` override and only
-            // falls back to the RDT's embedded scripts, so a corrupt embedded
-            // table is not a failure when the merged pack carries an override
-            // the reader accepts.
-            match pack.read(&id.scd_entry()) {
-                Ok(bytes) => {
-                    crate::scd::reader::parse(&bytes).context("invalid SCD override")?;
-                }
-                Err(_) => {
-                    crate::scd::reader::parse(data).context("invalid room SCD scripts")?;
-                }
-            }
+            // The scripts the engine runs: a corrupt embedded table is not a
+            // failure when the merged pack carries an override it prefers.
+            crate::engine::room_scripts(pack, id, data)?;
         }
         Format::Scd => {
             crate::scd::reader::parse(data)?;
