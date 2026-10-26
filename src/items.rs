@@ -312,19 +312,26 @@ pub const ITEM_GREEN_RED_HERB: u8 = 0x46;
 pub const ITEM_GREEN_GREEN_HERB: u8 = 0x47;
 /// The item id of the green and blue herb mix (`GB`).
 pub const ITEM_GREEN_BLUE_HERB: u8 = 0x48;
+/// The item id of the green, red and blue herb mix (`GRB`).
+pub const ITEM_GREEN_RED_BLUE_HERB: u8 = 0x49;
 /// The item id of the three green herbs mix (`GGG`).
 pub const ITEM_GREEN_GREEN_GREEN_HERB: u8 = 0x4A;
+/// The item id of the two green herbs and blue herb mix (`GGB`).
+pub const ITEM_GREEN_GREEN_BLUE_HERB: u8 = 0x4B;
 
 /// The heal items the menu takes at full health outside authentic mode, where
-/// the original refuses them: the first-aid spray and the `G`, `GR`, `GG`, `GB`
-/// and `GGG` herbs. At full health they heal nothing and are used up.
-pub const FULL_HEALTH_ITEMS: [u8; 6] = [
+/// the original refuses them. That is the first-aid spray and the `G`, `GR`,
+/// `GG`, `GB`, `GRB`, `GGG` and `GGB` herbs. At full health they heal nothing
+/// and are used up.
+pub const FULL_HEALTH_ITEMS: [u8; 8] = [
     ITEM_FIRST_AID_SPRAY,
     ITEM_GREEN_HERB,
     ITEM_GREEN_RED_HERB,
     ITEM_GREEN_GREEN_HERB,
     ITEM_GREEN_BLUE_HERB,
+    ITEM_GREEN_RED_BLUE_HERB,
     ITEM_GREEN_GREEN_GREEN_HERB,
+    ITEM_GREEN_GREEN_BLUE_HERB,
 ];
 
 /// Offset of the item-examine combo table inside [`ITEM_LOOKUP`].

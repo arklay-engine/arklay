@@ -15910,6 +15910,35 @@ mod tests {
                 cured: true
             }
         );
+
+        // The blue-herb mixes at full health are used up without curing the 0x20
+        // poison, which only the serum clears. With the 0x02 poison they cure it.
+        state.entities[0].health = 96;
+        state.set_health_status(0x20);
+        for item in [
+            items::ITEM_GREEN_BLUE_HERB,
+            items::ITEM_GREEN_RED_BLUE_HERB,
+            items::ITEM_GREEN_GREEN_BLUE_HERB,
+        ] {
+            assert_eq!(
+                state.use_item(item),
+                UseResult::Used {
+                    healed: false,
+                    cured: false
+                },
+                "item {item:#04x} poisoned with 0x20 at full health"
+            );
+            assert_eq!(state.health_status, 0x20);
+        }
+        state.set_health_status(0x02);
+        assert_eq!(
+            state.use_item(items::ITEM_GREEN_RED_BLUE_HERB),
+            UseResult::Used {
+                healed: false,
+                cured: true
+            }
+        );
+        assert_eq!(state.health_status, 0);
     }
 
     #[test]
@@ -15941,14 +15970,14 @@ mod tests {
     }
 
     #[test]
-    fn heal_items_outside_the_full_health_list_stay_refused() {
+    fn the_serum_and_red_herb_stay_refused_at_full_health() {
         let mut state = game();
         state.max_health = 96;
         state.entities[0].health = 96;
         state.set_health_status(0);
-        // The serum and red herb do not heal, and the green+red+blue and
-        // green+green+blue mixes heal but are not in the full-health list.
-        for item in [0x42, 0x43, 0x49, 0x4B] {
+        // Neither is in the full-health list, and with no poison set the serum
+        // has nothing to cure.
+        for item in [0x42, 0x43] {
             assert_eq!(
                 state.use_item(item),
                 UseResult::Unusable,
