@@ -1,0 +1,30 @@
+// Films, by `movie_on` id, named from their files.
+
+#define MOVIE_00_OJ 0x00
+#define MOVIE_01_PJ 0x01
+#define MOVIE_02_DMF 0x02
+#define MOVIE_03_DM3 0x03
+#define MOVIE_04_DM4 0x04
+#define MOVIE_05_DM1 0x05
+#define MOVIE_06_DM6 0x06
+#define MOVIE_07_DM7 0x07
+#define MOVIE_08_DM8 0x08
+#define MOVIE_09_DM2 0x09
+#define MOVIE_0B_DMB 0x0B
+#define MOVIE_0C_DMC 0x0C
+#define MOVIE_0D_DMD 0x0D
+#define MOVIE_0E_DME 0x0E
+#define MOVIE_0F_ED1 0x0F
+#define MOVIE_10_ED2 0x10
+#define MOVIE_11_ED3 0x11
+#define MOVIE_12_ED4 0x12
+#define MOVIE_13_ED5 0x13
+#define MOVIE_14_ED6 0x14
+#define MOVIE_15_ED7 0x15
+#define MOVIE_16_ED8 0x16
+#define MOVIE_17_CAPCOM 0x17
+#define MOVIE_18_STFC_B 0x18
+#define MOVIE_19_STFJ_B 0x19
+#define MOVIE_1A_STFZ_B 0x1A
+#define MOVIE_1B_STAF_B 0x1B
+#define MOVIE_1C_VLOGO 0x1C

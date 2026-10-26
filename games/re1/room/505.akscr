@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -17,26 +19,27 @@
 #define ENEMY_01 0x01
 #define ENEMY_02_ZOMBIE_NAKED 0x02
 #define ENEMY_03_ZOMBIE_NAKED 0x03
+#define FX_0A 0x0A
 #define MSG_IT_IS_TOO_DARK_TO_SEE 0x00
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 1600, 22700, 3800, 6200, 0, 9, 25, 96, 0, ROOM_503_STAIRS, 19100, 0, 16600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 20300, 21300, 2400, 2200, 10, 12, 13, 64, 0, ROOM_506_SMALL_LABORATORY, 15200, 0, 4300, 2712, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 15700, 4300, 2800, 1500, 9, 1, 13, 6, 173, ROOM_507_MORTUARY, 12100, 0, 2500, 3072, LOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 0, 16100, 2700, 3400, 9, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 19500, 0, 3500, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_04_DOOR, 22600, 2200, 2700, 2300, 7, 1, 12, 7, 157, ROOM_50C_FRONT_OF_ELEVATOR, 2500, 0, 17300, 0, IT_3C_KEY_LAB_POWER_ROOM, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 1600, 22700, 3800, 6200, 0, DOOR_SND_09_ST_MTL, DOOR_19_KAI04, 96, 0, ROOM_503_STAIRS, 19100, 0, 16600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 20300, 21300, 2400, 2200, 10, DOOR_SND_0C_DR_AIR, DOOR_0D_DOOR13, 64, 0, ROOM_506_SMALL_LABORATORY, 15200, 0, 4300, 2712, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 15700, 4300, 2800, 1500, 9, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, DOOR_LOCKED | F_LOCK_2D, ROOM_507_MORTUARY, 12100, 0, 2500, 3072, LOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 0, 16100, 2700, 3400, 9, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_508_DOUBLE_LOCK, 19500, 0, 3500, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_04_DOOR, 22600, 2200, 2700, 2300, 7, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, DOOR_LOCKED | F_LOCK_1D, ROOM_50C_FRONT_OF_ELEVATOR, 2500, 0, 17300, 0, IT_3C_KEY_LAB_POWER_ROOM, SAT_MANUAL | SAT_PLAYER);
 #if JILL
-    item_aot_set(AOT_05_ITEM, 10520, 1390, 1000, 1000, IT_2F_KEY_INK_RIBBON, 3, 0, 255, 12, 43, 0, 0, 98, 7, 0, 0, 201, 129, 1, 0);
+    item_aot_set(AOT_05_ITEM, 10520, 1390, 1000, 1000, IT_2F_KEY_INK_RIBBON, 3, 0, 255, 12, 43, 0, 0, 98, 7, 0, 0, F_ITEM_C9, 129, 1, 0);
 #endif
     aot_set(AOT_06_EVENT, 10600, 1000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_06, 0, 0, 0);
     if (ck(FG_LOCK, F_LOCK_1D, TRUE))
     {
-        effect(10, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
+        effect(FX_0A, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
     }
     else
     {
-        effect_tracked(10, 16, 0, 228, 87, 40, 241, 252, 8, 0, 0);
+        effect_tracked(FX_0A, 16, 0, 228, 87, 40, 241, 252, 8, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
     {
@@ -47,7 +50,7 @@ proc init
         }
         if (ck(FG_ENEMY, F_ENEMY_40, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, 65, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, ENEMY_00, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_41, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, ENEMY_00, 0, 0, 0);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
@@ -59,7 +62,7 @@ proc init
         }
         if (ck(FG_ENEMY, F_ENEMY_43, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, 68, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, ENEMY_01, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_44, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, ENEMY_01, 0, 0, 0);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
@@ -71,7 +74,7 @@ proc init
         }
         if (ck(FG_ENEMY, F_ENEMY_46, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, 71, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_47, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, 0, 0, 0);
         }
     }
 #if CHRIS
@@ -84,35 +87,35 @@ proc init
         }
         if (ck(FG_ENEMY, F_ENEMY_49, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, 74, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_4A, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
         }
     }
     if (ck(FG_COMMON, F_COMMON_5C, FALSE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
     {
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
         set(FG_COMMON, F_COMMON_5C, TRUE);
-        room_bgm_state_set(4, ROOM_500_UNDER_FOUNTAIN, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_501_HELIPORT_PASSAGE, BGM_CH2 | BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(4, ROOM_502_LADDER_ROOM, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_503_STAIRS, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_504_CONFERENCE_ROOM, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
+        room_bgm_state_set(4, ROOM_500_UNDER_FOUNTAIN, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_501_HELIPORT_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(4, ROOM_502_LADDER_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_503_STAIRS, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_504_CONFERENCE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
         room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_RELOAD | 1);
-        room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_507_MORTUARY, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_508_DOUBLE_LOCK, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_509_PRIVATE_ROOM_A, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_50A_PRIVATE_ROOM_B, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_50B_FRONT_OF_CELL, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_50C_FRONT_OF_ELEVATOR, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_50D_ESCAPE_ELEVATOR, BGM_CH2 | BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(4, ROOM_50E_SAVE_ROOM, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_510_MAZE_B, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_511_ENGINE_ROOM, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_512_CELL, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_513_TYRANT_ROOM, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
-        room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_CH2 | BGM_CH1 | BGM_CH0 | 2);
-        room_bgm_state_set(4, ROOM_515_B4_ELEVATOR, BGM_CH2 | BGM_CH1 | BGM_CH0);
+        room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_507_MORTUARY, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_508_DOUBLE_LOCK, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_509_PRIVATE_ROOM_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_50A_PRIVATE_ROOM_B, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_50B_FRONT_OF_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_50C_FRONT_OF_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_50D_ESCAPE_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(4, ROOM_50E_SAVE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_510_MAZE_B, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_511_ENGINE_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_513_TYRANT_ROOM, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+        room_bgm_state_set(4, ROOM_514_FRONT_OF_TYRANT, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 2);
+        room_bgm_state_set(4, ROOM_515_B4_ELEVATOR, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON);
         set(FG_SCENARIO, F_SCENARIO_2B, TRUE);
     }
 #else
@@ -125,14 +128,14 @@ proc init
         }
         if (ck(FG_ENEMY, F_ENEMY_49, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, 74, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_4A, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
         }
     }
 #endif
     if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
     {
-        enemy(EM_09_CHIMERA, 3, 164, 1, 2, 0, 0, 0, 0, 0, 13100, 0, 3070, ENEMY_00, 0, 0, 1);
-        enemy(EM_09_CHIMERA, 3, 165, 1, 2, 0, 0, 2072, 0, 0, 10250, 0, 18760, ENEMY_01, 0, 0, 1);
+        enemy(EM_09_CHIMERA, 3, F_ENEMY_A4, 1, 2, 0, 0, 0, 0, 0, 13100, 0, 3070, ENEMY_00, 0, 0, 1);
+        enemy(EM_09_CHIMERA, 3, F_ENEMY_A5, 1, 2, 0, 0, 2072, 0, 0, 10250, 0, 18760, ENEMY_01, 0, 0, 1);
     }
 }
 
@@ -144,7 +147,7 @@ proc main
         {
             set(FG_SCENARIO, F_SCENARIO_63, TRUE);
             effect_kill_a(0);
-            effect(10, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
+            effect(FX_0A, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
         }
     }
 }
@@ -164,11 +167,11 @@ event event_00
     set(FG_STATUS, F_STATUS_0F, TRUE);
     run
     {
-        snd_pan_vol_set(1, 112, 112);
-        snd_pan_vol_set(2, 112, 112);
-        bgm_play(0);
-        bgm_play(1);
-        bgm_play(2);
+        snd_pan_vol_set(BGM_SUB_1, 112, 112);
+        snd_pan_vol_set(BGM_SUB_2, 112, 112);
+        bgm_play(BGM_MAIN);
+        bgm_play(BGM_SUB_1);
+        bgm_play(BGM_SUB_2);
         message(1, 0);
     }
     sleep(30);
@@ -226,7 +229,7 @@ event event_00
     set(FG_STATUS, F_STATUS_0F, FALSE);
     run
     {
-        room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
+        room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
         set(FG_6, F_6_17, TRUE);
         set(FG_6, F_6_1D, TRUE);
     }
@@ -246,7 +249,7 @@ event on_aot_06
     act_reset();
     evt_nop();
     sleep(25);
-    message(MSG_IT_IS_TOO_DARK_TO_SEE, 65535); // "It's too dark to see anything..."
+    message(MSG_IT_IS_TOO_DARK_TO_SEE, MSG_PAUSE_8000 | MSG_PAUSE_4000 | MSG_PAUSE_2000 | MSG_PAUSE_1000 | MSG_PAUSE_0800 | MSG_PAUSE_0400 | MSG_PAUSE_DEMO | MSG_PAUSE_CONTROLS | MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dark to see anything..."
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

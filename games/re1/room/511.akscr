@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -13,14 +15,17 @@
 #define ENEMY_00_NPC_REBECCA 0x00
 #define ENEMY_00_NPC_WESKER 0x00
 #define ENEMY_01_CHIMERA 0x01
+#define FX_1F 0x1F
 #define F_ROOM_19 0x19
 #define MSG_A_POWER_CONNECTION_SWITCH 0x03
 #define MSG_THE_POWER_FOR_THE_ELEVATOR_IS 0x06
 #define MSG_THE_POWER_IS_NOT_SUPPLIED_TO 0x04
+#define SE_17_PANEL02 0x17
+#define SE_18_STEAM_A 0x18
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 11300, 15800, 3000, 2900, 12, 1, 11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 11300, 15800, 3000, 2900, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_MESSAGE, 17700, 8300, 2100, 1600, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
     aot_set(AOT_02_MESSAGE, 5800, 4400, 2100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 0, 0, 0, 0);
 #if CHRIS
@@ -28,18 +33,18 @@ proc init
     {
         aot_set(AOT_03_MESSAGE, 6000, 3600, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 69, 0, 0, 0);
         enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 3072, 0, 0, 6500, 0, 4100, ENEMY_00_NPC_REBECCA, 32, 1, 0);
-        evt_exec(0, 9, on_enter_3);
+        evt_exec(0, TASK_09, on_enter_3);
     }
 #else
     if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
     {
         aot_set(AOT_03_MESSAGE, 8500, 3226, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 71, 0, 0, 0);
         enemy(EM_24_NPC_WESKER, 2, 255, 1, 2, 0, 0, 2000, 0, 0, 9000, 0, 3726, ENEMY_00_NPC_WESKER, 0, 0, 0);
-        enemy(EM_09_CHIMERA, 3, 181, 1, 2, 0, 0, 2048, 0, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 3, F_ENEMY_B5, 1, 2, 0, 0, 2048, 0, 0, 10600, 0, 4000, ENEMY_01_CHIMERA, 0, 0, 0);
     }
 #endif
-    evt_exec(0, 9, on_enter);
-    evt_exec(0, 9, on_enter_2);
+    evt_exec(0, TASK_09, on_enter);
+    evt_exec(0, TASK_09, on_enter_2);
 }
 
 proc main
@@ -73,7 +78,7 @@ event on_aot_01_message
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_19, FALSE);
         set(FG_6, F_6_17, FALSE);
-        message(MSG_A_POWER_CONNECTION_SWITCH | MSG_FAST, 70); // "A power connection switch. The elevator power is off. Will you connect it? The power isn't supplied to the elevator."
+        message(MSG_A_POWER_CONNECTION_SWITCH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "A power connection switch. The elevator power is off. Will you connect it? The power isn't supplied to the elevator."
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -91,7 +96,7 @@ event on_aot_01_message
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_01_message_sub1);
+            evt_exec(0, TASK_09, on_aot_01_message_sub1);
             set(FG_SCENARIO, F_SCENARIO_2D, TRUE);
         }
     }
@@ -113,17 +118,17 @@ event on_aot_01_message_sub1
         set(FG_6, F_6_17, FALSE);
     }
     sleep(10);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_PANEL02, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(10);
     run
     {
         if (ck(FG_SCENARIO, F_SCENARIO_2E, TRUE))
         {
-            message(MSG_THE_POWER_FOR_THE_ELEVATOR_IS | MSG_FAST, 70); // "The power for the elevator is activated as the power supply and the circuit have been connected."
+            message(MSG_THE_POWER_FOR_THE_ELEVATOR_IS | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "The power for the elevator is activated as the power supply and the circuit have been connected."
         }
         else
         {
-            message(MSG_THE_POWER_IS_NOT_SUPPLIED_TO | MSG_FAST, 70); // "The power isn't supplied to the elevator."
+            message(MSG_THE_POWER_IS_NOT_SUPPLIED_TO | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "The power isn't supplied to the elevator."
         }
     }
     do
@@ -145,11 +150,11 @@ event on_enter
     sleep(119);
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 6600, 11600);
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 6600, 11600);
     }
     for (8)
     {
-        effect(31, 0, 0, 200, 25, 196, 240, 80, 45, 188, 7);
+        effect(FX_1F, 0, 0, 200, 25, 196, 240, 80, 45, 188, 7);
         sleep(3);
     }
     evt_nop();
@@ -162,11 +167,11 @@ event on_enter_2
     sleep(240);
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 13200, 5600);
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 13200, 5600);
     }
     for (8)
     {
-        effect(31, 0, 0, 144, 51, 60, 246, 224, 21, 2, 3);
+        effect(FX_1F, 0, 0, 144, 51, 60, 246, 224, 21, 2, 3);
         sleep(3);
     }
     evt_chain(3);
@@ -182,9 +187,9 @@ event event_04
     sleep(1);
     set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-    evt_fork(9, on_enter_3_sub3, 0);
+    evt_fork(TASK_09, on_enter_3_sub3, 0);
 #else
-    evt_fork(9, event_07, 0);
+    evt_fork(TASK_09, event_07, 0);
 #endif
     do
     {
@@ -196,9 +201,9 @@ event event_04
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-        evt_fork(9, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-        evt_fork(9, event_05, 0);
+        evt_fork(TASK_09, event_05, 0);
 #endif
         do
         {
@@ -212,9 +217,9 @@ event event_04
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-        evt_fork(9, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-        evt_fork(9, event_05, 0);
+        evt_fork(TASK_09, event_05, 0);
 #endif
         do
         {
@@ -228,9 +233,9 @@ event event_04
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-        evt_fork(9, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-        evt_fork(9, event_05, 0);
+        evt_fork(TASK_09, event_05, 0);
 #endif
         do
         {
@@ -244,9 +249,9 @@ event event_04
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-        evt_fork(9, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-        evt_fork(9, event_05, 0);
+        evt_fork(TASK_09, event_05, 0);
 #endif
         do
         {
@@ -259,9 +264,9 @@ event event_04
     sleep(30);
     set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-    evt_fork(9, on_enter_3_sub4, 0);
+    evt_fork(TASK_09, on_enter_3_sub4, 0);
 #else
-    evt_fork(9, event_08, 0);
+    evt_fork(TASK_09, event_08, 0);
 #endif
     do
     {
@@ -270,9 +275,9 @@ event event_04
     while (ck(FG_ROOM, F_ROOM_19, FALSE));
     set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-    evt_fork(9, on_enter_3_sub2, 0);
+    evt_fork(TASK_09, on_enter_3_sub2, 0);
 #else
-    evt_fork(9, event_06, 0);
+    evt_fork(TASK_09, event_06, 0);
 #endif
     do
     {
@@ -282,9 +287,9 @@ event event_04
     sleep(1);
     set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-    evt_fork(9, on_enter_3_sub3, 0);
+    evt_fork(TASK_09, on_enter_3_sub3, 0);
 #else
-    evt_fork(9, event_07, 0);
+    evt_fork(TASK_09, event_07, 0);
 #endif
     do
     {
@@ -296,9 +301,9 @@ event event_04
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-        evt_fork(9, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-        evt_fork(9, event_05, 0);
+        evt_fork(TASK_09, event_05, 0);
 #endif
         do
         {
@@ -312,9 +317,9 @@ event event_04
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-        evt_fork(9, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-        evt_fork(9, event_05, 0);
+        evt_fork(TASK_09, event_05, 0);
 #endif
         do
         {
@@ -326,9 +331,9 @@ event event_04
     sleep(10);
     set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-    evt_fork(9, on_enter_3_sub1, 0);
+    evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-    evt_fork(9, event_05, 0);
+    evt_fork(TASK_09, event_05, 0);
 #endif
     do
     {
@@ -340,9 +345,9 @@ event event_04
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-        evt_fork(9, on_enter_3_sub1, 0);
+        evt_fork(TASK_09, on_enter_3_sub1, 0);
 #else
-        evt_fork(9, event_05, 0);
+        evt_fork(TASK_09, event_05, 0);
 #endif
         do
         {
@@ -354,9 +359,9 @@ event event_04
     sleep(40);
     set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-    evt_fork(9, on_enter_3_sub5, 0);
+    evt_fork(TASK_09, on_enter_3_sub5, 0);
 #else
-    evt_fork(9, event_0A, 0);
+    evt_fork(TASK_09, event_0A, 0);
 #endif
     do
     {
@@ -365,9 +370,9 @@ event event_04
     while (ck(FG_ROOM, F_ROOM_19, FALSE));
     set(FG_ROOM, F_ROOM_19, FALSE);
 #if CHRIS
-    evt_fork(9, on_enter_3_sub6, 0);
+    evt_fork(TASK_09, on_enter_3_sub6, 0);
 #else
-    evt_fork(9, event_0C, 0);
+    evt_fork(TASK_09, event_0C, 0);
 #endif
     do
     {
@@ -384,7 +389,7 @@ event on_enter_3_sub1
 event event_05
 #endif
 {
-    se_play_3d(2, 23, 0, SND_AT_POINT, 0, 6500, 4100);
+    se_play_3d(SND_BANK_ROOM, SE_17_PANEL02, 0, SND_AT_POINT, 0, 6500, 4100);
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
 #else
@@ -459,10 +464,10 @@ event event_08
 #endif
 {
 #if CHRIS
-    evt_fork(9, on_enter_3_sub4_sub1, 0);
+    evt_fork(TASK_09, on_enter_3_sub4_sub1, 0);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
 #else
-    evt_fork(9, event_09, 0);
+    evt_fork(TASK_09, event_09, 0);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
 #endif
     evt_actor_begin();
@@ -503,10 +508,10 @@ event event_0A
 #endif
 {
 #if CHRIS
-    evt_fork(9, on_enter_3_sub5_sub1, 0);
+    evt_fork(TASK_09, on_enter_3_sub5_sub1, 0);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
 #else
-    evt_fork(9, event_0B, 0);
+    evt_fork(TASK_09, event_0B, 0);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
 #endif
     evt_actor_begin();

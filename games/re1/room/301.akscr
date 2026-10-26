@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -14,6 +16,14 @@
 #define AOT_05_USEITEM 0x05
 #define AOT_06_MESSAGE 0x06
 #define AOT_07_EVENT 0x07
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_02 0x02
+#define CAM_03 0x03
+#define CAM_04 0x04
+#define CAM_05 0x05
+#define CAM_06 0x06
+#define CAM_07 0x07
 #define ENEMY_00_ADDER 0x00
 #define ENEMY_01_ADDER 0x01
 #define ENEMY_02_ADDER 0x02
@@ -34,11 +44,24 @@
 #define F_ROOM_21 0x21
 #define MSG_THERE_IS_A_SQUARE_HOLE 0x00
 #define MSG_THE_WATER_IS_RUNNING_DOWN_THE 0x02
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define OBJ_02 0x02
+#define OBJ_03 0x03
+#define OBJ_04 0x04
+#define OBJ_05 0x05
+#define OBJ_06 0x06
+#define OBJ_07 0x07
+#define OBJ_08 0x08
+#define SE_18_CRANK 0x18
+#define SE_19_WATERGT 0x19
+#define SE_21_ELV1 0x21
+#define SE_22_ELV2 0x22
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 20800, 1000, 3300, 2400, 1, 8, 15, 64, 0, ROOM_300_FIRST_HOUSE_OUT, 23800, 0, 27500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 1600, 10300, 3100, 1600, 1, 6, 21, 64, 0, ROOM_302_FALLS, 22800, 0, 26700, 1024, UNLOCKED, SAT_MANUAL | SAT_UNDER);
+    door_aot_set(AOT_00_DOOR, 20800, 1000, 3300, 2400, 1, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_300_FIRST_HOUSE_OUT, 23800, 0, 27500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 1600, 10300, 3100, 1600, 1, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_302_FALLS, 22800, 0, 26700, 1024, UNLOCKED, SAT_MANUAL | SAT_UNDER);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_300_FIRST_HOUSE_OUT))
     {
         aot_set(AOT_02_C, 21500, 10323, 1500, 1800, SCE_C, SAT_MANUAL | SAT_PLAYER, 1, 0, 234, 86, 215, 43);
@@ -60,27 +83,27 @@ proc init
     {
         aot_set(AOT_07_EVENT, 4000, 12000, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
     }
-    obj(0, 15, 255, 20103, 2303, 13603, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(1, 15, 255, 24180, 870, 17544, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(2, 15, 255, 6350, 3600, 18174, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(3, 15, 255, 10502, 1812, 23202, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(4, 15, 255, 1, 7210, 20411, -2050, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(5, 15, 255, 13080, 3534, 19960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(6, 15, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 15, 255, 20103, 2303, 13603, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01, 15, 255, 24180, 870, 17544, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_02, 15, 255, 6350, 3600, 18174, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_03, 15, 255, 10502, 1812, 23202, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_04, 15, 255, 1, 7210, 20411, -2050, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_05, 15, 255, 13080, 3534, 19960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_06, 15, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_30, FALSE))
     {
-        obj(7, 191, 255, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_07, 191, 255, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     else
     {
-        obj(7, 0, 255, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        obj(8, 37, 255, 2810, 0, 11530, 1024, 62, 254, 0, 0, 194, 1, 0, 0, 84, 6, 144, 1, 196, 9, 232, 3);
+        obj(OBJ_07, 0, 255, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_08, 37, 255, 2810, 0, 11530, 1024, 62, 254, 0, 0, 194, 1, 0, 0, 84, 6, 144, 1, 196, 9, 232, 3);
     }
     set(FG_STATUS, F_STATUS_1C, TRUE);
     set(FG_STATUS, F_STATUS_3C, TRUE);
-    evt_exec(0, 0, on_enter_3);
-    evt_exec(0, 1, on_enter_4);
-    evt_exec(0, 2, on_enter);
+    evt_exec(0, TASK_00, on_enter_3);
+    evt_exec(0, TASK_01, on_enter_4);
+    evt_exec(0, TASK_02, on_enter);
     if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
     {
         aot_reset(AOT_02_C, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
@@ -97,13 +120,13 @@ proc init
         dir_set(0, 0, 3072, 0, 2985, 2500, 11300);
         eml_pos(7, 0, 0, 0, 4, 0, 0, 250, 10, 196, 9, 10, 45);
         spd_set(0, 196, 9);
-        evt_exec(0, 9, on_enter_2);
-        cutnext(7);
-        snd_pan_vol_set(1, 60, 45);
+        evt_exec(0, TASK_09, on_enter_2);
+        cutnext(CAM_07);
+        snd_pan_vol_set(BGM_SUB_1, 60, 45);
     }
     else
     {
-        snd_pan_vol_set(1, 30, 30);
+        snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
     enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 1024, 0, 0, 19000, 0, 27000, ENEMY_00_ADDER, 0, 0, 0);
     enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 1024, 0, 0, 15000, 0, 27000, ENEMY_01_ADDER, 0, 0, 0);
@@ -119,13 +142,13 @@ proc main
     if (ck(FG_ROOM, F_ROOM_01, TRUE))
     {
         dir_set(0, 0, 3072, 0, 12700, 0, 16700);
-        bgm_stop(1);
+        bgm_stop(BGM_SUB_1);
         aot_reset(AOT_02_C, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         aot_reset(AOT_03_C, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
-        room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_CH0);
-        room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_CH0);
-        room_bgm_state_set(2, ROOM_302_FALLS, BGM_CH0);
-        room_bgm_state_set(2, ROOM_304_SECOND_HOUSE_GATE, BGM_CH0);
+        room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_302_FALLS, BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_304_SECOND_HOUSE_GATE, BGM_MAIN_ON);
         objtbl_b_set(0, 0, 1);
         objtbl_b_set(0, 1, 1);
         eml_pos(0, 0, 0, 0, 0, 0, 0, 95, 98, 89, 4, 207, 81);
@@ -138,7 +161,7 @@ proc main
         {
             if (ck(FG_ROOM, F_ROOM_21, TRUE))
             {
-                evt_exec(0, 7, from_main);
+                evt_exec(0, TASK_07, from_main);
                 dir_set(0, 0, 3072, 0, 11942, 0, 16500);
             }
         }
@@ -147,11 +170,11 @@ proc main
     {
         if (ck(FG_ROOM, F_ROOM_21, TRUE))
         {
-            evt_exec(0, 7, from_main_2);
+            evt_exec(0, TASK_07, from_main_2);
             dir_set(0, 0, 3072, 0, 11842, 0, 16686);
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 0))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
     {
         if (ck(FG_ROOM, F_ROOM_0A, FALSE))
         {
@@ -172,7 +195,7 @@ proc main
                 objtbl_b_set(0, 2, 0);
                 objtbl_b_set(0, 3, 0);
                 objtbl_b_set(0, 4, 0);
-                snd_pan_vol_set(1, 30, 30);
+                snd_pan_vol_set(BGM_SUB_1, 30, 30);
             }
             set(FG_ROOM, F_ROOM_0A, TRUE);
             set(FG_ROOM, F_ROOM_0B, FALSE);
@@ -184,7 +207,7 @@ proc main
             set(FG_ROOM, F_ROOM_11, FALSE);
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 1))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
     {
         if (ck(FG_ROOM, F_ROOM_0B, FALSE))
         {
@@ -205,7 +228,7 @@ proc main
                 objtbl_b_set(0, 2, 0);
                 objtbl_b_set(0, 3, 0);
                 objtbl_b_set(0, 4, 0);
-                snd_pan_vol_set(1, 30, 30);
+                snd_pan_vol_set(BGM_SUB_1, 30, 30);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
             set(FG_ROOM, F_ROOM_0B, TRUE);
@@ -217,7 +240,7 @@ proc main
             set(FG_ROOM, F_ROOM_11, FALSE);
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 2))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
     {
         if (ck(FG_ROOM, F_ROOM_0C, FALSE))
         {
@@ -240,7 +263,7 @@ proc main
                 objtbl_b_set(0, 3, 0);
                 objtbl_b_set(0, 4, 0);
                 eml_pos(5, 0, 0, 0, 0, 0, 0, 212, 48, 18, 6, 238, 77);
-                snd_pan_vol_set(1, 30, 30);
+                snd_pan_vol_set(BGM_SUB_1, 30, 30);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
             set(FG_ROOM, F_ROOM_0B, FALSE);
@@ -253,7 +276,7 @@ proc main
             objtbl_b_set(0, 7, 0);
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 3))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
     {
         if (ck(FG_ROOM, F_ROOM_0D, FALSE))
         {
@@ -276,7 +299,7 @@ proc main
                 objtbl_b_set(0, 3, 0);
                 objtbl_b_set(0, 4, 0);
                 eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 78, 1, 248, 77);
-                snd_pan_vol_set(1, 45, 35);
+                snd_pan_vol_set(BGM_SUB_1, 45, 35);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
             set(FG_ROOM, F_ROOM_0B, FALSE);
@@ -288,7 +311,7 @@ proc main
             set(FG_ROOM, F_ROOM_11, FALSE);
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 4))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
     {
         if (ck(FG_ROOM, F_ROOM_0E, FALSE))
         {
@@ -302,12 +325,12 @@ proc main
             set(FG_ROOM, F_ROOM_11, FALSE);
             if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
             {
-                snd_pan_vol_set(1, 30, 30);
+                snd_pan_vol_set(BGM_SUB_1, 30, 30);
                 eml_pos(5, 0, 0, 0, 0, 0, 0, 126, 44, 76, 3, 216, 79);
             }
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 5))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
     {
         if (ck(FG_ROOM, F_ROOM_0F, FALSE))
         {
@@ -328,7 +351,7 @@ proc main
                 objtbl_b_set(0, 4, 0);
                 objtbl_b_set(0, 0, 0);
                 objtbl_b_set(0, 1, 0);
-                snd_pan_vol_set(1, 33, 32);
+                snd_pan_vol_set(BGM_SUB_1, 33, 32);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
             set(FG_ROOM, F_ROOM_0B, FALSE);
@@ -340,7 +363,7 @@ proc main
             set(FG_ROOM, F_ROOM_11, FALSE);
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 6))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
     {
         if (ck(FG_ROOM, F_ROOM_10, FALSE))
         {
@@ -362,7 +385,7 @@ proc main
                 objtbl_b_set(0, 4, 0);
                 eml_pos(2, 0, 0, 0, 0, 0, 0, 206, 24, 16, 14, 254, 70);
                 eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 78, 1, 248, 77);
-                snd_pan_vol_set(1, 33, 33);
+                snd_pan_vol_set(BGM_SUB_1, 33, 33);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
             set(FG_ROOM, F_ROOM_0B, FALSE);
@@ -374,7 +397,7 @@ proc main
             set(FG_ROOM, F_ROOM_11, FALSE);
         }
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 7))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_07))
     {
         if (ck(FG_ROOM, F_ROOM_11, FALSE))
         {
@@ -396,7 +419,7 @@ proc main
                 objtbl_b_set(0, 4, 1);
                 eml_pos(3, 0, 0, 0, 0, 0, 0, 6, 41, 20, 7, 162, 90);
                 eml_pos(4, 0, 0, 254, 247, 0, 0, 1, 0, 209, 2, 187, 79);
-                snd_pan_vol_set(1, 60, 45);
+                snd_pan_vol_set(BGM_SUB_1, 60, 45);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
             set(FG_ROOM, F_ROOM_0B, FALSE);
@@ -427,15 +450,15 @@ event from_main
     {
         set(FG_6, F_6_17, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        evt_exec(0, 9, from_main_sub1);
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 11000, 17380);
+        evt_exec(0, TASK_09, from_main_sub1);
+        se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     }
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 11000, 17380);
+    se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
@@ -446,7 +469,7 @@ event from_main
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 11000, 17380);
+    se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
@@ -464,21 +487,21 @@ event from_main
         objtbl_b_set(0, 1, 128);
         eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 78, 1, 248, 77);
         dir_set(0, 0, 3072, 0, 12700, 0, 16700);
-        movie_on(13);
+        movie_on(MOVIE_0D_DMD);
     }
     sleep(1);
     run
     {
-        snd_pan_vol_set(1, 45, 35);
-        bgm_play(1);
+        snd_pan_vol_set(BGM_SUB_1, 45, 35);
+        bgm_play(BGM_SUB_1);
         set(FG_STATUS, F_STATUS_11, TRUE);
     }
-    evt_work_set(WK_OBJ, 2);
+    evt_work_set(WK_OBJ, OBJ_02);
     evt_tween_begin_alt();
     tw_abs_pos(0, 12390, 314, 19540);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, 6);
+    evt_work_set(WK_OBJ, OBJ_06);
     evt_tween_begin_alt();
     tw_abs_pos(0, 0, 0, 0);
     tw_end();
@@ -488,11 +511,11 @@ event from_main
     {
         if (ck(FG_SCENARIO, F_SCENARIO_52, FALSE))
         {
-            evt_exec(0, 9, from_main_sub2);
+            evt_exec(0, TASK_09, from_main_sub2);
         }
         else
         {
-            evt_exec(0, 9, from_main_sub3);
+            evt_exec(0, TASK_09, from_main_sub3);
         }
     }
     evt_finish();
@@ -504,15 +527,15 @@ event from_main_2
     {
         set(FG_6, F_6_17, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        evt_exec(0, 9, from_main_sub1);
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 11000, 17380);
+        evt_exec(0, TASK_09, from_main_sub1);
+        se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     }
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 11000, 17380);
+    se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
@@ -523,7 +546,7 @@ event from_main_2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 11000, 17380);
+    se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
@@ -536,9 +559,9 @@ event from_main_2
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
     run
     {
-        se_play_3d(2, 25, 0, SND_AT_ENEMY, ENEMY_00_ADDER, 12700, 17700);
+        se_play_3d(SND_BANK_ROOM, SE_19_WATERGT, 0, SND_AT_ENEMY, ENEMY_00_ADDER, 12700, 17700);
     }
-    evt_work_set(WK_OBJ, 5);
+    evt_work_set(WK_OBJ, OBJ_05);
     evt_tween_begin_alt();
     tw_set_pos(0, 64, 0);
     for (50)
@@ -551,16 +574,16 @@ event from_main_2
     evt_nop();
     run
     {
-        snd_pan_vol_set(2, 45, 35);
-        bgm_play(2);
+        snd_pan_vol_set(BGM_SUB_2, 45, 35);
+        bgm_play(BGM_SUB_2);
     }
     sleep(3);
     run
     {
-        bgm_stop(1);
+        bgm_stop(BGM_SUB_1);
     }
     set(FG_STATUS, F_STATUS_11, TRUE);
-    evt_work_set(WK_OBJ, 6);
+    evt_work_set(WK_OBJ, OBJ_06);
     evt_tween_begin_alt();
     tw_abs_pos(0, 0, 0, 0);
     tw_end();
@@ -608,7 +631,7 @@ event event_03
 
 event event_04
 {
-    evt_work_set(WK_OBJ, 5);
+    evt_work_set(WK_OBJ, OBJ_05);
     evt_tween_begin_alt();
     tw_abs_pos(0, 12390, 314, 19540);
     tw_end();
@@ -619,7 +642,7 @@ event event_04
 event event_05
 {
     objtbl_b_set(0, 0, 1);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 24180, 4770, 19144);
     tw_set_pos(0, 179, 0);
@@ -637,7 +660,7 @@ event event_05
 event event_06
 {
     objtbl_b_set(0, 1, 1);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 8250, 5690, 19634);
     tw_set_pos(0, 179, 0);
@@ -654,7 +677,7 @@ event event_06
 
 event from_main_sub1
 {
-    evt_work_set(WK_OBJ, 6);
+    evt_work_set(WK_OBJ, OBJ_06);
     evt_tween_begin_alt();
     tw_abs_pos(0, 12690, -2190, 17320);
     evt_next();
@@ -1032,10 +1055,10 @@ event on_aot_07
     run
     {
         set(FG_6, F_6_17, FALSE);
-        evt_exec(0, 9, on_aot_07_sub1);
-        evt_exec(0, 9, on_aot_07_sub2);
-        se_play_3d(2, 33, 0, SND_AT_POINT, 0, 3000, 11300);
-        sys_multi(1, 128);
+        evt_exec(0, TASK_09, on_aot_07_sub1);
+        evt_exec(0, TASK_09, on_aot_07_sub2);
+        se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_POINT, 0, 3000, 11300);
+        sys_multi(SYS_01, 128);
     }
     sleep(70);
     timer_setup(2, 128, 8, 7, 0);
@@ -1052,7 +1075,7 @@ event on_aot_07
 
 event on_aot_07_sub1
 {
-    evt_work_set(WK_OBJ, 7);
+    evt_work_set(WK_OBJ, OBJ_07);
     evt_tween_begin_alt();
     tw_set_pos(0, 25, 0);
     for (70)
@@ -1089,9 +1112,9 @@ event on_enter_2
     run
     {
         set(FG_6, F_6_17, FALSE);
-        evt_exec(0, 9, on_enter_2_sub1);
-        evt_exec(0, 9, on_enter_2_sub2);
-        se_play_3d(2, 34, 0, SND_AT_POINT, 0, 3000, 11300);
+        evt_exec(0, TASK_09, on_enter_2_sub1);
+        evt_exec(0, TASK_09, on_enter_2_sub2);
+        se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_POINT, 0, 3000, 11300);
     }
     sleep(110);
     run
@@ -1104,7 +1127,7 @@ event on_enter_2
 
 event on_enter_2_sub1
 {
-    evt_work_set(WK_OBJ, 7);
+    evt_work_set(WK_OBJ, OBJ_07);
     evt_tween_begin_alt();
     tw_set_pos(0, 231, 0);
     for (100)
@@ -1137,7 +1160,7 @@ event on_enter_2_sub2
 
 event on_enter_3
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1147,7 +1170,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 13, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1157,7 +1180,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 12, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1167,7 +1190,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 11, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1177,7 +1200,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 10, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1187,7 +1210,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 9, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1197,7 +1220,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 8, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1207,7 +1230,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 7, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 3, 0);
     for (6)
@@ -1217,7 +1240,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 6, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1227,7 +1250,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 5, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1237,7 +1260,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 4, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1247,7 +1270,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 3, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1257,7 +1280,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 2, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1267,7 +1290,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 1, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1277,7 +1300,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 0, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1287,7 +1310,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 1, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1297,7 +1320,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 2, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1307,7 +1330,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 3, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1317,7 +1340,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 4, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1327,7 +1350,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 5, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1337,7 +1360,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 6, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 253, 0);
     for (6)
@@ -1347,7 +1370,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 7, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1357,7 +1380,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 8, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1367,7 +1390,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 9, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1377,7 +1400,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 10, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1387,7 +1410,7 @@ event on_enter_3
     }
     tw_end();
     nop_wide(0, 11, 0);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1405,7 +1428,7 @@ event on_enter_3
 
 event on_enter_4
 {
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1415,7 +1438,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 13, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1425,7 +1448,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 12, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1435,7 +1458,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 11, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1445,7 +1468,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 10, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1455,7 +1478,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 9, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1465,7 +1488,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 8, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1475,7 +1498,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 7, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 3, 0);
     for (6)
@@ -1485,7 +1508,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 6, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1495,7 +1518,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 5, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 2, 0);
     for (6)
@@ -1505,7 +1528,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 4, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1515,7 +1538,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 3, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (6)
@@ -1525,7 +1548,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 2, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1535,7 +1558,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 1, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1545,7 +1568,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 0, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1555,7 +1578,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 1, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1565,7 +1588,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 2, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1575,7 +1598,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 3, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1585,7 +1608,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 4, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1595,7 +1618,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 5, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1605,7 +1628,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 6, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 253, 0);
     for (6)
@@ -1615,7 +1638,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 7, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1625,7 +1648,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 8, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 254, 0);
     for (6)
@@ -1635,7 +1658,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 9, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1645,7 +1668,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 10, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 255, 0);
     for (6)
@@ -1655,7 +1678,7 @@ event on_enter_4
     }
     tw_end();
     nop_wide(0, 11, 0);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 0);
     for (6)
@@ -1698,10 +1721,10 @@ event from_main_sub2
         cut_auto(0);
         set(FG_SCENARIO, F_SCENARIO_2F, TRUE);
         set(FG_SCENARIO, F_SCENARIO_52, TRUE);
-        room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(2, ROOM_302_FALLS, BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(2, ROOM_304_SECOND_HOUSE_GATE, BGM_CH1 | BGM_CH0);
+        room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_302_FALLS, BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_304_SECOND_HOUSE_GATE, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1721,10 +1744,10 @@ event from_main_sub3
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         set(FG_SCENARIO, F_SCENARIO_2F, TRUE);
-        room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(2, ROOM_302_FALLS, BGM_CH1 | BGM_CH0);
-        room_bgm_state_set(2, ROOM_304_SECOND_HOUSE_GATE, BGM_CH1 | BGM_CH0);
+        room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_302_FALLS, BGM_SUB_1_ON | BGM_MAIN_ON);
+        room_bgm_state_set(2, ROOM_304_SECOND_HOUSE_GATE, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

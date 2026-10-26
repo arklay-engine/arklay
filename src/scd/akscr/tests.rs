@@ -661,7 +661,7 @@ fn decompile_names_aots_events_and_messages() {
         "aot_set(AOT_02_EVENT,",
         "event on_enter",
         "event on_aot_02",
-        "evt_exec(0, 6, on_enter);",
+        "evt_exec(0, TASK_06, on_enter);",
         "#define MSG_A_RED_BOOK 0x02",
         "message(MSG_A_RED_BOOK, 0); // \"A red book.\"",
         "message(MSG_A_RED_BOOK | MSG_FAST, 0); // \"A red book.\"",
@@ -690,13 +690,17 @@ fn decompile_names_engine_values_and_room_slots() {
     aot_set                 2, 0, 0, 0, 0, SCE_MESSAGE, 129, 0, 0, 0, 0, 0, 0
     if                      off_A
     cmpb                    5, 2, 128
+    cmpb                    10, 0, 1
     setw                    1, 0, 0
 off_A:
     endif                   0
     enemy                   5, 1, 255, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0
     room_bgm_state_set      0, 4, 65
     voice_play              1, 9, 0
-    message                 3, 0
+    message                 3, 261
+    cutnext                 3
+    se_play_3d              2, 23, 0, 1, 0, 0, 0
+    evt_exec                0, 9, event_00
     end                     0
 
 .event event_00
@@ -718,6 +722,15 @@ off_A:
         "voice_play(VOICE_PLAY, VO_",
         "message(MSG_VO_",
         "evt_work_set(WK_ENEMY, ENEMY_02_CROW);",
+        // Placeholders for what has no meaning yet.
+        "cmpb(B_0A, CMP_EQ, 1)",
+        "MSG_PAUSE_CONTROLS | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER);",
+        "evt_exec(0, TASK_09, on_enter);",
+        // The room's own cameras and sounds.
+        "#define CAM_03 0x03",
+        "cutnext(CAM_03);",
+        "se_play_3d(SND_BANK_ROOM, SE_17",
+        "SND_AT_PLAYER, 0, 0, 0);",
     ] {
         assert!(text.contains(expected), "{expected}\n{text}");
     }

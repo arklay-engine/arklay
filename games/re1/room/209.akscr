@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -13,16 +15,16 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 9200, 7200, 1500, 1000, 1, 0, 0, 9, 0, ROOM_208_DEER_ROOM, 2700, 0, 4500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 3000, 9000, 1500, 2100, IT_30_KEY_LIGHTER, 0, 0, 255, 62, 13, 60, 246, 218, 37, 0, 0, 37, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 9200, 7200, 1500, 1000, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 9, 0, ROOM_208_DEER_ROOM, 2700, 0, 4500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 3000, 9000, 1500, 2100, IT_30_KEY_LIGHTER, 0, 0, 255, 62, 13, 60, 246, 218, 37, 0, 0, F_ITEM_25, 129, 0, 0);
 #if MANSION1
 #if CHRIS
-    item_aot_set(AOT_02_ITEM, 1300, 1200, 3300, 2100, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 240, 10, 0, 0, 196, 9, 0, 0, 38, 129, 1, 0);
+    item_aot_set(AOT_02_ITEM, 1300, 1200, 3300, 2100, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 240, 10, 0, 0, 196, 9, 0, 0, F_ITEM_26, 129, 1, 0);
 #else
-    item_aot_set(AOT_02_ITEM, 1300, 1200, 3300, 2100, IT_0B_AMMO_HANDGUN, 15, 1, 255, 240, 10, 0, 0, 196, 9, 0, 0, 38, 129, 1, 0);
+    item_aot_set(AOT_02_ITEM, 1300, 1200, 3300, 2100, IT_0B_AMMO_HANDGUN, 15, 1, 255, 240, 10, 0, 0, 196, 9, 0, 0, F_ITEM_26, 129, 1, 0);
 #endif
 #else
-    item_aot_set(AOT_02_ITEM, 1300, 1200, 3300, 2100, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 240, 10, 0, 0, 196, 9, 0, 0, 38, 129, 1, 0);
+    item_aot_set(AOT_02_ITEM, 1300, 1200, 3300, 2100, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 240, 10, 0, 0, 196, 9, 0, 0, F_ITEM_26, 129, 1, 0);
 #endif
-    item_aot_set(AOT_03_ITEM, 8100, 1700, 1400, 1400, IT_43_HEAL_HERB_RED, 1, 2, 255, 96, 34, 0, 0, 96, 9, 0, 0, 211, 129, 1, 0);
+    item_aot_set(AOT_03_ITEM, 8100, 1700, 1400, 1400, IT_43_HEAL_HERB_RED, 1, 2, 255, 96, 34, 0, 0, 96, 9, 0, 0, F_ITEM_D3, 129, 1, 0);
 }

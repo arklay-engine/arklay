@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,6 +18,11 @@
 #define AOT_07_MESSAGE 0x07
 #define AOT_08_MESSAGE 0x08
 #define AOT_09_ITEM 0x09
+#define CAM_01 0x01
+#define CAM_02 0x02
+#define CAM_03 0x03
+#define FX_08 0x08
+#define FX_09 0x09
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
 #define F_ROOM_1A 0x1A
@@ -30,10 +37,16 @@
 #define F_ROOM_24 0x24
 #define MSG_POISON_GAS_IS_ESCAPING 0x04
 #define MSG_THERE_IS_A_SWITCH 0x00
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define OBJ_02 0x02
+#define SE_17_MACHA 0x17
+#define SE_18_SHUTER 0x18
+#define SE_PL_02 0x02
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 16400, 5800, 2000, 3000, 12, 1, 9, 5, 0, ROOM_204_C_PASSAGE, 18600, 0, 11300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 16400, 5800, 2000, 3000, 12, DOOR_SND_01_DR_MTL, DOOR_09_DOOR09, 5, 0, ROOM_204_C_PASSAGE, 18600, 0, 11300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_USEITEM, 4785, 6936, 700, 600, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 32, 0, 1, 0);
     aot_set(AOT_02_USEITEM, 13635, 6936, 700, 600, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 33, 0, 1, 0);
     aot_set(AOT_03_EVENT, 9235, 6736, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
@@ -42,10 +55,10 @@ proc init
     aot_set(AOT_06_MESSAGE, 1000, 2000, 18400, 3300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
     aot_set(AOT_07_MESSAGE, 4385, 6736, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_08_MESSAGE, 13535, 6736, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_09_ITEM, 1400, 6200, 2200, 2300, IT_2E_KEY_CREST_SUN, 1, 0, 255, 42, 8, 0, 0, 190, 25, 0, 4, 36, 129, 0, 0);
-    obj(0, 31, 255, 2655, 0, 7220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(1, 1, 255, 8795, 0, 7886, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
-    obj(2, 1, 255, 14035, 0, 6190, 0, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
+    item_aot_set(AOT_09_ITEM, 1400, 6200, 2200, 2300, IT_2E_KEY_CREST_SUN, 1, 0, 255, 42, 8, 0, 0, 190, 25, 0, 4, F_ITEM_24, 129, 0, 0);
+    obj(OBJ_00, 31, 255, 2655, 0, 7220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01, 1, 255, 8795, 0, 7886, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
+    obj(OBJ_02, 1, 255, 14035, 0, 6190, 0, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
     set(FG_STATUS, F_STATUS_1D, TRUE);
     set(FG_ROOM, F_ROOM_20, TRUE);
     set(FG_ROOM, F_ROOM_21, TRUE);
@@ -76,12 +89,12 @@ proc main
     {
         set(FG_ROOM, F_ROOM_1E, FALSE);
     }
-    if (ck(FG_SCENARIO, F_SCENARIO_3A, FALSE) && cmpb(B_CAMERA, CMP_EQ, 2))
+    if (ck(FG_SCENARIO, F_SCENARIO_3A, FALSE) && cmpb(B_CAMERA, CMP_EQ, CAM_02))
     {
         bank_bit(1);
         bank_bit(2);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 2) && ck(FG_ROOM, F_ROOM_1E, FALSE))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_02) && ck(FG_ROOM, F_ROOM_1E, FALSE))
     {
         bank_bit(3);
     }
@@ -91,7 +104,7 @@ proc main
         {
             if (ck(FG_ROOM, F_ROOM_1B, FALSE))
             {
-                evt_exec(0, 9, from_main);
+                evt_exec(0, TASK_09, from_main);
             }
             if (ck(FG_ITEM, F_ITEM_24, TRUE))
             {
@@ -102,7 +115,7 @@ proc main
         }
         else
         {
-            evt_exec(0, 9, from_main_2);
+            evt_exec(0, TASK_09, from_main_2);
         }
         aot_delete(AOT_03_EVENT, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
         set(FG_ROOM, F_ROOM_1C, FALSE);
@@ -114,7 +127,7 @@ proc main
         }
         else
         {
-            evt_exec(0, 9, from_main_5);
+            evt_exec(0, TASK_09, from_main_5);
             set(FG_ROOM, F_ROOM_1D, FALSE);
         }
     }
@@ -130,42 +143,42 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_1A, TRUE) && ck(FG_ROOM, F_ROOM_20, FALSE) && ck(FG_ROOM, F_ROOM_18, FALSE))
     {
-        evt_exec(0, 9, from_main_3);
+        evt_exec(0, TASK_09, from_main_3);
         aot_delete(AOT_07_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
         set(FG_ROOM, F_ROOM_18, TRUE);
     }
     if (ck(FG_ROOM, F_ROOM_1A, TRUE) && ck(FG_ROOM, F_ROOM_21, FALSE) && ck(FG_ROOM, F_ROOM_19, FALSE))
     {
-        evt_exec(0, 9, from_main_4);
+        evt_exec(0, TASK_09, from_main_4);
         aot_delete(AOT_08_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
         set(FG_ROOM, F_ROOM_19, TRUE);
     }
     if (ck(FG_ROOM, F_ROOM_24, TRUE) && ck(FG_STATUS, F_STATUS_40, FALSE))
     {
-        sys_multi(8, 320);
+        sys_multi(SYS_08, 320);
     }
     if (ck(FG_ROOM, F_ROOM_18, FALSE) && ck(FG_ROOM, F_ROOM_19, FALSE))
     {
         if (ck(FG_ROOM, F_ROOM_1F, TRUE))
         {
             set(FG_ROOM, F_ROOM_1F, FALSE);
-            bgm_stop(0);
+            bgm_stop(BGM_MAIN);
         }
     }
     else if (ck(FG_ROOM, F_ROOM_1F, FALSE))
     {
         set(FG_ROOM, F_ROOM_1F, TRUE);
-        bgm_play(0);
-        snd_pan_vol_set(0, 255, 255);
+        bgm_play(BGM_MAIN);
+        snd_pan_vol_set(BGM_MAIN, 255, 255);
     }
 }
 
 event on_aot_03
 {
     set(FG_6, F_6_17, FALSE);
-    cutnext(3);
+    cutnext(CAM_03);
     sleep(15);
-    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 69); // "There's a switch. Will you push it? A weird hole opens."
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch. Will you push it? A weird hole opens."
     do
     {
         evt_next();
@@ -178,7 +191,7 @@ event on_aot_03
             set(FG_ROOM, F_ROOM_1C, TRUE);
         }
         set(FG_6, F_6_17, TRUE);
-        cutnext(1);
+        cutnext(CAM_01);
         cut_auto(0);
     }
     evt_next();
@@ -191,7 +204,7 @@ event from_main
     {
         set(FG_6, F_6_17, FALSE);
         cut_auto(1);
-        cutnext(1);
+        cutnext(CAM_01);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_ROOM, F_ROOM_1E, TRUE);
         bank_bit(1);
@@ -210,15 +223,15 @@ event from_main
     evt_nop();
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 9550, 7200);
-        cutnext(2);
+        se_play_3d(SND_BANK_ROOM, SE_18_SHUTER, 0, SND_AT_POINT, 0, 9550, 7200);
+        cutnext(CAM_02);
         aot_switch(0, 3, 0);
         aot_delete(AOT_03_EVENT, SCE_NONE, SAT_UNDER | SAT_OBJECT);
     }
     sleep(40);
-    se_play_3d(2, 23, 0, SND_AT_POINT, 0, 3500, 7200);
-    evt_fork(9, from_main_sub1, 0);
-    evt_work_set(WK_OBJ, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_MACHA, 0, SND_AT_POINT, 0, 3500, 7200);
+    evt_fork(TASK_09, from_main_sub1, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 24, 0);
     for (90)
@@ -232,7 +245,7 @@ event from_main
     tw_end();
     sleep(40);
     aot_switch(0, 3, 1);
-    cutnext(1);
+    cutnext(CAM_01);
     cut_auto(0);
     sleep(10);
     evt_work_set(WK_PLAYER, 1);
@@ -278,13 +291,13 @@ event from_main_2
     evt_nop();
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 9550, 7200);
+        se_play_3d(SND_BANK_ROOM, SE_18_SHUTER, 0, SND_AT_POINT, 0, 9550, 7200);
         set(FG_ROOM, F_ROOM_1A, TRUE);
         timer_setup(1, 200, 0, 6, 0);
     }
     sleep(30);
     setw(W_LIGHT_DELTA, 0, 0);
-    message(MSG_POISON_GAS_IS_ESCAPING, 69); // "Poison gas is escaping...!"
+    message(MSG_POISON_GAS_IS_ESCAPING, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "Poison gas is escaping...!"
     do
     {
         evt_next();
@@ -308,7 +321,7 @@ event from_main_2
     sleep(60);
     set(FG_6, F_6_17, FALSE);
     cut_auto(1);
-    se_play_3d(3, 2, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_PLAYER, SE_PL_02, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_work_set(WK_PLAYER, 1);
     evt_actor_begin();
     act_anim_flags(0 | 1, 32 | 4, 0 | 0);
@@ -338,7 +351,7 @@ event from_main_3
 {
     do
     {
-        single(12) effect(9, 24, 0, 21, 19, 152, 254, 68, 28);
+        single(12) effect(FX_09, 24, 0, 21, 19, 152, 254, 68, 28);
         evt_nop();
         evt_nop();
         sleep(15);
@@ -351,7 +364,7 @@ event from_main_4
 {
     do
     {
-        single(12) effect_tracked(9, 24, 0, 211, 54, 152, 254, 68, 28);
+        single(12) effect_tracked(FX_09, 24, 0, 211, 54, 152, 254, 68, 28);
         evt_nop();
         evt_nop();
         sleep(15);
@@ -373,7 +386,7 @@ event from_main_5
     run
     {
         setw(W_LIGHT_DELTA, 0, 0);
-        message(MSG_POISON_GAS_IS_ESCAPING, 69); // "Poison gas is escaping...!"
+        message(MSG_POISON_GAS_IS_ESCAPING, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "Poison gas is escaping...!"
     }
     do
     {
@@ -389,7 +402,7 @@ event from_main_5
     run
     {
         set(FG_6, F_6_17, FALSE);
-        se_play_3d(3, 2, 0, SND_AT_PLAYER, 0, 0, 0);
+        se_play_3d(SND_BANK_PLAYER, SE_PL_02, 0, SND_AT_PLAYER, 0, 0, 0);
         cut_auto(1);
     }
     evt_work_set(WK_PLAYER, 1);
@@ -419,75 +432,75 @@ event from_main_5
 
 event from_main_sub1
 {
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 88, 27);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 88, 27);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 76, 29);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 152, 33);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 152, 33);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 144, 26);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 144, 26);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 76, 29);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 220, 30);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 220, 30);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 100, 25);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 100, 25);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 88, 27);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 88, 27);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 152, 33);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 152, 33);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 120, 30);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 120, 30);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 76, 29);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 108, 32);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 108, 32);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 144, 26);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 144, 26);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 76, 29);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 8, 32);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 8, 32);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 120, 30);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 120, 30);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 88, 27);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 88, 27);
     evt_nop();
     evt_nop();
     sleep(5);
-    single(12) effect(8, 19, 0, 240, 10, 76, 255, 64, 31);
+    single(12) effect(FX_08, 19, 0, 240, 10, 76, 255, 64, 31);
     evt_nop();
     evt_nop();
     sleep(5);

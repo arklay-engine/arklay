@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -18,25 +20,26 @@
 #define ENEMY_00_PLANT_FOUNTAIN 0x00
 #define F_ROOM_17 0x17
 #define F_ROOM_18 0x18
+#define OBJ_00 0x00
 
 proc init
 {
     set(FG_STATUS, F_STATUS_1D, TRUE);
-    door_aot_set(AOT_00_DOOR, 2300, 6500, 2700, 3200, 2, 0, 3, 1, 0, STAGE_3 | ROOM_304_SECOND_HOUSE_GATE, 4000, 0, 30000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 11300, 13800, 3500, 3200, 1, 0, 6, 1, 0, ROOM_401_ROOM_001, 9700, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 10600, 8200, 2400, 3200, 3, 0, 3, 4, 0, ROOM_403_SAVE_ROOM, 8600, 0, 9000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 20900, 11100, 3400, 3200, 12, 0, 5, 1, 0, ROOM_404_BAR, 11600, 0, 12700, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_04_DOOR, 14700, 500, 3700, 2000, 1, 0, 0, 9, 0, ROOM_405_CENTER_PASSAGE, 3800, 0, 4500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_05_ITEM, 4700, 17300, 600, 600, IT_45_HEAL_HERB_BLUE, 1, 0, 255, 136, 19, 0, 0, 192, 68, 0, 0, 157, 129, 1, 0);
-    item_aot_set(AOT_07_ITEM, 4700, 16700, 600, 600, IT_45_HEAL_HERB_BLUE, 1, 1, 255, 136, 19, 0, 0, 104, 66, 0, 0, 209, 129, 1, 0);
-    item_aot_set(AOT_08_ITEM, 4700, 16100, 600, 600, IT_45_HEAL_HERB_BLUE, 1, 2, 255, 136, 19, 0, 0, 16, 64, 0, 0, 210, 129, 1, 0);
+    door_aot_set(AOT_00_DOOR, 2300, 6500, 2700, 3200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, STAGE_3 | ROOM_304_SECOND_HOUSE_GATE, 4000, 0, 30000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 11300, 13800, 3500, 3200, 1, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_401_ROOM_001, 9700, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 10600, 8200, 2400, 3200, 3, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_403_SAVE_ROOM, 8600, 0, 9000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 20900, 11100, 3400, 3200, 12, DOOR_SND_00_DR_WD, DOOR_05_DOOR05, 1, 0, ROOM_404_BAR, 11600, 0, 12700, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_04_DOOR, 14700, 500, 3700, 2000, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 9, 0, ROOM_405_CENTER_PASSAGE, 3800, 0, 4500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_05_ITEM, 4700, 17300, 600, 600, IT_45_HEAL_HERB_BLUE, 1, 0, 255, 136, 19, 0, 0, 192, 68, 0, 0, F_ITEM_9D, 129, 1, 0);
+    item_aot_set(AOT_07_ITEM, 4700, 16700, 600, 600, IT_45_HEAL_HERB_BLUE, 1, 1, 255, 136, 19, 0, 0, 104, 66, 0, 0, F_ITEM_D1, 129, 1, 0);
+    item_aot_set(AOT_08_ITEM, 4700, 16100, 600, 600, IT_45_HEAL_HERB_BLUE, 1, 2, 255, 136, 19, 0, 0, 16, 64, 0, 0, F_ITEM_D2, 129, 1, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_51, TRUE))
     {
-        obj(0, 1, 255, 16236, 0, 8700, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
+        obj(OBJ_00, 1, 255, 16236, 0, 8700, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
     }
     else
     {
-        obj(0, 1, 255, 4622, 0, 10550, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
+        obj(OBJ_00, 1, 255, 4622, 0, 10550, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
     }
     aot_set(AOT_06_USEITEM, 15711, 8221, 900, 900, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 24, 0, 1, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
@@ -55,7 +58,7 @@ proc init
 #if CHRIS
     if (ck(FG_SCENARIO, F_SCENARIO_1E, FALSE) && ck(FG_SCENARIO, F_SCENARIO_1F, FALSE))
     {
-        if (cmpw(0, 5, CMP_GE, 105))
+        if (cmpw(0, W_05, CMP_GE, 105))
         {
             set(FG_SCENARIO, F_SCENARIO_1E, TRUE);
         }
@@ -67,7 +70,7 @@ proc init
 #else
     if (ck(FG_SCENARIO, F_SCENARIO_1E, FALSE) && ck(FG_SCENARIO, F_SCENARIO_1F, FALSE))
     {
-        if (cmpw(0, 5, CMP_GE, 72))
+        if (cmpw(0, W_05, CMP_GE, 72))
         {
             set(FG_SCENARIO, F_SCENARIO_1E, TRUE);
         }

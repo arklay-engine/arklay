@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -14,22 +16,24 @@
 #define ENEMY_00_CHIMERA 0x00
 #define ENEMY_01_CHIMERA 0x01
 #define ENEMY_02_CHIMERA 0x02
+#define FX_1F 0x1F
+#define SE_18_STEAM_A 0x18
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, 1, 11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, 1, 11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 90, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_5A, 129, 0, 0);
     aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, SAT_PLAYER, 9, 0, 13, 0, 1, 0);
     aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    enemy(EM_09_CHIMERA, 2, 97, 1, 1, 0, 0, 2500, 0, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, 0, 0, 0);
-    enemy(EM_09_CHIMERA, 2, 98, 1, 1, 0, 0, 3500, 0, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, F_ENEMY_61, 1, 1, 0, 0, 2500, 0, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, F_ENEMY_62, 1, 1, 0, 0, 3500, 0, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, 0, 0, 0);
 #if CHRIS
-    enemy(EM_09_CHIMERA, 2, 179, 1, 1, 0, 0, 144, 0, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, F_ENEMY_B3, 1, 1, 0, 0, 144, 0, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, 0, 0, 0);
 #endif
-    evt_exec(0, 9, on_enter);
-    evt_exec(0, 9, on_enter_2);
-    evt_exec(0, 9, on_enter_3);
+    evt_exec(0, TASK_09, on_enter);
+    evt_exec(0, TASK_09, on_enter_2);
+    evt_exec(0, TASK_09, on_enter_3);
 }
 
 proc main
@@ -46,7 +50,7 @@ proc main
     }
     if (testitem(IT_28_KEY_MO_DISK))
     {
-        evt_exec(0, 9, from_main);
+        evt_exec(0, TASK_09, from_main);
     }
 }
 
@@ -62,11 +66,11 @@ event on_enter
     sleep(171);
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 18300, 9400);
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 18300, 9400);
     }
     for (8)
     {
-        effect(31, 0, 0, 124, 71, 16, 245, 184, 36, 80, 10);
+        effect(FX_1F, 0, 0, 124, 71, 16, 245, 184, 36, 80, 10);
         sleep(3);
     }
     evt_nop();
@@ -79,11 +83,11 @@ event on_enter_2
     sleep(285);
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 9300, 1600);
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 9300, 1600);
     }
     for (8)
     {
-        effect(31, 0, 0, 84, 36, 104, 247, 64, 6, 228, 12);
+        effect(FX_1F, 0, 0, 84, 36, 104, 247, 64, 6, 228, 12);
         sleep(3);
     }
     evt_nop();
@@ -96,11 +100,11 @@ event on_enter_3
     sleep(349);
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 8000, 8600);
+        se_play_3d(SND_BANK_ROOM, SE_18_STEAM_A, 0, SND_AT_POINT, 0, 8000, 8600);
     }
     for (8)
     {
-        effect(31, 0, 0, 64, 31, 184, 242, 152, 33, 152, 8);
+        effect(FX_1F, 0, 0, 64, 31, 184, 242, 152, 33, 152, 8);
         sleep(3);
     }
     evt_chain(3);

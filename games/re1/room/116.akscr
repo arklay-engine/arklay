@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -14,14 +16,19 @@
 #define AOT_07_NONE 0x07
 #define AOT_08_MESSAGE 0x08
 #define AOT_09_MESSAGE 0x09
+#define OBJ_00 0x00
+#define SE_17_GATAN 0x17
+#define SE_18_SW_TRAP 0x18
+#define SE_19_CEILPRES 0x19
+#define SE_1A 0x1A
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, 0, 0, 4, 129, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, 0, 255, 208, 42, 2, 244, 90, 25, 0, 12, 0, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_01, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, 0, 255, 208, 42, 2, 244, 90, 25, 0, 12, F_ITEM_00, 129, 0, 0);
     swap_var(1, 1, 12);
-    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, 1, 255, 208, 42, 2, 244, 90, 25, 0, 12, 1, 129, 0, 0);
-    obj(0, 1, 255, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, 1, 255, 208, 42, 2, 244, 90, 25, 0, 12, F_ITEM_01, 129, 0, 0);
+    obj(OBJ_00, 1, 255, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_05_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_PLAYER, 9, 0, 1, 0, 1, 0);
     aot_set(AOT_06_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 5, 0, 0, 0);
     aot_set(AOT_07_NONE, 3800, 10500, 2500, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
@@ -29,19 +36,19 @@ proc init
     aot_set(AOT_09_MESSAGE, 0, 5000, 3600, 3200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     if (ck(FG_ITEM, F_ITEM_01, FALSE) && ck(FG_ITEM, F_ITEM_00, FALSE))
     {
-        evt_exec(0, 0, on_enter);
+        evt_exec(0, TASK_00, on_enter);
         aot_delete(AOT_05_NONE, SCE_USEITEM, SAT_PLAYER);
         aot_delete(AOT_06_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE) && ck(FG_COMMON, F_COMMON_20, TRUE))
     {
-        evt_exec(0, 9, on_enter_2);
+        evt_exec(0, TASK_09, on_enter_2);
         aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_07_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     if (ck(FG_STATUS, F_STATUS_08, TRUE) && ck(FG_COMMON, F_COMMON_29, TRUE))
     {
-        evt_exec(0, 9, on_enter_2);
+        evt_exec(0, TASK_09, on_enter_2);
         aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_07_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
@@ -51,7 +58,7 @@ proc main
 {
     if (testpickup(IT_03_WEAPON_SHOTGUN))
     {
-        evt_exec(0, 9, from_main);
+        evt_exec(0, TASK_09, from_main);
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
@@ -59,8 +66,8 @@ proc main
         {
             set(FG_ITEM, F_ITEM_00, TRUE);
             setbyte(0, 1, 0);
-            evt_exec(0, 9, from_main_2);
-            evt_exec(0, 9, from_main_3);
+            evt_exec(0, TASK_09, from_main_2);
+            evt_exec(0, TASK_09, from_main_3);
             set(FG_COMMON, F_COMMON_20, FALSE);
             aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -69,8 +76,8 @@ proc main
         {
             set(FG_ITEM, F_ITEM_01, TRUE);
             setbyte(1, 1, 0);
-            evt_exec(0, 9, from_main_2);
-            evt_exec(0, 9, from_main_4);
+            evt_exec(0, TASK_09, from_main_2);
+            evt_exec(0, TASK_09, from_main_4);
             set(FG_COMMON, F_COMMON_20, FALSE);
             aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -82,8 +89,8 @@ proc main
         {
             set(FG_ITEM, F_ITEM_00, TRUE);
             setbyte(0, 1, 0);
-            evt_exec(0, 9, from_main_2);
-            evt_exec(0, 9, from_main_3);
+            evt_exec(0, TASK_09, from_main_2);
+            evt_exec(0, TASK_09, from_main_3);
             set(FG_COMMON, F_COMMON_29, FALSE);
             aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -92,8 +99,8 @@ proc main
         {
             set(FG_ITEM, F_ITEM_01, TRUE);
             setbyte(1, 1, 0);
-            evt_exec(0, 9, from_main_2);
-            evt_exec(0, 9, from_main_4);
+            evt_exec(0, TASK_09, from_main_2);
+            evt_exec(0, TASK_09, from_main_4);
             set(FG_COMMON, F_COMMON_29, FALSE);
             aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -103,10 +110,10 @@ proc main
 
 event from_main
 {
-    se_play_3d(2, 23, 0, SND_AT_POINT, 0, 5500, 7070);
+    se_play_3d(SND_BANK_ROOM, SE_17_GATAN, 0, SND_AT_POINT, 0, 5500, 7070);
     sleep(5);
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 5500, 7070);
-    evt_work_set(WK_OBJ, 0);
+    se_play_3d(SND_BANK_ROOM, SE_18_SW_TRAP, 0, SND_AT_POINT, 0, 5500, 7070);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -192,8 +199,8 @@ event from_main
 
 event from_main_2
 {
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 5500, 7070);
-    evt_work_set(WK_OBJ, 0);
+    se_play_3d(SND_BANK_ROOM, SE_18_SW_TRAP, 0, SND_AT_POINT, 0, 5500, 7070);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -285,7 +292,7 @@ event from_main_2
 
 event on_enter
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10980, -3138, 6490);
     tw_finish();
@@ -512,8 +519,8 @@ event on_enter_2
     sleep(10);
     run
     {
-        se_play_3d(2, 25, 6, SND_AT_POINT, 0, 4700, 10380);
-        se_play_3d(2, 26, 6, SND_AT_POINT, 0, 4700, 10380);
+        se_play_3d(SND_BANK_ROOM, SE_19_CEILPRES, 6, SND_AT_POINT, 0, 4700, 10380);
+        se_play_3d(SND_BANK_ROOM, SE_1A, 6, SND_AT_POINT, 0, 4700, 10380);
     }
     evt_finish();
 }

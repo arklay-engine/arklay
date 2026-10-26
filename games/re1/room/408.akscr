@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -13,6 +15,8 @@
 #define AOT_04_USEITEM 0x04
 #define AOT_05_ITEM 0x05
 #define AOT_06_ITEM 0x06
+#define CAM_02 0x02
+#define CAM_07 0x07
 #define ENEMY_00_NPC_REBECCA 0x00
 #define ENEMY_00_WASP 0x00
 #define ENEMY_01_WASP 0x01
@@ -25,6 +29,8 @@
 #define F_ROOM_1D 0x1D
 #define F_ROOM_20 0x20
 #define F_ROOM_21 0x21
+#define SE_DOOR_00 0x00
+#define SE_DOOR_01 0x01
 #define VO_00A_20 0x0E
 #define VO_00A_21 0x0F
 #define VO_00A_22 0x10
@@ -41,15 +47,15 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 0, 2200, 3000, 2100, 0, 0, 0, 4, 0, ROOM_405_CENTER_PASSAGE, 23200, 0, 8800, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 5500, 9400, 3000, 1800, 1, 0, 7, 1, 0, ROOM_409_DRUG_STOREHOUSE, 9000, 0, 3000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 18200, 6500, 3000, 2000, 1, 0, 6, 1, 170, ROOM_40A_ROOM_003, 2900, 0, 2800, 0, IT_3A_KEY_GUARDHOUSE_003, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 0, 2200, 3000, 2100, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_405_CENTER_PASSAGE, 23200, 0, 8800, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 5500, 9400, 3000, 1800, 1, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, 0, ROOM_409_DRUG_STOREHOUSE, 9000, 0, 3000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 18200, 6500, 3000, 2000, 1, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, DOOR_LOCKED | F_LOCK_2A, ROOM_40A_ROOM_003, 2900, 0, 2800, 0, IT_3A_KEY_GUARDHOUSE_003, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_SCENARIO, F_SCENARIO_44, TRUE))
     {
 #if CHRIS
-        door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, 0, 0, 1, 64, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCK_40, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #else
-        door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, 0, 0, 1, 0, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, 12, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_40C_PLANT_BOSS_ROOM, 3000, 0, 10200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #endif
     }
     else
@@ -61,16 +67,16 @@ proc init
 #endif
     }
     aot_set(AOT_04_USEITEM, 7200, 11000, 800, 800, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 32, 0, 1, 0);
-    item_aot_set(AOT_05_ITEM, 15000, 21700, 2000, 1000, IT_39_KEY_GUARDHOUSE_002, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 4, 72, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 15000, 21700, 2000, 1000, IT_39_KEY_GUARDHOUSE_002, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 4, F_ITEM_48, 129, 0, 0);
 #if CHRIS
-    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_4D_KEY_RADIO, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 4, 8, 129, 0, 0);
+    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_4D_KEY_RADIO, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 4, F_ITEM_08, 129, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
     {
         if (ck(FG_COMMON, F_COMMON_3D, TRUE))
         {
             if (ck(FG_COMMON, F_COMMON_AA, FALSE))
             {
-                evt_exec(0, 9, on_enter_2);
+                evt_exec(0, TASK_09, on_enter_2);
             }
         }
     }
@@ -82,12 +88,12 @@ proc init
 #endif
     set(FG_ROOM, F_ROOM_1D, TRUE);
     aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 143, 255, 0);
-    evt_exec(0, 9, on_enter);
+    evt_exec(0, TASK_09, on_enter);
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_38, TRUE) && ck(FG_COMMON, F_COMMON_AD, FALSE))
     {
         set(FG_COMMON, F_COMMON_AD, TRUE);
-        evt_exec(0, 9, on_enter_3);
+        evt_exec(0, TASK_09, on_enter_3);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
     {
@@ -145,7 +151,7 @@ event event_01
         set(FG_6, F_6_1D, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 1680, 0, 26000, 0, 4280);
-        cutnext(7);
+        cutnext(CAM_07);
     }
     sleep(2);
     run
@@ -397,17 +403,17 @@ event event_01
         if (ck(FG_SCENARIO, F_SCENARIO_7F, TRUE))
         {
 #if CHRIS
-            evt_exec(0, 9, on_enter_2_sub1);
+            evt_exec(0, TASK_09, on_enter_2_sub1);
 #else
-            evt_exec(0, 9, event_02);
+            evt_exec(0, TASK_09, event_02);
 #endif
         }
         else
         {
 #if CHRIS
-            evt_exec(0, 9, on_enter_2_sub2);
+            evt_exec(0, TASK_09, on_enter_2_sub2);
 #else
-            evt_exec(0, 9, event_03);
+            evt_exec(0, TASK_09, event_03);
 #endif
         }
     }
@@ -595,11 +601,11 @@ event event_02
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     run
     {
-        se_play_3d(0, 0, 0, SND_AT_POINT, 0, 6388, 14000);
-        cutnext(2);
+        se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 6388, 14000);
+        cutnext(CAM_02);
     }
     sleep(30);
-    se_play_3d(0, 1, 0, SND_AT_POINT, 0, 6388, 14000);
+    se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6388, 14000);
     sleep(10);
     run
     {
@@ -998,7 +1004,11 @@ event event_03
     run
     {
         set(FG_6, F_6_17, TRUE);
+#if CHRIS
+        give_item(AOT_06_ITEM, 4, 129);
+#else
         give_item(6, 4, 129);
+#endif
     }
     sleep(1);
     set(FG_6, F_6_17, FALSE);
@@ -1177,11 +1187,11 @@ event event_03
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     run
     {
-        se_play_3d(0, 0, 0, SND_AT_POINT, 0, 6388, 14000);
-        cutnext(2);
+        se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 6388, 14000);
+        cutnext(CAM_02);
     }
     sleep(30);
-    se_play_3d(0, 1, 0, SND_AT_POINT, 0, 6388, 14000);
+    se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6388, 14000);
     sleep(10);
     run
     {

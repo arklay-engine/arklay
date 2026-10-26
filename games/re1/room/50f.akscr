@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -12,12 +14,15 @@
 #define ENEMY_00_CHIMERA 0x00
 #define ENEMY_01_CHIMERA 0x01
 #define ENEMY_02_CHIMERA 0x02
+#define FX_1F 0x1F
 #define MSG_A_POWER_PANEL 0x00
+#define SE_17_CONPANE 0x17
+#define SE_18 0x18
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 11100, 20500, 3200, 3800, 12, 1, 11, 3, 0, ROOM_50C_FRONT_OF_ELEVATOR, 12700, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 21100, 4800, 1500, 2100, 0, 1, 11, 3, 0, ROOM_510_MAZE_B, 22000, 0, 16500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 11100, 20500, 3200, 3800, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50C_FRONT_OF_ELEVATOR, 12700, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 21100, 4800, 1500, 2100, 0, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_510_MAZE_B, 22000, 0, 16500, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_SCENARIO, F_SCENARIO_2E, FALSE))
     {
         aot_set(AOT_02_EVENT, 1528, 3494, 1050, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
@@ -28,31 +33,31 @@ proc init
     }
     if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
     {
-        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
+        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
     }
     else
     {
-        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_CH0);
+        room_bgm_state_set(4, ROOM_50F_MAZE_A, BGM_MAIN_ON);
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        enemy(EM_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, 0, 0, 0);
-        enemy(EM_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, 0, 0, 0);
-        enemy(EM_09_CHIMERA, 2, 178, 1, 2, 0, 0, 3128, 0, 0, 16093, 0, 4892, ENEMY_02_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, F_ENEMY_78, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, F_ENEMY_79, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, F_ENEMY_B2, 1, 2, 0, 0, 3128, 0, 0, 16093, 0, 4892, ENEMY_02_CHIMERA, 0, 0, 0);
     }
     else
     {
-        enemy(EM_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, 0, 0, 0);
-        enemy(EM_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, F_ENEMY_78, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, F_ENEMY_79, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, 0, 0, 0);
     }
-    evt_exec(0, 9, on_enter);
-    evt_exec(0, 9, on_enter_2);
+    evt_exec(0, TASK_09, on_enter);
+    evt_exec(0, TASK_09, on_enter_2);
 }
 
 event on_aot_02
 {
     set(FG_6, F_6_17, FALSE);
-    message(MSG_A_POWER_PANEL | MSG_FAST, 255); // "A power panel. Some areas do not have power. Will you activate the blacked-out areas? It shows the power supply status."
+    message(MSG_A_POWER_PANEL | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "A power panel. Some areas do not have power. Will you activate the blacked-out areas? It shows the power supply status."
     do
     {
         evt_next();
@@ -62,11 +67,11 @@ event on_aot_02
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_sub1);
+            evt_exec(0, TASK_09, on_aot_02_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_aot_02_sub2);
+            evt_exec(0, TASK_09, on_aot_02_sub2);
         }
     }
     evt_finish();
@@ -74,7 +79,7 @@ event on_aot_02
 
 event on_aot_02_sub1
 {
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_CONPANE, 0, SND_AT_PLAYER, 0, 0, 0);
     run
     {
         set(FG_6, F_6_17, TRUE);
@@ -95,11 +100,11 @@ event on_enter
     sleep(119);
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 7600, 9900);
+        se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 7600, 9900);
     }
     for (8)
     {
-        effect(31, 0, 0, 176, 29, 52, 239, 172, 38, 78, 7);
+        effect(FX_1F, 0, 0, 176, 29, 52, 239, 172, 38, 78, 7);
         sleep(3);
     }
     evt_nop();
@@ -112,11 +117,11 @@ event on_enter_2
     sleep(240);
     run
     {
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 13100, 10600);
+        se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 13100, 10600);
     }
     for (8)
     {
-        effect(31, 0, 0, 44, 51, 160, 246, 104, 41, 10, 15);
+        effect(FX_1F, 0, 0, 44, 51, 160, 246, 104, 41, 10, 15);
         sleep(3);
     }
     evt_chain(4);

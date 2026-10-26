@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -12,6 +14,7 @@
 #define AOT_03_DOOR 0x03
 #define AOT_04_5 0x04
 #define AOT_05_EVENT 0x05
+#define CAM_00 0x00
 #define ENEMY_00 0x00
 #define ENEMY_00_NPC_REBECCA 0x00
 #define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
@@ -26,6 +29,8 @@
 #define MSG_VO_008_18 0x0A
 #define MSG_VO_A06_00 0x00
 #define MSG_VO_A07_00 0x0C
+#define SE_2C_TAORE_ST 0x2C
+#define SE_DOOR_01 0x01
 #define VO_008_10 0x0F
 #define VO_008_11 0x10
 #define VO_008_12 0x11
@@ -45,14 +50,14 @@ proc init
 proc init noreturn
 #endif
 {
-    door_aot_set(AOT_00_DOOR, 500, 2500, 1700, 3800, 1, 0, 0, 1, 0, ROOM_20D_PILLAR_PASSAGE, 11500, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 3200, 11400, 1700, 1600, 2, 0, 1, 4, 0, ROOM_20F_DINING, 4800, 0, 11600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 500, 2500, 1700, 3800, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_20D_PILLAR_PASSAGE, 11500, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 3200, 11400, 1700, 1600, 2, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, 0, ROOM_20F_DINING, 4800, 0, 11600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if MANSION1
-    door_aot_set(AOT_02_DOOR, 9200, 2500, 1700, 1300, 2, 0, 7, 1, 135, ROOM_210_ATTIC, 6100, 0, 3600, 0, IT_35_KEY_MANSION_SHIELD, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 9200, 2500, 1700, 1300, 2, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, DOOR_LOCKED | F_LOCK_07, ROOM_210_ATTIC, 6100, 0, 3600, 0, IT_35_KEY_MANSION_SHIELD, SAT_MANUAL | SAT_PLAYER);
 #if CHRIS
-    door_aot_set(AOT_03_DOOR, 0, 0, 1, 1, 5, 3, 0, 64, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 0, 0, 1, 1, 5, DOOR_SND_03_DR_REB, DOOR_00_DOOR00, 64, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #else
-    door_aot_set(AOT_03_DOOR, 0, 0, 1, 1, 0, 0, 0, 4, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 0, 0, 1, 1, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #endif
     aot_set(AOT_04_5, 6800, 2100, 1400, 1700, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
 #if CHRIS
@@ -62,9 +67,9 @@ proc init noreturn
     {
         room_bgm_state_set(1, ROOM_20E_FRONT_OF_ATTIC, BGM_OFF);
 #if CHRIS
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 88, 1, 2, 0, 0, 1024, 0, 0, 5300, 0, 5800, ENEMY_01_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, F_ENEMY_58, 1, 2, 0, 0, 1024, 0, 0, 5300, 0, 5800, ENEMY_01_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
 #else
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 88, 1, 2, 0, 0, 1024, 0, 0, 5300, 0, 5800, ENEMY_00, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, F_ENEMY_58, 1, 2, 0, 0, 1024, 0, 0, 5300, 0, 5800, ENEMY_00, 0, 0, 0);
 #endif
     }
 #if CHRIS
@@ -90,17 +95,17 @@ proc init noreturn
         dir_set(0, 0, 2448, 0, 5070, 0, 3100);
         plw_anim(0, 4, 27);
         pos_set(ENEMY_00_NPC_REBECCA, 0, 0, 0, 2260, 0, 3340);
-        if (cmpw(0, 4, CMP_LT, 300))
+        if (cmpw(0, W_04, CMP_LT, 300))
         {
-            if (cmpw(0, 4, CMP_LT, 200))
+            if (cmpw(0, W_04, CMP_LT, 200))
             {
                 set(FG_COMMON, F_COMMON_5D, TRUE);
             }
-            evt_exec(0, 9, on_enter);
+            evt_exec(0, TASK_09, on_enter);
         }
         else
         {
-            evt_exec(0, 9, on_enter_2);
+            evt_exec(0, TASK_09, on_enter_2);
         }
     }
     set(FG_COMMON, F_COMMON_66, TRUE);
@@ -113,8 +118,8 @@ proc init noreturn
     }
 #endif
 #else
-    door_aot_set(AOT_02_DOOR, 8900, 2500, 1700, 1300, 2, 0, 7, 1, 135, ROOM_210_ATTIC, 6100, 0, 3600, 0, IT_35_KEY_MANSION_SHIELD, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 0, 0, 1, 1, 5, 3, 0, 64, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 8900, 2500, 1700, 1300, 2, DOOR_SND_00_DR_WD, DOOR_07_DOOR07, 1, DOOR_LOCKED | F_LOCK_07, ROOM_210_ATTIC, 6100, 0, 3600, 0, IT_35_KEY_MANSION_SHIELD, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 0, 0, 1, 1, 5, DOOR_SND_03_DR_REB, DOOR_00_DOOR00, 64, 0, STAGE_1 | ROOM_100_SAVE_ROOM, 3500, 0, 2600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_04_5, 6600, 2600, 1900, 2400, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
 #endif
 }
@@ -158,24 +163,24 @@ event on_aot_05
 #if CHRIS
         if (ck(FG_COMMON, F_COMMON_24, TRUE))
         {
-            evt_exec(0, 9, on_aot_05_sub3);
+            evt_exec(0, TASK_09, on_aot_05_sub3);
         }
         else if (ck(FG_COMMON, F_COMMON_63, TRUE))
         {
-            evt_exec(0, 9, on_aot_05_sub1);
+            evt_exec(0, TASK_09, on_aot_05_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_aot_05_sub2);
+            evt_exec(0, TASK_09, on_aot_05_sub2);
         }
 #else
         if (ck(FG_COMMON, F_COMMON_07, TRUE))
         {
-            evt_exec(0, 9, on_aot_05_sub2);
+            evt_exec(0, TASK_09, on_aot_05_sub2);
         }
         else
         {
-            evt_exec(0, 9, on_aot_05_sub1);
+            evt_exec(0, TASK_09, on_aot_05_sub1);
         }
 #endif
     }
@@ -187,7 +192,7 @@ event on_aot_05
 #if MANSION1
 event on_aot_05_sub1
 {
-    evt_fork(9, on_aot_05_sub1_sub1, 0);
+    evt_fork(TASK_09, on_aot_05_sub1_sub1, 0);
     sleep(20);
     evt_chain(5);
     evt_finish();
@@ -195,13 +200,13 @@ event on_aot_05_sub1
 
 event on_aot_05_sub2
 {
-    evt_fork(9, on_aot_05_sub2_sub3, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub3, 0);
     sleep(40);
-    bgm_play(0);
-    evt_fork(9, on_aot_05_sub2_sub2, 0);
+    bgm_play(BGM_MAIN);
+    evt_fork(TASK_09, on_aot_05_sub2_sub2, 0);
     sleep(80);
     voice_play(VOICE_PLAY, VO_A06_00, 0);
-    evt_fork(9, on_aot_05_sub2_sub1, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub1, 0);
     sleep(15);
     message(MSG_VO_A06_00, 0);
     wait_message();
@@ -217,17 +222,17 @@ event on_aot_05_sub2
 
 event on_aot_05_sub3
 {
-    evt_fork(9, on_aot_05_sub1_sub1, 0);
+    evt_fork(TASK_09, on_aot_05_sub1_sub1, 0);
     sleep(20);
     run
     {
         if (ck(FG_COMMON, F_COMMON_22, TRUE))
         {
-            evt_exec(0, 9, on_aot_05_sub3_sub1);
+            evt_exec(0, TASK_09, on_aot_05_sub3_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_aot_05_sub3_sub2);
+            evt_exec(0, TASK_09, on_aot_05_sub3_sub2);
         }
     }
     evt_finish();
@@ -238,46 +243,46 @@ event on_aot_05_sub3_sub1
     run
     {
         cut_auto(1);
-        bgm_play(0);
+        bgm_play(BGM_MAIN);
     }
-    evt_fork(9, on_aot_05_sub3_sub1_sub1, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub1, 0);
     sleep(80);
     voice_play(VOICE_PLAY, VO_A06_00, 0);
     sleep(15);
     message(MSG_VO_A06_00, 0);
-    evt_fork(9, on_aot_05_sub3_sub1_sub2, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub2, 0);
     for (3)
     {
-        evt_fork(9, on_aot_05_sub3_sub1_sub4, 0);
+        evt_fork(TASK_09, on_aot_05_sub3_sub1_sub4, 0);
         sleep(30);
     }
     evt_nop();
-    evt_fork(9, on_aot_05_sub3_sub1_sub3, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub3, 0);
     sleep(25);
-    evt_fork(9, on_aot_05_sub3_sub1_sub7, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub7, 0);
     sleep(10);
-    evt_fork(9, on_aot_05_sub3_sub1_sub5, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub5, 0);
     sleep(33);
     run
     {
-        se_play_3d(2, 44, 0, SND_AT_PLAYER, 0, 0, 0);
-        bgm_stop(0);
+        se_play_3d(SND_BANK_ROOM, SE_2C_TAORE_ST, 0, SND_AT_PLAYER, 0, 0, 0);
+        bgm_stop(BGM_MAIN);
     }
     sleep(140);
     run
     {
-        se_play_3d(0, 1, 0, SND_AT_POINT, 0, 500, 2500);
+        se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 500, 2500);
     }
     sleep(20);
-    evt_fork(9, on_aot_05_sub3_sub1_sub8, 0);
-    evt_fork(9, on_aot_05_sub3_sub1_sub6, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub8, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub6, 0);
     sleep(100);
     wait_message();
     run
     {
         set(FG_COMMON, F_COMMON_27, TRUE);
         set(FG_COMMON, F_COMMON_5E, TRUE);
-        sys_multi(8, 544);
+        sys_multi(SYS_08, 544);
         cut_auto(0);
         aot_on(AOT_03_DOOR, SCE_DOOR, 0);
     }
@@ -290,31 +295,31 @@ event on_aot_05_sub3_sub2
     {
         pos_set(ENEMY_00_NPC_REBECCA, 0, 0, 0, 2260, 0, 3340);
     }
-    evt_fork(9, on_aot_05_sub3_sub1_sub1, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub1, 0);
     sleep(80);
-    bgm_play(0);
-    evt_fork(9, on_aot_05_sub3_sub2_sub5, 0);
+    bgm_play(BGM_MAIN);
+    evt_fork(TASK_09, on_aot_05_sub3_sub2_sub5, 0);
     sleep(20);
     run
     {
-        se_play_3d(0, 1, 0, SND_AT_POINT, 0, 500, 2500);
+        se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 500, 2500);
     }
     sleep(30);
-    cutnext(0);
-    evt_fork(9, on_aot_05_sub3_sub2_sub6, 0);
+    cutnext(CAM_00);
+    evt_fork(TASK_09, on_aot_05_sub3_sub2_sub6, 0);
     sleep(5);
     voice_play(VOICE_PLAY, VO_008_10, 0);
     sleep(15);
     message(MSG_VO_008_10, 0);
-    evt_fork(9, on_aot_05_sub3_sub2_sub1, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub2_sub1, 0);
     wait_message();
     voice_play(VOICE_PLAY, VO_A06_00, 0);
     sleep(15);
     message(MSG_VO_A06_00, 0);
-    evt_fork(9, on_aot_05_sub3_sub1_sub2, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub1_sub2, 0);
     for (3)
     {
-        evt_fork(9, on_aot_05_sub3_sub1_sub4, 0);
+        evt_fork(TASK_09, on_aot_05_sub3_sub1_sub4, 0);
         sleep(48);
     }
     evt_nop();
@@ -322,12 +327,12 @@ event on_aot_05_sub3_sub2
     voice_play(VOICE_PLAY, VO_008_11, 0);
     sleep(15);
     message(MSG_VO_008_11, 0);
-    evt_fork(9, on_aot_05_sub3_sub2_sub2, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub2_sub2, 0);
     sleep(80);
     message(3, 0);
-    evt_fork(9, on_aot_05_sub3_sub2_sub3, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub2_sub3, 0);
     sleep(61);
-    evt_fork(9, on_aot_05_sub3_sub2_sub4, 0);
+    evt_fork(TASK_09, on_aot_05_sub3_sub2_sub4, 0);
     sleep(25);
     wait_message();
     evt_work_set(WK_PLAYER, 0);
@@ -343,7 +348,7 @@ event on_aot_05_sub3_sub2
         set(FG_COMMON, F_COMMON_59, TRUE);
         setb(B_CHARACTER_MODEL, 3, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        setw(4, 0, 0);
+        setw(W_04, 0, 0);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
         set(FG_6, F_6_17, TRUE);
     }
@@ -369,53 +374,53 @@ event on_enter
 
 event event_07
 {
-    evt_fork(9, event_11, 0);
+    evt_fork(TASK_09, event_11, 0);
     sleep(60);
-    bgm_play(0);
-    evt_fork(9, event_20, 0);
+    bgm_play(BGM_MAIN);
+    evt_fork(TASK_09, event_20, 0);
     sleep(50);
-    evt_fork(9, event_21, 0);
+    evt_fork(TASK_09, event_21, 0);
     sleep(1);
-    evt_fork(7, event_12, 0);
+    evt_fork(TASK_07, event_12, 0);
     sleep(100);
     voice_play(VOICE_PLAY, VO_008_12, 0);
     sleep(15);
     message(MSG_VO_008_12, 0);
-    evt_fork(9, event_15, 0);
+    evt_fork(TASK_09, event_15, 0);
     wait_message();
     voice_play(VOICE_PLAY, VO_008_13, 0);
     sleep(15);
     message(MSG_VO_008_13, 0);
-    evt_fork(9, event_16, 0);
+    evt_fork(TASK_09, event_16, 0);
     wait_message();
     voice_play(VOICE_PLAY, VO_008_14, 0);
     sleep(15);
     message(MSG_VO_008_14, 0);
-    evt_fork(9, event_17, 0);
+    evt_fork(TASK_09, event_17, 0);
     sleep(100);
     message(7, 0);
     wait_message();
     voice_play(VOICE_PLAY, VO_008_15, 0);
-    evt_fork(9, event_19, 0);
+    evt_fork(TASK_09, event_19, 0);
     sleep(15);
     message(MSG_VO_008_15, 0);
     wait_message();
     voice_play(VOICE_PLAY, VO_008_16, 0);
     sleep(15);
     message(MSG_VO_008_16, 0);
-    evt_fork(9, event_1A, 0);
+    evt_fork(TASK_09, event_1A, 0);
     wait_message();
     voice_play(VOICE_PLAY, VO_008_18, 0);
     sleep(15);
     message(MSG_VO_008_18, 0);
-    evt_fork(9, event_1B, 0);
+    evt_fork(TASK_09, event_1B, 0);
     wait_message();
-    evt_disable(7);
-    evt_fork(9, event_27, 0);
+    evt_disable(TASK_07);
+    evt_fork(TASK_09, event_27, 0);
     sleep(40);
     run
     {
-        sys_multi(8, 544);
+        sys_multi(SYS_08, 544);
         aot_set(AOT_05_EVENT, 3420, 1930, 1100, 1100, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05_2, 0, 0, 0);
         set(FG_COMMON, F_COMMON_5E, TRUE);
     }
@@ -429,13 +434,13 @@ event event_08
 #if MANSION1
 event on_aot_05_sub1
 {
-    evt_fork(9, on_aot_05_sub1_sub3, 0);
+    evt_fork(TASK_09, on_aot_05_sub1_sub3, 0);
     sleep(40);
-    evt_fork(9, on_aot_05_sub1_sub1, 0);
-    bgm_play(0);
+    evt_fork(TASK_09, on_aot_05_sub1_sub1, 0);
+    bgm_play(BGM_MAIN);
     sleep(80);
     voice_play(VOICE_PLAY, VO_A07_00, 0);
-    evt_fork(9, on_aot_05_sub1_sub2, 0);
+    evt_fork(TASK_09, on_aot_05_sub1_sub2, 0);
     sleep(15);
     message(MSG_VO_A07_00, 0);
     wait_message();
@@ -733,7 +738,7 @@ event on_aot_05_sub1_sub1
 #endif
 {
 #if CHRIS
-    evt_disable(7);
+    evt_disable(TASK_07);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -787,7 +792,7 @@ event on_aot_05_sub1_sub1
     act_reset();
     evt_nop();
 #if CHRIS
-    evt_fork(7, event_12, 0);
+    evt_fork(TASK_07, event_12, 0);
 #endif
     evt_finish();
 }
@@ -972,46 +977,46 @@ event event_20
 #else
 event on_aot_05_sub2
 {
-    evt_fork(9, on_aot_05_sub2_sub8, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub8, 0);
     sleep(20);
-    evt_fork(9, on_aot_05_sub2_sub1, 0);
-    bgm_play(0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub1, 0);
+    bgm_play(BGM_MAIN);
     sleep(80);
     voice_play(VOICE_PLAY, VO_A07_00, 0);
     sleep(15);
     message(MSG_VO_A07_00, 0);
-    evt_fork(9, on_aot_05_sub2_sub2, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub2, 0);
     for (3)
     {
-        evt_fork(9, on_aot_05_sub2_sub9, 0);
+        evt_fork(TASK_09, on_aot_05_sub2_sub9, 0);
         sleep(30);
     }
     evt_nop();
-    evt_fork(9, on_aot_05_sub2_sub3, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub3, 0);
     sleep(25);
-    evt_fork(9, on_aot_05_sub2_sub4, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub4, 0);
     sleep(40);
-    evt_fork(9, on_aot_05_sub2_sub5, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub5, 0);
     sleep(33);
     run
     {
-        bgm_stop(0);
-        se_play_3d(2, 44, 0, SND_AT_PLAYER, 0, 0, 0);
+        bgm_stop(BGM_MAIN);
+        se_play_3d(SND_BANK_ROOM, SE_2C_TAORE_ST, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     sleep(140);
     run
     {
-        se_play_3d(0, 1, 0, SND_AT_POINT, 0, 500, 2500);
+        se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 500, 2500);
     }
     sleep(20);
-    evt_fork(9, on_aot_05_sub2_sub6, 0);
-    evt_fork(9, on_aot_05_sub2_sub7, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub6, 0);
+    evt_fork(TASK_09, on_aot_05_sub2_sub7, 0);
     sleep(100);
     wait_message();
     run
     {
         set(FG_COMMON, F_COMMON_22, TRUE);
-        sys_multi(8, 544);
+        sys_multi(SYS_08, 544);
         aot_on(AOT_03_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
@@ -1077,7 +1082,7 @@ event on_enter_2
     sleep(1);
     run
     {
-        cutnext(0);
+        cutnext(CAM_00);
         set(FG_6, F_6_17, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
@@ -1089,9 +1094,9 @@ event on_enter_2
 event event_24
 {
     voice_play(VOICE_PLAY, VO_008_10, 0);
-    evt_fork(9, event_29, 0);
+    evt_fork(TASK_09, event_29, 0);
     wait_message();
-    evt_fork(9, event_2A, 0);
+    evt_fork(TASK_09, event_2A, 0);
     sleep(30);
     voice_play(VOICE_PLAY, VO_008_19, 0);
     wait_message();

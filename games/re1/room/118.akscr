@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -17,31 +19,32 @@
 #define AOT_04_TYPEWRITER 0x04
 #define AOT_05_ITEM 0x05
 #define AOT_06_TYPEWRITER 0x06
+#define OBJ_00 0x00
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 5600, 8200, 1200, 1300, 3, 0, 6, 1, 0, ROOM_10B_1F_RIGHT_STAIRS, 9500, 0, 14300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 5600, 8200, 1200, 1300, 3, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_10B_1F_RIGHT_STAIRS, 9500, 0, 14300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if MANSION1
-    item_aot_set(AOT_01_ITEM, 2260, 2469, 1800, 1800, IT_26_KEY_HERBICIDE, 1, 0, 255, 98, 12, 0, 0, 11, 13, 0, 0, 13, 129, 1, 0);
+    item_aot_set(AOT_01_ITEM, 2260, 2469, 1800, 1800, IT_26_KEY_HERBICIDE, 1, 0, 255, 98, 12, 0, 0, 11, 13, 0, 0, F_ITEM_0D, 129, 1, 0);
     aot_set(AOT_02_MESSAGE, 1800, 1900, 2800, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     aot_set(AOT_03_ITEMBOX, 4750, 1900, 2800, 2050, SCE_ITEMBOX, SAT_MANUAL | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
     aot_set(AOT_04_TYPEWRITER, 1300, 8000, 1900, 1700, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
 #else
     aot_set(AOT_01_ITEMBOX, 4750, 1900, 2800, 2050, SCE_ITEMBOX, SAT_MANUAL | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
-    item_aot_set(AOT_02_ITEM, 4644, 4278, 1800, 1800, IT_41_HEAL_FIRST_AID_SPRAY, 1, 0, 255, 168, 21, 0, 0, 58, 20, 0, 0, 160, 129, 1, 0);
+    item_aot_set(AOT_02_ITEM, 4644, 4278, 1800, 1800, IT_41_HEAL_FIRST_AID_SPRAY, 1, 0, 255, 168, 21, 0, 0, 58, 20, 0, 0, F_ITEM_A0, 129, 1, 0);
     aot_set(AOT_03_MESSAGE, 1800, 1900, 2800, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_04_ITEM, 6234, 4868, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 222, 27, 0, 0, 136, 22, 0, 0, 218, 129, 1, 0);
+    item_aot_set(AOT_04_ITEM, 6234, 4868, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 222, 27, 0, 0, 136, 22, 0, 0, F_ITEM_DA, 129, 1, 0);
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        item_aot_set(AOT_05_ITEM, 6084, 3968, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, 2, 255, 72, 27, 0, 0, 4, 19, 0, 0, 217, 129, 1, 0);
+        item_aot_set(AOT_05_ITEM, 6084, 3968, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, 2, 255, 72, 27, 0, 0, 4, 19, 0, 0, F_ITEM_D9, 129, 1, 0);
     }
     else
     {
-        item_aot_set(AOT_05_ITEM, 6084, 3968, 1800, 1800, IT_11_AMMO_GRENADE_ACID, 6, 2, 255, 72, 27, 0, 0, 4, 19, 0, 0, 217, 129, 1, 0);
+        item_aot_set(AOT_05_ITEM, 6084, 3968, 1800, 1800, IT_11_AMMO_GRENADE_ACID, 6, 2, 255, 72, 27, 0, 0, 4, 19, 0, 0, F_ITEM_D9, 129, 1, 0);
     }
     aot_set(AOT_06_TYPEWRITER, 1300, 8000, 1900, 1700, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
 #endif
-    obj(0, 17, 255, 6320, -1410, 1770, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 17, 255, 6320, -1410, 1770, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 #if MANSION1
 

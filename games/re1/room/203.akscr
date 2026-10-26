@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -14,6 +16,9 @@
 #define AOT_05_5 0x05
 #define AOT_07_USEITEM 0x07
 #define AOT_08_ITEM 0x08
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_03 0x03
 #define ENEMY_00_NPC_BARRY 0x00
 #define F_ROOM_03 0x03
 #define F_ROOM_05 0x05
@@ -25,16 +30,18 @@
 #define MSG_VO_106_00 0x01
 #define MSG_VO_106_01 0x02
 #define MSG_VO_106_02 0x05
+#define SE_DOOR_00 0x00
+#define SE_DOOR_01 0x01
 #define VO_106_00 0x22
 #define VO_106_01 0x23
 #define VO_106_02 0x24
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 14000, 21500, 6000, 2000, 1, 4, 22, 96, 0, STAGE_1 | ROOM_106_MAIN_HALL, 17000, 0, 14300, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 31400, 7000, 2000, 2000, 2, 0, 0, 1, 64, ROOM_211_TERRACE_PASSAGE, 2400, 0, 3600, 3360, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 31400, 19000, 2000, 3000, 2, 0, 3, 1, 0, ROOM_204_C_PASSAGE, 3000, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_03_DOOR, 1000, 15000, 1700, 3800, 6, 0, 3, 1, 0, ROOM_202_DINING_ROOM_2F, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 14000, 21500, 6000, 2000, 1, DOOR_SND_04_ST_WCP, DOOR_16_KAI01, 96, 0, STAGE_1 | ROOM_106_MAIN_HALL, 17000, 0, 14300, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 31400, 7000, 2000, 2000, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCK_40, ROOM_211_TERRACE_PASSAGE, 2400, 0, 3600, 3360, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 31400, 19000, 2000, 3000, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_204_C_PASSAGE, 3000, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 1000, 15000, 1700, 3800, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_202_DINING_ROOM_2F, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_04_5, 20220, 23900, 3540, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_05_5, 10200, 23900, 3480, 3490, SCE_5, SAT_MANUAL | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
     aot_set(AOT_07_USEITEM, 7000, 13000, 20000, 6000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
@@ -48,9 +55,9 @@ proc init
     {
         set(FG_COMMON, F_COMMON_07, TRUE);
         set(FG_ROOM, F_ROOM_1F, TRUE);
-        item_aot_set(AOT_08_ITEM, 0, 0, 16, 16, IT_11_AMMO_GRENADE_ACID, 6, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 14, 65, 0, 0);
+        item_aot_set(AOT_08_ITEM, 0, 0, 16, 16, IT_11_AMMO_GRENADE_ACID, 6, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_0E, 65, 0, 0);
         enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1568, 0, 0, 23782, -2885, 14862, ENEMY_00_NPC_BARRY, 0, 0, 0);
-        evt_exec(0, 0, on_enter);
+        evt_exec(0, TASK_00, on_enter);
         set(FG_ROOM, F_ROOM_0A, TRUE);
         set(FG_ROOM, F_ROOM_0B, TRUE);
     }
@@ -66,7 +73,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_ROOM, F_ROOM_21, TRUE) && cmpb(B_CAMERA, CMP_EQ, 0))
+    if (ck(FG_ROOM, F_ROOM_21, TRUE) && cmpb(B_CAMERA, CMP_EQ, CAM_00))
     {
         aot_switch(0, 1, 1);
         aot_switch(0, 2, 1);
@@ -111,7 +118,7 @@ event on_enter
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(5);
-    evt_fork(1, on_enter_sub2, 0);
+    evt_fork(TASK_01, on_enter_sub2, 0);
     voice_play(VOICE_PLAY, VO_106_00, 0);
     message(MSG_VO_106_00, 0);
     wait_message();
@@ -266,11 +273,11 @@ event on_enter
     {
         if (cmpb(B_TOTAL_HELD, CMP_GE, 8))
         {
-            evt_exec(0, 1, on_enter_sub3);
+            evt_exec(0, TASK_01, on_enter_sub3);
         }
         else
         {
-            evt_exec(0, 1, on_enter_sub1);
+            evt_exec(0, TASK_01, on_enter_sub1);
         }
     }
     evt_finish();
@@ -465,7 +472,7 @@ event on_enter_sub1
     act_idle();
     act_reset();
     wait_message();
-    give_item(8, 4, 129);
+    give_item(AOT_08_ITEM, 4, 129);
     set(FG_6, F_6_17, TRUE);
     evt_next();
     evt_nop();
@@ -480,7 +487,7 @@ event on_enter_sub1
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    evt_fork(2, on_enter_sub3, 0);
+    evt_fork(TASK_02, on_enter_sub3, 0);
     evt_finish();
 }
 
@@ -562,7 +569,7 @@ event on_enter_sub3
     sleep(5);
     run
     {
-        cutnext(0);
+        cutnext(CAM_00);
         set(FG_ROOM, F_ROOM_0B, FALSE);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
@@ -576,7 +583,7 @@ event on_enter_sub3
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
     run
     {
-        cutnext(1);
+        cutnext(CAM_01);
         set(FG_ROOM, F_ROOM_0B, TRUE);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
@@ -588,14 +595,14 @@ event on_enter_sub3
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    cutnext(3);
+    cutnext(CAM_03);
     sleep(10);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_idle();
     act_reset();
     sleep(30);
-    se_play_3d(0, 0, 0, SND_AT_POINT, 0, 19000, 17000);
+    se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 19000, 17000);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -603,7 +610,7 @@ event on_enter_sub3
     act_reset();
     evt_nop();
     sleep(50);
-    se_play_3d(0, 1, 0, SND_AT_POINT, 0, 19000, 17000);
+    se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 19000, 17000);
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

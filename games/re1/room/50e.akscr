@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -13,22 +15,23 @@
 #define AOT_05_ITEM 0x05
 #define AOT_06_ITEMBOX 0x06
 #define AOT_84_ITEM 0x84
+#define OBJ_00 0x00
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 700, 2800, 1900, 1700, 1, 1, 12, 7, 0, ROOM_50C_FRONT_OF_ELEVATOR, 14300, 0, 17700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 700, 2800, 1900, 1700, 1, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_50C_FRONT_OF_ELEVATOR, 14300, 0, 17700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_TYPEWRITER, 2000, 8500, 1800, 2200, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    item_aot_set(AOT_02_ITEM, 8000, 8000, 1400, 1400, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 252, 33, 0, 0, 252, 33, 0, 0, 232, 129, 1, 0);
-    item_aot_set(AOT_03_ITEM, 4700, 8000, 1400, 1400, IT_45_HEAL_HERB_BLUE, 1, 1, 255, 24, 21, 0, 0, 252, 33, 0, 0, 233, 129, 1, 0);
+    item_aot_set(AOT_02_ITEM, 8000, 8000, 1400, 1400, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 252, 33, 0, 0, 252, 33, 0, 0, F_ITEM_E8, 129, 1, 0);
+    item_aot_set(AOT_03_ITEM, 4700, 8000, 1400, 1400, IT_45_HEAL_HERB_BLUE, 1, 1, 255, 24, 21, 0, 0, 252, 33, 0, 0, F_ITEM_E9, 129, 1, 0);
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        item_aot_set(AOT_84_ITEM, 8000, 4100, 1400, 1400, IT_0E_AMMO_MAGNUM, 6, 2, 255, 252, 33, 104, 247, 192, 18, 0, 0, 234, 129, 0, 0);
+        item_aot_set(AOT_84_ITEM, 8000, 4100, 1400, 1400, IT_0E_AMMO_MAGNUM, 6, 2, 255, 252, 33, 104, 247, 192, 18, 0, 0, F_ITEM_EA, 129, 0, 0);
     }
     else
     {
-        item_aot_set(AOT_84_ITEM, 8000, 4100, 1400, 1400, IT_12_AMMO_GRENADE_FLAME, 6, 2, 255, 252, 33, 104, 247, 192, 18, 0, 0, 234, 129, 0, 0);
+        item_aot_set(AOT_84_ITEM, 8000, 4100, 1400, 1400, IT_12_AMMO_GRENADE_FLAME, 6, 2, 255, 252, 33, 104, 247, 192, 18, 0, 0, F_ITEM_EA, 129, 0, 0);
     }
-    item_aot_set(AOT_05_ITEM, 8000, 5800, 1400, 1400, IT_2F_KEY_INK_RIBBON, 2, 3, 255, 252, 33, 50, 246, 100, 25, 0, 0, 235, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 8000, 5800, 1400, 1400, IT_2F_KEY_INK_RIBBON, 2, 3, 255, 252, 33, 50, 246, 100, 25, 0, 0, F_ITEM_EB, 129, 0, 0);
     aot_set(AOT_06_ITEMBOX, 7100, 1900, 1800, 2900, SCE_ITEMBOX, SAT_MANUAL | SAT_PLAYER, 5, 0, 0, 0, 0, 0);
-    obj(0, 17, 255, 9100, -1440, 3000, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 17, 255, 9100, -1440, 3000, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }

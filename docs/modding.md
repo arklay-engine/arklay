@@ -626,8 +626,11 @@ directory at or above `--out`, and from the English text beside it
 (`language/en-US.txt`):
 
 - items (`IT_0B_AMMO_HANDGUN`, `IT_2F_KEY_INK_RIBBON`), enemies
-  (`EM_11_ZOMBIE_LAB`, `EM_0A_ADDER`) and flags
-  (`F_SCENARIO_0A`, a bit of `FG_SCENARIO`) by the define's prefix; a door
+  (`EM_11_ZOMBIE_LAB`, `EM_0A_ADDER`), flags
+  (`F_SCENARIO_0A`, a bit of `FG_SCENARIO`), door sounds and animations
+  (`DOOR_SND_01_DR_MTL`, `DOOR_16_KAI01`) and films (`MOVIE_05_DM1`) by the
+  define's prefix; `door_aot_set`'s lock is `DOOR_LOCKED | F_LOCK_12`, the
+  `FG_LOCK` bit that unlocks it; a door
   target is a room of the same stage (`ROOM_106_MAIN_HALL`) or
   `STAGE_2 | ROOM_201_..` for another;
 - each AOT index the room sets up, as a local `#define AOT_05_ITEM 0x05` named
@@ -649,7 +652,18 @@ directory at or above `--out`, and from the English text beside it
   other commands on a slot;
 - each voice line the room plays, `#define VO_104_02 0x09` after the line's
   file;
+- the room's objects (`OBJ_02`), cameras (`CAM_03`, for `cutnext` and the
+  `B_CAMERA`/`B_CUT` state bytes) and effects (`FX_25`) as local placeholder
+  defines, and its sounds after the bank `se_play_3d` plays from:
+  `SE_17_SPRAY` from the room's sound table (`SE_17` where the room's
+  variants play different files), `SE_DOOR_00`, `SE_WEAPON_xx`, `SE_PL_xx`
+  and `SE_BGM_xx` for the banks that depend on the door, weapon or character;
 - engine values with the compiler's own names (below).
+
+Every id, enum and flag argument gets a name, even one whose meaning is not
+known yet (`B_0A`, `TASK_09`, `OBJ_02`), so it can be renamed once it is;
+only plain quantities (positions, angles, counts, frames, volumes) and the
+fields the disassembler still splits into raw bytes stay numbers.
 
 These names are a starting point for hand renaming; once a script is edited
 by hand, re-exporting would overwrite it.
@@ -719,11 +733,21 @@ event on_enter
   | `W_LIGHT_STATE` `W_LIGHT_DELTA` `W_RANDOM` `W_DPAD_HELD` `W_DPAD_PRESSED` | `cmpw` / `setw` state words |
   | `SAT_PLAYER` `SAT_OBJECT` `SAT_UNDER` `SAT_MANUAL` | AOT trigger flags: the player or an object, at its feet rather than its reach, on the action button |
   | `MSG_FAST` | `message`: show the text at once |
+  | `MSG_PAUSE_PLAYER` `MSG_PAUSE_ENTITIES` `MSG_PAUSE_MONSTERS` `MSG_PAUSE_EFFECTS` `MSG_PAUSE_CONTROLS` `MSG_PAUSE_DEMO` | `message`'s second argument: what stops while the window is open |
   | `VOICE_PLAY` `VOICE_STOP` | `voice_play` |
+  | `SND_BANK_DOOR` `SND_BANK_WEAPON` `SND_BANK_ROOM` `SND_BANK_PLAYER` `SND_BANK_BGM` | `se_play_3d`: the sound bank |
   | `SND_AT_POINT` `SND_AT_PLAYER` `SND_AT_ENEMY` `SND_NO_POS` | `se_play_3d`: where the sound plays |
-  | `BGM_CH0` `BGM_CH1` `BGM_CH2` `BGM_RELOAD` `BGM_RESTART` `BGM_OFF` | `room_bgm_state_set`: the channels, the load type, no music; the low three bits pick the room's music group |
+  | `BGM_MAIN` `BGM_SUB_1` `BGM_SUB_2` | the music channel of `bgm_play`, `bgm_stop`, `bgm_volume_ramp` and `snd_pan_vol_set` |
+  | `BGM_MAIN_ON` `BGM_SUB_1_ON` `BGM_SUB_2_ON` `BGM_RELOAD` `BGM_RESTART` `BGM_OFF` | `room_bgm_state_set`: the channels to start, the load type, no music; the low three bits pick the room's music group |
+  | `DOOR_LOCKED` `DOOR_LOCK_40` | `door_aot_set`'s lock byte, ORed with the `FG_LOCK` bit |
   | `EML_BEHAVIOUR` `EML_REVIVE` `EML_ACTION` `EML_STATUS` `EML_ANGLE` `EML_BLEND_RESET` `EML_JOINTS` `EML_ACTION_STATE` | `eml_state` sub-commands |
   | `EML_STATUS_SET` `EML_STATUS_OR` `EML_STATUS_XOR` | `eml_state(.., EML_STATUS, EML_STATUS_OR \| 2)`: how the bits apply |
+
+  Values without a known meaning have placeholder names: every state byte and
+  word (`B_0A`, `W_04`), `eml_state` sub-command (`EML_08`), `sys_multi`
+  sub-command (`SYS_04`), event slot of `evt_exec`, `evt_fork`,
+  `evt_disable` and `task_kill` (`TASK_09`), and every unnamed bit of the
+  trigger flags (`SAT_02`) and message pause word (`MSG_PAUSE_0010`).
 - `#define NAME value` names a number (or an earlier name) and
   `#include "inc/items.akinc"` reads a file of defines, resolved against the
   script's directory and then each directory above it. Game data has no

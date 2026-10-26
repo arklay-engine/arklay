@@ -12,12 +12,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use super::engine;
 use super::names::Names;
-use super::preprocess::merged_id;
+use super::preprocess::{merged_id, room_variants};
 use crate::scd::akscr::compile;
 use crate::scd::decomp::constants;
 use crate::scd::disasm::{COMMAND_SIG, EventState, format_insn, next_event_state, render_run};
 use crate::scd::ir::{Block, Decoded, Insn, Scripts, Stream, StreamKind};
 use crate::scd::opcode::command_width;
+use crate::sfx;
 
 /// Render the `.akscr` source of every stream, with numbers for game data.
 pub fn decompile(scripts: &Scripts) -> String {
@@ -50,6 +51,15 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     for (&id, name) in &voice_messages {
         defines.insert(name.clone(), i64::from(id));
     }
+    for value in 0..=u8::MAX {
+        for prefix in ROOM_SLOTS {
+            defines.insert(format!("{prefix}{value:02X}"), i64::from(value));
+        }
+    }
+    let sounds = sound_names(room);
+    for (&(_, id), name) in &sounds {
+        defines.insert(name.clone(), i64::from(id));
+    }
     let ctx = Ctx {
         names,
         room,
@@ -62,6 +72,8 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         room_flags: RefCell::default(),
         room_messages: RefCell::default(),
         used_voices: RefCell::default(),
+        locals: RefCell::default(),
+        sounds,
     };
     let mut sections: Vec<String> = Vec::new();
     for block in &scripts.init {
@@ -86,7 +98,9 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     let room_flags = ctx.room_flags.borrow();
     let room_messages = ctx.room_messages.borrow();
     let used_voices = ctx.used_voices.borrow();
+    let locals = ctx.locals.borrow();
     if !room_flags.is_empty()
+        || !locals.is_empty()
         || !ctx.aots.is_empty()
         || !ctx.enemies.is_empty()
         || !room_messages.is_empty()
@@ -98,6 +112,9 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         }
         for (&slot, name) in &ctx.enemies {
             out.push_str(&format!("#define {name} 0x{slot:02X}\n"));
+        }
+        for (name, value) in locals.iter() {
+            out.push_str(&format!("#define {name} 0x{value:02X}\n"));
         }
         for &id in used_voices.iter() {
             out.push_str(&format!("#define {} 0x{id:02X}\n", ctx.voices[&id]));
@@ -114,6 +131,54 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         out.push_str(&section);
     }
     out
+}
+
+/// The prefixes of a room's object, camera and effect slot names.
+const ROOM_SLOTS: [&str; 3] = ["OBJ_", "CAM_", "FX_"];
+
+/// Names for the sounds `se_play_3d` can play in RDT `room`, by bank and
+/// id: `SE_<id>_<file>` from the room's sound table when every variant of
+/// the room plays the same file, `SE_<id>` when not, and a placeholder for
+/// the other banks, whose sound depends on the door taken, the weapon or the
+/// character.
+fn sound_names(room: u16) -> BTreeMap<(u8, u8), String> {
+    let rows: Vec<usize> = room_variants(merged_id(room))
+        .into_iter()
+        .map(|variant| sfx::room_row((variant >> 12) as u8, ((variant >> 4) & 0xFF) as u8))
+        .collect();
+    let mut names = BTreeMap::new();
+    for id in 0..=u8::MAX {
+        let files: BTreeSet<Option<&str>> = rows
+            .iter()
+            .map(|&row| sfx::room_sound(row, usize::from(id)))
+            .collect();
+        let name = match files.into_iter().collect::<Vec<_>>().as_slice() {
+            [Some(file)] => {
+                let file: String = file
+                    .chars()
+                    .map(|ch| {
+                        if ch.is_ascii_alphanumeric() {
+                            ch.to_ascii_uppercase()
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect();
+                format!("SE_{id:02X}_{file}")
+            }
+            _ => format!("SE_{id:02X}"),
+        };
+        names.insert((2, id), name);
+        for (bank, prefix) in [
+            (0, "SE_DOOR_"),
+            (1, "SE_WEAPON_"),
+            (3, "SE_PL_"),
+            (4, "SE_BGM_"),
+        ] {
+            names.insert((bank, id), format!("{prefix}{id:02X}"));
+        }
+    }
+    names
 }
 
 /// The opcodes whose first operand is an AOT (room trigger) index.
@@ -469,13 +534,32 @@ struct Ctx<'n> {
     room_messages: RefCell<BTreeMap<u8, String>>,
     /// The voice lines named so far, defined at the top of the script.
     used_voices: RefCell<BTreeSet<u16>>,
+    /// The room's object, camera, effect and sound names used so far,
+    /// defined at the top of the script.
+    locals: RefCell<BTreeMap<String, u8>>,
+    /// The room's sound names, by `se_play_3d` bank and id.
+    sounds: BTreeMap<(u8, u8), String>,
+}
+
+impl Ctx<'_> {
+    /// `name`, defined at the top of the script as `value`.
+    fn local(&self, name: String, value: u8) -> Option<String> {
+        self.locals.borrow_mut().insert(name.clone(), value);
+        Some(name)
+    }
 }
 
 /// The flag group of the room's own flags.
 const FG_ROOM: u8 = 4;
 
+/// The flag group of the door lock flags.
+const FG_LOCK: u8 = 2;
+
 /// The flag group of the enemy flags.
 const FG_ENEMY: u8 = 3;
+
+/// The flag group of the room item flags.
+const FG_ITEM: u8 = 7;
 
 /// One `proc init`/`proc main` section, verified against the block's bytes.
 fn block_section(ctx: &Ctx, name: &str, block: &Block) -> String {
@@ -898,14 +982,23 @@ fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
         Decoded::Event(op) if op.op == 0x04 && insn.bytes.len() == 3 => {
             let value = insn.bytes[2];
             let named = match insn.bytes[1] {
-                1 => ctx.enemies.get(&value),
-                3 => ctx.aots.get(&value),
+                1 => ctx.enemies.get(&value).cloned(),
+                2 => ctx.local(format!("OBJ_{value:02X}"), value),
+                3 => ctx.aots.get(&value).cloned(),
                 _ => None,
             };
             if let Some(named) = named
                 && let Some(arg) = args.get_mut(1)
             {
-                *arg = named.clone();
+                *arg = named;
+            }
+        }
+        // `evt_fork(slot, ..)` / `evt_disable(slot)`.
+        Decoded::Event(op) if matches!(op.op, 0x05 | 0x09) && insn.bytes.len() > 1 => {
+            if let (Some(named), Some(arg)) =
+                (engine::TASK.name(i64::from(insn.bytes[1])), args.get_mut(0))
+            {
+                *arg = named;
             }
         }
         _ => {}
@@ -946,8 +1039,7 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
     for (index, &(kind, position)) in positions.iter().enumerate() {
         let value = byte(position);
         let word = i64::from(value) | (i64::from(byte(position + 1)) << 8);
-        let engine =
-            |names: &[&'static str], value: i64| engine::name_in(names, value).map(str::to_string);
+        let byte_value = i64::from(value);
         let named = match (op, index, kind) {
             // `ck` / `set`: the flag bit within its group, and the state.
             (0x04 | 0x05, 1, _) => {
@@ -959,22 +1051,35 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
                     ctx.names.flag(group, value).map(str::to_string)
                 }
             }
-            (0x04 | 0x05, 2, _) => match value {
-                0 => Some("TRUE".to_string()),
-                1 => Some("FALSE".to_string()),
-                2 if op == 0x05 => Some("TOGGLE".to_string()),
-                _ => None,
-            },
+            (0x04, 2, _) if value < 2 => engine::TRUTH.name(byte_value),
+            (0x05, 2, _) => engine::TRUTH.name(byte_value),
             // `cmpb` / `setb`: the state byte, the comparison and the value.
-            (0x06 | 0x08, 0, _) => engine(&engine::prefixed("B_"), i64::from(value)),
-            (0x06, 1, _) | (0x07, 2, _) => engine(&engine::prefixed("CMP_"), i64::from(value)),
+            (0x06 | 0x08, 0, _) => engine::BYTE.name(byte_value),
+            (0x06, 1, _) | (0x07, 2, _) => engine::CMP.name(byte_value),
             (0x06, 2, _) | (0x08, 1, _) => state_value(ctx, at(0), value),
             // `cmpw` / `setw`: the state word.
-            (0x07, 1, _) | (0x31, 0, _) => engine(&engine::prefixed("W_"), i64::from(value)),
+            (0x07, 1, _) | (0x31, 0, _) => engine::WORD.name(byte_value),
             // The AOT trigger flags.
-            (0x0C, 16, _) | (0x0D, 6, _) | (0x12 | 0x13, 2, _) => {
-                engine::bits_of("SAT_", i64::from(value))
-            }
+            (0x0C, 16, _) | (0x0D, 6, _) | (0x12 | 0x13, 2, _) => engine::SAT.bits(byte_value),
+            // The camera to cut to.
+            (0x09, 0, _) => ctx.local(format!("CAM_{value:02X}"), value),
+            // `door_aot_set`: its sound pair, animation and lock.
+            (0x0C, 6, _) => ctx.names.door_sound(value).map(str::to_string),
+            (0x0C, 7, _) => ctx.names.door(value).map(str::to_string),
+            (0x0C, 9, _) => door_lock(ctx, value),
+            // `item_aot_set`: the item flag that marks it taken.
+            (0x18, 17, _) => ctx.names.flag(FG_ITEM, value).map(str::to_string),
+            // Event slots.
+            (0x14, 1, _) | (0x44, 0, _) => engine::TASK.name(byte_value),
+            // Music channels.
+            (0x15 | 0x16 | 0x2F | 0x43, 0, _) => engine::BGM_CHANNEL.name(byte_value),
+            // Room objects and effects.
+            (0x1F, 0, _) => ctx.local(format!("OBJ_{value:02X}"), value),
+            (0x2A | 0x3D | 0x42, 0, _) => ctx.local(format!("FX_{value:02X}"), value),
+            (0x29, 0, _) => ctx.names.movie(value).map(str::to_string),
+            (0x2D, 0, _) => ctx.aots.get(&value).cloned(),
+            (0x33, 0, _) => engine::SYS.name(byte_value),
+            (0x0B, 1, b'U') => engine::MSG_PAUSE.bits(word),
             (_, _, b't') if !matches!(value, 0 | 254 | 255) => Some(
                 ctx.names
                     .item(value)
@@ -1008,14 +1113,20 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
                     (None, false) => None,
                 }
             }
-            // `se_play_3d`: where it plays, and the enemy it plays on.
-            (0x17, 3, _) => engine(&engine::prefixed("SND_"), i64::from(value)),
+            // `se_play_3d`: the bank and sound, where it plays, and the enemy
+            // it plays on.
+            (0x17, 0, _) => engine::SND_BANK.name(byte_value),
+            (0x17, 1, _) => ctx
+                .sounds
+                .get(&(at(0), value))
+                .and_then(|name| ctx.local(name.clone(), value)),
+            (0x17, 3, _) => engine::SND_AT.name(byte_value),
             (0x17, 4, _) if at(3) == 2 => ctx.enemies.get(&value).cloned(),
             // `enemy`: the enemy flag that keeps it away, and its slot.
             (0x1B, 2, _) if value != 0xFF => ctx.names.flag(FG_ENEMY, value).map(str::to_string),
             (0x1B, 13, _) => ctx.enemies.get(&value).cloned(),
             // `voice_play`: play or stop, and the line.
-            (0x1E, 0, _) => engine(&["VOICE_PLAY", "VOICE_STOP"], i64::from(value)),
+            (0x1E, 0, _) => engine::VOICE.name(byte_value),
             (0x1E, 1, _) if at(0) == 1 && byte(position + 1) == 0 => {
                 let id = u16::from(value);
                 ctx.voices.get(&id).map(|name| {
@@ -1026,33 +1137,16 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
             // Commands on an enemy slot.
             (0x21 | 0x39, 0, _) | (0x28, 1, _) => ctx.enemies.get(&value).cloned(),
             // `eml_state`: the sub-command, and how the status bits apply.
-            (0x28, 2, _) => engine(
-                &[
-                    "EML_BEHAVIOUR",
-                    "EML_REVIVE",
-                    "EML_ACTION",
-                    "EML_STATUS",
-                    "EML_ANGLE",
-                    "EML_BLEND_RESET",
-                    "EML_JOINTS",
-                    "EML_ACTION_STATE",
-                ],
-                i64::from(value),
-            ),
-            (0x28, 3, b'U') if at(2) == 3 => {
-                let mode = engine(
-                    &["EML_STATUS_SET", "EML_STATUS_OR", "EML_STATUS_XOR"],
-                    word & 0xFF00,
-                );
-                mode.map(|mode| format!("{mode} | {}", word & 0xFF))
-            }
+            (0x28, 2, _) => engine::EML.name(byte_value),
+            (0x28, 3, b'U') if at(2) == 3 => engine::EML_STATUS
+                .name(word & 0xFF00)
+                .map(|mode| format!("{mode} | {}", word & 0xFF)),
             // `room_bgm_state_set`: the room in the 0-based stage, and the
             // music state.
             (0x37, 1, _) if value < 0x20 => ctx.names.door_target(at(0) + 1, value),
-            (0x37, 2, _) => match value {
-                0xFF => Some("BGM_OFF".to_string()),
-                _ => engine::bits_of("BGM_", i64::from(value)),
-            },
+            (0x37, 2, _) => engine::BGM_OFF
+                .name(byte_value)
+                .or_else(|| engine::BGM_STATE.bits(byte_value)),
             (_, _, b'r') => Some(
                 ctx.names
                     .door_target(ctx.stage, value)
@@ -1068,10 +1162,32 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
     }
 }
 
-/// A value a state byte holds: a room of this stage, or an item.
+/// `door_aot_set`'s lock byte: locked, and the `FG_LOCK` bit that unlocks.
+fn door_lock(ctx: &Ctx, value: u8) -> Option<String> {
+    if value == 0 {
+        return None;
+    }
+    let mut parts: Vec<String> = [0x80, 0x40]
+        .into_iter()
+        .filter(|&bit| value & bit != 0)
+        .filter_map(|bit| engine::DOOR_LOCK.name(i64::from(bit)))
+        .collect();
+    let bit = value & 0x3F;
+    if bit != 0 || value & 0x80 != 0 {
+        parts.push(
+            ctx.names
+                .flag(FG_LOCK, bit)
+                .map_or_else(|| bit.to_string(), str::to_string),
+        );
+    }
+    Some(parts.join(" | "))
+}
+
+/// A value a state byte holds: a room of this stage, a camera, or an item.
 fn state_value(ctx: &Ctx, index: u8, value: u8) -> Option<String> {
     match index {
         1 | 3 if value < 0x20 => ctx.names.door_target(ctx.stage, value),
+        2 | 4 => ctx.local(format!("CAM_{value:02X}"), value),
         6 | 18 | 19 | 41 if value != 0 => ctx.names.item(value).map(str::to_string),
         _ => None,
     }

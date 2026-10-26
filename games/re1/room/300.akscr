@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -20,6 +22,13 @@
 #define AOT_0B_ITEM 0x0B
 #define AOT_0C_ITEM 0x0C
 #define AOT_0D_MESSAGE 0x0D
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_02 0x02
+#define CAM_03 0x03
+#define CAM_04 0x04
+#define CAM_05 0x05
+#define CAM_06 0x06
 #define ENEMY_00_CERBERUS 0x00
 #define ENEMY_01_CERBERUS 0x01
 #define ENEMY_02_CERBERUS 0x02
@@ -34,6 +43,11 @@
 #define MSG_VO_009_03 0x03
 #define MSG_VO_A05_01 0x05
 #define MSG_YOU_GOT_THE_MAP_OF_GARDEN 0x0A
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define SE_17_CALL 0x17
+#define SE_21_ELV1 0x21
+#define SE_22_ELV2 0x22
 #define VO_009_00_1E 0x1E
 #define VO_009_00_24 0x24
 #define VO_009_01 0x1F
@@ -46,12 +60,12 @@
 proc init
 {
     set(FG_STATUS, F_STATUS_1D, TRUE);
-    door_aot_set(AOT_00_DOOR, 23100, 27800, 1700, 2000, 0, 8, 15, 64, 0, ROOM_301_WATER_GATE, 22400, 0, 3600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 6, 21, 64, 0, ROOM_302_FALLS, 20300, 0, 4700, 1024, UNLOCKED, 0);
-    door_aot_set(AOT_02_DOOR, 22300, 3200, 4700, 4100, 12, 1, 8, 0, 0, STAGE_1 | ROOM_11B_STORE_ROOM, 8200, 0, 5900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 23100, 27800, 1700, 2000, 0, DOOR_SND_08_DR_GAT, DOOR_0F_MON, 64, 0, ROOM_301_WATER_GATE, 22400, 0, 3600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, DOOR_SND_06_EV_MV, DOOR_15_ELE04, 64, 0, ROOM_302_FALLS, 20300, 0, 4700, 1024, UNLOCKED, 0);
+    door_aot_set(AOT_02_DOOR, 22300, 3200, 4700, 4100, 12, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, STAGE_1 | ROOM_11B_STORE_ROOM, 8200, 0, 5900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_03_USEITEM, 0, 0, 32000, 32000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 0, 63, 0, 1, 0);
     aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
-    item_aot_set(AOT_04_ITEM, 4500, 12500, 2000, 2000, IT_50_UNKNOWN_50, 1, 0, 255, 10, 22, 14, 247, 250, 51, 0, 4, 79, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 4500, 12500, 2000, 2000, IT_50_UNKNOWN_50, 1, 0, 255, 10, 22, 14, 247, 250, 51, 0, 4, F_ITEM_4F, 129, 0, 0);
     if (ck(FG_ITEM, F_ITEM_4F, TRUE))
     {
         aot_reset(AOT_04_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 2, on_aot_04_item, 0);
@@ -61,24 +75,24 @@ proc init
         aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
     }
     aot_set(AOT_05_EVENT, 2696, 11486, 900, 1100, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 3, 0, on_aot_05, 0, 0, 0);
-    item_aot_set(AOT_06_ITEM, 25700, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 1, 255, 232, 103, 0, 0, 208, 7, 0, 0, 185, 129, 1, 0);
-    item_aot_set(AOT_07_ITEM, 26200, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 2, 255, 220, 105, 0, 0, 208, 7, 0, 0, 186, 129, 1, 0);
-    item_aot_set(AOT_08_ITEM, 26700, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 3, 255, 208, 107, 0, 0, 208, 7, 0, 0, 187, 129, 1, 0);
-    item_aot_set(AOT_09_ITEM, 29000, 1100, 1800, 1800, IT_43_HEAL_HERB_RED, 1, 4, 255, 204, 116, 0, 0, 208, 7, 0, 0, 188, 129, 1, 0);
-    item_aot_set(AOT_0A_ITEM, 29500, 1100, 1800, 1800, IT_43_HEAL_HERB_RED, 1, 5, 255, 192, 118, 0, 0, 208, 7, 0, 0, 189, 129, 1, 0);
-    item_aot_set(AOT_0B_ITEM, 22000, 8500, 2000, 1200, IT_45_HEAL_HERB_BLUE, 1, 6, 255, 172, 88, 0, 0, 28, 37, 0, 0, 191, 129, 1, 0);
-    item_aot_set(AOT_0C_ITEM, 22000, 8500, 2000, 1200, IT_45_HEAL_HERB_BLUE, 1, 7, 255, 104, 91, 0, 0, 28, 37, 0, 0, 192, 129, 1, 0);
+    item_aot_set(AOT_06_ITEM, 25700, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 1, 255, 232, 103, 0, 0, 208, 7, 0, 0, F_ITEM_B9, 129, 1, 0);
+    item_aot_set(AOT_07_ITEM, 26200, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 2, 255, 220, 105, 0, 0, 208, 7, 0, 0, F_ITEM_BA, 129, 1, 0);
+    item_aot_set(AOT_08_ITEM, 26700, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 3, 255, 208, 107, 0, 0, 208, 7, 0, 0, F_ITEM_BB, 129, 1, 0);
+    item_aot_set(AOT_09_ITEM, 29000, 1100, 1800, 1800, IT_43_HEAL_HERB_RED, 1, 4, 255, 204, 116, 0, 0, 208, 7, 0, 0, F_ITEM_BC, 129, 1, 0);
+    item_aot_set(AOT_0A_ITEM, 29500, 1100, 1800, 1800, IT_43_HEAL_HERB_RED, 1, 5, 255, 192, 118, 0, 0, 208, 7, 0, 0, F_ITEM_BD, 129, 1, 0);
+    item_aot_set(AOT_0B_ITEM, 22000, 8500, 2000, 1200, IT_45_HEAL_HERB_BLUE, 1, 6, 255, 172, 88, 0, 0, 28, 37, 0, 0, F_ITEM_BF, 129, 1, 0);
+    item_aot_set(AOT_0C_ITEM, 22000, 8500, 2000, 1200, IT_45_HEAL_HERB_BLUE, 1, 7, 255, 104, 91, 0, 0, 28, 37, 0, 0, F_ITEM_C0, 129, 1, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_31, TRUE))
     {
         if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_302_FALLS))
         {
-            obj(0, 191, 255, 2946, 2500, 11736, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(1, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_00, 191, 255, 2946, 2500, 11736, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_01, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         else
         {
-            obj(0, 191, 255, 2946, 0, 11736, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            obj(1, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_00, 191, 255, 2946, 0, 11736, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            obj(OBJ_01, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         inst_cfg(1, 6, 0, 0, 0, 0, 0, 1, 0, 1, 0);
         inst_cfg(3, 4, 0, 0, 0, 0, 0, 1, 0, 1, 0);
@@ -102,7 +116,7 @@ proc init
     set(FG_SCENARIO, F_SCENARIO_14, TRUE);
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_302_FALLS))
     {
-        evt_exec(0, 0, on_enter);
+        evt_exec(0, TASK_00, on_enter);
         dir_set(0, 0, 0, 0, 3200, 2500, 12000);
         spd_set(0, 196, 9);
         timer_setup(2, 0, 0, 7, 0);
@@ -110,15 +124,15 @@ proc init
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, 31))
     {
-        snd_pan_vol_set(1, 20, 25);
+        snd_pan_vol_set(BGM_SUB_1, 20, 25);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_301_WATER_GATE))
     {
-        snd_pan_vol_set(1, 30, 30);
+        snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_302_FALLS))
     {
-        snd_pan_vol_set(1, 45, 30);
+        snd_pan_vol_set(BGM_SUB_1, 45, 30);
     }
 }
 
@@ -132,7 +146,7 @@ proc main
             {
                 set(FG_ROOM, F_ROOM_01, TRUE);
                 aot_reset(AOT_03_USEITEM, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 63, 1);
-                evt_exec(0, 0, from_main);
+                evt_exec(0, TASK_00, from_main);
             }
         }
     }
@@ -142,56 +156,56 @@ proc main
         {
             set(FG_ROOM, F_ROOM_01, TRUE);
             aot_reset(AOT_03_USEITEM, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 63, 1);
-            evt_exec(0, 0, from_main);
+            evt_exec(0, TASK_00, from_main);
         }
     }
     if (testitem(IT_4D_KEY_RADIO))
     {
         aot_reset(AOT_05_EVENT, SCE_NONE, 0, 0, 0, 0);
-        evt_exec(0, 1, from_main_2);
+        evt_exec(0, TASK_01, from_main_2);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 0))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
     {
-        snd_pan_vol_set(1, 30, 30);
+        snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 1))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
     {
-        snd_pan_vol_set(1, 30, 30);
+        snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 2))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
     {
-        snd_pan_vol_set(1, 45, 30);
+        snd_pan_vol_set(BGM_SUB_1, 45, 30);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 3))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
     {
-        snd_pan_vol_set(1, 30, 30);
+        snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 4))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
     {
-        snd_pan_vol_set(1, 30, 30);
+        snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 5))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
     {
-        snd_pan_vol_set(1, 30, 30);
+        snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
-    if (cmpb(B_CAMERA, CMP_EQ, 6))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
     {
-        snd_pan_vol_set(1, 30, 35);
+        snd_pan_vol_set(BGM_SUB_1, 30, 35);
     }
 }
 
 event from_main
 {
     sleep(30);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_CALL, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_CALL, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_CALL, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_CALL, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_CALL, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(480);
     aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
     evt_finish();
@@ -199,7 +213,7 @@ event from_main
 
 event from_main_2
 {
-    evt_disable(0);
+    evt_disable(TASK_00);
     set(FG_6, F_6_17, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
@@ -294,12 +308,12 @@ event from_main_2
 #endif
     act_reset();
     evt_nop();
-    sys_multi(4);
+    sys_multi(SYS_04);
     sleep(40);
     wait_message();
     run
     {
-        sys_multi(7);
+        sys_multi(SYS_07);
         set(FG_6, F_6_17, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_STATUS, F_STATUS_11, TRUE);
@@ -313,7 +327,7 @@ event from_main_2
 
 event on_aot_04_item
 {
-    message(MSG_IT_IS_A_MAP_OF_GARDEN | MSG_FAST, 255); // "It's a map of GARDEN. Will you take it? You got the map of GARDEN."
+    message(MSG_IT_IS_A_MAP_OF_GARDEN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's a map of GARDEN. Will you take it? You got the map of GARDEN."
     do
     {
         evt_next();
@@ -323,7 +337,7 @@ event on_aot_04_item
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 3, on_aot_04_item_sub1);
+            evt_exec(0, TASK_03, on_aot_04_item_sub1);
         }
     }
     evt_finish();
@@ -338,7 +352,7 @@ event on_aot_04_item_sub1
     }
     evt_next();
     evt_nop();
-    message(MSG_YOU_GOT_THE_MAP_OF_GARDEN | MSG_FAST, 255); // "You got the map of GARDEN."
+    message(MSG_YOU_GOT_THE_MAP_OF_GARDEN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "You got the map of GARDEN."
     evt_finish();
 }
 
@@ -347,8 +361,8 @@ event on_aot_05
     run
     {
         set(FG_6, F_6_17, FALSE);
-        sys_multi(1, 128);
-        se_play_3d(2, 33, 0, SND_AT_PLAYER, 0, 0, 0);
+        sys_multi(SYS_01, 128);
+        se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -358,8 +372,8 @@ event on_aot_05
     run
     {
         set(FG_6, F_6_1F, FALSE);
-        evt_exec(0, 4, on_aot_05_sub1);
-        evt_exec(0, 5, on_aot_05_sub2);
+        evt_exec(0, TASK_04, on_aot_05_sub1);
+        evt_exec(0, TASK_05, on_aot_05_sub2);
     }
     for (39)
     {
@@ -401,7 +415,7 @@ event on_aot_05_sub1
 
 event on_aot_05_sub2
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 25, 0);
     for (54)
@@ -422,13 +436,13 @@ event on_enter
     run
     {
         set(FG_6, F_6_17, FALSE);
-        sys_multi(1, 128);
+        sys_multi(SYS_01, 128);
     }
-    se_play_3d(2, 34, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_PLAYER, 0, 0, 0);
     run
     {
-        evt_exec(0, 1, on_enter_sub1);
-        evt_exec(0, 2, on_enter_sub2);
+        evt_exec(0, TASK_01, on_enter_sub1);
+        evt_exec(0, TASK_02, on_enter_sub2);
     }
     setw(W_LIGHT_DELTA, 128, 247);
     sleep(130);
@@ -438,7 +452,7 @@ event on_enter
         set(FG_6, F_6_1D, TRUE);
         setw(W_LIGHT_DELTA, 0, 0);
         setw(W_LIGHT_STATE, 0, 0);
-        sys_multi(7);
+        sys_multi(SYS_07);
     }
     evt_finish();
 }
@@ -467,7 +481,7 @@ event on_enter_sub1
 
 event on_enter_sub2
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 2946, 2500, 11736);
     tw_set_pos(0, 231, 0);

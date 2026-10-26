@@ -10,7 +10,9 @@
 //! - `STAGE_*` a door target's stage bits (`0x40` for stage 2);
 //! - `ROOM_<stage><room>*` a room within its stage (`ROOM_106_MAIN_HALL` is
 //!   `0x06`), for door targets;
-//! - `F_<group>_*` a bit of flag group `FG_<group>`.
+//! - `F_<group>_*` a bit of flag group `FG_<group>`;
+//! - `DOOR_SND_*` a door's sound pair, `DOOR_*` a door's animation, and
+//!   `MOVIE_*` a film.
 //!
 //! A room's own message ids are named from their English text
 //! (`MSG_THERES_SOMETHING_AT_THE_BACK`), defined in the room's script.
@@ -34,6 +36,9 @@ pub struct Names {
     stages: HashMap<u8, String>,
     rooms: HashMap<(u8, u8), String>,
     flags: HashMap<(u8, u8), String>,
+    door_sounds: HashMap<u8, String>,
+    doors: HashMap<u8, String>,
+    movies: HashMap<u8, String>,
     /// Global messages by `message` id (`0x40` and up).
     global_messages: HashMap<u8, String>,
     /// Message text by language key, as one plain line, for comments.
@@ -80,6 +85,12 @@ impl Names {
             self.global_messages.entry(byte).or_insert(name);
         } else if name.starts_with("EM_") {
             self.enemies.entry(byte).or_insert(name);
+        } else if name.starts_with("DOOR_SND_") {
+            self.door_sounds.entry(byte).or_insert(name);
+        } else if name.starts_with("DOOR_") {
+            self.doors.entry(byte).or_insert(name);
+        } else if name.starts_with("MOVIE_") {
+            self.movies.entry(byte).or_insert(name);
         } else if name.starts_with("STAGE_") {
             self.stages.entry(byte >> 5).or_insert(name);
         } else if let Some(stage) = name
@@ -208,6 +219,18 @@ impl Names {
 
     pub(super) fn enemy(&self, value: u8) -> Option<&str> {
         self.enemies.get(&value).map(String::as_str)
+    }
+
+    pub(super) fn door_sound(&self, value: u8) -> Option<&str> {
+        self.door_sounds.get(&value).map(String::as_str)
+    }
+
+    pub(super) fn door(&self, value: u8) -> Option<&str> {
+        self.doors.get(&value).map(String::as_str)
+    }
+
+    pub(super) fn movie(&self, value: u8) -> Option<&str> {
+        self.movies.get(&value).map(String::as_str)
     }
 
     pub(super) fn flag(&self, group: u8, bit: u8) -> Option<&str> {

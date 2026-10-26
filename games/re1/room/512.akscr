@@ -1,14 +1,19 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_MESSAGE 0x01
 #define AOT_02_MESSAGE 0x02
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_02 0x02
 #define ENEMY_00_NPC_CHRIS 0x00
 #define ENEMY_00_NPC_JILL 0x00
 #define F_ROOM_16 0x16
@@ -35,26 +40,26 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 4800, 10400, 1300, 1200, 3, 1, 14, 3, 0, ROOM_50B_FRONT_OF_CELL, 9800, 0, 15800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 4800, 10400, 1300, 1200, 3, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, 0, ROOM_50B_FRONT_OF_CELL, 9800, 0, 15800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     room_bgm_state_set(4, ROOM_512_CELL, BGM_OFF);
     if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
     {
-        room_bgm_state_set(4, ROOM_512_CELL, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
+        room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
     }
     if (ck(FG_COMMON, F_COMMON_4B, FALSE))
     {
 #if CHRIS
         enemy(EM_21_NPC_JILL, 0, 255, 1, 2, 0, 0, 3000, 0, 0, 5680, 0, 2930, ENEMY_00_NPC_JILL, 0, 0, 0);
-        sys_multi(0);
+        sys_multi(SYS_00);
         plw_anim(0, 0, 0);
         eml_state(0, ENEMY_00_NPC_JILL, EML_STATUS, EML_STATUS_OR | 2);
         dir_set(0, 0, 1024, 0, 5670, 0, 9100);
 #else
         enemy(EM_20_NPC_CHRIS, 0, 255, 1, 2, 0, 0, 3000, 0, 0, 5680, 0, 2930, ENEMY_00_NPC_CHRIS, 0, 0, 0);
 #endif
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
         set(FG_COMMON, F_COMMON_4B, TRUE);
-        room_bgm_state_set(4, ROOM_512_CELL, BGM_CH1);
+        room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_1_ON);
     }
     aot_set(AOT_01_MESSAGE, 1800, 3100, 900, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
     aot_set(AOT_02_MESSAGE, 7000, 2000, 1800, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 138, 0, 255, 0, 0, 0);
@@ -71,11 +76,11 @@ event on_enter
         set(FG_STATUS, F_STATUS_0F, TRUE);
         if (ck(FG_SCENARIO, F_SCENARIO_65, TRUE))
         {
-            evt_exec(0, 9, on_enter_sub1);
+            evt_exec(0, TASK_09, on_enter_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_enter_sub2);
+            evt_exec(0, TASK_09, on_enter_sub2);
         }
     }
 #else
@@ -90,11 +95,11 @@ event on_enter
     {
         if (ck(FG_SCENARIO, F_SCENARIO_65, TRUE))
         {
-            evt_exec(0, 9, on_enter_sub1);
+            evt_exec(0, TASK_09, on_enter_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_enter_sub2);
+            evt_exec(0, TASK_09, on_enter_sub2);
         }
     }
 #endif
@@ -127,7 +132,7 @@ event on_enter_sub1
     act_reset();
     evt_nop();
 #else
-    evt_fork(9, on_enter_sub1_sub1, 0);
+    evt_fork(TASK_09, on_enter_sub1_sub1, 0);
 #endif
     sleep(30);
 #if CHRIS
@@ -141,7 +146,7 @@ event on_enter_sub1
     run
     {
         dir_set(0, 0, 1024, 0, 5700, 0, 9100);
-        cutnext(2);
+        cutnext(CAM_02);
     }
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -182,7 +187,7 @@ event on_enter_sub1
     sleep(10);
     run
     {
-        sys_multi(4);
+        sys_multi(SYS_04);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     evt_actor_begin();
@@ -259,8 +264,8 @@ event on_enter_sub1
         pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8440);
     }
 #else
-    cutnext(2);
-    evt_fork(9, on_enter_sub1_sub2, 0);
+    cutnext(CAM_02);
+    evt_fork(TASK_09, on_enter_sub1_sub2, 0);
     voice_play(VOICE_PLAY, VO_119_00, 0);
     sleep(15);
     message(MSG_VO_119_00, 0);
@@ -275,7 +280,7 @@ event on_enter_sub1
     sleep(30);
     run
     {
-        sys_multi(4);
+        sys_multi(SYS_04);
     }
     run
     {
@@ -304,7 +309,7 @@ event on_enter_sub1
     sleep(1);
     run
     {
-        cutnext(0);
+        cutnext(CAM_00);
         pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8000);
     }
     sleep(1);
@@ -331,11 +336,11 @@ event on_enter_sub1
     act_reset();
     evt_nop();
 #else
-    evt_fork(9, on_enter_sub1_sub3, 0);
+    evt_fork(TASK_09, on_enter_sub1_sub3, 0);
     sleep(70);
-    evt_fork(9, on_enter_sub1_sub4, 0);
+    evt_fork(TASK_09, on_enter_sub1_sub4, 0);
     sleep(60);
-    evt_fork(9, on_enter_sub1_sub5, 0);
+    evt_fork(TASK_09, on_enter_sub1_sub5, 0);
 #endif
     wait_message();
     evt_work_set(WK_PLAYER, 0);
@@ -358,7 +363,7 @@ event on_enter_sub1
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
 #else
         pos_set(ENEMY_00_NPC_CHRIS, 0, 3072, 0, 5700, 0, 6800);
-        cutnext(0);
+        cutnext(CAM_00);
         cut_auto(0);
 #endif
     }
@@ -383,7 +388,7 @@ event on_enter_sub1
 #if JILL
     run
     {
-        eml_state(0, ENEMY_00_NPC_CHRIS, 8);
+        eml_state(0, ENEMY_00_NPC_CHRIS, EML_08);
         set(FG_6, F_6_17, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
@@ -420,7 +425,7 @@ event on_enter_sub2
     wait_message();
     run
     {
-        cutnext(1);
+        cutnext(CAM_01);
     }
     sleep(1);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
@@ -445,7 +450,7 @@ event on_enter_sub2
     run
     {
         dir_set(0, 0, 1024, 0, 5700, 0, 9100);
-        cutnext(2);
+        cutnext(CAM_02);
     }
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -486,7 +491,7 @@ event on_enter_sub2
     sleep(10);
     run
     {
-        sys_multi(4);
+        sys_multi(SYS_04);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     evt_actor_begin();
@@ -590,10 +595,10 @@ event on_enter_sub2
     evt_nop();
     wait_message();
 #else
-    evt_fork(9, on_enter_sub1_sub1, 0);
+    evt_fork(TASK_09, on_enter_sub1_sub1, 0);
     sleep(30);
-    cutnext(2);
-    evt_fork(9, on_enter_sub1_sub2, 0);
+    cutnext(CAM_02);
+    evt_fork(TASK_09, on_enter_sub1_sub2, 0);
     voice_play(VOICE_PLAY, VO_119_01, 0);
     sleep(15);
     message(MSG_VO_119_01, 0);
@@ -616,7 +621,7 @@ event on_enter_sub2
     sleep(2);
     run
     {
-        cutnext(0);
+        cutnext(CAM_00);
         pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8000);
     }
     sleep(2);
@@ -643,11 +648,11 @@ event on_enter_sub2
     act_reset();
     evt_nop();
 #else
-    evt_fork(9, on_enter_sub2_sub1, 0);
+    evt_fork(TASK_09, on_enter_sub2_sub1, 0);
     sleep(70);
-    evt_fork(9, on_enter_sub2_sub2, 0);
+    evt_fork(TASK_09, on_enter_sub2_sub2, 0);
     sleep(130);
-    evt_fork(9, on_enter_sub2_sub3, 0);
+    evt_fork(TASK_09, on_enter_sub2_sub3, 0);
 #endif
     wait_message();
     evt_work_set(WK_PLAYER, 0);
@@ -665,7 +670,7 @@ event on_enter_sub2
 #if CHRIS
         set(FG_6, F_6_17, TRUE);
 #else
-        cutnext(0);
+        cutnext(CAM_00);
 #endif
         cut_auto(0);
 #if CHRIS
@@ -695,7 +700,7 @@ event on_enter_sub2
 #if JILL
     run
     {
-        eml_state(0, ENEMY_00_NPC_CHRIS, 8);
+        eml_state(0, ENEMY_00_NPC_CHRIS, EML_08);
         set(FG_6, F_6_17, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }

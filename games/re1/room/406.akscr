@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -15,12 +17,20 @@
 #define AOT_06_ITEM 0x06
 #define AOT_07_ITEM 0x07
 #define AOT_08_ITEM 0x08
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_02 0x02
+#define CAM_05 0x05
 #define ENEMY_00_NPC_BARRY 0x00
 #define F_ROOM_20 0x20
 #define F_ROOM_21 0x21
 #define MSG_A_DORMITORY_SKETCH 0x06
 #define MSG_THERE_IS_A_LADDER 0x07
 #define MSG_YOU_GOT_THE_MAP_OF_DORMITORY 0x09
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define SE_DOOR_00 0x00
+#define SE_DOOR_01 0x01
 #define VO_109_10 0x01
 #define VO_109_11 0x02
 #define VO_109_12 0x03
@@ -30,26 +40,26 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 300, 2000, 2100, 1800, 0, 0, 6, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 2500, 3700, 1600, 1800, 1, 0, 33, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 1, 11, 26, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 300, 2000, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 2500, 3700, 1600, 1800, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_03_HIKIDASHI, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 34, 0, 6, 0, 6, 0);
     aot_set(AOT_04_EVENT, 9000, 5000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
     aot_set(AOT_05_EVENT, 12100, 8400, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
-    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 22, 43, 116, 255, 168, 7, 0, 0, 25, 0, 0, 0);
+    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 22, 43, 116, 255, 168, 7, 0, 0, F_ITEM_19, 0, 0, 0);
     eml_rot(0, 0, 0, 0, 252);
     setbyte(0, 0, 0);
-    item_aot_set(AOT_07_ITEM, 12400, 3800, 1000, 1400, IT_64_FILE_PLANT_42_REPORT, 1, 1, 255, 88, 52, 58, 253, 76, 19, 0, 0, 134, 129, 0, 0);
-    item_aot_set(AOT_08_ITEM, 0, 0, 1, 10, IT_52_UNKNOWN_52, 1, 2, 255, 64, 36, 240, 246, 44, 21, 0, 0, 135, 129, 0, 0);
+    item_aot_set(AOT_07_ITEM, 12400, 3800, 1000, 1400, IT_64_FILE_PLANT_42_REPORT, 1, 1, 255, 88, 52, 58, 253, 76, 19, 0, 0, F_ITEM_86, 129, 0, 0);
+    item_aot_set(AOT_08_ITEM, 0, 0, 1, 10, IT_52_UNKNOWN_52, 1, 2, 255, 64, 36, 240, 246, 44, 21, 0, 0, F_ITEM_87, 129, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_45, TRUE))
     {
-        obj(0, 17, 255, 10180, 0, 8970, 1024, 0, 0, 94, 1, 0, 0, 162, 254, 200, 0, 76, 4, 176, 4, 88, 2);
-        obj(1, 17, 255, 10176, 0, 10220, 1024, 0, 0, 44, 1, 0, 0, 212, 254, 200, 0, 76, 4, 176, 4, 88, 2);
+        obj(OBJ_00, 17, 255, 10180, 0, 8970, 1024, 0, 0, 94, 1, 0, 0, 162, 254, 200, 0, 76, 4, 176, 4, 88, 2);
+        obj(OBJ_01, 17, 255, 10176, 0, 10220, 1024, 0, 0, 44, 1, 0, 0, 212, 254, 200, 0, 76, 4, 176, 4, 88, 2);
     }
     else
     {
-        obj(0, 17, 255, 12907, 0, 8580, 1024, 0, 0, 94, 1, 0, 0, 162, 254, 200, 0, 76, 4, 176, 4, 88, 2);
-        obj(1, 17, 255, 10176, 0, 8580, 1024, 0, 0, 44, 1, 0, 0, 212, 254, 200, 0, 76, 4, 176, 4, 88, 2);
+        obj(OBJ_00, 17, 255, 12907, 0, 8580, 1024, 0, 0, 94, 1, 0, 0, 162, 254, 200, 0, 76, 4, 176, 4, 88, 2);
+        obj(OBJ_01, 17, 255, 10176, 0, 8580, 1024, 0, 0, 44, 1, 0, 0, 212, 254, 200, 0, 76, 4, 176, 4, 88, 2);
     }
 #if CHRIS
     if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
@@ -67,7 +77,7 @@ proc init
             {
                 if (ck(FG_COMMON, F_COMMON_B1, FALSE))
                 {
-                    evt_exec(0, 9, on_enter);
+                    evt_exec(0, TASK_09, on_enter);
                 }
             }
         }
@@ -132,9 +142,9 @@ event on_enter
     sleep(25);
     run
     {
-        cutnext(2);
-        evt_exec(0, 9, on_enter_sub1);
-        evt_exec(0, 9, on_enter_sub2);
+        cutnext(CAM_02);
+        evt_exec(0, TASK_09, on_enter_sub1);
+        evt_exec(0, TASK_09, on_enter_sub2);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -160,7 +170,7 @@ event on_enter
     act_anim_flags(32 | 0, 32 | 1, 0 | 0);
     act_reset();
     evt_nop();
-    bgm_play(0);
+    bgm_play(BGM_MAIN);
     sleep(30);
     run
     {
@@ -232,7 +242,7 @@ event on_enter
     wait_message();
     run
     {
-        bgm_play(1);
+        bgm_play(BGM_SUB_1);
         message(2, 0);
         voice_play(VOICE_PLAY, VO_109_12, 0);
     }
@@ -433,7 +443,7 @@ event on_enter
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     wait_message();
-    cutnext(5);
+    cutnext(CAM_05);
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
@@ -468,14 +478,14 @@ event on_enter
     act_reset();
     evt_nop();
     sleep(20);
-    cutnext(2);
+    cutnext(CAM_02);
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     sleep(20);
-    cutnext(1);
+    cutnext(CAM_01);
     sleep(5);
     run
     {
@@ -500,9 +510,9 @@ event on_enter
     act_motion(16);
     act_reset();
     evt_nop();
-    cutnext(5);
+    cutnext(CAM_05);
     sleep(20);
-    se_play_3d(0, 0, 0, SND_AT_POINT, 0, 6388, 14000);
+    se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 6388, 14000);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 4, 32 | 0, 0 | 0);
@@ -517,7 +527,7 @@ event on_enter
     sleep(15);
     run
     {
-        se_play_3d(0, 1, 0, SND_AT_POINT, 0, 6388, 14000);
+        se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6388, 14000);
         pos_set(ENEMY_00_NPC_BARRY, 0, 0, 0, 0, 0, 0);
     }
     sleep(20);
@@ -531,15 +541,15 @@ event on_enter
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    cutnext(2);
+    cutnext(CAM_02);
     sleep(30);
     run
     {
-        bgm_stop(1);
+        bgm_stop(BGM_SUB_1);
         set(FG_6, F_6_17, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        room_bgm_state_set(3, ROOM_406_ROOM_002, BGM_CH0);
+        room_bgm_state_set(3, ROOM_406_ROOM_002, BGM_MAIN_ON);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -604,11 +614,11 @@ event on_aot_04
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_04_sub1);
+            evt_exec(0, TASK_09, on_aot_04_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_aot_04_sub2);
+            evt_exec(0, TASK_09, on_aot_04_sub2);
         }
     }
     evt_finish();
@@ -645,7 +655,7 @@ event on_aot_05
 {
     run
     {
-        cutnext(0);
+        cutnext(CAM_00);
         set(FG_6, F_6_17, FALSE);
         message(MSG_THERE_IS_A_LADDER | MSG_FAST, 0); // "There's a ladder. Will you descend it? There is no time to check it."
     }
@@ -663,11 +673,11 @@ event on_aot_05
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_05_sub1);
+            evt_exec(0, TASK_09, on_aot_05_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_aot_05_sub2);
+            evt_exec(0, TASK_09, on_aot_05_sub2);
         }
     }
     evt_finish();
@@ -677,7 +687,7 @@ event on_aot_05_sub1
 {
     run
     {
-        door_aot_set(AOT_02_DOOR, 10000, 6400, 5000, 5000, 1, 11, 26, 64, 0, ROOM_40D_UNDER_PASSAGE, 3000, 0, 27800, 1024, UNLOCKED, SAT_UNDER | SAT_PLAYER);
+        door_aot_set(AOT_02_DOOR, 10000, 6400, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3000, 0, 27800, 1024, UNLOCKED, SAT_UNDER | SAT_PLAYER);
         set(FG_6, F_6_17, TRUE);
     }
     evt_finish();

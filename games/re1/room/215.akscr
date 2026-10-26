@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -18,34 +20,43 @@
 #define AOT_09_MESSAGE 0x09
 #define AOT_0A_MESSAGE 0x0A
 #define AOT_0B_MESSAGE 0x0B
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_03 0x03
+#define CAM_04 0x04
+#define CAM_05 0x05
+#define CAM_07 0x07
+#define FX_0C 0x0C
 #define MSG_NOTHING_IMPORTANT 0x01
 #define MSG_THERE_IS_A_SWITCH 0x00
 #define MSG_WILL_YOU_TRY_AND_TAKE_OUT 0x02
+#define OBJ_00 0x00
+#define SE_17_SW_BTN 0x17
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 8100, 3200, 1800, 1300, 3, 0, 0, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 8100, 3200, 1800, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_EVENT, 8200, 5100, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
     aot_set(AOT_02_EVENT, 4450, 10680, 1000, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
-    item_aot_set(AOT_03_ITEM, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 16, 9, 80, 251, 36, 39, 0, 8, 29, 129, 0, 0);
-    item_aot_set(AOT_04_ITEM, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, 1, 255, 242, 18, 70, 251, 244, 31, 180, 251, 116, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 16, 9, 80, 251, 36, 39, 0, 8, F_ITEM_1D, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, 1, 255, 242, 18, 70, 251, 244, 31, 180, 251, F_ITEM_74, 129, 0, 0);
     eml_rot(1, 124, 1, 232, 8);
-    item_aot_set(AOT_05_ITEM, 0, 0, 10, 10, IT_22_KEY_JEWEL_RED, 1, 2, 255, 8, 32, 198, 233, 50, 55, 0, 0, 30, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 0, 0, 10, 10, IT_22_KEY_JEWEL_RED, 1, 2, 255, 8, 32, 198, 233, 50, 55, 0, 0, F_ITEM_1E, 129, 0, 0);
     eml_rot(2, 0, 0, 0, 252);
     setbyte(2, 0, 0);
-    item_aot_set(AOT_06_ITEM, 1780, 7820, 1000, 1500, IT_0E_AMMO_MAGNUM, 6, 3, 255, 232, 8, 80, 251, 160, 35, 0, 0, 200, 129, 0, 0);
-    obj(0, 65, 255, 6720, 0, 10440, 0, 64, 2, 0, 0, 192, 253, 0, 0, 28, 2, 132, 3, 232, 3, 28, 2);
+    item_aot_set(AOT_06_ITEM, 1780, 7820, 1000, 1500, IT_0E_AMMO_MAGNUM, 6, 3, 255, 232, 8, 80, 251, 160, 35, 0, 0, F_ITEM_C8, 129, 0, 0);
+    obj(OBJ_00, 65, 255, 6720, 0, 10440, 0, 64, 2, 0, 0, 192, 253, 0, 0, 28, 2, 132, 3, 232, 3, 28, 2);
     if (ck(FG_COMMON, F_COMMON_44, FALSE))
     {
-        cutnext(4);
-        evt_exec(0, 9, on_enter);
+        cutnext(CAM_04);
+        evt_exec(0, TASK_09, on_enter);
     }
     else
     {
         msg_list(0, 18, 38, 248, 243, 248, 25, 56, 56, 56, 0, 200, 45, 169, 38, 22, 244, 80, 28, 56, 56, 56, 0, 112, 43, 11, 39, 72, 244, 8, 25, 180, 180, 180, 0, 160, 35, 160, 1, 160, 1, 160, 1);
         if (ck(FG_ITEM, F_ITEM_1E, TRUE))
         {
-            effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
+            effect_tracked(FX_0C, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
     }
     aot_set(AOT_07_MESSAGE, 5500, 5200, 1100, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
@@ -103,35 +114,35 @@ event on_aot_01
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            se_play_3d(2, 23, 0, SND_AT_POINT, 0, 8200, 5100);
+            se_play_3d(SND_BANK_ROOM, SE_17_SW_BTN, 0, SND_AT_POINT, 0, 8200, 5100);
             if (ck(FG_COMMON, F_COMMON_44, FALSE))
             {
-                if (cmpb(B_CAMERA, CMP_EQ, 4))
+                if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
                 {
-                    cutnext(0);
+                    cutnext(CAM_00);
                 }
                 else
                 {
-                    cutnext(1);
+                    cutnext(CAM_01);
                 }
-                evt_exec(0, 9, on_aot_01_sub1);
+                evt_exec(0, TASK_09, on_aot_01_sub1);
             }
             else
             {
-                if (cmpb(B_CAMERA, CMP_EQ, 0))
+                if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
                 {
-                    cutnext(4);
+                    cutnext(CAM_04);
                 }
                 else
                 {
-                    cutnext(5);
+                    cutnext(CAM_05);
                 }
-                evt_exec(0, 9, on_aot_01_sub2);
+                evt_exec(0, TASK_09, on_aot_01_sub2);
             }
         }
         else
         {
-            evt_exec(0, 9, on_enter);
+            evt_exec(0, TASK_09, on_enter);
         }
     }
     evt_finish();
@@ -143,7 +154,7 @@ event on_aot_01_sub1
     {
         if (ck(FG_ITEM, F_ITEM_1E, TRUE))
         {
-            effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
+            effect_tracked(FX_0C, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
         msg_list(0, 18, 38, 248, 243, 248, 25, 56, 56, 56, 0, 200, 45, 169, 38, 22, 244, 80, 28, 56, 56, 56, 0, 112, 43, 11, 39, 72, 244, 8, 25, 180, 180, 180, 0, 160, 35, 160, 1, 160, 1, 160, 1);
         set(FG_COMMON, F_COMMON_44, TRUE);
@@ -202,17 +213,17 @@ event on_aot_02
         set(FG_6, F_6_17, FALSE);
         if (ck(FG_COMMON, F_COMMON_44, FALSE))
         {
-            cutnext(7);
-            evt_exec(0, 9, on_aot_02_sub1);
+            cutnext(CAM_07);
+            evt_exec(0, TASK_09, on_aot_02_sub1);
         }
         else
         {
-            cutnext(3);
+            cutnext(CAM_03);
             setbyte(2, 1, 0);
             effect_kill_a(0);
             msg_list(0, 168, 22, 248, 243, 204, 41, 255, 255, 255, 0, 240, 25, 168, 22, 22, 244, 204, 41, 255, 255, 255, 0, 240, 25, 168, 22, 72, 244, 204, 41, 255, 255, 255, 0, 240, 25, 120, 5, 120, 5, 120, 5);
-            evt_exec(0, 9, on_aot_02_sub2);
-            evt_exec(0, 7, on_aot_02_sub3);
+            evt_exec(0, TASK_09, on_aot_02_sub2);
+            evt_exec(0, TASK_07, on_aot_02_sub3);
         }
     }
     evt_finish();
@@ -253,11 +264,11 @@ event on_aot_02_sub2
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_sub2_sub1);
+            evt_exec(0, TASK_09, on_aot_02_sub2_sub1);
         }
         else
         {
-            evt_exec(0, 9, on_aot_02_sub2_sub2);
+            evt_exec(0, TASK_09, on_aot_02_sub2_sub2);
         }
     }
     evt_finish();
@@ -283,12 +294,12 @@ event on_aot_02_sub2_sub1
 
 event on_aot_02_sub2_sub2
 {
-    evt_disable(7);
+    evt_disable(TASK_07);
     run
     {
         if (ck(FG_ITEM, F_ITEM_1E, TRUE))
         {
-            effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
+            effect_tracked(FX_0C, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
         setbyte(2, 0, 0);
         cutcurr(0);

@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -14,6 +16,12 @@
 #define AOT_04_DOOR 0x04
 #define AOT_05_ITEM 0x05
 #define AOT_06_ITEM 0x06
+#define CAM_01 0x01
+#define CAM_02 0x02
+#define CAM_03 0x03
+#define CAM_04 0x04
+#define CAM_05 0x05
+#define CAM_06 0x06
 #define ENEMY_00 0x00
 #define ENEMY_00_NPC_WESKER 0x00
 #define ENEMY_01_NPC_BARRY 0x01
@@ -66,6 +74,10 @@
 #define MSG_VO_106_00 0x23
 #define MSG_VO_106_01 0x24
 #define MSG_VO_106_02 0x27
+#define SE_17 0x17
+#define SE_18 0x18
+#define SE_19 0x19
+#define SE_1A 0x1A
 #define VO_001_00 0x00
 #define VO_001_01 0x01
 #define VO_001_02 0x02
@@ -92,13 +104,13 @@
 proc init
 {
     set(FG_STATUS, F_STATUS_1C, TRUE);
-    door_aot_set(AOT_00_DOOR, 31100, 10000, 2000, 3000, 6, 0, 4, 7, 0, ROOM_107_GALLERY, 2700, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 31100, 18600, 2000, 1200, 2, 0, 3, 1, 197, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 1000, 15000, 1950, 3800, 6, 0, 3, 7, 0, ROOM_105_DINING_ROOM, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 31100, 10000, 2000, 3000, 6, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 7, 0, ROOM_107_GALLERY, 2700, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 31100, 18600, 2000, 1200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_05, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 1000, 15000, 1950, 3800, 6, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 7, 0, ROOM_105_DINING_ROOM, 30900, 0, 8300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if CHRIS
     if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
     {
-        door_aot_set(AOT_03_DOOR, 14600, 800, 5200, 2200, 2, 0, 3, 1, 197, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR, 14600, 800, 5200, 2200, 2, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_05, ROOM_111_DRESSING_ROOM, 2800, 0, 4600, 0, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
@@ -107,11 +119,11 @@ proc init
 #else
     aot_set(AOT_03_USEITEM, 14600, 800, 5200, 2200, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
 #endif
-    door_aot_set(AOT_04_DOOR, 15600, 15900, 2900, 2600, 0, 4, 22, 96, 0, STAGE_2 | ROOM_203_HALL_2F, 17100, 0, 25300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_04_DOOR, 15600, 15900, 2900, 2600, 0, DOOR_SND_04_ST_WCP, DOOR_16_KAI01, 96, 0, STAGE_2 | ROOM_203_HALL_2F, 17100, 0, 25300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_08, FALSE))
     {
-        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, 3, 255, 0, 0, 32, 78, 0, 0, 0, 0, 52, 129, 0, 0);
+        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, 3, 255, 0, 0, 32, 78, 0, 0, 0, 0, F_ITEM_34, 129, 0, 0);
         if (ck(FG_ITEM, F_ITEM_34, TRUE))
         {
             if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
@@ -127,7 +139,7 @@ proc init
 #else
     if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
     {
-        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, 3, 255, 0, 0, 32, 78, 0, 0, 0, 0, 52, 129, 0, 0);
+        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, 3, 255, 0, 0, 32, 78, 0, 0, 0, 0, F_ITEM_34, 129, 0, 0);
     }
     else
     {
@@ -136,12 +148,12 @@ proc init
 #endif
     if (ck(FG_COMMON, F_COMMON_03, TRUE))
     {
-        room_bgm_state_set(0, ROOM_106_MAIN_HALL, BGM_CH0);
+        room_bgm_state_set(0, ROOM_106_MAIN_HALL, BGM_MAIN_ON);
     }
 #if CHRIS
     if (ck(FG_ITEM, F_ITEM_1A, TRUE) && ck(FG_COMMON, F_COMMON_02, TRUE))
     {
-        item_aot_set(AOT_06_ITEM, 24100, 10100, 1800, 1800, IT_02_WEAPON_HANDGUN, 15, 2, 255, 168, 97, 0, 0, 248, 42, 0, 0, 26, 129, 0, 0);
+        item_aot_set(AOT_06_ITEM, 24100, 10100, 1800, 1800, IT_02_WEAPON_HANDGUN, 15, 2, 255, 168, 97, 0, 0, 248, 42, 0, 0, F_ITEM_1A, 129, 0, 0);
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
             aot_reset(AOT_06_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 174, 255, 0);
@@ -155,20 +167,20 @@ proc init
     if (ck(FG_COMMON, F_COMMON_0A, FALSE) && ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_ITEM, F_ITEM_0D, FALSE))
     {
         set(FG_COMMON, F_COMMON_07, TRUE);
-        item_aot_set(AOT_06_ITEM, 0, 0, 16, 16, IT_11_AMMO_GRENADE_ACID, 6, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 14, 65, 0, 0);
+        item_aot_set(AOT_06_ITEM, 0, 0, 16, 16, IT_11_AMMO_GRENADE_ACID, 6, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_0E, 65, 0, 0);
         enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1568, 0, 0, 19100, 0, 14600, ENEMY_00, 0, 0, 0);
-        evt_exec(0, 0, on_enter_5);
+        evt_exec(0, TASK_00, on_enter_5);
     }
     if (ck(FG_COMMON, F_COMMON_05, FALSE) && ck(FG_COMMON, F_COMMON_07, TRUE))
     {
         set(FG_COMMON, F_COMMON_07, FALSE);
         set(FG_COMMON, F_COMMON_05, TRUE);
         room_bgm_state_set(0, ROOM_106_MAIN_HALL, BGM_RELOAD | 1);
-        item_aot_set(AOT_06_ITEM, 0, 0, 16, 16, IT_31_KEY_LOCKPICK, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 9, 65, 0, 0);
+        item_aot_set(AOT_06_ITEM, 0, 0, 16, 16, IT_31_KEY_LOCKPICK, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_09, 65, 0, 0);
         enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 317, 0, 0, 12609, 0, 5417, ENEMY_00, 0, 0, 0);
-        evt_exec(0, 0, on_enter_4);
+        evt_exec(0, TASK_00, on_enter_4);
         cut_auto(1);
-        setb(B_CAMERA, 6, 0);
+        setb(B_CAMERA, CAM_06, 0);
         set(FG_STATUS, F_STATUS_1D, TRUE);
         set(FG_ROOM, F_ROOM_09, TRUE);
         set(FG_ROOM, F_ROOM_0C, TRUE);
@@ -180,16 +192,16 @@ proc init
         set(FG_COMMON, F_COMMON_03, TRUE);
 #else
         room_bgm_state_set(0, ROOM_106_MAIN_HALL, BGM_RELOAD | 1);
-        item_aot_set(AOT_06_ITEM, 0, 0, 16, 16, IT_31_KEY_LOCKPICK, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 9, 65, 0, 0);
+        item_aot_set(AOT_06_ITEM, 0, 0, 16, 16, IT_31_KEY_LOCKPICK, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_09, 65, 0, 0);
         enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 480, 0, 0, 5460, 0, 14767, ENEMY_00, 0, 0, 0);
         aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 162, 255, 0);
         aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 162, 255, 0);
         aot_reset(AOT_02_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 162, 255, 0);
         aot_reset(AOT_05_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 174, 255, 0);
         cut_auto(1);
-        setb(B_CAMERA, 6, 0);
+        setb(B_CAMERA, CAM_06, 0);
 #endif
-        evt_exec(0, 0, on_enter_3);
+        evt_exec(0, TASK_00, on_enter_3);
 #if JILL
         set(FG_COMMON, F_COMMON_03, TRUE);
         set(FG_STATUS, F_STATUS_1D, TRUE);
@@ -204,9 +216,9 @@ proc init
         enemy(EM_24_NPC_WESKER, 0, 255, 1, 2, 0, 0, 3888, 0, 0, 19600, 0, 8500, ENEMY_00, 0, 0, 0);
 #endif
         cut_auto(1);
-        setb(B_CAMERA, 6, 0);
+        setb(B_CAMERA, CAM_06, 0);
         set(FG_COMMON, F_COMMON_01, TRUE);
-        evt_exec(0, 0, on_enter_2);
+        evt_exec(0, TASK_00, on_enter_2);
     }
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_00, FALSE))
@@ -215,7 +227,7 @@ proc init
         enemy(EM_21_NPC_JILL, 2, 255, 1, 2, 0, 0, 1300, 0, 0, 20800, 0, 8500, ENEMY_01_NPC_JILL, 18, 0, 0);
         dir_set(0, 0, 0, 0, 14600, 0, 5000);
         set(FG_COMMON, F_COMMON_00, TRUE);
-        evt_exec(0, 0, on_enter);
+        evt_exec(0, TASK_00, on_enter);
         set(FG_STATUS, F_STATUS_1D, TRUE);
         set(FG_COMMON, F_COMMON_A7, TRUE);
     }
@@ -224,7 +236,7 @@ proc init
         if (ck(FG_COMMON, F_COMMON_A1, FALSE))
         {
             set(FG_COMMON, F_COMMON_A1, TRUE);
-            room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_CH0 | 2);
+            room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_MAIN_ON | 2);
             room_bgm_state_set(0, ROOM_10F_BAR, BGM_RELOAD | 1);
         }
     }
@@ -239,7 +251,7 @@ proc init
         enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 2816, 0, 0, 15500, 0, 2500, ENEMY_01_NPC_BARRY, 0, 0, 0);
         dir_set(0, 0, 3200, 0, 18500, 0, 2500);
         set(FG_COMMON, F_COMMON_00, TRUE);
-        evt_exec(0, 0, on_enter);
+        evt_exec(0, TASK_00, on_enter);
         set(FG_STATUS, F_STATUS_1D, TRUE);
         set(FG_COMMON, F_COMMON_AA, TRUE);
     }
@@ -259,7 +271,7 @@ proc main
                 {
                     set(FG_COMMON, F_COMMON_04, TRUE);
                     set(FG_ROOM, F_ROOM_01, TRUE);
-                    evt_exec(0, 7, from_main_2);
+                    evt_exec(0, TASK_07, from_main_2);
                     set(FG_ROOM, F_ROOM_01, FALSE);
                 }
                 else
@@ -271,7 +283,7 @@ proc main
             {
                 set(FG_ROOM, F_ROOM_02, FALSE);
                 set(FG_ROOM, F_ROOM_01, TRUE);
-                message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, 255); // "It's too dangerous to go outside!"
+                message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dangerous to go outside!"
                 set(FG_ROOM, F_ROOM_01, FALSE);
             }
         }
@@ -288,47 +300,47 @@ proc main
     return;
     if (testpickup(IT_54_UNKNOWN_54))
     {
-        evt_exec(0, 9, from_main);
+        evt_exec(0, TASK_09, from_main);
     }
     if (ck(FG_ROOM, F_ROOM_00, TRUE))
     {
-        evt_exec(0, 9, from_main_3);
+        evt_exec(0, TASK_09, from_main_3);
         set(FG_ROOM, F_ROOM_00, FALSE);
     }
 #else
     if (ck(FG_COMMON, F_COMMON_03, TRUE) && ck(FG_COMMON, F_COMMON_05, FALSE))
     {
-        if (cmpb(B_CAMERA, CMP_EQ, 3) && ck(FG_ROOM, F_ROOM_14, FALSE))
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_03) && ck(FG_ROOM, F_ROOM_14, FALSE))
         {
             set(FG_ROOM, F_ROOM_07, TRUE);
             set(FG_ROOM, F_ROOM_14, TRUE);
-            evt_exec(0, 3, from_main);
+            evt_exec(0, TASK_03, from_main);
         }
-        if (cmpb(B_CAMERA, CMP_EQ, 4) && ck(FG_ROOM, F_ROOM_14, FALSE))
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_04) && ck(FG_ROOM, F_ROOM_14, FALSE))
         {
             set(FG_ROOM, F_ROOM_07, TRUE);
             set(FG_ROOM, F_ROOM_14, TRUE);
-            evt_exec(0, 3, from_main);
+            evt_exec(0, TASK_03, from_main);
         }
         if (ck(FG_ROOM, F_ROOM_07, TRUE) && ck(FG_ROOM, F_ROOM_08, FALSE))
         {
-            if (cmpb(B_CAMERA, CMP_EQ, 2))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
             {
                 set(FG_ROOM, F_ROOM_08, TRUE);
                 set(FG_COMMON, F_COMMON_05, TRUE);
                 set(FG_ROOM, F_ROOM_09, TRUE);
                 set(FG_ROOM, F_ROOM_0A, TRUE);
                 pos_set(ENEMY_00, 0, 1709, 0, 25524, 0, 6371);
-                evt_exec(0, 0, from_main_2);
+                evt_exec(0, TASK_00, from_main_2);
             }
-            if (cmpb(B_CAMERA, CMP_EQ, 5))
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
             {
                 set(FG_ROOM, F_ROOM_08, TRUE);
                 set(FG_COMMON, F_COMMON_05, TRUE);
                 set(FG_ROOM, F_ROOM_09, TRUE);
                 set(FG_ROOM, F_ROOM_0B, TRUE);
                 pos_set(ENEMY_00, 0, 2488, 0, 8111, 0, 9567);
-                evt_exec(0, 0, from_main_5);
+                evt_exec(0, TASK_00, from_main_5);
             }
         }
     }
@@ -339,22 +351,22 @@ proc main
             if (ck(FG_ROOM, F_ROOM_0D, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0D, FALSE);
-                evt_exec(0, 0, from_main_10);
+                evt_exec(0, TASK_00, from_main_10);
             }
             if (ck(FG_ROOM, F_ROOM_0E, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0E, FALSE);
-                evt_exec(0, 0, from_main_3);
+                evt_exec(0, TASK_00, from_main_3);
             }
             if (ck(FG_ROOM, F_ROOM_0F, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0F, FALSE);
-                evt_exec(0, 0, from_main_11);
+                evt_exec(0, TASK_00, from_main_11);
             }
             if (ck(FG_ROOM, F_ROOM_10, TRUE))
             {
                 set(FG_ROOM, F_ROOM_10, FALSE);
-                evt_exec(0, 0, from_main_4);
+                evt_exec(0, TASK_00, from_main_4);
             }
         }
         if (ck(FG_ROOM, F_ROOM_0B, TRUE))
@@ -362,22 +374,22 @@ proc main
             if (ck(FG_ROOM, F_ROOM_0D, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0D, FALSE);
-                evt_exec(0, 0, from_main_10);
+                evt_exec(0, TASK_00, from_main_10);
             }
             if (ck(FG_ROOM, F_ROOM_0E, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0E, FALSE);
-                evt_exec(0, 0, from_main_6);
+                evt_exec(0, TASK_00, from_main_6);
             }
             if (ck(FG_ROOM, F_ROOM_0F, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0F, FALSE);
-                evt_exec(0, 0, from_main_11);
+                evt_exec(0, TASK_00, from_main_11);
             }
             if (ck(FG_ROOM, F_ROOM_10, TRUE))
             {
                 set(FG_ROOM, F_ROOM_10, FALSE);
-                evt_exec(0, 0, from_main_7);
+                evt_exec(0, TASK_00, from_main_7);
             }
         }
         if (ck(FG_ROOM, F_ROOM_0C, TRUE))
@@ -385,22 +397,22 @@ proc main
             if (ck(FG_ROOM, F_ROOM_0D, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0D, FALSE);
-                evt_exec(0, 0, from_main_10);
+                evt_exec(0, TASK_00, from_main_10);
             }
             if (ck(FG_ROOM, F_ROOM_0E, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0E, FALSE);
-                evt_exec(0, 0, from_main_8);
+                evt_exec(0, TASK_00, from_main_8);
             }
             if (ck(FG_ROOM, F_ROOM_0F, TRUE))
             {
                 set(FG_ROOM, F_ROOM_0F, FALSE);
-                evt_exec(0, 0, from_main_11);
+                evt_exec(0, TASK_00, from_main_11);
             }
             if (ck(FG_ROOM, F_ROOM_10, TRUE))
             {
                 set(FG_ROOM, F_ROOM_10, FALSE);
-                evt_exec(0, 0, from_main_9);
+                evt_exec(0, TASK_00, from_main_9);
             }
         }
     }
@@ -412,7 +424,7 @@ proc main
             {
                 set(FG_COMMON, F_COMMON_04, TRUE);
                 set(FG_ROOM, F_ROOM_01, TRUE);
-                evt_exec(0, 7, from_main_12);
+                evt_exec(0, TASK_07, from_main_12);
                 set(FG_ROOM, F_ROOM_01, FALSE);
             }
             else
@@ -424,7 +436,7 @@ proc main
         {
             set(FG_ROOM, F_ROOM_02, FALSE);
             set(FG_ROOM, F_ROOM_01, TRUE);
-            message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, 255); // "It's too dangerous to go outside!"
+            message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dangerous to go outside!"
             set(FG_ROOM, F_ROOM_01, FALSE);
         }
     }
@@ -442,8 +454,8 @@ event on_enter
     evt_nop();
     set(FG_6, F_6_17, FALSE);
 #if CHRIS
-    evt_fork(1, on_enter_sub1, 0);
-    evt_fork(2, on_enter_sub2, 0);
+    evt_fork(TASK_01, on_enter_sub1, 0);
+    evt_fork(TASK_02, on_enter_sub2, 0);
 #else
     cut_auto(1);
 #endif
@@ -451,7 +463,7 @@ event on_enter
     set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
     sleep(50);
-    cutnext(6);
+    cutnext(CAM_06);
     sleep(20);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_JILL);
 #else
@@ -489,20 +501,20 @@ event on_enter
     evt_actor_begin();
     act_anim_seq(33794, 16437, 8735);
     act_reset();
-    evt_fork(3, on_enter_sub1, 0);
-    evt_fork(2, on_enter_sub2, 0);
-    evt_fork(1, on_enter_sub3, 0);
+    evt_fork(TASK_03, on_enter_sub1, 0);
+    evt_fork(TASK_02, on_enter_sub2, 0);
+    evt_fork(TASK_01, on_enter_sub3, 0);
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     sleep(10);
-    cutnext(1);
+    cutnext(CAM_01);
     voice_play(VOICE_PLAY, VO_101_00, 0);
     message(MSG_VO_101_00, 0);
     sleep(32);
-    evt_disable(1);
+    evt_disable(TASK_01);
     sleep(23);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
@@ -533,7 +545,7 @@ event on_enter
     act_reset();
 #if CHRIS
     evt_nop();
-    evt_disable(2);
+    evt_disable(TASK_02);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
 #else
     do
@@ -554,7 +566,7 @@ event on_enter
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_JILL);
 #else
-    evt_disable(2);
+    evt_disable(TASK_02);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
@@ -589,16 +601,16 @@ event on_enter
         evt_next();
     }
     while (ck(FG_STATUS, F_STATUS_0E, TRUE));
-    cutnext(2);
+    cutnext(CAM_02);
     sleep(8);
-    evt_disable(3);
+    evt_disable(TASK_03);
 #endif
     sleep(10);
 #if CHRIS
-    evt_fork(3, on_enter_sub3, 0);
+    evt_fork(TASK_03, on_enter_sub3, 0);
     wait_message();
-    cutnext(1);
-    evt_disable(1);
+    cutnext(CAM_01);
+    evt_disable(TASK_01);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -644,7 +656,7 @@ event on_enter
     voice_play(VOICE_PLAY, VO_001_01, 0);
     message(MSG_VO_001_01, 0);
 #else
-    cutnext(6);
+    cutnext(CAM_06);
     evt_next();
     evt_nop();
     voice_play(VOICE_PLAY, VO_101_01, 0);
@@ -719,7 +731,7 @@ event on_enter
     evt_nop();
 #if CHRIS
     sleep(4);
-    evt_disable(2);
+    evt_disable(TASK_02);
 #endif
     do
     {
@@ -803,9 +815,9 @@ event on_enter
     evt_nop();
 #if CHRIS
     wait_message();
-    cutnext(2);
+    cutnext(CAM_02);
     sleep(10);
-    evt_disable(3);
+    evt_disable(TASK_03);
     voice_play(VOICE_PLAY, VO_001_02, 0);
     message(MSG_VO_001_02, 0);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_JILL);
@@ -840,7 +852,7 @@ event on_enter
         evt_next();
     }
     while (ck(FG_STATUS, F_STATUS_0E, TRUE));
-    cutnext(1);
+    cutnext(CAM_01);
 #else
     act_anim_flags(32 | 1, 32 | 1, 0 | 3);
     sleep(25);
@@ -874,11 +886,11 @@ event on_enter
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
 #if CHRIS
     sleep(10);
-    se_play_3d(2, 23, 0, SND_AT_POINT, 0, 9000, 15000);
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 9000, 15000);
+    se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9000, 15000);
+    se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 9000, 15000);
 #else
-    se_play_3d(2, 23, 0, SND_AT_POINT, 0, 3400, 17000);
-    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 3400, 17000);
+    se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 3400, 17000);
+    se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 3400, 17000);
 #endif
     sleep(8);
 #if CHRIS
@@ -1171,7 +1183,7 @@ event on_enter
     sleep(50);
     act_anim_seq(43014, 4143, 8743);
     act_reset();
-    cutnext(1);
+    cutnext(CAM_01);
     do
     {
         evt_next();
@@ -1187,7 +1199,7 @@ event on_enter
     act_reset();
     evt_nop();
 #if CHRIS
-    evt_fork(1, on_enter_sub4, 0);
+    evt_fork(TASK_01, on_enter_sub4, 0);
     do
     {
         evt_next();
@@ -1236,7 +1248,7 @@ event on_enter
 #if CHRIS
     sleep(12);
     wait_message();
-    cutnext(6);
+    cutnext(CAM_06);
     sleep(10);
     voice_play(VOICE_PLAY, VO_001_05, 0);
     message(MSG_VO_001_05, 0);
@@ -1357,7 +1369,7 @@ event on_enter
         evt_next();
     }
     while (ck(FG_STATUS, F_STATUS_0E, TRUE));
-    cutnext(5);
+    cutnext(CAM_05);
     aot_reset(AOT_02_DOOR, SCE_DOOR, SAT_PLAYER, 2, 0, 0);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
@@ -1543,10 +1555,10 @@ event on_enter_3
 #endif
 {
 #if JILL
-    evt_fork(1, on_enter_3_sub1, 0);
+    evt_fork(TASK_01, on_enter_3_sub1, 0);
     evt_next();
     evt_nop();
-    bgm_play(0);
+    bgm_play(BGM_MAIN);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(20482, 46622, 1328);
@@ -1560,7 +1572,7 @@ event on_enter_3
     }
     while (ck(FG_ROOM, F_ROOM_05, FALSE));
     set(FG_ROOM, F_ROOM_05, FALSE);
-    cutnext(5);
+    cutnext(CAM_05);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_motion_path(113, 700, 0, 1, 80, 64);
@@ -1668,7 +1680,7 @@ event on_enter_3
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_fork(1, on_enter_3_sub2, 0);
+    evt_fork(TASK_01, on_enter_3_sub2, 0);
 #endif
     evt_finish();
 }
@@ -1774,9 +1786,9 @@ event on_enter_3_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_fork(2, on_enter_3_sub2_sub1, 0);
+    evt_fork(TASK_02, on_enter_3_sub2_sub1, 0);
     sleep(120);
-    evt_fork(2, on_enter_3_sub2_sub3, 0);
+    evt_fork(TASK_02, on_enter_3_sub2_sub3, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(27650, 34133, 8745);
@@ -1793,10 +1805,10 @@ event on_enter_3_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_disable(2);
-    evt_fork(2, on_enter_3_sub2_sub2, 0);
+    evt_disable(TASK_02);
+    evt_fork(TASK_02, on_enter_3_sub2_sub2, 0);
     sleep(120);
-    evt_fork(2, on_enter_3_sub2_sub3, 0);
+    evt_fork(TASK_02, on_enter_3_sub2_sub3, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(16386, 33113, 8731);
@@ -1813,10 +1825,10 @@ event on_enter_3_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_disable(2);
-    evt_fork(2, on_enter_3_sub2_sub1, 0);
+    evt_disable(TASK_02);
+    evt_fork(TASK_02, on_enter_3_sub2_sub1, 0);
     sleep(120);
-    evt_fork(2, on_enter_3_sub2_sub3, 0);
+    evt_fork(TASK_02, on_enter_3_sub2_sub3, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(33282, 36653, 8727);
@@ -1826,10 +1838,10 @@ event on_enter_3_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_disable(2);
-    evt_fork(2, on_enter_3_sub2_sub2, 0);
+    evt_disable(TASK_02);
+    evt_fork(TASK_02, on_enter_3_sub2_sub2, 0);
     sleep(120);
-    evt_fork(2, on_enter_3_sub2_sub3, 0);
+    evt_fork(TASK_02, on_enter_3_sub2_sub3, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(57346, 36654, 8743);
@@ -1839,10 +1851,10 @@ event on_enter_3_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_disable(2);
-    evt_fork(2, on_enter_3_sub2_sub1, 0);
+    evt_disable(TASK_02);
+    evt_fork(TASK_02, on_enter_3_sub2_sub1, 0);
     sleep(120);
-    evt_fork(2, on_enter_3_sub2_sub3, 0);
+    evt_fork(TASK_02, on_enter_3_sub2_sub3, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(23554, 33348, 8749);
@@ -1852,7 +1864,7 @@ event on_enter_3_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    evt_disable(2);
+    evt_disable(TASK_02);
     evt_chain(7);
 #endif
     evt_finish();
@@ -1924,9 +1936,9 @@ event on_enter_3_sub2_sub3
 
 event from_main
 {
-    evt_disable(2);
-    evt_disable(1);
-    evt_disable(0);
+    evt_disable(TASK_02);
+    evt_disable(TASK_01);
+    evt_disable(TASK_00);
     pos_set(ENEMY_00, 0, 0, 0, 0, 3000, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
@@ -1945,7 +1957,7 @@ event from_main_2
 #else
     set(FG_6, F_6_17, FALSE);
     cut_auto(1);
-    evt_fork(1, from_main_2_sub1, 0);
+    evt_fork(TASK_01, from_main_2_sub1, 0);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     evt_work_set(WK_ENEMY, ENEMY_00);
@@ -1969,14 +1981,14 @@ event from_main_2
     act_reset();
 #if JILL
     sleep(20);
-    cutnext(1);
+    cutnext(CAM_01);
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_05, FALSE));
     set(FG_ROOM, F_ROOM_05, FALSE);
-    cutnext(2);
+    cutnext(CAM_02);
     sleep(10);
     voice_play(VOICE_PLAY, VO_103_01, 0);
     message(MSG_VO_103_01, 0);
@@ -2138,7 +2150,7 @@ event from_main_4
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    cutnext(6);
+    cutnext(CAM_06);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_motion(16);
@@ -2170,7 +2182,7 @@ event from_main_4
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    cutnext(5);
+    cutnext(CAM_05);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(62723, 49957, 8244);
@@ -2223,7 +2235,7 @@ event from_main_4
 #endif
     wait_message();
 #if JILL
-    cutnext(6);
+    cutnext(CAM_06);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2238,7 +2250,7 @@ event from_main_4
     evt_nop();
     sleep(10);
 #endif
-    cutnext(5);
+    cutnext(CAM_05);
 #if JILL
     voice_play(VOICE_PLAY, VO_103_0D, 0);
     message(MSG_VO_103_0D, 0);
@@ -2282,9 +2294,9 @@ event from_main_4
     act_reset();
     evt_nop();
     wait_message();
-    cutnext(2);
+    cutnext(CAM_02);
     sleep(15);
-    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 15390, 12269);
+    se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_POINT, 0, 15390, 12269);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2292,7 +2304,7 @@ event from_main_4
     act_reset();
     evt_nop();
     sleep(50);
-    se_play_3d(2, 26, 0, SND_AT_POINT, 0, 15390, 12269);
+    se_play_3d(SND_BANK_ROOM, SE_1A, 0, SND_AT_POINT, 0, 15390, 12269);
     sleep(15);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2309,7 +2321,7 @@ event from_main_4
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_6, F_6_17, TRUE);
         cut_auto(0);
-        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_CH1 | BGM_CH0);
+        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
 #endif
     evt_finish();
@@ -2347,7 +2359,7 @@ event from_main_5
 {
     set(FG_6, F_6_17, FALSE);
     cut_auto(1);
-    evt_fork(1, from_main_5_sub1, 0);
+    evt_fork(TASK_01, from_main_5_sub1, 0);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     evt_work_set(WK_ENEMY, ENEMY_00);
@@ -2365,14 +2377,14 @@ event from_main_5
     act_anim_seq(10242, 4128, 1331);
     act_reset();
     sleep(20);
-    cutnext(6);
+    cutnext(CAM_06);
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_05, FALSE));
     set(FG_ROOM, F_ROOM_05, FALSE);
-    cutnext(5);
+    cutnext(CAM_05);
     sleep(10);
     voice_play(VOICE_PLAY, VO_103_01, 0);
     message(MSG_VO_103_01, 0);
@@ -2509,7 +2521,7 @@ event from_main_7
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
 #else
     evt_nop();
-    evt_fork(1, from_main_7_sub1, 0);
+    evt_fork(TASK_01, from_main_7_sub1, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
 #endif
     evt_actor_begin();
@@ -2646,7 +2658,7 @@ event from_main_7
     aot_reset(AOT_02_DOOR, SCE_DOOR, SAT_PLAYER, 2, 0, 0);
 #else
     sleep(10);
-    cutnext(5);
+    cutnext(CAM_05);
     voice_play(VOICE_PLAY, VO_103_0D, 0);
     message(MSG_VO_103_0D, 0);
 #endif
@@ -2716,11 +2728,11 @@ event from_main_7
     set(FG_6, F_6_17, TRUE);
 #else
     dir_set(0, 0, 1501, 0, 14470, 0, 12949);
-    cutnext(1);
+    cutnext(CAM_01);
     sleep(15);
-    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 9436, 14218);
+    se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_POINT, 0, 9436, 14218);
     sleep(60);
-    se_play_3d(2, 26, 0, SND_AT_POINT, 0, 9436, 14218);
+    se_play_3d(SND_BANK_ROOM, SE_1A, 0, SND_AT_POINT, 0, 9436, 14218);
     sleep(15);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2739,7 +2751,7 @@ event from_main_7
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_6, F_6_17, TRUE);
         cut_auto(0);
-        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_CH1 | BGM_CH0);
+        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
 #endif
     evt_finish();
@@ -2793,11 +2805,11 @@ event on_enter_4
 #if CHRIS
     set(FG_6, F_6_17, FALSE);
 #endif
-    bgm_play(0);
+    bgm_play(BGM_MAIN);
 #if JILL
     set(FG_6, F_6_17, FALSE);
     cut_auto(1);
-    evt_fork(1, on_enter_4_sub1, 0);
+    evt_fork(TASK_01, on_enter_4_sub1, 0);
 #endif
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
@@ -2810,13 +2822,13 @@ event on_enter_4
     act_anim_seq(26114, 3879, 8496);
     act_reset();
     sleep(20);
-    cutnext(6);
+    cutnext(CAM_06);
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    cutnext(5);
+    cutnext(CAM_05);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2843,7 +2855,7 @@ event on_enter_4
     act_reset();
 #if CHRIS
     sleep(10);
-    cutnext(6);
+    cutnext(CAM_06);
     do
     {
         evt_next();
@@ -2857,7 +2869,7 @@ event on_enter_4
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    cutnext(1);
+    cutnext(CAM_01);
     sleep(10);
 #endif
     evt_work_set(WK_PLAYER, 0);
@@ -2932,7 +2944,7 @@ event on_enter_4
 #endif
     sleep(40);
 #if CHRIS
-    cutnext(2);
+    cutnext(CAM_02);
     do
     {
         evt_next();
@@ -2984,7 +2996,7 @@ event on_enter_4
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_fork(1, on_enter_3_sub1, 0);
+    evt_fork(TASK_01, on_enter_3_sub1, 0);
     sleep(130);
 #else
     evt_work_set(WK_ENEMY, ENEMY_00);
@@ -3043,13 +3055,13 @@ event on_enter_4
 #if CHRIS
     act_idle();
     act_reset();
-    evt_disable(1);
+    evt_disable(TASK_01);
     run
     {
         set(FG_6, F_6_17, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_CH1 | BGM_CH0);
+        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
 #else
     sleep(12);
@@ -3118,7 +3130,7 @@ event from_main_9
     act_anim_seq(15123, 41777, 8239);
     act_reset();
     sleep(5);
-    cutnext(6);
+    cutnext(CAM_06);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_seq(17158, 51232, 8754);
@@ -3130,7 +3142,7 @@ event from_main_9
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    cutnext(5);
+    cutnext(CAM_05);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(62723, 49957, 8244);
@@ -3178,7 +3190,7 @@ event from_main_9
     act_reset();
     evt_nop();
     wait_message();
-    cutnext(6);
+    cutnext(CAM_06);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -3192,7 +3204,7 @@ event from_main_9
     act_reset();
     evt_nop();
     sleep(10);
-    cutnext(5);
+    cutnext(CAM_05);
     voice_play(VOICE_PLAY, VO_103_0D, 0);
     message(MSG_VO_103_0D, 0);
     evt_work_set(WK_PLAYER, 0);
@@ -3223,9 +3235,9 @@ event from_main_9
     act_reset();
     evt_nop();
     wait_message();
-    cutnext(1);
+    cutnext(CAM_01);
     sleep(15);
-    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 11453, 13787);
+    se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_POINT, 0, 11453, 13787);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -3233,7 +3245,7 @@ event from_main_9
     act_reset();
     evt_nop();
     sleep(50);
-    se_play_3d(2, 26, 0, SND_AT_POINT, 0, 11453, 13787);
+    se_play_3d(SND_BANK_ROOM, SE_1A, 0, SND_AT_POINT, 0, 11453, 13787);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 0, 32 | 0, 0 | 0);
@@ -3251,7 +3263,7 @@ event from_main_9
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_6, F_6_17, TRUE);
         cut_auto(0);
-        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_CH1 | BGM_CH0);
+        room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
     evt_finish();
 }
@@ -3361,7 +3373,7 @@ event from_main_10
 #endif
     sleep(15);
 #if CHRIS
-    message(MSG_IT_IS_JILLS_GUN | MSG_FAST, 255); // "It's Jill's gun...!"
+    message(MSG_IT_IS_JILLS_GUN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's Jill's gun...!"
 #else
     act_anim_flags(32 | 1, 32 | 2, 0 | 0);
     sleep(25);
@@ -3593,13 +3605,13 @@ event on_enter_5
     run
     {
         bgm_stop_all(0);
-        movie_on(9);
+        movie_on(MOVIE_09_DM2);
     }
 #endif
     evt_next();
     evt_nop();
 #if JILL
-    bgm_play(0);
+    bgm_play(BGM_MAIN);
     set(FG_6, F_6_17, FALSE);
     cut_auto(1);
     evt_work_set(WK_PLAYER, 0);
@@ -3609,13 +3621,13 @@ event on_enter_5
     act_reset();
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
-    cutnext(1);
+    cutnext(CAM_01);
     sleep(5);
-    evt_fork(1, on_enter_5_sub2, 0);
+    evt_fork(TASK_01, on_enter_5_sub2, 0);
     voice_play(VOICE_PLAY, VO_106_00, 0);
     message(MSG_VO_106_00, 0);
     wait_message();
-    cutnext(2);
+    cutnext(CAM_02);
     voice_play(VOICE_PLAY, VO_106_01, 0);
     message(MSG_VO_106_01, 0);
     do
@@ -3771,11 +3783,11 @@ event on_enter_5
 #else
         if (cmpb(B_TOTAL_HELD, CMP_GE, 8))
         {
-            evt_exec(0, 1, on_enter_5_sub3);
+            evt_exec(0, TASK_01, on_enter_5_sub3);
         }
         else
         {
-            evt_exec(0, 1, on_enter_5_sub1);
+            evt_exec(0, TASK_01, on_enter_5_sub1);
         }
 #endif
     }
@@ -3974,7 +3986,7 @@ event on_enter_5_sub1
     act_idle();
     act_reset();
     wait_message();
-    give_item(6, 4, 129);
+    give_item(AOT_06_ITEM, 4, 129);
     set(FG_6, F_6_17, TRUE);
     evt_next();
     evt_nop();
@@ -3989,7 +4001,7 @@ event on_enter_5_sub1
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    evt_fork(2, on_enter_5_sub3, 0);
+    evt_fork(TASK_02, on_enter_5_sub3, 0);
     evt_finish();
 }
 
@@ -4067,7 +4079,7 @@ event on_enter_5_sub3
     act_reset();
     evt_nop();
     sleep(10);
-    cutnext(6);
+    cutnext(CAM_06);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_anim_seq(2835, 8225, 8759);
@@ -4077,14 +4089,14 @@ event on_enter_5_sub3
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    cutnext(2);
+    cutnext(CAM_02);
     sleep(10);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();
     act_idle();
     act_reset();
     sleep(30);
-    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 15887, 12538);
+    se_play_3d(SND_BANK_ROOM, SE_19, 0, SND_AT_POINT, 0, 15887, 12538);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -4092,7 +4104,7 @@ event on_enter_5_sub3
     act_reset();
     evt_nop();
     sleep(50);
-    se_play_3d(2, 26, 0, SND_AT_POINT, 0, 15887, 12538);
+    se_play_3d(SND_BANK_ROOM, SE_1A, 0, SND_AT_POINT, 0, 15887, 12538);
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -4128,7 +4140,7 @@ event from_main_12
     run
     {
         bgm_stop_all(0);
-        movie_on(5);
+        movie_on(MOVIE_05_DM1);
     }
 #endif
     evt_next();

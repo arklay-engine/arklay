@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -11,28 +13,33 @@
 #define AOT_02_USEITEM 0x02
 #define AOT_03_ITEM 0x03
 #define AOT_05_DOOR 0x05
+#define CAM_01 0x01
+#define CAM_02 0x02
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
 #define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
+#define FX_10 0x10
 #define MSG_IT_IS_A_MAP_OF_2ND 0x00
 #define MSG_YOU_GOT_THE_MAP_OF_2ND 0x02
+#define OBJ_01 0x01
+#define OBJ_80 0x80
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 7200, 8300, 1300, 1000, 3, 0, 4, 4, 0, ROOM_207_2F_RIGHT_STAIRS, 30400, 0, 5000, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_05_DOOR, 1100, 6400, 1400, 1900, 2, 0, 31, 5, 153, ROOM_20C_LESSON_ROOM, 10400, 0, 18400, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_03_ITEM, 7800, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 252, 33, 0, 0, 208, 7, 0, 0, 162, 129, 1, 0);
+    door_aot_set(AOT_00_DOOR, 7200, 8300, 1300, 1000, 3, DOOR_SND_00_DR_WD, DOOR_04_DOOR04, 4, 0, ROOM_207_2F_RIGHT_STAIRS, 30400, 0, 5000, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_05_DOOR, 1100, 6400, 1400, 1900, 2, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, DOOR_LOCKED | F_LOCK_19, ROOM_20C_LESSON_ROOM, 10400, 0, 18400, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_03_ITEM, 7800, 1100, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 252, 33, 0, 0, 208, 7, 0, 0, F_ITEM_A2, 129, 1, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_08, FALSE))
     {
         aot_set(AOT_01_MESSAGE, 5050, 1400, 500, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
         aot_set(AOT_02_USEITEM, 5050, 1400, 500, 1800, SCE_USEITEM, SAT_PLAYER, 9, 0, 21, 0, 1, 0);
-        obj(128, 17, 255, 5110, -2950, 2439, 2902, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_80, 17, 255, 5110, -2950, 2439, 2902, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         eml_rot(128, 0, 12, 0, 12);
-        obj(1, 1, 255, 5110, -2950, 2438, 2902, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01, 1, 255, 5110, -2950, 2438, 2902, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         eml_rot(129, 0, 12, 0, 12);
     }
     else if (ck(FG_ITEM, F_ITEM_11, TRUE))
     {
-        obj(1, 1, 255, 5110, -2950, 2438, 2902, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01, 1, 255, 5110, -2950, 2438, 2902, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         eml_rot(129, 0, 12, 0, 12);
         aot_set(AOT_02_USEITEM, 5050, 1400, 500, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02_useitem, 0, 0, 0);
     }
@@ -42,14 +49,14 @@ proc init
         {
             if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
             {
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, 26, 1, 2, 0, 0, 3640, 0, 0, 2478, 0, 3059, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
-                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, 27, 1, 2, 0, 0, 3048, 0, 0, 8016, 0, 2690, ENEMY_01_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_1A, 1, 2, 0, 0, 3640, 0, 0, 2478, 0, 3059, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+                enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_1B, 1, 2, 0, 0, 3048, 0, 0, 8016, 0, 2690, ENEMY_01_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
             }
             room_bgm_state_set(1, ROOM_20B_FRONT_LESSON_ROOM, BGM_OFF);
         }
         else
         {
-            evt_exec(0, 9, on_enter);
+            evt_exec(0, TASK_09, on_enter);
         }
     }
 }
@@ -58,10 +65,10 @@ proc main
 {
     if (cmpb(B_USED_ITEM, CMP_EQ, IT_30_KEY_LIGHTER))
     {
-        evt_exec(0, 9, from_main);
+        evt_exec(0, TASK_09, from_main);
         aot_reset(AOT_01_MESSAGE, SCE_NONE, 0, 0, 0, 0);
         aot_reset(AOT_02_USEITEM, SCE_NONE, 0, 0, 0, 0);
-        cutnext(2);
+        cutnext(CAM_02);
     }
 }
 
@@ -75,7 +82,7 @@ event from_main
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 1024, 0, 5520, 0, 4535);
     }
-    evt_fork(9, on_enter, 0);
+    evt_fork(TASK_09, on_enter, 0);
     sleep(50);
     for (40)
     {
@@ -88,7 +95,7 @@ event from_main
     {
         aot_delete(AOT_01_MESSAGE, SCE_NONE, 0);
         aot_reset(AOT_02_USEITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_02_useitem, 0);
-        cutnext(1);
+        cutnext(CAM_01);
         cut_auto(0);
         set(FG_6, F_6_17, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
@@ -98,15 +105,15 @@ event from_main
 
 event on_enter
 {
-    effect(16, 0, 0, 180, 20, 106, 255, 96, 9, 0, 0);
+    effect(FX_10, 0, 0, 180, 20, 106, 255, 96, 9, 0, 0);
     sleep(1);
-    bgm_play(0);
+    bgm_play(BGM_MAIN);
     evt_finish();
 }
 
 event on_aot_02_useitem
 {
-    message(MSG_IT_IS_A_MAP_OF_2ND | MSG_FAST, 255); // "It's a map of 2ND FLOOR. Will you take it? Wood is put in the stove. A paper is on the wall."
+    message(MSG_IT_IS_A_MAP_OF_2ND | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's a map of 2ND FLOOR. Will you take it? Wood is put in the stove. A paper is on the wall."
     do
     {
         evt_next();
@@ -120,7 +127,7 @@ event on_aot_02_useitem
             objtbl_b_set(0, 1, 0);
             set(FG_ITEM, F_ITEM_11, FALSE);
             set(FG_MAP, F_MAP_7D, TRUE);
-            message(MSG_YOU_GOT_THE_MAP_OF_2ND | MSG_FAST, 255); // "You got the map of 2ND FLOOR."
+            message(MSG_YOU_GOT_THE_MAP_OF_2ND | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "You got the map of 2ND FLOOR."
         }
     }
     evt_finish();

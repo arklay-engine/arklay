@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,6 +18,8 @@
 #define AOT_05_USEITEM 0x05
 #define AOT_06_NONE 0x06
 #define AOT_06_USEITEM 0x06
+#define CAM_01 0x01
+#define CAM_04 0x04
 #define ENEMY_00_CERBERUS 0x00
 #define ENEMY_00_HUNTER 0x00
 #define F_ROOM_01 0x01
@@ -30,6 +34,12 @@
 #define MSG_VO_00C_20 0x08
 #define MSG_VO_00C_22 0x09
 #define MSG_WHEN_THE_SUN_SETS_IN_THE 0x0A
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define OBJ_02 0x02
+#define OBJ_03 0x03
+#define SE_17 0x17
+#define SE_18 0x18
 #define VO_00B_00 0x77
 #define VO_00B_01 0x78
 #define VO_00C_00 0x54
@@ -40,8 +50,8 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 4700, 2700, 1800, 2300, 3, 1, 8, 0, 0, ROOM_10A_BACK_PASSAGE, 2400, 0, 11900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 8000, 24500, 1500, 2100, 2, 1, 8, 0, 151, ROOM_11B_STORE_ROOM, 3500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 4700, 2700, 1800, 2300, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_10A_BACK_PASSAGE, 2400, 0, 11900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 8000, 24500, 1500, 2100, 2, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_17, ROOM_11B_STORE_ROOM, 3500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if MANSION1
     aot_set(AOT_02_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 32, 0, 1, 0);
     aot_set(AOT_03_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, SAT_PLAYER, 9, 0, 19, 0, 1, 0);
@@ -53,13 +63,13 @@ proc init
 #if CHRIS
     if (ck(FG_SCENARIO, F_SCENARIO_7F, FALSE))
     {
-        item_aot_set(AOT_03_ITEM, 6500, 27200, 2000, 1000, IT_4D_KEY_RADIO, 1, 0, 255, 177, 18, 0, 0, 30, 35, 0, 0, 59, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 6500, 27200, 2000, 1000, IT_4D_KEY_RADIO, 1, 0, 255, 177, 18, 0, 0, 30, 35, 0, 0, F_ITEM_3B, 129, 0, 0);
         aot_reset(AOT_06_NONE, SCE_NONE, 0, 0, 0, 0);
         set(FG_STATUS, F_STATUS_1D, TRUE);
     }
 #endif
 #endif
-    obj(0, 47, 255, 7010, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 47, 255, 7010, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(128, 0, 0, 0, 4);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_69, FALSE))
@@ -67,7 +77,7 @@ proc init
         objtbl_b_set(0, 0, 0);
     }
 #endif
-    obj(1, 47, 255, 8040, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01, 47, 255, 8040, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(129, 0, 0, 0, 4);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_6B, FALSE))
@@ -75,7 +85,7 @@ proc init
         objtbl_b_set(0, 1, 0);
     }
 #endif
-    obj(2, 47, 255, 7540, -2390, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_02, 47, 255, 7540, -2390, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(130, 0, 0, 0, 4);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_6A, FALSE))
@@ -83,19 +93,19 @@ proc init
         objtbl_b_set(0, 2, 0);
     }
 #endif
-    obj(3, 47, 255, 7530, -1900, 27220, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_03, 47, 255, 7530, -1900, 27220, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(131, 0, 0, 0, 4);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_6C, FALSE))
     {
         objtbl_b_set(0, 3, 0);
     }
-    enemy(EM_02_CERBERUS, 3, 46, 1, 2, 0, 0, 1536, 0, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, 0, 0, 0);
+    enemy(EM_02_CERBERUS, 3, F_ENEMY_2E, 1, 2, 0, 0, 1536, 0, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, 0, 0, 0);
 #else
 #if CHRIS
     if (ck(FG_SCENARIO, F_SCENARIO_17, TRUE))
     {
-        enemy(EM_06_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, 2, F_ENEMY_2F, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, ENEMY_00_HUNTER, 0, 0, 0);
     }
     if (ck(FG_COMMON, F_COMMON_21, TRUE))
     {
@@ -103,20 +113,20 @@ proc init
         if (ck(FG_COMMON, F_COMMON_22, TRUE))
         {
             plw_anim(2, 40, 0);
-            setw(4, 0, 0);
-            evt_exec(0, 9, on_enter);
+            setw(W_04, 0, 0);
+            evt_exec(0, TASK_09, on_enter);
         }
         if (ck(FG_COMMON, F_COMMON_36, TRUE))
         {
             plw_anim(2, 40, 0);
-            setw(4, 0, 0);
-            evt_exec(0, 9, on_enter_2);
+            setw(W_04, 0, 0);
+            evt_exec(0, TASK_09, on_enter_2);
         }
     }
 #else
     if (ck(FG_SCENARIO, F_SCENARIO_17, TRUE))
     {
-        enemy(EM_06_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, 2, F_ENEMY_2F, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, ENEMY_00_HUNTER, 0, 0, 0);
     }
 #endif
 #endif
@@ -129,37 +139,37 @@ proc main
     {
         if (ck(FG_SCENARIO, F_SCENARIO_69, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6C, TRUE))
         {
-            evt_exec(0, 0, from_main_2);
+            evt_exec(0, TASK_00, from_main_2);
         }
         else
         {
-            evt_exec(0, 0, from_main);
+            evt_exec(0, TASK_00, from_main);
         }
     }
     if (testitem(IT_2E_KEY_CREST_SUN))
     {
         set(FG_ROOM, F_ROOM_01, TRUE);
-        evt_exec(0, 0, from_main_3);
+        evt_exec(0, TASK_00, from_main_3);
     }
     if (testitem(IT_2C_KEY_CREST_MOON))
     {
         set(FG_ROOM, F_ROOM_01, TRUE);
-        evt_exec(0, 0, from_main_4);
+        evt_exec(0, TASK_00, from_main_4);
     }
     if (testitem(IT_2D_KEY_CREST_STAR))
     {
         set(FG_ROOM, F_ROOM_01, TRUE);
-        evt_exec(0, 0, from_main_5);
+        evt_exec(0, TASK_00, from_main_5);
     }
     if (testitem(IT_29_KEY_CREST_WIND))
     {
         set(FG_ROOM, F_ROOM_01, TRUE);
-        evt_exec(0, 0, from_main_6);
+        evt_exec(0, TASK_00, from_main_6);
     }
     if (ck(FG_LOCK, F_LOCK_17, FALSE) && ck(FG_SCENARIO, F_SCENARIO_69, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, F_SCENARIO_6C, TRUE))
     {
         set(FG_LOCK, F_LOCK_17, TRUE);
-        evt_exec(0, 1, from_main_7);
+        evt_exec(0, TASK_01, from_main_7);
     }
 }
 
@@ -168,13 +178,13 @@ event from_main
 #if CHRIS
 proc main
 {
-    if (ck(FG_SCENARIO, F_SCENARIO_7F, FALSE) && cmpb(B_CAMERA, CMP_EQ, 1))
+    if (ck(FG_SCENARIO, F_SCENARIO_7F, FALSE) && cmpb(B_CAMERA, CMP_EQ, CAM_01))
     {
         set(FG_SCENARIO, F_SCENARIO_7F, TRUE);
         set(FG_STATUS, F_STATUS_1D, FALSE);
         set(FG_6, F_6_17, FALSE);
         dir_set(0, 0, 996, 0, 2888, 0, 12473);
-        evt_exec(0, 0, from_main);
+        evt_exec(0, TASK_00, from_main);
     }
 }
 
@@ -182,11 +192,11 @@ proc main
 event on_aot_02
 #endif
 {
-    cutnext(4);
+    cutnext(CAM_04);
 #if MANSION1
-    message(MSG_WHEN_THE_SUN_SETS_IN_THE | MSG_FAST, 255); // "When the sun sets in the west and the moon rises in the east, stars will begin to appear in the sky and wind will blow towards the ground. Then the gate of new life will open."
+    message(MSG_WHEN_THE_SUN_SETS_IN_THE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "When the sun sets in the west and the moon rises in the east, stars will begin to appear in the sky and wind will blow towards the ground. Then the gate of new life will open."
 #else
-    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, 255); // "Crests are placed in all the hollows."
+    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "Crests are placed in all the hollows."
 #endif
     do
     {
@@ -200,8 +210,8 @@ event on_aot_02
 
 event from_main_2
 {
-    cutnext(4);
-    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, 255); // "Crests are placed in all the hollows."
+    cutnext(CAM_04);
+    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "Crests are placed in all the hollows."
     do
     {
         evt_next();
@@ -227,8 +237,8 @@ event from_main_3
     evt_next();
     run
     {
-        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 7027, 27234);
-        cutnext(4);
+        se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 7027, 27234);
+        cutnext(CAM_04);
         objtbl_b_set(0, 0, 47);
         set(FG_SCENARIO, F_SCENARIO_69, TRUE);
     }
@@ -254,8 +264,8 @@ event from_main_4
     evt_next();
     run
     {
-        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 8117, 27234);
-        cutnext(4);
+        se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 8117, 27234);
+        cutnext(CAM_04);
         objtbl_b_set(0, 1, 47);
         set(FG_SCENARIO, F_SCENARIO_6B, TRUE);
     }
@@ -281,8 +291,8 @@ event from_main_5
     evt_next();
     run
     {
-        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 7597, 27234);
-        cutnext(4);
+        se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 7597, 27234);
+        cutnext(CAM_04);
         objtbl_b_set(0, 2, 47);
         set(FG_SCENARIO, F_SCENARIO_6A, TRUE);
     }
@@ -308,8 +318,8 @@ event from_main_6
     evt_next();
     run
     {
-        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 7597, 27234);
-        cutnext(4);
+        se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 7597, 27234);
+        cutnext(CAM_04);
         objtbl_b_set(0, 3, 47);
         set(FG_SCENARIO, F_SCENARIO_6C, TRUE);
     }
@@ -326,7 +336,7 @@ event from_main_6
 
 event from_main_7
 {
-    evt_disable(0);
+    evt_disable(TASK_00);
     run
     {
         set(FG_6, F_6_1D, FALSE);
@@ -339,7 +349,7 @@ event from_main_7
         cutcurr(0);
         set(FG_6, F_6_1D, TRUE);
         set(FG_6, F_6_17, TRUE);
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 8500, 24600);
+        se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 8500, 24600);
     }
     evt_finish();
 }
@@ -394,10 +404,10 @@ event from_main
     evt_nop();
     objtbl_b_set(1, 0, 0);
     sleep(10);
-    evt_fork(1, from_main_sub1, 0);
+    evt_fork(TASK_01, from_main_sub1, 0);
     wait_message();
-    evt_disable(1);
-    sys_multi(6);
+    evt_disable(TASK_01);
+    sys_multi(SYS_06);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion(16);
@@ -443,10 +453,10 @@ event on_enter
     evt_nop();
     run
     {
-        bgm_play(1);
+        bgm_play(BGM_SUB_1);
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_17, FALSE);
-        evt_exec(0, 9, on_enter_sub1);
+        evt_exec(0, TASK_09, on_enter_sub1);
         voice_play(VOICE_PLAY, VO_00C_00, 0);
         message(MSG_VO_00C_00, 0);
     }
@@ -515,10 +525,10 @@ event on_enter_2
     evt_nop();
     run
     {
-        bgm_play(1);
+        bgm_play(BGM_SUB_1);
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_17, FALSE);
-        evt_exec(0, 9, on_enter_2_sub1);
+        evt_exec(0, TASK_09, on_enter_2_sub1);
         voice_play(VOICE_PLAY, VO_00C_20, 0);
         message(MSG_VO_00C_20, 0);
     }

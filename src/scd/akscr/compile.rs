@@ -366,8 +366,8 @@ fn parse(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<Section>> {
     budget::check_len(text.len(), budget::MAX_TEXT_BYTES, "script size")?;
     let tokens = lex(text)?;
     let mut defines = defines.clone();
-    for &(name, value) in super::engine::ENGINE_NAMES {
-        defines.entry(name.to_string()).or_insert(value);
+    for (name, value) in super::engine::engine_names() {
+        defines.entry(name.clone()).or_insert(*value);
     }
     // Event names stand for their index, so any event may name any other.
     let mut depth = 0usize;

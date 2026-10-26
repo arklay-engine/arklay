@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -13,11 +15,13 @@
 #define AOT_04_EVENT 0x04
 #define AOT_05_EVENT 0x05
 #define AOT_06_MESSAGE 0x06
+#define CAM_00 0x00
+#define CAM_01 0x01
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 9900, 2000, 2500, 2700, 9, 0, 0, 1, 147, ROOM_104_TEA_ROOM, 31800, 0, 3300, 2048, LOCK, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 0, 9200, 2500, 2700, 0, 0, 0, 1, 0, STAGE_2 | ROOM_21C_UNDER_KITCHEN, 3800, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 9900, 2000, 2500, 2700, 9, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_13, ROOM_104_TEA_ROOM, 31800, 0, 3300, 2048, LOCK, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 9200, 2500, 2700, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, STAGE_2 | ROOM_21C_UNDER_KITCHEN, 3800, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_02_5, 4500, 9300, 4348, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_03_5, 11151, 9300, 4148, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_04_EVENT, 8030, 8400, 500, 4400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
@@ -28,7 +32,7 @@ proc init
 
 proc main
 {
-    if (cmpb(B_CAMERA, CMP_EQ, 0))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
     {
         set(FG_MAP, F_MAP_3E, TRUE);
     }
@@ -43,7 +47,7 @@ event on_aot_04
         dir_set(0, 0, 0, 0, 11336, -4315, 10556);
         spd_set(0, 37, 239);
         aot_on(AOT_03_5, SCE_5, 0);
-        cutnext(1);
+        cutnext(CAM_01);
         cut_auto(0);
     }
     sleep(70);
@@ -63,7 +67,7 @@ event on_aot_05
         dir_set(0, 0, 2048, 0, 8338, -2885, 10453);
         spd_set(0, 187, 244);
         aot_on(AOT_02_5, SCE_5, 0);
-        cutnext(0);
+        cutnext(CAM_00);
         cut_auto(0);
     }
     sleep(70);

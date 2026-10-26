@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -11,18 +13,23 @@
 #define AOT_03_NONE 0x03
 #define AOT_04_MESSAGE 0x04
 #define AOT_05_MESSAGE 0x05
+#define CAM_00 0x00
+#define CAM_01 0x01
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
 #define F_ROOM_1A 0x1A
 #define MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY 0x00
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define SE_17_BATHMIX 0x17
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 6600, 2000, 2100, 2300, 2, 0, 33, 1, 0, ROOM_401_ROOM_001, 9200, 0, 3200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 1300, 2100, 2400, 3200, IT_3B_KEY_CONTROL_ROOM, 1, 0, 255, 10, 10, 208, 253, 30, 15, 246, 0, 156, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 6600, 2000, 2100, 2300, 2, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_401_ROOM_001, 9200, 0, 3200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 1300, 2100, 2400, 3200, IT_3B_KEY_CONTROL_ROOM, 1, 0, 255, 10, 10, 208, 253, 30, 15, 246, 0, F_ITEM_9C, 129, 0, 0);
     eml_rot(0, 0, 0, 0, 8);
-    obj(0, 1, 255, 21000, 0, 21000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(1, 1, 255, 20000, 0, 20000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 1, 255, 21000, 0, 21000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01, 1, 255, 20000, 0, 20000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_03_NONE, 1300, 2100, 2400, 3200, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 2, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 4800, 700, 1500, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_05_MESSAGE, 2000, 6400, 2000, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
@@ -32,7 +39,7 @@ proc init
     {
         aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
     }
 }
 
@@ -44,35 +51,35 @@ proc main
         if (ck(FG_ROOM, F_ROOM_19, TRUE))
         {
             set(FG_ROOM, F_ROOM_19, FALSE);
-            evt_exec(0, 9, from_main_2);
+            evt_exec(0, TASK_09, from_main_2);
         }
         else
         {
-            evt_exec(0, 9, from_main_3);
+            evt_exec(0, TASK_09, from_main_3);
             set(FG_STATUS, F_STATUS_0F, FALSE);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_43, FALSE) && ck(FG_ROOM, F_ROOM_1A, TRUE))
     {
-        if (cmpb(B_CAMERA, CMP_EQ, 0) && ck(FG_STATUS, F_STATUS_1A, TRUE))
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_00) && ck(FG_STATUS, F_STATUS_1A, TRUE))
         {
-            evt_exec(0, 9, on_enter);
+            evt_exec(0, TASK_09, on_enter);
         }
-        if (cmpb(B_CAMERA, CMP_EQ, 1) && ck(FG_STATUS, F_STATUS_1A, TRUE))
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_01) && ck(FG_STATUS, F_STATUS_1A, TRUE))
         {
-            evt_exec(0, 9, from_main);
+            evt_exec(0, TASK_09, from_main);
         }
     }
 }
 
 event on_enter
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 2580, -1610, 4580);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 21000, 0, 21000);
     tw_finish();
@@ -80,12 +87,12 @@ event on_enter
 
 event from_main
 {
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 2600, -680, 3680);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 20000, 0, 20000);
     tw_finish();
@@ -98,12 +105,12 @@ event event_02
         set(FG_ROOM, F_ROOM_1A, FALSE);
         cut_auto(1);
     }
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 2600, -680, 3680);
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 20000, 0, 20000);
     tw_end();
@@ -113,14 +120,14 @@ event event_02
         aot_delete(AOT_03_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         set(FG_6, F_6_17, FALSE);
         set(FG_6, F_6_19, FALSE);
-        cutnext(1);
+        cutnext(CAM_01);
     }
     evt_next();
     evt_nop();
     sleep(15);
     run
     {
-        message(MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY | MSG_FAST, 255); // "The bathtub is filled with muddy water. Will you unplug it? Nothing special."
+        message(MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "The bathtub is filled with muddy water. Will you unplug it? Nothing special."
     }
     evt_next();
     evt_nop();
@@ -144,11 +151,11 @@ event from_main_2
 {
     run
     {
-        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 2400, 3800);
+        se_play_3d(SND_BANK_ROOM, SE_17_BATHMIX, 0, SND_AT_POINT, 0, 2400, 3800);
         set(FG_SCENARIO, F_SCENARIO_43, TRUE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_set_pos(0, 1, 0);
     for (15)
@@ -174,7 +181,7 @@ event from_main_2
     tw_end();
     sleep(30);
     set(FG_STATUS, F_STATUS_0F, FALSE);
-    evt_work_set(WK_OBJ, 1);
+    evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 21000, 0, 21000);
     tw_end();

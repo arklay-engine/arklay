@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -12,6 +14,7 @@
 #define AOT_03_EVENT 0x03
 #define AOT_03_ITEM 0x03
 #define AOT_04_NONE 0x04
+#define CAM_04 0x04
 #define ENEMY_00 0x00
 #define ENEMY_00_HUNTER 0x00
 #define ENEMY_01_HUNTER 0x01
@@ -28,6 +31,11 @@
 #define MSG_VO_10E_08 0x1B
 #define MSG_WILL_YOU_GO_WITH_HIM 0x17
 #define MSG_WILL_YOU_STAY_HERE 0x19
+#define OBJ_00 0x00
+#define SE_17_HOOKMIX 0x17
+#define SE_18_LOCKOUTA 0x18
+#define SE_19_LOCKOUTB 0x19
+#define SE_1A_MAGNUM 0x1A
 #define VO_00D_02 0x02
 #define VO_10E_00 0x16
 #define VO_10E_01 0x17
@@ -42,20 +50,20 @@
 proc init
 {
 #if CHRIS
-    door_aot_set(AOT_00_DOOR, 200, 15900, 2100, 1500, 3, 1, 8, 0, 168, ROOM_307_LADDER_PASSAGE, 13700, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 200, 15900, 2100, 1500, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_28, ROOM_307_LADDER_PASSAGE, 13700, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #else
-    door_aot_set(AOT_00_DOOR, 200, 15900, 2100, 1500, 3, 1, 8, 0, 0, ROOM_307_LADDER_PASSAGE, 13700, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 200, 15900, 2100, 1500, 3, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_307_LADDER_PASSAGE, 13700, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #endif
-    door_aot_set(AOT_01_DOOR, 12800, 26400, 2100, 1700, 0, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 4100, 0, 26800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 11100, 2800, 2100, 1500, 0, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 2800, 0, 4400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 12800, 26400, 2100, 1700, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_309_DARKNESS_PASSAGE, 4100, 0, 26800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 11100, 2800, 2100, 1500, 0, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_309_DARKNESS_PASSAGE, 2800, 0, 4400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if CHRIS
-    item_aot_set(AOT_03_ITEM, 5060, 18000, 1400, 2000, IT_06_WEAPON_FLAMETHROWER, 240, 0, 255, 196, 19, 188, 248, 134, 76, 0, 4, 154, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 5060, 18000, 1400, 2000, IT_06_WEAPON_FLAMETHROWER, 240, 0, 255, 196, 19, 188, 248, 134, 76, 0, 4, F_ITEM_9A, 129, 0, 0);
     swap_var(1, 3, 14);
-    obj(0, 15, 255, 4910, -1740, 19790, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 15, 255, 4910, -1740, 19790, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_04_NONE, 5060, 18000, 1400, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 4, 0, 0, 0);
     if (ck(FG_ITEM, F_ITEM_9A, FALSE))
     {
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
         aot_delete(AOT_04_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         set(FG_LOCK, F_LOCK_28, FALSE);
     }
@@ -68,7 +76,7 @@ proc init
     {
         dir_set(0, 0, 3920, 0, 2800, 0, 16300);
         enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3984, 0, 0, 5224, 0, 17102, ENEMY_00, 0, 0, 0);
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
         aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01_door, 0);
     }
     if (ck(FG_COMMON, F_COMMON_58, TRUE) && ck(FG_COMMON, F_COMMON_48, FALSE) && ck(FG_COMMON, F_COMMON_5D, TRUE))
@@ -82,7 +90,7 @@ proc init
         {
             enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3288, 0, 0, 8690, 0, 3250, ENEMY_00, 0, 0, 0);
         }
-        evt_exec(0, 9, on_enter_2);
+        evt_exec(0, TASK_09, on_enter_2);
         aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
         aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01_door, 0);
     }
@@ -99,11 +107,11 @@ proc init
     if (ck(FG_ENEMY, F_ENEMY_4B, TRUE))
     {
 #if CHRIS
-        enemy(EM_06_HUNTER, 0, 76, 1, 2, 0, 0, 1024, 0, 0, 9800, 0, 13200, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, 0, F_ENEMY_4C, 1, 2, 0, 0, 1024, 0, 0, 9800, 0, 13200, ENEMY_00_HUNTER, 0, 0, 0);
 #else
-        enemy(EM_06_HUNTER, 0, 76, 1, 2, 0, 0, 1024, 0, 0, 9800, 0, 13200, ENEMY_00, 0, 0, 0);
+        enemy(EM_06_HUNTER, 0, F_ENEMY_4C, 1, 2, 0, 0, 1024, 0, 0, 9800, 0, 13200, ENEMY_00, 0, 0, 0);
 #endif
-        enemy(EM_06_HUNTER, 0, 77, 1, 2, 0, 0, 3072, 0, 0, 9800, 0, 19600, ENEMY_01_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, 0, F_ENEMY_4D, 1, 2, 0, 0, 3072, 0, 0, 9800, 0, 19600, ENEMY_01_HUNTER, 0, 0, 0);
     }
 }
 
@@ -113,14 +121,14 @@ proc main
     if (testpickup(IT_06_WEAPON_FLAMETHROWER))
     {
         set(FG_LOCK, F_LOCK_28, FALSE);
-        evt_exec(0, 9, from_main);
+        evt_exec(0, TASK_09, from_main);
     }
     if (testitem(IT_06_WEAPON_FLAMETHROWER))
     {
         set(FG_ITEM, F_ITEM_9A, TRUE);
         setbyte(0, 1, 0);
-        evt_exec(0, 9, from_main_2);
-        evt_exec(0, 9, from_main_3);
+        evt_exec(0, TASK_09, from_main_2);
+        evt_exec(0, TASK_09, from_main_3);
     }
 }
 #else
@@ -153,25 +161,25 @@ event event_01
 {
     voice_play(VOICE_PLAY, VO_10E_00, 0);
     sleep(15);
-    evt_fork(9, event_09, 0);
-    evt_fork(9, event_0A, 0);
+    evt_fork(TASK_09, event_09, 0);
+    evt_fork(TASK_09, event_0A, 0);
     message(MSG_VO_10E_00, 0);
     sleep(100);
     message(1, 0);
-    evt_fork(9, event_0B, 0);
+    evt_fork(TASK_09, event_0B, 0);
     sleep(110);
     message(2, 0);
-    evt_fork(9, event_0C, 0);
+    evt_fork(TASK_09, event_0C, 0);
     sleep(65);
     message(3, 0);
-    evt_fork(9, event_0D, 0);
+    evt_fork(TASK_09, event_0D, 0);
     wait_message();
     run
     {
-        bgm_play(1);
+        bgm_play(BGM_SUB_1);
     }
     message(MSG_WILL_YOU_GO_WITH_HIM, 0); // "Will you go with him? Do you want him to go first? Will you stay here?"
-    evt_fork(9, event_0E, 0);
+    evt_fork(TASK_09, event_0E, 0);
     do
     {
         evt_next();
@@ -181,11 +189,11 @@ event event_01
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, event_02);
+            evt_exec(0, TASK_09, event_02);
         }
         else
         {
-            evt_exec(0, 9, event_05);
+            evt_exec(0, TASK_09, event_05);
         }
     }
     evt_finish();
@@ -195,25 +203,25 @@ event event_02
 {
     voice_play(VOICE_PLAY, VO_10E_01, 0);
     sleep(15);
-    evt_fork(9, event_0F, 0);
+    evt_fork(TASK_09, event_0F, 0);
     message(MSG_VO_10E_01, 0);
     sleep(60);
     message(5, 0);
-    evt_fork(9, event_10, 0);
+    evt_fork(TASK_09, event_10, 0);
     sleep(30);
-    evt_fork(9, event_11, 0);
-    evt_fork(9, event_09, 0);
+    evt_fork(TASK_09, event_11, 0);
+    evt_fork(TASK_09, event_09, 0);
     wait_message();
     voice_play(VOICE_PLAY, VO_10E_02, 0);
-    evt_fork(9, event_12, 0);
+    evt_fork(TASK_09, event_12, 0);
     sleep(15);
     message(MSG_VO_10E_02, 0);
     sleep(65);
     message(7, 0);
-    evt_fork(9, event_13, 0);
+    evt_fork(TASK_09, event_13, 0);
     wait_message();
     message(MSG_DO_YOU_WANT_HIM_TO_GO, 0); // "Do you want him to go first? Will you stay here?"
-    evt_fork(9, event_0E, 0);
+    evt_fork(TASK_09, event_0E, 0);
     do
     {
         evt_next();
@@ -223,11 +231,11 @@ event event_02
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, event_03);
+            evt_exec(0, TASK_09, event_03);
         }
         else
         {
-            evt_exec(0, 9, event_04);
+            evt_exec(0, TASK_09, event_04);
         }
     }
     evt_finish();
@@ -238,15 +246,15 @@ event event_03
     voice_play(VOICE_PLAY, VO_10E_03, 0);
     sleep(15);
     message(MSG_VO_10E_03, 0);
-    evt_fork(9, event_14, 0);
+    evt_fork(TASK_09, event_14, 0);
     sleep(85);
     message(9, 0);
-    evt_fork(9, event_15, 0);
+    evt_fork(TASK_09, event_15, 0);
     sleep(40);
     message(10, 0);
-    evt_fork(9, event_16, 0);
+    evt_fork(TASK_09, event_16, 0);
     wait_message();
-    evt_fork(9, event_17, 0);
+    evt_fork(TASK_09, event_17, 0);
     sleep(100);
     pos_set(ENEMY_00, 0, 0, 0, 30000, 30000, 30000);
     run
@@ -270,15 +278,15 @@ event event_04
 {
     voice_play(VOICE_PLAY, VO_10E_04, 0);
     sleep(15);
-    evt_fork(9, event_18, 0);
+    evt_fork(TASK_09, event_18, 0);
     message(MSG_VO_10E_04, 0);
     sleep(70);
-    evt_fork(9, event_19, 0);
+    evt_fork(TASK_09, event_19, 0);
     message(12, 0);
     wait_message();
     run
     {
-        eml_state(0, ENEMY_00, 8);
+        eml_state(0, ENEMY_00, EML_08);
         set(FG_COMMON, F_COMMON_58, TRUE);
         set(FG_COMMON, F_COMMON_59, TRUE);
         set(FG_COMMON, F_COMMON_5A, FALSE);
@@ -294,22 +302,22 @@ event event_04
 event event_05
 {
     voice_play(VOICE_PLAY, VO_10E_05, 0);
-    evt_fork(9, event_1B, 0);
+    evt_fork(TASK_09, event_1B, 0);
     sleep(15);
     message(MSG_VO_10E_05, 0);
     sleep(70);
     message(14, 0);
-    evt_fork(9, event_1C, 0);
+    evt_fork(TASK_09, event_1C, 0);
     sleep(60);
     message(15, 0);
-    evt_fork(9, event_1D, 0);
+    evt_fork(TASK_09, event_1D, 0);
     sleep(80);
     message(16, 0);
-    evt_fork(9, event_1E, 0);
+    evt_fork(TASK_09, event_1E, 0);
     wait_message();
     message(MSG_WILL_YOU_STAY_HERE, 0); // "Will you stay here?"
-    evt_fork(9, event_09, 0);
-    evt_fork(9, event_0E, 0);
+    evt_fork(TASK_09, event_09, 0);
+    evt_fork(TASK_09, event_0E, 0);
     do
     {
         evt_next();
@@ -319,11 +327,11 @@ event event_05
     {
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, event_06);
+            evt_exec(0, TASK_09, event_06);
         }
         else
         {
-            evt_exec(0, 9, event_07);
+            evt_exec(0, TASK_09, event_07);
         }
     }
     evt_finish();
@@ -332,23 +340,23 @@ event event_05
 event event_06
 {
     voice_play(VOICE_PLAY, VO_10E_06, 0);
-    evt_fork(9, event_1F, 0);
+    evt_fork(TASK_09, event_1F, 0);
     sleep(10);
     message(MSG_VO_10E_06, 0);
     sleep(45);
     message(18, 0);
-    evt_fork(9, event_20, 0);
+    evt_fork(TASK_09, event_20, 0);
     wait_message();
-    cutnext(4);
-    evt_fork(9, event_21, 0);
+    cutnext(CAM_04);
+    evt_fork(TASK_09, event_21, 0);
     sleep(50);
-    evt_fork(9, event_22, 0);
+    evt_fork(TASK_09, event_22, 0);
     sleep(50);
-    evt_fork(9, event_1A, 0);
+    evt_fork(TASK_09, event_1A, 0);
     sleep(40);
-    evt_fork(9, event_23, 0);
+    evt_fork(TASK_09, event_23, 0);
     sleep(30);
-    evt_fork(9, event_24, 0);
+    evt_fork(TASK_09, event_24, 0);
     sleep(10);
     cutcurr(0);
     run
@@ -367,26 +375,26 @@ event event_06
 event event_07
 {
     voice_play(VOICE_PLAY, VO_10E_07, 0);
-    evt_fork(9, event_25, 0);
+    evt_fork(TASK_09, event_25, 0);
     sleep(35);
     message(MSG_VO_10E_07, 0);
     sleep(100);
     message(21, 0);
-    evt_fork(9, event_26, 0);
+    evt_fork(TASK_09, event_26, 0);
     sleep(110);
     message(22, 0);
-    evt_fork(9, event_27, 0);
+    evt_fork(TASK_09, event_27, 0);
     wait_message();
-    cutnext(4);
-    evt_fork(9, event_21, 0);
+    cutnext(CAM_04);
+    evt_fork(TASK_09, event_21, 0);
     sleep(50);
-    evt_fork(9, event_22, 0);
+    evt_fork(TASK_09, event_22, 0);
     sleep(50);
-    evt_fork(9, event_1A, 0);
+    evt_fork(TASK_09, event_1A, 0);
     sleep(40);
-    evt_fork(9, event_23, 0);
+    evt_fork(TASK_09, event_23, 0);
     sleep(30);
-    evt_fork(9, event_24, 0);
+    evt_fork(TASK_09, event_24, 0);
     sleep(10);
     cutcurr(0);
     run
@@ -940,13 +948,13 @@ event on_aot_03
     sleep(10);
     run
     {
-        bgm_stop(1);
-        se_play_3d(2, 26, 0, SND_AT_POINT, 0, 11850, 26300);
+        bgm_stop(BGM_SUB_1);
+        se_play_3d(SND_BANK_ROOM, SE_1A_MAGNUM, 0, SND_AT_POINT, 0, 11850, 26300);
     }
     sleep(5);
     run
     {
-        bgm_play(2);
+        bgm_play(BGM_SUB_2);
         aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01_door_2, 0);
     }
     sleep(20);
@@ -976,11 +984,11 @@ event on_aot_01_door
 #if CHRIS
     run
     {
-        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 2200, 16700);
-        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 2200, 16700);
+        se_play_3d(SND_BANK_ROOM, SE_17_HOOKMIX, 0, SND_AT_POINT, 0, 2200, 16700);
+        se_play_3d(SND_BANK_ROOM, SE_18_LOCKOUTA, 0, SND_AT_POINT, 0, 2200, 16700);
     }
     sleep(5);
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -1076,8 +1084,8 @@ event on_aot_01_door
 event from_main_2
 {
     aot_delete(AOT_04_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-    se_play_3d(2, 23, 0, SND_AT_POINT, 0, 2200, 16700);
-    evt_work_set(WK_OBJ, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_HOOKMIX, 0, SND_AT_POINT, 0, 2200, 16700);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
@@ -1167,14 +1175,14 @@ event from_main_2
     tw_end();
     evt_nop();
     aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
-    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 2200, 16700);
+    se_play_3d(SND_BANK_ROOM, SE_19_LOCKOUTB, 0, SND_AT_POINT, 0, 2200, 16700);
     set(FG_LOCK, F_LOCK_28, TRUE);
     evt_finish();
 }
 
 event on_enter
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4910, -1888, 19790);
     tw_finish();
@@ -1296,7 +1304,7 @@ event on_enter_2
         setb(B_SELECTED_ITEM, IT_06_WEAPON_FLAMETHROWER, 0);
         set(FG_STATUS, F_STATUS_12, TRUE);
 #else
-        eml_state(0, ENEMY_00, 8);
+        eml_state(0, ENEMY_00, EML_08);
 #endif
     }
     evt_finish();

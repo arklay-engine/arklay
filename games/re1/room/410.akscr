@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -22,12 +24,12 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 9500, 1900, 1600, 2100, 0, 1, 11, 3, 0, ROOM_40E_WATER_TANK, 3000, 0, 26700, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 1700, 4300, 1300, 1100, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 52, 8, 80, 246, 236, 19, 0, 0, 122, 129, 0, 0);
-    item_aot_set(AOT_02_ITEM, 1700, 4300, 1300, 1100, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 52, 8, 80, 246, 48, 17, 0, 0, 131, 129, 0, 0);
-    item_aot_set(AOT_83_ITEM, 8400, 6200, 1300, 1200, IT_0B_AMMO_HANDGUN, 15, 2, 255, 140, 35, 214, 247, 88, 27, 88, 2, 112, 129, 0, 0);
-    item_aot_set(AOT_84_ITEM, 8400, 6200, 1300, 1200, IT_0B_AMMO_HANDGUN, 15, 3, 255, 252, 33, 214, 247, 88, 27, 88, 2, 92, 129, 0, 0);
-    item_aot_set(AOT_05_ITEM, 3900, 6270, 1100, 1100, IT_3A_KEY_GUARDHOUSE_003, 1, 4, 255, 242, 18, 214, 247, 112, 28, 50, 15, 114, 129, 0, 132);
+    door_aot_set(AOT_00_DOOR, 9500, 1900, 1600, 2100, 0, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_40E_WATER_TANK, 3000, 0, 26700, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_01_ITEM, 1700, 4300, 1300, 1100, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 52, 8, 80, 246, 236, 19, 0, 0, F_ITEM_7A, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 1700, 4300, 1300, 1100, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 52, 8, 80, 246, 48, 17, 0, 0, F_ITEM_83, 129, 0, 0);
+    item_aot_set(AOT_83_ITEM, 8400, 6200, 1300, 1200, IT_0B_AMMO_HANDGUN, 15, 2, 255, 140, 35, 214, 247, 88, 27, 88, 2, F_ITEM_70, 129, 0, 0);
+    item_aot_set(AOT_84_ITEM, 8400, 6200, 1300, 1200, IT_0B_AMMO_HANDGUN, 15, 3, 255, 252, 33, 214, 247, 88, 27, 88, 2, F_ITEM_5C, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 3900, 6270, 1100, 1100, IT_3A_KEY_GUARDHOUSE_003, 1, 4, 255, 242, 18, 214, 247, 112, 28, 50, 15, F_ITEM_72, 129, 0, 132);
     aot_set(AOT_0A_MESSAGE, 1700, 5700, 1300, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);
     aot_set(AOT_0B_MESSAGE, 3000, 6200, 800, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);
     aot_set(AOT_0C_MESSAGE, 1700, 1800, 1300, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);

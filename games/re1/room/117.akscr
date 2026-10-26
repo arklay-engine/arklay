@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,6 +18,9 @@
 #define AOT_07_MESSAGE 0x07
 #define AOT_08_EVENT 0x08
 #define AOT_09_ITEM 0x09
+#define CAM_00 0x00
+#define CAM_06 0x06
+#define CAM_07 0x07
 #define ENEMY_00_CROW 0x00
 #define ENEMY_01_CROW 0x01
 #define ENEMY_02_CROW 0x02
@@ -48,6 +53,10 @@
 #define MSG_VO_00C_01 0x01
 #define MSG_VO_00C_20 0x02
 #define MSG_VO_00C_22 0x03
+#define OBJ_00 0x00
+#define SE_17_SW_BTN 0x17
+#define SE_18_FRAME_GA 0x18
+#define SE_19_FRAME_FA 0x19
 #define VO_00C_00 0x54
 #define VO_00C_01 0x55
 #define VO_00C_20 0x64
@@ -56,33 +65,33 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 2000, 10800, 2400, 1800, 1, 0, 30, 5, 0, ROOM_10A_BACK_PASSAGE, 3000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_09_ITEM, 1300, 3300, 1100, 1600, IT_2D_KEY_CREST_STAR, 1, 0, 255, 250, 5, 202, 244, 220, 15, 128, 12, 31, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 2000, 10800, 2400, 1800, 1, DOOR_SND_00_DR_WD, DOOR_1E_DOOR03K, 5, 0, ROOM_10A_BACK_PASSAGE, 3000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_09_ITEM, 1300, 3300, 1100, 1600, IT_2D_KEY_CREST_STAR, 1, 0, 255, 250, 5, 202, 244, 220, 15, 128, 12, F_ITEM_1F, 129, 0, 0);
 #if MANSION1
 #if CHRIS
-    room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_RELOAD | BGM_CH0);
+    room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_RELOAD | BGM_MAIN_ON);
 #endif
 #else
-    room_bgm_state_set(5, 23, BGM_CH0);
+    room_bgm_state_set(5, 23, BGM_MAIN_ON);
 #endif
     if (ck(FG_SCENARIO, F_SCENARIO_03, TRUE))
     {
 #if MANSION1
-        room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_CH0);
-        evt_exec(0, 9, on_enter_2);
+        room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_MAIN_ON);
+        evt_exec(0, TASK_09, on_enter_2);
 #else
 #if JILL
-        evt_exec(0, 9, on_enter_2);
+        evt_exec(0, TASK_09, on_enter_2);
 #endif
 #endif
-        obj(0, 129, 255, 3440, 300, 3310, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00, 129, 255, 3440, 300, 3310, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if MANSION1
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
 #else
 #if CHRIS
-        evt_exec(0, 9, on_enter_3);
+        evt_exec(0, TASK_09, on_enter_3);
 #else
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
 #endif
 #endif
         aot_set(AOT_01_EVENT, 6600, 6800, 5000, 1200, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
@@ -96,7 +105,7 @@ proc init
     }
     else
     {
-        obj(0, 1, 255, 1860, -3850, 3200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00, 1, 255, 1860, -3850, 3200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         aot_set(AOT_01_EVENT, 6600, 6800, 5000, 1200, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
         aot_set(AOT_02_MESSAGE, 15000, 6800, 2000, 800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02_message, 0, 0, 0);
         aot_set(AOT_03_MESSAGE, 18500, 6800, 2000, 800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03_message, 0, 0, 0);
@@ -108,7 +117,7 @@ proc init
     }
 #if MANSION1
 #if JILL
-    room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_RELOAD | BGM_CH0);
+    room_bgm_state_set(0, ROOM_117_LARGE_GALLERY, BGM_RELOAD | BGM_MAIN_ON);
 #endif
 #endif
     enemy(EM_05_CROW, 0, F_ENEMY_22, 1, 2, 0, 0, 1024, 0, 0, 19557, -5500, 10200, ENEMY_00_CROW, 0, 0, 0);
@@ -130,19 +139,19 @@ proc init
         {
             room_bgm_state_set(5, 23, BGM_RELOAD | 1);
             plw_anim(2, 40, 0);
-            setw(4, 0, 0);
+            setw(W_04, 0, 0);
             cut_auto(1);
-            setb(B_CAMERA, 0, 0);
-            evt_exec(0, 9, on_enter);
+            setb(B_CAMERA, CAM_00, 0);
+            evt_exec(0, TASK_09, on_enter);
         }
         if (ck(FG_COMMON, F_COMMON_36, TRUE))
         {
             room_bgm_state_set(5, 23, BGM_RELOAD | 1);
             plw_anim(2, 40, 0);
-            setw(4, 0, 0);
+            setw(W_04, 0, 0);
             cut_auto(1);
-            setb(B_CAMERA, 0, 0);
-            evt_exec(0, 9, on_enter_2);
+            setb(B_CAMERA, CAM_00, 0);
+            evt_exec(0, TASK_09, on_enter_2);
         }
     }
 #endif
@@ -171,10 +180,10 @@ event event_00
     evt_nop();
     run
     {
-        bgm_play(1);
+        bgm_play(BGM_SUB_1);
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_17, FALSE);
-        evt_exec(0, 9, on_enter_sub1);
+        evt_exec(0, TASK_09, on_enter_sub1);
         voice_play(VOICE_PLAY, VO_00C_00, 0);
         message(MSG_VO_00C_00, 0);
     }
@@ -267,10 +276,10 @@ event event_02
     evt_nop();
     run
     {
-        bgm_play(1);
+        bgm_play(BGM_SUB_1);
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_17, FALSE);
-        evt_exec(0, 9, on_enter_2_sub1);
+        evt_exec(0, TASK_09, on_enter_2_sub1);
         voice_play(VOICE_PLAY, VO_00C_20, 0);
         message(MSG_VO_00C_20, 0);
     }
@@ -363,8 +372,8 @@ event on_aot_01
         set(FG_6, F_6_17, FALSE);
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
-        cutnext(7);
-        message(MSG_THE_TITLE_IS_ALL_LIVING_THINGS | MSG_FAST, 325); // "The title is “All living things are destined to die"."
+        cutnext(CAM_07);
+        message(MSG_THE_TITLE_IS_ALL_LIVING_THINGS | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "The title is “All living things are destined to die"."
     }
     do
     {
@@ -390,7 +399,7 @@ event on_aot_02_message
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
     }
-    message(MSG_A_PICTURE_OF_A_TIRED_MIDDLEAGED | MSG_FAST, 325); // "A picture of a tired middle-aged man."
+    message(MSG_A_PICTURE_OF_A_TIRED_MIDDLEAGED | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a tired middle-aged man."
     do
     {
         evt_next();
@@ -400,7 +409,7 @@ event on_aot_02_message
     {
         if (ck(FG_SCENARIO, F_SCENARIO_03, FALSE))
         {
-            evt_exec(0, 9, on_aot_02_message_sub1);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1);
         }
         else
         {
@@ -420,7 +429,7 @@ event on_aot_03_message
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
     }
-    message(MSG_A_PICTURE_OF_A_NEWBORN_BABY | MSG_FAST, 325); // "A picture of a newborn baby."
+    message(MSG_A_PICTURE_OF_A_NEWBORN_BABY | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a newborn baby."
     do
     {
         evt_next();
@@ -430,7 +439,7 @@ event on_aot_03_message
     {
         if (ck(FG_SCENARIO, F_SCENARIO_03, FALSE))
         {
-            evt_exec(0, 9, on_aot_03_message_sub1);
+            evt_exec(0, TASK_09, on_aot_03_message_sub1);
         }
         else
         {
@@ -450,7 +459,7 @@ event on_aot_04_message
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
     }
-    message(MSG_A_PICTURE_OF_A_YOUNG_MAN | MSG_FAST, 325); // "A picture of a young man."
+    message(MSG_A_PICTURE_OF_A_YOUNG_MAN | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a young man."
     do
     {
         evt_next();
@@ -460,7 +469,7 @@ event on_aot_04_message
     {
         if (ck(FG_SCENARIO, F_SCENARIO_03, FALSE))
         {
-            evt_exec(0, 9, on_aot_04_message_sub1);
+            evt_exec(0, TASK_09, on_aot_04_message_sub1);
         }
         else
         {
@@ -480,7 +489,7 @@ event on_aot_05_message
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
     }
-    message(MSG_A_PICTURE_OF_AN_INFANT | MSG_FAST, 325); // "A picture of an infant."
+    message(MSG_A_PICTURE_OF_AN_INFANT | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of an infant."
     do
     {
         evt_next();
@@ -490,7 +499,7 @@ event on_aot_05_message
     {
         if (ck(FG_SCENARIO, F_SCENARIO_03, FALSE))
         {
-            evt_exec(0, 9, on_aot_05_message_sub1);
+            evt_exec(0, TASK_09, on_aot_05_message_sub1);
         }
         else
         {
@@ -510,7 +519,7 @@ event on_aot_06_message
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
     }
-    message(MSG_A_PICTURE_OF_A_LIVELY_BOY | MSG_FAST, 325); // "A picture of a lively boy."
+    message(MSG_A_PICTURE_OF_A_LIVELY_BOY | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a lively boy."
     do
     {
         evt_next();
@@ -520,7 +529,7 @@ event on_aot_06_message
     {
         if (ck(FG_SCENARIO, F_SCENARIO_03, FALSE))
         {
-            evt_exec(0, 9, on_aot_06_message_sub1);
+            evt_exec(0, TASK_09, on_aot_06_message_sub1);
         }
         else
         {
@@ -540,7 +549,7 @@ event on_aot_07_message
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
     }
-    message(MSG_A_PICTURE_OF_A_BOLDLOOKING_OLD | MSG_FAST, 325); // "A picture of a bold-looking old man."
+    message(MSG_A_PICTURE_OF_A_BOLDLOOKING_OLD | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a bold-looking old man."
     do
     {
         evt_next();
@@ -550,7 +559,7 @@ event on_aot_07_message
     {
         if (ck(FG_SCENARIO, F_SCENARIO_03, FALSE))
         {
-            evt_exec(0, 9, on_aot_07_message_sub1);
+            evt_exec(0, TASK_09, on_aot_07_message_sub1);
         }
         else
         {
@@ -569,7 +578,7 @@ event on_aot_08
         set(FG_6, F_6_17, FALSE);
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_1C, FALSE);
-        message(MSG_A_PICTURE_OF_PEOPLE_MOURNING_FOR | MSG_FAST, 325); // "A picture of people mourning for the dead."
+        message(MSG_A_PICTURE_OF_PEOPLE_MOURNING_FOR | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of people mourning for the dead."
     }
     do
     {
@@ -581,7 +590,7 @@ event on_aot_08
         set(FG_ROOM, F_ROOM_12, FALSE);
         if (ck(FG_SCENARIO, F_SCENARIO_03, FALSE))
         {
-            evt_exec(0, 9, on_aot_08_sub1);
+            evt_exec(0, TASK_09, on_aot_08_sub1);
             set(FG_ROOM, F_ROOM_12, TRUE);
         }
         else
@@ -602,14 +611,14 @@ event on_aot_08
 event on_aot_02_message_sub1_sub2
 {
     set(FG_ROOM, F_ROOM_16, FALSE);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_SW_BTN, 0, SND_AT_PLAYER, 0, 0, 0);
     set(FG_ROOM, F_ROOM_16, TRUE);
     evt_finish();
 }
 
 event on_aot_02_message_sub1
 {
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 325); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -620,8 +629,8 @@ event on_aot_02_message_sub1
         set(FG_ROOM, F_ROOM_16, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_message_sub1_sub1);
-            evt_exec(0, 9, on_aot_02_message_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub1);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub2);
             require(ck(FG_ROOM, F_ROOM_1B, TRUE));
             set(FG_ROOM, F_ROOM_17, TRUE);
         }
@@ -649,7 +658,7 @@ event on_aot_02_message_sub1
 
 event on_aot_03_message_sub1
 {
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 325); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -660,8 +669,8 @@ event on_aot_03_message_sub1
         set(FG_ROOM, F_ROOM_16, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_message_sub1_sub2);
-            evt_exec(0, 9, on_aot_02_message_sub1_sub1);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub1);
             set(FG_ROOM, F_ROOM_17, TRUE);
         }
     }
@@ -689,7 +698,7 @@ event on_aot_03_message_sub1
 event on_aot_04_message_sub1
 {
     set(FG_ROOM, F_ROOM_17, FALSE);
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 325); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -700,8 +709,8 @@ event on_aot_04_message_sub1
         set(FG_ROOM, F_ROOM_16, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_message_sub1_sub1);
-            evt_exec(0, 9, on_aot_02_message_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub1);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub2);
             require(ck(FG_ROOM, F_ROOM_1D, TRUE));
             set(FG_ROOM, F_ROOM_17, TRUE);
         }
@@ -729,7 +738,7 @@ event on_aot_04_message_sub1
 
 event on_aot_05_message_sub1
 {
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 325); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -740,8 +749,8 @@ event on_aot_05_message_sub1
         set(FG_ROOM, F_ROOM_16, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_message_sub1_sub1);
-            evt_exec(0, 9, on_aot_02_message_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub1);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub2);
             require(ck(FG_ROOM, F_ROOM_1A, TRUE));
             set(FG_ROOM, F_ROOM_17, TRUE);
         }
@@ -769,7 +778,7 @@ event on_aot_05_message_sub1
 
 event on_aot_06_message_sub1
 {
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 325); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -780,8 +789,8 @@ event on_aot_06_message_sub1
         set(FG_ROOM, F_ROOM_16, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_message_sub1_sub1);
-            evt_exec(0, 9, on_aot_02_message_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub1);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub2);
             require(ck(FG_ROOM, F_ROOM_1C, TRUE));
             set(FG_ROOM, F_ROOM_17, TRUE);
         }
@@ -809,7 +818,7 @@ event on_aot_06_message_sub1
 
 event on_aot_07_message_sub1
 {
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 325); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -820,8 +829,8 @@ event on_aot_07_message_sub1
         set(FG_ROOM, F_ROOM_16, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            evt_exec(0, 9, on_aot_02_message_sub1_sub1);
-            evt_exec(0, 9, on_aot_02_message_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub1);
+            evt_exec(0, TASK_09, on_aot_02_message_sub1_sub2);
             require(ck(FG_ROOM, F_ROOM_19, TRUE));
             set(FG_ROOM, F_ROOM_17, TRUE);
         }
@@ -849,7 +858,7 @@ event on_aot_07_message_sub1
 
 event on_aot_08_sub1
 {
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 325); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -860,8 +869,8 @@ event on_aot_08_sub1
         set(FG_ROOM, F_ROOM_14, FALSE);
         set(FG_ROOM, F_ROOM_16, TRUE);
         require(cmpb(B_MENU_CHOICE, CMP_EQ, 0));
-        evt_exec(0, 9, on_aot_02_message_sub1_sub2);
-        evt_exec(0, 9, on_aot_02_message_sub1_sub1);
+        evt_exec(0, TASK_09, on_aot_02_message_sub1_sub2);
+        evt_exec(0, TASK_09, on_aot_02_message_sub1_sub1);
         if (ck(FG_ROOM, F_ROOM_1E, TRUE))
         {
             set(FG_ROOM, F_ROOM_17, TRUE);
@@ -885,14 +894,14 @@ event on_aot_08_sub1
             set(FG_ROOM, F_ROOM_17, FALSE);
             set(FG_ROOM, F_ROOM_1F, TRUE);
             set(FG_SCENARIO, F_SCENARIO_03, TRUE);
-            evt_exec(0, 9, on_aot_08_sub1_sub1);
+            evt_exec(0, TASK_09, on_aot_08_sub1_sub1);
             set(FG_ROOM, F_ROOM_13, TRUE);
-            evt_exec(0, 9, on_aot_08_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_08_sub1_sub2);
 #if MANSION1
-            bgm_play(0);
+            bgm_play(BGM_MAIN);
 #endif
             set(FG_STATUS, F_STATUS_0F, TRUE);
-            cutnext(6);
+            cutnext(CAM_06);
             dir_set(0, 0, 2100, 0, 2773, 0, 4147);
         }
     }
@@ -903,12 +912,12 @@ event on_aot_08_sub1
             if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
             {
                 get_eml_state(ENEMY_00_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_22, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_22, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_00_CROW, 0, 1024, 0, 19000, -2000, 4847);
                 }
                 get_eml_state(ENEMY_01_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_23, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_23, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_01_CROW, 0, 2048, 0, 19000, -2000, 4247);
                 }
@@ -922,12 +931,12 @@ event on_aot_08_sub1
             if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
             {
                 get_eml_state(ENEMY_02_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_24, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_24, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_02_CROW, 0, 3072, 0, 19000, -2000, 3647);
                 }
                 get_eml_state(ENEMY_03_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_25, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_25, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_03_CROW, 0, 0, 0, 19000, -2000, 3047);
                 }
@@ -941,12 +950,12 @@ event on_aot_08_sub1
             if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
             {
                 get_eml_state(ENEMY_00_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_22, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_22, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_00_CROW, 0, 1024, 0, 19000, -2000, 5047);
                 }
                 get_eml_state(ENEMY_01_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_23, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_23, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_01_CROW, 0, 2048, 0, 19000, -2000, 4617);
                 }
@@ -960,12 +969,12 @@ event on_aot_08_sub1
             if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
             {
                 get_eml_state(ENEMY_02_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_24, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_24, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_02_CROW, 0, 3072, 0, 19000, -2000, 4187);
                 }
                 get_eml_state(ENEMY_03_CROW);
-                if (ck(FG_ENEMY, F_ENEMY_25, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_25, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
                     pos_set(ENEMY_03_CROW, 0, 0, 0, 19000, -2000, 3757);
                 }
@@ -983,7 +992,7 @@ event on_aot_08_sub1
 #else
                 get_eml_state(4);
 #endif
-                if (ck(FG_ENEMY, F_ENEMY_26, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_26, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
 #if MANSION1
                     pos_set(ENEMY_04_CROW, 0, 1024, 0, 19000, -2000, 3327);
@@ -996,7 +1005,7 @@ event on_aot_08_sub1
 #else
                 get_eml_state(5);
 #endif
-                if (ck(FG_ENEMY, F_ENEMY_27, FALSE) && cmpb(10, CMP_NE, 0))
+                if (ck(FG_ENEMY, F_ENEMY_27, FALSE) && cmpb(B_0A, CMP_NE, 0))
                 {
 #if MANSION1
                     pos_set(ENEMY_05_CROW, 0, 2048, 0, 19000, -2000, 2897);
@@ -1012,17 +1021,17 @@ event on_aot_08_sub1
         if (ck(FG_ROOM, F_ROOM_14, TRUE))
         {
 #if MANSION1
-            bgm_play(0);
+            bgm_play(BGM_MAIN);
 #endif
             get_eml_state(ENEMY_00_CROW);
-            if (cmpb(10, CMP_EQ, 0))
+            if (cmpb(B_0A, CMP_EQ, 0))
             {
                 eml_state(0, ENEMY_00_CROW, EML_ACTION, 13);
                 eml_state(0, ENEMY_01_CROW, EML_ACTION, 13);
                 eml_state(0, ENEMY_02_CROW, EML_ACTION, 13);
                 eml_state(0, ENEMY_03_CROW, EML_ACTION, 13);
             }
-            if (cmpb(10, CMP_EQ, 0) && ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
+            if (cmpb(B_0A, CMP_EQ, 0) && ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
             {
 #if MANSION1
                 eml_state(0, ENEMY_04_CROW, EML_ACTION, 13);
@@ -1032,7 +1041,7 @@ event on_aot_08_sub1
                 eml_state(0, 5, EML_ACTION, 13);
 #endif
             }
-            evt_exec(0, 9, on_aot_08_sub1_sub2);
+            evt_exec(0, TASK_09, on_aot_08_sub1_sub2);
         }
     }
     run
@@ -1059,8 +1068,8 @@ event on_aot_08_sub1_sub1
     }
     while (ck(FG_ROOM, F_ROOM_13, TRUE));
     sleep(10);
-    se_play_3d(2, 24, 0, SND_AT_PLAYER, 0, 0, 0);
-    evt_work_set(WK_OBJ, 0);
+    se_play_3d(SND_BANK_ROOM, SE_18_FRAME_GA, 0, SND_AT_PLAYER, 0, 0, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_rot(206, 0, 0);
     for (2)
@@ -1087,14 +1096,14 @@ event on_aot_08_sub1_sub1
     {
         dir_set(0, 0, 2048, 0, 4800, 0, 3950);
         set(FG_ROOM, F_ROOM_13, TRUE);
-        evt_exec(0, 9, on_aot_08_sub1_sub1_sub1);
+        evt_exec(0, TASK_09, on_aot_08_sub1_sub1_sub1);
     }
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_13, TRUE));
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_rot(156, 0, 0);
     for (4)
@@ -1108,7 +1117,7 @@ event on_aot_08_sub1_sub1
     run
     {
         set(FG_ROOM, F_ROOM_13, TRUE);
-        evt_exec(0, 9, on_aot_08_sub1_sub1_sub2);
+        evt_exec(0, TASK_09, on_aot_08_sub1_sub1_sub2);
     }
     do
     {
@@ -1119,14 +1128,14 @@ event on_aot_08_sub1_sub1
     run
     {
         set(FG_ROOM, F_ROOM_13, TRUE);
-        evt_exec(0, 9, on_aot_08_sub1_sub1_sub3);
+        evt_exec(0, TASK_09, on_aot_08_sub1_sub1_sub3);
     }
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_13, TRUE));
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_rot(100, 0, 0);
     for (2)
@@ -1137,7 +1146,7 @@ event on_aot_08_sub1_sub1
     tw_nop();
     tw_end();
     evt_nop();
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_pos(0, 40, 0);
     tw_set_rot(80, 0, 0);
@@ -1170,7 +1179,7 @@ event on_aot_08_sub1_sub1
     tw_end();
     evt_nop();
     sleep(5);
-    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 2500, 3200);
+    se_play_3d(SND_BANK_ROOM, SE_19_FRAME_FA, 0, SND_AT_POINT, 0, 2500, 3200);
     sleep(10);
     set(FG_6, F_6_1D, TRUE);
     sleep(10);
@@ -1210,7 +1219,7 @@ event on_aot_08_sub1_sub2
 
 event on_aot_08_sub1_sub1_sub1
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_rot(240, 0, 0);
     for (2)
@@ -1248,7 +1257,7 @@ event on_aot_08_sub1_sub1_sub1
 
 event on_aot_08_sub1_sub1_sub2
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_rot(176, 0, 0);
     for (1)
@@ -1286,7 +1295,7 @@ event on_aot_08_sub1_sub1_sub2
 
 event on_aot_08_sub1_sub1_sub3
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_rot(16, 0, 0);
     for (2)
@@ -1324,7 +1333,7 @@ event on_aot_08_sub1_sub1_sub3
 
 event event_1A
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_set_rot(80, 0, 0);
     for (1)
@@ -1370,7 +1379,7 @@ event on_enter
 #endif
 #endif
 {
-    evt_work_set(WK_OBJ, 0);
+    evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_rot(0, 0, 65416, 1024);
     tw_end();
@@ -1390,7 +1399,7 @@ event on_enter_2
 {
     sleep(1);
 #if MANSION1
-    bgm_play(0);
+    bgm_play(BGM_MAIN);
 #endif
     evt_finish();
 }

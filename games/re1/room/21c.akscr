@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -17,16 +19,19 @@
 #define AOT_08_MESSAGE 0x08
 #define AOT_09_MESSAGE 0x09
 #define AOT_0A_ITEM 0x0A
+#define CAM_00 0x00
+#define CAM_01 0x01
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
 #define ENEMY_01_ZOMBIE_LAB 0x01
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
+#define SE_17 0x17
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 17500, 5300, 2000, 2900, 0, 10, 16, 64, 0, ROOM_200_1F_B1_ELEVATOR, 4600, 0, 4600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 5600, 1000, 1900, 1300, 1, 1, 8, 0, 155, ROOM_21B_UNDER_PASSAGE_2, 4800, 0, 4600, 0, LOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_02_DOOR, 4200, 9600, 1800, 1300, 3, 0, 0, 1, 0, STAGE_1 | ROOM_110_1F_ELEVATOR, 2900, 0, 10400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 17500, 5300, 2000, 2900, 0, DOOR_SND_0A_EV_OLD, DOOR_10_ELE03, 64, 0, ROOM_200_1F_B1_ELEVATOR, 4600, 0, 4600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 5600, 1000, 1900, 1300, 1, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, DOOR_LOCKED | F_LOCK_1B, ROOM_21B_UNDER_PASSAGE_2, 4800, 0, 4600, 0, LOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 4200, 9600, 1800, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, STAGE_1 | ROOM_110_1F_ELEVATOR, 2900, 0, 10400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_03_USEITEM, 400, 9800, 4900, 12400, SCE_USEITEM, SAT_PLAYER, 4, 0, 24, 0, 1, 0);
     aot_set(AOT_04_MESSAGE, 800, 2300, 1400, 2100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);
     aot_set(AOT_05_MESSAGE, 14000, 4000, 1400, 3900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 79, 0, 0, 0);
@@ -35,9 +40,9 @@ proc init
     aot_set(AOT_08_MESSAGE, 11000, 7800, 1500, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 79, 0, 0, 0);
     aot_set(AOT_09_MESSAGE, 5400, 5200, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 79, 0, 0, 0);
 #if CHRIS
-    item_aot_set(AOT_0A_ITEM, 8500, 7800, 1600, 1000, IT_3D_KEY_DESK, 1, 0, 255, 34, 36, 36, 250, 96, 34, 0, 0, 228, 129, 0, 134);
+    item_aot_set(AOT_0A_ITEM, 8500, 7800, 1600, 1000, IT_3D_KEY_DESK, 1, 0, 255, 34, 36, 36, 250, 96, 34, 0, 0, F_ITEM_E4, 129, 0, 134);
 #endif
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, 107, 1, 2, 0, 0, 1536, 0, 0, 20000, 0, 4500, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, F_ENEMY_6B, 1, 2, 0, 0, 1536, 0, 0, 20000, 0, 4500, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
     enemy(EM_11_ZOMBIE_LAB, 128, F_ENEMY_6C, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_33, TRUE))
     {
@@ -60,7 +65,7 @@ proc main
 {
     if (ck(FG_ROOM, F_ROOM_18, TRUE) && ck(FG_SCENARIO, F_SCENARIO_33, FALSE))
     {
-        evt_exec(0, 9, from_main);
+        evt_exec(0, TASK_09, from_main);
         set(FG_SCENARIO, F_SCENARIO_33, TRUE);
         aot_delete(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_02_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
@@ -74,7 +79,7 @@ event from_main
         set(FG_6, F_6_17, FALSE);
         set(FG_6, F_6_1D, FALSE);
         bgm_stop_all(0);
-        movie_on(4);
+        movie_on(MOVIE_04_DM4);
     }
     evt_next();
     evt_nop();
@@ -82,14 +87,14 @@ event from_main
     {
         bgm_restore(0);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        cutnext(1);
+        cutnext(CAM_01);
         dir_set(0, 0, 3200, 0, 3600, 0, 9000);
         eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
     }
     sleep(20);
     run
     {
-        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 4200, 10000);
+        se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 4200, 10000);
     }
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -111,7 +116,7 @@ event from_main
     run
     {
         pos_set(ENEMY_01_ZOMBIE_LAB, 0, 1350, 0, 4000, 0, 9800);
-        cutnext(0);
+        cutnext(CAM_00);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_6, F_6_17, TRUE);
         cutcurr(0);

@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -11,12 +13,13 @@
 #define ENEMY_00_NPC_BARRY 0x00
 #define ENEMY_00_NPC_REBECCA 0x00
 #define F_ROOM_18 0x18
+#define SE_17_ELV515 0x17
 
 proc init
 {
     set(FG_STATUS, F_STATUS_3D, TRUE);
-    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, 13, 18, 64, 0, ROOM_50C_FRONT_OF_ELEVATOR, 16000, 0, 27900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 13, 19, 64, 0, ROOM_514_FRONT_OF_TYRANT, 13300, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_12_ELE01A, 64, 0, ROOM_50C_FRONT_OF_ELEVATOR, 16000, 0, 27900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_13_ELE01B, 64, 0, ROOM_514_FRONT_OF_TYRANT, 13300, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if JILL
     dir_set(0, 0, 2048, 0, 4500, 0, 4200);
 #endif
@@ -43,7 +46,7 @@ proc init
             dir_set(0, 0, 2048, 0, 4500, 0, 4200);
         }
 #endif
-        evt_exec(0, 9, on_enter);
+        evt_exec(0, TASK_09, on_enter);
     }
     else
     {
@@ -68,7 +71,7 @@ proc init
             dir_set(0, 0, 2048, 0, 4500, 0, 4200);
         }
 #endif
-        evt_exec(0, 9, on_enter_2);
+        evt_exec(0, TASK_09, on_enter_2);
     }
 }
 
@@ -76,8 +79,8 @@ event on_enter
 {
     sleep(1);
     set(FG_6, F_6_17, FALSE);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
-    evt_fork(9, on_enter_sub1, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_ELV515, 0, SND_AT_PLAYER, 0, 0, 0);
+    evt_fork(TASK_09, on_enter_sub1, 0);
     do
     {
         evt_next();
@@ -95,8 +98,8 @@ event on_enter_2
 {
     sleep(1);
     set(FG_6, F_6_17, FALSE);
-    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
-    evt_fork(9, on_enter_sub1, 0);
+    se_play_3d(SND_BANK_ROOM, SE_17_ELV515, 0, SND_AT_PLAYER, 0, 0, 0);
+    evt_fork(TASK_09, on_enter_sub1, 0);
     do
     {
         evt_next();

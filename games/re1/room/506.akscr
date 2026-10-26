@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -19,12 +21,15 @@
 #define ENEMY_01_PROP_COMPUTER_HANDS_LEFT 0x01
 #define F_ROOM_1E 0x1E
 #define MSG_THIS_COMPUTER_IS_USED_TO_OPEN 0x00
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define OBJ_02 0x02
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 13800, 1900, 3300, 2000, 10, 12, 13, 64, 0, ROOM_505_O_PASSAGE, 21600, 0, 21000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 13800, 1900, 3300, 2000, 10, DOOR_SND_0C_DR_AIR, DOOR_0D_DOOR13, 64, 0, ROOM_505_O_PASSAGE, 21600, 0, 21000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_EVENT, 16000, 7600, 1000, 1200, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
-    item_aot_set(AOT_02_ITEM, 9160, 7640, 1800, 1800, IT_2B_KEY_SLIDES, 1, 0, 255, 76, 39, 0, 0, 92, 33, 0, 0, 179, 129, 1, 0);
+    item_aot_set(AOT_02_ITEM, 9160, 7640, 1800, 1800, IT_2B_KEY_SLIDES, 1, 0, 255, 76, 39, 0, 0, 92, 33, 0, 0, F_ITEM_B3, 129, 1, 0);
     aot_set(AOT_03_MESSAGE, 16800, 5700, 900, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 2100, 2900, 900, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     aot_set(AOT_06_MESSAGE, 2500, 1700, 4000, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
@@ -32,9 +37,9 @@ proc init
     aot_set(AOT_08_MESSAGE, 8200, 5200, 5000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
     aot_set(AOT_09_MESSAGE, 1900, 10000, 8900, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
     set(FG_ROOM, F_ROOM_1E, TRUE);
-    obj(0, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(2, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_02, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
         enemy(EM_15_PROP_COMPUTER_HANDS_RIGHT, 128, 255, 1, 2, 0, 0, 0, 176, 14, 16564, -1242, 8322, ENEMY_00_PROP_COMPUTER_HANDS_RIGHT, 0, 0, 0);
@@ -47,17 +52,17 @@ proc init
     }
     if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
     {
-        room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_CH0);
+        room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_MAIN_ON);
     }
     else
     {
-        room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_CH2 | BGM_CH1 | BGM_CH0 | 1);
+        room_bgm_state_set(4, ROOM_506_SMALL_LABORATORY, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
     }
 }
 
 event on_aot_01
 {
-    message(MSG_THIS_COMPUTER_IS_USED_TO_OPEN | MSG_FAST, 255); // "This computer is used to open the electronic locks. Will you turn it on? Various chemicals used for research. Nothing useful."
+    message(MSG_THIS_COMPUTER_IS_USED_TO_OPEN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "This computer is used to open the electronic locks. Will you turn it on? Various chemicals used for research. Nothing useful."
     do
     {
         evt_next();

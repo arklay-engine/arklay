@@ -1,9 +1,11 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,12 +18,12 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 29300, 2900, 3000, 2100, 0, 11, 26, 64, 0, ROOM_20C_LESSON_ROOM, 20300, 0, 3500, 0, UNLOCKED, 0);
-    door_aot_set(AOT_01_DOOR, 200, 2800, 1900, 1500, 2, 0, 6, 7, 0, ROOM_21B_UNDER_PASSAGE_2, 27500, 0, 12600, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 29300, 2900, 3000, 2100, 0, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_20C_LESSON_ROOM, 20300, 0, 3500, 0, UNLOCKED, 0);
+    door_aot_set(AOT_01_DOOR, 200, 2800, 1900, 1500, 2, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 7, 0, ROOM_21B_UNDER_PASSAGE_2, 27500, 0, 12600, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_02_EVENT, 29300, 2900, 3000, 2100, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
-    item_aot_set(AOT_03_ITEM, 28000, 11500, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 84, 111, 0, 0, 224, 46, 0, 0, 219, 129, 1, 0);
-    enemy(EM_11_ZOMBIE_LAB, 0, 128, 1, 2, 0, 0, 1711, 0, 0, 27742, 0, 13736, ENEMY_00_ZOMBIE_LAB, 0, 0, 1);
-    enemy(EM_11_ZOMBIE_LAB, 0, 180, 1, 2, 0, 0, 3344, 0, 0, 12764, 0, 2397, ENEMY_01_ZOMBIE_LAB, 0, 0, 1);
+    item_aot_set(AOT_03_ITEM, 28000, 11500, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 84, 111, 0, 0, 224, 46, 0, 0, F_ITEM_DB, 129, 1, 0);
+    enemy(EM_11_ZOMBIE_LAB, 0, F_ENEMY_80, 1, 2, 0, 0, 1711, 0, 0, 27742, 0, 13736, ENEMY_00_ZOMBIE_LAB, 0, 0, 1);
+    enemy(EM_11_ZOMBIE_LAB, 0, F_ENEMY_B4, 1, 2, 0, 0, 3344, 0, 0, 12764, 0, 2397, ENEMY_01_ZOMBIE_LAB, 0, 0, 1);
 }
 
 event on_aot_02
@@ -29,7 +31,7 @@ event on_aot_02
     run
     {
         set(FG_6, F_6_17, FALSE);
-        message(MSG_THERE_IS_A_LADDER | MSG_FAST, 255); // "There's a ladder. Will you climb it?"
+        message(MSG_THERE_IS_A_LADDER | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a ladder. Will you climb it?"
     }
     do
     {

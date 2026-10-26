@@ -1,15 +1,19 @@
 #version 1
 
+#include "inc/doors.akinc"
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
 #include "inc/messages.akinc"
+#include "inc/movies.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_EVENT 0x01
 #define AOT_02_ITEM 0x02
 #define AOT_03_ITEM 0x03
+#define CAM_01 0x01
+#define CAM_02 0x02
 #define F_ROOM_23 0x23
 #define MSG_A_BATTERY 0x02
 #define MSG_IT_IS_A_HELICOPTER_PORT 0x01
@@ -17,10 +21,10 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 4600, 1200, 900, 1300, 3, 0, 0, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_00_DOOR, 4600, 1200, 900, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_EVENT, 4500, 8500, 2200, 1000, SCE_EVENT, SAT_PLAYER, 0, 0, on_aot_01, 0, 0, 0);
-    item_aot_set(AOT_02_ITEM, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 132, 28, 48, 248, 196, 9, 0, 12, 199, 129, 0, 0);
-    item_aot_set(AOT_03_ITEM, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, 1, 255, 152, 18, 48, 248, 112, 23, 0, 4, 91, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 132, 28, 48, 248, 196, 9, 0, 12, F_ITEM_C7, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, 1, 255, 152, 18, 48, 248, 112, 23, 0, 4, F_ITEM_5B, 129, 0, 0);
     set(FG_SCENARIO, F_SCENARIO_4F, TRUE);
 }
 
@@ -52,7 +56,7 @@ event on_aot_01
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        cutnext(2);
+        cutnext(CAM_02);
         dir_set(0, 0, 2920, 0, 5000, 0, 7850);
         if (ck(FG_SCENARIO, F_SCENARIO_60, FALSE))
         {
@@ -72,7 +76,7 @@ event on_aot_01
     }
     while (ck_bits(1, 255, 255));
     set(FG_6, F_6_17, FALSE);
-    cutnext(1);
+    cutnext(CAM_01);
     sleep(5);
     run
     {
