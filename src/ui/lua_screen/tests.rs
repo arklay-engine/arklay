@@ -1112,3 +1112,584 @@ api:background("art/bg.bmp", {colour = "#FF8000", blend = "half"})"##,
         assert_eq!(quads[0].colour, [1.0; 3]);
     }
 }
+
+/// A solid `width` x `height` BMP in one colour.
+fn solid_bmp(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
+    let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+    for _ in 0..width * height {
+        rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
+    }
+    crate::bmp::encode_to_vec(&crate::state::Image {
+        width,
+        height,
+        rgba,
+    })
+    .unwrap()
+}
+
+/// The sample IVM's TMD with a non-degenerate triangle, so the viewer's
+/// back-face test keeps it.
+fn sample_item_tmd() -> Vec<u8> {
+    let ivm = crate::ivm::sample_ivm();
+    let (_, tmd) = crate::ivm::split(&ivm).unwrap();
+    let mut tmd = tmd.to_vec();
+    let vertices = [[0i16, -1000, -1000], [0, -1000, 1000], [0, 1000, 0]];
+    for (index, vertex) in vertices.iter().enumerate() {
+        let at = 12 + 28 + index * 8;
+        for (slot, value) in vertex.iter().enumerate() {
+            tmd[at + slot * 2..at + slot * 2 + 2].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+    tmd
+}
+
+/// Build a pack of art entries and a test screen, leaked for the
+/// fixture's `'static` borrow.
+fn art_pack(label: &str, source: &str, entries: Vec<(&str, Vec<u8>)>) -> Fixture {
+    use crate::pack::PackWriter;
+    let mut writer = PackWriter::new();
+    writer
+        .add("screen/save.lua", source.as_bytes().to_vec())
+        .unwrap();
+    for (path, data) in entries {
+        writer.add(path, data).unwrap();
+    }
+    let pack: &'static Pack = Box::leak(Box::new(
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap(),
+    ));
+    Fixture {
+        pack,
+        text: Text::load(pack, Some("en-US")),
+        font: test_font(),
+        dir: TempDir::new(label),
+    }
+}
+
+fn one_quad(framebuffer: &crate::render::Framebuffer) -> crate::htexture::Quad {
+    let quads = framebuffer.hd_quads();
+    assert_eq!(quads.len(), 1, "expected one HD quad, got {quads:?}");
+    quads[0].clone()
+}
+
+#[test]
+fn item_icons_prefer_the_per_item_file_and_its_named_hd_image() {
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local icon = api:item_icon(0x0B)
+if icon ~= nil then
+    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
+end
+end
+"#;
+    // The shared atlas is green; the per-item icon is red; the named HD
+    // image is blue. The original icon's content hash is given a third
+    // colour so the named key can be shown to win.
+    let per_item_pack = {
+        use crate::pack::PackWriter;
+        let mut writer = PackWriter::new();
+        writer
+            .add("item/0b.bmp", solid_bmp(40, 30, [255, 0, 0]))
+            .unwrap();
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    };
+    let per_item = crate::ui::load_picture(
+        &per_item_pack,
+        "item/0b",
+        crate::assets::Geometry::Shipped,
+        Some([0, 0, 0]),
+    )
+    .unwrap();
+    let hash = crate::htexture::image_candidates(&per_item)[0].hash;
+    let hash_entry = Box::leak(format!("htexture/misc/{hash:08X}.bmp").into_boxed_str());
+    let fixture = art_pack(
+        "item-icon-hd",
+        source,
+        vec![
+            ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0])),
+            ("item/0b.bmp", solid_bmp(40, 30, [255, 0, 0])),
+            (hash_entry, solid_bmp(40, 30, [0, 255, 0])),
+            ("htexture/item/0b.bmp", solid_bmp(80, 60, [0, 0, 255])),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let plain = draw(&mut screen, &cx);
+    let pixel = |framebuffer: &crate::render::Framebuffer, x: usize, y: usize| {
+        let index = (y * 320 + x) * 4;
+        [
+            framebuffer.rgba[index],
+            framebuffer.rgba[index + 1],
+            framebuffer.rgba[index + 2],
+        ]
+    };
+    // Without a capture the per-item picture draws, not the atlas.
+    assert_eq!(pixel(&plain, 11, 21), [255, 0, 0]);
+
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    assert_eq!(pixel(&framebuffer, 11, 21), [0, 0, 0]);
+    let quad = one_quad(&framebuffer);
+    assert_eq!(quad.dst, [10.0, 20.0, 50.0, 50.0]);
+    assert_eq!(quad.uv, [0.0, 0.0, 1.0, 1.0]);
+    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+        panic!("an icon quad");
+    };
+    assert_eq!((image.image.width, image.image.height), (80, 60));
+    assert_eq!(image.image.rgba[0..3], [0, 0, 255]);
+    assert_eq!(image.frame, [40, 30]);
+}
+
+#[test]
+fn legacy_item_all_hd_name_replaces_the_atlas_cell() {
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local icon = api:item_icon(0x01)
+if icon ~= nil then
+    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
+end
+end
+"#;
+    // Only the shared atlas exists, so the icon is its row-0 crop. The
+    // legacy HD name (`hires/Data/ITEM_ALL/00.webp`) wins over the hash.
+    let fixture = art_pack(
+        "item-icon-legacy-hd",
+        source,
+        vec![
+            ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0])),
+            (
+                "htexture/data/item_all/00.bmp",
+                solid_bmp(80, 60, [0, 0, 255]),
+            ),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    let quad = one_quad(&framebuffer);
+    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+        panic!("an icon quad");
+    };
+    assert_eq!((image.image.width, image.image.height), (80, 60));
+    assert_eq!(image.frame, [40, 30]);
+}
+
+#[test]
+fn an_old_pack_hash_still_replaces_the_shared_atlas_icon() {
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local icon = api:item_icon(0x01)
+if icon ~= nil then
+    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
+end
+end
+"#;
+    // No per-item and no named file: the icon is the atlas crop, whose
+    // content hash an older HD pack still names.
+    let atlas_only = crate::pack::Pack::from_bytes({
+        use crate::pack::PackWriter;
+        let mut writer = PackWriter::new();
+        writer
+            .add("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0]))
+            .unwrap();
+        writer.to_bytes().unwrap()
+    })
+    .unwrap();
+    let icon = crate::ui::load_picture(
+        &atlas_only,
+        "item/item_all",
+        crate::assets::Geometry::Shipped,
+        Some([0, 0, 0]),
+    )
+    .unwrap();
+    let hash = crate::htexture::image_candidates(&icon)[0].hash;
+    let hash_entry = Box::leak(format!("htexture/misc/{hash:08X}.bmp").into_boxed_str());
+    let fixture = art_pack(
+        "item-icon-atlas-hash",
+        source,
+        vec![
+            ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0])),
+            (hash_entry, solid_bmp(80, 60, [0, 0, 255])),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    let quad = one_quad(&framebuffer);
+    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+        panic!("an icon quad");
+    };
+    assert_eq!((image.image.width, image.image.height), (80, 60));
+}
+
+#[test]
+fn a_page_sprite_keeps_its_content_hash_replacement() {
+    // The machinegun specials draw cells of the shared `ui/staitem` page, so
+    // the page hash must still reach those draws.
+    let source = r#"
+function update(api, input) end
+function draw(api)
+api:page_sprite_mirrored(api:page("art/dot"), 0, 0, 4, 4, 10, 20, 8, 8, 0, 0, false, false)
+end
+"#;
+    let base = art_pack(
+        "page-hash-base",
+        "function update(api, input) end function draw(api) end",
+        vec![("art/dot.tim", test_tim())],
+    );
+    let hash = {
+        let page = crate::ui::load_page(base.pack, "art/dot").unwrap();
+        let crate::assets::Artwork::Indexed(texture) = page else {
+            panic!("the dot page is indexed");
+        };
+        crate::htexture::page_candidates(&texture, 0)[0].hash
+    };
+    let hash_entry = Box::leak(format!("htexture/misc/{hash:08X}.bmp").into_boxed_str());
+    let fixture = art_pack(
+        "page-hash",
+        source,
+        vec![
+            ("art/dot.tim", test_tim()),
+            (hash_entry, solid_bmp(8, 8, [0, 0, 255])),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    let quad = one_quad(&framebuffer);
+    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+        panic!("a page quad");
+    };
+    assert_eq!((image.image.width, image.image.height), (8, 8));
+}
+
+#[test]
+fn item_icon_hd_prefers_the_per_item_name_then_the_legacy_name() {
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local icon = api:item_icon(0x01)
+if icon ~= nil then
+    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
+end
+end
+"#;
+    let atlas = || ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0]));
+    let legacy = || {
+        (
+            "htexture/data/item_all/00.bmp",
+            solid_bmp(100, 60, [255, 255, 0]),
+        )
+    };
+    let primary = || ("htexture/item/01.bmp", solid_bmp(120, 60, [0, 0, 255]));
+    let hd_size = |label: &str, entries: Vec<(&str, Vec<u8>)>| {
+        let fixture = art_pack(label, source, entries);
+        let mut screen = fixture.load();
+        let cx = fixture.context();
+        let mut framebuffer = crate::render::Framebuffer::new();
+        framebuffer.capture_hd(0);
+        screen.draw(&cx, &mut framebuffer);
+        let quad = one_quad(&framebuffer);
+        let crate::htexture::QuadImage::Art(image) = &quad.image else {
+            panic!("an icon quad");
+        };
+        (image.image.width, image.image.height)
+    };
+    // The legacy name wins over the hash (none is present here).
+    assert_eq!(
+        hd_size("precedence-legacy", vec![atlas(), legacy()]),
+        (100, 60)
+    );
+    // The per-item name wins over the legacy name.
+    assert_eq!(
+        hd_size("precedence-primary", vec![atlas(), legacy(), primary()]),
+        (120, 60)
+    );
+}
+
+#[test]
+fn a_broken_per_item_icon_falls_back_to_the_shared_atlas() {
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local icon = api:item_icon(0x01)
+if icon ~= nil then
+    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
+end
+end
+"#;
+    let fixture = art_pack(
+        "item-icon-broken",
+        source,
+        vec![
+            ("item/01.bmp", b"not a BMP".to_vec()),
+            ("item/item_all.bmp", solid_bmp(40, 30, [255, 0, 0])),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let framebuffer = draw(&mut screen, &cx);
+    let index = (20 * 320 + 10) * 4;
+    assert_eq!(
+        &framebuffer.rgba[index..index + 3],
+        &[255, 0, 0],
+        "the atlas row still draws"
+    );
+}
+
+#[test]
+fn the_item_viewer_uses_a_named_model_texture_replacement() {
+    let tmd = sample_item_tmd();
+    let ivm = crate::ivm::sample_ivm();
+    let (texture, _) = crate::ivm::split(&ivm).unwrap();
+    let page =
+        crate::bmp::encode_indexed_page(&crate::tim::decode_8bpp(texture).unwrap(), 0).unwrap();
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local viewport = { 50, 50, 100, 80 }
+local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
+api:fill_rect(ox + viewport[1], oy + viewport[2], viewport[3], viewport[4], 0, 0, 32, 255)
+api:clip(ox + viewport[1], oy + viewport[2], viewport[3], viewport[4])
+local model = api:item_model(0x02)
+if model ~= nil then
+    api:draw_ivm(model, {
+        joints = { { rx = 0, ry = 0, rz = 0, tx = 0x1980 } },
+        camera = {
+            from = { 15000, 0, 0 },
+            to = { 0, 0, 0 },
+            fov = 0xC0,
+            screen = { 112 - 160, 76 - 120 },
+        },
+    })
+end
+api:clip()
+end
+"#;
+    let fixture = art_pack(
+        "item-model-hd",
+        source,
+        vec![
+            ("item/02_model.tmd", tmd.clone()),
+            ("item/02_model.bmp", page),
+            (
+                "htexture/item/02_model.bmp",
+                solid_bmp(512, 512, [0, 0, 255]),
+            ),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    let quad = one_quad(&framebuffer);
+    let crate::htexture::QuadImage::Model(model) = &quad.image else {
+        panic!("a model quad");
+    };
+    let page = model.page.as_ref().expect("the named page replacement");
+    assert_eq!((page.image.width, page.image.height), (512, 512));
+    assert_eq!(page.frame, [256, 256]);
+    assert!(!model.vertices.is_empty());
+    assert_eq!(quad.clip, [50, 50, 100, 80]);
+}
+
+#[test]
+fn every_item_icon_loads_without_exhausting_the_screen_budget() {
+    // A converted pack has one icon per item; the item box can show 48 at
+    // once and the pause screen keeps them loaded, so the icons must not
+    // consume the script art count budget.
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+    for item in crate::items::art_items() {
+        if let Some(entry) = crate::item_art::icon_entry(item) {
+            entries.push((entry, solid_bmp(40, 30, [10, 20, 30])));
+        }
+    }
+    let mut writer = crate::pack::PackWriter::new();
+    writer
+        .add(
+            "screen/save.lua",
+            br#"
+function update(api, input) end
+function draw(api)
+    local count = 0
+    for item = 1, 0x70 do
+        if api:item_icon(item) ~= nil then
+            count = count + 1
+        end
+    end
+    api:set("count", count)
+end
+"#
+            .to_vec(),
+        )
+        .unwrap();
+    for (path, data) in entries {
+        writer.add(&path, data).unwrap();
+    }
+    let pack: &'static Pack = Box::leak(Box::new(
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap(),
+    ));
+    let fixture = Fixture {
+        pack,
+        text: Text::load(pack, Some("en-US")),
+        font: test_font(),
+        dir: TempDir::new("item-icon-budget"),
+    };
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let _ = draw(&mut screen, &cx);
+    assert_eq!(screen.value("count"), 92, "every item with an icon loads");
+}
+
+#[test]
+fn content_hashes_still_replace_item_icons_and_model_pages() {
+    // A pack made before the named keys existed only has hashes. The
+    // icon hashes its 40x30 cell and the model page its 256x256 upload.
+    let icon_source = r#"
+function update(api, input) end
+function draw(api)
+local icon = api:item_icon(0x01)
+if icon ~= nil then
+    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
+end
+end
+"#;
+    let per_item_pack = {
+        use crate::pack::PackWriter;
+        let mut writer = PackWriter::new();
+        writer
+            .add("item/01.bmp", solid_bmp(40, 30, [255, 0, 0]))
+            .unwrap();
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    };
+    let icon = crate::ui::load_picture(
+        &per_item_pack,
+        "item/01",
+        crate::assets::Geometry::Shipped,
+        Some([0, 0, 0]),
+    )
+    .unwrap();
+    let icon_hash = crate::htexture::image_candidates(&icon)[0].hash;
+    let icon_entry = Box::leak(format!("htexture/misc/{icon_hash:08X}.bmp").into_boxed_str());
+    let fixture = art_pack(
+        "item-icon-hash",
+        icon_source,
+        vec![
+            ("item/01.bmp", solid_bmp(40, 30, [255, 0, 0])),
+            (icon_entry, solid_bmp(80, 60, [0, 0, 255])),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    let quad = one_quad(&framebuffer);
+    let crate::htexture::QuadImage::Art(image) = &quad.image else {
+        panic!("an icon quad");
+    };
+    assert_eq!((image.image.width, image.image.height), (80, 60));
+
+    // The model page's hash route.
+    let ivm = crate::ivm::sample_ivm();
+    let (texture, _) = crate::ivm::split(&ivm).unwrap();
+    let texture = crate::tim::decode_8bpp(texture).unwrap();
+    let page_hash = crate::htexture::page_candidates(&texture, 0)[0].hash;
+    let page_entry = Box::leak(format!("htexture/misc/{page_hash:08X}.bmp").into_boxed_str());
+    let page = crate::bmp::encode_indexed_page(&texture, 0).unwrap();
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
+api:fill_rect(ox + 50, oy + 50, 100, 80, 0, 0, 32, 255)
+api:clip(ox + 50, oy + 50, 100, 80)
+local model = api:item_model(0x02)
+if model ~= nil then
+    api:draw_ivm(model, {
+        joints = { { rx = 0, ry = 0, rz = 0, tx = 0x1980 } },
+        camera = {
+            from = { 15000, 0, 0 },
+            to = { 0, 0, 0 },
+            fov = 0xC0,
+            screen = { 112 - 160, 76 - 120 },
+        },
+    })
+end
+api:clip()
+end
+"#;
+    let fixture = art_pack(
+        "item-model-hash",
+        source,
+        vec![
+            ("item/02_model.tmd", sample_item_tmd()),
+            ("item/02_model.bmp", page),
+            (page_entry, solid_bmp(512, 512, [0, 0, 255])),
+        ],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    let quad = one_quad(&framebuffer);
+    let crate::htexture::QuadImage::Model(model) = &quad.image else {
+        panic!("a model quad");
+    };
+    let page = model.page.as_ref().expect("the hash page replacement");
+    assert_eq!((page.image.width, page.image.height), (512, 512));
+    assert_eq!(page.frame, [256, 256]);
+}
+
+#[test]
+fn a_tmd_only_item_model_draws_untextured() {
+    let tmd = sample_item_tmd();
+    let source = r#"
+function update(api, input) end
+function draw(api)
+local viewport = { 50, 50, 100, 80 }
+local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
+api:fill_rect(ox + viewport[1], oy + viewport[2], viewport[3], viewport[4], 0, 0, 32, 255)
+api:clip(ox + viewport[1], oy + viewport[2], viewport[3], viewport[4])
+local model = api:item_model(0x01)
+if model ~= nil then
+    api:draw_ivm(model, {
+        joints = { { rx = 0, ry = 0, rz = 0, tx = 0x1980 } },
+        camera = {
+            from = { 15000, 0, 0 },
+            to = { 0, 0, 0 },
+            fov = 0xC0,
+            screen = { 112 - 160, 76 - 120 },
+        },
+    })
+end
+api:clip()
+end
+"#;
+    let fixture = art_pack(
+        "item-model-tmd-only",
+        source,
+        vec![("item/01_model.tmd", tmd)],
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::new();
+    framebuffer.capture_hd(0);
+    screen.draw(&cx, &mut framebuffer);
+    let quad = one_quad(&framebuffer);
+    let crate::htexture::QuadImage::Model(model) = &quad.image else {
+        panic!("a model quad");
+    };
+    assert!(model.page.is_none(), "no texture means no HD page");
+    assert!(!model.vertices.is_empty());
+}

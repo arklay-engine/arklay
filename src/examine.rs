@@ -12,8 +12,6 @@ use crate::items;
 use crate::render::Camera;
 use crate::text::Text;
 
-/// Pack path prefix of the shipped item-view models.
-pub const ITEM_MODEL_PREFIX: &str = "item/";
 /// Viewer camera position: on the +X axis, looking at the origin.
 pub const CAMERA_FROM: [i32; 3] = [15000, 0, 0];
 /// Viewer camera look-at point.
@@ -240,14 +238,11 @@ pub fn description_bytes(text: &Text, item: u8) -> Option<&[u8]> {
     text.description(id)
 }
 
-/// The pack entry of the item's `.ivm` model; `None` for an item without a
-/// model name.
+/// The pack entry of the item's shared `.ivm` model; `None` for an item
+/// without a model name. New packs also carry the per-item split files
+/// ([`crate::item_art::load_model`] prefers those).
 pub fn model_entry(item: u8) -> Option<String> {
-    let name = items::model_name(item)?;
-    Some(format!(
-        "{ITEM_MODEL_PREFIX}{}.ivm",
-        name.to_ascii_lowercase()
-    ))
+    crate::item_art::legacy_model_entry(item)
 }
 
 #[cfg(test)]
@@ -427,16 +422,19 @@ mod tests {
     }
 
     #[test]
-    fn the_placeholder_model_name_resolves_to_an_absent_entry() {
-        // Item 0x6E maps to the placeholder model name "m": the viewer looks
-        // it up like any other and finds nothing, and the description index
-        // is past the table.
+    fn an_item_with_no_image_type_has_no_model() {
+        // Item 0x6E's lookup record has class 0: the old code resolved the
+        // placeholder "m" name, which no pack carries.
         let dir = TempDir::new();
         let pack = empty_pack(&dir);
-        let entry = model_entry(0x6E).unwrap();
-        assert_eq!(entry, "item/m.ivm");
-        assert!(pack.read(&entry).is_err());
+        assert_eq!(model_entry(0x6E), None);
+        assert_eq!(crate::items::model_name(0x6E), None);
+        assert!(crate::item_art::load_model(&pack, 0x6E).unwrap().is_none());
         assert_eq!(description_bytes(&Text::default(), 0x6E), None);
+        // A class with a real model name still falls back to the missing
+        // shared file and reports no model.
+        assert_eq!(crate::items::model_name(0x01), Some("i05v"));
+        assert!(crate::item_art::load_model(&pack, 0x01).unwrap().is_none());
     }
 
     #[test]

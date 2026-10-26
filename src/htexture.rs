@@ -14,6 +14,13 @@
 //! therefore keeps its own art, and an HD image can never land on the wrong
 //! texels.
 //!
+//! Art that is composited per frame (the inventory icons) has no stable hash.
+//! A pack may name such a replacement by its own stem under [`ROOT`] instead,
+//! e.g. `htexture/item/0b.webp` for item `0x0B`'s icon; the caller supplies
+//! the source extent the image covers ([`named_replacement`]). The named
+//! route is preferred when it exists and the content hashes remain the
+//! fallback, so a pack made before the name existed keeps working.
+//!
 //! The PC game uploaded each texture in its own conversion, so one texture can
 //! carry any of a few hashes ([`image_candidates`], [`page_candidates`]); the
 //! first one in the table wins. Each candidate also states its frame: the
@@ -34,7 +41,7 @@ use anyhow::{Context, Result};
 
 use crate::hash::{Expand, Surface, texel};
 use crate::model::{PALETTE_ROW_LEN, Texture8};
-use crate::pack::Pack;
+use crate::pack::{AssetClass, Pack};
 use crate::state::Image;
 
 /// The pack directory replacements are found under, at any depth.
@@ -64,6 +71,10 @@ type DecodedKey = (String, [u32; 2]);
 #[derive(Debug, Default)]
 pub struct HdTable {
     files: HashMap<u32, String>,
+    /// Images with a meaningful stem rather than a hash: the named per-item
+    /// keys. They are not hash candidates, but their presence still makes the
+    /// pack an HD pack.
+    named: usize,
     /// Room masks by the hash of their camera's background, from a TeamX
     /// loader's `cache/ROOM*.dat` lists ([`HdTable::paired_masks`]).
     paired: HashMap<u32, u32>,
@@ -88,6 +99,7 @@ impl HdTable {
         let mut files = HashMap::new();
         let mut suffixed = HashMap::new();
         let mut lists = Vec::new();
+        let mut named = 0usize;
         for path in pack.paths() {
             let lower = path.to_ascii_lowercase();
             if !lower.starts_with(ROOT) {
@@ -109,9 +121,11 @@ impl HdTable {
                 None => (stem, true),
             };
             if digits.len() != 8 {
+                named += 1;
                 continue;
             }
             let Ok(hash) = u32::from_str_radix(digits, 16) else {
+                named += 1;
                 continue;
             };
             let slot = if bare { &mut files } else { &mut suffixed };
@@ -143,25 +157,28 @@ impl HdTable {
         }
         HdTable {
             files,
+            named,
             paired,
             reported: Mutex::new(HashSet::new()),
             decoded: Mutex::new(HashMap::new()),
         }
     }
 
+    /// The number of HD names: content hashes and named entries.
     pub fn len(&self) -> usize {
-        self.files.len()
+        self.files.len() + self.named
     }
 
     pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
+        self.files.is_empty() && self.named == 0
     }
 
     /// The replacement of the first candidate the table names.
     ///
-    /// With a non-empty table a texture none of whose candidates match is
-    /// reported once on stderr, naming `what` and its hashes, so a pack's
-    /// coverage gaps show up while playing.
+    /// With a table of content hashes a texture none of whose candidates
+    /// match is reported once on stderr, naming `what` and its hashes, so a
+    /// pack's coverage gaps show up while playing. Named-only packs do not
+    /// report hash misses.
     pub fn find(&self, candidates: &[Candidate], what: impl FnOnce() -> String) -> Option<Found> {
         let found = self.find_quietly(candidates);
         if found.is_none()
@@ -522,7 +539,35 @@ pub fn replacement(
     let table = pack.htexture();
     let found = table.find(candidates, what)?;
     let frame = [found.frame[0].max(1), found.frame[1].max(1)];
-    let key = (found.path, frame);
+    decoded_replacement(pack, table, found.path, frame)
+}
+
+/// The HD image a pack names under [`ROOT`] (`stem` is `item/0b`), decoded at
+/// any size.
+///
+/// This is the per-item name route: the file has a stable path instead of a
+/// content hash, so art that is composited per frame (the inventory icons) can
+/// still be replaced. A missing name is not reported; the caller has a content
+/// hash fallback.
+pub fn named_replacement(pack: &Pack, stem: &str, frame: [u32; 2]) -> Option<Arc<Replacement>> {
+    let path = format!("{ROOT}{stem}");
+    let asset = pack
+        .read_asset(path.trim_end_matches('/'), AssetClass::Image)
+        .ok()
+        .flatten()?;
+    let frame = [frame[0].max(1), frame[1].max(1)];
+    let table = pack.htexture();
+    decoded_replacement(pack, table, asset.path().to_string(), frame)
+}
+
+/// Decode and cache `path`'s replacement covering `frame`.
+fn decoded_replacement(
+    pack: &Pack,
+    table: &HdTable,
+    path: String,
+    frame: [u32; 2],
+) -> Option<Arc<Replacement>> {
+    let key = (path, frame);
     if let Some(kept) = table
         .decoded
         .lock()
@@ -610,6 +655,10 @@ pub struct Model {
     pub vertices: Vec<ModelVertex>,
     /// The flat colour the software overlay had under the quad.
     pub backdrop: [u8; 3],
+    /// A named or content-hash HD replacement of the model's page, covering
+    /// the whole page. The caller resolves it before queuing the model; when
+    /// absent the page draws from its own palette.
+    pub page: Option<Arc<Replacement>>,
 }
 
 /// One projected model corner (40 bytes), the input of `ivm.vert`.
@@ -1099,7 +1148,8 @@ mod tests {
             "roomcut/12345678.webp",
         ]);
         let table = HdTable::scan(&pack);
-        assert_eq!(table.len(), 3);
+        // Three content hashes plus the named `misc/XYZ` image.
+        assert_eq!(table.len(), 4);
         let find = |hash| {
             table
                 .find(
@@ -1205,6 +1255,17 @@ mod tests {
     }
 
     #[test]
+    fn a_named_only_pack_is_still_an_hd_pack() {
+        let pack = pack_of(&["htexture/item/0b.webp", "htexture/notes.txt"]);
+        let table = HdTable::scan(&pack);
+        assert_eq!(table.len(), 1, "the named icon only");
+        assert!(!table.is_empty(), "the named item icon makes it an HD pack");
+        // A hash-shaped stem that is not hex is a name, not a hash.
+        let pack = pack_of(&["htexture/item/ZZZZZZZZ.webp"]);
+        assert!(!HdTable::scan(&pack).is_empty());
+    }
+
+    #[test]
     fn a_replacement_is_shared_while_any_holder_keeps_it() {
         let bmp = crate::bmp::encode_to_vec(&Image {
             width: 2,
@@ -1227,6 +1288,40 @@ mod tests {
         let decoded = replacement(&pack, &candidates, String::new).unwrap();
         assert_eq!(decoded.frame, [4, 4]);
         assert_eq!(decoded.image.width, 2);
+    }
+
+    #[test]
+    fn named_replacements_resolve_by_stem_and_frame() {
+        let image = |width: u32, height: u32| {
+            crate::bmp::encode_to_vec(&Image {
+                width,
+                height,
+                rgba: [0, 0, 255, 255].repeat((width * height) as usize),
+            })
+            .unwrap()
+        };
+        let mut writer = crate::pack::PackWriter::new();
+        writer.add("htexture/item/0b.bmp", image(80, 60)).unwrap();
+        writer
+            .add("htexture/data/item_all/01.bmp", image(160, 120))
+            .unwrap();
+        // A hash-named file still fills the hash table; a caller that names
+        // its full stem can also find it by name.
+        writer
+            .add("htexture/hash/00000001.bmp", image(4, 4))
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+
+        let icon = named_replacement(&pack, "item/0b", [40, 30]).unwrap();
+        assert_eq!((icon.image.width, icon.image.height), (80, 60));
+        assert_eq!(icon.frame, [40, 30]);
+        let legacy = named_replacement(&pack, "data/item_all/01", [40, 30]).unwrap();
+        assert_eq!((legacy.image.width, legacy.image.height), (160, 120));
+        assert!(named_replacement(&pack, "item/0c", [40, 30]).is_none());
+
+        // The decoded replacement is cached across lookups.
+        let again = named_replacement(&pack, "item/0b", [40, 30]).unwrap();
+        assert!(Arc::ptr_eq(&icon, &again));
     }
 
     #[test]

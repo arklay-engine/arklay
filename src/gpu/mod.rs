@@ -120,6 +120,15 @@ fn sdl_error() -> String {
         .into_owned()
 }
 
+/// The number of CLUT rows a page's palette holds, at least one.
+fn page_row_count(texture: &Texture8) -> usize {
+    texture
+        .palettes
+        .len()
+        .div_ceil(crate::model::PALETTE_ROW_LEN)
+        .max(1)
+}
+
 /// A compiled shader, released when dropped; a pipeline keeps what it needs.
 struct Shader {
     device: *mut SDL_GPUDevice,
@@ -137,8 +146,18 @@ impl Drop for Shader {
 #[derive(Clone, Copy)]
 enum Upload {
     Mesh(usize),
-    Page(usize),
+    Page(PageKey),
     Image(usize),
+}
+
+/// The identity of an uploaded page: the texture, the named replacement it
+/// was drawn with, and the pack its content hashes came from. A page may be
+/// drawn in more than one of those states, and each needs its own upload.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct PageKey {
+    texture: usize,
+    named: usize,
+    pack: usize,
 }
 
 /// A cached upload and the frame it was last drawn in.
@@ -337,7 +356,11 @@ pub struct GpuRenderer {
     /// every frame.
     overlay_warned: bool,
     meshes: HashMap<usize, Resident<MeshBuffer>>,
-    pages: HashMap<usize, Resident<PageTextures>>,
+    pages: HashMap<PageKey, Resident<PageTextures>>,
+    /// The named replacement each page key names, kept alive so its address
+    /// cannot be reused for a different replacement while the entry is
+    /// cached (the key stores that address).
+    page_keeps: HashMap<PageKey, Arc<htexture::Replacement>>,
     images: HashMap<usize, Resident<ImageTexture>>,
     /// Bound in place of a page's replacements when it has none.
     no_hd: *mut SDL_GPUTexture,
@@ -522,6 +545,7 @@ impl GpuRenderer {
             overlay_warned: false,
             meshes: HashMap::new(),
             pages: HashMap::new(),
+            page_keeps: HashMap::new(),
             images: HashMap::new(),
             no_hd: std::ptr::null_mut(),
             no_hd_rows: std::ptr::null_mut(),
@@ -1255,13 +1279,18 @@ impl GpuRenderer {
         texture: &Texture8,
         used: u32,
         pack: Option<&Pack>,
+        named: Option<&Arc<htexture::Replacement>>,
     ) -> Result<Option<PageTextures>> {
         // Like the software rasterizer, an empty page draws nothing; a
         // truncated one draws its missing texels as index 0 (transparent).
         if texture.width == 0 || texture.height == 0 {
             return Ok(None);
         }
-        let key = texture as *const Texture8 as usize;
+        let key = PageKey {
+            texture: texture as *const Texture8 as usize,
+            named: named.map_or(0, |replacement| Arc::as_ptr(replacement) as usize),
+            pack: pack.map_or(0, |pack| pack as *const Pack as usize),
+        };
         let pack = pack.filter(|pack| !pack.htexture().is_empty());
         let fingerprint = scene::texture_fingerprint(texture);
         if let Some(entry) = self.pages.get_mut(&key)
@@ -1318,9 +1347,12 @@ impl GpuRenderer {
                     &palette_rgba,
                 )
             })
-            .and_then(|()| match pack {
-                Some(pack) => self.upload_page_hd(copy, &mut value, texture, used, pack),
-                None => Ok(()),
+            .and_then(|()| match (named, pack) {
+                (Some(replacement), _) => {
+                    self.upload_page_named(copy, &mut value, texture, replacement)
+                }
+                (None, Some(pack)) => self.upload_page_hd(copy, &mut value, texture, used, pack),
+                (None, None) => Ok(()),
             });
         if let Err(err) = uploaded {
             self.release_page(value);
@@ -1338,6 +1370,14 @@ impl GpuRenderer {
         ) {
             self.release_page(old.value);
         }
+        match named {
+            Some(replacement) => {
+                self.page_keeps.insert(key, Arc::clone(replacement));
+            }
+            None => {
+                self.page_keeps.remove(&key);
+            }
+        }
         Ok(Some(value))
     }
 
@@ -1352,15 +1392,11 @@ impl GpuRenderer {
         pack: &Pack,
     ) -> Result<()> {
         let table = pack.htexture();
-        let row_count = texture
-            .palettes
-            .len()
-            .div_ceil(crate::model::PALETTE_ROW_LEN)
-            .max(1);
         // Rows sharing a replacement share its layer.
-        let mut layers: Vec<(String, Image)> = Vec::new();
-        let mut placed = vec![[0u16; 8]; row_count];
-        for (row, place) in placed.iter_mut().enumerate() {
+        let mut layers: Vec<Image> = Vec::new();
+        let mut layer_by_path: Vec<(String, usize)> = Vec::new();
+        let mut rows: Vec<(usize, usize, [u32; 2])> = Vec::new();
+        for row in 0..page_row_count(texture) {
             let candidates = htexture::page_candidates(texture, row);
             let found = if used & 1u32.checked_shl(row as u32).unwrap_or(0) != 0 {
                 table.find(&candidates, || {
@@ -1375,12 +1411,14 @@ impl GpuRenderer {
             let Some(found) = found else {
                 continue;
             };
-            let layer = match layers.iter().position(|(path, _)| *path == found.path) {
-                Some(layer) => layer,
+            let layer = match layer_by_path.iter().find(|(path, _)| *path == found.path) {
+                Some((_, layer)) => *layer,
                 None => match htexture::load(pack, &found.path) {
                     Ok(image) if image.width > 0 && image.height > 0 => {
-                        layers.push((found.path, image));
-                        layers.len() - 1
+                        layers.push(image);
+                        let layer = layers.len() - 1;
+                        layer_by_path.push((found.path, layer));
+                        layer
                     }
                     Ok(_) => continue,
                     Err(err) => {
@@ -1389,11 +1427,53 @@ impl GpuRenderer {
                     }
                 },
             };
-            let image = &layers[layer].1;
-            *place = [
+            rows.push((row, layer, [found.frame[0], found.frame[1]]));
+        }
+        self.upload_page_layers(copy, page, texture, &layers, &rows)
+    }
+
+    /// Upload a named per-item page replacement, which covers the whole page
+    /// and replaces its first CLUT row.
+    fn upload_page_named(
+        &self,
+        copy: *mut SDL_GPUCopyPass,
+        page: &mut PageTextures,
+        texture: &Texture8,
+        replacement: &htexture::Replacement,
+    ) -> Result<()> {
+        let layers = [replacement.image.clone()];
+        let rows = [(
+            0,
+            0,
+            [replacement.frame[0].max(1), replacement.frame[1].max(1)],
+        )];
+        self.upload_page_layers(copy, page, texture, &layers, &rows)
+    }
+
+    /// Upload one array layer per replacement image and the per-row placement
+    /// table `mesh.frag` reads.
+    fn upload_page_layers(
+        &self,
+        copy: *mut SDL_GPUCopyPass,
+        page: &mut PageTextures,
+        texture: &Texture8,
+        layers: &[Image],
+        rows: &[(usize, usize, [u32; 2])],
+    ) -> Result<()> {
+        if layers.is_empty() || rows.is_empty() {
+            return Ok(());
+        }
+        let row_count = page_row_count(texture);
+        let mut placed = vec![[0u16; 8]; row_count];
+        for &(row, layer, frame) in rows {
+            let image = &layers[layer];
+            if row >= row_count || image.width == 0 || image.height == 0 {
+                continue;
+            }
+            placed[row] = [
                 layer as u16 + 1,
-                found.frame[0].min(0xFFFF) as u16,
-                found.frame[1].min(0xFFFF) as u16,
+                frame[0].min(0xFFFF) as u16,
+                frame[1].min(0xFFFF) as u16,
                 0,
                 image.width.min(0xFFFF) as u16,
                 image.height.min(0xFFFF) as u16,
@@ -1401,19 +1481,8 @@ impl GpuRenderer {
                 0,
             ];
         }
-        if layers.is_empty() {
-            return Ok(());
-        }
-        let width = layers
-            .iter()
-            .map(|(_, image)| image.width)
-            .max()
-            .unwrap_or(1);
-        let height = layers
-            .iter()
-            .map(|(_, image)| image.height)
-            .max()
-            .unwrap_or(1);
+        let width = layers.iter().map(|image| image.width).max().unwrap_or(1);
+        let height = layers.iter().map(|image| image.height).max().unwrap_or(1);
         page.hd = self.array_texture(
             SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
             width,
@@ -1426,7 +1495,7 @@ impl GpuRenderer {
             row_count as u32,
             SDL_GPU_TEXTUREUSAGE_SAMPLER,
         )?;
-        for (layer, (_, image)) in layers.iter().enumerate() {
+        for (layer, image) in layers.iter().enumerate() {
             let bytes = &image.rgba[..(image.width * image.height * 4) as usize];
             self.upload_layer(
                 copy,
@@ -1589,13 +1658,14 @@ impl GpuRenderer {
                 self.release_mesh(entry.value);
             }
         }
-        let pages: Vec<usize> = self
+        let pages: Vec<PageKey> = self
             .pages
             .iter()
             .filter(|(_, entry)| stale(entry.last_used))
             .map(|(&key, _)| key)
             .collect();
         for key in pages {
+            self.page_keeps.remove(&key);
             if let Some(entry) = self.pages.remove(&key) {
                 self.release_page(entry.value);
             }
@@ -1625,6 +1695,7 @@ impl GpuRenderer {
         for (_, entry) in std::mem::take(&mut self.meshes) {
             self.release_mesh(entry.value);
         }
+        self.page_keeps.clear();
         for (_, entry) in std::mem::take(&mut self.pages) {
             self.release_page(entry.value);
         }
@@ -1645,6 +1716,7 @@ impl GpuRenderer {
                     }
                 }
                 Upload::Page(key) => {
+                    self.page_keeps.remove(&key);
                     if let Some(entry) = self.pages.remove(&key) {
                         self.release_page(entry.value);
                     }
@@ -1703,7 +1775,7 @@ impl GpuRenderer {
             let mut meshes = Vec::with_capacity(scene.meshes.len());
             for mesh in scene.meshes {
                 let buffer = self.ensure_mesh(copy, mesh.mesh)?;
-                let page = self.ensure_page(copy, mesh.texture, buffer.rows, pack)?;
+                let page = self.ensure_page(copy, mesh.texture, buffer.rows, pack, None)?;
                 meshes.push(page.map(|page| (buffer, page)));
             }
             let sprites = scene::scene_sprites(scene);
@@ -2330,7 +2402,13 @@ impl GpuRenderer {
             buffer: self.model_buffer,
             offset: 0,
         };
-        let samplers = [page.indices, page.palette, self.no_hd, self.no_hd_rows].map(|texture| {
+        let mut material = scene::material(None, false);
+        let hd = if page.hd.is_null() {
+            [self.no_hd, self.no_hd_rows]
+        } else {
+            [page.hd, page.hd_rows]
+        };
+        let samplers = [page.indices, page.palette, hd[0], hd[1]].map(|texture| {
             SDL_GPUTextureSamplerBinding {
                 texture,
                 sampler: self.sampler,
@@ -2342,7 +2420,8 @@ impl GpuRenderer {
             } else {
                 self.pipelines.model_opaque
             };
-            let material = scene::material(None, blend_pass);
+            material[1] = if blend_pass { 1.0 } else { 0.0 };
+            material[2] = if page.hd.is_null() { 0.0 } else { 1.0 };
             unsafe {
                 SDL_BindGPUGraphicsPipeline(pass, pipeline);
                 SDL_PushGPUFragmentUniformData(
@@ -2404,7 +2483,13 @@ impl GpuRenderer {
                 let replacement = match &quad.image {
                     htexture::QuadImage::Art(replacement) => replacement,
                     htexture::QuadImage::Model(model) => {
-                        let page = self.ensure_page(copy, &model.ivm.texture, 0, None)?;
+                        let page = self.ensure_page(
+                            copy,
+                            &model.ivm.texture,
+                            0,
+                            None,
+                            model.page.as_ref(),
+                        )?;
                         let first = model_vertices.len() as u32;
                         model_vertices.extend_from_slice(&model.vertices);
                         let count = model.vertices.len() as u32;
@@ -3713,6 +3798,7 @@ mod tests {
                 ivm: ivm.clone(),
                 vertices,
                 backdrop: [0, 0, 32],
+                page: None,
             })),
             dst: [100.0, 80.0, 200.0, 160.0],
             uv: [0.0, 0.0, 1.0, 1.0],
@@ -3772,5 +3858,91 @@ mod tests {
         gpu.overlay_frame += 1;
         gpu.evict_overlay_images();
         assert!(gpu.model_targets.is_empty());
+    }
+
+    /// A model's HD page replacement is bound and sampled; without one the
+    /// base palette draws.
+    #[test]
+    fn gpu_model_draws_its_page_replacement() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let mut palettes = vec![[0, 0, 0, 0]; crate::model::PALETTE_ROW_LEN];
+        palettes[1] = [255, 255, 255, 255];
+        let ivm = Arc::new(crate::ivm::Ivm {
+            texture: Texture8 {
+                width: 1,
+                height: 1,
+                indices: vec![1],
+                palettes,
+                stp: vec![false; crate::model::PALETTE_ROW_LEN],
+            },
+            objects: Vec::new(),
+        });
+        let corner = |x: f32, y: f32| htexture::ModelVertex {
+            clip: [x, y, 0.5, 1.0],
+            uv: [0.0, 0.0],
+            shade: [255.0; 3],
+            packed: 0,
+        };
+        let vertices = vec![corner(-1.0, 1.0), corner(1.0, 1.0), corner(-1.0, -1.0)];
+        let solid = |rgba: [u8; 4]| Image {
+            width: 1,
+            height: 1,
+            rgba: rgba.to_vec(),
+        };
+        let model = |page: Option<Arc<htexture::Replacement>>| htexture::Quad {
+            image: htexture::QuadImage::Model(Arc::new(htexture::Model {
+                ivm: ivm.clone(),
+                vertices: vertices.clone(),
+                backdrop: [0, 0, 32],
+                page,
+            })),
+            dst: [100.0, 80.0, 200.0, 160.0],
+            uv: [0.0, 0.0, 1.0, 1.0],
+            colour: [1.0; 3],
+            clip: [100, 80, 100, 80],
+        };
+        let overlay = |quad| {
+            let mut overlay = htexture::Overlay {
+                quads: vec![quad],
+                scene: false,
+                ..htexture::Overlay::new(0, [LAYER_WIDTH, LAYER_HEIGHT])
+            };
+            for y in 80..160 {
+                for x in 100..200 {
+                    overlay.coverage[y * LAYER_WIDTH as usize + x] = 1;
+                }
+            }
+            overlay
+        };
+        let pixel = |gpu: &mut GpuRenderer, overlay: &htexture::Overlay| {
+            gpu.draw_overlay(overlay, (LAYER_WIDTH, LAYER_HEIGHT))
+                .unwrap();
+            let size = gpu.overlay_size;
+            let pixels = gpu.read_texture(gpu.overlay_target, size).unwrap();
+            let i = (90 * size.0 as usize + 120) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+
+        // The base page is white.
+        let plain = overlay(model(None));
+        assert_eq!(pixel(&mut gpu, &plain), [255, 255, 255]);
+        // The named replacement is red, at its own resolution.
+        let red = Arc::new(htexture::Replacement {
+            image: solid([255, 0, 0, 255]),
+            frame: [1, 1],
+        });
+        let replaced = overlay(model(Some(red)));
+        assert_eq!(pixel(&mut gpu, &replaced), [255, 0, 0]);
     }
 }

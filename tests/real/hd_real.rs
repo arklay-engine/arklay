@@ -220,3 +220,70 @@ fn hd_pack_swaps_a_background_a_ui_page_and_a_bgm_track() {
         );
     }
 }
+
+#[test]
+#[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn real_item_art_takes_named_and_legacy_hd_paths() {
+    let Some((_root, pack_path)) = common::asset_env() else {
+        return;
+    };
+    let temp = TempDir::new("item-names");
+    let mod_path = temp.path.join("item-hd.akpak");
+    let image = |width, height, rgb: [u8; 3]| {
+        let rgba: Vec<u8> = (0..width * height)
+            .flat_map(|_| [rgb[0], rgb[1], rgb[2], 255])
+            .collect();
+        arklay::bmp::encode_to_vec(&arklay::state::Image {
+            width,
+            height,
+            rgba,
+        })
+        .unwrap()
+    };
+    let mut writer = arklay::pack::PackWriter::new();
+    writer
+        .add(
+            arklay::manifest::ENTRY,
+            arklay::manifest::Manifest {
+                kind: arklay::manifest::PackKind::Mod,
+                base: Some("re1".to_string()),
+                load_order: 10,
+                ..arklay::manifest::Manifest::base("item-hd")
+            }
+            .render()
+            .into_bytes(),
+        )
+        .unwrap();
+    // The new per-item names, plus one legacy `ITEM_ALL` name.
+    writer
+        .add("htexture/item/02.bmp", image(80, 60, [0, 0, 255]))
+        .unwrap();
+    writer
+        .add("htexture/item/02_model.bmp", image(512, 512, [0, 0, 255]))
+        .unwrap();
+    writer
+        .add("htexture/data/item_all/01.bmp", image(80, 60, [0, 255, 0]))
+        .unwrap();
+    writer.write(&mod_path).unwrap();
+
+    let layered = Pack::open_layered(&pack_path, std::slice::from_ref(&mod_path)).unwrap();
+    let icon = arklay::htexture::named_replacement(&layered, "item/02", [40, 30])
+        .expect("the named per-item icon");
+    assert_eq!((icon.image.width, icon.image.height), (80, 60));
+    assert_eq!(icon.frame, [40, 30]);
+    let page = arklay::htexture::named_replacement(&layered, "item/02_model", [256, 256])
+        .expect("the named per-item model page");
+    assert_eq!((page.image.width, page.image.height), (512, 512));
+    assert_eq!(page.frame, [256, 256]);
+    let legacy = arklay::htexture::named_replacement(&layered, "data/item_all/01", [40, 30])
+        .expect("the legacy ITEM_ALL name");
+    assert_eq!((legacy.image.width, legacy.image.height), (80, 60));
+
+    // The real per-item model still loads through the layered pack, and its
+    // split files match the shared IVM's page.
+    let model = arklay::item_art::load_model(&layered, 0x02)
+        .unwrap()
+        .unwrap();
+    assert!(model.per_item);
+    assert!(!model.untextured);
+}

@@ -91,6 +91,7 @@ pub fn lzw(data: &[u8]) {
 pub fn bmp(data: &[u8]) {
     let _ = bmp::decode(data);
     let _ = bmp::decode_mask(data);
+    let _ = bmp::decode_indexed_page(data);
 }
 
 pub fn save(data: &[u8]) {
