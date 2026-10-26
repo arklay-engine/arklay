@@ -295,6 +295,26 @@ impl MessageWindow {
         self.phase
     }
 
+    /// Treat every key as already held, so one still down from a screen that
+    /// owned the input (the native in-game menu) must be released before it
+    /// pages, dismisses or answers the window.
+    pub fn hold_input(&mut self) {
+        self.previous = MessageInput {
+            action: true,
+            left: true,
+            right: true,
+            cancel: true,
+        };
+    }
+
+    /// Whether the window still takes the action key: a reveal (the press
+    /// speeds it up), a page break, finished text held for a press or a
+    /// yes/no prompt. A timed page pause or a line timing itself out (a voiced
+    /// line's subtitle) ignores the press.
+    pub fn takes_input(&self) -> bool {
+        self.active && !matches!(self.phase, MessagePhase::Delay | MessagePhase::AutoDismiss)
+    }
+
     /// Whether the window was requested by the pause menu: its text draws on
     /// the menu line and its reveal runs at half speed.
     pub fn uses_menu_position(&self) -> bool {
