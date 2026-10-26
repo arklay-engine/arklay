@@ -2610,7 +2610,7 @@ impl GameSession {
             computer: None,
             computer_saved: None,
         });
-        session.enter_room(pack, None, RoomBgmHandoff::Now);
+        session.enter_room(pack, None, true, RoomBgmHandoff::Now);
         Ok(session)
     }
 
@@ -2620,21 +2620,35 @@ impl GameSession {
     ///
     /// `from` is the room the player came from, used by the BGM state machine
     /// to resolve the outgoing group; `None` for a direct boot or save load.
+    /// `init_room` is set when the original reaches this load through
+    /// `init_room` (a fresh boot, save load or stage-change door) rather than a
+    /// same-stage door's bare `room_set`.
     /// A door transition passes [`RoomBgmHandoff::AtTransitionEnd`]: the
     /// original loads the destination while the animation plays but runs
     /// `update_room_bgm` only after the animation task finishes (see
     /// [`GameSession::end_transition`]).
-    fn enter_room(&mut self, pack: &Pack, from: Option<RoomId>, bgm_handoff: RoomBgmHandoff) {
+    fn enter_room(
+        &mut self,
+        pack: &Pack,
+        from: Option<RoomId>,
+        init_room: bool,
+        bgm_handoff: RoomBgmHandoff,
+    ) {
         self.apply_costume_model(pack);
         // The original stores the outgoing room id in
-        // `g_AttractMode_RoomCameraId` on a same-stage door; a fresh or
-        // stage-change load resets it to 0x1F. The hunter's scripted intro
-        // reads it as a camera selector.
+        // `g_AttractMode_RoomCameraId` on a same-stage door; `init_room`
+        // resets it to 0x1F. The hunter's scripted intro reads it as a camera
+        // selector.
         let attract_room_camera_id = match from {
-            Some(source) if source.stage == self.game.id.stage => source.room,
+            Some(source) if !init_room => source.room,
             _ => 0x1F,
         };
         self.game.set_attract_room_camera_id(attract_room_camera_id);
+        if init_room {
+            // `init_room`'s attract-demo override lands before `room_set`, so
+            // the init script may still rewrite the row.
+            bgm::init_room_demo_override(&mut self.game, self.loaded.id);
+        }
         {
             let mut host = game::ScdGameHost::new(&mut self.game);
             self.command_vm.run_init(&mut host);
@@ -4406,7 +4420,9 @@ impl GameSession {
         self.game.entities[0].action_behavior = 0;
         self.game.entities[0].action_state = 0;
         self.game.enter_room(target, &self.loaded.room);
-        self.enter_room(pack, Some(from), RoomBgmHandoff::Now);
+        // The jump is port-only; a stage change takes `init_room`'s path.
+        let init_room = from.stage != target.stage;
+        self.enter_room(pack, Some(from), init_room, RoomBgmHandoff::Now);
         self.player = player::spawn(target, &self.loaded.room);
         self.place_room_entry(pack, target);
         self.arm_room_fade();
@@ -5420,6 +5436,7 @@ impl GameSession {
             return;
         }
         let from = session.source;
+        let init_room = session.stage_change;
         finish_transition(
             &mut session,
             &mut self.game,
@@ -5430,7 +5447,7 @@ impl GameSession {
         let scripts = Rc::new(self.loaded.scripts.clone());
         self.command_vm = scd::vm::CommandVm::from_scripts(Rc::clone(&scripts));
         self.event_vm = scd::vm::EventVm::from_scripts(scripts);
-        self.enter_room(pack, Some(from), RoomBgmHandoff::AtTransitionEnd);
+        self.enter_room(pack, Some(from), init_room, RoomBgmHandoff::AtTransitionEnd);
         // `room_set` runs `room_events_check` once with the message gate
         // forced open, so an event the init script queued executes exactly one
         // opcode during the load (RoomInit.cpp 0x00477c45), the same pass the
@@ -21300,6 +21317,107 @@ mod tests {
         }
         assert!(session.transition_finished, "the transition never finished");
         assert_eq!(held, 0, "a type 0 stage change does not sleep");
+    }
+
+    /// Walk an attract-demo session (or a normal one) from room 1000 through a
+    /// door with destination byte `next_room` into room 1003, whose BGM row is
+    /// the always-reload type 1. Returns the session and the frames
+    /// `update_room_bgm`'s `bgm_fade_out_all` sleeps held the tail.
+    fn demo_door_bgm_hold(next_room: u8, demo: bool) -> (Box<GameSession>, u32) {
+        let dir = TempDir::new();
+        let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
+        let source = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+        };
+        let target = RoomId {
+            stage: 1,
+            room: 3,
+            player_flag: 0,
+        };
+        let pack_path = dir.0.join("game.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                &source.rdt_entry(),
+                synthetic_rdt(&door_init_record(next_room, [555, 0, 666], 1024, 0)),
+            )
+            .unwrap();
+        writer
+            .add(&target.rdt_entry(), synthetic_rdt(&[0x00, 0x00]))
+            .unwrap();
+        writer.add(&source.cut_entry(0), bmp_bytes.clone()).unwrap();
+        writer.add(&target.cut_entry(0), bmp_bytes).unwrap();
+        writer.write(&pack_path).unwrap();
+        let pack = Pack::open(&pack_path).unwrap();
+
+        let mut session = GameSession::from_room(&pack, source, Path::new("saves")).unwrap();
+        if demo {
+            session.game.apply_flag(5, game::MSF2_ATTRACT_DEMO, 0);
+        }
+        session.game.room_bgm[usize::from(source.room)] = 0x08;
+        bgm::update_room_bgm(&mut session.game, source, None);
+        session.game.room_bgm[usize::from(target.room)] = 0x48;
+
+        trigger_test_door(&pack, &mut session);
+        let mut held = 0;
+        for _ in 0..MAX_TRANSITION_FRAMES {
+            session.tick_transition(&pack, false);
+            let animating = session
+                .transition
+                .as_ref()
+                .is_some_and(|transition| !transition.frame.finished);
+            if !animating && !session.transition_finished {
+                held += 1;
+            }
+            if session.transition_finished {
+                break;
+            }
+        }
+        assert!(session.transition_finished, "the transition never finished");
+        assert_eq!(session.loaded.id, target);
+        (session, held)
+    }
+
+    #[test]
+    fn a_demo_stage_change_door_forces_the_destination_bgm_off() {
+        let fade = u32::from(bgm::FADE_OUT_ALL_FRAMES);
+        // Outside the demo the type-1 reload runs one `bgm_fade_out_all`.
+        let (session, held) = demo_door_bgm_hold(0x23, false);
+        assert_eq!(held, fade);
+        assert_eq!(session.game.room_bgm[3], 0x48);
+
+        // The demo's `init_room` forces the row to 0xFF before `room_set`, so
+        // the stage change does not sleep and the destination is silent.
+        let (session, held) = demo_door_bgm_hold(0x23, true);
+        assert_eq!(held, 0, "init_room reset g_BGM_STATE, so no fade-out runs");
+        // 0x23 resolves to the current stage but still takes `init_room`,
+        // which also resets `g_AttractMode_RoomCameraId`.
+        assert_eq!(session.game.attract_room_camera_id(), 0x1F);
+        assert_eq!(session.game.room_bgm[3], 0xFF);
+        assert_eq!(session.game.bgm.state, 0xFF);
+        assert!(
+            session
+                .game
+                .bgm
+                .channels
+                .iter()
+                .all(|channel| channel.track.is_none()),
+            "the outgoing track is torn down"
+        );
+    }
+
+    #[test]
+    fn a_demo_same_stage_door_keeps_the_destination_bgm() {
+        // A same-stage door runs only `room_set`, so the demo override does
+        // not apply: the group change and the type-1 reload each run
+        // `bgm_fade_out_all` while the source's track is still playing.
+        let (session, held) = demo_door_bgm_hold(0x03, true);
+        assert_eq!(held, 2 * u32::from(bgm::FADE_OUT_ALL_FRAMES));
+        assert_eq!(session.game.attract_room_camera_id(), 0x00);
+        assert_eq!(session.game.room_bgm[3], 0x48);
+        assert_eq!(session.game.bgm.state, 0x48);
     }
 
     #[test]
