@@ -362,7 +362,7 @@ proc main
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_04))
     {
-        set(FG_MAP, F_MAP_1F, TRUE);
+        set(FG_MAP, F_MAP_VISITED_11F, TRUE);
     }
 }
 

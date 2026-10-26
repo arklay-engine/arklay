@@ -127,7 +127,7 @@ event on_aot_02_useitem
             aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
             objtbl_b_set(TBL_OBJ, OBJ_01, 0);
             set(FG_ITEM, F_ITEM_11, FALSE);
-            set(FG_MAP, F_MAP_7D, TRUE);
+            set(FG_MAP, F_MAP_OWNED_MANSION_2F, TRUE);
             message(MSG_YOU_GOT_THE_MAP_OF_2ND | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of 2ND FLOOR."
         }
     }

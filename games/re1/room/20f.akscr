@@ -88,10 +88,10 @@ proc main
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
     {
-        set(FG_MAP, F_MAP_3D, TRUE);
+        set(FG_MAP, F_MAP_VISITED_21D, TRUE);
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
     {
-        set(FG_MAP, F_MAP_3D, TRUE);
+        set(FG_MAP, F_MAP_VISITED_21D, TRUE);
     }
 }

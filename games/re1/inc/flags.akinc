@@ -646,14 +646,19 @@
 #define F_ITEM_FC 0xFC
 #define F_ITEM_FF 0xFF
 
-#define F_MAP_1D 0x1D
-#define F_MAP_1F 0x1F
-#define F_MAP_3D 0x3D
-#define F_MAP_3E 0x3E
-#define F_MAP_50 0x50
-#define F_MAP_51 0x51
-#define F_MAP_7A 0x7A
-#define F_MAP_7D 0x7D
+// FG_MAP (bank 8) is what the map and file screens know, in three blocks:
+// rooms visited from 0x00 (bit = stage base + room; the stage bases are
+// 0x00, 0x20, 0x3F, 0x52, 0x64 for stages 1-5, stages 6/7 reuse 1/2), maps
+// owned from 0x7C (by map: mansion 1F, mansion 2F, courtyard, underground,
+// guardhouse, laboratory) and files collected from 0x82.
+#define F_MAP_VISITED_11D 0x1D
+#define F_MAP_VISITED_11F 0x1F
+#define F_MAP_VISITED_21D 0x3D
+#define F_MAP_VISITED_21E 0x3E
+#define F_MAP_VISITED_311 0x50
+#define F_MAP_VISITED_312 0x51
+#define F_MAP_VISITED_516 0x7A
+#define F_MAP_OWNED_MANSION_2F 0x7D
 
 #define F_9_06 0x06
 #define F_9_07 0x07

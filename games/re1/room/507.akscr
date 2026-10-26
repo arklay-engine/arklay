@@ -488,7 +488,7 @@ event on_aot_09_sub1
         set(FG_ROOM, F_ROOM_07, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_ROOM, F_ROOM_0C, FALSE);
-        set(FG_MAP, F_MAP_7A, TRUE);
+        set(FG_MAP, F_MAP_VISITED_516, TRUE);
     }
     evt_finish();
 }
