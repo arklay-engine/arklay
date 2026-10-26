@@ -7140,10 +7140,18 @@ impl GameState {
             .filter(|action| action.kind == RoomActionKind::Item)
     }
 
-    /// The inventory item a desk key turn uses: Jill's lockpick when the
-    /// scenario flag is set, otherwise the desk key.
+    /// Whether the player can pick locks. The original only tests Jill's
+    /// lockpick scenario flag; outside authentic mode a lockpick in the
+    /// inventory also counts, for either character.
+    fn has_lockpick(&self) -> bool {
+        self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_HAS_LOCKPICK, false)
+            || (!self.player_options.authentic && self.has_item(ITEM_LOCK_PICK))
+    }
+
+    /// The inventory item a desk key turn uses: the lockpick when
+    /// [`Self::has_lockpick`], otherwise the desk key.
     fn desk_key_item(&self) -> u8 {
-        if self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_HAS_LOCKPICK, false) {
+        if self.has_lockpick() {
             ITEM_LOCK_PICK
         } else {
             ITEM_DESK_KEY
@@ -7186,11 +7194,9 @@ impl GameState {
             return true;
         }
         if !self.flag_test(BANK_LOCKS, action.param_word(0) as u8, false) {
-            // Locked: the desk key or Jill's lockpick is required. With either
+            // Locked: the desk key or the lockpick is required. With either
             // the key prompt arms; without, the "locked" message plays.
-            if !self.has_item(ITEM_DESK_KEY)
-                && !self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_HAS_LOCKPICK, false)
-            {
+            if !self.has_item(ITEM_DESK_KEY) && !self.has_lockpick() {
                 self.show_message(MESSAGE_DESK_LOCKED, 0xFF);
                 self.record_interaction(
                     slot,
@@ -7896,8 +7902,9 @@ impl GameState {
     }
 
     /// Run the door in `slot`, with the original's full interaction flow:
-    /// character restriction, lock flag, required key (with Jill's lockpick
-    /// substituting for the sword key) and the special `0xFE`/`0xFF` keys.
+    /// character restriction, lock flag, required key (with the lockpick
+    /// substituting for the sword key, see [`Self::has_lockpick`]) and the
+    /// special `0xFE`/`0xFF` keys.
     ///
     /// A key turn only raises the lock flag and plays the message; the door
     /// transitions on the next probe, exactly as in the original. The key is
@@ -7936,15 +7943,19 @@ impl GameState {
             self.show_message(MESSAGE_LOCKED_KEY, 0xFF);
             return false;
         }
-        let turned = if need == ITEM_SWORD_KEY && self.id.player_flag & 1 == 1 {
-            // Jill substitutes her lockpick for the sword key, but only once
-            // she has picked it up.
-            if !self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_HAS_LOCKPICK, false) {
-                self.sfx_requests.push(DOOR_CUE_LOCKED);
-                self.show_message(MESSAGE_NO_LOCKPICK, 0xFF);
-                return false;
-            }
+        let is_jill = self.id.player_flag & 1 == 1;
+        let authentic = self.player_options.authentic;
+        let sword = need == ITEM_SWORD_KEY;
+        let turned = if sword && (is_jill || !authentic) && self.has_lockpick() {
+            // Jill substitutes her lockpick for the sword key once she has
+            // picked it up. Outside authentic mode Chris may too.
             ITEM_LOCK_PICK
+        } else if sword && is_jill && (authentic || !self.has_item(need)) {
+            // Jill without a lockpick; outside authentic mode she may still
+            // turn a held sword key (the branch below).
+            self.sfx_requests.push(DOOR_CUE_LOCKED);
+            self.show_message(MESSAGE_NO_LOCKPICK, 0xFF);
+            return false;
         } else if !self.has_item(need) {
             // "It's locked": keyed message indexed from the sword key.
             self.sfx_requests.push(DOOR_CUE_LOCKED);
@@ -13942,6 +13953,35 @@ mod tests {
     }
 
     #[test]
+    fn desk_accepts_a_held_lockpick_outside_authentic_mode() {
+        // Chris with the lockpick in his inventory but no scenario flag.
+        let mut state = desk_game();
+        state.id.player_flag = 0;
+        state.add_item(ITEM_LOCK_PICK, 1);
+        assert!(state.check_desk(0));
+        assert_eq!(state.desk.state, 1);
+        assert_eq!(state.desk_key_item(), ITEM_LOCK_PICK);
+
+        // Authentic mode only honours the scenario flag.
+        let mut state = desk_game();
+        state.player_options.authentic = true;
+        state.add_item(ITEM_LOCK_PICK, 1);
+        assert!(state.check_desk(0));
+        assert_eq!(state.message.id, Some(MESSAGE_DESK_LOCKED));
+        assert_eq!(state.desk.state, 0);
+    }
+
+    #[test]
+    fn jill_opens_a_desk_with_a_small_key() {
+        let mut state = desk_game();
+        state.id.player_flag = 1;
+        state.add_item(ITEM_DESK_KEY, 1);
+        assert!(state.check_desk(0));
+        assert_eq!(state.desk.state, 1);
+        assert_eq!(state.desk_key_item(), ITEM_DESK_KEY);
+    }
+
+    #[test]
     fn desk_prompt_names_the_selected_key() {
         // The desk key path.
         let mut state = desk_game();
@@ -15018,6 +15058,96 @@ mod tests {
         state.interact([-550, 0, 50], 0, true);
         assert_eq!(state.message.id, Some(0xC3));
         assert!(state.flag_test(2, 7, false));
+    }
+
+    #[test]
+    fn sword_key_lock_accepts_a_held_lockpick_outside_authentic_mode() {
+        let sword_door = |state: &mut GameState| {
+            let mut locked = door(1, 0x80 | 7);
+            locked.key = ITEM_SWORD_KEY;
+            state.room_actions[0] = Some(door_action(locked));
+            state.doors[0] = Some(locked);
+        };
+        for (player_flag, authentic, flag, held, opens) in [
+            // Chris: the flag or a held lockpick, but only outside authentic.
+            (0, false, false, true, true),
+            (0, false, true, false, true),
+            (0, true, false, true, false),
+            (0, true, true, false, false),
+            (0, false, false, false, false),
+            // Jill: a held lockpick counts outside authentic; the flag always.
+            (1, false, false, true, true),
+            (1, true, false, true, false),
+            (1, true, true, false, true),
+        ] {
+            let mut state = game();
+            sword_door(&mut state);
+            state.id.player_flag = player_flag;
+            state.player_options.authentic = authentic;
+            if flag {
+                state.apply_flag(BANK_SCENARIO, SCENARIO_FLAG_HAS_LOCKPICK, 0);
+            }
+            if held {
+                state.add_item(ITEM_LOCK_PICK, 1);
+            }
+            state.interact([-550, 0, 50], 0, true);
+            let case = (player_flag, authentic, flag, held);
+            assert_eq!(state.flag_test(BANK_LOCKS, 7, false), opens, "{case:?}");
+            if opens {
+                assert_eq!(state.message.id, Some(MESSAGE_KEY_TURN), "{case:?}");
+                assert_eq!(state.selected_item, Some(ITEM_LOCK_PICK), "{case:?}");
+                // Dismissing the prompt never consumes the lockpick.
+                state.cancel_message();
+                assert!(state.check_event_item_usage(), "{case:?}");
+                assert_eq!(state.has_item(ITEM_LOCK_PICK), held, "{case:?}");
+            } else if player_flag == 1 {
+                assert_eq!(state.message.id, Some(MESSAGE_NO_LOCKPICK), "{case:?}");
+            } else {
+                assert_eq!(state.message.id, Some(LOCKED_MESSAGE), "{case:?}");
+            }
+        }
+
+        // Without a lockpick a held sword key turns for Chris, and for Jill
+        // outside authentic mode.
+        for (player_flag, authentic, opens) in [
+            (0, false, true),
+            (0, true, true),
+            (1, false, true),
+            (1, true, false),
+        ] {
+            let mut state = game();
+            sword_door(&mut state);
+            state.id.player_flag = player_flag;
+            state.player_options.authentic = authentic;
+            state.add_item(ITEM_SWORD_KEY, 1);
+            state.interact([-550, 0, 50], 0, true);
+            let case = (player_flag, authentic);
+            assert_eq!(state.flag_test(BANK_LOCKS, 7, false), opens, "{case:?}");
+            if opens {
+                assert_eq!(state.selected_item, Some(ITEM_SWORD_KEY), "{case:?}");
+                // Dismissing the prompt consumes the sword key.
+                state.cancel_message();
+                assert!(state.check_event_item_usage(), "{case:?}");
+                assert_eq!(state.item_count(ITEM_SWORD_KEY), 0, "{case:?}");
+            } else {
+                assert_eq!(state.message.id, Some(MESSAGE_NO_LOCKPICK), "{case:?}");
+            }
+        }
+
+        // Holding both, either character turns the lockpick and keeps the key.
+        for player_flag in [0, 1] {
+            let mut state = game();
+            sword_door(&mut state);
+            state.id.player_flag = player_flag;
+            state.add_item(ITEM_SWORD_KEY, 1);
+            state.add_item(ITEM_LOCK_PICK, 1);
+            state.interact([-550, 0, 50], 0, true);
+            assert_eq!(state.selected_item, Some(ITEM_LOCK_PICK));
+            state.cancel_message();
+            assert!(state.check_event_item_usage());
+            assert_eq!(state.item_count(ITEM_SWORD_KEY), 1);
+            assert!(state.has_item(ITEM_LOCK_PICK));
+        }
     }
 
     #[test]
