@@ -101,7 +101,7 @@ event from_main
     {
         bgm_play(BGM_MAIN);
         set(FG_ROOM, F_ROOM_0F, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cutnext(CAM_04);
         dir_set(0, 0, 0, 0, 11130, 0, 2640);
     }
@@ -114,7 +114,7 @@ event from_main
     {
         cutnext(CAM_01);
         dir_set(0, 0, 2910, 0, 11434, 0, 8043);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -125,21 +125,21 @@ event on_aot_04
     run
     {
         set(FG_STATUS, F_STATUS_1D, FALSE);
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
         cutnext(CAM_05);
     }
     sleep(30);
     run
     {
         set(FG_ROOM, F_ROOM_1F, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_01_ITEM, SCE_ITEM, 0);
     }
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         if (ck(FG_ITEM, F_ITEM_81, FALSE))
         {
             aot_reset(AOT_04_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
@@ -149,8 +149,8 @@ event on_aot_04
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_finish();
 }

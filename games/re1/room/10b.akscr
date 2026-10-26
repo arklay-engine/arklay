@@ -105,8 +105,8 @@ event on_enter
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
         evt_exec(0, TASK_09, on_enter_sub1);
         voice_play(VOICE_PLAY, VO_00C_00, 0);
         message(MSG_VO_00C_00, 0);
@@ -128,8 +128,8 @@ event on_enter
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -177,8 +177,8 @@ event on_enter_2
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
         evt_exec(0, TASK_09, on_enter_2_sub1);
         voice_play(VOICE_PLAY, VO_00C_20, 0);
         message(MSG_VO_00C_20, 0);
@@ -195,8 +195,8 @@ event on_enter_2
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

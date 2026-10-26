@@ -112,7 +112,7 @@ event from_main
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
         dir_set(0, 0, 0, 0, 5250, 300, 15200);
@@ -160,12 +160,12 @@ event from_main
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_11, TRUE);
     }
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         dir_set(0, 0, 0, 0, 5300, 0, 14600);
         cutnext(CAM_04);
         cut_auto(0);
@@ -190,7 +190,7 @@ event on_enter
     {
         aot_delete(AOT_06_MESSAGE, SCE_NONE, 0);
         objtbl_b_set(0, 2, 47);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -203,7 +203,7 @@ event from_main_sub1
     {
         aot_set(AOT_06_MESSAGE, 600, 11000, 6200, 2200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
         objtbl_b_set(0, 2, 45);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -334,7 +334,7 @@ event on_enter_2
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_55, TRUE);
         set(FG_COMMON, F_COMMON_C0, TRUE);
@@ -519,14 +519,14 @@ event on_enter_2
     sleep(40);
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_03_ITEM, SCE_DOCUMENT, 0);
     }
     evt_next();
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
@@ -562,7 +562,7 @@ event on_enter_2
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

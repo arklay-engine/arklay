@@ -295,7 +295,7 @@ proc main
     if (ck(FG_ROOM, F_ROOM_0F, TRUE) && ck(FG_ENEMY, F_ENEMY_60, FALSE) && ck(FG_SCENARIO, F_SCENARIO_29, TRUE) && ck(FG_ROOM, F_ROOM_0E, FALSE))
     {
         set(FG_ROOM, F_ROOM_0E, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, from_main);
     }
     if (ck(FG_ROOM, F_ROOM_0C, TRUE) && ck(FG_ROOM, F_ROOM_3D, TRUE))
@@ -332,7 +332,7 @@ event on_aot_05
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         bgm_play(BGM_SUB_1);
         set(FG_ROOM, F_ROOM_09, TRUE);
     }
@@ -380,7 +380,7 @@ event on_aot_05
 #else
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         dir_set(0, 0, 1716, 0, 2439, 0, 9876);
         cutnext(CAM_06);
     }
@@ -428,7 +428,7 @@ event on_aot_05
 #else
         cutnext(CAM_00);
 #endif
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #if JILL
         set(FG_ROOM, F_ROOM_0D, TRUE);
 #endif
@@ -565,7 +565,7 @@ event from_main
         cutnext(CAM_00);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -958,7 +958,7 @@ event on_enter_sub8
 #else
 event on_aot_07
 {
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -987,7 +987,7 @@ event on_aot_07
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -1008,7 +1008,7 @@ event on_enter_2
         eml_state(0, ENEMY_05_PLANT_42, EML_STATUS, EML_STATUS_OR | 2);
     }
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     evt_fork(TASK_09, on_enter_sub1, 0);
     sleep(160);
     eml_state(0, ENEMY_00_PLANT_42, EML_ACTION, 10);
@@ -1031,7 +1031,7 @@ event on_enter_2
         eml_state(0, ENEMY_05_PLANT_42, EML_STATUS, EML_STATUS_XOR | 2);
     }
     set(FG_STATUS, F_STATUS_0F, FALSE);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_finish();
 }
 #else
@@ -1108,7 +1108,7 @@ event on_aot_07_sub2
     tw_end();
     evt_nop();
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(100);
     eml_state(0, ENEMY_00_PLANT_42, EML_ACTION, 12);
     sleep(30);
@@ -1138,7 +1138,7 @@ event on_aot_07_sub2
         eml_state(0, ENEMY_02_PLANT_42, EML_BEHAVIOUR, 1);
         eml_state(0, ENEMY_04_PLANT_42, EML_BEHAVIOUR, 1);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cutnext(CAM_00);
         cut_auto(0);
     }
@@ -1155,7 +1155,7 @@ event on_aot_05
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         dir_set(0, 0, 1716, 0, 2439, 0, 9876);
         cutnext(CAM_06);
     }
@@ -1168,7 +1168,7 @@ event on_aot_05
     run
     {
         cutnext(CAM_00);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_ROOM, F_ROOM_0D, TRUE);
         cut_auto(0);
     }

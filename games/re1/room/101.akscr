@@ -174,7 +174,7 @@ event from_main
         pos_set(ENEMY_01_HUNTER, 0, 256, 0, 4219, 0, 7747);
     }
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     evt_fork(TASK_09, from_main_sub1, 0);
     evt_fork(TASK_09, from_main_sub2, 0);
     evt_fork(TASK_09, from_main_sub5, 0);
@@ -191,7 +191,7 @@ event from_main
         pos_set(ENEMY_01_HUNTER, 0, 2432, 0, 7860, 0, 5845);
         cutnext(CAM_03);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     eml_state(0, ENEMY_01_HUNTER, EML_BEHAVIOUR, 0);
@@ -297,7 +297,7 @@ event on_aot_05_message
         bgm_play(BGM_SUB_1);
         cutnext(CAM_05);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_COMMON, F_COMMON_31, FALSE);
         aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
         dir_set(0, 0, 592, 0, 12132, 0, 4876);
@@ -350,7 +350,7 @@ event on_aot_05_message
         aot_reset(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05_message_3, 0);
         cutnext(CAM_04);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -541,7 +541,7 @@ event on_aot_05_message_2
         bgm_play(BGM_MAIN);
         cutnext(CAM_05);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_COMMON, F_COMMON_31, FALSE);
         set(FG_COMMON, F_COMMON_35, TRUE);
         aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
@@ -557,7 +557,7 @@ event on_aot_05_message_2
         aot_reset(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 255, 0);
         cutnext(CAM_04);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -586,14 +586,14 @@ event on_aot_05_message_2_sub1
 
 event on_aot_05_message_3
 {
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     evt_fork(TASK_09, on_aot_05_message_3_sub1, 0);
     voice_play(VOICE_PLAY, VO_007_0D_63, 0);
     message(MSG_VO_007_0D_63, 0);
     wait_message();
     set(FG_STATUS, F_STATUS_0F, FALSE);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_finish();
 }
 

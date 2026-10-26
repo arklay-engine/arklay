@@ -104,8 +104,8 @@ event on_enter
 {
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
-    set(FG_6, F_6_1D, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
     voice_play(VOICE_PLAY, VO_A00_00, 0);
     wait_message();
     evt_fork(TASK_09, on_enter_sub1, 0);
@@ -114,8 +114,8 @@ event on_enter
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -137,7 +137,7 @@ event on_aot_05
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cutnext(CAM_07);
         message(MSG_A_NUMERIC_KEY_PANEL | MSG_FAST, MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A numeric key panel."
     }
@@ -174,17 +174,17 @@ event on_aot_05
     run
     {
 #if MANSION1
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #else
 #if CHRIS
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #else
         if (ck(FG_COMMON, F_COMMON_25, TRUE))
         {
             aot_delete(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             aot_on(AOT_01_DOOR, SCE_DOOR, 0);
             set(FG_SCENARIO, F_SCENARIO_46, TRUE);
-            set(FG_6, F_6_17, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         }
 #endif
 #endif
@@ -192,7 +192,7 @@ event on_aot_05
         cut_auto(0);
 #if MANSION2
 #if JILL
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #endif
 #endif
     }

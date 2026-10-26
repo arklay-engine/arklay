@@ -100,7 +100,7 @@ event on_aot_03_item
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -151,7 +151,7 @@ event on_aot_03_item
     run
     {
         set(FG_COMMON, F_COMMON_60, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
 #if MANSION1
         eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_STATUS, EML_STATUS_SET | 1);
 #endif
@@ -185,7 +185,7 @@ event on_aot_03_item
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     sleep(16);
     run
@@ -378,9 +378,9 @@ event event_05
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -414,9 +414,9 @@ event event_05
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }

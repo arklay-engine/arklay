@@ -161,8 +161,8 @@ event event_00
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
     }
     set(FG_STATUS, F_STATUS_0F, TRUE);
     run
@@ -230,8 +230,8 @@ event event_00
     run
     {
         room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_finish();
 }
@@ -240,8 +240,8 @@ event on_aot_06
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -266,8 +266,8 @@ event on_aot_06
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_finish();
 }

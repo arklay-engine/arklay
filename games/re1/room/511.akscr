@@ -75,9 +75,9 @@ event on_aot_01_message
 {
     run
     {
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         message(MSG_A_POWER_CONNECTION_SWITCH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "A power connection switch. The elevator power is off. Will you connect it? The power isn't supplied to the elevator."
     }
     evt_work_set(WK_PLAYER, 0);
@@ -102,9 +102,9 @@ event on_aot_01_message
     }
     run
     {
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -113,9 +113,9 @@ event on_aot_01_message_sub1
 {
     run
     {
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     sleep(10);
     se_play_3d(SND_BANK_ROOM, SE_17_PANEL02, 0, SND_AT_PLAYER, 0, 0, 0);
@@ -138,9 +138,9 @@ event on_aot_01_message_sub1
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

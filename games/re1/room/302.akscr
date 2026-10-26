@@ -306,7 +306,7 @@ event on_aot_07
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_21_ELVX1, 0, SND_AT_POINT, 0, 23200, 28700);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         sys_multi(SYS_01, 128);
         evt_exec(0, TASK_09, on_aot_07_sub1);
         evt_exec(0, TASK_09, on_aot_07_sub2);
@@ -319,7 +319,7 @@ event on_aot_07
         setw(W_LIGHT_DELTA, 0, 0);
         aot_on(AOT_01_DOOR, SCE_DOOR, 129);
         set(FG_SCENARIO, F_SCENARIO_30, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -329,7 +329,7 @@ event on_aot_08
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_21_ELVX1, 0, SND_AT_POINT, 0, 20900, 5000);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         sys_multi(SYS_01, 128);
         evt_exec(0, TASK_09, on_aot_08_sub1);
         evt_exec(0, TASK_09, on_aot_07_sub2);
@@ -342,7 +342,7 @@ event on_aot_08
         setw(W_LIGHT_DELTA, 0, 0);
         aot_on(AOT_00_DOOR, SCE_DOOR, 129);
         set(FG_SCENARIO, F_SCENARIO_31, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
         {
             setb(B_CHARACTER_MODEL, 0, 0);
@@ -432,12 +432,12 @@ event on_enter
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_23_ELVX2, 0, SND_AT_POINT, 0, 23200, 28700);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_sub1);
         evt_exec(0, TASK_09, on_enter_sub2);
     }
     sleep(100);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -447,12 +447,12 @@ event on_enter_2
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_23_ELVX2, 0, SND_AT_POINT, 0, 20900, 5000);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_2_sub1);
         evt_exec(0, TASK_09, on_enter_sub2);
     }
     sleep(100);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -509,8 +509,8 @@ event on_aot_0a
 {
     run
     {
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         message(MSG_THERE_IS_A_LADDER | MSG_FAST, 0); // "There's a ladder. Will you descend it? I've got to get power to the elevator."
     }
     do
@@ -545,8 +545,8 @@ event on_aot_0a_sub1
             setb(B_CHARACTER_MODEL, 5, 0);
         }
         door_aot_set(AOT_03_DOOR, 13300, 25300, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1B_LAD01, 64, 0, ROOM_307_LADDER_PASSAGE, 11400, 0, 4200, 3072, UNLOCKED, SAT_UNDER | SAT_PLAYER);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -555,8 +555,8 @@ event on_aot_0a_sub2
 {
     run
     {
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

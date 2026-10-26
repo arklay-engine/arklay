@@ -44,10 +44,10 @@ event on_aot_04
 {
     run
     {
-        set(FG_6, F_6_1F, FALSE);
-        set(FG_6, F_6_19, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
         message(MSG_A_BATTERY | MSG_FAST, 0); // "A battery. Now I can move the elevator in the courtyard."
     }
     do
@@ -57,10 +57,10 @@ event on_aot_04
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_6, F_6_1F, TRUE);
-        set(FG_6, F_6_19, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         aot_on(AOT_03_ITEM, SCE_ITEM, 0);
     }
     evt_finish();

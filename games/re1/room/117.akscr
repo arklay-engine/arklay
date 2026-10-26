@@ -181,8 +181,8 @@ event event_00
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_sub1);
         voice_play(VOICE_PLAY, VO_00C_00, 0);
         message(MSG_VO_00C_00, 0);
@@ -204,8 +204,8 @@ event event_00
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -277,8 +277,8 @@ event event_02
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_2_sub1);
         voice_play(VOICE_PLAY, VO_00C_20, 0);
         message(MSG_VO_00C_20, 0);
@@ -294,8 +294,8 @@ event event_02
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -369,9 +369,9 @@ event on_aot_01
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
         cutnext(CAM_07);
         message(MSG_THE_TITLE_IS_ALL_LIVING_THINGS | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "The title is “All living things are destined to die"."
     }
@@ -382,9 +382,9 @@ event on_aot_01
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         cutcurr(0);
         cut_auto(0);
     }
@@ -395,9 +395,9 @@ event on_aot_02_message
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
     }
     message(MSG_A_PICTURE_OF_A_TIRED_MIDDLEAGED | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a tired middle-aged man."
     do
@@ -413,9 +413,9 @@ event on_aot_02_message
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_1C, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         }
     }
     evt_finish();
@@ -425,9 +425,9 @@ event on_aot_03_message
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
     }
     message(MSG_A_PICTURE_OF_A_NEWBORN_BABY | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a newborn baby."
     do
@@ -443,9 +443,9 @@ event on_aot_03_message
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_1C, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         }
     }
     evt_finish();
@@ -455,9 +455,9 @@ event on_aot_04_message
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
     }
     message(MSG_A_PICTURE_OF_A_YOUNG_MAN | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a young man."
     do
@@ -473,9 +473,9 @@ event on_aot_04_message
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_1C, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         }
     }
     evt_finish();
@@ -485,9 +485,9 @@ event on_aot_05_message
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
     }
     message(MSG_A_PICTURE_OF_AN_INFANT | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of an infant."
     do
@@ -503,9 +503,9 @@ event on_aot_05_message
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_1C, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         }
     }
     evt_finish();
@@ -515,9 +515,9 @@ event on_aot_06_message
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
     }
     message(MSG_A_PICTURE_OF_A_LIVELY_BOY | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a lively boy."
     do
@@ -533,9 +533,9 @@ event on_aot_06_message
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_1C, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         }
     }
     evt_finish();
@@ -545,9 +545,9 @@ event on_aot_07_message
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
     }
     message(MSG_A_PICTURE_OF_A_BOLDLOOKING_OLD | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of a bold-looking old man."
     do
@@ -563,9 +563,9 @@ event on_aot_07_message
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_1C, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         }
     }
     evt_finish();
@@ -575,9 +575,9 @@ event on_aot_08
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
         message(MSG_A_PICTURE_OF_PEOPLE_MOURNING_FOR | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A picture of people mourning for the dead."
     }
     do
@@ -595,9 +595,9 @@ event on_aot_08
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_1C, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         }
     }
     do
@@ -649,9 +649,9 @@ event on_aot_02_message_sub1
     }
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -688,9 +688,9 @@ event on_aot_03_message_sub1
     }
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -729,9 +729,9 @@ event on_aot_04_message_sub1
     }
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -769,9 +769,9 @@ event on_aot_05_message_sub1
     }
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -809,9 +809,9 @@ event on_aot_06_message_sub1
     }
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -849,9 +849,9 @@ event on_aot_07_message_sub1
     }
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -1046,9 +1046,9 @@ event on_aot_08_sub1
     }
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         set(FG_ROOM, F_ROOM_13, FALSE);
         set(FG_ROOM, F_ROOM_12, FALSE);
     }
@@ -1059,8 +1059,8 @@ event on_aot_08_sub1_sub1
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
     }
     do
     {
@@ -1181,14 +1181,14 @@ event on_aot_08_sub1_sub1
     sleep(5);
     se_play_3d(SND_BANK_ROOM, SE_19_FRAME_FA, 0, SND_AT_POINT, 0, 2500, 3200);
     sleep(10);
-    set(FG_6, F_6_1D, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     sleep(10);
     run
     {
         cutcurr(0);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
         objtbl_b_set(0, 0, 129);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }

@@ -278,9 +278,9 @@ event event_00
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         set(FG_ROOM, F_ROOM_19, FALSE);
         set(FG_ROOM, F_ROOM_1A, FALSE);
         aot_delete(AOT_09_NONE, SCE_NONE, SAT_PLAYER);
@@ -371,9 +371,9 @@ event event_00
     {
         aot_delete(AOT_0B_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         set(FG_ROOM, F_ROOM_19, FALSE);
         aot_delete(AOT_0D_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         set(FG_ROOM, F_ROOM_1D, TRUE);
@@ -385,9 +385,9 @@ event event_01
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         set(FG_ROOM, F_ROOM_1D, FALSE);
         aot_delete(AOT_0A_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
     }
@@ -425,9 +425,9 @@ event event_01
     {
         aot_delete(AOT_0C_6, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         set(FG_ROOM, F_ROOM_19, FALSE);
         set(FG_ROOM, F_ROOM_1A, TRUE);
         aot_delete(AOT_0D_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -488,9 +488,9 @@ event on_aot_0e
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -502,7 +502,7 @@ event on_aot_0e
     sleep(15);
     run
     {
-        set(FG_6, F_6_1F, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
         evt_exec(0, TASK_09, on_aot_0e_sub1);
         evt_exec(0, TASK_09, on_aot_0e_sub2);
     }
@@ -521,9 +521,9 @@ event on_aot_0e
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         setw(W_LIGHT_DELTA, 0, 0);
         if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 0))
         {
@@ -575,9 +575,9 @@ event on_enter
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
     }
     se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_PLAYER, 0, 0, 0);
     run
@@ -589,9 +589,9 @@ event on_enter
     sleep(110);
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         setw(W_LIGHT_DELTA, 0, 0);
         setw(W_LIGHT_STATE, 0, 0);
     }
@@ -642,8 +642,8 @@ event from_main_3
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1F, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
     }
     sleep(10);
     run
@@ -664,8 +664,8 @@ event from_main_3
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1F, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
         bgm_restore(0);
         set(FG_ROOM, F_ROOM_1B, TRUE);
         set(FG_ROOM, F_ROOM_1A, TRUE);

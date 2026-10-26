@@ -34,7 +34,7 @@ event on_enter
     evt_next();
     evt_nop();
     bgm_play(BGM_SUB_1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     for (120)
     {
         spd_add(216);
@@ -82,7 +82,7 @@ event on_enter
             setb(B_CHARACTER_MODEL, 1, 0);
         }
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -92,7 +92,7 @@ event on_enter_2
     evt_next();
     evt_nop();
     bgm_play(BGM_SUB_1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     for (10)
     {
         spd_add(1);
@@ -140,7 +140,7 @@ event on_enter_2
             setb(B_CHARACTER_MODEL, 5, 0);
         }
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

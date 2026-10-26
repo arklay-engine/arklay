@@ -103,7 +103,7 @@ proc main
 event on_aot_01
 {
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 0); // "There's a switch. Will you push it? ...Nothing important."
     do
     {
@@ -200,7 +200,7 @@ event on_enter
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -210,7 +210,7 @@ event on_aot_02
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         if (ck(FG_COMMON, F_COMMON_44, FALSE))
         {
             cutnext(CAM_07);
@@ -246,7 +246,7 @@ event on_aot_02_sub1
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -278,14 +278,14 @@ event on_aot_02_sub2_sub1
 {
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_05_ITEM, SCE_ITEM, 0);
     }
     evt_next();
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     sleep(1);
     evt_chain(8);
@@ -309,7 +309,7 @@ event on_aot_02_sub2_sub2
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

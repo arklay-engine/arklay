@@ -155,7 +155,7 @@ event on_aot_03
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         bgm_stop(BGM_MAIN);
     }
@@ -211,7 +211,7 @@ event on_aot_03
     sleep(20);
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cutnext(CAM_02);
         cut_auto(0);
     }
@@ -228,7 +228,7 @@ event on_aot_03_2
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
@@ -246,7 +246,7 @@ event on_aot_03_2
     wait_message();
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -267,7 +267,7 @@ event event_04
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
@@ -280,7 +280,7 @@ event event_04
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -290,7 +290,7 @@ event on_enter_2
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_42, TRUE);
         set(FG_COMMON, F_COMMON_0A, TRUE);
@@ -1081,10 +1081,10 @@ event event_22
     act_reset();
     evt_nop();
     give_item(AOT_01_ITEM, 4, 129);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_next();
     evt_nop();
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     evt_chain(37);
     evt_finish();
 }
@@ -1113,7 +1113,7 @@ event event_23
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, FALSE);
     sleep(10);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     run
     {
         aot_set(AOT_03_EVENT, 23400, 20400, 1100, 1400, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03_2, 0, 0, 0);

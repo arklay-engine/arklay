@@ -122,7 +122,7 @@ event on_aot_05
         set(FG_STATUS, F_STATUS_0F, TRUE);
         bgm_restore(0);
         dir_set(0, 0, 304, 0, 2276, 0, 3481);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cutnext(CAM_02);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -156,7 +156,7 @@ event on_aot_05
         eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, 39);
         cutnext(CAM_02);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #if CHRIS
         set(FG_COMMON, F_COMMON_21, TRUE);
 #endif
@@ -189,7 +189,7 @@ event from_main
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, from_main_sub1);
         voice_play(VOICE_PLAY, VO_00C_00, 0);
         message(MSG_VO_00C_00, 0);
@@ -211,7 +211,7 @@ event from_main
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -261,7 +261,7 @@ event from_main_2
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, from_main_2_sub1);
         voice_play(VOICE_PLAY, VO_00C_20, 0);
         message(MSG_VO_00C_20, 0);
@@ -282,7 +282,7 @@ event from_main_2
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

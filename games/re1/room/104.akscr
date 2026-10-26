@@ -194,8 +194,8 @@ event on_aot_04
     run
     {
         cutnext(CAM_05);
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
         message(MSG_HE_IS_KENNETH_FROM_THE_STARS | MSG_FAST, 0); // "He's Kenneth from the ＳＴＡＲＳ Bravo team...! Now he's become a mere shadow of his former self."
     }
     do
@@ -207,8 +207,8 @@ event on_aot_04
     {
         cutnext(CAM_04);
         aot_delete(AOT_04_EVENT, SCE_NONE, SAT_PLAYER);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);

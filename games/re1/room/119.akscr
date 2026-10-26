@@ -103,7 +103,7 @@ proc main
 event on_aot_02
 {
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     message(MSG_THERE_IS_A_SWITCH | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a switch. Will you push it? Nothing uncommon."
     do
     {
@@ -174,7 +174,7 @@ event on_enter
     sleep(1);
     cut_auto(0);
     sleep(1);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -191,7 +191,7 @@ event on_enter_2
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_2_sub1);
         voice_play(VOICE_PLAY, VO_00C_00, 0);
         message(MSG_VO_00C_00, 0);
@@ -213,7 +213,7 @@ event on_enter_2
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -261,7 +261,7 @@ event on_enter_3
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_3_sub1);
         voice_play(VOICE_PLAY, VO_00C_20, 0);
         message(MSG_VO_00C_20, 0);
@@ -278,7 +278,7 @@ event on_enter_3
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

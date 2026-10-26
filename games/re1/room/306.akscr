@@ -133,7 +133,7 @@ event on_enter
 
 event from_main
 {
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(2);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
@@ -194,7 +194,7 @@ event from_main
         dir_set(0, 0, 3072, 0, 5900, 0, 10000);
         cutnext(CAM_00);
         set(FG_STATUS, F_STATUS_11, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_3E, FALSE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
@@ -658,7 +658,7 @@ event event_07
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         message(MSG_I_CANNOT_USE_THE_CRANK_BECAUSE | MSG_FAST, 0); // "I can't use the crank because of the statue."
     }
     do
@@ -666,7 +666,7 @@ event event_07
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();

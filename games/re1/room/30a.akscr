@@ -175,7 +175,7 @@ event on_aot_02
     run
     {
         set(FG_COMMON, F_COMMON_48, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(CAM_03);
         dir_set(0, 0, 3480, 0, 13220, 0, 4450);
@@ -489,7 +489,7 @@ event on_aot_02_sub1
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -512,7 +512,7 @@ event on_aot_02_sub2
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_48, TRUE);
     }
@@ -1130,7 +1130,7 @@ event on_aot_02_sub2
 #endif
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #if JILL
         aot_set(AOT_02_EVENT, 11000, 14000, 1500, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02_2, 0, 0, 0);
 #endif
@@ -1266,15 +1266,15 @@ event on_aot_03
 #if CHRIS
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(CAM_05);
     }
 #else
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
@@ -1321,14 +1321,14 @@ event event_08
 {
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_01_ITEM, SCE_ITEM, 0);
     }
     evt_next();
     evt_nop();
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cutnext(CAM_04);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -1355,9 +1355,9 @@ event event_08
         }
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #if CHRIS
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
 #endif
     }
     evt_finish();
@@ -1390,7 +1390,7 @@ event on_aot_02_2
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     sleep(20);
     message(MSG_BARRY_IS_INVESTIGATING | MSG_FAST, 0); // "Barry is investigating..."
@@ -1402,7 +1402,7 @@ event on_aot_02_2
     wait_message();
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

@@ -903,7 +903,7 @@ event on_enter_5
     act_motion_path(147, 0, 0, 0, 192, 64);
     act_reset();
     evt_nop();
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(10);
@@ -1781,7 +1781,7 @@ event on_enter_5
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -1883,7 +1883,7 @@ event on_enter_6
 {
     evt_next();
     evt_nop();
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     do
@@ -2437,7 +2437,7 @@ event on_enter_6
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -2802,7 +2802,7 @@ event on_aot_03_message
 {
     evt_next();
     evt_nop();
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(9);
     cutnext(CAM_05);
     evt_fork(TASK_07, on_enter_5_sub1, 0);
@@ -2943,7 +2943,7 @@ event on_aot_03_message
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
         sys_multi(SYS_07);
         eml_state(0, ENEMY_00, EML_08);

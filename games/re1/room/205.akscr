@@ -175,7 +175,7 @@ proc main
 
 event on_aot_03
 {
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     cutnext(CAM_03);
     sleep(15);
     message(MSG_THERE_IS_A_SWITCH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch. Will you push it? A weird hole opens."
@@ -190,7 +190,7 @@ event on_aot_03
         {
             set(FG_ROOM, F_ROOM_1C, TRUE);
         }
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cutnext(CAM_01);
         cut_auto(0);
     }
@@ -202,7 +202,7 @@ event from_main
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cut_auto(1);
         cutnext(CAM_01);
         set(FG_STATUS, F_STATUS_0F, TRUE);
@@ -268,7 +268,7 @@ event from_main
         set(FG_ROOM, F_ROOM_1E, FALSE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -277,7 +277,7 @@ event from_main_2
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     evt_work_set(WK_PLAYER, 1);
     evt_actor_begin();
@@ -316,10 +316,10 @@ event from_main_2
     act_nop();
     act_reset();
     evt_nop();
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     cut_auto(0);
     sleep(60);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     cut_auto(1);
     se_play_3d(SND_BANK_PLAYER, SE_PL_02, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_work_set(WK_PLAYER, 1);
@@ -337,11 +337,11 @@ event from_main_2
     sleep(10);
     run
     {
-        if (ck(FG_6, F_6_19, FALSE))
+        if (ck(FG_MESSAGE, F_MESSAGE_READY, FALSE))
         {
-            set(FG_6, F_6_19, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         }
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -377,7 +377,7 @@ event from_main_5
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cut_auto(1);
         set(FG_ROOM, F_ROOM_1A, TRUE);
         timer_setup(1, 200, 0, 6, 0);
@@ -396,12 +396,12 @@ event from_main_5
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     sleep(60);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         se_play_3d(SND_BANK_PLAYER, SE_PL_02, 0, SND_AT_PLAYER, 0, 0, 0);
         cut_auto(1);
     }
@@ -422,9 +422,9 @@ event from_main_5
     {
         if (ck(FG_STATUS, F_STATUS_19, FALSE))
         {
-            set(FG_6, F_6_19, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         }
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();

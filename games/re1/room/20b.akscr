@@ -78,7 +78,7 @@ event from_main
     {
         set(FG_SCENARIO, F_SCENARIO_09, FALSE);
         set(FG_SCENARIO, F_SCENARIO_08, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 1024, 0, 5520, 0, 4535);
     }
@@ -97,7 +97,7 @@ event from_main
         aot_reset(AOT_02_USEITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_02_useitem, 0);
         cutnext(CAM_01);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();

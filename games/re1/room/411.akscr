@@ -122,9 +122,9 @@ event on_aot_01
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         set(FG_ROOM, F_ROOM_1A, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -155,9 +155,9 @@ event on_aot_01
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_19, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
             cutcurr(0);
             cut_auto(0);
         }
@@ -190,9 +190,9 @@ event on_aot_01_sub1
     sleep(60);
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         cutnext(CAM_01);
         cut_auto(0);
         set(FG_SCENARIO, F_SCENARIO_23, TRUE);
@@ -551,9 +551,9 @@ event event_0A
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         message(MSG_THERE_IS_A_BUTTON | MSG_FAST, MSG_PAUSE_PLAYER); // "There's a button. Will you push it? There was a sound from the room next door."
     }
     do
@@ -572,9 +572,9 @@ event event_0A
         }
         else
         {
-            set(FG_6, F_6_17, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_19, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         }
     }
     evt_finish();
@@ -611,9 +611,9 @@ event event_0D
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
     }
     evt_finish();
 }

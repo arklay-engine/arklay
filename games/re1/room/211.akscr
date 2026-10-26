@@ -46,7 +46,7 @@ proc init
 event on_aot_03
 {
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -70,7 +70,7 @@ event on_aot_03
     sleep(30);
     set(FG_ROOM, F_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -83,7 +83,7 @@ event on_aot_03
 event on_aot_03_2
 {
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -107,7 +107,7 @@ event on_aot_03_2
     sleep(30);
     set(FG_ROOM, F_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -120,7 +120,7 @@ event on_aot_03_2
 event on_aot_04
 {
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -144,7 +144,7 @@ event on_aot_04
     sleep(30);
     set(FG_ROOM, F_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();

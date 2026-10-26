@@ -160,7 +160,7 @@ event on_enter_2
     run
     {
         bgm_play(BGM_MAIN);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_AF, TRUE);
         eml_state(0, ENEMY_01_WASP, EML_REVIVE, 65535, 1, 0);
@@ -770,7 +770,7 @@ event on_enter_2
     {
         bgm_stop(BGM_MAIN);
         cutnext(CAM_02);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -791,7 +791,7 @@ event on_enter_3
         room_bgm_state_set(3, ROOM_405_CENTER_PASSAGE, BGM_RELOAD | 1);
 #endif
         bgm_play(BGM_MAIN);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
         set(FG_COMMON, F_COMMON_AB, TRUE);
@@ -1852,7 +1852,7 @@ event on_enter_3
     {
         bgm_stop(BGM_MAIN);
         cutnext(CAM_02);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         room_bgm_state_set(3, ROOM_405_CENTER_PASSAGE, BGM_OFF);
@@ -1871,7 +1871,7 @@ event on_aot_01_door
     run
     {
         bgm_play(BGM_MAIN);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_AE, TRUE);
         message(MSG_VOICES_ARE_HEARD_FROM_THE_OTHER | MSG_FAST, 0); // "Voices are heard from the other side of the door."
@@ -1918,7 +1918,7 @@ event on_aot_01_door
     run
     {
         bgm_stop(BGM_MAIN);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         aot_reset(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         room_bgm_state_set(3, ROOM_405_CENTER_PASSAGE, BGM_OFF);

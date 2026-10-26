@@ -140,7 +140,7 @@ event on_enter
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY_2);
@@ -339,14 +339,14 @@ event on_enter
     act_reset();
     evt_nop();
     sleep(40);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     run
     {
         aot_on(AOT_02_ITEM, SCE_DOCUMENT, 0);
     }
     evt_next();
     evt_nop();
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -368,7 +368,7 @@ event on_enter
         cutnext(CAM_00);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -382,7 +382,7 @@ event on_enter_2
 #endif
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
 #if JILL
@@ -682,14 +682,14 @@ event on_enter_2
     act_reset();
     evt_nop();
     sleep(40);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     run
     {
         aot_on(AOT_02_ITEM, SCE_DOCUMENT, 0);
     }
     evt_next();
     evt_nop();
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_CHRIS);
     evt_actor_begin();
     act_motion_path(49, 300, 0, 0, 20, 0);
@@ -757,12 +757,12 @@ event on_enter_2
 #if CHRIS
         eml_state(0, ENEMY_00_NPC_JILL, EML_08);
 #else
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #endif
     }
 #if CHRIS
     sleep(20);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #endif
     evt_finish();
 }
@@ -783,7 +783,7 @@ event on_enter_3
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(10);
@@ -816,7 +816,7 @@ event on_enter_3
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         eml_state(0, ENEMY_01_NPC_CHRIS, EML_08);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
 #endif
     evt_finish();

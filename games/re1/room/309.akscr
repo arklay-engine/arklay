@@ -89,7 +89,7 @@ event on_aot_02_door
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         if (ck(FG_COMMON, F_COMMON_59, TRUE))
         {
@@ -299,7 +299,7 @@ event on_aot_02_door_sub1
     sleep(10);
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         eml_state(0, ENEMY_00_NPC_BARRY_3, EML_08);
     }
     evt_finish();
@@ -443,7 +443,7 @@ event on_aot_02_door_sub2
     sleep(10);
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_02_DOOR, SCE_DOOR, 0);
     }
     evt_finish();

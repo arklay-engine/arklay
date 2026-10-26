@@ -698,7 +698,7 @@ event on_enter
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     evt_exec(0, 6, on_enter_sub1);
     sleep(30);

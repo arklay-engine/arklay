@@ -119,7 +119,7 @@ event event_00
 {
     run
     {
-        set(FG_6, 23, 1);
+        set(FG_MESSAGE, 23, 1);
     }
     evt_exec(0, 6, event_0A);
     single(10) effect(0, 5, 0, 196, 34, 212, 254, 116);
@@ -205,7 +205,7 @@ off_B:
 .event event_00
     evt_block               15
     evt_block_sub           12
-    set                     FG_6, 23, 1
+    set                     FG_MESSAGE, 23, 1
     set                     FG_STATUS, 15, 0
     end                     0
     evt_block_sub           0

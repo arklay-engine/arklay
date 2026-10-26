@@ -54,9 +54,9 @@ event on_aot_05
 {
     run
     {
-        set(FG_6, F_6_1F, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         message(MSG_A_STRANGE_LOOKING_COSTUME | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A strange looking costume. Will you change your outfit? Just a moment please."
     }
     do
@@ -79,9 +79,9 @@ event on_aot_05
         }
         else
         {
-            set(FG_6, F_6_1F, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_19, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         }
     }
     evt_finish();
@@ -132,9 +132,9 @@ event on_aot_05_sub1
     sleep(40);
     run
     {
-        set(FG_6, F_6_1F, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
     }
     aot_on(AOT_00_DOOR, SCE_DOOR, 129);
     evt_finish();
@@ -155,9 +155,9 @@ event on_aot_04_message
 {
     run
     {
-        set(FG_6, F_6_1F, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         message(MSG_A_DIFFERENT_LOOKING_COSTUME | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A different looking costume. Will you change your outfit? xFFxFFxFFxFFxFFxFFxFFxFF e"
     }
     do
@@ -180,9 +180,9 @@ event on_aot_04_message
         }
         else
         {
-            set(FG_6, F_6_1F, TRUE);
-            set(FG_6, F_6_1D, TRUE);
-            set(FG_6, F_6_19, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         }
     }
     evt_finish();

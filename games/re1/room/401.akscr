@@ -65,7 +65,7 @@ event event_00
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cutnext(CAM_04);
 #if CHRIS
         aot_delete(AOT_05_EVENT, SCE_NONE, 0);
@@ -88,7 +88,7 @@ event event_00
 #endif
         cutcurr(0);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

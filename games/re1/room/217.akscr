@@ -116,7 +116,7 @@ event on_aot_01
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         message(MSG_THERE_IS_A_SWITCH_WILL_YOU_PUSH_IT_05 | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a switch. Will you push it?"
     }
     do
@@ -139,7 +139,7 @@ event on_aot_01
         {
             aot_switch(0, 7, 0);
         }
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -150,7 +150,7 @@ event on_aot_03
     {
         aot_delete(AOT_03_EVENT, SCE_NONE, 0);
         objtbl_b_set(0, 0, 1);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_SCENARIO, F_SCENARIO_68, TRUE);
     }
@@ -163,7 +163,7 @@ event on_aot_03
     {
         cutnext(CAM_04);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         if (ck(FG_SCENARIO, F_SCENARIO_41, FALSE))
         {

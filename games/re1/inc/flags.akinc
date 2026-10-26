@@ -423,16 +423,19 @@
 #define F_STATUS_3E 0x3E
 #define F_STATUS_40 0x40
 
-#define F_6_00 0x00
-#define F_6_17 0x17
-#define F_6_18 0x18
-#define F_6_19 0x19
-#define F_6_1A 0x1A
-#define F_6_1B 0x1B
-#define F_6_1C 0x1C
-#define F_6_1D 0x1D
-#define F_6_1E 0x1E
-#define F_6_1F 0x1F
+// FG_MESSAGE is g_message_flags, the word that gates what runs each frame
+// (a message's pause word clears its bits): bit 0x10+n is mask 0x8000 >> n,
+// and 0x00-0x0F the adjacent backup word.
+#define F_MESSAGE_00 0x00
+#define F_MESSAGE_CONTROLS 0x17
+#define F_MESSAGE_18 0x18
+#define F_MESSAGE_READY 0x19
+#define F_MESSAGE_1A 0x1A
+#define F_MESSAGE_1B 0x1B
+#define F_MESSAGE_EFFECTS 0x1C
+#define F_MESSAGE_MONSTERS 0x1D
+#define F_MESSAGE_ENTITIES 0x1E
+#define F_MESSAGE_PLAYER 0x1F
 
 #define F_ITEM_00 0x00
 #define F_ITEM_01 0x01

@@ -371,7 +371,7 @@ event on_enter
         set(FG_COMMON, F_COMMON_24, TRUE);
     }
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     evt_fork(TASK_09, on_enter_sub1, 0);
     sleep(10);
     voice_play(VOICE_PLAY, VO_004_00, 0);
@@ -443,7 +443,7 @@ event on_aot_01
         aot_reset(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         cutnext(CAM_01);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         dir_set(0, 0, 3400, 0, 3260, 0, 2370);
         pos_set(ENEMY_00_NPC_REBECCA, 0, 2600, 0, 7294, 0, 8200);
     }
@@ -522,7 +522,7 @@ event on_enter
     tw_end();
     evt_nop();
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     sleep(100);
     timer_setup(2, 0, 0, 7, 0);
 #if CHRIS
@@ -577,7 +577,7 @@ event on_enter
     cutnext(CAM_01);
     cut_auto(0);
     set(FG_STATUS, F_STATUS_0F, FALSE);
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     sys_multi(SYS_03, 516);
 #endif
     evt_work_set(WK_PLAYER, 0);
@@ -851,7 +851,7 @@ event on_aot_00_door
         set(FG_COMMON, F_COMMON_2C, TRUE);
         aot_reset(AOT_00_DOOR, SCE_NONE, 0, 0, 0, 0);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     evt_fork(TASK_09, on_aot_00_door_sub3, 0);
     evt_fork(TASK_09, on_aot_00_door_sub4, 0);
@@ -861,7 +861,7 @@ event on_aot_00_door
     voice_play(VOICE_PLAY, VO_004_0B, 0);
     message(MSG_VO_004_0B, 0);
     wait_message();
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     message(MSG_WILL_YOU_TAKE_REBECCA_WITH_YOU, 0); // "Will you take Rebecca with you?"
     do
     {
@@ -1092,7 +1092,7 @@ event event_14
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -1119,7 +1119,7 @@ event on_aot_01_2
         aot_reset(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         cutnext(CAM_01);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         dir_set(0, 0, 3400, 0, 3260, 0, 2370);
         pos_set(ENEMY_00_NPC_REBECCA, 0, 2600, 0, 7294, 0, 8200);
     }
@@ -1331,7 +1331,7 @@ event on_aot_01_2_sub3
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -1691,7 +1691,7 @@ event on_aot_01_3
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         if (ck(FG_COMMON, F_COMMON_22, TRUE))
         {
@@ -1707,7 +1707,7 @@ event on_aot_01_3
         }
     }
     wait_message();
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     set(FG_STATUS, F_STATUS_0F, FALSE);
     evt_finish();
 }
@@ -1792,14 +1792,14 @@ event on_aot_01_4
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         evt_exec(0, TASK_09, on_aot_01_4_sub1);
         voice_play(VOICE_PLAY, VO_004_09, 0);
         message(MSG_VO_004_09, 0);
     }
     wait_message();
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     set(FG_STATUS, F_STATUS_0F, FALSE);
     evt_finish();
 }
@@ -1843,14 +1843,14 @@ event on_aot_02
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         evt_exec(0, TASK_09, on_aot_02_sub1);
         voice_play(VOICE_PLAY, VO_007_0E, 0);
         message(MSG_VO_007_0E, 0);
     }
     wait_message();
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     set(FG_STATUS, F_STATUS_0F, FALSE);
     evt_finish();
 }
@@ -2012,8 +2012,8 @@ event on_enter
 {
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
-    set(FG_6, F_6_1D, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
     voice_play(VOICE_PLAY, VO_A00_00, 0);
     wait_message();
     evt_fork(TASK_09, on_enter_sub1, 0);
@@ -2022,8 +2022,8 @@ event on_enter
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_finish();
 }
@@ -2043,7 +2043,7 @@ event on_enter_2
 {
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     evt_fork(TASK_09, on_enter_2_sub1, 0);
     sleep(40);
     pos_set(ENEMY_00_NPC_REBECCA, 0, 1853, 0, 8062, 0, 7898);
@@ -2097,7 +2097,7 @@ event on_enter_2
     {
         aot_set(AOT_0A_EVENT, 7562, 7398, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0a, 0, 0, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -2305,13 +2305,13 @@ event on_enter_2_sub12
 
 event on_aot_0a
 {
-    set(FG_6, F_6_17, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     evt_fork(TASK_09, on_aot_0a_sub1, 0);
     voice_play(VOICE_PLAY, VO_007_0D_63, 0);
     message(MSG_VO_007_0D_63, 0);
     wait_message();
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     set(FG_STATUS, F_STATUS_0F, FALSE);
     evt_finish();
 }

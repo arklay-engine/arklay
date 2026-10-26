@@ -271,7 +271,7 @@ proc main
             if (ck(FG_COMMON, F_COMMON_62, FALSE) && ck(FG_COMMON, F_COMMON_63, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
             {
                 set(FG_COMMON, F_COMMON_62, TRUE);
-                set(FG_6, F_6_17, FALSE);
+                set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
                 set(FG_STATUS, F_STATUS_0F, TRUE);
                 set(FG_COMMON, F_COMMON_2D, TRUE);
                 cut_auto(1);
@@ -282,7 +282,7 @@ proc main
             if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_63, TRUE) && ck(FG_COMMON, F_COMMON_64, FALSE))
             {
                 set(FG_COMMON, F_COMMON_61, TRUE);
-                set(FG_6, F_6_17, FALSE);
+                set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
                 set(FG_STATUS, F_STATUS_0F, TRUE);
                 cut_auto(1);
                 cutnext(CAM_05);
@@ -302,8 +302,8 @@ proc main
     }
     if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_03, TRUE))
     {
-        set(FG_6, F_6_18, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_18, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
     }
     if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_02, TRUE))
     {
@@ -591,7 +591,7 @@ event from_main
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
         setw(W_04, 0, 0);
     }
@@ -883,7 +883,7 @@ event from_main_2
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -895,7 +895,7 @@ event on_aot_04
     {
         cut_auto(1);
         cutnext(CAM_04);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
@@ -940,7 +940,7 @@ event on_aot_04
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
         aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
     }
@@ -953,7 +953,7 @@ event on_aot_04_2
     {
         cut_auto(1);
         cutnext(CAM_04);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
@@ -1049,7 +1049,7 @@ event on_aot_04_2
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -1060,7 +1060,7 @@ event on_aot_04_3
     {
         cut_auto(1);
         cutnext(CAM_04);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
@@ -1139,7 +1139,7 @@ event on_aot_04_3
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_COMMON, F_COMMON_65, TRUE);
     }
     evt_finish();
@@ -1294,7 +1294,7 @@ proc main
             if (ck(FG_COMMON, F_COMMON_62, FALSE) && ck(FG_COMMON, F_COMMON_63, FALSE) && ck(FG_COMMON, F_COMMON_64, FALSE))
             {
                 set(FG_COMMON, F_COMMON_62, TRUE);
-                set(FG_6, F_6_17, FALSE);
+                set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
                 set(FG_STATUS, F_STATUS_0F, TRUE);
                 set(FG_COMMON, F_COMMON_23, TRUE);
                 cut_auto(1);
@@ -1305,7 +1305,7 @@ proc main
             if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_63, TRUE) && ck(FG_COMMON, F_COMMON_64, FALSE))
             {
                 set(FG_COMMON, F_COMMON_61, TRUE);
-                set(FG_6, F_6_17, FALSE);
+                set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
                 set(FG_STATUS, F_STATUS_0F, TRUE);
                 cut_auto(1);
                 cutnext(CAM_05);
@@ -1587,7 +1587,7 @@ event from_main_2
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
         setw(W_04, 0, 0);
     }
@@ -1733,7 +1733,7 @@ event from_main_3
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cutnext(CAM_03);
         cut_auto(0);
     }
@@ -2012,7 +2012,7 @@ event on_aot_04
     {
         cut_auto(1);
         cutnext(CAM_04);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
@@ -2061,7 +2061,7 @@ event on_aot_04
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
         aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
     }
@@ -2102,7 +2102,7 @@ event on_aot_04_2
     {
         cut_auto(1);
         cutnext(CAM_04);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
@@ -2147,7 +2147,7 @@ event on_aot_04_2
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
         aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
     }
@@ -2160,7 +2160,7 @@ event on_aot_04_3
     {
         cut_auto(1);
         cutnext(CAM_05);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
@@ -2200,7 +2200,7 @@ event on_aot_04_3
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -2211,7 +2211,7 @@ event on_aot_04_4
     {
         cut_auto(1);
         cutnext(CAM_04);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 3465, 0, 8000, 0, 2440);
     }
@@ -2256,7 +2256,7 @@ event on_aot_04_4
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_UNDER | SAT_PLAYER, 1, 0, 0);
         aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
     }

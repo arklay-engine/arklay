@@ -448,7 +448,7 @@ event from_main
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         evt_exec(0, TASK_09, from_main_sub1);
         se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
@@ -525,7 +525,7 @@ event from_main_2
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         evt_exec(0, TASK_09, from_main_sub1);
         se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
@@ -591,7 +591,7 @@ event from_main_2
     run
     {
         set(FG_ROOM, F_ROOM_01, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         set(FG_SCENARIO, F_SCENARIO_2F, FALSE);
@@ -607,7 +607,7 @@ event event_03
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         aot_delete(AOT_01_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         message(MSG_THERE_IS_A_SQUARE_HOLE, 0); // "There's a square hole."
     }
@@ -620,7 +620,7 @@ event event_03
     {
         aot_delete(AOT_04_USEITEM, SCE_USEITEM, SAT_PLAYER);
         aot_delete(AOT_05_USEITEM, SCE_USEITEM, SAT_PLAYER);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1054,7 +1054,7 @@ event on_aot_07
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_aot_07_sub1);
         evt_exec(0, TASK_09, on_aot_07_sub2);
         se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_POINT, 0, 3000, 11300);
@@ -1068,7 +1068,7 @@ event on_aot_07
         setw(W_LIGHT_DELTA, 0, 0);
         aot_on(AOT_01_DOOR, SCE_DOOR, 129);
         set(FG_SCENARIO, F_SCENARIO_30, TRUE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -1111,7 +1111,7 @@ event on_enter_2
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_2_sub1);
         evt_exec(0, TASK_09, on_enter_2_sub2);
         se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_POINT, 0, 3000, 11300);
@@ -1120,7 +1120,7 @@ event on_enter_2
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -1716,7 +1716,7 @@ event from_main_sub2
     {
         aot_reset(AOT_02_C, SCE_C, SAT_MANUAL | SAT_PLAYER, 1, 22250, 11223);
         aot_reset(AOT_03_C, SCE_C, SAT_MANUAL | SAT_PLAYER, 0, 22250, 25146);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         set(FG_SCENARIO, F_SCENARIO_2F, TRUE);
@@ -1740,7 +1740,7 @@ event from_main_sub3
         dir_set(0, 0, 3072, 0, 12700, 0, 16700);
         aot_reset(AOT_02_C, SCE_C, SAT_MANUAL | SAT_PLAYER, 1, 22250, 11223);
         aot_reset(AOT_03_C, SCE_C, SAT_MANUAL | SAT_PLAYER, 0, 22250, 25146);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         set(FG_SCENARIO, F_SCENARIO_2F, TRUE);

@@ -118,8 +118,8 @@ event event_02
     run
     {
         aot_delete(AOT_03_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
         cutnext(CAM_01);
     }
     evt_next();
@@ -131,7 +131,7 @@ event event_02
     }
     evt_next();
     evt_nop();
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     do
     {
         evt_next();
@@ -139,7 +139,7 @@ event event_02
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_ROOM, F_ROOM_18, TRUE);
         require(cmpb(B_MENU_CHOICE, CMP_EQ, 0));
         set(FG_ROOM, F_ROOM_19, TRUE);
@@ -189,8 +189,8 @@ event from_main_2
     run
     {
         set(FG_ROOM, F_ROOM_1A, TRUE);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         cut_auto(0);
     }
     sleep(3);
@@ -207,8 +207,8 @@ event from_main_3
     run
     {
         set(FG_ROOM, F_ROOM_1A, TRUE);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_19, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
         cut_auto(0);
     }
     sleep(3);

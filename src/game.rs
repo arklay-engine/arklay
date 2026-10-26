@@ -3375,7 +3375,7 @@ pub struct GameState {
     /// `g_message_flags` that the SCD bank-6 dword view addresses with
     /// selectors 0..=15 (see [`message_bank_selector`]). The port's menu flow
     /// does not back up and restore through it yet, so it only holds what the
-    /// scripts' `set FG_6, 0, ..` sites write.
+    /// scripts' `set FG_MESSAGE, 0, ..` sites write.
     short_message_flags: u16,
     /// Message state.
     pub message: MessageWindow,

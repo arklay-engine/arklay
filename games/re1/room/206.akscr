@@ -159,7 +159,7 @@ event from_main
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_ROOM, F_ROOM_02, TRUE);
         cut_auto(1);
@@ -204,7 +204,7 @@ event from_main
     {
         cutnext(CAM_00);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_ROOM, F_ROOM_02, FALSE);
     }
@@ -260,7 +260,7 @@ event from_main_2
     sleep(25);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_6D, TRUE);
         bgm_volume_ramp(BGM_MAIN, 161, 30);
@@ -317,7 +317,7 @@ event from_main_2
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_ROOM, F_ROOM_02, FALSE);
     }
@@ -466,7 +466,7 @@ event from_main_3
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_ROOM, F_ROOM_02, TRUE);
         cut_auto(1);
@@ -527,7 +527,7 @@ event from_main_3
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_ROOM, F_ROOM_02, FALSE);
         set(FG_COMMON, F_COMMON_C0, TRUE);
@@ -654,7 +654,7 @@ event on_aot_04
         objtbl_b_set(0, 0, 0);
         cut_auto(1);
         cutnext(CAM_05);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_ROOM, F_ROOM_02, TRUE);
         dir_set(0, 0, 2728, 0, 8875, 0, 11549);
@@ -694,7 +694,7 @@ event on_aot_04
         cutnext(CAM_03);
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_ROOM, F_ROOM_02, FALSE);
         pos_set(ENEMY_00_NPC_REBECCA_2, 0, 72, 0, 6947, 0, 12497);
     }

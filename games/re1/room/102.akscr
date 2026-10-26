@@ -62,8 +62,8 @@ event on_enter
 {
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(1);
-    set(FG_6, F_6_17, FALSE);
-    set(FG_6, F_6_1D, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
     voice_play(VOICE_PLAY, VO_A00_00, 0);
     wait_message();
     evt_fork(TASK_09, on_enter_sub1, 0);
@@ -72,8 +72,8 @@ event on_enter
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
     }
     evt_finish();
 }

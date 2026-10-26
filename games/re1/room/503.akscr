@@ -60,7 +60,7 @@ event on_aot_08
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         cutnext(CAM_04);
     }
     sleep(20);
@@ -73,7 +73,7 @@ event on_aot_08
     {
         cutcurr(0);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -82,7 +82,7 @@ event on_aot_01_door
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_POINT, 0, 7300, 13800);
     }
     sleep(20);
@@ -93,7 +93,7 @@ event on_aot_01_door
     wait_message();
     run
     {
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }

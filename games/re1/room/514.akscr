@@ -228,7 +228,7 @@ event on_enter
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         if (ck(FG_COMMON, F_COMMON_C0, FALSE))
         {
@@ -251,7 +251,7 @@ event on_enter
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
 #endif
@@ -1659,7 +1659,7 @@ event on_enter
 #if CHRIS
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
 #else
         if (ck(FG_COMMON, F_COMMON_5B, TRUE))
@@ -1743,7 +1743,7 @@ event on_enter_sub2
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -3020,7 +3020,7 @@ event on_enter_sub3
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
 #if JILL
@@ -3039,7 +3039,7 @@ event on_enter_2
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
 #if JILL
         pos_set(ENEMY_00, 0, 3300, 0, 2950, 0, 3000);
@@ -3751,7 +3751,7 @@ event on_enter_2
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
 #if CHRIS
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
 #else
@@ -3775,7 +3775,7 @@ event on_enter_3
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_4C, TRUE);
         set(FG_SCENARIO, F_SCENARIO_2B, TRUE);
@@ -3944,7 +3944,7 @@ event on_enter_3
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -3962,7 +3962,7 @@ event event_07
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

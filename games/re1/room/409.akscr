@@ -231,10 +231,10 @@ event on_aot_08_message
 {
     run
     {
-        set(FG_6, F_6_1F, FALSE);
-        set(FG_6, F_6_19, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
         message(MSG_WILL_YOU_PUT_WATER_IN_THE | MSG_FAST, 0); // "Will you put water in the empty bottle? There's a UMB.No2. Will you put UMB No.2 in the empty bottle? There's a UMB.No4. Will you put UMB No.4 in the empty bottle? There's UMB No.2. You need a container to obtain it."
     }
     do
@@ -249,10 +249,10 @@ event on_aot_08_message
             remove_item(IT_13_CHEMICAL_EMPTY_BOTTLE);
             give_item(AOT_05_ITEM, 4, 0);
         }
-        set(FG_6, F_6_1F, TRUE);
-        set(FG_6, F_6_19, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -261,10 +261,10 @@ event on_aot_0b_message
 {
     run
     {
-        set(FG_6, F_6_1F, FALSE);
-        set(FG_6, F_6_19, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
         message(MSG_THERE_IS_A_UMBNO2_WILL_YOU_PUT_UMB_NO2_IN | MSG_FAST, 0); // "There's a UMB.No2. Will you put UMB No.2 in the empty bottle? There's a UMB.No4. Will you put UMB No.4 in the empty bottle? There's UMB No.2. You need a container to obtain it."
     }
     do
@@ -279,10 +279,10 @@ event on_aot_0b_message
             remove_item(IT_13_CHEMICAL_EMPTY_BOTTLE);
             give_item(AOT_06_ITEM, 4, 0);
         }
-        set(FG_6, F_6_1F, TRUE);
-        set(FG_6, F_6_19, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -291,10 +291,10 @@ event on_aot_0c_message
 {
     run
     {
-        set(FG_6, F_6_1F, FALSE);
-        set(FG_6, F_6_19, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_1C, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
         message(MSG_THERE_IS_A_UMBNO4_WILL_YOU_PUT_UMB_NO4_IN | MSG_FAST, 0); // "There's a UMB.No4. Will you put UMB No.4 in the empty bottle? There's UMB No.2. You need a container to obtain it."
     }
     do
@@ -309,10 +309,10 @@ event on_aot_0c_message
             remove_item(IT_13_CHEMICAL_EMPTY_BOTTLE);
             give_item(AOT_07_ITEM, 4, 0);
         }
-        set(FG_6, F_6_1F, TRUE);
-        set(FG_6, F_6_19, TRUE);
-        set(FG_6, F_6_1D, TRUE);
-        set(FG_6, F_6_1C, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
     }
     evt_finish();
 }
@@ -322,9 +322,9 @@ event from_main
     run
     {
         set(FG_ROOM, F_ROOM_19, FALSE);
-        set(FG_6, F_6_17, FALSE);
-        set(FG_6, F_6_1D, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -362,9 +362,9 @@ event from_main
             timer_setup(3, 176, 4, 6, 0);
         }
         set(FG_ROOM, F_ROOM_19, FALSE);
-        set(FG_6, F_6_17, TRUE);
-        set(FG_6, F_6_1F, FALSE);
-        set(FG_6, F_6_19, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
     }
     sleep(20);
     setw(W_LIGHT_DELTA, 0, 0);
@@ -376,9 +376,9 @@ event from_main
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_6, F_6_1F, TRUE);
-        set(FG_6, F_6_19, TRUE);
-        set(FG_6, F_6_1D, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
         sys_multi(SYS_08, 320);
     }
     evt_finish();
@@ -423,7 +423,7 @@ event on_aot_0d
     run
     {
         cutnext(CAM_00);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_3B, TRUE);
     }
@@ -559,7 +559,7 @@ event event_0A
         aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_4, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -685,7 +685,7 @@ event on_aot_0d_2
     run
     {
         cutnext(CAM_00);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_fork(TASK_09, on_aot_0d_2_sub3, 0);
@@ -738,7 +738,7 @@ event on_aot_0d_2_sub1
         aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_3, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -756,7 +756,7 @@ event on_aot_0d_2_sub2
         aot_reset(AOT_0D_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_0d_4, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -795,7 +795,7 @@ event on_aot_0d_3
     {
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(CAM_00);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
     }
     evt_fork(TASK_09, on_aot_0d_3_sub1, 0);
     voice_play(VOICE_PLAY, VO_A08_08, 0);
@@ -804,7 +804,7 @@ event on_aot_0d_3
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -815,7 +815,7 @@ event on_aot_0d_4
     run
     {
         cutnext(CAM_00);
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_fork(TASK_09, on_aot_0d_3_sub1, 0);
@@ -825,7 +825,7 @@ event on_aot_0d_4
     run
     {
         cut_auto(0);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();

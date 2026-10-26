@@ -172,7 +172,7 @@ event on_enter
     sleep(1);
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
         set(FG_COMMON, F_COMMON_AC, TRUE);
@@ -298,7 +298,7 @@ event on_enter
 #else
         pos_set(ENEMY_00_NPC_CHRIS, 0, 4056, 0, 0, 0, 0);
 #endif
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -313,7 +313,7 @@ event on_aot_04
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
         cutnext(CAM_04);
         message(MSG_A_PASS_CODE_PANEL | MSG_FAST, 0); // "A pass code panel."
@@ -392,7 +392,7 @@ event on_aot_04
         }
         dir_set(0, 0, 3056, 0, 2280, 0, 4850);
         cutnext(CAM_03);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -406,7 +406,7 @@ event on_aot_04_2
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
         cutnext(CAM_04);
         message(MSG_A_PASS_CODE_PANEL | MSG_FAST, 0); // "A pass code panel."
@@ -426,7 +426,7 @@ event on_aot_04_2
     {
         dir_set(0, 0, 3056, 0, 2280, 0, 4850);
         cutnext(CAM_03);
-        set(FG_6, F_6_17, TRUE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -440,7 +440,7 @@ event on_aot_01_door
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_POINT, 0, 11300, 4850);
         message(MSG_IT_IS_ELECTRONICALLY_LOCKED | MSG_FAST, 0); // "It's electronically locked."
     }
@@ -449,7 +449,7 @@ event on_aot_01_door
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -457,7 +457,7 @@ event on_aot_03_door
 {
     run
     {
-        set(FG_6, F_6_17, FALSE);
+        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
         se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_POINT, 0, 11300, 4850);
         message(MSG_IT_IS_LOCKED_05 | MSG_FAST, 0); // "It's locked."
     }
@@ -466,6 +466,6 @@ event on_aot_03_door
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_6, F_6_17, TRUE);
+    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
     evt_finish();
 }
