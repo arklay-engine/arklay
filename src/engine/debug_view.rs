@@ -551,7 +551,7 @@ fn rasterize(
     mut depth: Option<&mut Vec<f32>>,
 ) {
     let (w, h) = (image.width as i32, image.height as i32);
-    for triangle in triangles.chunks_exact(3) {
+    for triangle in triangles.as_chunks::<3>().0 {
         let p: [[f32; 2]; 3] = std::array::from_fn(|i| {
             [
                 triangle[i].position[0] * scale[0] + x_offset as f32,
