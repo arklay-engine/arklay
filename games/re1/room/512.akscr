@@ -72,7 +72,7 @@ event on_enter
     run
     {
         pos_set(ENEMY_00_NPC_JILL, 0, 0, 0, 5680, 0, 2930);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         if (ck(FG_SCENARIO, F_SCENARIO_65, TRUE))
         {
@@ -88,7 +88,7 @@ event on_enter
     {
         dir_set(0, 0, 1024, 0, 5670, 0, 9200);
     }
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(20);
     run
@@ -359,7 +359,7 @@ event on_enter_sub1
 #endif
         set(FG_STATUS, F_STATUS_0F, FALSE);
 #if CHRIS
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
 #else
         pos_set(ENEMY_00_NPC_CHRIS, 0, 3072, 0, 5700, 0, 6800);
@@ -389,7 +389,7 @@ event on_enter_sub1
     run
     {
         eml_state(0, ENEMY_00_NPC_CHRIS, EML_08);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
 #endif
@@ -668,7 +668,7 @@ event on_enter_sub2
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
 #if CHRIS
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #else
         cutnext(CAM_00);
 #endif
@@ -701,7 +701,7 @@ event on_enter_sub2
     run
     {
         eml_state(0, ENEMY_00_NPC_CHRIS, EML_08);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
 #endif

@@ -60,20 +60,20 @@ event on_aot_08
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_04);
     }
     sleep(20);
     run
     {
-        message(MSG_THERE_IS_A_PLATE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a plate. “Visual Data Room""
+        message(MSG_THERE_IS_A_PLATE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a plate. “Visual Data Room""
     }
     wait_message();
     run
     {
         cutcurr(0);
         cut_auto(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -82,18 +82,18 @@ event on_aot_01_door
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_POINT, 0, 7300, 13800);
     }
     sleep(20);
     run
     {
-        message(MSG_IT_IS_ELECTRONICALLY_LOCKED | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's electronically locked."
+        message(MSG_IT_IS_ELECTRONICALLY_LOCKED | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's electronically locked."
     }
     wait_message();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }

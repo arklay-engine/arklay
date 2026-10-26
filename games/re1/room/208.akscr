@@ -90,7 +90,7 @@ event event_00
 event event_01
 {
     evt_fork(TASK_09, event_03, 0);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_seq(38918, 31752, 6421);
@@ -121,7 +121,7 @@ event event_01
     evt_nop();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         pos_set(ENEMY_00_ZOMBIE_LAB, 0, 1600, 0, 5900, 0, 6100);
         se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6400, 6300);
         eml_state(0, ENEMY_00_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
@@ -134,14 +134,14 @@ event event_01
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 
 event from_main
 {
     sleep(3);
-    set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+    set(FG_RUN, F_RUN_MONSTERS, FALSE);
     evt_finish();
 }
 

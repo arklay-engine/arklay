@@ -221,7 +221,7 @@ event event_00
 #endif
     sleep(1);
 #if JILL
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -286,9 +286,9 @@ event event_00
 #if CHRIS
 #if MANSION2
         bgm_play(BGM_SUB_1);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #if MANSION1
         evt_exec(0, TASK_09, event_02);
 #else
@@ -362,10 +362,10 @@ event event_00
 #else
         set(FG_STATUS, F_STATUS_0F, FALSE);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #if MANSION2
 #if CHRIS
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
 #endif
 #endif
     }
@@ -444,9 +444,9 @@ event on_enter_2
     {
 #if MANSION2
         bgm_play(BGM_SUB_1);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #if MANSION1
         evt_exec(0, TASK_09, event_04);
         voice_play(VOICE_PLAY, VO_007_0D_63, 0);
@@ -482,9 +482,9 @@ event on_enter_2
     {
         dir_set(0, 0, 1194, 0, 5520, 0, 8360);
         cut_auto(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #if MANSION2
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
 #endif
     }
     evt_work_set(WK_PLAYER, 0);

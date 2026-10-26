@@ -142,7 +142,7 @@ proc main
             if (ck(FG_ROOM, F_ROOM_1A, TRUE))
             {
                 cutnext(CAM_01);
-                message(MSG_IT_READS_SOME_TIGERS_HAVE_A | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It reads “Some tigers have a red eye and a blue eye"."
+                message(MSG_IT_READS_SOME_TIGERS_HAVE_A | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It reads “Some tigers have a red eye and a blue eye"."
                 set(FG_ROOM, F_ROOM_19, TRUE);
             }
         }
@@ -158,7 +158,7 @@ proc main
 event from_main
 {
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     bgm_play(BGM_MAIN);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
@@ -243,14 +243,14 @@ event from_main
     tw_end();
     set(FG_ROOM, F_ROOM_18, FALSE);
     cutcurr(0);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     bgm_stop(BGM_MAIN);
     evt_finish();
 }
 
 event from_main_2
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     bgm_play(BGM_MAIN);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
@@ -335,7 +335,7 @@ event from_main_2
     tw_end();
     bgm_stop(BGM_MAIN);
     cutcurr(0);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_next();
     evt_nop();
     set(FG_ROOM, F_ROOM_18, FALSE);
@@ -345,7 +345,7 @@ event from_main_2
 event from_main_3
 {
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     bgm_play(BGM_MAIN);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
@@ -430,14 +430,14 @@ event from_main_3
     tw_end();
     set(FG_ROOM, F_ROOM_18, FALSE);
     cutcurr(0);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     bgm_stop(BGM_MAIN);
     evt_finish();
 }
 
 event from_main_4
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     bgm_play(BGM_MAIN);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
@@ -522,7 +522,7 @@ event from_main_4
     tw_end();
     bgm_stop(BGM_MAIN);
     cutcurr(0);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_next();
     evt_nop();
     set(FG_ROOM, F_ROOM_18, FALSE);

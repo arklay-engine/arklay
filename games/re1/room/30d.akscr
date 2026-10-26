@@ -162,8 +162,8 @@ event from_main
     run
     {
         aot_delete(AOT_05_NONE, SCE_NONE, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     evt_next();
     evt_nop();
@@ -255,8 +255,8 @@ event from_main
         se_play_3d(SND_BANK_ROOM, SE_18_LOCKOUTA, 0, SND_AT_POINT, 0, 1200, 2750);
         set(FG_LOCK, F_LOCK_2F, FALSE);
         cutcurr(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_STATUS, F_STATUS_1A, TRUE);
     }
     evt_finish();
@@ -268,8 +268,8 @@ event from_main_2
     {
         aot_delete(AOT_04_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         se_play_3d(SND_BANK_ROOM, SE_17_HOOKMIX, 0, SND_AT_POINT, 0, 3810, 7180);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
@@ -367,8 +367,8 @@ event from_main_2
         se_play_3d(SND_BANK_ROOM, SE_19_LOCKOUTB, 0, SND_AT_POINT, 0, 1200, 2750);
         set(FG_LOCK, F_LOCK_2F, TRUE);
         cutcurr(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_STATUS, F_STATUS_1A, TRUE);
     }
     evt_work_set(WK_AOT, AOT_00_DOOR);
@@ -482,8 +482,8 @@ event event_03
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
         eml_pos(0, 0, 0, 0, 4, 0, 0, 120, 15, 146, 245, 102, 28);
         cutnext(CAM_04);
     }
@@ -495,8 +495,8 @@ event event_03
     sleep(20);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         setb(B_SELECTED_ITEM, IT_06_WEAPON_FLAMETHROWER, 0);
         swap_var(2, 3, 13);
         set(FG_STATUS, F_STATUS_12, TRUE);
@@ -509,8 +509,8 @@ event event_04
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
         eml_pos(0, 0, 0, 0, 4, 0, 0, 120, 15, 0, 246, 102, 28);
         cutnext(CAM_04);
     }
@@ -522,8 +522,8 @@ event event_04
     sleep(20);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         aot_on(AOT_03_ITEM, SCE_ITEM, 0);
         set(FG_ROOM, F_ROOM_18, TRUE);
     }
@@ -555,7 +555,7 @@ event event_07
 {
     run
     {
-        message(MSG_IT_LOOKS_LIKE_A_HOOK | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It looks like a hook."
+        message(MSG_IT_LOOKS_LIKE_A_HOOK | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It looks like a hook."
         eml_pos(0, 0, 0, 0, 4, 0, 0, 120, 15, 146, 245, 102, 28);
         cutnext(CAM_04);
     }
@@ -567,8 +567,8 @@ event event_07
     run
     {
         eml_pos(0, 0, 0, 0, 4, 0, 0, 228, 12, 214, 247, 26, 29);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         cutcurr(0);
     }
     evt_finish();

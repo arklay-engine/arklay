@@ -65,7 +65,7 @@ event event_00
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_04);
 #if CHRIS
         aot_delete(AOT_05_EVENT, SCE_NONE, 0);
@@ -76,7 +76,7 @@ event event_00
     sleep(1);
     run
     {
-        message(MSG_THERE_IS_A_KEY_IN_THE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a key in the cup."
+        message(MSG_THERE_IS_A_KEY_IN_THE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a key in the cup."
     }
     wait_message();
     run
@@ -88,7 +88,7 @@ event event_00
 #endif
         cutcurr(0);
         cut_auto(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }

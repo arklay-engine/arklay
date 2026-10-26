@@ -143,7 +143,7 @@ proc main
     if (ck(FG_ITEM, F_ITEM_76, FALSE) && ck(FG_ROOM, F_ROOM_1F, TRUE))
     {
         set(FG_ROOM, F_ROOM_1F, FALSE);
-        message(MSG_YOU_GOT_THE_MAP_OF_UNDER | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "You got the map of UNDER GROUND."
+        message(MSG_YOU_GOT_THE_MAP_OF_UNDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of UNDER GROUND."
     }
     if (ck(FG_STATUS, F_STATUS_1A, TRUE))
     {
@@ -345,7 +345,7 @@ event event_00
         set(FG_SCENARIO, F_SCENARIO_4C, TRUE);
         objtbl_b_set(0, 0, 45);
         set(FG_ROOM, F_ROOM_13, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
         aot_delete(AOT_03_EVENT, SCE_NONE, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
         aot_delete(AOT_04_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_05_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
@@ -370,7 +370,7 @@ event event_00
     while (ck(FG_ROOM, F_ROOM_19, FALSE));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_ROOM, F_ROOM_13, FALSE);
         set(FG_ROOM, F_ROOM_11, FALSE);
         aot_delete(AOT_03_EVENT, SCE_EVENT, SAT_MANUAL | SAT_UNDER | SAT_PLAYER);
@@ -1105,7 +1105,7 @@ event event_02
     {
         cutnext(CAM_07);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_ROOM, F_ROOM_1C, TRUE);
         set(FG_ROOM, F_ROOM_0A, TRUE);
         bgm_play(BGM_SUB_1);
@@ -1228,7 +1228,7 @@ event event_02
         set(FG_ROOM, F_ROOM_18, TRUE);
         cutcurr(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_delete(AOT_09_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
         aot_delete(AOT_0E_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
     }
@@ -1393,7 +1393,7 @@ event from_main_4
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     for (4)
@@ -1421,7 +1421,7 @@ event from_main_4
     evt_nop();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_ROOM, F_ROOM_1D, TRUE);
         if (ck(FG_SCENARIO, F_SCENARIO_4A, FALSE))
         {
@@ -1737,7 +1737,7 @@ event from_main_4_sub2
 
 event on_aot_0c
 {
-    message(MSG_IT_IS_A_MAP_OF_UNDER | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's a map of UNDER GROUND. Will you take it? You got the map of UNDER GROUND."
+    message(MSG_IT_IS_A_MAP_OF_UNDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's a map of UNDER GROUND. Will you take it? You got the map of UNDER GROUND."
     do
     {
         evt_next();
@@ -1785,7 +1785,7 @@ event on_aot_03_sub1
 
 event on_aot_03
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_fork(TASK_09, on_aot_03_sub1, 0);
     evt_next();
     evt_nop();
@@ -1844,7 +1844,7 @@ event on_aot_03
             setb(B_CHARACTER_MODEL, 1, 0);
         }
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -1860,7 +1860,7 @@ event on_enter_sub1
     {
         se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_POINT, 0, 24300, 2360);
         se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_POINT, 0, 24300, 2360);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_work_set(WK_OBJ, OBJ_02);
     evt_tween_begin_alt();
@@ -1898,7 +1898,7 @@ event on_enter
     evt_fork(TASK_09, on_enter_sub1, 0);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         dir_set(0, 0, 3072, 0, 24200, -2000, 3650);
         spd_set(0, 48, 248);
     }
@@ -1958,7 +1958,7 @@ event on_enter
     evt_next();
     tw_end();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 

@@ -12687,7 +12687,7 @@ fn tick_room_timed(
     let state = context.game.entities[0].state();
     let mut pad = input;
     // The original's `game_loop` blanking (0x00480e89): outside an action
-    // zone, or while the script's controls latch is clear (`set FG_MESSAGE, 23, 1`
+    // zone, or while the script's controls latch is clear (`set FG_RUN, 23, 1`
     // clears `g_message_flags` bit 0x100), the held and pressed pad words are
     // masked to zero before the player machine, so no direction, run, aim,
     // fire or action input reaches the locomotion, the weapon machine or the

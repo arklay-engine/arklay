@@ -142,7 +142,7 @@ proc main
         else
         {
             set(FG_STATUS, F_STATUS_0F, FALSE);
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
             cut_auto(0);
         }
     }
@@ -197,8 +197,8 @@ proc main
         spd_set(0, 224, 177);
         setb(B_ROOM, ROOM_311, 0);
         evt_exec(0, TASK_07, from_main_6);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_PLAYER, FALSE);
     }
     if (ck(FG_ROOM, F_ROOM_1E, FALSE) && item_ck(IT_0A_WEAPON_ROCKET_LAUNCHER) && ck_item_count(10, 0, 0))
     {
@@ -317,14 +317,14 @@ event from_main
     run
     {
         mass_mask(0, 0, 128);
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_ENTITIES, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_1B, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_1A, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_PLAYER, FALSE);
+        set(FG_RUN, F_RUN_ENTITIES, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_EFFECTS, FALSE);
+        set(FG_RUN, F_RUN_1B, FALSE);
+        set(FG_RUN, F_RUN_1A, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_05);
     }
     sleep(10);
@@ -517,14 +517,14 @@ event from_main
     wait_message();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_ENTITIES, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_1B, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_1A, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_ENTITIES, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_EFFECTS, TRUE);
+        set(FG_RUN, F_RUN_1B, TRUE);
+        set(FG_RUN, F_RUN_1A, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         mass_mask(1, 0, 128);
         cutcurr(0);
@@ -1230,7 +1230,7 @@ event from_main_3_sub3_sub11
 
 event from_main_2
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(0 | 9, 32 | 0, 0 | 0);
@@ -2531,7 +2531,7 @@ event from_main_4
     {
         aot_switch(0, 1, 0);
         aot_switch(0, 2, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         pos_set(ENEMY_00_TYRANT_2, 0, 800, 0, 13873, 0, 24724);
         bank_bit(255);
@@ -2569,7 +2569,7 @@ event from_main_4
     {
         inst_cfg(1, 4, 2, 150, 21, 12, 98, 2, 67, 0, 125);
         set(FG_ROOM, F_ROOM_09, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -2603,14 +2603,14 @@ event from_main_6
     sleep(10);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_EFFECTS, FALSE);
     }
     sleep(20);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_EFFECTS, TRUE);
         effect_clear(0);
     }
     run
@@ -2624,14 +2624,14 @@ event from_main_6
     sleep(10);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_EFFECTS, FALSE);
     }
     sleep(20);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_EFFECTS, TRUE);
         effect_clear(0);
     }
     run

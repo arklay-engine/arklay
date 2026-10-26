@@ -54,10 +54,10 @@ event on_aot_05
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        message(MSG_A_STRANGE_LOOKING_COSTUME | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A strange looking costume. Will you change your outfit? Just a moment please."
+        set(FG_RUN, F_RUN_PLAYER, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        message(MSG_A_STRANGE_LOOKING_COSTUME | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "A strange looking costume. Will you change your outfit? Just a moment please."
     }
     do
     {
@@ -79,9 +79,9 @@ event on_aot_05
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+            set(FG_RUN, F_RUN_PLAYER, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
         }
     }
     evt_finish();
@@ -117,7 +117,7 @@ event on_aot_05_sub1
     sleep(20);
     se_play_3d(SND_BANK_ROOM, SE_1A_ZIPPER1, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(10);
-    message(MSG_JUST_A_MOMENT_PLEASE | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "Just a moment please."
+    message(MSG_JUST_A_MOMENT_PLEASE | MSG_FAST, RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "Just a moment please."
     se_play_3d(SND_BANK_ROOM, SE_18_KIGAE2, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(125);
     se_play_3d(SND_BANK_ROOM, SE_1A_ZIPPER1, 0, SND_AT_PLAYER, 0, 0, 0);
@@ -132,9 +132,9 @@ event on_aot_05_sub1
     sleep(40);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
     }
     aot_on(AOT_00_DOOR, SCE_DOOR, 129);
     evt_finish();
@@ -155,10 +155,10 @@ event on_aot_04_message
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        message(MSG_A_DIFFERENT_LOOKING_COSTUME | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "A different looking costume. Will you change your outfit? xFFxFFxFFxFFxFFxFFxFFxFF e"
+        set(FG_RUN, F_RUN_PLAYER, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        message(MSG_A_DIFFERENT_LOOKING_COSTUME | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "A different looking costume. Will you change your outfit? xFFxFFxFFxFFxFFxFFxFFxFF e"
     }
     do
     {
@@ -180,9 +180,9 @@ event on_aot_04_message
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+            set(FG_RUN, F_RUN_PLAYER, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
         }
     }
     evt_finish();

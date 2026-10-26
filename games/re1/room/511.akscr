@@ -75,10 +75,10 @@ event on_aot_01_message
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        message(MSG_A_POWER_CONNECTION_SWITCH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "A power connection switch. The elevator power is off. Will you connect it? The power isn't supplied to the elevator."
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        message(MSG_A_POWER_CONNECTION_SWITCH | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_ENTITIES); // "A power connection switch. The elevator power is off. Will you connect it? The power isn't supplied to the elevator."
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -102,9 +102,9 @@ event on_aot_01_message
     }
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -113,9 +113,9 @@ event on_aot_01_message_sub1
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     sleep(10);
     se_play_3d(SND_BANK_ROOM, SE_17_PANEL02, 0, SND_AT_PLAYER, 0, 0, 0);
@@ -124,11 +124,11 @@ event on_aot_01_message_sub1
     {
         if (ck(FG_SCENARIO, F_SCENARIO_2E, TRUE))
         {
-            message(MSG_THE_POWER_FOR_THE_ELEVATOR_IS | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "The power for the elevator is activated as the power supply and the circuit have been connected."
+            message(MSG_THE_POWER_FOR_THE_ELEVATOR_IS | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_ENTITIES); // "The power for the elevator is activated as the power supply and the circuit have been connected."
         }
         else
         {
-            message(MSG_THE_POWER_IS_NOT_SUPPLIED_TO | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "The power isn't supplied to the elevator."
+            message(MSG_THE_POWER_IS_NOT_SUPPLIED_TO | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_ENTITIES); // "The power isn't supplied to the elevator."
         }
     }
     do
@@ -138,9 +138,9 @@ event on_aot_01_message_sub1
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }

@@ -76,8 +76,8 @@ event from_main
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
         bgm_stop_all(0);
         movie_on(MOVIE_04_DM4);
     }
@@ -118,9 +118,9 @@ event from_main
         pos_set(ENEMY_01_ZOMBIE_LAB, 0, 1350, 0, 4000, 0, 9800);
         cutnext(CAM_00);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cutcurr(0);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
     }
     sleep(20);
     evt_finish();

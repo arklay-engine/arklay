@@ -94,9 +94,9 @@ event on_aot_02
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -105,7 +105,7 @@ event on_aot_02
     act_reset();
     evt_nop();
     sleep(15);
-    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch. Will you push it? John. ADA..."
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "There's a switch. Will you push it? John. ADA..."
     do
     {
         evt_next();
@@ -129,10 +129,10 @@ event on_aot_02
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+            set(FG_RUN, F_RUN_PLAYER, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
         }
     }
     evt_finish();
@@ -150,10 +150,10 @@ event on_aot_02_sub1
     {
         setw(W_LIGHT_DELTA, 0, 0);
         setw(W_LIGHT_STATE, 16, 39);
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -170,10 +170,10 @@ event on_aot_02_sub2
     {
         setw(W_LIGHT_DELTA, 0, 0);
         setw(W_LIGHT_STATE, 0, 0);
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -182,9 +182,9 @@ event on_aot_03
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -193,7 +193,7 @@ event on_aot_03
     act_reset();
     evt_nop();
     sleep(15);
-    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "There's a switch. Will you push it? John. ADA..."
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "There's a switch. Will you push it? John. ADA..."
     do
     {
         evt_next();
@@ -217,10 +217,10 @@ event on_aot_03
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+            set(FG_RUN, F_RUN_PLAYER, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
         }
     }
     evt_finish();
@@ -260,10 +260,10 @@ event on_aot_03_sub1
     run
     {
         set(FG_ROOM, F_ROOM_1A, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
     }
     evt_finish();
 }
@@ -279,10 +279,10 @@ event on_aot_03_sub2
     }
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
     }
     evt_finish();
 }
@@ -361,7 +361,7 @@ event on_aot_03_sub1_sub2
 event from_main
 {
     sleep(1);
-    message(MSG_JOHN | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "John. ADA..."
+    message(MSG_JOHN | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "John. ADA..."
     do
     {
         evt_next();

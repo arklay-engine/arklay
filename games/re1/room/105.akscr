@@ -550,11 +550,11 @@ event from_main
 #endif
 {
 #if CHRIS
-    message(MSG_THERE_MAY_BE_MORE_HERE_WORTH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There may be more here worth investigating."
+    message(MSG_THERE_MAY_BE_MORE_HERE_WORTH | MSG_FAST, RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There may be more here worth investigating."
 #else
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_exec(0, TASK_06, from_main_sub3);
@@ -586,7 +586,7 @@ event from_main
     evt_nop();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         room_bgm_state_set(0, ROOM_10F_BAR, BGM_RELOAD | 1);
     }
@@ -819,7 +819,7 @@ event from_main_2
     run
     {
         cutcurr(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_COMMON, F_COMMON_A2, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         aot_delete(AOT_10_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
@@ -840,7 +840,7 @@ event on_aot_02
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cut_auto(1);
         set(FG_ROOM, F_ROOM_05, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -894,7 +894,7 @@ event on_aot_03
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cut_auto(1);
         set(FG_ROOM, F_ROOM_05, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -931,7 +931,7 @@ event on_aot_04
     {
         set(FG_ROOM, F_ROOM_08, TRUE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_03);
     }
     evt_next();
@@ -1027,7 +1027,7 @@ event on_aot_04
     aot_reset(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05, 0);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -1037,7 +1037,7 @@ event on_aot_05
 {
     run
     {
-        message(MSG_THERE_MAY_BE_MORE_HERE_WORTH | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There may be more here worth investigating."
+        message(MSG_THERE_MAY_BE_MORE_HERE_WORTH | MSG_FAST, RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There may be more here worth investigating."
         if (ck(FG_COMMON, F_COMMON_A2, TRUE))
         {
             set(FG_ROOM, F_ROOM_08, TRUE);
@@ -1084,7 +1084,7 @@ event from_main_sub3
 event from_main_3
 #endif
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     bgm_stop(BGM_SUB_1);
     sleep(10);
     run
@@ -1116,7 +1116,7 @@ event from_main_3
     run
     {
         cutnext(CAM_03);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_MAIN_ON);
@@ -1164,7 +1164,7 @@ event event_0E
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cut_auto(1);
         aot_delete(AOT_0E_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
@@ -1375,7 +1375,7 @@ event event_0E
         set(FG_COMMON, F_COMMON_B4, TRUE);
         set(FG_COMMON, F_COMMON_02, TRUE);
         set(FG_COMMON, F_COMMON_AD, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         eml_state(0, ENEMY_00_NPC_BARRY, EML_08);
@@ -1393,7 +1393,7 @@ event on_enter_2
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -1718,7 +1718,7 @@ event on_enter_2
         aot_reset(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 6, 0, 0);
         set(FG_ENEMY, F_ENEMY_1C, TRUE);
         set(FG_COMMON, F_COMMON_AD, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         eml_state(0, ENEMY_00_NPC_BARRY, EML_08);
@@ -1838,7 +1838,7 @@ event on_aot_0d
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_06);
         message(MSG_IT_IS_THE_HOLLOW_THAT_AN | MSG_FAST, 0); // "It's the hollow that an emblem was in."
     }
@@ -1850,7 +1850,7 @@ event on_aot_0d
     run
     {
         cutnext(CAM_03);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -1864,7 +1864,7 @@ event on_aot_0d_2
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         message(MSG_AN_EMBLEM_IS_IN_PLACE | MSG_FAST, 0); // "An emblem is in place."
     }
     do
@@ -1874,7 +1874,7 @@ event on_aot_0d_2
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();

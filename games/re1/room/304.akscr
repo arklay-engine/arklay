@@ -129,7 +129,7 @@ event on_enter
 event from_main
 {
     evt_disable(TASK_00);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
@@ -184,7 +184,7 @@ event from_main
     run
     {
         sys_multi(SYS_07);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_STATUS, F_STATUS_11, TRUE);
         aot_reset(AOT_02_USEITEM, SCE_NONE, 0, 0, 0, 0);

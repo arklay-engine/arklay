@@ -125,7 +125,7 @@ event on_enter_3
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(CAM_02);
     }
@@ -175,7 +175,7 @@ event on_enter_3
     sleep(20);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #if CHRIS
         eml_state(0, 1, EML_08);
 #else
@@ -189,7 +189,7 @@ event on_aot_03
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_04);
     }
     sleep(20);
@@ -203,7 +203,7 @@ event on_aot_03
     {
         cutnext(CAM_02);
         cut_auto(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -212,21 +212,21 @@ event event_04
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     sleep(5);
     run
     {
         effect_kill_a(0);
         effect(FX_0A, 24, 0, 160, 15, 184, 242, 122, 43, 0, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
 
 event on_aot_02_door
 {
-    message(MSG_THERE_IS_A_LADDER | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a ladder. Will you descend it? There's no turning back!"
+    message(MSG_THERE_IS_A_LADDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a ladder. Will you descend it? There's no turning back!"
     do
     {
         evt_next();

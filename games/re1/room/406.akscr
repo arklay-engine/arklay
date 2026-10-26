@@ -118,7 +118,7 @@ event on_enter
     run
     {
         set(FG_COMMON, F_COMMON_B2, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 4085, 0, 2800, 0, 3000);
     }
@@ -546,7 +546,7 @@ event on_enter
     run
     {
         bgm_stop(BGM_SUB_1);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         room_bgm_state_set(3, ROOM_406_ROOM_002, BGM_MAIN_ON);
@@ -597,7 +597,7 @@ event on_aot_04
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         message(MSG_A_DORMITORY_SKETCH | MSG_FAST, 0); // "A dormitory sketch. Will you take it? There's a ladder. Will you descend it? There is no time to check it."
     }
     do
@@ -639,7 +639,7 @@ event on_aot_04_sub1
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_SCENARIO, F_SCENARIO_3E, TRUE);
     }
     evt_finish();
@@ -647,7 +647,7 @@ event on_aot_04_sub1
 
 event on_aot_04_sub2
 {
-    single(4) set(FG_MESSAGE, 0, 0);
+    single(4) set(FG_RUN, 0, 0);
     raw(0x17, 0x00, 0xFF, 0x00);
 }
 
@@ -656,7 +656,7 @@ event on_aot_05
     run
     {
         cutnext(CAM_00);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         message(MSG_THERE_IS_A_LADDER | MSG_FAST, 0); // "There's a ladder. Will you descend it? There is no time to check it."
     }
     do
@@ -688,7 +688,7 @@ event on_aot_05_sub1
     run
     {
         door_aot_set(AOT_02_DOOR, 10000, 6400, 5000, 5000, 1, DOOR_SND_0B_LADDER, DOOR_1A_LAD00, 64, 0, ROOM_40D_UNDER_PASSAGE, 3000, 0, 27800, 1024, UNLOCKED, SAT_UNDER | SAT_PLAYER);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -697,7 +697,7 @@ event on_aot_05_sub2
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();

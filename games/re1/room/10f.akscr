@@ -404,7 +404,7 @@ event from_main
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #if CHRIS
         remove_item(IT_23_KEY_MUSIC_SCORE);
         set(FG_COMMON, F_COMMON_A0, TRUE);
@@ -887,7 +887,7 @@ event from_main_2
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         remove_item(IT_23_KEY_MUSIC_SCORE);
         set(FG_COMMON, F_COMMON_A0, TRUE);
         message(MSG_CHRIS_UNFORTUNATELY_CANNOT_READ_MUSIC | MSG_FAST, 0); // "Chris unfortunately can't read music."
@@ -1353,7 +1353,7 @@ event from_main_sub1
     run
     {
         cutnext(CAM_01);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 146, 125, 0);
@@ -1429,7 +1429,7 @@ event from_main_sub2
     run
     {
         cutnext(CAM_01);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 146, 125, 0);
@@ -1449,7 +1449,7 @@ event from_main_2
 {
     se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
     se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 9424, 12173);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(20);
     run
     {
@@ -1475,7 +1475,7 @@ event from_main_2
     run
     {
         cutnext(CAM_04);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -1551,7 +1551,7 @@ event event_05
 event from_main_3
 {
     se_play_3d(SND_BANK_ROOM, SE_1B, 0, SND_AT_POINT, 0, 9424, 12173);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(21);
     run
     {
@@ -1578,7 +1578,7 @@ event from_main_3
     run
     {
         cutnext(CAM_04);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -1611,7 +1611,7 @@ event on_aot_00_door
 {
     aot_delete(AOT_01_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     set(FG_STATUS, F_STATUS_0F, TRUE);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_seq(58374, 27685, 8224);
@@ -1650,7 +1650,7 @@ event on_aot_00_door
     {
         door_aot_set(AOT_03_ITEM, 11600, 760, 5800, 4400, 1, DOOR_SND_00_DR_WD, DOOR_1F_DOOR05K, 5, 0, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, UNLOCKED, SAT_UNDER | SAT_PLAYER);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1687,7 +1687,7 @@ event event_06
         bgm_play(BGM_MAIN);
     }
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     run
     {
@@ -2197,7 +2197,7 @@ event event_06
         remove_item(IT_23_KEY_MUSIC_SCORE);
         set(FG_COMMON, F_COMMON_A5, TRUE);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
 #if CHRIS
@@ -2247,7 +2247,7 @@ event event_07
 #if CHRIS
     se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9424, 12173);
     se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 9424, 12173);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(20);
     run
     {
@@ -2273,14 +2273,14 @@ event event_07
     run
     {
         cutnext(CAM_04);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
 #else
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -2292,7 +2292,7 @@ event event_07
 event from_main_4
 {
     se_play_3d(SND_BANK_ROOM, SE_1B, 0, SND_AT_POINT, 0, 9424, 12173);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(21);
     run
     {
@@ -2319,7 +2319,7 @@ event from_main_4
     run
     {
         cutnext(CAM_04);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -2363,7 +2363,7 @@ event on_aot_0d
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         message(26 | MSG_FAST, 0);
         voice_play(VOICE_PLAY, VO_007_08, 0);
@@ -2384,7 +2384,7 @@ event on_aot_0d
     sleep(10);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -2399,7 +2399,7 @@ event on_aot_0d_2
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         message(27 | MSG_FAST, 0);
         voice_play(VOICE_PLAY, VO_008_01, 0);
@@ -2420,7 +2420,7 @@ event on_aot_0d_2
     sleep(10);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -2435,7 +2435,7 @@ event from_main_6
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         message(MSG_THERE_IS_NO_TIME_TO_PLAY | MSG_FAST, 0); // "There's no time to play the piano!"
     }
     do
@@ -2443,7 +2443,7 @@ event from_main_6
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();

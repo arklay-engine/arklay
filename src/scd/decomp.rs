@@ -210,7 +210,7 @@ pub(super) mod constants {
         "FG_ENEMY",
         "FG_ROOM",
         "FG_STATUS",
-        "FG_MESSAGE",
+        "FG_RUN",
         "FG_ITEM",
         "FG_MAP",
         "FG_9",

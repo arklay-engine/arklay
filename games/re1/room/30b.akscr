@@ -280,7 +280,7 @@ event event_00
     run
     {
         set(FG_SCENARIO, F_SCENARIO_3D, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
         aot_delete(AOT_05_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         aot_delete(AOT_0A_USEITEM, SCE_NONE, SAT_UNDER | SAT_PLAYER);
     }
@@ -309,7 +309,7 @@ event event_00
         msgnode_set(3, 0, 7);
         inst_cfg(0, 5, 0, 0, 0, 0, 0, 2, 0, 2, 0);
         inst_cfg(1, 4, 0, 0, 0, 0, 0, 2, 0, 2, 0);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_SCENARIO, F_SCENARIO_62, TRUE);
         set(FG_ROOM, F_ROOM_17, TRUE);
         aot_delete(AOT_0B_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
@@ -940,7 +940,7 @@ event event_02
     {
         cutnext(CAM_04);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_ROOM, F_ROOM_1C, TRUE);
         set(FG_ROOM, F_ROOM_0A, TRUE);
         bgm_play(BGM_SUB_1);
@@ -1054,7 +1054,7 @@ event event_02
         set(FG_ROOM, F_ROOM_18, TRUE);
         cutcurr(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_delete(AOT_06_NONE, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
         aot_delete(AOT_07_NONE, SCE_USEITEM, SAT_UNDER | SAT_PLAYER);
         aot_delete(AOT_09_NONE, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
@@ -1174,7 +1174,7 @@ event event_06
         aot_delete(AOT_09_NONE, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         dir_set(0, 0, 900, 0, 21600, 0, 18300);
         cutnext(CAM_00);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_next();
@@ -1224,7 +1224,7 @@ event event_06
     act_reset();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_ROOM, F_ROOM_21, FALSE);
         bgm_play(BGM_SUB_2);
@@ -1727,7 +1727,7 @@ event from_main_7
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         se_play_3d(SND_BANK_DOOR, SE_DOOR_00, 0, SND_AT_POINT, 0, 23000, 20000);
         pos_set(ENEMY_00_HUNTER, 0, 1300, 0, 23200, 0, 17800);
@@ -1744,7 +1744,7 @@ event from_main_7
     {
         cutcurr(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }

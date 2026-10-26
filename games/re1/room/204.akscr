@@ -140,8 +140,8 @@ proc main
     }
     if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_01, TRUE))
     {
-        set(FG_MESSAGE, F_MESSAGE_18, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_18, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
     }
     if (ck(FG_STATUS, F_STATUS_16, FALSE) && ck(FG_ROOM, F_ROOM_00, TRUE))
     {

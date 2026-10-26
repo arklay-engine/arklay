@@ -214,7 +214,7 @@ event from_main
 event from_main_2
 {
     evt_disable(TASK_00);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
@@ -314,7 +314,7 @@ event from_main_2
     run
     {
         sys_multi(SYS_07);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_STATUS, F_STATUS_11, TRUE);
         aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
@@ -327,7 +327,7 @@ event from_main_2
 
 event on_aot_04_item
 {
-    message(MSG_IT_IS_A_MAP_OF_GARDEN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's a map of GARDEN. Will you take it? You got the map of GARDEN."
+    message(MSG_IT_IS_A_MAP_OF_GARDEN | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's a map of GARDEN. Will you take it? You got the map of GARDEN."
     do
     {
         evt_next();
@@ -352,7 +352,7 @@ event on_aot_04_item_sub1
     }
     evt_next();
     evt_nop();
-    message(MSG_YOU_GOT_THE_MAP_OF_GARDEN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "You got the map of GARDEN."
+    message(MSG_YOU_GOT_THE_MAP_OF_GARDEN | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of GARDEN."
     evt_finish();
 }
 
@@ -360,7 +360,7 @@ event on_aot_05
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         sys_multi(SYS_01, 128);
         se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_PLAYER, 0, 0, 0);
     }
@@ -371,7 +371,7 @@ event on_aot_05
     sleep(15);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
+        set(FG_RUN, F_RUN_PLAYER, FALSE);
         evt_exec(0, TASK_04, on_aot_05_sub1);
         evt_exec(0, TASK_05, on_aot_05_sub2);
     }
@@ -388,8 +388,8 @@ event on_aot_05
     }
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_SCENARIO, F_SCENARIO_31, FALSE);
         setw(W_LIGHT_DELTA, 0, 0);
         aot_on(AOT_01_DOOR, SCE_DOOR, 129);
@@ -435,7 +435,7 @@ event on_enter
     evt_nop();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         sys_multi(SYS_01, 128);
     }
     se_play_3d(SND_BANK_ROOM, SE_22_ELV2, 0, SND_AT_PLAYER, 0, 0, 0);
@@ -448,8 +448,8 @@ event on_enter
     sleep(130);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         setw(W_LIGHT_DELTA, 0, 0);
         setw(W_LIGHT_STATE, 0, 0);
         sys_multi(SYS_07);

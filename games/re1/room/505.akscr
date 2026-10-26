@@ -161,8 +161,8 @@ event event_00
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     set(FG_STATUS, F_STATUS_0F, TRUE);
     run
@@ -230,8 +230,8 @@ event event_00
     run
     {
         room_bgm_state_set(4, ROOM_505_O_PASSAGE, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
     }
     evt_finish();
 }
@@ -240,8 +240,8 @@ event on_aot_06
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -249,7 +249,7 @@ event on_aot_06
     act_reset();
     evt_nop();
     sleep(25);
-    message(MSG_IT_IS_TOO_DARK_TO_SEE, MSG_PAUSE_8000 | MSG_PAUSE_4000 | MSG_PAUSE_2000 | MSG_PAUSE_1000 | MSG_PAUSE_0800 | MSG_PAUSE_0400 | MSG_PAUSE_DEMO | MSG_PAUSE_CONTROLS | MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dark to see anything..."
+    message(MSG_IT_IS_TOO_DARK_TO_SEE, RUN_8000 | RUN_4000 | RUN_2000 | RUN_1000 | RUN_0800 | RUN_0400 | RUN_DEMO | RUN_CONTROLS | RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's too dark to see anything..."
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -266,8 +266,8 @@ event on_aot_06
     evt_nop();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
     }
     evt_finish();
 }

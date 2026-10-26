@@ -370,7 +370,7 @@ event on_aot_03
     evt_fork(TASK_09, on_aot_03_sub1, 0);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_26, TRUE);
         aot_reset(AOT_03_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
@@ -378,10 +378,10 @@ event on_aot_03
 #endif
     sleep(26);
 #if CHRIS
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-    message(MSG_IT_IS_TOO_DARK_TO_SEEWILL | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dark to see.Will you jump down? There's a rope. Will you descend it?"
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    message(MSG_IT_IS_TOO_DARK_TO_SEEWILL | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's too dark to see.Will you jump down? There's a rope. Will you descend it?"
 #else
-    message(MSG_IT_IS_TOO_DARK_TO_SEE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dark to see anything."
+    message(MSG_IT_IS_TOO_DARK_TO_SEE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's too dark to see anything."
 #endif
     do
     {
@@ -467,7 +467,7 @@ event on_aot_02
     run
     {
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_fork(TASK_09, on_aot_02_sub1, 0);
     sleep(100);
@@ -703,7 +703,7 @@ event from_main
     run
     {
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
 #if CHRIS
     evt_fork(TASK_09, on_aot_03_sub2, 0);
@@ -711,7 +711,7 @@ event from_main
     evt_fork(TASK_09, on_aot_03_sub1, 0);
 #endif
     sleep(40);
-    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
@@ -756,7 +756,7 @@ event on_aot_09_sub1
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -922,11 +922,11 @@ event on_aot_03_sub8
     sleep(30);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         give_item(AOT_07_ITEM, 4, 129);
     }
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     evt_fork(TASK_09, on_aot_03_sub8_sub3, 0);
     voice_play(VOICE_PLAY, VO_10D_07, 0);
@@ -1448,8 +1448,8 @@ event from_main_2_sub14
 
 event on_aot_09
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-    message(MSG_THERE_IS_A_ROPE_WILL_YOU_CLIMB_IT | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a rope. Will you climb it? There's a ladder. Will you descend it? A hole opens in the fireplace."
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    message(MSG_THERE_IS_A_ROPE_WILL_YOU_CLIMB_IT | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a rope. Will you climb it? There's a ladder. Will you descend it? A hole opens in the fireplace."
     do
     {
         evt_next();
@@ -1489,8 +1489,8 @@ event on_aot_09_sub2
 
 event on_aot_03_2
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-    message(MSG_THERE_IS_A_ROPE_WILL_YOU_DESCEND_IT | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a rope. Will you descend it?"
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    message(MSG_THERE_IS_A_ROPE_WILL_YOU_DESCEND_IT | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a rope. Will you descend it?"
     do
     {
         evt_next();
@@ -1534,7 +1534,7 @@ event from_main_2
     {
         aot_delete(AOT_09_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         set(FG_COMMON, F_COMMON_25, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         pos_set(ENEMY_0F_NPC_BARRY_2_STARS, 0, 1184, 0, 9578, 0, 16571);
     }
@@ -1619,10 +1619,10 @@ event from_main_2
     message(MSG_VO_10D_18, 0);
     wait_message();
     sleep(30);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     aot_on(AOT_08_ITEM, SCE_DOCUMENT, 0);
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_fork(TASK_09, from_main_2_sub12, 0);
     voice_play(VOICE_PLAY, VO_10D_19, 0);
     message(MSG_VO_10D_19, 0);
@@ -1669,8 +1669,8 @@ event on_aot_0a
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        message(MSG_THERE_IS_A_LADDER | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a ladder. Will you descend it? A hole opens in the fireplace."
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        message(MSG_THERE_IS_A_LADDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a ladder. Will you descend it? A hole opens in the fireplace."
     }
     do
     {
@@ -1682,11 +1682,11 @@ event on_aot_0a
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             aot_on(AOT_01_DOOR, SCE_DOOR, 0);
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
     }
     evt_finish();

@@ -283,7 +283,7 @@ proc main
             {
                 set(FG_ROOM, F_ROOM_02, FALSE);
                 set(FG_ROOM, F_ROOM_01, TRUE);
-                message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dangerous to go outside!"
+                message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's too dangerous to go outside!"
                 set(FG_ROOM, F_ROOM_01, FALSE);
             }
         }
@@ -436,7 +436,7 @@ proc main
         {
             set(FG_ROOM, F_ROOM_02, FALSE);
             set(FG_ROOM, F_ROOM_01, TRUE);
-            message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too dangerous to go outside!"
+            message(MSG_IT_IS_TOO_DANGEROUS_TO_GO | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's too dangerous to go outside!"
             set(FG_ROOM, F_ROOM_01, FALSE);
         }
     }
@@ -452,7 +452,7 @@ event on_enter
 {
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #if CHRIS
     evt_fork(TASK_01, on_enter_sub1, 0);
     evt_fork(TASK_02, on_enter_sub2, 0);
@@ -1392,7 +1392,7 @@ event on_enter
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
 #endif
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -1455,7 +1455,7 @@ event on_enter_2
 #if JILL
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
 #endif
@@ -1543,7 +1543,7 @@ event on_enter_2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #endif
     evt_finish();
 }
@@ -1563,7 +1563,7 @@ event on_enter_3
     evt_actor_begin();
     act_anim_seq(20482, 46622, 1328);
     act_reset();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     do
@@ -1660,7 +1660,7 @@ event on_enter_3
     wait_message();
     set(FG_STATUS, F_STATUS_0F, FALSE);
     sleep(10);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     cut_auto(0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1955,7 +1955,7 @@ event from_main_2
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_JILL);
 #else
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(1);
     evt_fork(TASK_01, from_main_2_sub1, 0);
     sleep(10);
@@ -2319,7 +2319,7 @@ event from_main_4
         aot_reset(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 1, 0, 0);
         aot_reset(AOT_02_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 2, 0, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
         room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
@@ -2357,7 +2357,7 @@ event from_main_2_sub1
 
 event from_main_5
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(1);
     evt_fork(TASK_01, from_main_5_sub1, 0);
     sleep(10);
@@ -2504,7 +2504,7 @@ event from_main_7
 #if CHRIS
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
 #endif
@@ -2725,7 +2725,7 @@ event from_main_7
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     set(FG_STATUS, F_STATUS_0F, FALSE);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #else
     dir_set(0, 0, 1501, 0, 14470, 0, 12949);
     cutnext(CAM_01);
@@ -2749,7 +2749,7 @@ event from_main_7
         aot_reset(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 1, 0, 0);
         aot_reset(AOT_02_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 2, 0, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
         room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
@@ -2803,11 +2803,11 @@ event on_enter_4
     evt_next();
     evt_nop();
 #if CHRIS
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #endif
     bgm_play(BGM_MAIN);
 #if JILL
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(1);
     evt_fork(TASK_01, on_enter_4_sub1, 0);
 #endif
@@ -3058,7 +3058,7 @@ event on_enter_4
     evt_disable(TASK_01);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
@@ -3261,7 +3261,7 @@ event from_main_9
         aot_reset(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 1, 0, 0);
         aot_reset(AOT_02_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER, 2, 0, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
         room_bgm_state_set(0, ROOM_105_DINING_ROOM, BGM_SUB_1_ON | BGM_MAIN_ON);
     }
@@ -3306,7 +3306,7 @@ event from_main_10
 #endif
 {
 #if CHRIS
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #else
     run
     {
@@ -3373,7 +3373,7 @@ event from_main_10
 #endif
     sleep(15);
 #if CHRIS
-    message(MSG_IT_IS_JILLS_GUN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's Jill's gun...!"
+    message(MSG_IT_IS_JILLS_GUN | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's Jill's gun...!"
 #else
     act_anim_flags(32 | 1, 32 | 2, 0 | 0);
     sleep(25);
@@ -3412,7 +3412,7 @@ event from_main_10
 #if CHRIS
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_reset(AOT_06_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 2, 0);
         aot_on(AOT_06_ITEM, SCE_ITEM, 0);
     }
@@ -3477,7 +3477,7 @@ event from_main_10
         {
             aot_reset(AOT_06_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_06_item, 0);
         }
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
 #else
     evt_work_set(WK_PLAYER, 0);
@@ -3612,7 +3612,7 @@ event on_enter_5
     evt_nop();
 #if JILL
     bgm_play(BGM_MAIN);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -3987,10 +3987,10 @@ event on_enter_5_sub1
     act_reset();
     wait_message();
     give_item(AOT_06_ITEM, 4, 129);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     do
     {
         evt_next();
@@ -4114,7 +4114,7 @@ event on_enter_5_sub3
     {
         pos_set(ENEMY_00, 0, 0, 0, 0, 10000, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
     }
     evt_finish();
@@ -4126,14 +4126,14 @@ event from_main_12
 #if CHRIS
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_next();
     evt_nop();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_06_ITEM, SCE_ITEM, 0);
     }
 #else
@@ -4148,13 +4148,13 @@ event from_main_12
 #if CHRIS
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         aot_reset(AOT_06_ITEM, SCE_NONE, 0, 0, 0, 0);
     }
     sleep(50);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
 #else

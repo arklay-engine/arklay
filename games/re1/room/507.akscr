@@ -263,7 +263,7 @@ event from_main
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_00, FALSE));
-    message(MSG_POISON_GAS_IS_ESCAPING | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_PLAYER); // "Poison gas is escaping...!"
+    message(MSG_POISON_GAS_IS_ESCAPING | MSG_FAST, RUN_CONTROLS | RUN_PLAYER); // "Poison gas is escaping...!"
     sleep(20);
     timer_setup(3, 88, 2, 6, 0);
     set(FG_ROOM, F_ROOM_0A, TRUE);
@@ -287,15 +287,15 @@ event from_main
         {
             evt_next();
         }
-        while (ck(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE));
+        while (ck(FG_RUN, F_RUN_CONTROLS, FALSE));
     }
     evt_nop();
     run
     {
         sys_multi(SYS_08, 320);
         se_play_3d(SND_BANK_PLAYER, SE_PL_02, 0, SND_AT_PLAYER, 0, 0, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_READY, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -305,7 +305,7 @@ event from_main
     act_nop();
     act_reset();
     evt_nop();
-    single(4) set(FG_MESSAGE, 0, 0);
+    single(4) set(FG_RUN, 0, 0);
     raw(0x17, 0x00, 0x07, 0x04, 0x05, 0x06, 0x19, 0x00, 0xFF, 0x00, 0x00, 0x00);
 }
 
@@ -397,7 +397,7 @@ event from_main_5
 
 event on_aot_09
 {
-    message(MSG_THERE_IS_AN_AIR_SHAFTWILL_YOU | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_PLAYER); // "There's an air shaft.Will you enter it? Poison gas is escaping...!"
+    message(MSG_THERE_IS_AN_AIR_SHAFTWILL_YOU | MSG_FAST, RUN_CONTROLS | RUN_PLAYER); // "There's an air shaft.Will you enter it? Poison gas is escaping...!"
     set(FG_ROOM, F_ROOM_0C, TRUE);
     do
     {
@@ -422,7 +422,7 @@ event on_aot_09_sub1
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     timer_setup(2, 48, 248, 7, 0);
@@ -479,9 +479,9 @@ event on_aot_09_sub1
         }
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_ROOM, F_ROOM_07, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
         set(FG_ROOM, F_ROOM_0C, FALSE);
         set(FG_MAP, F_MAP_7A, TRUE);
     }

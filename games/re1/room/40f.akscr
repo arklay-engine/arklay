@@ -130,7 +130,7 @@ event from_main
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         evt_exec(0, TASK_09, from_main_sub1);
     }
@@ -203,7 +203,7 @@ event from_main_sub1
         aot_delete(AOT_03_USEITEM, SCE_NONE, SAT_PLAYER);
         aot_reset(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
         set(FG_SCENARIO, F_SCENARIO_13, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -489,7 +489,7 @@ event on_aot_00_door
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
@@ -535,7 +535,7 @@ event on_aot_00_door
     {
         door_aot_set(AOT_00_DOOR, 0, 11300, 2500, 2300, 2, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_40C_PLANT_BOSS_ROOM, 28400, 0, 29300, 2048, UNLOCKED, SAT_PLAYER);
         setb(B_CHARACTER_MODEL, 0, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);

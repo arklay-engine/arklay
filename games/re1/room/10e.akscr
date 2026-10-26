@@ -100,7 +100,7 @@ event on_aot_03_item
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -151,7 +151,7 @@ event on_aot_03_item
     run
     {
         set(FG_COMMON, F_COMMON_60, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
 #if MANSION1
         eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_STATUS, EML_STATUS_SET | 1);
 #endif
@@ -185,7 +185,7 @@ event on_aot_03_item
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     sleep(16);
     run
@@ -378,9 +378,9 @@ event event_05
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_EFFECTS, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -388,7 +388,7 @@ event event_05
     sleep(26);
     act_reset();
     evt_nop();
-    message(MSG_IT_IS_A_MAP_OF_1ST_WILL_YOU_TAKE_IT_01 | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's a map of 1ST FLOOR. Will you take it? None of them looks useful."
+    message(MSG_IT_IS_A_MAP_OF_1ST_WILL_YOU_TAKE_IT_01 | MSG_FAST, RUN_CONTROLS | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's a map of 1ST FLOOR. Will you take it? None of them looks useful."
     do
     {
         evt_next();
@@ -400,7 +400,7 @@ event event_05
         {
             aot_reset(AOT_02_ITEM, SCE_F, SAT_MANUAL | SAT_PLAYER, 0, 1, 0);
             aot_on(AOT_02_ITEM, SCE_F, 0);
-            message(MSG_YOU_GOT_THE_MAP_OF_1ST | MSG_FAST, MSG_PAUSE_CONTROLS | MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "You got the map of 1ST FLOOR."
+            message(MSG_YOU_GOT_THE_MAP_OF_1ST | MSG_FAST, RUN_CONTROLS | RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of 1ST FLOOR."
         }
     }
     evt_work_set(WK_PLAYER, 0);
@@ -414,9 +414,9 @@ event event_05
     evt_nop();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_EFFECTS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_EFFECTS, TRUE);
     }
     evt_finish();
 }

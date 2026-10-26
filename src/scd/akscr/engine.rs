@@ -15,7 +15,7 @@ enum Placeholders {
     None,
     /// Every byte value: `B_0A`.
     Byte(&'static str),
-    /// Every bit of a field this many bits wide: `MSG_PAUSE_0010`.
+    /// Every bit of a field this many bits wide: `RUN_0010`.
     Bits(&'static str, u32),
 }
 
@@ -155,17 +155,19 @@ pub(super) const SAT: Family = Family {
     placeholders: Placeholders::Bits("SAT_", 8),
 };
 
-/// `message`'s pause word: what stops while the window is open.
-pub(super) const MSG_PAUSE: Family = Family {
+/// The systems that run each frame (the `FG_RUN` word): `message`'s pause
+/// word clears these while the window is open.
+pub(super) const RUN: Family = Family {
     names: &[
-        ("MSG_PAUSE_PLAYER", 0x01),
-        ("MSG_PAUSE_ENTITIES", 0x02),
-        ("MSG_PAUSE_MONSTERS", 0x04),
-        ("MSG_PAUSE_EFFECTS", 0x08),
-        ("MSG_PAUSE_CONTROLS", 0x100),
-        ("MSG_PAUSE_DEMO", 0x200),
+        ("RUN_PLAYER", 0x01),
+        ("RUN_ENTITIES", 0x02),
+        ("RUN_MONSTERS", 0x04),
+        ("RUN_EFFECTS", 0x08),
+        ("RUN_READY", 0x40),
+        ("RUN_CONTROLS", 0x100),
+        ("RUN_DEMO", 0x200),
     ],
-    placeholders: Placeholders::Bits("MSG_PAUSE_", 16),
+    placeholders: Placeholders::Bits("RUN_", 16),
 };
 
 /// `voice_play`.
@@ -273,7 +275,7 @@ const FAMILIES: [&Family; 18] = [
     &BYTE,
     &WORD,
     &SAT,
-    &MSG_PAUSE,
+    &RUN,
     &VOICE,
     &SND_BANK,
     &SND_AT,

@@ -45,7 +45,7 @@ event on_aot_01
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         aot_delete(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         message(MSG_I_CAN_LOOK_OVER_THE_COURTYARD | MSG_FAST, 0); // "I can look over the courtyard from here."
     }
@@ -69,19 +69,19 @@ event on_aot_01
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     do
     {
         evt_next();
     }
     while (ck_bits(1, 255, 255));
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cutnext(CAM_01);
     sleep(5);
     run
     {
         aot_delete(AOT_01_EVENT, SCE_EVENT, SAT_PLAYER);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -96,7 +96,7 @@ event event_02
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         message(MSG_A_BATTERY | MSG_FAST, 0); // "A battery. Now I can move the elevator in the courtyard."
     }
     do
@@ -118,7 +118,7 @@ event event_02
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }

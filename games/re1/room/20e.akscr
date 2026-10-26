@@ -143,7 +143,7 @@ event on_aot_05
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_SCENARIO, F_SCENARIO_47, TRUE);
     }
@@ -151,7 +151,7 @@ event on_aot_05
     run
     {
         aot_delete(AOT_05_EVENT, SCE_NONE, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_56, TRUE);
         set(FG_SCENARIO, F_SCENARIO_47, TRUE);
@@ -350,7 +350,7 @@ event on_aot_05_sub3_sub2
         set(FG_STATUS, F_STATUS_0F, FALSE);
         setw(W_04, 0, 0);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }
@@ -364,7 +364,7 @@ event on_enter
     }
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
@@ -487,7 +487,7 @@ event event_02
     set(FG_STATUS, F_STATUS_0F, FALSE);
 #endif
     sleep(20);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -915,7 +915,7 @@ event event_06
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #endif
     evt_finish();
 }
@@ -1083,7 +1083,7 @@ event on_enter_2
     run
     {
         cutnext(CAM_00);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
@@ -1103,7 +1103,7 @@ event event_24
     run
     {
         set(FG_STATUS, F_STATUS_07, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -1316,7 +1316,7 @@ event on_aot_05_2
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     run
     {

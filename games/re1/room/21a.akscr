@@ -30,8 +30,8 @@ event on_aot_02
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        message(MSG_THERE_IS_A_LADDER | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's a ladder. Will you climb it?"
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        message(MSG_THERE_IS_A_LADDER | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's a ladder. Will you climb it?"
     }
     do
     {
@@ -43,11 +43,11 @@ event on_aot_02
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             aot_on(AOT_00_DOOR, SCE_DOOR, 0);
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
     }
     evt_finish();

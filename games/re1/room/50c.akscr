@@ -144,7 +144,7 @@ proc main
 event on_aot_05
 {
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 0); // "There's a switch. Will you push it? There's no reaction. It has no power."
     do
     {
@@ -175,7 +175,7 @@ event on_aot_05
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
         }
     }
     evt_finish();
@@ -184,13 +184,13 @@ event on_aot_05
 event on_aot_04_door
 {
     sleep(1);
-    message(MSG_THERE_IS_NO_REACTION | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "There's no reaction. It has no power."
+    message(MSG_THERE_IS_NO_REACTION | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "There's no reaction. It has no power."
     do
     {
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -198,7 +198,7 @@ event on_aot_05_sub1
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_07);
         se_play_3d(SND_BANK_ROOM, SE_18_SW_BTN, 0, SND_AT_POINT, 0, 16300, 27630);
     }
@@ -213,7 +213,7 @@ event on_aot_05_sub1
         cut_auto(0);
         msgnode_set(13, 2, 7);
         aot_delete(AOT_04_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
 #else
     run
@@ -225,7 +225,7 @@ event on_aot_05_sub1
     {
         msgnode_set(13, 2, 7);
         aot_delete(AOT_04_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
 #endif
     evt_finish();
@@ -236,7 +236,7 @@ event on_aot_05_sub2
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
         pos_set(ENEMY_00_NPC_REBECCA, 0, 3920, 0, 7300, 0, 16600);
@@ -606,7 +606,7 @@ event on_aot_05_sub2_sub1
 #if JILL
         set(FG_STATUS, F_STATUS_0F, FALSE);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_04_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
@@ -816,7 +816,7 @@ event on_aot_05_sub2_sub2
 #if JILL
         set(FG_STATUS, F_STATUS_0F, FALSE);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_04_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
@@ -827,7 +827,7 @@ event on_enter
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
         set(FG_LOCK, F_LOCK_2C, TRUE);
@@ -1211,7 +1211,7 @@ event on_enter
     {
         cut_auto(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }

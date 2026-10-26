@@ -108,7 +108,7 @@ event on_aot_07
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         if (ck(FG_ROOM, F_ROOM_00, TRUE))
         {
             evt_exec(0, TASK_09, on_aot_07_sub2);
@@ -239,7 +239,7 @@ event on_aot_07_sub1_sub2
     sleep(1);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
 }

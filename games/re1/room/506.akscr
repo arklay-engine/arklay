@@ -62,7 +62,7 @@ proc init
 
 event on_aot_01
 {
-    message(MSG_THIS_COMPUTER_IS_USED_TO_OPEN | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "This computer is used to open the electronic locks. Will you turn it on? Various chemicals used for research. Nothing useful."
+    message(MSG_THIS_COMPUTER_IS_USED_TO_OPEN | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "This computer is used to open the electronic locks. Will you turn it on? Various chemicals used for research. Nothing useful."
     do
     {
         evt_next();

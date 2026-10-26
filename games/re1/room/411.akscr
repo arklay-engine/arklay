@@ -122,9 +122,9 @@ event on_aot_01
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
         set(FG_ROOM, F_ROOM_1A, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -137,7 +137,7 @@ event on_aot_01
     run
     {
         set(FG_ROOM, F_ROOM_1A, FALSE);
-        message(MSG_THERE_IS_A_LEVER | MSG_FAST, MSG_PAUSE_PLAYER); // "There's a lever. Will you move it? There's a button. Will you push it? There was a sound from the room next door."
+        message(MSG_THERE_IS_A_LEVER | MSG_FAST, RUN_PLAYER); // "There's a lever. Will you move it? There's a button. Will you push it? There was a sound from the room next door."
         cut_auto(1);
         cutnext(CAM_04);
         dir_set(0, 0, 0, 0, 7800, 0, 5000);
@@ -155,9 +155,9 @@ event on_aot_01
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
             cutcurr(0);
             cut_auto(0);
         }
@@ -190,9 +190,9 @@ event on_aot_01_sub1
     sleep(60);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
         cutnext(CAM_01);
         cut_auto(0);
         set(FG_SCENARIO, F_SCENARIO_23, TRUE);
@@ -551,10 +551,10 @@ event event_0A
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        message(MSG_THERE_IS_A_BUTTON | MSG_FAST, MSG_PAUSE_PLAYER); // "There's a button. Will you push it? There was a sound from the room next door."
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        message(MSG_THERE_IS_A_BUTTON | MSG_FAST, RUN_PLAYER); // "There's a button. Will you push it? There was a sound from the room next door."
     }
     do
     {
@@ -572,9 +572,9 @@ event event_0A
         }
         else
         {
-            set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-            set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            set(FG_RUN, F_RUN_MONSTERS, TRUE);
+            set(FG_RUN, F_RUN_READY, TRUE);
         }
     }
     evt_finish();
@@ -603,7 +603,7 @@ event from_main_3
 event event_0D
 {
     sleep(20);
-    message(MSG_THERE_WAS_A_SOUND_FROM_THE | MSG_FAST, MSG_PAUSE_PLAYER); // "There was a sound from the room next door."
+    message(MSG_THERE_WAS_A_SOUND_FROM_THE | MSG_FAST, RUN_PLAYER); // "There was a sound from the room next door."
     do
     {
         evt_next();
@@ -611,9 +611,9 @@ event event_0D
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
     }
     evt_finish();
 }

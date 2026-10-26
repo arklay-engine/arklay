@@ -177,7 +177,7 @@ event event_00
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         message(MSG_AN_OLD_PUMP, 0); // "An old pump. Water seems to be sent from here. The lid is open!"
     }
@@ -187,7 +187,7 @@ event event_00
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_ROOM, F_ROOM_00, TRUE);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -200,7 +200,7 @@ event from_main
     run
     {
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #if CHRIS
         effect_clear(0);
 #endif
@@ -262,7 +262,7 @@ event from_main
 #else
         set(FG_COMMON, F_COMMON_A9, TRUE);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -287,7 +287,7 @@ event from_main_2
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         message(MSG_IT_DOES_NOT_SEEM_TO_CAUSE | MSG_FAST, 0); // "It does not seem to cause any damage."
     }
     sleep(30);
@@ -296,7 +296,7 @@ event from_main_2
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();

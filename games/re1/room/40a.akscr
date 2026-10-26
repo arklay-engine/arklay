@@ -142,10 +142,10 @@ event from_main
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_PLAYER, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(10);
@@ -177,10 +177,10 @@ event from_main
     {
         cutnext(CAM_03);
         cut_auto(0);
-        set(FG_MESSAGE, F_MESSAGE_PLAYER, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_PLAYER, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -245,10 +245,10 @@ event on_aot_05
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        message(MSG_A_ROW_OF_RED_BOOKS | MSG_FAST, MSG_PAUSE_8000 | MSG_PAUSE_4000 | MSG_PAUSE_2000 | MSG_PAUSE_1000 | MSG_PAUSE_0800 | MSG_PAUSE_0400 | MSG_PAUSE_DEMO | MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "A row of red books. There's one white book. Will you take it? Now a book is missing."
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        message(MSG_A_ROW_OF_RED_BOOKS | MSG_FAST, RUN_8000 | RUN_4000 | RUN_2000 | RUN_1000 | RUN_0800 | RUN_0400 | RUN_DEMO | RUN_CONTROLS | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES); // "A row of red books. There's one white book. Will you take it? Now a book is missing."
     }
     do
     {
@@ -257,9 +257,9 @@ event on_aot_05
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             aot_on(AOT_03_ITEM, SCE_DOCUMENT, 0);
@@ -270,7 +270,7 @@ event on_aot_05
 
 event from_main_3
 {
-    message(MSG_NOW_A_BOOK_IS_MISSING | MSG_FAST, MSG_PAUSE_8000 | MSG_PAUSE_4000 | MSG_PAUSE_2000 | MSG_PAUSE_1000 | MSG_PAUSE_0800 | MSG_PAUSE_0400 | MSG_PAUSE_DEMO | MSG_PAUSE_CONTROLS | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES); // "Now a book is missing."
+    message(MSG_NOW_A_BOOK_IS_MISSING | MSG_FAST, RUN_8000 | RUN_4000 | RUN_2000 | RUN_1000 | RUN_0800 | RUN_0400 | RUN_DEMO | RUN_CONTROLS | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES); // "Now a book is missing."
     evt_finish();
 }
 

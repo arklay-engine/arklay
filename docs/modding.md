@@ -698,7 +698,7 @@ event on_enter
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_exec(0, 6, on_enter_sub1);
     sleep(30);
@@ -733,7 +733,7 @@ event on_enter
   | `W_LIGHT_STATE` `W_LIGHT_DELTA` `W_RANDOM` `W_DPAD_HELD` `W_DPAD_PRESSED` | `cmpw` / `setw` state words |
   | `SAT_PLAYER` `SAT_OBJECT` `SAT_UNDER` `SAT_MANUAL` | AOT trigger flags: the player or an object, at its feet rather than its reach, on the action button |
   | `MSG_FAST` | `message`: show the text at once |
-  | `MSG_PAUSE_PLAYER` `MSG_PAUSE_ENTITIES` `MSG_PAUSE_MONSTERS` `MSG_PAUSE_EFFECTS` `MSG_PAUSE_CONTROLS` `MSG_PAUSE_DEMO` | `message`'s second argument: what stops while the window is open |
+  | `RUN_PLAYER` `RUN_ENTITIES` `RUN_MONSTERS` `RUN_EFFECTS` `RUN_READY` `RUN_CONTROLS` `RUN_DEMO` | the systems that run each frame (`FG_RUN`); `message`'s second argument stops these while the window is open |
   | `VOICE_PLAY` `VOICE_STOP` | `voice_play` |
   | `SND_BANK_DOOR` `SND_BANK_WEAPON` `SND_BANK_ROOM` `SND_BANK_PLAYER` `SND_BANK_BGM` | `se_play_3d`: the sound bank |
   | `SND_AT_POINT` `SND_AT_PLAYER` `SND_AT_ENEMY` `SND_NO_POS` | `se_play_3d`: where the sound plays |
@@ -747,7 +747,7 @@ event on_enter
   word (`B_0A`, `W_04`), `eml_state` sub-command (`EML_08`), `sys_multi`
   sub-command (`SYS_04`), event slot of `evt_exec`, `evt_fork`,
   `evt_disable` and `task_kill` (`TASK_09`), and every unnamed bit of the
-  trigger flags (`SAT_02`) and message pause word (`MSG_PAUSE_0010`).
+  trigger flags (`SAT_02`) and run word (`RUN_0010`).
 - `#define NAME value` names a number (or an earlier name) and
   `#include "inc/items.akinc"` reads a file of defines, resolved against the
   script's directory and then each directory above it. Game data has no

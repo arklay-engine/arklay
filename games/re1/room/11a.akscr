@@ -182,7 +182,7 @@ proc main
     {
         set(FG_SCENARIO, F_SCENARIO_7F, TRUE);
         set(FG_STATUS, F_STATUS_1D, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         dir_set(0, 0, 996, 0, 2888, 0, 12473);
         evt_exec(0, TASK_00, from_main);
     }
@@ -194,9 +194,9 @@ event on_aot_02
 {
     cutnext(CAM_04);
 #if MANSION1
-    message(MSG_WHEN_THE_SUN_SETS_IN_THE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "When the sun sets in the west and the moon rises in the east, stars will begin to appear in the sky and wind will blow towards the ground. Then the gate of new life will open."
+    message(MSG_WHEN_THE_SUN_SETS_IN_THE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "When the sun sets in the west and the moon rises in the east, stars will begin to appear in the sky and wind will blow towards the ground. Then the gate of new life will open."
 #else
-    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "Crests are placed in all the hollows."
+    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "Crests are placed in all the hollows."
 #endif
     do
     {
@@ -211,7 +211,7 @@ event on_aot_02
 event from_main_2
 {
     cutnext(CAM_04);
-    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "Crests are placed in all the hollows."
+    message(MSG_CRESTS_ARE_PLACED_IN_ALL_THE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "Crests are placed in all the hollows."
     do
     {
         evt_next();
@@ -230,8 +230,8 @@ event from_main_3
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     evt_next();
     evt_next();
@@ -245,8 +245,8 @@ event from_main_3
     sleep(40);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_ROOM, F_ROOM_01, FALSE);
         cutcurr(0);
     }
@@ -257,8 +257,8 @@ event from_main_4
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     evt_next();
     evt_next();
@@ -272,8 +272,8 @@ event from_main_4
     sleep(40);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_ROOM, F_ROOM_01, FALSE);
         cutcurr(0);
     }
@@ -284,8 +284,8 @@ event from_main_5
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     evt_next();
     evt_next();
@@ -299,8 +299,8 @@ event from_main_5
     sleep(40);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_ROOM, F_ROOM_01, FALSE);
         cutcurr(0);
     }
@@ -311,8 +311,8 @@ event from_main_6
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
     }
     evt_next();
     evt_next();
@@ -326,8 +326,8 @@ event from_main_6
     sleep(40);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_ROOM, F_ROOM_01, FALSE);
         cutcurr(0);
     }
@@ -339,16 +339,16 @@ event from_main_7
     evt_disable(TASK_00);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_ROOM, F_ROOM_01, FALSE);
     }
     sleep(30);
     run
     {
         cutcurr(0);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_18, 0, SND_AT_POINT, 0, 8500, 24600);
     }
     evt_finish();
@@ -420,7 +420,7 @@ event from_main
     {
         set(FG_ITEM, F_ITEM_3B, FALSE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_1D, FALSE);
     }
     evt_finish();
@@ -454,8 +454,8 @@ event on_enter
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_sub1);
         voice_play(VOICE_PLAY, VO_00C_00, 0);
         message(MSG_VO_00C_00, 0);
@@ -477,8 +477,8 @@ event on_enter
     run
     {
         cut_auto(0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -526,8 +526,8 @@ event on_enter_2
     run
     {
         bgm_play(BGM_SUB_1);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_2_sub1);
         voice_play(VOICE_PLAY, VO_00C_20, 0);
         message(MSG_VO_00C_20, 0);
@@ -544,8 +544,8 @@ event on_enter_2
     run
     {
         cut_auto(0);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

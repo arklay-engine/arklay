@@ -365,7 +365,7 @@ proc main
 
 event on_aot_02_message
 {
-    message(MSG_IT_SEEMS_SOMEONE_HAS_SEARCHED_HERE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It seems someone has searched here already... It appears to be a switch. Will you push it? There's something at the back of the shelf."
+    message(MSG_IT_SEEMS_SOMEONE_HAS_SEARCHED_HERE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It seems someone has searched here already... It appears to be a switch. Will you push it? There's something at the back of the shelf."
     do
     {
         evt_next();
@@ -386,7 +386,7 @@ event on_aot_02_message_sub1
     run
     {
         se_play_3d(SND_BANK_ROOM, SE_18_SW_PUSH, 0, SND_AT_POINT, 0, 3200, 1800);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_05);
         set(FG_ROOM, F_ROOM_0A, TRUE);
     }
@@ -437,7 +437,7 @@ event on_aot_02_message_sub1
         aot_reset(AOT_06_USEITEM, SCE_NONE, 0, 0, 0, 0);
         set(FG_SCENARIO, F_SCENARIO_12, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         cut_auto(0);
         sys_multi(SYS_07);
     }
@@ -476,7 +476,7 @@ event from_main
         evt_next();
     }
     while (ck_bits(0, 1, 0));
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 18, 32 | 4, 0 | 0);
@@ -487,15 +487,15 @@ event from_main
     {
         objtbl_b_set(0, 0, 1);
         set(FG_ROOM, F_ROOM_01, FALSE);
-        message(MSG_IT_IS_TOO_HEAVY_TO_MOVE | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's too heavy to move."
+        message(MSG_IT_IS_TOO_HEAVY_TO_MOVE | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's too heavy to move."
     }
     do
     {
         evt_next();
     }
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
-    set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_READY, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 
@@ -505,7 +505,7 @@ event on_enter
     evt_fork(TASK_01, on_enter_sub1, 0);
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(1);
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
@@ -655,14 +655,14 @@ event on_enter
         bgm_play(BGM_MAIN);
         sys_multi(SYS_04);
         aot_on(AOT_08_ITEM, SCE_DOCUMENT, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_next();
     evt_nop();
     run
     {
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
@@ -865,7 +865,7 @@ event on_enter
     run
     {
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_COMMON, F_COMMON_08, TRUE);
         cut_auto(0);
         sys_multi(SYS_07);

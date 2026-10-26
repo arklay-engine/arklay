@@ -26,7 +26,7 @@
 //! {
 //!     run
 //!     {
-//!         set(FG_MESSAGE, 23, FALSE);
+//!         set(FG_RUN, 23, FALSE);
 //!     }
 //!     evt_exec(0, 6, event_0A);
 //!     sleep(30);

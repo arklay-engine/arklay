@@ -56,8 +56,8 @@ proc init
 
 event on_aot_02
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-    message(MSG_A_POWER_PANEL | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "A power panel. Some areas do not have power. Will you activate the blacked-out areas? It shows the power supply status."
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    message(MSG_A_POWER_PANEL | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "A power panel. Some areas do not have power. Will you activate the blacked-out areas? It shows the power supply status."
     do
     {
         evt_next();
@@ -82,7 +82,7 @@ event on_aot_02_sub1
     se_play_3d(SND_BANK_ROOM, SE_17_CONPANE, 0, SND_AT_PLAYER, 0, 0, 0);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_SCENARIO, F_SCENARIO_2E, TRUE);
         aot_reset(AOT_02_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
     }
@@ -91,7 +91,7 @@ event on_aot_02_sub1
 
 event on_aot_02_sub2
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }
 

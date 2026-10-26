@@ -94,7 +94,7 @@ event event_01
     run
     {
         aot_delete(AOT_03_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         cutnext(CAM_03);
     }
     evt_work_set(WK_OBJ, OBJ_00);
@@ -103,10 +103,10 @@ event event_01
     tw_end();
     evt_next();
     sleep(15);
-    message(MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "The bathtub is filled with muddy water. Will you unplug it? Nothing useful."
+    message(MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "The bathtub is filled with muddy water. Will you unplug it? Nothing useful."
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     do
     {
         evt_next();
@@ -114,7 +114,7 @@ event event_01
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_ROOM, F_ROOM_18, TRUE);
         require(cmpb(B_MENU_CHOICE, CMP_EQ, 0));
         set(FG_ROOM, F_ROOM_19, TRUE);
@@ -204,7 +204,7 @@ event from_main
     run
     {
         aot_delete(AOT_04_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -221,7 +221,7 @@ event from_main_2
     evt_next();
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
@@ -229,20 +229,20 @@ event from_main_2
 
 event event_04
 {
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cutnext(CAM_03);
     evt_next();
     evt_nop();
     sleep(30);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     aot_on(AOT_01_ITEM, SCE_ITEM, 0);
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(20);
     cutcurr(0);
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_finish();
 }

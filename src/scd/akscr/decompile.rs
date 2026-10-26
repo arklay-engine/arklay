@@ -1079,7 +1079,7 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
             (0x29, 0, _) => ctx.names.movie(value).map(str::to_string),
             (0x2D, 0, _) => ctx.aots.get(&value).cloned(),
             (0x33, 0, _) => engine::SYS.name(byte_value),
-            (0x0B, 1, b'U') => engine::MSG_PAUSE.bits(word),
+            (0x0B, 1, b'U') => engine::RUN.bits(word),
             (_, _, b't') if !matches!(value, 0 | 254 | 255) => Some(
                 ctx.names
                     .item(value)

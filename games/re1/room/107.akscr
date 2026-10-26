@@ -155,7 +155,7 @@ proc main
 
 event on_aot_05_message
 {
-    message(MSG_IT_IS_A_MAP_OF_1ST | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "It's a map of 1ST FLOOR. Will you take it? You got the map of 1ST FLOOR."
+    message(MSG_IT_IS_A_MAP_OF_1ST | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "It's a map of 1ST FLOOR. Will you take it? You got the map of 1ST FLOOR."
     do
     {
         evt_next();
@@ -176,6 +176,6 @@ event on_aot_05_message_sub1
     aot_on(AOT_02_ITEM, SCE_F, 0);
     sleep(1);
     aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
-    message(MSG_YOU_GOT_THE_MAP_OF_1ST | MSG_FAST, MSG_PAUSE_0080 | MSG_PAUSE_0040 | MSG_PAUSE_0020 | MSG_PAUSE_0010 | MSG_PAUSE_EFFECTS | MSG_PAUSE_MONSTERS | MSG_PAUSE_ENTITIES | MSG_PAUSE_PLAYER); // "You got the map of 1ST FLOOR."
+    message(MSG_YOU_GOT_THE_MAP_OF_1ST | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "You got the map of 1ST FLOOR."
     evt_finish();
 }

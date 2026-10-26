@@ -78,7 +78,7 @@ proc init
 event on_enter
 {
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     se_play_3d(SND_BANK_ROOM, SE_17_ELV515, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_fork(TASK_09, on_enter_sub1, 0);
     do
@@ -88,7 +88,7 @@ event on_enter
     while (ck(FG_ROOM, F_ROOM_18, FALSE));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
@@ -97,7 +97,7 @@ event on_enter
 event on_enter_2
 {
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     se_play_3d(SND_BANK_ROOM, SE_17_ELV515, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_fork(TASK_09, on_enter_sub1, 0);
     do
@@ -107,7 +107,7 @@ event on_enter_2
     while (ck(FG_ROOM, F_ROOM_18, FALSE));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
     evt_finish();

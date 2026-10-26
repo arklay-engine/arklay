@@ -74,12 +74,12 @@ event on_aot_04
 {
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_READY, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_READY, FALSE);
         cut_auto(1);
         cutnext(CAM_04);
-        message(MSG_IT_IS_A_PASS_CODE_OUTPUT | MSG_FAST, MSG_PAUSE_0040 | MSG_PAUSE_MONSTERS | MSG_PAUSE_PLAYER); // "It's a pass code output machine. If I had a MO DISK, I could get the code..."
+        message(MSG_IT_IS_A_PASS_CODE_OUTPUT | MSG_FAST, RUN_READY | RUN_MONSTERS | RUN_PLAYER); // "It's a pass code output machine. If I had a MO DISK, I could get the code..."
     }
     do
     {
@@ -88,9 +88,9 @@ event on_aot_04
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_READY, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
         cutcurr(0);
         cut_auto(0);
     }

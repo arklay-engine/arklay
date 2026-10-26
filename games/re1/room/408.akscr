@@ -147,8 +147,8 @@ event event_01
     run
     {
         set(FG_COMMON, F_COMMON_AA, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         dir_set(0, 0, 1680, 0, 26000, 0, 4280);
         cutnext(CAM_07);
@@ -614,8 +614,8 @@ event event_02
 #else
         pos_set(ENEMY_00_WASP, 0, 1024, 0, 0, 0, 0);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
@@ -1003,7 +1003,7 @@ event event_03
     sleep(20);
     run
     {
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #if CHRIS
         give_item(AOT_06_ITEM, 4, 129);
 #else
@@ -1011,7 +1011,7 @@ event event_03
 #endif
     }
     sleep(1);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     sleep(20);
     run
     {
@@ -1200,8 +1200,8 @@ event event_03
 #else
         pos_set(ENEMY_00_WASP, 0, 1024, 0, 0, 0, 0);
 #endif
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
-        set(FG_MESSAGE, F_MESSAGE_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }

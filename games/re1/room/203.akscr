@@ -108,7 +108,7 @@ event on_enter
 {
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cut_auto(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -473,10 +473,10 @@ event on_enter_sub1
     act_reset();
     wait_message();
     give_item(AOT_08_ITEM, 4, 129);
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+    set(FG_RUN, F_RUN_CONTROLS, TRUE);
     evt_next();
     evt_nop();
-    set(FG_MESSAGE, F_MESSAGE_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
     do
     {
         evt_next();
@@ -620,7 +620,7 @@ event on_enter_sub3
     {
         pos_set(ENEMY_00_NPC_BARRY, 0, 0, 0, 0, 10000, 0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        set(FG_MESSAGE, F_MESSAGE_CONTROLS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_ROOM, F_ROOM_1F, FALSE);
         set(FG_ROOM, F_ROOM_0A, FALSE);
         cut_auto(0);
