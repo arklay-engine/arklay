@@ -39,7 +39,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::convert::{self, UiKind};
 use crate::manifest;
-use crate::pack::{Pack, PackWriter};
+use crate::pack::Pack;
 use crate::state::RoomId;
 
 /// The base pack id every converted CR mod layers over.
@@ -182,84 +182,64 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     plan.drop_shadowed_films();
     plan.add_late_stage_copies(base.as_ref());
 
-    // A converted HD pack runs to gigabytes, so the entries spill to a file
-    // beside the output instead of piling up in memory until the write.
-    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
-    let mut writer = PackWriter::spilling(&out)?;
+    // Settle every entry before writing any: the pack's table of contents and
+    // path list come first, so the entry set must be final. Only an override
+    // the base already has is produced here, to drop it when it changes
+    // nothing; it is produced again when written, and every other file is read
+    // once, as it streams into the pack.
     let mut unchanged = 0usize;
     let mut texts: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut palette = None;
-    let mut entries = 0usize;
-    let mut bytes = 0usize;
-    eprintln!(
-        "converting {} file(s) from {}",
-        plan.targets.len(),
-        options.input.display()
-    );
+    let mut pack_entries: Vec<(String, Source)> = Vec::new();
     for (entry, planned) in &plan.targets {
         let file = &files[planned.file];
-        let raw = input
-            .read(file)
-            .with_context(|| format!("failed to read {}", file.path))?;
-        let data = match &planned.convert {
-            Convert::Raw => raw,
-            Convert::Camera => convert::camera_bmp(&file.path, &raw)?,
-            Convert::Mask => convert::roommask_bmp(&file.path, &raw)?,
-            Convert::Ui(kind) => convert::convert_ui_asset(*kind, &raw)
-                .with_context(|| format!("failed to convert {}", file.path))?,
-            Convert::ItemAtlas(rows) => {
-                if palette.is_none() {
-                    palette = Some(item_palette(&input, &files, &plan, base.as_ref()));
-                }
-                match palette.as_ref().and_then(Option::as_ref) {
-                    Some(texture) => convert::bake_item_atlas(&raw, *rows, texture)
-                        .with_context(|| format!("failed to bake {}", file.path))?,
-                    None => {
-                        warnings.push(format!(
-                            "{}: no STATUS.TIM palette in the mod or a base pack; item icons left out",
-                            file.path
-                        ));
-                        continue;
-                    }
-                }
-            }
+        match &planned.convert {
             Convert::RoomText(room3) => {
+                let raw = input
+                    .read(file)
+                    .with_context(|| format!("failed to read {}", file.path))?;
                 let source = String::from_utf8_lossy(&raw);
                 let strings = parse_room_text(&source)
                     .with_context(|| format!("failed to parse {}", file.path))?;
                 texts.insert(room3.clone(), strings);
                 continue;
             }
-            Convert::StartInventory => {
-                let source = String::from_utf8_lossy(&raw);
-                start_inventory_script(&source)
-                    .with_context(|| format!("failed to convert {}", file.path))?
-                    .into_bytes()
+            Convert::ItemAtlas(_) => {
+                if palette.is_none() {
+                    palette = Some(item_palette(&input, &files, &plan, base.as_ref()));
+                }
+                if palette.as_ref().is_some_and(Option::is_none) {
+                    warnings.push(format!(
+                        "{}: no STATUS.TIM palette in the mod or a base pack; item icons left out",
+                        file.path
+                    ));
+                    continue;
+                }
             }
-        };
+            _ => {}
+        }
         // An override identical to the base entry changes nothing.
         if let Some(base) = &base
             && base.contains(entry)
-            && base.read(entry).is_ok_and(|existing| *existing == *data)
         {
-            unchanged += 1;
-            continue;
+            let data = produce(
+                &input,
+                file,
+                &planned.convert,
+                palette.as_ref().and_then(Option::as_ref),
+            )?;
+            if base.read(entry).is_ok_and(|existing| *existing == *data) {
+                unchanged += 1;
+                continue;
+            }
         }
-        entries += 1;
-        bytes += data.len();
-        writer
-            .add(entry, data)
-            .with_context(|| format!("failed to add {entry}"))?;
+        pack_entries.push((entry.clone(), Source::Planned(planned)));
     }
+    let palette = palette.flatten();
 
     if !texts.is_empty() {
         let language = room_text_language(&texts, &mut warnings);
-        entries += 1;
-        bytes += language.len();
-        writer.add(TEXT_ENTRY, language.into_bytes())?;
+        pack_entries.push((TEXT_ENTRY.to_string(), Source::Ready(language.into_bytes())));
     }
 
     for (reason, paths) in unsupported {
@@ -271,7 +251,7 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
             file_list(&unmapped)
         ));
     }
-    if entries == 0 {
+    if pack_entries.is_empty() {
         bail!(
             "{} has nothing to pack: no file overrides a game entry",
             options.input.display()
@@ -279,13 +259,49 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     }
 
     let rendered = manifest.render();
-    entries += 1;
-    bytes += rendered.len();
-    writer.add(manifest::ENTRY, rendered.into_bytes())?;
+    pack_entries.push((
+        manifest::ENTRY.to_string(),
+        Source::Ready(rendered.into_bytes()),
+    ));
 
-    eprintln!("compressing {} entries", writer.len());
-    writer.compress_entries(jobs(options.jobs), convert::is_precompressed)?;
-    writer.write(&out)?;
+    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    eprintln!(
+        "converting {} entries from {}",
+        pack_entries.len(),
+        options.input.display()
+    );
+    let entries = pack_entries.len();
+    let mut bytes = 0usize;
+    let paths: Vec<String> = pack_entries
+        .iter()
+        .map(|(entry, _)| entry.clone())
+        .collect();
+    let mut sources: Vec<Option<Source>> = pack_entries
+        .into_iter()
+        .map(|(_, source)| Some(source))
+        .collect();
+    crate::pack::stream_pack(
+        &out,
+        &paths,
+        jobs(options.jobs),
+        convert::is_precompressed,
+        |index| {
+            let data = match sources[index].take() {
+                Some(Source::Planned(planned)) => {
+                    let file = &files[planned.file];
+                    produce(&input, file, &planned.convert, palette.as_ref())
+                }
+                Some(Source::Ready(data)) => Ok(data),
+                None => unreachable!("each pack entry is produced once"),
+            }
+            .with_context(|| format!("failed to add {}", paths[index]))?;
+            bytes += data.len();
+            Ok(data)
+        },
+    )?;
 
     Ok(ConvertModSummary {
         out,
@@ -296,6 +312,47 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         unchanged,
         replaced,
         warnings,
+    })
+}
+
+/// Where one pack entry's bytes come from.
+enum Source<'a> {
+    /// A mod file, read and converted as the entry is written.
+    Planned(&'a Planned),
+    /// Bytes built while planning: the language file and the manifest.
+    Ready(Vec<u8>),
+}
+
+/// Read `file` and convert it into its pack entry's bytes. Room text is
+/// merged while planning instead, and an item atlas needs the `palette`
+/// planning found.
+fn produce(
+    input: &Input,
+    file: &InputFile,
+    convert: &Convert,
+    palette: Option<&crate::model::Texture8>,
+) -> Result<Vec<u8>> {
+    let raw = input
+        .read(file)
+        .with_context(|| format!("failed to read {}", file.path))?;
+    Ok(match convert {
+        Convert::Raw => raw,
+        Convert::Camera => convert::camera_bmp(&file.path, &raw)?,
+        Convert::Mask => convert::roommask_bmp(&file.path, &raw)?,
+        Convert::Ui(kind) => convert::convert_ui_asset(*kind, &raw)
+            .with_context(|| format!("failed to convert {}", file.path))?,
+        Convert::ItemAtlas(rows) => {
+            let texture = palette.context("item atlas without a palette")?;
+            convert::bake_item_atlas(&raw, *rows, texture)
+                .with_context(|| format!("failed to bake {}", file.path))?
+        }
+        Convert::RoomText(_) => unreachable!("room text is merged while planning"),
+        Convert::StartInventory => {
+            let source = String::from_utf8_lossy(&raw);
+            start_inventory_script(&source)
+                .with_context(|| format!("failed to convert {}", file.path))?
+                .into_bytes()
+        }
     })
 }
 
@@ -1765,5 +1822,58 @@ mod tests {
         plan.drop_shadowed_films();
         let kept: Vec<&str> = plan.targets.keys().map(String::as_str).collect();
         assert_eq!(kept, ["movie/oj.mp4", "movie/pj.avi"]);
+    }
+
+    #[test]
+    fn converting_a_mod_streams_only_the_entries_that_change_the_base() {
+        let dir = std::env::temp_dir().join(format!("arklay-convert-mod-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let input = dir.join("mod");
+        fs::create_dir_all(input.join("mod_test/STAGE1")).unwrap();
+        fs::create_dir_all(input.join("mod_test/TEXT")).unwrap();
+        fs::write(input.join("mod_test/manifest.txt"), "Test Mod\n").unwrap();
+        fs::write(input.join("mod_test/STAGE1/ROOM1000.RDT"), b"same").unwrap();
+        fs::write(input.join("mod_test/STAGE1/ROOM1010.RDT"), b"changed").unwrap();
+        fs::write(
+            input.join("mod_test/TEXT/ROOM_100.xml"),
+            "<Strings><Text>Hello</Text></Strings>",
+        )
+        .unwrap();
+        let base = dir.join("base.akpak");
+        let mut writer = crate::pack::PackWriter::new();
+        writer.add("room/1000.rdt", b"same".to_vec()).unwrap();
+        writer.add("room/1010.rdt", b"original".to_vec()).unwrap();
+        writer.write(&base).unwrap();
+
+        let out = dir.join("out.akpak");
+        let summary = convert_mod(&ConvertModOptions {
+            input,
+            out: Some(out.clone()),
+            root: None,
+            base: Some(base),
+            id: Some("test".to_string()),
+            name: None,
+            version: None,
+            force: false,
+            jobs: 2,
+        })
+        .unwrap();
+        assert_eq!(summary.unchanged, 1);
+        assert_eq!(summary.entries, 3);
+        let pack = Pack::open(&out).unwrap();
+        let mut paths: Vec<&str> = pack.entries().map(|entry| entry.path()).collect();
+        paths.sort_unstable();
+        assert_eq!(paths, [TEXT_ENTRY, manifest::ENTRY, "room/1010.rdt"]);
+        assert_eq!(*pack.read("room/1010.rdt").unwrap(), *b"changed");
+        let language = pack.read(TEXT_ENTRY).unwrap();
+        assert!(String::from_utf8_lossy(&language).contains("Hello"));
+        assert_eq!(
+            summary.bytes,
+            paths
+                .iter()
+                .map(|path| pack.read(path).unwrap().len())
+                .sum::<usize>()
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }
