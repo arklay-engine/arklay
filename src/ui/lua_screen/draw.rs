@@ -896,13 +896,17 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     );
 
     // `page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, clut,
-    // brightness, mirror_u, mirror_v)`: a sheet region flipped per axis.
+    // brightness, mirror_u, mirror_v[, whole])`: a sheet region flipped per
+    // axis. With `whole`, an HD replacement covers the region's keyed-clear
+    // texels too, its own alpha saying what shows: for art whose HD version
+    // is redrawn rather than upscaled, which the original's opaque texels
+    // would cut to pieces.
     #[allow(clippy::type_complexity)]
     methods.add_method_mut(
         "page_sprite_mirrored",
         |_lua,
          api,
-         (handle, sx, sy, sw, sh, dx, dy, dw, dh, clut, brightness, mirror_u, mirror_v): (
+         (handle, sx, sy, sw, sh, dx, dy, dw, dh, clut, brightness, mirror_u, mirror_v, whole): (
             usize,
             i32,
             i32,
@@ -916,6 +920,7 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
             i64,
             bool,
             bool,
+            Option<bool>,
         )| {
             let Api {
                 host, framebuffer, ..
@@ -940,7 +945,12 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
                     let (corners, uv) = sprite_quad(&hd, src, dst, mirror);
                     let scale = crate::render::brightness_scale(brightness);
                     let colour = sprite_colour(Tint::White, scale);
-                    framebuffer.draw_replaced(hd, corners, uv, colour, draw);
+                    framebuffer.draw_replaced(hd, corners, uv, colour, |framebuffer| {
+                        if whole == Some(true) {
+                            framebuffer.punch_rect(dst);
+                        }
+                        draw(framebuffer);
+                    });
                 }
                 None => draw(framebuffer),
             }

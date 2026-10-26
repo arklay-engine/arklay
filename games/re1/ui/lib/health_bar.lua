@@ -216,9 +216,12 @@ local function sweep_index(span, head)
     return count
 end
 
+-- The tile is drawn whole: Classic REbirth's HD status page redraws the
+-- labels in another typeface, which the original's drawn texels would cut to
+-- pieces.
 local function draw_face_tile(api, ox, oy, v)
     api:page_sprite_mirrored(api:page("ui/status"), 0x60, v, FACE_W, FACE_H, ox + FACE_X,
-        oy + FACE_Y, FACE_W, FACE_H, 0, 0, false, false)
+        oy + FACE_Y, FACE_W, FACE_H, 0, 0, false, false, true)
 end
 
 -- The face tile the health state and the sweep position select.

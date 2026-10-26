@@ -4141,6 +4141,41 @@ fn health_monitor_face_flash_wraps_its_sweep_threshold() {
 }
 
 #[test]
+fn health_monitor_face_covers_its_whole_tile_for_hd_art() {
+    // Classic REbirth's HD status page redraws the condition labels in a
+    // different typeface, so the tile asks for its whole rect to be punched
+    // rather than only the original's drawn texels (#158).
+    let menu = Menu::open(menu_game());
+    let whole: Vec<bool> = (0..=4)
+        .map(|row: i64| {
+            let (state, poisoned) = (row.min(3), row == 4);
+            menu.eval(&format!(
+                r#"
+                local Bar = require('lib/health_bar')
+                local whole = nil
+                local api = {{
+                    line = function() end,
+                    page = function() return nil end,
+                    page_sprite_mirrored = function(...)
+                        whole = select(15, ...)
+                    end,
+                }}
+                local bar = Bar.new()
+                bar.state = 1
+                bar.health_state = {state}
+                bar.poisoned = {poisoned}
+                bar.head = 0x64
+                bar.secondary_head = 0x35
+                Bar.draw(api, bar, 0, 0)
+                return whole
+                "#
+            ))
+        })
+        .collect();
+    assert_eq!(whole, [true; 5]);
+}
+
+#[test]
 fn health_monitor_trail_starts_pre_faded_past_the_window() {
     let menu = Menu::open(menu_game());
     // A trail whose right edge (secondary head + 0x1F) is past the window is

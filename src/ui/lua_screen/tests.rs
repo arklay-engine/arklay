@@ -927,6 +927,90 @@ fn capture_entry_art(
     (framebuffer, candidate.frame)
 }
 
+/// A 4x4 4bpp TIM whose only drawn texel is the blue top-left one; the rest
+/// are colour `0x0000`, the keyed-clear texel.
+fn keyed_tim() -> Vec<u8> {
+    let mut bytes = test_tim();
+    let pixels = bytes.len() - 16;
+    bytes[pixels..].fill(0);
+    bytes[pixels] = 0x01;
+    bytes
+}
+
+#[test]
+fn page_sprite_mirrored_whole_punches_the_keyed_clear_texels_too() {
+    use crate::pack::PackWriter;
+
+    let build = |source: &str, hd: Option<(u32, Vec<u8>)>| {
+        let mut writer = PackWriter::new();
+        writer
+            .add("screen/save.lua", source.as_bytes().to_vec())
+            .unwrap();
+        writer.add("art/keyed.tim", keyed_tim()).unwrap();
+        if let Some((hash, bytes)) = hd {
+            writer
+                .add(&format!("htexture/misc/{hash:08X}.bmp"), bytes)
+                .unwrap();
+        }
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    };
+    let crate::assets::Artwork::Indexed(page) =
+        crate::ui::load_page(&build("", None), "art/keyed").unwrap()
+    else {
+        panic!("an indexed page");
+    };
+    let candidate = crate::htexture::page_candidates(&page, 0)[0];
+    let hd = crate::bmp::encode_to_vec(&crate::state::Image {
+        width: 8,
+        height: 8,
+        rgba: [0, 255, 0, 255].repeat(64),
+    })
+    .unwrap();
+    // The punched texels of the 4x4 region drawn at (10, 20), with and
+    // without `whole`.
+    let punched = |whole: &str, hole: u8| {
+        let source = format!(
+            "function update(api, input) end\nfunction draw(api)\n\
+             api:page_sprite_mirrored(api:page(\"art/keyed\"), 0, 0, 4, 4, 10, 20, 4, 4, 0, 0, \
+             false, false{whole})\nend\n"
+        );
+        let pack: &'static Pack =
+            Box::leak(Box::new(build(&source, Some((candidate.hash, hd.clone())))));
+        let fixture = Fixture {
+            pack,
+            text: Text::load(pack, Some("en-US")),
+            font: test_font(),
+            dir: TempDir::new("hd-whole"),
+        };
+        let mut screen = fixture.load();
+        let cx = fixture.context();
+        let mut framebuffer = crate::render::Framebuffer::new();
+        framebuffer.capture_hd(hole);
+        screen.draw(&cx, &mut framebuffer);
+        assert_eq!(framebuffer.hd_quads().len(), 1);
+        assert_eq!(framebuffer.hd_quads()[0].dst, [10.0, 20.0, 14.0, 24.0]);
+        let mut texels = Vec::new();
+        for y in 20..24 {
+            for x in 10..14 {
+                let index = (y * 320 + x) * 4;
+                if framebuffer.rgba[index..index + 3] == [hole; 3] {
+                    texels.push((x, y));
+                }
+            }
+        }
+        texels
+    };
+    let rect: Vec<_> = (20..24)
+        .flat_map(|y| (10..14).map(move |x| (x, y)))
+        .collect();
+    // The hole grey of 255 can't be mistaken for the black the frame starts
+    // as; a plain draw punches its one drawn texel, a whole draw every texel
+    // of the region, so redrawn HD art isn't cut to the original's shape.
+    assert_eq!(punched("", 255), [(10, 20)]);
+    assert_eq!(punched(", false", 255), [(10, 20)]);
+    assert_eq!(punched(", true", 255), rect);
+}
+
 #[test]
 fn replaced_entry_art_leaves_a_hole_and_a_quad_while_capturing() {
     let pixel = |framebuffer: &crate::render::Framebuffer, x: usize, y: usize| {
