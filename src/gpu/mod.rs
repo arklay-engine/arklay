@@ -74,7 +74,7 @@ use sdl3_sys::video::{SDL_GetWindowSizeInPixels, SDL_Window};
 use crate::htexture;
 use crate::model::{Texture8, Tmd};
 use crate::pack::Pack;
-use crate::render::{Framebuffer, GameplayScene, root_position};
+use crate::render::{Framebuffer, GameplayScene, ImageGeneration, root_position};
 use crate::state::Image;
 use crate::video;
 
@@ -145,6 +145,9 @@ enum Upload {
 struct Resident<T> {
     value: T,
     fingerprint: u64,
+    /// The owner's [`ImageGeneration`] of an image upload, which stands in
+    /// for `fingerprint` while it is unchanged.
+    generation: Option<ImageGeneration>,
     last_used: u64,
 }
 
@@ -1234,6 +1237,7 @@ impl GpuRenderer {
             Resident {
                 value,
                 fingerprint,
+                generation: None,
                 last_used: self.frame,
             },
         ) {
@@ -1328,6 +1332,7 @@ impl GpuRenderer {
             Resident {
                 value,
                 fingerprint,
+                generation: None,
                 last_used: self.frame,
             },
         ) {
@@ -1477,12 +1482,14 @@ impl GpuRenderer {
     }
 
     /// Make an RGBA image, or the HD replacement `pack` carries for it,
-    /// resident.
+    /// resident. An image its owner tags with a `generation` is not
+    /// fingerprinted again while the generation is unchanged.
     fn ensure_image(
         &mut self,
         copy: *mut SDL_GPUCopyPass,
         image: &Image,
         background: Option<&Image>,
+        generation: Option<ImageGeneration>,
         pack: Option<&Pack>,
     ) -> Result<Option<ImageTexture>> {
         if image.width == 0
@@ -1492,10 +1499,18 @@ impl GpuRenderer {
             return Ok(None);
         }
         let key = image as *const Image as usize;
+        if let Some(entry) = self.images.get_mut(&key)
+            && generation.is_some()
+            && entry.generation == generation
+        {
+            entry.last_used = self.frame;
+            return Ok(Some(entry.value));
+        }
         let fingerprint = scene::image_fingerprint(image);
         if let Some(entry) = self.images.get_mut(&key)
             && entry.fingerprint == fingerprint
         {
+            entry.generation = generation;
             entry.last_used = self.frame;
             return Ok(Some(entry.value));
         }
@@ -1524,6 +1539,7 @@ impl GpuRenderer {
             Resident {
                 value,
                 fingerprint,
+                generation,
                 last_used: self.frame,
             },
         ) {
@@ -1696,7 +1712,7 @@ impl GpuRenderer {
                 let key = run.image as *const Image as usize;
                 if let std::collections::hash_map::Entry::Vacant(slot) = sprite_textures.entry(key)
                     && let Some(texture) =
-                        self.ensure_image(copy, run.image, run.background, pack)?
+                        self.ensure_image(copy, run.image, run.background, run.generation, pack)?
                 {
                     slot.insert(texture);
                 }
@@ -3192,6 +3208,7 @@ mod tests {
         };
         let scene = GameplayScene {
             background: None,
+            background_generation: None,
             origin: [0, 0],
             colour: [0x80; 3],
             meshes: &meshes,
@@ -3250,6 +3267,75 @@ mod tests {
         gpu.retire();
         gpu.record_scene(&empty, None).unwrap();
         assert_eq!(gpu.resident_counts(), (0, 0, 0));
+    }
+
+    /// A background tagged with a generation keeps its upload, unhashed,
+    /// until the generation changes; an untagged one is fingerprinted, so an
+    /// in-place edit is still seen.
+    #[test]
+    fn gpu_image_generation_stands_in_for_the_fingerprint() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let camera = Camera::from_points([0, 0, 1000], [0, 0, 0], 600);
+        let lighting = Lighting {
+            ambient: [4096; 3],
+            lights: Default::default(),
+        };
+        let mut background = Image {
+            width: 320,
+            height: 240,
+            rgba: [200, 0, 0, 255].repeat(320 * 240),
+        };
+        let mut draw = |background: &Image, generation| {
+            let scene = GameplayScene {
+                background: Some(background),
+                background_generation: generation,
+                origin: [0, 0],
+                colour: [255; 3],
+                meshes: &[],
+                shadows: &[],
+                camera: &camera,
+                lighting: &lighting,
+                mask_layer: None,
+                effect_layer: None,
+                mirror_from: 0,
+                mirror: None,
+            };
+            gpu.record_scene(&scene, None).unwrap();
+            assert_eq!(gpu.resident_counts().2, 1);
+            let pixels = gpu.read_scene().unwrap();
+            let (width, height) = gpu.scene_size();
+            let centre = ((height / 2 * width + width / 2) * 4) as usize;
+            [pixels[centre], pixels[centre + 1], pixels[centre + 2]]
+        };
+        let paint = |background: &mut Image, colour: [u8; 4]| {
+            for pixel in background.rgba.chunks_mut(4) {
+                pixel.copy_from_slice(&colour);
+            }
+        };
+        let first = ImageGeneration::next();
+        assert_eq!(draw(&background, Some(first)), [200, 0, 0]);
+        // An edit the owner did not tag is not looked for.
+        paint(&mut background, [0, 200, 0, 255]);
+        assert_eq!(draw(&background, Some(first)), [200, 0, 0]);
+        // A new generation re-checks the pixels and uploads them.
+        assert_eq!(
+            draw(&background, Some(ImageGeneration::next())),
+            [0, 200, 0]
+        );
+        // Untagged, the fingerprint sees an in-place edit.
+        paint(&mut background, [0, 0, 200, 255]);
+        assert_eq!(draw(&background, None), [0, 0, 200]);
     }
 
     /// A pack's `htexture/` replacements are drawn in place of the background
@@ -3331,6 +3417,7 @@ mod tests {
         };
         let scene = GameplayScene {
             background: Some(&background),
+            background_generation: None,
             origin: [0, 0],
             colour: [255; 3],
             meshes: &meshes,
@@ -3476,6 +3563,7 @@ mod tests {
         };
         let scene = GameplayScene {
             background: Some(&background),
+            background_generation: None,
             origin: [0, 0],
             colour: [255; 3],
             meshes: &[],

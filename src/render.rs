@@ -2186,6 +2186,7 @@ impl DoorScene {
     pub fn scene<'a>(&'a self, meshes: &'a [EntityMesh<'a>]) -> GameplayScene<'a> {
         GameplayScene {
             background: None,
+            background_generation: None,
             origin: [0, 0],
             colour: [255; 3],
             meshes,
@@ -2372,6 +2373,22 @@ impl<'a> MaskLayer<'a> {
     }
 }
 
+/// One version of an image's contents, handed out by [`ImageGeneration::next`]
+/// and unique for the process. An owner that keeps an image across frames
+/// tags it with a generation and takes a new one whenever it changes the
+/// pixels, size or allocation, so the GPU renderer can keep the upload
+/// without hashing every byte each frame (`crate::gpu::scene::image_fingerprint`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ImageGeneration(u64);
+
+impl ImageGeneration {
+    /// A generation no other image has been tagged with.
+    pub fn next() -> Self {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        Self(NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
 /// Every input of one gameplay frame, bundled so the software rasterizer
 /// ([`GameplayScene::draw`]) and the optional GPU renderer (`crate::gpu`) draw
 /// from the same description. The fields are the arguments of
@@ -2379,6 +2396,9 @@ impl<'a> MaskLayer<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct GameplayScene<'a> {
     pub background: Option<&'a Image>,
+    /// The generation `background`'s owner tagged it with, if it tracks one;
+    /// `None` has the GPU renderer fingerprint the pixels instead.
+    pub background_generation: Option<ImageGeneration>,
     pub origin: [i32; 2],
     pub colour: [u8; 3],
     pub meshes: &'a [EntityMesh<'a>],
@@ -4309,6 +4329,13 @@ fn blend_unorm8(source: u8, destination: u8, alpha: u8) -> u8 {
 mod tests {
     use super::*;
     use crate::model::{TmdObject, TmdPrim};
+
+    #[test]
+    fn image_generations_are_unique() {
+        let a = ImageGeneration::next();
+        let b = ImageGeneration::next();
+        assert_ne!(a, b);
+    }
 
     #[test]
     fn draw_line_covers_the_quad_and_skips_offscreen_pixels() {

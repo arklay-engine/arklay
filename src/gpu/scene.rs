@@ -18,8 +18,8 @@
 use crate::anim::Mat4x3;
 use crate::model::{Texture8, Tmd};
 use crate::render::{
-    self, ABE_BIT, Camera, EntityLight, EntityMesh, GameplayScene, MirrorPass, apply_matrix_sv,
-    mul_matrix0, stored_camera_matrix,
+    self, ABE_BIT, Camera, EntityLight, EntityMesh, GameplayScene, ImageGeneration, MirrorPass,
+    apply_matrix_sv, mul_matrix0, stored_camera_matrix,
 };
 use crate::state::Image;
 
@@ -364,6 +364,9 @@ pub struct SpriteRun<'a> {
     /// mask's HD replacement when its own hash doesn't
     /// ([`crate::htexture::HdTable::paired_masks`]).
     pub background: Option<&'a Image>,
+    /// The generation `image`'s owner tagged it with
+    /// ([`GameplayScene::background_generation`]); `None` fingerprints it.
+    pub generation: Option<ImageGeneration>,
 }
 
 /// The frame's sprites: `before` draws ahead of the meshes (background,
@@ -412,6 +415,7 @@ impl<'a> Sprites<'a> {
             count: count as u32,
             depth_write,
             background: None,
+            generation: None,
         })
     }
 }
@@ -443,7 +447,11 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
             [colour[0], colour[1], colour[2], 1.0],
             SPRITE_BACKGROUND,
         );
-        sprites.before.extend(sprites.run(image, first, false));
+        let run = sprites.run(image, first, false).map(|run| SpriteRun {
+            generation: scene.background_generation,
+            ..run
+        });
+        sprites.before.extend(run);
     }
 
     // The masks are opaque cut-outs at their painter's key; they write depth

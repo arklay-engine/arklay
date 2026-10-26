@@ -129,7 +129,8 @@ use crate::player;
 use crate::player_script;
 use crate::rdt;
 use crate::render::{
-    self, Camera, EffectLayer, EffectQuad, EntityMesh, Framebuffer, Lighting, MaskLayer,
+    self, Camera, EffectLayer, EffectQuad, EntityMesh, Framebuffer, ImageGeneration, Lighting,
+    MaskLayer,
 };
 use crate::save;
 use crate::scd;
@@ -1786,7 +1787,8 @@ const DEATH_BACKDROP_MAX_HEIGHT: u32 = 2160;
 /// target's size ([`crate::htexture::Overlay::flatten`]), so the background's
 /// nearest sampling maps it pixel for pixel. The bake is redone only when the
 /// frame, its art or the target changes, and the images persist so the GPU
-/// keeps their upload.
+/// keeps their upload. The bake carries an [`ImageGeneration`] taken anew
+/// each time it is redone, so the GPU does not re-hash it every frame.
 #[derive(Default)]
 struct DeathBackdrop {
     /// The 320x240 frame drawn so far.
@@ -1795,16 +1797,21 @@ struct DeathBackdrop {
     baked: Image,
     /// The quads baked into `hd`.
     quads: Vec<crate::htexture::Quad>,
-    /// `baked` with the HD art over it.
-    hd: Option<Image>,
+    /// `baked` with the HD art over it, and its generation.
+    hd: Option<(Image, ImageGeneration)>,
 }
 
 impl DeathBackdrop {
     /// Snapshot `band`, the frame's rows from `top` on, and return the
     /// background to record into a `target` (`[width, height]`) scene: the
-    /// frame, or the bake when HD art was captured over it. `None` when the
-    /// art cannot be baked (a model, a blended punch).
-    fn update(&mut self, band: &Framebuffer, top: u32, target: (u32, u32)) -> Option<&Image> {
+    /// frame, or the bake and its generation when HD art was captured over
+    /// it. `None` when the art cannot be baked (a model, a blended punch).
+    fn update(
+        &mut self,
+        band: &Framebuffer,
+        top: u32,
+        target: (u32, u32),
+    ) -> Option<(&Image, Option<ImageGeneration>)> {
         let (width, height) = (WIDTH as u32, HEIGHT as u32);
         let top = (top as usize).min(height as usize);
         let stride = width as usize * 4;
@@ -1820,7 +1827,7 @@ impl DeathBackdrop {
             .as_deref()
             .filter(|overlay| !overlay.quads.is_empty())
         else {
-            return Some(&self.frame);
+            return Some((&self.frame, None));
         };
         let (target_w, target_h) = target;
         let out_h = target_h.clamp(1, DEATH_BACKDROP_MAX_HEIGHT);
@@ -1828,7 +1835,7 @@ impl DeathBackdrop {
             (u64::from(target_w) * u64::from(out_h) / u64::from(target_h.max(1))).max(1) as u32,
             out_h,
         ];
-        let current = self.hd.as_ref().is_some_and(|hd| {
+        let current = self.hd.as_ref().is_some_and(|(hd, _)| {
             [hd.width, hd.height] == out
                 && self.quads.len() == overlay.quads.len()
                 && self
@@ -1839,11 +1846,13 @@ impl DeathBackdrop {
                 && self.baked.rgba == self.frame.rgba
         });
         if !current {
-            self.hd = Some(overlay.flatten(&self.frame, out)?);
+            self.hd = Some((overlay.flatten(&self.frame, out)?, ImageGeneration::next()));
             self.quads.clone_from(&overlay.quads);
             self.baked.clone_from(&self.frame);
         }
-        self.hd.as_ref()
+        self.hd
+            .as_ref()
+            .map(|(hd, generation)| (hd, Some(*generation)))
     }
 }
 
@@ -5614,7 +5623,8 @@ impl GameSession {
             if let Some(gpu) = gpu
                 .as_deref_mut()
                 .filter(|_| !scene_shown && framebuffer.width == WIDTH as u32)
-                && let Some(background) = death_backdrop.update(framebuffer, top, gpu.scene_size())
+                && let Some((background, background_generation)) =
+                    death_backdrop.update(framebuffer, top, gpu.scene_size())
             {
                 let mut camera = *camera;
                 camera.screen[1] += top as i32;
@@ -5634,6 +5644,7 @@ impl GameSession {
                 }];
                 let scene = render::GameplayScene {
                     background: Some(background),
+                    background_generation,
                     origin: [0, 0],
                     colour: [255; 3],
                     meshes: &meshes,
@@ -14866,6 +14877,7 @@ fn render_frame_on(
     let global_colour = [255; 3];
     let scene = render::GameplayScene {
         background: cut.background.as_ref(),
+        background_generation: None,
         origin: display_origin,
         colour: global_colour,
         meshes: &meshes,
@@ -15429,6 +15441,51 @@ mod tests {
         SDL_SCANCODE_RSHIFT, SDL_SCANCODE_SPACE, SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_X,
         SDL_SCANCODE_Z,
     };
+
+    /// The DIED screen's HD bake keeps its generation while the frame, its
+    /// art and the target are unchanged, and takes a new one when it is
+    /// rebaked, so the GPU skips re-hashing it only while it is current.
+    #[test]
+    fn death_backdrop_bake_takes_a_new_generation_when_rebaked() {
+        let mut backdrop = DeathBackdrop::default();
+        let mut band = Framebuffer::new();
+        // No captured art: the 320x240 frame, which the GPU fingerprints.
+        let (frame, generation) = backdrop.update(&band, 0, (640, 480)).unwrap();
+        assert_eq!((frame.width, frame.height, generation), (320, 240, None));
+
+        band.capture_hd(0);
+        let art = std::sync::Arc::new(crate::htexture::Replacement {
+            image: Image {
+                width: 1,
+                height: 1,
+                rgba: vec![255, 0, 0, 255],
+            },
+            frame: [1, 1],
+        });
+        let overlay = band.hd.as_mut().unwrap();
+        overlay.quads.push(crate::htexture::Quad {
+            image: art.into(),
+            dst: [0.0, 0.0, 16.0, 16.0],
+            uv: [0.0, 0.0, 1.0, 1.0],
+            colour: [1.0; 3],
+            clip: [0, 0, 16, 16],
+        });
+        overlay.cover(0, 0);
+        let mut bake = |band: &Framebuffer, target| {
+            let (hd, generation) = backdrop.update(band, 0, target).unwrap();
+            ([hd.width, hd.height], generation.expect("a bake is tagged"))
+        };
+        let (size, first) = bake(&band, (640, 480));
+        assert_eq!(size, [640, 480]);
+        assert_eq!(bake(&band, (640, 480)).1, first, "unchanged bake");
+        band.rgba[(100 * WIDTH as usize + 100) * 4] = 7;
+        let second = bake(&band, (640, 480)).1;
+        assert_ne!(second, first, "the frame changed");
+        let (size, third) = bake(&band, (1440, 1080));
+        assert_eq!(size, [1440, 1080]);
+        assert_ne!(third, second, "the target changed");
+        assert_eq!(bake(&band, (1440, 1080)).1, third);
+    }
 
     #[test]
     fn menu_saves_only_what_it_changed_over_the_file() {
