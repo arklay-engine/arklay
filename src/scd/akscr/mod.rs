@@ -72,15 +72,24 @@
 //!   its header says `nopad` (`event event_05 nopad`); `raw(0x.., ...);` as
 //!   the last statement gives any other trailing bytes.
 //!
+//! One merged script covers every variant of a room: `#if CHRIS`, `#if JILL`,
+//! `#if MANSION1` and `#if MANSION2` (with `#else` / `#endif`, nestable) keep
+//! or drop whole lines per variant before the script is parsed; see
+//! [`compile_variant`] and [`merge`].
+//!
 //! Anywhere a statement is allowed, `asm { ... }` embeds `.s` assembly lines
 //! verbatim (closed by a line holding only `}`); the decompiler uses it for
 //! bytecode that has no structured form.
 
 mod compile;
 mod decompile;
+mod merge;
+mod preprocess;
 
-pub use compile::compile;
+pub use compile::{compile, compile_variant};
 pub use decompile::decompile;
+pub use merge::{merge, merge_rooms};
+pub use preprocess::{SYMBOLS, Variant, merged_id, preprocess, room_variants};
 
 #[cfg(test)]
 mod tests;

@@ -1,0 +1,188 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 17200, 900, 2000, 2000, 1, 0, 3, 4, 0, RDT_002, 6400, 0, 14000, 1024, UNLOCKED, 129);
+#if MANSION1
+    door_aot_set(1, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 255, RDT_014, 6400, 0, 14000, 3072, UNLOCKED, 0);
+    door_aot_set(2, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 204, RDT_015, 8100, 0, 3800, 2048, ITEM_HELMET_KEY, 129);
+    door_aot_set(3, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, RDT_101, 4300, 0, 3100, 2048, UNLOCKED, 129);
+#else
+#if CHRIS
+    door_aot_set(1, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 255, RDT_014, 11200, 0, 28000, 3072, UNLOCKED, 129);
+    door_aot_set(2, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 140, RDT_015, 8100, 0, 3800, 2048, ITEM_HELMET_KEY, 129);
+    door_aot_set(3, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, RDT_601, 4300, 0, 3100, 2048, UNLOCKED, 129);
+#else
+    door_aot_set(1, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 0, RDT_014, 11200, 0, 28000, 3072, UNLOCKED, 129);
+    door_aot_set(2, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 204, RDT_015, 8100, 0, 3800, 2048, ITEM_HELMET_KEY, 129);
+    door_aot_set(3, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, RDT_101, 4300, 0, 3100, 2048, UNLOCKED, 129);
+#endif
+#endif
+    aot_set(4, 2000, 10300, 300, 1900, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+#if MANSION1
+    aot_set(5, 14700, 25700, 1500, 1900, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+    if (ck(FG_STATUS, 8, 1))
+    {
+        set(FG_COMMON, 44, 1);
+    }
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 4, 29, 1, 2, 0, 0, 0, 0, 0, 9500, 0, 8600, 0, 0, 0, 0);
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 4, 30, 1, 2, 0, 0, 2039, 0, 0, 9242, 0, 13969, 1, 0, 0, 0);
+    if (ck(FG_STATUS, 8, 1))
+    {
+        enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 4, 31, 1, 2, 0, 0, 920, 0, 0, 5213, 0, 10454, 2, 0, 0, 0);
+    }
+    if (ck(FG_STATUS, 8, 1))
+#else
+#if CHRIS
+    aot_set(5, 14700, 25700, 1500, 1900, SCE_EVENT, 129, 9, 0, event_02, 0, 0, 0);
+    enemy(ENEMY_HUNTER, 0, 60, 1, 2, 0, 0, 1976, 0, 0, 15656, 0, 21372, 0, 0, 0, 0);
+    enemy(ENEMY_HUNTER, 16, 61, 1, 2, 0, 0, 1809, 0, 0, 20872, 0, 4240, 1, 0, 0, 0);
+    if (ck(FG_STATUS, 8, 1))
+#else
+    aot_set(5, 14700, 25700, 1500, 1900, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+    enemy(ENEMY_HUNTER, 2, 60, 1, 2, 0, 0, 1976, 0, 0, 16012, 0, 20724, 0, 0, 0, 0);
+    if (ck(FG_SCENARIO, 70, 1))
+    {
+        aot_delete(1, SCE_NONE, 129);
+    }
+    else
+#endif
+#endif
+    {
+#if MANSION1
+        if (ck(FG_COMMON, 160, 0))
+        {
+            if (ck(FG_COMMON, 161, 1))
+            {
+                set(FG_COMMON, 161, 0);
+                room_bgm_state_set(0, 4, 10);
+                room_bgm_state_set(0, 15, 65);
+            }
+        }
+#else
+#if CHRIS
+        if (ck(FG_COMMON, 47, 0))
+        {
+            set(FG_COMMON, 48, 0);
+            set(FG_COMMON, 192, 0);
+            set(FG_COMMON, 47, 1);
+            evt_exec(0, 9, event_00);
+        }
+#else
+        aot_delete(5, SCE_NONE, 129);
+#endif
+#endif
+    }
+#if MANSION2
+#if CHRIS
+    aot_delete(1, SCE_NONE, 129);
+#endif
+#endif
+}
+
+event event_00
+#if MANSION1
+{
+    run
+    {
+#else
+{
+#if CHRIS
+    set(FG_STATUS, 15, 0);
+    sleep(1);
+    set(FG_6, 23, 1);
+    set(FG_6, 29, 1);
+    voice_play(1, 93, 0);
+    wait_message();
+    evt_fork(9, event_01, 0);
+    sleep(100);
+#endif
+    run
+    {
+#if CHRIS
+        cut_auto(0);
+        set(FG_STATUS, 15, 1);
+        set(FG_6, 29, 0);
+        set(FG_6, 23, 0);
+    }
+    evt_finish();
+}
+
+event event_01
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 15, 32 | 31, 0 | 0);
+    act_param_set(0, 8);
+    sleep(42);
+    act_idle();
+    act_finish();
+}
+
+event event_02
+{
+    run
+    {
+#endif
+#endif
+        set(FG_6, 23, 1);
+        cutnext(7);
+        message(128, 5);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+#if MANSION1
+    message(129, 5);
+#else
+#if CHRIS
+    message(129, 5);
+#else
+    run
+    {
+        if (ck(FG_COMMON, 37, 1))
+        {
+            message(129, 5);
+        }
+        else
+        {
+            se_play_3d(2, 23, 0, 0, 0, 15500, 26000);
+            message(130, 5);
+        }
+    }
+#endif
+#endif
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+#if MANSION1
+        set(FG_6, 23, 0);
+#else
+#if CHRIS
+        set(FG_6, 23, 0);
+#else
+        if (ck(FG_COMMON, 37, 0))
+        {
+            aot_delete(1, SCE_DOOR, 129);
+            aot_on(1, SCE_DOOR, 0);
+            set(FG_SCENARIO, 70, 0);
+            set(FG_6, 23, 0);
+        }
+#endif
+#endif
+        cutcurr(0);
+        cut_auto(0);
+#if MANSION2
+#if JILL
+        set(FG_6, 23, 0);
+#endif
+#endif
+    }
+    evt_finish();
+}

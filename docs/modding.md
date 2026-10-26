@@ -446,7 +446,9 @@ arklay re1.akpak --mod fr.akpak --language fr-FR --room 100
 `manifest.toml` is required and packed, every other file maps to a pack entry
 equal to its directory-relative path, and a `scd/<stem>.s` source is assembled
 into `scd/<stem>.scd` (the `.s` itself is not packed); a `scd/<stem>.akscr`
-script is compiled the same way. `--base <base.akpak>`
+script is compiled the same way, and a merged room script named by three hex
+digits (`scd/103.akscr`) is compiled once per variant, into `scd/1030.scd`,
+`scd/1031.scd`, `scd/6030.scd` and `scd/6031.scd`. `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
 its own class (the previous section) is an override, not a new file. PNG, WebP
@@ -591,8 +593,31 @@ events are inert.
 `arklay scd export ROOM1000.RDT --out 1000.akscr` decompiles a room's scripts
 to structured code, and `arklay scd build 1000.akscr --out scd/1000.scd`
 compiles it back. Every room of the shipped game decompiles to a script that
-compiles to byte-identical init, main and event streams; the decompiled
-scripts are checked in under `games/re1/room/`.
+compiles to byte-identical init, main and event streams.
+
+`arklay scd export-rooms re1.akpak --out games/re1/room` writes one merged
+script per room, covering both players and, for stages 1 and 2, the second
+mansion visit (stages 6 and 7): `103.akscr` holds RDTs 1030, 1031, 6030 and
+6031. Where the variants differ, `#if` blocks pick the lines:
+
+```c
+#if CHRIS
+    voice_play(1, 28, 0);
+#else
+    voice_play(1, 92, 0);
+#endif
+#if MANSION2
+    set(FG_ROOM, 4, 1);
+#endif
+```
+
+`CHRIS` and `JILL` follow the player digit, `MANSION1` and `MANSION2` the
+stage (neither is defined outside the mansion); blocks nest, and the
+directives work on whole lines, so a block may cover part of a statement or
+a section header. `arklay scd build 103.akscr --room 6031 --out
+scd/6031.scd` compiles one variant; a script without a variant must not use
+`#if`. The merged scripts are checked in under `games/re1/room/`, and each
+compiles to its RDTs' exact bytecode.
 
 ```c
 #version 1

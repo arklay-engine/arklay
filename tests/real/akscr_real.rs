@@ -2,12 +2,14 @@
 //!
 //! Needs `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK`; without them the test skips.
 //! Every room RDT with scripts must decompile to a script that compiles back
-//! to byte-identical init, main and event streams, and the checked-in
-//! `games/re1/room/<id>.akscr` must be exactly that script.
+//! to byte-identical init, main and event streams. The checked-in
+//! `games/re1/room/<room>.akscr` must be exactly the merged script of the
+//! room's variants, and compiling it for each variant must give that RDT's
+//! streams again.
 
 use crate::common;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use arklay::pack::Pack;
@@ -35,9 +37,14 @@ fn event_bytes(stream: &Stream) -> Vec<u8> {
     bytes
 }
 
-/// Compile `text` into a standalone container and decode it back.
-fn compile(text: &str) -> Scripts {
-    let container = akscr::compile(text)
+/// Compile `text` (for `variant`, if given) into a standalone container and
+/// decode it back.
+fn compile(text: &str, variant: Option<akscr::Variant>) -> Scripts {
+    let assembled = match variant {
+        Some(variant) => akscr::compile_variant(text, variant),
+        None => akscr::compile(text),
+    };
+    let container = assembled
         .and_then(|assembled| assembled.to_container())
         .unwrap();
     reader::parse(&container).unwrap()
@@ -81,12 +88,14 @@ fn every_room_script_compiles_to_identical_bytecode() {
     let pack = Pack::open(&pack_path).unwrap();
     let checked_in = Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room");
 
-    let mut rooms = BTreeSet::new();
+    let mut originals = BTreeMap::new();
+    let mut texts = BTreeMap::new();
     for entry in pack.entries() {
         let path = entry.path();
-        let Some(stem) = path
+        let Some(id) = path
             .strip_prefix("room/")
             .and_then(|name| name.strip_suffix(".rdt"))
+            .and_then(|stem| u16::from_str_radix(stem, 16).ok())
         else {
             continue;
         };
@@ -100,25 +109,39 @@ fn every_room_script_compiles_to_identical_bytecode() {
             continue;
         };
         let text = akscr::decompile(&original);
-        assert_identical(path, &original, &compile(&text));
+        assert_identical(path, &original, &compile(&text, None));
+        texts.insert(id, text);
+        originals.insert(id, original);
+    }
+    assert!(texts.len() > 300, "only {} rooms with scripts", texts.len());
 
-        let script = checked_in.join(format!("{stem}.akscr"));
+    let merged = akscr::merge_rooms(&texts).unwrap();
+    for (base, text) in &merged {
+        let script = checked_in.join(format!("{base:03x}.akscr"));
         let stored = std::fs::read_to_string(&script)
             .unwrap_or_else(|error| panic!("{}: {error}", script.display()));
         assert!(
-            stored == text,
-            "{} is out of date; re-export it with `arklay scd export`",
+            &stored == text,
+            "{} is out of date; re-export it with `arklay scd export-rooms`",
             script.display()
         );
-        rooms.insert(stem.to_string());
     }
-    assert!(rooms.len() > 300, "only {} rooms with scripts", rooms.len());
+    for (&id, original) in &originals {
+        let base = akscr::merged_id(id);
+        let compiled = compile(&merged[&base], Some(akscr::Variant::for_room(id)));
+        assert_identical(
+            &format!("{base:03x}.akscr as {id:04X}"),
+            original,
+            &compiled,
+        );
+    }
 
+    let stems: BTreeSet<String> = merged.keys().map(|base| format!("{base:03x}")).collect();
     for entry in std::fs::read_dir(&checked_in).unwrap() {
         let path = entry.unwrap().path();
         let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
         assert!(
-            rooms.contains(&stem),
+            stems.contains(&stem),
             "{} has no room in the pack",
             path.display()
         );

@@ -7,12 +7,23 @@
 
 use anyhow::{Result, bail};
 
+use super::preprocess::{Variant, preprocess};
 use crate::budget;
 use crate::scd::asm::{self, Arg, Assembled, InsnSrc, Item, ItemKind, Source};
 use crate::scd::disasm::{ACTOR_SIG, CONTROL_SIG, EVENT_TOP_SIG, TWEEN_SIG};
 
-/// Compile `.akscr` source into the SCD IR.
+/// Compile `.akscr` source into the SCD IR. The script must not use `#if`;
+/// see [`compile_variant`].
 pub fn compile(text: &str) -> Result<Assembled> {
+    compile_preprocessed(&preprocess(text, None)?)
+}
+
+/// Compile the `variant` of a merged `.akscr` script into the SCD IR.
+pub fn compile_variant(text: &str, variant: Variant) -> Result<Assembled> {
+    compile_preprocessed(&preprocess(text, Some(variant))?)
+}
+
+fn compile_preprocessed(text: &str) -> Result<Assembled> {
     let sections = parse(text)?;
     let mut source = Source::default();
     let mut pad_events = Vec::new();

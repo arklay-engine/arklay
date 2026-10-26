@@ -273,7 +273,114 @@ fn errors_name_the_line() {
     );
 }
 
-/// Every checked-in room script compiles.
+#[test]
+fn preprocessor_selects_lines_per_variant() {
+    let text = "#version 1
+proc main noreturn
+{
+#if MANSION1
+    nop(1);
+#if CHRIS
+    nop(2);
+#else
+    nop(3);
+#endif
+#else
+    nop(4);
+#endif
+#if JILL
+    nop(5);
+#endif
+}
+";
+    let nops = |id: u16| -> Vec<u8> {
+        let container = compile_variant(text, Variant::for_room(id))
+            .unwrap()
+            .to_container()
+            .unwrap();
+        block_bytes(&reader::parse(&container).unwrap().main[0])
+            .chunks(2)
+            .map(|insn| insn[1])
+            .collect()
+    };
+    assert_eq!(nops(0x1030), [1, 2]);
+    assert_eq!(nops(0x1031), [1, 3, 5]);
+    assert_eq!(nops(0x6030), [4]);
+    assert_eq!(nops(0x7031), [4, 5]);
+    // Outside the mansion neither mansion symbol is defined.
+    assert_eq!(nops(0x3001), [4, 5]);
+
+    assert!(compile_error(text).contains("--room"));
+    let unknown = format!(
+        "{:#}",
+        compile_variant(
+            "#version 1\n#if REBECCA\n#endif\n",
+            Variant::for_room(0x1030)
+        )
+        .unwrap_err()
+    );
+    assert!(unknown.contains("REBECCA"), "{unknown}");
+    for broken in ["#endif\n", "#if JILL\n", "#if JILL\n#else\n#else\n#endif\n"] {
+        assert!(
+            compile_variant(broken, Variant::for_room(0x1030)).is_err(),
+            "{broken}"
+        );
+    }
+    // Dropped lines keep their place, so errors name the source line.
+    let error = format!(
+        "{:#}",
+        compile_variant(
+            "#version 1\nproc init\n{\n#if CHRIS\n    nop(0);\n#endif\n    sleep(1);\n}\n",
+            Variant::for_room(0x1031)
+        )
+        .unwrap_err()
+    );
+    assert!(error.contains("line 7"), "{error}");
+}
+
+#[test]
+fn room_ids_map_to_merged_scripts() {
+    assert_eq!(merged_id(0x1030), 0x103);
+    assert_eq!(merged_id(0x6031), 0x103);
+    assert_eq!(merged_id(0x70C0), 0x20C);
+    assert_eq!(merged_id(0x5141), 0x514);
+    assert_eq!(room_variants(0x103), [0x1030, 0x1031, 0x6030, 0x6031]);
+    assert_eq!(room_variants(0x514), [0x5140, 0x5141]);
+}
+
+#[test]
+fn merged_scripts_reproduce_every_variant() {
+    let chris_1 = "#version 1\n\nproc main\n{\n    nop(1);\n    nop(2);\n    nop(3);\n}\n";
+    let jill_1 = "#version 1\n\nproc main\n{\n    nop(1);\n    nop(9);\n    nop(3);\n}\n";
+    let chris_2 = "#version 1\n\nproc main\n{\n    nop(1);\n    nop(2);\n}\n";
+    let jill_2 = "#version 1\n\nproc main\n{\n    nop(1);\n    nop(9);\n}\n";
+    let variants = [
+        (Variant::for_room(0x1030), chris_1),
+        (Variant::for_room(0x1031), jill_1),
+        (Variant::for_room(0x6030), chris_2),
+        (Variant::for_room(0x6031), jill_2),
+    ];
+    let merged = merge(&variants).unwrap();
+    assert_eq!(
+        merged,
+        "#version 1\n\nproc main\n{\n    nop(1);\n#if CHRIS\n    nop(2);\n#else\n    \
+         nop(9);\n#endif\n#if MANSION1\n    nop(3);\n#endif\n}\n"
+    );
+    for (variant, text) in variants {
+        let kept: Vec<&str> = preprocess::kept_lines(&merged, Some(variant))
+            .unwrap()
+            .into_iter()
+            .map(|(_, line)| line)
+            .collect();
+        assert_eq!(kept, text.lines().collect::<Vec<_>>());
+    }
+
+    // A room missing a variant merges what is there.
+    let merged = merge(&variants[..2]).unwrap();
+    assert!(!merged.contains("MANSION"), "{merged}");
+}
+
+/// Every checked-in room script compiles for each of its variants.
 #[test]
 fn checked_in_room_scripts_compile() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room");
@@ -290,8 +397,14 @@ fn checked_in_room_scripts_compile() {
             continue;
         }
         let text = std::fs::read_to_string(&path).unwrap();
-        if let Err(error) = compile(&text).and_then(|assembled| assembled.to_container()) {
-            panic!("{}: {error:#}", path.display());
+        let stem = path.file_stem().unwrap().to_string_lossy();
+        let base = u16::from_str_radix(&stem, 16).unwrap();
+        for id in room_variants(base) {
+            if let Err(error) = compile_variant(&text, Variant::for_room(id))
+                .and_then(|assembled| assembled.to_container())
+            {
+                panic!("{} as {id:04X}: {error:#}", path.display());
+            }
         }
         count += 1;
     }

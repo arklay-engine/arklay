@@ -105,6 +105,19 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
         {
             continue;
         }
+        if let Some((prefix, base)) = merged_scd_source(relative) {
+            let text = fs::read_to_string(source)
+                .with_context(|| format!("failed to read {}", source.display()))?;
+            for id in crate::scd::akscr::room_variants(base) {
+                let variant = crate::scd::akscr::Variant::for_room(id);
+                let container = crate::scd::akscr::compile_variant(&text, variant)
+                    .and_then(|assembled| assembled.to_container())
+                    .with_context(|| format!("failed to compile {relative} for room {id:04X}"))?;
+                let output = format!("{prefix}{id:04x}.scd");
+                push_entry(&mut entries, &mut outputs, output, container, relative)?;
+            }
+            continue;
+        }
         if let Some(assembled) = scd_source_output(relative) {
             let container = assemble_scd(source)?;
             push_entry(&mut entries, &mut outputs, assembled, container, relative)?;
@@ -301,6 +314,21 @@ fn scd_source_output(relative: &str) -> Option<String> {
     Some(format!("{stem}.scd"))
 }
 
+/// A merged room script `scd/<room>.akscr` (three hex digits, e.g.
+/// `scd/103.akscr`): the `scd/` prefix as written and the room id. It builds
+/// `scd/<id>.scd` for every player and mansion variant of the room.
+fn merged_scd_source(relative: &str) -> Option<(&str, u16)> {
+    let (prefix, name) = relative.split_at_checked(4)?;
+    if !prefix.eq_ignore_ascii_case("scd/") {
+        return None;
+    }
+    let (stem, extension) = name.split_at_checked(3)?;
+    if !extension.eq_ignore_ascii_case(".akscr") || !stem.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some((prefix, u16::from_str_radix(stem, 16).ok()?))
+}
+
 /// Add one built entry, rejecting two sources that map to the same path.
 fn push_entry(
     entries: &mut Vec<(String, Vec<u8>)>,
@@ -488,6 +516,53 @@ mod tests {
     }
 
     #[test]
+    fn merged_room_scripts_build_every_variant() {
+        let dir = TempDir::new("scd-merged");
+        let source = dir.path.join("source");
+        write(
+            &source.join("manifest.toml"),
+            mod_manifest_text("demo", "re1").as_bytes(),
+        );
+        write(
+            &source.join("scd/103.akscr"),
+            b"#version 1\nproc main noreturn\n{\n#if JILL\n    nop(1);\n#endif\n#if MANSION2\n    nop(2);\n#endif\n}\n",
+        );
+
+        let out = dir.path.join("demo.akpak");
+        let summary = build_mod(&source, &out, None).unwrap();
+        assert_eq!(
+            summary
+                .entries
+                .iter()
+                .map(|(path, _)| path.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "manifest.toml",
+                "scd/1030.scd",
+                "scd/1031.scd",
+                "scd/6030.scd",
+                "scd/6031.scd"
+            ]
+        );
+
+        let pack = Pack::open(&out).unwrap();
+        for (path, expected) in [
+            ("scd/1030.scd", &[][..]),
+            ("scd/1031.scd", &[0x0E, 0x01][..]),
+            ("scd/6030.scd", &[0x0E, 0x02][..]),
+            ("scd/6031.scd", &[0x0E, 0x01, 0x0E, 0x02][..]),
+        ] {
+            let scripts = crate::scd::reader::parse(&pack.read(path).unwrap()).unwrap();
+            let bytes: Vec<u8> = scripts.main[0]
+                .insns
+                .iter()
+                .flat_map(|insn| insn.bytes.iter().copied())
+                .collect();
+            assert_eq!(bytes, expected, "{path}");
+        }
+    }
+
+    #[test]
     fn a_broken_scd_source_fails_the_build() {
         let dir = TempDir::new("scd-broken");
         let source = dir.path.join("source");
@@ -528,6 +603,16 @@ mod tests {
         assert_eq!(scd_source_output("scd/.akscr"), None);
         assert_eq!(scd_source_output("scd/.s"), None);
         assert_eq!(scd_source_output("scd/1000.scd"), None);
+    }
+
+    #[test]
+    fn merged_room_scripts_are_recognised() {
+        assert_eq!(merged_scd_source("scd/103.akscr"), Some(("scd/", 0x103)));
+        assert_eq!(merged_scd_source("SCD/20A.AKSCR"), Some(("SCD/", 0x20A)));
+        assert_eq!(merged_scd_source("scd/1030.akscr"), None);
+        assert_eq!(merged_scd_source("scd/10x.akscr"), None);
+        assert_eq!(merged_scd_source("scd/103.s"), None);
+        assert_eq!(merged_scd_source("lua/103.akscr"), None);
     }
 
     #[test]

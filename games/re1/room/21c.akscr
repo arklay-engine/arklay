@@ -1,0 +1,100 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 17500, 5300, 2000, 2900, 0, 10, 16, 64, 0, RDT_000, 4600, 0, 4600, 1024, UNLOCKED, 129);
+    door_aot_set(1, 5600, 1000, 1900, 1300, 1, 1, 8, 0, 155, RDT_01B, 4800, 0, 4600, 0, LOCKED, 129);
+    door_aot_set(2, 4200, 9600, 1800, 1300, 3, 0, 0, 1, 0, RDT_110, 2900, 0, 10400, 0, UNLOCKED, 129);
+    aot_set(3, 400, 9800, 4900, 12400, SCE_USEITEM, 1, 4, 0, 24, 0, 1, 0);
+    aot_set(4, 800, 2300, 1400, 2100, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    aot_set(5, 14000, 4000, 1400, 3900, SCE_MESSAGE, 129, 129, 0, 79, 0, 0, 0);
+    aot_set(6, 800, 6200, 1400, 1200, SCE_MESSAGE, 129, 130, 0, 79, 0, 0, 0);
+    aot_set(7, 7300, 7800, 1400, 1500, SCE_MESSAGE, 129, 131, 0, 79, 0, 0, 0);
+    aot_set(8, 11000, 7800, 1500, 1500, SCE_MESSAGE, 129, 132, 0, 79, 0, 0, 0);
+    aot_set(9, 5400, 5200, 2000, 2300, SCE_MESSAGE, 129, 133, 0, 79, 0, 0, 0);
+#if CHRIS
+    item_aot_set(10, 8500, 7800, 1600, 1000, ITEM_SMALL_KEY, 1, 0, 255, 34, 36, 36, 250, 96, 34, 0, 0, 228, 129, 0, 134);
+#endif
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 3, 107, 1, 2, 0, 0, 1536, 0, 0, 20000, 0, 4500, 0, 0, 0, 0);
+    enemy(ENEMY_ZOMBIE_RESEARCHER_, 128, 108, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+    if (ck(FG_SCENARIO, 51, 0))
+    {
+        aot_delete(3, SCE_NONE, 129);
+        if (ck(FG_ENEMY, 108, 1))
+        {
+            pos_set(1, 0, 850, 0, 3450, 0, 4600);
+            eml_state(0, 1, 0, 0);
+        }
+    }
+    if (ck(FG_SCENARIO, 51, 1))
+    {
+        aot_delete(2, SCE_NONE, 129);
+    }
+    set(FG_STATUS, 29, 0);
+    set(FG_STATUS, 28, 0);
+}
+
+proc main
+{
+    if (ck(FG_ROOM, 24, 0) && ck(FG_SCENARIO, 51, 1))
+    {
+        evt_exec(0, 9, event_00);
+        set(FG_SCENARIO, 51, 0);
+        aot_delete(3, SCE_NONE, 129);
+        aot_delete(2, SCE_DOOR, 129);
+    }
+}
+
+event event_00
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        bgm_stop_all(0);
+        movie_on(4);
+    }
+    evt_next();
+    evt_nop();
+    run
+    {
+        bgm_restore(0);
+        set(FG_STATUS, 15, 0);
+        cutnext(1);
+        dir_set(0, 0, 3200, 0, 3600, 0, 9000);
+        eml_state(0, 1, 0, 0);
+    }
+    sleep(20);
+    run
+    {
+        se_play_3d(2, 23, 0, 0, 0, 4200, 10000);
+    }
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(35845, 18698, 6428);
+    act_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 25, 1));
+    act_reset();
+    evt_nop();
+    sleep(5);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_reset();
+    run
+    {
+        pos_set(1, 0, 1350, 0, 4000, 0, 9800);
+        cutnext(0);
+        set(FG_STATUS, 15, 1);
+        set(FG_6, 23, 0);
+        cutcurr(0);
+        set(FG_6, 29, 0);
+    }
+    sleep(20);
+    evt_finish();
+}
