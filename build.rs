@@ -176,9 +176,10 @@ fn emit_language_files() {
 
 /// Compile the checked-in room scripts under `games/re1/room/` into the SCD
 /// bytecode `convert-game` packs as `scd/<id>.scd`, one container per RDT
-/// variant, each beside the digest of its `AUTHENTIC` build: a container only
-/// replaces an RDT's own scripts when that digest proves they are the ones
-/// the script was written from.
+/// variant and release, each beside the digest of its `AUTHENTIC` build: a
+/// container only replaces an RDT's own scripts when that digest proves they
+/// are the ones the script was written from. Where both releases build the
+/// same `AUTHENTIC` bytecode the Steam container stands for both.
 fn emit_room_scripts() {
     use scd::akscr::preprocess::{Variant, includes_from, room_variants};
 
@@ -234,21 +235,40 @@ fn emit_room_scripts() {
         let text = std::fs::read_to_string(path)
             .unwrap_or_else(|err| panic!("cannot read {}: {err}", path.display()));
         for id in room_variants(*base) {
-            let variant = Variant::for_room(id);
-            let authentic = compile(&text, variant.authentic(), path);
-            let original = scd::reader::parse(&authentic)
-                .unwrap_or_else(|err| panic!("{} as {id:04X}: {err:#}", path.display()))
-                .digest();
-            let container = compile(&text, variant, path);
-            let file = scd_dir.join(format!("{id:04x}.scd"));
-            std::fs::write(&file, container).expect("failed to write room bytecode");
-            writeln!(
-                out,
-                "    RoomScript {{ id: 0x{id:04X}, original: 0x{original:016X}, \
-                 container: include_bytes!({:?}) }},",
-                file.to_string_lossy()
-            )
-            .expect("writing to a String cannot fail");
+            let mut steam_build = None;
+            for (variant, suffix) in [
+                (Variant::for_room(id), ""),
+                (Variant::for_room(id).mediakite(), "-mediakite"),
+            ] {
+                let authentic = compile(&text, variant.authentic(), path);
+                let original = scd::reader::parse(&authentic)
+                    .unwrap_or_else(|err| panic!("{} as {id:04X}: {err:#}", path.display()))
+                    .digest();
+                let container = compile(&text, variant, path);
+                if let Some((steam_original, steam_container)) = &steam_build {
+                    if *steam_original == original {
+                        assert!(
+                            *steam_container == container,
+                            "{} as {id:04X}: both releases build the same `AUTHENTIC` \
+                             bytecode but different fixed bytecode; `#if STEAM` may only \
+                             hold lines where the releases' own scripts differ",
+                            path.display()
+                        );
+                        continue;
+                    }
+                } else {
+                    steam_build = Some((original, container.clone()));
+                }
+                let file = scd_dir.join(format!("{id:04x}{suffix}.scd"));
+                std::fs::write(&file, container).expect("failed to write room bytecode");
+                writeln!(
+                    out,
+                    "    RoomScript {{ id: 0x{id:04X}, original: 0x{original:016X}, \
+                     container: include_bytes!({:?}) }},",
+                    file.to_string_lossy()
+                )
+                .expect("writing to a String cannot fail");
+            }
         }
     }
     out.push_str("]\n");

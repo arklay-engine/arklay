@@ -88,7 +88,15 @@ proc init
     effect(FX_13, FX_ROW_00, FX_AT_WORLD, 7939, -2010, 5432, 0);
     effect(FX_1B, FX_ROW_00, FX_AT_WORLD, 7940, -2070, 5450, 0);
     evt_exec(0, TASK_09, on_enter);
+#if MANSION1
     snd_pan_vol_set(BGM_SUB_1, 110, 110);
+#else
+#if STEAM
+    snd_pan_vol_set(BGM_SUB_1, 110, 110);
+#else
+    snd_pan_vol_set(BGM_SUB_1, 90, 90);
+#endif
+#endif
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_A6, FALSE))
     {
@@ -134,19 +142,51 @@ proc main
 {
     if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
     {
+#if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 110, 110);
+#else
+#if STEAM
+        snd_pan_vol_set(BGM_SUB_1, 110, 110);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 90, 90);
+#endif
+#endif
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
     {
+#if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 50, 50);
+#else
+#if STEAM
+        snd_pan_vol_set(BGM_SUB_1, 50, 50);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 5, 5);
+#endif
+#endif
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
     {
+#if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 50, 50);
+#else
+#if STEAM
+        snd_pan_vol_set(BGM_SUB_1, 50, 50);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 5, 5);
+#endif
+#endif
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
     {
+#if MANSION1
         snd_pan_vol_set(BGM_SUB_1, 50, 50);
+#else
+#if STEAM
+        snd_pan_vol_set(BGM_SUB_1, 50, 50);
+#else
+        snd_pan_vol_set(BGM_SUB_1, 5, 5);
+#endif
+#endif
     }
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_A6, FALSE))

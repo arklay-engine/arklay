@@ -273,7 +273,19 @@ event on_enter_3
     wait_message();
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_21);
+#if CHRIS
     sleep(56);
+#else
+#if STEAM
+    sleep(56);
+#else
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
+#endif
+#endif
     sleep(10);
     voice_play(VOICE_PLAY, VO_00C_22);
     message(MSG_VO_00C_22, 0);

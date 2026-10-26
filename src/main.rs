@@ -517,6 +517,11 @@ enum ScdAction {
         /// rather than the fixed version of its quirks
         #[arg(long)]
         authentic: bool,
+
+        /// Compile for the original Mediakite PC release rather than the
+        /// Steam/GOG release (`#if STEAM`)
+        #[arg(long)]
+        mediakite: bool,
     },
 
     /// Export every room of a pack as one merged .akscr script per room
@@ -530,6 +535,12 @@ enum ScdAction {
         /// Directory to write `<room>.akscr` into (e.g. `103.akscr`)
         #[arg(long, short)]
         out: PathBuf,
+
+        /// A pack of the original Mediakite PC release to merge with `PACK`
+        /// (the Steam/GOG release), writing where they differ under
+        /// `#if STEAM`
+        #[arg(long, value_name = "PACK")]
+        mediakite: Option<PathBuf>,
     },
 }
 
@@ -575,7 +586,13 @@ fn export_scd(rdt: &std::path::Path, out: &std::path::Path, list: bool) -> Resul
 
 /// Assemble a text `.s` source or compile an `.akscr` script into a
 /// standalone `.scd` container.
-fn build_scd(input: &Path, out: &Path, room: Option<u16>, authentic: bool) -> Result<()> {
+fn build_scd(
+    input: &Path,
+    out: &Path,
+    room: Option<u16>,
+    authentic: bool,
+    mediakite: bool,
+) -> Result<()> {
     let text =
         fs::read_to_string(input).with_context(|| format!("failed to read {}", input.display()))?;
     let script = input
@@ -584,17 +601,22 @@ fn build_scd(input: &Path, out: &Path, room: Option<u16>, authentic: bool) -> Re
     if authentic && room.is_none() {
         bail!("--authentic needs --room");
     }
+    if mediakite && room.is_none() {
+        bail!("--mediakite needs --room");
+    }
     let assembled = if script {
         let dir = input.parent().unwrap_or(Path::new("."));
         arklay::scd::akscr::compile_with(
             &text,
             room.map(|room| {
-                let variant = arklay::scd::akscr::Variant::for_room(room);
+                let mut variant = arklay::scd::akscr::Variant::for_room(room);
                 if authentic {
-                    variant.authentic()
-                } else {
-                    variant
+                    variant = variant.authentic();
                 }
+                if mediakite {
+                    variant = variant.mediakite();
+                }
+                variant
             }),
             &arklay::scd::akscr::includes_from(dir),
         )
@@ -621,11 +643,37 @@ fn build_scd(input: &Path, out: &Path, room: Option<u16>, authentic: bool) -> Re
 }
 
 /// Decompile every room RDT in `pack` and write one merged `.akscr` per room
-/// into `out`.
-fn export_rooms(pack: &Path, out: &Path) -> Result<()> {
-    let pack = Pack::open(pack).with_context(|| format!("failed to open {}", pack.display()))?;
+/// into `out`, merged with the Mediakite release's `mediakite` pack if given.
+fn export_rooms(pack: &Path, out: &Path, mediakite: Option<&Path>) -> Result<()> {
     fs::create_dir_all(out).with_context(|| format!("failed to create {}", out.display()))?;
     let names = arklay::scd::akscr::load_names(out)?;
+    let rooms = decompile_rooms(pack, &names)?;
+    let merged = match mediakite {
+        Some(mediakite) => {
+            arklay::scd::akscr::merge_releases(&rooms, &decompile_rooms(mediakite, &names)?)?
+        }
+        None => arklay::scd::akscr::merge_rooms(&rooms)?,
+    };
+    for (base, text) in &merged {
+        let path = out.join(format!("{base:03x}.akscr"));
+        arklay::atomic::write(&path, text.as_bytes())
+            .with_context(|| format!("failed to write {}", path.display()))?;
+    }
+    println!(
+        "exported {} rooms ({} RDTs) to {}",
+        merged.len(),
+        rooms.len(),
+        out.display()
+    );
+    Ok(())
+}
+
+/// Decompile every room RDT with scripts in `pack`, by RDT id.
+fn decompile_rooms(
+    pack: &Path,
+    names: &arklay::scd::akscr::Names,
+) -> Result<std::collections::BTreeMap<u16, String>> {
+    let pack = Pack::open(pack).with_context(|| format!("failed to open {}", pack.display()))?;
     let mut rooms = std::collections::BTreeMap::new();
     for entry in pack.entries() {
         let path = entry.path();
@@ -641,21 +689,9 @@ fn export_rooms(pack: &Path, out: &Path) -> Result<()> {
         let Ok(scripts) = arklay::scd::reader::parse(&data) else {
             continue;
         };
-        rooms.insert(id, arklay::scd::akscr::decompile_with(&scripts, &names, id));
+        rooms.insert(id, arklay::scd::akscr::decompile_with(&scripts, names, id));
     }
-    let merged = arklay::scd::akscr::merge_rooms(&rooms)?;
-    for (base, text) in &merged {
-        let path = out.join(format!("{base:03x}.akscr"));
-        arklay::atomic::write(&path, text.as_bytes())
-            .with_context(|| format!("failed to write {}", path.display()))?;
-    }
-    println!(
-        "exported {} rooms ({} RDTs) to {}",
-        merged.len(),
-        rooms.len(),
-        out.display()
-    );
-    Ok(())
+    Ok(rooms)
 }
 
 /// Build a mod source directory and print its summary and aggregated warnings.
@@ -1019,8 +1055,13 @@ fn main() -> Result<()> {
                 out,
                 room,
                 authentic,
-            } => build_scd(&input, &out, room, authentic),
-            ScdAction::ExportRooms { pack, out } => export_rooms(&pack, &out),
+                mediakite,
+            } => build_scd(&input, &out, room, authentic, mediakite),
+            ScdAction::ExportRooms {
+                pack,
+                out,
+                mediakite,
+            } => export_rooms(&pack, &out, mediakite.as_deref()),
         },
         Some(Command::Mod { action }) => match action {
             ModAction::Build { dir, out, base } => build_mod_pack(&dir, &out, base.as_deref()),
@@ -1506,7 +1547,7 @@ mod tests {
         )
         .unwrap();
 
-        build_scd(&input, &out, None, false).unwrap();
+        build_scd(&input, &out, None, false, false).unwrap();
 
         let bytes = fs::read(&out).unwrap();
         let scripts = arklay::scd::reader::parse(&bytes).unwrap();

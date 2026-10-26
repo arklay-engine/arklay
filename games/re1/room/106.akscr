@@ -141,6 +141,7 @@ proc init
         aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
 #else
+#if STEAM
     if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
     {
         item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
@@ -149,6 +150,27 @@ proc init
     {
         aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
+#else
+#if MANSION1
+    if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+    {
+        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    }
+#else
+    if (ck(FG_COMMON, F_COMMON_0B, FALSE))
+    {
+        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    else
+    {
+        aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    }
+#endif
+#endif
 #endif
     if (ck(FG_COMMON, F_COMMON_03, TRUE))
     {
@@ -194,6 +216,7 @@ proc init
     {
 #if CHRIS
         set(FG_COMMON, F_COMMON_03, TRUE);
+        evt_exec(0, TASK_00, on_enter_3);
 #else
         room_bgm_state_set(0, ROOM_106_MAIN_HALL, BGM_RELOAD | 1);
         item_aot_set(AOT_06_ITEM, 0, 0, 16, 16, IT_31_KEY_LOCKPICK, 0, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_09, SAT_UNDER | SAT_PLAYER, 0);
@@ -204,10 +227,19 @@ proc init
         aot_reset(AOT_05_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 174, 255, 0);
         cut_auto(CUT_LOCKED);
         setb(B_CAMERA, CAM_06, 0);
-#endif
+#if MANSION1
         evt_exec(0, TASK_00, on_enter_3);
-#if JILL
+#else
+#if STEAM
+        evt_exec(0, TASK_00, on_enter_3);
+#endif
+#endif
         set(FG_COMMON, F_COMMON_03, TRUE);
+#if MANSION2
+#if !STEAM
+        evt_exec(0, TASK_00, on_enter_3);
+#endif
+#endif
         set(FG_STATUS, F_STATUS_1D, TRUE);
 #endif
     }
@@ -3312,6 +3344,7 @@ event from_main_10
 #if CHRIS
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
 #else
+#if MANSION1
     run
     {
         if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
@@ -3323,6 +3356,23 @@ event from_main_10
             aot_reset(AOT_05_ITEM, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         }
     }
+#else
+#if STEAM
+    run
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+        {
+            aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
+        }
+        else
+        {
+            aot_reset(AOT_05_ITEM, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+        }
+    }
+#else
+    aot_reset(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 3, 0);
+#endif
+#endif
     message(24, 0);
     evt_work_set(WK_ENEMY, ENEMY_00);
     evt_actor_begin();

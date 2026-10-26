@@ -7,8 +7,9 @@
 //! which variants hold it. Lines every variant in scope holds are written
 //! plainly. Each run of the others is grown to whole statements (balanced
 //! braces, an `if` with its `else`, a header with its block) and split on
-//! the mansion or the player, whichever writes fewer lines, into
-//! `#if` / `#else` / `#endif` blocks. A section header alone may differ.
+//! the mansion, the player or the release, whichever writes fewer lines (on
+//! a tie, in that order), into `#if` / `#else` / `#endif` blocks. A section
+//! header alone may differ.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -195,21 +196,41 @@ fn align_units<'a>(groups: Vec<Group<'a>>, units: Vec<Unit<'a>>, bit: u8) -> Vec
     out
 }
 
-/// Merge the scripts of `variants` (at most eight, each variant once) into a
-/// single script whose preprocessed text is each input again.
+/// Merge the scripts of `variants` (each variant once) into a single script
+/// whose preprocessed text is each input again.
+///
+/// A variant whose script is its other release's, word for word, shares that
+/// release's input, so the releases differ only where their scripts do. At
+/// most eight inputs remain.
 pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
-    ensure!(
-        !variants.is_empty() && variants.len() <= 8,
-        "merge takes one to eight variants"
-    );
+    ensure!(!variants.is_empty(), "merge takes at least one variant");
     for (index, (variant, _)) in variants.iter().enumerate() {
         if variants[..index].iter().any(|(other, _)| other == variant) {
             bail!("variant {variant:?} given twice");
         }
     }
+    let mut inputs: Vec<(Vec<Variant>, &str)> = Vec::new();
+    for &(variant, text) in variants {
+        let twin = Variant {
+            steam: !variant.steam,
+            ..variant
+        };
+        match inputs
+            .iter_mut()
+            .find(|(kinds, other)| *other == text && kinds.contains(&twin))
+        {
+            Some((kinds, _)) => kinds.push(variant),
+            None => inputs.push((vec![variant], text)),
+        }
+    }
+    ensure!(
+        inputs.len() <= 8,
+        "merge takes at most eight distinct scripts, not {}",
+        inputs.len()
+    );
 
     let mut groups: Vec<Group> = Vec::new();
-    for (bit, (_, text)) in variants.iter().enumerate() {
+    for (bit, (_, text)) in inputs.iter().enumerate() {
         groups = align_units(groups, units(text), 1 << bit);
     }
     let entries: Vec<Entry> = groups
@@ -217,8 +238,8 @@ pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
         .flat_map(|group| group.headers.into_iter().chain(group.body))
         .collect();
 
-    let all = (1u8 << variants.len()) - 1;
-    let kinds: Vec<Variant> = variants.iter().map(|(variant, _)| *variant).collect();
+    let all = u8::MAX >> (8 - inputs.len());
+    let kinds: Vec<Vec<Variant>> = inputs.into_iter().map(|(kinds, _)| kinds).collect();
     let mut out = String::new();
     for line in emit(&entries, all, &kinds) {
         out.push_str(&line);
@@ -335,13 +356,14 @@ fn align<'a>(entries: Vec<Entry<'a>>, lines: &[&'a str], bit: u8) -> Vec<Entry<'
 }
 
 /// The symbol pairs a context can split on: (mask of the first half, its
-/// symbol, the second half's symbol).
-fn splits(ctx: u8, kinds: &[Variant]) -> Vec<(u8, &'static str, &'static str)> {
+/// symbol, the second half's symbol). An input in either half has all its
+/// variants there.
+fn splits(ctx: u8, kinds: &[Vec<Variant>]) -> Vec<(u8, &'static str, &'static str)> {
     let half = |pick: &dyn Fn(Variant) -> bool| -> u8 {
         kinds
             .iter()
             .enumerate()
-            .filter(|&(_, &kind)| pick(kind))
+            .filter(|&(_, kinds)| kinds.iter().all(|&kind| pick(kind)))
             .fold(0, |mask, (bit, _)| mask | (1 << bit))
             & ctx
     };
@@ -359,6 +381,12 @@ fn splits(ctx: u8, kinds: &[Variant]) -> Vec<(u8, &'static str, &'static str)> {
             "CHRIS",
             "JILL",
         ),
+        (
+            half(&|kind| kind.steam),
+            half(&|kind| !kind.steam),
+            "STEAM",
+            "!STEAM",
+        ),
     ] {
         if first != 0 && second != 0 && first | second == ctx {
             splits.push((first, a, b));
@@ -368,7 +396,7 @@ fn splits(ctx: u8, kinds: &[Variant]) -> Vec<(u8, &'static str, &'static str)> {
 }
 
 /// The lines of `entries` for the variants in `ctx`.
-fn emit(entries: &[Entry], ctx: u8, kinds: &[Variant]) -> Vec<String> {
+fn emit(entries: &[Entry], ctx: u8, kinds: &[Vec<Variant>]) -> Vec<String> {
     let live: Vec<Entry> = entries
         .iter()
         .filter(|entry| entry.mask & ctx != 0)
@@ -504,7 +532,7 @@ fn contain(live: &[Entry], mut start: usize, mut end: usize, ctx: u8) -> (usize,
 /// Write a run of lines not every variant in `ctx` holds as `#if` blocks.
 /// The run is cut where its lines change from differing on one symbol pair
 /// to the other, and the cuts that give the shortest text are kept.
-fn split(run: &[Entry], ctx: u8, kinds: &[Variant]) -> Vec<String> {
+fn split(run: &[Entry], ctx: u8, kinds: &[Vec<Variant>]) -> Vec<String> {
     let pairs = splits(ctx, kinds);
     // Which pair each line differs on alone, if just one.
     let class = |entry: &Entry| {
@@ -558,13 +586,17 @@ fn split(run: &[Entry], ctx: u8, kinds: &[Variant]) -> Vec<String> {
 fn split_block(
     run: &[Entry],
     ctx: u8,
-    kinds: &[Variant],
+    kinds: &[Vec<Variant>],
     pairs: &[(u8, &'static str, &'static str)],
 ) -> Vec<String> {
     let mut best: Option<Vec<String>> = None;
     for &(first, a, b) in pairs {
         let yes = emit(run, first, kinds);
         let no = emit(run, ctx & !first, kinds);
+        // The halves can line up the same lines differently.
+        if yes == no {
+            return yes;
+        }
         let mut lines = Vec::with_capacity(yes.len() + no.len() + 3);
         if yes.is_empty() {
             lines.push(format!("#if {b}"));
@@ -583,7 +615,7 @@ fn split_block(
         }
     }
     // A run only exists when `ctx` holds variants that differ, and those
-    // always differ in the mansion or the player.
+    // always differ in the mansion, the player or the release.
     best.expect("a run of differing lines has a symbol to split on")
 }
 
@@ -594,12 +626,48 @@ fn split_block(
 /// The variants' `#define` lines are pooled first: a define changes no
 /// bytecode, so every variant gets them all and they need no `#if`.
 pub fn merge_rooms(rooms: &BTreeMap<u16, String>) -> Result<BTreeMap<u16, String>> {
+    merge_variants(
+        rooms
+            .iter()
+            .map(|(&id, text)| (id, Variant::for_room(id), text.as_str())),
+    )
+}
+
+/// [`merge_rooms`] over both releases: `steam` and `mediakite` hold each
+/// release's per-RDT scripts, and the lines they differ in go under
+/// `#if STEAM`.
+pub fn merge_releases(
+    steam: &BTreeMap<u16, String>,
+    mediakite: &BTreeMap<u16, String>,
+) -> Result<BTreeMap<u16, String>> {
+    if let Some(id) = steam.keys().find(|id| !mediakite.contains_key(id)) {
+        bail!("RDT {id:04X} has scripts in the Steam release but not the Mediakite one");
+    }
+    if let Some(id) = mediakite.keys().find(|id| !steam.contains_key(id)) {
+        bail!("RDT {id:04X} has scripts in the Mediakite release but not the Steam one");
+    }
+    merge_variants(
+        steam
+            .iter()
+            .map(|(&id, text)| (id, Variant::for_room(id), text.as_str()))
+            .chain(
+                mediakite
+                    .iter()
+                    .map(|(&id, text)| (id, Variant::for_room(id).mediakite(), text.as_str())),
+            ),
+    )
+}
+
+/// Merge `(RDT id, variant, script)` triples into one script per room.
+fn merge_variants<'a>(
+    rooms: impl Iterator<Item = (u16, Variant, &'a str)>,
+) -> Result<BTreeMap<u16, String>> {
     let mut groups: BTreeMap<u16, Vec<(Variant, &str)>> = BTreeMap::new();
-    for (&id, text) in rooms {
+    for (id, variant, text) in rooms {
         groups
             .entry(merged_id(id))
             .or_default()
-            .push((Variant::for_room(id), text));
+            .push((variant, text));
     }
     groups
         .into_iter()

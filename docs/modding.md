@@ -448,7 +448,9 @@ equal to its directory-relative path, and a `scd/<stem>.s` source is assembled
 into `scd/<stem>.scd` (the `.s` itself is not packed); a `scd/<stem>.akscr`
 script is compiled the same way, and a merged room script named by three hex
 digits (`scd/103.akscr`) is compiled once per variant, into `scd/1030.scd`,
-`scd/1031.scd`, `scd/6030.scd` and `scd/6031.scd`. `--base <base.akpak>`
+`scd/1031.scd`, `scd/6030.scd` and `scd/6031.scd`, each built for the
+Steam/GOG release (`#if STEAM` is defined; a mod has no build per release).
+`--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
 its own class (the previous section) is an override, not a new file. PNG, WebP
@@ -629,12 +631,29 @@ A build uses the fixed version unless asked for the original (`scd build
 --room 1051 --authentic`); built as `AUTHENTIC`, every script compiles to its
 RDTs' exact bytecode, which the real-data tests check.
 
+`STEAM` picks the release. The Steam/GOG release defines it and the
+original Mediakite PC release does not; they ship different scripts in 37
+RDTs (19 rooms), and every such difference sits in an `#if STEAM` block, so
+`grep -rn STEAM games/re1/room` lists them all. Most are the Steam release's
+changes: two ink ribbons per pickup where Mediakite gives three, `bgm_stop`
+calls added to cutscenes, and adjusted waits and camera cuts. A build is for
+Steam/GOG unless asked for Mediakite (`scd build --room 1001 --mediakite`).
+`#if !SYMBOL` takes its block when `SYMBOL` is not defined, which reads
+better than an empty `#if STEAM` before `#else`. To give Mediakite one of
+the Steam changes, keep the Mediakite line under `#if AUTHENTIC` inside the
+`#else` of `#if STEAM`, with the Steam line as its fix.
+
+`scd export-rooms steam.akpak --mediakite mediakite.akpak --out DIR` merges
+both releases this way; without `--mediakite` it exports one release.
+
 These scripts are what the game runs. The build compiles each one, fixed,
-for every RDT it covers and carries the bytecode in the executable;
-`convert-game` packs it as `scd/{id}.scd` beside the RDT, after checking
-that the RDT's own scripts are the ones the script was written from (their
-digest equals the `AUTHENTIC` build's). A room from another release keeps
-its own scripts, with a warning. A mod's `scd/{id}.scd` overrides the
+for every RDT it covers and for both releases, and carries the bytecode in
+the executable; `convert-game` packs it as `scd/{id}.scd` beside the RDT,
+picking the release whose `AUTHENTIC` build has the same digest as the RDT's
+own scripts. An RDT whose scripts are neither release's keeps its own
+scripts, with a warning. A script may use `STEAM` only where the releases'
+own scripts differ: the build stops if both releases' `AUTHENTIC` builds of
+an RDT match but their fixed builds do not. A mod's `scd/{id}.scd` overrides the
 packed one, and a mod that replaces an RDT without shipping a script keeps
 that RDT's scripts: a script only applies over an RDT from its own layer
 or a lower one.

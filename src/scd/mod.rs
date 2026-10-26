@@ -16,7 +16,7 @@ pub mod reader;
 pub mod vm;
 
 /// One checked-in room script (`games/re1/room/<room>.akscr`) compiled for
-/// one RDT.
+/// one RDT of one release.
 pub struct RoomScript {
     /// The RDT, e.g. `0x1030` for stage 1, room 03, player 0.
     pub id: u16,
@@ -28,5 +28,6 @@ pub struct RoomScript {
 }
 
 /// The checked-in room scripts, compiled by the build script for every RDT
-/// variant they cover.
+/// variant they cover: the Steam/GOG release's build, then the Mediakite
+/// release's where its `AUTHENTIC` build differs (`#if STEAM`).
 pub static ROOM_SCRIPTS: &[RoomScript] = include!(concat!(env!("OUT_DIR"), "/room_scripts.rs"));

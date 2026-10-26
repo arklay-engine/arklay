@@ -749,7 +749,11 @@ event on_enter_2
     act_nop();
     act_reset();
     evt_nop();
+#if STEAM
     sleep(20);
+#else
+    wait_message();
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(ANIM_20, F_ROOM_20, AFL_01);
@@ -1831,7 +1835,11 @@ event on_enter_3
     act_nop();
     act_reset();
     evt_nop();
+#if STEAM
     sleep(20);
+#else
+    wait_message();
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(ANIM_20, F_ROOM_20, AFL_01);

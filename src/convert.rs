@@ -3180,29 +3180,32 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
 /// The checked-in room script's bytecode to pack as `scd/<id>.scd` beside
 /// RDT `id`, so the engine runs it in place of the RDT's own scripts.
 ///
-/// `None` for a room without a script or an RDT without scripts. A room
-/// whose scripts are not the ones its script was written from (another
-/// release's RDT) is an error naming the room: it keeps its own scripts.
+/// The build for the RDT's release is the one whose `AUTHENTIC` digest equals
+/// the RDT's own scripts'. `None` for a room without a script or an RDT
+/// without scripts. A room whose scripts are neither release's (a modified
+/// RDT) is an error naming the room: it keeps its own scripts.
 fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static [u8]>, String> {
     let number = id.rdt_number();
-    let Some(script) = crate::scd::ROOM_SCRIPTS
+    let mut builds = crate::scd::ROOM_SCRIPTS
         .iter()
-        .find(|script| script.id == number)
-    else {
+        .filter(|script| script.id == number)
+        .peekable();
+    if builds.peek().is_none() {
         return Ok(None);
-    };
+    }
     // The stub RDTs of unused room slots carry no scripts to replace.
     let Ok(scripts) = crate::scd::reader::parse(rdt) else {
         return Ok(None);
     };
-    if scripts.digest() != script.original {
+    let digest = scripts.digest();
+    let Some(script) = builds.find(|script| script.original == digest) else {
         return Err(format!(
             "{}: its scripts are not the ones games/re1/room/{:03x}.akscr was written \
              from, so the room keeps them",
             id.rdt_entry(),
             crate::scd::akscr::merged_id(number)
         ));
-    }
+    };
     Ok(Some(script.container))
 }
 
@@ -3335,6 +3338,19 @@ mod tests {
         let error = room_script(id, script(0x1010)).unwrap_err();
         assert!(error.contains("room/1000.rdt"), "{error}");
         assert_eq!(room_script(id, &[0; 4]), Ok(None), "a stub RDT");
+
+        // Jill's ink ribbons differ by release (`#if STEAM`), so RDT 1001
+        // has a build per release and each RDT takes its own.
+        let builds: Vec<&[u8]> = crate::scd::ROOM_SCRIPTS
+            .iter()
+            .filter(|script| script.id == 0x1001)
+            .map(|script| script.container)
+            .collect();
+        assert_eq!(builds.len(), 2);
+        let id = RoomId::parse("1001").unwrap();
+        for build in builds {
+            assert_eq!(room_script(id, build), Ok(Some(build)));
+        }
     }
 
     const RDT_HEADER_LEN: usize = 0x94;

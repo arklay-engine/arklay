@@ -326,7 +326,8 @@ fn scd_source_output(relative: &str) -> Option<String> {
 
 /// A merged room script `scd/<room>.akscr` (three hex digits, e.g.
 /// `scd/103.akscr`): the `scd/` prefix as written and the room id. It builds
-/// `scd/<id>.scd` for every player and mansion variant of the room.
+/// `scd/<id>.scd` for every player and mansion variant of the room, for the
+/// Steam/GOG release (`#if STEAM`): a mod's script has no build per release.
 fn merged_scd_source(relative: &str) -> Option<(&str, u16)> {
     let (prefix, name) = relative.split_at_checked(4)?;
     if !prefix.eq_ignore_ascii_case("scd/") {

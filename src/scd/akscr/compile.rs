@@ -88,6 +88,7 @@ pub(super) fn section_bytes(
         jill: false,
         mansion: None,
         authentic,
+        steam: true,
     };
     let kept: Vec<&str> = super::preprocess::kept_lines(text, Some(variant))?
         .into_iter()
