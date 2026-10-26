@@ -618,8 +618,40 @@ each block (balanced braces, an `if` with its `else`), lining up each
 variant's events by content, so only a section header such as
 `event event_01` / `event event_04` stands alone in a block. `arklay scd build 103.akscr --room 6031 --out
 scd/6031.scd` compiles one variant; a script without a variant must not use
-`#if`. The merged scripts are checked in under `games/re1/room/`, and each
-compiles to its RDTs' exact bytecode.
+`#if`. The merged scripts are checked in under `games/re1/room/`.
+
+`AUTHENTIC` keeps the original game's exact bytecode where the shipped data
+has a quirk with no structured form, and its `#else` holds the fixed version.
+A build uses the fixed version unless asked for the original (`scd build
+--room 1051 --authentic`); built as `AUTHENTIC`, every script compiles to its
+RDTs' exact bytecode, which the real-data tests check.
+
+```c
+#if AUTHENTIC
+    run noreturn
+    {
+        asm
+        {
+                if                      off_28672 + 1
+                ...
+        }
+    }
+#else
+    run
+    {
+        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+        {
+            set(FG_ROOM, F_ROOM_02, TRUE);
+        }
+    }
+#endif
+```
+
+The exporter fixes two quirks this way, each behaving as the original does:
+an `if` whose skip lands one byte past its `endif` (the original runs the
+`endif`'s zero operand byte as `end`, so it ends the block either way), and
+an `endif` that closes no `if` (the block's `end` resets the branch stack it
+unbalances, so the fixed version drops it).
 
 The exporter names what it can from the `*.akinc` files in the nearest `inc/`
 directory at or above `--out`, and from the English text beside it
@@ -770,7 +802,8 @@ event on_enter
   statement gives any other trailing bytes.
 - `asm { }` (the braces on their own lines) embeds `.s` assembly verbatim. The
   decompiler uses it only where the shipped bytecode has no structured form,
-  such as an `if` that jumps into the middle of an instruction.
+  such as an `if` that jumps into the middle of an instruction, and then
+  under `#if AUTHENTIC` beside a fixed version.
 
 ## Lua hooks
 

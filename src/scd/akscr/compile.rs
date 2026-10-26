@@ -76,10 +76,25 @@ pub fn compile_with(text: &str, variant: Option<Variant>, load: Loader) -> Resul
 }
 
 /// Compile a single section (with or without the `#version` line), naming
-/// with `defines`, and return the bytes of its block or event stream.
-pub(super) fn section_bytes(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<u8>> {
-    let text = if text.trim_start().starts_with('#') {
-        text.to_string()
+/// with `defines`, and return the bytes of its block or event stream. The
+/// section may use `#if AUTHENTIC`.
+pub(super) fn section_bytes(
+    text: &str,
+    defines: &HashMap<String, i64>,
+    authentic: bool,
+) -> Result<Vec<u8>> {
+    let variant = Variant {
+        jill: false,
+        mansion: None,
+        authentic,
+    };
+    let kept: Vec<&str> = super::preprocess::kept_lines(text, Some(variant))?
+        .into_iter()
+        .map(|(_, line)| line)
+        .collect();
+    let text = kept.join("\n");
+    let text = if text.trim_start().starts_with("#version") {
+        text
     } else {
         format!("#version 1\n{text}")
     };

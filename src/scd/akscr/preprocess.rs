@@ -6,6 +6,10 @@
 //! `MANSION2`; blocks nest. A room outside the mansion defines neither
 //! mansion symbol.
 //!
+//! `AUTHENTIC` selects the original game's exact bytecode where the shipped
+//! data has a quirk: `#if AUTHENTIC` keeps the original, its `#else` holds
+//! the fixed version a build uses by default.
+//!
 //! `#define NAME value` names a number (or another name) for the arguments
 //! that follow, and `#include "inc/items.akinc"` reads defines from a file;
 //! an include file holds only directives, comments and blank lines, and each
@@ -17,7 +21,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 /// The defined symbols.
-pub const SYMBOLS: [&str; 4] = ["CHRIS", "JILL", "MANSION1", "MANSION2"];
+pub const SYMBOLS: [&str; 5] = ["CHRIS", "JILL", "MANSION1", "MANSION2", "AUTHENTIC"];
 
 /// The room variant a script is compiled for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -27,6 +31,9 @@ pub struct Variant {
     /// 1 for the first mansion visit (stages 1/2), 2 for the second (stages
     /// 6/7), `None` outside the mansion.
     pub mansion: Option<u8>,
+    /// Compile the original game's exact bytecode rather than the fixed
+    /// version of its quirks.
+    pub authentic: bool,
 }
 
 impl Variant {
@@ -40,6 +47,15 @@ impl Variant {
                 6 | 7 => Some(2),
                 _ => None,
             },
+            authentic: false,
+        }
+    }
+
+    /// This variant compiled to the original game's exact bytecode.
+    pub fn authentic(self) -> Self {
+        Self {
+            authentic: true,
+            ..self
         }
     }
 
@@ -50,6 +66,7 @@ impl Variant {
             "JILL" => Some(self.jill),
             "MANSION1" => Some(self.mansion == Some(1)),
             "MANSION2" => Some(self.mansion == Some(2)),
+            "AUTHENTIC" => Some(self.authentic),
             _ => None,
         }
     }
@@ -107,18 +124,39 @@ fn directive(line: &str) -> Option<Directive<'_>> {
 /// The lines `variant` keeps, with their 1-based line numbers. Without a
 /// variant the script must not use any directive.
 pub(super) fn kept_lines(text: &str, variant: Option<Variant>) -> Result<Vec<(usize, &str)>> {
-    // One entry per open `#if`: (taking the `#if` branch, now in `#else`).
-    let mut stack: Vec<(bool, bool)> = Vec::new();
+    kept_lines_with(text, variant, None)
+}
+
+/// [`kept_lines`], keeping the `#if keep` blocks as they are, directives
+/// and both branches.
+pub(super) fn kept_lines_with<'a>(
+    text: &'a str,
+    variant: Option<Variant>,
+    keep: Option<&str>,
+) -> Result<Vec<(usize, &'a str)>> {
+    // One entry per open `#if`: (taking the `#if` branch, now in `#else`),
+    // or `None` for a kept block.
+    let mut stack: Vec<Option<(bool, bool)>> = Vec::new();
     let mut kept = Vec::new();
     for (index, line) in text.lines().enumerate() {
         let line_no = index + 1;
+        let live = stack
+            .iter()
+            .flatten()
+            .all(|&(taken, in_else)| taken != in_else);
         let Some(directive) = directive(line) else {
-            if stack.iter().all(|&(taken, in_else)| taken != in_else) {
+            if live {
                 kept.push((line_no, line));
             }
             continue;
         };
         match directive {
+            Directive::If(symbol) if keep == Some(symbol) => {
+                stack.push(None);
+                if live {
+                    kept.push((line_no, line));
+                }
+            }
             Directive::If(symbol) => {
                 let Some(variant) = variant else {
                     bail!(
@@ -132,18 +170,27 @@ pub(super) fn kept_lines(text: &str, variant: Option<Variant>) -> Result<Vec<(us
                         SYMBOLS.join(", ")
                     );
                 };
-                stack.push((defined, false));
+                stack.push(Some((defined, false)));
             }
             Directive::Else => match stack.last_mut() {
-                Some((_, in_else @ false)) => *in_else = true,
-                Some(_) => bail!("line {line_no}: second `#else` for one `#if`"),
+                Some(None) => {
+                    if live {
+                        kept.push((line_no, line));
+                    }
+                }
+                Some(Some((_, in_else @ false))) => *in_else = true,
+                Some(Some(_)) => bail!("line {line_no}: second `#else` for one `#if`"),
                 None => bail!("line {line_no}: `#else` without `#if`"),
             },
-            Directive::Endif => {
-                if stack.pop().is_none() {
-                    bail!("line {line_no}: `#endif` without `#if`");
+            Directive::Endif => match stack.pop() {
+                Some(None) => {
+                    if live {
+                        kept.push((line_no, line));
+                    }
                 }
-            }
+                Some(Some(_)) => {}
+                None => bail!("line {line_no}: `#endif` without `#if`"),
+            },
         }
     }
     if !stack.is_empty() {

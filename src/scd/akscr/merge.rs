@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
-use super::preprocess::{Variant, kept_lines, merged_id};
+use super::preprocess::{Variant, kept_lines_with, merged_id};
 
 /// One merged line and the variants (bit per input) that hold it.
 #[derive(Clone, Copy)]
@@ -226,7 +226,7 @@ pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
     }
 
     for (variant, text) in variants {
-        let kept = kept_lines(&out, Some(*variant))?;
+        let kept = kept_lines_with(&out, Some(*variant), Some("AUTHENTIC"))?;
         let same = kept.len() == text.lines().count()
             && kept
                 .iter()
@@ -411,11 +411,14 @@ fn emit(entries: &[Entry], ctx: u8, kinds: &[Variant]) -> Vec<String> {
 }
 
 /// The brace a line opens (1) or closes (-1); the decompiler puts braces on
-/// lines of their own.
+/// lines of their own. A section's own `#if AUTHENTIC` nests like a brace,
+/// so a variant split never cuts through it.
 fn brace(line: &str) -> i32 {
     match line.trim() {
         "{" => 1,
         "}" => -1,
+        line if line.starts_with("#if ") => 1,
+        "#endif" => -1,
         _ => 0,
     }
 }

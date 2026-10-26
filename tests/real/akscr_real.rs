@@ -111,7 +111,11 @@ fn every_room_script_compiles_to_identical_bytecode() {
             continue;
         };
         let text = akscr::decompile_with(&original, &names, id);
-        assert_identical(path, &original, &compile(&text, None));
+        assert_identical(
+            path,
+            &original,
+            &compile(&text, Some(akscr::Variant::for_room(id).authentic())),
+        );
         texts.insert(id, text);
         originals.insert(id, original);
     }
@@ -130,7 +134,12 @@ fn every_room_script_compiles_to_identical_bytecode() {
     }
     for (&id, original) in &originals {
         let base = akscr::merged_id(id);
-        let compiled = compile(&merged[&base], Some(akscr::Variant::for_room(id)));
+        let compiled = compile(
+            &merged[&base],
+            Some(akscr::Variant::for_room(id).authentic()),
+        );
+        // The fixed version compiles too.
+        compile(&merged[&base], Some(akscr::Variant::for_room(id)));
         assert_identical(
             &format!("{base:03x}.akscr as {id:04X}"),
             original,

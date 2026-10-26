@@ -597,6 +597,7 @@ event from_main
         {
             evt_next();
             evt_nop();
+#if AUTHENTIC
             run noreturn
             {
                 asm
@@ -610,6 +611,15 @@ event from_main
                         end                     0
                 }
             }
+#else
+            run
+            {
+                if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
+                {
+                    set(FG_ROOM, F_ROOM_02, TRUE);
+                }
+            }
+#endif
             evt_nop();
         }
         while (ck(FG_ROOM, F_ROOM_02, FALSE));
@@ -621,6 +631,7 @@ event from_main
     {
         evt_next();
         evt_nop();
+#if AUTHENTIC
         run noreturn
         {
             asm
@@ -634,6 +645,15 @@ event from_main
                     end                     0
             }
         }
+#else
+        run
+        {
+            if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
+            {
+                set(FG_ROOM, F_ROOM_04, TRUE);
+            }
+        }
+#endif
         evt_nop();
     }
     while (ck(FG_ROOM, F_ROOM_04, FALSE));

@@ -3,9 +3,17 @@ use crate::scd::asm;
 use crate::scd::ir::{Block, Scripts, Stream};
 use crate::scd::reader;
 
-/// Compile `text`, lay it out as a container and decode it back.
+/// Compile `text` as the original game's bytecode (`AUTHENTIC`), lay it
+/// out as a container and decode it back.
 fn round(text: &str) -> Scripts {
-    let container = compile(text).unwrap().to_container().unwrap();
+    round_variant(text, Variant::for_room(0x1000).authentic())
+}
+
+fn round_variant(text: &str, variant: Variant) -> Scripts {
+    let container = compile_variant(text, variant)
+        .unwrap()
+        .to_container()
+        .unwrap();
     reader::parse(&container).unwrap()
 }
 
@@ -230,7 +238,7 @@ off_C:
 }
 
 #[test]
-fn malformed_jumps_fall_back_to_asm() {
+fn malformed_jumps_keep_asm_as_authentic() {
     // The `if` skip lands one byte into its `endif`, as in ROOM1051.
     let text = decompiles_exactly(
         ".version 1
@@ -250,8 +258,48 @@ off_A:
 ",
     );
     assert!(text.contains("event event_00 nopad"), "{text}");
-    assert!(text.contains("run noreturn"), "{text}");
-    assert!(text.contains("asm"), "{text}");
+    // The original as `asm`, and the fixed jump otherwise.
+    assert!(
+        text.contains("#if AUTHENTIC\n    run noreturn\n    {\n        asm"),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "#else\n    run\n    {\n        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))\n        {\n            \
+             set(FG_ROOM, F_ROOM_02, TRUE);\n        }\n    }\n#endif"
+        ),
+        "{text}"
+    );
+    // The fixed `if` skips to its `endif`.
+    let fixed = round_variant(&text, Variant::for_room(0x1000));
+    let bytes = event_bytes(&fixed.events[0]);
+    assert_eq!(&bytes[4..6], [0x01, 0x0A], "{text}");
+}
+
+#[test]
+fn an_unpaired_endif_is_authentic_only() {
+    let text = decompiles_exactly(
+        ".version 1
+
+.init
+.block
+    set                     FG_ROOM, 2, 0
+    endif                   0
+    set                     FG_ROOM, 3, 0
+    end                     0
+",
+    );
+    assert!(
+        text.contains(
+            "#if AUTHENTIC\n    asm\n    {\n            endif                   0\n    }\n#endif"
+        ),
+        "{text}"
+    );
+    let fixed = round_variant(&text, Variant::for_room(0x1000));
+    assert_eq!(
+        block_bytes(&fixed.init[0]),
+        [0x05, 0x04, 0x02, 0x00, 0x05, 0x04, 0x03, 0x00, 0x00, 0x00]
+    );
 }
 
 #[test]
@@ -759,10 +807,12 @@ fn checked_in_room_scripts_compile() {
         let base = u16::from_str_radix(&stem, 16).unwrap();
         let load = includes_from(&dir);
         for id in room_variants(base) {
-            if let Err(error) = compile_with(&text, Some(Variant::for_room(id)), &load)
-                .and_then(|assembled| assembled.to_container())
-            {
-                panic!("{} as {id:04X}: {error:#}", path.display());
+            for variant in [Variant::for_room(id), Variant::for_room(id).authentic()] {
+                if let Err(error) = compile_with(&text, Some(variant), &load)
+                    .and_then(|assembled| assembled.to_container())
+                {
+                    panic!("{} as {variant:?}: {error:#}", path.display());
+                }
             }
         }
         count += 1;
