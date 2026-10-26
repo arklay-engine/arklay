@@ -5868,8 +5868,9 @@ impl GameState {
     /// category dispatch does:
     ///
     /// - heal items run the heal table and update health/status; outside
-    ///   authentic mode one with no effect is still used up (see
-    ///   [`Self::accepts_ineffective_heal`]);
+    ///   authentic mode the [`items::FULL_HEALTH_ITEMS`] at full health, and a
+    ///   blue herb while the player is not poisoned, are still used up with no
+    ///   effect;
     /// - key, special and chemical items need their per-item use flag;
     /// - books only accept the red book, with flag bit `0x23`;
     /// - weapons, ammo, the empty bottle and unusable ids do nothing.
