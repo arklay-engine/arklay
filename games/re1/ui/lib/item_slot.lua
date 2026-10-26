@@ -1,7 +1,8 @@
 -- The pause menu's 40x30 item slot: an item's icon and its quantity digits.
 --
--- `api:item_icon` returns the item's own `item/<id>.bmp` when the pack has
--- it, and the shared `item/item_all` or `ui/staitem` row otherwise. The
+-- Regular items draw their own `item/<id>.bmp` when the pack has it, and the
+-- shared `item/item_all` row otherwise. The Ingram and Minimi draw the
+-- `ui/staitem` page cells so an HD pack's page hash keeps replacing them. The
 -- quantity digits and the infinity mark come from `ui/status`. Positions are
 -- screen coordinates; the callers add their own origin.
 

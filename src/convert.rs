@@ -5633,10 +5633,13 @@ mod tests {
         assert_eq!(count("bgm/"), crate::music::MUSIC_TRACKS.len());
         assert_eq!(count("se/"), sfx::SE_NAMES.len());
         assert_eq!(count("door/"), 34);
+        // Enemy sounds are packed beside their scripts and models
+        // (`enemy/em00_04.wav`), so they count here too.
+        let enemy_sounds: usize = sfx::ENEMY_SOUNDS.iter().map(|(_, slots)| slots.len()).sum();
         assert_eq!(
             count("enemy/"),
-            15 + 44 + crate::enemy::ENEMY_SCRIPTS.len(),
-            "15 character models, 44 monster models and the checked-in scripts"
+            15 + 44 + crate::enemy::ENEMY_SCRIPTS.len() + enemy_sounds,
+            "15 character models, 44 monster models, their sounds and the checked-in scripts"
         );
         assert_eq!(count("effspr/"), 33);
         assert_eq!(count("map/"), 16, "15 plans and the backdrop");
