@@ -1639,17 +1639,18 @@ impl Framebuffer {
         let vertices = triangles
             .iter()
             .flat_map(|triangle| {
-                let packed = (triangle.palette_row as u32 & 0xFFFF) << 8
+                let packed = (triangle.palette_row as u32 & 0xFF) << 8
                     | u32::from(triangle.blend) << 24
                     | u32::from(triangle.flat.is_some()) << 25;
-                triangle.raster.each_ref().map(|vertex| {
+                std::array::from_fn::<_, 3, _>(|corner| {
+                    let vertex = &triangle.raster[corner];
                     let w = vertex.w;
                     let ndc_x = (vertex.position[0] - x as f32) / width as f32 * 2.0 - 1.0;
                     let ndc_y = 1.0 - (vertex.position[1] - y as f32) / height as f32 * 2.0;
                     crate::htexture::ModelVertex {
                         clip: [ndc_x * w, ndc_y * w, depth_ndc(w) * w, w],
-                        uv: [vertex.u, vertex.v],
-                        shade: vertex.shade.map(|channel| channel * 255.0),
+                        uv: stored_uv(vertex, triangle.uv_nudge[corner], &ivm.texture),
+                        shade: vertex.shade,
                         packed,
                     }
                 })
@@ -1746,33 +1747,16 @@ impl Framebuffer {
         if texture.width == 0 || texture.height == 0 {
             return;
         }
-        let texture_width = f64::from(texture.width);
-        let texture_height = f64::from(texture.height);
         // A blending packet's vertex alpha is the record's foreground weight;
         // `None` keeps the M16 per-packet half blend.
         let alpha = if triangle.blend {
-            match triangle.blend_weight {
-                // `CreateTmdObjectInternal`'s 0.2f background weight.
-                Some(0x33) => 1.0 - 0.2f32,
-                weight => 1.0 - f32::from(weight.unwrap_or(0x80)) / 256.0,
-            }
+            blend_alpha(triangle.blend_weight)
         } else {
             1.0
         };
         let vertices = std::array::from_fn(|corner| {
             let vertex = &triangle.raster[corner];
-            let nudge = triangle.uv_nudge[corner];
-            // `PSXObject_Store` stores normalised coordinates and nudges a
-            // degenerate corner by 0.003 on the stored float.
-            let mut u = (f64::from(vertex.u) / texture_width) as f32;
-            let mut v = (f64::from(vertex.v) / texture_height) as f32;
-            let step = f64::from(if nudge & 4 != 0 { 0.0001f32 } else { 0.003f32 });
-            if nudge & 1 != 0 {
-                u = (f64::from(u) + step) as f32;
-            }
-            if nudge & 2 != 0 {
-                v = (f64::from(v) + step) as f32;
-            }
+            let [u, v] = stored_uv(vertex, triangle.uv_nudge[corner], texture);
             crate::raster::GlVertex {
                 x: vertex.position[0],
                 y: vertex.position[1],
@@ -1984,17 +1968,7 @@ impl Framebuffer {
         }
 
         let page_width = page.width as usize;
-        // `SubmitEffectSprite`: the tint is scaled by 0x80 and
-        // `g_ColorScaleFactor / 255` and truncated to a byte, and the blend
-        // level becomes `blend / 256` (opaque when zero), truncated to a byte.
-        let tint_scale = (2.0f32 / 255.0) * (1.0f32 / 255.0);
-        let color = quad.tint.map(|channel| {
-            let value = (f32::from(channel) * 128.0 * tint_scale * 255.0) as i32;
-            value.clamp(0, 255) as f32 / 255.0
-        });
-        let level = f32::from(quad.blend) * 0.003_906_25;
-        let level = if level == 0.0 { 1.0 } else { level };
-        let alpha = ((level * 255.0) as i32).clamp(0, 255) as f32 / 255.0;
+        let (color, alpha) = quad.colour();
         let target_stride = self.width as usize;
 
         // `MarniDX::DrawSprite`: two unprojected triangles, `(x, y) (x1, y)
@@ -3400,6 +3374,24 @@ pub struct EffectQuad {
     pub sheet: [u16; 2],
 }
 
+impl EffectQuad {
+    /// `SubmitEffectSprite`'s vertex colour and alpha: the tint is scaled by
+    /// 0x80 and `g_ColorScaleFactor / 255` and truncated to a byte, and the
+    /// blend level becomes `blend / 256` (opaque when zero), truncated to a
+    /// byte.
+    pub(crate) fn colour(&self) -> ([f32; 3], f32) {
+        let tint_scale = (2.0f32 / 255.0) * (1.0f32 / 255.0);
+        let color = self.tint.map(|channel| {
+            let value = (f32::from(channel) * 128.0 * tint_scale * 255.0) as i32;
+            value.clamp(0, 255) as f32 / 255.0
+        });
+        let level = f32::from(self.blend) * 0.003_906_25;
+        let level = if level == 0.0 { 1.0 } else { level };
+        let alpha = ((level * 255.0) as i32).clamp(0, 255) as f32 / 255.0;
+        (color, alpha)
+    }
+}
+
 /// The effect pages of one frame plus the billboards that sample them.
 ///
 /// `pages` holds the four base texture pages followed by the variant CLUT-row
@@ -3911,6 +3903,15 @@ impl RefProjection {
     }
 }
 
+/// The reference's view transform of one object drawn through `camera` with
+/// `joint` ([`RefProjection`]): the rotation applied to a vertex-buffer
+/// position, the translation, and the near limit inside which a packet is
+/// dropped. The GPU renderer projects through the same terms.
+pub(crate) fn object_view(camera: &Camera, joint: &anim::Mat4x3) -> ([[f64; 3]; 3], [f64; 3], f64) {
+    let projection = RefProjection::new(camera, joint);
+    (projection.rotation, projection.translation, projection.near)
+}
+
 /// `FUN_00486190`'s view rotation while the screen is shaken: the look-at from
 /// `(0, 0, -f)` towards `(-shake_x, shake_y, 0)` (`FUN_0048cc50`), which the
 /// reference folds into every TMD object's matrix on top of the shifted
@@ -3969,7 +3970,7 @@ fn ref_composed(camera: &Camera, joint: &anim::Mat4x3) -> ([[i16; 3]; 3], [i32; 
 type Projected = ([f32; 2], f32);
 
 /// `TmdDepthNdc`: view Z on the linear `[0, 1]` depth-buffer ramp.
-fn depth_ndc(view_z: f32) -> f32 {
+pub(crate) fn depth_ndc(view_z: f32) -> f32 {
     const NEAR: f32 = 1.0;
     const FAR: f32 = 131_072.0;
     ((view_z - NEAR) * (1.0 / (FAR - NEAR))).clamp(0.0, 1.0)
@@ -4256,6 +4257,32 @@ fn clamp_i32(value: i128) -> i32 {
 /// the camera projection (verified against the model's stored corner normals).
 fn faces_camera(area: f64) -> bool {
     area > 0.0
+}
+
+/// A blending packet's vertex alpha: the foreground weight of a record's
+/// background `weight`, or the M16 per-packet half blend for `None`.
+pub(crate) fn blend_alpha(weight: Option<u8>) -> f32 {
+    match weight {
+        // `CreateTmdObjectInternal`'s 0.2f background weight.
+        Some(0x33) => 1.0 - 0.2f32,
+        weight => 1.0 - f32::from(weight.unwrap_or(0x80)) / 256.0,
+    }
+}
+
+/// `PSXObject_Store`'s normalised texture coordinates of one corner: the
+/// texel position over the page size, a degenerate corner (`nudge`, see
+/// [`crate::model::TmdPrim::uv_nudge`]) nudged by 0.003 on the stored float.
+fn stored_uv(vertex: &RasterVertex, nudge: u8, texture: &Texture8) -> [f32; 2] {
+    let mut u = (f64::from(vertex.u) / f64::from(texture.width)) as f32;
+    let mut v = (f64::from(vertex.v) / f64::from(texture.height)) as f32;
+    let step = f64::from(if nudge & 4 != 0 { 0.0001f32 } else { 0.003f32 });
+    if nudge & 1 != 0 {
+        u = (f64::from(u) + step) as f32;
+    }
+    if nudge & 2 != 0 {
+        v = (f64::from(v) + step) as f32;
+    }
+    [u, v]
 }
 
 /// GL_NEAREST under CLAMP_TO_EDGE: the texel under a normalised coordinate.

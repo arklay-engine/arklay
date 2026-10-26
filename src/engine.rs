@@ -18150,7 +18150,7 @@ mod tests {
                 .map(|[x, y]| crate::htexture::ModelVertex {
                     clip: [x, y, 0.5, 1.0],
                     uv: [0.0, 0.0],
-                    shade: [255.0, 0.0, 0.0],
+                    shade: [1.0, 0.0, 0.0],
                     packed: 1 << 25,
                 })
                 .to_vec(),
@@ -18248,11 +18248,21 @@ mod tests {
         let pack = Pack::open_layered(Path::new(&path), &mods).unwrap();
         let save_dir = TempDir::new();
         let mut drawn = 0;
-        for (room, cut) in ["105", "106", "10B", "10D", "202", "1001"]
-            .into_iter()
-            .flat_map(|room| (0..8).map(move |cut| (room, cut)))
+        // `ARKLAY_GPU_TEST_ROOMS=<room>,<room>,...` measures other rooms.
+        let rooms: Vec<String> = std::env::var("ARKLAY_GPU_TEST_ROOMS")
+            .map(|rooms| rooms.split(',').map(str::to_owned).collect())
+            .unwrap_or_else(|_| {
+                ["105", "106", "10B", "10D", "202", "1001"]
+                    .map(str::to_owned)
+                    .to_vec()
+            });
+        for (room, cut) in rooms
+            .iter()
+            .flat_map(|room| (0..8).map(move |cut| (room.as_str(), cut)))
         {
-            let id = RoomId::parse(room).unwrap();
+            let Ok(id) = RoomId::parse(room) else {
+                continue;
+            };
             let Ok(mut session) = GameSession::from_room(&pack, id, &save_dir.0) else {
                 continue;
             };
@@ -18320,21 +18330,24 @@ mod tests {
                 let offset = ((y * scale + scale / 2) * gpu_width + x * scale + scale / 2) * 4;
                 &hardware[offset as usize..offset as usize + 4]
             };
-            let different = software
-                .rgba
-                .chunks(4)
-                .enumerate()
-                .filter(|(index, sw)| {
-                    let hw = centre(*index);
-                    (0..3).any(|c| sw[c].abs_diff(hw[c]) > 48)
-                })
-                .count();
+            let error = |index: usize, sw: &[u8]| {
+                let hw = centre(index);
+                (0..3).map(|c| sw[c].abs_diff(hw[c])).max().unwrap_or(0)
+            };
+            let (mut different, mut inexact) = (0, 0);
+            for (index, sw) in software.rgba.chunks(4).enumerate() {
+                let error = error(index, sw);
+                different += usize::from(error > 48);
+                inexact += usize::from(error > 0);
+            }
             let total = (WIDTH * HEIGHT) as usize;
-            eprintln!("room {room}: {different} of {total} pixels differ");
-            // Edges, depth-vs-painter ties and float shading differ; whole
-            // missing or misplaced layers would not fit in this budget.
+            eprintln!("room {room}: {different} of {total} pixels differ ({inexact} not exact)");
+            // Where the depth buffer and the painter's list disagree (a
+            // shadow or effect against a mesh, overlapping blended meshes)
+            // pixels still differ; whole missing or misplaced layers would
+            // not fit in this budget.
             assert!(
-                different * 10 < total,
+                different * 200 < total,
                 "room {room}: {different} pixels differ"
             );
             drawn += 1;
