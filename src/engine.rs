@@ -409,8 +409,9 @@ pub fn run_with_options(
         let load_start = Instant::now();
         let mut loaded = load_room(&pack, id)?;
         let mut game = new_game_state(&pack, id, &loaded.room);
-        seed_fresh_state(&pack, &mut game);
+        // The seed chunk reads the run options, so they land first.
         game.player_options = player_options;
+        seed_fresh_state(&pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         run_room_init(&mut loaded, &mut game);
@@ -2264,6 +2265,7 @@ impl GameSession {
         let id = new_game_id(character);
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
+        game.player_options = options;
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
@@ -2292,6 +2294,7 @@ impl GameSession {
         let character = character & 1;
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
+        game.player_options = options;
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
@@ -2339,6 +2342,7 @@ impl GameSession {
         let id = reel.room;
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
+        game.player_options = options;
         seed_new_game(pack, &mut game, reel.character);
         // The attract branch sets the mode bit before the room loads, so every
         // script and entity driver sees it, and seeds the PRNG as game_loop
@@ -2418,6 +2422,7 @@ impl GameSession {
     ) -> Result<Box<Self>> {
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room);
+        game.player_options = options;
         seed_fresh_state(pack, &mut game);
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
@@ -3859,6 +3864,7 @@ impl GameSession {
                 ..
             } = self;
             let mut cx = UiContext {
+                authentic: game.player_options.authentic,
                 pack,
                 save_dir,
                 font: font.as_ref(),
@@ -4864,6 +4870,7 @@ impl GameSession {
     /// The session's UI context for a screen that runs over the frozen room.
     fn ui_context<'a>(&'a self, pack: &'a Pack) -> UiContext<'a> {
         UiContext {
+            authentic: self.game.player_options.authentic,
             pack,
             save_dir: &self.save_dir,
             font: self.font.as_ref(),
@@ -4891,6 +4898,7 @@ impl GameSession {
                 return;
             };
             let cx = UiContext {
+                authentic: game.player_options.authentic,
                 pack,
                 save_dir,
                 font: font.as_ref(),
@@ -5562,6 +5570,7 @@ impl GameSession {
             return false;
         };
         let cx = UiContext {
+            authentic: game.player_options.authentic,
             pack,
             save_dir,
             font: font.as_ref(),
@@ -6133,6 +6142,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = computer.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6196,6 +6206,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = menu.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6222,6 +6233,7 @@ impl GameSession {
             } = self;
             if let Some(viewer) = examine.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6249,6 +6261,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = item_box.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6273,6 +6286,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = file.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6296,6 +6310,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = map.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6319,6 +6334,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = save_screen {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6346,6 +6362,7 @@ impl GameSession {
             } = self;
             if let Some(pickup) = pickup_view.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6412,6 +6429,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = return_title.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6850,12 +6868,17 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
 /// the infinite rocket launcher (a no-save run or an already-infinite one), the
 /// special key (held, or granted by the epilogue), the under-four-hour machine
 /// gun - and the second-playthrough flag.
-fn build_next_cycle_save(pack: &Pack, flow: &EndingFlow) -> Result<save::SaveFile> {
+fn build_next_cycle_save(
+    pack: &Pack,
+    flow: &EndingFlow,
+    options: player::Options,
+) -> Result<save::SaveFile> {
     let stats = flow.stats;
     let character = stats.character & 1;
     let id = new_game_id(character);
     let loaded = load_room(pack, id)?;
     let mut game = new_game_state(pack, id, &loaded.room);
+    game.player_options = options;
     seed_new_game(pack, &mut game, character);
 
     // The reference reloads the blank card and never runs `InitializeGame`'s
@@ -7329,6 +7352,7 @@ impl App {
     /// Build the shared screen context.
     fn context(&self) -> UiContext<'_> {
         UiContext {
+            authentic: self.player_options.authentic,
             pack: &self.pack,
             save_dir: &self.save_dir,
             font: self.font.as_ref(),
@@ -7820,7 +7844,7 @@ impl App {
         let Some(flow) = self.ending else {
             return self.open_title();
         };
-        let file = match build_next_cycle_save(&self.pack, &flow) {
+        let file = match build_next_cycle_save(&self.pack, &flow, self.player_options) {
             Ok(file) => file,
             Err(err) => {
                 eprintln!("warning: could not build the next-cycle save: {err:#}");
@@ -8018,6 +8042,7 @@ impl App {
                 ..
             } = self;
             let cx = UiContext {
+                authentic: self.player_options.authentic,
                 pack,
                 save_dir,
                 font: font.as_ref(),
@@ -8142,6 +8167,7 @@ impl App {
             Mode::Boot => {}
             Mode::Title(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8155,6 +8181,7 @@ impl App {
             }
             Mode::Select(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8168,6 +8195,7 @@ impl App {
             }
             Mode::Load(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8181,6 +8209,7 @@ impl App {
             }
             Mode::Save(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8194,6 +8223,7 @@ impl App {
             }
             Mode::Ending(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8207,6 +8237,7 @@ impl App {
             }
             Mode::Epilogue(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -24697,7 +24728,7 @@ off_0010:
             has_special_key: true,
             has_infinite_launcher: false,
         };
-        let file = build_next_cycle_save(&pack, &flow).unwrap();
+        let file = build_next_cycle_save(&pack, &flow, player::Options::default()).unwrap();
         assert_eq!(file.saves, 0, "the next-cycle counter restarts at zero");
         let has = |item: u8| file.player_slots.iter().any(|slot| slot.id == item);
         assert!(
@@ -24735,7 +24766,7 @@ off_0010:
             has_special_key: true,
             has_infinite_launcher: false,
         };
-        let file = build_next_cycle_save(&pack, &jill).unwrap();
+        let file = build_next_cycle_save(&pack, &jill, player::Options::default()).unwrap();
         let mut state = new_game_state(&pack, id, &loaded.room);
         file.apply_to(&mut state);
         assert!(
@@ -26505,6 +26536,39 @@ off_0010:
             .map(|slot| (slot.id, slot.quantity))
             .collect();
         assert_eq!(held, [(5, 6), (14, 2)]);
+    }
+
+    /// A pack's `game/new_game.lua` sees the run's `--authentic` mode the way
+    /// a hook does, so its start items can follow it.
+    #[test]
+    fn new_game_script_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[(crate::lua::NEW_GAME_ENTRY, script)],
+        ))
+        .unwrap();
+        let start_items = |options| {
+            let session = GameSession::new_with(&pack, 0, Path::new("saves"), options).unwrap();
+            session
+                .game
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect::<Vec<(u8, u8)>>()
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(start_items(authentic), [(3, 7)]);
+        assert_eq!(start_items(player::Options::default()), [(5, 6)]);
     }
 
     /// A failing `game/new_game.lua` falls back to the shipped start items.

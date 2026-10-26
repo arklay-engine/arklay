@@ -39,9 +39,12 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     });
 
     // `authentic()`: whether the run was started with `--authentic`, the
-    // original's item rules; `false` outside a session.
+    // original's item rules. A paused session's game state answers; a screen
+    // with no session reads the run's copy on its context.
     methods.add_method("authentic", |_lua, api, ()| {
-        Ok(api.game().is_some_and(|game| game.player_options.authentic))
+        Ok(api
+            .game()
+            .map_or(api.cx.authentic, |game| game.player_options.authentic))
     });
 
     // `equipped()`: the equipped item, `0` for none.

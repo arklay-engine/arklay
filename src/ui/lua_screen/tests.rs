@@ -152,6 +152,7 @@ impl Fixture {
 
     fn context(&self) -> crate::ui::UiContext<'_> {
         crate::ui::UiContext {
+            authentic: false,
             pack: self.pack,
             save_dir: &self.dir.path,
             font: Some(&self.font),

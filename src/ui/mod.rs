@@ -229,6 +229,10 @@ pub struct UiContext<'a> {
     /// The paused session's game state, for the in-game screens' rule
     /// queries; `None` outside a session.
     pub game: Option<&'a crate::game::GameState>,
+    /// Whether the run was started with `--authentic`. Screens with no paused
+    /// session read it through `api:authentic()`; a paused session's game
+    /// state answers when there is one.
+    pub authentic: bool,
 }
 
 impl UiContext<'_> {

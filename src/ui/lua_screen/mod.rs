@@ -454,11 +454,11 @@ impl LuaScreen {
     }
 
     /// Evaluate `body` with the module table bound to `M` and the API bound
-    /// to `api` over the lent game, for the unit tests that reach the API.
+    /// to `api` over `game` when one is lent, for the unit tests that reach the API.
     pub(crate) fn test_eval_with_game<T: mlua::FromLuaMulti>(
         &mut self,
         cx: &UiContext<'_>,
-        game: &mut GameState,
+        game: Option<&mut GameState>,
         body: &str,
     ) -> T {
         self.vm
@@ -691,13 +691,13 @@ impl ScreenVm {
     }
 
     /// Evaluate `body` with the module table bound to `M` and the API bound
-    /// to `api`, built over the lent game the way the callbacks build it.
+    /// to `api`, built over the lent game, if any, the way the callbacks build it.
     #[cfg(test)]
     fn eval_with_game<T: mlua::FromLuaMulti>(
         &self,
         host: &mut Host,
         cx: &UiContext<'_>,
-        game: &mut GameState,
+        game: Option<&mut GameState>,
         body: &str,
     ) -> mlua::Result<T> {
         let function: Function = self
@@ -710,7 +710,7 @@ impl ScreenVm {
             let api = scope.create_userdata(Api {
                 host: &mut *host,
                 cx,
-                game_mut: Some(game),
+                game_mut: game,
                 framebuffer: None,
                 actors: None,
             })?;
