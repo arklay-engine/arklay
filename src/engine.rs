@@ -60,7 +60,7 @@ use sdl3_sys::gamepad::{
     SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER,
     SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_START, SDL_Gamepad,
     SDL_GamepadAxis, SDL_GamepadButton, SDL_GamepadType, SDL_GetGamepadAxis, SDL_GetGamepadButton,
-    SDL_GetGamepadTypeForID, SDL_GetGamepads, SDL_OpenGamepad,
+    SDL_GetGamepadTypeForID, SDL_GetGamepads, SDL_OpenGamepad, SDL_RumbleGamepad,
 };
 use sdl3_sys::hints::{SDL_HINT_RENDER_DRIVER, SDL_HINT_VIDEO_DRIVER, SDL_SetHint};
 use sdl3_sys::init::{
@@ -92,12 +92,12 @@ use sdl3_sys::surface::{
 use sdl3_sys::timer::{SDL_DelayNS, SDL_GetTicksNS};
 use sdl3_sys::video::{
     SDL_CreateWindow, SDL_DestroyWindow, SDL_DisplayID, SDL_GetDisplayForWindow,
-    SDL_GetDisplayUsableBounds, SDL_GetDisplays, SDL_GetPrimaryDisplay, SDL_GetWindowBordersSize,
-    SDL_GetWindowPixelDensity, SDL_GetWindowSize, SDL_GetWindowSizeInPixels,
-    SDL_SetWindowFullscreen, SDL_SetWindowFullscreenMode, SDL_SetWindowMinimumSize,
-    SDL_SetWindowPosition, SDL_SetWindowResizable, SDL_SetWindowSize, SDL_SetWindowTitle,
-    SDL_ShowWindow, SDL_SyncWindow, SDL_WINDOW_HIDDEN, SDL_WINDOWPOS_CENTERED_DISPLAY, SDL_Window,
-    SDL_WindowFlags,
+    SDL_GetDisplayName, SDL_GetDisplayUsableBounds, SDL_GetDisplays, SDL_GetPrimaryDisplay,
+    SDL_GetWindowBordersSize, SDL_GetWindowPixelDensity, SDL_GetWindowSize,
+    SDL_GetWindowSizeInPixels, SDL_SetWindowFullscreen, SDL_SetWindowFullscreenMode,
+    SDL_SetWindowMinimumSize, SDL_SetWindowPosition, SDL_SetWindowResizable, SDL_SetWindowSize,
+    SDL_SetWindowTitle, SDL_ShowWindow, SDL_SyncWindow, SDL_WINDOW_HIDDEN,
+    SDL_WINDOWPOS_CENTERED_DISPLAY, SDL_Window, SDL_WindowFlags,
 };
 
 use crate::anim;
@@ -1192,6 +1192,13 @@ impl Display {
         self.save_window();
     }
 
+    /// Remember the HDR choice; the swapchain does not output HDR yet.
+    fn set_hdr(&mut self, hdr: bool) {
+        if let Some(graphics) = self.graphics.as_mut() {
+            graphics.hdr = hdr;
+        }
+    }
+
     /// Change V-Sync for the current backend and remember it.
     pub(crate) fn set_vsync(&mut self, vsync: bool) -> Result<()> {
         if let Some(graphics) = self.graphics.as_mut() {
@@ -1226,6 +1233,17 @@ impl Display {
         place_window(window, &mut graphics, display);
         *current = graphics;
         graphics
+    }
+
+    /// Move the window to the 1-based display `number`, keeping its size
+    /// (shrunk to fit) or filling it when fullscreen.
+    pub(crate) fn move_to_display(&mut self, number: u32) {
+        let window = self.window;
+        let Some(graphics) = self.graphics.as_mut() else {
+            return;
+        };
+        graphics.display = number;
+        place_window(window, graphics, display_id(number));
     }
 
     /// Record the display the window is now on, so the next run opens there.
@@ -6975,6 +6993,8 @@ struct App {
     save_dir: PathBuf,
     /// The action map the window reads, handed to every gameplay session.
     bindings: controls::Bindings,
+    /// How hard the gamepads rumble.
+    vibration: crate::config::Vibration,
     /// The save/load screen entry the pack's scripts registered (`None` for
     /// the ported original).
     save_screen: Option<String>,
@@ -7080,6 +7100,7 @@ impl App {
             pack,
             save_dir,
             bindings: controls::Bindings::default(),
+            vibration: crate::config::Config::load_default().0.game.vibration,
             save_screen,
             font,
             text,
@@ -7202,6 +7223,22 @@ impl App {
         }
     }
 
+    /// The gamepad rumble the playing session's last ticks asked for, once,
+    /// scaled by the Controller Vibration option (`None` when it is off).
+    fn take_rumble(&mut self) -> Option<crate::game::Rumble> {
+        let Mode::Play(session) = &mut self.mode else {
+            return None;
+        };
+        let rumble = session.game.rumble.take()?;
+        let strength = self.vibration.strength();
+        let scale = |level: u16| (f32::from(level) * strength) as u16;
+        (strength > 0.0).then_some(crate::game::Rumble {
+            low: scale(rumble.low),
+            high: scale(rumble.high),
+            ..rumble
+        })
+    }
+
     /// Poll the active film's skip input between ticks; see
     /// [`GameSession::poll_movie_skip`].
     fn poll_movie_skip(&mut self, buttons: u16) {
@@ -7287,7 +7324,7 @@ impl App {
                 continue;
             };
             if let Some(wav) = ui_sfx_cache.load(pack, name) {
-                mixer.play_sfx(wav, 1.0, 0.0);
+                mixer.play_menu_sfx(wav);
             }
         }
     }
@@ -8955,6 +8992,9 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             }
             clock.ticked(tick_ms);
         }
+        if let Some(rumble) = app.take_rumble() {
+            input.pads.rumble(rumble);
+        }
         let alpha = match clock.pace(tick_ms, app.transition_finished()) {
             Pace::Present { alpha } => alpha,
             Pace::Wait(ns) => {
@@ -9065,7 +9105,7 @@ fn drive_system_menu(
                 }
             }
             gui::MenuRequest::Settings(settings) => {
-                apply_menu_settings(app, display, clock, settings);
+                apply_menu_settings(app, display, input, clock, settings);
             }
             gui::MenuRequest::Sound(sound) => app.play_ui_cues(vec![match sound {
                 gui::Sound::Cursor => ui::UiCue::Cursor,
@@ -9108,10 +9148,13 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
     game.quick_turn = app.player_options.quick_turn;
     game.tactical_reload = app.player_options.tactical_reload;
     game.analog_movement = app.player_options.analog_movement;
+    game.auto_aim = !app.player_options.no_auto_aim;
+    game.blood = !app.player_options.no_blood;
     gui::Settings {
         graphics: display.graphics().copied().unwrap_or(config.graphics),
         game,
         language: app.pack.language().map(str::to_string),
+        displays: display_names(),
     }
 }
 
@@ -9147,7 +9190,8 @@ fn persisted_options(
             msaa,
             vsync,
             frame_rate,
-            aspect
+            aspect,
+            hdr
         ]
     );
     // Every `[game]` field is listed: a new one must be added here too.
@@ -9155,13 +9199,25 @@ fn persisted_options(
         quick_turn: _,
         tactical_reload: _,
         analog_movement: _,
+        auto_aim: _,
+        blood: _,
         ui_font: _,
-        menu_sounds: _,
+        menu_text_size: _,
         button_style: _,
+        control_type: _,
+        vibration: _,
+        master_volume: _,
         music_volume: _,
         ambient_volume: _,
         effects_volume: _,
         voice_volume: _,
+        menu_volume: _,
+        subtitles: _,
+        subtitle_size: _,
+        subtitle_background: _,
+        subtitle_color: _,
+        speaker_names: _,
+        speaker_name_color: _,
     } = after.game;
     let mut saved_game = file.game;
     take_changed!(
@@ -9172,13 +9228,25 @@ fn persisted_options(
             quick_turn,
             tactical_reload,
             analog_movement,
+            auto_aim,
+            blood,
             ui_font,
-            menu_sounds,
+            menu_text_size,
             button_style,
+            control_type,
+            vibration,
+            master_volume,
             music_volume,
             ambient_volume,
             effects_volume,
-            voice_volume
+            voice_volume,
+            menu_volume,
+            subtitles,
+            subtitle_size,
+            subtitle_background,
+            subtitle_color,
+            speaker_names,
+            speaker_name_color
         ]
     );
     let language = if before.language != after.language {
@@ -9195,6 +9263,7 @@ fn persisted_options(
 fn apply_menu_settings(
     app: &mut App,
     display: &mut Display,
+    input: &mut InputState,
     clock: &mut LoopClock,
     settings: gui::Settings,
 ) {
@@ -9235,11 +9304,27 @@ fn apply_menu_settings(
             display.set_frame_rate(wanted.frame_rate);
             clock.set_rate(wanted.frame_rate);
         }
+        if wanted.display != old.display {
+            display.move_to_display(wanted.display);
+        }
+        // HDR is stored for when the swapchain can use it.
+        display.set_hdr(wanted.hdr);
     }
     let graphics = display.graphics().copied().unwrap_or(wanted);
     app.player_options.quick_turn = settings.game.quick_turn;
     app.player_options.tactical_reload = settings.game.tactical_reload;
     app.player_options.analog_movement = settings.game.analog_movement;
+    app.player_options.no_auto_aim = !settings.game.auto_aim;
+    app.player_options.no_blood = !settings.game.blood;
+    app.vibration = settings.game.vibration;
+    if settings.game.control_type != before.game.control_type {
+        let bindings = input
+            .bindings()
+            .clone()
+            .with_control_type(settings.game.control_type);
+        input.apply_bindings_change(bindings.clone());
+        app.set_bindings(bindings);
+    }
     if let Mode::Play(session) = &mut app.mode {
         session.game.player_options = app.player_options;
     }
@@ -11293,6 +11378,13 @@ pub(crate) struct Gamepads {
 }
 
 impl Gamepads {
+    /// Rumble every open pad; a pad without motors ignores it.
+    fn rumble(&self, rumble: crate::game::Rumble) {
+        for &(_, pad) in &self.open {
+            unsafe { SDL_RumbleGamepad(pad, rumble.low, rumble.high, rumble.ms) };
+        }
+    }
+
     /// Start the gamepad subsystem for an interactive window: SDL's built-in
     /// mapping database, `SDL_GAMECONTROLLERCONFIG`, plus an optional
     /// `gamecontrollerdb.txt` beside `arklay.toml`. A failure only costs the
@@ -14950,6 +15042,22 @@ fn displays() -> Vec<SDL_DisplayID> {
     ids
 }
 
+/// SDL's displays' names, in its order (empty for one SDL cannot name).
+fn display_names() -> Vec<String> {
+    displays()
+        .into_iter()
+        .map(|display| {
+            let name = unsafe { SDL_GetDisplayName(display) };
+            if name.is_null() {
+                return String::new();
+            }
+            unsafe { std::ffi::CStr::from_ptr(name) }
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect()
+}
+
 /// The display a 1-based `display` option names, else the primary display.
 fn display_id(number: u32) -> SDL_DisplayID {
     let index = number.saturating_sub(1) as usize;
@@ -15168,6 +15276,7 @@ mod tests {
             graphics: file.graphics,
             game: file.game,
             language: Some("fr".to_string()),
+            displays: Vec::new(),
         };
         before.game.quick_turn = false;
         before.graphics.renderer = RendererKind::Software;

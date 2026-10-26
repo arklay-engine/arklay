@@ -10,16 +10,19 @@ use super::input::PadStyle;
 use super::locale::Locale;
 use super::options::{Choice, OptionDef, OptionKind};
 use super::theme::FontFamily;
-use crate::config;
+use crate::config::{self, ControlType, Named, SubtitleSize, TextColor, TextSize, Vibration};
 use crate::video::{self, Aspect, Graphics, RendererKind};
 
 /// The settings the options screen edits.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
     pub graphics: Graphics,
     pub game: config::Game,
     /// The configured language tag; `None` follows the OS locale.
     pub language: Option<String>,
+    /// The connected displays' names in SDL's order, for the monitor choice
+    /// (`graphics.display` is 1-based into it).
+    pub displays: Vec<String>,
 }
 
 /// The two common shapes first, then the rarer ones.
@@ -65,20 +68,40 @@ const BUTTON_STYLES: [Option<PadStyle>; 4] = [
     Some(PadStyle::Nintendo),
 ];
 
-/// The volume rows: option id, then the setting it edits.
-const VOLUMES: [&str; 4] = [
+/// The volume rows' option ids, in screen order.
+const VOLUMES: [&str; 6] = [
+    "master_volume",
+    "effects_volume",
     "music_volume",
     "ambient_volume",
-    "effects_volume",
     "voice_volume",
+    "menu_volume",
 ];
 
-fn volume_mut<'a>(game: &'a mut config::Game, id: &str) -> Option<&'a mut u8> {
+/// The 0..=100 percent setting a percent row edits.
+fn percent_mut<'a>(game: &'a mut config::Game, id: &str) -> Option<&'a mut u8> {
     Some(match id {
+        "master_volume" => &mut game.master_volume,
         "music_volume" => &mut game.music_volume,
         "ambient_volume" => &mut game.ambient_volume,
         "effects_volume" => &mut game.effects_volume,
         "voice_volume" => &mut game.voice_volume,
+        "menu_volume" => &mut game.menu_volume,
+        "subtitle_background" => &mut game.subtitle_background,
+        _ => return None,
+    })
+}
+
+/// The on/off settings, by option id.
+fn switch_mut<'a>(game: &'a mut config::Game, id: &str) -> Option<&'a mut bool> {
+    Some(match id {
+        "quick_turn" => &mut game.quick_turn,
+        "analog_movement" => &mut game.analog_movement,
+        "auto_aim" => &mut game.auto_aim,
+        "tactical_reload" => &mut game.tactical_reload,
+        "blood" => &mut game.blood,
+        "subtitles" => &mut game.subtitles,
+        "speaker_names" => &mut game.speaker_names,
         _ => return None,
     })
 }
@@ -113,11 +136,79 @@ fn endonym(tag: &str) -> &str {
     }
 }
 
+/// A PC Specs preset: the renderer settings it picks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Preset {
+    renderer: RendererKind,
+    render_scale: u32,
+    msaa: u32,
+}
+
+/// The PC Specs presets, lowest first; any other combination is Custom, the
+/// choice after them.
+const PRESETS: [(&str, Preset); 4] = [
+    (
+        "low",
+        Preset {
+            renderer: RendererKind::Software,
+            render_scale: 100,
+            msaa: 1,
+        },
+    ),
+    (
+        "medium",
+        Preset {
+            renderer: RendererKind::Gpu,
+            render_scale: 100,
+            msaa: 1,
+        },
+    ),
+    (
+        "high",
+        Preset {
+            renderer: RendererKind::Gpu,
+            render_scale: 150,
+            msaa: 2,
+        },
+    ),
+    (
+        "ultra",
+        Preset {
+            renderer: RendererKind::Gpu,
+            render_scale: 200,
+            msaa: 4,
+        },
+    ),
+];
+
+/// The preset `graphics` matches, else Custom (`PRESETS.len()`). The
+/// software renderer ignores the GPU settings, so any software setup is Low.
+fn preset(graphics: &Graphics) -> usize {
+    PRESETS
+        .iter()
+        .position(|(_, preset)| {
+            preset.renderer == graphics.renderer
+                && (graphics.renderer == RendererKind::Software
+                    || (preset.render_scale, preset.msaa) == (graphics.render_scale, graphics.msaa))
+        })
+        .unwrap_or(PRESETS.len())
+}
+
 impl Settings {
     /// The strings the menus draw in: the configured language, else the
     /// system's.
     pub fn locale(&self) -> Locale {
         Locale::new(&crate::language::resolve_tag(self.language.as_deref()))
+    }
+
+    /// The monitor choices: the connected displays, with an unlisted
+    /// configured one appended.
+    fn monitors(&self) -> Vec<String> {
+        let mut list = self.displays.clone();
+        while list.len() < self.graphics.display as usize {
+            list.push(String::new());
+        }
+        list
     }
 }
 
@@ -128,8 +219,28 @@ fn on_off(text: &Locale, id: &str) -> OptionKind {
     ])
 }
 
-/// A 0..=100 % volume slider.
-fn volume_slider() -> OptionKind {
+/// The choices of a [`Named`] setting, labelled by `{id}.{name}`.
+fn named<T: Named>(text: &Locale, id: &str) -> OptionKind {
+    OptionKind::Choice(
+        T::NAMES
+            .iter()
+            .map(|(_, name)| Choice::new(text.get(&format!("{id}.{name}"))))
+            .collect(),
+    )
+}
+
+/// The colour choices, labelled by the shared `color.` keys.
+fn colors(text: &Locale) -> OptionKind {
+    OptionKind::Choice(
+        TextColor::NAMES
+            .iter()
+            .map(|(_, name)| Choice::new(text.get(&format!("color.{name}"))))
+            .collect(),
+    )
+}
+
+/// A 0..=100 % slider.
+fn percent_slider() -> OptionKind {
     OptionKind::Slider {
         min: 0,
         max: 100,
@@ -139,7 +250,8 @@ fn volume_slider() -> OptionKind {
 }
 
 /// One option: its strings come from `{id}.label` and `{id}.description`, its
-/// place from the `category.`, `page.` and `group.` keys.
+/// place from the `category.`, `page.` and `group.` keys. An empty group draws
+/// no header.
 fn def(
     text: &Locale,
     id: &str,
@@ -151,7 +263,11 @@ fn def(
         id: id.to_string(),
         category: text.get(&format!("category.{category}")).to_string(),
         subcategory: text.get(&format!("page.{page}")).to_string(),
-        group: text.get(&format!("group.{group}")).to_string(),
+        group: if group.is_empty() {
+            String::new()
+        } else {
+            text.get(&format!("group.{group}")).to_string()
+        },
         label: text.get(&format!("{id}.label")).to_string(),
         description: text.get(&format!("{id}.description")).to_string(),
         kind,
@@ -162,8 +278,11 @@ fn def(
 
 /// Every engine option, in screen order, in `text`'s language.
 pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
-    let graphics_default = Graphics::default();
-    let game_default = config::Game::default();
+    let defaults = Settings {
+        displays: settings.displays.clone(),
+        ..Settings::default()
+    };
+    let game = &settings.game;
     let gpu = settings.graphics.renderer == RendererKind::Gpu;
     let aspect_list = aspects(settings.graphics.aspect);
     let rate_list = frame_rates(settings.graphics.frame_rate);
@@ -171,40 +290,55 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
     let language_list = languages();
     const CHARACTER: (&str, &str, &str) = ("controls", "basic", "character_controls");
     const AIMING: (&str, &str, &str) = ("controls", "basic", "when_aiming");
-    const CONTROLLER: (&str, &str, &str) = ("controls", "basic", "controller");
-    const DISPLAY: (&str, &str, &str) = ("graphics", "display", "display");
-    const RENDERER: (&str, &str, &str) = ("graphics", "rendering", "renderer");
-    const TEXT: (&str, &str, &str) = ("interface", "general", "text");
+    const BUTTONS: (&str, &str, &str) = ("controls", "controller", "button_settings");
+    const FUNCTIONS: (&str, &str, &str) = ("controls", "controller", "function_settings");
+    const HUD: (&str, &str, &str) = ("hud", "hud", "");
+    const DISPLAY: (&str, &str, &str) = ("graphics", "display", "");
+    const IMAGE: (&str, &str, &str) = ("graphics", "image", "");
+    const QUALITY: (&str, &str, &str) = ("graphics", "image", "quality_settings");
     const VOLUME: (&str, &str, &str) = ("audio", "general", "volume");
-    const SOUND: (&str, &str, &str) = ("audio", "general", "menus");
-    const LANGUAGE: (&str, &str, &str) = ("language", "language", "text");
+    const LANGUAGE: (&str, &str, &str) = ("language", "general", "language");
+    const SUBTITLES: (&str, &str, &str) = ("language", "general", "subtitles");
 
+    // A default is read back through `value`, so each row's mapping lives in
+    // one place; a list that grows with the current setting is searched
+    // instead.
+    let row = |id: &str, place, kind| {
+        let graphics = &defaults.graphics;
+        let default = match id {
+            "resolution" => resolution_list
+                .iter()
+                .position(|&size| size == (graphics.window_width, graphics.window_height))
+                .unwrap_or(0) as i32,
+            "aspect" => aspect_list
+                .iter()
+                .position(|&a| a == graphics.aspect)
+                .unwrap_or(0) as i32,
+            "frame_rate" => rate_list
+                .iter()
+                .position(|&r| r == graphics.frame_rate)
+                .unwrap_or(0) as i32,
+            _ => value(id, &defaults),
+        };
+        def(text, id, place, kind, default)
+    };
     let mut list = vec![
-        def(
-            text,
-            "quick_turn",
-            CHARACTER,
-            on_off(text, "quick_turn"),
-            i32::from(game_default.quick_turn),
-        ),
-        def(
-            text,
+        row("quick_turn", CHARACTER, on_off(text, "quick_turn")),
+        row(
             "analog_movement",
             CHARACTER,
             on_off(text, "analog_movement"),
-            i32::from(game_default.analog_movement),
         ),
-        def(
-            text,
-            "tactical_reload",
-            AIMING,
-            on_off(text, "tactical_reload"),
-            i32::from(game_default.tactical_reload),
+        row("auto_aim", AIMING, on_off(text, "auto_aim")),
+        row("tactical_reload", AIMING, on_off(text, "tactical_reload")),
+        row(
+            "control_type",
+            BUTTONS,
+            named::<ControlType>(text, "control_type"),
         ),
-        def(
-            text,
+        row(
             "button_style",
-            CONTROLLER,
+            BUTTONS,
             OptionKind::Choice(vec![
                 Choice::described(
                     text.get("button_style.auto"),
@@ -214,23 +348,51 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 Choice::new("PlayStation"),
                 Choice::new("Nintendo"),
             ]),
-            BUTTON_STYLES
-                .iter()
-                .position(|&style| style == game_default.button_style)
-                .unwrap_or(0) as i32,
         ),
-        def(
-            text,
+        row(
+            "vibration",
+            FUNCTIONS,
+            named::<Vibration>(text, "vibration"),
+        ),
+        row(
+            "ui_font",
+            HUD,
+            OptionKind::Choice(vec![
+                Choice::described(text.get("ui_font.modern"), text.get("ui_font.modern_note")),
+                Choice::described(text.get("ui_font.retro"), text.get("ui_font.retro_note")),
+            ]),
+        ),
+        row(
+            "menu_text_size",
+            HUD,
+            named::<TextSize>(text, "menu_text_size"),
+        ),
+        row(
             "fullscreen",
             DISPLAY,
             OptionKind::Choice(vec![
                 Choice::new(text.get("fullscreen.window")),
                 Choice::new(text.get("fullscreen.fullscreen")),
             ]),
-            i32::from(graphics_default.fullscreen),
         ),
-        def(
-            text,
+        row(
+            "monitor",
+            DISPLAY,
+            OptionKind::Choice(
+                settings
+                    .monitors()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, name)| {
+                        Choice::new(match name.as_str() {
+                            "" => format!("{}", index + 1),
+                            name => format!("{}: {name}", index + 1),
+                        })
+                    })
+                    .collect(),
+            ),
+        ),
+        row(
             "resolution",
             DISPLAY,
             OptionKind::Choice(
@@ -239,18 +401,8 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     .map(|&(width, height)| Choice::new(format!("{width}x{height}")))
                     .collect(),
             ),
-            resolution_list
-                .iter()
-                .position(|&size| {
-                    size == (
-                        graphics_default.window_width,
-                        graphics_default.window_height,
-                    )
-                })
-                .unwrap_or(0) as i32,
         ),
-        def(
-            text,
+        row(
             "aspect",
             DISPLAY,
             OptionKind::Choice(
@@ -259,20 +411,8 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     .map(|aspect| Choice::new(aspect.name()))
                     .collect(),
             ),
-            aspect_list
-                .iter()
-                .position(|&a| a == graphics_default.aspect)
-                .unwrap_or(0) as i32,
         ),
-        def(
-            text,
-            "vsync",
-            DISPLAY,
-            on_off(text, "vsync"),
-            i32::from(graphics_default.vsync),
-        ),
-        def(
-            text,
+        row(
             "frame_rate",
             DISPLAY,
             OptionKind::Choice(
@@ -281,15 +421,37 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     .map(|rate| Choice::new(text.format("frame_rate.value", rate)))
                     .collect(),
             ),
-            rate_list
-                .iter()
-                .position(|&r| r == graphics_default.frame_rate)
-                .unwrap_or(0) as i32,
         ),
-        def(
-            text,
+        row("vsync", DISPLAY, on_off(text, "vsync")),
+        row(
+            "hdr",
+            DISPLAY,
+            OptionKind::Choice(vec![
+                Choice::described(text.get("hdr.auto"), text.get("hdr.auto_note")),
+                Choice::described(text.get("choice.off"), text.get("hdr.off")),
+            ]),
+        ),
+        row(
+            "pc_specs",
+            IMAGE,
+            OptionKind::Choice(
+                PRESETS
+                    .iter()
+                    .map(|(name, _)| *name)
+                    .chain(["custom"])
+                    .map(|name| {
+                        Choice::described(
+                            text.get(&format!("pc_specs.{name}")),
+                            text.get(&format!("pc_specs.{name}_note")),
+                        )
+                    })
+                    .collect(),
+            ),
+        ),
+        row("blood", IMAGE, on_off(text, "blood")),
+        row(
             "renderer",
-            RENDERER,
+            QUALITY,
             OptionKind::Choice(vec![
                 Choice::described(
                     text.get("renderer.software"),
@@ -297,24 +459,20 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 ),
                 Choice::described(text.get("renderer.gpu"), text.get("renderer.gpu_note")),
             ]),
-            i32::from(graphics_default.renderer == RendererKind::Gpu),
         ),
-        def(
-            text,
+        row(
             "render_scale",
-            RENDERER,
+            QUALITY,
             OptionKind::Slider {
                 min: 25,
                 max: 400,
                 step: 25,
                 suffix: "%",
             },
-            graphics_default.render_scale as i32,
         ),
-        def(
-            text,
+        row(
             "msaa",
-            RENDERER,
+            QUALITY,
             OptionKind::Choice(
                 video::MSAA_COUNTS
                     .iter()
@@ -324,58 +482,18 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     })
                     .collect(),
             ),
-            video::MSAA_COUNTS
-                .iter()
-                .position(|&m| m == graphics_default.msaa)
-                .unwrap_or(0) as i32,
         ),
-        def(
-            text,
-            "music_volume",
-            VOLUME,
-            volume_slider(),
-            i32::from(game_default.music_volume),
+    ];
+    for id in VOLUMES {
+        list.push(row(id, VOLUME, percent_slider()));
+    }
+    list.extend([
+        row(
+            "voice_language",
+            LANGUAGE,
+            OptionKind::Choice(vec![Choice::new(endonym("en-US"))]),
         ),
-        def(
-            text,
-            "ambient_volume",
-            VOLUME,
-            volume_slider(),
-            i32::from(game_default.ambient_volume),
-        ),
-        def(
-            text,
-            "effects_volume",
-            VOLUME,
-            volume_slider(),
-            i32::from(game_default.effects_volume),
-        ),
-        def(
-            text,
-            "voice_volume",
-            VOLUME,
-            volume_slider(),
-            i32::from(game_default.voice_volume),
-        ),
-        def(
-            text,
-            "menu_sounds",
-            SOUND,
-            on_off(text, "menu_sounds"),
-            i32::from(game_default.menu_sounds),
-        ),
-        def(
-            text,
-            "ui_font",
-            TEXT,
-            OptionKind::Choice(vec![
-                Choice::described(text.get("ui_font.modern"), text.get("ui_font.modern_note")),
-                Choice::described(text.get("ui_font.retro"), text.get("ui_font.retro_note")),
-            ]),
-            (game_default.ui_font == FontFamily::Retro) as i32,
-        ),
-        def(
-            text,
+        row(
             "language",
             LANGUAGE,
             OptionKind::Choice(
@@ -393,17 +511,29 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     })
                     .collect(),
             ),
-            0,
         ),
-    ];
+        row("subtitles", SUBTITLES, on_off(text, "subtitles")),
+        row(
+            "subtitle_size",
+            SUBTITLES,
+            named::<SubtitleSize>(text, "subtitle_size"),
+        ),
+        row("subtitle_background", SUBTITLES, percent_slider()),
+        row("subtitle_color", SUBTITLES, colors(text)),
+        row("speaker_names", SUBTITLES, on_off(text, "speaker_names")),
+        row("speaker_name_color", SUBTITLES, colors(text)),
+    ]);
     for option in &mut list {
-        if matches!(option.id.as_str(), "render_scale" | "msaa") && !gpu {
-            option.disabled = true;
-        }
-        // A fullscreen window takes the display's size.
-        if option.id == "resolution" && settings.graphics.fullscreen {
-            option.disabled = true;
-        }
+        option.disabled = match option.id.as_str() {
+            "render_scale" | "msaa" => !gpu,
+            // A fullscreen window takes the display's size.
+            "resolution" => settings.graphics.fullscreen,
+            "subtitle_size" | "subtitle_background" | "subtitle_color" | "speaker_names" => {
+                !game.subtitles
+            }
+            "speaker_name_color" => !game.subtitles || !game.speaker_names,
+            _ => false,
+        };
     }
     list
 }
@@ -411,45 +541,68 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
 /// The current value of option `id`.
 pub fn value(id: &str, settings: &Settings) -> i32 {
     let graphics = &settings.graphics;
+    let game = &settings.game;
+    let index = |position: usize| position as i32;
     match id {
-        "quick_turn" => i32::from(settings.game.quick_turn),
-        "tactical_reload" => i32::from(settings.game.tactical_reload),
-        "analog_movement" => i32::from(settings.game.analog_movement),
+        "control_type" => index(game.control_type.index()),
+        "vibration" => index(game.vibration.index()),
+        "menu_text_size" => index(game.menu_text_size.index()),
+        "subtitle_size" => index(game.subtitle_size.index()),
+        "subtitle_color" => index(game.subtitle_color.index()),
+        "speaker_name_color" => index(game.speaker_name_color.index()),
         "fullscreen" => i32::from(graphics.fullscreen),
-        "resolution" => resolutions(graphics)
-            .iter()
-            .position(|&size| size == (graphics.window_width, graphics.window_height))
-            .unwrap_or(0) as i32,
-        "menu_sounds" => i32::from(settings.game.menu_sounds),
-        "button_style" => BUTTON_STYLES
-            .iter()
-            .position(|&style| style == settings.game.button_style)
-            .unwrap_or(0) as i32,
-        "aspect" => aspects(graphics.aspect)
-            .iter()
-            .position(|&a| a == graphics.aspect)
-            .unwrap_or(0) as i32,
+        "monitor" => graphics.display.saturating_sub(1) as i32,
+        "resolution" => index(
+            resolutions(graphics)
+                .iter()
+                .position(|&size| size == (graphics.window_width, graphics.window_height))
+                .unwrap_or(0),
+        ),
+        "button_style" => index(
+            BUTTON_STYLES
+                .iter()
+                .position(|&style| style == game.button_style)
+                .unwrap_or(0),
+        ),
+        "aspect" => index(
+            aspects(graphics.aspect)
+                .iter()
+                .position(|&a| a == graphics.aspect)
+                .unwrap_or(0),
+        ),
         "vsync" => i32::from(graphics.vsync),
-        "frame_rate" => frame_rates(graphics.frame_rate)
-            .iter()
-            .position(|&r| r == graphics.frame_rate)
-            .unwrap_or(0) as i32,
+        "hdr" => i32::from(!graphics.hdr),
+        "frame_rate" => index(
+            frame_rates(graphics.frame_rate)
+                .iter()
+                .position(|&r| r == graphics.frame_rate)
+                .unwrap_or(0),
+        ),
+        "pc_specs" => index(preset(graphics)),
         "renderer" => i32::from(graphics.renderer == RendererKind::Gpu),
         "render_scale" => graphics.render_scale as i32,
-        "msaa" => video::MSAA_COUNTS
-            .iter()
-            .position(|&m| m == graphics.msaa)
-            .unwrap_or(0) as i32,
-        "ui_font" => i32::from(settings.game.ui_font == FontFamily::Retro),
-        id if VOLUMES.contains(&id) => {
-            let mut game = settings.game;
-            volume_mut(&mut game, id).map_or(0, |volume| i32::from(*volume))
+        "msaa" => index(
+            video::MSAA_COUNTS
+                .iter()
+                .position(|&m| m == graphics.msaa)
+                .unwrap_or(0),
+        ),
+        "ui_font" => i32::from(game.ui_font == FontFamily::Retro),
+        "voice_language" => 0,
+        "language" => index(
+            languages()
+                .iter()
+                .position(|choice| choice.as_deref() == settings.language.as_deref())
+                .unwrap_or(0),
+        ),
+        id => {
+            let mut game = *game;
+            if let Some(switch) = switch_mut(&mut game, id) {
+                i32::from(*switch)
+            } else {
+                percent_mut(&mut game, id).map_or(0, |percent| i32::from(*percent))
+            }
         }
-        "language" => languages()
-            .iter()
-            .position(|choice| choice.as_deref() == settings.language.as_deref())
-            .unwrap_or(0) as i32,
-        _ => 0,
     }
 }
 
@@ -457,27 +610,36 @@ pub fn value(id: &str, settings: &Settings) -> i32 {
 pub fn apply(id: &str, value: i32, settings: &mut Settings) {
     let on = value != 0;
     let index = value.max(0) as usize;
+    let monitors = settings.monitors().len();
     let graphics = &mut settings.graphics;
+    let game = &mut settings.game;
+    fn set<T: Named>(slot: &mut T, index: usize) {
+        if let Some(value) = T::at(index) {
+            *slot = value;
+        }
+    }
     match id {
-        "quick_turn" => settings.game.quick_turn = on,
-        "tactical_reload" => settings.game.tactical_reload = on,
-        "analog_movement" => settings.game.analog_movement = on,
+        "control_type" => set(&mut game.control_type, index),
+        "vibration" => set(&mut game.vibration, index),
+        "menu_text_size" => set(&mut game.menu_text_size, index),
+        "subtitle_size" => set(&mut game.subtitle_size, index),
+        "subtitle_color" => set(&mut game.subtitle_color, index),
+        "speaker_name_color" => set(&mut game.speaker_name_color, index),
         "fullscreen" => graphics.fullscreen = on,
+        "monitor" => {
+            if index < monitors {
+                graphics.display = index as u32 + 1;
+            }
+        }
         "resolution" => {
             if let Some(&(width, height)) = resolutions(graphics).get(index) {
                 graphics.window_width = width;
                 graphics.window_height = height;
             }
         }
-        "menu_sounds" => settings.game.menu_sounds = on,
         "button_style" => {
             if let Some(&style) = BUTTON_STYLES.get(index) {
-                settings.game.button_style = style;
-            }
-        }
-        id if VOLUMES.contains(&id) => {
-            if let Some(volume) = volume_mut(&mut settings.game, id) {
-                *volume = value.clamp(0, 100) as u8;
+                game.button_style = style;
             }
         }
         "aspect" => {
@@ -486,9 +648,20 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
             }
         }
         "vsync" => graphics.vsync = on,
+        "hdr" => graphics.hdr = !on,
         "frame_rate" => {
             if let Some(&rate) = frame_rates(graphics.frame_rate).get(index) {
                 graphics.frame_rate = rate;
+            }
+        }
+        // Custom keeps whatever the quality rows say.
+        "pc_specs" => {
+            if let Some((_, preset)) = PRESETS.get(index) {
+                graphics.renderer = preset.renderer;
+                if preset.renderer == RendererKind::Gpu {
+                    graphics.render_scale = preset.render_scale;
+                    graphics.msaa = preset.msaa;
+                }
             }
         }
         "renderer" => {
@@ -510,7 +683,7 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
             }
         }
         "ui_font" => {
-            settings.game.ui_font = if on {
+            game.ui_font = if on {
                 FontFamily::Retro
             } else {
                 FontFamily::Modern
@@ -521,7 +694,13 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
                 settings.language = choice.clone();
             }
         }
-        _ => {}
+        id => {
+            if let Some(switch) = switch_mut(game, id) {
+                *switch = on;
+            } else if let Some(percent) = percent_mut(game, id) {
+                *percent = value.clamp(0, 100) as u8;
+            }
+        }
     }
 }
 
@@ -531,9 +710,8 @@ mod tests {
 
     fn settings() -> Settings {
         Settings {
-            graphics: Graphics::default(),
-            game: config::Game::default(),
-            language: None,
+            displays: vec!["Left".into(), "Right".into()],
+            ..Settings::default()
         }
     }
 
@@ -546,6 +724,11 @@ mod tests {
                     OptionKind::Choice(_) => position,
                     OptionKind::Slider { min, step, .. } => min + position * step,
                 };
+                // Custom is what the quality rows add up to, not a choice
+                // of its own.
+                if option.id == "pc_specs" && wanted == PRESETS.len() as i32 {
+                    continue;
+                }
                 let mut changed = base.clone();
                 apply(&option.id, wanted, &mut changed);
                 assert_eq!(value(&option.id, &changed), wanted, "{}", option.id);
@@ -559,5 +742,57 @@ mod tests {
         for option in defs(&base, &Locale::default()) {
             assert_eq!(option.default, value(&option.id, &base), "{}", option.id);
         }
+    }
+
+    #[test]
+    fn every_string_is_translated_to_english() {
+        // A missing string draws as its key.
+        let is_key = |shown: &str| {
+            shown.contains('.')
+                && shown
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '_' || c == '.')
+        };
+        for option in defs(&settings(), &Locale::default()) {
+            let choices = match &option.kind {
+                OptionKind::Choice(choices) => choices.clone(),
+                OptionKind::Slider { .. } => Vec::new(),
+            };
+            for shown in [
+                &option.category,
+                &option.subcategory,
+                &option.group,
+                &option.label,
+                &option.description,
+            ]
+            .into_iter()
+            .chain(choices.iter().map(|c| &c.label))
+            .chain(choices.iter().filter_map(|c| c.description.as_ref()))
+            {
+                assert!(!is_key(shown), "{}: {shown}", option.id);
+            }
+        }
+    }
+
+    #[test]
+    fn the_pc_specs_follow_the_quality_rows() {
+        let mut base = settings();
+        assert_eq!(value("pc_specs", &base), 1, "the defaults are Medium");
+        apply("msaa", 3, &mut base);
+        assert_eq!(value("pc_specs", &base), PRESETS.len() as i32, "Custom");
+        apply("pc_specs", 3, &mut base);
+        assert_eq!(
+            (base.graphics.render_scale, base.graphics.msaa),
+            (200, 4),
+            "Ultra"
+        );
+        // Low only swaps the renderer; the GPU rows keep their values.
+        apply("pc_specs", 0, &mut base);
+        assert_eq!(base.graphics.renderer, RendererKind::Software);
+        assert_eq!(base.graphics.render_scale, 200);
+        // Custom changes nothing.
+        let before = base.clone();
+        apply("pc_specs", PRESETS.len() as i32, &mut base);
+        assert_eq!(base, before);
     }
 }

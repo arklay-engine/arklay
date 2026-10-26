@@ -415,6 +415,9 @@ pub struct Graphics {
     pub frame_rate: u32,
     /// The display aspect ratio: 4:3 or a wider crop.
     pub aspect: Aspect,
+    /// HDR output when the display supports it ("Auto"); stored only, the
+    /// swapchain is always SDR for now.
+    pub hdr: bool,
 }
 
 impl Default for Graphics {
@@ -430,6 +433,7 @@ impl Default for Graphics {
             vsync: true,
             frame_rate: TICK_RATE,
             aspect: Aspect::STANDARD,
+            hdr: true,
         }
     }
 }

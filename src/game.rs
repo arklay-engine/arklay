@@ -3749,6 +3749,49 @@ pub struct GameState {
     /// matching command-line overrides. Runtime options, not part of a save
     /// block.
     pub player_options: crate::player::Options,
+    /// The gamepad rumble this tick's events asked for, taken by the window.
+    /// Runtime state, not part of a save block.
+    pub rumble: Option<Rumble>,
+}
+
+/// A gamepad rumble a game event asks for, at full strength: the low- and
+/// high-frequency motors' levels (SDL's 0 to 0xFFFF) and how long it lasts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rumble {
+    pub low: u16,
+    pub high: u16,
+    pub ms: u32,
+}
+
+impl Rumble {
+    /// The player takes damage.
+    pub const HURT: Self = Self {
+        low: 0xCCCC,
+        high: 0x8000,
+        ms: 250,
+    };
+    /// The player fires a round.
+    pub const SHOT: Self = Self {
+        low: 0x4CCC,
+        high: 0xB333,
+        ms: 90,
+    };
+
+    /// The stronger of each part of `self` and `other`.
+    fn max(self, other: Self) -> Self {
+        Self {
+            low: self.low.max(other.low),
+            high: self.high.max(other.high),
+            ms: self.ms.max(other.ms),
+        }
+    }
+}
+
+impl GameState {
+    /// Ask for `rumble`, merged with any already asked for this tick.
+    pub fn rumble(&mut self, rumble: Rumble) {
+        self.rumble = Some(self.rumble.map_or(rumble, |pending| pending.max(rumble)));
+    }
 }
 
 /// The initial entity array: only the player slot is spawned.
@@ -3905,6 +3948,7 @@ impl Default for GameState {
             last_effect_spawn: None,
             save_screen: None,
             player_options: crate::player::Options::default(),
+            rumble: None,
         }
     }
 }

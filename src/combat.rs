@@ -1468,6 +1468,9 @@ impl GameState {
         }
         self.entities[0].health = health;
         self.set_health_copy(health);
+        if damage > 0 {
+            self.rumble(crate::game::Rumble::HURT);
+        }
         health
     }
 
@@ -2428,6 +2431,20 @@ mod tests {
             -1,
             "the lethal flagged blow resolves to the scripted death"
         );
+    }
+
+    #[test]
+    fn a_hurt_asks_for_a_rumble_and_merges_with_a_shot() {
+        let mut game = GameState::default();
+        game.entities[0].health = 100;
+        game.apply_player_hurt(0, 0);
+        assert_eq!(game.rumble, None, "no damage, no rumble");
+        game.rumble(crate::game::Rumble::SHOT);
+        game.apply_player_hurt(10, 0);
+        let rumble = game.rumble.unwrap();
+        assert_eq!(rumble.low, crate::game::Rumble::HURT.low);
+        assert_eq!(rumble.high, crate::game::Rumble::SHOT.high);
+        assert_eq!(rumble.ms, crate::game::Rumble::HURT.ms);
     }
 
     #[test]

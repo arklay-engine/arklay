@@ -22,28 +22,35 @@ options.reset_page_question = "このページの設定を初期値に戻しま�
 options.default = "（初期値：{}）"
 
 category.controls = "操作"
+category.hud = "HUD"
 category.graphics = "グラフィック"
 category.audio = "サウンド"
-category.interface = "インターフェース"
 category.language = "言語"
 
 page.basic = "基本設定"
+page.controller = "コントローラー"
+page.hud = "HUD"
 page.display = "ディスプレイ"
-page.rendering = "描画"
+page.image = "画質"
 page.general = "全般"
-page.language = "言語"
 
 group.character_controls = "キャラクター操作"
 group.when_aiming = "構え中"
-group.controller = "コントローラー"
-group.display = "ディスプレイ"
-group.renderer = "レンダラー"
-group.text = "テキスト"
+group.button_settings = "ボタン設定"
+group.function_settings = "機能設定"
+group.quality_settings = "クオリティ設定"
 group.volume = "音量"
-group.menus = "メニュー"
+group.language = "言語"
+group.subtitles = "字幕"
 
 choice.off = "オフ"
 choice.on = "オン"
+
+color.white = "白"
+color.red = "赤"
+color.blue = "青"
+color.green = "緑"
+color.yellow = "黄"
 
 quick_turn.label = "クイックターン"
 quick_turn.description = "後退中にダッシュボタンを押すと、その場で180度振り向きます。"
@@ -55,20 +62,41 @@ analog_movement.description = "リメイク版のように、左スティック�
 analog_movement.off = "左スティックはラジコン操作です。"
 analog_movement.on = "左スティックを倒した方向へ移動します。"
 
+auto_aim.label = "オートエイム"
+auto_aim.description = "武器を構えたとき、最も近い敵の方を向きます。"
+auto_aim.off = "キャラクターの向いている方向に構えます（北米版と同じ）。"
+auto_aim.on = "最も近い敵をロックオンします。"
+
 tactical_reload.label = "タクティカルリロード"
 tactical_reload.description = "弾が残っている武器を、撃ち切らずにリロードします。"
 tactical_reload.off = "弾切れのときだけリロードします。"
 tactical_reload.on = "構え中にダッシュボタンを押し続けるとリロードします。"
 
-button_style.label = "ボタン表示"
+control_type.label = "操作タイプ"
+control_type.description = "コントローラーのボタン配置です。"
+control_type.a = "タイプA"
+control_type.b = "タイプB"
+control_type.c = "タイプC"
+
+button_style.label = "ボタンアイコンの種類"
 button_style.description = "ヒントに表示するコントローラーのボタンです。"
 button_style.auto = "自動"
 button_style.auto_note = "使用中のコントローラーに合わせます。"
+
+vibration.label = "コントローラーの振動"
+vibration.description = "コントローラーの振動の強さです。"
+vibration.off = "オフ"
+vibration.weak = "弱"
+vibration.normal = "標準"
+vibration.strong = "強"
 
 fullscreen.label = "表示モード"
 fullscreen.description = "ウィンドウまたはボーダーレスのフルスクリーンで表示します。Alt+Enter でも切り替えられます。"
 fullscreen.window = "ウィンドウ"
 fullscreen.fullscreen = "フルスクリーン"
+
+monitor.label = "モニター"
+monitor.description = "ゲームを表示するディスプレイです。"
 
 resolution.label = "解像度"
 resolution.description = "ゲームウィンドウの大きさです。フルスクリーンではディスプレイの大きさを使います。"
@@ -81,9 +109,33 @@ vsync.description = "ディスプレイの更新を待ってから各フレー�
 vsync.off = "遅延が少なくなりますが、画面が乱れることがあります。"
 vsync.on = "画面が乱れません。フレームはディスプレイを待ちます。"
 
+hdr.label = "HDR"
+hdr.description = "HDR対応ディスプレイでハイダイナミックレンジで出力します。"
+hdr.auto = "自動"
+hdr.auto_note = "ディスプレイが対応していればHDRを使用します。"
+hdr.off = "常に標準ダイナミックレンジで出力します。"
+
 frame_rate.label = "フレームレート"
 frame_rate.description = "1秒間に表示するフレーム数です。ゲーム自体は常に毎秒30回更新され、高いレートではその間の動きが滑らかになります。"
 frame_rate.value = "{} FPS"
+
+pc_specs.label = "PCスペック"
+pc_specs.description = "レンダラー、描画解像度、アンチエイリアスをまとめて設定します。"
+pc_specs.low = "低"
+pc_specs.low_note = "ソフトウェアレンダラーです。"
+pc_specs.medium = "中"
+pc_specs.medium_note = "画面の解像度で描画するGPUレンダラーです。"
+pc_specs.high = "高"
+pc_specs.high_note = "150%、2倍アンチエイリアスのGPUレンダラーです。"
+pc_specs.ultra = "最高"
+pc_specs.ultra_note = "200%、4倍アンチエイリアスのGPUレンダラーです。"
+pc_specs.custom = "カスタム"
+pc_specs.custom_note = "下のクオリティ設定のとおりです。"
+
+blood.label = "流血表現"
+blood.description = "血しぶき、噴き出す血、血だまりです。"
+blood.off = "血を表示しません。"
+blood.on = "血を表示します。"
 
 renderer.label = "レンダラー"
 renderer.description = "ゲームの描画方法です。"
@@ -106,6 +158,16 @@ ui_font.modern_note = "すっきりとしたゴシック体です。"
 ui_font.retro = "レトロ"
 ui_font.retro_note = "オリジナルに合わせたドット書体です。"
 
+menu_text_size.label = "メニューの文字サイズ"
+menu_text_size.description = "このメニューの文字の大きさです。"
+menu_text_size.small = "小"
+menu_text_size.standard = "標準"
+menu_text_size.large = "大"
+menu_text_size.extra_large = "特大"
+
+master_volume.label = "マスター音量"
+master_volume.description = "すべての音の音量です。"
+
 music_volume.label = "BGM"
 music_volume.description = "音楽の音量です。"
 
@@ -113,17 +175,43 @@ ambient_volume.label = "環境音"
 ambient_volume.description = "雨や風、機械の音など、音楽以外の背景音の音量です。"
 
 effects_volume.label = "効果音"
-effects_volume.description = "足音、銃声、クリーチャー、ドア、メニューの音の音量です。"
+effects_volume.description = "足音、銃声、クリーチャー、ドアの音量です。"
 
-voice_volume.label = "ボイス"
+voice_volume.label = "会話音声"
 voice_volume.description = "キャラクターの声の音量です。"
 
-menu_sounds.label = "メニューサウンド"
-menu_sounds.description = "このメニューで移動や決定をしたときに音を鳴らします。"
-menu_sounds.off = "メニューの音を鳴らしません。"
-menu_sounds.on = "カーソル、決定、キャンセルの音を鳴らします。"
+menu_volume.label = "メニュー効果音"
+menu_volume.description = "メニューでカーソルを動かしたり決定したりするときの音の音量です。"
 
-language.label = "言語"
+voice_language.label = "音声言語"
+voice_language.description = "キャラクターが話す言語です。"
+
+language.label = "表示言語"
 language.description = "ゲームのテキストとこのメニューの言語です。"
 language.system = "システム"
 language.system_note = "システムの言語（{}）に従います。"
+
+subtitles.label = "字幕"
+subtitles.description = "会話の字幕を表示します。"
+subtitles.off = "字幕を表示しません。"
+subtitles.on = "会話に字幕を表示します。"
+
+subtitle_size.label = "字幕サイズ"
+subtitle_size.description = "字幕の文字の大きさです。"
+subtitle_size.small = "小"
+subtitle_size.standard = "標準"
+subtitle_size.large = "大"
+
+subtitle_background.label = "字幕の背景"
+subtitle_background.description = "字幕の後ろの帯の不透明度です。"
+
+subtitle_color.label = "字幕の色"
+subtitle_color.description = "字幕の文字の色です。"
+
+speaker_names.label = "話者名の表示"
+speaker_names.description = "字幕の前に話している人の名前を表示します。"
+speaker_names.off = "字幕のみ。"
+speaker_names.on = "話者名と字幕。"
+
+speaker_name_color.label = "話者名の色"
+speaker_name_color.description = "話者名の色です。"

@@ -630,9 +630,10 @@ fn consume_round(game: &mut GameState, slot: usize) {
     let capacity = clip_capacity(weapon);
     game.inventory[slot].quantity = match game.debug.infinite_ammo {
         InfiniteAmmo::Infinite if capacity != 0 => refill_quantity(weapon, quantity),
-        _ if clip_is_empty(weapon, quantity) => quantity,
+        _ if clip_is_empty(weapon, quantity) => return,
         _ => quantity.wrapping_sub(1),
     };
+    game.rumble(crate::game::Rumble::SHOT);
 }
 
 /// `fire_consume_ammo_stack`: move rounds from the largest matching
@@ -2654,8 +2655,12 @@ fn vector_normal(point: [i32; 2]) -> [i32; 2] {
     [(x * 4096.0 / len) as i32, (z * 4096.0 / len) as i32]
 }
 
-/// `player_reticle_enemy`: the nearest valid target's entity slot.
+/// `player_reticle_enemy`: the nearest valid target's entity slot. With auto
+/// aim off nothing is ever locked.
 fn reticle_scan(game: &GameState, player: &PlayerState, room: &RoomState) -> Option<u8> {
+    if game.player_options.no_auto_aim {
+        return None;
+    }
     let mut nearest: Option<(u8, u32)> = None;
     let mut low: Option<(u8, u32)> = None;
     let mut standing: Option<(u8, u32)> = None;
@@ -2705,7 +2710,7 @@ fn player_find_aim_target(
     room: &RoomState,
 ) -> bool {
     let count = usize::from(game.enemy_count).min(30);
-    if count == 0 {
+    if count == 0 || game.player_options.no_auto_aim {
         return false;
     }
     let slots = crate::game::ENTITY_COUNT.saturating_sub(1);

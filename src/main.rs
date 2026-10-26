@@ -950,6 +950,9 @@ fn main() -> Result<()> {
                 // A scripted run has no stick; keep it off like the other
                 // options so the traces never depend on it.
                 analog_movement: config.game.analog_movement && !(tracing || cli.input.is_some()),
+                // A scripted run keeps the original's aim and blood.
+                no_auto_aim: !(config.game.auto_aim || tracing || cli.input.is_some()),
+                no_blood: !(config.game.blood || tracing || cli.input.is_some()),
             };
             let mut renderer = config.graphics;
             if let Some(kind) = cli.renderer {

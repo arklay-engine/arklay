@@ -300,6 +300,7 @@ fn projectile_hit_check(
                 base.wrapping_sub(0x1e)
             };
         }
+        game.rumble(crate::game::Rumble::HURT);
         let player = &mut game.entities[0];
         player.health = health;
         player.is_being_attacked = 1;

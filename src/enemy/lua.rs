@@ -1569,7 +1569,11 @@ mod imp {
                 Ok(api.game_ref().entities[0].health)
             });
             fields.add_field_method_set("player_health", |_lua, api, value: i64| {
-                api.game().entities[0].health = value as i16;
+                let game = api.game();
+                if (value as i16) < game.entities[0].health {
+                    game.rumble(crate::game::Rumble::HURT);
+                }
+                game.entities[0].health = value as i16;
                 Ok(())
             });
             fields.add_field_method_get("player_attacked", |_lua, api| {

@@ -46,27 +46,34 @@ const MAX_RENDER_FRAMES: usize = 8192;
 const BYTES_PER_FRAME: usize = 4;
 
 /// The player's level for each kind of game sound, as linear gains applied
-/// on top of each sound's own. The film audio is not scaled.
+/// on top of each sound's own. The master gain scales everything, the film
+/// audio included; the film audio has no level of its own.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Volumes {
+    /// Everything.
+    pub master: f32,
     /// The BGM channels carrying music.
     pub music: f32,
     /// The BGM channels carrying an ambient loop (see
     /// [`crate::music::track_kind`]).
     pub ambient: f32,
-    /// The one-shot pool: gameplay cues and the menus' cues.
+    /// The one-shot pool's gameplay cues.
     pub effects: f32,
     /// The voice (dialogue) channel and a spoken BGM track.
     pub voice: f32,
+    /// The menus' cues ([`Mixer::play_menu_sfx`]).
+    pub menu: f32,
 }
 
 impl Default for Volumes {
     fn default() -> Self {
         Self {
+            master: 1.0,
             music: 1.0,
             ambient: 1.0,
             effects: 1.0,
             voice: 1.0,
+            menu: 1.0,
         }
     }
 }
@@ -78,18 +85,20 @@ pub fn percent_gain(percent: u8) -> f32 {
     level * level
 }
 
-/// The volumes every [`Mixer`] renders with, as `f32` bits (music, ambient,
-/// effects, voice); 1.0 until [`set_volumes`].
-static VOLUMES: [AtomicU32; 4] = [const { AtomicU32::new(0x3F80_0000) }; 4];
+/// The volumes every [`Mixer`] renders with, as `f32` bits (master, music,
+/// ambient, effects, voice, menu); 1.0 until [`set_volumes`].
+static VOLUMES: [AtomicU32; 6] = [const { AtomicU32::new(0x3F80_0000) }; 6];
 
 /// Set the volumes every mixer renders with from its next update. Audio
 /// already queued on a device (about a tenth of a second) keeps its level.
 pub fn set_volumes(volumes: Volumes) {
     let gains = [
+        volumes.master,
         volumes.music,
         volumes.ambient,
         volumes.effects,
         volumes.voice,
+        volumes.menu,
     ];
     for (slot, gain) in VOLUMES.iter().zip(gains) {
         slot.store(gain.max(0.0).to_bits(), Ordering::Relaxed);
@@ -99,10 +108,12 @@ pub fn set_volumes(volumes: Volumes) {
 fn volumes() -> Volumes {
     let gain = |index: usize| f32::from_bits(VOLUMES[index].load(Ordering::Relaxed));
     Volumes {
-        music: gain(0),
-        ambient: gain(1),
-        effects: gain(2),
-        voice: gain(3),
+        master: gain(0),
+        music: gain(1),
+        ambient: gain(2),
+        effects: gain(3),
+        voice: gain(4),
+        menu: gain(5),
     }
 }
 
@@ -367,6 +378,8 @@ struct Voice {
     /// restarts this voice instead of appending a new one; `None` voices (the
     /// unkeyed test/UI entries) never match.
     bank: Option<u64>,
+    /// A menu cue, at the menu volume rather than the effects volume.
+    menu: bool,
 }
 
 impl Voice {
@@ -379,6 +392,7 @@ impl Voice {
             looping,
             seq,
             bank: None,
+            menu: false,
         }
     }
 
@@ -392,6 +406,7 @@ impl Voice {
         self.looping = false;
         self.seq = seq;
         self.bank = Some(bank);
+        self.menu = false;
     }
 
     /// Whether a one-shot voice has played its whole buffer.
@@ -659,6 +674,14 @@ impl MixState {
             .push(Voice::new(pcm, gain.max(0.0), pan, false, seq));
     }
 
+    /// Start a one-shot menu cue, at the menu volume.
+    pub(crate) fn play_menu_sfx(&mut self, pcm: Vec<i16>) {
+        self.play_sfx(pcm, 1.0, 0.0);
+        if let Some(voice) = self.sfx.last_mut() {
+            voice.menu = true;
+        }
+    }
+
     fn bgm_any_playing(&self) -> bool {
         self.bgm_channels
             .iter()
@@ -825,7 +848,12 @@ impl MixState {
                     if voice.pos >= voice.pcm.len() {
                         continue;
                     }
-                    let sample = f32::from(voice.pcm[voice.pos]) * voice.gain * volumes.effects;
+                    let bus = if voice.menu {
+                        volumes.menu
+                    } else {
+                        volumes.effects
+                    };
+                    let sample = f32::from(voice.pcm[voice.pos]) * voice.gain * bus;
                     let (l, r) = pan_gains(voice.pan);
                     left += sample * l;
                     right += sample * r;
@@ -844,8 +872,8 @@ impl MixState {
                 }
             }
 
-            push_sample(out, left);
-            push_sample(out, right);
+            push_sample(out, left * volumes.master);
+            push_sample(out, right * volumes.master);
         }
     }
 
@@ -1058,6 +1086,17 @@ impl Mixer {
             return;
         };
         self.state.play_sfx(mono, gain, pan);
+        self.resume();
+        self.update();
+    }
+
+    /// Start a one-shot menu cue (a cursor move, a confirm), at the menu
+    /// volume.
+    pub fn play_menu_sfx(&mut self, wav: Wav) {
+        let Some(mono) = mono_or_warn(&wav) else {
+            return;
+        };
+        self.state.play_menu_sfx(mono);
         self.resume();
         self.update();
     }
@@ -2002,10 +2041,12 @@ mod tests {
     fn player_volumes_scale_each_kind_of_sound() {
         let mut state = MixState::new();
         state.volumes = Volumes {
+            master: 1.0,
             music: 0.5,
             ambient: 0.25,
             effects: 0.0,
             voice: 2.0,
+            menu: 0.5,
         };
         let level = |state: &mut MixState| {
             let mut out = Vec::new();
@@ -2023,6 +2064,11 @@ mod tests {
         assert_eq!(level(&mut state), 0, "effects");
         state.play_voice(vec![1000, 1000], 1.0, 0.0);
         assert_eq!(level(&mut state), 2000, "voice");
+        state.stop_voice();
+        state.play_menu_sfx(vec![1000, 1000]);
+        assert_eq!(level(&mut state), 500, "a menu cue");
+        state.volumes.master = 0.5;
+        assert_eq!(level(&mut state), 250, "the master scales the rest");
     }
 
     #[test]

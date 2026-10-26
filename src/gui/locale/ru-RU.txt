@@ -22,28 +22,35 @@ options.reset_page_question = "Сбросить настройки этой ст
 options.default = "(По умолчанию: {})"
 
 category.controls = "УПРАВЛЕНИЕ"
+category.hud = "HUD"
 category.graphics = "ГРАФИКА"
 category.audio = "ЗВУК"
-category.interface = "ИНТЕРФЕЙС"
 category.language = "ЯЗЫК"
 
 page.basic = "Основные"
+page.controller = "Геймпад"
+page.hud = "HUD"
 page.display = "Экран"
-page.rendering = "Отрисовка"
+page.image = "Изображение"
 page.general = "Общие"
-page.language = "Язык"
 
 group.character_controls = "Управление персонажем"
 group.when_aiming = "При прицеливании"
-group.controller = "Геймпад"
-group.display = "Экран"
-group.renderer = "Рендерер"
-group.text = "Текст"
+group.button_settings = "Настройки кнопок"
+group.function_settings = "Настройки функций"
+group.quality_settings = "Настройки качества"
 group.volume = "Громкость"
-group.menus = "Меню"
+group.language = "Язык"
+group.subtitles = "Субтитры"
 
 choice.off = "Выкл."
 choice.on = "Вкл."
+
+color.white = "Белый"
+color.red = "Красный"
+color.blue = "Синий"
+color.green = "Зелёный"
+color.yellow = "Жёлтый"
 
 quick_turn.label = "Быстрый разворот"
 quick_turn.description = "Разворот на 180 градусов на месте нажатием бега при движении назад."
@@ -55,20 +62,41 @@ analog_movement.description = "Движение в направлении лев
 analog_movement.off = "Левый стик использует танковое управление."
 analog_movement.on = "Персонаж идёт туда, куда указывает левый стик."
 
+auto_aim.label = "Автоприцеливание"
+auto_aim.description = "Поворачиваться к ближайшему врагу, поднимая оружие."
+auto_aim.off = "Целиться туда, куда смотрит персонаж, как в оригинальной американской версии."
+auto_aim.on = "Захватывать ближайшего врага."
+
 tactical_reload.label = "Тактическая перезарядка"
 tactical_reload.description = "Перезарядка частично заряженного оружия без опустошения магазина."
 tactical_reload.off = "Оружие перезаряжается только пустым."
 tactical_reload.on = "Удерживайте бег при прицеливании, чтобы перезарядить."
 
-button_style.label = "Стиль кнопок"
+control_type.label = "Тип управления"
+control_type.description = "Раскладка кнопок геймпада."
+control_type.a = "Тип A"
+control_type.b = "Тип B"
+control_type.c = "Тип C"
+
+button_style.label = "Тип значков кнопок"
 button_style.description = "Кнопки геймпада, показываемые в подсказках."
 button_style.auto = "Авто"
 button_style.auto_note = "Как у используемого геймпада."
+
+vibration.label = "Вибрация геймпада"
+vibration.description = "Сила вибрации геймпада."
+vibration.off = "Выкл."
+vibration.weak = "Слабая"
+vibration.normal = "Обычная"
+vibration.strong = "Сильная"
 
 fullscreen.label = "Режим экрана"
 fullscreen.description = "Игра в окне или в полноэкранном режиме без рамки. Также переключается клавишами Alt+Enter."
 fullscreen.window = "Окно"
 fullscreen.fullscreen = "Полный экран"
+
+monitor.label = "Монитор"
+monitor.description = "Экран, на котором отображается игра."
 
 resolution.label = "Разрешение"
 resolution.description = "Размер окна игры. В полноэкранном режиме используется размер экрана."
@@ -81,9 +109,33 @@ vsync.description = "Ждать обновления экрана перед п�
 vsync.off = "Меньше задержка; возможны разрывы изображения."
 vsync.on = "Без разрывов; кадры ждут экран."
 
+hdr.label = "HDR"
+hdr.description = "Вывод с расширенным динамическим диапазоном для поддерживающих его экранов."
+hdr.auto = "Авто"
+hdr.auto_note = "Использовать HDR, если экран его поддерживает."
+hdr.off = "Всегда выводить стандартный динамический диапазон."
+
 frame_rate.label = "Частота кадров"
 frame_rate.description = "Кадров в секунду. Сама игра всегда обновляется 30 раз в секунду; более высокая частота сглаживает движение между обновлениями."
 frame_rate.value = "{} кадр/с"
+
+pc_specs.label = "Характеристики ПК"
+pc_specs.description = "Настроить рендерер, масштаб отрисовки и сглаживание вместе."
+pc_specs.low = "Низкие"
+pc_specs.low_note = "Программный рендерер."
+pc_specs.medium = "Средние"
+pc_specs.medium_note = "GPU-рендерер в разрешении экрана."
+pc_specs.high = "Высокие"
+pc_specs.high_note = "GPU-рендерер на 150% со сглаживанием 2x."
+pc_specs.ultra = "Ультра"
+pc_specs.ultra_note = "GPU-рендерер на 200% со сглаживанием 4x."
+pc_specs.custom = "Свои"
+pc_specs.custom_note = "Настройки качества ниже, как они заданы."
+
+blood.label = "Кровь"
+blood.description = "Брызги, струи и лужи крови."
+blood.off = "Кровь не отображается."
+blood.on = "Кровь отображается."
 
 renderer.label = "Рендерер"
 renderer.description = "Способ отрисовки игры."
@@ -106,6 +158,16 @@ ui_font.modern_note = "Чистый шрифт без засечек."
 ui_font.retro = "Ретро"
 ui_font.retro_note = "Пиксельный шрифт в духе оригинала."
 
+menu_text_size.label = "Размер текста меню"
+menu_text_size.description = "Размер текста в этих меню."
+menu_text_size.small = "Мелкий"
+menu_text_size.standard = "Стандартный"
+menu_text_size.large = "Крупный"
+menu_text_size.extra_large = "Очень крупный"
+
+master_volume.label = "Общая громкость"
+master_volume.description = "Громкость всего звука."
+
 music_volume.label = "Музыка"
 music_volume.description = "Громкость музыки."
 
@@ -113,17 +175,43 @@ ambient_volume.label = "Звуки окружения"
 ambient_volume.description = "Громкость фоновых звуков, которые не являются музыкой: дождь, ветер, механизмы."
 
 effects_volume.label = "Звуковые эффекты"
-effects_volume.description = "Громкость шагов, выстрелов, существ, дверей и звуков меню."
+effects_volume.description = "Громкость шагов, выстрелов, существ и дверей."
 
-voice_volume.label = "Голоса"
+voice_volume.label = "Голоса в диалогах"
 voice_volume.description = "Громкость голосов персонажей."
 
-menu_sounds.label = "Звуки меню"
-menu_sounds.description = "Воспроизводить звуки при перемещении и выборе в этих меню."
-menu_sounds.off = "Меню без звука."
-menu_sounds.on = "Звуки курсора, подтверждения и отмены."
+menu_volume.label = "Звуки меню"
+menu_volume.description = "Громкость звуков при перемещении и выборе в меню."
 
-language.label = "Язык текста"
+voice_language.label = "Язык озвучки"
+voice_language.description = "Язык, на котором говорят персонажи."
+
+language.label = "Язык интерфейса"
 language.description = "Язык текстов игры и этих меню."
 language.system = "Системный"
 language.system_note = "Как в системе ({})."
+
+subtitles.label = "Субтитры"
+subtitles.description = "Показывать субтитры к диалогам."
+subtitles.off = "Без субтитров."
+subtitles.on = "Диалоги сопровождаются субтитрами."
+
+subtitle_size.label = "Размер субтитров"
+subtitle_size.description = "Размер текста субтитров."
+subtitle_size.small = "Мелкий"
+subtitle_size.standard = "Стандартный"
+subtitle_size.large = "Крупный"
+
+subtitle_background.label = "Фон субтитров"
+subtitle_background.description = "Непрозрачность полосы за субтитрами."
+
+subtitle_color.label = "Цвет субтитров"
+subtitle_color.description = "Цвет текста субтитров."
+
+speaker_names.label = "Имя говорящего"
+speaker_names.description = "Показывать, кто говорит, перед каждым субтитром."
+speaker_names.off = "Только субтитры."
+speaker_names.on = "Имя говорящего, затем субтитр."
+
+speaker_name_color.label = "Цвет имени говорящего"
+speaker_name_color.description = "Цвет имени говорящего."

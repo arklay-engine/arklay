@@ -2005,6 +2005,8 @@ impl Launcher {
             quick_turn: self.config.game.quick_turn,
             tactical_reload: self.config.game.tactical_reload,
             analog_movement: self.config.game.analog_movement,
+            no_auto_aim: !self.config.game.auto_aim,
+            no_blood: !self.config.game.blood,
         };
         logging::write(&format!("play: {}", pack.path.display()));
         let result = engine::run_root_with_display(

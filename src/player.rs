@@ -164,6 +164,12 @@ pub struct Options {
     /// stick's direction on screen, turning quickly toward it. The keyboard
     /// and the d-pad keep the tank controls. Off by default.
     pub analog_movement: bool,
+    /// Port-only: raising a weapon never locks on to an enemy, so the shot
+    /// goes where the player faces. Off by default (the original's auto aim).
+    pub no_auto_aim: bool,
+    /// Port-only: the blood billboards, spurts and pools are not spawned.
+    /// Off by default.
+    pub no_blood: bool,
 }
 
 /// Keyboard state for one tick.

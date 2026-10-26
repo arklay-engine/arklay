@@ -28,14 +28,26 @@
 //! quick_turn = true      # BACKWARD + RUN turns the player 180 degrees
 //! tactical_reload = true # AIM + RUN reloads a partially loaded gun
 //! analog_movement = true # the left stick moves relative to the camera
+//! auto_aim = true        # raising a weapon locks on to the nearest enemy
+//! blood = true           # blood billboards, spurts and pools
 //! ui_font = "modern"     # the menus' face: "modern" or "retro"
-//! menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
+//! menu_text_size = "standard" # "small", "standard", "large", "extra_large"
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
 //!                        # or "nintendo"
-//! music_volume = 100     # levels in percent (0..100): the music, the
-//! ambient_volume = 100   # ambient loops (rain, machinery), the sound
-//! effects_volume = 100   # effects and the voices
+//! control_type = "a"     # the gamepad layout preset: "a", "b" or "c"
+//! vibration = "normal"   # "off", "weak", "normal" or "strong"
+//! master_volume = 100    # levels in percent (0..100): everything, then the
+//! music_volume = 100     # music, the ambient loops (rain, machinery), the
+//! ambient_volume = 100   # sound effects, the voices and the menus' cues
+//! effects_volume = 100
 //! voice_volume = 100
+//! menu_volume = 100
+//! subtitles = true       # the subtitle options (stored; not drawn yet)
+//! subtitle_size = "standard"   # "small", "standard" or "large"
+//! subtitle_background = 50     # the band's opacity in percent
+//! subtitle_color = "white"     # "white", "red", "blue", "green", "yellow"
+//! speaker_names = false
+//! speaker_name_color = "yellow"
 //!
 //! # The interactive window (see `crate::video`); a key left out keeps its
 //! # default. F8 and Alt+Enter rewrite `fullscreen` and the window size, and
@@ -53,6 +65,7 @@
 //! frame_rate = 30        # presented frames per second (30..1000); the game
 //!                        # still runs at 30 Hz and higher rates tween
 //! aspect = "4:3"         # or "16:9": crops the 4:3 frame to the wider shape
+//! hdr = true             # HDR output when the display supports it
 //!
 //! # Discovered mods (the game pack's sibling `mods/` and `<config dir>/mods`).
 //! # `enabled` narrows the discovered set when present; `disabled` always
@@ -201,6 +214,157 @@ pub struct Games {
     pub re1_build: Option<String>,
 }
 
+/// A `[game]` option stored as one of a few quoted names.
+pub trait Named: Copy + PartialEq + Sized + 'static {
+    /// Every value, in menu order, with its name.
+    const NAMES: &'static [(Self, &'static str)];
+
+    fn name(self) -> &'static str {
+        Self::NAMES
+            .iter()
+            .find(|(value, _)| *value == self)
+            .map_or("", |(_, name)| name)
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        Self::NAMES
+            .iter()
+            .find(|(_, n)| *n == name)
+            .map(|&(value, _)| value)
+    }
+
+    /// The value's position in [`Self::NAMES`].
+    fn index(self) -> usize {
+        Self::NAMES
+            .iter()
+            .position(|(value, _)| *value == self)
+            .unwrap_or(0)
+    }
+
+    /// The value at `index` in [`Self::NAMES`].
+    fn at(index: usize) -> Option<Self> {
+        Self::NAMES.get(index).map(|&(value, _)| value)
+    }
+}
+
+/// How strongly the controller rumbles.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Vibration {
+    Off,
+    Weak,
+    #[default]
+    Normal,
+    Strong,
+}
+
+impl Named for Vibration {
+    const NAMES: &'static [(Self, &'static str)] = &[
+        (Vibration::Off, "off"),
+        (Vibration::Weak, "weak"),
+        (Vibration::Normal, "normal"),
+        (Vibration::Strong, "strong"),
+    ];
+}
+
+impl Vibration {
+    /// The rumble motors' strength as a fraction of full.
+    pub fn strength(self) -> f32 {
+        match self {
+            Vibration::Off => 0.0,
+            Vibration::Weak => 0.4,
+            Vibration::Normal => 0.7,
+            Vibration::Strong => 1.0,
+        }
+    }
+}
+
+/// The gamepad layout preset (see
+/// [`crate::controls::Bindings::with_control_type`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ControlType {
+    #[default]
+    A,
+    B,
+    C,
+}
+
+impl Named for ControlType {
+    const NAMES: &'static [(Self, &'static str)] = &[
+        (ControlType::A, "a"),
+        (ControlType::B, "b"),
+        (ControlType::C, "c"),
+    ];
+}
+
+/// The size of the native-resolution menus' text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextSize {
+    Small,
+    #[default]
+    Standard,
+    Large,
+    ExtraLarge,
+}
+
+impl Named for TextSize {
+    const NAMES: &'static [(Self, &'static str)] = &[
+        (TextSize::Small, "small"),
+        (TextSize::Standard, "standard"),
+        (TextSize::Large, "large"),
+        (TextSize::ExtraLarge, "extra_large"),
+    ];
+}
+
+impl TextSize {
+    /// The factor on the theme's text sizes.
+    pub fn scale(self) -> f32 {
+        match self {
+            TextSize::Small => 0.85,
+            TextSize::Standard => 1.0,
+            TextSize::Large => 1.15,
+            TextSize::ExtraLarge => 1.3,
+        }
+    }
+}
+
+/// The size of the subtitles.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SubtitleSize {
+    Small,
+    #[default]
+    Standard,
+    Large,
+}
+
+impl Named for SubtitleSize {
+    const NAMES: &'static [(Self, &'static str)] = &[
+        (SubtitleSize::Small, "small"),
+        (SubtitleSize::Standard, "standard"),
+        (SubtitleSize::Large, "large"),
+    ];
+}
+
+/// A subtitle or speaker name colour.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextColor {
+    #[default]
+    White,
+    Red,
+    Blue,
+    Green,
+    Yellow,
+}
+
+impl Named for TextColor {
+    const NAMES: &'static [(Self, &'static str)] = &[
+        (TextColor::White, "white"),
+        (TextColor::Red, "red"),
+        (TextColor::Blue, "blue"),
+        (TextColor::Green, "green"),
+        (TextColor::Yellow, "yellow"),
+    ];
+}
+
 /// The `[game]` gameplay options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Game {
@@ -216,15 +380,25 @@ pub struct Game {
     /// alternate controls); the keyboard and the d-pad keep the tank
     /// controls. On by default.
     pub analog_movement: bool,
+    /// Raising a weapon locks on to the nearest enemy, as the original does;
+    /// off aims where the player faces. On by default.
+    pub auto_aim: bool,
+    /// The blood billboards, spurts and pools. On by default.
+    pub blood: bool,
     /// The face the native-resolution menus draw with: `"modern"` (the
     /// default) or `"retro"`.
     pub ui_font: crate::gui::FontFamily,
-    /// Whether the in-game menu plays its cursor, confirm and cancel sounds.
-    /// On by default.
-    pub menu_sounds: bool,
+    /// The size of the native-resolution menus' text.
+    pub menu_text_size: TextSize,
     /// The controller glyphs the menus draw; `None` (`"auto"`, the default)
     /// follows the controller in use.
     pub button_style: Option<crate::gui::PadStyle>,
+    /// The gamepad layout preset.
+    pub control_type: ControlType,
+    /// How strongly the controller rumbles.
+    pub vibration: Vibration,
+    /// The level of everything, 0..=100 percent, on top of the others.
+    pub master_volume: u8,
     /// The music's level, 0..=100 percent.
     pub music_volume: u8,
     /// The ambient loops' level (rain, machinery: the room tracks that are
@@ -234,6 +408,17 @@ pub struct Game {
     pub effects_volume: u8,
     /// The voices' level, 0..=100 percent.
     pub voice_volume: u8,
+    /// The menus' cursor, confirm and cancel sounds, 0..=100 percent.
+    pub menu_volume: u8,
+    /// Show subtitles. Stored only: subtitles are not drawn yet.
+    pub subtitles: bool,
+    pub subtitle_size: SubtitleSize,
+    /// The opacity of the band behind the subtitles, 0..=100 percent.
+    pub subtitle_background: u8,
+    pub subtitle_color: TextColor,
+    /// Show the speaker's name with a subtitle.
+    pub speaker_names: bool,
+    pub speaker_name_color: TextColor,
 }
 
 impl Default for Game {
@@ -242,13 +427,25 @@ impl Default for Game {
             quick_turn: true,
             tactical_reload: true,
             analog_movement: true,
+            auto_aim: true,
+            blood: true,
             ui_font: crate::gui::FontFamily::Modern,
-            menu_sounds: true,
+            menu_text_size: TextSize::Standard,
             button_style: None,
+            control_type: ControlType::A,
+            vibration: Vibration::Normal,
+            master_volume: 100,
             music_volume: 100,
             ambient_volume: 100,
             effects_volume: 100,
             voice_volume: 100,
+            menu_volume: 100,
+            subtitles: true,
+            subtitle_size: SubtitleSize::Standard,
+            subtitle_background: 50,
+            subtitle_color: TextColor::White,
+            speaker_names: false,
+            speaker_name_color: TextColor::Yellow,
         }
     }
 }
@@ -257,10 +454,12 @@ impl Game {
     /// The volume settings as mixer gains.
     pub fn volumes(&self) -> crate::audio::Volumes {
         crate::audio::Volumes {
+            master: crate::audio::percent_gain(self.master_volume),
             music: crate::audio::percent_gain(self.music_volume),
             ambient: crate::audio::percent_gain(self.ambient_volume),
             effects: crate::audio::percent_gain(self.effects_volume),
             voice: crate::audio::percent_gain(self.voice_volume),
+            menu: crate::audio::percent_gain(self.menu_volume),
         }
     }
 }
@@ -796,6 +995,13 @@ fn parse_graphics_key(graphics: &mut Graphics, key: &str, value: &str, line: usi
             graphics.aspect = video::Aspect::parse(&name)
                 .with_context(|| format!("line {line}: invalid `aspect`"))?;
         }
+        "hdr" => {
+            graphics.hdr = match value {
+                "true" => true,
+                "false" => false,
+                _ => bail!("line {line}: `hdr` expects true or false"),
+            };
+        }
         other => bail!("line {line}: unknown key `{other}`"),
     }
     Ok(())
@@ -957,28 +1163,33 @@ fn parse_game_line(
         bail!("line {line}: duplicate key `{key}`");
     }
     seen.push(key.to_string());
+    let boolean = || -> Result<bool> {
+        match value {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            _ => bail!("line {line}: `{key}` expects true or false"),
+        }
+    };
+    let percent = || -> Result<u8> {
+        value
+            .parse::<u8>()
+            .ok()
+            .filter(|volume| *volume <= 100)
+            .ok_or_else(|| anyhow::anyhow!("line {line}: `{key}` expects 0 to 100"))
+    };
+    fn named<T: Named>(key: &str, value: &str, line: usize) -> Result<T> {
+        let name = parse_quoted(value, line)?;
+        T::from_name(&name).ok_or_else(|| {
+            let names: Vec<String> = T::NAMES.iter().map(|(_, n)| format!("\"{n}\"")).collect();
+            anyhow::anyhow!("line {line}: `{key}` expects {}", names.join(", "))
+        })
+    }
     match key {
-        "quick_turn" => {
-            game.quick_turn = match value {
-                "true" => true,
-                "false" => false,
-                _ => bail!("line {line}: `quick_turn` expects true or false"),
-            };
-        }
-        "tactical_reload" => {
-            game.tactical_reload = match value {
-                "true" => true,
-                "false" => false,
-                _ => bail!("line {line}: `tactical_reload` expects true or false"),
-            };
-        }
-        "analog_movement" => {
-            game.analog_movement = match value {
-                "true" => true,
-                "false" => false,
-                _ => bail!("line {line}: `analog_movement` expects true or false"),
-            };
-        }
+        "quick_turn" => game.quick_turn = boolean()?,
+        "tactical_reload" => game.tactical_reload = boolean()?,
+        "analog_movement" => game.analog_movement = boolean()?,
+        "auto_aim" => game.auto_aim = boolean()?,
+        "blood" => game.blood = boolean()?,
         "ui_font" => {
             game.ui_font = match parse_quoted(value, line)?.as_str() {
                 "modern" => crate::gui::FontFamily::Modern,
@@ -986,12 +1197,12 @@ fn parse_game_line(
                 _ => bail!("line {line}: `ui_font` expects \"modern\" or \"retro\""),
             };
         }
+        "menu_text_size" => game.menu_text_size = named(key, value, line)?,
+        // The on/off switch the menu volume replaced: off is silence.
         "menu_sounds" => {
-            game.menu_sounds = match value {
-                "true" => true,
-                "false" => false,
-                _ => bail!("line {line}: `menu_sounds` expects true or false"),
-            };
+            if !boolean()? {
+                game.menu_volume = 0;
+            }
         }
         "button_style" => {
             game.button_style = match parse_quoted(value, line)?.as_str() {
@@ -1004,19 +1215,20 @@ fn parse_game_line(
                 ),
             };
         }
-        "music_volume" | "ambient_volume" | "effects_volume" | "voice_volume" => {
-            let volume = value
-                .parse::<u8>()
-                .ok()
-                .filter(|volume| *volume <= 100)
-                .ok_or_else(|| anyhow::anyhow!("line {line}: `{key}` expects 0 to 100"))?;
-            *match key {
-                "music_volume" => &mut game.music_volume,
-                "ambient_volume" => &mut game.ambient_volume,
-                "effects_volume" => &mut game.effects_volume,
-                _ => &mut game.voice_volume,
-            } = volume;
-        }
+        "control_type" => game.control_type = named(key, value, line)?,
+        "vibration" => game.vibration = named(key, value, line)?,
+        "master_volume" => game.master_volume = percent()?,
+        "music_volume" => game.music_volume = percent()?,
+        "ambient_volume" => game.ambient_volume = percent()?,
+        "effects_volume" => game.effects_volume = percent()?,
+        "voice_volume" => game.voice_volume = percent()?,
+        "menu_volume" => game.menu_volume = percent()?,
+        "subtitles" => game.subtitles = boolean()?,
+        "subtitle_size" => game.subtitle_size = named(key, value, line)?,
+        "subtitle_background" => game.subtitle_background = percent()?,
+        "subtitle_color" => game.subtitle_color = named(key, value, line)?,
+        "speaker_names" => game.speaker_names = boolean()?,
+        "speaker_name_color" => game.speaker_name_color = named(key, value, line)?,
         other => bail!("line {line}: unknown key `{other}`"),
     }
     Ok(())
@@ -1026,14 +1238,24 @@ fn parse_game_line(
 fn render_game(game: &Game) -> String {
     let defaults = Game::default();
     let mut out = String::new();
-    if game.quick_turn != defaults.quick_turn {
-        out.push_str(&format!("quick_turn = {}\n", game.quick_turn));
-    }
-    if game.tactical_reload != defaults.tactical_reload {
-        out.push_str(&format!("tactical_reload = {}\n", game.tactical_reload));
-    }
-    if game.analog_movement != defaults.analog_movement {
-        out.push_str(&format!("analog_movement = {}\n", game.analog_movement));
+    for (key, value, default) in [
+        ("quick_turn", game.quick_turn, defaults.quick_turn),
+        (
+            "tactical_reload",
+            game.tactical_reload,
+            defaults.tactical_reload,
+        ),
+        (
+            "analog_movement",
+            game.analog_movement,
+            defaults.analog_movement,
+        ),
+        ("auto_aim", game.auto_aim, defaults.auto_aim),
+        ("blood", game.blood, defaults.blood),
+    ] {
+        if value != default {
+            out.push_str(&format!("{key} = {value}\n"));
+        }
     }
     if game.ui_font != defaults.ui_font {
         let name = match game.ui_font {
@@ -1042,8 +1264,11 @@ fn render_game(game: &Game) -> String {
         };
         out.push_str(&format!("ui_font = \"{name}\"\n"));
     }
-    if game.menu_sounds != defaults.menu_sounds {
-        out.push_str(&format!("menu_sounds = {}\n", game.menu_sounds));
+    if game.menu_text_size != defaults.menu_text_size {
+        out.push_str(&format!(
+            "menu_text_size = \"{}\"\n",
+            game.menu_text_size.name()
+        ));
     }
     if game.button_style != defaults.button_style {
         let name = match game.button_style {
@@ -1054,7 +1279,17 @@ fn render_game(game: &Game) -> String {
         };
         out.push_str(&format!("button_style = \"{name}\"\n"));
     }
+    if game.control_type != defaults.control_type {
+        out.push_str(&format!(
+            "control_type = \"{}\"\n",
+            game.control_type.name()
+        ));
+    }
+    if game.vibration != defaults.vibration {
+        out.push_str(&format!("vibration = \"{}\"\n", game.vibration.name()));
+    }
     for (key, volume, default) in [
+        ("master_volume", game.master_volume, defaults.master_volume),
         ("music_volume", game.music_volume, defaults.music_volume),
         (
             "ambient_volume",
@@ -1067,10 +1302,41 @@ fn render_game(game: &Game) -> String {
             defaults.effects_volume,
         ),
         ("voice_volume", game.voice_volume, defaults.voice_volume),
+        ("menu_volume", game.menu_volume, defaults.menu_volume),
     ] {
         if volume != default {
             out.push_str(&format!("{key} = {volume}\n"));
         }
+    }
+    if game.subtitles != defaults.subtitles {
+        out.push_str(&format!("subtitles = {}\n", game.subtitles));
+    }
+    if game.subtitle_size != defaults.subtitle_size {
+        out.push_str(&format!(
+            "subtitle_size = \"{}\"\n",
+            game.subtitle_size.name()
+        ));
+    }
+    if game.subtitle_background != defaults.subtitle_background {
+        out.push_str(&format!(
+            "subtitle_background = {}\n",
+            game.subtitle_background
+        ));
+    }
+    if game.subtitle_color != defaults.subtitle_color {
+        out.push_str(&format!(
+            "subtitle_color = \"{}\"\n",
+            game.subtitle_color.name()
+        ));
+    }
+    if game.speaker_names != defaults.speaker_names {
+        out.push_str(&format!("speaker_names = {}\n", game.speaker_names));
+    }
+    if game.speaker_name_color != defaults.speaker_name_color {
+        out.push_str(&format!(
+            "speaker_name_color = \"{}\"\n",
+            game.speaker_name_color.name()
+        ));
     }
     out
 }
@@ -1090,6 +1356,9 @@ fn render_graphics(graphics: &Graphics) -> String {
     }
     if graphics.aspect != defaults.aspect {
         out.push_str(&format!("aspect = {}\n", quote(&graphics.aspect.name())));
+    }
+    if graphics.hdr != defaults.hdr {
+        out.push_str(&format!("hdr = {}\n", graphics.hdr));
     }
     for (key, value, default) in [
         ("window_width", graphics.window_width, defaults.window_width),
@@ -1473,6 +1742,7 @@ mod tests {
                 vsync: false,
                 frame_rate: 75,
                 aspect: video::Aspect::WIDE,
+                hdr: true,
             }
         );
         let text = config.render();
@@ -1689,6 +1959,7 @@ mod tests {
             vsync: false,
             frame_rate: 120,
             aspect: video::Aspect::WIDE,
+            hdr: false,
         };
         Config::save_window(&path, &run).unwrap();
         let (saved, warnings) = Config::load(&path);
@@ -1733,18 +2004,31 @@ mod tests {
             vsync: false,
             frame_rate: 144,
             aspect: video::Aspect::WIDE,
+            hdr: false,
         };
         let game = Game {
             quick_turn: true,
             tactical_reload: true,
             analog_movement: false,
+            auto_aim: false,
+            blood: false,
             ui_font: crate::gui::FontFamily::Retro,
-            menu_sounds: false,
+            menu_text_size: TextSize::ExtraLarge,
             button_style: Some(crate::gui::PadStyle::Nintendo),
+            control_type: ControlType::C,
+            vibration: Vibration::Off,
+            master_volume: 70,
             music_volume: 40,
             ambient_volume: 0,
             effects_volume: 100,
             voice_volume: 85,
+            menu_volume: 0,
+            subtitles: false,
+            subtitle_size: SubtitleSize::Large,
+            subtitle_background: 0,
+            subtitle_color: TextColor::Green,
+            speaker_names: true,
+            speaker_name_color: TextColor::Red,
         };
         Config::save_options(&path, &graphics, Some("ja-JP"), game).unwrap();
         let text = fs::read_to_string(&path).unwrap();

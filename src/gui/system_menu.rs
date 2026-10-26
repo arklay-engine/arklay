@@ -195,7 +195,7 @@ impl SystemMenu {
             let start = requests.len();
             self.handle_one(event, &mut requests);
             if let Some(sound) = self.sound(before, &requests[start..])
-                && self.settings.game.menu_sounds
+                && self.settings.game.menu_volume > 0
             {
                 requests.push(MenuRequest::Sound(sound));
             }
@@ -358,7 +358,8 @@ impl SystemMenu {
             palette::MENU_SHADE.fade(appear)
         };
         self.canvas.reset_to(width, height, shade);
-        let theme = Theme::new(width, height, self.settings.game.ui_font);
+        let theme = Theme::new(width, height, self.settings.game.ui_font)
+            .with_text_scale(self.settings.game.menu_text_size.scale());
         let device = self.shown_device();
         let mut p = Painter {
             canvas: &mut self.canvas,
@@ -467,15 +468,9 @@ mod tests {
     use super::*;
     use crate::config;
     use crate::gui::PadStyle;
-    use crate::video::Graphics;
 
     fn menu() -> SystemMenu {
-        SystemMenu::new(Settings {
-            graphics: Graphics::default(),
-            game: config::Game::default(),
-            language: None,
-        })
-        .unwrap()
+        SystemMenu::new(Settings::default()).unwrap()
     }
 
     fn key(key: GuiKey) -> GuiEvent {
@@ -545,14 +540,13 @@ mod tests {
     }
 
     #[test]
-    fn menu_sounds_off_silences_every_step() {
+    fn a_silent_menu_volume_silences_every_step() {
         let mut menu = SystemMenu::new(Settings {
-            graphics: Graphics::default(),
             game: config::Game {
-                menu_sounds: false,
+                menu_volume: 0,
                 ..config::Game::default()
             },
-            language: None,
+            ..Settings::default()
         })
         .unwrap();
         assert_eq!(sounds(&mut menu, &[key(GuiKey::Down)]), []);

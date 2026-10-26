@@ -387,7 +387,7 @@ pub fn create(
     yaw: i16,
     light: u8,
 ) -> Option<u8> {
-    create_attached(
+    spawn(
         game,
         room,
         effect_type,
@@ -399,13 +399,39 @@ pub fn create(
     )
 }
 
+/// The effect types the blood option hides: the enemies' type-0 blood
+/// (splatters, spurts and pools) and the weapon hits' 0x0E blood billboard.
+pub const BLOOD_EFFECTS: [u8; 2] = [0x00, 0x0E];
+
 /// Spawn an effect attached to an already-resolved transform.
 ///
 /// This is the behaviour-spawn entry point: the original passes the parent
 /// slot's sprite matrix (`spriteInfo`) to the spawn helper, not the script
 /// operand, so a child inherits its parent's attach target.
+///
+/// The engine's own spawns (the hits, the enemies, the behaviours) come here,
+/// so with the blood option off ([`crate::player::Options::no_blood`]) the
+/// [`BLOOD_EFFECTS`] are skipped. A room script's spawn ([`create`]) is the
+/// room's own content and always plays.
 #[allow(clippy::too_many_arguments)] // the spawn operand signature is fixed
 pub fn create_attached(
+    game: &mut GameState,
+    room: &RoomEffects,
+    effect_type: u8,
+    depth: u8,
+    attach: Attach,
+    pos: [i32; 3],
+    yaw: i16,
+    light: u8,
+) -> Option<u8> {
+    if game.player_options.no_blood && BLOOD_EFFECTS.contains(&effect_type) {
+        return None;
+    }
+    spawn(game, room, effect_type, depth, attach, pos, yaw, light)
+}
+
+#[allow(clippy::too_many_arguments)] // the spawn operand signature is fixed
+fn spawn(
     game: &mut GameState,
     room: &RoomEffects,
     effect_type: u8,
@@ -593,6 +619,20 @@ mod tests {
         assert_eq!(create(&mut game, &room, 9, 0, 0, [0, 0, 0], 0, 0), None);
         assert_eq!(game.effects.active_count(), EFFECT_POOL_SIZE);
         assert!(game.effects.slot(0).unwrap().anim_id != 0);
+    }
+
+    #[test]
+    fn blood_off_skips_the_engine_blood_but_not_a_script_spawn() {
+        let mut game = game_with_weapon(0x0E, std::array::from_fn(|_| vec![vec![block(2, 0, 0)]]));
+        game.player_options.no_blood = true;
+        let room = RoomEffects::default();
+        let engine = |game: &mut GameState| {
+            create_attached(game, &room, 0x0E, 0, Attach::Identity, [0; 3], 0, 0)
+        };
+        assert_eq!(engine(&mut game), None);
+        assert!(create(&mut game, &room, 0x0E, 0, 0, [0; 3], 0, 0).is_some());
+        game.player_options.no_blood = false;
+        assert!(engine(&mut game).is_some());
     }
 
     #[test]

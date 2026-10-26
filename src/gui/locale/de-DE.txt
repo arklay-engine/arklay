@@ -22,28 +22,35 @@ options.reset_page_question = "Die Optionen dieser Seite auf die Standardwerte z
 options.default = "(Standard: {})"
 
 category.controls = "STEUERUNG"
+category.hud = "HUD"
 category.graphics = "GRAFIK"
 category.audio = "AUDIO"
-category.interface = "OBERFLÄCHE"
 category.language = "SPRACHE"
 
 page.basic = "Grundeinstellungen"
+page.controller = "Controller"
+page.hud = "HUD"
 page.display = "Anzeige"
-page.rendering = "Darstellung"
+page.image = "Bild"
 page.general = "Allgemein"
-page.language = "Sprache"
 
 group.character_controls = "Figurensteuerung"
 group.when_aiming = "Beim Zielen"
-group.controller = "Controller"
-group.display = "Anzeige"
-group.renderer = "Renderer"
-group.text = "Text"
+group.button_settings = "Tasteneinstellungen"
+group.function_settings = "Funktionseinstellungen"
+group.quality_settings = "Qualitätseinstellungen"
 group.volume = "Lautstärke"
-group.menus = "Menüs"
+group.language = "Sprache"
+group.subtitles = "Untertitel"
 
 choice.off = "Aus"
 choice.on = "An"
+
+color.white = "Weiß"
+color.red = "Rot"
+color.blue = "Blau"
+color.green = "Grün"
+color.yellow = "Gelb"
 
 quick_turn.label = "Schnelle Drehung"
 quick_turn.description = "Beim Rückwärtsgehen mit Rennen auf der Stelle um 180 Grad drehen."
@@ -55,20 +62,41 @@ analog_movement.description = "Sich in die Richtung des linken Sticks auf dem Bi
 analog_movement.off = "Der linke Stick nutzt die Panzersteuerung."
 analog_movement.on = "Die Figur läuft dorthin, wohin der linke Stick zeigt."
 
+auto_aim.label = "Automatisches Zielen"
+auto_aim.description = "Beim Anheben einer Waffe zum nächsten Gegner drehen."
+auto_aim.off = "Dorthin zielen, wohin die Figur blickt, wie in der US-Originalversion."
+auto_aim.on = "Den nächsten Gegner anvisieren."
+
 tactical_reload.label = "Taktisches Nachladen"
 tactical_reload.description = "Eine teilweise geladene Waffe nachladen, ohne sie zuerst leer zu schießen."
 tactical_reload.off = "Waffen werden nur leer nachgeladen."
 tactical_reload.on = "Beim Zielen Rennen gedrückt halten, um nachzuladen."
 
-button_style.label = "Tastensymbole"
+control_type.label = "Steuerungstyp"
+control_type.description = "Die Tastenbelegung des Controllers."
+control_type.a = "Typ A"
+control_type.b = "Typ B"
+control_type.c = "Typ C"
+
+button_style.label = "Tastensymboltyp"
 button_style.description = "Die Controller-Tasten, die die Hinweise zeigen."
 button_style.auto = "Automatisch"
 button_style.auto_note = "Passend zum verwendeten Controller."
+
+vibration.label = "Controller-Vibration"
+vibration.description = "Wie stark der Controller vibriert."
+vibration.off = "Aus"
+vibration.weak = "Schwach"
+vibration.normal = "Normal"
+vibration.strong = "Stark"
 
 fullscreen.label = "Anzeigemodus"
 fullscreen.description = "Im Fenster oder randlosen Vollbild spielen. Auch mit Alt+Eingabe umschaltbar."
 fullscreen.window = "Fenster"
 fullscreen.fullscreen = "Vollbild"
+
+monitor.label = "Monitor"
+monitor.description = "Der Bildschirm, auf dem das Spiel erscheint."
 
 resolution.label = "Auflösung"
 resolution.description = "Die Größe des Spielfensters. Der Vollbildmodus nutzt die Größe des Bildschirms."
@@ -81,9 +109,33 @@ vsync.description = "Vor jedem Bild auf die Aktualisierung des Bildschirms warte
 vsync.off = "Geringere Latenz; das Bild kann zerreißen."
 vsync.on = "Kein Zerreißen; Bilder warten auf den Bildschirm."
 
+hdr.label = "HDR"
+hdr.description = "Ausgabe mit hohem Dynamikumfang für Bildschirme, die ihn unterstützen."
+hdr.auto = "Auto"
+hdr.auto_note = "HDR verwenden, wenn der Bildschirm es unterstützt."
+hdr.off = "Immer mit Standard-Dynamikumfang ausgeben."
+
 frame_rate.label = "Bildrate"
 frame_rate.description = "Angezeigte Bilder pro Sekunde. Das Spiel selbst läuft immer mit 30 Aktualisierungen pro Sekunde; höhere Raten glätten die Bewegung dazwischen."
 frame_rate.value = "{} FPS"
+
+pc_specs.label = "PC-Leistung"
+pc_specs.description = "Renderer, Renderskalierung und Kantenglättung gemeinsam einstellen."
+pc_specs.low = "Niedrig"
+pc_specs.low_note = "Der Software-Renderer."
+pc_specs.medium = "Mittel"
+pc_specs.medium_note = "Der GPU-Renderer in der Bildschirmauflösung."
+pc_specs.high = "Hoch"
+pc_specs.high_note = "Der GPU-Renderer mit 150 % und 2x-Kantenglättung."
+pc_specs.ultra = "Ultra"
+pc_specs.ultra_note = "Der GPU-Renderer mit 200 % und 4x-Kantenglättung."
+pc_specs.custom = "Benutzerdefiniert"
+pc_specs.custom_note = "Die Qualitätseinstellungen unten, wie eingestellt."
+
+blood.label = "Blut"
+blood.description = "Blutspritzer, Blutfontänen und Blutlachen."
+blood.off = "Es wird kein Blut angezeigt."
+blood.on = "Blut wird angezeigt."
 
 renderer.label = "Renderer"
 renderer.description = "Wie das Spiel gezeichnet wird."
@@ -106,6 +158,16 @@ ui_font.modern_note = "Eine klare serifenlose Schrift."
 ui_font.retro = "Retro"
 ui_font.retro_note = "Eine Pixelschrift im Stil des Originals."
 
+menu_text_size.label = "Menütextgröße"
+menu_text_size.description = "Die Größe des Textes in diesen Menüs."
+menu_text_size.small = "Klein"
+menu_text_size.standard = "Standard"
+menu_text_size.large = "Groß"
+menu_text_size.extra_large = "Sehr groß"
+
+master_volume.label = "Gesamtlautstärke"
+master_volume.description = "Die Lautstärke von allem."
+
 music_volume.label = "Hintergrundmusik"
 music_volume.description = "Die Lautstärke der Musik."
 
@@ -113,17 +175,43 @@ ambient_volume.label = "Umgebungsgeräusche"
 ambient_volume.description = "Die Lautstärke der Hintergrundgeräusche, die keine Musik sind: Regen, Wind, Maschinen."
 
 effects_volume.label = "Soundeffekte"
-effects_volume.description = "Die Lautstärke von Schritten, Schüssen, Kreaturen, Türen und den Menütönen."
+effects_volume.description = "Die Lautstärke von Schritten, Schüssen, Kreaturen und Türen."
 
-voice_volume.label = "Stimmen"
+voice_volume.label = "Dialogstimmen"
 voice_volume.description = "Die Lautstärke der Stimmen der Figuren."
 
-menu_sounds.label = "Menütöne"
-menu_sounds.description = "Spielt Töne beim Bewegen und Auswählen in diesen Menüs."
-menu_sounds.off = "Stumme Menüs."
-menu_sounds.on = "Töne für Cursor, Bestätigen und Abbrechen."
+menu_volume.label = "Menü-Soundeffekte"
+menu_volume.description = "Die Lautstärke der Töne beim Bewegen und Auswählen in Menüs."
 
-language.label = "Textsprache"
+voice_language.label = "Sprachausgabe"
+voice_language.description = "Die Sprache, die die Figuren sprechen."
+
+language.label = "Anzeigesprache"
 language.description = "Die Sprache der Spieltexte und dieser Menüs."
 language.system = "System"
 language.system_note = "Der Systemsprache folgen ({})."
+
+subtitles.label = "Untertitel"
+subtitles.description = "Untertitel für Dialoge anzeigen."
+subtitles.off = "Keine Untertitel."
+subtitles.on = "Dialoge werden untertitelt."
+
+subtitle_size.label = "Untertitelgröße"
+subtitle_size.description = "Die Größe des Untertiteltextes."
+subtitle_size.small = "Klein"
+subtitle_size.standard = "Standard"
+subtitle_size.large = "Groß"
+
+subtitle_background.label = "Untertitelhintergrund"
+subtitle_background.description = "Die Deckkraft des Bandes hinter den Untertiteln."
+
+subtitle_color.label = "Untertitelfarbe"
+subtitle_color.description = "Die Farbe des Untertiteltextes."
+
+speaker_names.label = "Sprechername anzeigen"
+speaker_names.description = "Vor jedem Untertitel anzeigen, wer spricht."
+speaker_names.off = "Nur Untertitel."
+speaker_names.on = "Der Name des Sprechers, dann der Untertitel."
+
+speaker_name_color.label = "Farbe des Sprechernamens"
+speaker_name_color.description = "Die Farbe des Sprechernamens."

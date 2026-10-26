@@ -198,6 +198,11 @@ pub enum Source {
 }
 
 impl Source {
+    /// A gamepad button or axis.
+    pub fn is_pad(self) -> bool {
+        matches!(self, Source::PadButton(_) | Source::PadAxis(..))
+    }
+
     /// A keyboard key.
     pub fn key(scancode: SDL_Scancode) -> Self {
         Source::Key(scancode.0)
@@ -516,6 +521,64 @@ impl Default for Bindings {
 }
 
 impl Bindings {
+    /// These bindings with every gamepad source replaced by the `control_type`
+    /// preset's; the keyboard and mouse sources are kept.
+    /// - A: the default layout (west runs, the triggers aim and fire, the
+    ///   shoulders page).
+    /// - B: the original PlayStation layout (the right shoulder aims, south
+    ///   fires, the triggers page).
+    /// - C: A with confirm and cancel swapped (east confirms, south cancels).
+    pub fn with_control_type(mut self, control_type: crate::config::ControlType) -> Self {
+        use crate::config::ControlType;
+        use sdl3_sys::gamepad::{
+            SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_GAMEPAD_BUTTON_EAST,
+            SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH,
+        };
+        let pad = |button: SDL_GamepadButton| Source::PadButton(button.0);
+        let axis = |axis: SDL_GamepadAxis| Source::PadAxis(axis.0, true);
+        let mut layout = Self::default();
+        match control_type {
+            ControlType::A => {}
+            ControlType::B => {
+                for (action, source) in [
+                    (Action::Aim, pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)),
+                    (Action::Fire, pad(SDL_GAMEPAD_BUTTON_SOUTH)),
+                    (Action::PageLeft, axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)),
+                    (Action::PageRight, axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)),
+                ] {
+                    layout.replace_pad(action, vec![source]);
+                }
+            }
+            ControlType::C => {
+                layout.replace_pad(Action::Confirm, vec![pad(SDL_GAMEPAD_BUTTON_EAST)]);
+                layout.replace_pad(Action::Cancel, vec![pad(SDL_GAMEPAD_BUTTON_SOUTH)]);
+            }
+        }
+        // The preset's pad sources fill the old ones' slots in order, so the
+        // keyboard and mouse slots stay where the rebind screen shows them.
+        for action in ACTIONS {
+            let mut pads = layout.get(action).iter().copied().filter(|s| s.is_pad());
+            let mut sources = Vec::new();
+            for &source in &self.sources[action as usize] {
+                if !source.is_pad() {
+                    sources.push(source);
+                } else if let Some(pad) = pads.next() {
+                    sources.push(pad);
+                }
+            }
+            sources.extend(pads);
+            self.sources[action as usize] = sources;
+        }
+        self
+    }
+
+    /// Replace `action`'s gamepad sources with `pads`.
+    fn replace_pad(&mut self, action: Action, pads: Vec<Source>) {
+        let sources = &mut self.sources[action as usize];
+        sources.retain(|source| !source.is_pad());
+        sources.extend(pads);
+    }
+
     /// No action bound at all.
     pub fn empty() -> Self {
         Self {
@@ -606,6 +669,31 @@ impl Bindings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_control_type_swaps_only_the_gamepad_sources() {
+        use crate::config::ControlType;
+        let mut bindings = Bindings::default();
+        bindings.bind(Action::Fire, 2, Source::Mouse(1));
+        assert_eq!(bindings.clone().with_control_type(ControlType::A), bindings);
+        let b = bindings.clone().with_control_type(ControlType::B);
+        assert_eq!(
+            b.get(Action::Fire),
+            [
+                Source::key(sdl3_sys::scancode::SDL_SCANCODE_Z),
+                Source::PadButton(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_SOUTH.0),
+                Source::Mouse(1),
+            ]
+        );
+        assert_eq!(b.with_control_type(ControlType::A), bindings);
+        let c = bindings.with_control_type(ControlType::C);
+        assert_eq!(
+            c.get(Action::Confirm).last(),
+            Some(&Source::PadButton(
+                sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_EAST.0
+            ))
+        );
+    }
 
     #[test]
     fn default_keyboard_matches_the_readme_controls() {

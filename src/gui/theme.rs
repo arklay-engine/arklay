@@ -85,6 +85,9 @@ pub struct Theme {
     pub width: f32,
     pub height: f32,
     pub family: FontFamily,
+    /// The body text sizes' factor (the Menu Text Size option); the layout
+    /// keeps its size.
+    pub text_scale: f32,
 }
 
 impl Theme {
@@ -96,7 +99,13 @@ impl Theme {
             width,
             height,
             family,
+            text_scale: 1.0,
         }
+    }
+
+    /// This theme with its text drawn `text_scale` times its size.
+    pub fn with_text_scale(self, text_scale: f32) -> Self {
+        Self { text_scale, ..self }
     }
 
     /// `units` in pixels.
@@ -132,7 +141,13 @@ impl Theme {
             Role::DebugHeading => (Face::Bold, 22.0),
             Role::Notice => (Face::Regular, 30.0),
         };
-        let px = self.u(units);
+        // The title, tabs and key caps keep their size: they fill fixed
+        // slots.
+        let text_scale = match role {
+            Role::Title | Role::Tab | Role::KeyCap | Role::Debug | Role::DebugHeading => 1.0,
+            _ => self.text_scale,
+        };
+        let px = self.u(units) * text_scale;
         match self.family {
             FontFamily::Modern => Style::new(face, px.round().max(6.0) as u32),
             // Departure Mono is drawn on an 11-pixel grid; whole multiples
@@ -156,6 +171,13 @@ mod tests {
         assert_eq!(Theme::new(3840, 2160, FontFamily::Modern).scale, 2.0);
         // Narrower than 4:3: the width limits the scale.
         assert_eq!(Theme::new(720, 1080, FontFamily::Modern).scale, 0.5);
+    }
+
+    #[test]
+    fn the_text_scale_sizes_text_but_not_units() {
+        let theme = Theme::new(1920, 1080, FontFamily::Modern).with_text_scale(1.3);
+        assert_eq!(theme.u(10.0), 10.0);
+        assert_eq!(theme.style(Role::Row).px, 40);
     }
 
     #[test]
