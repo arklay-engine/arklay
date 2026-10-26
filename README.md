@@ -194,6 +194,13 @@ cargo run -- re1.akpak --ui debug --capture debug.bmp
 # Classic REbirth tactical reload is on by default: with a gun aimed, hold RUN
 # to reload instead of firing. Turn it off for one run with:
 cargo run -- re1.akpak --room 100 --no-tactical-reload
+
+# Authentic mode keeps the original's item rules: a healing item that would do
+# nothing is refused, such as the first-aid spray and the herbs at full health,
+# and a blue herb while the player is not poisoned. It is off by default, and
+# only the command line turns it on (for checking the port against the
+# reference):
+cargo run -- re1.akpak --room 100 --authentic
 ```
 
 Captures, assembled scripts and converted packs are written to a sibling
@@ -329,7 +336,9 @@ directions. Turn it off for tank controls on the stick too.
 
 A `--trace` or `--input` run leaves quick turn and tactical reload off
 unless the matching positive flag is passed, and always leaves
-`analog_movement` off, so existing traces stay byte-identical.
+`analog_movement` off, so existing traces stay byte-identical. It never
+turns on `--authentic` either; the oracle scripts pass that flag themselves
+when they compare with the reference.
 
 ### Controls
 

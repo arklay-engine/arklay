@@ -146,8 +146,9 @@ const JILL_FOOTFALL: [u8; 4] = [0x14, 0x16, 0x0F, 0x0F];
 /// Angular step of the PS1 trig tables: `2*pi / 4096`.
 const ANGLE_STEP: f64 = 0.0015339807880859375;
 
-/// The gameplay options the player's tick reads, from `arklay.toml`'s
-/// `[game]` table and the matching command-line overrides.
+/// The run options the session reads: the gameplay options the player's tick
+/// reads, from `arklay.toml`'s `[game]` table and the matching command-line
+/// overrides, and the command-line-only `--authentic` mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Options {
     /// Classic REbirth's quick turn (`[DLL] QuickTurn`): a RUN press while a
@@ -170,6 +171,12 @@ pub struct Options {
     /// Port-only: the blood billboards, spurts and pools are not spawned.
     /// Off by default.
     pub no_blood: bool,
+    /// The `--authentic` run mode: the original's item rules where the port
+    /// is more lenient. A healing item that would do nothing is refused: the
+    /// first-aid spray and the herbs at full health, and a blue herb while the
+    /// player is not poisoned. Command line only and off by default;
+    /// `arklay.toml` has no key for it.
+    pub authentic: bool,
 }
 
 /// Keyboard state for one tick.

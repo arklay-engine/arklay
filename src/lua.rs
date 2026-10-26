@@ -363,6 +363,12 @@ mod imp {
             // `room()` is read-only: the three hex digits of the room id.
             methods.add_method("room", |_lua, game, ()| Ok(game.id.room3()));
 
+            // `authentic()` is read-only: whether the run was started with
+            // `--authentic`, the original's item rules.
+            methods.add_method("authentic", |_lua, game, ()| {
+                Ok(game.player_options.authentic)
+            });
+
             methods.add_method("flag_get", |_lua, game, (bank, bit): (u8, u8)| {
                 Ok(game
                     .flags
@@ -1225,6 +1231,27 @@ end
 
         assert_eq!(vm.filter_message(&mut game, 9), Some(10));
         assert_eq!(vm.filter_message(&mut game, 9), Some(10));
+    }
+
+    #[test]
+    fn hooks_read_whether_the_run_is_authentic() {
+        let source = r#"
+function on_room_load(api)
+    api:set_max_health(api:authentic() and 1 or 2)
+end
+"#;
+        let pack = lua_pack(&["lua/authentic.lua"], &[("lua/authentic.lua", source)]);
+        let vm = LuaVm::load(&pack).unwrap().expect("a Lua VM");
+
+        let mut game = GameState::default();
+        let id = crate::state::RoomId::parse("1000").unwrap();
+        game.id = id;
+        vm.call_room_load(&mut game, id);
+        assert_eq!(game.max_health, 2, "a default run is not authentic");
+
+        game.player_options.authentic = true;
+        vm.call_room_load(&mut game, id);
+        assert_eq!(game.max_health, 1, "--authentic reaches the hooks");
     }
 
     #[test]

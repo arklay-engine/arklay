@@ -2007,6 +2007,8 @@ impl Launcher {
             analog_movement: self.config.game.analog_movement,
             no_auto_aim: !self.config.game.auto_aim,
             no_blood: !self.config.game.blood,
+            // Only the command line runs in authentic mode.
+            authentic: false,
         };
         logging::write(&format!("play: {}", pack.path.display()));
         let result = engine::run_root_with_display(

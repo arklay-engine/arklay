@@ -378,7 +378,8 @@ pub fn run(pack: &Path, id: RoomId, capture: Option<&Path>, ticks: u32) -> Resul
 /// phases and prints the [`crate::stats`] report to stdout at exit; it runs
 /// without a capture and without opening a display. `_debug_menu` is retained
 /// for CLI compatibility: the port-only F1 room-select overlay is always
-/// enabled. `player_options` are the `[game]` gameplay options this run uses.
+/// enabled. `player_options` are the run options this run uses: the `[game]`
+/// gameplay options and `--authentic`.
 /// `trace` enables the oracle trace of `oracle/trace-v1.md`: one line
 /// per fixed tick (rendering each tick so the frame hash exists) plus the
 /// `--capture-every` BMP cadence.
@@ -407,9 +408,8 @@ pub fn run_with_options(
         let mut timings = stats::Stats::new();
         let load_start = Instant::now();
         let mut loaded = load_room(&pack, id)?;
-        let mut game = new_game_state(&pack, id, &loaded.room);
+        let mut game = new_game_state(&pack, id, &loaded.room, player_options);
         seed_fresh_state(&pack, &mut game);
-        game.player_options = player_options;
         let mut player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
         run_room_init(&mut loaded, &mut game);
@@ -645,7 +645,7 @@ pub fn run_with_options(
         return Ok(());
     }
 
-    let mut session = GameSession::from_room(&pack, id, &save_dir)?;
+    let mut session = GameSession::from_room_with(&pack, id, &save_dir, player_options)?;
     session.run_setup_script(authoring.setup_script)?;
     let title = window_title(
         &session.loaded.id.room3(),
@@ -2244,20 +2244,31 @@ fn door_skip_pressed(ui: &UiInput, input: &player::Input, attract: bool) -> bool
 }
 
 impl GameSession {
+    /// [`GameSession::new_with`] under the default run options, for the tests.
+    #[cfg(test)]
+    fn new(pack: &Pack, character: u8, save_dir: &Path) -> Result<Box<Self>> {
+        Self::new_with(pack, character, save_dir, player::Options::default())
+    }
+
     /// A new game as `character` (`0` Chris, `1` Jill): the shipped card's
     /// start room (the main hall), the original's start position, health,
     /// items and room-item flags, then the room init/main/event VMs.
-    fn new(pack: &Pack, character: u8, save_dir: &Path) -> Result<Box<Self>> {
+    fn new_with(
+        pack: &Pack,
+        character: u8,
+        save_dir: &Path,
+        options: player::Options,
+    ) -> Result<Box<Self>> {
         let character = character & 1;
         let id = new_game_id(character);
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
         player_state.angle = NEW_GAME_ANGLE;
         game.sync_entity_from_player(&player_state);
-        Self::from_loaded(pack, loaded, game, player_state, save_dir)
+        Self::from_loaded(pack, loaded, game, player_state, save_dir, options)
     }
 
     /// A new game as `id.player_flag` that boots straight into `id` instead
@@ -2270,17 +2281,23 @@ impl GameSession {
     /// arbitrary-room boot) re-places the player at the walk zone centre after
     /// the room-set event pass, in [`GameSession::place_room_boot_spawn`] and
     /// [`GameSession::arm_new_game_boot`].
-    fn new_in_room(pack: &Pack, id: RoomId, character: u8, save_dir: &Path) -> Result<Box<Self>> {
+    fn new_in_room_with(
+        pack: &Pack,
+        id: RoomId,
+        character: u8,
+        save_dir: &Path,
+        options: player::Options,
+    ) -> Result<Box<Self>> {
         let character = character & 1;
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
         player_state.angle = NEW_GAME_ANGLE;
         player_state.collision_mirror = [NEW_GAME_POS_X, NEW_GAME_POS_Z];
         game.sync_entity_from_player(&player_state);
-        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir)?;
+        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
         session.room_boot_respawn = true;
         Ok(session)
     }
@@ -2308,14 +2325,19 @@ impl GameSession {
     /// character, room, position, facing, items, equipped item, camera and
     /// health. `game_loop` seeds the platform stream with `srand(0)` for
     /// attract playback, so the reel replays its recorded draws exactly.
-    fn from_demo(pack: &Pack, entry: &str, save_dir: &Path) -> Result<Box<Self>> {
+    fn from_demo_with(
+        pack: &Pack,
+        entry: &str,
+        save_dir: &Path,
+        options: player::Options,
+    ) -> Result<Box<Self>> {
         let bytes = pack
             .read(entry)
             .with_context(|| format!("missing attract demo reel {entry}"))?;
         let reel = demo::DemoReel::parse(entry, &bytes)?;
         let id = reel.room;
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, reel.character);
         // The attract branch sets the mode bit before the room loads, so every
         // script and entity driver sees it, and seeds the PRNG as game_loop
@@ -2359,14 +2381,19 @@ impl GameSession {
         player_state.pos = reel.pos;
         player_state.angle = reel.angle;
         game.sync_entity_from_player(&player_state);
-        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir)?;
+        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
         session.attract = Some(demo::AttractState::new(reel));
         Ok(session)
     }
 
     /// Boot the `index`-th entry of the pack's `demo/` enumeration (the
     /// reference's `--test-demo` anchor and the port's `--ui demo`).
-    fn from_demo_index(pack: &Pack, index: u8, save_dir: &Path) -> Result<Box<Self>> {
+    fn from_demo_index_with(
+        pack: &Pack,
+        index: u8,
+        save_dir: &Path,
+        options: player::Options,
+    ) -> Result<Box<Self>> {
         let entries = demo::entries(pack);
         let entry = entries.get(usize::from(index)).with_context(|| {
             format!(
@@ -2374,7 +2401,7 @@ impl GameSession {
                 entries.len()
             )
         })?;
-        Self::from_demo(pack, entry, save_dir)
+        Self::from_demo_with(pack, entry, save_dir, options)
     }
 
     /// Boot `id` directly, the `--room` path. A direct boot is a fresh game
@@ -2382,20 +2409,37 @@ impl GameSession {
     /// start health are seeded like a new game's, and the player is placed at
     /// the room's paired-door entry once the room boot has built the door
     /// table.
-    fn from_room(pack: &Pack, id: RoomId, save_dir: &Path) -> Result<Box<Self>> {
+    fn from_room_with(
+        pack: &Pack,
+        id: RoomId,
+        save_dir: &Path,
+        options: player::Options,
+    ) -> Result<Box<Self>> {
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_fresh_state(pack, &mut game);
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
-        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir)?;
+        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
         session.place_room_entry(pack, id);
         Ok(session)
     }
 
+    /// [`GameSession::from_room_with`] under the default run options, for the
+    /// tests.
+    #[cfg(test)]
+    fn from_room(pack: &Pack, id: RoomId, save_dir: &Path) -> Result<Box<Self>> {
+        Self::from_room_with(pack, id, save_dir, player::Options::default())
+    }
+
     /// Continue from a parsed save: the block replaces the state, the saved
     /// position and angle place the player and the saved room loads.
-    fn from_save(pack: &Pack, file: &save::SaveFile, save_dir: &Path) -> Result<Box<Self>> {
+    fn from_save_with(
+        pack: &Pack,
+        file: &save::SaveFile,
+        save_dir: &Path,
+        options: player::Options,
+    ) -> Result<Box<Self>> {
         let id = RoomId {
             // The block's stage byte is the original's 0-based `g_stageId`.
             stage: file.stage + 1,
@@ -2403,7 +2447,7 @@ impl GameSession {
             player_flag: file.character & 1,
         };
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         file.apply_to(&mut game);
         // `InitializeGame`'s continue branch: a zero save counter also zeroes
         // the play timer, then every load advances the counter.
@@ -2424,7 +2468,14 @@ impl GameSession {
         // and teleports the player there.
         player_state.collision_mirror = [i32::from(file.pos_x), i32::from(file.pos_z)];
         game.sync_entity_from_player(&player_state);
-        Self::from_loaded(pack, loaded, game, player_state, save_dir)
+        Self::from_loaded(pack, loaded, game, player_state, save_dir, options)
+    }
+
+    /// [`GameSession::from_save_with`] under the default run options, for the
+    /// tests.
+    #[cfg(test)]
+    fn from_save(pack: &Pack, file: &save::SaveFile, save_dir: &Path) -> Result<Box<Self>> {
+        Self::from_save_with(pack, file, save_dir, player::Options::default())
     }
 
     /// Assemble a session around already-built state and run the room boot.
@@ -2434,6 +2485,7 @@ impl GameSession {
         game: game::GameState,
         player_state: player::PlayerState,
         save_dir: &Path,
+        options: player::Options,
     ) -> Result<Box<Self>> {
         let scripts = Rc::new(loaded.scripts.clone());
         let command_vm = scd::vm::CommandVm::from_scripts(Rc::clone(&scripts));
@@ -2449,6 +2501,9 @@ impl GameSession {
         // typewriter.
         let lua = load_lua(pack);
         let mut game = game;
+        // The run options land before `on_init`, so the hooks read them on the
+        // first room as well as after a door.
+        game.player_options = options;
         call_lua_init(lua.as_ref(), &mut game);
         let mut session = Box::new(Self {
             loaded,
@@ -3803,6 +3858,7 @@ impl GameSession {
                 ..
             } = self;
             let mut cx = UiContext {
+                authentic: game.player_options.authentic,
                 pack,
                 save_dir,
                 font: font.as_ref(),
@@ -4808,6 +4864,7 @@ impl GameSession {
     /// The session's UI context for a screen that runs over the frozen room.
     fn ui_context<'a>(&'a self, pack: &'a Pack) -> UiContext<'a> {
         UiContext {
+            authentic: self.game.player_options.authentic,
             pack,
             save_dir: &self.save_dir,
             font: self.font.as_ref(),
@@ -4835,6 +4892,7 @@ impl GameSession {
                 return;
             };
             let cx = UiContext {
+                authentic: game.player_options.authentic,
                 pack,
                 save_dir,
                 font: font.as_ref(),
@@ -5506,6 +5564,7 @@ impl GameSession {
             return false;
         };
         let cx = UiContext {
+            authentic: game.player_options.authentic,
             pack,
             save_dir,
             font: font.as_ref(),
@@ -6077,6 +6136,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = computer.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6140,6 +6200,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = menu.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6166,6 +6227,7 @@ impl GameSession {
             } = self;
             if let Some(viewer) = examine.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6193,6 +6255,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = item_box.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6217,6 +6280,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = file.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6240,6 +6304,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = map.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6263,6 +6328,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = save_screen {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6290,6 +6356,7 @@ impl GameSession {
             } = self;
             if let Some(pickup) = pickup_view.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6356,6 +6423,7 @@ impl GameSession {
             } = self;
             if let Some(screen) = return_title.as_mut() {
                 let cx = UiContext {
+                    authentic: game.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -6794,12 +6862,16 @@ fn seed_new_game(pack: &Pack, game: &mut game::GameState, character: u8) {
 /// the infinite rocket launcher (a no-save run or an already-infinite one), the
 /// special key (held, or granted by the epilogue), the under-four-hour machine
 /// gun - and the second-playthrough flag.
-fn build_next_cycle_save(pack: &Pack, flow: &EndingFlow) -> Result<save::SaveFile> {
+fn build_next_cycle_save(
+    pack: &Pack,
+    flow: &EndingFlow,
+    options: player::Options,
+) -> Result<save::SaveFile> {
     let stats = flow.stats;
     let character = stats.character & 1;
     let id = new_game_id(character);
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, options);
     seed_new_game(pack, &mut game, character);
 
     // The reference reloads the blank card and never runs `InitializeGame`'s
@@ -7042,8 +7114,8 @@ struct App {
     /// sessions this app starts. Enabled by default; `--debug-menu` is
     /// retained for CLI compatibility.
     debug_menu: bool,
-    /// The `[game]` gameplay options (`--quick-turn`) every gameplay session
-    /// this app starts runs with.
+    /// The run options (the `[game]` gameplay options and `--authentic`) every
+    /// gameplay session this app starts runs with.
     player_options: player::Options,
     /// The active post-film ending sequence, or `None` outside one.
     ending: Option<EndingFlow>,
@@ -7273,6 +7345,7 @@ impl App {
     /// Build the shared screen context.
     fn context(&self) -> UiContext<'_> {
         UiContext {
+            authentic: self.player_options.authentic,
             pack: &self.pack,
             save_dir: &self.save_dir,
             font: self.font.as_ref(),
@@ -7362,8 +7435,16 @@ impl App {
     /// `App::apply`'s frame bounded; see `App::start_new_game`).
     fn boot_new_game(&mut self, character: u8, room: Option<RoomId>) -> Result<()> {
         let mut session = match room {
-            Some(id) => GameSession::new_in_room(&self.pack, id, character, &self.save_dir)?,
-            None => GameSession::new(&self.pack, character, &self.save_dir)?,
+            Some(id) => GameSession::new_in_room_with(
+                &self.pack,
+                id,
+                character,
+                &self.save_dir,
+                self.player_options,
+            )?,
+            None => {
+                GameSession::new_with(&self.pack, character, &self.save_dir, self.player_options)?
+            }
         };
         // The interactive arbitrary-room boot lands on the walk zone centre
         // right away; the trace path re-places after the room-set event pass
@@ -7376,14 +7457,20 @@ impl App {
     /// The interactive `AppBoot::Continue` arm.
     fn boot_continue(&mut self, path: &Path) -> Result<()> {
         let file = save::load_file(path)?;
-        let session = GameSession::from_save(&self.pack, &file, &self.save_dir)?;
+        let session =
+            GameSession::from_save_with(&self.pack, &file, &self.save_dir, self.player_options)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_CONTINUE);
         Ok(())
     }
 
     /// The interactive `AppBoot::Demo` arm.
     fn boot_demo(&mut self, index: u8) -> Result<()> {
-        let session = GameSession::from_demo_index(&self.pack, index, &self.save_dir)?;
+        let session = GameSession::from_demo_index_with(
+            &self.pack,
+            index,
+            &self.save_dir,
+            self.player_options,
+        )?;
         self.start_session(session);
         Ok(())
     }
@@ -7518,7 +7605,8 @@ impl App {
     /// Windows main thread's 1 MiB stack. Keeping the moves in this small
     /// helper bounds the frame.
     fn start_new_game(&mut self, character: u8) -> Result<()> {
-        let session = GameSession::new(&self.pack, character, &self.save_dir)?;
+        let session =
+            GameSession::new_with(&self.pack, character, &self.save_dir, self.player_options)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_NEW_GAME);
         self.restart_point = Some(RestartPoint::NewGame { character });
         Ok(())
@@ -7566,7 +7654,8 @@ impl App {
 
     /// Continue from a parsed save block (a Lua screen's chosen file).
     fn continue_from_file(&mut self, file: save::SaveFile) -> Result<()> {
-        let session = GameSession::from_save(&self.pack, &file, &self.save_dir)?;
+        let session =
+            GameSession::from_save_with(&self.pack, &file, &self.save_dir, self.player_options)?;
         self.start_narrated_session(session, game::MESSAGE_BOOT_CONTINUE);
         Ok(())
     }
@@ -7575,7 +7664,8 @@ impl App {
     /// capture inventory and the menu already open.
     fn open_menu(&mut self) -> Result<()> {
         let id = RoomId::parse(MENU_ROOM)?;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.seed_menu_capture();
         session.open_menu(&self.pack);
         self.start_session(session);
@@ -7586,7 +7676,8 @@ impl App {
     /// a few box slots, with the box overlay already open.
     fn open_item_box_capture(&mut self) -> Result<()> {
         let id = RoomId::parse(MENU_ROOM)?;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.seed_menu_capture();
         session.seed_item_box_capture();
         session.open_item_box(&self.pack);
@@ -7598,7 +7689,8 @@ impl App {
     /// inventory with the F1 tool list open.
     fn open_debug_capture(&mut self) -> Result<()> {
         let id = RoomId::parse(MENU_ROOM)?;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.seed_menu_capture();
         session.open_debug_menu(&self.pack);
         self.start_session(session);
@@ -7609,7 +7701,8 @@ impl App {
     /// collected documents.
     fn open_file_capture(&mut self) -> Result<()> {
         let id = RoomId::parse(MENU_ROOM)?;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.seed_file_capture();
         session.open_file(&self.pack);
         self.start_session(session);
@@ -7621,7 +7714,8 @@ impl App {
     /// flag), so no extra flag is seeded.
     fn open_map_capture(&mut self) -> Result<()> {
         let id = RoomId::parse(MENU_ROOM)?;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.seed_menu_capture();
         session.open_map(&self.pack);
         self.start_session(session);
@@ -7632,7 +7726,8 @@ impl App {
     /// combat knife examined, the deterministic `--ui view` path.
     fn open_view(&mut self) -> Result<()> {
         let id = RoomId::parse(MENU_ROOM)?;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.seed_menu_capture();
         session.game.add_item(ITEM_KNIFE, 0);
         session.open_menu(&self.pack);
@@ -7647,7 +7742,8 @@ impl App {
     fn open_death_capture(&mut self, character: u8) -> Result<()> {
         let mut id = RoomId::parse(DEATH_ROOM)?;
         id.player_flag = character & 1;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.game.apply_player_hurt(i16::MAX, 0);
         self.start_session(session);
         Ok(())
@@ -7658,7 +7754,8 @@ impl App {
     /// typewriter save screen already open over the frozen frame.
     fn open_save_capture(&mut self) -> Result<()> {
         let id = RoomId::parse(MENU_ROOM)?;
-        let mut session = GameSession::from_room(&self.pack, id, &self.save_dir)?;
+        let mut session =
+            GameSession::from_room_with(&self.pack, id, &self.save_dir, self.player_options)?;
         session.seed_menu_capture();
         session.game.add_item(items::ITEM_INK_RIBBONS, 1);
         session.open_typewriter_save(&self.pack, true);
@@ -7740,7 +7837,7 @@ impl App {
         let Some(flow) = self.ending else {
             return self.open_title();
         };
-        let file = match build_next_cycle_save(&self.pack, &flow) {
+        let file = match build_next_cycle_save(&self.pack, &flow, self.player_options) {
             Ok(file) => file,
             Err(err) => {
                 eprintln!("warning: could not build the next-cycle save: {err:#}");
@@ -7853,8 +7950,12 @@ impl App {
                 // `LoadAttractModePlayerData` advances after the load). A pack
                 // without reels simply stays on the title.
                 match self.next_attract_entry() {
-                    Some(entry) => match GameSession::from_demo(&self.pack, &entry, &self.save_dir)
-                    {
+                    Some(entry) => match GameSession::from_demo_with(
+                        &self.pack,
+                        &entry,
+                        &self.save_dir,
+                        self.player_options,
+                    ) {
                         Ok(mut session) => {
                             session.arm_new_game_boot();
                             self.start_session(session);
@@ -7934,6 +8035,7 @@ impl App {
                 ..
             } = self;
             let cx = UiContext {
+                authentic: self.player_options.authentic,
                 pack,
                 save_dir,
                 font: font.as_ref(),
@@ -8058,6 +8160,7 @@ impl App {
             Mode::Boot => {}
             Mode::Title(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8071,6 +8174,7 @@ impl App {
             }
             Mode::Select(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8084,6 +8188,7 @@ impl App {
             }
             Mode::Load(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8097,6 +8202,7 @@ impl App {
             }
             Mode::Save(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8110,6 +8216,7 @@ impl App {
             }
             Mode::Ending(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8123,6 +8230,7 @@ impl App {
             }
             Mode::Epilogue(screen) => {
                 let cx = UiContext {
+                    authentic: self.player_options.authentic,
                     pack,
                     save_dir,
                     font: font.as_ref(),
@@ -8372,8 +8480,8 @@ pub fn run_ui_with_options(
 /// `trace` enables the `--ui game` oracle run: `ticks` fixed updates with a
 /// trace line per tick and the `capture_every` BMP cadence. `authoring` adds
 /// the CLI's oracle seams: a `--load` continue boot, the `--setup-script`
-/// chunk and the `--save-out` dump. `player_options` are the `[game]`
-/// gameplay options the booted sessions run with.
+/// chunk and the `--save-out` dump. `player_options` are the run options the
+/// booted sessions run with.
 #[allow(clippy::too_many_arguments)] // the CLI boot options are all needed
 pub fn run_ui_with_mods(
     pack: &Path,
@@ -8518,8 +8626,14 @@ pub(crate) fn run_root_with_display(
 /// bounded (see `App::start_new_game`).
 fn start_capture_game(app: &mut App, character: u8, room: Option<RoomId>) -> Result<()> {
     let session = match room {
-        Some(id) => GameSession::new_in_room(&app.pack, id, character, &app.save_dir)?,
-        None => GameSession::new(&app.pack, character, &app.save_dir)?,
+        Some(id) => GameSession::new_in_room_with(
+            &app.pack,
+            id,
+            character,
+            &app.save_dir,
+            app.player_options,
+        )?,
+        None => GameSession::new_with(&app.pack, character, &app.save_dir, app.player_options)?,
     };
     app.start_session(session);
     Ok(())
@@ -8528,14 +8642,15 @@ fn start_capture_game(app: &mut App, character: u8, room: Option<RoomId>) -> Res
 /// Build the capture-path continue session and start it.
 fn start_capture_continue(app: &mut App, path: &Path) -> Result<()> {
     let file = save::load_file(path)?;
-    let session = GameSession::from_save(&app.pack, &file, &app.save_dir)?;
+    let session = GameSession::from_save_with(&app.pack, &file, &app.save_dir, app.player_options)?;
     app.start_session(session);
     Ok(())
 }
 
 /// Build the capture-path attract-demo session and start it.
 fn start_capture_demo(app: &mut App, index: u8) -> Result<()> {
-    let session = GameSession::from_demo_index(&app.pack, index, &app.save_dir)?;
+    let session =
+        GameSession::from_demo_index_with(&app.pack, index, &app.save_dir, app.player_options)?;
     app.start_session(session);
     Ok(())
 }
@@ -10161,7 +10276,7 @@ pub fn simulate_door(
     frame_dir: Option<&Path>,
 ) -> Result<SimulatedDoor> {
     let mut loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let mut player_state = player::spawn(id, &loaded.room);
     run_room_init(&mut loaded, &mut game);
@@ -10356,7 +10471,7 @@ pub fn simulate_room_with_input(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let player_state = player::spawn(id, &loaded.room);
     game.sync_entity_from_player(&player_state);
@@ -10374,7 +10489,7 @@ pub fn simulate_room_seeded(
     input: player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -10396,7 +10511,7 @@ pub fn simulate_room_prepared(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -10423,7 +10538,7 @@ pub fn simulate_room_with_movie(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedMovie> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -10495,7 +10610,7 @@ pub fn simulate_new_game(
     let character = character & 1;
     let id = new_game_id(character);
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_new_game(pack, &mut game, character);
     let mut player_state = player::spawn(id, &loaded.room);
     player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
@@ -10801,7 +10916,7 @@ pub fn simulate_typewriter(
     id: RoomId,
     save_dir: &Path,
 ) -> Result<SimulatedTypewriter> {
-    let mut session = GameSession::from_room(pack, id, save_dir)?;
+    let mut session = GameSession::from_room_with(pack, id, save_dir, player::Options::default())?;
     if let Some(entry) = session.game.save_screen.as_deref() {
         bail!(
             "pack registers the Lua save screen {entry}: simulate_typewriter writes the ported slot 0"
@@ -10875,7 +10990,7 @@ pub fn simulate_typewriter(
 
     let saved = save::load(save_dir, 0)?;
     let state_after_save = session.game.clone();
-    let loaded = GameSession::from_save(pack, &saved, save_dir)?;
+    let loaded = GameSession::from_save_with(pack, &saved, save_dir, player::Options::default())?;
     let ink_ribbon = saved.used_item == items::ITEM_INK_RIBBONS;
     Ok(SimulatedTypewriter {
         room: id,
@@ -10914,7 +11029,7 @@ pub struct SimulatedDeath {
 /// returned to the title. `hurt` is the damage the killing blow applies.
 pub fn simulate_death(pack: &Pack, id: RoomId, ticks: usize, hurt: i16) -> Result<SimulatedDeath> {
     let save_dir = PathBuf::from("saves");
-    let mut session = GameSession::from_room(pack, id, &save_dir)?;
+    let mut session = GameSession::from_room_with(pack, id, &save_dir, player::Options::default())?;
     session.game.apply_player_hurt(hurt, 0);
     let mut screen_open = false;
     let mut screen_frame = None;
@@ -12245,10 +12360,17 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
 /// Build a fresh game state for `id`/`room` with the pack's static music
 /// tables and global weapon-FX metadata installed, so room entry and script
 /// effect spawns resolve both the room's declared sprites and the `core00`
-/// types.
-fn new_game_state(pack: &Pack, id: RoomId, room: &RoomState) -> game::GameState {
+/// types. `options`, the run's mode, are set first, so the music chunk and the
+/// seed scripts that run after it read them.
+fn new_game_state(
+    pack: &Pack,
+    id: RoomId,
+    room: &RoomState,
+    options: player::Options,
+) -> game::GameState {
     let mut game = game::GameState::new(id, room);
-    game.music = crate::music::load(pack);
+    game.player_options = options;
+    game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -15177,7 +15299,7 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
 /// running engine goes through [`bgm::BgmCache`] instead.
 #[cfg(test)]
 fn load_room_music(pack: &Pack, id: RoomId) -> Option<audio::Wav> {
-    let tables = crate::music::load(pack);
+    let tables = crate::music::load(pack, player::Options::default());
     let stage = usize::from(id.stage.checked_sub(1)?);
     let group = tables.group_for(stage, usize::from(id.room), 0x08)?;
     let track = tables.group(group)?.tracks.into_iter().flatten().next()?;
@@ -19787,6 +19909,21 @@ mod tests {
                 .game
                 .flag_test(game::BANK_ROOM_FLAGS, LAB_MAP_FLAG, false)
         );
+    }
+
+    #[test]
+    fn a_new_game_built_by_the_app_carries_its_run_options() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        app.player_options.authentic = true;
+
+        start_capture_game(&mut app, 0, None).unwrap();
+        let Mode::Play(session) = &app.mode else {
+            panic!("the new game starts in play");
+        };
+        assert!(session.game.player_options.authentic);
     }
 
     #[test]
@@ -24591,7 +24728,7 @@ off_0010:
             has_special_key: true,
             has_infinite_launcher: false,
         };
-        let file = build_next_cycle_save(&pack, &flow).unwrap();
+        let file = build_next_cycle_save(&pack, &flow, player::Options::default()).unwrap();
         assert_eq!(file.saves, 0, "the next-cycle counter restarts at zero");
         let has = |item: u8| file.player_slots.iter().any(|slot| slot.id == item);
         assert!(
@@ -24607,7 +24744,7 @@ off_0010:
         // The flags round-trip through the scenario bank.
         let id = new_game_id(0);
         let loaded = load_room(&pack, id).unwrap();
-        let mut state = new_game_state(&pack, id, &loaded.room);
+        let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
         file.apply_to(&mut state);
         assert!(state.flag_test(
             game::BANK_SCENARIO,
@@ -24629,8 +24766,8 @@ off_0010:
             has_special_key: true,
             has_infinite_launcher: false,
         };
-        let file = build_next_cycle_save(&pack, &jill).unwrap();
-        let mut state = new_game_state(&pack, id, &loaded.room);
+        let file = build_next_cycle_save(&pack, &jill, player::Options::default()).unwrap();
+        let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
         file.apply_to(&mut state);
         assert!(
             state.flag_test(
@@ -26216,8 +26353,9 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
-        // At full health the green herb's USE is refused; the menu reports
-        // the refusal as 0xf7 + the heal category (7).
+        // Authentic mode refuses the green herb at full health; the menu
+        // reports the refusal as 0xf7 + the heal category (7).
+        session.game.player_options.authentic = true;
         session.game.entities[0].health = session.game.max_health;
         session.game.add_item(ITEM_GREEN_HERB, 1);
 
@@ -26398,6 +26536,211 @@ off_0010:
             .map(|slot| (slot.id, slot.quantity))
             .collect();
         assert_eq!(held, [(5, 6), (14, 2)]);
+    }
+
+    /// A pack's `game/new_game.lua` sees the run's `--authentic` mode the way
+    /// a hook does, so its start items can follow it.
+    #[test]
+    fn new_game_script_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[(crate::lua::NEW_GAME_ENTRY, script)],
+        ))
+        .unwrap();
+        let start_items = |options| {
+            let session = GameSession::new_with(&pack, 0, Path::new("saves"), options).unwrap();
+            session
+                .game
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect::<Vec<(u8, u8)>>()
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(start_items(authentic), [(3, 7)]);
+        assert_eq!(start_items(player::Options::default()), [(5, 6)]);
+    }
+
+    /// A `--room` boot into a new game reads the run mode in its start items
+    /// and in its room music, both seeded from the options it was given.
+    #[test]
+    fn new_in_room_with_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script: &[u8] = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let music: &[u8] = b"local api = ...\n\
+            api:set_music_group(0x01, { { 0x013, true } })\n\
+            api:set_music_group(0x02, { { 0x005, true } })\n\
+            api:set_room_music(1, 0x00, { api:authentic() and 0x02 or 0x01 })\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[
+                (crate::lua::NEW_GAME_ENTRY, script),
+                (crate::music::MUSIC_ENTRY, music),
+            ],
+        ))
+        .unwrap();
+        let id = RoomId {
+            stage: 1,
+            room: NEW_GAME_ROOM,
+            player_flag: 0,
+        };
+        let boot = |options| {
+            let session =
+                GameSession::new_in_room_with(&pack, id, 0, Path::new("saves"), options).unwrap();
+            let items: Vec<(u8, u8)> = session
+                .game
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect();
+            (items, session.game.music.group_for(0, 0x00, 0x08))
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(boot(player::Options::default()), (vec![(5, 6)], Some(0x01)));
+        assert_eq!(boot(authentic), (vec![(3, 7)], Some(0x02)));
+    }
+
+    /// A `--room` boot seeds the pack's `game/initial_state.lua`, which reads
+    /// the run mode the way the new-game script does.
+    #[test]
+    fn room_boot_initial_state_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script: &[u8] = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[(crate::music::INITIAL_STATE_ENTRY, script)],
+        ))
+        .unwrap();
+        let id = RoomId {
+            stage: 1,
+            room: NEW_GAME_ROOM,
+            player_flag: 0,
+        };
+        let start_items = |options| {
+            let session =
+                GameSession::from_room_with(&pack, id, Path::new("saves"), options).unwrap();
+            session
+                .game
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect::<Vec<(u8, u8)>>()
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(start_items(authentic), [(3, 7)]);
+        assert_eq!(start_items(player::Options::default()), [(5, 6)]);
+    }
+
+    /// The next cycle's card is built under the run mode too: a
+    /// `game/new_game.lua` that reads it seeds the carried-over card's items.
+    #[test]
+    fn next_cycle_card_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script: &[u8] = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[(crate::lua::NEW_GAME_ENTRY, script)],
+        ))
+        .unwrap();
+        let flow = EndingFlow {
+            stats: ending::EndStats::debug(6, 0, 1),
+            second_playthrough: false,
+            has_special_key: false,
+            has_infinite_launcher: false,
+        };
+        let card_items = |options| {
+            let file = build_next_cycle_save(&pack, &flow, options).unwrap();
+            let mut restored = game::GameState::default();
+            file.apply_to(&mut restored);
+            restored
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect::<Vec<(u8, u8)>>()
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(card_items(authentic).first(), Some(&(3, 7)));
+        assert_eq!(
+            card_items(player::Options::default()).first(),
+            Some(&(5, 6))
+        );
+    }
+
+    /// An attract reel boots its recorded room under the run mode, so that
+    /// room's music follows it the way a new game's does.
+    #[test]
+    fn attract_reel_boot_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let music: &[u8] = b"local api = ...\n\
+            api:set_music_group(0x01, { { 0x013, true } })\n\
+            api:set_music_group(0x02, { { 0x005, true } })\n\
+            api:set_room_music(1, 0x07, { api:authentic() and 0x02 or 0x01 })\n";
+        // The reel records stage 1, room 0x07, player flag 1, so the pack
+        // needs that room's RDT and its cut background too.
+        let room = RoomId {
+            stage: 1,
+            room: 0x07,
+            player_flag: 1,
+        };
+        let room_rdt = synthetic_rdt(&[0x00, 0x00]);
+        let cut = bmp::encode_to_vec(&test_image()).unwrap();
+        let reel = demo::tests::reel_bytes();
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[
+                (&room.rdt_entry(), &room_rdt),
+                (&room.cut_entry(0), &cut),
+                (crate::music::MUSIC_ENTRY, music),
+                ("demo/02.dat", &reel),
+            ],
+        ))
+        .unwrap();
+        let music_group = |options| {
+            let session =
+                GameSession::from_demo_with(&pack, "demo/02.dat", Path::new("saves"), options)
+                    .unwrap();
+            session.game.music.group_for(0, 0x07, 0x08)
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(music_group(player::Options::default()), Some(0x01));
+        assert_eq!(music_group(authentic), Some(0x02));
     }
 
     /// A failing `game/new_game.lua` falls back to the shipped start items.
@@ -27440,6 +27783,65 @@ off_0010:
         assert!(
             session.game.flags[0].bit(5),
             "the init's event ran on the first tick"
+        );
+    }
+
+    #[test]
+    fn an_authentic_run_reaches_the_init_and_first_room_hooks() {
+        use crate::manifest;
+
+        let id = RoomId::parse("1000").unwrap();
+        let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
+        // Each hook records the mode in its own flag, so options applied only
+        // after the boot would leave both bits clear.
+        let source = r#"
+function on_init(api)
+    api:flag_set(0, 4, api:authentic())
+end
+
+function on_room_load(api)
+    api:flag_set(0, 5, api:authentic())
+end
+"#;
+        let manifest = manifest::Manifest {
+            kind: manifest::PackKind::Mod,
+            base: Some("base".to_string()),
+            lua: vec!["lua/authentic.lua".to_string()],
+            ..manifest::Manifest::base("authentic")
+        };
+        let mut writer = PackWriter::new();
+        writer
+            .add(manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        writer
+            .add(&id.rdt_entry(), synthetic_rdt(&[0x0E, 0x00]))
+            .unwrap();
+        writer.add(&id.cut_entry(0), bmp_bytes).unwrap();
+        writer
+            .add("lua/authentic.lua", source.as_bytes().to_vec())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        let session =
+            GameSession::from_room_with(&pack, id, Path::new("saves"), authentic).unwrap();
+        assert!(session.game.flags[0].bit(4), "on_init reads --authentic");
+        assert!(
+            session.game.flags[0].bit(5),
+            "the first room reads --authentic"
+        );
+
+        let session = GameSession::from_room(&pack, id, Path::new("saves")).unwrap();
+        assert!(
+            !session.game.flags[0].bit(4),
+            "a default run is not authentic"
+        );
+        assert!(
+            !session.game.flags[0].bit(5),
+            "a default run is not authentic"
         );
     }
 

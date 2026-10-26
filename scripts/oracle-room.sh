@@ -108,9 +108,11 @@ LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvm
     --test-exit-after "$TICKS" --test-nolimit )
 
 echo "== arklay: room $ROOM player $PLAYER, $TICKS ticks"
+# The reference refuses a healing item with no effect, so compare under the
+# authentic item rules.
 "$ARK_BIN" "$PACK" --ui game --room "$ROOM" --player "$PLAYER" \
     --character "$PLAYER" --ticks "$TICKS" --no-mods \
-    --language "$LANGUAGE" --trace "$OUT/ark.trace" \
+    --language "$LANGUAGE" --authentic --trace "$OUT/ark.trace" \
     --capture-every 30 --capture-dir "$OUT/arkcaps"
 
 echo "== compare"

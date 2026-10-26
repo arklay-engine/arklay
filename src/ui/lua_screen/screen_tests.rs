@@ -55,6 +55,7 @@ impl Harness {
 
     fn context(&self) -> UiContext<'_> {
         UiContext {
+            authentic: false,
             pack: empty_pack(),
             save_dir: &self.dir.0,
             font: None,
@@ -1354,6 +1355,7 @@ impl Lab {
         let harness = Harness::new(label);
         let text = crate::text::Text::embedded();
         let mut cx = UiContext {
+            authentic: false,
             text: Some(&text),
             ..harness.context()
         };
@@ -1368,6 +1370,7 @@ impl Lab {
 
     fn step(&mut self, input: UiInput) -> ScreenResult {
         let cx = UiContext {
+            authentic: false,
             text: Some(&self.text),
             ..self.harness.context()
         };
@@ -1539,6 +1542,7 @@ impl MapTab {
         }
         let screen = {
             let mut cx = UiContext {
+                authentic: false,
                 pack: &pack,
                 game: Some(&game),
                 ..harness.context()
@@ -1555,6 +1559,7 @@ impl MapTab {
 
     fn step(&mut self, input: UiInput) -> ScreenResult {
         let cx = UiContext {
+            authentic: false,
             pack: &self.pack,
             game: Some(&self.game),
             ..self.harness.context()
@@ -1564,6 +1569,7 @@ impl MapTab {
 
     fn draw(&mut self) -> crate::render::Framebuffer {
         let cx = UiContext {
+            authentic: false,
             pack: &self.pack,
             game: Some(&self.game),
             ..self.harness.context()
@@ -1793,6 +1799,7 @@ impl FileTab {
         }
         let screen = {
             let mut cx = UiContext {
+                authentic: false,
                 pack,
                 text,
                 game: Some(&game),
@@ -1812,6 +1819,7 @@ impl FileTab {
 
     fn step(&mut self, input: UiInput) -> ScreenResult {
         let cx = UiContext {
+            authentic: false,
             pack: self.pack,
             text: self.text,
             game: Some(&self.game),
@@ -1828,6 +1836,7 @@ impl FileTab {
 
     fn draw(&mut self) -> crate::render::Framebuffer {
         let cx = UiContext {
+            authentic: false,
             pack: self.pack,
             text: self.text,
             game: Some(&self.game),
@@ -2689,6 +2698,7 @@ impl ItemView {
         all.extend(args.iter().cloned());
         let screen = {
             let mut cx = UiContext {
+                authentic: false,
                 game: Some(&game),
                 ..harness.context()
             };
@@ -2703,6 +2713,7 @@ impl ItemView {
 
     fn step(&mut self, input: UiInput) -> ScreenResult {
         let cx = UiContext {
+            authentic: false,
             game: Some(&self.game),
             ..self.harness.context()
         };
@@ -2926,6 +2937,7 @@ fn item_view_pickup_spins_in_and_closes_on_begin_exit() {
     assert!(view.screen.value("settled") != 0);
     {
         let cx = UiContext {
+            authentic: false,
             game: Some(&view.game),
             ..view.harness.context()
         };
@@ -2950,6 +2962,7 @@ impl ItemBoxScreen {
         let harness = Harness::new(label);
         let screen = {
             let mut cx = UiContext {
+                authentic: false,
                 game: Some(&game),
                 ..harness.context()
             };
@@ -2977,6 +2990,7 @@ impl ItemBoxScreen {
     /// One frame; whether the box closed.
     fn closes(&mut self, input: UiInput) -> bool {
         let cx = UiContext {
+            authentic: false,
             game: Some(&self.game),
             ..self.harness.context()
         };
@@ -3339,6 +3353,7 @@ fn item_box_opening_on_a_disabled_tab_uses_exit() {
 fn item_box_without_art_draws_nothing() {
     let mut item_box = ItemBoxScreen::new("box-draw", box_game(), 8);
     let cx = UiContext {
+        authentic: false,
         game: Some(&item_box.game),
         ..item_box.harness.context()
     };
@@ -3495,6 +3510,13 @@ impl Menu {
 
     fn eval<T: mlua::FromLuaMulti>(&self, body: &str) -> T {
         self.screen.test_eval(body)
+    }
+
+    /// Evaluate `body` with `api` bound to the menu's API over the lent game.
+    fn eval_api<T: mlua::FromLuaMulti>(&mut self, body: &str) -> T {
+        let cx = self.harness.context();
+        self.screen
+            .test_eval_with_game(&cx, Some(&mut self.game), body)
     }
 }
 
@@ -3673,7 +3695,9 @@ fn main_menu_a_herb_heal_updates_health_and_state() {
 
 #[test]
 fn main_menu_heal_refusals_do_not_consume() {
+    // Authentic mode refuses a green herb at full health, as the original does.
     let mut game = menu_game();
+    game.player_options.authentic = true;
     game.add_item(0x44, 1);
     let mut menu = Menu::open(game);
     menu.confirm();
@@ -3681,6 +3705,51 @@ fn main_menu_heal_refusals_do_not_consume() {
     assert_eq!(menu.game.message.id, Some(0xF7 + 7), "the heal refusal");
     assert_eq!(menu.game.inventory.len(), 1, "the herb was not consumed");
     assert_eq!(menu.game.last_used_item, None);
+}
+
+#[test]
+fn main_menu_full_health_herbs_are_used_up_outside_authentic_mode() {
+    let mut game = menu_game();
+    game.add_item(0x44, 1);
+    let mut menu = Menu::open(game);
+    menu.confirm();
+    menu.confirm_action();
+    assert_eq!(menu.game.message.id, None, "a used herb raises no message");
+    assert!(menu.game.inventory.is_empty(), "the herb was used up");
+    assert_eq!(menu.game.last_used_item, Some(0x44));
+    assert_eq!(menu.game.entities[0].health, 96, "it heals nothing");
+    let started: bool = menu.eval("return M.state.bar.flush ~= nil");
+    assert!(!started, "a use with no effect starts no flush");
+    menu.finish_close();
+    assert_eq!(menu.mode(), MODE_NAVIGATION);
+}
+
+#[test]
+fn the_menu_api_reads_whether_the_run_is_authentic() {
+    let mut menu = Menu::open(menu_game());
+    let authentic: bool = menu.eval_api("return api:authentic()");
+    assert!(!authentic, "a default run is not authentic");
+
+    let mut game = menu_game();
+    game.player_options.authentic = true;
+    let mut menu = Menu::open(game);
+    let authentic: bool = menu.eval_api("return api:authentic()");
+    assert!(authentic, "--authentic reaches the menu API");
+}
+
+#[test]
+fn a_screen_with_no_session_reads_the_run_mode() {
+    let harness = Harness::new("title-authentic");
+    let mut screen = harness.open("title", &[]);
+    let mut cx = harness.context();
+    let default: bool = screen.test_eval_with_game(&cx, None, "return api:authentic()");
+    assert!(!default, "a default run is not authentic");
+    cx.authentic = true;
+    let authentic: bool = screen.test_eval_with_game(&cx, None, "return api:authentic()");
+    assert!(
+        authentic,
+        "an authentic run reaches a screen with no session"
+    );
 }
 
 #[test]

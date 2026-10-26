@@ -564,6 +564,7 @@ exist (Lua colon syntax):
 | Method | Effect |
 | --- | --- |
 | `api:room()` | The three-digit room id, read-only. |
+| `api:authentic()` | Whether the run was started with `--authentic` (the original's item rules), read-only. |
 | `api:flag_get(bank, bit)` | Whether a flag bit is set. |
 | `api:flag_set(bank, bit[, value])` | Set (default) or clear a flag bit. |
 | `api:item_count(item)` | Total held quantity. |
@@ -822,13 +823,14 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:item_box(slot)` | The id and quantity of item-box slot `slot`. |
 | `api:player_health()` | The player's health, maximum health and status byte (poison bits `0x22`). |
 | `api:character()` | The portrait's character index (`0` Chris, `1` Jill, `2`/`3` the alternates). |
+| `api:authentic()` | Whether the run was started with `--authentic` (the original's item rules). |
 | `api:has_radio()` | Whether the radio tab is live. |
 | `api:equipped()` | The equipped item, `0` for none. |
 | `api:item_count(item)` | How many of `item` the inventory holds. |
 | `api:rand()` | *Lent.* The next draw of the game's shared `rand()` stream, `0..=0x7FFF`. |
 | `api:select_item(item)` | *Lent.* Mirror the item under the cursor into the state byte the scripts test (`0` for none). |
 | `api:equip(item)` | *Lent.* Equip `item`, or unequip with `0`. |
-| `api:use_item(slot)` | *Lent.* USE the item in `slot`: `true, healed, cured, closes` (the item is consumed; `closes` exits the whole menu), `false, category` for a refusal, nothing for an empty slot. |
+| `api:use_item(slot)` | *Lent.* USE the item in `slot`: `true, healed, cured, closes` (the item is consumed; `closes` exits the whole menu), `false, category` for a refusal, nothing for an empty slot. Outside authentic mode the full-health heal items, and a blue herb while the player is not poisoned, are consumed with no effect and return `true, false, false`; authentic mode refuses them. |
 | `api:combine(slot, target)` | *Lent.* MOVE `slot` onto `target`: `"applied", herb`, `"drug_store"`, `"herb_no_recipe"` or `"none"`. |
 | `api:show_message(id)` | *Lent.* Open the game's message window on global message `id`. |
 | `api:item_icon_row(item)` | The item's 40x30 row in `item/item_all`, or `nil`. |

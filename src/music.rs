@@ -12,6 +12,7 @@ use anyhow::{Result, bail};
 
 use crate::game::GameState;
 use crate::pack::Pack;
+use crate::player;
 
 /// Pack entry carrying the static music tables.
 pub const MUSIC_ENTRY: &str = "game/music.lua";
@@ -130,10 +131,12 @@ pub fn bgm_entry(track: TrackId) -> String {
 /// Load the static music tables for `pack`.
 ///
 /// The pack's `game/music.lua` wins; a missing or invalid entry falls back to
-/// the copy embedded from `games/re1/game/music.lua`.
-pub fn load(pack: &Pack) -> MusicTables {
+/// the copy embedded from `games/re1/game/music.lua`. Both run with the run's
+/// `options`, so the chunk can read `api:authentic()` like the seed scripts.
+pub fn load(pack: &Pack, options: player::Options) -> MusicTables {
     if let Ok(bytes) = pack.read(MUSIC_ENTRY) {
         let mut scratch = GameState::default();
+        scratch.player_options = options;
         match crate::lua::run_chunk(&mut scratch, &bytes, MUSIC_ENTRY, 0) {
             Ok(()) => match scratch.music.validate() {
                 Ok(()) => return scratch.music,
@@ -144,11 +147,12 @@ pub fn load(pack: &Pack) -> MusicTables {
             Err(err) => eprintln!("[lua] {err}; using the built-in music tables"),
         }
     }
-    load_builtin()
+    load_builtin(options)
 }
 
-/// Load the copy embedded at build time from `games/re1/game/music.lua`.
-pub fn load_builtin() -> MusicTables {
+/// Load the copy embedded at build time from `games/re1/game/music.lua`, run
+/// with the run's `options`.
+pub fn load_builtin(options: player::Options) -> MusicTables {
     let Some((_, source)) = crate::lua::GAME_SCRIPTS
         .iter()
         .find(|(entry, _)| *entry == MUSIC_ENTRY)
@@ -156,6 +160,7 @@ pub fn load_builtin() -> MusicTables {
         return MusicTables::default();
     };
     let mut scratch = GameState::default();
+    scratch.player_options = options;
     if let Err(err) = crate::lua::run_chunk(&mut scratch, source.as_bytes(), MUSIC_ENTRY, 0) {
         eprintln!("[lua] built-in {MUSIC_ENTRY}: {err}");
         return MusicTables::default();
@@ -324,7 +329,7 @@ mod tests {
             api:set_music_group(0x01, { { 0x013, true } })
             api:set_room_music(1, 0x00, { 0x01 })
         "#;
-        let tables = load(&pack_with_music(custom));
+        let tables = load(&pack_with_music(custom), player::Options::default());
         assert_eq!(tables.group(0x01).unwrap().tracks[0], Some(0x013));
         assert_eq!(tables.group_for(0, 0x00, 0x08), Some(0x01));
         assert_eq!(tables.group_for(0, 0x00, 0x40), Some(0x01));
@@ -335,13 +340,34 @@ mod tests {
             local api = ...
             api:set_room_music(1, 0x00, { 0x02 })
         "#;
-        let tables = load(&pack_with_music(invalid));
+        let tables = load(&pack_with_music(invalid), player::Options::default());
         assert_eq!(tables.group_for(0, 0x00, 0x40), Some(0x0B));
     }
 
     #[test]
+    fn music_chunk_reads_the_run_mode() {
+        // The chunk runs with the run's options, so `api:authentic()` picks
+        // the group: 0x01 by default, 0x02 in authentic mode.
+        let source = r#"
+            local api = ...
+            api:set_music_group(0x01, { { 0x013, true } })
+            api:set_music_group(0x02, { { 0x005, true } })
+            api:set_room_music(1, 0x00, { api:authentic() and 0x02 or 0x01 })
+        "#;
+        let pack = pack_with_music(source);
+        let tables = load(&pack, player::Options::default());
+        assert_eq!(tables.group_for(0, 0x00, 0x08), Some(0x01));
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        let tables = load(&pack, authentic);
+        assert_eq!(tables.group_for(0, 0x00, 0x08), Some(0x02));
+    }
+
+    #[test]
     fn parsed_builtin_tables_match_known_rooms() {
-        let tables = load_builtin();
+        let tables = load_builtin(player::Options::default());
         tables.validate().expect("valid tables");
         assert_eq!(tables.group_for(0, 0x00, 0x40), Some(0x0B));
         assert_eq!(tables.group_for(0, 0x00, 0xFF), None);
