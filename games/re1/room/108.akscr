@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -23,36 +24,36 @@
 #define AOT_0C_MESSAGE 0x0C
 #define AOT_0D_MESSAGE 0x0D
 #define AOT_0E_MESSAGE 0x0E
-#define FLAG_ROOM_09 0x09
-#define FLAG_ROOM_0A 0x0A
+#define F_ROOM_09 0x09
+#define F_ROOM_0A 0x0A
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 0, 2900, 3200, 2600, 1, 0, 0, 1, 0, ROOM_107_GALLERY, 15300, 0, 4200, 2048, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 23300, 25500, 3000, 2400, 2, 0, 0, 1, 0, ROOM_109_TRAP_PASSAGE, 24400, 0, 2700, 3072, UNLOCKED, 129);
-    item_aot_set(AOT_03_ITEM, 20700, 13200, 1000, 1000, ITEM_0B_AMMO_HANDGUN, 15, 1, 255, 208, 82, 0, 0, 132, 53, 68, 10, 19, 129, 1, 0);
+    item_aot_set(AOT_03_ITEM, 20700, 13200, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 1, 255, 208, 82, 0, 0, 132, 53, 68, 10, 19, 129, 1, 0);
     obj(0, 1, 255, 14160, 0, 5905, 1024, 0, 0, 64, 2, 0, 0, 192, 253, 88, 2, 32, 2, 120, 5, 138, 2);
     obj(1, 1, 255, 21605, 0, 13970, 0, 0, 0, 64, 2, 0, 0, 192, 253, 88, 2, 32, 2, 138, 2, 120, 5);
 #if MANSION1
-    if (ck(FG_COMMON, FLAG_COMMON_40, FALSE))
+    if (ck(FG_COMMON, F_COMMON_40, FALSE))
     {
         aot_set(AOT_04_EVENT, 14500, 1560, 800, 5400, SCE_EVENT, 65, 9, 0, on_aot_04, 0, 0, 0);
         aot_set(AOT_05_EVENT, 19420, 1560, 800, 5400, SCE_EVENT, 65, 9, 0, on_aot_04, 0, 0, 0);
-        enemy(ENEMY_02_DOG_CERBERUS, 128, 0, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 0, 0, 0, 0);
+        enemy(EM_02_CERBERUS, 128, 0, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 0, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_02_DOG_CERBERUS, 1, 0, 1, 2, 0, 0, 2048, 0, 0, 10000, 0, 3600, 0, 0, 0, 0);
+        enemy(EM_02_CERBERUS, 1, 0, 1, 2, 0, 0, 2048, 0, 0, 10000, 0, 3600, 0, 0, 0, 0);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_41, FALSE))
+    if (ck(FG_COMMON, F_COMMON_41, FALSE))
     {
         aot_set(AOT_06_EVENT, 21100, 8360, 5400, 800, SCE_EVENT, 65, 9, 0, on_aot_06, 0, 0, 0);
         aot_set(AOT_07_EVENT, 21100, 13080, 5400, 800, SCE_EVENT, 65, 9, 0, on_aot_06, 0, 0, 0);
-        enemy(ENEMY_02_DOG_CERBERUS, 128, 1, 1, 2, 0, 0, 2016, 0, 0, 28400, -3000, 16900, 1, 0, 0, 0);
+        enemy(EM_02_CERBERUS, 128, 1, 1, 2, 0, 0, 2016, 0, 0, 28400, -3000, 16900, 1, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_02_DOG_CERBERUS, 1, 1, 1, 2, 0, 0, 3072, 0, 0, 24000, 0, 15080, 1, 0, 0, 0);
+        enemy(EM_02_CERBERUS, 1, 1, 1, 2, 0, 0, 3072, 0, 0, 24000, 0, 15080, 1, 0, 0, 0);
     }
     aot_set(AOT_09_MESSAGE, 4600, 5000, 2000, 1200, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_0A_MESSAGE, 9200, 5000, 2000, 1200, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
@@ -61,8 +62,8 @@ proc init
     aot_set(AOT_0D_MESSAGE, 21300, 17600, 1200, 2000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_0E_MESSAGE, 21300, 22000, 1200, 2000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
 #else
-    enemy(ENEMY_03_SPIDER_WEB_SPINNER, 2, 173, 1, 2, 0, 0, 2048, 0, 0, 17700, 0, 3500, 0, 0, 0, 0);
-    enemy(ENEMY_03_SPIDER_WEB_SPINNER, 3, 174, 1, 2, 0, 0, 1024, 0, 0, 24000, 0, 20000, 1, 0, 0, 0);
+    enemy(EM_03_SPIDER_WEB_SPINNER, 2, 173, 1, 2, 0, 0, 2048, 0, 0, 17700, 0, 3500, 0, 0, 0, 0);
+    enemy(EM_03_SPIDER_WEB_SPINNER, 3, 174, 1, 2, 0, 0, 1024, 0, 0, 24000, 0, 20000, 1, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 4600, 5000, 2000, 1200, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_05_MESSAGE, 9200, 5000, 2000, 1200, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_06_MESSAGE, 17500, 5000, 2000, 1200, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
@@ -75,7 +76,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_COMMON, FLAG_COMMON_40, FALSE))
+    if (ck(FG_COMMON, F_COMMON_40, FALSE))
     {
         if (cmpb(2, 0, 1))
         {
@@ -88,7 +89,7 @@ proc main
         aot_switch(0, 1, 0);
         aot_switch(0, 2, 0);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_41, FALSE))
+    if (ck(FG_COMMON, F_COMMON_41, FALSE))
     {
         if (cmpb(2, 0, 2))
         {
@@ -114,19 +115,19 @@ proc main
             aot_switch(0, 6, 0);
         }
     }
-    if (ck(FG_ENEMY, FLAG_ENEMY_00, TRUE) && ck(FG_ROOM, FLAG_ROOM_09, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_00, TRUE) && ck(FG_ROOM, F_ROOM_09, TRUE))
     {
-        set(FG_ROOM, FLAG_ROOM_09, FALSE);
-        if (ck(FG_ROOM, FLAG_ROOM_0A, FALSE))
+        set(FG_ROOM, F_ROOM_09, FALSE);
+        if (ck(FG_ROOM, F_ROOM_0A, FALSE))
         {
             bgm_stop(2);
             bgm_play(0);
         }
     }
-    if (ck(FG_ENEMY, FLAG_ENEMY_01, TRUE) && ck(FG_ROOM, FLAG_ROOM_0A, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_01, TRUE) && ck(FG_ROOM, F_ROOM_0A, TRUE))
     {
-        set(FG_ROOM, FLAG_ROOM_0A, FALSE);
-        if (ck(FG_ROOM, FLAG_ROOM_09, FALSE))
+        set(FG_ROOM, F_ROOM_0A, FALSE);
+        if (ck(FG_ROOM, F_ROOM_09, FALSE))
         {
             bgm_stop(2);
             bgm_play(0);
@@ -146,12 +147,12 @@ event on_aot_04
         {
                 endif                   0
         }
-        set(FG_ROOM, FLAG_ROOM_09, TRUE);
+        set(FG_ROOM, F_ROOM_09, TRUE);
     }
     sleep(1);
     run
     {
-        set(FG_COMMON, FLAG_COMMON_40, TRUE);
+        set(FG_COMMON, F_COMMON_40, TRUE);
         se_play_3d(2, 23, 0, 0, 0, 9200, 1620);
         effect(21, 0, 0, 240, 35, 216, 245, 84, 6, 144, 11);
         effect(21, 1, 0, 240, 35, 72, 244, 84, 6, 144, 11);
@@ -189,17 +190,17 @@ event on_aot_06
     {
         aot_delete(AOT_06_EVENT, SCE_NONE, 0);
         aot_delete(AOT_07_EVENT, SCE_NONE, 0);
-        if (ck(FG_ROOM, FLAG_ROOM_09, FALSE))
+        if (ck(FG_ROOM, F_ROOM_09, FALSE))
         {
             bgm_stop(0);
             bgm_play(2);
         }
-        set(FG_ROOM, FLAG_ROOM_0A, TRUE);
+        set(FG_ROOM, F_ROOM_0A, TRUE);
     }
     sleep(1);
     run
     {
-        set(FG_COMMON, FLAG_COMMON_41, TRUE);
+        set(FG_COMMON, F_COMMON_41, TRUE);
         se_play_3d(2, 23, 0, 0, 0, 26080, 17900);
         effect(21, 0, 0, 224, 101, 16, 245, 236, 69, 192, 7);
         effect(21, 1, 0, 224, 101, 16, 245, 236, 69, 192, 7);

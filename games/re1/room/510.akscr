@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -15,13 +16,13 @@ proc init
 {
     door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, 1, 11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, 1, 11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, 129);
-    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, ITEM_6D_FILE_PASS_CODE_03, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 90, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 90, 129, 0, 0);
     aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, 1, 9, 0, 13, 0, 1, 0);
     aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, 1, 0, 0, 0, 0, 0, 0);
-    enemy(ENEMY_09_CHIMERA, 2, 97, 1, 1, 0, 0, 2500, 0, 0, 22000, 0, 7900, 0, 0, 0, 0);
-    enemy(ENEMY_09_CHIMERA, 2, 98, 1, 1, 0, 0, 3500, 0, 0, 6000, 0, 5000, 1, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, 97, 1, 1, 0, 0, 2500, 0, 0, 22000, 0, 7900, 0, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, 98, 1, 1, 0, 0, 3500, 0, 0, 6000, 0, 5000, 1, 0, 0, 0);
 #if CHRIS
-    enemy(ENEMY_09_CHIMERA, 2, 179, 1, 1, 0, 0, 144, 0, 0, 12496, 0, 10163, 2, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, 179, 1, 1, 0, 0, 144, 0, 0, 12496, 0, 10163, 2, 0, 0, 0);
 #endif
     evt_exec(0, 9, on_enter);
     evt_exec(0, 9, on_enter_2);
@@ -30,7 +31,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_ITEM, FLAG_ITEM_5A, TRUE))
+    if (ck(FG_ITEM, F_ITEM_5A, TRUE))
     {
         aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, 129, 128, 69, 0);
         aot_reset(AOT_03_USEITEM, SCE_USEITEM, 1, 9, 13, 1);
@@ -40,7 +41,7 @@ proc main
         aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, 129, 129, 69, 0);
         aot_reset(AOT_03_USEITEM, SCE_NONE, 129, 0, 0, 0);
     }
-    if (testitem(ITEM_28_PUZZLE_MO_DISK))
+    if (testitem(IT_28_KEY_MO_DISK))
     {
         evt_exec(0, 9, from_main);
     }

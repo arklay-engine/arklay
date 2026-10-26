@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -14,22 +15,22 @@ proc init
 {
     door_aot_set(AOT_00_DOOR, 5000, 14100, 2300, 3100, 2, 0, 3, 4, 0, ROOM_201_2F_LEFT_STAIRS, 18100, 0, 2700, 2560, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 31000, 6900, 2800, 3300, 9, 0, 3, 1, 0, ROOM_203_HALL_2F, 3400, -2885, 17000, 0, UNLOCKED, 129);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_0B, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_0B, FALSE))
     {
         obj(0, 1, 255, 23263, 0, 3510, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
         aot_set(AOT_03_EVENT, 16863, 4440, 1250, 501, SCE_EVENT, 68, 0, 0, on_aot_03, 0, 0, 0);
         aot_set(AOT_02_SAVE, 16863, 3000, 1250, 4900, SCE_SAVE, 68, 0, 0, 0, 0, 0, 0);
     }
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_A7, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A7, TRUE))
     {
         obj(1, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_A8, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A8, TRUE))
     {
         obj(2, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_A8, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A8, TRUE))
     {
         obj(3, 1, 255, 16000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
     }
@@ -38,15 +39,15 @@ proc init
         obj(3, 1, 255, 18000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
     }
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_AA, TRUE))
+    if (ck(FG_COMMON, F_COMMON_AA, TRUE))
     {
         obj(1, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_AB, TRUE))
+    if (ck(FG_COMMON, F_COMMON_AB, TRUE))
     {
         obj(2, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_AB, TRUE))
+    if (ck(FG_COMMON, F_COMMON_AB, TRUE))
     {
         obj(3, 1, 255, 16000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
     }
@@ -55,23 +56,23 @@ proc init
         obj(3, 1, 255, 18000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
     }
 #endif
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 1, 32, 1, 2, 0, 0, 2932, 0, 0, 16416, 0, 2384, 0, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 1, 32, 1, 2, 0, 0, 2932, 0, 0, 16416, 0, 2384, 0, 0, 0, 0);
 #if CHRIS
-        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 33, 1, 2, 0, 0, 432, 0, 0, 23542, 0, 13672, 1, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, 33, 1, 2, 0, 0, 432, 0, 0, 23542, 0, 13672, 1, 0, 0, 0);
 #else
-        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 33, 1, 2, 0, 0, 432, 0, 0, 24594, 0, 13672, 1, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, 33, 1, 2, 0, 0, 432, 0, 0, 24594, 0, 13672, 1, 0, 0, 0);
 #endif
     }
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
     {
 #if CHRIS
-        enemy(ENEMY_06_HUNTER, 7, 155, 1, 2, 0, 0, 2276, 0, 0, 2172, 0, 6217, 0, 0, 0, 0);
-        enemy(ENEMY_06_HUNTER, 7, 156, 1, 2, 0, 0, 3872, 0, 0, 23354, 0, 14662, 1, 0, 0, 0);
+        enemy(EM_06_HUNTER, 7, 155, 1, 2, 0, 0, 2276, 0, 0, 2172, 0, 6217, 0, 0, 0, 0);
+        enemy(EM_06_HUNTER, 7, 156, 1, 2, 0, 0, 3872, 0, 0, 23354, 0, 14662, 1, 0, 0, 0);
 #else
-        enemy(ENEMY_06_HUNTER, 7, 155, 1, 2, 0, 0, 2932, 0, 0, 10768, 0, 2932, 0, 0, 0, 0);
-        enemy(ENEMY_06_HUNTER, 7, 156, 1, 2, 0, 0, 1680, 0, 0, 20081, 0, 14326, 1, 0, 0, 0);
+        enemy(EM_06_HUNTER, 7, 155, 1, 2, 0, 0, 2932, 0, 0, 10768, 0, 2932, 0, 0, 0, 0);
+        enemy(EM_06_HUNTER, 7, 156, 1, 2, 0, 0, 1680, 0, 0, 20081, 0, 14326, 1, 0, 0, 0);
 #endif
     }
     if (cmpb(3, 0, 3))
@@ -86,7 +87,7 @@ proc init
 
 proc main noreturn
 {
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_0B, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_0B, FALSE))
     {
         if (cmpb(17, 0, 3))
         {
@@ -123,7 +124,7 @@ event on_aot_03
 {
     aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
     objtbl_b_set(0, 0, 15);
-    set(FG_SCENARIO, FLAG_SCENARIO_0B, TRUE);
+    set(FG_SCENARIO, F_SCENARIO_0B, TRUE);
     cutnext(4);
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();

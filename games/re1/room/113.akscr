@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -10,21 +11,22 @@
 #define AOT_03_NONE 0x03
 #define AOT_04_NONE 0x04
 #define AOT_05_MESSAGE 0x05
-#define FLAG_ROOM_18 0x18
-#define FLAG_ROOM_19 0x19
+#define F_ROOM_18 0x18
+#define F_ROOM_19 0x19
+#define MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY 0x00
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 1700, 1300, 2000, 900, 3, 0, 1, 7, 0, ROOM_109_TRAP_PASSAGE, 18000, 0, 8100, 1024, UNLOCKED, 129);
-    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        if (ck(FG_SCENARIO, FLAG_SCENARIO_02, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_02, FALSE))
         {
-            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, ITEM_3D_KEY_DESK, 1, 0, 255, 32, 78, 0, 0, 32, 78, 4, 247, 3, 129, 0, 0);
+            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, IT_3D_KEY_DESK, 1, 0, 255, 32, 78, 0, 0, 32, 78, 4, 247, 3, 129, 0, 0);
         }
         else
         {
-            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, ITEM_3D_KEY_DESK, 1, 0, 255, 218, 22, 186, 255, 8, 27, 82, 254, 3, 129, 0, 0);
+            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, IT_3D_KEY_DESK, 1, 0, 255, 218, 22, 186, 255, 8, 27, 82, 254, 3, 129, 0, 0);
             eml_rot(0, 0, 0, 248, 7);
         }
         obj(0, 1, 255, 21000, 0, 21000, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -34,17 +36,17 @@ proc init
     }
     aot_set(AOT_05_MESSAGE, 8500, 2000, 1500, 2000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     scene_setup(1, 4700, 7000, 1800);
-    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        set(FG_STATUS, FLAG_STATUS_1D, TRUE);
-        if (ck(FG_SCENARIO, FLAG_SCENARIO_02, FALSE))
+        set(FG_STATUS, F_STATUS_1D, TRUE);
+        if (ck(FG_SCENARIO, F_SCENARIO_02, FALSE))
         {
             aot_delete(AOT_03_NONE, SCE_EVENT, 129);
             evt_exec(0, 9, on_enter);
         }
         else
         {
-            require(ck(FG_ITEM, FLAG_ITEM_03, TRUE));
+            require(ck(FG_ITEM, F_ITEM_03, TRUE));
             aot_delete(AOT_04_NONE, SCE_EVENT, 129);
         }
     }
@@ -52,23 +54,23 @@ proc init
 
 proc main
 {
-    if (testpickup(ITEM_3D_KEY_DESK))
+    if (testpickup(IT_3D_KEY_DESK))
     {
         aot_delete(AOT_04_NONE, SCE_NONE, 129);
     }
-    if (ck(FG_ROOM, FLAG_ROOM_18, TRUE))
+    if (ck(FG_ROOM, F_ROOM_18, TRUE))
     {
-        set(FG_ROOM, FLAG_ROOM_18, FALSE);
-        if (ck(FG_ROOM, FLAG_ROOM_19, TRUE))
+        set(FG_ROOM, F_ROOM_18, FALSE);
+        if (ck(FG_ROOM, F_ROOM_19, TRUE))
         {
-            set(FG_ROOM, FLAG_ROOM_19, FALSE);
+            set(FG_ROOM, F_ROOM_19, FALSE);
             evt_exec(0, 9, from_main);
         }
         else
         {
             aot_delete(AOT_03_NONE, SCE_EVENT, 129);
             evt_exec(0, 9, from_main_2);
-            set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+            set(FG_STATUS, F_STATUS_0F, FALSE);
         }
     }
 }
@@ -86,7 +88,7 @@ event event_01
     run
     {
         aot_delete(AOT_03_NONE, SCE_NONE, 129);
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
         cutnext(3);
     }
     evt_work_set(WK_OBJ, 0);
@@ -95,10 +97,10 @@ event event_01
     tw_end();
     evt_next();
     sleep(15);
-    message(128, 69); // "The bathtub is filled with muddy water.Will you unplug it? Nothing useful."
+    message(MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY | 0x80, 69); // "The bathtub is filled with muddy water. Will you unplug it? Nothing useful."
     evt_next();
     evt_nop();
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     do
     {
         evt_next();
@@ -106,10 +108,10 @@ event event_01
     while (cmpb(5, 2, 128));
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_ROOM, FLAG_ROOM_18, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_ROOM, F_ROOM_18, TRUE);
         require(cmpb(5, 0, 0));
-        set(FG_ROOM, FLAG_ROOM_19, TRUE);
+        set(FG_ROOM, F_ROOM_19, TRUE);
     }
     evt_next();
     evt_finish();
@@ -121,8 +123,8 @@ event from_main
     {
         se_play_3d(2, 23, 7, 0, 0, 5500, 7070);
         aot_delete(AOT_03_NONE, SCE_NONE, 129);
-        set(FG_SCENARIO, FLAG_SCENARIO_02, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_02, TRUE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -196,8 +198,8 @@ event from_main
     run
     {
         aot_delete(AOT_04_NONE, SCE_EVENT, 129);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
 }
@@ -213,28 +215,28 @@ event from_main_2
     evt_next();
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
 }
 
 event event_04
 {
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     cutnext(3);
     evt_next();
     evt_nop();
     sleep(30);
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     aot_on(AOT_01_ITEM, SCE_ITEM, 0);
     evt_next();
     evt_nop();
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(20);
     cutcurr(0);
     evt_next();
     evt_nop();
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_finish();
 }

@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,17 +17,19 @@
 #define AOT_05_TYPEWRITER 0x05
 #define AOT_06_MESSAGE 0x06
 #define AOT_07_TYPEWRITER 0x07
+#define MSG_BARRY 0x01
+#define MSG_THERE_IS_A_LADDER 0x02
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 10200, 600, 1900, 2600, 0, 11, 27, 64, 0, ROOM_302_FALLS, 14600, 0, 26000, 1024, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 13800, 2300, 2100, 2600, 0, 1, 8, 0, 0, ROOM_308_BRANCH_PASSAGE, 2600, 0, 16500, 0, UNLOCKED, 129);
     door_aot_set(AOT_02_DOOR, 2400, 600, 2800, 2600, 0, 1, 8, 0, 0, ROOM_30B_ROCK_PASSAGE, 23100, 0, 18700, 1024, UNLOCKED, 129);
-    set(FG_STATUS, FLAG_STATUS_3D, TRUE);
+    set(FG_STATUS, F_STATUS_3D, TRUE);
 #if JILL
-    item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, ITEM_6A_FILE_BARRYS_PICTURE, 0, 0, 255, 48, 117, 48, 117, 48, 117, 0, 0, 117, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, IT_6A_FILE_BARRYS_PICTURE, 0, 0, 255, 48, 117, 48, 117, 48, 117, 0, 0, 117, 129, 0, 0);
 #endif
-    if (ck(FG_COMMON, FLAG_COMMON_47, FALSE))
+    if (ck(FG_COMMON, F_COMMON_47, FALSE))
     {
 #if CHRIS
         obj(0, 1, 255, 3810, -1630, 11310, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -43,7 +46,7 @@ proc init
     eml_rot(128, 0, 4, 0, 4);
     objtbl_b_set(0, 0, 3);
     obj(1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    if (ck(FG_COMMON, FLAG_COMMON_47, FALSE))
+    if (ck(FG_COMMON, F_COMMON_47, FALSE))
     {
         obj(2, 45, 255, 4932, 0, 11304, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 19, 116, 7);
     }
@@ -56,40 +59,40 @@ proc init
     aot_set(AOT_04_MESSAGE, 5600, 13700, 1000, 2100, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
     aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
     aot_set(AOT_05_TYPEWRITER, 6500, 17800, 2800, 1100, SCE_TYPEWRITER, 129, 0, 0, 0, 0, 0, 0);
-    if (ck(FG_COMMON, FLAG_COMMON_22, TRUE) && ck(FG_COMMON, FLAG_COMMON_32, FALSE) && ck(FG_COMMON, FLAG_COMMON_33, FALSE))
+    if (ck(FG_COMMON, F_COMMON_22, TRUE) && ck(FG_COMMON, F_COMMON_32, FALSE) && ck(FG_COMMON, F_COMMON_33, FALSE))
     {
-        set(FG_COMMON, FLAG_COMMON_C0, TRUE);
-        set(FG_COMMON, FLAG_COMMON_30, TRUE);
-        set(FG_COMMON, FLAG_COMMON_33, TRUE);
-        set(FG_COMMON, FLAG_COMMON_23, TRUE);
+        set(FG_COMMON, F_COMMON_C0, TRUE);
+        set(FG_COMMON, F_COMMON_30, TRUE);
+        set(FG_COMMON, F_COMMON_33, TRUE);
+        set(FG_COMMON, F_COMMON_23, TRUE);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_36, TRUE) && ck(FG_COMMON, FLAG_COMMON_67, FALSE) && ck(FG_COMMON, FLAG_COMMON_68, FALSE))
+    if (ck(FG_COMMON, F_COMMON_36, TRUE) && ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_COMMON, F_COMMON_68, FALSE))
     {
-        set(FG_COMMON, FLAG_COMMON_C0, TRUE);
-        set(FG_COMMON, FLAG_COMMON_6C, TRUE);
+        set(FG_COMMON, F_COMMON_C0, TRUE);
+        set(FG_COMMON, F_COMMON_6C, TRUE);
     }
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_5C, TRUE) && ck(FG_COMMON, FLAG_COMMON_48, TRUE) && ck(FG_COMMON, FLAG_COMMON_55, FALSE))
+    if (ck(FG_COMMON, F_COMMON_5C, TRUE) && ck(FG_COMMON, F_COMMON_48, TRUE) && ck(FG_COMMON, F_COMMON_55, FALSE))
     {
         dir_set(0, 0, 2650, 0, 13000, 0, 4040);
-        enemy(ENEMY_2A_NPC_BARRY_2, 4, 255, 1, 2, 0, 0, 1224, 0, 0, 11700, 0, 4500, 0, 51, 0, 0);
+        enemy(EM_2A_NPC_BARRY_2, 4, 255, 1, 2, 0, 0, 1224, 0, 0, 11700, 0, 4500, 0, 51, 0, 0);
         evt_exec(0, 9, on_enter_2);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_5C, TRUE) && ck(FG_COMMON, FLAG_COMMON_48, TRUE) && ck(FG_COMMON, FLAG_COMMON_55, TRUE))
+    if (ck(FG_COMMON, F_COMMON_5C, TRUE) && ck(FG_COMMON, F_COMMON_48, TRUE) && ck(FG_COMMON, F_COMMON_55, TRUE))
     {
-        enemy(ENEMY_2A_NPC_BARRY_2, 4, 255, 1, 2, 0, 0, 1224, 0, 0, 11700, 0, 4500, 0, 54, 50, 0);
+        enemy(EM_2A_NPC_BARRY_2, 4, 255, 1, 2, 0, 0, 1224, 0, 0, 11700, 0, 4500, 0, 54, 50, 0);
     }
     aot_set(AOT_04_USEITEM, 5600, 13700, 1000, 2100, SCE_USEITEM, 1, 9, 0, 3, 0, 1, 0);
     aot_set(AOT_05_MESSAGE, 5600, 13700, 1000, 2100, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
     aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
     aot_set(AOT_07_TYPEWRITER, 6500, 17800, 2800, 1100, SCE_TYPEWRITER, 129, 0, 0, 0, 0, 0, 0);
 #endif
-    set(FG_STATUS, FLAG_STATUS_3C, TRUE);
+    set(FG_STATUS, F_STATUS_3C, TRUE);
 }
 
 proc main
 {
-    if (testitem(ITEM_1E_PUZZLE_CRANK_HEXAGONAL))
+    if (testitem(IT_1E_KEY_CRANK_HEXAGONAL))
     {
         evt_exec(0, 9, from_main);
     }
@@ -99,8 +102,8 @@ event from_main
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
         dir_set(0, 0, 0, 0, 5250, 300, 15200);
 #else
@@ -115,7 +118,7 @@ event from_main
     tw_end();
     evt_nop();
     sleep(1);
-    set(FG_STATUS, FLAG_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_3E, TRUE);
     for (16)
     {
         evt_work_set(WK_PLAYER, 0);
@@ -133,7 +136,7 @@ event from_main
         sleep(36);
     }
     evt_nop();
-    set(FG_STATUS, FLAG_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_3E, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -147,23 +150,23 @@ event from_main
     evt_nop();
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_11, TRUE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_11, TRUE);
     }
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
         dir_set(0, 0, 0, 0, 5300, 0, 14600);
         cutnext(4);
         cut_auto(0);
-        if (ck(FG_COMMON, FLAG_COMMON_47, FALSE))
+        if (ck(FG_COMMON, F_COMMON_47, FALSE))
         {
-            set(FG_COMMON, FLAG_COMMON_47, TRUE);
+            set(FG_COMMON, F_COMMON_47, TRUE);
             evt_exec(0, 9, on_enter);
         }
         else
         {
-            set(FG_COMMON, FLAG_COMMON_47, FALSE);
+            set(FG_COMMON, F_COMMON_47, FALSE);
             evt_exec(0, 9, from_main_sub1);
         }
     }
@@ -177,8 +180,8 @@ event on_enter
     {
         aot_delete(AOT_06_MESSAGE, SCE_NONE, 0);
         objtbl_b_set(0, 2, 47);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
 }
@@ -190,8 +193,8 @@ event from_main_sub1
     {
         aot_set(AOT_06_MESSAGE, 600, 11000, 6200, 2200, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
         objtbl_b_set(0, 2, 45);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
 }
@@ -294,7 +297,7 @@ event from_main_sub3
 
 event on_aot_00_door
 {
-    message(130, 255); // "There's a ladder. Will you climb it? There's a hexagonal hole."
+    message(MSG_THERE_IS_A_LADDER | 0x80, 255); // "There's a ladder. Will you climb it? There's a hexagonal hole."
     do
     {
         evt_next();
@@ -321,10 +324,10 @@ event on_enter_2
     sleep(1);
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
-        set(FG_COMMON, FLAG_COMMON_55, TRUE);
-        set(FG_COMMON, FLAG_COMMON_C0, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_COMMON, F_COMMON_55, TRUE);
+        set(FG_COMMON, F_COMMON_C0, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -506,14 +509,14 @@ event on_enter_2
     sleep(40);
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
         aot_on(AOT_03_ITEM, SCE_DOCUMENT, 0);
     }
     evt_next();
     evt_nop();
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
     }
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
@@ -548,15 +551,15 @@ event on_enter_2
     run
     {
         cut_auto(0);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
 
 event event_07
 {
-    message(1, 0); // "Barry..."
+    message(MSG_BARRY, 0); // "Barry..."
     do
     {
         evt_next();

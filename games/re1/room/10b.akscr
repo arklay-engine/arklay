@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -23,17 +24,17 @@ proc init
     door_aot_set(AOT_02_DOOR, 8500, 12400, 2000, 1500, 0, 0, 6, 1, 0, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, 129);
 #endif
     aot_set(AOT_03_MESSAGE, 4400, 7800, 1500, 3000, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_04_ITEM, 6762, 15568, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 238, 29, 0, 0, 84, 64, 0, 0, 110, 129, 1, 0);
+    item_aot_set(AOT_04_ITEM, 6762, 15568, 1800, 1800, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 238, 29, 0, 0, 84, 64, 0, 0, 110, 129, 1, 0);
 #if MANSION1
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_09, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_09, FALSE))
     {
-        set(FG_SCENARIO, FLAG_SCENARIO_09, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_09, TRUE);
     }
-    enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 4, 25, 1, 2, 0, 0, 2009, 0, 0, 4089, 0, 13523, 0, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 25, 1, 2, 0, 0, 2009, 0, 0, 4089, 0, 13523, 0, 0, 0, 0);
 #else
     obj(0, 1, 255, 10720, -2350, 15120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(128, 0, 248, 0, 4);
-    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
         aot_set(AOT_05_MESSAGE, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     }
@@ -41,14 +42,14 @@ proc init
     {
         aot_set(AOT_05_MESSAGE, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
     }
-    enemy(ENEMY_06_HUNTER, 39, 117, 1, 2, 0, 0, 520, 0, 0, 5853, 0, 16051, 0, 0, 0, 0);
+    enemy(EM_06_HUNTER, 39, 117, 1, 2, 0, 0, 520, 0, 0, 5853, 0, 16051, 0, 0, 0, 0);
     room_bgm_state_set(5, 11, 8);
-    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_21, TRUE))
+        if (ck(FG_COMMON, F_COMMON_21, TRUE))
         {
-            set(FG_COMMON, FLAG_COMMON_21, FALSE);
-            if (ck(FG_COMMON, FLAG_COMMON_22, TRUE))
+            set(FG_COMMON, F_COMMON_21, FALSE);
+            if (ck(FG_COMMON, F_COMMON_22, TRUE))
             {
                 plw_anim(2, 40, 0);
                 setw(4, 0, 0);
@@ -59,7 +60,7 @@ proc init
 #endif
                 room_bgm_state_set(5, 11, 65);
             }
-            if (ck(FG_COMMON, FLAG_COMMON_36, TRUE))
+            if (ck(FG_COMMON, F_COMMON_36, TRUE))
             {
                 plw_anim(2, 40, 0);
                 setw(4, 0, 0);
@@ -79,7 +80,7 @@ proc init
 
 event on_enter
 {
-    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_0F, TRUE);
     dir_set(0, 0, 2880, 0, 3300, 0, 7410);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -90,8 +91,8 @@ event on_enter
     run
     {
         bgm_play(1);
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_6, F_6_1D, FALSE);
         evt_exec(0, 9, on_enter_sub1);
         voice_play(1, 84, 0);
         message(0, 0);
@@ -113,14 +114,14 @@ event on_enter
     run
     {
         cut_auto(0);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_6, F_6_1D, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
     act_reset();
-    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_0F, FALSE);
     evt_finish();
 }
 
@@ -151,7 +152,7 @@ event on_enter_sub1
 
 event on_enter_2
 {
-    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_0F, TRUE);
     dir_set(0, 0, 2880, 0, 3300, 0, 7410);
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -162,8 +163,8 @@ event on_enter_2
     run
     {
         bgm_play(1);
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_6, FLAG_6_1D, FALSE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_6, F_6_1D, FALSE);
         evt_exec(0, 9, on_enter_2_sub1);
         voice_play(1, 100, 0);
         message(2, 0);
@@ -180,15 +181,15 @@ event on_enter_2
     run
     {
         cut_auto(0);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_6, F_6_1D, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(51, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
-    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_0F, FALSE);
     evt_finish();
 }
 

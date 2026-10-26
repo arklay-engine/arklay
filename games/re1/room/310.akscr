@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -30,7 +31,7 @@ event on_enter
     evt_next();
     evt_nop();
     bgm_play(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     for (120)
     {
         spd_add(216);
@@ -69,7 +70,7 @@ event on_enter
     evt_nop();
     run
     {
-        if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
             setb(9, 0, 0);
         }
@@ -78,7 +79,7 @@ event on_enter
             setb(9, 1, 0);
         }
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
@@ -88,7 +89,7 @@ event on_enter_2
     evt_next();
     evt_nop();
     bgm_play(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     for (10)
     {
         spd_add(1);
@@ -127,7 +128,7 @@ event on_enter_2
     evt_nop();
     run
     {
-        if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
             setb(9, 4, 0);
         }
@@ -136,7 +137,7 @@ event on_enter_2
             setb(9, 5, 0);
         }
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }

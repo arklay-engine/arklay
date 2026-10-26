@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -20,15 +21,15 @@ proc init
     {
         aot_set(AOT_02_ITEMBOX, 8600, 4500, 2000, 3150, SCE_ITEMBOX, 129, 3, 0, 0, 0, 0, 0);
     }
-    if (ck(FG_STATUS, FLAG_STATUS_08, TRUE))
+    if (ck(FG_STATUS, F_STATUS_08, TRUE))
     {
-        item_aot_set(AOT_03_ITEM, 1800, 6800, 1000, 1800, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 0, 255, 140, 10, 242, 254, 16, 29, 212, 254, 167, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 1800, 6800, 1000, 1800, IT_10_AMMO_GRENADE_EXPLOSIVE, 6, 0, 255, 140, 10, 242, 254, 16, 29, 212, 254, 167, 129, 0, 0);
     }
     else
     {
-        item_aot_set(AOT_03_ITEM, 1800, 6800, 1000, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 140, 10, 212, 254, 232, 28, 236, 250, 166, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 1800, 6800, 1000, 1800, IT_0B_AMMO_HANDGUN, 15, 0, 255, 140, 10, 212, 254, 232, 28, 236, 250, 166, 129, 0, 0);
     }
-    item_aot_set(AOT_04_ITEM, 1800, 4800, 1000, 1800, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 1, 255, 166, 9, 98, 243, 112, 23, 112, 254, 180, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 1800, 4800, 1000, 1800, IT_41_HEAL_FIRST_AID_SPRAY, 1, 1, 255, 166, 9, 98, 243, 112, 23, 112, 254, 180, 129, 0, 0);
     aot_set(AOT_05_MESSAGE, 6700, 1600, 3850, 1900, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
     obj(0, 17, 255, 10600, -1440, 6000, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }

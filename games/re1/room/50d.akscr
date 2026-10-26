@@ -3,15 +3,16 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
-#define FLAG_ROOM_18 0x18
+#define F_ROOM_18 0x18
 
 proc init
 {
-    set(FG_STATUS, FLAG_STATUS_3D, TRUE);
+    set(FG_STATUS, F_STATUS_3D, TRUE);
     door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, 13, 17, 64, 0, ROOM_501_HELIPORT_PASSAGE, 3500, 0, 28000, 0, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 13, 17, 64, 0, STAGE_3 | ROOM_303_HELIPORT, 9000, 0, 5500, 0, UNLOCKED, 129);
     dir_set(0, 0, 2048, 0, 4600, 0, 4600);
@@ -28,17 +29,17 @@ proc init
 event on_enter
 {
     sleep(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     se_play_3d(2, 23, 0, 1, 0, 0, 0);
     evt_fork(9, on_enter_sub1, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_18, FALSE));
+    while (ck(FG_ROOM, F_ROOM_18, FALSE));
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
         aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
@@ -47,17 +48,17 @@ event on_enter
 event on_enter_2
 {
     sleep(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     se_play_3d(2, 23, 0, 1, 0, 0, 0);
     evt_fork(9, on_enter_sub1, 0);
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_18, FALSE));
+    while (ck(FG_ROOM, F_ROOM_18, FALSE));
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
@@ -66,19 +67,19 @@ event on_enter_2
 event on_enter_sub1
 {
     sleep(5);
-    set(FG_STATUS, FLAG_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_3E, TRUE);
     sleep(10);
-    set(FG_STATUS, FLAG_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_3E, FALSE);
     sleep(220);
-    set(FG_STATUS, FLAG_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_3E, TRUE);
     sleep(8);
-    set(FG_STATUS, FLAG_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_3E, FALSE);
     sleep(7);
-    set(FG_STATUS, FLAG_STATUS_3E, TRUE);
+    set(FG_STATUS, F_STATUS_3E, TRUE);
     sleep(5);
-    set(FG_STATUS, FLAG_STATUS_3E, FALSE);
+    set(FG_STATUS, F_STATUS_3E, FALSE);
     sleep(60);
-    set(FG_ROOM, FLAG_ROOM_18, TRUE);
+    set(FG_ROOM, F_ROOM_18, TRUE);
     evt_finish();
 }
 

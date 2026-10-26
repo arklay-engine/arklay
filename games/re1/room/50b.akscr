@@ -3,23 +3,25 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
-#define FLAG_ROOM_20 0x20
-#define FLAG_ROOM_21 0x21
+#define F_ROOM_20 0x20
+#define F_ROOM_21 0x21
+#define MSG_THE_DOOR_IS_TIGHTLY_LOCKED_03 0x03
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 5500, 2700, 2600, 2400, 12, 1, 11, 3, 0, ROOM_508_DOUBLE_LOCK, 2500, 0, 3600, 0, UNLOCKED, 129);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
     {
         door_aot_set(AOT_01_DOOR, 9000, 14000, 1700, 1800, 0, 1, 14, 3, 0, ROOM_512_CELL, 5600, 0, 10000, 1024, UNLOCKED, 129);
     }
-    else if (ck(FG_ENEMY, FLAG_ENEMY_70, FALSE))
+    else if (ck(FG_ENEMY, F_ENEMY_70, FALSE))
     {
-        if (ck(FG_SCENARIO, FLAG_SCENARIO_65, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_65, FALSE))
         {
             aot_set(AOT_01_DOOR, 9100, 15000, 1500, 1000, SCE_EVENT, 129, 0, 0, on_aot_01_door, 0, 0, 0);
         }
@@ -34,34 +36,34 @@ proc init
     }
     else
     {
-        door_aot_set(AOT_01_DOOR, 9000, 14000, 1700, 1800, 0, 1, 14, 3, 172, ROOM_512_CELL, 5600, 0, 10000, 1024, ITEM_37_KEY_LAB_MASTER, 129);
+        door_aot_set(AOT_01_DOOR, 9000, 14000, 1700, 1800, 0, 1, 14, 3, 172, ROOM_512_CELL, 5600, 0, 10000, 1024, IT_37_KEY_LAB_MASTER, 129);
     }
     evt_exec(0, 9, on_enter);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
     {
-        if (ck(FG_SCENARIO, FLAG_SCENARIO_65, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_65, FALSE))
         {
 #if CHRIS
-            enemy(ENEMY_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 3072, 0, 0, 10750, 0, 11000, 0, 0, 0, 0);
+            enemy(EM_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 3072, 0, 0, 10750, 0, 11000, 0, 0, 0, 0);
 #else
-            enemy(ENEMY_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 3072, 0, 0, 10750, 0, 11000, 0, 0, 0, 0);
+            enemy(EM_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 3072, 0, 0, 10750, 0, 11000, 0, 0, 0, 0);
 #endif
         }
     }
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_AC, FALSE))
+    if (ck(FG_COMMON, F_COMMON_AC, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
+        if (ck(FG_COMMON, F_COMMON_4B, TRUE))
         {
-            enemy(ENEMY_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 2048, 0, 0, 9000, 0, 16100, 1, 0, 0, 0);
+            enemy(EM_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 2048, 0, 0, 9000, 0, 16100, 1, 0, 0, 0);
         }
     }
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_B3, FALSE))
+    if (ck(FG_COMMON, F_COMMON_B3, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
+        if (ck(FG_COMMON, F_COMMON_4B, TRUE))
         {
-            enemy(ENEMY_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 2048, 0, 0, 9000, 0, 16100, 1, 0, 0, 0);
+            enemy(EM_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 2048, 0, 0, 9000, 0, 16100, 1, 0, 0, 0);
         }
     }
 #endif
@@ -73,17 +75,17 @@ event on_enter
     run
     {
 #if CHRIS
-        if (ck(FG_COMMON, FLAG_COMMON_AC, FALSE))
+        if (ck(FG_COMMON, F_COMMON_AC, FALSE))
         {
-            if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
             {
                 eml_state(0, 1, 8);
             }
         }
 #else
-        if (ck(FG_COMMON, FLAG_COMMON_B3, FALSE))
+        if (ck(FG_COMMON, F_COMMON_B3, FALSE))
         {
-            if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
+            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
             {
                 eml_state(0, 1, 8);
             }
@@ -97,9 +99,9 @@ event on_aot_01_door
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
-        set(FG_SCENARIO, FLAG_SCENARIO_65, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_65, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -109,7 +111,7 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
 #if CHRIS
     se_play_3d(2, 20, 0, 2, 0, 10000, 15800);
 #endif
@@ -169,7 +171,7 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     run
     {
         message(2, 0);
@@ -189,7 +191,7 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_anim_flags(32 | 7, 32 | 1, 0 | 0);
@@ -201,7 +203,7 @@ event on_aot_01_door
     wait_message();
     run
     {
-        message(3, 0); // "The door is tightly locked."
+        message(MSG_THE_DOOR_IS_TIGHTLY_LOCKED_03, 0); // "The door is tightly locked."
         voice_play(1, 157, 0);
     }
     wait_message();
@@ -243,7 +245,7 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -256,7 +258,7 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #endif
@@ -270,7 +272,7 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -296,7 +298,7 @@ event on_aot_01_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     wait_message();
     cutnext(2);
     evt_work_set(WK_PLAYER, 0);
@@ -312,8 +314,8 @@ event on_aot_01_door
 #else
         aot_reset(AOT_01_DOOR, SCE_MESSAGE, 129, 134, 255, 0);
 #endif
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);

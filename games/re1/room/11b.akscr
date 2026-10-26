@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,15 +17,15 @@ proc init
 {
     door_aot_set(AOT_00_DOOR, 0, 5200, 2600, 2400, 1, 1, 8, 0, 0, ROOM_11A_ROOFED_PASSAGE, 7700, 0, 25500, 2048, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 8800, 4300, 1700, 3200, 11, 1, 8, 0, 0, STAGE_3 | ROOM_300_FIRST_HOUSE_OUT, 27300, 0, 5600, 0, UNLOCKED, 129);
-    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        item_aot_set(AOT_02_ITEM, 8100, 8500, 1300, 1800, ITEM_3D_KEY_DESK, 1, 0, 255, 240, 35, 76, 250, 240, 35, 0, 0, 34, 129, 0, 0);
+        item_aot_set(AOT_02_ITEM, 8100, 8500, 1300, 1800, IT_3D_KEY_DESK, 1, 0, 255, 240, 35, 76, 250, 240, 35, 0, 0, 34, 129, 0, 0);
     }
     else
     {
         aot_set(AOT_02_ITEM, 8100, 8500, 1300, 1800, SCE_MESSAGE, 129, 129, 0, 69, 0, 0, 0);
     }
-    item_aot_set(AOT_03_ITEM, 5000, 1200, 1300, 1600, ITEM_1D_PUZZLE_CRANK_SQUARE, 0, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 35, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 5000, 1200, 1300, 1600, IT_1D_KEY_CRANK_SQUARE, 0, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 35, 129, 0, 0);
     obj(0, 65, 255, 4050, 0, 7500, 3072, 64, 2, 0, 0, 192, 253, 0, 0, 28, 2, 132, 3, 28, 2, 232, 3);
     obj(1, 63, 255, 5660, -4180, 2144, 1168, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 1700, 8700, 2800, 900, SCE_MESSAGE, 129, 128, 0, 69, 0, 0, 0);
@@ -33,7 +34,7 @@ proc init
 
 proc main
 {
-    if (ck(FG_STATUS, FLAG_STATUS_18, TRUE))
+    if (ck(FG_STATUS, F_STATUS_18, TRUE))
     {
         aot_delete(AOT_02_ITEM, SCE_NONE, 129);
         aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
@@ -42,7 +43,7 @@ proc main
     }
     else
     {
-        if (ck(FG_ITEM, FLAG_ITEM_22, TRUE) && ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+        if (ck(FG_ITEM, F_ITEM_22, TRUE) && ck(FG_STATUS, F_STATUS_08, FALSE))
         {
             aot_reset(AOT_02_ITEM, SCE_ITEM, 129, 0, 0, 0);
         }
@@ -54,7 +55,7 @@ proc main
         aot_delete(AOT_04_MESSAGE, SCE_MESSAGE, 129);
         aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, 129);
     }
-    if (ck(FG_ITEM, FLAG_ITEM_23, FALSE))
+    if (ck(FG_ITEM, F_ITEM_23, FALSE))
     {
         aot_delete(AOT_03_ITEM, SCE_NONE, 129);
         objtbl_b_set(0, 1, 62);

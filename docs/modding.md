@@ -607,7 +607,7 @@ mansion visit (stages 6 and 7): `103.akscr` holds RDTs 1030, 1031, 6030 and
     voice_play(1, 92, 0);
 #endif
 #if MANSION2
-    set(FG_ROOM, FLAG_ROOM_04, FALSE);
+    set(FG_ROOM, F_ROOM_04, FALSE);
 #endif
 ```
 
@@ -625,18 +625,24 @@ The exporter names what it can from the `*.akinc` files in the nearest `inc/`
 directory at or above `--out`, and from the English text beside it
 (`language/en-US.txt`):
 
-- items (`ITEM_0B_AMMO_HANDGUN`), enemies (`ENEMY_11_ZOMBIE_LAB`) and flags
-  (`FLAG_SCENARIO_0A`, a bit of `FG_SCENARIO`) by the define's prefix; a door
+- items (`IT_0B_AMMO_HANDGUN`, `IT_2F_KEY_INK_RIBBON`), enemies
+  (`EM_11_ZOMBIE_LAB`, `EM_0A_ADDER`) and flags
+  (`F_SCENARIO_0A`, a bit of `FG_SCENARIO`) by the define's prefix; a door
   target is a room of the same stage (`ROOM_106_MAIN_HALL`) or
   `STAGE_2 | ROOM_201_..` for another;
 - each AOT index the room sets up, as a local `#define AOT_05_ITEM 0x05` named
   after its first non-`SCE_NONE` type, and each `FG_ROOM` bit as
-  `FLAG_ROOM_xx`;
+  `F_ROOM_xx`;
 - events after what starts them: `on_aot_05_item` for an AOT's event,
   `on_enter` from `proc init`, `from_main` from `proc main`, `<parent>_sub1`
   for an event another starts, with `_2` and so on for repeats; an event
   nothing refers to stays `event_XX`;
-- `message(id, ..)` gets its text as a comment.
+- message ids from their English text, the first sentence at up to six
+  words (`MSG_IT_IS_LOCKED`), adding the next sentence and then the id where
+  two would share a name. The global messages (id `0x40` and up) are in
+  `inc/messages.akinc` and a room's own are defined in its script;
+  `MSG_.. | 0x80` asks for the fast reveal, and the full text follows as a
+  comment.
 
 These names are a starting point for hand renaming; once a script is edited
 by hand, re-exporting would overwrite it.
@@ -646,20 +652,22 @@ by hand, re-exporting would overwrite it.
 
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 
 #define AOT_02_EVENT 0x02
-#define FLAG_ROOM_02 0x02
+#define F_ROOM_02 0x02
+#define MSG_THERE_IS_A_BLOOD_STAIN_ON 0x02
 
 proc init
 {
-    if (ck(FG_COMMON, FLAG_COMMON_A4, TRUE) && ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_COMMON, F_COMMON_A4, TRUE) && ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        set(FG_COMMON, FLAG_COMMON_A9, TRUE);
-        message(2, 0); // "There's a blood stain on the floor."
+        set(FG_COMMON, F_COMMON_A9, TRUE);
+        message(MSG_THERE_IS_A_BLOOD_STAIN_ON, 0); // "There's a blood stain on the floor."
     }
-    else if (ck(FG_ROOM, FLAG_ROOM_02, FALSE))
+    else if (ck(FG_ROOM, F_ROOM_02, FALSE))
     {
-        require(testitem(ITEM_33_KEY_MANSION_SWORD));
+        require(testitem(IT_33_KEY_MANSION_SWORD));
         return;
     }
     evt_exec(0, 6, on_enter);
@@ -669,7 +677,7 @@ event on_enter
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
     }
     evt_exec(0, 6, on_enter_sub1);
     sleep(30);

@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -10,6 +11,9 @@
 #define AOT_03_MESSAGE 0x03
 #define AOT_04_MESSAGE 0x04
 #define AOT_05_EVENT 0x05
+#define MSG_A_DIFFERENT_LOOKING_COSTUME 0x03
+#define MSG_A_STRANGE_LOOKING_COSTUME 0x01
+#define MSG_JUST_A_MOMENT_PLEASE 0x02
 
 proc init
 {
@@ -17,7 +21,7 @@ proc init
     obj(0, 0, 255, 10885, -5580, 5935, 2038, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_02_MESSAGE, 1900, 1900, 7300, 1500, SCE_MESSAGE, 129, 128, 0, 69, 0, 0, 0);
     aot_set(AOT_03_MESSAGE, 5600, 4000, 3600, 1600, SCE_MESSAGE, 129, 128, 0, 69, 0, 0, 0);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_2A, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_2A, TRUE))
     {
         if (costume_ck(0))
         {
@@ -41,10 +45,10 @@ event on_aot_05
 {
     run
     {
-        set(FG_6, FLAG_6_1F, FALSE);
-        set(FG_6, FLAG_6_1D, FALSE);
-        set(FG_6, FLAG_6_19, FALSE);
-        message(129, 69); // "A strange looking costume.Will you change your outfit? Just a moment please."
+        set(FG_6, F_6_1F, FALSE);
+        set(FG_6, F_6_1D, FALSE);
+        set(FG_6, F_6_19, FALSE);
+        message(MSG_A_STRANGE_LOOKING_COSTUME | 0x80, 69); // "A strange looking costume. Will you change your outfit? Just a moment please."
     }
     do
     {
@@ -60,15 +64,15 @@ event on_aot_05
 #else
             setb(9, 9, 0);
 #endif
-            set(FG_SCENARIO, FLAG_SCENARIO_2A, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_2A, TRUE);
             costume_set(0);
             evt_exec(0, 9, on_aot_05_sub1);
         }
         else
         {
-            set(FG_6, FLAG_6_1F, TRUE);
-            set(FG_6, FLAG_6_1D, TRUE);
-            set(FG_6, FLAG_6_19, TRUE);
+            set(FG_6, F_6_1F, TRUE);
+            set(FG_6, F_6_1D, TRUE);
+            set(FG_6, F_6_19, TRUE);
         }
     }
     evt_finish();
@@ -104,7 +108,7 @@ event on_aot_05_sub1
     sleep(20);
     se_play_3d(2, 26, 0, 1, 0, 0, 0);
     sleep(10);
-    message(130, 127); // "Just a moment please."
+    message(MSG_JUST_A_MOMENT_PLEASE | 0x80, 127); // "Just a moment please."
     se_play_3d(2, 24, 0, 1, 0, 0, 0);
     sleep(125);
     se_play_3d(2, 26, 0, 1, 0, 0, 0);
@@ -119,9 +123,9 @@ event on_aot_05_sub1
     sleep(40);
     run
     {
-        set(FG_6, FLAG_6_1F, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
-        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, F_6_1F, TRUE);
+        set(FG_6, F_6_1D, TRUE);
+        set(FG_6, F_6_19, TRUE);
     }
     aot_on(AOT_00_DOOR, SCE_DOOR, 129);
     evt_finish();
@@ -142,10 +146,10 @@ event on_aot_04_message
 {
     run
     {
-        set(FG_6, FLAG_6_1F, FALSE);
-        set(FG_6, FLAG_6_1D, FALSE);
-        set(FG_6, FLAG_6_19, FALSE);
-        message(131, 69); // "A different looking costume.Will you change your outfit? xFFxFFxFFxFFxFFxFFxFFxFF e"
+        set(FG_6, F_6_1F, FALSE);
+        set(FG_6, F_6_1D, FALSE);
+        set(FG_6, F_6_19, FALSE);
+        message(MSG_A_DIFFERENT_LOOKING_COSTUME | 0x80, 69); // "A different looking costume. Will you change your outfit? xFFxFFxFFxFFxFFxFFxFFxFF e"
     }
     do
     {
@@ -161,15 +165,15 @@ event on_aot_04_message
 #else
             setb(9, 9, 0);
 #endif
-            set(FG_SCENARIO, FLAG_SCENARIO_2A, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_2A, TRUE);
             costume_set(1);
             evt_exec(0, 9, on_aot_05_sub1);
         }
         else
         {
-            set(FG_6, FLAG_6_1F, TRUE);
-            set(FG_6, FLAG_6_1D, TRUE);
-            set(FG_6, FLAG_6_19, TRUE);
+            set(FG_6, F_6_1F, TRUE);
+            set(FG_6, F_6_1D, TRUE);
+            set(FG_6, F_6_19, TRUE);
         }
     }
     evt_finish();

@@ -2020,6 +2020,7 @@ fn encode_label_target(
 fn argument_int(arg: &Arg, _op: &Op, src: &InsnSrc) -> Result<i64> {
     match arg {
         Arg::Num(value) => Ok(*value),
+        Arg::Bits(high, low) => Ok(*high | *low),
         _ => bail!(
             "line {}, column {}: `{}` needs a numeric argument, found `{arg:?}`",
             src.line,

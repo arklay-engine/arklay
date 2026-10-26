@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,18 +17,18 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR, 1500, 14400, 900, 2100, 3, 0, 0, 7, 0, ROOM_111_DRESSING_ROOM, 22500, 0, 11300, 2048, UNLOCKED, 129);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_7B, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
     {
-        door_aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, 0, 0, 0, 7, 176, ROOM_11C_WARDROBE_S, 3500, 0, 4500, 1024, ITEM_38_KEY_CLOSET, 129);
+        door_aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, 0, 0, 0, 7, 176, ROOM_11C_WARDROBE_S, 3500, 0, 4500, 1024, IT_38_KEY_CLOSET, 129);
     }
     else
     {
         aot_set(AOT_01_DOOR, 1200, 5200, 3100, 1500, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
     }
-    item_aot_set(AOT_02_ITEM, 10250, 6500, 1000, 1000, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 254, 41, 0, 0, 88, 27, 168, 253, 142, 129, 1, 0);
-    item_aot_set(AOT_03_ITEM, 8200, 6500, 1000, 1000, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 252, 33, 0, 0, 88, 27, 12, 254, 143, 129, 1, 0);
-    item_aot_set(AOT_04_ITEM, 3180, 9230, 1000, 1000, ITEM_2F_TOOL_INK_RIBBON, 2, 2, 255, 96, 14, 24, 252, 2, 38, 0, 0, 212, 129, 1, 0);
-    if (ck(FG_ITEM, FLAG_ITEM_D4, TRUE))
+    item_aot_set(AOT_02_ITEM, 10250, 6500, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 254, 41, 0, 0, 88, 27, 168, 253, 142, 129, 1, 0);
+    item_aot_set(AOT_03_ITEM, 8200, 6500, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, 1, 255, 252, 33, 0, 0, 88, 27, 12, 254, 143, 129, 1, 0);
+    item_aot_set(AOT_04_ITEM, 3180, 9230, 1000, 1000, IT_2F_KEY_INK_RIBBON, 2, 2, 255, 96, 14, 24, 252, 2, 38, 0, 0, 212, 129, 1, 0);
+    if (ck(FG_ITEM, F_ITEM_D4, TRUE))
     {
         aot_set(AOT_05_MESSAGE, 2200, 9200, 2000, 1400, SCE_NONE, 129, 128, 0, 255, 0, 0, 0);
     }
@@ -37,19 +38,19 @@ proc init
     }
     aot_set(AOT_06_MESSAGE, 11200, 9000, 2000, 3000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     scene_setup(1, 4100, 10000, 5700);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(ENEMY_11_ZOMBIE_LAB, 2, 144, 1, 2, 0, 0, 2048, 0, 0, 10000, 0, 12600, 0, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 2, 144, 1, 2, 0, 0, 2048, 0, 0, 10000, 0, 12600, 0, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_06_HUNTER, 7, 157, 1, 2, 0, 0, 1776, 0, 0, 11211, 0, 11654, 0, 0, 0, 0);
+        enemy(EM_06_HUNTER, 7, 157, 1, 2, 0, 0, 1776, 0, 0, 11211, 0, 11654, 0, 0, 0, 0);
     }
 }
 
 proc main
 {
-    if (testpickup(ITEM_2F_TOOL_INK_RIBBON))
+    if (testpickup(IT_2F_KEY_INK_RIBBON))
     {
         aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, 129);
     }

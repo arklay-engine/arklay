@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -11,13 +12,16 @@
 #define AOT_03_EVENT 0x03
 #define AOT_04_EVENT 0x04
 #define AOT_05_ITEM 0x05
-#define FLAG_ROOM_18 0x18
+#define F_ROOM_18 0x18
+#define MSG_I_HOPE_THIS_BLOOD_IS_NOT 0x00
+#define MSG_SPOTS_OF_BLOOD_ARE_HERE_AND 0x02
+#define MSG_THIS_MUST_BE_FORESTS 0x01
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 0, 0, 2500, 4200, 1, 0, 0, 1, 0, ROOM_203_HALL_2F, 31500, -2885, 8000, 2048, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 3600, 11500, 2000, 2500, 0, 0, 6, 4, 0, ROOM_212_TERRACE, 19600, 0, 27000, 0, UNLOCKED, 129);
-    if (ck(FG_COMMON, FLAG_COMMON_42, TRUE))
+    if (ck(FG_COMMON, F_COMMON_42, TRUE))
     {
         room_bgm_state_set(1, 17, 255);
         aot_set(AOT_02_MESSAGE, 3800, 10000, 600, 1000, SCE_MESSAGE, 129, 129, 0, 69, 1, 0, 0);
@@ -30,9 +34,9 @@ proc init
         aot_set(AOT_03_EVENT, 2500, 11000, 900, 2000, SCE_EVENT, 129, 9, 0, on_aot_03_2, 0, 0, 0);
     }
     aot_set(AOT_04_EVENT, 2500, 7600, 900, 2000, SCE_EVENT, 129, 9, 0, on_aot_04, 0, 0, 0);
-    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        item_aot_set(AOT_05_ITEM, 2000, 400, 1700, 1700, ITEM_3D_KEY_DESK, 1, 0, 255, 84, 11, 28, 248, 244, 6, 0, 0, 149, 129, 0, 134);
+        item_aot_set(AOT_05_ITEM, 2000, 400, 1700, 1700, IT_3D_KEY_DESK, 1, 0, 255, 84, 11, 28, 248, 244, 6, 0, 0, 149, 129, 0, 134);
         eml_rot(0, 0, 0, 0, 8);
     }
 }
@@ -40,7 +44,7 @@ proc init
 event on_aot_03
 {
     sleep(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -48,8 +52,8 @@ event on_aot_03
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, FLAG_ROOM_18, FALSE);
-    message(129, 325); // "This must be Forest's..."
+    set(FG_ROOM, F_ROOM_18, FALSE);
+    message(MSG_THIS_MUST_BE_FORESTS | 0x80, 325); // "This must be Forest's..."
     do
     {
         evt_next();
@@ -62,9 +66,9 @@ event on_aot_03
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, FLAG_ROOM_18, FALSE);
+    set(FG_ROOM, F_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -77,7 +81,7 @@ event on_aot_03
 event on_aot_03_2
 {
     sleep(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -85,8 +89,8 @@ event on_aot_03_2
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, FLAG_ROOM_18, FALSE);
-    message(128, 325); // "I hope this blood isn't from my teammates..."
+    set(FG_ROOM, F_ROOM_18, FALSE);
+    message(MSG_I_HOPE_THIS_BLOOD_IS_NOT | 0x80, 325); // "I hope this blood isn't from my teammates..."
     do
     {
         evt_next();
@@ -99,9 +103,9 @@ event on_aot_03_2
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, FLAG_ROOM_18, FALSE);
+    set(FG_ROOM, F_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
@@ -114,7 +118,7 @@ event on_aot_03_2
 event on_aot_04
 {
     sleep(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -122,8 +126,8 @@ event on_aot_04
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, FLAG_ROOM_18, FALSE);
-    message(130, 325); // "Spots of blood are here and there."
+    set(FG_ROOM, F_ROOM_18, FALSE);
+    message(MSG_SPOTS_OF_BLOOD_ARE_HERE_AND | 0x80, 325); // "Spots of blood are here and there."
     do
     {
         evt_next();
@@ -136,9 +140,9 @@ event on_aot_04
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_ROOM, FLAG_ROOM_18, FALSE);
+    set(FG_ROOM, F_ROOM_18, FALSE);
     sleep(5);
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();

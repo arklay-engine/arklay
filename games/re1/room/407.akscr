@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -14,9 +15,9 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR, 1600, 4400, 2400, 1500, 2, 0, 33, 1, 0, ROOM_406_ROOM_002, 3100, 0, 3700, 1024, UNLOCKED, 129);
-    item_aot_set(AOT_01_ITEM, 7000, 5600, 1000, 1500, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 126, 29, 142, 249, 194, 26, 0, 4, 109, 129, 0, 0);
+    item_aot_set(AOT_01_ITEM, 7000, 5600, 1000, 1500, IT_0B_AMMO_HANDGUN, 15, 0, 255, 126, 29, 142, 249, 194, 26, 0, 4, 109, 129, 0, 0);
     aot_set(AOT_02_MESSAGE, 2300, 8700, 2800, 4000, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
     aot_set(AOT_03_MESSAGE, 5600, 5400, 1500, 1000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 6100, 8900, 1500, 1000, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 182, 1, 2, 0, 0, 1528, 0, 0, 7025, 0, 8632, 0, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, 182, 1, 2, 0, 0, 1528, 0, 0, 7025, 0, 8632, 0, 0, 0, 0);
 }

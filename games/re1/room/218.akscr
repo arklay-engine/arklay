@@ -3,26 +3,30 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_EVENT 0x01
 #define AOT_02_ITEM 0x02
 #define AOT_03_ITEM 0x03
-#define FLAG_ROOM_23 0x23
+#define F_ROOM_23 0x23
+#define MSG_A_BATTERY 0x02
+#define MSG_IT_IS_A_HELICOPTER_PORT 0x01
+#define MSG_I_CAN_LOOK_OVER_THE_COURTYARD 0x00
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 4600, 1200, 900, 1300, 3, 0, 0, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, 129);
     aot_set(AOT_01_EVENT, 4500, 8500, 2200, 1000, SCE_EVENT, 1, 0, 0, on_aot_01, 0, 0, 0);
-    item_aot_set(AOT_02_ITEM, 7100, 2000, 1000, 1000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 132, 28, 48, 248, 196, 9, 0, 12, 199, 129, 0, 0);
-    item_aot_set(AOT_03_ITEM, 4200, 4600, 2400, 1800, ITEM_2F_TOOL_INK_RIBBON, 2, 1, 255, 152, 18, 48, 248, 112, 23, 0, 4, 91, 129, 0, 0);
-    set(FG_SCENARIO, FLAG_SCENARIO_4F, TRUE);
+    item_aot_set(AOT_02_ITEM, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 132, 28, 48, 248, 196, 9, 0, 12, 199, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, 1, 255, 152, 18, 48, 248, 112, 23, 0, 4, 91, 129, 0, 0);
+    set(FG_SCENARIO, F_SCENARIO_4F, TRUE);
 }
 
 proc main
 {
-    if (ck(FG_ITEM, FLAG_ITEM_C7, FALSE))
+    if (ck(FG_ITEM, F_ITEM_C7, FALSE))
     {
         aot_delete(5, SCE_NONE, 129);
     }
@@ -37,9 +41,9 @@ event on_aot_01
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
         aot_delete(AOT_01_EVENT, SCE_NONE, 129);
-        message(128, 0); // "I can look over the courtyard from here."
+        message(MSG_I_CAN_LOOK_OVER_THE_COURTYARD | 0x80, 0); // "I can look over the courtyard from here."
     }
     do
     {
@@ -50,31 +54,31 @@ event on_aot_01
     {
         cutnext(2);
         dir_set(0, 0, 2920, 0, 5000, 0, 7850);
-        if (ck(FG_SCENARIO, FLAG_SCENARIO_60, FALSE))
+        if (ck(FG_SCENARIO, F_SCENARIO_60, FALSE))
         {
-            set(FG_SCENARIO, FLAG_SCENARIO_60, TRUE);
+            set(FG_SCENARIO, F_SCENARIO_60, TRUE);
         }
     }
-    message(129, 0); // "It's a helicopter port!If I could contact the other members from there..."
+    message(MSG_IT_IS_A_HELICOPTER_PORT | 0x80, 0); // "It's a helicopter port! If I could contact the other members from there..."
     do
     {
         evt_next();
     }
     while (cmpb(5, 2, 128));
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     do
     {
         evt_next();
     }
     while (ck_bits(1, 255, 255));
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     cutnext(1);
     sleep(5);
     run
     {
         aot_delete(AOT_01_EVENT, SCE_EVENT, 1);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -88,8 +92,8 @@ event event_02
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        message(130, 0); // "A battery.Now I can move the elevator in the courtyard."
+        set(FG_6, F_6_17, FALSE);
+        message(MSG_A_BATTERY | 0x80, 0); // "A battery. Now I can move the elevator in the courtyard."
     }
     do
     {
@@ -105,12 +109,12 @@ event event_02
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_23, FALSE));
+    while (ck(FG_ROOM, F_ROOM_23, FALSE));
     aot_on(4, SCE_ITEM, 0);
     sleep(1);
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }

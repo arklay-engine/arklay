@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -18,11 +19,12 @@
 #define AOT_08_ITEM 0x08
 #define AOT_08_MESSAGE 0x08
 #define AOT_09_ITEM 0x09
+#define MSG_HE_IS_KENNETH_FROM_THE_STARS 0x00
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 14800, 4100, 3000, 3100, 2, 0, 1, 1, 146, ROOM_103_F_PASSAGE, 3000, 0, 3000, 3072, LOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 29800, 4000, 1700, 3500, 2, 0, 31, 5, 134, ROOM_10F_BAR, 14000, 0, 3000, 3072, ITEM_33_KEY_MANSION_SWORD, 129);
+    door_aot_set(AOT_01_DOOR, 29800, 4000, 1700, 3500, 2, 0, 31, 5, 134, ROOM_10F_BAR, 14000, 0, 3000, 3072, IT_33_KEY_MANSION_SWORD, 129);
 #if MANSION1
     door_aot_set(AOT_02_DOOR, 31500, 1900, 2300, 1800, 6, 0, 0, 1, 211, ROOM_110_1F_ELEVATOR, 0, 0, 0, 0, LOCKED, 129);
 #else
@@ -32,28 +34,28 @@ proc init
 #if MANSION1
     aot_set(AOT_04_EVENT, 3300, 5600, 2000, 2000, SCE_EVENT, 129, 9, 0, on_aot_04, 0, 0, 0);
 #if CHRIS
-    item_aot_set(AOT_05_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
+    item_aot_set(AOT_05_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
     aot_set(AOT_06_MESSAGE, 3300, 7400, 2000, 1000, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
     aot_set(AOT_07_MESSAGE, 5500, 5700, 1000, 1500, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     aot_set(AOT_08_MESSAGE, 1000, 6900, 1000, 1600, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_09_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
-    set(FG_STATUS, FLAG_STATUS_1C, TRUE);
+    item_aot_set(AOT_09_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
+    set(FG_STATUS, F_STATUS_1C, TRUE);
 #else
     aot_set(AOT_05_MESSAGE, 3300, 7400, 2000, 1000, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
     aot_set(AOT_06_MESSAGE, 5500, 5700, 1000, 1500, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     aot_set(AOT_07_MESSAGE, 1000, 6900, 1000, 1600, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
-    if (ck(FG_COMMON, FLAG_COMMON_B4, FALSE))
+    if (ck(FG_COMMON, F_COMMON_B4, FALSE))
     {
-        item_aot_set(AOT_08_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
-        item_aot_set(AOT_09_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
+        item_aot_set(AOT_08_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
+        item_aot_set(AOT_09_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
     }
-    set(FG_COMMON, FLAG_COMMON_AC, TRUE);
+    set(FG_COMMON, F_COMMON_AC, TRUE);
 #endif
     evt_exec(0, 9, on_enter);
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_A2, FALSE))
+    if (ck(FG_COMMON, F_COMMON_A2, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_A0, TRUE))
+        if (ck(FG_COMMON, F_COMMON_A0, TRUE))
         {
             if (cmpb(3, 0, 3))
             {
@@ -73,61 +75,61 @@ proc init
         }
     }
 #endif
-    if (ck(FG_COMMON, FLAG_COMMON_02, FALSE))
+    if (ck(FG_COMMON, F_COMMON_02, FALSE))
     {
-        enemy(ENEMY_11_ZOMBIE_LAB, 133, 28, 1, 2, 0, 0, 3072, 0, 0, 4150, 0, 6300, 0, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 133, 28, 1, 2, 0, 0, 3072, 0, 0, 4150, 0, 6300, 0, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_11_ZOMBIE_LAB, 0, 28, 1, 2, 0, 0, 3072, 0, 0, 4150, 0, 5550, 0, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 0, 28, 1, 2, 0, 0, 3072, 0, 0, 4150, 0, 5550, 0, 0, 0, 0);
     }
 #if CHRIS
-    enemy(ENEMY_25_NPC_KENNETH_1, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
+    enemy(EM_25_NPC_KENNETH_1, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_AD, FALSE))
+    if (ck(FG_COMMON, F_COMMON_AD, FALSE))
     {
-        enemy(ENEMY_25_NPC_KENNETH_1, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
+        enemy(EM_25_NPC_KENNETH_1, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
     }
-    else if (ck(FG_COMMON, FLAG_COMMON_B4, TRUE))
+    else if (ck(FG_COMMON, F_COMMON_B4, TRUE))
     {
-        enemy(ENEMY_29_NPC_KENNETH_2, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
+        enemy(EM_29_NPC_KENNETH_2, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_25_NPC_KENNETH_1, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
+        enemy(EM_25_NPC_KENNETH_1, 0, 255, 1, 2, 0, 0, 0, 0, 0, 3550, 0, 6400, 1, 0, 0, 0);
     }
 #endif
 #else
 #if CHRIS
-    item_aot_set(AOT_04_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
+    item_aot_set(AOT_04_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_B4, FALSE))
+    if (ck(FG_COMMON, F_COMMON_B4, FALSE))
     {
-        item_aot_set(AOT_04_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
+        item_aot_set(AOT_04_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 54, 16, 0, 0, 0, 25, 0, 4, 41, 129, 1, 0);
     }
 #endif
     aot_set(AOT_05_MESSAGE, 3300, 7400, 2000, 1000, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
     aot_set(AOT_06_MESSAGE, 5500, 5700, 1000, 1500, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     aot_set(AOT_07_MESSAGE, 1000, 6900, 1000, 1600, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
 #if CHRIS
-    item_aot_set(AOT_08_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
+    item_aot_set(AOT_08_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_B4, FALSE))
+    if (ck(FG_COMMON, F_COMMON_B4, FALSE))
     {
-        item_aot_set(AOT_08_ITEM, 3300, 5600, 2000, 2000, ITEM_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
+        item_aot_set(AOT_08_ITEM, 3300, 5600, 2000, 2000, IT_0B_AMMO_HANDGUN, 15, 1, 255, 54, 16, 0, 0, 0, 25, 0, 4, 47, 129, 1, 0);
     }
 #endif
-    enemy(ENEMY_06_HUNTER, 0, 158, 1, 2, 0, 0, 4011, 0, 0, 3616, 0, 3322, 0, 0, 0, 0);
-    enemy(ENEMY_06_HUNTER, 0, 159, 1, 2, 0, 0, 1915, 0, 0, 23680, 0, 3370, 1, 0, 0, 0);
+    enemy(EM_06_HUNTER, 0, 158, 1, 2, 0, 0, 4011, 0, 0, 3616, 0, 3322, 0, 0, 0, 0);
+    enemy(EM_06_HUNTER, 0, 159, 1, 2, 0, 0, 1915, 0, 0, 23680, 0, 3370, 1, 0, 0, 0);
 #endif
 }
 #if MANSION1
 
 proc main
 {
-    if (ck(FG_COMMON, FLAG_COMMON_02, FALSE))
+    if (ck(FG_COMMON, F_COMMON_02, FALSE))
     {
-        if (ck(FG_STATUS, FLAG_STATUS_1A, TRUE))
+        if (ck(FG_STATUS, F_STATUS_1A, TRUE))
         {
             if (cmpb(2, 0, 4))
             {
@@ -135,14 +137,14 @@ proc main
             }
         }
     }
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_11, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_11, TRUE))
     {
         aot_delete(AOT_04_EVENT, SCE_NONE, 1);
     }
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_A2, FALSE))
+    if (ck(FG_COMMON, F_COMMON_A2, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_A0, TRUE))
+        if (ck(FG_COMMON, F_COMMON_A0, TRUE))
         {
             if (cmpb(2, 0, 0))
             {
@@ -179,9 +181,9 @@ event on_aot_04
     run
     {
         cutnext(5);
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_6, FLAG_6_1D, FALSE);
-        message(128, 0); // "He's Kenneth from the ＳＴＡＲＳ Bravo team...!Now he's become a mere shadow of his former self."
+        set(FG_6, F_6_17, FALSE);
+        set(FG_6, F_6_1D, FALSE);
+        message(MSG_HE_IS_KENNETH_FROM_THE_STARS | 0x80, 0); // "He's Kenneth from the ＳＴＡＲＳ Bravo team...! Now he's become a mere shadow of his former self."
     }
     do
     {
@@ -192,8 +194,8 @@ event on_aot_04
     {
         cutnext(4);
         aot_delete(AOT_04_EVENT, SCE_NONE, 1);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_6, F_6_1D, TRUE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -209,10 +211,10 @@ event on_enter
 #if CHRIS
     run
     {
-        set(FG_STATUS, FLAG_STATUS_1D, TRUE);
+        set(FG_STATUS, F_STATUS_1D, TRUE);
     }
 #else
-    set(FG_STATUS, FLAG_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_1D, TRUE);
 #endif
     evt_finish();
 }
@@ -229,7 +231,7 @@ event from_main
     {
         room_bgm_state_set(0, 4, 8);
         eml_state(0, 0, 0, 5);
-        set(FG_COMMON, FLAG_COMMON_02, TRUE);
+        set(FG_COMMON, F_COMMON_02, TRUE);
     }
     evt_finish();
 }

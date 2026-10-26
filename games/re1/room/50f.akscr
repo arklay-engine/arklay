@@ -3,17 +3,19 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
 #define AOT_02_EVENT 0x02
+#define MSG_A_POWER_PANEL 0x00
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 11100, 20500, 3200, 3800, 12, 1, 11, 3, 0, ROOM_50C_FRONT_OF_ELEVATOR, 12700, 0, 2500, 3072, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 21100, 4800, 1500, 2100, 0, 1, 11, 3, 0, ROOM_510_MAZE_B, 22000, 0, 16500, 1024, UNLOCKED, 129);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_2E, FALSE))
+    if (ck(FG_SCENARIO, F_SCENARIO_2E, FALSE))
     {
         aot_set(AOT_02_EVENT, 1528, 3494, 1050, 1800, SCE_EVENT, 129, 9, 0, on_aot_02, 0, 0, 0);
     }
@@ -21,7 +23,7 @@ proc init
     {
         aot_set(AOT_02_EVENT, 1528, 3494, 950, 1800, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     }
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE))
+    if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
     {
         room_bgm_state_set(4, 15, 57);
     }
@@ -29,16 +31,16 @@ proc init
     {
         room_bgm_state_set(4, 15, 8);
     }
-    if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+    if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        enemy(ENEMY_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
-        enemy(ENEMY_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
-        enemy(ENEMY_09_CHIMERA, 2, 178, 1, 2, 0, 0, 3128, 0, 0, 16093, 0, 4892, 2, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, 178, 1, 2, 0, 0, 3128, 0, 0, 16093, 0, 4892, 2, 0, 0, 0);
     }
     else
     {
-        enemy(ENEMY_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
-        enemy(ENEMY_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, 120, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, 0, 0, 0, 0);
+        enemy(EM_09_CHIMERA, 2, 121, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, 1, 0, 0, 0);
     }
     evt_exec(0, 9, on_enter);
     evt_exec(0, 9, on_enter_2);
@@ -46,8 +48,8 @@ proc init
 
 event on_aot_02
 {
-    set(FG_6, FLAG_6_17, FALSE);
-    message(128, 255); // "A power panel. Some areas do not have power.Will you activate the blacked-out areas?It shows the power supply status."
+    set(FG_6, F_6_17, FALSE);
+    message(MSG_A_POWER_PANEL | 0x80, 255); // "A power panel. Some areas do not have power. Will you activate the blacked-out areas? It shows the power supply status."
     do
     {
         evt_next();
@@ -72,8 +74,8 @@ event on_aot_02_sub1
     se_play_3d(2, 23, 0, 1, 0, 0, 0);
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_SCENARIO, FLAG_SCENARIO_2E, TRUE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_2E, TRUE);
         aot_reset(AOT_02_EVENT, SCE_MESSAGE, 129, 129, 255, 0);
     }
     evt_finish();
@@ -81,7 +83,7 @@ event on_aot_02_sub1
 
 event on_aot_02_sub2
 {
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_finish();
 }
 

@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -11,6 +12,9 @@
 #define AOT_03_EVENT 0x03
 #define AOT_03_ITEM 0x03
 #define AOT_04_NONE 0x04
+#define MSG_DO_YOU_WANT_HIM_TO_GO 0x18
+#define MSG_WILL_YOU_GO_WITH_HIM 0x17
+#define MSG_WILL_YOU_STAY_HERE 0x19
 
 proc init
 {
@@ -22,69 +26,69 @@ proc init
     door_aot_set(AOT_01_DOOR, 12800, 26400, 2100, 1700, 0, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 4100, 0, 26800, 0, UNLOCKED, 129);
     door_aot_set(AOT_02_DOOR, 11100, 2800, 2100, 1500, 0, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 2800, 0, 4400, 0, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(AOT_03_ITEM, 5060, 18000, 1400, 2000, ITEM_06_WEAPON_FLAMETHROWER, 240, 0, 255, 196, 19, 188, 248, 134, 76, 0, 4, 154, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 5060, 18000, 1400, 2000, IT_06_WEAPON_FLAMETHROWER, 240, 0, 255, 196, 19, 188, 248, 134, 76, 0, 4, 154, 129, 0, 0);
     swap_var(1, 3, 14);
     obj(0, 15, 255, 4910, -1740, 19790, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_04_NONE, 5060, 18000, 1400, 2000, SCE_NONE, 129, 9, 0, 4, 0, 0, 0);
-    if (ck(FG_ITEM, FLAG_ITEM_9A, FALSE))
+    if (ck(FG_ITEM, F_ITEM_9A, FALSE))
     {
         evt_exec(0, 9, on_enter);
         aot_delete(AOT_04_NONE, SCE_EVENT, 129);
-        set(FG_LOCK, FLAG_LOCK_28, FALSE);
+        set(FG_LOCK, F_LOCK_28, FALSE);
     }
     else
     {
-        set(FG_LOCK, FLAG_LOCK_28, TRUE);
+        set(FG_LOCK, F_LOCK_28, TRUE);
     }
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_5D, FALSE) && ck(FG_COMMON, FLAG_COMMON_25, TRUE))
+    if (ck(FG_COMMON, F_COMMON_5D, FALSE) && ck(FG_COMMON, F_COMMON_25, TRUE))
     {
         dir_set(0, 0, 3920, 0, 2800, 0, 16300);
-        enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3984, 0, 0, 5224, 0, 17102, 0, 0, 0, 0);
+        enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3984, 0, 0, 5224, 0, 17102, 0, 0, 0, 0);
         evt_exec(0, 9, on_enter);
         aot_reset(AOT_01_DOOR, SCE_EVENT, 129, 9, on_aot_01_door, 0);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_58, TRUE) && ck(FG_COMMON, FLAG_COMMON_48, FALSE) && ck(FG_COMMON, FLAG_COMMON_5D, TRUE))
+    if (ck(FG_COMMON, F_COMMON_58, TRUE) && ck(FG_COMMON, F_COMMON_48, FALSE) && ck(FG_COMMON, F_COMMON_5D, TRUE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_57, TRUE))
+        if (ck(FG_COMMON, F_COMMON_57, TRUE))
         {
-            enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1288, 0, 0, 12140, 0, 28590, 0, 0, 0, 0);
-            set(FG_COMMON, FLAG_COMMON_57, FALSE);
+            enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1288, 0, 0, 12140, 0, 28590, 0, 0, 0, 0);
+            set(FG_COMMON, F_COMMON_57, FALSE);
         }
         else
         {
-            enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3288, 0, 0, 8690, 0, 3250, 0, 0, 0, 0);
+            enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3288, 0, 0, 8690, 0, 3250, 0, 0, 0, 0);
         }
         evt_exec(0, 9, on_enter_2);
         aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
         aot_reset(AOT_01_DOOR, SCE_EVENT, 129, 9, on_aot_01_door, 0);
     }
 #endif
-    if (ck(FG_COMMON, FLAG_COMMON_48, TRUE))
+    if (ck(FG_COMMON, F_COMMON_48, TRUE))
     {
-        enemy(ENEMY_06_HUNTER, 0, 75, 1, 2, 0, 0, 0, 0, 0, 5900, 0, 16500, 0, 0, 0, 0);
+        enemy(EM_06_HUNTER, 0, 75, 1, 2, 0, 0, 0, 0, 0, 5900, 0, 16500, 0, 0, 0, 0);
 #if JILL
-        set(FG_COMMON, FLAG_COMMON_50, TRUE);
+        set(FG_COMMON, F_COMMON_50, TRUE);
 #endif
     }
-    if (ck(FG_ENEMY, FLAG_ENEMY_4B, TRUE))
+    if (ck(FG_ENEMY, F_ENEMY_4B, TRUE))
     {
-        enemy(ENEMY_06_HUNTER, 0, 76, 1, 2, 0, 0, 1024, 0, 0, 9800, 0, 13200, 0, 0, 0, 0);
-        enemy(ENEMY_06_HUNTER, 0, 77, 1, 2, 0, 0, 3072, 0, 0, 9800, 0, 19600, 1, 0, 0, 0);
+        enemy(EM_06_HUNTER, 0, 76, 1, 2, 0, 0, 1024, 0, 0, 9800, 0, 13200, 0, 0, 0, 0);
+        enemy(EM_06_HUNTER, 0, 77, 1, 2, 0, 0, 3072, 0, 0, 9800, 0, 19600, 1, 0, 0, 0);
     }
 }
 
 #if CHRIS
 proc main
 {
-    if (testpickup(ITEM_06_WEAPON_FLAMETHROWER))
+    if (testpickup(IT_06_WEAPON_FLAMETHROWER))
     {
-        set(FG_LOCK, FLAG_LOCK_28, FALSE);
+        set(FG_LOCK, F_LOCK_28, FALSE);
         evt_exec(0, 9, from_main);
     }
-    if (testitem(ITEM_06_WEAPON_FLAMETHROWER))
+    if (testitem(IT_06_WEAPON_FLAMETHROWER))
     {
-        set(FG_ITEM, FLAG_ITEM_9A, TRUE);
+        set(FG_ITEM, F_ITEM_9A, TRUE);
         setbyte(0, 1, 0);
         evt_exec(0, 9, from_main_2);
         evt_exec(0, 9, from_main_3);
@@ -96,9 +100,9 @@ event on_enter
     sleep(1);
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
-        set(FG_COMMON, FLAG_COMMON_5D, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_COMMON, F_COMMON_5D, TRUE);
     }
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -137,7 +141,7 @@ event event_01
     {
         bgm_play(1);
     }
-    message(23, 0); // "Will you go with him? Do you want him to go first? Will you stay here?"
+    message(MSG_WILL_YOU_GO_WITH_HIM, 0); // "Will you go with him? Do you want him to go first? Will you stay here?"
     evt_fork(9, event_0E, 0);
     do
     {
@@ -179,7 +183,7 @@ event event_02
     message(7, 0);
     evt_fork(9, event_13, 0);
     wait_message();
-    message(24, 0); // "Do you want him to go first? Will you stay here?"
+    message(MSG_DO_YOU_WANT_HIM_TO_GO, 0); // "Do you want him to go first? Will you stay here?"
     evt_fork(9, event_0E, 0);
     do
     {
@@ -222,12 +226,12 @@ event event_03
     }
     run
     {
-        set(FG_COMMON, FLAG_COMMON_58, FALSE);
-        set(FG_COMMON, FLAG_COMMON_59, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5A, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5B, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5C, TRUE);
-        set(FG_COMMON, FLAG_COMMON_52, FALSE);
+        set(FG_COMMON, F_COMMON_58, FALSE);
+        set(FG_COMMON, F_COMMON_59, FALSE);
+        set(FG_COMMON, F_COMMON_5A, FALSE);
+        set(FG_COMMON, F_COMMON_5B, FALSE);
+        set(FG_COMMON, F_COMMON_5C, TRUE);
+        set(FG_COMMON, F_COMMON_52, FALSE);
     }
     evt_chain(8);
     evt_finish();
@@ -246,12 +250,12 @@ event event_04
     run
     {
         eml_state(0, 0, 8);
-        set(FG_COMMON, FLAG_COMMON_58, TRUE);
-        set(FG_COMMON, FLAG_COMMON_59, TRUE);
-        set(FG_COMMON, FLAG_COMMON_5A, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5B, TRUE);
-        set(FG_COMMON, FLAG_COMMON_5C, FALSE);
-        set(FG_COMMON, FLAG_COMMON_52, FALSE);
+        set(FG_COMMON, F_COMMON_58, TRUE);
+        set(FG_COMMON, F_COMMON_59, TRUE);
+        set(FG_COMMON, F_COMMON_5A, FALSE);
+        set(FG_COMMON, F_COMMON_5B, TRUE);
+        set(FG_COMMON, F_COMMON_5C, FALSE);
+        set(FG_COMMON, F_COMMON_52, FALSE);
         aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
     }
     evt_chain(8);
@@ -274,7 +278,7 @@ event event_05
     message(16, 0);
     evt_fork(9, event_1E, 0);
     wait_message();
-    message(25, 0); // "Will you stay here?"
+    message(MSG_WILL_YOU_STAY_HERE, 0); // "Will you stay here?"
     evt_fork(9, event_09, 0);
     evt_fork(9, event_0E, 0);
     do
@@ -320,12 +324,12 @@ event event_06
     cutcurr(0);
     run
     {
-        set(FG_COMMON, FLAG_COMMON_58, FALSE);
-        set(FG_COMMON, FLAG_COMMON_59, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5A, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5B, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5C, FALSE);
-        set(FG_COMMON, FLAG_COMMON_52, TRUE);
+        set(FG_COMMON, F_COMMON_58, FALSE);
+        set(FG_COMMON, F_COMMON_59, FALSE);
+        set(FG_COMMON, F_COMMON_5A, FALSE);
+        set(FG_COMMON, F_COMMON_5B, FALSE);
+        set(FG_COMMON, F_COMMON_5C, FALSE);
+        set(FG_COMMON, F_COMMON_52, TRUE);
     }
     evt_chain(8);
     evt_finish();
@@ -362,12 +366,12 @@ event event_07
     }
     run
     {
-        set(FG_COMMON, FLAG_COMMON_58, FALSE);
-        set(FG_COMMON, FLAG_COMMON_59, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5A, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5B, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5C, TRUE);
-        set(FG_COMMON, FLAG_COMMON_52, FALSE);
+        set(FG_COMMON, F_COMMON_58, FALSE);
+        set(FG_COMMON, F_COMMON_59, FALSE);
+        set(FG_COMMON, F_COMMON_5A, FALSE);
+        set(FG_COMMON, F_COMMON_5B, FALSE);
+        set(FG_COMMON, F_COMMON_5C, TRUE);
+        set(FG_COMMON, F_COMMON_52, FALSE);
     }
     evt_chain(8);
     evt_finish();
@@ -395,9 +399,9 @@ event event_08
     act_reset();
     evt_nop();
     sleep(30);
-    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_0F, FALSE);
     sleep(20);
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_finish();
 }
 
@@ -900,8 +904,8 @@ event on_aot_03
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         aot_delete(AOT_03_EVENT, SCE_NONE, 0);
     }
     sleep(10);
@@ -931,8 +935,8 @@ event on_aot_03
     wait_message();
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
@@ -1032,7 +1036,7 @@ event on_aot_01_door
 #else
     run
     {
-        set(FG_COMMON, FLAG_COMMON_57, TRUE);
+        set(FG_COMMON, F_COMMON_57, TRUE);
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
     }
 #endif
@@ -1135,7 +1139,7 @@ event from_main_2
     evt_nop();
     aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
     se_play_3d(2, 25, 0, 0, 0, 2200, 16700);
-    set(FG_LOCK, FLAG_LOCK_28, TRUE);
+    set(FG_LOCK, F_LOCK_28, TRUE);
     evt_finish();
 }
 
@@ -1258,10 +1262,10 @@ event on_enter_2
     run
     {
 #if CHRIS
-        require(item_ck(ITEM_06_WEAPON_FLAMETHROWER));
+        require(item_ck(IT_06_WEAPON_FLAMETHROWER));
         swap_var(2, 3, 14);
         setb(6, 6, 0);
-        set(FG_STATUS, FLAG_STATUS_12, TRUE);
+        set(FG_STATUS, F_STATUS_12, TRUE);
 #else
         eml_state(0, 0, 8);
 #endif
@@ -1274,8 +1278,8 @@ event on_aot_00_door
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(30);
     run
@@ -1286,8 +1290,8 @@ event on_aot_00_door
     wait_message();
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
@@ -1296,12 +1300,12 @@ event on_aot_01_door_2
 {
     run
     {
-        set(FG_COMMON, FLAG_COMMON_58, FALSE);
-        set(FG_COMMON, FLAG_COMMON_59, FALSE);
-        set(FG_COMMON, FLAG_COMMON_5A, TRUE);
-        set(FG_COMMON, FLAG_COMMON_5B, TRUE);
-        set(FG_COMMON, FLAG_COMMON_5C, FALSE);
-        set(FG_COMMON, FLAG_COMMON_52, FALSE);
+        set(FG_COMMON, F_COMMON_58, FALSE);
+        set(FG_COMMON, F_COMMON_59, FALSE);
+        set(FG_COMMON, F_COMMON_5A, TRUE);
+        set(FG_COMMON, F_COMMON_5B, TRUE);
+        set(FG_COMMON, F_COMMON_5C, FALSE);
+        set(FG_COMMON, F_COMMON_52, FALSE);
         aot_on(AOT_01_DOOR, SCE_DOOR, 0);
     }
     evt_finish();

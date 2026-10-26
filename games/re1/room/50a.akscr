@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -16,42 +17,44 @@
 #define AOT_08_ITEM 0x08
 #define AOT_0A_MESSAGE 0x0A
 #define AOT_0B_MESSAGE 0x0B
-#define FLAG_ROOM_18 0x18
-#define FLAG_ROOM_19 0x19
-#define FLAG_ROOM_1A 0x1A
-#define FLAG_ROOM_1B 0x1B
+#define F_ROOM_18 0x18
+#define F_ROOM_19 0x19
+#define F_ROOM_1A 0x1A
+#define F_ROOM_1B 0x1B
+#define MSG_JOHN 0x01
+#define MSG_THERE_IS_A_SWITCH 0x00
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 10100, 10400, 1300, 1200, 3, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 18400, 0, 2400, 3072, UNLOCKED, 129);
-    item_aot_set(AOT_01_ITEM, 10800, 5000, 2200, 1000, ITEM_68_FILE_RESEARCHERS_LETTER, 1, 0, 255, 104, 46, 36, 250, 156, 19, 0, 0, 81, 129, 0, 0);
+    item_aot_set(AOT_01_ITEM, 10800, 5000, 2200, 1000, IT_68_FILE_RESEARCHERS_LETTER, 1, 0, 255, 104, 46, 36, 250, 156, 19, 0, 0, 81, 129, 0, 0);
     obj(0, 1, 255, 8200, 0, 2252, 3072, 0, 0, 242, 254, 0, 0, 14, 1, 14, 1, 72, 18, 70, 5, 118, 2);
     aot_set(AOT_02_EVENT, 8200, 1600, 600, 600, SCE_EVENT, 129, 9, 0, on_aot_02, 0, 0, 0);
     aot_set(AOT_03_EVENT, 8200, 10500, 1300, 1000, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 1100, 4500, 1000, 3500, SCE_NONE, 129, 130, 0, 68, 1, 0, 0);
     aot_set(AOT_05_USEITEM, 7000, 700, 3000, 2300, SCE_USEITEM, 68, 4, 0, 27, 0, 1, 0);
-    item_aot_set(AOT_06_ITEM, 4500, 9700, 1400, 1700, ITEM_0B_AMMO_HANDGUN, 15, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 163, 129, 0, 0);
-    item_aot_set(AOT_07_ITEM, 4500, 9700, 1400, 1700, ITEM_0B_AMMO_HANDGUN, 15, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 229, 129, 0, 0);
-    item_aot_set(AOT_08_ITEM, 2100, 4200, 1000, 600, ITEM_44_HEAL_HERB_GREEN, 1, 3, 255, 40, 10, 0, 0, 148, 17, 0, 0, 164, 129, 1, 0);
+    item_aot_set(AOT_06_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 163, 129, 0, 0);
+    item_aot_set(AOT_07_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 229, 129, 0, 0);
+    item_aot_set(AOT_08_ITEM, 2100, 4200, 1000, 600, IT_44_HEAL_HERB_GREEN, 1, 3, 255, 40, 10, 0, 0, 148, 17, 0, 0, 164, 129, 1, 0);
     aot_set(AOT_0A_MESSAGE, 6500, 9600, 2000, 1400, SCE_MESSAGE, 129, 132, 0, 68, 1, 0, 0);
     aot_set(AOT_0B_MESSAGE, 3500, 10600, 900, 1300, SCE_MESSAGE, 129, 133, 0, 68, 1, 0, 0);
     eml_rot(0, 250, 7, 0, 0);
     scene_setup(0, 6400, 8600, 12000);
-    set(FG_STATUS, FLAG_STATUS_1F, TRUE);
+    set(FG_STATUS, F_STATUS_1F, TRUE);
 }
 
 proc main
 {
-    if (ck(FG_ROOM, FLAG_ROOM_1B, FALSE))
+    if (ck(FG_ROOM, F_ROOM_1B, FALSE))
     {
         aot_delete(AOT_02_EVENT, SCE_EVENT, 129);
     }
     else
     {
         aot_delete(AOT_02_EVENT, SCE_NONE, 129);
-        set(FG_ROOM, FLAG_ROOM_1B, FALSE);
+        set(FG_ROOM, F_ROOM_1B, FALSE);
     }
-    if (ck(FG_ROOM, FLAG_ROOM_19, TRUE))
+    if (ck(FG_ROOM, F_ROOM_19, TRUE))
     {
         msgnode_set(22, 6, 7);
     }
@@ -59,7 +62,7 @@ proc main
     {
         msgnode_set(22, 6, 3);
     }
-    if (testpickup(ITEM_68_FILE_RESEARCHERS_LETTER))
+    if (testpickup(IT_68_FILE_RESEARCHERS_LETTER))
     {
         evt_exec(0, 9, from_main);
     }
@@ -82,9 +85,9 @@ event on_aot_02
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_6, FLAG_6_1D, FALSE);
-        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_6, F_6_1D, FALSE);
+        set(FG_6, F_6_19, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -93,7 +96,7 @@ event on_aot_02
     act_reset();
     evt_nop();
     sleep(15);
-    message(128, 69); // "There's a switch. Will you push it? John. ADA..."
+    message(MSG_THERE_IS_A_SWITCH | 0x80, 69); // "There's a switch. Will you push it? John. ADA..."
     do
     {
         evt_next();
@@ -104,23 +107,23 @@ event on_aot_02
         if (cmpb(5, 0, 0))
         {
             se_play_3d(2, 23, 0, 1, 0, 0, 0);
-            if (ck(FG_ROOM, FLAG_ROOM_19, FALSE))
+            if (ck(FG_ROOM, F_ROOM_19, FALSE))
             {
                 evt_exec(0, 9, on_aot_02_sub1);
-                set(FG_ROOM, FLAG_ROOM_19, TRUE);
+                set(FG_ROOM, F_ROOM_19, TRUE);
             }
             else
             {
                 evt_exec(0, 9, on_aot_02_sub2);
-                set(FG_ROOM, FLAG_ROOM_19, FALSE);
+                set(FG_ROOM, F_ROOM_19, FALSE);
             }
         }
         else
         {
-            set(FG_6, FLAG_6_1F, TRUE);
-            set(FG_6, FLAG_6_17, TRUE);
-            set(FG_6, FLAG_6_1D, TRUE);
-            set(FG_6, FLAG_6_19, TRUE);
+            set(FG_6, F_6_1F, TRUE);
+            set(FG_6, F_6_17, TRUE);
+            set(FG_6, F_6_1D, TRUE);
+            set(FG_6, F_6_19, TRUE);
         }
     }
     evt_finish();
@@ -138,10 +141,10 @@ event on_aot_02_sub1
     {
         setw(2, 0, 0);
         setw(1, 16, 39);
-        set(FG_6, FLAG_6_1F, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
-        set(FG_6, FLAG_6_19, TRUE);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_1F, TRUE);
+        set(FG_6, F_6_1D, TRUE);
+        set(FG_6, F_6_19, TRUE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
@@ -158,10 +161,10 @@ event on_aot_02_sub2
     {
         setw(2, 0, 0);
         setw(1, 0, 0);
-        set(FG_6, FLAG_6_1F, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
-        set(FG_6, FLAG_6_19, TRUE);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_1F, TRUE);
+        set(FG_6, F_6_1D, TRUE);
+        set(FG_6, F_6_19, TRUE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
@@ -170,9 +173,9 @@ event on_aot_03
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_6, FLAG_6_1D, FALSE);
-        set(FG_6, FLAG_6_19, FALSE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_6, F_6_1D, FALSE);
+        set(FG_6, F_6_19, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -181,7 +184,7 @@ event on_aot_03
     act_reset();
     evt_nop();
     sleep(15);
-    message(128, 69); // "There's a switch. Will you push it? John. ADA..."
+    message(MSG_THERE_IS_A_SWITCH | 0x80, 69); // "There's a switch. Will you push it? John. ADA..."
     do
     {
         evt_next();
@@ -192,23 +195,23 @@ event on_aot_03
         if (cmpb(5, 0, 0))
         {
             se_play_3d(2, 23, 0, 1, 0, 0, 0);
-            if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
+            if (ck(FG_ROOM, F_ROOM_18, FALSE))
             {
                 evt_exec(0, 9, on_aot_03_sub1);
-                set(FG_ROOM, FLAG_ROOM_18, TRUE);
+                set(FG_ROOM, F_ROOM_18, TRUE);
             }
             else
             {
                 evt_exec(0, 9, on_aot_03_sub2);
-                set(FG_ROOM, FLAG_ROOM_18, FALSE);
+                set(FG_ROOM, F_ROOM_18, FALSE);
             }
         }
         else
         {
-            set(FG_6, FLAG_6_1F, TRUE);
-            set(FG_6, FLAG_6_17, TRUE);
-            set(FG_6, FLAG_6_1D, TRUE);
-            set(FG_6, FLAG_6_19, TRUE);
+            set(FG_6, F_6_1F, TRUE);
+            set(FG_6, F_6_17, TRUE);
+            set(FG_6, F_6_1D, TRUE);
+            set(FG_6, F_6_19, TRUE);
         }
     }
     evt_finish();
@@ -226,7 +229,7 @@ event on_aot_03_sub1
     sleep(1);
     run
     {
-        if (ck(FG_ROOM, FLAG_ROOM_19, TRUE))
+        if (ck(FG_ROOM, F_ROOM_19, TRUE))
         {
             evt_exec(0, 9, on_aot_03_sub1_sub1);
         }
@@ -239,19 +242,19 @@ event on_aot_03_sub1
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_1A, FALSE));
+    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_1A, FALSE));
+    while (ck(FG_ROOM, F_ROOM_1A, FALSE));
     run
     {
-        set(FG_ROOM, FLAG_ROOM_1A, FALSE);
-        set(FG_6, FLAG_6_1F, TRUE);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
-        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_ROOM, F_ROOM_1A, FALSE);
+        set(FG_6, F_6_1F, TRUE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_6, F_6_1D, TRUE);
+        set(FG_6, F_6_19, TRUE);
     }
     evt_finish();
 }
@@ -267,10 +270,10 @@ event on_aot_03_sub2
     }
     run
     {
-        set(FG_6, FLAG_6_1F, TRUE);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_6, FLAG_6_1D, TRUE);
-        set(FG_6, FLAG_6_19, TRUE);
+        set(FG_6, F_6_1F, TRUE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_6, F_6_1D, TRUE);
+        set(FG_6, F_6_19, TRUE);
     }
     evt_finish();
 }
@@ -291,7 +294,7 @@ event on_aot_03_sub1_sub1
 {
     run
     {
-        set(FG_ROOM, FLAG_ROOM_1A, FALSE);
+        set(FG_ROOM, F_ROOM_1A, FALSE);
         timer_setup(1, 16, 39, 1, 0);
     }
     sleep(2);
@@ -306,7 +309,7 @@ event on_aot_03_sub1_sub1
     run
     {
         setw(2, 0, 0);
-        if (ck(FG_ROOM, FLAG_ROOM_19, TRUE))
+        if (ck(FG_ROOM, F_ROOM_19, TRUE))
         {
             setw(1, 16, 39);
         }
@@ -314,7 +317,7 @@ event on_aot_03_sub1_sub1
         {
             setw(1, 0, 0);
         }
-        set(FG_ROOM, FLAG_ROOM_1A, TRUE);
+        set(FG_ROOM, F_ROOM_1A, TRUE);
     }
     evt_finish();
 }
@@ -323,7 +326,7 @@ event on_aot_03_sub1_sub2
 {
     run
     {
-        set(FG_ROOM, FLAG_ROOM_1A, FALSE);
+        set(FG_ROOM, F_ROOM_1A, FALSE);
         require(cmpw(8, 28, 2, 0));
         return;
     }
@@ -341,7 +344,7 @@ event on_aot_03_sub1_sub2
     run
     {
         timer_setup(2, 240, 216, 7, 0);
-        set(FG_ROOM, FLAG_ROOM_1A, TRUE);
+        set(FG_ROOM, F_ROOM_1A, TRUE);
     }
     evt_finish();
 }
@@ -349,7 +352,7 @@ event on_aot_03_sub1_sub2
 event from_main
 {
     sleep(1);
-    message(129, 69); // "John. ADA..."
+    message(MSG_JOHN | 0x80, 69); // "John. ADA..."
     do
     {
         evt_next();

@@ -487,10 +487,7 @@ event event_01
 fn includes_and_defines_name_values() {
     let load = |path: &str| -> anyhow::Result<String> {
         assert_eq!(path, "inc/flags.akinc");
-        Ok(
-            "// flags\n#define FLAG_COMMON_A4 0xA4\n#define FLAG_ALIAS FLAG_COMMON_A4\n"
-                .to_string(),
-        )
+        Ok("// flags\n#define F_COMMON_A4 0xA4\n#define F_ALIAS F_COMMON_A4\n".to_string())
     };
     let text = "#version 1
 #include \"inc/flags.akinc\"
@@ -498,8 +495,8 @@ fn includes_and_defines_name_values() {
 #define SEVEN 7
 proc main noreturn
 {
-    set(FG_COMMON, FLAG_COMMON_A4, TOGGLE);
-    set(FG_COMMON, FLAG_ALIAS, TRUE);
+    set(FG_COMMON, F_COMMON_A4, TOGGLE);
+    set(FG_COMMON, F_ALIAS, TRUE);
     nop(SEVEN);
 }
 ";
@@ -514,9 +511,9 @@ proc main noreturn
 
     // Game data has no built-in names; a missing include names the problem.
     let error =
-        compile_error("#version 1\nproc main\n{\n    set(FG_COMMON, FLAG_COMMON_A4, TRUE);\n}\n");
+        compile_error("#version 1\nproc main\n{\n    set(FG_COMMON, F_COMMON_A4, TRUE);\n}\n");
     assert!(
-        error.contains("`FLAG_COMMON_A4`") && error.contains("#include"),
+        error.contains("`F_COMMON_A4`") && error.contains("#include"),
         "{error}"
     );
     let error = compile_error("#version 1\nproc main\n{\n    testitem(ITEM_SWORD_KEY);\n}\n");
@@ -571,12 +568,12 @@ event door_knock
 fn include_names_decompile_game_data() {
     let names = Names::parse(&[(
         "inc/game.akinc".to_string(),
-        "#define ITEM_33_KEY_SWORD 0x33
+        "#define IT_33_KEY_SWORD 0x33
 #define STAGE_2 0x40
 #define ROOM_101_STAIRS 0x01
 #define ROOM_201_HALL 0x01
-#define FLAG_COMMON_A4 0xA4
-#define FLAG_STATUS_08 0x08
+#define F_COMMON_A4 0xA4
+#define F_STATUS_08 0x08
 "
         .to_string(),
     )])
@@ -596,11 +593,11 @@ fn include_names_decompile_game_data() {
     let text = decompile_with(&scripts, &names, 0x6010);
     for expected in [
         "#include \"inc/game.akinc\"",
-        "#define FLAG_ROOM_03 0x03",
-        "require(testitem(ITEM_33_KEY_SWORD));",
-        "set(FG_COMMON, FLAG_COMMON_A4, TRUE);",
-        "set(FG_STATUS, FLAG_STATUS_08, TOGGLE);",
-        "set(FG_ROOM, FLAG_ROOM_03, FALSE);",
+        "#define F_ROOM_03 0x03",
+        "require(testitem(IT_33_KEY_SWORD));",
+        "set(FG_COMMON, F_COMMON_A4, TRUE);",
+        "set(FG_STATUS, F_STATUS_08, TOGGLE);",
+        "set(FG_ROOM, F_ROOM_03, FALSE);",
     ] {
         assert!(text.contains(expected), "{expected}\n{text}");
     }
@@ -629,6 +626,7 @@ fn decompile_names_aots_events_and_messages() {
     aot_reset               2, SCE_EVENT, 0, 0, event_01, 0
     evt_exec                0, 6, event_00
     message                 2, 0
+    message                 130, 0
     message                 67, 0
     end                     0
 
@@ -638,6 +636,23 @@ fn decompile_names_aots_events_and_messages() {
 .event event_01
     evt_finish
 ";
+    for (text, name) in [
+        (
+            "There's something at the back of the shelf.",
+            "MSG_THERE_IS_SOMETHING_AT_THE_BACK",
+        ),
+        ("You can't. Barry's gun.", "MSG_YOU_CANNOT"),
+        (
+            "He's from the \u{FF33}\u{FF34}\u{FF21}\u{FF32}\u{FF33}!",
+            "MSG_HE_IS_FROM_THE_STARS",
+        ),
+    ] {
+        assert_eq!(super::names::message_name(text, 1).as_deref(), Some(name));
+    }
+    assert_eq!(
+        super::names::message_name("You can't. Barry's gun.", 2).as_deref(),
+        Some("MSG_YOU_CANNOT_BARRYS_GUN")
+    );
     let container = asm::assemble(source).unwrap().to_container().unwrap();
     let scripts = reader::parse(&container).unwrap();
     let text = decompile_with(&scripts, &names, 0x6010);
@@ -647,7 +662,9 @@ fn decompile_names_aots_events_and_messages() {
         "event on_enter",
         "event on_aot_02",
         "evt_exec(0, 6, on_enter);",
-        "message(2, 0); // \"A red book.\"",
+        "#define MSG_A_RED_BOOK 0x02",
+        "message(MSG_A_RED_BOOK, 0); // \"A red book.\"",
+        "message(MSG_A_RED_BOOK | 0x80, 0); // \"A red book.\"",
         "message(67, 0); // \"Saved.\"",
     ] {
         assert!(text.contains(expected), "{expected}\n{text}");

@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -12,58 +13,60 @@
 #define AOT_04_ITEM 0x04
 #define AOT_05_ITEM 0x05
 #define AOT_08_EVENT 0x08
+#define MSG_IT_IS_ELECTRONICALLY_LOCKED 0x00
+#define MSG_THERE_IS_A_PLATE 0x01
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 26000, 5900, 1800, 2300, 3, 1, 10, 8, 0, ROOM_502_LADDER_ROOM, 5600, 0, 3100, 3072, UNLOCKED, 129);
     door_aot_set(AOT_01_DOOR, 6600, 13600, 3800, 2800, 8, 1, 12, 7, 0, ROOM_504_CONFERENCE_ROOM, 7300, 0, 13800, 1024, UNLOCKED, 129);
     door_aot_set(AOT_02_DOOR, 18100, 13995, 2800, 2605, 1, 9, 25, 96, 0, ROOM_505_O_PASSAGE, 3500, 0, 23100, 1024, UNLOCKED, 129);
-    item_aot_set(AOT_03_ITEM, 2330, 15950, 1000, 1000, ITEM_28_PUZZLE_MO_DISK, 1, 0, 255, 130, 10, 30, 251, 66, 64, 0, 0, 176, 129, 0, 0);
-    item_aot_set(AOT_04_ITEM, 16700, 7600, 1000, 1000, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 48, 67, 0, 0, 164, 31, 0, 0, 177, 129, 1, 0);
-    item_aot_set(AOT_05_ITEM, 16700, 8500, 1000, 1000, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 48, 67, 0, 0, 40, 35, 0, 0, 178, 129, 1, 0);
-    if (ck(FG_SCENARIO, FLAG_SCENARIO_37, FALSE))
+    item_aot_set(AOT_03_ITEM, 2330, 15950, 1000, 1000, IT_28_KEY_MO_DISK, 1, 0, 255, 130, 10, 30, 251, 66, 64, 0, 0, 176, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 16700, 7600, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, 1, 255, 48, 67, 0, 0, 164, 31, 0, 0, 177, 129, 1, 0);
+    item_aot_set(AOT_05_ITEM, 16700, 8500, 1000, 1000, IT_44_HEAL_HERB_GREEN, 1, 2, 255, 48, 67, 0, 0, 40, 35, 0, 0, 178, 129, 1, 0);
+    if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
     {
-        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 4, 160, 1, 2, 0, 0, 1024, 0, 0, 16050, 0, 16450, 0, 0, 0, 0);
-        enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 4, 161, 1, 2, 0, 0, 0, 0, 0, 16050, 0, 3550, 1, 0, 0, 0);
-        if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 160, 1, 2, 0, 0, 1024, 0, 0, 16050, 0, 16450, 0, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 161, 1, 2, 0, 0, 0, 0, 0, 16050, 0, 3550, 1, 0, 0, 0);
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
-            enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 4, 176, 1, 2, 0, 0, 3971, 0, 0, 3500, 0, 16841, 2, 0, 0, 0);
+            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 176, 1, 2, 0, 0, 3971, 0, 0, 3500, 0, 16841, 2, 0, 0, 0);
         }
     }
     else
     {
-        enemy(ENEMY_11_ZOMBIE_LAB, 4, 162, 1, 2, 0, 0, 3475, 0, 0, 23684, 0, 2872, 0, 0, 0, 0);
-        enemy(ENEMY_11_ZOMBIE_LAB, 4, 163, 1, 2, 0, 0, 3831, 0, 0, 15161, 0, 7764, 1, 0, 0, 0);
-        enemy(ENEMY_11_ZOMBIE_LAB, 4, 177, 1, 2, 0, 0, 3541, 0, 0, 16473, 0, 12762, 2, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 4, 162, 1, 2, 0, 0, 3475, 0, 0, 23684, 0, 2872, 0, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 4, 163, 1, 2, 0, 0, 3831, 0, 0, 15161, 0, 7764, 1, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 4, 177, 1, 2, 0, 0, 3541, 0, 0, 16473, 0, 12762, 2, 0, 0, 0);
     }
-    if (ck(FG_LOCK, FLAG_LOCK_25, FALSE))
+    if (ck(FG_LOCK, F_LOCK_25, FALSE))
     {
         aot_reset(AOT_01_DOOR, SCE_EVENT, 129, 9, on_aot_01_door, 0);
     }
     aot_set(AOT_08_EVENT, 10000, 15500, 2000, 500, SCE_EVENT, 129, 9, 0, on_aot_08, 0, 0, 0);
-    set(FG_ENEMY, FLAG_ENEMY_52, FALSE);
-    set(FG_ENEMY, FLAG_ENEMY_53, FALSE);
-    set(FG_COMMON, FLAG_COMMON_4E, FALSE);
+    set(FG_ENEMY, F_ENEMY_52, FALSE);
+    set(FG_ENEMY, F_ENEMY_53, FALSE);
+    set(FG_COMMON, F_COMMON_4E, FALSE);
 }
 
 event on_aot_08
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
         cutnext(4);
     }
     sleep(20);
     run
     {
-        message(129, 255); // "There's a plate. “Visual Data Room""
+        message(MSG_THERE_IS_A_PLATE | 0x80, 255); // "There's a plate. “Visual Data Room""
     }
     wait_message();
     run
     {
         cutcurr(0);
         cut_auto(0);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
@@ -72,18 +75,18 @@ event on_aot_01_door
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
         se_play_3d(2, 20, 0, 0, 0, 7300, 13800);
     }
     sleep(20);
     run
     {
-        message(128, 255); // "It's electronically locked."
+        message(MSG_IT_IS_ELECTRONICALLY_LOCKED | 0x80, 255); // "It's electronically locked."
     }
     wait_message();
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }

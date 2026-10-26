@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -23,15 +24,19 @@
 #define AOT_0D_USEITEM 0x0D
 #define AOT_0E_USEITEM 0x0E
 #define AOT_0F_USEITEM 0x0F
-#define FLAG_ROOM_20 0x20
-#define FLAG_ROOM_21 0x21
-#define FLAG_ROOM_22 0x22
-#define FLAG_ROOM_23 0x23
-#define FLAG_ROOM_24 0x24
+#define F_ROOM_20 0x20
+#define F_ROOM_21 0x21
+#define F_ROOM_22 0x22
+#define F_ROOM_23 0x23
+#define F_ROOM_24 0x24
+#define MSG_CHRIS_UNFORTUNATELY_CANNOT_READ_MUSIC 0x01
+#define MSG_IT_IS_MOONLIGHT_SONATA 0x17
+#define MSG_THERE_IS_NO_TIME_TO_PLAY 0x1C
+#define MSG_WILL_YOU_HAVE_REBECCA_PRACTICE 0x0B
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 13700, 960, 1700, 1900, 1, 0, 31, 5, 134, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, ITEM_33_KEY_MANSION_SWORD, 129);
+    door_aot_set(AOT_00_DOOR, 13700, 960, 1700, 1900, 1, 0, 31, 5, 134, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, IT_33_KEY_MANSION_SWORD, 129);
 #if CHRIS
     aot_set(AOT_01_MESSAGE, 8800, 7200, 1500, 1700, SCE_NONE, 193, 0, 0, 0, 0, 0, 0);
 #else
@@ -39,26 +44,26 @@ proc init
 #endif
     aot_set(AOT_02_MESSAGE, 10200, 7300, 600, 1500, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_A4, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A4, TRUE))
     {
-        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, ITEM_1F_PUZZLE_EMBLEM_WOOD, 1, 0, 255, 4, 36, 208, 253, 94, 76, 0, 4, 20, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, 0, 255, 4, 36, 208, 253, 94, 76, 0, 4, 20, 129, 0, 0);
     }
     else
     {
-        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, ITEM_1F_PUZZLE_EMBLEM_WOOD, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 20, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 20, 129, 0, 0);
     }
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_A7, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A7, TRUE))
     {
-        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, ITEM_1F_PUZZLE_EMBLEM_WOOD, 1, 0, 255, 4, 36, 208, 253, 94, 76, 0, 4, 20, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, 0, 255, 4, 36, 208, 253, 94, 76, 0, 4, 20, 129, 0, 0);
     }
     else
     {
-        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, ITEM_1F_PUZZLE_EMBLEM_WOOD, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 20, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 0, 0, 0, 0, IT_1F_KEY_EMBLEM_WOOD, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 20, 129, 0, 0);
     }
 #endif
-    item_aot_set(AOT_04_ITEM, 8100, 18800, 1500, 1000, ITEM_20_PUZZLE_EMBLEM_GOLD, 1, 1, 255, 4, 36, 208, 253, 94, 76, 0, 4, 21, 129, 0, 0);
-    item_aot_set(AOT_05_ITEM, 17000, 11500, 800, 1000, ITEM_23_PUZZLE_MUSIC_SCORE, 0, 2, 255, 98, 67, 72, 244, 30, 45, 226, 4, 7, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 8100, 18800, 1500, 1000, IT_20_KEY_EMBLEM_GOLD, 1, 1, 255, 4, 36, 208, 253, 94, 76, 0, 4, 21, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 17000, 11500, 800, 1000, IT_23_KEY_MUSIC_SCORE, 0, 2, 255, 98, 67, 72, 244, 30, 45, 226, 4, 7, 129, 0, 0);
     aot_set(AOT_06_USEITEM, 8100, 18800, 1500, 1000, SCE_USEITEM, 1, 9, 0, 4, 0, 1, 0);
 #if CHRIS
     aot_set(AOT_07_USEITEM, 8100, 18800, 1500, 1000, SCE_USEITEM, 1, 4, 0, 35, 0, 1, 0);
@@ -87,11 +92,11 @@ proc init
     obj(1, 1, 255, 17394, 0, 11190, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 20, 5, 38, 2);
     obj(2, 35, 255, 15000, 0, 11200, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 88, 2, 32, 2, 132, 3, 88, 2);
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_A2, FALSE))
+    if (ck(FG_COMMON, F_COMMON_A2, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_A0, TRUE))
+        if (ck(FG_COMMON, F_COMMON_A0, TRUE))
         {
-            if (ck(FG_COMMON, FLAG_COMMON_A1, TRUE))
+            if (ck(FG_COMMON, F_COMMON_A1, TRUE))
             {
                 evt_exec(0, 0, on_enter_2);
             }
@@ -107,16 +112,16 @@ proc init
         evt_exec(0, 9, on_enter_3);
     }
     evt_exec(0, 9, on_enter_4);
-    if (ck(FG_COMMON, FLAG_COMMON_A2, FALSE))
+    if (ck(FG_COMMON, F_COMMON_A2, FALSE))
     {
-        enemy(ENEMY_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 424, 0, 0, 200, 0, 500, 0, 0, 0, 0);
+        enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 424, 0, 0, 200, 0, 500, 0, 0, 0, 0);
     }
-    else if (ck(FG_COMMON, FLAG_COMMON_A9, FALSE))
+    else if (ck(FG_COMMON, F_COMMON_A9, FALSE))
     {
-        enemy(ENEMY_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 3224, 0, 0, 9600, 0, 8100, 0, 0, 0, 0);
+        enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 3224, 0, 0, 9600, 0, 8100, 0, 0, 0, 0);
     }
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_A5, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A5, TRUE))
     {
         evt_exec(0, 9, on_enter);
     }
@@ -126,16 +131,16 @@ proc init
 
 proc main
 {
-    if (testitem(ITEM_23_PUZZLE_MUSIC_SCORE))
+    if (testitem(IT_23_KEY_MUSIC_SCORE))
     {
 #if CHRIS
-        if (ck(FG_ROOM, FLAG_ROOM_24, TRUE))
+        if (ck(FG_ROOM, F_ROOM_24, TRUE))
         {
-            if (ck(FG_COMMON, FLAG_COMMON_62, TRUE))
+            if (ck(FG_COMMON, F_COMMON_62, TRUE))
             {
-                if (ck(FG_COMMON, FLAG_COMMON_61, TRUE))
+                if (ck(FG_COMMON, F_COMMON_61, TRUE))
                 {
-                    if (ck(FG_COMMON, FLAG_COMMON_24, FALSE))
+                    if (ck(FG_COMMON, F_COMMON_24, FALSE))
                     {
                         evt_exec(0, 9, from_main);
                     }
@@ -149,7 +154,7 @@ proc main
                     evt_exec(0, 9, from_main_6);
                 }
             }
-            else if (ck(FG_COMMON, FLAG_COMMON_24, FALSE))
+            else if (ck(FG_COMMON, F_COMMON_24, FALSE))
             {
                 evt_exec(0, 9, from_main);
             }
@@ -159,16 +164,16 @@ proc main
             }
         }
 #else
-        if (ck(FG_ROOM, FLAG_ROOM_23, TRUE))
+        if (ck(FG_ROOM, F_ROOM_23, TRUE))
         {
             evt_exec(0, 9, from_main);
         }
 #endif
     }
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_A4, FALSE))
+    if (ck(FG_COMMON, F_COMMON_A4, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_A3, TRUE))
+        if (ck(FG_COMMON, F_COMMON_A3, TRUE))
         {
             aot_delete(AOT_06_USEITEM, SCE_USEITEM, 1);
             aot_delete(AOT_07_USEITEM, SCE_USEITEM, 1);
@@ -178,37 +183,37 @@ proc main
             aot_delete(AOT_06_USEITEM, SCE_NONE, 1);
             aot_delete(AOT_07_USEITEM, SCE_NONE, 1);
         }
-        if (testpickup(ITEM_20_PUZZLE_EMBLEM_GOLD))
+        if (testpickup(IT_20_KEY_EMBLEM_GOLD))
         {
-            set(FG_COMMON, FLAG_COMMON_A3, TRUE);
+            set(FG_COMMON, F_COMMON_A3, TRUE);
             evt_exec(0, 9, from_main_3);
         }
-        if (testitem(ITEM_1F_PUZZLE_EMBLEM_WOOD))
+        if (testitem(IT_1F_KEY_EMBLEM_WOOD))
         {
-            if (ck(FG_ROOM, FLAG_ROOM_23, TRUE))
+            if (ck(FG_ROOM, F_ROOM_23, TRUE))
             {
-                set(FG_ITEM, FLAG_ITEM_14, TRUE);
-                set(FG_COMMON, FLAG_COMMON_A4, TRUE);
+                set(FG_ITEM, F_ITEM_14, TRUE);
+                set(FG_COMMON, F_COMMON_A4, TRUE);
                 objtbl_b_set(1, 0, 1);
                 aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
                 evt_exec(0, 9, from_main_4);
                 evt_exec(0, 9, from_main_5);
             }
         }
-        if (testitem(ITEM_20_PUZZLE_EMBLEM_GOLD))
+        if (testitem(IT_20_KEY_EMBLEM_GOLD))
         {
-            if (ck(FG_ROOM, FLAG_ROOM_22, TRUE))
+            if (ck(FG_ROOM, F_ROOM_22, TRUE))
             {
-                set(FG_ITEM, FLAG_ITEM_15, TRUE);
+                set(FG_ITEM, F_ITEM_15, TRUE);
                 objtbl_b_set(1, 1, 1);
                 aot_delete(AOT_04_ITEM, SCE_ITEM, 129);
                 evt_exec(0, 9, from_main_4);
-                set(FG_COMMON, FLAG_COMMON_A3, FALSE);
+                set(FG_COMMON, F_COMMON_A3, FALSE);
             }
         }
-        if (ck(FG_COMMON, FLAG_COMMON_A2, TRUE))
+        if (ck(FG_COMMON, F_COMMON_A2, TRUE))
         {
-            if (ck(FG_COMMON, FLAG_COMMON_A9, FALSE))
+            if (ck(FG_COMMON, F_COMMON_A9, FALSE))
             {
                 aot_delete(AOT_01_MESSAGE, SCE_NONE, 129);
                 aot_reset(AOT_0D_EVENT, SCE_EVENT, 129, 9, on_aot_0d, 0);
@@ -217,9 +222,9 @@ proc main
     }
     else
     {
-        if (ck(FG_COMMON, FLAG_COMMON_A2, TRUE))
+        if (ck(FG_COMMON, F_COMMON_A2, TRUE))
         {
-            if (ck(FG_COMMON, FLAG_COMMON_A9, FALSE))
+            if (ck(FG_COMMON, F_COMMON_A9, FALSE))
             {
                 aot_delete(AOT_01_MESSAGE, SCE_NONE, 129);
                 aot_reset(AOT_0D_EVENT, SCE_EVENT, 129, 9, on_aot_0d_2, 0);
@@ -230,11 +235,11 @@ proc main
         aot_delete(AOT_08_USEITEM, SCE_NONE, 1);
         aot_delete(AOT_09_USEITEM, SCE_NONE, 1);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_A4, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A4, TRUE))
     {
         aot_reset(AOT_0A_MESSAGE, SCE_MESSAGE, 129, 153, 255, 0);
     }
-    else if (ck(FG_COMMON, FLAG_COMMON_A3, TRUE))
+    else if (ck(FG_COMMON, F_COMMON_A3, TRUE))
     {
         aot_reset(AOT_0A_MESSAGE, SCE_MESSAGE, 129, 152, 255, 0);
     }
@@ -243,16 +248,16 @@ proc main
         aot_delete(AOT_0A_MESSAGE, SCE_NONE, 129);
     }
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_A5, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A5, TRUE))
     {
         if (cmpb(2, 0, 1))
         {
             aot_switch(0, 14, 1);
         }
     }
-    if (ck(FG_COMMON, FLAG_COMMON_A7, FALSE))
+    if (ck(FG_COMMON, F_COMMON_A7, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_A6, TRUE))
+        if (ck(FG_COMMON, F_COMMON_A6, TRUE))
         {
             aot_delete(AOT_06_USEITEM, SCE_USEITEM, 1);
             aot_delete(AOT_07_USEITEM, SCE_USEITEM, 1);
@@ -262,32 +267,32 @@ proc main
             aot_delete(AOT_06_USEITEM, SCE_NONE, 1);
             aot_delete(AOT_07_USEITEM, SCE_NONE, 1);
         }
-        if (testpickup(ITEM_20_PUZZLE_EMBLEM_GOLD))
+        if (testpickup(IT_20_KEY_EMBLEM_GOLD))
         {
-            set(FG_COMMON, FLAG_COMMON_A6, TRUE);
+            set(FG_COMMON, F_COMMON_A6, TRUE);
             evt_exec(0, 9, from_main_2);
         }
-        if (testitem(ITEM_1F_PUZZLE_EMBLEM_WOOD))
+        if (testitem(IT_1F_KEY_EMBLEM_WOOD))
         {
-            if (ck(FG_ROOM, FLAG_ROOM_22, TRUE))
+            if (ck(FG_ROOM, F_ROOM_22, TRUE))
             {
-                set(FG_ITEM, FLAG_ITEM_14, TRUE);
-                set(FG_COMMON, FLAG_COMMON_A7, TRUE);
+                set(FG_ITEM, F_ITEM_14, TRUE);
+                set(FG_COMMON, F_COMMON_A7, TRUE);
                 objtbl_b_set(1, 0, 1);
                 aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
                 evt_exec(0, 9, from_main_3);
                 evt_exec(0, 9, from_main_4);
             }
         }
-        if (testitem(ITEM_20_PUZZLE_EMBLEM_GOLD))
+        if (testitem(IT_20_KEY_EMBLEM_GOLD))
         {
-            if (ck(FG_ROOM, FLAG_ROOM_21, TRUE))
+            if (ck(FG_ROOM, F_ROOM_21, TRUE))
             {
-                set(FG_ITEM, FLAG_ITEM_15, TRUE);
+                set(FG_ITEM, F_ITEM_15, TRUE);
                 objtbl_b_set(1, 1, 1);
                 aot_delete(AOT_04_ITEM, SCE_ITEM, 129);
                 evt_exec(0, 9, from_main_3);
-                set(FG_COMMON, FLAG_COMMON_A6, FALSE);
+                set(FG_COMMON, F_COMMON_A6, FALSE);
             }
         }
     }
@@ -298,11 +303,11 @@ proc main
         aot_delete(AOT_08_USEITEM, SCE_NONE, 1);
         aot_delete(AOT_09_USEITEM, SCE_NONE, 1);
     }
-    if (ck(FG_COMMON, FLAG_COMMON_A7, TRUE))
+    if (ck(FG_COMMON, F_COMMON_A7, TRUE))
     {
         aot_reset(AOT_0A_MESSAGE, SCE_MESSAGE, 129, 153, 255, 0);
     }
-    else if (ck(FG_COMMON, FLAG_COMMON_A6, TRUE))
+    else if (ck(FG_COMMON, F_COMMON_A6, TRUE))
     {
         aot_reset(AOT_0A_MESSAGE, SCE_MESSAGE, 129, 152, 255, 0);
     }
@@ -326,7 +331,7 @@ event on_enter_2_sub1
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(0 | 6, 32 | 0, 0 | 0);
@@ -340,14 +345,14 @@ event from_main
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
+        set(FG_6, F_6_17, FALSE);
 #if CHRIS
-        remove_item(ITEM_23_PUZZLE_MUSIC_SCORE);
-        set(FG_COMMON, FLAG_COMMON_A0, TRUE);
-        message(129, 0); // "Chris unfortunately can't read music."
+        remove_item(IT_23_KEY_MUSIC_SCORE);
+        set(FG_COMMON, F_COMMON_A0, TRUE);
+        message(MSG_CHRIS_UNFORTUNATELY_CANNOT_READ_MUSIC | 0x80, 0); // "Chris unfortunately can't read music."
 #else
-        message(151, 0); // "It's “Moonlight Sonata"."
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        message(MSG_IT_IS_MOONLIGHT_SONATA | 0x80, 0); // "It's “Moonlight Sonata"."
+        set(FG_STATUS, F_STATUS_0F, TRUE);
 #endif
     }
     do
@@ -356,7 +361,7 @@ event from_main
     }
     while (cmpb(5, 2, 128));
 #if CHRIS
-    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_0F, TRUE);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_flag_op(0, 0, 0);
@@ -371,8 +376,8 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
-    set(FG_ROOM, FLAG_ROOM_20, FALSE);
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    set(FG_ROOM, F_ROOM_20, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_seq(57350, 19502, 8221);
@@ -381,7 +386,7 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(50, 0, 300, 0, 40, 70);
@@ -431,14 +436,14 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     act_anim_seq(52227, 28709, 8215);
     act_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     act_anim_seq(43014, 1071, 8208);
     act_nop();
     act_flag_op(0, 2, 0);
@@ -448,7 +453,7 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 0, 32 | 0, 0 | 0);
@@ -467,7 +472,7 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     voice_play(1, 65, 0);
     message(2, 0);
     evt_work_set(WK_ENEMY, 0);
@@ -496,7 +501,7 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 0, 32 | 1, 0 | 0);
@@ -550,12 +555,12 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     do
     {
         evt_next();
     }
-    while (ck(FG_STATUS, FLAG_STATUS_0E, TRUE));
+    while (ck(FG_STATUS, F_STATUS_0E, TRUE));
     sleep(40);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -610,7 +615,7 @@ event from_main
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     sleep(30);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -796,7 +801,7 @@ event from_main
     voice_play(1, 73, 0);
     message(10, 0);
     wait_message();
-    message(11, 0); // "Will you have Rebecca practice?"
+    message(MSG_WILL_YOU_HAVE_REBECCA_PRACTICE, 0); // "Will you have Rebecca practice?"
     do
     {
         evt_next();
@@ -823,17 +828,17 @@ event from_main_2
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        remove_item(ITEM_23_PUZZLE_MUSIC_SCORE);
-        set(FG_COMMON, FLAG_COMMON_A0, TRUE);
-        message(129, 0); // "Chris unfortunately can't read music."
+        set(FG_6, F_6_17, FALSE);
+        remove_item(IT_23_KEY_MUSIC_SCORE);
+        set(FG_COMMON, F_COMMON_A0, TRUE);
+        message(MSG_CHRIS_UNFORTUNATELY_CANNOT_READ_MUSIC | 0x80, 0); // "Chris unfortunately can't read music."
     }
     do
     {
         evt_next();
     }
     while (cmpb(5, 2, 128));
-    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+    set(FG_STATUS, F_STATUS_0F, TRUE);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_flag_op(0, 0, 0);
@@ -848,8 +853,8 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
-    set(FG_ROOM, FLAG_ROOM_20, FALSE);
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    set(FG_ROOM, F_ROOM_20, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_seq(57350, 19502, 8221);
@@ -858,7 +863,7 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(50, 0, 300, 0, 40, 70);
@@ -908,14 +913,14 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     act_anim_seq(52227, 28709, 8215);
     act_nop();
     do
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     act_anim_seq(43014, 1071, 8208);
     act_nop();
     act_flag_op(0, 2, 0);
@@ -925,7 +930,7 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 0, 32 | 0, 0 | 0);
@@ -944,7 +949,7 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     voice_play(1, 65, 0);
     message(2, 0);
     evt_work_set(WK_ENEMY, 0);
@@ -973,7 +978,7 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 0, 32 | 1, 0 | 0);
@@ -1045,7 +1050,7 @@ event from_main_2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     sleep(30);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -1225,7 +1230,7 @@ event from_main_2
     voice_play(1, 73, 0);
     message(10, 0);
     wait_message();
-    message(11, 0); // "Will you have Rebecca practice?"
+    message(MSG_WILL_YOU_HAVE_REBECCA_PRACTICE, 0); // "Will you have Rebecca practice?"
     do
     {
         evt_next();
@@ -1256,7 +1261,7 @@ event from_main_sub1
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     voice_play(1, 74, 0);
     message(12, 0);
     evt_work_set(WK_PLAYER, 0);
@@ -1289,8 +1294,8 @@ event from_main_sub1
     run
     {
         cutnext(1);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 146, 125, 0);
     }
@@ -1337,7 +1342,7 @@ event from_main_sub2
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     voice_play(1, 76, 0);
     message(14, 0);
     evt_work_set(WK_PLAYER, 0);
@@ -1365,8 +1370,8 @@ event from_main_sub2
     run
     {
         cutnext(1);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 146, 125, 0);
         aot_reset(AOT_00_DOOR, SCE_EVENT, 193, 9, on_aot_00_door, 0);
@@ -1385,11 +1390,11 @@ event from_main_2
 {
     se_play_3d(2, 23, 0, 0, 0, 9424, 12173);
     se_play_3d(2, 24, 0, 0, 0, 9424, 12173);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(20);
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(3);
     }
     evt_work_set(WK_OBJ, 0);
@@ -1411,8 +1416,8 @@ event from_main_2
     run
     {
         cutnext(4);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_finish();
@@ -1487,11 +1492,11 @@ event event_05
 event from_main_3
 {
     se_play_3d(2, 27, 0, 0, 0, 9424, 12173);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(21);
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(3);
     }
     se_play_3d(2, 23, 0, 0, 0, 9424, 12173);
@@ -1514,8 +1519,8 @@ event from_main_3
     run
     {
         cutnext(4);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_finish();
@@ -1546,8 +1551,8 @@ event on_enter
 event on_aot_00_door
 {
     aot_delete(AOT_01_MESSAGE, SCE_NONE, 129);
-    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_STATUS, F_STATUS_0F, TRUE);
+    set(FG_6, F_6_17, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_seq(58374, 27685, 8224);
@@ -1558,7 +1563,7 @@ event on_aot_00_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     voice_play(1, 78, 0);
     message(16, 0);
     evt_work_set(WK_PLAYER, 0);
@@ -1581,12 +1586,12 @@ event on_aot_00_door
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     run
     {
         door_aot_set(AOT_03_ITEM, 11600, 760, 5800, 4400, 1, 0, 31, 5, 0, ROOM_104_TEA_ROOM, 30700, 0, 3900, 1024, UNLOCKED, 65);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1623,11 +1628,11 @@ event event_06
         bgm_play(0);
     }
     sleep(1);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(10);
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         voice_play(1, 80, 0);
         message(19, 0);
     }
@@ -1653,7 +1658,7 @@ event event_06
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
@@ -1674,7 +1679,7 @@ event event_06
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
 #if CHRIS
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2097,7 +2102,7 @@ event event_06
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     cutnext(7);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2127,14 +2132,14 @@ event event_06
     run
     {
 #if CHRIS
-        set(FG_COMMON, FLAG_COMMON_A2, TRUE);
+        set(FG_COMMON, F_COMMON_A2, TRUE);
 #else
         aot_reset(AOT_02_MESSAGE, SCE_MESSAGE, 129, 128, 255, 0);
-        remove_item(ITEM_23_PUZZLE_MUSIC_SCORE);
-        set(FG_COMMON, FLAG_COMMON_A5, TRUE);
+        remove_item(IT_23_KEY_MUSIC_SCORE);
+        set(FG_COMMON, F_COMMON_A5, TRUE);
 #endif
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
 #if CHRIS
         room_bgm_state_set(0, 4, 8);
@@ -2183,11 +2188,11 @@ event event_07
 #if CHRIS
     se_play_3d(2, 23, 0, 0, 0, 9424, 12173);
     se_play_3d(2, 24, 0, 0, 0, 9424, 12173);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(20);
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(3);
     }
     evt_work_set(WK_OBJ, 0);
@@ -2209,15 +2214,15 @@ event event_07
     run
     {
         cutnext(4);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
 #else
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
 #endif
@@ -2228,11 +2233,11 @@ event event_07
 event from_main_4
 {
     se_play_3d(2, 27, 0, 0, 0, 9424, 12173);
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     sleep(21);
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(3);
     }
     se_play_3d(2, 23, 0, 0, 0, 9424, 12173);
@@ -2255,8 +2260,8 @@ event from_main_4
     run
     {
         cutnext(4);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_finish();
@@ -2290,7 +2295,7 @@ event on_enter_2
 #endif
 {
     sleep(1);
-    set(FG_STATUS, FLAG_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_1D, TRUE);
     evt_finish();
 }
 #if CHRIS
@@ -2299,8 +2304,8 @@ event on_aot_0d
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         message(154, 0);
         voice_play(1, 111, 0);
         aot_delete(AOT_01_MESSAGE, SCE_NONE, 1);
@@ -2320,8 +2325,8 @@ event on_aot_0d
     sleep(10);
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -2335,8 +2340,8 @@ event on_aot_0d_2
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         message(155, 0);
         voice_play(1, 122, 0);
         aot_delete(AOT_01_MESSAGE, SCE_NONE, 1);
@@ -2356,8 +2361,8 @@ event on_aot_0d_2
     sleep(10);
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -2371,15 +2376,15 @@ event from_main_6
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        message(156, 0); // "There's no time to play the piano!"
+        set(FG_6, F_6_17, FALSE);
+        message(MSG_THERE_IS_NO_TIME_TO_PLAY | 0x80, 0); // "There's no time to play the piano!"
     }
     do
     {
         evt_next();
     }
     while (cmpb(5, 2, 128));
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();

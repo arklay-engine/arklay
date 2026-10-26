@@ -30,6 +30,9 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     for bit in 0..=u8::MAX {
         defines.insert(room_flag(bit), i64::from(bit));
     }
+    for (id, name) in names.room_message_names(room) {
+        defines.insert(name.to_string(), i64::from(id));
+    }
     let aots = aot_names(scripts);
     for (&index, name) in &aots {
         defines.insert(name.clone(), i64::from(index));
@@ -41,6 +44,7 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         stage: (merged_id(room) >> 8) as u8,
         defines,
         room_flags: RefCell::default(),
+        room_messages: RefCell::default(),
     };
     let mut sections: Vec<String> = Vec::new();
     for block in &scripts.init {
@@ -63,13 +67,17 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         }
     }
     let room_flags = ctx.room_flags.borrow();
-    if !room_flags.is_empty() || !ctx.aots.is_empty() {
+    let room_messages = ctx.room_messages.borrow();
+    if !room_flags.is_empty() || !ctx.aots.is_empty() || !room_messages.is_empty() {
         out.push('\n');
         for (&index, name) in &ctx.aots {
             out.push_str(&format!("#define {name} 0x{index:02X}\n"));
         }
         for &bit in room_flags.iter() {
             out.push_str(&format!("#define {} 0x{bit:02X}\n", room_flag(bit)));
+        }
+        for (&id, name) in room_messages.iter() {
+            out.push_str(&format!("#define {name} 0x{id:02X}\n"));
         }
     }
     for section in sections {
@@ -276,7 +284,7 @@ fn rename_events(text: &str, names: &[String]) -> String {
 
 /// The generated name of a room's own flag bit.
 fn room_flag(bit: u8) -> String {
-    format!("FLAG_ROOM_{bit:02X}")
+    format!("F_ROOM_{bit:02X}")
 }
 
 /// The naming context of one room.
@@ -292,6 +300,8 @@ struct Ctx<'n> {
     defines: HashMap<String, i64>,
     /// The room flag bits named so far, defined at the top of the script.
     room_flags: RefCell<BTreeSet<u8>>,
+    /// The room's own message names used so far, by id.
+    room_messages: RefCell<BTreeMap<u8, String>>,
 }
 
 /// The flag group of the room's own flags.
@@ -750,6 +760,23 @@ fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
                         .map_or_else(|| value.to_string(), str::to_string),
                 ),
                 (op, 0, _) if AOT_OPS.contains(&op) => ctx.aots.get(&value).cloned(),
+                // `message`: the text id, its top bit asking for the fast reveal.
+                (0x0B, 0, _) => {
+                    ctx.names
+                        .message_id(ctx.room, value & 0x7F)
+                        .map(|(name, local)| {
+                            if local {
+                                ctx.room_messages
+                                    .borrow_mut()
+                                    .insert(value & 0x7F, name.to_string());
+                            }
+                            if value & 0x80 != 0 {
+                                format!("{name} | 0x80")
+                            } else {
+                                name.to_string()
+                            }
+                        })
+                }
                 (_, _, b'r') => Some(
                     ctx.names
                         .door_target(ctx.stage, value)
@@ -782,7 +809,7 @@ fn with_comment(ctx: &Ctx, insn: &Insn, line: String) -> String {
         && op.op == 0x0B
         && insn.bytes.len() == 4
         // The id's top bit asks for the fast reveal; the rest picks the text.
-        && let Some(text) = ctx.names.message(ctx.room, u16::from(insn.bytes[1] & 0x7F))
+        && let Some(text) = ctx.names.message(ctx.room, insn.bytes[1] & 0x7F)
     {
         return format!("{line} // \"{text}\"");
     }

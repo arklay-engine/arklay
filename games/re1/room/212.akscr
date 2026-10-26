@@ -3,63 +3,66 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_ITEM 0x01
 #define AOT_03_EVENT 0x03
-#define FLAG_ROOM_20 0x20
-#define FLAG_ROOM_21 0x21
-#define FLAG_ROOM_22 0x22
-#define FLAG_ROOM_23 0x23
-#define FLAG_ROOM_24 0x24
-#define FLAG_ROOM_25 0x25
-#define FLAG_ROOM_26 0x26
-#define FLAG_ROOM_27 0x27
-#define FLAG_ROOM_28 0x28
-#define FLAG_ROOM_29 0x29
+#define F_ROOM_20 0x20
+#define F_ROOM_21 0x21
+#define F_ROOM_22 0x22
+#define F_ROOM_23 0x23
+#define F_ROOM_24 0x24
+#define F_ROOM_25 0x25
+#define F_ROOM_26 0x26
+#define F_ROOM_27 0x27
+#define F_ROOM_28 0x28
+#define F_ROOM_29 0x29
+#define MSG_FOREST 0x0E
+#define MSG_IT_IS_FOREST 0x0F
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 16800, 26400, 2200, 2200, 3, 0, 6, 4, 0, ROOM_211_TERRACE_PASSAGE, 3000, 0, 12000, 1024, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
+    item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
 #if MANSION1
-    if (ck(FG_COMMON, FLAG_COMMON_42, FALSE))
+    if (ck(FG_COMMON, F_COMMON_42, FALSE))
     {
         aot_set(AOT_03_EVENT, 22600, 18000, 2900, 2250, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
     }
 #endif
 #else
-    item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, ITEM_07_WEAPON_GRENADE_LAUNCHER_ACID, 6, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
+    item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, IT_07_WEAPON_GL_ACID, 6, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
 #endif
 #if MANSION1
-    enemy(ENEMY_26_NPC_FORREST, 0, 255, 1, 2, 0, 0, 1936, 0, 0, 25150, 0, 18700, 0, 0, 0, 0);
+    enemy(EM_26_NPC_FORREST, 0, 255, 1, 2, 0, 0, 1936, 0, 0, 25150, 0, 18700, 0, 0, 0, 0);
 #if CHRIS
-    if (ck(FG_COMMON, FLAG_COMMON_42, FALSE))
+    if (ck(FG_COMMON, F_COMMON_42, FALSE))
     {
-        enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 3000, 0, 0, 19000, -3000, 20000, 1, 0, 0, 0);
-        enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19000, -4000, 20000, 2, 0, 0, 0);
-        enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19000, -3500, 20000, 3, 0, 0, 0);
+        enemy(EM_05_CROW, 130, 255, 1, 2, 0, 0, 3000, 0, 0, 19000, -3000, 20000, 1, 0, 0, 0);
+        enemy(EM_05_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19000, -4000, 20000, 2, 0, 0, 0);
+        enemy(EM_05_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19000, -3500, 20000, 3, 0, 0, 0);
     }
     else
     {
         room_bgm_state_set(1, 18, 32);
-        enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
-        enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
-        enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
+        enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
+        enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
+        enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
     }
     evt_exec(0, 9, on_enter);
     evt_exec(0, 9, on_enter_2);
 #else
-    if (ck(FG_COMMON, FLAG_COMMON_07, FALSE) && ck(FG_COMMON, FLAG_COMMON_21, FALSE) && ck(FG_COMMON, FLAG_COMMON_4F, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_67, FALSE))
+    if (ck(FG_COMMON, F_COMMON_07, FALSE) && ck(FG_COMMON, F_COMMON_21, FALSE) && ck(FG_COMMON, F_COMMON_4F, TRUE) && ck(FG_SCENARIO, F_SCENARIO_67, FALSE))
     {
-        if (ck(FG_COMMON, FLAG_COMMON_5E, FALSE))
+        if (ck(FG_COMMON, F_COMMON_5E, FALSE))
         {
-            enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 52, 0, 0, 22680, 0, 26170, 1, 0, 0, 0);
-            if (ck(FG_COMMON, FLAG_COMMON_5F, FALSE))
+            enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 52, 0, 0, 22680, 0, 26170, 1, 0, 0, 0);
+            if (ck(FG_COMMON, F_COMMON_5F, FALSE))
             {
-                set(FG_COMMON, FLAG_COMMON_5F, TRUE);
+                set(FG_COMMON, F_COMMON_5F, TRUE);
                 evt_exec(0, 9, on_enter_2);
             }
             else
@@ -76,37 +79,37 @@ proc init
             evt_exec(0, 9, on_enter_3);
             evt_exec(0, 9, on_enter_4);
             room_bgm_state_set(1, 18, 32);
-            enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
-            enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
-            enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
+            enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
+            enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
+            enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
         }
     }
     else
     {
-        set(FG_SCENARIO, FLAG_SCENARIO_67, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_67, TRUE);
         evt_exec(0, 9, on_enter_3);
         evt_exec(0, 9, on_enter_4);
-        if (ck(FG_COMMON, FLAG_COMMON_5E, FALSE))
+        if (ck(FG_COMMON, F_COMMON_5E, FALSE))
         {
-            enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 3000, 0, 0, 19000, -3000, 20000, 1, 0, 0, 0);
-            enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19100, -4000, 21000, 2, 0, 0, 0);
-            enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19200, -3500, 20000, 3, 0, 0, 0);
+            enemy(EM_05_CROW, 130, 255, 1, 2, 0, 0, 3000, 0, 0, 19000, -3000, 20000, 1, 0, 0, 0);
+            enemy(EM_05_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19100, -4000, 21000, 2, 0, 0, 0);
+            enemy(EM_05_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19200, -3500, 20000, 3, 0, 0, 0);
             aot_set(AOT_03_EVENT, 22600, 18000, 2900, 2250, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
         }
         else
         {
             room_bgm_state_set(1, 18, 32);
-            enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
-            enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
-            enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
+            enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
+            enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
+            enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
         }
     }
 #endif
 #else
     room_bgm_state_set(1, 18, 32);
-    enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
-    enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
-    enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
+    enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
+    enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
+    enemy(EM_05_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
     evt_exec(0, 9, on_enter);
     evt_exec(0, 9, on_enter_2);
 #endif
@@ -118,8 +121,8 @@ event on_aot_03
     sleep(1);
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
         bgm_stop(0);
     }
 #if CHRIS
@@ -129,9 +132,9 @@ event on_aot_03
 #endif
     run
     {
-        set(FG_COMMON, FLAG_COMMON_42, TRUE);
+        set(FG_COMMON, F_COMMON_42, TRUE);
 #if JILL
-        set(FG_COMMON, FLAG_COMMON_5E, TRUE);
+        set(FG_COMMON, F_COMMON_5E, TRUE);
 #endif
         aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
         cutnext(3);
@@ -146,7 +149,7 @@ event on_aot_03
     {
         bgm_play(1);
     }
-    message(143, 0); // "It's Forest...! He's been pecked to death by crows."
+    message(MSG_IT_IS_FOREST | 0x80, 0); // "It's Forest...! He's been pecked to death by crows."
     do
     {
         evt_next();
@@ -170,11 +173,11 @@ event on_aot_03
     act_nop();
     act_reset();
     evt_nop();
-    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_0F, FALSE);
     sleep(20);
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_6, F_6_17, TRUE);
         cutnext(2);
         cut_auto(0);
     }
@@ -191,8 +194,8 @@ event on_aot_03_2
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
     evt_work_set(WK_ENEMY, 1);
@@ -209,8 +212,8 @@ event on_aot_03_2
     wait_message();
     run
     {
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     evt_finish();
 }
@@ -230,11 +233,11 @@ event event_04
 {
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     sleep(20);
-    message(14, 0); // "Forest..."
+    message(MSG_FOREST, 0); // "Forest..."
     do
     {
         evt_next();
@@ -242,8 +245,8 @@ event event_04
     while (cmpb(5, 2, 128));
     run
     {
-        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
-        set(FG_6, FLAG_6_17, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_6, F_6_17, TRUE);
     }
     evt_finish();
 }
@@ -253,10 +256,10 @@ event on_enter_2
     sleep(1);
     run
     {
-        set(FG_6, FLAG_6_17, FALSE);
-        set(FG_STATUS, FLAG_STATUS_0F, TRUE);
-        set(FG_COMMON, FLAG_COMMON_42, TRUE);
-        set(FG_COMMON, FLAG_COMMON_0A, TRUE);
+        set(FG_6, F_6_17, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_COMMON, F_COMMON_42, TRUE);
+        set(FG_COMMON, F_COMMON_0A, TRUE);
     }
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -294,7 +297,7 @@ event event_07
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_22, FALSE));
+    while (ck(FG_ROOM, F_ROOM_22, FALSE));
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -306,7 +309,7 @@ event event_07
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_23, FALSE));
+    while (ck(FG_ROOM, F_ROOM_23, FALSE));
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -317,7 +320,7 @@ event event_07
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_24, FALSE));
+    while (ck(FG_ROOM, F_ROOM_24, FALSE));
     evt_finish();
 }
 
@@ -357,7 +360,7 @@ event event_09
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_26, FALSE));
+    while (ck(FG_ROOM, F_ROOM_26, FALSE));
     evt_finish();
 }
 
@@ -381,7 +384,7 @@ event event_0A
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_27, FALSE));
+    while (ck(FG_ROOM, F_ROOM_27, FALSE));
     sleep(1);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -392,7 +395,7 @@ event event_0A
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_28, FALSE));
+    while (ck(FG_ROOM, F_ROOM_28, FALSE));
     sleep(1);
     evt_fork(9, event_0B, 0);
     sleep(3);
@@ -406,7 +409,7 @@ event event_0A
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_29, FALSE));
+    while (ck(FG_ROOM, F_ROOM_29, FALSE));
     wait_message();
     evt_chain(12);
     evt_finish();
@@ -427,7 +430,7 @@ event event_0B
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_finish();
 }
 
@@ -497,7 +500,7 @@ event event_0D
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_25, FALSE));
+    while (ck(FG_ROOM, F_ROOM_25, FALSE));
     sleep(30);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -549,7 +552,7 @@ event event_0F
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_27, FALSE));
+    while (ck(FG_ROOM, F_ROOM_27, FALSE));
     sleep(10);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -560,7 +563,7 @@ event event_0F
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_28, FALSE));
+    while (ck(FG_ROOM, F_ROOM_28, FALSE));
     sleep(1);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -622,7 +625,7 @@ event event_10
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_22, FALSE));
+    while (ck(FG_ROOM, F_ROOM_22, FALSE));
     evt_chain(19);
     evt_finish();
 }
@@ -651,7 +654,7 @@ event event_11
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_23, FALSE));
+    while (ck(FG_ROOM, F_ROOM_23, FALSE));
     sleep(1);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -661,7 +664,7 @@ event event_11
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_24, FALSE));
+    while (ck(FG_ROOM, F_ROOM_24, FALSE));
     evt_chain(18);
     evt_finish();
 }
@@ -687,7 +690,7 @@ event event_13
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_25, FALSE));
+    while (ck(FG_ROOM, F_ROOM_25, FALSE));
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -697,7 +700,7 @@ event event_13
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_26, FALSE));
+    while (ck(FG_ROOM, F_ROOM_26, FALSE));
     evt_chain(20);
     evt_finish();
 }
@@ -713,7 +716,7 @@ event event_14
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_27, FALSE));
+    while (ck(FG_ROOM, F_ROOM_27, FALSE));
     evt_chain(21);
     evt_finish();
 }
@@ -729,7 +732,7 @@ event event_15
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_28, FALSE));
+    while (ck(FG_ROOM, F_ROOM_28, FALSE));
     voice_play(1, 4, 0);
     sleep(15);
     message(5, 0);
@@ -749,7 +752,7 @@ event event_15
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_29, FALSE));
+    while (ck(FG_ROOM, F_ROOM_29, FALSE));
     sleep(1);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -760,7 +763,7 @@ event event_15
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     wait_message();
     cutnext(3);
     bgm_stop(0);
@@ -817,7 +820,7 @@ event event_18
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_22, FALSE));
+    while (ck(FG_ROOM, F_ROOM_22, FALSE));
     sleep(10);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -828,7 +831,7 @@ event event_18
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_23, FALSE));
+    while (ck(FG_ROOM, F_ROOM_23, FALSE));
     sleep(20);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -873,7 +876,7 @@ event event_19
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_25, FALSE));
+    while (ck(FG_ROOM, F_ROOM_25, FALSE));
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -998,7 +1001,7 @@ event event_20
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_20, FALSE));
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_chain(33);
     evt_finish();
 }
@@ -1020,7 +1023,7 @@ event event_21
     {
         evt_next();
     }
-    while (ck(FG_ROOM, FLAG_ROOM_21, FALSE));
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
     sleep(1);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -1044,10 +1047,10 @@ event event_22
     act_reset();
     evt_nop();
     give_item(1, 4, 129);
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     evt_next();
     evt_nop();
-    set(FG_6, FLAG_6_17, FALSE);
+    set(FG_6, F_6_17, FALSE);
     evt_chain(37);
     evt_finish();
 }
@@ -1074,9 +1077,9 @@ event event_23
     act_reset();
     evt_nop();
     sleep(10);
-    set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+    set(FG_STATUS, F_STATUS_0F, FALSE);
     sleep(10);
-    set(FG_6, FLAG_6_17, TRUE);
+    set(FG_6, F_6_17, TRUE);
     run
     {
         aot_set(AOT_03_EVENT, 23400, 20400, 1100, 1400, SCE_EVENT, 129, 9, 0, on_aot_03_2, 0, 0, 0);

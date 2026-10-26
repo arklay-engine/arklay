@@ -3,6 +3,7 @@
 #include "inc/enemies.akinc"
 #include "inc/flags.akinc"
 #include "inc/items.akinc"
+#include "inc/messages.akinc"
 #include "inc/rooms.akinc"
 
 #define AOT_00_DOOR 0x00
@@ -22,14 +23,14 @@ proc init
     aot_set(AOT_04_EVENT, 8030, 8400, 500, 4400, SCE_EVENT, 65, 9, 0, on_aot_04, 0, 0, 0);
     aot_set(AOT_05_EVENT, 11049, 8400, 500, 4400, SCE_EVENT, 65, 9, 0, on_aot_05, 0, 0, 0);
     aot_set(AOT_06_MESSAGE, 15100, 6200, 1700, 2300, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    set(FG_STATUS, FLAG_STATUS_1D, TRUE);
+    set(FG_STATUS, F_STATUS_1D, TRUE);
 }
 
 proc main
 {
     if (cmpb(2, 0, 0))
     {
-        set(FG_MAP, FLAG_MAP_3E, TRUE);
+        set(FG_MAP, F_MAP_3E, TRUE);
     }
 }
 
