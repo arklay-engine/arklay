@@ -1,0 +1,236 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 4700, 2700, 1800, 2300, 3, 1, 8, 0, 0, RDT_00A, 2400, 0, 11900, 0, UNLOCKED, 129);
+    door_aot_set(1, 8000, 24500, 1500, 2100, 2, 1, 8, 0, 151, RDT_01B, 3500, 0, 6600, 0, UNLOCKED, 129);
+    aot_set(2, 6500, 27200, 2000, 1000, SCE_USEITEM, 129, 4, 0, 32, 0, 1, 0);
+    aot_set(3, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 19, 0, 1, 0);
+    aot_set(4, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 17, 0, 1, 0);
+    aot_set(5, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 18, 0, 1, 0);
+    aot_set(6, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 14, 0, 1, 0);
+    obj(0, 47, 255, 7010, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(128, 0, 0, 0, 4);
+    if (ck(FG_SCENARIO, 105, 1))
+    {
+        objtbl_b_set(0, 0, 0);
+    }
+    obj(1, 47, 255, 8040, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(129, 0, 0, 0, 4);
+    if (ck(FG_SCENARIO, 107, 1))
+    {
+        objtbl_b_set(0, 1, 0);
+    }
+    obj(2, 47, 255, 7540, -2390, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(130, 0, 0, 0, 4);
+    if (ck(FG_SCENARIO, 106, 1))
+    {
+        objtbl_b_set(0, 2, 0);
+    }
+    obj(3, 47, 255, 7530, -1900, 27220, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(131, 0, 0, 0, 4);
+    if (ck(FG_SCENARIO, 108, 1))
+    {
+        objtbl_b_set(0, 3, 0);
+    }
+    enemy(ENEMY_CERBERUS, 3, 46, 1, 2, 0, 0, 1536, 0, 0, 6500, 0, 24860, 0, 0, 0, 0);
+}
+
+proc main
+{
+    if (ck(FG_ROOM, 32, 0) && ck(FG_ROOM, 1, 1))
+    {
+        if (ck(FG_SCENARIO, 105, 0) && ck(FG_SCENARIO, 106, 0) && ck(FG_SCENARIO, 107, 0) && ck(FG_SCENARIO, 108, 0))
+        {
+            evt_exec(0, 0, event_01);
+        }
+        else
+        {
+            evt_exec(0, 0, event_00);
+        }
+    }
+    if (testitem(ITEM_SUN_CREST))
+    {
+        set(FG_ROOM, 1, 0);
+        evt_exec(0, 0, event_03);
+    }
+    if (testitem(ITEM_MOON_CREST))
+    {
+        set(FG_ROOM, 1, 0);
+        evt_exec(0, 0, event_04);
+    }
+    if (testitem(ITEM_STAR_CREST))
+    {
+        set(FG_ROOM, 1, 0);
+        evt_exec(0, 0, event_05);
+    }
+    if (testitem(ITEM_WIND_CREST))
+    {
+        set(FG_ROOM, 1, 0);
+        evt_exec(0, 0, event_06);
+    }
+    if (ck(FG_LOCK, 23, 1) && ck(FG_SCENARIO, 105, 0) && ck(FG_SCENARIO, 106, 0) && ck(FG_SCENARIO, 107, 0) && ck(FG_SCENARIO, 108, 0))
+    {
+        set(FG_LOCK, 23, 0);
+        evt_exec(0, 1, event_07);
+    }
+}
+
+event event_00
+{
+    cutnext(4);
+    message(138, 255);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    cutcurr(0);
+    evt_finish();
+}
+
+event event_01
+{
+    cutnext(4);
+    message(131, 255);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    cutcurr(0);
+    evt_finish();
+}
+
+event event_02
+{
+    evt_finish();
+}
+
+event event_03
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+    }
+    evt_next();
+    evt_next();
+    run
+    {
+        se_play_3d(2, 23, 0, 0, 0, 7027, 27234);
+        cutnext(4);
+        objtbl_b_set(0, 0, 47);
+        set(FG_SCENARIO, 105, 0);
+    }
+    sleep(40);
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_ROOM, 1, 1);
+        cutcurr(0);
+    }
+    evt_finish();
+}
+
+event event_04
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+    }
+    evt_next();
+    evt_next();
+    run
+    {
+        se_play_3d(2, 23, 0, 0, 0, 8117, 27234);
+        cutnext(4);
+        objtbl_b_set(0, 1, 47);
+        set(FG_SCENARIO, 107, 0);
+    }
+    sleep(40);
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_ROOM, 1, 1);
+        cutcurr(0);
+    }
+    evt_finish();
+}
+
+event event_05
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+    }
+    evt_next();
+    evt_next();
+    run
+    {
+        se_play_3d(2, 23, 0, 0, 0, 7597, 27234);
+        cutnext(4);
+        objtbl_b_set(0, 2, 47);
+        set(FG_SCENARIO, 106, 0);
+    }
+    sleep(40);
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_ROOM, 1, 1);
+        cutcurr(0);
+    }
+    evt_finish();
+}
+
+event event_06
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+    }
+    evt_next();
+    evt_next();
+    run
+    {
+        se_play_3d(2, 23, 0, 0, 0, 7597, 27234);
+        cutnext(4);
+        objtbl_b_set(0, 3, 47);
+        set(FG_SCENARIO, 108, 0);
+    }
+    sleep(40);
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_ROOM, 1, 1);
+        cutcurr(0);
+    }
+    evt_finish();
+}
+
+event event_07
+{
+    evt_disable(0);
+    run
+    {
+        set(FG_6, 29, 1);
+        set(FG_6, 23, 1);
+        set(FG_ROOM, 1, 1);
+    }
+    sleep(30);
+    run
+    {
+        cutcurr(0);
+        set(FG_6, 29, 0);
+        set(FG_6, 23, 0);
+        se_play_3d(2, 24, 0, 0, 0, 8500, 24600);
+    }
+    evt_finish();
+}

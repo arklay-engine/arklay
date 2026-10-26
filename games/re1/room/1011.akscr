@@ -1,0 +1,16 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 7600, 7700, 2400, 1500, 0, 0, 0, 4, 0, RDT_000, 3500, 0, 2600, 3072, UNLOCKED, 129);
+    door_aot_set(1, 14000, 17200, 2000, 1500, 2, 0, 29, 5, 202, RDT_002, 3400, 0, 9200, 1024, ITEM_ARMOR_KEY, 129);
+    door_aot_set(2, 19400, 19000, 2000, 2700, 1, 0, 0, 1, 0, RDT_003, 2400, 0, 24800, 0, UNLOCKED, 129);
+    door_aot_set(3, 4700, 2500, 2605, 1300, 0, 5, 24, 96, 0, RDT_201, 14100, 0, 11500, 0, UNLOCKED, 129);
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 8, 9, 1, 2, 0, 0, 3136, 0, 0, 9520, 0, 19044, 0, 0, 0, 0);
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 4, 10, 1, 2, 0, 0, 288, 0, 0, 2805, 0, 13359, 1, 0, 0, 0);
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 8, 11, 1, 2, 0, 0, 2144, 0, 0, 13096, 0, 7312, 2, 0, 0, 0);
+    if (ck(FG_STATUS, 8, 1))
+    {
+        set(FG_COMMON, 60, 1);
+    }
+}

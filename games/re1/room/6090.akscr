@@ -1,0 +1,249 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 23400, 800, 2000, 1700, 1, 0, 0, 1, 0, RDT_008, 25000, 0, 25300, 1024, UNLOCKED, 129);
+    door_aot_set(1, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 132, RDT_014, 10030, 0, 23449, 1024, ITEM_ARMOR_KEY, 129);
+    door_aot_set(2, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 0, RDT_013, 2800, 0, 2400, 3072, UNLOCKED, 129);
+    door_aot_set(3, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 0, RDT_015, 2500, 0, 4900, 0, UNLOCKED, 129);
+    door_aot_set(4, 0, 7300, 2600, 2500, 6, 0, 0, 1, 0, RDT_00A, 15200, 0, 3900, 2048, UNLOCKED, 129);
+    item_aot_set(5, 20406, 1524, 1800, 1800, ITEM_GREEN_HERB, 1, 0, 255, 58, 83, 0, 0, 120, 9, 0, 0, 111, 129, 1, 0);
+    aot_set(6, 12600, 2800, 7400, 8700, SCE_USEITEM, 65, 4, 0, 2, 0, 1, 0);
+    obj(0, 15, 255, 7590, 0, 8680, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    if (ck(FG_SCENARIO, 94, 0))
+    {
+        enemy(ENEMY_HUNTER, 18, 118, 1, 2, 0, 0, 1536, 0, 0, 15565, 0, 12166, 0, 0, 0, 0);
+    }
+    else
+    {
+        if (cmpb(3, 0, 10))
+        {
+            set(FG_ROOM, 0, 0);
+        }
+        if (cmpb(3, 0, 21))
+        {
+            set(FG_ROOM, 0, 0);
+        }
+        if (cmpb(3, 0, 8))
+        {
+            set(FG_ROOM, 1, 0);
+        }
+        if (cmpb(3, 0, 19))
+        {
+            set(FG_ROOM, 1, 0);
+        }
+        if (cmpb(3, 0, 20))
+        {
+            set(FG_ROOM, 1, 0);
+        }
+    }
+    if (ck(FG_ROOM, 0, 0))
+    {
+        enemy(ENEMY_HUNTER, 136, 118, 1, 2, 0, 0, 3600, 0, 0, 20824, 0, 7524, 0, 0, 0, 0);
+    }
+    if (ck(FG_ROOM, 1, 0))
+    {
+        enemy(ENEMY_HUNTER, 137, 118, 1, 2, 0, 0, 0, 0, 0, 12733, 0, 14086, 0, 0, 0, 0);
+    }
+    room_bgm_state_set(5, 9, 255);
+    if (ck(FG_COMMON, 33, 0))
+    {
+        set(FG_COMMON, 33, 1);
+        if (ck(FG_COMMON, 34, 0))
+        {
+            plw_anim(2, 40, 0);
+            setw(4, 0, 0);
+            room_bgm_state_set(5, 9, 64);
+            cut_auto(1);
+            setb(2, 7, 0);
+            evt_exec(0, 9, event_01);
+        }
+        if (ck(FG_COMMON, 54, 0))
+        {
+            plw_anim(2, 40, 0);
+            setw(4, 0, 0);
+            room_bgm_state_set(5, 9, 64);
+            cut_auto(1);
+            setb(2, 7, 0);
+            evt_exec(0, 9, event_03);
+        }
+    }
+}
+
+proc main
+{
+    if (ck(FG_SCENARIO, 94, 1))
+    {
+        if (ck(FG_ROOM, 0, 0) && ck(FG_ROOM, 2, 0))
+        {
+            set(FG_SCENARIO, 94, 0);
+            eml_state(0, 0, 0, 8);
+        }
+        if (ck(FG_ROOM, 1, 0) && cmpb(2, 0, 3))
+        {
+            set(FG_SCENARIO, 94, 0);
+            eml_state(0, 0, 0, 9);
+        }
+    }
+}
+
+event event_00
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 1000, 0, 1000);
+    tw_end();
+    evt_nop();
+    single(6) aot_reset(3, SCE_NONE, 0, 0, 0, 0);
+    evt_nop();
+    evt_nop();
+    evt_nop();
+    evt_nop();
+    evt_nop();
+    evt_nop();
+    evt_finish();
+}
+
+event event_01
+{
+    set(FG_STATUS, 15, 0);
+    dir_set(0, 0, 650, 0, 5300, 0, 7160);
+    sleep(1);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(50, 0, 250, 0, 0, 250);
+    act_reset();
+    evt_nop();
+    run
+    {
+        bgm_play(1);
+        set(FG_6, 29, 1);
+        set(FG_6, 23, 1);
+        evt_exec(0, 9, event_02);
+        voice_play(1, 84, 0);
+        message(4, 0);
+    }
+    wait_message();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(50, 0, 0, 0, 0, 50);
+    act_reset();
+    evt_nop();
+    sleep(30);
+    voice_play(1, 85, 0);
+    message(5, 0);
+    wait_message();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_reset();
+    run
+    {
+        cut_auto(0);
+        dir_set(0, 0, 1194, 0, 5520, 0, 8360);
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_reset();
+    set(FG_STATUS, 15, 1);
+    evt_finish();
+}
+
+event event_02
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(30);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(30);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(70);
+    act_motion_path(49, 1250, 0, 0, 50, 0);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(20);
+    act_motion(16);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event event_03
+{
+    set(FG_STATUS, 15, 0);
+    dir_set(0, 0, 650, 0, 5300, 0, 7160);
+    sleep(1);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(50, 0, 250, 0, 0, 250);
+    act_reset();
+    evt_nop();
+    run
+    {
+        bgm_play(1);
+        set(FG_6, 29, 1);
+        set(FG_6, 23, 1);
+        evt_exec(0, 9, event_04);
+        voice_play(1, 100, 0);
+        message(6, 0);
+    }
+    wait_message();
+    sleep(10);
+    voice_play(1, 101, 0);
+    sleep(56);
+    sleep(10);
+    voice_play(1, 102, 0);
+    message(7, 0);
+    wait_message();
+    run
+    {
+        dir_set(0, 0, 1194, 0, 5520, 0, 8360);
+        cut_auto(0);
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(51, 0, 0, 0, 250, 250);
+    act_idle();
+    act_reset();
+    set(FG_STATUS, 15, 1);
+    evt_finish();
+}
+
+event event_04
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(30);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(40);
+    act_motion_path(51, 1700, 60536, 0, 150, 50);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(20);
+    act_motion_path(51, 63836, 60536, 0, 150, 50);
+    sleep(15);
+    act_motion_path(51, 1700, 60536, 0, 150, 50);
+    sleep(25);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(40);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    sleep(40);
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}

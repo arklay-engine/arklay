@@ -1,0 +1,1072 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 2000, 10800, 2400, 1800, 1, 0, 30, 5, 0, RDT_00A, 3000, 0, 2500, 3072, UNLOCKED, 129);
+    item_aot_set(9, 1300, 3300, 1100, 1600, ITEM_STAR_CREST, 1, 0, 255, 250, 5, 202, 244, 220, 15, 128, 12, 31, 129, 0, 0);
+    room_bgm_state_set(0, 23, 72);
+    if (ck(FG_SCENARIO, 3, 0))
+    {
+        room_bgm_state_set(0, 23, 8);
+        evt_exec(0, 9, event_1C);
+        obj(0, 129, 255, 3440, 300, 3310, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        evt_exec(0, 9, event_1B);
+        aot_set(1, 6600, 6800, 5000, 1200, SCE_EVENT, 129, 9, 0, event_05, 0, 0, 0);
+        aot_set(2, 15000, 6800, 2000, 800, SCE_MESSAGE, 129, 133, 0, 69, 1, 0, 0);
+        aot_set(3, 18500, 6800, 2000, 800, SCE_MESSAGE, 129, 134, 0, 69, 1, 0, 0);
+        aot_set(4, 18500, 5700, 2000, 800, SCE_MESSAGE, 129, 135, 0, 69, 1, 0, 0);
+        aot_set(5, 15300, 5700, 1400, 800, SCE_MESSAGE, 129, 136, 0, 69, 1, 0, 0);
+        aot_set(6, 9800, 5700, 1400, 800, SCE_MESSAGE, 129, 137, 0, 69, 1, 0, 0);
+        aot_set(7, 6000, 5700, 2500, 800, SCE_MESSAGE, 129, 138, 0, 69, 1, 0, 0);
+        aot_set(8, 1300, 3300, 1100, 1600, SCE_NONE, 0, 0, 0, 0, 0, 0, 0);
+    }
+    else
+    {
+        obj(0, 1, 255, 1860, -3850, 3200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        aot_set(1, 6600, 6800, 5000, 1200, SCE_EVENT, 129, 9, 0, event_05, 0, 0, 0);
+        aot_set(2, 15000, 6800, 2000, 800, SCE_EVENT, 129, 9, 0, event_06, 0, 0, 0);
+        aot_set(3, 18500, 6800, 2000, 800, SCE_EVENT, 129, 9, 0, event_07, 0, 0, 0);
+        aot_set(4, 18500, 5700, 2000, 800, SCE_EVENT, 129, 9, 0, event_08, 0, 0, 0);
+        aot_set(5, 15300, 5700, 1400, 800, SCE_EVENT, 129, 9, 0, event_09, 0, 0, 0);
+        aot_set(6, 9800, 5700, 1400, 800, SCE_EVENT, 129, 9, 0, event_0A, 0, 0, 0);
+        aot_set(7, 6000, 5700, 2500, 800, SCE_EVENT, 129, 9, 0, event_0B, 0, 0, 0);
+        aot_set(8, 1300, 3300, 1100, 1600, SCE_EVENT, 129, 9, 0, event_0C, 0, 0, 0);
+    }
+    enemy(ENEMY_CROW, 0, 34, 1, 2, 0, 0, 1024, 0, 0, 19557, -5500, 10200, 0, 0, 0, 0);
+    enemy(ENEMY_CROW, 0, 35, 1, 2, 0, 0, 1024, 0, 0, 18500, -5500, 10200, 1, 0, 0, 0);
+    enemy(ENEMY_CROW, 0, 36, 1, 2, 0, 0, 1024, 0, 0, 17500, -5500, 10200, 2, 0, 0, 0);
+    enemy(ENEMY_CROW, 0, 37, 1, 2, 0, 0, -1024, 0, 0, 15000, -5000, 2600, 3, 0, 0, 0);
+    enemy(ENEMY_CROW, 0, 38, 1, 2, 0, 0, -1024, 0, 0, 12000, -5000, 2600, 4, 0, 0, 0);
+    enemy(ENEMY_CROW, 0, 39, 1, 2, 0, 0, -1024, 0, 0, 6000, -5000, 2600, 5, 0, 0, 0);
+}
+
+event event_00
+{
+    evt_finish();
+}
+
+event event_01
+{
+    evt_finish();
+}
+
+event event_02
+{
+    evt_finish();
+}
+
+event event_03
+{
+    evt_finish();
+}
+
+event event_04
+{
+    run
+    {
+        set(FG_ROOM, 24, 1);
+        set(FG_ROOM, 25, 1);
+        set(FG_ROOM, 26, 1);
+        set(FG_ROOM, 27, 1);
+        set(FG_ROOM, 28, 1);
+        set(FG_ROOM, 29, 1);
+        set(FG_ROOM, 30, 1);
+    }
+    evt_finish();
+}
+
+event event_05
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+        cutnext(7);
+        message(132, 325);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+        cutcurr(0);
+        cut_auto(0);
+    }
+    evt_finish();
+}
+
+event event_06
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+    }
+    message(133, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 1))
+        {
+            evt_exec(0, 9, event_0E);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 28, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_07
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+    }
+    message(134, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 1))
+        {
+            evt_exec(0, 9, event_0F);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 28, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_08
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+    }
+    message(135, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 1))
+        {
+            evt_exec(0, 9, event_10);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 28, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_09
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+    }
+    message(136, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 1))
+        {
+            evt_exec(0, 9, event_11);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 28, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_0A
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+    }
+    message(137, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 1))
+        {
+            evt_exec(0, 9, event_12);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 28, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_0B
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+    }
+    message(138, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 1))
+        {
+            evt_exec(0, 9, event_13);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 28, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_0C
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 28, 1);
+        message(139, 325);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 18, 1);
+        if (ck(FG_SCENARIO, 3, 1))
+        {
+            evt_exec(0, 9, event_14);
+            set(FG_ROOM, 18, 0);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 28, 0);
+        }
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 18, 0));
+    evt_finish();
+}
+
+event event_0D
+{
+    set(FG_ROOM, 22, 1);
+    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    set(FG_ROOM, 22, 0);
+    evt_finish();
+}
+
+event event_0E
+{
+    message(140, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 22, 0);
+        if (cmpb(5, 0, 0))
+        {
+            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, event_0D);
+            require(ck(FG_ROOM, 27, 0));
+            set(FG_ROOM, 23, 0);
+        }
+    }
+    sleep(1);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 22, 1));
+    run
+    {
+        require(ck(FG_ROOM, 23, 0));
+        set(FG_ROOM, 23, 1);
+        set(FG_ROOM, 25, 0);
+    }
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+    }
+    evt_finish();
+}
+
+event event_0F
+{
+    message(140, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 22, 0);
+        if (cmpb(5, 0, 0))
+        {
+            evt_exec(0, 9, event_0D);
+            evt_exec(0, 9, event_04);
+            set(FG_ROOM, 23, 0);
+        }
+    }
+    sleep(1);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 22, 1));
+    run
+    {
+        require(ck(FG_ROOM, 23, 0));
+        set(FG_ROOM, 23, 1);
+        set(FG_ROOM, 26, 0);
+    }
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+    }
+    evt_finish();
+}
+
+event event_10
+{
+    set(FG_ROOM, 23, 1);
+    message(140, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 22, 0);
+        if (cmpb(5, 0, 0))
+        {
+            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, event_0D);
+            require(ck(FG_ROOM, 29, 0));
+            set(FG_ROOM, 23, 0);
+        }
+    }
+    sleep(1);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 22, 1));
+    run
+    {
+        require(ck(FG_ROOM, 23, 0));
+        set(FG_ROOM, 23, 1);
+        set(FG_ROOM, 27, 0);
+    }
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+    }
+    evt_finish();
+}
+
+event event_11
+{
+    message(140, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 22, 0);
+        if (cmpb(5, 0, 0))
+        {
+            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, event_0D);
+            require(ck(FG_ROOM, 26, 0));
+            set(FG_ROOM, 23, 0);
+        }
+    }
+    sleep(1);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 22, 1));
+    run
+    {
+        require(ck(FG_ROOM, 23, 0));
+        set(FG_ROOM, 23, 1);
+        set(FG_ROOM, 28, 0);
+    }
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+    }
+    evt_finish();
+}
+
+event event_12
+{
+    message(140, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 22, 0);
+        if (cmpb(5, 0, 0))
+        {
+            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, event_0D);
+            require(ck(FG_ROOM, 28, 0));
+            set(FG_ROOM, 23, 0);
+        }
+    }
+    sleep(1);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 22, 1));
+    run
+    {
+        require(ck(FG_ROOM, 23, 0));
+        set(FG_ROOM, 23, 1);
+        set(FG_ROOM, 29, 0);
+    }
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+    }
+    evt_finish();
+}
+
+event event_13
+{
+    message(140, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 22, 0);
+        if (cmpb(5, 0, 0))
+        {
+            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, event_0D);
+            require(ck(FG_ROOM, 25, 0));
+            set(FG_ROOM, 23, 0);
+        }
+    }
+    sleep(1);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 22, 1));
+    run
+    {
+        require(ck(FG_ROOM, 23, 0));
+        set(FG_ROOM, 23, 1);
+        set(FG_ROOM, 30, 0);
+    }
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+    }
+    evt_finish();
+}
+
+event event_14
+{
+    message(140, 325);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        set(FG_ROOM, 20, 1);
+        set(FG_ROOM, 22, 0);
+        require(cmpb(5, 0, 0));
+        evt_exec(0, 9, event_0D);
+        evt_exec(0, 9, event_04);
+        if (ck(FG_ROOM, 30, 0))
+        {
+            set(FG_ROOM, 23, 0);
+        }
+        else
+        {
+            set(FG_ROOM, 20, 0);
+            set(FG_ROOM, 23, 1);
+        }
+    }
+    sleep(1);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 22, 1));
+    run
+    {
+        if (ck(FG_ROOM, 23, 0))
+        {
+            set(FG_ROOM, 23, 1);
+            set(FG_ROOM, 31, 0);
+            set(FG_SCENARIO, 3, 0);
+            evt_exec(0, 9, event_15);
+            set(FG_ROOM, 19, 0);
+            evt_exec(0, 9, event_16);
+            bgm_play(0);
+            set(FG_STATUS, 15, 0);
+            cutnext(6);
+            dir_set(0, 0, 2100, 0, 2773, 0, 4147);
+        }
+    }
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 0))
+        {
+            if (ck(FG_SCENARIO, 0, 0))
+            {
+                get_eml_state(0);
+                if (ck(FG_ENEMY, 34, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(0, 0, 1024, 0, 19000, -2000, 4847);
+                }
+                get_eml_state(1);
+                if (ck(FG_ENEMY, 35, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(1, 0, 2048, 0, 19000, -2000, 4247);
+                }
+            }
+        }
+    }
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 0))
+        {
+            if (ck(FG_SCENARIO, 0, 0))
+            {
+                get_eml_state(2);
+                if (ck(FG_ENEMY, 36, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(2, 0, 3072, 0, 19000, -2000, 3647);
+                }
+                get_eml_state(3);
+                if (ck(FG_ENEMY, 37, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(3, 0, 0, 0, 19000, -2000, 3047);
+                }
+            }
+        }
+    }
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 0))
+        {
+            if (ck(FG_SCENARIO, 0, 1))
+            {
+                get_eml_state(0);
+                if (ck(FG_ENEMY, 34, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(0, 0, 1024, 0, 19000, -2000, 5047);
+                }
+                get_eml_state(1);
+                if (ck(FG_ENEMY, 35, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(1, 0, 2048, 0, 19000, -2000, 4617);
+                }
+            }
+        }
+    }
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 0))
+        {
+            if (ck(FG_SCENARIO, 0, 1))
+            {
+                get_eml_state(2);
+                if (ck(FG_ENEMY, 36, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(2, 0, 3072, 0, 19000, -2000, 4187);
+                }
+                get_eml_state(3);
+                if (ck(FG_ENEMY, 37, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(3, 0, 0, 0, 19000, -2000, 3757);
+                }
+            }
+        }
+    }
+    run
+    {
+        if (ck(FG_SCENARIO, 3, 0))
+        {
+            if (ck(FG_SCENARIO, 0, 1))
+            {
+                get_eml_state(4);
+                if (ck(FG_ENEMY, 38, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(4, 0, 1024, 0, 19000, -2000, 3327);
+                }
+                get_eml_state(5);
+                if (ck(FG_ENEMY, 39, 1) && cmpb(10, 5, 0))
+                {
+                    pos_set(5, 0, 2048, 0, 19000, -2000, 2897);
+                }
+            }
+        }
+    }
+    run
+    {
+        if (ck(FG_ROOM, 20, 0))
+        {
+            bgm_play(0);
+            get_eml_state(0);
+            if (cmpb(10, 0, 0))
+            {
+                eml_state(0, 0, 2, 13);
+                eml_state(0, 1, 2, 13);
+                eml_state(0, 2, 2, 13);
+                eml_state(0, 3, 2, 13);
+            }
+            if (cmpb(10, 0, 0) && ck(FG_SCENARIO, 0, 1))
+            {
+                eml_state(0, 4, 2, 13);
+                eml_state(0, 5, 2, 13);
+            }
+            evt_exec(0, 9, event_16);
+        }
+    }
+    run
+    {
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 28, 0);
+        set(FG_ROOM, 19, 1);
+        set(FG_ROOM, 18, 1);
+    }
+    evt_finish();
+}
+
+event event_15
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 19, 0));
+    sleep(10);
+    se_play_3d(2, 24, 0, 1, 0, 0, 0);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_rot(206, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    sleep(15);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(19717, 23313, 4881);
+    act_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 19, 1));
+    act_idle();
+    act_reset();
+    run
+    {
+        dir_set(0, 0, 2048, 0, 4800, 0, 3950);
+        set(FG_ROOM, 19, 0);
+        evt_exec(0, 9, event_17);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 19, 0));
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_rot(156, 0, 0);
+    for (4)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    run
+    {
+        set(FG_ROOM, 19, 0);
+        evt_exec(0, 9, event_18);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 19, 0));
+    sleep(2);
+    run
+    {
+        set(FG_ROOM, 19, 0);
+        evt_exec(0, 9, event_19);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 19, 0));
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_rot(100, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 40, 0);
+    tw_set_rot(80, 0, 0);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_rot(40, 0, 0);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 70, 0);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_rot(16, 0, 0);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 120, 0);
+    tw_pos_rot_add();
+    evt_next();
+    tw_set_pos(0, 100, 0);
+    for (5)
+    {
+        tw_pos_rot_add();
+        tw_pos_add();
+        evt_next();
+        tw_nop();
+    }
+    tw_nop();
+    sleep(1);
+    tw_abs_pos(0, 3440, 300, 3310);
+    tw_abs_rot(0, 0, 65416, 1024);
+    tw_end();
+    evt_nop();
+    sleep(5);
+    se_play_3d(2, 25, 0, 0, 0, 2500, 3200);
+    sleep(10);
+    set(FG_6, 29, 0);
+    sleep(10);
+    run
+    {
+        cutcurr(0);
+        cut_auto(0);
+        set(FG_6, 23, 0);
+        set(FG_6, 28, 0);
+        objtbl_b_set(0, 0, 129);
+        set(FG_STATUS, 15, 1);
+    }
+    evt_finish();
+}
+
+event event_16
+{
+    run
+    {
+        aot_reset(2, SCE_MESSAGE, 129, 133, 325, 0);
+        aot_reset(3, SCE_MESSAGE, 129, 134, 325, 0);
+        aot_reset(4, SCE_MESSAGE, 129, 135, 325, 0);
+        aot_reset(5, SCE_MESSAGE, 129, 136, 325, 0);
+        aot_reset(6, SCE_MESSAGE, 129, 137, 325, 0);
+        aot_reset(7, SCE_MESSAGE, 129, 138, 325, 0);
+        if (ck(FG_SCENARIO, 3, 0))
+        {
+            aot_reset(8, SCE_NONE, 0, 0, 0, 0);
+        }
+        else
+        {
+            aot_reset(8, SCE_MESSAGE, 129, 139, 325, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_17
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_rot(240, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(232, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(216, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(176, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    set(FG_ROOM, 19, 1);
+    evt_finish();
+}
+
+event event_18
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_rot(176, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(216, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(232, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(240, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    set(FG_ROOM, 19, 1);
+    evt_finish();
+}
+
+event event_19
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_rot(16, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(24, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(40, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(80, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    set(FG_ROOM, 19, 1);
+    evt_finish();
+}
+
+event event_1A
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_rot(80, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(40, 0, 0);
+    for (1)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(24, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(16, 0, 0);
+    for (2)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    set(FG_ROOM, 19, 1);
+    evt_finish();
+}
+
+event event_1B
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_rot(0, 0, 65416, 1024);
+    tw_end();
+    evt_nop();
+    evt_finish();
+}
+
+event event_1C
+{
+    sleep(1);
+    bgm_play(0);
+    evt_finish();
+}

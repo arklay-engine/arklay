@@ -489,7 +489,8 @@ enum ScdAction {
         /// Input RDT file
         rdt: PathBuf,
 
-        /// Output file: .s for disassembly, .bio for decompilation
+        /// Output file: .s for disassembly, .bio for decompilation, .akscr
+        /// for a script that compiles back to identical bytecode
         #[arg(long, short)]
         out: PathBuf,
 
@@ -498,9 +499,10 @@ enum ScdAction {
         list: bool,
     },
 
-    /// Assemble a text .s source into a standalone .scd container
+    /// Assemble a text .s source or compile an .akscr script into a
+    /// standalone .scd container
     Build {
-        /// Input .s source
+        /// Input .s or .akscr source
         input: PathBuf,
 
         /// Output .scd container
@@ -524,8 +526,10 @@ fn export_scd(rdt: &std::path::Path, out: &std::path::Path, list: bool) -> Resul
         arklay::scd::decomp::render(&scripts, &data)
     } else if extension.eq_ignore_ascii_case("s") {
         arklay::scd::disasm::render(&scripts, &data)
+    } else if extension.eq_ignore_ascii_case("akscr") {
+        arklay::scd::akscr::decompile(&scripts)
     } else {
-        bail!("output `{}` must end in .s or .bio", out.display());
+        bail!("output `{}` must end in .s, .bio or .akscr", out.display());
     };
     arklay::atomic::write(out, text.as_bytes())
         .with_context(|| format!("failed to write {}", out.display()))?;
@@ -539,12 +543,21 @@ fn export_scd(rdt: &std::path::Path, out: &std::path::Path, list: bool) -> Resul
     Ok(())
 }
 
-/// Assemble a text `.s` source into a standalone `.scd` container.
+/// Assemble a text `.s` source or compile an `.akscr` script into a
+/// standalone `.scd` container.
 fn build_scd(input: &Path, out: &Path) -> Result<()> {
     let text =
         fs::read_to_string(input).with_context(|| format!("failed to read {}", input.display()))?;
-    let assembled = arklay::scd::asm::assemble(&text)
-        .with_context(|| format!("failed to assemble {}", input.display()))?;
+    let script = input
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("akscr"));
+    let assembled = if script {
+        arklay::scd::akscr::compile(&text)
+            .with_context(|| format!("failed to compile {}", input.display()))?
+    } else {
+        arklay::scd::asm::assemble(&text)
+            .with_context(|| format!("failed to assemble {}", input.display()))?
+    };
     let container = assembled
         .to_container()
         .with_context(|| format!("failed to lay out {}", input.display()))?;

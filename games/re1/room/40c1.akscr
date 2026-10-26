@@ -1,0 +1,614 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 1100, 8000, 1500, 3900, 11, 0, 0, 1, 0, RDT_008, 26000, 0, 4000, 2048, UNLOCKED, 129);
+    aot_set(1, 1000, 12400, 1500, 3000, SCE_MESSAGE, 129, 140, 0, 255, 0, 0, 0);
+    aot_set(2, 9800, 16600, 2200, 1200, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
+    item_aot_set(3, 9800, 17700, 2200, 1800, ITEM_HELMET_KEY, 3, 0, 255, 54, 41, 52, 254, 90, 70, 0, 4, 88, 0, 0, 0);
+    eml_rot(0, 250, 0, 28, 248);
+    aot_set(5, 1100, 8000, 1500, 3900, SCE_EVENT, 0, 9, 0, event_00, 0, 0, 0);
+    aot_set(6, 9800, 17200, 1700, 1100, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
+    aot_set(7, 3229, 10452, 1800, 1800, SCE_EVENT, 0, 9, 0, event_0C, 0, 0, 0);
+    aot_set(8, 3800, 12000, 1300, 800, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+    aot_set(9, 4800, 11100, 1500, 1300, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+    if (ck(FG_COMMON, 178, 1))
+    {
+        set(FG_ROOM, 15, 0);
+    }
+    if (ck(FG_COMMON, 7, 0))
+    {
+        set(FG_ROOM, 15, 0);
+    }
+    if (ck(FG_SCENARIO, 19, 0))
+    {
+        set(FG_ROOM, 15, 1);
+        set(FG_SCENARIO, 41, 0);
+    }
+    if (ck(FG_ENEMY, 96, 1))
+    {
+        room_bgm_state_set(3, 12, 8);
+        set(FG_ROOM, 10, 0);
+    }
+    if (ck(FG_ENEMY, 96, 1))
+    {
+        if (ck(FG_SCENARIO, 41, 1))
+        {
+            if (ck(FG_ROOM, 15, 0))
+            {
+                room_bgm_state_set(3, 12, 65);
+                set(FG_ROOM, 10, 1);
+                enemy(ENEMY_BARRY_2_STARS_, 5, 255, 1, 2, 0, 0, 0, 0, 0, 10000, 0, 30000, 6, 42, 0, 0);
+                evt_exec(0, 9, event_10);
+            }
+            enemy(ENEMY_PLANT_42, 0, 96, 1, 2, 0, 0, 3572, 0, 0, 10800, -7000, 10800, 0, 0, 0, 0);
+            enemy(ENEMY_PLANT_42, 1, 255, 1, 2, 0, 0, 0, 0, 0, 11200, -7000, 10800, 1, 0, 0, 0);
+            enemy(ENEMY_PLANT_42, 1, 255, 1, 2, 0, 0, 1024, 0, 0, 10800, -7000, 11200, 2, 0, 0, 0);
+            enemy(ENEMY_PLANT_42, 1, 255, 1, 2, 0, 0, 2048, 0, 0, 11200, -7000, 11200, 3, 0, 0, 0);
+            enemy(ENEMY_PLANT_42, 5, 255, 1, 2, 0, 0, 500, 0, 0, 10400, -7000, 10800, 4, 0, 0, 0);
+            enemy(ENEMY_PLANT_42, 1, 255, 1, 2, 0, 0, 1500, 0, 0, 10800, -7000, 10400, 5, 0, 0, 0);
+        }
+        else
+        {
+            enemy(ENEMY_PLANT_42, 8, 96, 1, 2, 0, 0, 3572, 0, 0, 10800, -7000, 10800, 0, 0, 0, 0);
+            enemy(ENEMY_PLANT_42, 1, 255, 1, 2, 0, 0, 0, 0, 0, 11200, -7000, 10800, 1, 0, 0, 0);
+            enemy(ENEMY_PLANT_42, 5, 255, 1, 2, 0, 0, 1024, 0, 0, 10400, -7000, 11200, 2, 0, 0, 0);
+        }
+    }
+    else
+    {
+        enemy(ENEMY_PLANT_42, 4, 255, 1, 2, 0, 0, 1024, 0, 0, 10800, 200, 10800, 0, 0, 0, 0);
+        room_bgm_state_set(3, 12, 255);
+        set(FG_ROOM, 10, 1);
+        if (ck(FG_ROOM, 15, 0) && ck(FG_COMMON, 39, 1))
+        {
+            aot_set(7, 6862, 8109, 1800, 1800, SCE_EVENT, 129, 9, 0, event_0C, 0, 0, 0);
+            aot_set(8, 7600, 9900, 1300, 800, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+            aot_set(9, 8300, 8800, 1500, 1300, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+            enemy(ENEMY_BARRY_2_STARS_, 5, 255, 1, 2, 0, 0, 3873, 0, 0, 7762, 0, 9009, 6, 42, 0, 0);
+            set(FG_ROOM, 12, 0);
+            evt_exec(0, 9, event_0F);
+        }
+    }
+    set(FG_SCENARIO, 68, 0);
+}
+
+proc main
+{
+    if (ck(FG_ROOM, 62, 0) && ck(FG_ITEM, 88, 0))
+    {
+        if (ck(FG_ENEMY, 96, 0))
+        {
+            aot_delete(6, SCE_MESSAGE, 0);
+            aot_delete(3, SCE_ITEM, 129);
+        }
+        else
+        {
+            aot_delete(6, SCE_MESSAGE, 129);
+            aot_delete(3, SCE_ITEM, 0);
+        }
+    }
+    if (ck(FG_ENEMY, 96, 0))
+    {
+        set(FG_SCENARIO, 0, 0);
+    }
+    if (ck(FG_ENEMY, 96, 0) && ck(FG_ROOM, 10, 0) && ck(FG_ROOM, 11, 1))
+    {
+        set(FG_ROOM, 11, 0);
+        evt_exec(0, 9, event_11);
+    }
+    if (ck(FG_ENEMY, 96, 0) && ck(FG_ROOM, 9, 0) && ck(FG_ROOM, 11, 1))
+    {
+        set(FG_ROOM, 11, 0);
+        evt_exec(0, 9, event_12);
+    }
+    if (ck(FG_ENEMY, 96, 0) && ck(FG_ROOM, 13, 1))
+    {
+        if (ck(FG_ITEM, 88, 0))
+        {
+            aot_delete(5, SCE_EVENT, 129);
+            aot_delete(0, SCE_DOOR, 0);
+        }
+        else
+        {
+            aot_delete(0, SCE_DOOR, 129);
+            aot_delete(5, SCE_EVENT, 0);
+        }
+    }
+    if (ck(FG_ROOM, 15, 0) && ck(FG_ENEMY, 96, 1) && ck(FG_SCENARIO, 41, 0) && ck(FG_ROOM, 14, 1))
+    {
+        set(FG_ROOM, 14, 0);
+        set(FG_6, 23, 1);
+        evt_exec(0, 9, event_01);
+    }
+    if (ck(FG_ROOM, 12, 0) && ck(FG_ROOM, 61, 0))
+    {
+        aot_delete(7, SCE_EVENT, 129);
+    }
+    else
+    {
+        aot_delete(7, SCE_EVENT, 0);
+    }
+}
+
+event event_00
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        dir_set(0, 0, 1716, 0, 2439, 0, 9876);
+        cutnext(6);
+    }
+    effect(11, 21, 0, 156, 49, 0, 0, 120, 80, 0, 0);
+    sleep(30);
+    effect(11, 21, 0, 156, 49, 0, 0, 120, 80, 0, 0);
+    sleep(30);
+    aot_delete(0, SCE_DOOR, 129);
+    aot_delete(5, SCE_EVENT, 0);
+    run
+    {
+        cutnext(0);
+        set(FG_6, 23, 0);
+        set(FG_ROOM, 13, 0);
+        cut_auto(0);
+    }
+    evt_finish();
+}
+
+event event_01
+{
+    set(FG_STATUS, 15, 0);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
+    act_reset();
+    evt_nop();
+    sleep(1);
+    dir_set(0, 0, 490, 0, 2440, 0, 18895);
+    cutnext(5);
+    sleep(170);
+    run
+    {
+        eml_state(0, 0, 3, 258);
+        eml_state(0, 1, 3, 258);
+        eml_state(0, 2, 3, 258);
+        eml_state(0, 3, 3, 258);
+        eml_state(0, 4, 3, 258);
+        eml_state(0, 5, 3, 258);
+    }
+    sleep(1);
+    evt_work_set(WK_ENEMY, 0);
+    evt_tween_begin_alt();
+    tw_abs_rot(0, 0, 2600, 65036);
+    tw_end();
+    evt_nop();
+    cutnext(0);
+    run
+    {
+        eml_state(0, 0, 0, 64);
+        eml_state(0, 1, 0, 65);
+        eml_state(0, 2, 0, 65);
+        eml_state(0, 3, 0, 65);
+        eml_state(0, 4, 0, 65);
+        eml_state(0, 5, 0, 65);
+    }
+    sleep(40);
+    evt_fork(9, event_02, 0);
+    sleep(100);
+    evt_fork(9, event_04, 0);
+    sleep(50);
+    evt_fork(9, event_03, 0);
+    sleep(20);
+    eml_state(0, 0, 2, 10);
+    sleep(100);
+    eml_state(0, 0, 2, 11);
+    cutnext(5);
+    sleep(100);
+    run
+    {
+        pos_set(6, 0, 3712, 0, 3371, 0, 9814);
+        se_play_3d(0, 1, 0, 2, 6, 0, 0);
+        cutnext(0);
+    }
+    evt_fork(9, event_05, 0);
+    voice_play(1, 28, 0);
+    message(4, 0);
+    wait_message();
+    evt_fork(9, event_06, 0);
+    sleep(100);
+    evt_fork(9, event_07, 0);
+    sleep(200);
+    cutnext(4);
+    sleep(20);
+    eml_state(0, 0, 2, 12);
+    sleep(200);
+    dir_set(0, 0, 490, 0, 2440, 0, 18895);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(0 | 9, 32 | 31, 0 | 0);
+    act_flag_op(0, 32, 0);
+    act_reset();
+    evt_nop();
+    sleep(50);
+    sys_multi(4);
+    sleep(10);
+    dir_set(0, 0, 1177, 0, 5975, 0, 15293);
+    cutnext(0);
+    eml_state(0, 1, 2, 14);
+    eml_state(0, 2, 2, 14);
+    sleep(30);
+    eml_state(0, 3, 2, 14);
+    eml_state(0, 4, 2, 14);
+    sleep(30);
+    eml_state(0, 5, 2, 14);
+    sleep(60);
+    eml_state(0, 0, 2, 14);
+    sleep(60);
+    bgm_volume_ramp(0, 160, 30);
+    cutnext(4);
+    sleep(140);
+    evt_fork(9, event_08, 0);
+    sleep(30);
+    voice_play(1, 29, 0);
+    message(5, 0);
+    wait_message();
+    evt_fork(9, event_09, 0);
+    voice_play(1, 30, 0);
+    message(6, 0);
+    wait_message();
+    evt_fork(9, event_0A, 0);
+    voice_play(1, 31, 0);
+    message(7, 0);
+    wait_message();
+    evt_fork(9, event_0B, 0);
+    voice_play(1, 32, 0);
+    message(8, 0);
+    wait_message();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion(16);
+    act_idle();
+    act_reset();
+    run
+    {
+        eml_state(0, 0, 3, 514);
+        set(FG_ROOM, 12, 0);
+        cutnext(0);
+        set(FG_STATUS, 15, 1);
+        cut_auto(0);
+        set(FG_6, 23, 0);
+    }
+    evt_finish();
+}
+
+event event_02
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(19, 10000, 57736, 10000, 150, 75);
+    act_anim_seq(17410, 25891, 16176);
+    act_nop();
+    act_finish();
+}
+
+event event_03
+{
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_seq(58882, 9238, 16191);
+    act_reset();
+    evt_finish();
+}
+
+event event_04
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(58885, 9238, 16191);
+    act_reset();
+    sleep(120);
+    run
+    {
+        bgm_stop(1);
+        bgm_play(0);
+        set(FG_ROOM, 9, 1);
+        set(FG_ROOM, 10, 0);
+    }
+    evt_actor_begin();
+    act_nop();
+    act_anim_flags(32 | 31, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_05
+{
+    evt_work_set(WK_ENEMY, 6);
+    evt_actor_begin();
+    act_motion_path(19, 10000, 57736, 10000, 150, 75);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(25);
+    act_anim_flags(32 | 4, 32 | 31, 0 | 0);
+    sleep(35);
+    act_motion_path(147, 0, 0, 0, 150, 75);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_06
+{
+    evt_work_set(WK_ENEMY, 6);
+    evt_actor_begin();
+    act_motion_path(19, 10000, 57736, 10000, 150, 75);
+    act_anim_seq(40962, 54042, 16169);
+    act_nop();
+    sleep(45);
+    act_anim_set(0 | 7, 0 | 16, 32 | 31);
+    sleep(40);
+    act_anim_set(0 | 8, 0 | 17, 32 | 31);
+    act_flag_op(0, 12, 0);
+    act_param_set(62976, 255);
+    sleep(60);
+    act_param_set(2560, 0);
+    sleep(80);
+    act_param_set(62976, 255);
+    sleep(80);
+    act_param_set(2560, 0);
+    sleep(30);
+    act_param_set(62976, 255);
+    sleep(30);
+    act_param_set(3072, 0);
+    sleep(70);
+    act_param_set(62464, 255);
+    sleep(70);
+    act_anim_set(0 | 7, 0 | 16, 32 | 31);
+    act_motion_path(147, 1, 0, 0, 150, 75);
+    act_anim_seq(8452, 22544, 16172);
+    act_nop();
+    sleep(450);
+    act_motion(16);
+    act_anim_flags(32 | 13, 32 | 31, 0 | 0);
+    act_param_set(0, 252);
+    sleep(35);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_07
+{
+    sleep(50);
+    eml_state(0, 1, 2, 13);
+    eml_state(0, 2, 2, 16);
+    sleep(50);
+    eml_state(0, 3, 2, 13);
+    eml_state(0, 4, 2, 16);
+    sleep(50);
+    eml_state(0, 5, 2, 13);
+    eml_state(0, 1, 2, 16);
+    sleep(50);
+    eml_state(0, 2, 2, 13);
+    eml_state(0, 3, 2, 16);
+    sleep(50);
+    eml_state(0, 4, 2, 13);
+    eml_state(0, 5, 2, 16);
+    sleep(50);
+    eml_state(0, 2, 2, 13);
+    eml_state(0, 3, 2, 16);
+    evt_finish();
+}
+
+event event_08
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(147, 1, 6, 0, 150, 75);
+    act_anim_flags(0 | 9, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(30);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 5, 32 | 31, 0 | 0);
+    sleep(22);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    sleep(10);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_09
+{
+    evt_work_set(WK_ENEMY, 6);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(50);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_0A
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(30);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 4, 32 | 31, 0 | 0);
+    sleep(12);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    sleep(10);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 3);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_0B
+{
+    evt_work_set(WK_ENEMY, 6);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 4, 32 | 31, 0 | 0);
+    sleep(35);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(15);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(25);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(25);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    sleep(14);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(25);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(30);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(25);
+    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
+    sleep(15);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(20);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_0C
+{
+    set(FG_6, 23, 1);
+    set(FG_STATUS, 15, 0);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(147, 1, 6, 0, 150, 75);
+    act_reset();
+    evt_nop();
+    evt_fork(9, event_0D, 0);
+    voice_play(1, 33, 0);
+    message(9, 0);
+    wait_message();
+    evt_fork(9, event_0E, 0);
+    voice_play(1, 34, 0);
+    message(10, 0);
+    wait_message();
+    evt_work_set(WK_ENEMY, 6);
+    evt_actor_begin();
+    act_motion(16);
+    act_reset();
+    evt_nop();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion(16);
+    act_idle();
+    act_reset();
+    run
+    {
+        cut_auto(0);
+        set(FG_STATUS, 15, 1);
+        set(FG_6, 23, 0);
+    }
+    evt_finish();
+}
+
+event event_0D
+{
+    evt_work_set(WK_ENEMY, 6);
+    evt_actor_begin();
+    act_motion_path(147, 0, 0, 0, 150, 75);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(10);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(30);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(25);
+    act_anim_flags(32 | 4, 32 | 31, 0 | 0);
+    sleep(35);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(25);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(20);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    sleep(10);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(35);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(10);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(15);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(15);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
+    sleep(15);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(20);
+    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
+    sleep(15);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    act_flag_op(0, 1, 0);
+    sleep(15);
+    act_anim_flags(32 | 4, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_0E
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_0F
+{
+    sleep(1);
+    evt_work_set(WK_ENEMY, 6);
+    evt_actor_begin();
+    act_anim_flags(32 | 10, 32 | 31, 0 | 3);
+    act_flag_op(0, 16, 0);
+    act_finish();
+}
+
+event event_10
+{
+    sleep(1);
+    bgm_play(1);
+    set(FG_ROOM, 9, 0);
+    evt_finish();
+}
+
+event event_11
+{
+    bgm_volume_ramp(0, 160, 30);
+    sleep(30);
+    bgm_stop(0);
+    set(FG_ROOM, 10, 1);
+    evt_finish();
+}
+
+event event_12
+{
+    bgm_volume_ramp(1, 160, 30);
+    sleep(30);
+    bgm_stop(1);
+    set(FG_ROOM, 9, 1);
+    evt_finish();
+}

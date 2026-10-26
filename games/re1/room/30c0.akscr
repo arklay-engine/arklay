@@ -1,0 +1,40 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 9500, 13300, 2700, 2200, 12, 1, 8, 0, 0, RDT_00B, 27700, 0, 3300, 3072, UNLOCKED, 129);
+    door_aot_set(1, 10300, 500, 2600, 2200, 12, 1, 8, 0, 0, RDT_00D, 14800, 0, 7100, 1024, UNLOCKED, 129);
+    item_aot_set(2, 18400, 1400, 2000, 2000, ITEM_COMBAT_KNIFE, 1, 0, 255, 200, 75, 190, 251, 96, 9, 0, 0, 246, 129, 0, 135);
+    if (ck(FG_STATUS, 8, 0))
+    {
+        item_aot_set(3, 19000, 12800, 2000, 2000, ITEM_INK_RIBBON, 2, 1, 255, 32, 78, 78, 253, 232, 53, 0, 0, 250, 129, 0, 0);
+    }
+    set(FG_SCENARIO, 98, 1);
+    if (ck(FG_ENEMY, 138, 1))
+    {
+        aot_delete(1, SCE_NONE, 129);
+    }
+    if (ck(FG_ENEMY, 137, 1))
+    {
+        set(FG_ROOM, 24, 0);
+    }
+    else
+    {
+        room_bgm_state_set(2, 12, 255);
+    }
+    enemy(ENEMY_BLACK_TIGER, 0, 137, 1, 2, 0, 0, 3800, 0, 0, 4500, 0, 5700, 0, 0, 0, 0);
+    enemy(ENEMY_COBWEB, 0, 138, 1, 1, 0, 0, 3072, 0, 0, 11000, -2000, 2000, 1, 0, 0, 0);
+}
+
+proc main
+{
+    if (ck(FG_ENEMY, 138, 0))
+    {
+        aot_delete(1, SCE_DOOR, 129);
+    }
+    if (ck(FG_ENEMY, 137, 0) && ck(FG_ROOM, 24, 0))
+    {
+        set(FG_ROOM, 24, 1);
+        bgm_volume_ramp(0, 161, 30);
+    }
+}

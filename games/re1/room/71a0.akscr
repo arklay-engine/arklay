@@ -1,0 +1,38 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 29300, 2900, 3000, 2100, 0, 11, 26, 64, 0, RDT_00C, 20300, 0, 3500, 0, UNLOCKED, 0);
+    door_aot_set(1, 200, 2800, 1900, 1500, 2, 0, 6, 7, 0, RDT_01B, 27500, 0, 12600, 2048, UNLOCKED, 129);
+    aot_set(2, 29300, 2900, 3000, 2100, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+    item_aot_set(3, 28000, 11500, 1000, 1000, ITEM_SHELLS, 7, 0, 255, 84, 111, 0, 0, 224, 46, 0, 0, 219, 129, 1, 0);
+    enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 128, 1, 2, 0, 0, 1711, 0, 0, 27742, 0, 13736, 0, 0, 0, 1);
+    enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 180, 1, 2, 0, 0, 3344, 0, 0, 12764, 0, 2397, 1, 0, 0, 1);
+}
+
+event event_00
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        message(128, 255);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (cmpb(5, 0, 0))
+        {
+            aot_on(0, SCE_DOOR, 0);
+            set(FG_6, 23, 0);
+        }
+        else
+        {
+            set(FG_6, 23, 0);
+        }
+    }
+    evt_finish();
+}

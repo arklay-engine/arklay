@@ -1,0 +1,44 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 8800, 400, 1600, 2100, 2, 0, 6, 1, 0, RDT_000, 13300, 0, 13600, 1024, UNLOCKED, 129);
+    door_aot_set(1, 7300, 2200, 1600, 2200, 1, 0, 33, 1, 0, RDT_002, 6300, 0, 3300, 2048, UNLOCKED, 129);
+    item_aot_set(2, 9500, 12900, 1000, 1000, ITEM_RED_BOOK, 1, 0, 255, 16, 39, 42, 254, 88, 52, 0, 0, 99, 129, 0, 0);
+    item_aot_set(4, 0, 0, 1, 1, ITEM_SHELLS, 7, 2, 255, 106, 39, 60, 0, 42, 38, 240, 251, 165, 129, 0, 0);
+    eml_rot(2, 116, 255, 186, 255);
+    setbyte(2, 0, 0);
+    if (ck(FG_ITEM, 165, 0))
+    {
+        aot_set(6, 9600, 10600, 1000, 1500, SCE_HIKIDASHI, 129, 33, 0, 4, 0, 3, 0);
+    }
+    aot_set(7, 1700, 10800, 1100, 2000, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(8, 5000, 15100, 1500, 300, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    set(FG_STATUS, 60, 0);
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 0, 183, 1, 2, 0, 0, 413, 0, 0, 4463, 0, 12506, 0, 0, 0, 0);
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 0, 184, 1, 2, 0, 0, 773, 0, 0, 8350, 0, 11866, 1, 0, 0, 0);
+}
+
+event event_00
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        cutnext(4);
+        aot_delete(5, SCE_NONE, 0);
+    }
+    sleep(1);
+    run
+    {
+        message(128, 255);
+    }
+    wait_message();
+    run
+    {
+        aot_delete(3, SCE_ITEM, 129);
+        cutcurr(0);
+        cut_auto(0);
+        set(FG_6, 23, 0);
+    }
+    evt_finish();
+}

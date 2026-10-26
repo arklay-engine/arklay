@@ -1,0 +1,504 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 3800, 10500, 2500, 2000, 3, 0, 0, 4, 129, RDT_015, 6000, 0, 2500, 3072, UNLOCKED, 129);
+    item_aot_set(1, 10200, 5700, 1400, 1400, ITEM_SHOTGUN, 7, 0, 255, 208, 42, 2, 244, 90, 25, 0, 12, 0, 129, 0, 0);
+    swap_var(1, 1, 12);
+    item_aot_set(2, 0, 0, 0, 0, ITEM_BROKEN_SHOTGUN, 1, 1, 255, 208, 42, 2, 244, 90, 25, 0, 12, 1, 129, 0, 0);
+    obj(0, 1, 255, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    aot_set(5, 9820, 5340, 2000, 2000, SCE_NONE, 1, 9, 0, 1, 0, 1, 0);
+    aot_set(6, 9820, 5340, 2000, 2000, SCE_NONE, 129, 9, 0, 5, 0, 0, 0);
+    aot_set(7, 3800, 10500, 2500, 2000, SCE_NONE, 129, 128, 0, 255, 0, 0, 0);
+    aot_set(8, 9500, 1300, 2000, 1900, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(9, 0, 5000, 3600, 3200, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    if (ck(FG_ITEM, 1, 1) && ck(FG_ITEM, 0, 1))
+    {
+        evt_exec(0, 0, event_02);
+        aot_delete(5, SCE_USEITEM, 1);
+        aot_delete(6, SCE_EVENT, 129);
+    }
+    if (ck(FG_STATUS, 8, 1) && ck(FG_COMMON, 32, 0))
+    {
+        evt_exec(0, 9, event_06);
+        aot_delete(0, SCE_NONE, 129);
+        aot_delete(7, SCE_MESSAGE, 129);
+    }
+    if (ck(FG_STATUS, 8, 0) && ck(FG_COMMON, 41, 0))
+    {
+        evt_exec(0, 9, event_06);
+        aot_delete(0, SCE_NONE, 129);
+        aot_delete(7, SCE_MESSAGE, 129);
+    }
+}
+
+proc main
+{
+    if (testpickup(ITEM_SHOTGUN))
+    {
+        evt_exec(0, 9, event_00);
+    }
+    if (ck(FG_STATUS, 8, 1))
+    {
+        if (testitem(ITEM_SHOTGUN))
+        {
+            set(FG_ITEM, 0, 0);
+            setbyte(0, 1, 0);
+            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, event_03);
+            set(FG_COMMON, 32, 1);
+            aot_delete(0, SCE_DOOR, 129);
+            aot_delete(7, SCE_NONE, 129);
+        }
+        if (testitem(ITEM_BROKEN_SHOTGUN))
+        {
+            set(FG_ITEM, 1, 0);
+            setbyte(1, 1, 0);
+            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, event_04);
+            set(FG_COMMON, 32, 1);
+            aot_delete(0, SCE_DOOR, 129);
+            aot_delete(7, SCE_NONE, 129);
+        }
+    }
+    else
+    {
+        if (testitem(ITEM_SHOTGUN))
+        {
+            set(FG_ITEM, 0, 0);
+            setbyte(0, 1, 0);
+            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, event_03);
+            set(FG_COMMON, 41, 1);
+            aot_delete(0, SCE_DOOR, 129);
+            aot_delete(7, SCE_NONE, 129);
+        }
+        if (testitem(ITEM_BROKEN_SHOTGUN))
+        {
+            set(FG_ITEM, 1, 0);
+            setbyte(1, 1, 0);
+            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, event_04);
+            set(FG_COMMON, 41, 1);
+            aot_delete(0, SCE_DOOR, 129);
+            aot_delete(7, SCE_NONE, 129);
+        }
+    }
+}
+
+event event_00
+{
+    se_play_3d(2, 23, 0, 0, 0, 5500, 7070);
+    sleep(5);
+    se_play_3d(2, 24, 0, 0, 0, 5500, 7070);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    evt_next();
+    tw_nop();
+    tw_set_pos(0, 254, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 252, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 250, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 246, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 243, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 238, 0);
+    for (4)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 243, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 246, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 250, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 252, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 254, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 8, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 252, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 254, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 253, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 3, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 254, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 255, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 255, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_end();
+    evt_nop();
+    aot_delete(5, SCE_USEITEM, 1);
+    aot_delete(6, SCE_EVENT, 129);
+    evt_finish();
+}
+
+event event_01
+{
+    se_play_3d(2, 24, 0, 0, 0, 5500, 7070);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    evt_next();
+    tw_nop();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 3, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 5, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 8, 0);
+    for (4)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 10, 0);
+    for (5)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 5, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 3, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 252, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 248, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 3, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    for (4)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_finish();
+}
+
+event event_02
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 10980, -3138, 6490);
+    tw_finish();
+}
+
+event event_03
+{
+    aot_delete(5, SCE_NONE, 1);
+    aot_delete(6, SCE_NONE, 129);
+    evt_work_set(WK_AOT, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 10950, -3208, 6490);
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 3, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 5, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 8, 0);
+    for (4)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 10, 0);
+    for (5)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 5, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 254, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 252, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    for (4)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 255, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 255, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_end();
+    evt_next();
+    aot_delete(1, SCE_ITEM, 129);
+    evt_finish();
+}
+
+event event_04
+{
+    aot_delete(1, SCE_NONE, 129);
+    aot_delete(5, SCE_NONE, 1);
+    aot_delete(6, SCE_NONE, 1);
+    evt_work_set(WK_AOT, 1);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 10950, -3208, 6490);
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 3, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 5, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 8, 0);
+    for (4)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 10, 0);
+    for (5)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 5, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 254, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 252, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    for (4)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 255, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 255, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 1, 0);
+    tw_pos_add();
+    evt_next();
+    tw_end();
+    evt_next();
+    evt_finish();
+}
+
+event event_05
+{
+    run
+    {
+        require(item_ck(ITEM_SHOTGUN));
+        swap_var(2, 1, 12);
+        setb(6, 3, 0);
+        set(FG_STATUS, 18, 0);
+    }
+    evt_finish();
+}
+
+event event_06
+{
+    sleep(10);
+    run
+    {
+        se_play_3d(2, 25, 6, 0, 0, 4700, 10380);
+        se_play_3d(2, 26, 6, 0, 0, 4700, 10380);
+    }
+    evt_finish();
+}

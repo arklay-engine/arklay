@@ -251,10 +251,14 @@ cargo run -- pack info re1.akpak --mod demo.akpak
 # Disassemble/reassemble a room's scripts
 cargo run -- scd export ROOM1000.RDT --out 1000.s
 cargo run -- scd build 1000.s --out scd/1000.scd
+
+# Decompile/recompile a room's scripts as structured code
+cargo run -- scd export ROOM1000.RDT --out 1000.akscr
+cargo run -- scd build 1000.akscr --out scd/1000.scd
 ```
 
 `docs/modding.md` documents the manifest grammar, the replacement formats and
-their override table, the `.s` grammar, the mod source convention, the
+their override table, the `.s` grammar, the `.akscr` script language, the mod source convention, the
 language-file overrides and the sandboxed Lua hook API; `docs/language.md`
 documents the `language/<tag>.txt` format, the key registry, the fallback chain
 and the missing-glyph box; `docs/m15-deviations.md` records the deliberate

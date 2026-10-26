@@ -1,0 +1,338 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 10100, 10400, 1300, 1200, 3, 1, 12, 7, 0, RDT_008, 18400, 0, 2400, 3072, UNLOCKED, 129);
+    item_aot_set(1, 10800, 5000, 2200, 1000, ITEM_68, 1, 0, 255, 104, 46, 36, 250, 156, 19, 0, 0, 81, 129, 0, 0);
+    obj(0, 1, 255, 8200, 0, 2252, 3072, 0, 0, 242, 254, 0, 0, 14, 1, 14, 1, 72, 18, 70, 5, 118, 2);
+    aot_set(2, 8200, 1600, 600, 600, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+    aot_set(3, 8200, 10500, 1300, 1000, SCE_EVENT, 129, 9, 0, event_03, 0, 0, 0);
+    aot_set(4, 1100, 4500, 1000, 3500, SCE_NONE, 129, 130, 0, 68, 1, 0, 0);
+    aot_set(5, 7000, 700, 3000, 2300, SCE_USEITEM, 68, 4, 0, 27, 0, 1, 0);
+    item_aot_set(6, 4500, 9700, 1400, 1700, ITEM_CLIP, 15, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 163, 129, 0, 0);
+    item_aot_set(7, 4500, 9700, 1400, 1700, ITEM_CLIP, 15, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 229, 129, 0, 0);
+    item_aot_set(8, 2100, 4200, 1000, 600, ITEM_GREEN_HERB, 1, 3, 255, 40, 10, 0, 0, 148, 17, 0, 0, 164, 129, 1, 0);
+    aot_set(10, 6500, 9600, 2000, 1400, SCE_MESSAGE, 129, 132, 0, 68, 1, 0, 0);
+    aot_set(11, 3500, 10600, 900, 1300, SCE_MESSAGE, 129, 133, 0, 68, 1, 0, 0);
+    eml_rot(0, 250, 7, 0, 0);
+    scene_setup(0, 6400, 8600, 12000);
+    set(FG_STATUS, 31, 0);
+}
+
+proc main
+{
+    if (ck(FG_ROOM, 27, 1))
+    {
+        aot_delete(2, SCE_EVENT, 129);
+    }
+    else
+    {
+        aot_delete(2, SCE_NONE, 129);
+        set(FG_ROOM, 27, 1);
+    }
+    if (ck(FG_ROOM, 25, 0))
+    {
+        msgnode_set(22, 6, 7);
+    }
+    else
+    {
+        msgnode_set(22, 6, 3);
+    }
+    if (testpickup(ITEM_68))
+    {
+        evt_exec(0, 9, event_09);
+    }
+    aot_delete(4, SCE_NONE, 129);
+    if (cmpb(2, 0, 3))
+    {
+        aot_reset(4, SCE_MESSAGE, 129, 130, 255, 0);
+    }
+    if (cmpb(2, 0, 7))
+    {
+        aot_reset(4, SCE_MESSAGE, 129, 130, 255, 0);
+    }
+    if (cmpb(2, 0, 2))
+    {
+        aot_reset(4, SCE_MESSAGE, 129, 131, 255, 0);
+    }
+}
+
+event event_00
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 25, 1);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(15);
+    message(128, 69);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (cmpb(5, 0, 0))
+        {
+            se_play_3d(2, 23, 0, 1, 0, 0, 0);
+            if (ck(FG_ROOM, 25, 1))
+            {
+                evt_exec(0, 9, event_01);
+                set(FG_ROOM, 25, 0);
+            }
+            else
+            {
+                evt_exec(0, 9, event_02);
+                set(FG_ROOM, 25, 1);
+            }
+        }
+        else
+        {
+            set(FG_6, 31, 0);
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 25, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_01
+{
+    run
+    {
+        setw(1, 0, 0);
+        timer_setup(1, 232, 3, 1, 0);
+    }
+    sleep(10);
+    run
+    {
+        setw(2, 0, 0);
+        setw(1, 16, 39);
+        set(FG_6, 31, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 25, 0);
+        set(FG_6, 23, 0);
+    }
+    evt_finish();
+}
+
+event event_02
+{
+    run
+    {
+        setw(1, 16, 39);
+        setw(2, 24, 252);
+    }
+    sleep(10);
+    run
+    {
+        setw(2, 0, 0);
+        setw(1, 0, 0);
+        set(FG_6, 31, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 25, 0);
+        set(FG_6, 23, 0);
+    }
+    evt_finish();
+}
+
+event event_03
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_6, 29, 1);
+        set(FG_6, 25, 1);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(15);
+    message(128, 69);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (cmpb(5, 0, 0))
+        {
+            se_play_3d(2, 23, 0, 1, 0, 0, 0);
+            if (ck(FG_ROOM, 24, 1))
+            {
+                evt_exec(0, 9, event_04);
+                set(FG_ROOM, 24, 0);
+            }
+            else
+            {
+                evt_exec(0, 9, event_05);
+                set(FG_ROOM, 24, 1);
+            }
+        }
+        else
+        {
+            set(FG_6, 31, 0);
+            set(FG_6, 23, 0);
+            set(FG_6, 29, 0);
+            set(FG_6, 25, 0);
+        }
+    }
+    evt_finish();
+}
+
+event event_04
+{
+    run
+    {
+        cut_auto(1);
+        cutnext(4);
+        cut_auto(0);
+        msg_list(0, 158, 30, 48, 248, 95, 33, 255, 255, 255, 0, 216, 29, 112, 33, 48, 248, 184, 21, 117, 117, 116, 0, 140, 29, 112, 23, 48, 248, 68, 22, 117, 117, 116, 0, 184, 26, 224, 3, 144, 4, 240, 3);
+    }
+    sleep(1);
+    run
+    {
+        if (ck(FG_ROOM, 25, 0))
+        {
+            evt_exec(0, 9, event_07);
+        }
+        else
+        {
+            evt_exec(0, 9, event_08);
+        }
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 26, 1));
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 26, 1));
+    run
+    {
+        set(FG_ROOM, 26, 1);
+        set(FG_6, 31, 0);
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 25, 0);
+    }
+    evt_finish();
+}
+
+event event_05
+{
+    run
+    {
+        cut_auto(1);
+        cutnext(0);
+        cut_auto(0);
+        msg_list(0, 42, 11, 64, 237, 73, 25, 255, 255, 255, 0, 88, 32, 8, 32, 144, 232, 32, 28, 128, 128, 150, 0, 24, 31, 168, 22, 0, 0, 204, 16, 72, 72, 128, 0, 152, 23, 32, 3, 80, 3, 192, 2);
+    }
+    run
+    {
+        set(FG_6, 31, 0);
+        set(FG_6, 23, 0);
+        set(FG_6, 29, 0);
+        set(FG_6, 25, 0);
+    }
+    evt_finish();
+}
+
+event event_06
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(15);
+    evt_finish();
+}
+
+event event_07
+{
+    run
+    {
+        set(FG_ROOM, 26, 1);
+        timer_setup(1, 16, 39, 1, 0);
+    }
+    sleep(2);
+    timer_setup(2, 255, 255, 7, 0);
+    sleep(1);
+    timer_setup(1, 16, 39, 1, 0);
+    sleep(2);
+    timer_setup(2, 255, 255, 7, 0);
+    sleep(1);
+    timer_setup(1, 16, 39, 1, 0);
+    sleep(2);
+    run
+    {
+        setw(2, 0, 0);
+        if (ck(FG_ROOM, 25, 0))
+        {
+            setw(1, 16, 39);
+        }
+        else
+        {
+            setw(1, 0, 0);
+        }
+        set(FG_ROOM, 26, 0);
+    }
+    evt_finish();
+}
+
+event event_08
+{
+    run
+    {
+        set(FG_ROOM, 26, 1);
+        require(cmpw(8, 28, 2, 0));
+        return;
+    }
+    sleep(1);
+    timer_setup(2, 255, 255, 7, 0);
+    sleep(1);
+    timer_setup(2, 0, 0, 0, 0);
+    sleep(1);
+    timer_setup(2, 255, 255, 7, 0);
+    sleep(1);
+    timer_setup(2, 0, 0, 0, 0);
+    sleep(1);
+    timer_setup(2, 255, 255, 7, 0);
+    sleep(1);
+    run
+    {
+        timer_setup(2, 240, 216, 7, 0);
+        set(FG_ROOM, 26, 0);
+    }
+    evt_finish();
+}
+
+event event_09
+{
+    sleep(1);
+    message(129, 69);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    evt_finish();
+}

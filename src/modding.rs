@@ -261,18 +261,28 @@ fn is_mod_candidate(path: &Path) -> bool {
     path.is_dir() && path.join(manifest::ENTRY).is_file()
 }
 
-/// Assemble a text `.s` source into a standalone `.scd` container.
+/// Assemble a text `.s` source, or compile an `.akscr` script, into a
+/// standalone `.scd` container.
 pub fn assemble_scd(source: &Path) -> Result<Vec<u8>> {
     let text = fs::read_to_string(source)
         .with_context(|| format!("failed to read {}", source.display()))?;
-    let assembled = crate::scd::asm::assemble(&text)
-        .with_context(|| format!("failed to assemble {}", source.display()))?;
+    let script = source
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("akscr"));
+    let assembled = if script {
+        crate::scd::akscr::compile(&text)
+            .with_context(|| format!("failed to compile {}", source.display()))?
+    } else {
+        crate::scd::asm::assemble(&text)
+            .with_context(|| format!("failed to assemble {}", source.display()))?
+    };
     assembled
         .to_container()
         .with_context(|| format!("failed to lay out {}", source.display()))
 }
 
-/// The pack entry a `scd/<stem>.s` source assembles into, if it is one.
+/// The pack entry a `scd/<stem>.s` or `scd/<stem>.akscr` source builds into,
+/// if it is one.
 fn scd_source_output(relative: &str) -> Option<String> {
     if !relative
         .get(..4)
@@ -280,10 +290,10 @@ fn scd_source_output(relative: &str) -> Option<String> {
     {
         return None;
     }
-    let stem = relative.strip_suffix(".s").or_else(|| {
+    let stem = [".s", ".akscr"].iter().find_map(|suffix| {
         relative
-            .get(..relative.len().checked_sub(2)?)
-            .filter(|stem| relative[stem.len()..].eq_ignore_ascii_case(".s"))
+            .get(..relative.len().checked_sub(suffix.len())?)
+            .filter(|stem| relative[stem.len()..].eq_ignore_ascii_case(suffix))
     })?;
     if stem.len() <= 4 {
         return None;
@@ -510,7 +520,12 @@ mod tests {
             scd_source_output("scd/sub/room.s").as_deref(),
             Some("scd/sub/room.scd")
         );
+        assert_eq!(
+            scd_source_output("scd/1000.AKSCR").as_deref(),
+            Some("scd/1000.scd")
+        );
         assert_eq!(scd_source_output("lua/demo.s"), None);
+        assert_eq!(scd_source_output("scd/.akscr"), None);
         assert_eq!(scd_source_output("scd/.s"), None);
         assert_eq!(scd_source_output("scd/1000.scd"), None);
     }

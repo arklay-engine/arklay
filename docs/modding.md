@@ -445,7 +445,8 @@ arklay re1.akpak --mod fr.akpak --language fr-FR --room 100
 `arklay mod build <dir> --out <pack.akpak>` builds a mod from a directory:
 `manifest.toml` is required and packed, every other file maps to a pack entry
 equal to its directory-relative path, and a `scd/<stem>.s` source is assembled
-into `scd/<stem>.scd` (the `.s` itself is not packed). `--base <base.akpak>`
+into `scd/<stem>.scd` (the `.s` itself is not packed); a `scd/<stem>.akscr`
+script is compiled the same way. `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
 its own class (the previous section) is an override, not a new file. PNG, WebP
@@ -584,6 +585,76 @@ listing. The assembler accepts exactly the disassembler's grammar, including
 operand constants and the variable-width commands; a script override replaces
 the whole room's init/main/event scripts, so a demo room's vanilla doors and
 events are inert.
+
+## `.akscr` room scripts
+
+`arklay scd export ROOM1000.RDT --out 1000.akscr` decompiles a room's scripts
+to structured code, and `arklay scd build 1000.akscr --out scd/1000.scd`
+compiles it back. Every room of the shipped game decompiles to a script that
+compiles to byte-identical init, main and event streams; the decompiled
+scripts are checked in under `games/re1/room/`.
+
+```c
+#version 1
+
+proc init
+{
+    if (ck(FG_COMMON, 164, 0) && ck(FG_STATUS, 8, 1))
+    {
+        set(FG_COMMON, 169, 0);
+    }
+    else if (ck(FG_ROOM, 2, 1))
+    {
+        require(ck(FG_ROOM, 3, 1));
+        return;
+    }
+}
+
+event event_00
+{
+    run
+    {
+        set(FG_6, 23, 1);
+    }
+    evt_exec(0, 6, event_0A);
+    sleep(30);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_STATUS, 14, 0));
+    for (4)
+    {
+        evt_next();
+    }
+    wait_message();
+    evt_finish();
+}
+```
+
+- `proc init` and `proc main` hold one command block each (repeat the section
+  for a container with several blocks); `event event_XX` sections are dense
+  from `event_00`. `//` starts a comment.
+- A command is `name(args);` with the disassembler's mnemonics, constant names
+  and `hi | lo` bit fields.
+- `if (a && b) { } else { }` (and `else if`) takes condition commands.
+  `require(cond);` is a condition outside an `if` head: when false it leaves
+  the enclosing `if` body, or ends the block at the top level.
+- `return;` is `end 0`. Every block ends in an implicit `end 0` unless the
+  section (`proc init noreturn`) or `run` block (`run noreturn`) says
+  otherwise.
+- In an event, `evt_*`/`act_*`/`tw_*` mnemonics are event-VM instructions and
+  any other call is a command run through `evt_single`; `single(N) name(...)`
+  forces the payload length. `run { }` is an inline command block
+  (`evt_block`), `for (N) { }` is `evt_for`/`evt_fornext`,
+  `do { } while (cond);` is `evt_do`/`evt_dountil`, `sleep(N);` waits N frames
+  and `wait_message();` waits for the message window or voice line.
+- An event ending in `evt_finish` is zero-padded to four bytes unless its
+  header says `nopad` (`event event_05 nopad`); `raw(...)` as the last
+  statement gives any other trailing bytes.
+- `asm { }` (the braces on their own lines) embeds `.s` assembly verbatim. The
+  decompiler uses it only where the shipped bytecode has no structured form,
+  such as an `if` that jumps into the middle of an instruction.
 
 ## Lua hooks
 

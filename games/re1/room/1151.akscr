@@ -1,0 +1,707 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 900, 4000, 1350, 2500, 1, 0, 0, 1, 128, RDT_009, 6700, 0, 9800, 2048, UNLOCKED, 129);
+    door_aot_set(1, 5300, 1400, 2400, 1000, 0, 0, 0, 4, 129, RDT_016, 4850, 0, 10250, 1024, UNLOCKED, 129);
+    obj(0, 15, 255, 4860, -10280, 4860, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(1, 15, 255, 1760, 0, 3960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(2, 15, 255, 7590, 0, 8680, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    enemy(ENEMY_BARRY_STARS_, 0, 255, 1, 2, 0, 0, 0, 0, 0, 6900, 0, 9600, 0, 0, 0, 0);
+    enemy(ENEMY_BARRY_STARS_, 0, 255, 1, 2, 0, 0, 0, 0, 0, 450, 0, 5000, 1, 0, 0, 0);
+    if (ck(FG_COMMON, 7, 0))
+    {
+        set(FG_COMMON, 33, 0);
+    }
+    if (ck(FG_COMMON, 95, 0))
+    {
+        set(FG_COMMON, 33, 0);
+    }
+    if (ck(FG_ITEM, 0, 1) && ck(FG_ITEM, 1, 1))
+    {
+        if (ck(FG_COMMON, 7, 1) && ck(FG_COMMON, 95, 1))
+        {
+            set(FG_LOCK, 0, 1);
+            set(FG_LOCK, 1, 1);
+            cut_auto(1);
+            setb(2, 3, 0);
+            dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+            evt_exec(0, 9, event_02);
+        }
+        else if (ck(FG_COMMON, 41, 1))
+        {
+            set(FG_LOCK, 0, 1);
+            set(FG_LOCK, 1, 1);
+            cut_auto(1);
+            setb(2, 3, 0);
+            dir_set(0, 0, 3072, 0, 5200, -400, 2500);
+            set(FG_LOCK, 1, 0);
+            evt_exec(0, 9, event_05);
+        }
+        else
+        {
+            set(FG_LOCK, 0, 0);
+            set(FG_LOCK, 1, 0);
+        }
+    }
+    else
+    {
+        set(FG_LOCK, 0, 0);
+        set(FG_LOCK, 1, 0);
+    }
+}
+
+event event_00
+{
+    set(FG_STATUS, 15, 0);
+    set(FG_6, 23, 1);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 2, 32 | 31, 0 | 0);
+    act_reset();
+    evt_nop();
+    sleep(10);
+    voice_play(1, 48, 0);
+    message(0, 0);
+    wait_message();
+    dir_set(0, 0, 1648, 0, 12700, 0, 15500);
+    cutnext(4);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    sleep(30);
+    act_reset();
+    evt_nop();
+    voice_play(1, 49, 0);
+    message(1, 0);
+    evt_fork(9, event_0D, 0);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 6, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 0, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 6, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 0, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 3);
+    sleep(10);
+    act_anim_flags(32 | 2, 32 | 31, 0 | 3);
+    sleep(30);
+    act_reset();
+    evt_nop();
+    wait_message();
+    run
+    {
+        dir_set(0, 0, 1648, 0, 2700, 0, 5500);
+        cutnext(1);
+        voice_play(1, 50, 0);
+        message(2, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
+    sleep(14);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(8);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(20);
+    act_anim_flags(32 | 4, 32 | 31, 0 | 0);
+    sleep(15);
+    act_anim_flags(32 | 3, 32 | 31, 0 | 0);
+    sleep(10);
+    act_anim_flags(32 | 1, 32 | 31, 0 | 0);
+    sleep(10);
+    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
+    act_reset();
+    evt_nop();
+    wait_message();
+    evt_chain(1);
+}
+
+event event_01
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        voice_play(1, 51, 0);
+        message(3, 0);
+    }
+    sleep(50);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(9220, 62483, 1050);
+    act_reset();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 4, 1));
+    evt_fork(9, event_09, 0);
+    sleep(20);
+    se_play_3d(2, 23, 0, 2, 0, 0, 0);
+    evt_work_set(WK_OBJ, 1);
+    evt_tween_begin_alt();
+    tw_set_rot(0, 80, 0);
+    for (18)
+    {
+        tw_rot_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_rot(0, 78, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 76, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 74, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 72, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 70, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 68, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 66, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 64, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 194, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 196, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 198, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 200, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 202, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 204, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 206, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 208, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 210, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 212, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 214, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 216, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 218, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 220, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 222, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 224, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 226, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 228, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 230, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 232, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 234, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 236, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 238, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 240, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 242, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 244, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 246, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 248, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 250, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 252, 0);
+    tw_rot_add();
+    evt_next();
+    tw_set_rot(0, 254, 0);
+    tw_rot_add();
+    tw_nop();
+    tw_end();
+    evt_nop();
+    run
+    {
+        door_aot_set(0, 900, 4000, 1350, 2500, 4, 2, 0, 0, 128, RDT_009, 6700, 0, 9800, 2048, UNLOCKED, 65);
+        voice_play(1, 52, 0);
+        message(4, 0);
+    }
+    wait_message();
+    set(FG_LOCK, 0, 0);
+    set(FG_COMMON, 32, 0);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(53251, 6151, 789);
+    act_reset();
+    evt_finish();
+}
+
+event event_02
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 4860, -8690, 4860);
+    tw_end();
+    evt_nop();
+    sleep(1);
+    set(FG_6, 23, 1);
+    set(FG_STATUS, 15, 0);
+    evt_nop();
+    evt_nop();
+}
+
+event event_03
+{
+    set(FG_LOCK, 2, 1);
+    sleep(15);
+    se_play_3d(2, 24, 0, 1, 0, 0, 0);
+    sleep(5);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(19, 6600, 0, 2300, 100, 100);
+    act_reset();
+    evt_nop();
+    snd_pan_vol_set(0, 30, 30);
+    bgm_play(1);
+    sleep(45);
+    snd_pan_vol_set(0, 110, 110);
+    bgm_play(0);
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion(16);
+    act_reset();
+    evt_nop();
+    evt_exec(0, 9, event_07);
+    sleep(30);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(19, 4900, 57536, 4900, 100, 100);
+    sleep(40);
+    act_motion(16);
+    act_reset();
+    evt_nop();
+    sleep(10);
+    evt_nop();
+    evt_nop();
+}
+
+event event_04
+{
+    run
+    {
+        dir_set(0, 0, 3072, 0, 5200, 0, 2500);
+        cutnext(2);
+        cut_auto(0);
+    }
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 4860, -10500, 4860);
+    tw_end();
+    evt_nop();
+    run
+    {
+        set(FG_STATUS, 15, 1);
+        set(FG_6, 23, 0);
+        evt_exec(0, 9, event_08);
+    }
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 7, 0);
+    for (450)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    evt_fork(9, event_00, 0);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 5, 0);
+    for (10000)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    evt_finish();
+}
+
+event event_05
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 4860, -8690, 4860);
+    tw_end();
+    evt_nop();
+    sleep(1);
+    set(FG_STATUS, 15, 0);
+    set(FG_6, 23, 1);
+    sleep(10);
+    sleep(1);
+    run
+    {
+        set(FG_COMMON, 41, 0);
+        set(FG_LOCK, 2, 1);
+        evt_exec(0, 9, event_0E);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    sleep(60);
+    act_motion_path(19, 4900, 57536, 4900, 100, 100);
+    sleep(40);
+    act_motion(16);
+    sleep(40);
+    act_reset();
+    evt_nop();
+    run
+    {
+        dir_set(0, 0, 3072, 0, 5200, 0, 2500);
+        cutnext(2);
+        cut_auto(0);
+        set(FG_STATUS, 15, 1);
+    }
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 4860, -8600, 4860);
+    tw_end();
+    evt_nop();
+    set(FG_6, 23, 0);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 10, 0);
+    for (500)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    run
+    {
+        set(FG_STATUS, 15, 1);
+        set(FG_6, 23, 1);
+        cutnext(0);
+    }
+    evt_disable(6);
+    evt_disable(7);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_abs_pos(0, 4860, -6000, 4860);
+    for (80)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    run
+    {
+        bgm_stop(0);
+        bgm_stop(1);
+        se_play_3d(2, 25, 0, 1, 0, 0, 0);
+        se_play_3d(2, 26, 0, 1, 0, 0, 0);
+        se_play_3d(2, 27, 0, 1, 0, 0, 0);
+        se_play_3d(2, 28, 0, 1, 0, 0, 0);
+    }
+    sleep(1);
+    evt_work_set(WK_PLAYER, 0);
+    evt_tween_begin_alt();
+    tw_set_sel(3, 65535);
+    tw_set_sel(0, 4860);
+    tw_set_sel(2, 4860);
+    tw_end();
+    evt_nop();
+    set(FG_STATUS, 7, 0);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    for (30)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_set_pos(0, 8, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 6, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 4, 0);
+    tw_pos_add();
+    evt_next();
+    tw_set_pos(0, 2, 0);
+    tw_pos_add();
+    evt_next();
+    sleep(1);
+    tw_set_pos(0, 254, 0);
+    tw_pos_add();
+    evt_next();
+    tw_pos_add();
+    evt_next();
+    tw_end();
+    evt_finish();
+}
+
+event event_06
+{
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 5, 0);
+    for (450)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    evt_finish();
+}
+
+event event_07
+{
+    evt_fork(6, event_0A, 0);
+    evt_fork(7, event_0B, 0);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 10, 0);
+    for (140)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_nop();
+    evt_finish();
+}
+
+event event_08
+{
+    sleep(100);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(19, 4900, 57536, 4900, 100, 100);
+    sleep(20);
+    act_motion(16);
+    sleep(10);
+    act_end();
+    evt_nop();
+    evt_chain(8);
+}
+
+event event_09
+{
+    evt_work_set(WK_ENEMY, 1);
+    evt_actor_begin();
+    sleep(1);
+    act_anim_flags(32 | 18, 32 | 31, 0 | 1);
+    sleep(40);
+    act_motion_path(19, 4900, 57536, 4900, 100, 100);
+    sleep(20);
+    act_motion(16);
+    act_anim_flags(32 | 16, 32 | 31, 0 | 0);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event event_0A
+{
+    run
+    {
+        effect(8, 20, 128, 12, 244, 20, 0, 62, 244, 0, 0);
+        effect(8, 20, 128, 12, 244, 20, 0, 68, 12, 0, 0);
+        effect(8, 20, 128, 124, 11, 20, 0, 68, 12, 0, 0);
+        effect(8, 20, 128, 124, 11, 20, 0, 62, 244, 0, 0);
+    }
+    sleep(20);
+    evt_chain(10);
+    evt_nop();
+    evt_nop();
+}
+
+event event_0B
+{
+    sleep(30);
+}
+
+event event_0C
+{
+    run
+    {
+        if (cmpw(0, 3, 1, 10000))
+        {
+            if (cmpw(0, 3, 3, 20000))
+            {
+                effect(8, 20, 128, 208, 253, 20, 0, 62, 244, 0, 0);
+            }
+            else
+            {
+                effect(8, 20, 128, 178, 2, 20, 0, 62, 244, 0, 0);
+            }
+        }
+        else
+        {
+            effect(8, 20, 128, 238, 248, 20, 0, 62, 244, 0, 0);
+        }
+    }
+    sleep(1);
+    run
+    {
+        if (cmpw(0, 3, 1, 10000))
+        {
+            if (cmpw(0, 3, 3, 20000))
+            {
+                effect(8, 20, 128, 208, 253, 20, 0, 68, 12, 0, 0);
+            }
+            else
+            {
+                effect(8, 20, 128, 178, 2, 20, 0, 68, 12, 0, 0);
+            }
+        }
+        else
+        {
+            effect(8, 20, 128, 238, 248, 20, 0, 68, 12, 0, 0);
+        }
+    }
+    sleep(1);
+    run
+    {
+        if (cmpw(0, 3, 1, 10000))
+        {
+            if (cmpw(0, 3, 3, 20000))
+            {
+                effect(8, 20, 128, 12, 244, 20, 0, 242, 249, 0, 0);
+            }
+            else
+            {
+                effect(8, 20, 128, 12, 244, 20, 0, 0, 0, 0, 0);
+            }
+        }
+        else
+        {
+            effect(8, 20, 128, 12, 244, 20, 0, 14, 6, 0, 0);
+        }
+    }
+    sleep(1);
+    run
+    {
+        if (cmpw(0, 3, 1, 10000))
+        {
+            if (cmpw(0, 3, 3, 20000))
+            {
+                effect(8, 20, 128, 104, 11, 20, 0, 242, 249, 0, 0);
+            }
+            else
+            {
+                effect(8, 20, 128, 104, 11, 20, 0, 0, 0, 0, 0);
+            }
+        }
+        else
+        {
+            effect(8, 20, 128, 104, 11, 20, 0, 14, 6, 0, 0);
+        }
+    }
+    sleep(10);
+    evt_chain(12);
+    evt_nop();
+    evt_nop();
+}
+
+event event_0D
+{
+    sleep(10);
+    se_play_3d(2, 29, 0, 2, 0, 0, 0);
+    sleep(30);
+    se_play_3d(2, 29, 0, 2, 0, 0, 0);
+    sleep(30);
+    se_play_3d(2, 29, 0, 2, 0, 0, 0);
+    evt_finish();
+}
+
+event event_0E
+{
+    snd_pan_vol_set(0, 30, 30);
+    bgm_play(1);
+    sleep(45);
+    snd_pan_vol_set(0, 110, 110);
+    bgm_play(0);
+    evt_fork(6, event_0A, 0);
+    evt_fork(7, event_0B, 0);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 7, 0);
+    for (140)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_end();
+    evt_finish();
+}

@@ -1,0 +1,86 @@
+//! `.akscr` room scripts: structured source for a room's SCD streams.
+//!
+//! A script holds one `proc init` / `proc main` section per command block
+//! (in container order) and one `event event_XX` section per event script,
+//! dense from `event_00`. The decompiler renders the original bytecode as
+//! code and the compiler turns it back into byte-identical streams.
+//!
+//! ```text
+//! #version 1
+//!
+//! proc init
+//! {
+//!     if (ck(FG_COMMON, 164, 0) && ck(FG_STATUS, 8, 1))
+//!     {
+//!         set(FG_COMMON, 169, 0);
+//!     }
+//!     else
+//!     {
+//!         require(ck(FG_ROOM, 3, 1));
+//!         return;
+//!     }
+//! }
+//!
+//! event event_00
+//! {
+//!     run
+//!     {
+//!         set(FG_6, 23, 1);
+//!     }
+//!     evt_exec(0, 6, event_0A);
+//!     sleep(30);
+//!     do
+//!     {
+//!         evt_next();
+//!     }
+//!     while (ck(FG_STATUS, 14, 0));
+//!     for (4)
+//!     {
+//!         evt_next();
+//!     }
+//!     wait_message();
+//!     evt_finish();
+//! }
+//! ```
+//!
+//! Command blocks (`proc` sections and `run` blocks):
+//!
+//! - `name(args);` is one command; arguments are numbers, the disassembler's
+//!   constant names (`FG_COMMON`, `RDT_001`, `event_0A`, ...) and `hi | lo`
+//!   bit fields.
+//! - `if (a && b) { ... } else { ... }` and `else if`: the conditions are the
+//!   condition commands that follow the `if` opcode.
+//! - `require(cond);` is a condition outside an `if` head: when false it
+//!   abandons the enclosing `if` body, or the whole block at the top level.
+//! - `return;` is `end 0`. Every block ends in an implicit `end 0` unless the
+//!   section or `run` is marked `noreturn`.
+//!
+//! Event scripts:
+//!
+//! - an event-VM mnemonic (`evt_*`, `act_*`, `tw_*`) is that instruction; any
+//!   other call is a command wrapped in `evt_single`, and
+//!   `single(N) name(args);` gives the wrapper an explicit payload length
+//!   (the original data has payloads that cut a command short).
+//! - `run { ... }` is an `evt_block` with one command sub-block (plus the
+//!   `evt_nop` that is its terminator's second byte).
+//! - `for (N) { ... }` is `evt_for 0, N` ... `evt_fornext`.
+//! - `do { ... } while (cond);` is `evt_do` with its one inline condition
+//!   ... `evt_dountil`.
+//! - `sleep(N);` is `evt_sleep` with its `0xF9` tick byte and frame count;
+//!   `wait_message();` is `evt_push_cond` + `evt_skip_if`.
+//! - an event that ends in `evt_finish` is zero-padded to four bytes unless
+//!   its header says `nopad` (`event event_05 nopad`); `raw(0x.., ...);` as
+//!   the last statement gives any other trailing bytes.
+//!
+//! Anywhere a statement is allowed, `asm { ... }` embeds `.s` assembly lines
+//! verbatim (closed by a line holding only `}`); the decompiler uses it for
+//! bytecode that has no structured form.
+
+mod compile;
+mod decompile;
+
+pub use compile::compile;
+pub use decompile::decompile;
+
+#[cfg(test)]
+mod tests;

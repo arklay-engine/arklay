@@ -37,6 +37,7 @@
 mod common;
 
 mod actor_real;
+mod akscr_real;
 mod combat_real;
 mod death_real;
 mod door_anim_real;

@@ -1,0 +1,464 @@
+#version 1
+
+proc init
+{
+    door_aot_set(0, 16400, 5800, 2000, 3000, 12, 1, 9, 5, 0, RDT_004, 18600, 0, 11300, 0, UNLOCKED, 129);
+    aot_set(1, 4785, 6936, 700, 600, SCE_USEITEM, 68, 4, 0, 32, 0, 1, 0);
+    aot_set(2, 13635, 6936, 700, 600, SCE_USEITEM, 68, 4, 0, 33, 0, 1, 0);
+    aot_set(3, 9235, 6736, 1000, 1000, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+    aot_set(4, 1400, 6200, 2200, 2300, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(5, 1000, 9300, 17400, 3300, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(6, 1000, 2000, 18400, 3300, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(7, 4385, 6736, 1000, 1000, SCE_MESSAGE, 193, 129, 0, 255, 0, 0, 0);
+    aot_set(8, 13535, 6736, 1000, 1000, SCE_MESSAGE, 193, 129, 0, 255, 0, 0, 0);
+    item_aot_set(9, 1400, 6200, 2200, 2300, ITEM_SUN_CREST, 1, 0, 255, 42, 8, 0, 0, 190, 25, 0, 4, 36, 129, 0, 0);
+    obj(0, 31, 255, 2655, 0, 7220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(1, 1, 255, 8795, 0, 7886, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
+    obj(2, 1, 255, 14035, 0, 6190, 0, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
+    set(FG_STATUS, 29, 0);
+    set(FG_ROOM, 32, 0);
+    set(FG_ROOM, 33, 0);
+    aot_delete(9, SCE_NONE, 129);
+    if (ck(FG_COMMON, 98, 0) && ck(FG_COMMON, 97, 0) && ck(FG_COMMON, 99, 0))
+    {
+        set(FG_COMMON, 102, 0);
+    }
+    if (ck(FG_SCENARIO, 58, 0))
+    {
+        set(FG_ROOM, 27, 0);
+        if (ck(FG_ITEM, 36, 0))
+        {
+            aot_delete(9, SCE_ITEM, 129);
+        }
+        aot_delete(3, SCE_NONE, 129);
+        aot_delete(4, SCE_NONE, 129);
+        eml_pos(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        eml_pos(1, 0, 0, 0, 8, 0, 0, 237, 18, 0, 0, 68, 28);
+        eml_pos(2, 0, 0, 0, 0, 0, 0, 211, 54, 0, 0, 72, 28);
+        set(FG_ROOM, 29, 0);
+    }
+}
+
+proc main
+{
+    if (ck(FG_ROOM, 27, 0) && ck(FG_ROOM, 30, 0))
+    {
+        set(FG_ROOM, 30, 1);
+    }
+    if (ck(FG_SCENARIO, 58, 1) && cmpb(2, 0, 2))
+    {
+        bank_bit(1);
+        bank_bit(2);
+    }
+    if (cmpb(2, 0, 2) && ck(FG_ROOM, 30, 1))
+    {
+        bank_bit(3);
+    }
+    if (ck(FG_ROOM, 28, 0))
+    {
+        if (ck(FG_ROOM, 32, 0) && ck(FG_ROOM, 33, 0))
+        {
+            if (ck(FG_ROOM, 27, 1))
+            {
+                evt_exec(0, 9, event_01);
+            }
+            if (ck(FG_ITEM, 36, 0))
+            {
+                aot_delete(4, SCE_NONE, 129);
+                aot_delete(9, SCE_ITEM, 129);
+            }
+            set(FG_ROOM, 29, 0);
+        }
+        else
+        {
+            evt_exec(0, 9, event_02);
+        }
+        aot_delete(3, SCE_NONE, 193);
+        set(FG_ROOM, 28, 1);
+    }
+    if (ck(FG_ROOM, 29, 0))
+    {
+        if (ck(FG_ROOM, 32, 0) && ck(FG_ROOM, 33, 0))
+        {
+        }
+        else
+        {
+            evt_exec(0, 9, event_05);
+            set(FG_ROOM, 29, 1);
+        }
+    }
+    if (ck(FG_ROOM, 32, 0))
+    {
+        aot_delete(7, SCE_MESSAGE, 193);
+        set(FG_ROOM, 24, 1);
+    }
+    if (ck(FG_ROOM, 33, 0))
+    {
+        aot_delete(8, SCE_MESSAGE, 193);
+        set(FG_ROOM, 25, 1);
+    }
+    if (ck(FG_ROOM, 26, 0) && ck(FG_ROOM, 32, 1) && ck(FG_ROOM, 24, 1))
+    {
+        evt_exec(0, 9, event_03);
+        aot_delete(7, SCE_NONE, 193);
+        set(FG_ROOM, 24, 0);
+    }
+    if (ck(FG_ROOM, 26, 0) && ck(FG_ROOM, 33, 1) && ck(FG_ROOM, 25, 1))
+    {
+        evt_exec(0, 9, event_04);
+        aot_delete(8, SCE_NONE, 193);
+        set(FG_ROOM, 25, 0);
+    }
+    if (ck(FG_ROOM, 36, 0) && ck(FG_STATUS, 64, 1))
+    {
+        sys_multi(8, 320);
+    }
+    if (ck(FG_ROOM, 24, 1) && ck(FG_ROOM, 25, 1))
+    {
+        if (ck(FG_ROOM, 31, 0))
+        {
+            set(FG_ROOM, 31, 1);
+            bgm_stop(0);
+        }
+    }
+    else if (ck(FG_ROOM, 31, 1))
+    {
+        set(FG_ROOM, 31, 0);
+        bgm_play(0);
+        snd_pan_vol_set(0, 255, 255);
+    }
+}
+
+event event_00
+{
+    set(FG_6, 23, 1);
+    cutnext(3);
+    sleep(15);
+    message(128, 69);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        if (cmpb(5, 0, 0))
+        {
+            set(FG_ROOM, 28, 0);
+        }
+        set(FG_6, 23, 0);
+        cutnext(1);
+        cut_auto(0);
+    }
+    evt_next();
+    evt_finish();
+}
+
+event event_01
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        cut_auto(1);
+        cutnext(1);
+        set(FG_STATUS, 15, 0);
+        set(FG_ROOM, 30, 0);
+        bank_bit(1);
+        bank_bit(2);
+    }
+    sleep(10);
+    evt_work_set(WK_PLAYER, 1);
+    evt_actor_begin();
+    act_anim_flags(0 | 9, 32 | 2, 0 | 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 34, 1));
+    act_reset();
+    evt_nop();
+    run
+    {
+        se_play_3d(2, 24, 0, 0, 0, 9550, 7200);
+        cutnext(2);
+        aot_switch(0, 3, 0);
+        aot_delete(3, SCE_NONE, 68);
+    }
+    sleep(40);
+    se_play_3d(2, 23, 0, 0, 0, 3500, 7200);
+    evt_fork(9, event_06, 0);
+    evt_work_set(WK_OBJ, 0);
+    evt_tween_begin_alt();
+    tw_set_pos(0, 24, 0);
+    for (90)
+    {
+        tw_pos_add();
+        evt_next();
+    }
+    tw_nop();
+    tw_abs_pos(0, 0, 0, 0);
+    tw_nop();
+    tw_end();
+    sleep(40);
+    aot_switch(0, 3, 1);
+    cutnext(1);
+    cut_auto(0);
+    sleep(10);
+    evt_work_set(WK_PLAYER, 1);
+    evt_actor_begin();
+    act_anim_flags(0 | 9, 32 | 2, 0 | 0);
+    act_flag_op(1, 5, 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 34, 1));
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    run
+    {
+        aot_delete(4, SCE_NONE, 129);
+        set(FG_SCENARIO, 58, 0);
+        set(FG_ROOM, 30, 1);
+        set(FG_STATUS, 15, 1);
+        cut_auto(0);
+        set(FG_6, 23, 0);
+    }
+    evt_finish();
+}
+
+event event_02
+{
+    run
+    {
+        set(FG_6, 23, 1);
+    }
+    evt_work_set(WK_PLAYER, 1);
+    evt_actor_begin();
+    act_anim_flags(0 | 9, 32 | 2, 0 | 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 34, 1));
+    act_reset();
+    evt_nop();
+    run
+    {
+        se_play_3d(2, 24, 0, 0, 0, 9550, 7200);
+        set(FG_ROOM, 26, 0);
+        timer_setup(1, 200, 0, 6, 0);
+    }
+    sleep(30);
+    setw(2, 0, 0);
+    message(4, 69);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    evt_work_set(WK_PLAYER, 1);
+    evt_actor_begin();
+    act_anim_flags(0 | 9, 32 | 2, 0 | 0);
+    act_flag_op(1, 5, 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 34, 1));
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    set(FG_6, 23, 0);
+    cut_auto(0);
+    sleep(60);
+    set(FG_6, 23, 1);
+    cut_auto(1);
+    se_play_3d(3, 2, 0, 1, 0, 0, 0);
+    evt_work_set(WK_PLAYER, 1);
+    evt_actor_begin();
+    act_anim_flags(0 | 1, 32 | 4, 0 | 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 36, 1));
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(10);
+    run
+    {
+        if (ck(FG_6, 25, 1))
+        {
+            set(FG_6, 25, 0);
+        }
+        set(FG_6, 23, 0);
+        cut_auto(0);
+    }
+    evt_finish();
+}
+
+event event_03
+{
+    do
+    {
+        single(12) effect(9, 24, 0, 21, 19, 152, 254, 68, 28);
+        evt_nop();
+        evt_nop();
+        sleep(15);
+    }
+    while (ck(FG_ROOM, 24, 0));
+    evt_finish();
+}
+
+event event_04
+{
+    do
+    {
+        single(12) effect_tracked(9, 24, 0, 211, 54, 152, 254, 68, 28);
+        evt_nop();
+        evt_nop();
+        sleep(15);
+    }
+    while (ck(FG_ROOM, 25, 0));
+    evt_finish();
+}
+
+event event_05
+{
+    run
+    {
+        set(FG_6, 23, 1);
+        cut_auto(1);
+        set(FG_ROOM, 26, 0);
+        timer_setup(1, 200, 0, 6, 0);
+    }
+    sleep(30);
+    run
+    {
+        setw(2, 0, 0);
+        message(4, 69);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(5, 2, 128));
+    run
+    {
+        cut_auto(0);
+        set(FG_6, 23, 0);
+    }
+    sleep(60);
+    run
+    {
+        set(FG_6, 23, 1);
+        se_play_3d(3, 2, 0, 1, 0, 0, 0);
+        cut_auto(1);
+    }
+    evt_work_set(WK_PLAYER, 1);
+    evt_actor_begin();
+    act_anim_flags(0 | 1, 32 | 4, 0 | 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 36, 1));
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(10);
+    run
+    {
+        if (ck(FG_STATUS, 25, 1))
+        {
+            set(FG_6, 25, 0);
+        }
+        set(FG_6, 23, 0);
+        cut_auto(0);
+    }
+    evt_finish();
+}
+
+event event_06
+{
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 88, 27);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 152, 33);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 144, 26);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 220, 30);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 100, 25);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 88, 27);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 152, 33);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 120, 30);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 108, 32);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 144, 26);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 76, 29);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 8, 32);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 120, 30);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 88, 27);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    single(12) effect(8, 19, 0, 240, 10, 76, 255, 64, 31);
+    evt_nop();
+    evt_nop();
+    sleep(5);
+    evt_finish();
+}
