@@ -9190,18 +9190,20 @@ fn system_info(display: &Display) -> gui::settings::SystemInfo {
 
 /// The processor's brand string, from CPUID's extended leaves.
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+// `__cpuid` is safe on newer toolchains, but the MSRV still needs the block.
+#[allow(unused_unsafe)]
 fn cpu_brand() -> Option<String> {
     #[cfg(target_arch = "x86")]
     use std::arch::x86::__cpuid;
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::__cpuid;
     // Leaf 0x80000000 says whether the brand leaves exist.
-    if __cpuid(0x8000_0000).eax < 0x8000_0004 {
+    if unsafe { __cpuid(0x8000_0000) }.eax < 0x8000_0004 {
         return None;
     }
     let mut bytes = Vec::with_capacity(48);
     for leaf in 0x8000_0002..=0x8000_0004u32 {
-        let regs = __cpuid(leaf);
+        let regs = unsafe { __cpuid(leaf) };
         for reg in [regs.eax, regs.ebx, regs.ecx, regs.edx] {
             bytes.extend_from_slice(&reg.to_le_bytes());
         }
