@@ -7,12 +7,14 @@
 
 use super::canvas::{Color, Rect};
 use super::dialog::{Dialog, DialogResult};
-use super::input::{Device, GuiEvent, GuiKey};
+use super::input::{Device, GuiEvent, GuiKey, PadStyle};
 use super::locale::Locale;
 use super::options::{Category, OptionDef, OptionKind, tree};
+use super::pad_diagram;
 use super::text::Align;
 use super::theme::{Role, palette};
 use super::widgets::{Chevron, Painter, SELECTION_GLOW};
+use crate::controls::Bindings;
 
 /// Row heights, in units.
 const ROW_H: f32 = 66.0;
@@ -91,7 +93,18 @@ pub struct OptionsScreen {
     drag: Option<(usize, f32, f32)>,
     dialog: Option<(Dialog, Confirm)>,
     pub(super) device: Device,
+    /// The controller diagram and the option whose page shows it.
+    pad: Option<PadDiagram>,
     text: Locale,
+}
+
+/// A controller diagram for the description pane.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PadDiagram {
+    /// The diagram shows on the page holding this option.
+    pub page_of: String,
+    pub style: PadStyle,
+    pub bindings: Bindings,
 }
 
 impl OptionsScreen {
@@ -109,6 +122,7 @@ impl OptionsScreen {
             drag: None,
             dialog: None,
             device: Device::Keyboard,
+            pad: None,
             text,
         }
     }
@@ -122,6 +136,11 @@ impl OptionsScreen {
     /// Show hints for `device` until the next input says otherwise.
     pub fn set_device(&mut self, device: Device) {
         self.device = device;
+    }
+
+    /// Show `pad` beneath the description on its page.
+    pub fn set_pad_diagram(&mut self, pad: Option<PadDiagram>) {
+        self.pad = pad;
     }
 
     /// Replace the definitions (a change can enable or relabel others),
@@ -529,6 +548,7 @@ impl OptionsScreen {
         p.scrollbar(bar, self.scroll, visible, total);
 
         // The description pane.
+        let mut text_end = list.y;
         if let Some(&index) = self.options().get(self.row) {
             let def = self.defs[index].clone();
             let width = right - desc_left;
@@ -557,8 +577,21 @@ impl OptionsScreen {
                 let default = self
                     .text
                     .format("options.default", def.value_label(def.default));
-                p.paragraph(Role::Body, desc_left, y, width, palette::TEXT, &default);
+                y = p.paragraph(Role::Body, desc_left, y, width, palette::TEXT, &default);
             }
+            text_end = y;
+        }
+        // The controller diagram fills what the text leaves, from a fixed
+        // top so it holds still between rows.
+        if let Some(pad) = &self.pad
+            && self
+                .options()
+                .iter()
+                .any(|&index| self.defs[index].id == pad.page_of)
+        {
+            let top = u(560.0).max(text_end + u(30.0));
+            let area = Rect::new(desc_left, top, right - desc_left, u(990.0) - top);
+            pad_diagram::draw(p, area, pad.style, &pad.bindings, &self.text);
         }
 
         // Hints.

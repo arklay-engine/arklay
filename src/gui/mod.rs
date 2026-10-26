@@ -27,6 +27,7 @@ pub mod locale;
 pub mod options;
 pub mod options_screen;
 pub mod overlay;
+pub mod pad_diagram;
 pub mod settings;
 pub mod system_menu;
 pub mod text;

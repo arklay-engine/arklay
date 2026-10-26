@@ -15,7 +15,7 @@ use super::dialog::{Dialog, DialogResult};
 use super::input::{Device, GuiEvent, GuiKey, Sound};
 use super::key_config::{KeyConfigEvent, KeyConfigScreen};
 use super::locale::Locale;
-use super::options_screen::{OptionsEvent, OptionsScreen};
+use super::options_screen::{OptionsEvent, OptionsScreen, PadDiagram};
 use super::settings::{self, Settings};
 use super::text::{Align, Fonts};
 use super::theme::{Role, Theme, palette};
@@ -157,8 +157,10 @@ impl SystemMenu {
             screen.set_device(device);
             screen.set_bindings(self.settings.bindings.clone());
         }
+        let pad = self.pad_diagram();
         if let Some(screen) = &mut self.options {
             screen.set_device(device);
+            screen.set_pad_diagram(Some(pad));
             let defs = settings::defs(&self.settings, &self.text);
             let values = defs
                 .iter()
@@ -176,7 +178,22 @@ impl SystemMenu {
             .collect();
         let mut screen = OptionsScreen::new(defs, values, self.text.clone());
         screen.set_device(self.shown_device());
+        screen.set_pad_diagram(Some(self.pad_diagram()));
         self.options = Some(screen);
+    }
+
+    /// The Controller page's diagram: the chosen icon type's controller
+    /// (the one in use when automatic, else Xbox) and its bindings.
+    fn pad_diagram(&self) -> PadDiagram {
+        let style = match (self.shown_device(), self.settings.game.button_style) {
+            (Device::Gamepad(style), _) => style,
+            (Device::Keyboard, style) => style.unwrap_or_default(),
+        };
+        PadDiagram {
+            page_of: "control_type".to_string(),
+            style,
+            bindings: self.settings.bindings.clone(),
+        }
     }
 
     fn open_key_config(&mut self) {
@@ -796,6 +813,32 @@ mod tests {
         menu.handle(&[key(GuiKey::TabNext), key(GuiKey::Up)]);
         shot(&mut menu, "keys_menu", 1920, 1080);
         shot(&mut menu, "keys_4x3", 1024, 768);
+        // The controller diagram, per icon type and with type B.
+        let mut menu = self::menu();
+        menu.skip_intro();
+        menu.handle(&[
+            key(GuiKey::Down),
+            key(GuiKey::Down),
+            key(GuiKey::Confirm),
+            key(GuiKey::SubNext),
+        ]);
+        for (style, name) in [
+            (PadStyle::Xbox, "xbox"),
+            (PadStyle::PlayStation, "playstation"),
+            (PadStyle::Nintendo, "nintendo"),
+        ] {
+            menu.handle(&[GuiEvent::Key(GuiKey::Down, Device::Gamepad(style))]);
+            shot(&mut menu, &format!("pad_{name}"), 1920, 1080);
+        }
+        let mut settings = menu.settings().clone();
+        settings.game.control_type = crate::config::ControlType::B;
+        settings.bindings = settings
+            .bindings
+            .clone()
+            .with_control_type(crate::config::ControlType::B);
+        menu.set_settings(settings);
+        shot(&mut menu, "pad_type_b", 1920, 1080);
+        shot(&mut menu, "pad_4x3", 1024, 768);
     }
 
     #[test]
