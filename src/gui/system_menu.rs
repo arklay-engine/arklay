@@ -38,6 +38,16 @@ pub enum MenuRequest {
     Sound(Sound),
 }
 
+/// A version without its trailing zero parts beyond the second, as
+/// drivers are usually named ("616.56.0.0" is 616.56).
+fn short_version(version: &str) -> String {
+    let mut parts: Vec<&str> = version.split('.').collect();
+    while parts.len() > 2 && parts.last() == Some(&"0") {
+        parts.pop();
+    }
+    parts.join(".")
+}
+
 /// Where the menu's cursor is, compared across one event to pick its sound.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct View {
@@ -158,9 +168,11 @@ impl SystemMenu {
             screen.set_bindings(self.settings.bindings.clone());
         }
         let pad = self.pad_diagram();
+        let specs = self.specs();
         if let Some(screen) = &mut self.options {
             screen.set_device(device);
             screen.set_pad_diagram(Some(pad));
+            screen.set_facts(Some(("pc_specs".to_string(), specs)));
             let defs = settings::defs(&self.settings, &self.text);
             let values = defs
                 .iter()
@@ -179,7 +191,38 @@ impl SystemMenu {
         let mut screen = OptionsScreen::new(defs, values, self.text.clone());
         screen.set_device(self.shown_device());
         screen.set_pad_diagram(Some(self.pad_diagram()));
+        screen.set_facts(Some(("pc_specs".to_string(), self.specs())));
         self.options = Some(screen);
+    }
+
+    /// The PC Specs row's table: what is known of the machine.
+    fn specs(&self) -> Vec<(String, String)> {
+        let system = &self.settings.system;
+        let text = &self.text;
+        let cpu = system
+            .cpu
+            .clone()
+            .unwrap_or_else(|| text.format("specs.cores", system.cpu_cores));
+        let ram = text.format("specs.gb", format!("{:.2}", system.ram_mb as f32 / 1024.0));
+        let api = system.gpu.api.as_deref().map(|api| match api {
+            "vulkan" => "Vulkan".to_string(),
+            "direct3d12" => "Direct3D 12".to_string(),
+            "metal" => "Metal".to_string(),
+            other => other.to_string(),
+        });
+        [
+            ("specs.cpu", Some(cpu)),
+            ("specs.ram", Some(ram)),
+            ("specs.gpu", system.gpu.name.clone()),
+            (
+                "specs.driver",
+                system.gpu.driver_version.as_deref().map(short_version),
+            ),
+            ("specs.api", api),
+        ]
+        .into_iter()
+        .filter_map(|(key, value)| Some((text.get(key).to_string(), value?)))
+        .collect()
     }
 
     /// The Controller page's diagram: the chosen icon type's controller
@@ -839,6 +882,34 @@ mod tests {
         menu.set_settings(settings);
         shot(&mut menu, "pad_type_b", 1920, 1080);
         shot(&mut menu, "pad_4x3", 1024, 768);
+        // The PC Specs row's table.
+        let mut settings = menu.settings().clone();
+        settings.system = settings::SystemInfo {
+            cpu: Some("AMD Ryzen 9 7950X 16-Core Processor".to_string()),
+            cpu_cores: 32,
+            ram_mb: 64_666,
+            gpu: crate::gpu::GpuInfo {
+                name: Some("NVIDIA GeForce RTX 5080".to_string()),
+                driver_version: Some("616.56".to_string()),
+                api: Some("vulkan".to_string()),
+            },
+        };
+        menu.set_settings(settings);
+        menu.handle(&[
+            key(GuiKey::TabNext),
+            key(GuiKey::TabNext),
+            key(GuiKey::SubNext),
+        ]);
+        shot(&mut menu, "options_specs", 1920, 1080);
+        menu.handle(&[key(GuiKey::TabNext)]);
+        shot(&mut menu, "options_audio_single", 1920, 1080);
+    }
+
+    #[test]
+    fn driver_versions_drop_their_trailing_zeros() {
+        assert_eq!(short_version("616.56.0.0"), "616.56");
+        assert_eq!(short_version("32.0.15.6094"), "32.0.15.6094");
+        assert_eq!(short_version("1.0"), "1.0");
     }
 
     #[test]

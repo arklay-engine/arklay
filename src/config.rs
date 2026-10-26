@@ -31,7 +31,7 @@
 //! auto_aim = true        # raising a weapon locks on to the nearest enemy
 //! blood = true           # blood billboards, spurts and pools
 //! ui_font = "modern"     # the menus' face: "modern" or "retro"
-//! menu_text_size = "standard" # "small", "standard", "large", "extra_large"
+//! menu_text_size = "standard" # "small", "standard", "large"
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
 //!                        # or "nintendo"
 //! control_type = "a"     # the gamepad layout preset: "a", "b" or "c"
@@ -303,7 +303,6 @@ pub enum TextSize {
     #[default]
     Standard,
     Large,
-    ExtraLarge,
 }
 
 impl Named for TextSize {
@@ -311,7 +310,6 @@ impl Named for TextSize {
         (TextSize::Small, "small"),
         (TextSize::Standard, "standard"),
         (TextSize::Large, "large"),
-        (TextSize::ExtraLarge, "extra_large"),
     ];
 }
 
@@ -319,10 +317,9 @@ impl TextSize {
     /// The factor on the theme's text sizes.
     pub fn scale(self) -> f32 {
         match self {
-            TextSize::Small => 0.85,
-            TextSize::Standard => 1.0,
-            TextSize::Large => 1.15,
-            TextSize::ExtraLarge => 1.3,
+            TextSize::Small => 0.75,
+            TextSize::Standard => 0.85,
+            TextSize::Large => 1.0,
         }
     }
 }
@@ -2013,7 +2010,7 @@ mod tests {
             auto_aim: false,
             blood: false,
             ui_font: crate::gui::FontFamily::Retro,
-            menu_text_size: TextSize::ExtraLarge,
+            menu_text_size: TextSize::Large,
             button_style: Some(crate::gui::PadStyle::Nintendo),
             control_type: ControlType::C,
             vibration: Vibration::Off,

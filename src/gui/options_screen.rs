@@ -95,6 +95,9 @@ pub struct OptionsScreen {
     pub(super) device: Device,
     /// The controller diagram and the option whose page shows it.
     pad: Option<PadDiagram>,
+    /// Labelled values the row with this option id shows beneath its
+    /// description.
+    facts: Option<(String, Vec<(String, String)>)>,
     text: Locale,
 }
 
@@ -123,6 +126,7 @@ impl OptionsScreen {
             dialog: None,
             device: Device::Keyboard,
             pad: None,
+            facts: None,
             text,
         }
     }
@@ -136,6 +140,11 @@ impl OptionsScreen {
     /// Show hints for `device` until the next input says otherwise.
     pub fn set_device(&mut self, device: Device) {
         self.device = device;
+    }
+
+    /// Show `facts` beneath the description of the row with option `id`.
+    pub fn set_facts(&mut self, facts: Option<(String, Vec<(String, String)>)>) {
+        self.facts = facts;
     }
 
     /// Show `pad` beneath the description on its page.
@@ -228,6 +237,9 @@ impl OptionsScreen {
             if wrap && !def.disabled {
                 events.push(OptionsEvent::Open { index });
             }
+            return;
+        }
+        if def.kind == OptionKind::Info {
             return;
         }
         let current = self.values[index];
@@ -445,42 +457,45 @@ impl OptionsScreen {
         self.hits.push((cap, Hit::TabNext));
         p.rule(left, u(181.0), right - left, 2.0, palette::RULE_BRIGHT);
 
-        // Subcategory tabs.
-        let sub_y = u(260.0);
-        let cap = p.glyph(left + u(35.0), sub_y, self.device, GuiKey::SubPrev);
-        self.hits.push((cap, Hit::SubPrev));
-        let mut x = cap.right() + u(30.0);
+        // Subcategory tabs, unless there is only the one; the list stays
+        // where it is either way.
         let subs: Vec<String> = self
             .tree
             .get(self.category)
             .map(|c| c.subcategories.iter().map(|s| s.name.clone()).collect())
             .unwrap_or_default();
-        for (index, name) in subs.iter().enumerate() {
-            let text_w = p.measure(Role::SubTab, name);
-            let rect = Rect::new(x, sub_y - u(24.0), text_w + u(60.0), u(48.0));
-            let selected = index == self.sub;
-            let color = if selected {
-                palette::TEXT
-            } else {
-                palette::TEXT_DIM
-            };
-            p.text(
-                Role::SubTab,
-                rect.center_x(),
-                sub_y,
-                Align::Center,
-                color,
-                name,
-            );
-            if selected {
-                p.underline_glow(rect.center_x(), u(285.0), text_w + u(20.0));
+        if subs.len() > 1 {
+            let sub_y = u(260.0);
+            let cap = p.glyph(left + u(35.0), sub_y, self.device, GuiKey::SubPrev);
+            self.hits.push((cap, Hit::SubPrev));
+            let mut x = cap.right() + u(30.0);
+            for (index, name) in subs.iter().enumerate() {
+                let text_w = p.measure(Role::SubTab, name);
+                let rect = Rect::new(x, sub_y - u(24.0), text_w + u(60.0), u(48.0));
+                let selected = index == self.sub;
+                let color = if selected {
+                    palette::TEXT
+                } else {
+                    palette::TEXT_DIM
+                };
+                p.text(
+                    Role::SubTab,
+                    rect.center_x(),
+                    sub_y,
+                    Align::Center,
+                    color,
+                    name,
+                );
+                if selected {
+                    p.underline_glow(rect.center_x(), u(285.0), text_w + u(20.0));
+                }
+                self.hits.push((rect, Hit::Sub(index)));
+                x = rect.right() + u(20.0);
             }
-            self.hits.push((rect, Hit::Sub(index)));
-            x = rect.right() + u(20.0);
+            let cap = p.glyph(x, sub_y, self.device, GuiKey::SubNext);
+            self.hits.push((cap, Hit::SubNext));
+            p.rule(left, u(285.0), pane_right - left, 2.0, palette::RULE_BRIGHT);
         }
-        let cap = p.glyph(x, sub_y, self.device, GuiKey::SubNext);
-        self.hits.push((cap, Hit::SubNext));
-        p.rule(left, u(285.0), pane_right - left, 2.0, palette::RULE_BRIGHT);
 
         // The list.
         let list = Rect::new(left, u(329.0), pane_right - left, u(960.0) - u(329.0));
@@ -572,12 +587,17 @@ impl OptionsScreen {
                     }
                 }
             }
-            if def.kind != OptionKind::Link {
+            if !matches!(def.kind, OptionKind::Link | OptionKind::Info) {
                 y += p.line_height(Role::Body) * 0.6;
                 let default = self
                     .text
                     .format("options.default", def.value_label(def.default));
                 y = p.paragraph(Role::Body, desc_left, y, width, palette::TEXT, &default);
+            }
+            if let Some((id, facts)) = &self.facts
+                && *id == def.id
+            {
+                y = self.draw_facts(p, desc_left, y + u(30.0), width, facts);
             }
             text_end = y;
         }
@@ -611,6 +631,42 @@ impl OptionsScreen {
         if let Some((dialog, _)) = &mut self.dialog {
             dialog.draw(p, pulse);
         }
+    }
+
+    /// A table of labelled values from `y`, each label over its value
+    /// with a rule beneath; returns the bottom.
+    fn draw_facts(
+        &self,
+        p: &mut Painter<'_>,
+        x: f32,
+        mut y: f32,
+        width: f32,
+        facts: &[(String, String)],
+    ) -> f32 {
+        let line = p.line_height(Role::Body);
+        let rule = 2.0;
+        p.rule(x, y, width, rule, palette::RULE);
+        for (label, value) in facts {
+            p.text(
+                Role::Body,
+                x,
+                y + line * 0.6,
+                Align::Left,
+                palette::TEXT,
+                label,
+            );
+            p.text(
+                Role::Body,
+                x + width,
+                y + line * 1.6,
+                Align::Right,
+                palette::TEXT,
+                value,
+            );
+            y += line * 2.2;
+            p.rule(x, y, width, rule, palette::RULE);
+        }
+        y
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -729,6 +785,7 @@ impl OptionsScreen {
                 ));
             }
             OptionKind::Link => p.link_icon(right_arrow, cy, 30.0, arrows),
+            OptionKind::Info => {}
         }
         if value != def.default {
             p.diamond(rect.right() + u(16.0), cy, 7.0, Color::WHITE);

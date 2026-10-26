@@ -25,6 +25,18 @@ pub struct Settings {
     pub displays: Vec<String>,
     /// The action map the key configuration screen edits.
     pub bindings: crate::controls::Bindings,
+    /// The machine, for the PC Specs row.
+    pub system: SystemInfo,
+}
+
+/// What the PC Specs row shows of the machine.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SystemInfo {
+    /// The processor's brand string, where the CPU reports one.
+    pub cpu: Option<String>,
+    pub cpu_cores: u32,
+    pub ram_mb: u32,
+    pub gpu: crate::gpu::GpuInfo,
 }
 
 /// The two common shapes first, then the rarer ones.
@@ -436,9 +448,12 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 Choice::described(text.get("choice.off"), text.get("hdr.off")),
             ]),
         ),
+        // Shows the machine's specifications; it has no value.
+        row("pc_specs", IMAGE, OptionKind::Info),
+        row("blood", IMAGE, on_off(text, "blood")),
         row(
-            "pc_specs",
-            IMAGE,
+            "graphics_quality",
+            QUALITY,
             OptionKind::Choice(
                 PRESETS
                     .iter()
@@ -446,14 +461,13 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     .chain(["custom"])
                     .map(|name| {
                         Choice::described(
-                            text.get(&format!("pc_specs.{name}")),
-                            text.get(&format!("pc_specs.{name}_note")),
+                            text.get(&format!("graphics_quality.{name}")),
+                            text.get(&format!("graphics_quality.{name}_note")),
                         )
                     })
                     .collect(),
             ),
         ),
-        row("blood", IMAGE, on_off(text, "blood")),
         row(
             "renderer",
             QUALITY,
@@ -583,7 +597,7 @@ pub fn value(id: &str, settings: &Settings) -> i32 {
                 .position(|&r| r == graphics.frame_rate)
                 .unwrap_or(0),
         ),
-        "pc_specs" => index(preset(graphics)),
+        "graphics_quality" => index(preset(graphics)),
         "renderer" => i32::from(graphics.renderer == RendererKind::Gpu),
         "render_scale" => graphics.render_scale as i32,
         "msaa" => index(
@@ -660,7 +674,7 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
             }
         }
         // Custom keeps whatever the quality rows say.
-        "pc_specs" => {
+        "graphics_quality" => {
             if let Some((_, preset)) = PRESETS.get(index) {
                 graphics.renderer = preset.renderer;
                 if preset.renderer == RendererKind::Gpu {
@@ -728,11 +742,11 @@ mod tests {
                 let wanted = match option.kind {
                     OptionKind::Choice(_) => position,
                     OptionKind::Slider { min, step, .. } => min + position * step,
-                    OptionKind::Link => 0,
+                    OptionKind::Link | OptionKind::Info => 0,
                 };
                 // Custom is what the quality rows add up to, not a choice
                 // of its own.
-                if option.id == "pc_specs" && wanted == PRESETS.len() as i32 {
+                if option.id == "graphics_quality" && wanted == PRESETS.len() as i32 {
                     continue;
                 }
                 let mut changed = base.clone();
@@ -762,7 +776,7 @@ mod tests {
         for option in defs(&settings(), &Locale::default()) {
             let choices = match &option.kind {
                 OptionKind::Choice(choices) => choices.clone(),
-                OptionKind::Slider { .. } | OptionKind::Link => Vec::new(),
+                OptionKind::Slider { .. } | OptionKind::Link | OptionKind::Info => Vec::new(),
             };
             for shown in [
                 &option.category,
@@ -781,24 +795,32 @@ mod tests {
     }
 
     #[test]
-    fn the_pc_specs_follow_the_quality_rows() {
+    fn the_graphics_quality_follows_the_quality_rows() {
         let mut base = settings();
-        assert_eq!(value("pc_specs", &base), 1, "the defaults are Medium");
+        assert_eq!(
+            value("graphics_quality", &base),
+            1,
+            "the defaults are Medium"
+        );
         apply("msaa", 3, &mut base);
-        assert_eq!(value("pc_specs", &base), PRESETS.len() as i32, "Custom");
-        apply("pc_specs", 3, &mut base);
+        assert_eq!(
+            value("graphics_quality", &base),
+            PRESETS.len() as i32,
+            "Custom"
+        );
+        apply("graphics_quality", 3, &mut base);
         assert_eq!(
             (base.graphics.render_scale, base.graphics.msaa),
             (200, 4),
             "Ultra"
         );
         // Low only swaps the renderer; the GPU rows keep their values.
-        apply("pc_specs", 0, &mut base);
+        apply("graphics_quality", 0, &mut base);
         assert_eq!(base.graphics.renderer, RendererKind::Software);
         assert_eq!(base.graphics.render_scale, 200);
         // Custom changes nothing.
         let before = base.clone();
-        apply("pc_specs", PRESETS.len() as i32, &mut base);
+        apply("graphics_quality", PRESETS.len() as i32, &mut base);
         assert_eq!(base, before);
     }
 }

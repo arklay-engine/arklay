@@ -9163,7 +9163,49 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
         language: app.pack.language().map(str::to_string),
         displays: display_names(),
         bindings: app.bindings.clone(),
+        system: system_info(),
     }
+}
+
+/// The machine, for the options' PC Specs row; looked up once, as the GPU
+/// is probed with a device of its own.
+fn system_info() -> gui::settings::SystemInfo {
+    static INFO: std::sync::OnceLock<gui::settings::SystemInfo> = std::sync::OnceLock::new();
+    INFO.get_or_init(|| gui::settings::SystemInfo {
+        cpu: cpu_brand(),
+        cpu_cores: unsafe { sdl3_sys::cpuinfo::SDL_GetNumLogicalCPUCores() }.max(0) as u32,
+        ram_mb: unsafe { sdl3_sys::cpuinfo::SDL_GetSystemRAM() }.max(0) as u32,
+        gpu: GpuRenderer::probe().unwrap_or_default(),
+    })
+    .clone()
+}
+
+/// The processor's brand string, from CPUID's extended leaves.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn cpu_brand() -> Option<String> {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::__cpuid;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::__cpuid;
+    // Leaf 0x80000000 says whether the brand leaves exist.
+    if __cpuid(0x8000_0000).eax < 0x8000_0004 {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(48);
+    for leaf in 0x8000_0002..=0x8000_0004u32 {
+        let regs = __cpuid(leaf);
+        for reg in [regs.eax, regs.ebx, regs.ecx, regs.edx] {
+            bytes.extend_from_slice(&reg.to_le_bytes());
+        }
+    }
+    let brand = String::from_utf8_lossy(&bytes);
+    let brand = brand.trim_matches(|c: char| c.is_control() || c.is_whitespace());
+    (!brand.is_empty()).then(|| brand.to_string())
+}
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+fn cpu_brand() -> Option<String> {
+    None
 }
 
 /// What `arklay.toml` keeps after the menu changed `before` into `after`:
@@ -15290,6 +15332,7 @@ mod tests {
             language: Some("fr".to_string()),
             displays: Vec::new(),
             bindings: controls::Bindings::default(),
+            system: Default::default(),
         };
         before.game.quick_turn = false;
         before.graphics.renderer = RendererKind::Software;

@@ -221,6 +221,15 @@ struct ModelRun {
 }
 
 /// The SDL_GPU device, its pipelines and the resident uploads.
+/// A GPU's self-description, each part `None` when the driver keeps it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GpuInfo {
+    pub name: Option<String>,
+    pub driver_version: Option<String>,
+    /// SDL's name for the graphics API ("vulkan", "direct3d12", "metal").
+    pub api: Option<String>,
+}
+
 pub struct GpuRenderer {
     device: *mut SDL_GPUDevice,
     /// The claimed window; null for an offscreen renderer.
@@ -403,6 +412,43 @@ impl GpuRenderer {
     pub fn offscreen(scale: u32) -> Result<Self> {
         let scale = scale.clamp(1, MAX_SCALE);
         Self::create((LAYER_WIDTH * scale, LAYER_HEIGHT * scale), 100, 1)
+    }
+
+    /// What a device on this machine reports of itself, from one created
+    /// for the purpose; `None` when no device can be created.
+    pub fn probe() -> Option<GpuInfo> {
+        let device =
+            unsafe { SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, std::ptr::null()) };
+        if device.is_null() {
+            return None;
+        }
+        let string = |props: sdl3_sys::properties::SDL_PropertiesID,
+                      name: *const std::ffi::c_char| {
+            let value = unsafe {
+                sdl3_sys::properties::SDL_GetStringProperty(props, name, std::ptr::null())
+            };
+            (!value.is_null())
+                .then(|| {
+                    unsafe { std::ffi::CStr::from_ptr(value) }
+                        .to_string_lossy()
+                        .trim()
+                        .to_string()
+                })
+                .filter(|value| !value.is_empty())
+        };
+        let props = unsafe { SDL_GetGPUDeviceProperties(device) };
+        let api = unsafe { SDL_GetGPUDeviceDriver(device) };
+        let info = GpuInfo {
+            name: string(props, SDL_PROP_GPU_DEVICE_NAME_STRING),
+            driver_version: string(props, SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING),
+            api: (!api.is_null()).then(|| {
+                unsafe { std::ffi::CStr::from_ptr(api) }
+                    .to_string_lossy()
+                    .into_owned()
+            }),
+        };
+        unsafe { SDL_DestroyGPUDevice(device) };
+        Some(info)
     }
 
     fn create(scene_size: (u32, u32), render_scale: u32, msaa: u32) -> Result<Self> {
