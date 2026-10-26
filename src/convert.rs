@@ -392,6 +392,8 @@ pub fn convert_game_observed(
     let mut stage_counts = [(0usize, 0usize); RoomId::MAX_STAGE as usize];
     let mut rdt_count = 0usize;
     let mut rdt_bytes = 0usize;
+    let mut scd_count = 0usize;
+    let mut scd_bytes = 0usize;
     let mut cut_count = 0usize;
     let mut cut_bytes = 0usize;
     let mut mask_count = 0usize;
@@ -420,6 +422,18 @@ pub fn convert_game_observed(
             rdt_bytes += rdt.bytes.len();
             rdt_count += 1;
             stage_counts[rdt.id.stage_index() as usize].0 += 1;
+            match room_script(rdt.id, &rdt.bytes) {
+                Ok(Some(container)) => {
+                    scd_count += 1;
+                    scd_bytes += container.len();
+                    let scd = rdt.id.scd_entry();
+                    writer
+                        .add(&scd, container.to_vec())
+                        .with_context(|| format!("failed to add {scd}"))?;
+                }
+                Ok(None) => {}
+                Err(warning) => warnings.push(warning),
+            }
             writer
                 .add(&entry, rdt.bytes)
                 .with_context(|| format!("failed to add {entry}"))?;
@@ -631,6 +645,7 @@ pub fn convert_game_observed(
             writeln!(report, "STAGE{}: {rdts} RDT(s), {cuts} cut(s)", index + 1)?;
         }
         writeln!(report, "room: {rdt_count} entries, {rdt_bytes} bytes")?;
+        writeln!(report, "scd: {scd_count} entries, {scd_bytes} bytes")?;
         writeln!(report, "roomcut: {cut_count} entries, {cut_bytes} bytes")?;
         writeln!(report, "roommask: {mask_count} entries, {mask_bytes} bytes")?;
         writeln!(report, "bgm: {bgm_count} entries, {bgm_bytes} bytes")?;
@@ -3162,6 +3177,35 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
     Ok(assets)
 }
 
+/// The checked-in room script's bytecode to pack as `scd/<id>.scd` beside
+/// RDT `id`, so the engine runs it in place of the RDT's own scripts.
+///
+/// `None` for a room without a script or an RDT without scripts. A room
+/// whose scripts are not the ones its script was written from (another
+/// release's RDT) is an error naming the room: it keeps its own scripts.
+fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static [u8]>, String> {
+    let number = id.rdt_number();
+    let Some(script) = crate::scd::ROOM_SCRIPTS
+        .iter()
+        .find(|script| script.id == number)
+    else {
+        return Ok(None);
+    };
+    // The stub RDTs of unused room slots carry no scripts to replace.
+    let Ok(scripts) = crate::scd::reader::parse(rdt) else {
+        return Ok(None);
+    };
+    if scripts.digest() != script.original {
+        return Err(format!(
+            "{}: its scripts are not the ones games/re1/room/{:03x}.akscr was written \
+             from, so the room keeps them",
+            id.rdt_entry(),
+            crate::scd::akscr::merged_id(number)
+        ));
+    }
+    Ok(Some(script.container))
+}
+
 /// Parse `ROOM####.RDT` (case-insensitive) into its identity.
 ///
 /// Returns `None` when the name is not an RDT name at all and an error when it
@@ -3274,6 +3318,24 @@ fn bmp_bpp(data: &[u8]) -> Result<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn room_scripts_replace_only_the_scripts_they_were_written_from() {
+        let script = |id: u16| {
+            crate::scd::ROOM_SCRIPTS
+                .iter()
+                .find(|script| script.id == id)
+                .unwrap()
+                .container
+        };
+        let id = RoomId::parse("1000").unwrap();
+        // Room 100 has no `AUTHENTIC` block, so its fixed build carries the
+        // original scripts in the RDT pointer-table layout.
+        assert_eq!(room_script(id, script(0x1000)), Ok(Some(script(0x1000))));
+        let error = room_script(id, script(0x1010)).unwrap_err();
+        assert!(error.contains("room/1000.rdt"), "{error}");
+        assert_eq!(room_script(id, &[0; 4]), Ok(None), "a stub RDT");
+    }
 
     const RDT_HEADER_LEN: usize = 0x94;
     const RDT_CAMERA_LEN: usize = 44;
@@ -5623,6 +5685,11 @@ mod tests {
         let pack = crate::pack::Pack::open(&out).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("room/"), 348);
+        // Every RDT with scripts runs its checked-in room script (the other 28
+        // are the stubs of unused room slots), except, in the original PC
+        // release, the 37 rooms the Steam release's scripts fix.
+        let scripts = count("scd/");
+        assert!(matches!(scripts, 283 | 320), "{scripts} room scripts");
         // One cut set per distinct room; stages 6/7 reuse the stage 1/2 pak
         // files (620 distinct paks) but still name their cuts with their own
         // room id, e.g. roomcut/600_000.bmp.

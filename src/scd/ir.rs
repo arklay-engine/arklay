@@ -98,3 +98,35 @@ pub struct Scripts {
     /// Event scripts in table order.
     pub events: Vec<Stream>,
 }
+
+impl Scripts {
+    /// A 64-bit FNV-1a hash of every stream's bytes, in order: two script
+    /// sets with the same digest hold the same bytecode wherever it sits.
+    pub fn digest(&self) -> u64 {
+        fn feed(hash: &mut u64, bytes: &[u8]) {
+            for &byte in bytes {
+                *hash = (*hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3);
+            }
+        }
+        fn stream(hash: &mut u64, insns: &[Insn], trailing: &[u8]) {
+            let len = insns.iter().map(|insn| insn.bytes.len()).sum::<usize>() + trailing.len();
+            feed(hash, &(len as u32).to_le_bytes());
+            for insn in insns {
+                feed(hash, &insn.bytes);
+            }
+            feed(hash, trailing);
+        }
+        let mut hash = 0xCBF2_9CE4_8422_2325;
+        for blocks in [&self.init, &self.main] {
+            feed(&mut hash, &(blocks.len() as u32).to_le_bytes());
+            for block in blocks {
+                stream(&mut hash, &block.insns, &block.trailing);
+            }
+        }
+        feed(&mut hash, &(self.events.len() as u32).to_le_bytes());
+        for event in &self.events {
+            stream(&mut hash, &event.insns, &event.trailing);
+        }
+        hash
+    }
+}

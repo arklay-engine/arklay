@@ -629,6 +629,16 @@ A build uses the fixed version unless asked for the original (`scd build
 --room 1051 --authentic`); built as `AUTHENTIC`, every script compiles to its
 RDTs' exact bytecode, which the real-data tests check.
 
+These scripts are what the game runs. The build compiles each one, fixed,
+for every RDT it covers and carries the bytecode in the executable;
+`convert-game` packs it as `scd/{id}.scd` beside the RDT, after checking
+that the RDT's own scripts are the ones the script was written from (their
+digest equals the `AUTHENTIC` build's). A room from another release keeps
+its own scripts, with a warning. A mod's `scd/{id}.scd` overrides the
+packed one, and a mod that replaces an RDT without shipping a script keeps
+that RDT's scripts: a script only applies over an RDT from its own layer
+or a lower one.
+
 ```c
 #if AUTHENTIC
     run noreturn
