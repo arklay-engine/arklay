@@ -5,17 +5,23 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_MESSAGE 0x02
+#define AOT_03_MESSAGE 0x03
+#define AOT_04_MESSAGE 0x04
+
 proc init
 {
-    door_aot_set(0, 2100, 4300, 2700, 1800, 2, 0, 33, 1, 0, ROOM_40A_ROOM_003, 3400, 0, 3500, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 2100, 4300, 2700, 1800, 2, 0, 33, 1, 0, ROOM_40A_ROOM_003, 3400, 0, 3500, 1024, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(1, 5100, 7600, 1000, 600, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 224, 21, 0, 0, 220, 30, 12, 254, 168, 129, 1, 0);
+    item_aot_set(AOT_01_ITEM, 5100, 7600, 1000, 600, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 224, 21, 0, 0, 220, 30, 12, 254, 168, 129, 1, 0);
 #else
-    item_aot_set(1, 5100, 7600, 1000, 600, ITEM_12_AMMO_GRENADE_FLAME, 6, 0, 255, 224, 21, 0, 0, 220, 30, 12, 254, 168, 129, 1, 0);
+    item_aot_set(AOT_01_ITEM, 5100, 7600, 1000, 600, ITEM_12_AMMO_GRENADE_FLAME, 6, 0, 255, 224, 21, 0, 0, 220, 30, 12, 254, 168, 129, 1, 0);
 #endif
-    aot_set(2, 1900, 8700, 4000, 2100, SCE_MESSAGE, 129, 128, 0, 69, 0, 0, 0);
-    aot_set(3, 7000, 5600, 1000, 1300, SCE_MESSAGE, 129, 129, 0, 69, 0, 0, 0);
-    aot_set(4, 6500, 8800, 1700, 2000, SCE_MESSAGE, 129, 130, 0, 69, 0, 0, 0);
+    aot_set(AOT_02_MESSAGE, 1900, 8700, 4000, 2100, SCE_MESSAGE, 129, 128, 0, 69, 0, 0, 0);
+    aot_set(AOT_03_MESSAGE, 7000, 5600, 1000, 1300, SCE_MESSAGE, 129, 129, 0, 69, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 6500, 8800, 1700, 2000, SCE_MESSAGE, 129, 130, 0, 69, 0, 0, 0);
     enemy(ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 185, 1, 1, 0, 0, 1483, 0, 0, 5509, 0, 8870, 0, 0, 0, 0);
     scene_setup(2, 6100, 7700, 8500);
     set(FG_STATUS, FLAG_STATUS_1F, TRUE);

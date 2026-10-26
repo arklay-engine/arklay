@@ -5,6 +5,9 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_03_EVENT 0x03
 #define FLAG_ROOM_20 0x20
 #define FLAG_ROOM_21 0x21
 #define FLAG_ROOM_22 0x22
@@ -18,15 +21,21 @@
 
 proc init
 {
-    door_aot_set(0, 16800, 26400, 2200, 2200, 3, 0, 6, 4, 0, ROOM_211_TERRACE_PASSAGE, 3000, 0, 12000, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 16800, 26400, 2200, 2200, 3, 0, 6, 4, 0, ROOM_211_TERRACE_PASSAGE, 3000, 0, 12000, 1024, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(1, 23500, 19770, 1000, 1000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
+    item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
 #if MANSION1
     if (ck(FG_COMMON, FLAG_COMMON_42, FALSE))
     {
-        aot_set(3, 22600, 18000, 2900, 2250, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 22600, 18000, 2900, 2250, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
     }
+#endif
+#else
+    item_aot_set(AOT_01_ITEM, 23500, 19770, 1000, 1000, ITEM_07_WEAPON_GRENADE_LAUNCHER_ACID, 6, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
+#endif
+#if MANSION1
     enemy(ENEMY_26_NPC_FORREST, 0, 255, 1, 2, 0, 0, 1936, 0, 0, 25150, 0, 18700, 0, 0, 0, 0);
+#if CHRIS
     if (ck(FG_COMMON, FLAG_COMMON_42, FALSE))
     {
         enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 3000, 0, 0, 19000, -3000, 20000, 1, 0, 0, 0);
@@ -40,13 +49,9 @@ proc init
         enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
         enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
     }
-    evt_exec(0, 9, event_05);
-    evt_exec(0, 9, event_06);
-#endif
+    evt_exec(0, 9, on_enter);
+    evt_exec(0, 9, on_enter_2);
 #else
-    item_aot_set(1, 23500, 19770, 1000, 1000, ITEM_07_WEAPON_GRENADE_LAUNCHER_ACID, 6, 0, 255, 192, 93, 0, 0, 46, 79, 6, 6, 6, 129, 1, 0);
-#if MANSION1
-    enemy(ENEMY_26_NPC_FORREST, 0, 255, 1, 2, 0, 0, 1936, 0, 0, 25150, 0, 18700, 0, 0, 0, 0);
     if (ck(FG_COMMON, FLAG_COMMON_07, FALSE) && ck(FG_COMMON, FLAG_COMMON_21, FALSE) && ck(FG_COMMON, FLAG_COMMON_4F, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_67, FALSE))
     {
         if (ck(FG_COMMON, FLAG_COMMON_5E, FALSE))
@@ -55,21 +60,21 @@ proc init
             if (ck(FG_COMMON, FLAG_COMMON_5F, FALSE))
             {
                 set(FG_COMMON, FLAG_COMMON_5F, TRUE);
-                evt_exec(0, 9, event_05);
+                evt_exec(0, 9, on_enter_2);
             }
             else
             {
                 room_bgm_state_set(1, 18, 32);
                 pos_set(1, 0, 900, 0, 24000, 0, 21000);
-                evt_exec(0, 9, event_03);
-                aot_set(3, 23000, 20000, 2000, 2000, SCE_EVENT, 129, 9, 0, event_02, 0, 0, 0);
+                evt_exec(0, 9, on_enter);
+                aot_set(AOT_03_EVENT, 23000, 20000, 2000, 2000, SCE_EVENT, 129, 9, 0, on_aot_03_2, 0, 0, 0);
             }
         }
         else
         {
             room_bgm_state_set(1, 18, 32);
-            evt_exec(0, 9, event_2A);
-            evt_exec(0, 9, event_2B);
+            evt_exec(0, 9, on_enter_3);
+            evt_exec(0, 9, on_enter_4);
             room_bgm_state_set(1, 18, 32);
             enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
             enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
@@ -79,14 +84,14 @@ proc init
     else
     {
         set(FG_SCENARIO, FLAG_SCENARIO_67, TRUE);
-        evt_exec(0, 9, event_2A);
-        evt_exec(0, 9, event_2B);
+        evt_exec(0, 9, on_enter_3);
+        evt_exec(0, 9, on_enter_4);
         if (ck(FG_COMMON, FLAG_COMMON_5E, FALSE))
         {
             enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 3000, 0, 0, 19000, -3000, 20000, 1, 0, 0, 0);
             enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19100, -4000, 21000, 2, 0, 0, 0);
             enemy(ENEMY_05_BIRD_CROW, 130, 255, 1, 2, 0, 0, 0, 0, 0, 19200, -3500, 20000, 3, 0, 0, 0);
-            aot_set(3, 22600, 18000, 2900, 2250, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+            aot_set(AOT_03_EVENT, 22600, 18000, 2900, 2250, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
         }
         else
         {
@@ -97,19 +102,18 @@ proc init
         }
     }
 #endif
-#endif
-#if MANSION2
+#else
     room_bgm_state_set(1, 18, 32);
     enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 3072, 0, 0, 24000, -2000, 17800, 1, 0, 0, 0);
     enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 21400, 2, 0, 0, 0);
     enemy(ENEMY_05_BIRD_CROW, 1, 255, 1, 2, 0, 0, 0, 0, 0, 22460, -2000, 18020, 3, 0, 0, 0);
-    evt_exec(0, 9, event_00);
-    evt_exec(0, 9, event_01);
+    evt_exec(0, 9, on_enter);
+    evt_exec(0, 9, on_enter_2);
 #endif
 }
 
 #if MANSION1
-event event_00
+event on_aot_03
 {
     sleep(1);
     run
@@ -129,7 +133,7 @@ event event_00
 #if JILL
         set(FG_COMMON, FLAG_COMMON_5E, TRUE);
 #endif
-        aot_reset(3, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
         cutnext(3);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -142,7 +146,7 @@ event event_00
     {
         bgm_play(1);
     }
-    message(143, 0);
+    message(143, 0); // "It's Forest...! He's been pecked to death by crows."
     do
     {
         evt_next();
@@ -155,15 +159,9 @@ event event_00
     act_reset();
     evt_nop();
     sleep(30);
-#if CHRIS
-    evt_fork(9, event_02, 0);
-    evt_fork(9, event_03, 0);
-    evt_fork(9, event_04, 0);
-#else
-    evt_fork(9, event_27, 0);
-    evt_fork(9, event_28, 0);
-    evt_fork(9, event_29, 0);
-#endif
+    evt_fork(9, on_aot_03_sub1, 0);
+    evt_fork(9, on_aot_03_sub2, 0);
+    evt_fork(9, on_aot_03_sub3, 0);
     cutnext(4);
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
@@ -188,10 +186,8 @@ event event_01
     evt_finish();
 }
 
-#if CHRIS
-event event_02
-#else
-event event_02
+#if JILL
+event on_aot_03_2
 {
     run
     {
@@ -219,7 +215,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter
 {
     sleep(1);
     evt_work_set(WK_ENEMY, 1);
@@ -238,7 +234,7 @@ event event_04
         set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     }
     sleep(20);
-    message(14, 0);
+    message(14, 0); // "Forest..."
     do
     {
         evt_next();
@@ -252,7 +248,7 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event on_enter_2
 {
     sleep(1);
     run
@@ -1083,7 +1079,7 @@ event event_23
     set(FG_6, FLAG_6_17, TRUE);
     run
     {
-        aot_set(3, 23400, 20400, 1100, 1400, SCE_EVENT, 129, 9, 0, event_02, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 23400, 20400, 1100, 1400, SCE_EVENT, 129, 9, 0, on_aot_03_2, 0, 0, 0);
     }
     evt_finish();
 }
@@ -1132,8 +1128,8 @@ event event_26
     evt_finish();
 }
 
-event event_27
 #endif
+event on_aot_03_sub1
 {
     sleep(1);
     eml_state(0, 1, 0, 2);
@@ -1148,11 +1144,7 @@ event event_27
     evt_finish();
 }
 
-#if CHRIS
-event event_03
-#else
-event event_28
-#endif
+event on_aot_03_sub2
 {
     sleep(10);
     eml_state(0, 2, 0, 2);
@@ -1167,11 +1159,7 @@ event event_28
     evt_finish();
 }
 
-#if CHRIS
-event event_04
-#else
-event event_29
-#endif
+event on_aot_03_sub3
 {
     sleep(10);
     eml_state(0, 3, 0, 2);
@@ -1187,12 +1175,12 @@ event event_29
 }
 
 #if CHRIS
-event event_05
+event on_enter
 #else
-event event_2A
+event on_enter_3
 #endif
 #else
-event event_00
+event on_enter
 #endif
 {
     sleep(50);
@@ -1221,12 +1209,12 @@ event event_00
 
 #if MANSION1
 #if CHRIS
-event event_06
+event on_enter_2
 #else
-event event_2B
+event on_enter_4
 #endif
 #else
-event event_01
+event on_enter_2
 #endif
 {
     sleep(30);

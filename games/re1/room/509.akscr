@@ -5,24 +5,36 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_USEITEM 0x03
+#define AOT_04_EVENT 0x04
+#define AOT_05_MESSAGE 0x05
+#define AOT_06_MESSAGE 0x06
+#define AOT_07_ITEM 0x07
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_MESSAGE 0x09
+
 proc init
 {
-    door_aot_set(0, 3000, 1300, 1200, 1200, 3, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 11300, 0, 4800, 1024, UNLOCKED, 129);
-    item_aot_set(1, 0, 0, 1, 1, ITEM_6B_FILE_PASS_CODE_01, 1, 0, 255, 168, 97, 48, 117, 168, 97, 0, 0, 82, 129, 0, 0);
-    item_aot_set(2, 1200, 7400, 800, 1300, ITEM_65_FILE_FAX, 1, 1, 255, 164, 6, 94, 247, 154, 31, 0, 0, 83, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 3000, 1300, 1200, 1200, 3, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 11300, 0, 4800, 1024, UNLOCKED, 129);
+    item_aot_set(AOT_01_ITEM, 0, 0, 1, 1, ITEM_6B_FILE_PASS_CODE_01, 1, 0, 255, 168, 97, 48, 117, 168, 97, 0, 0, 82, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 1200, 7400, 800, 1300, ITEM_65_FILE_FAX, 1, 1, 255, 164, 6, 94, 247, 154, 31, 0, 0, 83, 129, 0, 0);
 #if JILL
-    item_aot_set(7, 9000, 9000, 2700, 1900, ITEM_2F_TOOL_INK_RIBBON, 2, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 230, 129, 0, 0);
+    item_aot_set(AOT_07_ITEM, 9000, 9000, 2700, 1900, ITEM_2F_TOOL_INK_RIBBON, 2, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 230, 129, 0, 0);
 #endif
-    aot_set(3, 9900, 1700, 2000, 2100, SCE_USEITEM, 1, 9, 0, 13, 0, 1, 0);
-    aot_set(4, 9900, 1700, 2000, 2100, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
-    aot_set(5, 5900, 1700, 1800, 3400, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(6, 11700, 4000, 1100, 1900, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_USEITEM, 9900, 1700, 2000, 2100, SCE_USEITEM, 1, 9, 0, 13, 0, 1, 0);
+    aot_set(AOT_04_EVENT, 9900, 1700, 2000, 2100, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 5900, 1700, 1800, 3400, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 11700, 4000, 1100, 1900, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
 #if CHRIS
-    aot_set(7, 9000, 9000, 2700, 1900, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(8, 1400, 8900, 800, 1100, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 9000, 9000, 2700, 1900, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 1400, 8900, 800, 1100, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
 #else
-    aot_set(8, 9000, 9000, 2700, 1900, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(9, 1400, 8900, 800, 1100, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 9000, 9000, 2700, 1900, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 1400, 8900, 800, 1100, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
 #endif
     enemy(ENEMY_01_ZOMBIE_NAKED, 0, 92, 1, 1, 0, 0, 360, 0, 0, 2900, 0, 6400, 0, 0, 0, 0);
     enemy(ENEMY_01_ZOMBIE_NAKED, 0, 93, 1, 1, 0, 0, 1024, 0, 0, 6100, 0, 8900, 1, 0, 0, 0);
@@ -35,21 +47,21 @@ proc main
 {
     if (ck(FG_ITEM, FLAG_ITEM_52, TRUE))
     {
-        aot_reset(4, SCE_EVENT, 129, 9, event_00, 0);
-        aot_reset(3, SCE_USEITEM, 1, 9, 13, 1);
+        aot_reset(AOT_04_EVENT, SCE_EVENT, 129, 9, on_aot_04, 0);
+        aot_reset(AOT_03_USEITEM, SCE_USEITEM, 1, 9, 13, 1);
     }
     else
     {
-        aot_reset(4, SCE_MESSAGE, 129, 129, 69, 0);
-        aot_reset(3, SCE_NONE, 129, 0, 0, 0);
+        aot_reset(AOT_04_EVENT, SCE_MESSAGE, 129, 129, 69, 0);
+        aot_reset(AOT_03_USEITEM, SCE_NONE, 129, 0, 0, 0);
     }
     if (testitem(ITEM_28_PUZZLE_MO_DISK))
     {
-        evt_exec(0, 9, event_01);
+        evt_exec(0, 9, from_main);
     }
 }
 
-event event_00
+event on_aot_04
 {
     run
     {
@@ -58,7 +70,7 @@ event event_00
         set(FG_6, FLAG_6_19, FALSE);
         cut_auto(1);
         cutnext(4);
-        message(128, 69);
+        message(128, 69); // "It's a pass code output machine.If I had a MO DISK, I could get the code..."
     }
     do
     {
@@ -76,9 +88,9 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event from_main
 {
     sleep(1);
-    aot_on(1, SCE_DOCUMENT, 0);
+    aot_on(AOT_01_ITEM, SCE_DOCUMENT, 0);
     evt_finish();
 }

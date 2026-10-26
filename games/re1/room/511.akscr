@@ -5,64 +5,68 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_MESSAGE 0x01
+#define AOT_02_MESSAGE 0x02
+#define AOT_03_MESSAGE 0x03
 #define FLAG_ROOM_19 0x19
 
 proc init
 {
-    door_aot_set(0, 11300, 15800, 3000, 2900, 12, 1, 11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, 129);
-    aot_set(1, 17700, 8300, 2100, 1600, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
-    aot_set(2, 5800, 4400, 2100, 1700, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 11300, 15800, 3000, 2900, 12, 1, 11, 3, 0, ROOM_510_MAZE_B, 12200, 0, 2500, 3072, UNLOCKED, 129);
+    aot_set(AOT_01_MESSAGE, 17700, 8300, 2100, 1600, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_MESSAGE, 5800, 4400, 2100, 1700, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
 #if CHRIS
     if (ck(FG_COMMON, FLAG_COMMON_5A, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_2B, FALSE))
     {
-        aot_set(3, 6000, 3600, 1000, 1000, SCE_MESSAGE, 129, 135, 0, 69, 0, 0, 0);
+        aot_set(AOT_03_MESSAGE, 6000, 3600, 1000, 1000, SCE_MESSAGE, 129, 135, 0, 69, 0, 0, 0);
         enemy(ENEMY_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 3072, 0, 0, 6500, 0, 4100, 0, 32, 1, 0);
-        evt_exec(0, 9, event_04);
+        evt_exec(0, 9, on_enter_3);
     }
 #else
     if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE) && ck(FG_COMMON, FLAG_COMMON_5B, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE))
     {
-        aot_set(3, 8500, 3226, 1000, 1000, SCE_MESSAGE, 129, 130, 0, 71, 0, 0, 0);
+        aot_set(AOT_03_MESSAGE, 8500, 3226, 1000, 1000, SCE_MESSAGE, 129, 130, 0, 71, 0, 0, 0);
         enemy(ENEMY_24_NPC_WESKER, 2, 255, 1, 2, 0, 0, 2000, 0, 0, 9000, 0, 3726, 0, 0, 0, 0);
         enemy(ENEMY_09_CHIMERA, 3, 181, 1, 2, 0, 0, 2048, 0, 0, 10600, 0, 4000, 1, 0, 0, 0);
     }
 #endif
-    evt_exec(0, 9, event_02);
-    evt_exec(0, 9, event_03);
+    evt_exec(0, 9, on_enter);
+    evt_exec(0, 9, on_enter_2);
 }
 
 proc main
 {
     if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE))
     {
-        aot_reset(2, SCE_MESSAGE, 129, 128, 69, 0);
+        aot_reset(AOT_02_MESSAGE, SCE_MESSAGE, 129, 128, 69, 0);
     }
     else
     {
-        aot_reset(2, SCE_MESSAGE, 129, 129, 69, 0);
+        aot_reset(AOT_02_MESSAGE, SCE_MESSAGE, 129, 129, 69, 0);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_2D, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_2E, TRUE))
     {
-        aot_reset(1, SCE_MESSAGE, 129, 134, 69, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 134, 69, 0);
     }
     else if (ck(FG_SCENARIO, FLAG_SCENARIO_2D, FALSE))
     {
-        aot_reset(1, SCE_EVENT, 129, 9, event_00, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_EVENT, 129, 9, on_aot_01_message, 0);
     }
     else
     {
-        aot_reset(1, SCE_MESSAGE, 129, 133, 69, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 133, 69, 0);
     }
 }
 
-event event_00
+event on_aot_01_message
 {
     run
     {
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_19, FALSE);
         set(FG_6, FLAG_6_17, FALSE);
-        message(131, 70);
+        message(131, 70); // "A power connection switch. The elevator power is off.Will you connect it?The power isn't supplied to the elevator."
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -80,7 +84,7 @@ event event_00
     {
         if (cmpb(5, 0, 0))
         {
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_aot_01_message_sub1);
             set(FG_SCENARIO, FLAG_SCENARIO_2D, TRUE);
         }
     }
@@ -93,7 +97,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_aot_01_message_sub1
 {
     run
     {
@@ -108,11 +112,11 @@ event event_01
     {
         if (ck(FG_SCENARIO, FLAG_SCENARIO_2E, TRUE))
         {
-            message(134, 70);
+            message(134, 70); // "The power for the elevator is activated as the powersupply and the circuit have been connected."
         }
         else
         {
-            message(132, 70);
+            message(132, 70); // "The power isn't supplied to the elevator."
         }
     }
     do
@@ -129,7 +133,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_enter
 {
     sleep(119);
     run
@@ -146,7 +150,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter_2
 {
     sleep(240);
     run
@@ -162,11 +166,19 @@ event event_03
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3
+#else
 event event_04
+#endif
 {
     sleep(1);
     set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+    evt_fork(9, on_enter_3_sub3, 0);
+#else
     evt_fork(9, event_07, 0);
+#endif
     do
     {
         evt_next();
@@ -176,7 +188,11 @@ event event_04
     for (2)
     {
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+        evt_fork(9, on_enter_3_sub1, 0);
+#else
         evt_fork(9, event_05, 0);
+#endif
         do
         {
             evt_next();
@@ -188,7 +204,11 @@ event event_04
     for (3)
     {
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+        evt_fork(9, on_enter_3_sub1, 0);
+#else
         evt_fork(9, event_05, 0);
+#endif
         do
         {
             evt_next();
@@ -200,7 +220,11 @@ event event_04
     for (6)
     {
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+        evt_fork(9, on_enter_3_sub1, 0);
+#else
         evt_fork(9, event_05, 0);
+#endif
         do
         {
             evt_next();
@@ -212,7 +236,11 @@ event event_04
     for (2)
     {
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+        evt_fork(9, on_enter_3_sub1, 0);
+#else
         evt_fork(9, event_05, 0);
+#endif
         do
         {
             evt_next();
@@ -223,14 +251,22 @@ event event_04
     evt_nop();
     sleep(30);
     set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+    evt_fork(9, on_enter_3_sub4, 0);
+#else
     evt_fork(9, event_08, 0);
+#endif
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+    evt_fork(9, on_enter_3_sub2, 0);
+#else
     evt_fork(9, event_06, 0);
+#endif
     do
     {
         evt_next();
@@ -238,7 +274,11 @@ event event_04
     while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     sleep(1);
     set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+    evt_fork(9, on_enter_3_sub3, 0);
+#else
     evt_fork(9, event_07, 0);
+#endif
     do
     {
         evt_next();
@@ -248,7 +288,11 @@ event event_04
     for (5)
     {
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+        evt_fork(9, on_enter_3_sub1, 0);
+#else
         evt_fork(9, event_05, 0);
+#endif
         do
         {
             evt_next();
@@ -260,7 +304,11 @@ event event_04
     for (3)
     {
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+        evt_fork(9, on_enter_3_sub1, 0);
+#else
         evt_fork(9, event_05, 0);
+#endif
         do
         {
             evt_next();
@@ -270,7 +318,11 @@ event event_04
     evt_nop();
     sleep(10);
     set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+    evt_fork(9, on_enter_3_sub1, 0);
+#else
     evt_fork(9, event_05, 0);
+#endif
     do
     {
         evt_next();
@@ -280,7 +332,11 @@ event event_04
     for (3)
     {
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+        evt_fork(9, on_enter_3_sub1, 0);
+#else
         evt_fork(9, event_05, 0);
+#endif
         do
         {
             evt_next();
@@ -290,14 +346,22 @@ event event_04
     evt_nop();
     sleep(40);
     set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+    evt_fork(9, on_enter_3_sub5, 0);
+#else
     evt_fork(9, event_0A, 0);
+#endif
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, FLAG_ROOM_19, FALSE));
     set(FG_ROOM, FLAG_ROOM_19, FALSE);
+#if CHRIS
+    evt_fork(9, on_enter_3_sub6, 0);
+#else
     evt_fork(9, event_0C, 0);
+#endif
     do
     {
         evt_next();
@@ -307,7 +371,11 @@ event event_04
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub1
+#else
 event event_05
+#endif
 {
     se_play_3d(2, 23, 0, 0, 0, 6500, 4100);
     evt_work_set(WK_ENEMY, 0);
@@ -331,7 +399,11 @@ event event_05
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub2
+#else
 event event_06
+#endif
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -344,7 +416,11 @@ event event_06
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub3
+#else
 event event_07
+#endif
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -357,9 +433,17 @@ event event_07
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub4
+#else
 event event_08
+#endif
 {
+#if CHRIS
+    evt_fork(9, on_enter_3_sub4_sub1, 0);
+#else
     evt_fork(9, event_09, 0);
+#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_anim_flags(32 | 10, 0 | 24, 0 | 0);
@@ -371,7 +455,11 @@ event event_08
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub4_sub1
+#else
 event event_09
+#endif
 {
     sleep(60);
     evt_work_set(WK_ENEMY, 0);
@@ -384,9 +472,17 @@ event event_09
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub5
+#else
 event event_0A
+#endif
 {
+#if CHRIS
+    evt_fork(9, on_enter_3_sub5_sub1, 0);
+#else
     evt_fork(9, event_0B, 0);
+#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_anim_flags(32 | 3, 0 | 24, 0 | 0);
@@ -401,7 +497,11 @@ event event_0A
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub5_sub1
+#else
 event event_0B
+#endif
 {
     sleep(6);
     evt_work_set(WK_ENEMY, 0);
@@ -414,7 +514,11 @@ event event_0B
     evt_finish();
 }
 
+#if CHRIS
+event on_enter_3_sub6
+#else
 event event_0C
+#endif
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();

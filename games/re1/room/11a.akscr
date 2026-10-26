@@ -5,6 +5,16 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_EVENT 0x02
+#define AOT_02_USEITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_03_USEITEM 0x03
+#define AOT_04_USEITEM 0x04
+#define AOT_05_USEITEM 0x05
+#define AOT_06_NONE 0x06
+#define AOT_06_USEITEM 0x06
 #define FLAG_ROOM_01 0x01
 #define FLAG_ROOM_02 0x02
 #define FLAG_ROOM_20 0x20
@@ -12,21 +22,21 @@
 
 proc init
 {
-    door_aot_set(0, 4700, 2700, 1800, 2300, 3, 1, 8, 0, 0, ROOM_10A_BACK_PASSAGE, 2400, 0, 11900, 0, UNLOCKED, 129);
-    door_aot_set(1, 8000, 24500, 1500, 2100, 2, 1, 8, 0, 151, ROOM_11B_STORE_ROOM, 3500, 0, 6600, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 4700, 2700, 1800, 2300, 3, 1, 8, 0, 0, ROOM_10A_BACK_PASSAGE, 2400, 0, 11900, 0, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 8000, 24500, 1500, 2100, 2, 1, 8, 0, 151, ROOM_11B_STORE_ROOM, 3500, 0, 6600, 0, UNLOCKED, 129);
 #if MANSION1
-    aot_set(2, 6500, 27200, 2000, 1000, SCE_USEITEM, 129, 4, 0, 32, 0, 1, 0);
-    aot_set(3, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 19, 0, 1, 0);
-    aot_set(4, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 17, 0, 1, 0);
-    aot_set(5, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 18, 0, 1, 0);
-    aot_set(6, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 14, 0, 1, 0);
+    aot_set(AOT_02_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, 129, 4, 0, 32, 0, 1, 0);
+    aot_set(AOT_03_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 19, 0, 1, 0);
+    aot_set(AOT_04_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 17, 0, 1, 0);
+    aot_set(AOT_05_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 18, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 6500, 27200, 2000, 1000, SCE_USEITEM, 1, 9, 0, 14, 0, 1, 0);
 #else
-    aot_set(2, 6500, 27200, 2000, 1000, SCE_EVENT, 129, 0, 0, event_00, 0, 0, 0);
+    aot_set(AOT_02_EVENT, 6500, 27200, 2000, 1000, SCE_EVENT, 129, 0, 0, on_aot_02, 0, 0, 0);
 #if CHRIS
     if (ck(FG_SCENARIO, FLAG_SCENARIO_7F, FALSE))
     {
-        item_aot_set(3, 6500, 27200, 2000, 1000, ITEM_4D_TOOL_RADIO, 1, 0, 255, 177, 18, 0, 0, 30, 35, 0, 0, 59, 129, 0, 0);
-        aot_reset(6, SCE_NONE, 0, 0, 0, 0);
+        item_aot_set(AOT_03_ITEM, 6500, 27200, 2000, 1000, ITEM_4D_TOOL_RADIO, 1, 0, 255, 177, 18, 0, 0, 30, 35, 0, 0, 59, 129, 0, 0);
+        aot_reset(AOT_06_NONE, SCE_NONE, 0, 0, 0, 0);
         set(FG_STATUS, FLAG_STATUS_1D, TRUE);
     }
 #endif
@@ -76,13 +86,13 @@ proc init
         {
             plw_anim(2, 40, 0);
             setw(4, 0, 0);
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, on_enter);
         }
         if (ck(FG_COMMON, FLAG_COMMON_36, TRUE))
         {
             plw_anim(2, 40, 0);
             setw(4, 0, 0);
-            evt_exec(0, 9, event_05);
+            evt_exec(0, 9, on_enter_2);
         }
     }
 #else
@@ -101,40 +111,41 @@ proc main
     {
         if (ck(FG_SCENARIO, FLAG_SCENARIO_69, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6C, TRUE))
         {
-            evt_exec(0, 0, event_01);
+            evt_exec(0, 0, from_main_2);
         }
         else
         {
-            evt_exec(0, 0, event_00);
+            evt_exec(0, 0, from_main);
         }
     }
     if (testitem(ITEM_2E_PUZZLE_CREST_SUN))
     {
         set(FG_ROOM, FLAG_ROOM_01, TRUE);
-        evt_exec(0, 0, event_03);
+        evt_exec(0, 0, from_main_3);
     }
     if (testitem(ITEM_2C_PUZZLE_CREST_MOON))
     {
         set(FG_ROOM, FLAG_ROOM_01, TRUE);
-        evt_exec(0, 0, event_04);
+        evt_exec(0, 0, from_main_4);
     }
     if (testitem(ITEM_2D_PUZZLE_CREST_STAR))
     {
         set(FG_ROOM, FLAG_ROOM_01, TRUE);
-        evt_exec(0, 0, event_05);
+        evt_exec(0, 0, from_main_5);
     }
     if (testitem(ITEM_29_PUZZLE_CREST_WIND))
     {
         set(FG_ROOM, FLAG_ROOM_01, TRUE);
-        evt_exec(0, 0, event_06);
+        evt_exec(0, 0, from_main_6);
     }
     if (ck(FG_LOCK, FLAG_LOCK_17, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_69, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6A, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6B, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_6C, TRUE))
     {
         set(FG_LOCK, FLAG_LOCK_17, TRUE);
-        evt_exec(0, 1, event_07);
+        evt_exec(0, 1, from_main_7);
     }
 }
 
+event from_main
 #else
 #if CHRIS
 proc main
@@ -145,19 +156,19 @@ proc main
         set(FG_STATUS, FLAG_STATUS_1D, FALSE);
         set(FG_6, FLAG_6_17, FALSE);
         dir_set(0, 0, 996, 0, 2888, 0, 12473);
-        evt_exec(0, 0, event_01);
+        evt_exec(0, 0, from_main);
     }
 }
 
 #endif
+event on_aot_02
 #endif
-event event_00
 {
     cutnext(4);
 #if MANSION1
-    message(138, 255);
+    message(138, 255); // "When the sun sets in the west and the moon rises inthe east, stars will begin to appear in the sky andwind will blow towards the ground.Then the gate of new life will open."
 #else
-    message(131, 255);
+    message(131, 255); // "Crests are placed in all the hollows."
 #endif
     do
     {
@@ -169,10 +180,10 @@ event event_00
 }
 #if MANSION1
 
-event event_01
+event from_main_2
 {
     cutnext(4);
-    message(131, 255);
+    message(131, 255); // "Crests are placed in all the hollows."
     do
     {
         evt_next();
@@ -187,7 +198,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event from_main_3
 {
     run
     {
@@ -214,7 +225,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event from_main_4
 {
     run
     {
@@ -241,7 +252,7 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event from_main_5
 {
     run
     {
@@ -268,7 +279,7 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event from_main_6
 {
     run
     {
@@ -295,7 +306,7 @@ event event_06
     evt_finish();
 }
 
-event event_07
+event from_main_7
 {
     evt_disable(0);
     run
@@ -317,7 +328,7 @@ event event_07
 #else
 #if CHRIS
 
-event event_01
+event from_main
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -365,7 +376,7 @@ event event_01
     evt_nop();
     objtbl_b_set(1, 0, 0);
     sleep(10);
-    evt_fork(1, event_02, 0);
+    evt_fork(1, from_main_sub1, 0);
     wait_message();
     evt_disable(1);
     sys_multi(6);
@@ -387,7 +398,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event from_main_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -402,7 +413,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter
 {
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 2496, 0, 4500, 0, 4100);
@@ -417,7 +428,7 @@ event event_03
         bgm_play(1);
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_17, FALSE);
-        evt_exec(0, 9, event_04);
+        evt_exec(0, 9, on_enter_sub1);
         voice_play(1, 84, 0);
         message(6, 0);
     }
@@ -449,7 +460,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event on_enter_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -474,7 +485,7 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event on_enter_2
 {
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 2496, 0, 4500, 0, 4100);
@@ -489,7 +500,7 @@ event event_05
         bgm_play(1);
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_17, FALSE);
-        evt_exec(0, 9, event_06);
+        evt_exec(0, 9, on_enter_2_sub1);
         voice_play(1, 100, 0);
         message(8, 0);
     }
@@ -517,7 +528,7 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event on_enter_2_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

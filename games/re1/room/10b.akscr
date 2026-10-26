@@ -5,18 +5,25 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_MESSAGE 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_MESSAGE 0x05
+
 proc init
 {
-    door_aot_set(0, 2300, 4800, 1700, 1800, 1, 0, 2, 1, 148, ROOM_10A_BACK_PASSAGE, 11300, 0, 4800, 1024, LOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 2300, 4800, 1700, 1800, 1, 0, 2, 1, 148, ROOM_10A_BACK_PASSAGE, 11300, 0, 4800, 1024, LOCKED, 129);
 #if MANSION1
-    door_aot_set(1, 3100, 18200, 2605, 2100, 0, 5, 23, 96, 0, STAGE_2 | ROOM_207_2F_RIGHT_STAIRS, 8600, 2885, 19000, 0, UNLOCKED, 129);
-    door_aot_set(2, 8500, 12400, 2000, 1500, 0, 0, 6, 1, 64, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 3100, 18200, 2605, 2100, 0, 5, 23, 96, 0, STAGE_2 | ROOM_207_2F_RIGHT_STAIRS, 8600, 2885, 19000, 0, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 8500, 12400, 2000, 1500, 0, 0, 6, 1, 64, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, 129);
 #else
-    door_aot_set(1, 3100, 18200, 2605, 2100, 0, 5, 23, 96, 0, STAGE_7 | 7, 8600, 2885, 19000, 0, UNLOCKED, 129);
-    door_aot_set(2, 8500, 12400, 2000, 1500, 0, 0, 6, 1, 0, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 3100, 18200, 2605, 2100, 0, 5, 23, 96, 0, STAGE_7 | 7, 8600, 2885, 19000, 0, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 8500, 12400, 2000, 1500, 0, 0, 6, 1, 0, ROOM_118_ROOM_UNDER_STAIRS, 6000, 0, 8000, 1024, UNLOCKED, 129);
 #endif
-    aot_set(3, 4400, 7800, 1500, 3000, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
-    item_aot_set(4, 6762, 15568, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 238, 29, 0, 0, 84, 64, 0, 0, 110, 129, 1, 0);
+    aot_set(AOT_03_MESSAGE, 4400, 7800, 1500, 3000, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
+    item_aot_set(AOT_04_ITEM, 6762, 15568, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 238, 29, 0, 0, 84, 64, 0, 0, 110, 129, 1, 0);
 #if MANSION1
     if (ck(FG_SCENARIO, FLAG_SCENARIO_09, FALSE))
     {
@@ -28,11 +35,11 @@ proc init
     eml_rot(128, 0, 248, 0, 4);
     if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        aot_set(5, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+        aot_set(AOT_05_MESSAGE, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     }
     else
     {
-        aot_set(5, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
+        aot_set(AOT_05_MESSAGE, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
     }
     enemy(ENEMY_06_HUNTER, 39, 117, 1, 2, 0, 0, 520, 0, 0, 5853, 0, 16051, 0, 0, 0, 0);
     room_bgm_state_set(5, 11, 8);
@@ -45,14 +52,22 @@ proc init
             {
                 plw_anim(2, 40, 0);
                 setw(4, 0, 0);
+#if CHRIS
+                evt_exec(0, 9, on_enter);
+#else
                 evt_exec(0, 9, event_00);
+#endif
                 room_bgm_state_set(5, 11, 65);
             }
             if (ck(FG_COMMON, FLAG_COMMON_36, TRUE))
             {
                 plw_anim(2, 40, 0);
                 setw(4, 0, 0);
+#if CHRIS
+                evt_exec(0, 9, on_enter_2);
+#else
                 evt_exec(0, 9, event_02);
+#endif
                 room_bgm_state_set(5, 11, 65);
             }
         }
@@ -62,7 +77,7 @@ proc init
 #if MANSION2
 #if CHRIS
 
-event event_00
+event on_enter
 {
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 2880, 0, 3300, 0, 7410);
@@ -77,7 +92,7 @@ event event_00
         bgm_play(1);
         set(FG_6, FLAG_6_17, FALSE);
         set(FG_6, FLAG_6_1D, FALSE);
-        evt_exec(0, 9, event_01);
+        evt_exec(0, 9, on_enter_sub1);
         voice_play(1, 84, 0);
         message(0, 0);
     }
@@ -109,7 +124,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_enter_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -134,7 +149,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_enter_2
 {
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 2880, 0, 3300, 0, 7410);
@@ -149,7 +164,7 @@ event event_02
         bgm_play(1);
         set(FG_6, FLAG_6_17, FALSE);
         set(FG_6, FLAG_6_1D, FALSE);
-        evt_exec(0, 9, event_03);
+        evt_exec(0, 9, on_enter_2_sub1);
         voice_play(1, 100, 0);
         message(2, 0);
     }
@@ -177,7 +192,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter_2_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

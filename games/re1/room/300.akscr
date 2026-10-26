@@ -5,34 +5,48 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_USEITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_EVENT 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_07_ITEM 0x07
+#define AOT_08_ITEM 0x08
+#define AOT_09_ITEM 0x09
+#define AOT_0A_ITEM 0x0A
+#define AOT_0B_ITEM 0x0B
+#define AOT_0C_ITEM 0x0C
+#define AOT_0D_MESSAGE 0x0D
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_01 0x01
 
 proc init
 {
     set(FG_STATUS, FLAG_STATUS_1D, TRUE);
-    door_aot_set(0, 23100, 27800, 1700, 2000, 0, 8, 15, 64, 0, ROOM_301_WATER_GATE, 22400, 0, 3600, 3072, UNLOCKED, 129);
-    door_aot_set(1, 0, 0, 1, 1, 1, 6, 21, 64, 0, ROOM_302_FALLS, 20300, 0, 4700, 1024, UNLOCKED, 0);
-    door_aot_set(2, 22300, 3200, 4700, 4100, 12, 1, 8, 0, 0, STAGE_1 | ROOM_11B_STORE_ROOM, 8200, 0, 5900, 2048, UNLOCKED, 129);
-    aot_set(3, 0, 0, 32000, 32000, SCE_USEITEM, 65, 9, 0, 63, 0, 1, 0);
-    aot_reset(3, SCE_NONE, 0, 0, 0, 0);
-    item_aot_set(4, 4500, 12500, 2000, 2000, ITEM_50_UNKNOWN_50, 1, 0, 255, 10, 22, 14, 247, 250, 51, 0, 4, 79, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 23100, 27800, 1700, 2000, 0, 8, 15, 64, 0, ROOM_301_WATER_GATE, 22400, 0, 3600, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 6, 21, 64, 0, ROOM_302_FALLS, 20300, 0, 4700, 1024, UNLOCKED, 0);
+    door_aot_set(AOT_02_DOOR, 22300, 3200, 4700, 4100, 12, 1, 8, 0, 0, STAGE_1 | ROOM_11B_STORE_ROOM, 8200, 0, 5900, 2048, UNLOCKED, 129);
+    aot_set(AOT_03_USEITEM, 0, 0, 32000, 32000, SCE_USEITEM, 65, 9, 0, 63, 0, 1, 0);
+    aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
+    item_aot_set(AOT_04_ITEM, 4500, 12500, 2000, 2000, ITEM_50_UNKNOWN_50, 1, 0, 255, 10, 22, 14, 247, 250, 51, 0, 4, 79, 129, 0, 0);
     if (ck(FG_ITEM, FLAG_ITEM_4F, TRUE))
     {
-        aot_reset(4, SCE_EVENT, 129, 2, event_02, 0);
+        aot_reset(AOT_04_ITEM, SCE_EVENT, 129, 2, on_aot_04_item, 0);
     }
     else
     {
-        aot_reset(4, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
     }
-    aot_set(5, 2696, 11486, 900, 1100, SCE_EVENT, 193, 3, 0, event_04, 0, 0, 0);
-    item_aot_set(6, 25700, 1100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 232, 103, 0, 0, 208, 7, 0, 0, 185, 129, 1, 0);
-    item_aot_set(7, 26200, 1100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 220, 105, 0, 0, 208, 7, 0, 0, 186, 129, 1, 0);
-    item_aot_set(8, 26700, 1100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 3, 255, 208, 107, 0, 0, 208, 7, 0, 0, 187, 129, 1, 0);
-    item_aot_set(9, 29000, 1100, 1800, 1800, ITEM_43_HEAL_HERB_RED, 1, 4, 255, 204, 116, 0, 0, 208, 7, 0, 0, 188, 129, 1, 0);
-    item_aot_set(10, 29500, 1100, 1800, 1800, ITEM_43_HEAL_HERB_RED, 1, 5, 255, 192, 118, 0, 0, 208, 7, 0, 0, 189, 129, 1, 0);
-    item_aot_set(11, 22000, 8500, 2000, 1200, ITEM_45_HEAL_HERB_BLUE, 1, 6, 255, 172, 88, 0, 0, 28, 37, 0, 0, 191, 129, 1, 0);
-    item_aot_set(12, 22000, 8500, 2000, 1200, ITEM_45_HEAL_HERB_BLUE, 1, 7, 255, 104, 91, 0, 0, 28, 37, 0, 0, 192, 129, 1, 0);
+    aot_set(AOT_05_EVENT, 2696, 11486, 900, 1100, SCE_EVENT, 193, 3, 0, on_aot_05, 0, 0, 0);
+    item_aot_set(AOT_06_ITEM, 25700, 1100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 232, 103, 0, 0, 208, 7, 0, 0, 185, 129, 1, 0);
+    item_aot_set(AOT_07_ITEM, 26200, 1100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 220, 105, 0, 0, 208, 7, 0, 0, 186, 129, 1, 0);
+    item_aot_set(AOT_08_ITEM, 26700, 1100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 3, 255, 208, 107, 0, 0, 208, 7, 0, 0, 187, 129, 1, 0);
+    item_aot_set(AOT_09_ITEM, 29000, 1100, 1800, 1800, ITEM_43_HEAL_HERB_RED, 1, 4, 255, 204, 116, 0, 0, 208, 7, 0, 0, 188, 129, 1, 0);
+    item_aot_set(AOT_0A_ITEM, 29500, 1100, 1800, 1800, ITEM_43_HEAL_HERB_RED, 1, 5, 255, 192, 118, 0, 0, 208, 7, 0, 0, 189, 129, 1, 0);
+    item_aot_set(AOT_0B_ITEM, 22000, 8500, 2000, 1200, ITEM_45_HEAL_HERB_BLUE, 1, 6, 255, 172, 88, 0, 0, 28, 37, 0, 0, 191, 129, 1, 0);
+    item_aot_set(AOT_0C_ITEM, 22000, 8500, 2000, 1200, ITEM_45_HEAL_HERB_BLUE, 1, 7, 255, 104, 91, 0, 0, 28, 37, 0, 0, 192, 129, 1, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_31, TRUE))
     {
         if (cmpb(3, 0, 2))
@@ -50,7 +64,7 @@ proc init
     }
     else
     {
-        aot_set(13, 2300, 8800, 2700, 2300, SCE_MESSAGE, 129, 135, 0, 255, 0, 0, 0);
+        aot_set(AOT_0D_MESSAGE, 2300, 8800, 2700, 2300, SCE_MESSAGE, 129, 135, 0, 255, 0, 0, 0);
         inst_cfg(1, 6, 0, 184, 8, 58, 35, 233, 16, 208, 56);
         inst_cfg(3, 4, 0, 184, 8, 58, 35, 233, 16, 208, 56);
     }
@@ -67,7 +81,7 @@ proc init
     set(FG_SCENARIO, FLAG_SCENARIO_14, TRUE);
     if (cmpb(3, 0, 2))
     {
-        evt_exec(0, 0, event_07);
+        evt_exec(0, 0, on_enter);
         dir_set(0, 0, 0, 0, 3200, 2500, 12000);
         spd_set(0, 196, 9);
         timer_setup(2, 0, 0, 7, 0);
@@ -96,8 +110,8 @@ proc main
             if (ck(FG_ENEMY, FLAG_ENEMY_30, TRUE) && ck(FG_ENEMY, FLAG_ENEMY_31, TRUE) && ck(FG_ENEMY, FLAG_ENEMY_32, TRUE))
             {
                 set(FG_ROOM, FLAG_ROOM_01, TRUE);
-                aot_reset(3, SCE_USEITEM, 65, 9, 63, 1);
-                evt_exec(0, 0, event_00);
+                aot_reset(AOT_03_USEITEM, SCE_USEITEM, 65, 9, 63, 1);
+                evt_exec(0, 0, from_main);
             }
         }
     }
@@ -106,14 +120,14 @@ proc main
         if (ck(FG_ENEMY, FLAG_ENEMY_30, TRUE) && ck(FG_ENEMY, FLAG_ENEMY_31, TRUE))
         {
             set(FG_ROOM, FLAG_ROOM_01, TRUE);
-            aot_reset(3, SCE_USEITEM, 65, 9, 63, 1);
-            evt_exec(0, 0, event_00);
+            aot_reset(AOT_03_USEITEM, SCE_USEITEM, 65, 9, 63, 1);
+            evt_exec(0, 0, from_main);
         }
     }
     if (testitem(ITEM_4D_TOOL_RADIO))
     {
-        aot_reset(5, SCE_NONE, 0, 0, 0, 0);
-        evt_exec(0, 1, event_01);
+        aot_reset(AOT_05_EVENT, SCE_NONE, 0, 0, 0, 0);
+        evt_exec(0, 1, from_main_2);
     }
     if (cmpb(2, 0, 0))
     {
@@ -145,7 +159,7 @@ proc main
     }
 }
 
-event event_00
+event from_main
 {
     sleep(30);
     se_play_3d(2, 23, 0, 1, 0, 0, 0);
@@ -158,11 +172,11 @@ event event_00
     sleep(180);
     se_play_3d(2, 23, 0, 1, 0, 0, 0);
     sleep(480);
-    aot_reset(3, SCE_NONE, 0, 0, 0, 0);
+    aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
     evt_finish();
 }
 
-event event_01
+event from_main_2
 {
     evt_disable(0);
     set(FG_6, FLAG_6_17, FALSE);
@@ -268,17 +282,17 @@ event event_01
         set(FG_6, FLAG_6_17, TRUE);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_STATUS, FLAG_STATUS_11, TRUE);
-        aot_reset(3, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_03_USEITEM, SCE_NONE, 0, 0, 0, 0);
 #if CHRIS
-        aot_reset(5, SCE_EVENT, 193, 3, event_04, 0);
+        aot_reset(AOT_05_EVENT, SCE_EVENT, 193, 3, on_aot_05, 0);
 #endif
     }
     evt_finish();
 }
 
-event event_02
+event on_aot_04_item
 {
-    message(137, 255);
+    message(137, 255); // "It's a map of GARDEN. Will you take it?You got the map of GARDEN."
     do
     {
         evt_next();
@@ -288,26 +302,26 @@ event event_02
     {
         if (cmpb(5, 0, 0))
         {
-            evt_exec(0, 3, event_03);
+            evt_exec(0, 3, on_aot_04_item_sub1);
         }
     }
     evt_finish();
 }
 
-event event_03
+event on_aot_04_item_sub1
 {
     run
     {
-        aot_reset(4, SCE_F, 129, 0, 0, 0);
-        aot_on(4, SCE_F, 0);
+        aot_reset(AOT_04_ITEM, SCE_F, 129, 0, 0, 0);
+        aot_on(AOT_04_ITEM, SCE_F, 0);
     }
     evt_next();
     evt_nop();
-    message(138, 255);
+    message(138, 255); // "You got the map of GARDEN."
     evt_finish();
 }
 
-event event_04
+event on_aot_05
 {
     run
     {
@@ -323,8 +337,8 @@ event event_04
     run
     {
         set(FG_6, FLAG_6_1F, FALSE);
-        evt_exec(0, 4, event_05);
-        evt_exec(0, 5, event_06);
+        evt_exec(0, 4, on_aot_05_sub1);
+        evt_exec(0, 5, on_aot_05_sub2);
     }
     for (39)
     {
@@ -343,12 +357,12 @@ event event_04
         set(FG_6, FLAG_6_1D, TRUE);
         set(FG_SCENARIO, FLAG_SCENARIO_31, FALSE);
         setw(2, 0, 0);
-        aot_on(1, SCE_DOOR, 129);
+        aot_on(AOT_01_DOOR, SCE_DOOR, 129);
     }
     evt_finish();
 }
 
-event event_05
+event on_aot_05_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_tween_begin_alt();
@@ -364,7 +378,7 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event on_aot_05_sub2
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -380,7 +394,7 @@ event event_06
     evt_finish();
 }
 
-event event_07
+event on_enter
 {
     evt_next();
     evt_nop();
@@ -392,8 +406,8 @@ event event_07
     se_play_3d(2, 34, 0, 1, 0, 0, 0);
     run
     {
-        evt_exec(0, 1, event_08);
-        evt_exec(0, 2, event_09);
+        evt_exec(0, 1, on_enter_sub1);
+        evt_exec(0, 2, on_enter_sub2);
     }
     setw(2, 128, 247);
     sleep(130);
@@ -408,7 +422,7 @@ event event_07
     evt_finish();
 }
 
-event event_08
+event on_enter_sub1
 {
     for (100)
     {
@@ -430,7 +444,7 @@ event event_08
     evt_finish();
 }
 
-event event_09
+event on_enter_sub2
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();

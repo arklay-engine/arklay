@@ -5,6 +5,19 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_EVENT 0x02
+#define AOT_03_DOOR 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_04_USEITEM 0x04
+#define AOT_05_MESSAGE 0x05
+#define AOT_05_USEITEM 0x05
+#define AOT_06_MESSAGE 0x06
+#define AOT_07_B 0x07
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_B 0x09
 #define FLAG_ROOM_20 0x20
 #define FLAG_ROOM_21 0x21
 
@@ -13,24 +26,24 @@ proc init
 #if JILL
     set(FG_STATUS, FLAG_STATUS_1C, TRUE);
 #endif
-    door_aot_set(0, 29700, 15100, 3700, 4800, 12, 1, 10, 8, 0, ROOM_40D_UNDER_PASSAGE, 18000, 0, 3500, 0, UNLOCKED, 129);
-    door_aot_set(1, 29700, 27200, 3700, 3200, 1, 1, 12, 7, 0, ROOM_40F_SECURITY_ROOM, 2800, 0, 12300, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 29700, 15100, 3700, 4800, 12, 1, 10, 8, 0, ROOM_40D_UNDER_PASSAGE, 18000, 0, 3500, 0, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 29700, 27200, 3700, 3200, 1, 1, 12, 7, 0, ROOM_40F_SECURITY_ROOM, 2800, 0, 12300, 0, UNLOCKED, 129);
     if (ck(FG_LOCK, FLAG_LOCK_24, FALSE))
     {
-        aot_set(2, 0, 25400, 2500, 3000, SCE_EVENT, 129, 5, 0, event_05, 0, 0, 0);
+        aot_set(AOT_02_EVENT, 0, 25400, 2500, 3000, SCE_EVENT, 129, 5, 0, on_aot_02, 0, 0, 0);
     }
     else
     {
-        door_aot_set(2, 0, 25400, 2500, 3000, 3, 1, 11, 3, 0, ROOM_410_ARMS_STOREHOUSE, 9100, 0, 3100, 2048, UNLOCKED, 129);
+        door_aot_set(AOT_02_EVENT, 0, 25400, 2500, 3000, 3, 1, 11, 3, 0, ROOM_410_ARMS_STOREHOUSE, 9100, 0, 3100, 2048, UNLOCKED, 129);
     }
-    door_aot_set(3, 0, 22400, 2500, 2500, 3, 1, 11, 3, 171, ROOM_411_CONTROL_ROOM, 8200, 0, 10800, 2048, ITEM_3B_KEY_CONTROL_ROOM, 129);
+    door_aot_set(AOT_03_DOOR, 0, 22400, 2500, 2500, 3, 1, 11, 3, 171, ROOM_411_CONTROL_ROOM, 8200, 0, 10800, 2048, ITEM_3B_KEY_CONTROL_ROOM, 129);
 #if CHRIS
-    aot_set(4, 14500, 8000, 6500, 2700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(5, 7500, 8000, 7000, 2700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(6, 7500, 24000, 13500, 1000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 14500, 8000, 6500, 2700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 7500, 8000, 7000, 2700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 7500, 24000, 13500, 1000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
-        aot_set(7, 0, 0, 32000, 32000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_07_B, 0, 0, 32000, 32000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
         obj(0, 31, 255, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(1, 31, 255, 16330, -1850, 26850, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(2, 31, 255, 4090, -1850, 16430, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -38,7 +51,7 @@ proc init
         enemy(ENEMY_0B_SHARK_NEPTUNE, 0, 57, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 15600, 0, 0, 0, 0);
         enemy(ENEMY_0B_SHARK_NEPTUNE, 2, 12, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 14600, 1, 0, 0, 0);
         enemy(ENEMY_0B_SHARK_NEPTUNE, 2, 13, 1, 2, 0, 0, 848, 0, 0, 4060, 0, 13600, 2, 0, 0, 0);
-        evt_exec(0, 4, event_04);
+        evt_exec(0, 4, on_enter);
     }
     else
     {
@@ -47,24 +60,24 @@ proc init
         enemy(ENEMY_0B_SHARK_NEPTUNE, 3, 13, 1, 2, 0, 0, 512, 0, 0, 25833, 0, 11000, 2, 0, 0, 0);
     }
 #else
-    aot_set(4, 7000, 1000, 6000, 8000, SCE_USEITEM, 65, 4, 0, 32, 0, 1, 0);
-    aot_set(5, 1400, 23600, 6000, 8000, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_04_USEITEM, 7000, 1000, 6000, 8000, SCE_USEITEM, 65, 4, 0, 32, 0, 1, 0);
+    aot_set(AOT_05_USEITEM, 1400, 23600, 6000, 8000, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
     if (ck(FG_COMMON, FLAG_COMMON_09, TRUE))
     {
-        aot_reset(4, SCE_NONE, 0, 0, 0, 0);
-        aot_reset(5, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_04_USEITEM, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_05_USEITEM, SCE_NONE, 0, 0, 0, 0);
     }
-    aot_set(6, 14500, 8000, 6500, 2700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(7, 7500, 8000, 7000, 2700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(8, 7500, 24000, 13500, 1000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 14500, 8000, 6500, 2700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 7500, 8000, 7000, 2700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 7500, 24000, 13500, 1000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
-        aot_set(9, 0, 0, 32000, 32000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_09_B, 0, 0, 32000, 32000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
         obj(0, 31, 255, 21840, -1850, 16600, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(1, 31, 255, 16330, -1850, 26850, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(2, 31, 255, 4090, -1850, 16430, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(3, 31, 255, 16230, -1850, 5470, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        evt_exec(0, 4, event_04);
+        evt_exec(0, 4, on_enter);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
@@ -103,8 +116,8 @@ proc main
             eml_state(0, 0, 0, 0);
             eml_state(0, 1, 0, 2);
             eml_state(0, 2, 0, 2);
-            aot_reset(4, SCE_NONE, 0, 0, 0, 0);
-            aot_reset(5, SCE_NONE, 0, 0, 0, 0);
+            aot_reset(AOT_04_USEITEM, SCE_NONE, 0, 0, 0, 0);
+            aot_reset(AOT_05_USEITEM, SCE_NONE, 0, 0, 0, 0);
             set(FG_COMMON, FLAG_COMMON_09, TRUE);
         }
         if (ck(FG_ROOM, FLAG_ROOM_21, TRUE))
@@ -116,16 +129,16 @@ proc main
             eml_state(0, 0, 0, 0);
             eml_state(0, 1, 0, 2);
             eml_state(0, 2, 0, 2);
-            aot_reset(4, SCE_NONE, 0, 0, 0, 0);
-            aot_reset(5, SCE_NONE, 0, 0, 0, 0);
+            aot_reset(AOT_04_USEITEM, SCE_NONE, 0, 0, 0, 0);
+            aot_reset(AOT_05_USEITEM, SCE_NONE, 0, 0, 0, 0);
             set(FG_COMMON, FLAG_COMMON_09, TRUE);
-            evt_exec(0, 7, event_06);
+            evt_exec(0, 7, from_main);
         }
     }
 }
 
 #endif
-event event_00
+event on_enter_sub1
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -391,7 +404,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_enter_sub2
 {
     evt_work_set(WK_OBJ, 1);
     evt_tween_begin_alt();
@@ -657,7 +670,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_enter_sub3
 {
     evt_work_set(WK_OBJ, 2);
     evt_tween_begin_alt();
@@ -923,7 +936,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter_sub4
 {
     evt_work_set(WK_OBJ, 3);
     evt_tween_begin_alt();
@@ -1189,23 +1202,27 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event on_enter
 {
-    evt_fork(0, event_00, 0);
-    evt_fork(1, event_01, 0);
-    evt_fork(2, event_02, 0);
-    evt_fork(3, event_03, 0);
+    evt_fork(0, on_enter_sub1, 0);
+    evt_fork(1, on_enter_sub2, 0);
+    evt_fork(2, on_enter_sub3, 0);
+    evt_fork(3, on_enter_sub4, 0);
     evt_finish();
 }
 
-event event_05
+event on_aot_02
 {
     se_play_3d(2, 20, 0, 0, 0, 1250, 26900);
-    message(128, 255);
+    message(128, 255); // "It's locked. There's no key hole."
     evt_finish();
 }
 
+#if CHRIS
 event event_06
+#else
+event from_main
+#endif
 {
     run
     {

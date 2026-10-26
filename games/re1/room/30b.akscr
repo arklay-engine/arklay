@@ -5,6 +5,19 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_NONE 0x04
+#define AOT_05_NONE 0x05
+#define AOT_06_NONE 0x06
+#define AOT_07_NONE 0x07
+#define AOT_08_USEITEM 0x08
+#define AOT_09_NONE 0x09
+#define AOT_0A_USEITEM 0x0A
+#define AOT_0B_NONE 0x0B
+#define AOT_0C_NONE 0x0C
 #define FLAG_ROOM_0A 0x0A
 #define FLAG_ROOM_0B 0x0B
 #define FLAG_ROOM_0C 0x0C
@@ -28,24 +41,24 @@ proc init
 {
     if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        door_aot_set(0, 21800, 18800, 2200, 2600, 3, 1, 8, 0, 167, ROOM_307_LADDER_PASSAGE, 3600, 0, 3900, 3072, UNLOCKED, 129);
+        door_aot_set(AOT_00_DOOR, 21800, 18800, 2200, 2600, 3, 1, 8, 0, 167, ROOM_307_LADDER_PASSAGE, 3600, 0, 3900, 3072, UNLOCKED, 129);
     }
     else
     {
-        door_aot_set(0, 21800, 18800, 2200, 2600, 3, 1, 8, 0, 0, ROOM_307_LADDER_PASSAGE, 3600, 0, 3900, 3072, UNLOCKED, 129);
+        door_aot_set(AOT_00_DOOR, 21800, 18800, 2200, 2600, 3, 1, 8, 0, 0, ROOM_307_LADDER_PASSAGE, 3600, 0, 3900, 3072, UNLOCKED, 129);
     }
-    door_aot_set(1, 25600, 300, 4300, 2900, 11, 1, 8, 0, 0, ROOM_30C_BLACK_TIGER_ROOM, 10700, 0, 12500, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 25600, 300, 4300, 2900, 11, 1, 8, 0, 0, ROOM_30C_BLACK_TIGER_ROOM, 10700, 0, 12500, 1024, UNLOCKED, 129);
     if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        item_aot_set(2, 2030, 9800, 1200, 1200, ITEM_0E_AMMO_MAGNUM, 6, 0, 255, 70, 10, 244, 247, 160, 40, 0, 0, 125, 129, 0, 0);
+        item_aot_set(AOT_02_ITEM, 2030, 9800, 1200, 1200, ITEM_0E_AMMO_MAGNUM, 6, 0, 255, 70, 10, 244, 247, 160, 40, 0, 0, 125, 129, 0, 0);
     }
     else
     {
-        item_aot_set(2, 2030, 9800, 1200, 1200, ITEM_12_AMMO_GRENADE_FLAME, 6, 0, 255, 60, 10, 168, 248, 52, 38, 144, 1, 126, 129, 0, 0);
+        item_aot_set(AOT_02_ITEM, 2030, 9800, 1200, 1200, ITEM_12_AMMO_GRENADE_FLAME, 6, 0, 255, 60, 10, 168, 248, 52, 38, 144, 1, 126, 129, 0, 0);
     }
     if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        item_aot_set(3, 20400, 17700, 1000, 1300, ITEM_06_WEAPON_FLAMETHROWER, 240, 1, 255, 198, 82, 228, 243, 176, 69, 0, 0, 153, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 20400, 17700, 1000, 1300, ITEM_06_WEAPON_FLAMETHROWER, 240, 1, 255, 198, 82, 228, 243, 176, 69, 0, 0, 153, 129, 0, 0);
         swap_var(1, 3, 13);
     }
     obj(0, 45, 255, 2000, -2480, 14500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 140, 10, 240, 10, 240, 10, 240, 10);
@@ -53,20 +66,20 @@ proc init
     {
         obj(1, 15, 255, 21090, -3072, 17840, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
-    aot_set(4, 20400, 17700, 1000, 1300, SCE_NONE, 129, 9, 0, 13, 0, 0, 0);
+    aot_set(AOT_04_NONE, 20400, 17700, 1000, 1300, SCE_NONE, 129, 9, 0, 13, 0, 0, 0);
     set(FG_STATUS, FLAG_STATUS_3D, TRUE);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_3D, FALSE))
     {
-        aot_set(5, 11000, 12000, 2000, 4000, SCE_NONE, 65, 0, 0, 0, 0, 0, 0);
-        aot_set(6, 14600, 11200, 4500, 6400, SCE_NONE, 65, 3, 0, 8, 0, 0, 0);
-        aot_set(7, 400, 11600, 30000, 5300, SCE_NONE, 65, 4, 0, 33, 0, 1, 0);
-        aot_set(8, 1500, 11300, 21700, 6000, SCE_USEITEM, 65, 4, 0, 34, 0, 1, 0);
-        aot_set(9, 21000, 16000, 4000, 4400, SCE_NONE, 65, 2, 0, 6, 0, 0, 0);
-        aot_set(10, 0, 12000, 9000, 4000, SCE_USEITEM, 65, 4, 0, 31, 0, 1, 0);
+        aot_set(AOT_05_NONE, 11000, 12000, 2000, 4000, SCE_NONE, 65, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_06_NONE, 14600, 11200, 4500, 6400, SCE_NONE, 65, 3, 0, 8, 0, 0, 0);
+        aot_set(AOT_07_NONE, 400, 11600, 30000, 5300, SCE_NONE, 65, 4, 0, 33, 0, 1, 0);
+        aot_set(AOT_08_USEITEM, 1500, 11300, 21700, 6000, SCE_USEITEM, 65, 4, 0, 34, 0, 1, 0);
+        aot_set(AOT_09_NONE, 21000, 16000, 4000, 4400, SCE_NONE, 65, 2, 0, 6, 0, 0, 0);
+        aot_set(AOT_0A_USEITEM, 0, 12000, 9000, 4000, SCE_USEITEM, 65, 4, 0, 31, 0, 1, 0);
     }
     else
     {
-        evt_exec(0, 0, event_0C);
+        evt_exec(0, 0, on_enter);
         inst_cfg(0, 5, 0, 0, 0, 0, 0, 2, 0, 2, 0);
         inst_cfg(1, 4, 0, 0, 0, 0, 0, 2, 0, 2, 0);
         msgnode_set(11, 2, 7);
@@ -76,7 +89,7 @@ proc init
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_61, FALSE))
     {
-        aot_set(11, 0, 9600, 8600, 8000, SCE_NONE, 65, 4, 0, 29, 0, 1, 0);
+        aot_set(AOT_0B_NONE, 0, 9600, 8600, 8000, SCE_NONE, 65, 4, 0, 29, 0, 1, 0);
         enemy(ENEMY_06_HUNTER, 130, 122, 1, 1, 0, 0, 0, 0, 0, 100, 0, 100, 0, 0, 0, 0);
         enemy(ENEMY_06_HUNTER, 130, 123, 1, 1, 0, 0, 0, 0, 0, 200, 0, 200, 1, 0, 0, 0);
         set(FG_ROOM, FLAG_ROOM_1E, TRUE);
@@ -88,19 +101,19 @@ proc init
     }
     if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        aot_set(12, 20400, 17700, 1000, 1300, SCE_NONE, 129, 128, 0, 255, 0, 0, 0);
+        aot_set(AOT_0C_NONE, 20400, 17700, 1000, 1300, SCE_NONE, 129, 128, 0, 255, 0, 0, 0);
     }
     if (ck(FG_ITEM, FLAG_ITEM_99, FALSE))
     {
-        evt_exec(0, 9, event_10);
+        evt_exec(0, 9, on_enter_2);
         set(FG_LOCK, FLAG_LOCK_27, FALSE);
         if (item_ck(ITEM_06_WEAPON_FLAMETHROWER))
         {
-            aot_delete(4, SCE_EVENT, 129);
+            aot_delete(AOT_04_NONE, SCE_EVENT, 129);
         }
         else
         {
-            aot_delete(12, SCE_MESSAGE, 129);
+            aot_delete(AOT_0C_NONE, SCE_MESSAGE, 129);
         }
     }
     else
@@ -126,24 +139,24 @@ proc main
     }
     if (ck(FG_ROOM, FLAG_ROOM_21, TRUE) && ck_counter(0, 1, 0, 148, 17))
     {
-        aot_delete(7, SCE_NONE, 65);
+        aot_delete(AOT_07_NONE, SCE_NONE, 65);
         if (ck_tween(0, 0, 4, 0, 12))
         {
-            evt_exec(0, 4, event_03);
+            evt_exec(0, 4, from_main);
         }
         else if (ck(FG_ROOM, FLAG_ROOM_22, TRUE))
         {
-            evt_exec(0, 4, event_05);
+            evt_exec(0, 4, from_main_3);
         }
         else
         {
-            evt_exec(0, 4, event_04);
+            evt_exec(0, 4, from_main_2);
         }
     }
     if (ck(FG_ROOM, FLAG_ROOM_1F, TRUE))
     {
         set(FG_ROOM, FLAG_ROOM_1F, FALSE);
-        aot_delete(5, SCE_EVENT, 65);
+        aot_delete(AOT_05_NONE, SCE_EVENT, 65);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_3D, TRUE))
     {
@@ -151,11 +164,11 @@ proc main
         {
             if (cmpb(2, 0, 7))
             {
-                evt_exec(0, 9, event_14);
+                evt_exec(0, 9, from_main_8);
             }
             else
             {
-                evt_exec(0, 9, event_15);
+                evt_exec(0, 9, from_main_9);
             }
         }
     }
@@ -163,7 +176,7 @@ proc main
     {
         if (testpickup(ITEM_06_WEAPON_FLAMETHROWER))
         {
-            evt_exec(0, 9, event_0E);
+            evt_exec(0, 9, from_main_4);
             set(FG_LOCK, FLAG_LOCK_27, FALSE);
             set(FG_ITEM, FLAG_ITEM_AC, FALSE);
         }
@@ -172,8 +185,8 @@ proc main
             set(FG_ITEM, FLAG_ITEM_AC, FALSE);
             set(FG_ITEM, FLAG_ITEM_99, TRUE);
             setbyte(1, 1, 0);
-            evt_exec(0, 9, event_0F);
-            evt_exec(0, 9, event_11);
+            evt_exec(0, 9, from_main_5);
+            evt_exec(0, 9, from_main_6);
         }
     }
     if (ck(FG_ROOM, FLAG_ROOM_1D, TRUE) && cmpb(2, 0, 4))
@@ -182,8 +195,8 @@ proc main
         set(FG_ROOM, FLAG_ROOM_1E, FALSE);
         set(FG_SCENARIO, FLAG_SCENARIO_61, TRUE);
         set(FG_ENEMY, FLAG_ENEMY_7B, TRUE);
-        aot_delete(11, SCE_NONE, 65);
-        evt_exec(0, 9, event_12);
+        aot_delete(AOT_0B_NONE, SCE_NONE, 65);
+        evt_exec(0, 9, from_main_7);
     }
     if (ck(FG_ROOM, FLAG_ROOM_1E, TRUE) && cmpb(2, 0, 5))
     {
@@ -191,7 +204,7 @@ proc main
         set(FG_ROOM, FLAG_ROOM_1E, FALSE);
         set(FG_SCENARIO, FLAG_SCENARIO_61, TRUE);
         set(FG_ENEMY, FLAG_ENEMY_7A, TRUE);
-        aot_delete(11, SCE_NONE, 65);
+        aot_delete(AOT_0B_NONE, SCE_NONE, 65);
         pos_set(1, 0, 3072, 0, 27800, 0, 5000);
         eml_state(0, 1, 0, 2);
     }
@@ -241,8 +254,8 @@ event event_00
     {
         set(FG_SCENARIO, FLAG_SCENARIO_3D, TRUE);
         set(FG_6, FLAG_6_19, FALSE);
-        aot_delete(5, SCE_NONE, 65);
-        aot_delete(10, SCE_NONE, 65);
+        aot_delete(AOT_05_NONE, SCE_NONE, 65);
+        aot_delete(AOT_0A_USEITEM, SCE_NONE, 65);
     }
     evt_fork(1, event_02, 0);
     do
@@ -272,7 +285,7 @@ event event_00
         set(FG_6, FLAG_6_19, TRUE);
         set(FG_SCENARIO, FLAG_SCENARIO_62, TRUE);
         set(FG_ROOM, FLAG_ROOM_17, TRUE);
-        aot_delete(11, SCE_USEITEM, 65);
+        aot_delete(AOT_0B_NONE, SCE_USEITEM, 65);
     }
     evt_finish();
 }
@@ -1015,20 +1028,20 @@ event event_02
         cutcurr(0);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_6, FLAG_6_17, TRUE);
-        aot_delete(6, SCE_EVENT, 65);
-        aot_delete(7, SCE_USEITEM, 65);
-        aot_delete(9, SCE_EVENT, 65);
+        aot_delete(AOT_06_NONE, SCE_EVENT, 65);
+        aot_delete(AOT_07_NONE, SCE_USEITEM, 65);
+        aot_delete(AOT_09_NONE, SCE_EVENT, 65);
     }
     evt_finish();
 }
 
-event event_03
+event from_main
 {
     evt_disable(1);
     evt_disable(2);
     evt_disable(5);
     evt_disable(6);
-    evt_fork(1, event_13, 0);
+    evt_fork(1, from_main_sub1, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 20, 32 | 0, 0 | 0);
@@ -1055,13 +1068,13 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event from_main_2
 {
     evt_disable(1);
     evt_disable(2);
     evt_disable(5);
     evt_disable(6);
-    evt_fork(1, event_13, 0);
+    evt_fork(1, from_main_sub1, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 21, 32 | 0, 0 | 0);
@@ -1088,13 +1101,13 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event from_main_3
 {
     evt_disable(1);
     evt_disable(2);
     evt_disable(5);
     evt_disable(6);
-    evt_fork(1, event_13, 0);
+    evt_fork(1, from_main_sub1, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 22, 32 | 0, 0 | 0);
@@ -1131,7 +1144,7 @@ event event_06
     evt_fork(3, event_07, 0);
     run
     {
-        aot_delete(9, SCE_NONE, 65);
+        aot_delete(AOT_09_NONE, SCE_NONE, 65);
         dir_set(0, 0, 900, 0, 21600, 0, 18300);
         cutnext(0);
         set(FG_6, FLAG_6_17, FALSE);
@@ -1276,7 +1289,7 @@ event event_07
         set(FG_ROOM, FLAG_ROOM_0F, TRUE);
         set(FG_ROOM, FLAG_ROOM_10, TRUE);
     }
-    evt_fork(5, event_0C, 0);
+    evt_fork(5, on_enter, 0);
     set(FG_STATUS, FLAG_STATUS_3E, TRUE);
     sleep(1);
     run
@@ -1292,7 +1305,7 @@ event event_07
     {
         set(FG_ROOM, FLAG_ROOM_1A, TRUE);
         set(FG_ROOM, FLAG_ROOM_21, FALSE);
-        aot_delete(7, SCE_NONE, 65);
+        aot_delete(AOT_07_NONE, SCE_NONE, 65);
         set(FG_STATUS, FLAG_STATUS_3E, FALSE);
     }
     evt_finish();
@@ -1300,7 +1313,7 @@ event event_07
 
 event event_08
 {
-    aot_delete(6, SCE_NONE, 65);
+    aot_delete(AOT_06_NONE, SCE_NONE, 65);
     cut_auto(1);
     evt_finish();
 }
@@ -1359,7 +1372,7 @@ event event_0B
     evt_finish();
 }
 
-event event_0C
+event on_enter
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -1380,7 +1393,7 @@ event event_0D
     evt_finish();
 }
 
-event event_0E
+event from_main_4
 {
     run
     {
@@ -1468,16 +1481,16 @@ event event_0E
     evt_nop();
     run
     {
-        aot_delete(4, SCE_EVENT, 129);
+        aot_delete(AOT_04_NONE, SCE_EVENT, 129);
     }
     evt_finish();
 }
 
-event event_0F
+event from_main_5
 {
     run
     {
-        aot_delete(4, SCE_NONE, 129);
+        aot_delete(AOT_04_NONE, SCE_NONE, 129);
         se_play_3d(4, 23, 0, 0, 0, 5500, 7070);
     }
     evt_work_set(WK_OBJ, 1);
@@ -1571,14 +1584,14 @@ event event_0F
     evt_nop();
     run
     {
-        aot_delete(3, SCE_ITEM, 129);
+        aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
         se_play_3d(2, 25, 0, 0, 0, 23000, 20000);
         set(FG_LOCK, FLAG_LOCK_27, TRUE);
     }
     evt_finish();
 }
 
-event event_10
+event on_enter_2
 {
     evt_work_set(WK_OBJ, 1);
     evt_tween_begin_alt();
@@ -1586,7 +1599,7 @@ event event_10
     tw_finish();
 }
 
-event event_11
+event from_main_6
 {
     evt_work_set(WK_AOT, 1);
     evt_tween_begin_alt();
@@ -1683,7 +1696,7 @@ event event_11
     tw_finish();
 }
 
-event event_12
+event from_main_7
 {
     run
     {
@@ -1709,7 +1722,7 @@ event event_12
     evt_finish();
 }
 
-event event_13
+event from_main_sub1
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -1726,7 +1739,7 @@ event event_13
     tw_finish();
 }
 
-event event_14
+event from_main_8
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -1734,7 +1747,7 @@ event event_14
     tw_finish();
 }
 
-event event_15
+event from_main_9
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();

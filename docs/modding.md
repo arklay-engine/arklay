@@ -607,7 +607,7 @@ mansion visit (stages 6 and 7): `103.akscr` holds RDTs 1030, 1031, 6030 and
     voice_play(1, 92, 0);
 #endif
 #if MANSION2
-    set(FG_ROOM, 4, 1);
+    set(FG_ROOM, FLAG_ROOM_04, FALSE);
 #endif
 ```
 
@@ -621,29 +621,57 @@ scd/6031.scd` compiles one variant; a script without a variant must not use
 `#if`. The merged scripts are checked in under `games/re1/room/`, and each
 compiles to its RDTs' exact bytecode.
 
+The exporter names what it can from the `*.akinc` files in the nearest `inc/`
+directory at or above `--out`, and from the English text beside it
+(`language/en-US.txt`):
+
+- items (`ITEM_0B_AMMO_HANDGUN`), enemies (`ENEMY_11_ZOMBIE_LAB`) and flags
+  (`FLAG_SCENARIO_0A`, a bit of `FG_SCENARIO`) by the define's prefix; a door
+  target is a room of the same stage (`ROOM_106_MAIN_HALL`) or
+  `STAGE_2 | ROOM_201_..` for another;
+- each AOT index the room sets up, as a local `#define AOT_05_ITEM 0x05` named
+  after its first non-`SCE_NONE` type, and each `FG_ROOM` bit as
+  `FLAG_ROOM_xx`;
+- events after what starts them: `on_aot_05_item` for an AOT's event,
+  `on_enter` from `proc init`, `from_main` from `proc main`, `<parent>_sub1`
+  for an event another starts, with `_2` and so on for repeats; an event
+  nothing refers to stays `event_XX`;
+- `message(id, ..)` gets its text as a comment.
+
+These names are a starting point for hand renaming; once a script is edited
+by hand, re-exporting would overwrite it.
+
 ```c
 #version 1
 
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+
+#define AOT_02_EVENT 0x02
+#define FLAG_ROOM_02 0x02
+
 proc init
 {
-    if (ck(FG_COMMON, 164, 0) && ck(FG_STATUS, 8, 1))
+    if (ck(FG_COMMON, FLAG_COMMON_A4, TRUE) && ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        set(FG_COMMON, 169, 0);
+        set(FG_COMMON, FLAG_COMMON_A9, TRUE);
+        message(2, 0); // "There's a blood stain on the floor."
     }
-    else if (ck(FG_ROOM, 2, 1))
+    else if (ck(FG_ROOM, FLAG_ROOM_02, FALSE))
     {
-        require(ck(FG_ROOM, 3, 1));
+        require(testitem(ITEM_33_KEY_MANSION_SWORD));
         return;
     }
+    evt_exec(0, 6, on_enter);
 }
 
-event event_00
+event on_enter
 {
     run
     {
-        set(FG_6, 23, 1);
+        set(FG_6, FLAG_6_17, FALSE);
     }
-    evt_exec(0, 6, event_0A);
+    evt_exec(0, 6, on_enter_sub1);
     sleep(30);
     do
     {
@@ -660,10 +688,18 @@ event event_00
 ```
 
 - `proc init` and `proc main` hold one command block each (repeat the section
-  for a container with several blocks); `event event_XX` sections are dense
-  from `event_00`. `//` starts a comment.
-- A command is `name(args);` with the disassembler's mnemonics, constant names
-  and `hi | lo` bit fields.
+  for a container with several blocks); `event NAME` sections are numbered in
+  order from 0, any name standing for its event's number (`event_XX` always
+  means XX). `//` starts a comment.
+- A command is `name(args);` with the disassembler's mnemonics, the engine's
+  constant names (`FG_*`, `SCE_*`, `WK_*`, `UNLOCKED`/`LOCK`/`LOCKED`) and
+  `hi | lo` bit fields. `TRUE` is 0, `FALSE` 1 and `TOGGLE` 2, as `ck` and
+  `set` read their last argument: `ck(.., TRUE)` passes when the bit is set.
+- `#define NAME value` names a number (or an earlier name) and
+  `#include "inc/items.akinc"` reads a file of defines, resolved against the
+  script's directory and then each directory above it. Game data has no
+  built-in names: a game names its items, enemies, rooms and flags in
+  `inc/*.akinc`, and an unknown name is an error.
 - `if (a && b) { } else { }` (and `else if`) takes condition commands.
   `require(cond);` is a condition outside an `if` head: when false it leaves
   the enclosing `if` body, or ends the block at the top level.

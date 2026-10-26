@@ -5,18 +5,24 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_SAVE 0x01
+#define AOT_02_USEITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_83_ITEM 0x83
 #define FLAG_ROOM_18 0x18
 #define FLAG_ROOM_19 0x19
 #define FLAG_ROOM_1A 0x1A
 
 proc init
 {
-    door_aot_set(0, 4600, 1800, 1800, 900, 0, 0, 0, 4, 0, ROOM_103_F_PASSAGE, 8600, 0, 15000, 1024, UNLOCKED, 129);
-    aot_set(1, 3000, 3556, 1600, 1400, SCE_SAVE, 1, 0, 0, 0, 0, 0, 0);
-    aot_set(2, 3000, 3556, 1600, 1400, SCE_USEITEM, 129, 4, 0, 26, 0, 1, 0);
-    item_aot_set(131, 3300, 4292, 1280, 800, ITEM_29_PUZZLE_CREST_WIND, 1, 0, 0, 62, 254, 242, 249, 18, 2, 0, 0, 174, 192, 1, 0);
+    door_aot_set(AOT_00_DOOR, 4600, 1800, 1800, 900, 0, 0, 0, 4, 0, ROOM_103_F_PASSAGE, 8600, 0, 15000, 1024, UNLOCKED, 129);
+    aot_set(AOT_01_SAVE, 3000, 3556, 1600, 1400, SCE_SAVE, 1, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_USEITEM, 3000, 3556, 1600, 1400, SCE_USEITEM, 129, 4, 0, 26, 0, 1, 0);
+    item_aot_set(AOT_83_ITEM, 3300, 4292, 1280, 800, ITEM_29_PUZZLE_CREST_WIND, 1, 0, 0, 62, 254, 242, 249, 18, 2, 0, 0, 174, 192, 1, 0);
     eml_rot(0, 0, 0, 0, 0);
-    item_aot_set(4, 3300, 3300, 1280, 800, ITEM_05_WEAPON_MAGNUM, 6, 1, 0, 62, 254, 36, 250, 152, 254, 252, 3, 175, 192, 1, 0);
+    item_aot_set(AOT_04_ITEM, 3300, 3300, 1280, 800, ITEM_05_WEAPON_MAGNUM, 6, 1, 0, 62, 254, 36, 250, 152, 254, 252, 3, 175, 192, 1, 0);
     obj(0, 47, 255, 3505, 0, 4145, 0, 0, 0, 64, 2, 0, 0, 192, 253, 88, 2, 32, 2, 88, 2, 232, 3);
     obj(1, 63, 0, 510, -2300, 130, -60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(129, 170, 0, 196, 255);
@@ -39,16 +45,16 @@ proc init
     if (ck(FG_SCENARIO, FLAG_SCENARIO_0E, TRUE))
     {
         objtbl_b_set(1, 1, 1);
-        aot_reset(4, SCE_ITEM, 129, 0, 1, 0);
-        aot_delete(2, SCE_NONE, 0);
-        evt_exec(0, 9, event_05);
+        aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 1, 0);
+        aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
+        evt_exec(0, 9, on_enter_2);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_0F, TRUE))
     {
         objtbl_b_set(1, 0, 1);
-        aot_reset(3, SCE_ITEM, 129, 0, 0, 0);
-        aot_delete(2, SCE_NONE, 0);
-        evt_exec(0, 9, event_04);
+        aot_reset(AOT_03_ITEM, SCE_ITEM, 129, 0, 0, 0);
+        aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
+        evt_exec(0, 9, on_enter);
     }
 }
 
@@ -60,12 +66,12 @@ proc main
         {
             if (cmpb(19, 0, 5))
             {
-                aot_delete(2, SCE_USEITEM, 129);
+                aot_delete(AOT_02_USEITEM, SCE_USEITEM, 129);
                 set(FG_ROOM, FLAG_ROOM_18, TRUE);
                 set(FG_SCENARIO, FLAG_SCENARIO_0E, FALSE);
                 cutnext(1);
                 set(FG_SCENARIO, FLAG_SCENARIO_0C, TRUE);
-                evt_exec(0, 9, event_03);
+                evt_exec(0, 9, from_main_4);
             }
             return;
         }
@@ -73,12 +79,12 @@ proc main
         {
             if (cmpb(19, 0, 41))
             {
-                aot_delete(2, SCE_USEITEM, 129);
+                aot_delete(AOT_02_USEITEM, SCE_USEITEM, 129);
                 set(FG_ROOM, FLAG_ROOM_18, TRUE);
                 set(FG_SCENARIO, FLAG_SCENARIO_0F, FALSE);
                 cutnext(1);
                 set(FG_SCENARIO, FLAG_SCENARIO_0D, TRUE);
-                evt_exec(0, 9, event_01);
+                evt_exec(0, 9, from_main_2);
             }
             return;
         }
@@ -91,13 +97,13 @@ proc main
             if (cmpb(18, 0, 34))
             {
                 objtbl_b_set(1, 1, 1);
-                aot_reset(4, SCE_ITEM, 129, 0, 1, 0);
+                aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 1, 0);
                 eml_pos(2, 176, 255, 0, 0, 230, 0, 254, 1, 250, 246, 146, 255);
                 cutnext(1);
                 set(FG_ROOM, FLAG_ROOM_18, TRUE);
                 set(FG_SCENARIO, FLAG_SCENARIO_0E, TRUE);
-                evt_exec(0, 9, event_02);
-                aot_delete(2, SCE_NONE, 0);
+                evt_exec(0, 9, from_main_3);
+                aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
                 set(FG_ROOM, FLAG_ROOM_19, FALSE);
             }
         }
@@ -110,13 +116,13 @@ proc main
             if (cmpb(18, 0, 33))
             {
                 objtbl_b_set(1, 0, 1);
-                aot_reset(3, SCE_ITEM, 129, 0, 0, 0);
+                aot_reset(AOT_03_ITEM, SCE_ITEM, 129, 0, 0, 0);
                 eml_pos(1, 170, 0, 196, 255, 196, 255, 254, 1, 4, 247, 130, 0);
                 cutnext(1);
                 set(FG_ROOM, FLAG_ROOM_18, TRUE);
                 set(FG_SCENARIO, FLAG_SCENARIO_0F, TRUE);
-                evt_exec(0, 9, event_00);
-                aot_delete(2, SCE_NONE, 0);
+                evt_exec(0, 9, from_main);
+                aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
                 set(FG_ROOM, FLAG_ROOM_19, FALSE);
             }
         }
@@ -128,7 +134,7 @@ proc main
             if (ck(FG_ROOM, FLAG_ROOM_1A, TRUE))
             {
                 cutnext(1);
-                message(128, 255);
+                message(128, 255); // "It reads “Some tigers have a red eye and a blue eye"."
                 set(FG_ROOM, FLAG_ROOM_19, TRUE);
             }
         }
@@ -141,7 +147,7 @@ proc main
     }
 }
 
-event event_00
+event from_main
 {
     sleep(1);
     set(FG_6, FLAG_6_17, FALSE);
@@ -234,7 +240,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event from_main_2
 {
     set(FG_6, FLAG_6_17, FALSE);
     bgm_play(0);
@@ -328,7 +334,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event from_main_3
 {
     sleep(1);
     set(FG_6, FLAG_6_17, FALSE);
@@ -421,7 +427,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event from_main_4
 {
     set(FG_6, FLAG_6_17, FALSE);
     bgm_play(0);
@@ -515,7 +521,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event on_enter
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -525,7 +531,7 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event on_enter_2
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();

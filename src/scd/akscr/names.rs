@@ -30,6 +30,8 @@ pub struct Names {
     stages: HashMap<u8, String>,
     rooms: HashMap<(u8, u8), String>,
     flags: HashMap<(u8, u8), String>,
+    /// Message text by language key, as one plain line, for comments.
+    messages: HashMap<String, String>,
 }
 
 impl Names {
@@ -91,6 +93,48 @@ impl Names {
         }
     }
 
+    /// Read message text for comments from a language file
+    /// (`KEY = "text"` lines); control codes are dropped.
+    pub fn add_messages(&mut self, language: &str) {
+        for line in language.lines() {
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            let key = key.trim();
+            if !(key.starts_with("MESSAGE_") || key.contains("_TEXT_")) {
+                continue;
+            }
+            let Some(value) = value
+                .trim()
+                .strip_prefix('"')
+                .and_then(|value| value.strip_suffix('"'))
+            else {
+                continue;
+            };
+            let text = plain_text(value);
+            if !text.is_empty() {
+                self.messages.insert(key.to_string(), text);
+            }
+        }
+    }
+
+    /// The text `message(_, id)` shows in RDT `room`: a global message, or
+    /// the room's own text for this player, then for either.
+    pub(super) fn message(&self, room: u16, id: u16) -> Option<&str> {
+        if id & 0x40 != 0 {
+            return self
+                .messages
+                .get(&format!("MESSAGE_{:02X}", id & 0x3F))
+                .map(String::as_str);
+        }
+        let room3 = format!("{:X}", room >> 4);
+        let player = room & 0xF;
+        self.messages
+            .get(&format!("ROOM_{room3}{player}_TEXT_{id:02X}"))
+            .or_else(|| self.messages.get(&format!("ROOM_{room3}_TEXT_{id:02X}")))
+            .map(String::as_str)
+    }
+
     pub(super) fn includes(&self) -> &[String] {
         &self.includes
     }
@@ -129,6 +173,31 @@ impl Names {
     }
 }
 
+/// A language value as one plain line: escapes resolved, `{codes}` dropped
+/// and whitespace collapsed.
+fn plain_text(value: &str) -> String {
+    let mut out = String::new();
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' => match chars.next() {
+                Some('n') => out.push(' '),
+                Some(other) => out.push(other),
+                None => {}
+            },
+            '{' => {
+                for ch in chars.by_ref() {
+                    if ch == '}' {
+                        break;
+                    }
+                }
+            }
+            _ => out.push(ch),
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Read every `*.akinc` in the `inc/` directory found in `dir` or the
 /// nearest directory above it, as `#include "inc/<file>"` names.
 pub fn load_names(dir: &std::path::Path) -> Result<Names> {
@@ -139,6 +208,7 @@ pub fn load_names(dir: &std::path::Path) -> Result<Names> {
     else {
         return Ok(Names::default());
     };
+    let mut names = Names::default();
     let mut paths: Vec<_> = std::fs::read_dir(&inc)
         .with_context(|| format!("failed to read {}", inc.display()))?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -155,5 +225,17 @@ pub fn load_names(dir: &std::path::Path) -> Result<Names> {
         let name = path.file_name().unwrap_or_default().to_string_lossy();
         files.push((format!("inc/{name}"), text));
     }
-    Names::parse(&files)
+    if !files.is_empty() {
+        names = Names::parse(&files)?;
+    }
+    // Message comments read the English text beside the includes.
+    if let Some(base) = inc.parent() {
+        let language = base.join("language/en-US.txt");
+        if language.is_file() {
+            let text = std::fs::read_to_string(&language)
+                .with_context(|| format!("failed to read {}", language.display()))?;
+            names.add_messages(&text);
+        }
+    }
+    Ok(names)
 }

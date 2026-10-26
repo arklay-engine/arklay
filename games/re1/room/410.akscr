@@ -5,25 +5,39 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_05_ITEM 0x05
+#define AOT_0A_MESSAGE 0x0A
+#define AOT_0B_MESSAGE 0x0B
+#define AOT_0C_MESSAGE 0x0C
+#define AOT_0D_MESSAGE 0x0D
+#define AOT_0E_MESSAGE 0x0E
+#define AOT_0F_MESSAGE 0x0F
+#define AOT_10_NONE 0x10
+#define AOT_83_ITEM 0x83
+#define AOT_84_ITEM 0x84
+
 proc init
 {
-    door_aot_set(0, 9500, 1900, 1600, 2100, 0, 1, 11, 3, 0, ROOM_40E_WATER_TANK, 3000, 0, 26700, 0, UNLOCKED, 129);
-    item_aot_set(1, 1700, 4300, 1300, 1100, ITEM_0C_AMMO_SHOTGUN, 7, 0, 255, 52, 8, 80, 246, 236, 19, 0, 0, 122, 129, 0, 0);
-    item_aot_set(2, 1700, 4300, 1300, 1100, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 52, 8, 80, 246, 48, 17, 0, 0, 131, 129, 0, 0);
-    item_aot_set(131, 8400, 6200, 1300, 1200, ITEM_0B_AMMO_HANDGUN, 15, 2, 255, 140, 35, 214, 247, 88, 27, 88, 2, 112, 129, 0, 0);
-    item_aot_set(132, 8400, 6200, 1300, 1200, ITEM_0B_AMMO_HANDGUN, 15, 3, 255, 252, 33, 214, 247, 88, 27, 88, 2, 92, 129, 0, 0);
-    item_aot_set(5, 3900, 6270, 1100, 1100, ITEM_3A_KEY_GUARDHOUSE_003, 1, 4, 255, 242, 18, 214, 247, 112, 28, 50, 15, 114, 129, 0, 132);
-    aot_set(10, 1700, 5700, 1300, 1800, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    aot_set(11, 3000, 6200, 800, 1300, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    aot_set(12, 1700, 1800, 1300, 2200, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    aot_set(13, 7300, 1500, 1400, 1300, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    aot_set(14, 3000, 1400, 4400, 2000, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    aot_set(15, 6400, 6200, 2100, 1100, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    aot_set(16, 1700, 4300, 1300, 1100, SCE_NONE, 129, 129, 0, 79, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 9500, 1900, 1600, 2100, 0, 1, 11, 3, 0, ROOM_40E_WATER_TANK, 3000, 0, 26700, 0, UNLOCKED, 129);
+    item_aot_set(AOT_01_ITEM, 1700, 4300, 1300, 1100, ITEM_0C_AMMO_SHOTGUN, 7, 0, 255, 52, 8, 80, 246, 236, 19, 0, 0, 122, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 1700, 4300, 1300, 1100, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 52, 8, 80, 246, 48, 17, 0, 0, 131, 129, 0, 0);
+    item_aot_set(AOT_83_ITEM, 8400, 6200, 1300, 1200, ITEM_0B_AMMO_HANDGUN, 15, 2, 255, 140, 35, 214, 247, 88, 27, 88, 2, 112, 129, 0, 0);
+    item_aot_set(AOT_84_ITEM, 8400, 6200, 1300, 1200, ITEM_0B_AMMO_HANDGUN, 15, 3, 255, 252, 33, 214, 247, 88, 27, 88, 2, 92, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 3900, 6270, 1100, 1100, ITEM_3A_KEY_GUARDHOUSE_003, 1, 4, 255, 242, 18, 214, 247, 112, 28, 50, 15, 114, 129, 0, 132);
+    aot_set(AOT_0A_MESSAGE, 1700, 5700, 1300, 1800, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 3000, 6200, 800, 1300, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    aot_set(AOT_0C_MESSAGE, 1700, 1800, 1300, 2200, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    aot_set(AOT_0D_MESSAGE, 7300, 1500, 1400, 1300, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    aot_set(AOT_0E_MESSAGE, 3000, 1400, 4400, 2000, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    aot_set(AOT_0F_MESSAGE, 6400, 6200, 2100, 1100, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    aot_set(AOT_10_NONE, 1700, 4300, 1300, 1100, SCE_NONE, 129, 129, 0, 79, 0, 0, 0);
     if (cmpb(9, 0, 3))
     {
-        aot_delete(1, SCE_NONE, 129);
-        aot_delete(2, SCE_NONE, 129);
-        aot_delete(16, SCE_MESSAGE, 129);
+        aot_delete(AOT_01_ITEM, SCE_NONE, 129);
+        aot_delete(AOT_02_ITEM, SCE_NONE, 129);
+        aot_delete(AOT_10_NONE, SCE_MESSAGE, 129);
     }
 }

@@ -5,23 +5,36 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_EVENT 0x01
+#define AOT_02_EVENT 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_MESSAGE 0x09
+#define AOT_0A_MESSAGE 0x0A
+#define AOT_0B_MESSAGE 0x0B
+
 proc init
 {
-    door_aot_set(0, 8100, 3200, 1800, 1300, 3, 0, 0, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, 129);
-    aot_set(1, 8200, 5100, 1000, 1000, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
-    aot_set(2, 4450, 10680, 1000, 1500, SCE_EVENT, 129, 9, 0, event_04, 0, 0, 0);
-    item_aot_set(3, 1820, 9520, 1000, 1000, ITEM_0C_AMMO_SHOTGUN, 7, 0, 255, 16, 9, 80, 251, 36, 39, 0, 8, 29, 129, 0, 0);
-    item_aot_set(4, 3900, 7500, 1700, 1600, ITEM_62_FILE_ORDERS, 0, 1, 255, 242, 18, 70, 251, 244, 31, 180, 251, 116, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 8100, 3200, 1800, 1300, 3, 0, 0, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, 129);
+    aot_set(AOT_01_EVENT, 8200, 5100, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_01, 0, 0, 0);
+    aot_set(AOT_02_EVENT, 4450, 10680, 1000, 1500, SCE_EVENT, 129, 9, 0, on_aot_02, 0, 0, 0);
+    item_aot_set(AOT_03_ITEM, 1820, 9520, 1000, 1000, ITEM_0C_AMMO_SHOTGUN, 7, 0, 255, 16, 9, 80, 251, 36, 39, 0, 8, 29, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 3900, 7500, 1700, 1600, ITEM_62_FILE_ORDERS, 0, 1, 255, 242, 18, 70, 251, 244, 31, 180, 251, 116, 129, 0, 0);
     eml_rot(1, 124, 1, 232, 8);
-    item_aot_set(5, 0, 0, 10, 10, ITEM_22_PUZZLE_JEWEL_RED, 1, 2, 255, 8, 32, 198, 233, 50, 55, 0, 0, 30, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 0, 0, 10, 10, ITEM_22_PUZZLE_JEWEL_RED, 1, 2, 255, 8, 32, 198, 233, 50, 55, 0, 0, 30, 129, 0, 0);
     eml_rot(2, 0, 0, 0, 252);
     setbyte(2, 0, 0);
-    item_aot_set(6, 1780, 7820, 1000, 1500, ITEM_0E_AMMO_MAGNUM, 6, 3, 255, 232, 8, 80, 251, 160, 35, 0, 0, 200, 129, 0, 0);
+    item_aot_set(AOT_06_ITEM, 1780, 7820, 1000, 1500, ITEM_0E_AMMO_MAGNUM, 6, 3, 255, 232, 8, 80, 251, 160, 35, 0, 0, 200, 129, 0, 0);
     obj(0, 65, 255, 6720, 0, 10440, 0, 64, 2, 0, 0, 192, 253, 0, 0, 28, 2, 132, 3, 232, 3, 28, 2);
     if (ck(FG_COMMON, FLAG_COMMON_44, FALSE))
     {
         cutnext(4);
-        evt_exec(0, 9, event_03);
+        evt_exec(0, 9, on_enter);
     }
     else
     {
@@ -31,52 +44,52 @@ proc init
             effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
     }
-    aot_set(7, 5500, 5200, 1100, 2500, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
-    aot_set(8, 3600, 11500, 3500, 600, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
-    aot_set(9, 7100, 11500, 1800, 600, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
-    aot_set(10, 1500, 10900, 2000, 1000, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(11, 2200, 7500, 300, 2500, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 5500, 5200, 1100, 2500, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 3600, 11500, 3500, 600, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 7100, 11500, 1800, 600, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 1500, 10900, 2000, 1000, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 2200, 7500, 300, 2500, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
 }
 
 proc main
 {
     if (ck(FG_STATUS, FLAG_STATUS_18, TRUE))
     {
-        aot_delete(2, SCE_EVENT, 129);
-        aot_delete(3, SCE_ITEM, 0);
-        aot_delete(4, SCE_DOCUMENT, 0);
-        aot_delete(5, SCE_ITEM, 0);
+        aot_delete(AOT_02_EVENT, SCE_EVENT, 129);
+        aot_delete(AOT_03_ITEM, SCE_ITEM, 0);
+        aot_delete(AOT_04_ITEM, SCE_DOCUMENT, 0);
+        aot_delete(AOT_05_ITEM, SCE_ITEM, 0);
     }
     else
     {
-        aot_delete(2, SCE_EVENT, 0);
-        aot_delete(3, SCE_ITEM, 129);
-        aot_delete(4, SCE_DOCUMENT, 129);
-        aot_delete(5, SCE_ITEM, 129);
+        aot_delete(AOT_02_EVENT, SCE_EVENT, 0);
+        aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
+        aot_delete(AOT_04_ITEM, SCE_DOCUMENT, 129);
+        aot_delete(AOT_05_ITEM, SCE_ITEM, 129);
     }
     if (ck(FG_ITEM, FLAG_ITEM_1E, FALSE))
     {
-        aot_delete(2, SCE_NONE, 0);
+        aot_delete(AOT_02_EVENT, SCE_NONE, 0);
     }
     if (ck(FG_ITEM, FLAG_ITEM_1D, FALSE))
     {
-        aot_delete(3, SCE_NONE, 0);
+        aot_delete(AOT_03_ITEM, SCE_NONE, 0);
     }
     if (ck(FG_ITEM, FLAG_ITEM_74, FALSE))
     {
-        aot_delete(4, SCE_NONE, 0);
+        aot_delete(AOT_04_ITEM, SCE_NONE, 0);
     }
     if (ck(FG_ITEM, FLAG_ITEM_C8, FALSE))
     {
-        aot_delete(5, SCE_NONE, 0);
+        aot_delete(AOT_05_ITEM, SCE_NONE, 0);
     }
 }
 
-event event_00
+event on_aot_01
 {
     sleep(1);
     set(FG_6, FLAG_6_17, FALSE);
-    message(128, 0);
+    message(128, 0); // "There's a switch. Will you push it? ...Nothing important."
     do
     {
         evt_next();
@@ -97,7 +110,7 @@ event event_00
                 {
                     cutnext(1);
                 }
-                evt_exec(0, 9, event_01);
+                evt_exec(0, 9, on_aot_01_sub1);
             }
             else
             {
@@ -109,18 +122,18 @@ event event_00
                 {
                     cutnext(5);
                 }
-                evt_exec(0, 9, event_02);
+                evt_exec(0, 9, on_aot_01_sub2);
             }
         }
         else
         {
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, on_enter);
         }
     }
     evt_finish();
 }
 
-event event_01
+event on_aot_01_sub1
 {
     run
     {
@@ -135,7 +148,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_aot_01_sub2
 {
     run
     {
@@ -166,7 +179,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter
 {
     sleep(5);
     run
@@ -177,7 +190,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event on_aot_02
 {
     sleep(1);
     run
@@ -186,7 +199,7 @@ event event_04
         if (ck(FG_COMMON, FLAG_COMMON_44, FALSE))
         {
             cutnext(7);
-            evt_exec(0, 9, event_05);
+            evt_exec(0, 9, on_aot_02_sub1);
         }
         else
         {
@@ -194,17 +207,17 @@ event event_04
             setbyte(2, 1, 0);
             effect_kill_a(0);
             msg_list(0, 168, 22, 248, 243, 204, 41, 255, 255, 255, 0, 240, 25, 168, 22, 22, 244, 204, 41, 255, 255, 255, 0, 240, 25, 168, 22, 72, 244, 204, 41, 255, 255, 255, 0, 240, 25, 120, 5, 120, 5, 120, 5);
-            evt_exec(0, 9, event_06);
-            evt_exec(0, 7, event_09);
+            evt_exec(0, 9, on_aot_02_sub2);
+            evt_exec(0, 7, on_aot_02_sub3);
         }
     }
     evt_finish();
 }
 
-event event_05
+event on_aot_02_sub1
 {
     sleep(50);
-    message(1, 0);
+    message(1, 0); // "...Nothing important."
     do
     {
         evt_next();
@@ -223,10 +236,10 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event on_aot_02_sub2
 {
     sleep(50);
-    message(130, 0);
+    message(130, 0); // "Will you try and take out the eyeball? It looks as if it's alive."
     do
     {
         evt_next();
@@ -236,22 +249,22 @@ event event_06
     {
         if (cmpb(5, 0, 0))
         {
-            evt_exec(0, 9, event_07);
+            evt_exec(0, 9, on_aot_02_sub2_sub1);
         }
         else
         {
-            evt_exec(0, 9, event_08);
+            evt_exec(0, 9, on_aot_02_sub2_sub2);
         }
     }
     evt_finish();
 }
 
-event event_07
+event on_aot_02_sub2_sub1
 {
     run
     {
         set(FG_6, FLAG_6_17, TRUE);
-        aot_on(5, SCE_ITEM, 0);
+        aot_on(AOT_05_ITEM, SCE_ITEM, 0);
     }
     evt_next();
     evt_nop();
@@ -264,7 +277,7 @@ event event_07
     evt_finish();
 }
 
-event event_08
+event on_aot_02_sub2_sub2
 {
     evt_disable(7);
     run
@@ -286,7 +299,7 @@ event event_08
     evt_finish();
 }
 
-event event_09
+event on_aot_02_sub3
 {
     for (40)
     {

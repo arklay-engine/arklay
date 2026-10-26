@@ -5,31 +5,41 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_EVENT 0x05
+#define AOT_06_HIKIDASHI 0x06
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+
 proc init
 {
-    door_aot_set(0, 8800, 400, 1600, 2100, 2, 0, 6, 1, 0, ROOM_400_ENTER_PASSAGE, 13300, 0, 13600, 1024, UNLOCKED, 129);
-    door_aot_set(1, 7300, 2200, 1600, 2200, 1, 0, 33, 1, 0, ROOM_402_ROOM_001_BATHROOM, 6300, 0, 3300, 2048, UNLOCKED, 129);
-    item_aot_set(2, 9500, 12900, 1000, 1000, ITEM_3E_PUZZLE_BOOK_BLANK, 1, 0, 255, 16, 39, 42, 254, 88, 52, 0, 0, 99, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 8800, 400, 1600, 2100, 2, 0, 6, 1, 0, ROOM_400_ENTER_PASSAGE, 13300, 0, 13600, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 7300, 2200, 1600, 2200, 1, 0, 33, 1, 0, ROOM_402_ROOM_001_BATHROOM, 6300, 0, 3300, 2048, UNLOCKED, 129);
+    item_aot_set(AOT_02_ITEM, 9500, 12900, 1000, 1000, ITEM_3E_PUZZLE_BOOK_BLANK, 1, 0, 255, 16, 39, 42, 254, 88, 52, 0, 0, 99, 129, 0, 0);
 #if CHRIS
-    item_aot_set(3, 2300, 13500, 1000, 1000, ITEM_3D_KEY_DESK, 1, 1, 255, 54, 11, 96, 250, 120, 55, 0, 0, 100, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 2300, 13500, 1000, 1000, ITEM_3D_KEY_DESK, 1, 1, 255, 54, 11, 96, 250, 120, 55, 0, 0, 100, 129, 0, 0);
     eml_rot(1, 0, 8, 150, 0);
-    aot_delete(3, SCE_NONE, 0);
+    aot_delete(AOT_03_ITEM, SCE_NONE, 0);
 #endif
-    item_aot_set(4, 0, 0, 1, 1, ITEM_0C_AMMO_SHOTGUN, 7, 2, 255, 106, 39, 60, 0, 42, 38, 240, 251, 165, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, ITEM_0C_AMMO_SHOTGUN, 7, 2, 255, 106, 39, 60, 0, 42, 38, 240, 251, 165, 129, 0, 0);
     eml_rot(2, 116, 255, 186, 255);
     setbyte(2, 0, 0);
 #if CHRIS
     if (ck(FG_ITEM, FLAG_ITEM_64, TRUE))
     {
-        aot_set(5, 2300, 13500, 1000, 1000, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+        aot_set(AOT_05_EVENT, 2300, 13500, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_05, 0, 0, 0);
     }
 #endif
     if (ck(FG_ITEM, FLAG_ITEM_A5, TRUE))
     {
-        aot_set(6, 9600, 10600, 1000, 1500, SCE_HIKIDASHI, 129, 33, 0, 4, 0, 3, 0);
+        aot_set(AOT_06_HIKIDASHI, 9600, 10600, 1000, 1500, SCE_HIKIDASHI, 129, 33, 0, 4, 0, 3, 0);
     }
-    aot_set(7, 1700, 10800, 1100, 2000, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(8, 5000, 15100, 1500, 300, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 1700, 10800, 1100, 2000, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 5000, 15100, 1500, 300, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
 #if JILL
     set(FG_STATUS, FLAG_STATUS_3C, TRUE);
 #endif
@@ -40,23 +50,35 @@ proc init
 #endif
 }
 
+#if CHRIS
+event on_aot_05
+#else
 event event_00
+#endif
 {
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
         cutnext(4);
+#if CHRIS
+        aot_delete(AOT_05_EVENT, SCE_NONE, 0);
+#else
         aot_delete(5, SCE_NONE, 0);
+#endif
     }
     sleep(1);
     run
     {
-        message(128, 255);
+        message(128, 255); // "There's a key in the cup."
     }
     wait_message();
     run
     {
+#if CHRIS
+        aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
+#else
         aot_delete(3, SCE_ITEM, 129);
+#endif
         cutcurr(0);
         cut_auto(0);
         set(FG_6, FLAG_6_17, TRUE);

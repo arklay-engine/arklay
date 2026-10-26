@@ -5,24 +5,30 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_HIKIDASHI 0x04
+
 proc init
 {
 #if MANSION1
-    door_aot_set(0, 2500, 9400, 1700, 2000, 1, 0, 29, 5, 0, ROOM_101_1F_LEFT_STAIRS, 15000, 0, 18800, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 2500, 9400, 1700, 2000, 1, 0, 29, 5, 0, ROOM_101_1F_LEFT_STAIRS, 15000, 0, 18800, 3072, UNLOCKED, 129);
 #else
-    door_aot_set(0, 2900, 9000, 1200, 1300, 1, 0, 29, 5, 0, ROOM_101_1F_LEFT_STAIRS, 15000, 0, 18800, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 2900, 9000, 1200, 1300, 1, 0, 29, 5, 0, ROOM_101_1F_LEFT_STAIRS, 15000, 0, 18800, 3072, UNLOCKED, 129);
 #endif
-    item_aot_set(1, 6500, 9100, 500, 900, ITEM_1C_PUZZLE_BROKEN_SHOTGUN, 1, 0, 255, 184, 26, 54, 247, 198, 37, 48, 248, 48, 129, 0, 0);
+    item_aot_set(AOT_01_ITEM, 6500, 9100, 500, 900, ITEM_1C_PUZZLE_BROKEN_SHOTGUN, 1, 0, 255, 184, 26, 54, 247, 198, 37, 48, 248, 48, 129, 0, 0);
     eml_rot(0, 156, 255, 180, 251);
 #if MANSION1
-    item_aot_set(2, 0, 0, 0, 0, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 0, 0, 0);
+    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 0, 0, 0);
 #else
-    item_aot_set(2, 0, 0, 0, 0, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 24, 11, 102, 254, 22, 8, 232, 3, 49, 129, 0, 0);
 #endif
     eml_rot(1, 0, 0, 180, 251);
     setbyte(1, 0, 0);
-    item_aot_set(3, 4540, 8470, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 2, 255, 64, 21, 204, 247, 154, 36, 0, 0, 50, 129, 0, 0);
-    aot_set(4, 2000, 2237, 1750, 700, SCE_HIKIDASHI, 129, 30, 0, 2, 0, 3, 0);
+    item_aot_set(AOT_03_ITEM, 4540, 8470, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 2, 255, 64, 21, 204, 247, 154, 36, 0, 0, 50, 129, 0, 0);
+    aot_set(AOT_04_HIKIDASHI, 2000, 2237, 1750, 700, SCE_HIKIDASHI, 129, 30, 0, 2, 0, 3, 0);
 #if MANSION2
     if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
@@ -31,7 +37,7 @@ proc init
             set(FG_COMMON, FLAG_COMMON_30, TRUE);
             set(FG_COMMON, FLAG_COMMON_C0, TRUE);
             set(FG_COMMON, FLAG_COMMON_2F, FALSE);
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_enter);
         }
     }
 #endif
@@ -48,7 +54,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_enter
 {
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     sleep(1);
@@ -56,7 +62,7 @@ event event_01
     set(FG_6, FLAG_6_1D, FALSE);
     voice_play(1, 133, 0);
     wait_message();
-    evt_fork(9, event_02, 0);
+    evt_fork(9, on_enter_sub1, 0);
     sleep(100);
     run
     {
@@ -68,7 +74,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_enter_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

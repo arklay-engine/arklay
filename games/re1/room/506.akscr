@@ -5,19 +5,28 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_EVENT 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_MESSAGE 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_06_MESSAGE 0x06
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_MESSAGE 0x09
 #define FLAG_ROOM_1E 0x1E
 
 proc init
 {
-    door_aot_set(0, 13800, 1900, 3300, 2000, 10, 12, 13, 64, 0, ROOM_505_O_PASSAGE, 21600, 0, 21000, 1024, UNLOCKED, 129);
-    aot_set(1, 16000, 7600, 1000, 1200, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
-    item_aot_set(2, 9160, 7640, 1800, 1800, ITEM_2B_PUZZLE_SLIDES, 1, 0, 255, 76, 39, 0, 0, 92, 33, 0, 0, 179, 129, 1, 0);
-    aot_set(3, 16800, 5700, 900, 1700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(4, 2100, 2900, 900, 1700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(6, 2500, 1700, 4000, 1300, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(7, 11800, 9300, 4000, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(8, 8200, 5200, 5000, 2300, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(9, 1900, 10000, 8900, 1200, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 13800, 1900, 3300, 2000, 10, 12, 13, 64, 0, ROOM_505_O_PASSAGE, 21600, 0, 21000, 1024, UNLOCKED, 129);
+    aot_set(AOT_01_EVENT, 16000, 7600, 1000, 1200, SCE_EVENT, 129, 9, 0, on_aot_01, 0, 0, 0);
+    item_aot_set(AOT_02_ITEM, 9160, 7640, 1800, 1800, ITEM_2B_PUZZLE_SLIDES, 1, 0, 255, 76, 39, 0, 0, 92, 33, 0, 0, 179, 129, 1, 0);
+    aot_set(AOT_03_MESSAGE, 16800, 5700, 900, 1700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 2100, 2900, 900, 1700, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 2500, 1700, 4000, 1300, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 11800, 9300, 4000, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 8200, 5200, 5000, 2300, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 1900, 10000, 8900, 1200, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     set(FG_ROOM, FLAG_ROOM_1E, TRUE);
     obj(0, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -42,9 +51,9 @@ proc init
     }
 }
 
-event event_00
+event on_aot_01
 {
-    message(128, 255);
+    message(128, 255); // "This computer is used to open the electronic locks.Will you turn it on?Various chemicals used for research. Nothing useful."
     do
     {
         evt_next();

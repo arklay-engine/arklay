@@ -5,6 +5,11 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_DOOR 0x03
+#define AOT_04_EVENT 0x04
 #define FLAG_ROOM_05 0x05
 #define FLAG_ROOM_06 0x06
 #define FLAG_ROOM_07 0x07
@@ -12,31 +17,31 @@
 
 proc init
 {
-    door_aot_set(0, 19500, 2400, 2100, 2500, 6, 1, 12, 7, 0, ROOM_505_O_PASSAGE, 2900, 0, 17500, 0, UNLOCKED, 129);
-    door_aot_set(1, 10700, 4800, 2300, 1600, 0, 1, 12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, 129);
-    door_aot_set(2, 17700, 800, 1400, 1600, 0, 1, 12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, 129);
-    door_aot_set(3, 200, 2500, 2100, 2200, 11, 1, 11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 19500, 2400, 2100, 2500, 6, 1, 12, 7, 0, ROOM_505_O_PASSAGE, 2900, 0, 17500, 0, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 10700, 4800, 2300, 1600, 0, 1, 12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 17700, 800, 1400, 1600, 0, 1, 12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, 129);
+    door_aot_set(AOT_03_DOOR, 200, 2500, 2100, 2200, 11, 1, 11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, 129);
     if (ck(FG_ITEM, FLAG_ITEM_52, TRUE))
     {
         if (ck(FG_ITEM, FLAG_ITEM_62, TRUE))
         {
             if (ck(FG_ITEM, FLAG_ITEM_5A, TRUE))
             {
-                aot_set(4, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, event_03, 0, 0, 0);
+                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04_2, 0, 0, 0);
             }
             else
             {
-                aot_set(4, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, event_02, 0, 0, 0);
+                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
             }
         }
         else
         {
-            aot_set(4, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, event_02, 0, 0, 0);
+            aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
         }
     }
     else
     {
-        aot_set(4, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, event_02, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_34, FALSE))
     {
@@ -56,7 +61,7 @@ proc init
         if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
         {
             dir_set(0, 0, 4056, 0, 2600, 0, 2500);
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_enter);
         }
     }
 #else
@@ -65,15 +70,15 @@ proc init
         if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
         {
             dir_set(0, 0, 4056, 0, 2600, 0, 2500);
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_enter);
         }
     }
 #endif
     if (ck(FG_LOCK, FLAG_LOCK_26, FALSE))
     {
-        aot_reset(1, SCE_EVENT, 129, 9, event_04, 0);
+        aot_reset(AOT_01_DOOR, SCE_EVENT, 129, 9, on_aot_01_door, 0);
     }
-    aot_reset(3, SCE_EVENT, 129, 9, event_05, 0);
+    aot_reset(AOT_03_DOOR, SCE_EVENT, 129, 9, on_aot_03_door, 0);
 #if CHRIS
     if (ck(FG_COMMON, FLAG_COMMON_AC, FALSE))
     {
@@ -128,7 +133,7 @@ proc main
         {
             if (ck(FG_SCENARIO, FLAG_SCENARIO_36, TRUE))
             {
-                aot_delete(3, SCE_DOOR, 129);
+                aot_delete(AOT_03_DOOR, SCE_DOOR, 129);
             }
         }
     }
@@ -139,7 +144,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_enter
 {
     sleep(1);
     run
@@ -261,14 +266,14 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_aot_04
 {
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
         cutnext(4);
-        message(128, 0);
+        message(128, 0); // "A pass code panel."
     }
     do
     {
@@ -281,7 +286,7 @@ event event_02
         {
             if (ck(FG_ITEM, FLAG_ITEM_52, FALSE))
             {
-                message(130, 0);
+                message(130, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, FLAG_SCENARIO_34, TRUE);
                 se_play_3d(2, 23, 0, 0, 0, 2300, 4850);
             }
@@ -298,7 +303,7 @@ event event_02
         {
             if (ck(FG_ITEM, FLAG_ITEM_62, FALSE))
             {
-                message(130, 0);
+                message(130, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, FLAG_SCENARIO_35, TRUE);
                 se_play_3d(2, 23, 0, 0, 0, 2300, 4850);
             }
@@ -315,7 +320,7 @@ event event_02
         {
             if (ck(FG_ITEM, FLAG_ITEM_5A, FALSE))
             {
-                message(130, 0);
+                message(130, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, FLAG_SCENARIO_36, TRUE);
                 se_play_3d(2, 23, 0, 0, 0, 2300, 4850);
             }
@@ -354,21 +359,21 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_aot_04_2
 {
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
         cutnext(4);
-        message(128, 0);
+        message(128, 0); // "A pass code panel."
     }
     do
     {
         evt_next();
     }
     while (cmpb(5, 2, 128));
-    message(129, 0);
+    message(129, 0); // "You don't have the pass code."
     do
     {
         evt_next();
@@ -388,13 +393,13 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event on_aot_01_door
 {
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
         se_play_3d(2, 20, 0, 0, 0, 11300, 4850);
-        message(132, 0);
+        message(132, 0); // "It's electronically locked."
     }
     do
     {
@@ -405,13 +410,13 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event on_aot_03_door
 {
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
         se_play_3d(2, 20, 0, 0, 0, 11300, 4850);
-        message(133, 0);
+        message(133, 0); // "It's locked."
     }
     do
     {

@@ -5,38 +5,44 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_MESSAGE 0x01
+#define AOT_02_USEITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_01 0x01
 
 proc init
 {
-    door_aot_set(0, 4000, 11800, 1300, 1400, 1, 0, 1, 4, 0, ROOM_20E_FRONT_OF_ATTIC, 4900, 0, 12500, 0, UNLOCKED, 129);
-    aot_set(1, 7300, 6700, 2700, 2000, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(2, 7300, 6700, 2700, 2000, SCE_USEITEM, 1, 9, 0, 21, 0, 1, 0);
-    item_aot_set(3, 10000, 11300, 1700, 1000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 11, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 4000, 11800, 1300, 1400, 1, 0, 1, 4, 0, ROOM_20E_FRONT_OF_ATTIC, 4900, 0, 12500, 0, UNLOCKED, 129);
+    aot_set(AOT_01_MESSAGE, 7300, 6700, 2700, 2000, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_02_USEITEM, 7300, 6700, 2700, 2000, SCE_USEITEM, 1, 9, 0, 21, 0, 1, 0);
+    item_aot_set(AOT_03_ITEM, 10000, 11300, 1700, 1000, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 11, 129, 0, 0);
 #if CHRIS
-    item_aot_set(4, 3200, 1900, 1200, 2400, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 12, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 3200, 1900, 1200, 2400, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 12, 129, 0, 0);
 #else
-    item_aot_set(4, 3200, 1900, 1200, 2400, ITEM_11_AMMO_GRENADE_ACID, 6, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 12, 129, 0, 0);
-    item_aot_set(5, 4800, 7000, 1100, 3400, ITEM_2F_TOOL_INK_RIBBON, 2, 2, 255, 192, 23, 50, 251, 116, 34, 0, 0, 89, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 3200, 1900, 1200, 2400, ITEM_11_AMMO_GRENADE_ACID, 6, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 12, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 4800, 7000, 1100, 3400, ITEM_2F_TOOL_INK_RIBBON, 2, 2, 255, 192, 23, 50, 251, 116, 34, 0, 0, 89, 129, 0, 0);
 #endif
     obj(0, 17, 255, 7872, 0, 5192, 3072, 0, 0, 106, 4, 0, 0, 150, 251, 40, 0, 232, 3, 146, 4, 28, 2);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_0A, FALSE))
     {
-        aot_reset(4, SCE_MESSAGE, 129, 130, 255, 0);
+        aot_reset(AOT_04_ITEM, SCE_MESSAGE, 129, 130, 255, 0);
     }
     else
     {
         cut_auto(1);
         setb(2, 3, 0);
-        aot_reset(1, SCE_MESSAGE, 129, 129, 255, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 129, 255, 0);
         if (ck(FG_ITEM, FLAG_ITEM_0C, TRUE))
         {
-            aot_reset(4, SCE_ITEM, 129, 0, 0, 0);
+            aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 0, 0);
         }
         else
         {
-            aot_reset(4, SCE_NONE, 0, 0, 0, 0);
+            aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
         }
         effect(15, 0, 0, 254, 31, 194, 248, 200, 31, 0, 0);
         effect(15, 0, 0, 124, 32, 122, 248, 70, 32, 0, 0);
@@ -53,8 +59,8 @@ proc main
         {
             cutnext(4);
             cut_auto(0);
-            aot_reset(1, SCE_MESSAGE, 129, 129, 255, 0);
-            aot_reset(4, SCE_ITEM, 129, 0, 0, 0);
+            aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 129, 255, 0);
+            aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 0, 0);
             effect(15, 0, 0, 254, 31, 194, 248, 200, 31, 0, 0);
             effect(15, 0, 0, 124, 32, 122, 248, 70, 32, 0, 0);
             effect(15, 0, 0, 12, 33, 194, 248, 196, 32, 0, 0);

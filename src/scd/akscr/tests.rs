@@ -615,6 +615,48 @@ fn include_names_decompile_game_data() {
     assert_eq!(names.door_target(1, 0x45).as_deref(), Some("STAGE_2 | 5"));
 }
 
+/// The decompiler names AOT indices, events reached from an AOT or a
+/// section, and comments messages with their text.
+#[test]
+fn decompile_names_aots_events_and_messages() {
+    let mut names = Names::default();
+    names.add_messages("ROOM_601_TEXT_02 = \"A {c1}red\\nbook.\"\nMESSAGE_03 = \"Saved.\"\n");
+    let source = ".version 1
+
+.init
+.block
+    aot_set                 2, 0, 0, 0, 0, SCE_NONE, 0, 0, 0, 0, 0, 0, 0
+    aot_reset               2, SCE_EVENT, 0, 0, event_01, 0
+    evt_exec                0, 6, event_00
+    message                 2, 0
+    message                 67, 0
+    end                     0
+
+.event event_00
+    evt_finish
+
+.event event_01
+    evt_finish
+";
+    let container = asm::assemble(source).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&container).unwrap();
+    let text = decompile_with(&scripts, &names, 0x6010);
+    for expected in [
+        "#define AOT_02_EVENT 0x02",
+        "aot_set(AOT_02_EVENT,",
+        "event on_enter",
+        "event on_aot_02",
+        "evt_exec(0, 6, on_enter);",
+        "message(2, 0); // \"A red book.\"",
+        "message(67, 0); // \"Saved.\"",
+    ] {
+        assert!(text.contains(expected), "{expected}\n{text}");
+    }
+    let compiled = compile_with(&text, None, &no_includes).unwrap();
+    let original = asm::assemble(source).unwrap();
+    assert_eq!(compiled, original, "{text}");
+}
+
 /// Every checked-in room script compiles for each of its variants.
 #[test]
 fn checked_in_room_scripts_compile() {

@@ -5,16 +5,20 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_NONE 0x03
 #define FLAG_ROOM_18 0x18
 #define FLAG_ROOM_19 0x19
 #define FLAG_ROOM_1A 0x1A
 
 proc init
 {
-    door_aot_set(0, 900, 3400, 1700, 1900, 2, 0, 0, 9, 0, ROOM_209_BEDROOM, 9100, 0, 7700, 2048, UNLOCKED, 129);
-    door_aot_set(1, 5700, 6400, 1400, 1200, 2, 0, 29, 5, 0, ROOM_207_2F_RIGHT_STAIRS, 17000, 0, 11300, 3072, UNLOCKED, 129);
-    door_aot_set(2, 10200, 4000, 1400, 1100, 1, 0, 0, 7, 0, ROOM_20A_STUDY_ROOM, 2600, 0, 5500, 0, UNLOCKED, 129);
-    aot_set(3, 1000, 3900, 1100, 1200, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 900, 3400, 1700, 1900, 2, 0, 0, 9, 0, ROOM_209_BEDROOM, 9100, 0, 7700, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 5700, 6400, 1400, 1200, 2, 0, 29, 5, 0, ROOM_207_2F_RIGHT_STAIRS, 17000, 0, 11300, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 10200, 4000, 1400, 1100, 1, 0, 0, 7, 0, ROOM_20A_STUDY_ROOM, 2600, 0, 5500, 0, UNLOCKED, 129);
+    aot_set(AOT_03_NONE, 1000, 3900, 1100, 1200, SCE_NONE, 129, 9, 0, 0, 0, 0, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
         if (ck(FG_SCENARIO, FLAG_SCENARIO_05, TRUE))
@@ -25,14 +29,14 @@ proc init
         {
             if (ck(FG_ENEMY, FLAG_ENEMY_14, FALSE))
             {
-                aot_delete(0, SCE_NONE, 129);
-                aot_delete(3, SCE_EVENT, 129);
+                aot_delete(AOT_00_DOOR, SCE_NONE, 129);
+                aot_delete(AOT_03_NONE, SCE_EVENT, 129);
             }
             else
             {
                 require(ck(FG_ENEMY, FLAG_ENEMY_13, FALSE));
-                aot_delete(0, SCE_NONE, 129);
-                aot_delete(3, SCE_EVENT, 129);
+                aot_delete(AOT_00_DOOR, SCE_NONE, 129);
+                aot_delete(AOT_03_NONE, SCE_EVENT, 129);
             }
             enemy(ENEMY_11_ZOMBIE_LAB, 4, 23, 1, 2, 0, 0, 0, 0, 0, 20000, 0, 20000, 0, 0, 0, 0);
         }
@@ -45,7 +49,7 @@ proc main
     {
         if (ck(FG_ROOM, FLAG_ROOM_18, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_05, FALSE))
         {
-            evt_exec(0, 9, event_02);
+            evt_exec(0, 9, from_main);
             set(FG_ROOM, FLAG_ROOM_18, TRUE);
         }
     }
@@ -55,8 +59,8 @@ event event_00
 {
     run
     {
-        aot_delete(0, SCE_DOOR, 129);
-        aot_delete(3, SCE_NONE, 129);
+        aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
+        aot_delete(AOT_03_NONE, SCE_NONE, 129);
         set(FG_SCENARIO, FLAG_SCENARIO_05, TRUE);
         set(FG_ENEMY, FLAG_ENEMY_17, TRUE);
         if (ck(FG_ENEMY, FLAG_ENEMY_14, FALSE))
@@ -127,7 +131,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event from_main
 {
     sleep(3);
     set(FG_6, FLAG_6_1D, FALSE);

@@ -5,6 +5,11 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_EVENT 0x02
+#define AOT_03_EVENT 0x03
+#define AOT_89_ITEM 0x89
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_01 0x01
 #define FLAG_ROOM_08 0x08
@@ -13,21 +18,21 @@
 
 proc init
 {
-    door_aot_set(0, 3400, 20200, 1500, 1300, 3, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 15300, 0, 2800, 3072, UNLOCKED, 129);
-    item_aot_set(1, 0, 0, 1, 1, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 252, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 3400, 20200, 1500, 1300, 3, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 15300, 0, 2800, 3072, UNLOCKED, 129);
+    item_aot_set(AOT_01_ITEM, 0, 0, 1, 1, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 252, 129, 0, 0);
     if (ck(FG_COMMON, FLAG_COMMON_48, FALSE))
     {
-        item_aot_set(137, 3330, 11130, 1000, 1000, ITEM_1E_PUZZLE_CRANK_HEXAGONAL, 0, 1, 255, 48, 117, 48, 117, 48, 117, 0, 0, 46, 129, 1, 134);
+        item_aot_set(AOT_89_ITEM, 3330, 11130, 1000, 1000, ITEM_1E_PUZZLE_CRANK_HEXAGONAL, 0, 1, 255, 48, 117, 48, 117, 48, 117, 0, 0, 46, 129, 1, 134);
         aot_delete(9, SCE_NONE, 129);
     }
     else
     {
-        item_aot_set(137, 3330, 11130, 1000, 1000, ITEM_1E_PUZZLE_CRANK_HEXAGONAL, 0, 1, 255, 246, 14, 0, 0, 110, 45, 176, 4, 46, 129, 1, 134);
+        item_aot_set(AOT_89_ITEM, 3330, 11130, 1000, 1000, ITEM_1E_PUZZLE_CRANK_HEXAGONAL, 0, 1, 255, 246, 14, 0, 0, 110, 45, 176, 4, 46, 129, 1, 134);
     }
 #if CHRIS
     if (ck(FG_COMMON, FLAG_COMMON_48, FALSE))
     {
-        aot_set(2, 10600, 1700, 1000, 6300, SCE_EVENT, 65, 9, 0, event_00, 0, 0, 0);
+        aot_set(AOT_02_EVENT, 10600, 1700, 1000, 6300, SCE_EVENT, 65, 9, 0, on_aot_02, 0, 0, 0);
         enemy(ENEMY_28_NPC_ENRICO, 2, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, 0, 0, 58, 0);
     }
     else
@@ -36,7 +41,7 @@ proc init
     }
     if (ck(FG_COMMON, FLAG_COMMON_49, FALSE))
     {
-        aot_set(3, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, event_02, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
     }
     if (ck(FG_COMMON, FLAG_COMMON_48, FALSE))
     {
@@ -51,23 +56,23 @@ proc init
 #else
     if (ck(FG_COMMON, FLAG_COMMON_48, FALSE) && ck(FG_COMMON, FLAG_COMMON_49, FALSE))
     {
-        aot_set(2, 10600, 1700, 1000, 6300, SCE_EVENT, 65, 9, 0, event_00, 0, 0, 0);
-        aot_set(3, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, event_06, 0, 0, 0);
+        aot_set(AOT_02_EVENT, 10600, 1700, 1000, 6300, SCE_EVENT, 65, 9, 0, on_aot_02, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
         if (ck(FG_COMMON, FLAG_COMMON_58, TRUE))
         {
             enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1024, 0, 0, 3060, 0, 19800, 1, 0, 0, 0);
-            evt_exec(0, 9, event_09);
-            aot_reset(0, SCE_EVENT, 129, 9, event_0A, 0);
+            evt_exec(0, 9, on_enter);
+            aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
         }
     }
     if (ck(FG_COMMON, FLAG_COMMON_48, TRUE) && ck(FG_COMMON, FLAG_COMMON_58, TRUE) && ck(FG_COMMON, FLAG_COMMON_50, FALSE))
     {
         enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3024, 0, 0, 11550, 0, 13650, 1, 9, 24, 0);
-        aot_set(2, 11000, 14000, 1500, 1500, SCE_EVENT, 129, 9, 0, event_0B, 0, 0, 0);
+        aot_set(AOT_02_EVENT, 11000, 14000, 1500, 1500, SCE_EVENT, 129, 9, 0, on_aot_02_2, 0, 0, 0);
     }
     if (ck(FG_COMMON, FLAG_COMMON_49, FALSE) && ck(FG_COMMON, FLAG_COMMON_48, TRUE))
     {
-        aot_set(3, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, event_06, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
     }
     enemy(ENEMY_28_NPC_ENRICO, 0, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, 0, 0, 59, 0);
 #endif
@@ -89,11 +94,11 @@ proc main
     }
 }
 #else
-event event_00
+event on_aot_02
 {
     run
     {
-        aot_delete(2, SCE_NONE, 0);
+        aot_delete(AOT_02_EVENT, SCE_NONE, 0);
         aot_delete(9, SCE_ITEM, 129);
     }
     sleep(1);
@@ -120,7 +125,7 @@ event event_00
     {
         if (ck(FG_COMMON, FLAG_COMMON_58, TRUE))
         {
-            evt_exec(0, 9, event_05);
+            evt_exec(0, 9, on_aot_02_sub5);
         }
     }
     evt_work_set(WK_PLAYER, 0);
@@ -171,19 +176,19 @@ event event_00
     act_anim_flags(0 | 2, 32 | 0, 0 | 3);
     act_reset();
     evt_nop();
-    evt_fork(9, event_03, 0);
+    evt_fork(9, on_aot_02_sub3, 0);
     wait_message();
-    evt_fork(7, event_04, 0);
+    evt_fork(7, on_aot_02_sub4, 0);
     run
     {
         cutnext(5);
         if (ck(FG_COMMON, FLAG_COMMON_58, TRUE))
         {
-            evt_exec(0, 9, event_02);
+            evt_exec(0, 9, on_aot_02_sub2);
         }
         else
         {
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_aot_02_sub1);
         }
     }
     evt_finish();
@@ -191,9 +196,9 @@ event event_00
 #endif
 
 #if CHRIS
-event event_00
+event on_aot_02
 #else
-event event_01
+event on_aot_02_sub1
 {
     run
     {
@@ -340,7 +345,7 @@ event event_01
         se_play_3d(2, 26, 0, 1, 0, 0, 0);
     }
     sleep(35);
-    evt_fork(9, event_0C, 0);
+    evt_fork(9, on_aot_02_sub1_sub1, 0);
     wait_message();
     run
     {
@@ -430,13 +435,13 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_aot_02_sub2
 #endif
 {
 #if CHRIS
     run
     {
-        aot_delete(2, SCE_NONE, 0);
+        aot_delete(AOT_02_EVENT, SCE_NONE, 0);
         aot_delete(9, SCE_ITEM, 129);
     }
     sleep(1);
@@ -670,7 +675,7 @@ event event_02
     act_reset();
     evt_nop();
 #if CHRIS
-    evt_fork(7, event_01, 0);
+    evt_fork(7, on_aot_02_sub1, 0);
     sleep(35);
     evt_work_set(WK_PLAYER, 0);
 #else
@@ -948,7 +953,7 @@ event event_02
     evt_nop();
 #if CHRIS
     sleep(50);
-    evt_fork(9, event_05, 0);
+    evt_fork(9, on_aot_02_sub2, 0);
 #endif
     wait_message();
 #if CHRIS
@@ -968,7 +973,7 @@ event event_02
         message(5, 0);
     }
 #else
-    evt_fork(9, event_0C, 0);
+    evt_fork(9, on_aot_02_sub1_sub1, 0);
     sleep(30);
 #endif
     evt_work_set(WK_PLAYER, 0);
@@ -1068,16 +1073,16 @@ event event_02
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_6, FLAG_6_17, TRUE);
 #if JILL
-        aot_set(2, 11000, 14000, 1500, 1500, SCE_EVENT, 129, 9, 0, event_0B, 0, 0, 0);
+        aot_set(AOT_02_EVENT, 11000, 14000, 1500, 1500, SCE_EVENT, 129, 9, 0, on_aot_02_2, 0, 0, 0);
 #endif
     }
     evt_finish();
 }
 
 #if CHRIS
-event event_01
+event on_aot_02_sub1
 #else
-event event_03
+event on_aot_02_sub3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1110,7 +1115,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event on_aot_02_sub4
 #endif
 {
 #if CHRIS
@@ -1162,10 +1167,8 @@ event event_04
     evt_finish();
 }
 
-#if CHRIS
-event event_02
-#else
-event event_05
+#if JILL
+event on_aot_02_sub5
 {
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -1198,8 +1201,8 @@ event event_05
     evt_finish();
 }
 
-event event_06
 #endif
+event on_aot_03
 {
 #if CHRIS
     run
@@ -1232,7 +1235,7 @@ event event_06
     act_motion_path(113, 500, 0, 1, 30, 0);
     act_reset();
     evt_nop();
-    message(6, 0);
+    message(6, 0); // "He couldn't have moved because of this injury... He's holding something."
     wait_message();
 #if CHRIS
     evt_chain(4);
@@ -1260,7 +1263,7 @@ event event_08
     run
     {
         set(FG_6, FLAG_6_17, TRUE);
-        aot_on(1, SCE_ITEM, 0);
+        aot_on(AOT_01_ITEM, SCE_ITEM, 0);
     }
     evt_next();
     evt_nop();
@@ -1288,7 +1291,7 @@ event event_08
     {
         if (ck(FG_ITEM, FLAG_ITEM_FC, FALSE))
         {
-            aot_delete(3, SCE_NONE, 0);
+            aot_delete(AOT_03_EVENT, SCE_NONE, 0);
             set(FG_COMMON, FLAG_COMMON_49, TRUE);
         }
         cut_auto(0);
@@ -1302,9 +1305,9 @@ event event_08
 }
 
 #if CHRIS
-event event_05
+event on_aot_02_sub2
 #else
-event event_09
+event on_enter
 {
     sleep(5);
     run
@@ -1314,24 +1317,24 @@ event event_09
     evt_finish();
 }
 
-event event_0A
+event on_aot_00_door
 {
     run
     {
         set(FG_COMMON, FLAG_COMMON_53, TRUE);
-        aot_on(0, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event event_0B
+event on_aot_02_2
 {
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
     }
     sleep(20);
-    message(152, 0);
+    message(152, 0); // "Barry is investigating..."
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
     act_motion_path(113, 300, 0, 1, 30, 0);
@@ -1345,7 +1348,7 @@ event event_0B
     evt_finish();
 }
 
-event event_0C
+event on_aot_02_sub1_sub1
 #endif
 {
     run

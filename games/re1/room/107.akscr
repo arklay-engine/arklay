@@ -5,6 +5,24 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_04_MESSAGE 0x04
+#define AOT_05_MESSAGE 0x05
+#define AOT_06_USEITEM 0x06
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_MESSAGE 0x09
+#define AOT_0A_MESSAGE 0x0A
+#define AOT_0B_MESSAGE 0x0B
+#define AOT_0C_MESSAGE 0x0C
+#define AOT_0D_USEITEM 0x0D
+#define AOT_0E_USEITEM 0x0E
+#define AOT_0F_MESSAGE 0x0F
+#define AOT_10_MESSAGE 0x10
+#define AOT_11_USEITEM 0x11
+#define AOT_83_ITEM 0x83
 #define FLAG_ROOM_3B 0x3B
 #define FLAG_ROOM_3C 0x3C
 #define FLAG_ROOM_3D 0x3D
@@ -12,43 +30,43 @@
 
 proc init
 {
-    door_aot_set(0, 0, 4700, 2650, 4100, 9, 0, 4, 7, 0, ROOM_106_MAIN_HALL, 30700, 0, 12400, 2048, UNLOCKED, 129);
-    door_aot_set(1, 15400, 2900, 2300, 2600, 2, 0, 0, 1, 137, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, ITEM_33_KEY_MANSION_SWORD, 129);
+    door_aot_set(AOT_00_DOOR, 0, 4700, 2650, 4100, 9, 0, 4, 7, 0, ROOM_106_MAIN_HALL, 30700, 0, 12400, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 15400, 2900, 2300, 2600, 2, 0, 0, 1, 137, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, ITEM_33_KEY_MANSION_SWORD, 129);
     if (cmpb(9, 0, 3) && ck(FG_ITEM, FLAG_ITEM_91, TRUE))
     {
-        item_aot_set(2, 0, 0, 0, 0, ITEM_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
+        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, ITEM_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
         eml_rot(0, 58, 253, 0, 0);
-        aot_set(5, 7950, 5500, 2700, 2300, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
+        aot_set(AOT_05_MESSAGE, 7950, 5500, 2700, 2300, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
     }
     else if (ck(FG_ITEM, FLAG_ITEM_91, TRUE))
     {
-        item_aot_set(2, 0, 0, 0, 0, ITEM_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
+        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, ITEM_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
         eml_rot(0, 58, 253, 0, 0);
-        aot_set(5, 7950, 5500, 2700, 2300, SCE_EVENT, 0, 9, 0, event_00, 0, 0, 0);
+        aot_set(AOT_05_MESSAGE, 7950, 5500, 2700, 2300, SCE_EVENT, 0, 9, 0, on_aot_05_message, 0, 0, 0);
     }
     if (cmpb(9, 0, 3) && ck(FG_ITEM, FLAG_ITEM_27, TRUE))
     {
-        item_aot_set(131, 12880, 12830, 1800, 1800, ITEM_2F_TOOL_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 0, 0, 0);
+        item_aot_set(AOT_83_ITEM, 12880, 12830, 1800, 1800, ITEM_2F_TOOL_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 0, 0, 0);
         eml_rot(1, 0, 0, 182, 3);
-        aot_set(4, 12880, 12830, 1800, 1800, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+        aot_set(AOT_04_MESSAGE, 12880, 12830, 1800, 1800, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
     }
     else
     {
-        item_aot_set(131, 12880, 12830, 1800, 1800, ITEM_2F_TOOL_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 129, 0, 0);
+        item_aot_set(AOT_83_ITEM, 12880, 12830, 1800, 1800, ITEM_2F_TOOL_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 129, 0, 0);
         eml_rot(1, 0, 0, 182, 3);
     }
-    aot_set(6, 7300, 6000, 500, 1800, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
-    aot_set(7, 3400, 300, 2800, 1800, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(8, 7600, 300, 2200, 1800, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(9, 11000, 300, 3500, 1800, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
-    aot_set(10, 3300, 11300, 3700, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(11, 11200, 11300, 2600, 1800, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
-    aot_set(12, 16400, 11000, 1900, 1400, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
-    aot_set(13, 16400, 12100, 1900, 1400, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
-    aot_set(14, 11200, 10000, 2600, 1800, SCE_USEITEM, 65, 4, 0, 60, 0, 1, 0);
-    aot_set(15, 7800, 6000, 1900, 1800, SCE_MESSAGE, 129, 135, 0, 255, 0, 0, 0);
-    aot_set(16, 15200, 5500, 900, 1800, SCE_MESSAGE, 129, 136, 0, 255, 0, 0, 0);
-    aot_set(17, 13700, 6000, 1600, 1700, SCE_USEITEM, 65, 4, 0, 59, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 7300, 6000, 500, 1800, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
+    aot_set(AOT_07_MESSAGE, 3400, 300, 2800, 1800, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 7600, 300, 2200, 1800, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 11000, 300, 3500, 1800, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 3300, 11300, 3700, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 11200, 11300, 2600, 1800, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_0C_MESSAGE, 16400, 11000, 1900, 1400, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_0D_USEITEM, 16400, 12100, 1900, 1400, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+    aot_set(AOT_0E_USEITEM, 11200, 10000, 2600, 1800, SCE_USEITEM, 65, 4, 0, 60, 0, 1, 0);
+    aot_set(AOT_0F_MESSAGE, 7800, 6000, 1900, 1800, SCE_MESSAGE, 129, 135, 0, 255, 0, 0, 0);
+    aot_set(AOT_10_MESSAGE, 15200, 5500, 900, 1800, SCE_MESSAGE, 129, 136, 0, 255, 0, 0, 0);
+    aot_set(AOT_11_USEITEM, 13700, 6000, 1600, 1700, SCE_USEITEM, 65, 4, 0, 59, 0, 1, 0);
     obj(64, 65, 255, 12500, 0, 4600, 0, 29, 1, 0, 0, 227, 254, 0, 0, 213, 2, 132, 3, 222, 3, 32, 3);
     obj(1, 1, 255, 14345, 0, 8795, 2048, 0, 0, 28, 2, 0, 0, 228, 253, 28, 2, 8, 7, 26, 4, 70, 5);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
@@ -69,11 +87,11 @@ proc main
         {
             if (ck(FG_STATUS, FLAG_STATUS_18, TRUE))
             {
-                aot_delete(5, SCE_EVENT, 129);
+                aot_delete(AOT_05_MESSAGE, SCE_EVENT, 129);
             }
             else
             {
-                aot_delete(5, SCE_EVENT, 0);
+                aot_delete(AOT_05_MESSAGE, SCE_EVENT, 0);
             }
         }
     }
@@ -81,11 +99,11 @@ proc main
     {
         if (ck(FG_STATUS, FLAG_STATUS_18, TRUE))
         {
-            aot_delete(5, SCE_MESSAGE, 129);
+            aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, 129);
         }
         else
         {
-            aot_delete(5, SCE_MESSAGE, 0);
+            aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, 0);
         }
     }
     if (cmpb(2, 0, 3))
@@ -94,41 +112,41 @@ proc main
     }
     if (ck(FG_ROOM, FLAG_ROOM_3E, TRUE))
     {
-        aot_delete(15, SCE_MESSAGE, 129);
+        aot_delete(AOT_0F_MESSAGE, SCE_MESSAGE, 129);
     }
     else
     {
-        aot_delete(15, SCE_MESSAGE, 0);
+        aot_delete(AOT_0F_MESSAGE, SCE_MESSAGE, 0);
     }
     if (ck(FG_ROOM, FLAG_ROOM_3D, TRUE))
     {
-        aot_delete(12, SCE_MESSAGE, 129);
+        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, 129);
     }
     else
     {
-        aot_delete(12, SCE_MESSAGE, 0);
+        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, 0);
     }
     if (ck(FG_ROOM, FLAG_ROOM_3C, TRUE))
     {
-        aot_delete(11, SCE_MESSAGE, 129);
+        aot_delete(AOT_0B_MESSAGE, SCE_MESSAGE, 129);
     }
     else
     {
-        aot_delete(11, SCE_MESSAGE, 0);
+        aot_delete(AOT_0B_MESSAGE, SCE_MESSAGE, 0);
     }
     if (ck(FG_ROOM, FLAG_ROOM_3B, TRUE))
     {
-        aot_delete(16, SCE_MESSAGE, 129);
+        aot_delete(AOT_10_MESSAGE, SCE_MESSAGE, 129);
     }
     else
     {
-        aot_delete(16, SCE_MESSAGE, 0);
+        aot_delete(AOT_10_MESSAGE, SCE_MESSAGE, 0);
     }
 }
 
-event event_00
+event on_aot_05_message
 {
-    message(137, 255);
+    message(137, 255); // "It's a map of 1ST FLOOR. Will you take it?You got the map of 1ST FLOOR."
     do
     {
         evt_next();
@@ -138,17 +156,17 @@ event event_00
     {
         if (cmpb(5, 0, 0))
         {
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_aot_05_message_sub1);
         }
     }
     evt_finish();
 }
 
-event event_01
+event on_aot_05_message_sub1
 {
-    aot_on(2, SCE_F, 0);
+    aot_on(AOT_02_ITEM, SCE_F, 0);
     sleep(1);
-    aot_delete(5, SCE_NONE, 0);
-    message(138, 255);
+    aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
+    message(138, 255); // "You got the map of 1ST FLOOR."
     evt_finish();
 }

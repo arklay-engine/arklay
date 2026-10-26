@@ -5,6 +5,14 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_USEITEM 0x01
+#define AOT_02_USEITEM 0x02
+#define AOT_03_MESSAGE 0x03
+#define AOT_04_USEITEM 0x04
+#define AOT_05_USEITEM 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_07_USEITEM 0x07
 #define FLAG_ROOM_01 0x01
 #define FLAG_ROOM_02 0x02
 #define FLAG_ROOM_20 0x20
@@ -15,14 +23,14 @@
 
 proc init
 {
-    door_aot_set(0, 10100, 5200, 1700, 2200, 3, 1, 8, 0, 0, ROOM_30F_CRANK_PASSAGE, 13000, 0, 16000, 0, UNLOCKED, 129);
-    aot_set(1, 5500, 10200, 500, 500, SCE_USEITEM, 1, 9, 0, 3, 0, 1, 0);
-    aot_set(2, 5500, 10200, 500, 500, SCE_USEITEM, 1, 4, 0, 33, 0, 1, 0);
-    aot_set(3, 5500, 10200, 500, 500, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(4, 7750, 3100, 700, 1000, SCE_USEITEM, 69, 4, 0, 34, 0, 1, 0);
-    aot_set(5, 7750, 3100, 700, 1000, SCE_USEITEM, 68, 4, 0, 35, 0, 1, 0);
-    item_aot_set(6, 10000, 3200, 1000, 600, ITEM_3F_PUZZLE_BOOK_DOOM_2, 1, 0, 255, 42, 43, 186, 245, 236, 13, 0, 8, 119, 129, 0, 0);
-    aot_set(7, 5300, 8200, 1500, 2000, SCE_USEITEM, 68, 4, 0, 36, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 10100, 5200, 1700, 2200, 3, 1, 8, 0, 0, ROOM_30F_CRANK_PASSAGE, 13000, 0, 16000, 0, UNLOCKED, 129);
+    aot_set(AOT_01_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, 1, 9, 0, 3, 0, 1, 0);
+    aot_set(AOT_02_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, 1, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_03_MESSAGE, 5500, 10200, 500, 500, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, 69, 4, 0, 34, 0, 1, 0);
+    aot_set(AOT_05_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, 68, 4, 0, 35, 0, 1, 0);
+    item_aot_set(AOT_06_ITEM, 10000, 3200, 1000, 600, ITEM_3F_PUZZLE_BOOK_DOOM_2, 1, 0, 255, 42, 43, 186, 245, 236, 13, 0, 8, 119, 129, 0, 0);
+    aot_set(AOT_07_USEITEM, 5300, 8200, 1500, 2000, SCE_USEITEM, 68, 4, 0, 36, 0, 1, 0);
     obj(0, 15, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_3C, FALSE))
     {
@@ -35,29 +43,29 @@ proc init
     }
     obj(2, 1, 255, 3830, 0, 9722, 0, 0, 0, 200, 0, 0, 0, 56, 255, 144, 1, 108, 2, 88, 2, 88, 2);
     obj(3, 31, 255, 10750, -2110, 3550, 2048, 0, 0, 200, 0, 0, 0, 56, 255, 144, 1, 108, 2, 88, 2, 88, 2);
-    aot_delete(6, SCE_NONE, 129);
-    evt_exec(0, 9, event_00);
+    aot_delete(AOT_06_ITEM, SCE_NONE, 129);
+    evt_exec(0, 9, on_enter);
 }
 
 proc main
 {
     if (ck(FG_ROOM, FLAG_ROOM_24, TRUE))
     {
-        aot_delete(1, SCE_NONE, 1);
-        aot_delete(2, SCE_NONE, 1);
-        aot_reset(3, SCE_MESSAGE, 129, 129, 255, 0);
+        aot_delete(AOT_01_USEITEM, SCE_NONE, 1);
+        aot_delete(AOT_02_USEITEM, SCE_NONE, 1);
+        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, 129, 129, 255, 0);
     }
     else
     {
-        aot_delete(1, SCE_USEITEM, 1);
-        aot_delete(2, SCE_USEITEM, 1);
-        aot_reset(3, SCE_MESSAGE, 129, 128, 255, 0);
+        aot_delete(AOT_01_USEITEM, SCE_USEITEM, 1);
+        aot_delete(AOT_02_USEITEM, SCE_USEITEM, 1);
+        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, 129, 128, 255, 0);
     }
     if (testitem(ITEM_1E_PUZZLE_CRANK_HEXAGONAL))
     {
         if (ck(FG_ROOM, FLAG_ROOM_21, TRUE))
         {
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, from_main);
         }
     }
     if (ck(FG_ROOM, FLAG_ROOM_22, TRUE))
@@ -66,7 +74,7 @@ proc main
         {
             if (ck(FG_ROOM, FLAG_ROOM_02, FALSE))
             {
-                evt_exec(0, 9, event_05);
+                evt_exec(0, 9, from_main_2);
                 se_play_3d(2, 23, 0, 0, 0, 8000, 3650);
                 se_play_3d(2, 26, 0, 0, 0, 9150, 3500);
                 set(FG_ROOM, FLAG_ROOM_01, TRUE);
@@ -78,7 +86,7 @@ proc main
     {
         if (ck(FG_ROOM, FLAG_ROOM_02, FALSE))
         {
-            evt_exec(0, 9, event_06);
+            evt_exec(0, 9, from_main_3);
             se_play_3d(2, 23, 0, 0, 0, 8000, 3650);
             se_play_3d(2, 26, 0, 0, 0, 9150, 3500);
             set(FG_ROOM, FLAG_ROOM_01, FALSE);
@@ -89,16 +97,16 @@ proc main
     {
         if (ck(FG_ITEM, FLAG_ITEM_77, TRUE))
         {
-            aot_delete(6, SCE_ITEM, 129);
+            aot_delete(AOT_06_ITEM, SCE_ITEM, 129);
         }
     }
     else
     {
-        aot_delete(6, SCE_NONE, 129);
+        aot_delete(AOT_06_ITEM, SCE_NONE, 129);
     }
 }
 
-event event_00
+event on_enter
 {
     evt_work_set(WK_AOT, 0);
     evt_tween_begin_alt();
@@ -109,7 +117,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event from_main
 {
     set(FG_6, FLAG_6_17, FALSE);
     sleep(2);
@@ -125,14 +133,14 @@ event event_01
         set(FG_STATUS, FLAG_STATUS_3E, TRUE);
         cutnext(1);
         se_play_3d(2, 24, 0, 0, 0, 5850, 10000);
-        evt_exec(0, 9, event_02);
+        evt_exec(0, 9, from_main_sub1);
         if (ck(FG_SCENARIO, FLAG_SCENARIO_3C, FALSE))
         {
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, from_main_sub2);
         }
         else
         {
-            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, from_main_sub3);
         }
     }
     do
@@ -184,7 +192,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event from_main_sub1
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -560,7 +568,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event from_main_sub2
 {
     se_play_3d(2, 25, 0, 0, 0, 9150, 10000);
     evt_work_set(WK_OBJ, 1);
@@ -579,7 +587,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event from_main_sub3
 {
     se_play_3d(2, 25, 0, 0, 0, 9150, 10000);
     evt_work_set(WK_OBJ, 1);
@@ -598,7 +606,7 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event from_main_2
 {
     evt_work_set(WK_OBJ, 3);
     evt_tween_begin_alt();
@@ -615,7 +623,7 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event from_main_3
 {
     evt_work_set(WK_OBJ, 3);
     evt_tween_begin_alt();
@@ -637,7 +645,7 @@ event event_07
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
-        message(129, 0);
+        message(129, 0); // "I can't use the crank because of the statue."
     }
     do
     {

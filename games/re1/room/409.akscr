@@ -5,6 +5,24 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_07_ITEM 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_MESSAGE 0x09
+#define AOT_0A_MESSAGE 0x0A
+#define AOT_0B_MESSAGE 0x0B
+#define AOT_0C_MESSAGE 0x0C
+#define AOT_0D_EVENT 0x0D
+#define AOT_0E_MESSAGE 0x0E
+#define AOT_0F_MESSAGE 0x0F
+#define AOT_10_MESSAGE 0x10
+#define AOT_11_MESSAGE 0x11
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_01 0x01
 #define FLAG_ROOM_02 0x02
@@ -13,75 +31,75 @@
 
 proc init
 {
-    door_aot_set(0, 9600, 2300, 1800, 1700, 2, 0, 7, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 8500, 0, 10200, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 9600, 2300, 1800, 1700, 2, 0, 7, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 8500, 0, 10200, 0, UNLOCKED, 129);
 #if CHRIS
     if (cmpb(9, 5, 3))
     {
-        item_aot_set(1, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 0);
-        item_aot_set(2, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 0);
-        item_aot_set(3, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 0);
-        item_aot_set(4, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 0);
+        item_aot_set(AOT_01_ITEM, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 0);
+        item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 0);
+        item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 0);
     }
     else
     {
-        item_aot_set(1, 4300, 1500, 1100, 1500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 132);
-        item_aot_set(2, 1900, 5400, 1200, 1000, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 132);
-        item_aot_set(3, 5100, 6000, 2200, 1100, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 132);
-        item_aot_set(4, 2200, 2800, 850, 500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 132);
+        item_aot_set(AOT_01_ITEM, 4300, 1500, 1100, 1500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 0, 132);
+        item_aot_set(AOT_02_ITEM, 1900, 5400, 1200, 1000, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 0, 132);
+        item_aot_set(AOT_03_ITEM, 5100, 6000, 2200, 1100, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 0, 132);
+        item_aot_set(AOT_04_ITEM, 2200, 2800, 850, 500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 0, 132);
     }
 #else
-    item_aot_set(1, 4300, 1500, 1100, 1500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 16, 132);
-    item_aot_set(2, 1900, 5400, 1200, 1000, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 16, 132);
-    item_aot_set(3, 5100, 6000, 2200, 1100, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 16, 132);
-    item_aot_set(4, 2200, 2800, 850, 500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 16, 132);
+    item_aot_set(AOT_01_ITEM, 4300, 1500, 1100, 1500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 0, 255, 132, 18, 172, 249, 196, 9, 0, 0, 60, 129, 16, 132);
+    item_aot_set(AOT_02_ITEM, 1900, 5400, 1200, 1000, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 1, 255, 198, 12, 156, 244, 168, 22, 0, 0, 61, 129, 16, 132);
+    item_aot_set(AOT_03_ITEM, 5100, 6000, 2200, 1100, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 2, 255, 240, 25, 62, 244, 76, 24, 132, 3, 62, 129, 16, 132);
+    item_aot_set(AOT_04_ITEM, 2200, 2800, 850, 500, ITEM_13_CHEMICAL_EMPTY_BOTTLE, 1, 3, 255, 236, 9, 226, 249, 58, 12, 0, 0, 63, 129, 16, 132);
 #endif
-    item_aot_set(5, 0, 0, 1, 1, ITEM_14_CHEMICAL_WATER, 1, 4, 255, 0, 0, 0, 0, 0, 0, 0, 0, 64, 129, 0, 0);
-    item_aot_set(6, 0, 0, 1, 1, ITEM_15_CHEMICAL_UMB_2, 1, 5, 255, 0, 0, 0, 0, 0, 0, 0, 0, 65, 129, 0, 0);
-    item_aot_set(7, 0, 0, 1, 1, ITEM_16_CHEMICAL_UMB_4, 1, 6, 255, 0, 0, 0, 0, 0, 0, 0, 0, 66, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 0, 0, 1, 1, ITEM_14_CHEMICAL_WATER, 1, 4, 255, 0, 0, 0, 0, 0, 0, 0, 0, 64, 129, 0, 0);
+    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, ITEM_15_CHEMICAL_UMB_2, 1, 5, 255, 0, 0, 0, 0, 0, 0, 0, 0, 65, 129, 0, 0);
+    item_aot_set(AOT_07_ITEM, 0, 0, 1, 1, ITEM_16_CHEMICAL_UMB_4, 1, 6, 255, 0, 0, 0, 0, 0, 0, 0, 0, 66, 129, 0, 0);
 #if CHRIS
-    aot_set(8, 5900, 1400, 1100, 1500, SCE_MESSAGE, 129, 132, 0, 77, 0, 0, 0);
-    aot_set(9, 3000, 1500, 1200, 600, SCE_MESSAGE, 129, 128, 0, 77, 0, 0, 0);
-    aot_set(10, 9800, 4400, 700, 1700, SCE_MESSAGE, 129, 129, 0, 77, 0, 0, 0);
-    aot_set(11, 7300, 6000, 2200, 1100, SCE_MESSAGE, 129, 136, 0, 77, 0, 0, 0);
-    aot_set(12, 1900, 3500, 1200, 1900, SCE_MESSAGE, 129, 137, 0, 77, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 5900, 1400, 1100, 1500, SCE_MESSAGE, 129, 132, 0, 77, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 3000, 1500, 1200, 600, SCE_MESSAGE, 129, 128, 0, 77, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 9800, 4400, 700, 1700, SCE_MESSAGE, 129, 129, 0, 77, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 7300, 6000, 2200, 1100, SCE_MESSAGE, 129, 136, 0, 77, 0, 0, 0);
+    aot_set(AOT_0C_MESSAGE, 1900, 3500, 1200, 1900, SCE_MESSAGE, 129, 137, 0, 77, 0, 0, 0);
     if (ck(FG_COMMON, FLAG_COMMON_3D, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_00, TRUE) && ck(FG_COMMON, FLAG_COMMON_3A, FALSE))
     {
         enemy(ENEMY_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 1300, 0, 0, 7446, 0, 5874, 0, 42, 0, 0);
-        evt_exec(0, 9, event_05);
+        evt_exec(0, 9, on_enter);
         if (ck(FG_COMMON, FLAG_COMMON_3B, FALSE))
         {
-            aot_set(13, 6548, 4974, 1800, 1800, SCE_EVENT, 129, 9, 0, event_06, 0, 0, 0);
+            aot_set(AOT_0D_EVENT, 6548, 4974, 1800, 1800, SCE_EVENT, 129, 9, 0, on_aot_0d, 0, 0, 0);
         }
         else
         {
-            aot_set(13, 6548, 4974, 1800, 1800, SCE_EVENT, 129, 9, 0, event_11, 0, 0, 0);
+            aot_set(AOT_0D_EVENT, 6548, 4974, 1800, 1800, SCE_EVENT, 129, 9, 0, on_aot_0d_2, 0, 0, 0);
         }
     }
     if (cmpb(9, 5, 3))
     {
         if (ck(FG_ITEM, FLAG_ITEM_3C, TRUE))
         {
-            aot_set(14, 4300, 1500, 1100, 1500, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
+            aot_set(AOT_0E_MESSAGE, 4300, 1500, 1100, 1500, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
         if (ck(FG_ITEM, FLAG_ITEM_3D, TRUE))
         {
-            aot_set(15, 1900, 5400, 1200, 1000, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
+            aot_set(AOT_0F_MESSAGE, 1900, 5400, 1200, 1000, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
         if (ck(FG_ITEM, FLAG_ITEM_3E, TRUE))
         {
-            aot_set(16, 5100, 6000, 2200, 1100, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
+            aot_set(AOT_10_MESSAGE, 5100, 6000, 2200, 1100, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
         if (ck(FG_ITEM, FLAG_ITEM_3F, TRUE))
         {
-            aot_set(17, 2200, 2800, 850, 500, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
+            aot_set(AOT_11_MESSAGE, 2200, 2800, 850, 500, SCE_MESSAGE, 129, 154, 0, 77, 0, 0, 0);
         }
     }
 #else
-    aot_set(11, 7300, 6000, 2200, 1100, SCE_MESSAGE, 129, 136, 0, 255, 0, 0, 0);
-    aot_set(12, 1900, 3500, 1200, 1900, SCE_MESSAGE, 129, 137, 0, 255, 0, 0, 0);
-    aot_set(8, 5900, 1400, 1100, 1500, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(9, 3000, 1500, 1200, 600, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(10, 9800, 4400, 700, 1700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 7300, 6000, 2200, 1100, SCE_MESSAGE, 129, 136, 0, 255, 0, 0, 0);
+    aot_set(AOT_0C_MESSAGE, 1900, 3500, 1200, 1900, SCE_MESSAGE, 129, 137, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 5900, 1400, 1100, 1500, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 3000, 1500, 1200, 600, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 9800, 4400, 700, 1700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
 #endif
 }
 
@@ -95,36 +113,36 @@ proc main
     {
         if (item_ck(ITEM_13_CHEMICAL_EMPTY_BOTTLE))
         {
-            aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
-            aot_reset(11, SCE_EVENT, 129, 9, event_01, 0);
-            aot_reset(12, SCE_EVENT, 129, 9, event_02, 0);
+            aot_reset(AOT_08_MESSAGE, SCE_EVENT, 129, 9, on_aot_08_message, 0);
+            aot_reset(AOT_0B_MESSAGE, SCE_EVENT, 129, 9, on_aot_0b_message, 0);
+            aot_reset(AOT_0C_MESSAGE, SCE_EVENT, 129, 9, on_aot_0c_message, 0);
         }
         else
         {
-            aot_reset(8, SCE_MESSAGE, 129, 132, 77, 0);
-            aot_reset(11, SCE_MESSAGE, 129, 136, 77, 0);
-            aot_reset(12, SCE_MESSAGE, 129, 137, 77, 0);
+            aot_reset(AOT_08_MESSAGE, SCE_MESSAGE, 129, 132, 77, 0);
+            aot_reset(AOT_0B_MESSAGE, SCE_MESSAGE, 129, 136, 77, 0);
+            aot_reset(AOT_0C_MESSAGE, SCE_MESSAGE, 129, 137, 77, 0);
         }
     }
     else if (ck(FG_ITEM, FLAG_ITEM_4E, FALSE))
     {
-        aot_reset(11, SCE_MESSAGE, 129, 152, 77, 0);
-        aot_reset(12, SCE_MESSAGE, 129, 153, 77, 0);
+        aot_reset(AOT_0B_MESSAGE, SCE_MESSAGE, 129, 152, 77, 0);
+        aot_reset(AOT_0C_MESSAGE, SCE_MESSAGE, 129, 153, 77, 0);
     }
     else
     {
-        aot_reset(11, SCE_NONE, 129, 152, 77, 0);
-        aot_reset(12, SCE_NONE, 129, 153, 77, 0);
+        aot_reset(AOT_0B_MESSAGE, SCE_NONE, 129, 152, 77, 0);
+        aot_reset(AOT_0C_MESSAGE, SCE_NONE, 129, 153, 77, 0);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_16, TRUE))
     {
         if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
         {
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, from_main);
         }
         else if (ck(FG_ROOM, FLAG_ROOM_00, TRUE))
         {
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, from_main);
         }
         set(FG_SCENARIO, FLAG_SCENARIO_16, FALSE);
         set(FG_ROOM, FLAG_ROOM_18, TRUE);
@@ -132,43 +150,43 @@ proc main
     if (ck(FG_ROOM, FLAG_ROOM_01, TRUE))
     {
         set(FG_ROOM, FLAG_ROOM_01, FALSE);
-        evt_exec(0, 9, event_04);
+        evt_exec(0, 9, from_main_2);
     }
 #else
     if (ck(FG_ITEM, FLAG_ITEM_4E, TRUE))
     {
         if (item_ck(ITEM_13_CHEMICAL_EMPTY_BOTTLE))
         {
-            aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
+            aot_reset(AOT_08_MESSAGE, SCE_EVENT, 129, 9, on_aot_08_message, 0);
         }
         else
         {
-            aot_reset(8, SCE_MESSAGE, 129, 132, 77, 0);
+            aot_reset(AOT_08_MESSAGE, SCE_MESSAGE, 129, 132, 77, 0);
         }
-        aot_delete(11, SCE_NONE, 129);
-        aot_delete(12, SCE_NONE, 129);
+        aot_delete(AOT_0B_MESSAGE, SCE_NONE, 129);
+        aot_delete(AOT_0C_MESSAGE, SCE_NONE, 129);
     }
     else if (item_ck(ITEM_13_CHEMICAL_EMPTY_BOTTLE))
     {
-        aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
-        aot_reset(11, SCE_EVENT, 129, 9, event_01, 0);
-        aot_reset(12, SCE_EVENT, 129, 9, event_02, 0);
+        aot_reset(AOT_08_MESSAGE, SCE_EVENT, 129, 9, on_aot_08_message, 0);
+        aot_reset(AOT_0B_MESSAGE, SCE_EVENT, 129, 9, on_aot_0b_message, 0);
+        aot_reset(AOT_0C_MESSAGE, SCE_EVENT, 129, 9, on_aot_0c_message, 0);
     }
     else
     {
-        aot_reset(8, SCE_MESSAGE, 129, 132, 77, 0);
-        aot_reset(11, SCE_MESSAGE, 129, 136, 77, 0);
-        aot_reset(12, SCE_MESSAGE, 129, 137, 77, 0);
+        aot_reset(AOT_08_MESSAGE, SCE_MESSAGE, 129, 132, 77, 0);
+        aot_reset(AOT_0B_MESSAGE, SCE_MESSAGE, 129, 136, 77, 0);
+        aot_reset(AOT_0C_MESSAGE, SCE_MESSAGE, 129, 137, 77, 0);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_16, TRUE))
     {
         if (ck(FG_ROOM, FLAG_ROOM_18, FALSE))
         {
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, from_main);
         }
         else if (ck(FG_ROOM, FLAG_ROOM_00, TRUE))
         {
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, from_main);
         }
         set(FG_SCENARIO, FLAG_SCENARIO_16, FALSE);
         set(FG_ROOM, FLAG_ROOM_18, TRUE);
@@ -176,7 +194,7 @@ proc main
 #endif
 }
 
-event event_00
+event on_aot_08_message
 {
     run
     {
@@ -184,7 +202,7 @@ event event_00
         set(FG_6, FLAG_6_19, FALSE);
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_1C, FALSE);
-        message(133, 0);
+        message(133, 0); // "Will you put water in the empty bottle?There's a UMB.No2.Will you put UMB No.2 in the empty bottle?There's a UMB.No4.Will you put UMB No.4 in the empty bottle?There's UMB No.2. You need a container to obtain it."
     }
     do
     {
@@ -206,7 +224,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_aot_0b_message
 {
     run
     {
@@ -214,7 +232,7 @@ event event_01
         set(FG_6, FLAG_6_19, FALSE);
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_1C, FALSE);
-        message(134, 0);
+        message(134, 0); // "There's a UMB.No2.Will you put UMB No.2 in the empty bottle?There's a UMB.No4.Will you put UMB No.4 in the empty bottle?There's UMB No.2. You need a container to obtain it."
     }
     do
     {
@@ -236,7 +254,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_aot_0c_message
 {
     run
     {
@@ -244,7 +262,7 @@ event event_02
         set(FG_6, FLAG_6_19, FALSE);
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_1C, FALSE);
-        message(135, 0);
+        message(135, 0); // "There's a UMB.No4.Will you put UMB No.4 in the empty bottle?There's UMB No.2. You need a container to obtain it."
     }
     do
     {
@@ -266,7 +284,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event from_main
 {
     run
     {
@@ -317,7 +335,7 @@ event event_03
     }
     sleep(20);
     setw(2, 0, 0);
-    message(139, 0);
+    message(139, 0); // "Perhaps I should leave for a moment."
     do
     {
         evt_next();
@@ -333,7 +351,11 @@ event event_03
     evt_finish();
 }
 
+#if CHRIS
+event from_main_2
+#else
 event event_04
+#endif
 {
     timer_setup(2, 0, 0, 0, 0);
     sleep(1);
@@ -352,7 +374,7 @@ event event_04
 }
 #if CHRIS
 
-event event_05
+event on_enter
 {
     sleep(1);
     evt_work_set(WK_ENEMY, 0);
@@ -363,7 +385,7 @@ event event_05
     act_finish();
 }
 
-event event_06
+event on_aot_0d
 {
     run
     {
@@ -372,11 +394,11 @@ event event_06
         set(FG_STATUS, FLAG_STATUS_0F, TRUE);
         set(FG_COMMON, FLAG_COMMON_3B, TRUE);
     }
-    evt_fork(9, event_07, 0);
+    evt_fork(9, on_aot_0d_sub1, 0);
     voice_play(1, 59, 0);
     message(12, 0);
     wait_message();
-    message(13, 0);
+    message(13, 0); // "Do you want me to heal your wounds?"
     do
     {
         evt_next();
@@ -386,17 +408,17 @@ event event_06
     {
         if (cmpb(5, 0, 0))
         {
-            evt_exec(0, 9, event_08);
+            evt_exec(0, 9, on_aot_0d_sub2);
         }
         else
         {
-            evt_exec(0, 9, event_09);
+            evt_exec(0, 9, on_aot_0d_sub3);
         }
     }
     evt_finish();
 }
 
-event event_07
+event on_aot_0d_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -443,9 +465,9 @@ event event_07
     act_finish();
 }
 
-event event_08
+event on_aot_0d_sub2
 {
-    evt_fork(9, event_0F, 0);
+    evt_fork(9, on_aot_0d_sub2_sub1, 0);
     voice_play(1, 60, 0);
     message(14, 0);
     wait_message();
@@ -457,7 +479,7 @@ event event_08
     tw_end();
     evt_nop();
     timer_setup(2, 0, 0, 7, 0);
-    message(22, 0);
+    message(22, 0); // "Rebecca treats Chris."
     wait_message();
     timer_setup(2, 0, 255, 7, 0);
     sleep(150);
@@ -467,9 +489,9 @@ event event_08
     evt_nop();
 }
 
-event event_09
+event on_aot_0d_sub3
 {
-    evt_fork(9, event_10, 0);
+    evt_fork(9, on_aot_0d_sub3_sub1, 0);
     voice_play(1, 68, 0);
     message(19, 0);
     wait_message();
@@ -501,7 +523,7 @@ event event_0A
     act_reset();
     run
     {
-        aot_reset(13, SCE_EVENT, 129, 9, event_16, 0);
+        aot_reset(AOT_0D_EVENT, SCE_EVENT, 129, 9, on_aot_0d_4, 0);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         cut_auto(0);
         set(FG_6, FLAG_6_17, TRUE);
@@ -574,7 +596,7 @@ event event_0E
     act_finish();
 }
 
-event event_0F
+event on_aot_0d_sub2_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -597,7 +619,7 @@ event event_0F
     act_finish();
 }
 
-event event_10
+event on_aot_0d_sub3_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -625,7 +647,7 @@ event event_10
     act_finish();
 }
 
-event event_11
+event on_aot_0d_2
 {
     run
     {
@@ -633,11 +655,11 @@ event event_11
         set(FG_6, FLAG_6_17, FALSE);
         set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     }
-    evt_fork(9, event_14, 0);
+    evt_fork(9, on_aot_0d_2_sub3, 0);
     voice_play(1, 66, 0);
     message(20, 0);
     wait_message();
-    message(13, 0);
+    message(13, 0); // "Do you want me to heal your wounds?"
     do
     {
         evt_next();
@@ -647,17 +669,17 @@ event event_11
     {
         if (cmpb(5, 0, 0))
         {
-            evt_exec(0, 9, event_12);
+            evt_exec(0, 9, on_aot_0d_2_sub1);
         }
         else
         {
-            evt_exec(0, 9, event_13);
+            evt_exec(0, 9, on_aot_0d_2_sub2);
         }
     }
     evt_finish();
 }
 
-event event_12
+event on_aot_0d_2_sub1
 {
     timer_setup(2, 0, 1, 7, 0);
     sleep(120);
@@ -667,7 +689,7 @@ event event_12
     tw_end();
     evt_nop();
     timer_setup(2, 0, 0, 7, 0);
-    message(22, 0);
+    message(22, 0); // "Rebecca treats Chris."
     wait_message();
     timer_setup(2, 0, 255, 7, 0);
     sleep(150);
@@ -680,7 +702,7 @@ event event_12
     act_reset();
     run
     {
-        aot_reset(13, SCE_EVENT, 129, 9, event_15, 0);
+        aot_reset(AOT_0D_EVENT, SCE_EVENT, 129, 9, on_aot_0d_3, 0);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         cut_auto(0);
         set(FG_6, FLAG_6_17, TRUE);
@@ -688,7 +710,7 @@ event event_12
     evt_finish();
 }
 
-event event_13
+event on_aot_0d_2_sub2
 {
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -698,7 +720,7 @@ event event_13
     act_reset();
     run
     {
-        aot_reset(13, SCE_EVENT, 129, 9, event_16, 0);
+        aot_reset(AOT_0D_EVENT, SCE_EVENT, 129, 9, on_aot_0d_4, 0);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         cut_auto(0);
         set(FG_6, FLAG_6_17, TRUE);
@@ -706,7 +728,7 @@ event event_13
     evt_finish();
 }
 
-event event_14
+event on_aot_0d_2_sub3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -734,7 +756,7 @@ event event_14
     act_finish();
 }
 
-event event_15
+event on_aot_0d_3
 {
     run
     {
@@ -742,7 +764,7 @@ event event_15
         cutnext(0);
         set(FG_6, FLAG_6_17, FALSE);
     }
-    evt_fork(9, event_17, 0);
+    evt_fork(9, on_aot_0d_3_sub1, 0);
     voice_play(1, 67, 0);
     message(21, 0);
     wait_message();
@@ -755,7 +777,7 @@ event event_15
     evt_finish();
 }
 
-event event_16
+event on_aot_0d_4
 {
     run
     {
@@ -763,7 +785,7 @@ event event_16
         set(FG_6, FLAG_6_17, FALSE);
         set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     }
-    evt_fork(9, event_17, 0);
+    evt_fork(9, on_aot_0d_3_sub1, 0);
     voice_play(1, 69, 0);
     message(23, 0);
     wait_message();
@@ -776,7 +798,7 @@ event event_16
     evt_finish();
 }
 
-event event_17
+event on_aot_0d_3_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

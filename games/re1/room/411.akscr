@@ -5,6 +5,11 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_EVENT 0x01
+#define AOT_02_NONE 0x02
+#define AOT_03_B 0x03
+#define AOT_04_MESSAGE 0x04
 #define FLAG_ROOM_17 0x17
 #define FLAG_ROOM_18 0x18
 #define FLAG_ROOM_19 0x19
@@ -12,23 +17,23 @@
 
 proc init
 {
-    door_aot_set(0, 8500, 8900, 2300, 3300, 0, 1, 11, 3, 0, ROOM_40E_WATER_TANK, 2900, 0, 23400, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 8500, 8900, 2300, 3300, 0, 1, 11, 3, 0, ROOM_40E_WATER_TANK, 2900, 0, 23400, 0, UNLOCKED, 129);
     obj(0, 63, 255, 5410, -1700, 7280, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(1, 8200, 4000, 1700, 1700, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
-    aot_set(2, 6300, 11800, 1100, 1500, SCE_NONE, 129, 9, 0, 10, 0, 0, 0);
+    aot_set(AOT_01_EVENT, 8200, 4000, 1700, 1700, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_NONE, 6300, 11800, 1100, 1500, SCE_NONE, 129, 9, 0, 10, 0, 0, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
-        aot_set(3, 0, 0, 20000, 20000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
         set(FG_ROOM, FLAG_ROOM_19, TRUE);
-        evt_exec(0, 9, event_06);
+        evt_exec(0, 9, on_enter);
     }
     else
     {
-        aot_set(3, 0, 0, 20000, 20000, SCE_NONE, 65, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_NONE, 65, 0, 0, 0, 0, 0, 0);
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
         objtbl_b_set(0, 0, 46);
     }
-    aot_set(4, 1500, 10000, 1300, 2900, SCE_MESSAGE, 129, 131, 0, 68, 1, 0, 0);
+    aot_set(AOT_04_MESSAGE, 1500, 10000, 1300, 2900, SCE_MESSAGE, 129, 131, 0, 68, 1, 0, 0);
     eml_rot(128, 246, 255, 0, 0);
 }
 
@@ -36,36 +41,36 @@ proc main
 {
     if (ck(FG_SCENARIO, FLAG_SCENARIO_23, FALSE))
     {
-        aot_reset(1, SCE_EVENT, 129, 9, event_01, 0);
+        aot_reset(AOT_01_EVENT, SCE_EVENT, 129, 9, on_aot_01, 0);
     }
     else
     {
-        aot_delete(1, SCE_NONE, 129);
+        aot_delete(AOT_01_EVENT, SCE_NONE, 129);
     }
     if (ck(FG_ROOM, FLAG_ROOM_18, FALSE) && ck(FG_ROOM, FLAG_ROOM_19, TRUE))
     {
         set(FG_ROOM, FLAG_ROOM_18, TRUE);
-        evt_exec(0, 9, event_00);
+        evt_exec(0, 9, from_main);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_23, TRUE) && ck(FG_LOCK, FLAG_LOCK_24, FALSE))
     {
-        aot_delete(2, SCE_EVENT, 129);
+        aot_delete(AOT_02_NONE, SCE_EVENT, 129);
         if (ck(FG_ROOM, FLAG_ROOM_17, FALSE) && ck(FG_ROOM, FLAG_ROOM_18, FALSE))
         {
-            evt_exec(0, 9, event_0B);
+            evt_exec(0, 9, from_main_2);
         }
     }
     else
     {
-        aot_delete(2, SCE_NONE, 129);
+        aot_delete(AOT_02_NONE, SCE_NONE, 129);
         if (ck(FG_ROOM, FLAG_ROOM_17, TRUE))
         {
-            evt_exec(0, 9, event_0C);
+            evt_exec(0, 9, from_main_3);
         }
     }
 }
 
-event event_00
+event from_main
 {
     run
     {
@@ -99,7 +104,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_aot_01
 {
     run
     {
@@ -118,7 +123,7 @@ event event_01
     run
     {
         set(FG_ROOM, FLAG_ROOM_1A, FALSE);
-        message(128, 1);
+        message(128, 1); // "There's a lever. Will you move it?There's a button. Will you push it?There was a sound from the room next door."
         cut_auto(1);
         cutnext(4);
         dir_set(0, 0, 0, 0, 7800, 0, 5000);
@@ -132,7 +137,7 @@ event event_01
     {
         if (cmpb(5, 0, 0))
         {
-            evt_exec(0, 9, event_02);
+            evt_exec(0, 9, on_aot_01_sub1);
         }
         else
         {
@@ -146,7 +151,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_aot_01_sub1
 {
     run
     {
@@ -158,8 +163,8 @@ event event_02
     {
         cutnext(2);
         dir_set(0, 0, 0, 0, 7500, 0, 5000);
-        evt_exec(0, 9, event_03);
-        evt_exec(0, 9, event_04);
+        evt_exec(0, 9, on_aot_01_sub1_sub1);
+        evt_exec(0, 9, on_aot_01_sub1_sub2);
     }
     sleep(195);
     do
@@ -167,7 +172,7 @@ event event_02
         evt_next();
     }
     while (ck(FG_ROOM, FLAG_ROOM_1A, FALSE));
-    aot_delete(3, SCE_NONE, 129);
+    aot_delete(AOT_03_B, SCE_NONE, 129);
     sleep(60);
     run
     {
@@ -182,7 +187,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_aot_01_sub1_sub1
 {
     bgm_play(1);
     evt_work_set(WK_OBJ, 0);
@@ -203,7 +208,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event on_aot_01_sub1_sub2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -231,12 +236,12 @@ event event_04
     act_motion(16);
     act_reset();
     evt_nop();
-    evt_fork(9, event_05, 0);
+    evt_fork(9, on_aot_01_sub1_sub2_sub1, 0);
     sleep(60);
     evt_finish();
 }
 
-event event_05
+event on_aot_01_sub1_sub2_sub1
 {
     set(FG_ROOM, FLAG_ROOM_1A, FALSE);
     evt_work_set(WK_PLAYER, 0);
@@ -258,15 +263,15 @@ event event_05
     act_finish();
 }
 
-event event_06
+event on_enter
 {
-    evt_fork(5, event_07, 0);
-    evt_fork(6, event_08, 0);
-    evt_fork(7, event_0E, 0);
+    evt_fork(5, on_enter_sub1, 0);
+    evt_fork(6, on_enter_sub2, 0);
+    evt_fork(7, on_enter_sub3, 0);
     evt_finish();
 }
 
-event event_07
+event on_enter_sub1
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -436,7 +441,7 @@ event event_07
     evt_finish();
 }
 
-event event_08
+event on_enter_sub2
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -535,7 +540,7 @@ event event_0A
         set(FG_6, FLAG_6_17, FALSE);
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_19, FALSE);
-        message(129, 1);
+        message(129, 1); // "There's a button. Will you push it?There was a sound from the room next door."
     }
     do
     {
@@ -561,7 +566,7 @@ event event_0A
     evt_finish();
 }
 
-event event_0B
+event from_main_2
 {
     run
     {
@@ -571,7 +576,7 @@ event event_0B
     evt_finish();
 }
 
-event event_0C
+event from_main_3
 {
     run
     {
@@ -584,7 +589,7 @@ event event_0C
 event event_0D
 {
     sleep(20);
-    message(130, 1);
+    message(130, 1); // "There was a sound from the room next door."
     do
     {
         evt_next();
@@ -599,7 +604,7 @@ event event_0D
     evt_finish();
 }
 
-event event_0E
+event on_enter_sub3
 {
     nop_wide(0, 13, 0);
     sleep(5);

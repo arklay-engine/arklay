@@ -5,17 +5,25 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_07_MESSAGE 0x07
+#define AOT_83_ITEM 0x83
+#define AOT_84_ITEM 0x84
+#define AOT_85_ITEM 0x85
+
 proc init
 {
-    door_aot_set(0, 1900, 25800, 2100, 1900, 3, 1, 8, 0, 0, ROOM_308_BRANCH_PASSAGE, 12600, 0, 27300, 2048, UNLOCKED, 129);
-    door_aot_set(1, 0, 3500, 2400, 1900, 3, 1, 8, 0, 0, ROOM_308_BRANCH_PASSAGE, 11000, 0, 3300, 2048, UNLOCKED, 129);
-    door_aot_set(2, 13900, 0, 2100, 2600, 0, 1, 8, 0, 0, ROOM_30A_ENRICO_ROOM, 4100, 0, 20000, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 1900, 25800, 2100, 1900, 3, 1, 8, 0, 0, ROOM_308_BRANCH_PASSAGE, 12600, 0, 27300, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 0, 3500, 2400, 1900, 3, 1, 8, 0, 0, ROOM_308_BRANCH_PASSAGE, 11000, 0, 3300, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 13900, 0, 2100, 2600, 0, 1, 8, 0, 0, ROOM_30A_ENRICO_ROOM, 4100, 0, 20000, 1024, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(132, 25000, 19000, 1000, 1000, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 156, 99, 174, 247, 44, 76, 0, 0, 202, 129, 0, 0);
-    item_aot_set(133, 25000, 20900, 1000, 1000, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 0, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
+    item_aot_set(AOT_84_ITEM, 25000, 19000, 1000, 1000, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 156, 99, 174, 247, 44, 76, 0, 0, 202, 129, 0, 0);
+    item_aot_set(AOT_85_ITEM, 25000, 20900, 1000, 1000, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 0, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
 #else
-    item_aot_set(131, 25000, 19000, 1000, 1000, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 0, 255, 156, 99, 174, 247, 44, 76, 0, 0, 45, 129, 0, 0);
-    item_aot_set(132, 25000, 20900, 1000, 1000, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 1, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
+    item_aot_set(AOT_83_ITEM, 25000, 19000, 1000, 1000, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 0, 255, 156, 99, 174, 247, 44, 76, 0, 0, 45, 129, 0, 0);
+    item_aot_set(AOT_84_ITEM, 25000, 20900, 1000, 1000, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 1, 255, 156, 99, 174, 247, 152, 83, 0, 0, 248, 129, 0, 0);
     if (ck(FG_COMMON, FLAG_COMMON_58, TRUE) && ck(FG_COMMON, FLAG_COMMON_48, FALSE))
     {
         if (ck(FG_COMMON, FLAG_COMMON_53, TRUE))
@@ -32,20 +40,20 @@ proc init
         }
         set(FG_COMMON, FLAG_COMMON_57, FALSE);
         set(FG_COMMON, FLAG_COMMON_53, FALSE);
-        aot_reset(0, SCE_EVENT, 129, 9, event_03, 0);
-        evt_exec(0, 9, event_04);
+        aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
+        evt_exec(0, 9, on_enter);
     }
     if (ck(FG_COMMON, FLAG_COMMON_59, TRUE))
     {
         enemy(ENEMY_06_HUNTER, 192, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 1, 0, 0, 0);
-        aot_reset(2, SCE_EVENT, 129, 9, event_00, 0);
+        aot_reset(AOT_02_DOOR, SCE_EVENT, 129, 9, on_aot_02_door, 0);
     }
     if (ck(FG_COMMON, FLAG_COMMON_5A, TRUE))
     {
         enemy(ENEMY_2D_NPC_BARRY_3, 4, 255, 1, 2, 0, 0, 1112, 0, 0, 6165, 0, 27740, 0, 0, 0, 0);
         enemy(ENEMY_06_HUNTER, 192, 255, 1, 2, 0, 0, 3192, 0, 0, 4300, 0, 16300, 1, 0, 0, 0);
-        evt_exec(0, 9, event_00);
-        aot_reset(0, SCE_EVENT, 129, 9, event_03, 0);
+        evt_exec(0, 9, on_aot_02_door);
+        aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
     }
 #endif
     if (ck(FG_COMMON, FLAG_COMMON_48, TRUE))
@@ -58,11 +66,11 @@ proc init
         enemy(ENEMY_06_HUNTER, 0, 79, 1, 2, 0, 0, 0, 0, 0, 9760, 0, 18180, 2, 0, 0, 0);
 #endif
     }
-    aot_set(7, 25600, 16400, 2000, 10100, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 25600, 16400, 2000, 10100, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
 }
 #if JILL
 
-event event_00
+event on_aot_02_door
 {
     sleep(1);
     run
@@ -71,17 +79,17 @@ event event_00
         set(FG_STATUS, FLAG_STATUS_0F, TRUE);
         if (ck(FG_COMMON, FLAG_COMMON_59, TRUE))
         {
-            evt_exec(0, 9, event_02);
+            evt_exec(0, 9, on_aot_02_door_sub2);
         }
         if (ck(FG_COMMON, FLAG_COMMON_5A, TRUE))
         {
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_aot_02_door_sub1);
         }
     }
     evt_finish();
 }
 
-event event_01
+event on_aot_02_door_sub1
 {
     run
     {
@@ -283,7 +291,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_aot_02_door_sub2
 {
     run
     {
@@ -422,22 +430,22 @@ event event_02
     run
     {
         set(FG_6, FLAG_6_17, TRUE);
-        aot_on(2, SCE_DOOR, 0);
+        aot_on(AOT_02_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event event_03
+event on_aot_00_door
 {
     run
     {
         set(FG_COMMON, FLAG_COMMON_57, TRUE);
-        aot_on(0, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event event_04
+event on_enter
 {
     sleep(5);
     run

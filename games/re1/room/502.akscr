@@ -5,64 +5,70 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_02_ITEMBOX 0x02
+#define AOT_03_ITEMBOX 0x03
+#define AOT_04_MESSAGE 0x04
 #define FLAG_ROOM_22 0x22
 
 proc init
 {
-    door_aot_set(0, 4700, 12000, 1300, 1300, 0, 11, 26, 64, 0, ROOM_500_UNDER_FOUNTAIN, 4400, 0, 7600, 3072, UNLOCKED, 129);
-    door_aot_set(1, 4800, 1500, 1500, 1300, 0, 1, 10, 8, 0, ROOM_503_STAIRS, 26000, 0, 5800, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 4700, 12000, 1300, 1300, 0, 11, 26, 64, 0, ROOM_500_UNDER_FOUNTAIN, 4400, 0, 7600, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 4800, 1500, 1500, 1300, 0, 1, 10, 8, 0, ROOM_503_STAIRS, 26000, 0, 5800, 1024, UNLOCKED, 129);
 #if JILL
-    item_aot_set(2, 0, 0, 1, 1, ITEM_6A_FILE_BARRYS_PICTURE, 0, 0, 255, 48, 117, 48, 117, 48, 117, 0, 0, 117, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, ITEM_6A_FILE_BARRYS_PICTURE, 0, 0, 255, 48, 117, 48, 117, 48, 117, 0, 0, 117, 129, 0, 0);
 #endif
     obj(0, 17, 255, 2100, -1440, 7800, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if CHRIS
-    aot_set(2, 1100, 6350, 3200, 2750, SCE_ITEMBOX, 129, 4, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_ITEMBOX, 1100, 6350, 3200, 2750, SCE_ITEMBOX, 129, 4, 0, 0, 0, 0, 0);
     if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
     {
         enemy(ENEMY_21_NPC_JILL, 2, 255, 1, 2, 0, 0, 2368, 0, 0, 8140, 0, 9680, 0, 6, 0, 0);
         if (ck(FG_COMMON, FLAG_COMMON_5B, FALSE))
         {
-            evt_exec(0, 9, event_00);
+            evt_exec(0, 9, on_enter);
             set(FG_COMMON, FLAG_COMMON_5B, TRUE);
         }
         else
         {
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_enter_2);
         }
     }
-    aot_reset(0, SCE_EVENT, 129, 9, event_02, 0);
+    aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_2B, TRUE))
     {
         room_bgm_state_set(4, 2, 57);
     }
 #else
-    aot_set(3, 1100, 6350, 3200, 2750, SCE_ITEMBOX, 129, 4, 0, 0, 0, 0, 0);
-    aot_reset(0, SCE_EVENT, 129, 9, event_03, 0);
+    aot_set(AOT_03_ITEMBOX, 1100, 6350, 3200, 2750, SCE_ITEMBOX, 129, 4, 0, 0, 0, 0, 0);
+    aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
     enemy(ENEMY_2A_NPC_BARRY_2, 4, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 0, 50, 99, 0);
     enemy(ENEMY_20_NPC_CHRIS, 2, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 1, 0, 0, 0);
     if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE) && ck(FG_COMMON, FLAG_COMMON_4E, FALSE))
     {
         pos_set(1, 0, 1504, 0, 3860, 0, 11550);
-        evt_exec(0, 7, event_02);
+        evt_exec(0, 7, on_enter_3);
     }
     if (ck(FG_COMMON, FLAG_COMMON_25, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE))
     {
         pos_set(0, 0, 0, 0, 2400, 0, 10500);
-        aot_set(4, 1900, 9300, 1500, 1500, SCE_MESSAGE, 129, 139, 0, 255, 0, 0, 0);
+        aot_set(AOT_04_MESSAGE, 1900, 9300, 1500, 1500, SCE_MESSAGE, 129, 139, 0, 255, 0, 0, 0);
         if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE))
         {
             if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
             {
-                evt_exec(0, 9, event_01);
+                evt_exec(0, 9, on_enter_2);
             }
             else
             {
-                evt_exec(0, 9, event_00);
+                evt_exec(0, 9, on_enter);
             }
         }
         else if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
         {
-            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, on_enter_4);
         }
         set(FG_COMMON, FLAG_COMMON_C0, TRUE);
         room_bgm_state_set(4, 2, 66);
@@ -70,21 +76,21 @@ proc init
     if (ck(FG_COMMON, FLAG_COMMON_52, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE))
     {
         pos_set(0, 0, 0, 0, 2400, 0, 10500);
-        aot_set(4, 1900, 9300, 1500, 1500, SCE_MESSAGE, 129, 139, 0, 255, 0, 0, 0);
+        aot_set(AOT_04_MESSAGE, 1900, 9300, 1500, 1500, SCE_MESSAGE, 129, 139, 0, 255, 0, 0, 0);
         if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE))
         {
             if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
             {
-                evt_exec(0, 9, event_01);
+                evt_exec(0, 9, on_enter_2);
             }
             else
             {
-                evt_exec(0, 9, event_00);
+                evt_exec(0, 9, on_enter);
             }
         }
         else if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE))
         {
-            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, on_enter_4);
         }
         set(FG_COMMON, FLAG_COMMON_C0, TRUE);
         room_bgm_state_set(4, 2, 66);
@@ -92,16 +98,16 @@ proc init
     if (ck(FG_COMMON, FLAG_COMMON_4B, TRUE) && ck(FG_COMMON, FLAG_COMMON_4E, TRUE))
     {
         pos_set(1, 0, 1504, 0, 3860, 0, 11550);
-        evt_exec(0, 9, event_04);
+        evt_exec(0, 9, on_enter_4);
         set(FG_COMMON, FLAG_COMMON_51, FALSE);
     }
 #endif
 }
 
 #if CHRIS
-event event_00
+event on_enter
 #else
-event event_00
+event on_enter
 {
     sleep(1);
     run
@@ -308,7 +314,7 @@ event event_00
     set(FG_6, FLAG_6_17, TRUE);
     run
     {
-        aot_on(2, SCE_DOCUMENT, 0);
+        aot_on(AOT_02_ITEM, SCE_DOCUMENT, 0);
     }
     evt_next();
     evt_nop();
@@ -339,7 +345,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_enter_2
 #endif
 {
     sleep(1);
@@ -649,7 +655,7 @@ event event_01
     set(FG_6, FLAG_6_17, TRUE);
     run
     {
-        aot_on(2, SCE_DOCUMENT, 0);
+        aot_on(AOT_02_ITEM, SCE_DOCUMENT, 0);
     }
     evt_next();
     evt_nop();
@@ -732,9 +738,9 @@ event event_01
 }
 
 #if CHRIS
-event event_01
+event on_enter_2
 #else
-event event_02
+event on_enter_3
 #endif
 {
 #if CHRIS
@@ -786,13 +792,9 @@ event event_02
     evt_finish();
 }
 
-#if CHRIS
-event event_02
-#else
-event event_03
-#endif
+event on_aot_00_door
 {
-    message(138, 255);
+    message(138, 255); // "There's a ladder. Will you climb it?He must have been attacked by those monsters."
     do
     {
         evt_next();
@@ -802,14 +804,14 @@ event event_03
     {
         if (cmpb(5, 0, 0))
         {
-            aot_on(0, SCE_DOOR, 0);
+            aot_on(AOT_00_DOOR, SCE_DOOR, 0);
         }
     }
     evt_finish();
 }
 #if JILL
 
-event event_04
+event on_enter_4
 {
     sleep(1);
     run

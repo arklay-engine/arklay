@@ -5,27 +5,31 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_HIKIDASHI 0x03
+#define AOT_04_EVENT 0x04
+#define AOT_05_EVENT 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_07_ITEM 0x07
+#define AOT_08_ITEM 0x08
 #define FLAG_ROOM_20 0x20
 #define FLAG_ROOM_21 0x21
 
 proc init
 {
-    door_aot_set(0, 300, 2000, 2100, 1800, 0, 0, 6, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, 129);
-    door_aot_set(1, 2500, 3700, 1600, 1800, 1, 0, 33, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, 129);
-    door_aot_set(2, 0, 0, 1, 1, 1, 11, 26, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, 129);
-    aot_set(3, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, 129, 34, 0, 6, 0, 6, 0);
-#if CHRIS
-    aot_set(4, 9000, 5000, 1000, 1000, SCE_EVENT, 129, 9, 0, event_01, 0, 0, 0);
-    aot_set(5, 12100, 8400, 1000, 1000, SCE_EVENT, 129, 9, 0, event_04, 0, 0, 0);
-#else
-    aot_set(4, 9000, 5000, 1000, 1000, SCE_EVENT, 129, 9, 0, event_04, 0, 0, 0);
-    aot_set(5, 12100, 8400, 1000, 1000, SCE_EVENT, 129, 9, 0, event_07, 0, 0, 0);
-#endif
-    item_aot_set(6, 0, 0, 1, 1, ITEM_0C_AMMO_SHOTGUN, 7, 0, 255, 22, 43, 116, 255, 168, 7, 0, 0, 25, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 300, 2000, 2100, 1800, 0, 0, 6, 1, 0, ROOM_405_CENTER_PASSAGE, 24700, 0, 21100, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 2500, 3700, 1600, 1800, 1, 0, 33, 1, 0, ROOM_407_ROOM_002_BATHROOM, 3100, 0, 6400, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 1, 11, 26, 64, 0, ROOM_40D_UNDER_PASSAGE, 3500, 0, 29000, 1024, UNLOCKED, 129);
+    aot_set(AOT_03_HIKIDASHI, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, 129, 34, 0, 6, 0, 6, 0);
+    aot_set(AOT_04_EVENT, 9000, 5000, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_04, 0, 0, 0);
+    aot_set(AOT_05_EVENT, 12100, 8400, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_05, 0, 0, 0);
+    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, ITEM_0C_AMMO_SHOTGUN, 7, 0, 255, 22, 43, 116, 255, 168, 7, 0, 0, 25, 0, 0, 0);
     eml_rot(0, 0, 0, 0, 252);
     setbyte(0, 0, 0);
-    item_aot_set(7, 12400, 3800, 1000, 1400, ITEM_64_FILE_PLANT_42_REPORT, 1, 1, 255, 88, 52, 58, 253, 76, 19, 0, 0, 134, 129, 0, 0);
-    item_aot_set(8, 0, 0, 1, 10, ITEM_52_UNKNOWN_52, 1, 2, 255, 64, 36, 240, 246, 44, 21, 0, 0, 135, 129, 0, 0);
+    item_aot_set(AOT_07_ITEM, 12400, 3800, 1000, 1400, ITEM_64_FILE_PLANT_42_REPORT, 1, 1, 255, 88, 52, 58, 253, 76, 19, 0, 0, 134, 129, 0, 0);
+    item_aot_set(AOT_08_ITEM, 0, 0, 1, 10, ITEM_52_UNKNOWN_52, 1, 2, 255, 64, 36, 240, 246, 44, 21, 0, 0, 135, 129, 0, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_45, TRUE))
     {
         obj(0, 17, 255, 10180, 0, 8970, 1024, 0, 0, 94, 1, 0, 0, 162, 254, 200, 0, 76, 4, 176, 4, 88, 2);
@@ -39,9 +43,9 @@ proc init
 #if CHRIS
     if (cmpb(9, 0, 3))
     {
-        aot_reset(3, SCE_MESSAGE, 129, 136, 255, 0);
-        aot_reset(4, SCE_MESSAGE, 129, 136, 255, 0);
-        aot_reset(7, SCE_MESSAGE, 129, 136, 255, 0);
+        aot_reset(AOT_03_HIKIDASHI, SCE_MESSAGE, 129, 136, 255, 0);
+        aot_reset(AOT_04_EVENT, SCE_MESSAGE, 129, 136, 255, 0);
+        aot_reset(AOT_07_ITEM, SCE_MESSAGE, 129, 136, 255, 0);
     }
 #else
     if (ck(FG_COMMON, FLAG_COMMON_B2, FALSE))
@@ -52,7 +56,7 @@ proc init
             {
                 if (ck(FG_COMMON, FLAG_COMMON_B1, FALSE))
                 {
-                    evt_exec(0, 9, event_01);
+                    evt_exec(0, 9, on_enter);
                 }
             }
         }
@@ -60,7 +64,7 @@ proc init
 #endif
     if (ck(FG_SCENARIO, FLAG_SCENARIO_3E, TRUE))
     {
-        aot_delete(4, SCE_NONE, 129);
+        aot_delete(AOT_04_EVENT, SCE_NONE, 129);
     }
     set(FG_STATUS, FLAG_STATUS_3C, TRUE);
 #if JILL
@@ -86,10 +90,8 @@ event event_00
     evt_finish();
 }
 
-#if CHRIS
-event event_01
-#else
-event event_01
+#if JILL
+event on_enter
 {
     sleep(2);
     run
@@ -120,8 +122,8 @@ event event_01
     run
     {
         cutnext(2);
-        evt_exec(0, 9, event_02);
-        evt_exec(0, 9, event_03);
+        evt_exec(0, 9, on_enter_sub1);
+        evt_exec(0, 9, on_enter_sub2);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -535,7 +537,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_enter_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -553,7 +555,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter_sub2
 {
     sleep(45);
     evt_work_set(WK_ENEMY, 0);
@@ -569,13 +571,13 @@ event event_03
     evt_finish();
 }
 
-event event_04
 #endif
+event on_aot_04
 {
     run
     {
         set(FG_6, FLAG_6_17, FALSE);
-        message(134, 0);
+        message(134, 0); // "A dormitory sketch. Will you take it?There's a ladder. Will you descend it?There is no time to check it."
     }
     do
     {
@@ -591,35 +593,23 @@ event event_04
     {
         if (cmpb(5, 0, 0))
         {
-#if CHRIS
-            evt_exec(0, 9, event_02);
-#else
-            evt_exec(0, 9, event_05);
-#endif
+            evt_exec(0, 9, on_aot_04_sub1);
         }
         else
         {
-#if CHRIS
-            evt_exec(0, 9, event_03);
-#else
-            evt_exec(0, 9, event_06);
-#endif
+            evt_exec(0, 9, on_aot_04_sub2);
         }
     }
     evt_finish();
 }
 
-#if CHRIS
-event event_02
-#else
-event event_05
-#endif
+event on_aot_04_sub1
 {
     run
     {
-        aot_on(8, SCE_F, 0);
-        aot_delete(4, SCE_NONE, 129);
-        message(137, 0);
+        aot_on(AOT_08_ITEM, SCE_F, 0);
+        aot_delete(AOT_04_EVENT, SCE_NONE, 129);
+        message(137, 0); // "You got the map of DORMITORY."
     }
     do
     {
@@ -634,27 +624,19 @@ event event_05
     evt_finish();
 }
 
-#if CHRIS
-event event_03
-#else
-event event_06
-#endif
+event on_aot_04_sub2
 {
     single(4) set(FG_6, FLAG_6_00, TRUE);
     raw(0x17, 0x00, 0xFF, 0x00);
 }
 
-#if CHRIS
-event event_04
-#else
-event event_07
-#endif
+event on_aot_05
 {
     run
     {
         cutnext(0);
         set(FG_6, FLAG_6_17, FALSE);
-        message(135, 0);
+        message(135, 0); // "There's a ladder. Will you descend it?There is no time to check it."
     }
     do
     {
@@ -670,43 +652,27 @@ event event_07
     {
         if (cmpb(5, 0, 0))
         {
-#if CHRIS
-            evt_exec(0, 9, event_05);
-#else
-            evt_exec(0, 9, event_08);
-#endif
+            evt_exec(0, 9, on_aot_05_sub1);
         }
         else
         {
-#if CHRIS
-            evt_exec(0, 9, event_06);
-#else
-            evt_exec(0, 9, event_09);
-#endif
+            evt_exec(0, 9, on_aot_05_sub2);
         }
     }
     evt_finish();
 }
 
-#if CHRIS
-event event_05
-#else
-event event_08
-#endif
+event on_aot_05_sub1
 {
     run
     {
-        door_aot_set(2, 10000, 6400, 5000, 5000, 1, 11, 26, 64, 0, ROOM_40D_UNDER_PASSAGE, 3000, 0, 27800, 1024, UNLOCKED, 65);
+        door_aot_set(AOT_02_DOOR, 10000, 6400, 5000, 5000, 1, 11, 26, 64, 0, ROOM_40D_UNDER_PASSAGE, 3000, 0, 27800, 1024, UNLOCKED, 65);
         set(FG_6, FLAG_6_17, TRUE);
     }
     evt_finish();
 }
 
-#if CHRIS
-event event_06
-#else
-event event_09
-#endif
+event on_aot_05_sub2
 {
     run
     {

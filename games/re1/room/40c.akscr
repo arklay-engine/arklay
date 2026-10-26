@@ -5,6 +5,15 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_MESSAGE 0x01
+#define AOT_02_USEITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_05_EVENT 0x05
+#define AOT_06_MESSAGE 0x06
+#define AOT_07_EVENT 0x07
+#define AOT_08_USEITEM 0x08
+#define AOT_09_USEITEM 0x09
 #define FLAG_ROOM_09 0x09
 #define FLAG_ROOM_0A 0x0A
 #define FLAG_ROOM_0B 0x0B
@@ -17,17 +26,13 @@
 
 proc init
 {
-    door_aot_set(0, 1100, 8000, 1500, 3900, 11, 0, 0, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 26000, 0, 4000, 2048, UNLOCKED, 129);
-    aot_set(1, 1000, 12400, 1500, 3000, SCE_MESSAGE, 129, 140, 0, 255, 0, 0, 0);
-    aot_set(2, 9800, 16600, 2200, 1200, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
-    item_aot_set(3, 9800, 17700, 2200, 1800, ITEM_36_KEY_MANSION_HELMET, 3, 0, 255, 54, 41, 52, 254, 90, 70, 0, 4, 88, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 1100, 8000, 1500, 3900, 11, 0, 0, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 26000, 0, 4000, 2048, UNLOCKED, 129);
+    aot_set(AOT_01_MESSAGE, 1000, 12400, 1500, 3000, SCE_MESSAGE, 129, 140, 0, 255, 0, 0, 0);
+    aot_set(AOT_02_USEITEM, 9800, 16600, 2200, 1200, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
+    item_aot_set(AOT_03_ITEM, 9800, 17700, 2200, 1800, ITEM_36_KEY_MANSION_HELMET, 3, 0, 255, 54, 41, 52, 254, 90, 70, 0, 4, 88, 0, 0, 0);
     eml_rot(0, 250, 0, 28, 248);
-#if CHRIS
-    aot_set(5, 1100, 8000, 1500, 3900, SCE_EVENT, 0, 9, 0, event_0B, 0, 0, 0);
-#else
-    aot_set(5, 1100, 8000, 1500, 3900, SCE_EVENT, 0, 9, 0, event_00, 0, 0, 0);
-#endif
-    aot_set(6, 9800, 17200, 1700, 1100, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_EVENT, 1100, 8000, 1500, 3900, SCE_EVENT, 0, 9, 0, on_aot_05, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 9800, 17200, 1700, 1100, SCE_MESSAGE, 0, 139, 0, 255, 0, 0, 0);
 #if CHRIS
     room_bgm_state_set(3, 12, 8);
     set(FG_ROOM, FLAG_ROOM_0A, TRUE);
@@ -85,23 +90,23 @@ proc init
                 {
                     room_bgm_state_set(3, 12, 65);
                     set(FG_ROOM, FLAG_ROOM_0A, FALSE);
-                    evt_exec(0, 9, event_00);
+                    evt_exec(0, 9, on_enter);
                 }
                 else
                 {
-                    evt_exec(0, 9, event_09);
+                    evt_exec(0, 9, on_enter_2);
                 }
             }
             else
             {
                 room_bgm_state_set(3, 12, 65);
                 set(FG_ROOM, FLAG_ROOM_0A, FALSE);
-                evt_exec(0, 9, event_00);
+                evt_exec(0, 9, on_enter);
             }
         }
         else
         {
-            evt_exec(0, 9, event_09);
+            evt_exec(0, 9, on_enter_2);
         }
     }
     else if (ck(FG_COMMON, FLAG_COMMON_38, TRUE))
@@ -110,12 +115,12 @@ proc init
         set(FG_SCENARIO, FLAG_SCENARIO_29, TRUE);
         room_bgm_state_set(3, 12, 64);
         set(FG_ROOM, FLAG_ROOM_0A, FALSE);
-        evt_exec(0, 9, event_0A);
+        evt_exec(0, 9, on_enter_3);
     }
 #else
-    aot_set(7, 3229, 10452, 1800, 1800, SCE_EVENT, 0, 9, 0, event_0C, 0, 0, 0);
-    aot_set(8, 3800, 12000, 1300, 800, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
-    aot_set(9, 4800, 11100, 1500, 1300, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+    aot_set(AOT_07_EVENT, 3229, 10452, 1800, 1800, SCE_EVENT, 0, 9, 0, on_aot_07, 0, 0, 0);
+    aot_set(AOT_08_USEITEM, 3800, 12000, 1300, 800, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+    aot_set(AOT_09_USEITEM, 4800, 11100, 1500, 1300, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
     if (ck(FG_COMMON, FLAG_COMMON_B2, FALSE))
     {
         set(FG_ROOM, FLAG_ROOM_0F, TRUE);
@@ -143,7 +148,7 @@ proc init
                 room_bgm_state_set(3, 12, 65);
                 set(FG_ROOM, FLAG_ROOM_0A, FALSE);
                 enemy(ENEMY_2B_NPC_BARRY_2_STARS, 5, 255, 1, 2, 0, 0, 0, 0, 0, 10000, 0, 30000, 6, 42, 0, 0);
-                evt_exec(0, 9, event_10);
+                evt_exec(0, 9, on_enter_2);
             }
             enemy(ENEMY_08_PLANT_42, 0, 96, 1, 2, 0, 0, 3572, 0, 0, 10800, -7000, 10800, 0, 0, 0, 0);
             enemy(ENEMY_08_PLANT_42, 1, 255, 1, 2, 0, 0, 0, 0, 0, 11200, -7000, 10800, 1, 0, 0, 0);
@@ -166,12 +171,12 @@ proc init
         set(FG_ROOM, FLAG_ROOM_0A, FALSE);
         if (ck(FG_ROOM, FLAG_ROOM_0F, TRUE) && ck(FG_COMMON, FLAG_COMMON_27, FALSE))
         {
-            aot_set(7, 6862, 8109, 1800, 1800, SCE_EVENT, 129, 9, 0, event_0C, 0, 0, 0);
-            aot_set(8, 7600, 9900, 1300, 800, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
-            aot_set(9, 8300, 8800, 1500, 1300, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+            aot_set(AOT_07_EVENT, 6862, 8109, 1800, 1800, SCE_EVENT, 129, 9, 0, on_aot_07, 0, 0, 0);
+            aot_set(AOT_08_USEITEM, 7600, 9900, 1300, 800, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+            aot_set(AOT_09_USEITEM, 8300, 8800, 1500, 1300, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
             enemy(ENEMY_2B_NPC_BARRY_2_STARS, 5, 255, 1, 2, 0, 0, 3873, 0, 0, 7762, 0, 9009, 6, 42, 0, 0);
             set(FG_ROOM, FLAG_ROOM_0C, TRUE);
-            evt_exec(0, 9, event_0F);
+            evt_exec(0, 9, on_enter);
         }
     }
 #endif
@@ -184,13 +189,13 @@ proc main
     {
         if (ck(FG_ENEMY, FLAG_ENEMY_60, TRUE))
         {
-            aot_delete(6, SCE_MESSAGE, 0);
-            aot_delete(3, SCE_ITEM, 129);
+            aot_delete(AOT_06_MESSAGE, SCE_MESSAGE, 0);
+            aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
         }
         else
         {
-            aot_delete(6, SCE_MESSAGE, 129);
-            aot_delete(3, SCE_ITEM, 0);
+            aot_delete(AOT_06_MESSAGE, SCE_MESSAGE, 129);
+            aot_delete(AOT_03_ITEM, SCE_ITEM, 0);
         }
     }
     if (ck(FG_ENEMY, FLAG_ENEMY_60, TRUE))
@@ -201,18 +206,18 @@ proc main
     {
         set(FG_ROOM, FLAG_ROOM_0B, TRUE);
 #if CHRIS
-        evt_exec(0, 9, event_0C);
+        evt_exec(0, 9, from_main);
 #else
-        evt_exec(0, 9, event_11);
+        evt_exec(0, 9, from_main_2);
 #endif
     }
     if (ck(FG_ENEMY, FLAG_ENEMY_60, TRUE) && ck(FG_ROOM, FLAG_ROOM_09, TRUE) && ck(FG_ROOM, FLAG_ROOM_0B, FALSE))
     {
         set(FG_ROOM, FLAG_ROOM_0B, TRUE);
 #if CHRIS
-        evt_exec(0, 9, event_0D);
+        evt_exec(0, 9, from_main_2);
 #else
-        evt_exec(0, 9, event_12);
+        evt_exec(0, 9, from_main_3);
 #endif
     }
 #if CHRIS
@@ -220,13 +225,13 @@ proc main
     {
         if (ck(FG_ITEM, FLAG_ITEM_58, TRUE))
         {
-            aot_delete(5, SCE_EVENT, 129);
-            aot_delete(0, SCE_DOOR, 0);
+            aot_delete(AOT_05_EVENT, SCE_EVENT, 129);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
         }
         else
         {
-            aot_delete(0, SCE_DOOR, 129);
-            aot_delete(5, SCE_EVENT, 0);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
+            aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
         }
     }
 #else
@@ -234,77 +239,41 @@ proc main
     {
         if (ck(FG_ITEM, FLAG_ITEM_58, TRUE))
         {
-            aot_delete(5, SCE_EVENT, 129);
-            aot_delete(0, SCE_DOOR, 0);
+            aot_delete(AOT_05_EVENT, SCE_EVENT, 129);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, 0);
         }
         else
         {
-            aot_delete(0, SCE_DOOR, 129);
-            aot_delete(5, SCE_EVENT, 0);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
+            aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
         }
     }
     if (ck(FG_ROOM, FLAG_ROOM_0F, TRUE) && ck(FG_ENEMY, FLAG_ENEMY_60, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_29, TRUE) && ck(FG_ROOM, FLAG_ROOM_0E, FALSE))
     {
         set(FG_ROOM, FLAG_ROOM_0E, TRUE);
         set(FG_6, FLAG_6_17, FALSE);
-        evt_exec(0, 9, event_01);
+        evt_exec(0, 9, from_main);
     }
     if (ck(FG_ROOM, FLAG_ROOM_0C, TRUE) && ck(FG_ROOM, FLAG_ROOM_3D, TRUE))
     {
-        aot_delete(7, SCE_EVENT, 129);
+        aot_delete(AOT_07_EVENT, SCE_EVENT, 129);
     }
     else
     {
-        aot_delete(7, SCE_EVENT, 0);
+        aot_delete(AOT_07_EVENT, SCE_EVENT, 0);
     }
 #endif
 }
 
 #if CHRIS
-event event_00
+event on_enter
 #else
-event event_00
-{
-    run
-    {
-        set(FG_6, FLAG_6_17, FALSE);
-        dir_set(0, 0, 1716, 0, 2439, 0, 9876);
-        cutnext(6);
-    }
-    effect(11, 21, 0, 156, 49, 0, 0, 120, 80, 0, 0);
-    sleep(30);
-    effect(11, 21, 0, 156, 49, 0, 0, 120, 80, 0, 0);
-    sleep(30);
-    aot_delete(0, SCE_DOOR, 129);
-    aot_delete(5, SCE_EVENT, 0);
-    run
-    {
-        cutnext(0);
-        set(FG_6, FLAG_6_17, TRUE);
-        set(FG_ROOM, FLAG_ROOM_0D, TRUE);
-        cut_auto(0);
-    }
-    evt_finish();
-}
-
-event event_01
+event on_aot_05
 #endif
 {
-#if JILL
-    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
-    act_reset();
-    evt_nop();
-    sleep(1);
-    dir_set(0, 0, 490, 0, 2440, 0, 18895);
-    cutnext(5);
-    sleep(170);
-#endif
-    run
-    {
 #if CHRIS
+    run
+    {
         set(FG_COMMON, FLAG_COMMON_3D, TRUE);
         set(FG_COMMON, FLAG_COMMON_38, TRUE);
         set(FG_STATUS, FLAG_STATUS_0F, TRUE);
@@ -315,48 +284,20 @@ event event_01
         eml_state(0, 3, 3, 514);
         eml_state(0, 4, 3, 514);
         eml_state(0, 5, 3, 514);
-#else
-        eml_state(0, 0, 3, 258);
-        eml_state(0, 1, 3, 258);
-        eml_state(0, 2, 3, 258);
-        eml_state(0, 3, 3, 258);
-        eml_state(0, 4, 3, 258);
-        eml_state(0, 5, 3, 258);
-#endif
     }
     sleep(1);
-#if JILL
-    evt_work_set(WK_ENEMY, 0);
-    evt_tween_begin_alt();
-    tw_abs_rot(0, 0, 2600, 65036);
-    tw_end();
-    evt_nop();
-    cutnext(0);
-#endif
     run
     {
-#if CHRIS
         set(FG_6, FLAG_6_17, FALSE);
         bgm_play(1);
         set(FG_ROOM, FLAG_ROOM_09, TRUE);
-#else
-        eml_state(0, 0, 0, 64);
-        eml_state(0, 1, 0, 65);
-        eml_state(0, 2, 0, 65);
-        eml_state(0, 3, 0, 65);
-        eml_state(0, 4, 0, 65);
-        eml_state(0, 5, 0, 65);
-#endif
     }
-#if CHRIS
-    evt_fork(9, event_01, 0);
+    evt_fork(9, on_enter_sub1, 0);
     sleep(160);
     eml_state(0, 0, 2, 10);
     sleep(120);
     eml_state(0, 0, 2, 11);
-#endif
     sleep(40);
-#if CHRIS
     run
     {
         msg_list(0, 168, 42, 48, 248, 8, 47, 210, 240, 210, 0, 184, 41, 152, 38, 48, 248, 8, 42, 100, 120, 100, 0, 247, 42, 160, 45, 48, 248, 8, 42, 130, 140, 100, 0, 143, 41, 208, 3, 240, 3, 16, 3);
@@ -366,82 +307,161 @@ event event_01
         set(FG_ROOM, FLAG_ROOM_09, FALSE);
         set(FG_ROOM, FLAG_ROOM_0A, TRUE);
     }
-#endif
-    evt_fork(9, event_02, 0);
-#if CHRIS
+    evt_fork(9, on_enter_sub2, 0);
     voice_play(1, 7, 0);
     sleep(115);
-#else
-    sleep(100);
-    evt_fork(9, event_04, 0);
-    sleep(50);
-    evt_fork(9, event_03, 0);
-#endif
     sleep(20);
-#if CHRIS
     se_play_3d(0, 0, 0, 2, 6, 0, 0);
     sleep(60);
-#else
-    eml_state(0, 0, 2, 10);
-    sleep(100);
-    eml_state(0, 0, 2, 11);
-    cutnext(5);
-    sleep(100);
-#endif
     run
     {
-#if JILL
-        pos_set(6, 0, 3712, 0, 3371, 0, 9814);
-#endif
         se_play_3d(0, 1, 0, 2, 6, 0, 0);
-#if CHRIS
         pos_set(6, 0, 3824, 0, 2500, 0, 11000);
         msg_list(0, 168, 42, 192, 224, 8, 47, 80, 60, 60, 0, 184, 41, 152, 38, 192, 224, 8, 42, 80, 60, 60, 0, 247, 42, 160, 45, 192, 224, 8, 42, 80, 60, 60, 0, 143, 41, 240, 4, 0, 4, 240, 3);
-#endif
         cutnext(0);
     }
-#if CHRIS
-    evt_fork(9, event_03, 0);
+    evt_fork(9, on_enter_sub3, 0);
     sleep(10);
     voice_play(1, 9, 0);
     message(0, 0);
     wait_message();
-    evt_fork(9, event_04, 0);
+    evt_fork(9, on_enter_sub4, 0);
     voice_play(1, 10, 0);
     message(1, 0);
     wait_message();
-#endif
-    evt_fork(9, event_05, 0);
-#if CHRIS
+    evt_fork(9, on_enter_sub5, 0);
     voice_play(1, 11, 0);
     message(0, 0);
-#else
-    voice_play(1, 28, 0);
-    message(4, 0);
-#endif
     wait_message();
-#if CHRIS
+#else
+    run
+    {
+        set(FG_6, FLAG_6_17, FALSE);
+        dir_set(0, 0, 1716, 0, 2439, 0, 9876);
+        cutnext(6);
+    }
+    effect(11, 21, 0, 156, 49, 0, 0, 120, 80, 0, 0);
+#endif
     sleep(30);
+#if CHRIS
     evt_work_set(WK_ENEMY, 0);
     evt_tween_begin_alt();
     tw_abs_rot(0, 0, 2600, 65036);
     tw_end();
     evt_nop();
     cutnext(5);
-#endif
-    evt_fork(9, event_06, 0);
-#if CHRIS
+    evt_fork(9, on_enter_sub6, 0);
     voice_play(1, 12, 0);
     message(2, 0);
     wait_message();
     cutnext(4);
-#else
-    sleep(100);
-#endif
-    evt_fork(9, event_07, 0);
-#if CHRIS
+    evt_fork(9, on_enter_sub7, 0);
     sleep(25);
+    cutnext(0);
+    effect_kill_a(0);
+    sleep(35);
+    evt_fork(9, on_enter_sub8, 0);
+    sleep(60);
+    voice_play(1, 13, 0);
+    message(3, 0);
+    wait_message();
 #else
+    effect(11, 21, 0, 156, 49, 0, 0, 120, 80, 0, 0);
+    sleep(30);
+    aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
+    aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
+#endif
+    run
+    {
+#if CHRIS
+        eml_state(0, 0, 3, 258);
+        eml_state(0, 1, 3, 258);
+        eml_state(0, 2, 3, 258);
+        eml_state(0, 3, 3, 258);
+        eml_state(0, 4, 3, 258);
+        eml_state(0, 5, 3, 258);
+        set(FG_STATUS, FLAG_STATUS_0F, FALSE);
+#else
+        cutnext(0);
+#endif
+        set(FG_6, FLAG_6_17, TRUE);
+#if JILL
+        set(FG_ROOM, FLAG_ROOM_0D, TRUE);
+#endif
+        cut_auto(0);
+#if CHRIS
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        setb(9, 3, 0);
+#endif
+    }
+    evt_finish();
+}
+
+#if CHRIS
+event on_enter_sub1
+#else
+event from_main
+{
+    set(FG_STATUS, FLAG_STATUS_0F, TRUE);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 0, 32 | 31, 0 | 0);
+    act_reset();
+    evt_nop();
+    sleep(1);
+    dir_set(0, 0, 490, 0, 2440, 0, 18895);
+    cutnext(5);
+    sleep(170);
+    run
+    {
+        eml_state(0, 0, 3, 258);
+        eml_state(0, 1, 3, 258);
+        eml_state(0, 2, 3, 258);
+        eml_state(0, 3, 3, 258);
+        eml_state(0, 4, 3, 258);
+        eml_state(0, 5, 3, 258);
+    }
+    sleep(1);
+    evt_work_set(WK_ENEMY, 0);
+    evt_tween_begin_alt();
+    tw_abs_rot(0, 0, 2600, 65036);
+    tw_end();
+    evt_nop();
+    cutnext(0);
+    run
+    {
+        eml_state(0, 0, 0, 64);
+        eml_state(0, 1, 0, 65);
+        eml_state(0, 2, 0, 65);
+        eml_state(0, 3, 0, 65);
+        eml_state(0, 4, 0, 65);
+        eml_state(0, 5, 0, 65);
+    }
+    sleep(40);
+    evt_fork(9, from_main_sub1, 0);
+    sleep(100);
+    evt_fork(9, from_main_sub3, 0);
+    sleep(50);
+    evt_fork(9, from_main_sub2, 0);
+    sleep(20);
+    eml_state(0, 0, 2, 10);
+    sleep(100);
+    eml_state(0, 0, 2, 11);
+    cutnext(5);
+    sleep(100);
+    run
+    {
+        pos_set(6, 0, 3712, 0, 3371, 0, 9814);
+        se_play_3d(0, 1, 0, 2, 6, 0, 0);
+        cutnext(0);
+    }
+    evt_fork(9, from_main_sub4, 0);
+    voice_play(1, 28, 0);
+    message(4, 0);
+    wait_message();
+    evt_fork(9, from_main_sub5, 0);
+    sleep(100);
+    evt_fork(9, from_main_sub6, 0);
     sleep(200);
     cutnext(4);
     sleep(20);
@@ -458,13 +478,7 @@ event event_01
     sys_multi(4);
     sleep(10);
     dir_set(0, 0, 1177, 0, 5975, 0, 15293);
-#endif
     cutnext(0);
-#if CHRIS
-    effect_kill_a(0);
-    sleep(35);
-    evt_fork(9, event_08, 0);
-#else
     eml_state(0, 1, 2, 14);
     eml_state(0, 2, 2, 14);
     sleep(30);
@@ -472,33 +486,26 @@ event event_01
     eml_state(0, 4, 2, 14);
     sleep(30);
     eml_state(0, 5, 2, 14);
-#endif
     sleep(60);
-#if CHRIS
-    voice_play(1, 13, 0);
-    message(3, 0);
-#else
     eml_state(0, 0, 2, 14);
     sleep(60);
     bgm_volume_ramp(0, 160, 30);
     cutnext(4);
     sleep(140);
-    evt_fork(9, event_08, 0);
+    evt_fork(9, from_main_sub7, 0);
     sleep(30);
     voice_play(1, 29, 0);
     message(5, 0);
-#endif
     wait_message();
-#if JILL
-    evt_fork(9, event_09, 0);
+    evt_fork(9, from_main_sub8, 0);
     voice_play(1, 30, 0);
     message(6, 0);
     wait_message();
-    evt_fork(9, event_0A, 0);
+    evt_fork(9, from_main_sub9, 0);
     voice_play(1, 31, 0);
     message(7, 0);
     wait_message();
-    evt_fork(9, event_0B, 0);
+    evt_fork(9, from_main_sub10, 0);
     voice_play(1, 32, 0);
     message(8, 0);
     wait_message();
@@ -507,40 +514,19 @@ event event_01
     act_motion(16);
     act_idle();
     act_reset();
-#endif
     run
     {
-#if CHRIS
-        eml_state(0, 0, 3, 258);
-        eml_state(0, 1, 3, 258);
-        eml_state(0, 2, 3, 258);
-        eml_state(0, 3, 3, 258);
-        eml_state(0, 4, 3, 258);
-        eml_state(0, 5, 3, 258);
-#else
         eml_state(0, 0, 3, 514);
         set(FG_ROOM, FLAG_ROOM_0C, TRUE);
         cutnext(0);
-#endif
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
-#if CHRIS
-        set(FG_6, FLAG_6_17, TRUE);
-#endif
         cut_auto(0);
-#if CHRIS
-        aot_on(0, SCE_DOOR, 0);
-        setb(9, 3, 0);
-#else
         set(FG_6, FLAG_6_17, TRUE);
-#endif
     }
     evt_finish();
 }
 
-#if CHRIS
-event event_01
-#else
-event event_02
+event from_main_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -550,7 +536,7 @@ event event_02
     act_finish();
 }
 
-event event_03
+event from_main_sub2
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -559,7 +545,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event from_main_sub3
 #endif
 {
     evt_work_set(WK_PLAYER, 0);
@@ -615,7 +601,7 @@ event event_04
 }
 
 #if CHRIS
-event event_02
+event on_enter_sub2
 {
     evt_work_set(WK_ENEMY, 6);
     evt_actor_begin();
@@ -638,7 +624,7 @@ event event_02
     act_finish();
 }
 #else
-event event_05
+event from_main_sub4
 {
     evt_work_set(WK_ENEMY, 6);
     evt_actor_begin();
@@ -655,9 +641,9 @@ event event_05
 #endif
 
 #if CHRIS
-event event_03
+event on_enter_sub3
 #else
-event event_06
+event from_main_sub5
 #endif
 {
 #if CHRIS
@@ -710,7 +696,7 @@ event event_06
 }
 
 #if CHRIS
-event event_04
+event on_enter_sub4
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -731,7 +717,7 @@ event event_04
     act_finish();
 }
 #else
-event event_07
+event from_main_sub6
 {
     sleep(50);
     eml_state(0, 1, 2, 13);
@@ -756,9 +742,9 @@ event event_07
 #endif
 
 #if CHRIS
-event event_05
+event on_enter_sub5
 #else
-event event_08
+event from_main_sub7
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -777,7 +763,7 @@ event event_08
     act_finish();
 }
 
-event event_09
+event from_main_sub8
 #endif
 {
     evt_work_set(WK_ENEMY, 6);
@@ -794,9 +780,9 @@ event event_09
 }
 
 #if CHRIS
-event event_06
+event on_enter_sub6
 #else
-event event_0A
+event from_main_sub9
 #endif
 {
 #if CHRIS
@@ -850,9 +836,9 @@ event event_0A
 }
 
 #if CHRIS
-event event_07
+event on_enter_sub7
 #else
-event event_0B
+event from_main_sub10
 #endif
 {
     evt_work_set(WK_ENEMY, 6);
@@ -898,9 +884,9 @@ event event_0B
 }
 
 #if CHRIS
-event event_08
+event on_enter_sub8
 #else
-event event_0C
+event on_aot_07
 {
     set(FG_6, FLAG_6_17, FALSE);
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
@@ -909,11 +895,11 @@ event event_0C
     act_motion_path(147, 1, 6, 0, 150, 75);
     act_reset();
     evt_nop();
-    evt_fork(9, event_0D, 0);
+    evt_fork(9, on_aot_07_sub1, 0);
     voice_play(1, 33, 0);
     message(9, 0);
     wait_message();
-    evt_fork(9, event_0E, 0);
+    evt_fork(9, on_aot_07_sub2, 0);
     voice_play(1, 34, 0);
     message(10, 0);
     wait_message();
@@ -936,7 +922,7 @@ event event_0C
     evt_finish();
 }
 
-event event_0D
+event on_aot_07_sub1
 {
     evt_work_set(WK_ENEMY, 6);
     evt_actor_begin();
@@ -986,7 +972,7 @@ event event_0D
     act_finish();
 }
 
-event event_0E
+event on_aot_07_sub2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -997,7 +983,7 @@ event event_0E
     act_finish();
 }
 
-event event_0F
+event on_enter
 #endif
 {
 #if JILL
@@ -1026,11 +1012,7 @@ event event_0F
     act_finish();
 }
 
-#if CHRIS
-event event_09
-#else
-event event_10
-#endif
+event on_enter_2
 {
 #if CHRIS
     run
@@ -1048,7 +1030,7 @@ event event_10
     sleep(1);
 #if CHRIS
     set(FG_6, FLAG_6_17, FALSE);
-    evt_fork(9, event_01, 0);
+    evt_fork(9, on_enter_sub1, 0);
     sleep(160);
     eml_state(0, 0, 2, 10);
     sleep(100);
@@ -1079,7 +1061,7 @@ event event_10
 }
 
 #if CHRIS
-event event_0A
+event on_enter_3
 {
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     evt_work_set(WK_PLAYER, 0);
@@ -1127,7 +1109,7 @@ event event_0A
     evt_finish();
 }
 
-event event_0B
+event on_aot_05
 {
     run
     {
@@ -1139,8 +1121,8 @@ event event_0B
     sleep(30);
     effect(11, 21, 0, 156, 49, 0, 0, 120, 80, 0, 0);
     sleep(30);
-    aot_delete(0, SCE_DOOR, 129);
-    aot_delete(5, SCE_EVENT, 0);
+    aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
+    aot_delete(AOT_05_EVENT, SCE_EVENT, 0);
     run
     {
         cutnext(0);
@@ -1151,9 +1133,9 @@ event event_0B
     evt_finish();
 }
 
-event event_0C
+event from_main
 #else
-event event_11
+event from_main_2
 #endif
 {
     bgm_volume_ramp(0, 160, 30);
@@ -1164,9 +1146,9 @@ event event_11
 }
 
 #if CHRIS
-event event_0D
+event from_main_2
 #else
-event event_12
+event from_main_3
 #endif
 {
     bgm_volume_ramp(1, 160, 30);

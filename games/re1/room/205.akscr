@@ -5,6 +5,16 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_USEITEM 0x01
+#define AOT_02_USEITEM 0x02
+#define AOT_03_EVENT 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_05_MESSAGE 0x05
+#define AOT_06_MESSAGE 0x06
+#define AOT_07_MESSAGE 0x07
+#define AOT_08_MESSAGE 0x08
+#define AOT_09_ITEM 0x09
 #define FLAG_ROOM_18 0x18
 #define FLAG_ROOM_19 0x19
 #define FLAG_ROOM_1A 0x1A
@@ -20,23 +30,23 @@
 
 proc init
 {
-    door_aot_set(0, 16400, 5800, 2000, 3000, 12, 1, 9, 5, 0, ROOM_204_C_PASSAGE, 18600, 0, 11300, 0, UNLOCKED, 129);
-    aot_set(1, 4785, 6936, 700, 600, SCE_USEITEM, 68, 4, 0, 32, 0, 1, 0);
-    aot_set(2, 13635, 6936, 700, 600, SCE_USEITEM, 68, 4, 0, 33, 0, 1, 0);
-    aot_set(3, 9235, 6736, 1000, 1000, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
-    aot_set(4, 1400, 6200, 2200, 2300, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(5, 1000, 9300, 17400, 3300, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
-    aot_set(6, 1000, 2000, 18400, 3300, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
-    aot_set(7, 4385, 6736, 1000, 1000, SCE_MESSAGE, 193, 129, 0, 255, 0, 0, 0);
-    aot_set(8, 13535, 6736, 1000, 1000, SCE_MESSAGE, 193, 129, 0, 255, 0, 0, 0);
-    item_aot_set(9, 1400, 6200, 2200, 2300, ITEM_2E_PUZZLE_CREST_SUN, 1, 0, 255, 42, 8, 0, 0, 190, 25, 0, 4, 36, 129, 0, 0);
+    door_aot_set(AOT_00_DOOR, 16400, 5800, 2000, 3000, 12, 1, 9, 5, 0, ROOM_204_C_PASSAGE, 18600, 0, 11300, 0, UNLOCKED, 129);
+    aot_set(AOT_01_USEITEM, 4785, 6936, 700, 600, SCE_USEITEM, 68, 4, 0, 32, 0, 1, 0);
+    aot_set(AOT_02_USEITEM, 13635, 6936, 700, 600, SCE_USEITEM, 68, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_03_EVENT, 9235, 6736, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 1400, 6200, 2200, 2300, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 1000, 9300, 17400, 3300, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 1000, 2000, 18400, 3300, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 4385, 6736, 1000, 1000, SCE_MESSAGE, 193, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 13535, 6736, 1000, 1000, SCE_MESSAGE, 193, 129, 0, 255, 0, 0, 0);
+    item_aot_set(AOT_09_ITEM, 1400, 6200, 2200, 2300, ITEM_2E_PUZZLE_CREST_SUN, 1, 0, 255, 42, 8, 0, 0, 190, 25, 0, 4, 36, 129, 0, 0);
     obj(0, 31, 255, 2655, 0, 7220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(1, 1, 255, 8795, 0, 7886, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
     obj(2, 1, 255, 14035, 0, 6190, 0, 0, 0, 0, 0, 0, 0, 0, 0, 194, 1, 188, 7, 194, 1, 194, 1);
     set(FG_STATUS, FLAG_STATUS_1D, TRUE);
     set(FG_ROOM, FLAG_ROOM_20, TRUE);
     set(FG_ROOM, FLAG_ROOM_21, TRUE);
-    aot_delete(9, SCE_NONE, 129);
+    aot_delete(AOT_09_ITEM, SCE_NONE, 129);
     if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_61, TRUE) && ck(FG_COMMON, FLAG_COMMON_63, TRUE))
     {
         set(FG_COMMON, FLAG_COMMON_66, TRUE);
@@ -46,10 +56,10 @@ proc init
         set(FG_ROOM, FLAG_ROOM_1B, TRUE);
         if (ck(FG_ITEM, FLAG_ITEM_24, TRUE))
         {
-            aot_delete(9, SCE_ITEM, 129);
+            aot_delete(AOT_09_ITEM, SCE_ITEM, 129);
         }
-        aot_delete(3, SCE_NONE, 129);
-        aot_delete(4, SCE_NONE, 129);
+        aot_delete(AOT_03_EVENT, SCE_NONE, 129);
+        aot_delete(AOT_04_MESSAGE, SCE_NONE, 129);
         eml_pos(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         eml_pos(1, 0, 0, 0, 8, 0, 0, 237, 18, 0, 0, 68, 28);
         eml_pos(2, 0, 0, 0, 0, 0, 0, 211, 54, 0, 0, 72, 28);
@@ -78,20 +88,20 @@ proc main
         {
             if (ck(FG_ROOM, FLAG_ROOM_1B, FALSE))
             {
-                evt_exec(0, 9, event_01);
+                evt_exec(0, 9, from_main);
             }
             if (ck(FG_ITEM, FLAG_ITEM_24, TRUE))
             {
-                aot_delete(4, SCE_NONE, 129);
-                aot_delete(9, SCE_ITEM, 129);
+                aot_delete(AOT_04_MESSAGE, SCE_NONE, 129);
+                aot_delete(AOT_09_ITEM, SCE_ITEM, 129);
             }
             set(FG_ROOM, FLAG_ROOM_1D, TRUE);
         }
         else
         {
-            evt_exec(0, 9, event_02);
+            evt_exec(0, 9, from_main_2);
         }
-        aot_delete(3, SCE_NONE, 193);
+        aot_delete(AOT_03_EVENT, SCE_NONE, 193);
         set(FG_ROOM, FLAG_ROOM_1C, FALSE);
     }
     if (ck(FG_ROOM, FLAG_ROOM_1D, TRUE))
@@ -101,30 +111,30 @@ proc main
         }
         else
         {
-            evt_exec(0, 9, event_05);
+            evt_exec(0, 9, from_main_5);
             set(FG_ROOM, FLAG_ROOM_1D, FALSE);
         }
     }
     if (ck(FG_ROOM, FLAG_ROOM_20, TRUE))
     {
-        aot_delete(7, SCE_MESSAGE, 193);
+        aot_delete(AOT_07_MESSAGE, SCE_MESSAGE, 193);
         set(FG_ROOM, FLAG_ROOM_18, FALSE);
     }
     if (ck(FG_ROOM, FLAG_ROOM_21, TRUE))
     {
-        aot_delete(8, SCE_MESSAGE, 193);
+        aot_delete(AOT_08_MESSAGE, SCE_MESSAGE, 193);
         set(FG_ROOM, FLAG_ROOM_19, FALSE);
     }
     if (ck(FG_ROOM, FLAG_ROOM_1A, TRUE) && ck(FG_ROOM, FLAG_ROOM_20, FALSE) && ck(FG_ROOM, FLAG_ROOM_18, FALSE))
     {
-        evt_exec(0, 9, event_03);
-        aot_delete(7, SCE_NONE, 193);
+        evt_exec(0, 9, from_main_3);
+        aot_delete(AOT_07_MESSAGE, SCE_NONE, 193);
         set(FG_ROOM, FLAG_ROOM_18, TRUE);
     }
     if (ck(FG_ROOM, FLAG_ROOM_1A, TRUE) && ck(FG_ROOM, FLAG_ROOM_21, FALSE) && ck(FG_ROOM, FLAG_ROOM_19, FALSE))
     {
-        evt_exec(0, 9, event_04);
-        aot_delete(8, SCE_NONE, 193);
+        evt_exec(0, 9, from_main_4);
+        aot_delete(AOT_08_MESSAGE, SCE_NONE, 193);
         set(FG_ROOM, FLAG_ROOM_19, TRUE);
     }
     if (ck(FG_ROOM, FLAG_ROOM_24, TRUE) && ck(FG_STATUS, FLAG_STATUS_40, FALSE))
@@ -147,12 +157,12 @@ proc main
     }
 }
 
-event event_00
+event on_aot_03
 {
     set(FG_6, FLAG_6_17, FALSE);
     cutnext(3);
     sleep(15);
-    message(128, 69);
+    message(128, 69); // "There's a switch. Will you push it? A weird hole opens."
     do
     {
         evt_next();
@@ -172,7 +182,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event from_main
 {
     run
     {
@@ -200,11 +210,11 @@ event event_01
         se_play_3d(2, 24, 0, 0, 0, 9550, 7200);
         cutnext(2);
         aot_switch(0, 3, 0);
-        aot_delete(3, SCE_NONE, 68);
+        aot_delete(AOT_03_EVENT, SCE_NONE, 68);
     }
     sleep(40);
     se_play_3d(2, 23, 0, 0, 0, 3500, 7200);
-    evt_fork(9, event_06, 0);
+    evt_fork(9, from_main_sub1, 0);
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
     tw_set_pos(0, 24, 0);
@@ -237,7 +247,7 @@ event event_01
     evt_nop();
     run
     {
-        aot_delete(4, SCE_NONE, 129);
+        aot_delete(AOT_04_MESSAGE, SCE_NONE, 129);
         set(FG_SCENARIO, FLAG_SCENARIO_3A, TRUE);
         set(FG_ROOM, FLAG_ROOM_1E, FALSE);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
@@ -247,7 +257,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event from_main_2
 {
     run
     {
@@ -271,7 +281,7 @@ event event_02
     }
     sleep(30);
     setw(2, 0, 0);
-    message(4, 69);
+    message(4, 69); // "Poison gas is escaping...!"
     do
     {
         evt_next();
@@ -321,7 +331,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event from_main_3
 {
     do
     {
@@ -334,7 +344,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event from_main_4
 {
     do
     {
@@ -347,7 +357,7 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event from_main_5
 {
     run
     {
@@ -360,7 +370,7 @@ event event_05
     run
     {
         setw(2, 0, 0);
-        message(4, 69);
+        message(4, 69); // "Poison gas is escaping...!"
     }
     do
     {
@@ -404,7 +414,7 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event from_main_sub1
 {
     single(12) effect(8, 19, 0, 240, 10, 76, 255, 88, 27);
     evt_nop();

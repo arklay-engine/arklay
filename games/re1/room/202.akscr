@@ -5,15 +5,20 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_SAVE 0x02
+#define AOT_03_EVENT 0x03
+
 proc init
 {
-    door_aot_set(0, 5000, 14100, 2300, 3100, 2, 0, 3, 4, 0, ROOM_201_2F_LEFT_STAIRS, 18100, 0, 2700, 2560, UNLOCKED, 129);
-    door_aot_set(1, 31000, 6900, 2800, 3300, 9, 0, 3, 1, 0, ROOM_203_HALL_2F, 3400, -2885, 17000, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 5000, 14100, 2300, 3100, 2, 0, 3, 4, 0, ROOM_201_2F_LEFT_STAIRS, 18100, 0, 2700, 2560, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 31000, 6900, 2800, 3300, 9, 0, 3, 1, 0, ROOM_203_HALL_2F, 3400, -2885, 17000, 0, UNLOCKED, 129);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_0B, FALSE))
     {
         obj(0, 1, 255, 23263, 0, 3510, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
-        aot_set(3, 16863, 4440, 1250, 501, SCE_EVENT, 68, 0, 0, event_00, 0, 0, 0);
-        aot_set(2, 16863, 3000, 1250, 4900, SCE_SAVE, 68, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 16863, 4440, 1250, 501, SCE_EVENT, 68, 0, 0, on_aot_03, 0, 0, 0);
+        aot_set(AOT_02_SAVE, 16863, 3000, 1250, 4900, SCE_SAVE, 68, 0, 0, 0, 0, 0, 0);
     }
 #if CHRIS
     if (ck(FG_COMMON, FLAG_COMMON_A7, TRUE))
@@ -114,9 +119,9 @@ proc main noreturn
     }
 }
 
-event event_00
+event on_aot_03
 {
-    aot_reset(3, SCE_NONE, 0, 0, 0, 0);
+    aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
     objtbl_b_set(0, 0, 15);
     set(FG_SCENARIO, FLAG_SCENARIO_0B, TRUE);
     cutnext(4);

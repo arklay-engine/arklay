@@ -5,28 +5,37 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_06_ITEM 0x06
+#define AOT_09_MESSAGE 0x09
+#define AOT_0A_USEITEM 0x0A
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_3E 0x3E
 
 proc init
 {
-    door_aot_set(0, 10500, 22812, 978, 1596, 1, 1, 8, 0, 0, ROOM_109_TRAP_PASSAGE, 24300, 0, 7600, 2048, UNLOCKED, 129);
-    item_aot_set(1, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 198, 73, 0, 0, 220, 55, 0, 0, 10, 129, 1, 0);
-    item_aot_set(2, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 198, 73, 0, 0, 26, 54, 0, 0, 221, 129, 1, 0);
-    item_aot_set(3, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 198, 73, 0, 0, 58, 52, 0, 0, 222, 129, 1, 0);
-    item_aot_set(4, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 3, 255, 198, 73, 0, 0, 110, 50, 0, 0, 223, 129, 1, 0);
-    item_aot_set(5, 12000, 14100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 4, 255, 160, 51, 0, 0, 90, 60, 0, 0, 224, 129, 1, 0);
-    item_aot_set(6, 12000, 14100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 5, 255, 222, 49, 0, 0, 90, 60, 0, 0, 225, 129, 1, 0);
-    aot_set(9, 13700, 14100, 2600, 1200, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(10, 13700, 13100, 2600, 1200, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 10500, 22812, 978, 1596, 1, 1, 8, 0, 0, ROOM_109_TRAP_PASSAGE, 24300, 0, 7600, 2048, UNLOCKED, 129);
+    item_aot_set(AOT_01_ITEM, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 198, 73, 0, 0, 220, 55, 0, 0, 10, 129, 1, 0);
+    item_aot_set(AOT_02_ITEM, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 198, 73, 0, 0, 26, 54, 0, 0, 221, 129, 1, 0);
+    item_aot_set(AOT_03_ITEM, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 198, 73, 0, 0, 58, 52, 0, 0, 222, 129, 1, 0);
+    item_aot_set(AOT_04_ITEM, 18600, 11900, 1500, 2400, ITEM_44_HEAL_HERB_GREEN, 1, 3, 255, 198, 73, 0, 0, 110, 50, 0, 0, 223, 129, 1, 0);
+    item_aot_set(AOT_05_ITEM, 12000, 14100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 4, 255, 160, 51, 0, 0, 90, 60, 0, 0, 224, 129, 1, 0);
+    item_aot_set(AOT_06_ITEM, 12000, 14100, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 5, 255, 222, 49, 0, 0, 90, 60, 0, 0, 225, 129, 1, 0);
+    aot_set(AOT_09_MESSAGE, 13700, 14100, 2600, 1200, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_USEITEM, 13700, 13100, 2600, 1200, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
     if (ck(FG_SCENARIO, FLAG_SCENARIO_00, FALSE))
     {
         if (ck(FG_SCENARIO, FLAG_SCENARIO_04, FALSE))
         {
             enemy(ENEMY_02_DOG_CERBERUS, 1, 4, 1, 2, 0, 0, 0, 0, 0, 4000, 0, 21696, 0, 0, 0, 0);
             enemy(ENEMY_02_DOG_CERBERUS, 128, 5, 1, 2, 0, 0, 2400, 0, 0, 22000, 0, 9800, 1, 0, 0, 0);
-            evt_exec(0, 9, event_00);
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_enter);
+            evt_exec(0, 9, on_enter_2);
         }
         else
         {
@@ -46,15 +55,15 @@ proc main
 {
     if (ck(FG_ROOM, FLAG_ROOM_3E, TRUE))
     {
-        aot_delete(9, SCE_MESSAGE, 129);
+        aot_delete(AOT_09_MESSAGE, SCE_MESSAGE, 129);
     }
     else
     {
-        aot_delete(9, SCE_MESSAGE, 0);
+        aot_delete(AOT_09_MESSAGE, SCE_MESSAGE, 0);
     }
 }
 
-event event_00
+event on_enter
 {
     do
     {
@@ -71,7 +80,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_enter_2
 {
     do
     {

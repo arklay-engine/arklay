@@ -1,22 +1,23 @@
 //! `.akscr` room scripts: structured source for a room's SCD streams.
 //!
 //! A script holds one `proc init` / `proc main` section per command block
-//! (in container order) and one `event event_XX` section per event script,
-//! dense from `event_00`. The decompiler renders the original bytecode as
-//! code and the compiler turns it back into byte-identical streams.
+//! (in container order) and one `event NAME` section per event script, each
+//! name standing for the event's number. The decompiler renders the original
+//! bytecode as code, naming game data from a game's `inc/*.akinc` defines
+//! ([`Names`]), and the compiler turns it back into byte-identical streams.
 //!
 //! ```text
 //! #version 1
 //!
 //! proc init
 //! {
-//!     if (ck(FG_COMMON, 164, 0) && ck(FG_STATUS, 8, 1))
+//!     if (ck(FG_COMMON, 164, TRUE) && ck(FG_STATUS, 8, FALSE))
 //!     {
-//!         set(FG_COMMON, 169, 0);
+//!         set(FG_COMMON, 169, TRUE);
 //!     }
 //!     else
 //!     {
-//!         require(ck(FG_ROOM, 3, 1));
+//!         require(ck(FG_ROOM, 3, FALSE));
 //!         return;
 //!     }
 //! }
@@ -25,7 +26,7 @@
 //! {
 //!     run
 //!     {
-//!         set(FG_6, 23, 1);
+//!         set(FG_6, 23, FALSE);
 //!     }
 //!     evt_exec(0, 6, event_0A);
 //!     sleep(30);

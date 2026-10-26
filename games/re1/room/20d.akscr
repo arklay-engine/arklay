@@ -5,6 +5,14 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_EVENT 0x04
+#define AOT_04_ITEM 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_82_ITEM 0x82
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_01 0x01
 #define FLAG_ROOM_02 0x02
@@ -13,20 +21,20 @@
 
 proc init
 {
-    door_aot_set(0, 1300, 12900, 3400, 2000, 3, 0, 0, 7, 0, ROOM_204_C_PASSAGE, 12500, 0, 2800, 3072, UNLOCKED, 129);
-    door_aot_set(1, 12000, 1100, 2300, 3100, 2, 0, 0, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 2700, 0, 2900, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 1300, 12900, 3400, 2000, 3, 0, 0, 7, 0, ROOM_204_C_PASSAGE, 12500, 0, 2800, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 12000, 1100, 2300, 3100, 2, 0, 0, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 2700, 0, 2900, 0, UNLOCKED, 129);
     if (ck(FG_ITEM, FLAG_ITEM_28, TRUE))
     {
 #if MANSION1
-        item_aot_set(2, 7500, 2500, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 10, 0, 0, 0, 10, 0, 0, 0, 40, 129, 1, 0);
-        aot_reset(2, SCE_NONE, 0, 0, 0, 0);
+        item_aot_set(AOT_02_ITEM, 7500, 2500, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 10, 0, 0, 0, 10, 0, 0, 0, 40, 129, 1, 0);
+        aot_reset(AOT_02_ITEM, SCE_NONE, 0, 0, 0, 0);
 #else
-        item_aot_set(130, 7500, 2500, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 108, 32, 0, 0, 16, 14, 0, 0, 40, 129, 1, 0);
+        item_aot_set(AOT_82_ITEM, 7500, 2500, 1800, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 108, 32, 0, 0, 16, 14, 0, 0, 40, 129, 1, 0);
 #endif
     }
     if (ck(FG_ITEM, FLAG_ITEM_C5, TRUE))
     {
-        item_aot_set(3, 5800, 6000, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 44, 26, 0, 0, 244, 26, 0, 0, 197, 129, 1, 0);
+        item_aot_set(AOT_03_ITEM, 5800, 6000, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 1, 255, 44, 26, 0, 0, 244, 26, 0, 0, 197, 129, 1, 0);
     }
 #if MANSION1
 #if CHRIS
@@ -45,9 +53,9 @@ proc init
                 set(FG_COMMON, FLAG_COMMON_64, FALSE);
                 room_bgm_state_set(1, 13, 65);
 #if CHRIS
-                aot_set(4, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, event_04, 0, 0, 0);
+                aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, on_aot_04_3, 0, 0, 0);
 #else
-                aot_set(4, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, event_07, 0, 0, 0);
+                aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, on_aot_04_2, 0, 0, 0);
 #endif
             }
             else
@@ -62,9 +70,9 @@ proc init
             set(FG_COMMON, FLAG_COMMON_63, FALSE);
             set(FG_COMMON, FLAG_COMMON_64, FALSE);
 #if CHRIS
-            aot_set(4, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 0, 0, event_03, 0, 0, 0);
+            aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 0, 0, on_aot_04_2, 0, 0, 0);
 #else
-            aot_set(4, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 0, 0, event_08, 0, 0, 0);
+            aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 0, 0, on_aot_04_3, 0, 0, 0);
 #endif
         }
         else
@@ -81,11 +89,11 @@ proc init
         if (ck(FG_COMMON, FLAG_COMMON_63, TRUE) && ck(FG_COMMON, FLAG_COMMON_66, FALSE))
         {
             enemy(ENEMY_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 2560, 0, 0, 9850, 0, 3000, 1, 61, 0, 1);
-            aot_set(4, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, event_04, 0, 0, 0);
+            aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, on_aot_04_3, 0, 0, 0);
         }
         else if (ck(FG_ITEM, FLAG_ITEM_28, TRUE))
         {
-            aot_set(4, 7400, 2700, 1800, 1800, SCE_EVENT, 129, 0, 0, event_02, 0, 0, 0);
+            aot_set(AOT_04_EVENT, 7400, 2700, 1800, 1800, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
         }
         if (ck(FG_COMMON, FLAG_COMMON_65, FALSE))
         {
@@ -99,7 +107,7 @@ proc init
     else if (ck(FG_COMMON, FLAG_COMMON_64, TRUE))
     {
         room_bgm_state_set(1, 13, 66);
-        aot_set(4, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, event_0C, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, on_aot_04_4, 0, 0, 0);
         enemy(ENEMY_27_NPC_RICHARD, 0, 255, 1, 2, 0, 0, 2048, 0, 0, 8300, 0, 3600, 0, 2, 39, 0);
     }
     else
@@ -111,12 +119,12 @@ proc init
     {
         if (item_ck(ITEM_42_HEAL_SERUM))
         {
-            aot_reset(1, SCE_EVENT, 129, 0, event_08, 0);
+            aot_reset(AOT_01_DOOR, SCE_EVENT, 129, 0, on_aot_01_door, 0);
         }
         else
         {
             set(FG_COMMON, FLAG_COMMON_5F, TRUE);
-            aot_reset(1, SCE_MESSAGE, 129, 148, 127, 0);
+            aot_reset(AOT_01_DOOR, SCE_MESSAGE, 129, 148, 127, 0);
         }
     }
 #else
@@ -124,7 +132,7 @@ proc init
     {
         if (ck(FG_ITEM, FLAG_ITEM_28, TRUE))
         {
-            aot_set(4, 7400, 2700, 1800, 1800, SCE_EVENT, 129, 0, 0, event_05, 0, 0, 0);
+            aot_set(AOT_04_EVENT, 7400, 2700, 1800, 1800, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
         }
         enemy(ENEMY_27_NPC_RICHARD, 0, 255, 1, 2, 0, 0, 2048, 0, 0, 8300, 0, 3600, 0, 2, 39, 0);
         if (ck(FG_COMMON, FLAG_COMMON_65, FALSE))
@@ -138,7 +146,7 @@ proc init
     }
     else if (ck(FG_COMMON, FLAG_COMMON_64, TRUE))
     {
-        aot_set(4, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, event_09, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 7500, 2500, 1800, 1800, SCE_EVENT, 193, 7, 0, on_aot_04_4, 0, 0, 0);
         enemy(ENEMY_27_NPC_RICHARD, 0, 255, 1, 2, 0, 0, 2048, 0, 0, 8300, 0, 3600, 0, 2, 39, 0);
         room_bgm_state_set(1, 13, 66);
     }
@@ -151,9 +159,9 @@ proc init
     if (ck(FG_ITEM, FLAG_ITEM_C6, TRUE))
     {
 #if MANSION1
-        item_aot_set(5, 4100, 6000, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 136, 19, 0, 0, 244, 26, 0, 0, 198, 129, 1, 0);
+        item_aot_set(AOT_05_ITEM, 4100, 6000, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 136, 19, 0, 0, 244, 26, 0, 0, 198, 129, 1, 0);
 #else
-        item_aot_set(4, 4100, 6000, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 136, 19, 0, 0, 244, 26, 0, 0, 198, 129, 1, 0);
+        item_aot_set(AOT_04_ITEM, 4100, 6000, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 2, 255, 136, 19, 0, 0, 244, 26, 0, 0, 198, 129, 1, 0);
 #endif
     }
 }
@@ -172,7 +180,7 @@ proc main
         if (ck(FG_ROOM, FLAG_ROOM_00, FALSE) && ck(FG_COMMON, FLAG_COMMON_64, FALSE))
         {
             set(FG_ROOM, FLAG_ROOM_00, TRUE);
-            evt_exec(0, 1, event_05);
+            evt_exec(0, 1, from_main_3);
         }
         if (cmpb(2, 0, 3) && ck(FG_ROOM, FLAG_ROOM_01, FALSE))
         {
@@ -186,7 +194,7 @@ proc main
                 cut_auto(1);
                 cutnext(4);
                 dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, 0, event_00);
+                evt_exec(0, 0, from_main);
             }
             if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_63, TRUE) && ck(FG_COMMON, FLAG_COMMON_64, FALSE))
             {
@@ -196,7 +204,7 @@ proc main
                 cut_auto(1);
                 cutnext(5);
                 dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, 0, event_01);
+                evt_exec(0, 0, from_main_2);
                 remove_item(ITEM_42_HEAL_SERUM);
             }
             if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_63, FALSE) && ck(FG_COMMON, FLAG_COMMON_64, TRUE))
@@ -205,7 +213,7 @@ proc main
             }
             if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_61, FALSE))
             {
-                aot_reset(1, SCE_MESSAGE, 129, 148, 127, 0);
+                aot_reset(AOT_01_DOOR, SCE_MESSAGE, 129, 148, 127, 0);
             }
         }
     }
@@ -224,7 +232,7 @@ proc main
     }
 }
 
-event event_00
+event from_main
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -326,7 +334,7 @@ event event_00
     act_reset();
     evt_nop();
     wait_message();
-    evt_fork(2, event_09, 0);
+    evt_fork(2, from_main_sub1, 0);
     voice_play(1, 39, 0);
     message(2, 0);
     evt_work_set(WK_ENEMY, 1);
@@ -501,13 +509,13 @@ event event_00
     {
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_6, FLAG_6_17, TRUE);
-        aot_on(0, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
         setw(4, 0, 0);
     }
     evt_finish();
 }
 
-event event_01
+event from_main_2
 #endif
 #else
 #if MANSION1
@@ -519,7 +527,7 @@ proc main
         if (ck(FG_ROOM, FLAG_ROOM_00, FALSE) && ck(FG_COMMON, FLAG_COMMON_64, FALSE))
         {
             set(FG_ROOM, FLAG_ROOM_00, TRUE);
-            evt_exec(0, 1, event_00);
+            evt_exec(0, 1, from_main);
         }
         if (cmpb(2, 0, 3) && ck(FG_ROOM, FLAG_ROOM_01, FALSE))
         {
@@ -533,7 +541,7 @@ proc main
                 cut_auto(1);
                 cutnext(4);
                 dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, 0, event_01);
+                evt_exec(0, 0, from_main_2);
             }
             if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_63, TRUE) && ck(FG_COMMON, FLAG_COMMON_64, FALSE))
             {
@@ -543,7 +551,7 @@ proc main
                 cut_auto(1);
                 cutnext(5);
                 dir_set(0, 0, 472, 0, 5596, 0, 3804);
-                evt_exec(0, 0, event_02);
+                evt_exec(0, 0, from_main_3);
                 remove_item(ITEM_42_HEAL_SERUM);
             }
             if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_63, FALSE) && ck(FG_COMMON, FLAG_COMMON_64, TRUE))
@@ -552,13 +560,13 @@ proc main
             }
             if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_61, FALSE))
             {
-                aot_reset(1, SCE_MESSAGE, 129, 143, 127, 0);
+                aot_reset(AOT_01_DOOR, SCE_MESSAGE, 129, 143, 127, 0);
             }
         }
     }
 }
 
-event event_00
+event from_main
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -568,7 +576,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event from_main_2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -624,7 +632,7 @@ event event_01
     act_reset();
     evt_nop();
     sleep(30);
-    evt_fork(2, event_03, 0);
+    evt_fork(2, from_main_2_sub1, 0);
     voice_play(1, 59, 0);
     message(1, 0);
     sleep(90);
@@ -821,13 +829,13 @@ event event_01
     {
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_6, FLAG_6_17, TRUE);
-        aot_on(0, SCE_DOOR, 0);
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
         setw(4, 0, 0);
     }
     evt_finish();
 }
 
-event event_02
+event from_main_3
 #endif
 #endif
 #if MANSION1
@@ -940,7 +948,7 @@ event event_02
     act_motion_path(19, 4012, 64736, 2200, 17, 17);
     act_reset();
     evt_nop();
-    evt_fork(2, event_0A, 0);
+    evt_fork(2, from_main_2_sub2, 0);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
     act_motion_path(19, 8200, 0, 5000, 20, 20);
@@ -964,7 +972,7 @@ event event_02
 #endif
     sleep(20);
 #if CHRIS
-    evt_fork(3, event_0B, 0);
+    evt_fork(3, from_main_2_sub3, 0);
     sleep(10);
     voice_play(1, 49, 0);
     message(13, 0);
@@ -1000,7 +1008,7 @@ event event_02
     wait_message();
 #if JILL
     sleep(20);
-    evt_fork(2, event_04, 0);
+    evt_fork(2, from_main_3_sub1, 0);
     voice_play(1, 68, 0);
     message(10, 0);
 #endif
@@ -1010,7 +1018,7 @@ event event_02
     sleep(40);
     voice_play(1, 50, 0);
     bgm_play(0);
-    evt_fork(4, event_07, 0);
+    evt_fork(4, from_main_2_sub1, 0);
 #else
     sleep(120);
 #endif
@@ -1263,10 +1271,8 @@ event event_02
     evt_finish();
 }
 
-#if CHRIS
-event event_02
-#else
-event event_03
+#if JILL
+event from_main_2_sub1
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -1358,7 +1364,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event from_main_3_sub1
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -1390,7 +1396,7 @@ event event_04
     sleep(16);
     act_reset();
     evt_nop();
-    evt_fork(3, event_06, 0);
+    evt_fork(3, from_main_3_sub1_sub1, 0);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_motion_path(49, 300, 100, 0, 50, 50);
@@ -1427,8 +1433,8 @@ event event_04
     evt_finish();
 }
 
-event event_05
 #endif
+event on_aot_04
 {
     run
     {
@@ -1452,9 +1458,9 @@ event event_05
             set(FG_COMMON, FLAG_COMMON_65, TRUE);
         }
 #if CHRIS
-        message(147, 0);
+        message(147, 0); // "Richard from Bravo team."
 #else
-        message(140, 0);
+        message(140, 0); // "Richard from Bravo team."
 #endif
     }
     evt_work_set(WK_PLAYER, 0);
@@ -1484,16 +1490,14 @@ event event_05
         cut_auto(0);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_6, FLAG_6_17, TRUE);
-        aot_reset(2, SCE_ITEM, 193, 1, 0, 0);
-        aot_reset(4, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_02_ITEM, SCE_ITEM, 193, 1, 0, 0);
+        aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
     }
     evt_finish();
 }
 
-#if CHRIS
-event event_03
-#else
-event event_06
+#if JILL
+event from_main_3_sub1_sub1
 {
     sleep(20);
     single(12) effect(0, 5, 0, 196, 34, 212, 254, 216, 14);
@@ -1520,8 +1524,8 @@ event event_06
     evt_finish();
 }
 
-event event_07
 #endif
+event on_aot_04_2
 {
     run
     {
@@ -1582,7 +1586,7 @@ event event_07
             bgm_play(0);
             set(FG_COMMON, FLAG_COMMON_65, TRUE);
         }
-        message(142, 0);
+        message(142, 0); // "Richard is dead."
     }
 #endif
     evt_work_set(WK_PLAYER, 0);
@@ -1663,18 +1667,14 @@ event event_07
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_6, FLAG_6_17, TRUE);
 #if JILL
-        aot_reset(2, SCE_ITEM, 193, 1, 0, 0);
-        aot_reset(4, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_02_ITEM, SCE_ITEM, 193, 1, 0, 0);
+        aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
 #endif
     }
     evt_finish();
 }
 
-#if CHRIS
-event event_04
-#else
-event event_08
-#endif
+event on_aot_04_3
 {
     run
     {
@@ -1808,7 +1808,7 @@ event event_08
 }
 
 #if CHRIS
-event event_05
+event from_main_3
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -1818,7 +1818,7 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event from_main_2_sub3_sub1
 {
     single(12) effect(0, 5, 0, 196, 34, 212, 254, 116, 14);
     sleep(20);
@@ -1839,7 +1839,7 @@ event event_06
     evt_finish();
 }
 
-event event_07
+event from_main_2_sub1
 {
     sleep(20);
     evt_work_set(WK_ENEMY, 1);
@@ -1925,19 +1925,19 @@ event event_07
     evt_finish();
 }
 
-event event_08
+event on_aot_01_door
 {
     run
     {
         setb(9, 0, 0);
-        aot_reset(1, SCE_DOOR, 129, 1, 0, 0);
-        aot_on(1, SCE_DOOR, 0);
+        aot_reset(AOT_01_DOOR, SCE_DOOR, 129, 1, 0, 0);
+        aot_on(AOT_01_DOOR, SCE_DOOR, 0);
         remove_item(ITEM_42_HEAL_SERUM);
     }
     evt_finish();
 }
 
-event event_09
+event from_main_sub1
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -2002,7 +2002,7 @@ event event_09
     evt_finish();
 }
 
-event event_0A
+event from_main_2_sub2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2015,7 +2015,7 @@ event event_0A
     evt_finish();
 }
 
-event event_0B
+event from_main_2_sub3
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -2054,7 +2054,7 @@ event event_0B
     single(12) effect(0, 5, 0, 196, 34, 212, 254, 216, 14);
     sleep(1);
     single(12) effect(0, 5, 0, 40, 35, 112, 254, 16, 14);
-    evt_fork(5, event_06, 0);
+    evt_fork(5, from_main_2_sub3_sub1, 0);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_motion_path(49, 300, 100, 0, 50, 50);
@@ -2099,10 +2099,8 @@ event event_0B
     evt_finish();
 }
 
-event event_0C
-#else
-event event_09
 #endif
+event on_aot_04_4
 {
     run
     {
@@ -2126,9 +2124,9 @@ event event_09
             set(FG_COMMON, FLAG_COMMON_65, TRUE);
         }
 #if CHRIS
-        message(151, 0);
+        message(151, 0); // "Richard is dead."
 #else
-        message(144, 0);
+        message(144, 0); // "Richard is dead."
 #endif
     }
     evt_work_set(WK_PLAYER, 0);
@@ -2158,8 +2156,8 @@ event event_09
         cut_auto(0);
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
         set(FG_6, FLAG_6_17, TRUE);
-        aot_reset(2, SCE_ITEM, 193, 1, 0, 0);
-        aot_reset(4, SCE_NONE, 0, 0, 0, 0);
+        aot_reset(AOT_02_ITEM, SCE_ITEM, 193, 1, 0, 0);
+        aot_reset(AOT_04_EVENT, SCE_NONE, 0, 0, 0, 0);
     }
     evt_finish();
 }

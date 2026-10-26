@@ -8,11 +8,12 @@
 //! block, so the output always compiles back to identical bytecode.
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use super::names::Names;
 use super::preprocess::merged_id;
 use crate::scd::akscr::compile;
+use crate::scd::decomp::constants;
 use crate::scd::disasm::{COMMAND_SIG, EventState, format_insn, next_event_state, render_run};
 use crate::scd::ir::{Block, Decoded, Insn, Scripts, Stream, StreamKind};
 use crate::scd::opcode::command_width;
@@ -29,8 +30,14 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     for bit in 0..=u8::MAX {
         defines.insert(room_flag(bit), i64::from(bit));
     }
+    let aots = aot_names(scripts);
+    for (&index, name) in &aots {
+        defines.insert(name.clone(), i64::from(index));
+    }
     let ctx = Ctx {
         names,
+        room,
+        aots,
         stage: (merged_id(room) >> 8) as u8,
         defines,
         room_flags: RefCell::default(),
@@ -42,9 +49,11 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     for block in &scripts.main {
         sections.push(block_section(&ctx, "main", block));
     }
+    let first_event = sections.len();
     for stream in &scripts.events {
         sections.push(event_section(&ctx, stream));
     }
+    name_events(&mut sections, first_event);
 
     let mut out = String::from("#version 1\n");
     if !names.includes().is_empty() {
@@ -54,8 +63,11 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         }
     }
     let room_flags = ctx.room_flags.borrow();
-    if !room_flags.is_empty() {
+    if !room_flags.is_empty() || !ctx.aots.is_empty() {
         out.push('\n');
+        for (&index, name) in &ctx.aots {
+            out.push_str(&format!("#define {name} 0x{index:02X}\n"));
+        }
         for &bit in room_flags.iter() {
             out.push_str(&format!("#define {} 0x{bit:02X}\n", room_flag(bit)));
         }
@@ -67,6 +79,201 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     out
 }
 
+/// The opcodes whose first operand is an AOT (room trigger) index.
+const AOT_OPS: [u8; 6] = [0x0C, 0x0D, 0x12, 0x13, 0x18, 0x24];
+
+/// Names for the room's AOT indices, `AOT_<index>_<kind>`, the kind from
+/// the first command that sets each one up as anything but `SCE_NONE`.
+fn aot_names(scripts: &Scripts) -> BTreeMap<u8, String> {
+    let insns = scripts
+        .init
+        .iter()
+        .chain(&scripts.main)
+        .flat_map(|block| &block.insns)
+        .chain(scripts.events.iter().flat_map(|stream| &stream.insns));
+    let mut names: BTreeMap<u8, String> = BTreeMap::new();
+    for insn in insns {
+        let Decoded::Command(op) = insn.decoded else {
+            continue;
+        };
+        let Some(&index) = insn.bytes.get(1) else {
+            continue;
+        };
+        let kind = match op.op {
+            0x0C => "DOOR".to_string(),
+            0x18 => "ITEM".to_string(),
+            // `aot_set` and `aot_reset` carry the room action type.
+            0x0D | 0x12 => {
+                let at = if op.op == 0x0D { 10 } else { 2 };
+                match insn.bytes.get(at).and_then(|&sce| constants::sce(sce)) {
+                    Some(sce) => sce.trim_start_matches("SCE_").to_string(),
+                    None => continue,
+                }
+            }
+            _ => continue,
+        };
+        let entry = names.entry(index).or_insert_with(|| kind.clone());
+        if entry == "NONE" {
+            *entry = kind;
+        }
+    }
+    names
+        .into_iter()
+        .map(|(index, kind)| (index, format!("AOT_{index:02X}_{kind}")))
+        .collect()
+}
+
+/// Name each event by what starts it: `on_aot_05_message` for one an AOT
+/// triggers, `on_enter` for one `proc init` runs, `from_main` for one
+/// `proc main` runs and `<parent>_sub<n>` for the events another event
+/// starts.
+/// Events nothing names keep `event_XX`. The `event_XX` references in
+/// `sections` (the events from `first_event` on) are renamed in place.
+fn name_events(sections: &mut [String], first_event: usize) {
+    let count = sections.len() - first_event;
+    // (priority, name) per event; the lowest priority wins.
+    let mut found: Vec<Option<(u8, String)>> = vec![None; count];
+    let mut parents: Vec<Vec<usize>> = vec![Vec::new(); count];
+    for (position, section) in sections.iter().enumerate() {
+        let owner = position.checked_sub(first_event);
+        let from_main = section.starts_with("proc main");
+        for line in section.lines() {
+            let trimmed = line.trim_start();
+            let mnemonic: String = trimmed
+                .chars()
+                .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+                .collect();
+            for target in event_refs(line) {
+                if target >= count {
+                    continue;
+                }
+                let candidate = if mnemonic == "aot_set" || mnemonic == "aot_reset" {
+                    trimmed[mnemonic.len()..]
+                        .trim_start_matches(['(', ' '])
+                        .split([',', ' '])
+                        .next()
+                        .map(|aot| {
+                            let aot = aot.to_ascii_lowercase();
+                            (
+                                0,
+                                format!("on_{}", aot.strip_suffix("_event").unwrap_or(&aot)),
+                            )
+                        })
+                } else {
+                    match owner {
+                        None if from_main => Some((2, "from_main".to_string())),
+                        None => Some((1, "on_enter".to_string())),
+                        Some(parent) if parent != target => {
+                            parents[target].push(parent);
+                            None
+                        }
+                        Some(_) => None,
+                    }
+                };
+                if let Some(candidate) = candidate
+                    && found[target]
+                        .as_ref()
+                        .is_none_or(|best| candidate.0 < best.0)
+                {
+                    found[target] = Some(candidate);
+                }
+            }
+        }
+    }
+
+    // Name the triggered events first, then the forks after their parents;
+    // a fork of a fork waits a round, and a cycle keeps `event_XX`.
+    let mut used = HashSet::new();
+    let mut unique = |base: &str| {
+        let mut name = base.to_string();
+        let mut suffix = 2;
+        while !used.insert(name.clone()) {
+            name = format!("{base}_{suffix}");
+            suffix += 1;
+        }
+        name
+    };
+    let mut names: Vec<Option<String>> = found
+        .iter()
+        .map(|found| found.as_ref().map(|(_, base)| unique(base)))
+        .collect();
+    let mut children = vec![0usize; count];
+    for _ in 0..count {
+        for index in 0..count {
+            if names[index].is_some() {
+                continue;
+            }
+            if let Some(parent) = parents[index]
+                .iter()
+                .copied()
+                .find(|&parent| names[parent].is_some())
+            {
+                children[parent] += 1;
+                let base = format!(
+                    "{}_sub{}",
+                    names[parent].as_deref().unwrap_or(""),
+                    children[parent]
+                );
+                names[index] = Some(unique(&base));
+            }
+        }
+    }
+    let names: Vec<String> = names
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| name.unwrap_or_else(|| format!("event_{index:02X}")))
+        .collect();
+    for section in sections.iter_mut() {
+        *section = rename_events(section, &names);
+    }
+}
+
+fn is_word(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+/// The index of a whole-word `event_XX` at the start of `text`, if `text`
+/// starts with one and `before` does not continue a word into it.
+fn event_ref_at(before: &str, text: &str) -> Option<usize> {
+    if before.chars().next_back().is_some_and(is_word) {
+        return None;
+    }
+    let hex = text.strip_prefix("event_")?.get(..2)?;
+    if text[8..].chars().next().is_some_and(is_word) {
+        return None;
+    }
+    usize::from_str_radix(hex, 16).ok()
+}
+
+/// The `event_XX` indices referenced on `line`.
+fn event_refs(line: &str) -> Vec<usize> {
+    line.match_indices("event_")
+        .filter_map(|(at, _)| event_ref_at(&line[..at], &line[at..]))
+        .collect()
+}
+
+/// `text` with each whole-word `event_XX` replaced by its name.
+fn rename_events(text: &str, names: &[String]) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    while let Some(found) = text[at..].find("event_") {
+        let start = at + found;
+        out.push_str(&text[at..start]);
+        match event_ref_at(&text[..start], &text[start..]).and_then(|index| names.get(index)) {
+            Some(name) => {
+                out.push_str(name);
+                at = start + 8;
+            }
+            None => {
+                out.push_str("event_");
+                at = start + 6;
+            }
+        }
+    }
+    out.push_str(&text[at..]);
+    out
+}
+
 /// The generated name of a room's own flag bit.
 fn room_flag(bit: u8) -> String {
     format!("FLAG_ROOM_{bit:02X}")
@@ -75,6 +282,10 @@ fn room_flag(bit: u8) -> String {
 /// The naming context of one room.
 struct Ctx<'n> {
     names: &'n Names,
+    /// The room's AOT index names, defined at the top of the script.
+    aots: BTreeMap<u8, String>,
+    /// The RDT id, for its message text.
+    room: u16,
     /// The room's stage (stages 6/7 as 1/2), for stage-relative door targets.
     stage: u8,
     /// Every name a section may use, for verifying it.
@@ -489,11 +700,12 @@ impl<'a> EventParser<'a> {
         let exact = command_width(&command.bytes) == Some(command.bytes.len())
             && usize::from(head.bytes[1]) == command.bytes.len() + 2;
         self.index += 2;
-        Some(Evt::Line(if exact {
+        let line = if exact {
             format!("{call};")
         } else {
             format!("single({}) {call};", head.bytes[1])
-        }))
+        };
+        Some(Evt::Line(with_comment(self.ctx, command, line)))
     }
 }
 
@@ -537,6 +749,7 @@ fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
                         .enemy(value)
                         .map_or_else(|| value.to_string(), str::to_string),
                 ),
+                (op, 0, _) if AOT_OPS.contains(&op) => ctx.aots.get(&value).cloned(),
                 (_, _, b'r') => Some(
                     ctx.names
                         .door_target(ctx.stage, value)
@@ -560,7 +773,20 @@ fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
 
 /// `name(args);` for one instruction.
 fn statement(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
-    format!("{};", call_text(ctx, insn, state))
+    with_comment(ctx, insn, format!("{};", call_text(ctx, insn, state)))
+}
+
+/// `line` with the text a `message` shows as a trailing comment.
+fn with_comment(ctx: &Ctx, insn: &Insn, line: String) -> String {
+    if let Decoded::Command(op) = insn.decoded
+        && op.op == 0x0B
+        && insn.bytes.len() == 4
+        // The id's top bit asks for the fast reveal; the rest picks the text.
+        && let Some(text) = ctx.names.message(ctx.room, u16::from(insn.bytes[1] & 0x7F))
+    {
+        return format!("{line} // \"{text}\"");
+    }
+    line
 }
 
 // ---------------------------------------------------------------------------

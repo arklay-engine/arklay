@@ -5,20 +5,26 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_EVENT 0x04
+
 proc init
 {
-    door_aot_set(0, 7800, 2000, 1000, 1800, 2, 0, 6, 1, 0, ROOM_213_FRONT_ELEVATOR, 9800, 0, 2900, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 7800, 2000, 1000, 1800, 2, 0, 6, 1, 0, ROOM_213_FRONT_ELEVATOR, 9800, 0, 2900, 0, UNLOCKED, 129);
 #if CHRIS
-    item_aot_set(1, 1800, 3200, 1100, 800, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
-    item_aot_set(2, 3200, 4100, 600, 1400, ITEM_0C_AMMO_SHOTGUN, 7, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
+    item_aot_set(AOT_01_ITEM, 1800, 3200, 1100, 800, ITEM_0C_AMMO_SHOTGUN, 7, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 3200, 4100, 600, 1400, ITEM_0C_AMMO_SHOTGUN, 7, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
 #else
-    item_aot_set(1, 1800, 3200, 1100, 800, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
-    item_aot_set(2, 3200, 4100, 600, 1400, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
+    item_aot_set(AOT_01_ITEM, 1800, 3200, 1100, 800, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 1, 255, 192, 8, 34, 247, 86, 14, 90, 15, 55, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 3200, 4100, 600, 1400, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 2, 255, 172, 13, 34, 247, 2, 18, 0, 244, 56, 129, 0, 0);
 #endif
-    item_aot_set(3, 0, 0, 1, 1, ITEM_27_PUZZLE_BATTERY, 1, 0, 255, 90, 10, 124, 252, 40, 10, 0, 0, 57, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, ITEM_27_PUZZLE_BATTERY, 1, 0, 255, 90, 10, 124, 252, 40, 10, 0, 0, 57, 129, 0, 0);
     if (ck(FG_ITEM, FLAG_ITEM_39, TRUE))
     {
-        aot_set(4, 2200, 1500, 1000, 1900, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 2200, 1500, 1000, 1900, SCE_EVENT, 129, 9, 0, on_aot_04, 0, 0, 0);
     }
 }
 
@@ -26,11 +32,11 @@ proc main
 {
     if (testpickup(ITEM_27_PUZZLE_BATTERY))
     {
-        aot_delete(4, SCE_NONE, 129);
+        aot_delete(AOT_04_EVENT, SCE_NONE, 129);
     }
 }
 
-event event_00
+event on_aot_04
 {
     run
     {
@@ -38,7 +44,7 @@ event event_00
         set(FG_6, FLAG_6_19, FALSE);
         set(FG_6, FLAG_6_1D, FALSE);
         set(FG_6, FLAG_6_1C, FALSE);
-        message(128, 0);
+        message(128, 0); // "A battery.Now I can move the elevator in the courtyard."
     }
     do
     {
@@ -51,7 +57,7 @@ event event_00
         set(FG_6, FLAG_6_19, TRUE);
         set(FG_6, FLAG_6_1D, TRUE);
         set(FG_6, FLAG_6_1C, TRUE);
-        aot_on(3, SCE_ITEM, 0);
+        aot_on(AOT_03_ITEM, SCE_ITEM, 0);
     }
     evt_finish();
 }

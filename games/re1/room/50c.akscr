@@ -5,17 +5,23 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_DOOR 0x03
+#define AOT_04_DOOR 0x04
+#define AOT_05_EVENT 0x05
 #define FLAG_ROOM_22 0x22
 #define FLAG_ROOM_23 0x23
 #define FLAG_ROOM_24 0x24
 
 proc init
 {
-    door_aot_set(0, 100, 16300, 2400, 2000, 8, 1, 12, 7, 0, ROOM_505_O_PASSAGE, 22500, 0, 3100, 2048, UNLOCKED, 129);
-    door_aot_set(1, 4700, 18300, 2500, 2300, 6, 1, 13, 6, 0, ROOM_507_MORTUARY, 21300, 0, 2800, 3072, UNLOCKED, 129);
-    door_aot_set(2, 14300, 17000, 2500, 1600, 2, 1, 12, 7, 0, ROOM_50E_SAVE_ROOM, 2800, 0, 4200, 3648, UNLOCKED, 129);
-    door_aot_set(3, 11400, 400, 2500, 2100, 11, 1, 11, 3, 0, ROOM_50F_MAZE_A, 11500, 0, 20800, 1024, UNLOCKED, 129);
-    door_aot_set(4, 16200, 26400, 2500, 2600, 0, 13, 18, 64, 0, ROOM_515_B4_ELEVATOR, 4600, 0, 4600, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 100, 16300, 2400, 2000, 8, 1, 12, 7, 0, ROOM_505_O_PASSAGE, 22500, 0, 3100, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 4700, 18300, 2500, 2300, 6, 1, 13, 6, 0, ROOM_507_MORTUARY, 21300, 0, 2800, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 14300, 17000, 2500, 1600, 2, 1, 12, 7, 0, ROOM_50E_SAVE_ROOM, 2800, 0, 4200, 3648, UNLOCKED, 129);
+    door_aot_set(AOT_03_DOOR, 11400, 400, 2500, 2100, 11, 1, 11, 3, 0, ROOM_50F_MAZE_A, 11500, 0, 20800, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_04_DOOR, 16200, 26400, 2500, 2600, 0, 13, 18, 64, 0, ROOM_515_B4_ELEVATOR, 4600, 0, 4600, 2048, UNLOCKED, 129);
 #if CHRIS
     enemy(ENEMY_23_NPC_REBECCA, 2, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 0, 0, 0, 0);
 #else
@@ -34,8 +40,8 @@ proc init
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_01, FALSE))
     {
-        aot_set(5, 16000, 25000, 1000, 1000, SCE_EVENT, 129, 9, 0, event_00, 0, 0, 0);
-        aot_reset(4, SCE_EVENT, 129, 9, event_01, 0);
+        aot_set(AOT_05_EVENT, 16000, 25000, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_05, 0, 0, 0);
+        aot_reset(AOT_04_DOOR, SCE_EVENT, 129, 9, on_aot_04_door, 0);
     }
     if (ck(FG_SCENARIO, FLAG_SCENARIO_01, TRUE))
     {
@@ -51,14 +57,14 @@ proc init
 #if CHRIS
     if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE) && ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE) && ck(FG_COMMON, FLAG_COMMON_5A, FALSE))
     {
-        evt_exec(0, 9, event_06);
+        evt_exec(0, 9, on_enter);
         set(FG_COMMON, FLAG_COMMON_5A, TRUE);
         pos_set(0, 0, 1780, 0, 16300, 0, 28900);
     }
 #else
     if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE) && ck(FG_COMMON, FLAG_COMMON_5B, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_37, TRUE) && ck(FG_COMMON, FLAG_COMMON_4D, FALSE))
     {
-        evt_exec(0, 9, event_06);
+        evt_exec(0, 9, on_enter);
         set(FG_COMMON, FLAG_COMMON_4D, TRUE);
         pos_set(0, 0, 1608, 0, 14950, 0, 29400);
         dir_set(0, 0, 2500, 0, 16300, 0, 28000);
@@ -82,11 +88,11 @@ proc main
     }
 }
 
-event event_00
+event on_aot_05
 {
     sleep(1);
     set(FG_6, FLAG_6_17, FALSE);
-    message(128, 0);
+    message(128, 0); // "There's a switch. Will you push it?There's no reaction. It has no power."
     do
     {
         evt_next();
@@ -99,19 +105,19 @@ event event_00
             if (ck(FG_SCENARIO, FLAG_SCENARIO_2D, TRUE) && ck(FG_SCENARIO, FLAG_SCENARIO_2E, TRUE))
             {
                 set(FG_SCENARIO, FLAG_SCENARIO_01, TRUE);
-                aot_delete(5, SCE_NONE, 0);
+                aot_delete(AOT_05_EVENT, SCE_NONE, 0);
                 if (ck(FG_COMMON, FLAG_COMMON_C0, FALSE))
                 {
-                    evt_exec(0, 9, event_03);
+                    evt_exec(0, 9, on_aot_05_sub2);
                 }
                 else
                 {
-                    evt_exec(0, 9, event_02);
+                    evt_exec(0, 9, on_aot_05_sub1);
                 }
             }
             else
             {
-                evt_exec(0, 9, event_01);
+                evt_exec(0, 9, on_aot_04_door);
             }
         }
         else
@@ -122,10 +128,10 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event on_aot_04_door
 {
     sleep(1);
-    message(129, 255);
+    message(129, 255); // "There's no reaction. It has no power."
     do
     {
         evt_next();
@@ -135,7 +141,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event on_aot_05_sub1
 {
     run
     {
@@ -153,7 +159,7 @@ event event_02
     {
         cut_auto(0);
         msgnode_set(13, 2, 7);
-        aot_delete(4, SCE_DOOR, 129);
+        aot_delete(AOT_04_DOOR, SCE_DOOR, 129);
         set(FG_6, FLAG_6_17, TRUE);
     }
 #else
@@ -165,14 +171,14 @@ event event_02
     run
     {
         msgnode_set(13, 2, 7);
-        aot_delete(4, SCE_DOOR, 129);
+        aot_delete(AOT_04_DOOR, SCE_DOOR, 129);
         set(FG_6, FLAG_6_17, TRUE);
     }
 #endif
     evt_finish();
 }
 
-event event_03
+event on_aot_05_sub2
 {
     sleep(1);
     run
@@ -276,27 +282,27 @@ event event_03
 #if CHRIS
         if (ck(FG_COMMON, FLAG_COMMON_6D, FALSE))
         {
-            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, on_aot_05_sub2_sub1);
         }
         else
         {
-            evt_exec(0, 9, event_05);
+            evt_exec(0, 9, on_aot_05_sub2_sub2);
         }
 #else
         if (ck(FG_COMMON, FLAG_COMMON_25, FALSE))
         {
-            evt_exec(0, 9, event_04);
+            evt_exec(0, 9, on_aot_05_sub2_sub1);
         }
         else
         {
-            evt_exec(0, 9, event_05);
+            evt_exec(0, 9, on_aot_05_sub2_sub2);
         }
 #endif
     }
     evt_finish();
 }
 
-event event_04
+event on_aot_05_sub2_sub1
 {
     run
     {
@@ -532,12 +538,12 @@ event event_04
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
 #endif
         set(FG_6, FLAG_6_17, TRUE);
-        aot_on(4, SCE_DOOR, 0);
+        aot_on(AOT_04_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event event_05
+event on_aot_05_sub2_sub2
 {
     run
     {
@@ -739,12 +745,12 @@ event event_05
         set(FG_STATUS, FLAG_STATUS_0F, FALSE);
 #endif
         set(FG_6, FLAG_6_17, TRUE);
-        aot_on(4, SCE_DOOR, 0);
+        aot_on(AOT_04_DOOR, SCE_DOOR, 0);
     }
     evt_finish();
 }
 
-event event_06
+event on_enter
 {
     sleep(1);
     run

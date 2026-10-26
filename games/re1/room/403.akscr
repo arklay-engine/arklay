@@ -5,23 +5,30 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_TYPEWRITER 0x01
+#define AOT_02_ITEMBOX 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_MESSAGE 0x05
+
 proc init
 {
-    door_aot_set(0, 7400, 9200, 2400, 2300, 0, 0, 3, 4, 0, ROOM_400_ENTER_PASSAGE, 11100, 0, 11700, 3072, UNLOCKED, 129);
-    aot_set(1, 3800, 2000, 1100, 1650, SCE_TYPEWRITER, 129, 0, 0, 0, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 7400, 9200, 2400, 2300, 0, 0, 3, 4, 0, ROOM_400_ENTER_PASSAGE, 11100, 0, 11700, 3072, UNLOCKED, 129);
+    aot_set(AOT_01_TYPEWRITER, 3800, 2000, 1100, 1650, SCE_TYPEWRITER, 129, 0, 0, 0, 0, 0, 0);
     if (cmpb(9, 5, 3))
     {
-        aot_set(2, 8600, 4500, 2000, 3150, SCE_ITEMBOX, 129, 3, 0, 0, 0, 0, 0);
+        aot_set(AOT_02_ITEMBOX, 8600, 4500, 2000, 3150, SCE_ITEMBOX, 129, 3, 0, 0, 0, 0, 0);
     }
     if (ck(FG_STATUS, FLAG_STATUS_08, TRUE))
     {
-        item_aot_set(3, 1800, 6800, 1000, 1800, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 0, 255, 140, 10, 242, 254, 16, 29, 212, 254, 167, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 1800, 6800, 1000, 1800, ITEM_10_AMMO_GRENADE_EXPLOSIVE, 6, 0, 255, 140, 10, 242, 254, 16, 29, 212, 254, 167, 129, 0, 0);
     }
     else
     {
-        item_aot_set(3, 1800, 6800, 1000, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 140, 10, 212, 254, 232, 28, 236, 250, 166, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 1800, 6800, 1000, 1800, ITEM_0B_AMMO_HANDGUN, 15, 0, 255, 140, 10, 212, 254, 232, 28, 236, 250, 166, 129, 0, 0);
     }
-    item_aot_set(4, 1800, 4800, 1000, 1800, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 1, 255, 166, 9, 98, 243, 112, 23, 112, 254, 180, 129, 0, 0);
-    aot_set(5, 6700, 1600, 3850, 1900, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+    item_aot_set(AOT_04_ITEM, 1800, 4800, 1000, 1800, ITEM_41_HEAL_FIRST_AID_SPRAY, 1, 1, 255, 166, 9, 98, 243, 112, 23, 112, 254, 180, 129, 0, 0);
+    aot_set(AOT_05_MESSAGE, 6700, 1600, 3850, 1900, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
     obj(0, 17, 255, 10600, -1440, 6000, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }

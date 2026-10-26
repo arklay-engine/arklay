@@ -5,6 +5,14 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_ITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_04_USEITEM 0x04
+#define AOT_05_USEITEM 0x05
+#define AOT_06_USEITEM 0x06
+#define AOT_07_USEITEM 0x07
+#define AOT_08_MESSAGE 0x08
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_01 0x01
 #define FLAG_ROOM_02 0x02
@@ -35,24 +43,24 @@
 proc init
 {
     set(FG_STATUS, FLAG_STATUS_1D, TRUE);
-    door_aot_set(0, 5800, 3900, 2500, 2700, 0, 13, 17, 64, 255, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, 129);
-    aot_reset(0, SCE_MESSAGE, 129, 130, 255, 0);
-    item_aot_set(1, 20000, 16000, 2000, 2000, ITEM_0A_WEAPON_ROCKET_LAUNCHER, 4, 0, 255, 8, 82, 176, 185, 104, 66, 0, 0, 71, 129, 0, 0);
-    aot_reset(1, SCE_NONE, 0, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, 13, 17, 64, 255, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, 129);
+    aot_reset(AOT_00_DOOR, SCE_MESSAGE, 129, 130, 255, 0);
+    item_aot_set(AOT_01_ITEM, 20000, 16000, 2000, 2000, ITEM_0A_WEAPON_ROCKET_LAUNCHER, 4, 0, 255, 8, 82, 176, 185, 104, 66, 0, 0, 71, 129, 0, 0);
+    aot_reset(AOT_01_ITEM, SCE_NONE, 0, 0, 0, 0);
     if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
     {
-        item_aot_set(2, 8000, 1400, 2000, 1600, ITEM_2A_PUZZLE_FLARE, 1, 1, 254, 32, 3, 0, 0, 200, 0, 0, 0, 73, 129, 0, 0);
+        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, ITEM_2A_PUZZLE_FLARE, 1, 1, 254, 32, 3, 0, 0, 200, 0, 0, 0, 73, 129, 0, 0);
     }
     else
     {
-        item_aot_set(2, 8000, 1400, 2000, 1600, ITEM_2A_PUZZLE_FLARE, 1, 1, 254, 32, 3, 0, 0, 0, 0, 0, 0, 73, 129, 0, 0);
+        item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, ITEM_2A_PUZZLE_FLARE, 1, 1, 254, 32, 3, 0, 0, 0, 0, 0, 0, 73, 129, 0, 0);
     }
     objtbl_b_set(1, 1, 0);
-    aot_set(4, 8500, 24000, 7500, 8500, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
-    aot_set(5, 8500, 22500, 9000, 10000, SCE_USEITEM, 65, 4, 0, 34, 0, 1, 0);
-    aot_set(6, 15900, 11200, 9500, 10000, SCE_USEITEM, 65, 4, 0, 35, 0, 1, 0);
-    aot_set(7, 15900, 11200, 9500, 10000, SCE_USEITEM, 66, 4, 0, 36, 0, 1, 0);
-    aot_set(8, 29000, 3600, 1000, 3600, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_USEITEM, 8500, 24000, 7500, 8500, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_05_USEITEM, 8500, 22500, 9000, 10000, SCE_USEITEM, 65, 4, 0, 34, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, 65, 4, 0, 35, 0, 1, 0);
+    aot_set(AOT_07_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, 66, 4, 0, 36, 0, 1, 0);
+    aot_set(AOT_08_MESSAGE, 29000, 3600, 1000, 3600, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
     obj(0, 31, 255, 22260, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(1, 31, 0, 0, 24, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(2, 31, 0, 0, 24, 2000, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -88,19 +96,19 @@ proc main
     if (testitem(ITEM_2A_PUZZLE_FLARE))
     {
         set(FG_ROOM, FLAG_ROOM_05, TRUE);
-        evt_exec(0, 0, event_10);
+        evt_exec(0, 0, from_main_2);
     }
     if (ck(FG_ROOM, FLAG_ROOM_03, FALSE) && ck(FG_ROOM, FLAG_ROOM_05, FALSE) && ck(FG_ROOM, FLAG_ROOM_00, TRUE))
     {
         set(FG_ROOM, FLAG_ROOM_03, TRUE);
-        evt_exec(0, 1, event_11);
+        evt_exec(0, 1, from_main_3);
     }
     if (ck(FG_ROOM, FLAG_ROOM_04, TRUE) && ck(FG_ROOM, FLAG_ROOM_07, FALSE))
     {
         if (ck(FG_ROOM, FLAG_ROOM_21, FALSE) && ck(FG_ROOM, FLAG_ROOM_22, FALSE))
         {
             set(FG_ROOM, FLAG_ROOM_07, TRUE);
-            evt_exec(0, 7, event_18);
+            evt_exec(0, 7, from_main_4);
         }
         else
         {
@@ -112,14 +120,14 @@ proc main
     if (ck(FG_ROOM, FLAG_ROOM_09, TRUE) && ck(FG_ROOM, FLAG_ROOM_0C, FALSE) && ck(FG_ROOM, FLAG_ROOM_11, FALSE))
     {
         set(FG_ROOM, FLAG_ROOM_11, TRUE);
-        evt_exec(0, 7, event_19);
+        evt_exec(0, 7, from_main_5);
     }
     if (ck(FG_ROOM, FLAG_ROOM_0C, FALSE))
     {
         if (ck(FG_ROOM, FLAG_ROOM_0B, TRUE) && ck(FG_ROOM, FLAG_ROOM_23, FALSE) && ck(FG_ROOM, FLAG_ROOM_24, FALSE))
         {
             set(FG_ROOM, FLAG_ROOM_0B, FALSE);
-            evt_exec(0, 0, event_00);
+            evt_exec(0, 0, from_main);
         }
         if (ck(FG_ROOM, FLAG_ROOM_09, TRUE))
         {
@@ -159,7 +167,7 @@ proc main
         dir_set(0, 0, 0, 0, 10000, -20000, 10000);
         spd_set(0, 224, 177);
         setb(1, 17, 0);
-        evt_exec(0, 7, event_1A);
+        evt_exec(0, 7, from_main_6);
         set(FG_6, FLAG_6_17, FALSE);
         set(FG_6, FLAG_6_1F, FALSE);
     }
@@ -188,7 +196,7 @@ proc main
     {
         set(FG_ROOM, FLAG_ROOM_1C, TRUE);
         task_kill(6);
-        evt_exec(0, 6, event_1B);
+        evt_exec(0, 6, from_main_7);
     }
     return;
     if (ck(FG_COMMON, FLAG_COMMON_20, TRUE))
@@ -274,7 +282,7 @@ proc main
     }
 }
 
-event event_00
+event from_main
 {
     sleep(10);
     run
@@ -463,7 +471,7 @@ event event_00
     sleep(10);
     tw_end();
     evt_nop();
-    aot_reset(1, SCE_ITEM, 129, 0, 0, 0);
+    aot_reset(AOT_01_ITEM, SCE_ITEM, 129, 0, 0, 0);
     run
     {
         if (ck(FG_STATUS, FLAG_STATUS_08, FALSE))
@@ -495,7 +503,7 @@ event event_00
     evt_finish();
 }
 
-event event_01
+event from_main_3_sub2_sub1
 {
     run
     {
@@ -547,7 +555,7 @@ event event_01
     evt_finish();
 }
 
-event event_02
+event from_main_3_sub2_sub2
 {
     run
     {
@@ -599,7 +607,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event from_main_3_sub2_sub3
 {
     run
     {
@@ -655,7 +663,7 @@ event event_03
     evt_finish();
 }
 
-event event_04
+event from_main_3_sub2_sub4
 {
     run
     {
@@ -699,7 +707,7 @@ event event_04
     evt_finish();
 }
 
-event event_05
+event from_main_3_sub3_sub1
 {
     run
     {
@@ -743,7 +751,7 @@ event event_05
     evt_finish();
 }
 
-event event_06
+event from_main_3_sub3_sub2
 {
     run
     {
@@ -787,7 +795,7 @@ event event_06
     evt_finish();
 }
 
-event event_07
+event from_main_3_sub3_sub3
 {
     run
     {
@@ -831,7 +839,7 @@ event event_07
     evt_finish();
 }
 
-event event_08
+event from_main_3_sub3_sub4
 {
     run
     {
@@ -855,7 +863,7 @@ event event_08
     evt_finish();
 }
 
-event event_09
+event from_main_3_sub3_sub5
 {
     run
     {
@@ -899,7 +907,7 @@ event event_09
     evt_finish();
 }
 
-event event_0A
+event from_main_3_sub3_sub6
 {
     run
     {
@@ -943,7 +951,7 @@ event event_0A
     evt_finish();
 }
 
-event event_0B
+event from_main_3_sub3_sub7
 {
     run
     {
@@ -987,7 +995,7 @@ event event_0B
     evt_finish();
 }
 
-event event_0C
+event from_main_3_sub3_sub8
 {
     run
     {
@@ -1031,7 +1039,7 @@ event event_0C
     evt_finish();
 }
 
-event event_0D
+event from_main_3_sub3_sub9
 {
     run
     {
@@ -1087,7 +1095,7 @@ event event_0D
     evt_finish();
 }
 
-event event_0E
+event from_main_3_sub3_sub10
 {
     run
     {
@@ -1139,7 +1147,7 @@ event event_0E
     evt_finish();
 }
 
-event event_0F
+event from_main_3_sub3_sub11
 {
     run
     {
@@ -1191,7 +1199,7 @@ event event_0F
     evt_finish();
 }
 
-event event_10
+event from_main_2
 {
     set(FG_6, FLAG_6_17, FALSE);
     evt_work_set(WK_PLAYER, 0);
@@ -1251,7 +1259,7 @@ event event_10
     evt_finish();
 }
 
-event event_11
+event from_main_3
 {
     run
     {
@@ -1304,10 +1312,10 @@ event event_11
         set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     }
     sleep(180);
-    evt_fork(3, event_13, 0);
-    evt_fork(4, event_12, 0);
-    evt_fork(5, event_15, 0);
-    evt_fork(6, event_16, 0);
+    evt_fork(3, from_main_3_sub2, 0);
+    evt_fork(4, from_main_3_sub1, 0);
+    evt_fork(5, from_main_3_sub4, 0);
+    evt_fork(6, from_main_3_sub5, 0);
     run
     {
         if (cmpb(2, 0, 2))
@@ -1395,7 +1403,7 @@ event event_11
     evt_nop();
     evt_disable(2);
     evt_disable(3);
-    evt_fork(3, event_14, 0);
+    evt_fork(3, from_main_3_sub3, 0);
     for (10)
     {
         evt_work_set(WK_OBJ, 0);
@@ -1810,13 +1818,13 @@ event event_11
         }
         else
         {
-            evt_exec(0, 7, event_1E);
+            evt_exec(0, 7, from_main_3_sub6);
         }
     }
     evt_finish();
 }
 
-event event_12
+event from_main_3_sub1
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -2106,112 +2114,112 @@ event event_12
     evt_finish();
 }
 
-event event_13
+event from_main_3_sub2
 {
-    evt_fork(2, event_01, 0);
+    evt_fork(2, from_main_3_sub2_sub1, 0);
     sleep(40);
     evt_disable(2);
-    evt_fork(2, event_02, 0);
+    evt_fork(2, from_main_3_sub2_sub2, 0);
     sleep(20);
     evt_disable(2);
-    evt_fork(2, event_03, 0);
+    evt_fork(2, from_main_3_sub2_sub3, 0);
     sleep(20);
     evt_disable(2);
-    evt_fork(2, event_04, 0);
+    evt_fork(2, from_main_3_sub2_sub4, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_03, 0);
+    evt_fork(2, from_main_3_sub2_sub3, 0);
     sleep(20);
     evt_disable(2);
-    evt_fork(2, event_02, 0);
+    evt_fork(2, from_main_3_sub2_sub2, 0);
     sleep(20);
     evt_disable(2);
     evt_chain(19);
     evt_finish();
 }
 
-event event_14
+event from_main_3_sub3
 {
-    evt_fork(2, event_03, 0);
+    evt_fork(2, from_main_3_sub2_sub3, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_04, 0);
+    evt_fork(2, from_main_3_sub2_sub4, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_05, 0);
+    evt_fork(2, from_main_3_sub3_sub1, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_06, 0);
+    evt_fork(2, from_main_3_sub3_sub2, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_07, 0);
+    evt_fork(2, from_main_3_sub3_sub3, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_08, 0);
+    evt_fork(2, from_main_3_sub3_sub4, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_09, 0);
+    evt_fork(2, from_main_3_sub3_sub5, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0A, 0);
+    evt_fork(2, from_main_3_sub3_sub6, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0B, 0);
+    evt_fork(2, from_main_3_sub3_sub7, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0C, 0);
+    evt_fork(2, from_main_3_sub3_sub8, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0E, 0);
+    evt_fork(2, from_main_3_sub3_sub10, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0F, 0);
+    evt_fork(2, from_main_3_sub3_sub11, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0E, 0);
+    evt_fork(2, from_main_3_sub3_sub10, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0D, 0);
+    evt_fork(2, from_main_3_sub3_sub9, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0C, 0);
+    evt_fork(2, from_main_3_sub3_sub8, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0B, 0);
+    evt_fork(2, from_main_3_sub3_sub7, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_0A, 0);
+    evt_fork(2, from_main_3_sub3_sub6, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_09, 0);
+    evt_fork(2, from_main_3_sub3_sub5, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_08, 0);
+    evt_fork(2, from_main_3_sub3_sub4, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_07, 0);
+    evt_fork(2, from_main_3_sub3_sub3, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_06, 0);
+    evt_fork(2, from_main_3_sub3_sub2, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_05, 0);
+    evt_fork(2, from_main_3_sub3_sub1, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_04, 0);
+    evt_fork(2, from_main_3_sub2_sub4, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_03, 0);
+    evt_fork(2, from_main_3_sub2_sub3, 0);
     sleep(10);
     evt_disable(2);
-    evt_fork(2, event_02, 0);
+    evt_fork(2, from_main_3_sub2_sub2, 0);
     sleep(10);
     evt_disable(2);
     evt_chain(19);
     evt_finish();
 }
 
-event event_15
+event from_main_3_sub4
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -2361,7 +2369,7 @@ event event_15
     evt_finish();
 }
 
-event event_16
+event from_main_3_sub5
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -2488,7 +2496,7 @@ event event_17
     evt_finish();
 }
 
-event event_18
+event from_main_4
 {
     run
     {
@@ -2538,14 +2546,14 @@ event event_18
     evt_finish();
 }
 
-event event_19
+event from_main_5
 {
     sleep(1800);
     set(FG_ROOM, FLAG_ROOM_08, TRUE);
     evt_finish();
 }
 
-event event_1A
+event from_main_6
 {
     run
     {
@@ -2611,7 +2619,7 @@ event event_1A
     {
         eml_state(0, 0, 2, 14);
     }
-    evt_fork(6, event_1D, 0);
+    evt_fork(6, from_main_6_sub2, 0);
     sleep(2);
     run
     {
@@ -2622,7 +2630,7 @@ event event_1A
     {
         eml_state(0, 0, 2, 13);
     }
-    evt_fork(6, event_1C, 0);
+    evt_fork(6, from_main_6_sub1, 0);
     sleep(20);
     run
     {
@@ -2675,7 +2683,7 @@ event event_1A
     evt_finish();
 }
 
-event event_1B
+event from_main_7
 {
     run
     {
@@ -2695,7 +2703,7 @@ event event_1B
     evt_finish();
 }
 
-event event_1C
+event from_main_6_sub1
 {
     run
     {
@@ -2856,7 +2864,7 @@ event event_1C
     evt_finish();
 }
 
-event event_1D
+event from_main_6_sub2
 {
     run
     {
@@ -2871,7 +2879,7 @@ event event_1D
     evt_finish();
 }
 
-event event_1E
+event from_main_3_sub6
 {
     run
     {

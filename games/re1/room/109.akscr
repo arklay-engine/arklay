@@ -5,26 +5,33 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_DOOR 0x03
+#define AOT_04_DOOR 0x04
+#define AOT_05_ITEM 0x05
+#define AOT_06_USEITEM 0x06
 #define FLAG_ROOM_00 0x00
 #define FLAG_ROOM_01 0x01
 #define FLAG_ROOM_02 0x02
 
 proc init
 {
-    door_aot_set(0, 23400, 800, 2000, 1700, 1, 0, 0, 1, 0, ROOM_108_L_PASSAGE, 25000, 0, 25300, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 23400, 800, 2000, 1700, 1, 0, 0, 1, 0, ROOM_108_L_PASSAGE, 25000, 0, 25300, 1024, UNLOCKED, 129);
 #if MANSION1
-    door_aot_set(1, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 196, ROOM_114_BOILER, 10030, 0, 23449, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
-    door_aot_set(2, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 64, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, 129);
-    door_aot_set(3, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 64, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 196, ROOM_114_BOILER, 10030, 0, 23449, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
+    door_aot_set(AOT_02_DOOR, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 64, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_03_DOOR, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 64, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, 129);
 #else
-    door_aot_set(1, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 132, ROOM_114_BOILER, 10030, 0, 23449, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
-    door_aot_set(2, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 0, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, 129);
-    door_aot_set(3, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 0, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 25000, 6800, 2000, 2300, 2, 1, 8, 0, 132, ROOM_114_BOILER, 10030, 0, 23449, 1024, ITEM_34_KEY_MANSION_ARMOR, 129);
+    door_aot_set(AOT_02_DOOR, 17000, 8000, 1600, 1930, 0, 0, 1, 7, 0, ROOM_113_BATHROOM, 2800, 0, 2400, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_03_DOOR, 6850, 8500, 1650, 2500, 2, 0, 0, 1, 0, ROOM_115_ALMOST_A_SANDWICH, 2500, 0, 4900, 0, UNLOCKED, 129);
 #endif
-    door_aot_set(4, 0, 7300, 2600, 2500, 6, 0, 0, 1, 0, ROOM_10A_BACK_PASSAGE, 15200, 0, 3900, 2048, UNLOCKED, 129);
-    item_aot_set(5, 20406, 1524, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 58, 83, 0, 0, 120, 9, 0, 0, 111, 129, 1, 0);
+    door_aot_set(AOT_04_DOOR, 0, 7300, 2600, 2500, 6, 0, 0, 1, 0, ROOM_10A_BACK_PASSAGE, 15200, 0, 3900, 2048, UNLOCKED, 129);
+    item_aot_set(AOT_05_ITEM, 20406, 1524, 1800, 1800, ITEM_44_HEAL_HERB_GREEN, 1, 0, 255, 58, 83, 0, 0, 120, 9, 0, 0, 111, 129, 1, 0);
 #if MANSION2
-    aot_set(6, 12600, 2800, 7400, 8700, SCE_USEITEM, 65, 4, 0, 2, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 12600, 2800, 7400, 8700, SCE_USEITEM, 65, 4, 0, 2, 0, 1, 0);
 #endif
     obj(0, 15, 255, 7590, 0, 8680, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if MANSION1
@@ -32,10 +39,10 @@ proc init
     enemy(ENEMY_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 34, 24, 0);
     if (ck(FG_COMMON, FLAG_COMMON_20, TRUE))
     {
-        evt_exec(0, 9, event_01);
+        evt_exec(0, 9, on_enter_2);
         if (ck(FG_COMMON, FLAG_COMMON_21, FALSE))
         {
-            evt_exec(0, 9, event_00);
+            evt_exec(0, 9, on_enter);
             cut_auto(1);
             setb(2, 7, 0);
         }
@@ -93,7 +100,7 @@ proc init
             room_bgm_state_set(5, 9, 64);
             cut_auto(1);
             setb(2, 7, 0);
-            evt_exec(0, 9, event_01);
+            evt_exec(0, 9, on_enter);
         }
         if (ck(FG_COMMON, FLAG_COMMON_36, TRUE))
         {
@@ -102,13 +109,13 @@ proc init
             room_bgm_state_set(5, 9, 64);
             cut_auto(1);
             setb(2, 7, 0);
-            evt_exec(0, 9, event_03);
+            evt_exec(0, 9, on_enter_2);
         }
     }
 #else
     if (ck(FG_COMMON, FLAG_COMMON_20, TRUE))
     {
-        evt_exec(0, 9, event_01);
+        evt_exec(0, 9, on_enter);
     }
 #endif
 #endif
@@ -143,7 +150,7 @@ event event_00
     tw_abs_pos(0, 1000, 0, 1000);
     tw_end();
     evt_nop();
-    single(6) aot_reset(3, SCE_NONE, 0, 0, 0, 0);
+    single(6) aot_reset(AOT_03_DOOR, SCE_NONE, 0, 0, 0, 0);
     evt_nop();
     evt_nop();
     evt_nop();
@@ -153,9 +160,17 @@ event event_00
     evt_finish();
 }
 
+#if MANSION1
 event event_01
 #else
+event on_enter
+#endif
+#else
+#if MANSION1
+event on_enter
+#else
 event event_00
+#endif
 #endif
 {
 #if CHRIS
@@ -185,30 +200,51 @@ event event_00
     evt_nop();
 #if JILL
     sleep(10);
+#if MANSION1
+    evt_fork(9, on_enter_sub1, 0);
+#else
     evt_fork(9, event_02, 0);
+#endif
     sleep(4);
     voice_play(1, 53, 0);
     sleep(35);
     wait_message();
     sleep(30);
+#if MANSION1
+    evt_fork(9, on_enter_sub2, 0);
+    evt_fork(9, on_enter_sub3, 0);
+#else
     evt_fork(9, event_03, 0);
     evt_fork(9, event_04, 0);
+#endif
     voice_play(1, 54, 0);
     message(0, 0);
     wait_message();
     sleep(30);
+#if MANSION1
+    evt_fork(9, on_enter_sub4, 0);
+#else
     evt_fork(9, event_05, 0);
+#endif
     sleep(20);
     voice_play(1, 55, 0);
     message(1, 0);
     wait_message();
     sleep(30);
+#if MANSION1
+    evt_fork(9, on_enter_sub5, 0);
+#else
     evt_fork(9, event_06, 0);
+#endif
     voice_play(1, 56, 0);
     message(2, 0);
     wait_message();
     cutnext(6);
+#if MANSION1
+    evt_fork(9, on_enter_sub6, 0);
+#else
     evt_fork(9, event_07, 0);
+#endif
     sleep(85);
 #endif
     run
@@ -219,7 +255,11 @@ event event_00
         set(FG_6, FLAG_6_1D, FALSE);
 #endif
         set(FG_6, FLAG_6_17, FALSE);
+#if MANSION1
         evt_exec(0, 9, event_02);
+#else
+        evt_exec(0, 9, on_enter_sub1);
+#endif
         voice_play(1, 84, 0);
         message(4, 0);
 #else
@@ -229,8 +269,13 @@ event event_00
 #endif
     }
 #if JILL
+#if MANSION1
+    evt_fork(9, on_enter_sub7, 0);
+    evt_fork(9, on_enter_sub8, 0);
+#else
     evt_fork(9, event_08, 0);
     evt_fork(9, event_09, 0);
+#endif
 #endif
     wait_message();
 #if JILL
@@ -297,7 +342,11 @@ event event_00
 }
 
 #if CHRIS
+#if MANSION1
 event event_02
+#else
+event on_enter_sub1
+#endif
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -322,20 +371,28 @@ event event_02
     evt_finish();
 }
 #else
-event event_01
+#if MANSION1
+event on_enter_2
+#else
+event on_enter
+#endif
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
     tw_abs_pos(0, 1000, 0, 1000);
     tw_end();
     evt_nop();
-    aot_delete(3, SCE_NONE, 0);
+    aot_delete(AOT_03_DOOR, SCE_NONE, 0);
     evt_finish();
 }
 #endif
 
 #if CHRIS
+#if MANSION1
 event event_03
+#else
+event on_enter_2
+#endif
 {
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     dir_set(0, 0, 650, 0, 5300, 0, 7160);
@@ -352,10 +409,11 @@ event event_03
         set(FG_6, FLAG_6_1D, FALSE);
 #endif
         set(FG_6, FLAG_6_17, FALSE);
-        evt_exec(0, 9, event_04);
 #if MANSION1
+        evt_exec(0, 9, event_04);
         voice_play(1, 99, 0);
 #else
+        evt_exec(0, 9, on_enter_2_sub1);
         voice_play(1, 100, 0);
 #endif
         message(6, 0);
@@ -397,7 +455,11 @@ event event_03
     evt_finish();
 }
 #else
+#if MANSION1
+event on_enter_sub1
+#else
 event event_02
+#endif
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -420,7 +482,11 @@ event event_02
 #endif
 
 #if CHRIS
+#if MANSION1
 event event_04
+#else
+event on_enter_2_sub1
+#endif
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -450,7 +516,11 @@ event event_04
     act_finish();
 }
 #else
+#if MANSION1
+event on_enter_sub2
+#else
 event event_03
+#endif
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -484,7 +554,11 @@ event event_03
     act_finish();
 }
 
+#if MANSION1
+event on_enter_sub3
+#else
 event event_04
+#endif
 {
     sleep(130);
     evt_work_set(WK_PLAYER, 0);
@@ -505,7 +579,11 @@ event event_04
     act_finish();
 }
 
+#if MANSION1
+event on_enter_sub4
+#else
 event event_05
+#endif
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -549,7 +627,11 @@ event event_05
     act_finish();
 }
 
+#if MANSION1
+event on_enter_sub5
+#else
 event event_06
+#endif
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -596,7 +678,11 @@ event event_06
     act_finish();
 }
 
+#if MANSION1
+event on_enter_sub6
+#else
 event event_07
+#endif
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -617,7 +703,11 @@ event event_07
     act_finish();
 }
 
+#if MANSION1
+event on_enter_sub7
+#else
 event event_08
+#endif
 {
     sleep(40);
     evt_work_set(WK_ENEMY, 0);
@@ -633,7 +723,11 @@ event event_08
     act_finish();
 }
 
+#if MANSION1
+event on_enter_sub8
+#else
 event event_09
+#endif
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

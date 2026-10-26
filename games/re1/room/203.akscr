@@ -5,6 +5,14 @@
 #include "inc/items.akinc"
 #include "inc/rooms.akinc"
 
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_DOOR 0x03
+#define AOT_04_5 0x04
+#define AOT_05_5 0x05
+#define AOT_07_USEITEM 0x07
+#define AOT_08_ITEM 0x08
 #define FLAG_ROOM_03 0x03
 #define FLAG_ROOM_05 0x05
 #define FLAG_ROOM_0A 0x0A
@@ -15,13 +23,13 @@
 
 proc init
 {
-    door_aot_set(0, 14000, 21500, 6000, 2000, 1, 4, 22, 96, 0, STAGE_1 | ROOM_106_MAIN_HALL, 17000, 0, 14300, 1024, UNLOCKED, 129);
-    door_aot_set(1, 31400, 7000, 2000, 2000, 2, 0, 0, 1, 64, ROOM_211_TERRACE_PASSAGE, 2400, 0, 3600, 3360, UNLOCKED, 129);
-    door_aot_set(2, 31400, 19000, 2000, 3000, 2, 0, 3, 1, 0, ROOM_204_C_PASSAGE, 3000, 0, 3600, 0, UNLOCKED, 129);
-    door_aot_set(3, 1000, 15000, 1700, 3800, 6, 0, 3, 1, 0, ROOM_202_DINING_ROOM_2F, 30900, 0, 8300, 2048, UNLOCKED, 129);
-    aot_set(4, 20220, 23900, 3540, 3500, SCE_5, 129, 0, 0, 0, 0, 0, 0);
-    aot_set(5, 10200, 23900, 3480, 3490, SCE_5, 129, 1, 0, 0, 0, 0, 0);
-    aot_set(7, 7000, 13000, 20000, 6000, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 14000, 21500, 6000, 2000, 1, 4, 22, 96, 0, STAGE_1 | ROOM_106_MAIN_HALL, 17000, 0, 14300, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 31400, 7000, 2000, 2000, 2, 0, 0, 1, 64, ROOM_211_TERRACE_PASSAGE, 2400, 0, 3600, 3360, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 31400, 19000, 2000, 3000, 2, 0, 3, 1, 0, ROOM_204_C_PASSAGE, 3000, 0, 3600, 0, UNLOCKED, 129);
+    door_aot_set(AOT_03_DOOR, 1000, 15000, 1700, 3800, 6, 0, 3, 1, 0, ROOM_202_DINING_ROOM_2F, 30900, 0, 8300, 2048, UNLOCKED, 129);
+    aot_set(AOT_04_5, 20220, 23900, 3540, 3500, SCE_5, 129, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_05_5, 10200, 23900, 3480, 3490, SCE_5, 129, 1, 0, 0, 0, 0, 0);
+    aot_set(AOT_07_USEITEM, 7000, 13000, 20000, 6000, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
 #if CHRIS
     if (ck(FG_COMMON, FLAG_COMMON_62, TRUE) && ck(FG_COMMON, FLAG_COMMON_61, TRUE) && ck(FG_COMMON, FLAG_COMMON_63, TRUE))
     {
@@ -32,18 +40,18 @@ proc init
     {
         set(FG_COMMON, FLAG_COMMON_07, TRUE);
         set(FG_ROOM, FLAG_ROOM_1F, TRUE);
-        item_aot_set(8, 0, 0, 16, 16, ITEM_11_AMMO_GRENADE_ACID, 6, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 14, 65, 0, 0);
+        item_aot_set(AOT_08_ITEM, 0, 0, 16, 16, ITEM_11_AMMO_GRENADE_ACID, 6, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 14, 65, 0, 0);
         enemy(ENEMY_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1568, 0, 0, 23782, -2885, 14862, 0, 0, 0, 0);
-        evt_exec(0, 0, event_00);
+        evt_exec(0, 0, on_enter);
         set(FG_ROOM, FLAG_ROOM_0A, TRUE);
         set(FG_ROOM, FLAG_ROOM_0B, TRUE);
     }
     if (ck(FG_COMMON, FLAG_COMMON_05, FALSE))
     {
         set(FG_COMMON, FLAG_COMMON_07, TRUE);
-        aot_reset(1, SCE_MESSAGE, 129, 128, 255, 0);
-        aot_reset(2, SCE_MESSAGE, 129, 128, 255, 0);
-        aot_reset(3, SCE_MESSAGE, 129, 128, 255, 0);
+        aot_reset(AOT_01_DOOR, SCE_MESSAGE, 129, 128, 255, 0);
+        aot_reset(AOT_02_DOOR, SCE_MESSAGE, 129, 128, 255, 0);
+        aot_reset(AOT_03_DOOR, SCE_MESSAGE, 129, 128, 255, 0);
     }
 #endif
 }
@@ -81,7 +89,7 @@ proc main
 }
 #if JILL
 
-event event_00
+event on_enter
 {
     evt_next();
     evt_nop();
@@ -95,7 +103,7 @@ event event_00
     sleep(10);
     set(FG_STATUS, FLAG_STATUS_0F, TRUE);
     sleep(5);
-    evt_fork(1, event_02, 0);
+    evt_fork(1, on_enter_sub2, 0);
     voice_play(1, 34, 0);
     message(1, 0);
     wait_message();
@@ -250,17 +258,17 @@ event event_00
     {
         if (cmpb(7, 2, 8))
         {
-            evt_exec(0, 1, event_03);
+            evt_exec(0, 1, on_enter_sub3);
         }
         else
         {
-            evt_exec(0, 1, event_01);
+            evt_exec(0, 1, on_enter_sub1);
         }
     }
     evt_finish();
 }
 
-event event_01
+event on_enter_sub1
 {
     voice_play(1, 36, 0);
     message(5, 0);
@@ -464,11 +472,11 @@ event event_01
         evt_next();
     }
     while (cmpb(5, 2, 128));
-    evt_fork(2, event_03, 0);
+    evt_fork(2, on_enter_sub3, 0);
     evt_finish();
 }
 
-event event_02
+event on_enter_sub2
 {
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -495,7 +503,7 @@ event event_02
     evt_finish();
 }
 
-event event_03
+event on_enter_sub3
 {
     sleep(20);
     evt_work_set(WK_ENEMY, 0);
