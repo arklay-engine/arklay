@@ -182,7 +182,13 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     plan.drop_shadowed_films();
     plan.add_late_stage_copies(base.as_ref());
 
-    let mut writer = PackWriter::new();
+    // A converted HD pack runs to gigabytes, so the entries spill to a file
+    // beside the output instead of piling up in memory until the write.
+    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    let mut writer = PackWriter::spilling(&out)?;
     let mut unchanged = 0usize;
     let mut texts: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut palette = None;
@@ -279,10 +285,6 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
 
     eprintln!("compressing {} entries", writer.len());
     writer.compress_entries(jobs(options.jobs), convert::is_precompressed)?;
-    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
     writer.write(&out)?;
 
     Ok(ConvertModSummary {

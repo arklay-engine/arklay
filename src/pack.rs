@@ -56,6 +56,10 @@ const HEADER_LEN: usize = 10;
 /// Size of one table-of-contents entry.
 const ENTRY_LEN: usize = 32;
 
+/// Largest slice of a spilled entry held in memory while it is copied into
+/// the pack.
+const SPILL_COPY_CHUNK: usize = 1 << 20;
+
 /// How one entry's bytes are stored in the pack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Compression {
@@ -85,15 +89,25 @@ impl Compression {
 }
 
 /// One entry's compression result: its index and, when the frame paid for
-/// itself, the compressed bytes. An `Err` aborts the compression pass.
-type CompressResult = (usize, Result<Option<Vec<u8>>>);
+/// itself, where the compressed bytes now live. An `Err` aborts the
+/// compression pass.
+type CompressResult = (usize, Result<Option<EntryData>>);
 
 /// Builds an `.akpak` pack from named byte blobs.
+///
+/// [`PackWriter::new`] keeps every entry in memory until the pack is written,
+/// which suits small packs and tests. [`PackWriter::spilling`] instead appends
+/// each entry to a temporary spill file as it is added and copies the bytes
+/// back out when the pack is written, so a large pack's peak memory is one
+/// entry per compression worker rather than the whole pack. Both modes write
+/// byte-identical packs for the same entries.
 #[derive(Debug, Default)]
 pub struct PackWriter {
     entries: Vec<WriterEntry>,
     /// ASCII-lowercased entry paths, for O(1) duplicate detection.
     seen: HashSet<String>,
+    /// Where entry bytes go when the writer spills to disk.
+    spill: Option<Spill>,
 }
 
 /// One entry being assembled.
@@ -101,11 +115,120 @@ pub struct PackWriter {
 struct WriterEntry {
     path: String,
     /// The bytes as added; replaced by the zstd frame once compressed.
-    data: Vec<u8>,
+    data: EntryData,
     /// Plain (uncompressed) byte count, kept after compression replaces
     /// `data` so the conversion report can still name both sizes.
     plain_len: usize,
     compression: Compression,
+}
+
+/// Where one entry's stored bytes live.
+#[derive(Debug)]
+enum EntryData {
+    /// Held in memory.
+    Memory(Vec<u8>),
+    /// A byte range of the writer's spill file.
+    Spilled { offset: u64, len: usize },
+}
+
+impl EntryData {
+    /// The stored byte count.
+    fn len(&self) -> usize {
+        match self {
+            Self::Memory(data) => data.len(),
+            Self::Spilled { len, .. } => *len,
+        }
+    }
+}
+
+/// The temporary file a spilling writer appends entry bytes to.
+///
+/// The file is unlinked as soon as it is created on Unix and opened
+/// delete-on-close on Windows, so it never outlives the writer, even when the
+/// process is killed.
+#[derive(Debug)]
+struct Spill {
+    inner: Mutex<SpillFile>,
+}
+
+/// The spill file and its append position, guarded together so a worker's
+/// seek and read or write cannot interleave with another's.
+#[derive(Debug)]
+struct SpillFile {
+    file: std::fs::File,
+    /// The end of the bytes written so far, where the next append lands.
+    end: u64,
+}
+
+impl Spill {
+    /// Create the spill file at `path`.
+    fn create(path: &Path) -> Result<Self> {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true).write(true).create_new(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            // FILE_FLAG_DELETE_ON_CLOSE: Windows cannot unlink an open file,
+            // so the handle removes it when the writer drops it.
+            options.custom_flags(0x0400_0000);
+        }
+        let file = options
+            .open(path)
+            .with_context(|| format!("failed to create spill file {}", path.display()))?;
+        #[cfg(unix)]
+        std::fs::remove_file(path)
+            .with_context(|| format!("failed to unlink spill file {}", path.display()))?;
+        Ok(Self {
+            inner: Mutex::new(SpillFile { file, end: 0 }),
+        })
+    }
+
+    /// Lock the spill file; a poisoned lock still guards a usable file.
+    fn lock(&self) -> std::sync::MutexGuard<'_, SpillFile> {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Append `data` and return where it landed.
+    fn append(&self, data: &[u8]) -> Result<EntryData> {
+        let mut spill = self.lock();
+        let offset = spill.end;
+        spill.file.seek(SeekFrom::Start(offset))?;
+        spill.file.write_all(data)?;
+        spill.end = offset
+            .checked_add(to_u64(data.len())?)
+            .context("spill file exceeds addressable size")?;
+        Ok(EntryData::Spilled {
+            offset,
+            len: data.len(),
+        })
+    }
+
+    /// Read back `len` bytes at `offset`.
+    fn read(&self, offset: u64, len: usize) -> Result<Vec<u8>> {
+        let mut data = vec![0; len];
+        let mut spill = self.lock();
+        spill.file.seek(SeekFrom::Start(offset))?;
+        spill.file.read_exact(&mut data)?;
+        Ok(data)
+    }
+
+    /// Copy `len` bytes at `offset` to `out` without buffering the whole
+    /// range.
+    fn copy_to(&self, offset: u64, len: usize, out: &mut impl Write) -> Result<()> {
+        let mut spill = self.lock();
+        spill.file.seek(SeekFrom::Start(offset))?;
+        let mut buffer = vec![0; len.min(SPILL_COPY_CHUNK)];
+        let mut left = len;
+        while left > 0 {
+            let chunk = &mut buffer[..left.min(SPILL_COPY_CHUNK)];
+            spill.file.read_exact(chunk)?;
+            out.write_all(chunk)?;
+            left -= chunk.len();
+        }
+        Ok(())
+    }
 }
 
 /// Entry order and offsets of a serialized pack.
@@ -152,23 +275,51 @@ impl<'a> WrittenEntry<'a> {
 }
 
 impl PackWriter {
-    /// Create a writer with no entries.
+    /// Create a writer that keeps every entry in memory.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a writer that spills entry bytes to a temporary file beside
+    /// `out`, the pack it will write.
+    ///
+    /// The spill file sits next to the output rather than in the system
+    /// temporary directory, which is often memory-backed, so the bytes really
+    /// leave RAM. It keeps every plain entry and every compressed frame until
+    /// the writer is dropped, and [`PackWriter::write`] creates the pack beside
+    /// it, so the directory needs about the plain size plus twice the
+    /// compressed size of free space. The directory of `out` must already
+    /// exist.
+    pub fn spilling(out: &Path) -> Result<Self> {
+        let path = spill_path(out)?;
+        Ok(Self {
+            spill: Some(Spill::create(&path)?),
+            ..Self::default()
+        })
     }
 
     /// Add one entry.
     ///
     /// Paths must be non-empty and relative, must not contain backslashes,
     /// NUL bytes or `..` components, and must be unique ignoring ASCII case.
+    /// A spilling writer appends `data` to its spill file and frees it.
     pub fn add(&mut self, path: &str, data: Vec<u8>) -> Result<()> {
         validate_path(path)?;
-        if !self.seen.insert(path.to_ascii_lowercase()) {
+        let key = path.to_ascii_lowercase();
+        if self.seen.contains(&key) {
             bail!("duplicate pack entry: {path}");
         }
+        let plain_len = data.len();
+        let data = match &self.spill {
+            Some(spill) => spill
+                .append(&data)
+                .with_context(|| format!("failed to spill pack entry {path}"))?,
+            None => EntryData::Memory(data),
+        };
+        self.seen.insert(key);
         self.entries.push(WriterEntry {
             path: path.to_owned(),
-            plain_len: data.len(),
+            plain_len,
             data,
             compression: Compression::None,
         });
@@ -190,9 +341,12 @@ impl PackWriter {
     /// Workers run to completion before any entry is replaced, and the results
     /// are applied in entry order, so a failed pass leaves every entry raw and
     /// a successful one is byte-deterministic for a given libzstd build
-    /// whatever the worker count or scheduling. The pass holds the raw entries
-    /// and every compressed frame at once, so its peak memory is the plain
-    /// pack size plus the compressed pack size.
+    /// whatever the worker count or scheduling. An in-memory writer holds the
+    /// raw entries and every compressed frame at once, so its peak memory is
+    /// the plain pack size plus the compressed pack size; a spilling writer
+    /// reads each entry back and appends its frame to the spill file, so it
+    /// holds only one entry and its frame per worker (the frames of a failed
+    /// pass stay unreferenced in the spill file until the writer is dropped).
     pub fn compress_entries(
         &mut self,
         jobs: usize,
@@ -245,17 +399,9 @@ impl PackWriter {
                             && !keep_raw(&entry.path)
                             && entry.data.len() <= cap
                         {
-                            let compressed = zstd::bulk::compress(&entry.data, ZSTD_LEVEL)
+                            let compressed = self
+                                .compress_entry(&entry.data)
                                 .with_context(|| format!("failed to zstd-compress {}", entry.path));
-                            // Keep an entry raw when the frame does not pay for
-                            // itself, whatever the policy says.
-                            let compressed = compressed.map(|frame| {
-                                if frame.len() < entry.data.len() {
-                                    Some(frame)
-                                } else {
-                                    None
-                                }
-                            });
                             results
                                 .lock()
                                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -286,6 +432,36 @@ impl PackWriter {
             }
         }
         Ok(count)
+    }
+
+    /// Zstd-compress one entry's bytes, returning the frame's new home, or
+    /// `None` when the frame does not pay for itself, whatever the policy
+    /// says. A spilled entry is read back and its frame appended to the spill
+    /// file, so only this one entry is held in memory.
+    fn compress_entry(&self, data: &EntryData) -> Result<Option<EntryData>> {
+        let spilled;
+        let plain = match data {
+            EntryData::Memory(data) => data.as_slice(),
+            EntryData::Spilled { offset, len } => {
+                spilled = self.spill()?.read(*offset, *len)?;
+                spilled.as_slice()
+            }
+        };
+        let frame = zstd::bulk::compress(plain, ZSTD_LEVEL)?;
+        if frame.len() >= plain.len() {
+            return Ok(None);
+        }
+        Ok(Some(match &self.spill {
+            Some(spill) => spill.append(&frame)?,
+            None => EntryData::Memory(frame),
+        }))
+    }
+
+    /// The spill file a spilled entry lives in.
+    fn spill(&self) -> Result<&Spill> {
+        self.spill
+            .as_ref()
+            .context("spilled pack entry without a spill file")
     }
 
     /// The number of entries added so far.
@@ -388,7 +564,10 @@ impl PackWriter {
             out.write_all(&[0])?;
         }
         for (_, index) in &layout.order {
-            out.write_all(&self.entries[*index].data)?;
+            match &self.entries[*index].data {
+                EntryData::Memory(data) => out.write_all(data)?,
+                EntryData::Spilled { offset, len } => self.spill()?.copy_to(*offset, *len, out)?,
+            }
         }
         Ok(())
     }
@@ -396,7 +575,8 @@ impl PackWriter {
     /// Write the pack to `out`, sorting entries by ASCII-lowercased path.
     ///
     /// Unlike [`PackWriter::to_bytes`] this never materializes a second copy
-    /// of the entry data.
+    /// of the entry data; a spilling writer copies each entry from its spill
+    /// file without loading it whole.
     pub fn stream_to(&self, out: &mut impl Write) -> Result<()> {
         let layout = self.serialize_layout()?;
         self.write_layout(&layout, out)
@@ -440,6 +620,21 @@ impl PackWriter {
             format!("failed to move the written pack into {}", path.display())
         })
     }
+}
+
+/// The spill file path for a pack written to `out`: a sibling named after
+/// the pack, the process and a per-process counter, distinct from
+/// [`crate::atomic::temp_path`] so the spill, the pack being written and any
+/// other writer's spill never collide.
+fn spill_path(out: &Path) -> Result<PathBuf> {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let name = out
+        .file_name()
+        .with_context(|| format!("{} has no file name to write", out.display()))?;
+    let mut spill = name.to_os_string();
+    let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+    spill.push(format!(".{}-{serial}.spill", std::process::id()));
+    Ok(out.with_file_name(spill))
 }
 
 /// One entry of a pack, as reported by [`Pack::entries`].
@@ -2198,6 +2393,135 @@ mod tests {
         )
         .unwrap();
         std::fs::write(path.join("x.txt"), data).unwrap();
+    }
+
+    /// Entries mixing compressible, incompressible, exempt and over-cap data,
+    /// added out of path order.
+    fn spill_entries() -> Vec<(&'static str, Vec<u8>)> {
+        vec![
+            ("room/1000.rdt", vec![3u8; 1_000]),
+            ("movie/oj.avi", vec![5u8; 4_096]),
+            ("big.tim", vec![1u8; 8_192]),
+            ("A.txt", b"x".to_vec()),
+            ("empty.bin", Vec::new()),
+            (
+                "roomcut/100_000.bmp",
+                (0..=255u8).cycle().take(4_096).collect(),
+            ),
+        ]
+    }
+
+    /// Add `entries` to `writer` and compress them as `convert-mod` does,
+    /// with a cap that keeps `big.tim` raw.
+    fn fill_and_compress(writer: &mut PackWriter, entries: &[(&str, Vec<u8>)]) -> usize {
+        for (path, data) in entries {
+            writer.add(path, data.clone()).unwrap();
+        }
+        writer
+            .compress_entries_capped(3, |path| path.ends_with(".avi"), 4_096, |_| {})
+            .unwrap()
+    }
+
+    #[test]
+    fn a_spilling_writer_writes_the_same_bytes_as_an_in_memory_one() {
+        let dir = TempDir::new("spill-identical");
+        let entries = spill_entries();
+        let mut memory = PackWriter::new();
+        let mut spilling = PackWriter::spilling(&dir.join("out.akpak")).unwrap();
+        let compressed = fill_and_compress(&mut memory, &entries);
+        assert_eq!(fill_and_compress(&mut spilling, &entries), compressed);
+        assert_eq!(compressed, 2);
+
+        let expected = memory.to_bytes().unwrap();
+        assert_eq!(spilling.to_bytes().unwrap(), expected);
+        assert_eq!(spilling.pack_size().unwrap(), expected.len());
+        assert!(memory.entries().eq(spilling.entries()));
+
+        let mut streamed = Vec::new();
+        spilling.stream_to(&mut streamed).unwrap();
+        assert_eq!(streamed, expected);
+        spilling.write(&dir.join("out.akpak")).unwrap();
+        assert_eq!(std::fs::read(dir.join("out.akpak")).unwrap(), expected);
+
+        let pack = Pack::from_bytes(expected).unwrap();
+        for (path, data) in &entries {
+            assert_eq!(&*pack.read(path).unwrap(), data.as_slice(), "{path}");
+        }
+    }
+
+    #[test]
+    fn concurrent_spilled_compression_matches_the_in_memory_writer() {
+        let dir = TempDir::new("spill-concurrent");
+        let entries: Vec<(String, Vec<u8>)> = (0..200)
+            .map(|index| {
+                let data = (0..=index as u8).cycle().take(500 + index * 7).collect();
+                (format!("room/{index:04}.rdt"), data)
+            })
+            .collect();
+        let mut memory = PackWriter::new();
+        let mut spilling = PackWriter::spilling(&dir.join("out.akpak")).unwrap();
+        for (path, data) in &entries {
+            memory.add(path, data.clone()).unwrap();
+            spilling.add(path, data.clone()).unwrap();
+        }
+        let compressed = memory.compress_entries(1, |_| false).unwrap();
+        assert!(compressed > 100, "{compressed}");
+        assert_eq!(spilling.compress_entries(8, |_| false).unwrap(), compressed);
+        assert_eq!(spilling.to_bytes().unwrap(), memory.to_bytes().unwrap());
+    }
+
+    #[test]
+    fn two_spilling_writers_for_one_output_do_not_share_a_spill_file() {
+        let dir = TempDir::new("spill-two");
+        let out = dir.join("out.akpak");
+        let mut one = PackWriter::spilling(&out).unwrap();
+        let mut two = PackWriter::spilling(&out).unwrap();
+        one.add("a.txt", b"one".to_vec()).unwrap();
+        two.add("a.txt", b"two!".to_vec()).unwrap();
+        let one = Pack::from_bytes(one.to_bytes().unwrap()).unwrap();
+        let two = Pack::from_bytes(two.to_bytes().unwrap()).unwrap();
+        assert_eq!(&*one.read("a.txt").unwrap(), b"one");
+        assert_eq!(&*two.read("a.txt").unwrap(), b"two!");
+    }
+
+    #[test]
+    fn a_spilling_writer_copies_entries_larger_than_one_chunk() {
+        let dir = TempDir::new("spill-chunks");
+        let large: Vec<u8> = (0..SPILL_COPY_CHUNK * 2 + 17)
+            .map(|index| (index % 251) as u8)
+            .collect();
+        let mut writer = PackWriter::spilling(&dir.join("out.akpak")).unwrap();
+        writer.add("movie/large.avi", large.clone()).unwrap();
+        writer.add("a.txt", b"before".to_vec()).unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        assert_eq!(&*pack.read("movie/large.avi").unwrap(), large.as_slice());
+        assert_eq!(&*pack.read("a.txt").unwrap(), b"before");
+    }
+
+    #[test]
+    fn a_spilling_writer_rejects_duplicates_and_leaves_no_spill_file() {
+        let dir = TempDir::new("spill-cleanup");
+        let out = dir.join("out.akpak");
+        {
+            let mut writer = PackWriter::spilling(&out).unwrap();
+            writer.add("a.txt", vec![1]).unwrap();
+            let err = writer.add("A.TXT", vec![2]).unwrap_err().to_string();
+            assert!(err.contains("duplicate"), "{err}");
+            writer.write(&out).unwrap();
+        }
+        let names: Vec<_> = std::fs::read_dir(&dir.path)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["out.akpak"]);
+        let pack = Pack::open(&out).unwrap();
+        assert_eq!(&*pack.read("a.txt").unwrap(), &[1]);
+    }
+
+    #[test]
+    fn a_spilling_writer_needs_an_existing_output_directory() {
+        let dir = TempDir::new("spill-missing-dir");
+        assert!(PackWriter::spilling(&dir.join("missing/out.akpak")).is_err());
     }
 
     /// Self-deleting temporary directory unique to this process and label.
