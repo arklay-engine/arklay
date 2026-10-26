@@ -62,27 +62,16 @@ proc main
     }
 #if CHRIS
     if (ck(FG_ROOM, 3, 0) && ck(FG_COMMON, 105, 1) && ck(FG_ROOM, 1, 1))
-#else
-    if (ck(FG_ROOM, 3, 0) && ck(FG_COMMON, 103, 1) && ck(FG_ROOM, 1, 1))
-#endif
     {
         set(FG_ROOM, 1, 0);
         evt_exec(0, 3, event_03);
     }
-#if CHRIS
     if (ck(FG_ROOM, 3, 0) && ck(FG_COMMON, 106, 1) && ck(FG_ROOM, 2, 1))
-#else
-    if (ck(FG_ROOM, 3, 0) && ck(FG_COMMON, 104, 1) && ck(FG_ROOM, 2, 1))
-#endif
     {
         set(FG_ROOM, 2, 0);
         evt_exec(0, 4, event_04);
     }
-#if CHRIS
     if (ck(FG_COMMON, 105, 1) && ck(FG_ROOM, 1, 0) && ck(FG_ROOM, 0, 1))
-#else
-    if (ck(FG_COMMON, 103, 1) && ck(FG_ROOM, 1, 0) && ck(FG_ROOM, 0, 1))
-#endif
     {
         set(FG_ROOM, 0, 0);
         if (ck(FG_SCENARIO, 43, 1))
@@ -90,11 +79,7 @@ proc main
             bgm_play(1);
         }
     }
-#if CHRIS
     if (ck(FG_COMMON, 106, 1) && ck(FG_ROOM, 2, 0) && ck(FG_ROOM, 0, 1))
-#else
-    if (ck(FG_COMMON, 104, 1) && ck(FG_ROOM, 2, 0) && ck(FG_ROOM, 0, 1))
-#endif
     {
         set(FG_ROOM, 0, 0);
         if (ck(FG_SCENARIO, 43, 1))
@@ -102,34 +87,58 @@ proc main
             bgm_play(1);
         }
     }
-#if CHRIS
     if (ck(FG_COMMON, 105, 0) && ck(FG_ROOM, 1, 0))
-#else
-    if (ck(FG_COMMON, 103, 0) && ck(FG_ROOM, 1, 0))
-#endif
     {
-#if CHRIS
         set(FG_COMMON, 105, 1);
-#else
-        set(FG_COMMON, 103, 1);
-#endif
         set(FG_ROOM, 1, 1);
         task_kill(3);
     }
-#if CHRIS
     if (ck(FG_COMMON, 106, 0) && ck(FG_ROOM, 2, 0))
-#else
-    if (ck(FG_COMMON, 104, 0) && ck(FG_ROOM, 2, 0))
-#endif
     {
-#if CHRIS
         set(FG_COMMON, 106, 1);
-#else
-        set(FG_COMMON, 104, 1);
-#endif
         set(FG_ROOM, 2, 1);
         task_kill(4);
     }
+#else
+    if (ck(FG_ROOM, 3, 0) && ck(FG_COMMON, 103, 1) && ck(FG_ROOM, 1, 1))
+    {
+        set(FG_ROOM, 1, 0);
+        evt_exec(0, 3, event_03);
+    }
+    if (ck(FG_ROOM, 3, 0) && ck(FG_COMMON, 104, 1) && ck(FG_ROOM, 2, 1))
+    {
+        set(FG_ROOM, 2, 0);
+        evt_exec(0, 4, event_04);
+    }
+    if (ck(FG_COMMON, 103, 1) && ck(FG_ROOM, 1, 0) && ck(FG_ROOM, 0, 1))
+    {
+        set(FG_ROOM, 0, 0);
+        if (ck(FG_SCENARIO, 43, 1))
+        {
+            bgm_play(1);
+        }
+    }
+    if (ck(FG_COMMON, 104, 1) && ck(FG_ROOM, 2, 0) && ck(FG_ROOM, 0, 1))
+    {
+        set(FG_ROOM, 0, 0);
+        if (ck(FG_SCENARIO, 43, 1))
+        {
+            bgm_play(1);
+        }
+    }
+    if (ck(FG_COMMON, 103, 0) && ck(FG_ROOM, 1, 0))
+    {
+        set(FG_COMMON, 103, 1);
+        set(FG_ROOM, 1, 1);
+        task_kill(3);
+    }
+    if (ck(FG_COMMON, 104, 0) && ck(FG_ROOM, 2, 0))
+    {
+        set(FG_COMMON, 104, 1);
+        set(FG_ROOM, 2, 1);
+        task_kill(4);
+    }
+#endif
     if (ck(FG_ROOM, 1, 1) && ck(FG_ROOM, 2, 1) && ck(FG_ROOM, 0, 0))
     {
         set(FG_ROOM, 0, 1);

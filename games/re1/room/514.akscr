@@ -10,21 +10,19 @@ proc init
         room_bgm_state_set(4, 20, 64);
 #endif
         enemy(ENEMY_WESKER_STARS_, 2, 255, 1, 2, 0, 0, 3072, 0, 0, 2950, 0, 3000, 0, 50, 0, 0);
-#if JILL
-        room_bgm_state_set(4, 20, 65);
-#endif
+#if CHRIS
         if (ck(FG_COMMON, 192, 1))
         {
-#if CHRIS
             enemy(ENEMY_REBECCA_STARS_, 0, 255, 1, 2, 0, 0, 2048, 0, 0, 13480, 0, 11000, 1, 0, 0, 0);
-#else
-            enemy(ENEMY_BARRY_STARS_, 4, 255, 1, 2, 0, 0, 2048, 0, 0, 13480, 0, 11000, 1, 0, 0, 0);
-            evt_exec(0, 9, event_00);
-#endif
         }
-#if CHRIS
         evt_exec(0, 9, event_00);
 #else
+        room_bgm_state_set(4, 20, 65);
+        if (ck(FG_COMMON, 192, 1))
+        {
+            enemy(ENEMY_BARRY_STARS_, 4, 255, 1, 2, 0, 0, 2048, 0, 0, 13480, 0, 11000, 1, 0, 0, 0);
+            evt_exec(0, 9, event_00);
+        }
         else
         {
             evt_exec(0, 9, event_05);
@@ -33,21 +31,18 @@ proc init
     }
 #if CHRIS
     if (ck(FG_SCENARIO, 55, 0) && ck(FG_COMMON, 192, 1) && ck(FG_COMMON, 76, 1))
-#else
-    if (ck(FG_SCENARIO, 55, 0) && ck(FG_COMMON, 192, 1) && ck(FG_COMMON, 91, 0) && ck(FG_COMMON, 76, 0))
-#endif
     {
-#if CHRIS
         enemy(ENEMY_REBECCA_STARS_, 0, 255, 1, 2, 0, 0, 1904, 0, 0, 12590, 0, 11000, 0, 0, 0, 0);
         eml_state(0, 0, 3, 258);
         set(FG_COMMON, 76, 0);
         room_bgm_state_set(4, 20, 255);
         evt_exec(0, 9, event_03);
-#else
-        room_bgm_state_set(4, 20, 58);
-#endif
     }
-#if JILL
+#else
+    if (ck(FG_SCENARIO, 55, 0) && ck(FG_COMMON, 192, 1) && ck(FG_COMMON, 91, 0) && ck(FG_COMMON, 76, 0))
+    {
+        room_bgm_state_set(4, 20, 58);
+    }
     if (ck(FG_SCENARIO, 55, 0) && ck(FG_COMMON, 192, 1) && ck(FG_COMMON, 91, 0) && ck(FG_COMMON, 76, 1))
     {
         room_bgm_state_set(4, 0, 57);
@@ -81,6 +76,7 @@ proc init
 #endif
 }
 
+#if CHRIS
 event event_00
 {
     sleep(1);
@@ -88,7 +84,6 @@ event event_00
     {
         set(FG_6, 23, 1);
         set(FG_STATUS, 15, 0);
-#if CHRIS
         if (ck(FG_COMMON, 192, 1))
         {
             evt_exec(0, 9, event_01);
@@ -97,14 +92,22 @@ event event_00
         {
             evt_exec(0, 9, event_02);
         }
-#endif
     }
-#if CHRIS
     evt_finish();
 }
 
 event event_01
+#else
+event event_00
+#endif
 {
+#if JILL
+    sleep(1);
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_STATUS, 15, 0);
+    }
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -584,9 +587,9 @@ event event_01
     act_reset();
     evt_nop();
     wait_message();
+#if CHRIS
     run
     {
-#if CHRIS
         cutnext(3);
     }
     sleep(1);
@@ -594,11 +597,14 @@ event event_01
     {
         voice_play(1, 33, 0);
         message(5, 0);
+    }
 #else
+    run
+    {
         voice_play(1, 100, 0);
         message(8, 0);
-#endif
     }
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
@@ -1305,58 +1311,77 @@ event event_01
         message(18, 0);
 #endif
     }
-#if JILL
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(32);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(25);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_motion_path(113, 300, 0, 1, 15, 0);
-    act_reset();
-    evt_nop();
-    wait_message();
-    cutnext(3);
-    sleep(1);
-    run
-    {
-        voice_play(1, 111, 0);
-        message(19, 0);
-    }
-#endif
+#if CHRIS
     evt_work_set(WK_ENEMY, 0);
+#else
+    evt_work_set(WK_PLAYER, 0);
+#endif
     evt_actor_begin();
 #if CHRIS
     act_anim_flags(32 | 25, 32 | 0, 0 | 1);
 #else
-    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
 #endif
     act_reset();
     evt_nop();
 #if CHRIS
     sleep(20);
-#else
-    sleep(35);
-#endif
     evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(32);
+    evt_work_set(WK_PLAYER, 0);
+#endif
     evt_actor_begin();
 #if CHRIS
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
 #else
-    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
-    act_flag_op(1, 1, 0);
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
 #endif
     act_reset();
     evt_nop();
+#if CHRIS
+    sleep(30);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(25);
+    evt_work_set(WK_PLAYER, 0);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+#else
+    act_motion_path(113, 300, 0, 1, 15, 0);
+#endif
+    act_reset();
+    evt_nop();
+    wait_message();
 #if JILL
+    cutnext(3);
+    sleep(1);
+#endif
+    run
+    {
+#if CHRIS
+        voice_play(1, 41, 0);
+        message(11, 0);
+#else
+        voice_play(1, 111, 0);
+        message(19, 0);
+#endif
+    }
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+#if JILL
+    sleep(35);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
     sleep(50);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -1381,7 +1406,7 @@ event event_01
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 17, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 6, 32 | 0, 0 | 1);
     act_flag_op(1, 1, 0);
@@ -1409,44 +1434,73 @@ event event_01
     evt_nop();
 #endif
     wait_message();
+#if JILL
     run
     {
-#if CHRIS
-        voice_play(1, 41, 0);
-        message(11, 0);
-#else
         voice_play(1, 112, 0);
         message(20, 0);
-#endif
     }
-#if JILL
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
+#if CHRIS
+    act_anim_flags(0 | 0, 32 | 0, 0 | 1);
+#else
     act_anim_flags(32 | 5, 32 | 0, 0 | 1);
+#endif
     act_reset();
     evt_nop();
+#if JILL
     sleep(25);
-#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if JILL
     act_anim_flags(32 | 27, 32 | 0, 0 | 1);
     act_reset();
     evt_nop();
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
+#if CHRIS
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+#else
     act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+#endif
     act_reset();
     evt_nop();
+#if CHRIS
+    sleep(20);
+#else
     sleep(25);
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
+#if CHRIS
+    act_idle();
+    act_nop();
+#else
     act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+#endif
     act_reset();
     evt_nop();
+#if JILL
     wait_message();
+#endif
     run
     {
+#if CHRIS
+        cut_auto(0);
+        set(FG_STATUS, 15, 1);
+        set(FG_6, 23, 0);
+        aot_on(0, SCE_DOOR, 0);
+#else
         if (ck(FG_COMMON, 91, 0))
         {
             evt_exec(0, 9, event_04);
@@ -1455,10 +1509,14 @@ event event_01
         {
             evt_exec(0, 9, event_03);
         }
+#endif
     }
     evt_finish();
 }
 
+#if CHRIS
+event event_02
+#else
 event event_01
 {
     evt_finish();
@@ -1510,7 +1568,6 @@ event event_03
     sleep(50);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#endif
     act_anim_flags(32 | 26, 32 | 0, 0 | 1);
     act_reset();
     evt_nop();
@@ -1521,7 +1578,6 @@ event event_03
     act_reset();
     evt_nop();
     wait_message();
-#if JILL
     run
     {
         cut_auto(0);
@@ -1529,23 +1585,45 @@ event event_03
         set(FG_6, 23, 0);
         aot_on(0, SCE_DOOR, 0);
     }
-#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(0 | 0, 32 | 0, 0 | 1);
-#else
     act_idle();
     act_nop();
-#endif
     act_reset();
     evt_nop();
-#if JILL
     evt_finish();
 }
 
 event event_04
+#endif
 {
+#if CHRIS
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(34818, 4115, 8487);
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(113, 400, 0, 1, 20, 0);
+    act_reset();
+    evt_nop();
+    sleep(80);
+    run
+    {
+        cutnext(3);
+        dir_set(0, 0, 1024, 0, 3300, 0, 10000);
+        bgm_play(0);
+    }
+    sleep(1);
+    run
+    {
+        voice_play(1, 28, 0);
+        message(0, 0);
+    }
+#else
     run
     {
         voice_play(1, 113, 0);
@@ -1554,51 +1632,101 @@ event event_04
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if JILL
-    act_motion_path(147, 1, 0, 0, 30, 0);
+#if CHRIS
+    act_anim_seq(14850, 23052, 8483);
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
     act_reset();
     evt_nop();
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
+    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
+#else
+    act_motion_path(147, 1, 0, 0, 30, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(30);
+#endif
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+#else
     act_anim_seq(9234, 56339, 8990);
     act_nop();
     act_motion_path(147, 0, 0, 0, 30, 0);
+#endif
     act_reset();
     evt_nop();
+#if CHRIS
+    wait_message();
+#else
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, 35, 1));
+#endif
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
-#endif
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
+#if CHRIS
+    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(20);
+    run
+    {
+        voice_play(1, 29, 0);
+        message(1, 0);
+    }
     evt_work_set(WK_PLAYER, 0);
-#else
-    evt_work_set(WK_ENEMY, 0);
-#endif
     evt_actor_begin();
-#if CHRIS
-    act_idle();
+    act_anim_seq(14850, 29196, 8479);
 #else
-    act_anim_flags(32 | 13, 32 | 0, 0 | 0);
     act_motion(16);
 #endif
     act_nop();
 #if JILL
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(5);
+#endif
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 20, 32 | 0, 0 | 1);
+    act_flag_op(1, 2, 0);
+    act_reset();
+    evt_nop();
+    sleep(15);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 13, 32 | 0, 0 | 0);
+    act_motion(16);
+    act_nop();
     act_nop();
     act_nop();
     act_nop();
@@ -1610,389 +1738,33 @@ event event_04
 #endif
     act_reset();
     evt_nop();
-#if CHRIS
-    run
-    {
-        cut_auto(0);
-        set(FG_STATUS, 15, 1);
-        set(FG_6, 23, 0);
-        aot_on(0, SCE_DOOR, 0);
-    }
-    evt_finish();
-}
-
-event event_02
-{
-#else
     sleep(35);
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 18, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    wait_message();
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
 #if CHRIS
-    act_anim_seq(34818, 4115, 8487);
-#else
-    act_anim_seq(45058, 46606, 8717);
-#endif
-    act_nop();
-#if JILL
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-#endif
-    act_reset();
-    evt_nop();
-    sleep(20);
-#if JILL
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_seq(45062, 3086, 8983);
-    act_nop();
-    act_reset();
-    evt_nop();
-    sleep(30);
-    run
-    {
-        pos_set(0, 0, 1024, 0, 4212, 0, 7728);
-        pos_set(1, 0, 1024, 0, 4216, 0, 8136);
-        cutnext(6);
-    }
-    sleep(1);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 20, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(5);
-    run
-    {
-        se_play_3d(2, 27, 0, 2, 0, 0, 0);
-    }
-    sleep(5);
-    run
-    {
-        voice_play(1, 114, 0);
-    }
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 22, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(40);
-    run
-    {
-        se_play_3d(2, 28, 0, 2, 0, 0, 0);
-    }
-    wait_message();
-    run
-    {
-        bgm_stop(0);
-        bgm_play(1);
-    }
-    sleep(10);
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_motion_path(113, 400, 0, 1, 20, 0);
-#else
-    act_anim_flags(32 | 15, 32 | 0, 0 | 1);
-    act_param_set(0, 8);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(80);
-#else
-    sleep(20);
-#endif
-    run
-    {
-        cutnext(3);
-#if CHRIS
-        dir_set(0, 0, 1024, 0, 3300, 0, 10000);
-        bgm_play(0);
-#endif
-    }
-    sleep(1);
-    run
-    {
-#if CHRIS
-        voice_play(1, 28, 0);
-        message(0, 0);
-#else
-        voice_play(1, 115, 0);
-        message(22, 0);
-#endif
-    }
-#if JILL
-    wait_message();
-    run
-    {
-        voice_play(1, 116, 0);
-        message(23, 0);
-    }
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 0);
-    act_motion_path(50, 0, 300, 0, 0, 40);
-    act_reset();
-    evt_nop();
-    sleep(30);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_reset();
-    evt_nop();
-    wait_message();
-    run
-    {
-        voice_play(1, 117, 0);
-        message(24, 0);
-    }
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_seq(14850, 23052, 8483);
-#else
-    act_anim_seq(15362, 16911, 8728);
-#endif
-    act_nop();
-#if JILL
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-#endif
-    act_reset();
-    evt_nop();
-    sleep(20);
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
-    evt_work_set(WK_ENEMY, 1);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
-    act_motion_path(113, 300, 0, 1, 20, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(20);
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 0, 32 | 0, 0 | 1);
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
-    sleep(30);
-    evt_work_set(WK_ENEMY, 1);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(30);
-    evt_work_set(WK_ENEMY, 0);
-#else
-    sleep(40);
-    evt_work_set(WK_ENEMY, 1);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    wait_message();
-#else
-    sleep(70);
-#endif
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
-#if JILL
-    act_motion_path(113, 300, 0, 1, 20, 0);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if JILL
-    sleep(40);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    wait_message();
-#endif
-    run
-    {
-#if CHRIS
-        voice_play(1, 29, 0);
-        message(1, 0);
-#else
-        voice_play(1, 118, 0);
-        message(25, 0);
-#endif
-    }
-#if CHRIS
-    evt_work_set(WK_PLAYER, 0);
-#else
-    evt_work_set(WK_ENEMY, 1);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_seq(14850, 29196, 8479);
-    act_nop();
-#else
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(5);
-    evt_work_set(WK_ENEMY, 0);
-#else
-    sleep(70);
-    evt_work_set(WK_ENEMY, 1);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 20, 32 | 0, 0 | 1);
-    act_flag_op(1, 2, 0);
-#else
-    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(15);
-#else
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 9, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    wait_message();
-    run
-    {
-        voice_play(1, 119, 0);
-        message(26, 0);
-    }
-    sleep(35);
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
-    act_motion_path(113, 300, 0, 2, 30, 0);
-#endif
-    act_reset();
-    evt_nop();
-    sleep(35);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 5, 32 | 0, 0 | 1);
     act_reset();
     evt_nop();
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
-    sleep(28);
-    evt_work_set(WK_PLAYER, 0);
 #endif
+    evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
 #if CHRIS
     act_anim_flags(32 | 20, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
-#endif
     act_flag_op(1, 1, 0);
     act_reset();
     evt_nop();
-#if CHRIS
     sleep(32);
-#else
-    sleep(40);
-#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
     act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-#endif
     act_reset();
     evt_nop();
     sleep(25);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
     act_motion_path(113, 300, 0, 1, 15, 0);
 #else
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-    act_motion_path(50, 0, 300, 0, 0, 30);
+    act_anim_flags(32 | 18, 32 | 0, 0 | 0);
 #endif
     act_reset();
     evt_nop();
@@ -2000,68 +1772,26 @@ event event_02
 #if CHRIS
     cutnext(4);
     sleep(1);
-#endif
     run
     {
-#if CHRIS
         voice_play(1, 30, 0);
         message(2, 0);
-#else
-        voice_play(1, 120, 0);
-        message(27, 0);
-#endif
     }
-#if CHRIS
     evt_work_set(WK_ENEMY, 0);
-#else
-    evt_work_set(WK_ENEMY, 1);
-#endif
     evt_actor_begin();
-#if CHRIS
     act_anim_flags(32 | 28, 32 | 0, 0 | 1);
     act_motion_path(51, 300, 200, 0, 15, 20);
-#else
-    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
-#endif
     act_reset();
     evt_nop();
-#if JILL
-    wait_message();
-    run
-    {
-        voice_play(1, 121, 0);
-        message(28, 0);
-    }
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_reset();
-    evt_nop();
-#endif
     sleep(40);
-#if CHRIS
     evt_work_set(WK_ENEMY, 0);
 #else
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_PLAYER, 0);
 #endif
     evt_actor_begin();
 #if JILL
-    act_anim_flags(32 | 9, 32 | 0, 0 | 0);
-    act_motion_path(113, 300, 0, 1, 20, 0);
-    act_reset();
-    evt_nop();
-    sleep(30);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 8, 32 | 0, 0 | 1);
+    act_anim_seq(45058, 46606, 8717);
+    act_nop();
 #endif
     act_motion(16);
     act_nop();
@@ -2082,69 +1812,375 @@ event event_02
         message(3, 0);
     }
     evt_work_set(WK_ENEMY, 0);
-#else
-    sleep(30);
-    evt_work_set(WK_ENEMY, 1);
-#endif
     evt_actor_begin();
-#if CHRIS
     act_anim_flags(32 | 27, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 0, 32 | 0, 0 | 0);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
     sleep(100);
-    evt_work_set(WK_ENEMY, 0);
 #else
-    sleep(25);
-    evt_work_set(WK_ENEMY, 1);
+    sleep(20);
 #endif
+    evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
 #if CHRIS
     act_anim_flags(32 | 24, 32 | 0, 0 | 1);
 #else
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+    act_anim_seq(45062, 3086, 8983);
+    act_nop();
 #endif
     act_reset();
     evt_nop();
-#if JILL
-    sleep(30);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
-    act_motion_path(113, 300, 0, 1, 20, 0);
-    act_reset();
-    evt_nop();
-    sleep(25);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-#endif
+#if CHRIS
     wait_message();
+#else
+    sleep(30);
+#endif
     run
     {
 #if CHRIS
         voice_play(1, 32, 0);
         message(4, 0);
 #else
-        voice_play(1, 122, 0);
-        message(29, 0);
+        pos_set(0, 0, 1024, 0, 4212, 0, 7728);
+        pos_set(1, 0, 1024, 0, 4216, 0, 8136);
+        cutnext(6);
 #endif
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(55);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(40);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_motion_path(113, 300, 0, 1, 40, 0);
+    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(40);
+    evt_work_set(WK_ENEMY, 0);
 #else
+    sleep(1);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+    act_anim_flags(32 | 20, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(30);
+#else
+    sleep(5);
+    run
+    {
+        se_play_3d(2, 27, 0, 2, 0, 0, 0);
+    }
+    sleep(5);
+    run
+    {
+        voice_play(1, 114, 0);
+    }
+#endif
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 22, 32 | 0, 0 | 1);
+#endif
+    act_reset();
+    evt_nop();
+    sleep(40);
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(35);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(35);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    run
+    {
+        se_play_3d(2, 28, 0, 2, 0, 0, 0);
+    }
+    wait_message();
+    run
+    {
+        bgm_stop(0);
+        bgm_play(1);
+    }
+    sleep(10);
     evt_work_set(WK_PLAYER, 0);
 #endif
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 21, 32 | 0, 0 | 1);
 #else
+    act_anim_flags(32 | 15, 32 | 0, 0 | 1);
+    act_param_set(0, 8);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    wait_message();
+#else
+    sleep(20);
+#endif
+    run
+    {
+        cutnext(3);
+    }
+    sleep(1);
+    run
+    {
+#if CHRIS
+        voice_play(1, 33, 0);
+        message(5, 0);
+#else
+        voice_play(1, 115, 0);
+        message(22, 0);
+#endif
+    }
+#if CHRIS
+    evt_work_set(WK_PLAYER, 0);
+#else
+    wait_message();
+    run
+    {
+        voice_play(1, 116, 0);
+        message(23, 0);
+    }
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_motion_path(113, 300, 0, 2, 35, 0);
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 4, 32 | 0, 0 | 0);
+    act_motion_path(50, 0, 300, 0, 0, 40);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(60);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(30);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(60);
+#else
+    wait_message();
+    run
+    {
+        voice_play(1, 117, 0);
+        message(24, 0);
+    }
+#endif
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+    act_motion_path(51, 300, 65436, 4, 35, 0);
+#else
+    act_anim_seq(15362, 16911, 8728);
+    act_nop();
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(50);
+    evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(20);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_motion_path(113, 100, 0, 1, 40, 0);
+    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
+    act_motion_path(113, 300, 0, 1, 20, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(60);
+#endif
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+#if JILL
+    act_anim_flags(32 | 0, 32 | 0, 0 | 1);
+#endif
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+#if CHRIS
     act_anim_flags(32 | 4, 32 | 0, 0 | 1);
+#else
+    act_flag_op(1, 1, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(40);
+    evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(30);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+    act_flag_op(1, 1, 0);
+#else
+    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(25);
+    evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(40);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
+#endif
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(25);
+    evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(70);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 9, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
+    act_motion_path(113, 300, 0, 1, 20, 0);
+    act_flag_op(1, 1, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(26);
+    evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(40);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 10, 32 | 0, 0 | 1);
+    act_flag_op(1, 16, 0);
+#else
+    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+#endif
+    act_reset();
+    evt_nop();
+    wait_message();
+    run
+    {
+#if CHRIS
+        voice_play(1, 34, 0);
+        message(6, 0);
+#else
+        voice_play(1, 118, 0);
+        message(25, 0);
+#endif
+    }
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(55);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 21, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+    act_flag_op(1, 1, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(30);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(70);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
+    act_flag_op(1, 1, 0);
 #endif
     act_reset();
     evt_nop();
@@ -2152,14 +2188,234 @@ event event_02
     sleep(55);
     evt_work_set(WK_ENEMY, 0);
 #else
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+    act_motion_path(113, 300, 0, 2, 40, 0);
+#else
+    act_anim_flags(32 | 9, 32 | 0, 0 | 0);
+#endif
+    act_reset();
+    evt_nop();
+    wait_message();
+#if CHRIS
+    cutnext(5);
+    sleep(1);
+#endif
+    run
+    {
+#if CHRIS
+        voice_play(1, 35, 0);
+        message(7, 0);
+#else
+        voice_play(1, 119, 0);
+        message(26, 0);
+#endif
+    }
+#if CHRIS
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(45);
+#else
+    sleep(35);
+#endif
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
+    act_motion_path(113, 300, 0, 2, 30, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(25);
+#else
+    sleep(35);
+#endif
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+    act_flag_op(0, 1, 0);
+#else
+    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(34);
+#else
+    sleep(28);
+#endif
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
+#if CHRIS
+    act_flag_op(0, 1, 0);
+    act_reset();
+    evt_nop();
+    wait_message();
+    cutnext(3);
+    sleep(1);
+    run
+    {
+        voice_play(1, 42, 0);
+        message(12, 0);
+    }
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
     sleep(30);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
+    act_motion_path(51, 100, 65486, 0, 40, 20);
+    act_reset();
+    evt_nop();
+    sleep(30);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 9, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+#else
+    act_flag_op(1, 1, 0);
+#endif
+    act_reset();
+    evt_nop();
+    sleep(40);
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
+    act_flag_op(0, 1, 0);
+    act_reset();
+    evt_nop();
+    sleep(70);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    evt_work_set(WK_PLAYER, 0);
+#endif
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(25);
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+#else
     evt_work_set(WK_PLAYER, 0);
 #endif
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
 #else
-    act_anim_flags(32 | 5, 32 | 0, 0 | 3);
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+    act_motion_path(50, 0, 300, 0, 0, 30);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(40);
+    evt_work_set(WK_PLAYER, 0);
+#else
+    wait_message();
+    run
+    {
+        voice_play(1, 120, 0);
+        message(27, 0);
+    }
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 8, 32 | 0, 0 | 1);
+    act_flag_op(1, 16, 0);
+#else
+    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+#else
+    wait_message();
+    run
+    {
+        voice_play(1, 121, 0);
+        message(28, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
+#endif
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(40);
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+#else
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 9, 32 | 0, 0 | 0);
+    act_motion_path(113, 300, 0, 1, 20, 0);
+    act_reset();
+    evt_nop();
+    sleep(30);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 8, 32 | 0, 0 | 1);
+#endif
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(30);
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+#else
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
+    act_motion_path(49, 50, 0, 0, 40, 0);
+#else
+    act_anim_flags(32 | 0, 32 | 0, 0 | 0);
 #endif
     act_reset();
     evt_nop();
@@ -2168,12 +2424,116 @@ event event_02
     evt_work_set(WK_ENEMY, 0);
 #else
     sleep(25);
-    evt_work_set(WK_PLAYER, 0);
+    evt_work_set(WK_ENEMY, 1);
 #endif
     evt_actor_begin();
 #if CHRIS
     act_motion_path(113, 300, 0, 1, 40, 0);
+#else
+    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+#endif
+    act_reset();
+    evt_nop();
+    sleep(30);
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+#else
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
     act_anim_flags(32 | 28, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 3, 32 | 0, 0 | 0);
+    act_motion_path(113, 300, 0, 1, 20, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(80);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(25);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+#else
+    act_anim_flags(32 | 0, 32 | 0, 0 | 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(110);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    wait_message();
+    run
+    {
+        voice_play(1, 122, 0);
+        message(29, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_flag_op(0, 1, 0);
+#else
+    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(40);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(30);
+    evt_work_set(WK_PLAYER, 0);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 21, 32 | 0, 0 | 1);
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+#else
+    act_anim_flags(32 | 5, 32 | 0, 0 | 3);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    wait_message();
+    cutnext(5);
+    sleep(1);
+    run
+    {
+        voice_play(1, 43, 0);
+        message(13, 0);
+    }
+#else
+    sleep(25);
+#endif
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 6, 32 | 0, 0 | 0);
     act_flag_op(1, 1, 0);
@@ -2181,45 +2541,151 @@ event event_02
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(40);
-    evt_work_set(WK_ENEMY, 0);
+    sleep(35);
 #else
     sleep(10);
-    evt_work_set(WK_PLAYER, 0);
 #endif
+    evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 20, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 6, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 9, 32 | 0, 0 | 1);
     act_flag_op(1, 1, 0);
 #endif
     act_reset();
     evt_nop();
-#if JILL
     sleep(25);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+    act_flag_op(0, 1, 0);
+#else
     act_anim_flags(32 | 3, 32 | 0, 0 | 0);
+#endif
     act_reset();
     evt_nop();
-#endif
-    sleep(30);
 #if CHRIS
-    evt_work_set(WK_ENEMY, 0);
+    sleep(34);
 #else
-    evt_work_set(WK_PLAYER, 0);
+    sleep(30);
 #endif
+    evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+    act_flag_op(0, 1, 0);
 #else
     act_anim_flags(32 | 4, 32 | 0, 0 | 1);
     act_flag_op(1, 1, 0);
 #endif
     act_reset();
     evt_nop();
+#if JILL
     sleep(40);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 5, 32 | 0, 0 | 3);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+    sleep(35);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 9, 32 | 0, 0 | 0);
+    act_reset();
+    evt_nop();
+    sleep(40);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 0, 32 | 0, 0 | 1);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+#endif
+    wait_message();
+#if CHRIS
+    cutnext(4);
+    sleep(1);
+#endif
+    run
+    {
+#if CHRIS
+        voice_play(1, 44, 0);
+        message(14, 0);
+#else
+        voice_play(1, 123, 0);
+        message(30, 0);
+#endif
+    }
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+#else
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
+    act_flag_op(1, 1, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(20);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(25);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+    act_flag_op(1, 1, 0);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(30);
+    evt_work_set(WK_ENEMY, 0);
+#else
+    sleep(25);
+    evt_work_set(WK_ENEMY, 1);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 4, 32 | 0, 0 | 0);
+    act_flag_op(1, 1, 0);
+    act_action_a(13);
+#endif
+    act_reset();
+    evt_nop();
+#if JILL
+    sleep(35);
+    evt_work_set(WK_ENEMY, 1);
+    evt_actor_begin();
+    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+#endif
+    wait_message();
+    run
+    {
+#if CHRIS
+        voice_play(1, 45, 0);
+        message(15, 0);
+#else
+        voice_play(1, 124, 0);
+        message(31, 0);
+#endif
+    }
 #if CHRIS
     evt_work_set(WK_ENEMY, 0);
 #else
@@ -2229,107 +2695,13 @@ event event_02
 #if CHRIS
     act_anim_flags(32 | 26, 32 | 0, 0 | 1);
 #else
-    act_anim_flags(32 | 5, 32 | 0, 0 | 3);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-    sleep(35);
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
-    evt_work_set(WK_PLAYER, 0);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 9, 32 | 0, 0 | 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(35);
-    evt_work_set(WK_ENEMY, 0);
-#else
-    sleep(40);
-    evt_work_set(WK_PLAYER, 0);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 21, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 0, 32 | 0, 0 | 1);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-    wait_message();
-    run
-    {
-#if CHRIS
-        cutnext(3);
-#else
-        voice_play(1, 123, 0);
-        message(30, 0);
-#endif
-    }
-#if CHRIS
-    sleep(1);
-#else
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-    act_reset();
-    evt_nop();
-    sleep(25);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-    act_reset();
-    evt_nop();
-    sleep(25);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-    act_action_a(13);
-    act_reset();
-    evt_nop();
-    sleep(35);
-    evt_work_set(WK_ENEMY, 1);
-    evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-    act_reset();
-    evt_nop();
-    wait_message();
-#endif
-    run
-    {
-#if CHRIS
-        voice_play(1, 33, 0);
-        message(5, 0);
-#else
-        voice_play(1, 124, 0);
-        message(31, 0);
-#endif
-    }
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_motion_path(113, 300, 0, 2, 35, 0);
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#else
     act_anim_flags(32 | 8, 32 | 0, 0 | 1);
     act_motion_path(113, 300, 0, 1, 20, 0);
 #endif
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(60);
+    sleep(30);
     evt_work_set(WK_ENEMY, 0);
 #else
     wait_message();
@@ -2342,65 +2714,95 @@ event event_02
 #endif
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 19, 32 | 0, 0 | 0);
 #endif
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(60);
+    evt_work_set(WK_ENEMY, 0);
 #else
     sleep(50);
     evt_work_set(WK_ENEMY, 1);
+#endif
     evt_actor_begin();
+#if CHRIS
+    act_motion_path(113, 300, 0, 2, 40, 0);
+#else
     act_anim_flags(32 | 19, 32 | 0, 0 | 0);
     act_flag_op(1, 1, 0);
+#endif
     act_reset();
     evt_nop();
+#if CHRIS
+    sleep(50);
+    evt_work_set(WK_ENEMY, 0);
+#else
     sleep(35);
     evt_work_set(WK_ENEMY, 1);
+#endif
     evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
+#else
     act_anim_flags(32 | 5, 32 | 0, 0 | 0);
     act_action_a(3);
     act_flag_op(1, 1, 0);
+#endif
     act_reset();
     evt_nop();
+#if CHRIS
+    sleep(30);
+    evt_work_set(WK_ENEMY, 0);
+#else
     sleep(45);
     evt_work_set(WK_ENEMY, 1);
+#endif
     evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 27, 32 | 0, 0 | 1);
+#else
     act_anim_flags(32 | 1, 32 | 0, 0 | 0);
     act_action_a(3);
     act_flag_op(1, 1, 0);
+#endif
     act_reset();
     evt_nop();
     wait_message();
     run
     {
+#if CHRIS
+        voice_play(1, 46, 0);
+        message(16, 0);
+#else
         voice_play(1, 126, 0);
         message(33, 0);
-    }
 #endif
+    }
+#if CHRIS
+    evt_work_set(WK_ENEMY, 0);
+#else
     evt_work_set(WK_PLAYER, 0);
+#endif
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-    act_motion_path(51, 300, 65436, 4, 35, 0);
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
 #else
     act_motion_path(114, 0, 300, 1, 0, 30);
 #endif
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(50);
+    sleep(30);
+    evt_work_set(WK_ENEMY, 0);
 #else
     wait_message();
-#endif
     evt_work_set(WK_PLAYER, 0);
+#endif
     evt_actor_begin();
 #if CHRIS
-    act_motion_path(113, 100, 0, 1, 40, 0);
-    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 17, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 15, 32 | 0, 0 | 1);
     act_param_set(0, 8);
@@ -2408,13 +2810,15 @@ event event_02
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(60);
+    wait_message();
 #else
     sleep(45);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if JILL
+#if CHRIS
+    act_anim_flags(0 | 0, 32 | 0, 0 | 1);
+#else
     act_anim_seq(45058, 46606, 8717);
     act_nop();
 #endif
@@ -2427,25 +2831,19 @@ event event_02
     act_nop();
     act_nop();
     act_nop();
-#if CHRIS
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(40);
-#else
     sleep(20);
-#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-    act_flag_op(1, 1, 0);
+    act_idle();
 #else
     act_anim_flags(0 | 0, 32 | 0, 0 | 1);
     act_motion(16);
+#endif
     act_nop();
+#if JILL
     act_nop();
     act_nop();
     act_nop();
@@ -2456,9 +2854,6 @@ event event_02
 #endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(25);
-#else
     run
     {
         cut_auto(0);
@@ -2466,54 +2861,53 @@ event event_02
         set(FG_6, 23, 0);
         aot_on(0, SCE_DOOR, 0);
     }
-#endif
+#if JILL
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-    act_flag_op(1, 1, 0);
-#else
     act_idle();
     act_nop();
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(25);
-#else
+#endif
     evt_finish();
 }
 
+#if CHRIS
+event event_03
+#else
 event event_05
+#endif
 {
     sleep(1);
     run
     {
         set(FG_6, 23, 1);
         set(FG_STATUS, 15, 0);
+#if JILL
         pos_set(0, 0, 3300, 0, 2950, 0, 3000);
-    }
 #endif
+    }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 9, 32 | 0, 0 | 1);
+    act_anim_seq(60946, 7183, 8485);
 #else
     act_anim_seq(28674, 4119, 8743);
-    act_nop();
 #endif
+    act_nop();
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(26);
+    sleep(45);
+    evt_work_set(WK_ENEMY, 0);
 #else
     sleep(20);
-#endif
     evt_work_set(WK_PLAYER, 0);
+#endif
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 10, 32 | 0, 0 | 1);
-    act_flag_op(1, 16, 0);
+    act_anim_seq(13314, 52257, 8233);
+    act_nop();
 #else
     act_motion_path(113, 400, 0, 1, 20, 0);
 #endif
@@ -2533,67 +2927,59 @@ event event_05
         voice_play(1, 92, 0);
         message(0, 0);
     }
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
+#if CHRIS
+    act_anim_seq(56834, 4122, 8487);
+#else
     act_anim_seq(37890, 3089, 8737);
+#endif
     act_nop();
     act_reset();
     evt_nop();
-#endif
+#if CHRIS
+    sleep(50);
+#else
     wait_message();
+#endif
     run
     {
 #if CHRIS
-        voice_play(1, 34, 0);
-        message(6, 0);
+        voice_play(1, 142, 0);
 #else
         voice_play(1, 128, 0);
         message(34, 0);
 #endif
     }
+#if JILL
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
-#else
     act_anim_flags(32 | 18, 32 | 0, 0 | 1);
     act_motion_path(113, 400, 0, 1, 30, 0);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(55);
-    evt_work_set(WK_ENEMY, 0);
-#else
     wait_message();
     run
     {
         voice_play(1, 129, 0);
         message(35, 0);
     }
-    evt_work_set(WK_PLAYER, 0);
 #endif
+    evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 21, 32 | 0, 0 | 1);
+    act_anim_flags(0 | 2, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-#endif
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
-#else
     act_anim_flags(32 | 24, 32 | 0, 0 | 1);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(55);
-#else
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 6, 32 | 0, 0 | 0);
@@ -2623,15 +3009,9 @@ event event_05
     {
         voice_play(1, 130, 0);
     }
-#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
-    act_motion_path(113, 300, 0, 2, 40, 0);
-#else
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
-#endif
     act_reset();
     evt_nop();
     wait_message();
@@ -2639,9 +3019,6 @@ event event_05
     sleep(1);
     run
     {
-#if CHRIS
-        voice_play(1, 35, 0);
-#else
         voice_play(1, 98, 0);
         message(6, 0);
     }
@@ -2659,123 +3036,82 @@ event event_05
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 1, 32 | 0, 0 | 3);
+#endif
     act_motion_path(113, 300, 0, 1, 40, 0);
     act_reset();
     evt_nop();
     wait_message();
+#if JILL
     run
     {
         voice_play(1, 99, 0);
-#endif
         message(7, 0);
     }
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 9, 32 | 0, 0 | 3);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(45);
-#else
-    sleep(30);
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 10, 32 | 0, 0 | 3);
-    act_flag_op(0, 16, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(25);
-#else
-    sleep(35);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
     act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-    act_flag_op(0, 1, 0);
 #else
-    act_motion_path(113, 300, 0, 1, 40, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(34);
-#else
-    sleep(50);
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
-    act_flag_op(0, 1, 0);
-#else
-    act_motion_path(113, 300, 0, 1, 40, 0);
+    act_anim_flags(32 | 9, 32 | 0, 0 | 3);
 #endif
     act_reset();
     evt_nop();
 #if JILL
+    sleep(30);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 10, 32 | 0, 0 | 3);
+    act_flag_op(0, 16, 0);
+    act_reset();
+    evt_nop();
+    sleep(35);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(113, 300, 0, 1, 40, 0);
+    act_reset();
+    evt_nop();
+    sleep(50);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(113, 300, 0, 1, 40, 0);
+    act_reset();
+    evt_nop();
     sleep(80);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion_path(113, 300, 0, 1, 40, 0);
     act_reset();
     evt_nop();
-#endif
     wait_message();
-#if CHRIS
-    cutnext(3);
-    sleep(1);
 #endif
     run
     {
 #if CHRIS
-        voice_play(1, 42, 0);
-        message(12, 0);
+        voice_play(1, 143, 0);
+        message(17, 0);
 #else
         voice_play(1, 100, 0);
         message(8, 0);
 #endif
     }
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
     evt_work_set(WK_PLAYER, 0);
-#endif
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
+    act_motion_path(147, 1, 0, 0, 0, 0);
 #else
     act_anim_flags(32 | 5, 32 | 0, 0 | 3);
 #endif
     act_reset();
     evt_nop();
+#if JILL
     sleep(30);
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
     evt_work_set(WK_PLAYER, 0);
-#endif
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
-    act_motion_path(51, 100, 65486, 0, 40, 20);
-#else
     act_anim_flags(32 | 3, 32 | 0, 0 | 3);
     act_flag_op(1, 1, 0);
-#endif
     act_reset();
     evt_nop();
-#if JILL
     sleep(50);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -2799,35 +3135,21 @@ event event_05
     act_anim_flags(32 | 4, 32 | 0, 0 | 3);
     act_reset();
     evt_nop();
-#endif
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 9, 32 | 0, 0 | 1);
-#else
     act_anim_flags(32 | 4, 32 | 0, 0 | 3);
     act_flag_op(1, 1, 0);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
     sleep(50);
     evt_work_set(WK_PLAYER, 0);
-#endif
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
-#else
     act_anim_flags(32 | 1, 32 | 0, 0 | 3);
     act_flag_op(1, 1, 0);
-#endif
     act_reset();
     evt_nop();
     sleep(40);
-#if JILL
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 2, 32 | 0, 0 | 3);
@@ -2845,22 +3167,18 @@ event event_05
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
-    act_flag_op(0, 1, 0);
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+    act_motion_path(147, 0, 0, 0, 0, 0);
 #else
     act_anim_flags(32 | 28, 32 | 0, 0 | 1);
 #endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(70);
-#else
     sleep(35);
-#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 21, 32 | 0, 0 | 3);
     act_motion_path(113, 300, 0, 2, 40, 0);
@@ -2869,22 +3187,16 @@ event event_05
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(25);
+    sleep(35);
 #else
     sleep(150);
 #endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-#else
+#if JILL
     act_anim_flags(32 | 24, 32 | 0, 0 | 0);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(40);
-#else
     sleep(100);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -2897,55 +3209,26 @@ event event_05
         voice_play(1, 108, 0);
         message(16, 0);
     }
-#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 8, 32 | 0, 0 | 1);
-    act_flag_op(1, 16, 0);
-#else
     act_motion_path(51, 300, 100, 0, 35, 20);
     act_anim_flags(32 | 1, 32 | 0, 0 | 1);
     act_action_a(6);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
     sleep(25);
     evt_work_set(WK_PLAYER, 0);
-#endif
     evt_actor_begin();
     act_anim_flags(32 | 3, 32 | 0, 0 | 1);
-#if CHRIS
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-#else
     act_flag_op(1, 1, 0);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(40);
-    evt_work_set(WK_ENEMY, 0);
-#else
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
-#endif
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
 #endif
+    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
+#if JILL
     act_motion(16);
     act_nop();
     act_nop();
@@ -2955,10 +3238,11 @@ event event_05
     act_nop();
     act_nop();
     act_nop();
+#endif
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(30);
+    sleep(35);
 #else
     wait_message();
     run
@@ -2969,105 +3253,53 @@ event event_05
 #endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
-    act_motion_path(49, 50, 0, 0, 40, 0);
-#else
+#if JILL
     act_anim_flags(32 | 25, 32 | 0, 0 | 1);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(40);
-    evt_work_set(WK_ENEMY, 0);
-#else
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
-#endif
     evt_actor_begin();
-#if CHRIS
-    act_motion_path(113, 300, 0, 1, 40, 0);
-#else
+#endif
     act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(30);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
-    act_motion_path(51, 300, 100, 0, 35, 20);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(80);
-#else
-    sleep(40);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-#else
-    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(110);
-#else
-    sleep(30);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
-#if CHRIS
-    act_flag_op(0, 1, 0);
-#else
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(40);
-#else
-    sleep(50);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 21, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
-#endif
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
     act_reset();
     evt_nop();
 #if JILL
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
+    act_motion_path(51, 300, 100, 0, 35, 20);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+    sleep(40);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    sleep(30);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+    sleep(50);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_reset();
+    evt_nop();
     sleep(45);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
@@ -3077,552 +3309,105 @@ event event_05
     evt_nop();
 #endif
     wait_message();
-#if CHRIS
-    cutnext(5);
-#else
+#if JILL
     cutnext(6);
-#endif
     sleep(1);
+#endif
     run
     {
 #if CHRIS
-        voice_play(1, 43, 0);
-        message(13, 0);
+        voice_play(1, 144, 0);
 #else
         voice_play(1, 110, 0);
-        message(18, 0);
 #endif
+        message(18, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
     act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(35);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 6, 32 | 0, 0 | 1);
+    act_motion_path(114, 0, 300, 1, 0, 20);
 #else
     act_anim_flags(32 | 5, 32 | 0, 0 | 1);
 #endif
     act_reset();
     evt_nop();
 #if CHRIS
-    sleep(25);
+    sleep(35);
 #else
     sleep(32);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#if CHRIS
-    act_flag_op(0, 1, 0);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(34);
-#else
+#if JILL
     sleep(25);
-#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-    act_flag_op(0, 1, 0);
-#else
     act_motion_path(113, 300, 0, 1, 15, 0);
-#endif
     act_reset();
     evt_nop();
-    wait_message();
-#if CHRIS
-    cutnext(4);
-#else
-    cutnext(3);
 #endif
+    wait_message();
+#if JILL
+    cutnext(3);
     sleep(1);
+#endif
     run
     {
 #if CHRIS
-        voice_play(1, 44, 0);
-        message(14, 0);
+        voice_play(1, 145, 0);
 #else
         voice_play(1, 111, 0);
-        message(19, 0);
 #endif
+        message(19, 0);
     }
+#if CHRIS
+    evt_work_set(WK_PLAYER, 0);
+#else
     evt_work_set(WK_ENEMY, 0);
+#endif
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
+    act_motion_path(147, 1, 0, 0, 0, 0);
 #else
     act_anim_flags(32 | 26, 32 | 0, 0 | 1);
 #endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(20);
-#else
+#if JILL
     sleep(35);
 #endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
 #else
     act_anim_flags(32 | 18, 32 | 0, 0 | 1);
     act_flag_op(1, 1, 0);
 #endif
     act_reset();
     evt_nop();
-#if CHRIS
-    sleep(30);
-#else
+#if JILL
     sleep(50);
-#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 24, 32 | 0, 0 | 1);
-#else
     act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-#endif
     act_reset();
     evt_nop();
-#if CHRIS
-    wait_message();
-    run
-    {
-        voice_play(1, 45, 0);
-        message(15, 0);
-    }
-#else
-    sleep(35);
 #endif
+    sleep(35);
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
-#else
     act_anim_flags(32 | 3, 32 | 0, 0 | 1);
+#if JILL
     act_flag_op(1, 1, 0);
 #endif
     act_reset();
     evt_nop();
-#if JILL
-    sleep(50);
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-#endif
-    sleep(30);
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 25, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 6, 32 | 0, 0 | 1);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if JILL
-    sleep(25);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_motion_path(113, 300, 0, 2, 40, 0);
-#else
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(50);
-#else
-    sleep(25);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(30);
-#else
-    sleep(25);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 27, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-    wait_message();
-    run
-    {
-#if CHRIS
-        voice_play(1, 46, 0);
-        message(16, 0);
-#else
-        voice_play(1, 112, 0);
-        message(20, 0);
-#endif
-    }
-#if CHRIS
-    evt_work_set(WK_ENEMY, 0);
-#else
-    evt_work_set(WK_PLAYER, 0);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(30);
-#else
-    sleep(25);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 17, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 27, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    wait_message();
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(0 | 0, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(25);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#endif
-    act_motion(16);
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_nop();
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(20);
-    evt_work_set(WK_PLAYER, 0);
-#else
-    wait_message();
-    run
-    {
-        voice_play(1, 113, 0);
-        message(21, 0);
-    }
-    evt_work_set(WK_ENEMY, 0);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_idle();
-    act_nop();
-#else
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
-#endif
-    act_reset();
-    evt_nop();
-#if JILL
-    sleep(35);
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(35);
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 17, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    wait_message();
-#endif
-    run
-    {
-        cut_auto(0);
-        set(FG_STATUS, 15, 1);
-        set(FG_6, 23, 0);
-        aot_on(0, SCE_DOOR, 0);
-    }
-#if JILL
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_idle();
-    act_nop();
-    act_reset();
-    evt_nop();
-#endif
-    evt_finish();
-}
-
-#if CHRIS
-event event_03
-#else
-event event_06
-#endif
-{
-    sleep(1);
-    run
-    {
-        set(FG_6, 23, 1);
-        set(FG_STATUS, 15, 0);
-#if JILL
-        set(FG_COMMON, 76, 0);
-        set(FG_SCENARIO, 43, 0);
-        set(FG_LOCK, 44, 0);
-        set(FG_LOCK, 28, 0);
-#endif
-    }
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_seq(60946, 7183, 8485);
-#else
-    act_anim_seq(39938, 33806, 8727);
-#endif
-    act_nop();
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(45);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_seq(13314, 52257, 8233);
-    act_nop();
-    act_reset();
-    evt_nop();
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_seq(56834, 4122, 8487);
-#else
-    act_anim_seq(20482, 20490, 8212);
-#endif
-    act_nop();
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(50);
-#else
-    do
-    {
-        evt_next();
-    }
-    while (ck(FG_ROOM, 34, 1));
-#endif
-    run
-    {
-#if CHRIS
-        voice_play(1, 142, 0);
-#else
-        voice_play(1, 12, 0);
-        message(0, 0);
-#endif
-    }
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(0 | 2, 32 | 0, 0 | 1);
-    act_motion_path(113, 300, 0, 1, 40, 0);
-#else
-    act_motion_path(113, 300, 0, 3, 60, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    wait_message();
-    evt_work_set(WK_PLAYER, 0);
-#else
-    evt_work_set(WK_ENEMY, 0);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#else
-    act_motion_path(113, 300, 0, 1, 20, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if JILL
-    wait_message();
-#endif
-    run
-    {
-#if CHRIS
-        voice_play(1, 143, 0);
-        message(17, 0);
-#else
-        bgm_play(1);
-        bgm_play(2);
-#endif
-    }
-#if JILL
-    sleep(1);
-    run
-    {
-        message(37, 0);
-    }
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_motion_path(147, 1, 0, 0, 0, 0);
-    act_reset();
-    evt_nop();
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-    act_motion_path(147, 0, 0, 0, 0, 0);
-#else
-    act_motion_path(51, 400, 65436, 0, 10, 10);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(35);
-#else
-    sleep(10);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
-#else
-    act_motion_path(51, 65136, 65436, 0, 10, 10);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(35);
-    evt_work_set(WK_ENEMY, 0);
-#else
-    sleep(70);
-    evt_work_set(WK_PLAYER, 0);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
-#else
-    act_motion_path(51, 65136, 65436, 0, 10, 10);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    sleep(35);
-#else
-    sleep(20);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#else
-    act_motion_path(51, 400, 65436, 0, 10, 10);
-#endif
-    act_reset();
-    evt_nop();
-    wait_message();
-    run
-    {
-#if CHRIS
-        voice_play(1, 144, 0);
-        message(18, 0);
-#else
-        voice_play(1, 13, 0);
-        message(38, 0);
-#endif
-    }
-#if CHRIS
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-    act_motion_path(114, 0, 300, 1, 0, 20);
-    act_reset();
-    evt_nop();
-    sleep(35);
-    evt_work_set(WK_PLAYER, 0);
-#else
-    evt_work_set(WK_ENEMY, 0);
-#endif
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-    act_motion_path(147, 0, 0, 0, 0, 0);
-#endif
-    act_reset();
-    evt_nop();
-#if CHRIS
-    wait_message();
-    run
-    {
-        voice_play(1, 145, 0);
-        message(19, 0);
-    }
-#else
-    sleep(10);
-#endif
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_motion_path(147, 1, 0, 0, 0, 0);
-    act_reset();
-    evt_nop();
-#if JILL
-    sleep(20);
-#endif
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-#else
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-    act_flag_op(1, 1, 0);
-#endif
-    act_reset();
-    evt_nop();
-    sleep(35);
-    evt_work_set(WK_ENEMY, 0);
-    evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
     wait_message();
     run
     {
@@ -3630,72 +3415,114 @@ event event_06
         message(20, 0);
     }
     evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(50);
+    evt_work_set(WK_ENEMY, 0);
+#endif
     evt_actor_begin();
     act_anim_flags(32 | 4, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(35);
+    evt_work_set(WK_PLAYER, 0);
 #else
-    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
-    act_action_a(3);
+    sleep(30);
+    evt_work_set(WK_ENEMY, 0);
+#endif
+    evt_actor_begin();
+    act_anim_flags(32 | 6, 32 | 0, 0 | 1);
+#if JILL
     act_flag_op(1, 1, 0);
 #endif
     act_reset();
     evt_nop();
-    sleep(35);
-#if CHRIS
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 6, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
     sleep(25);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    sleep(45);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 0, 0 | 1);
-    act_flag_op(0, 1, 0);
-    act_reset();
-    evt_nop();
-    sleep(14);
+#if CHRIS
     evt_work_set(WK_PLAYER, 0);
 #else
     evt_work_set(WK_ENEMY, 0);
 #endif
     evt_actor_begin();
 #if CHRIS
+    act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+#else
+    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(45);
+    evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(25);
+    evt_work_set(WK_ENEMY, 0);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 0, 32 | 0, 0 | 1);
+    act_flag_op(0, 1, 0);
+#else
+    act_anim_flags(32 | 18, 32 | 0, 0 | 1);
+#endif
+    act_reset();
+    evt_nop();
+#if CHRIS
+    sleep(14);
+#else
+    sleep(25);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 26, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
+    wait_message();
+    run
+    {
+        voice_play(1, 112, 0);
+        message(20, 0);
+    }
+#endif
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+#if CHRIS
     act_anim_flags(32 | 2, 32 | 0, 0 | 1);
     act_flag_op(0, 1, 0);
 #else
-    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
-    act_action_a(3);
-    act_flag_op(1, 1, 0);
+    act_anim_flags(32 | 5, 32 | 0, 0 | 1);
 #endif
     act_reset();
     evt_nop();
 #if CHRIS
     sleep(34);
+#else
+    sleep(25);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 27, 32 | 0, 0 | 1);
+    act_reset();
+    evt_nop();
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-#if CHRIS
     act_anim_flags(32 | 1, 32 | 0, 0 | 1);
+#if CHRIS
     act_flag_op(0, 1, 0);
-#else
-    act_motion_path(114, 0, 300, 1, 0, 30);
 #endif
     act_reset();
     evt_nop();
+#if CHRIS
     wait_message();
+#else
+    sleep(25);
+#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
     act_anim_seq(52243, 4137, 8487);
     act_nop();
 #else
-    act_anim_flags(0 | 0, 32 | 0, 0 | 1);
+    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
 #endif
     act_motion(16);
     act_nop();
@@ -3710,40 +3537,237 @@ event event_06
     evt_nop();
 #if CHRIS
     sleep(15);
-    evt_work_set(WK_ENEMY, 0);
 #else
+    wait_message();
     run
     {
-        bgm_play(0);
+        voice_play(1, 113, 0);
+        message(21, 0);
     }
-    evt_work_set(WK_PLAYER, 0);
 #endif
+    evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
 #if CHRIS
     act_anim_flags(32 | 13, 32 | 0, 0 | 1);
     act_param_set(0, 252);
 #else
-    act_anim_seq(5139, 4126, 8743);
-    act_nop();
+    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
 #endif
     act_reset();
     evt_nop();
-#if JILL
-    sleep(20);
-#endif
+#if CHRIS
     evt_work_set(WK_PLAYER, 0);
+#else
+    sleep(35);
+    evt_work_set(WK_ENEMY, 0);
+#endif
     evt_actor_begin();
 #if CHRIS
     act_anim_seq(48131, 4148, 8487);
-#else
-    act_anim_seq(63491, 4148, 8743);
-#endif
     act_nop();
+#else
+    act_anim_flags(32 | 28, 32 | 0, 0 | 1);
+#endif
     act_reset();
     evt_nop();
 #if CHRIS
     sleep(15);
+    evt_work_set(WK_PLAYER, 0);
 #else
+    sleep(35);
+    evt_work_set(WK_ENEMY, 0);
+#endif
+    evt_actor_begin();
+#if CHRIS
+    act_idle();
+    act_nop();
+#else
+    act_anim_flags(32 | 17, 32 | 0, 0 | 1);
+#endif
+    act_reset();
+    evt_nop();
+#if JILL
+    wait_message();
+#endif
+    run
+    {
+        cut_auto(0);
+        set(FG_STATUS, 15, 1);
+        set(FG_6, 23, 0);
+#if CHRIS
+        aot_on(1, SCE_DOOR, 0);
+#else
+        aot_on(0, SCE_DOOR, 0);
+#endif
+    }
+#if JILL
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+#endif
+    evt_finish();
+}
+#if JILL
+
+event event_06
+{
+    sleep(1);
+    run
+    {
+        set(FG_6, 23, 1);
+        set(FG_STATUS, 15, 0);
+        set(FG_COMMON, 76, 0);
+        set(FG_SCENARIO, 43, 0);
+        set(FG_LOCK, 44, 0);
+        set(FG_LOCK, 28, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(39938, 33806, 8727);
+    act_nop();
+    act_reset();
+    evt_nop();
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_seq(20482, 20490, 8212);
+    act_nop();
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, 34, 1));
+    run
+    {
+        voice_play(1, 12, 0);
+        message(0, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(113, 300, 0, 3, 60, 0);
+    act_reset();
+    evt_nop();
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_motion_path(113, 300, 0, 1, 20, 0);
+    act_reset();
+    evt_nop();
+    wait_message();
+    run
+    {
+        bgm_play(1);
+        bgm_play(2);
+    }
+    sleep(1);
+    run
+    {
+        message(37, 0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(51, 400, 65436, 0, 10, 10);
+    act_reset();
+    evt_nop();
+    sleep(10);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_motion_path(51, 65136, 65436, 0, 10, 10);
+    act_reset();
+    evt_nop();
+    sleep(70);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(51, 65136, 65436, 0, 10, 10);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_motion_path(51, 400, 65436, 0, 10, 10);
+    act_reset();
+    evt_nop();
+    wait_message();
+    run
+    {
+        voice_play(1, 13, 0);
+        message(38, 0);
+    }
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+    act_motion_path(147, 0, 0, 0, 0, 0);
+    act_reset();
+    evt_nop();
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(147, 1, 0, 0, 0, 0);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+    sleep(35);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
+    act_action_a(3);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+    sleep(35);
+    evt_work_set(WK_ENEMY, 0);
+    evt_actor_begin();
+    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
+    act_action_a(3);
+    act_flag_op(1, 1, 0);
+    act_reset();
+    evt_nop();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(114, 0, 300, 1, 0, 30);
+    act_reset();
+    evt_nop();
+    wait_message();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(0 | 0, 32 | 0, 0 | 1);
+    act_motion(16);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_reset();
+    evt_nop();
+    run
+    {
+        bgm_play(0);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(5139, 4126, 8743);
+    act_nop();
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(63491, 4148, 8743);
+    act_nop();
+    act_reset();
+    evt_nop();
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_anim_seq(5139, 4126, 8743);
@@ -3765,36 +3789,29 @@ event event_06
         set(FG_6, 23, 0);
         aot_on(1, SCE_DOOR, 0);
     }
-#endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
     act_nop();
     act_reset();
     evt_nop();
-#if JILL
     evt_finish();
 }
 
 event event_07
 {
-#endif
     run
     {
         cut_auto(0);
         set(FG_STATUS, 15, 1);
         set(FG_6, 23, 0);
-#if CHRIS
-        aot_on(1, SCE_DOOR, 0);
-#endif
     }
-#if JILL
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_idle();
     act_nop();
     act_reset();
     evt_nop();
-#endif
     evt_finish();
 }
+#endif

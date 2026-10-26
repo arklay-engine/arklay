@@ -29,7 +29,9 @@ proc init
             evt_exec(0, 9, event_01);
         }
     }
+#endif
 }
+#if MANSION2
 
 event event_00
 {
@@ -70,5 +72,5 @@ event event_02
     sleep(42);
     act_idle();
     act_finish();
-#endif
 }
+#endif

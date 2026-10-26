@@ -92,9 +92,9 @@ proc init
 #endif
 }
 
+#if MANSION1
 event event_00
 {
-#if MANSION1
     sleep(1);
     run
     {
@@ -172,9 +172,11 @@ event event_01
     evt_finish();
 }
 
+#if CHRIS
+event event_02
+#else
 event event_02
 {
-#if JILL
     run
     {
         set(FG_6, 23, 1);
@@ -203,9 +205,7 @@ event event_02
 
 event event_03
 {
-#endif
     sleep(1);
-#if JILL
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
     act_anim_flags(0 | 9, 32 | 0, 0 | 3);
@@ -1117,9 +1117,9 @@ event event_26
 }
 
 event event_27
+#endif
 {
     sleep(1);
-#endif
     eml_state(0, 1, 0, 2);
     evt_work_set(WK_ENEMY, 1);
     evt_actor_begin();
@@ -1175,8 +1175,10 @@ event event_05
 #else
 event event_2A
 #endif
-{
+#else
+event event_00
 #endif
+{
     sleep(50);
     se_play_3d(2, 24, 0, 0, 0, 3000, 3000);
     sleep(80);

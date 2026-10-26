@@ -8,50 +8,21 @@ proc init
     aot_set(2, 31700, 6300, 2000, 4000, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
     item_aot_set(3, 17400, 14500, 1000, 1000, ITEM_SHEILD_KEY, 1, 0, 255, 80, 70, 160, 246, 32, 58, 0, 0, 33, 129, 0, 134);
     if (ck(FG_COMMON, 167, 0))
-#else
-    aot_set(2, 4000, 10500, 6000, 3700, SCE_NONE, 65, 5, 0, 0, 0, 0, 0);
-    aot_set(3, 3000, 2300, 5000, 5300, SCE_NONE, 65, 6, 0, 0, 0, 0, 0);
-    aot_set(4, 31700, 6300, 2000, 4000, SCE_NONE, 129, 7, 0, 0, 0, 0, 0);
-    aot_set(5, 31700, 6300, 2000, 4000, SCE_NONE, 129, 8, 0, 0, 0, 0, 0);
-    item_aot_set(6, 17400, 14500, 1000, 1000, ITEM_SHEILD_KEY, 1, 0, 255, 80, 70, 160, 246, 32, 58, 0, 0, 33, 129, 0, 134);
-    if (ck(FG_COMMON, 170, 0))
-#endif
     {
-#if CHRIS
         item_aot_set(4, 2000, 7200, 1800, 1800, ITEM_WOOD_EMBLEM, 1, 1, 255, 16, 9, 216, 245, 8, 32, 0, 0, 42, 129, 0, 0);
-#else
-        item_aot_set(7, 2000, 7200, 1800, 1800, ITEM_WOOD_EMBLEM, 1, 1, 255, 16, 9, 216, 245, 8, 32, 0, 0, 42, 129, 0, 0);
-#endif
     }
     else
     {
-#if CHRIS
         item_aot_set(4, 2000, 7200, 1800, 1800, ITEM_WOOD_EMBLEM, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 42, 129, 0, 0);
-#else
-        item_aot_set(7, 2000, 7200, 1800, 1800, ITEM_WOOD_EMBLEM, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 42, 129, 0, 0);
-#endif
     }
-#if CHRIS
     if (ck(FG_COMMON, 168, 0))
-#else
-    if (ck(FG_COMMON, 171, 0))
-#endif
     {
-#if CHRIS
         item_aot_set(5, 0, 0, 0, 0, ITEM_GOLD_EMBLEM, 1, 2, 255, 16, 9, 216, 245, 8, 32, 0, 0, 43, 129, 0, 0);
-#else
-        item_aot_set(8, 0, 0, 0, 0, ITEM_GOLD_EMBLEM, 1, 2, 255, 16, 9, 216, 245, 8, 32, 0, 0, 43, 129, 0, 0);
-#endif
     }
     else
     {
-#if CHRIS
         item_aot_set(5, 0, 0, 0, 0, ITEM_GOLD_EMBLEM, 1, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 43, 129, 0, 0);
-#else
-        item_aot_set(8, 0, 0, 0, 0, ITEM_GOLD_EMBLEM, 1, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 43, 129, 0, 0);
-#endif
     }
-#if CHRIS
     aot_set(6, 2000, 7200, 1800, 1800, SCE_USEITEM, 1, 9, 0, 4, 0, 1, 0);
     aot_set(7, 2000, 7200, 1800, 1800, SCE_USEITEM, 1, 4, 0, 33, 0, 1, 0);
     aot_set(8, 2000, 7200, 1800, 1800, SCE_USEITEM, 1, 9, 0, 5, 0, 1, 0);
@@ -65,6 +36,27 @@ proc init
     aot_set(16, 16600, 13000, 2500, 1000, SCE_NONE, 129, 151, 0, 255, 0, 0, 0);
     aot_set(17, 14600, 13000, 2500, 1000, SCE_NONE, 129, 152, 0, 255, 0, 0, 0);
 #else
+    aot_set(2, 4000, 10500, 6000, 3700, SCE_NONE, 65, 5, 0, 0, 0, 0, 0);
+    aot_set(3, 3000, 2300, 5000, 5300, SCE_NONE, 65, 6, 0, 0, 0, 0, 0);
+    aot_set(4, 31700, 6300, 2000, 4000, SCE_NONE, 129, 7, 0, 0, 0, 0, 0);
+    aot_set(5, 31700, 6300, 2000, 4000, SCE_NONE, 129, 8, 0, 0, 0, 0, 0);
+    item_aot_set(6, 17400, 14500, 1000, 1000, ITEM_SHEILD_KEY, 1, 0, 255, 80, 70, 160, 246, 32, 58, 0, 0, 33, 129, 0, 134);
+    if (ck(FG_COMMON, 170, 0))
+    {
+        item_aot_set(7, 2000, 7200, 1800, 1800, ITEM_WOOD_EMBLEM, 1, 1, 255, 16, 9, 216, 245, 8, 32, 0, 0, 42, 129, 0, 0);
+    }
+    else
+    {
+        item_aot_set(7, 2000, 7200, 1800, 1800, ITEM_WOOD_EMBLEM, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 42, 129, 0, 0);
+    }
+    if (ck(FG_COMMON, 171, 0))
+    {
+        item_aot_set(8, 0, 0, 0, 0, ITEM_GOLD_EMBLEM, 1, 2, 255, 16, 9, 216, 245, 8, 32, 0, 0, 43, 129, 0, 0);
+    }
+    else
+    {
+        item_aot_set(8, 0, 0, 0, 0, ITEM_GOLD_EMBLEM, 1, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 43, 129, 0, 0);
+    }
     aot_set(9, 2000, 7200, 1800, 1800, SCE_USEITEM, 1, 9, 0, 4, 0, 1, 0);
     aot_set(10, 2000, 7200, 1800, 1800, SCE_USEITEM, 1, 4, 0, 35, 0, 1, 0);
     aot_set(11, 2000, 7200, 1800, 1800, SCE_USEITEM, 1, 9, 0, 5, 0, 1, 0);
@@ -92,11 +84,6 @@ proc init
     obj(0, 0, 255, 4100, 0, 6700, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 188, 2, 88, 2);
     obj(1, 0, 255, 5000, 0, 6900, -7800, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 94, 1, 44, 1);
     if (ck(FG_COMMON, 168, 0))
-#else
-    obj(0, 15, 255, 4100, 0, 6700, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 188, 2, 88, 2);
-    obj(1, 15, 255, 5000, 0, 6900, -7800, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 94, 1, 44, 1);
-    if (ck(FG_COMMON, 171, 0))
-#endif
     {
         obj(2, 1, 255, 16000, 0, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
     }
@@ -104,31 +91,49 @@ proc init
     {
         obj(2, 1, 255, 18000, 0, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
     }
+#else
+    obj(0, 15, 255, 4100, 0, 6700, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 188, 2, 88, 2);
+    obj(1, 15, 255, 5000, 0, 6900, -7800, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 94, 1, 44, 1);
+    if (ck(FG_COMMON, 171, 0))
+    {
+        obj(2, 1, 255, 16000, 0, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
+    }
+    else
+    {
+        obj(2, 1, 255, 18000, 0, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
+    }
+#endif
     if (ck(FG_SCENARIO, 11, 0))
     {
         obj(3, 37, 255, 12700, 0, 5000, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 2, 20, 5, 244, 1);
     }
 #if CHRIS
     if (ck(FG_COMMON, 2, 1))
-#else
-    if (ck(FG_COMMON, 161, 1))
-#endif
     {
-#if CHRIS
         set(FG_STATUS, 15, 1);
         if (ck(FG_COMMON, 1, 0))
-#else
-        if (ck(FG_COMMON, 2, 0))
-#endif
         {
-#if CHRIS
             aot_delete(1, SCE_NONE, 0);
             aot_reset(2, SCE_EVENT, 129, 0, event_00, 0);
-#else
-            set(FG_COMMON, 161, 0);
-#endif
         }
-#if JILL
+    }
+    if (ck(FG_COMMON, 164, 0))
+    {
+        set(FG_COMMON, 169, 0);
+    }
+    if (cmpb(9, 0, 3))
+    {
+        aot_reset(3, SCE_MESSAGE, 129, 147, 255, 0);
+        aot_reset(4, SCE_MESSAGE, 129, 147, 255, 0);
+        aot_reset(18, SCE_MESSAGE, 129, 147, 255, 0);
+    }
+#else
+    if (ck(FG_COMMON, 161, 1))
+    {
+        if (ck(FG_COMMON, 2, 0))
+        {
+            set(FG_COMMON, 161, 0);
+        }
         else
         {
             if (ck(FG_COMMON, 162, 1))
@@ -170,17 +175,9 @@ proc init
                 }
             }
         }
-#endif
     }
-#if CHRIS
-    if (ck(FG_COMMON, 164, 0))
-#else
     if (ck(FG_COMMON, 173, 1))
-#endif
     {
-#if CHRIS
-        set(FG_COMMON, 169, 0);
-#else
         if (ck(FG_COMMON, 172, 0))
         {
             if (ck(FG_COMMON, 2, 0))
@@ -190,31 +187,26 @@ proc init
                 evt_exec(0, 1, event_09);
             }
         }
-#endif
     }
-#if CHRIS
-    if (cmpb(9, 0, 3))
-#else
     if (ck(FG_COMMON, 5, 0))
-#endif
     {
-#if CHRIS
-        aot_reset(3, SCE_MESSAGE, 129, 147, 255, 0);
-        aot_reset(4, SCE_MESSAGE, 129, 147, 255, 0);
-        aot_reset(18, SCE_MESSAGE, 129, 147, 255, 0);
-#else
         set(FG_COMMON, 79, 0);
-#endif
     }
+#endif
     if (cmpb(3, 0, 4))
     {
         snd_pan_vol_set(1, 87, 90);
     }
+#if CHRIS
     if (cmpb(3, 0, 6))
     {
         snd_pan_vol_set(1, 85, 82);
     }
-#if JILL
+#else
+    if (cmpb(3, 0, 6))
+    {
+        snd_pan_vol_set(1, 85, 82);
+    }
     if (ck(FG_COMMON, 173, 1))
     {
         enemy(ENEMY_ZOMBIE_RESEARCHER_, 192, 255, 1, 1, 0, 0, 3072, 0, 0, 0, 0, 0, 1, 0, 0, 0);
@@ -226,123 +218,45 @@ proc main
 {
 #if CHRIS
     if (ck(FG_COMMON, 168, 1))
-#else
-    if (ck(FG_ROOM, 0, 0))
-#endif
     {
-#if CHRIS
         if (ck(FG_COMMON, 167, 0))
-#else
-        set(FG_ROOM, 0, 1);
-        if (ck(FG_ROOM, 4, 0))
-#endif
         {
-#if CHRIS
             aot_delete(6, SCE_NONE, 1);
             aot_delete(7, SCE_NONE, 1);
             aot_delete(8, SCE_NONE, 1);
-#else
-            evt_exec(0, 9, event_04);
-        }
-        else if (ck(FG_ROOM, 1, 0))
-        {
-            evt_exec(0, 9, event_00);
-        }
-    }
-    if (ck(FG_COMMON, 173, 1))
-    {
-        if (ck(FG_COMMON, 162, 0))
-        {
-            if (ck(FG_ROOM, 8, 0))
-            {
-                aot_delete(14, SCE_EVENT, 65);
-                set(FG_ROOM, 8, 1);
-            }
-        }
-    }
-    if (ck(FG_COMMON, 171, 1))
-    {
-        if (ck(FG_COMMON, 170, 0))
-        {
-#endif
             aot_delete(9, SCE_NONE, 1);
-#if JILL
-            aot_delete(10, SCE_NONE, 1);
-            aot_delete(11, SCE_NONE, 1);
-            aot_delete(12, SCE_NONE, 1);
-#endif
         }
         else
         {
-#if CHRIS
             aot_delete(4, SCE_NONE, 1);
             aot_delete(6, SCE_USEITEM, 1);
             aot_delete(7, SCE_USEITEM, 1);
             aot_delete(8, SCE_USEITEM, 1);
-#else
-            aot_delete(7, SCE_NONE, 1);
-#endif
             aot_delete(9, SCE_USEITEM, 1);
-#if JILL
-            aot_delete(10, SCE_USEITEM, 1);
-            aot_delete(11, SCE_USEITEM, 1);
-            aot_delete(12, SCE_USEITEM, 1);
-#endif
         }
         if (testpickup(ITEM_WOOD_EMBLEM))
         {
-#if CHRIS
             set(FG_COMMON, 167, 1);
-#else
-            set(FG_COMMON, 170, 1);
-#endif
         }
         if (testitem(ITEM_WOOD_EMBLEM))
         {
-#if CHRIS
             if (ck(FG_ROOM, 33, 0))
-#else
-            if (ck(FG_ROOM, 35, 0))
-#endif
             {
                 set(FG_ITEM, 42, 0);
-#if CHRIS
                 set(FG_COMMON, 167, 0);
-#else
-                set(FG_COMMON, 170, 0);
-#endif
                 objtbl_b_set(1, 1, 1);
-#if CHRIS
                 aot_delete(4, SCE_ITEM, 129);
                 evt_exec(0, 9, event_02);
-#else
-                aot_delete(7, SCE_ITEM, 129);
-                evt_exec(0, 9, event_0C);
-#endif
             }
         }
         if (testitem(ITEM_GOLD_EMBLEM))
         {
-#if CHRIS
             if (ck(FG_ROOM, 32, 0))
-#else
-            if (ck(FG_ROOM, 34, 0))
-#endif
             {
-#if CHRIS
                 set(FG_COMMON, 168, 0);
-#else
-                set(FG_COMMON, 171, 0);
-                set(FG_COMMON, 170, 0);
-#endif
                 objtbl_b_set(1, 2, 1);
-#if CHRIS
                 evt_exec(0, 9, event_01);
                 evt_exec(0, 9, event_03);
-#else
-                evt_exec(0, 9, event_0B);
-                evt_exec(0, 9, event_0D);
-#endif
             }
         }
         if (cmpb(2, 0, 0))
@@ -376,70 +290,155 @@ proc main
     }
     else
     {
-#if CHRIS
         aot_delete(4, SCE_NONE, 1);
         aot_delete(6, SCE_NONE, 1);
-#endif
         aot_delete(7, SCE_NONE, 1);
-#if CHRIS
         aot_delete(8, SCE_NONE, 1);
-#endif
         aot_delete(9, SCE_NONE, 1);
-#if CHRIS
         aot_delete(7, SCE_NONE, 1);
-#else
-        aot_delete(10, SCE_NONE, 1);
-        aot_delete(11, SCE_NONE, 1);
-        aot_delete(12, SCE_NONE, 1);
-#endif
     }
-#if CHRIS
     if (ck(FG_COMMON, 167, 0))
-#else
-    if (ck(FG_COMMON, 170, 0))
-#endif
     {
-#if CHRIS
         aot_delete(10, SCE_NONE, 129);
-#else
-        aot_delete(13, SCE_NONE, 129);
-#endif
     }
     else
     {
-#if CHRIS
         aot_delete(10, SCE_EVENT, 129);
-#else
-        aot_delete(13, SCE_EVENT, 129);
-#endif
     }
-#if CHRIS
     if (ck(FG_COMMON, 168, 0))
-#else
-    if (ck(FG_COMMON, 171, 0))
-#endif
     {
-#if CHRIS
         aot_reset(10, SCE_EVENT, 129, 9, event_05, 0);
         aot_delete(16, SCE_NONE, 129);
         aot_delete(17, SCE_MESSAGE, 129);
-#else
-        aot_reset(13, SCE_EVENT, 129, 9, event_14, 0);
-        aot_delete(21, SCE_NONE, 129);
-        aot_delete(22, SCE_MESSAGE, 129);
-#endif
     }
     else
     {
-#if CHRIS
         aot_delete(16, SCE_MESSAGE, 129);
         aot_delete(17, SCE_NONE, 129);
+    }
 #else
+    if (ck(FG_ROOM, 0, 0))
+    {
+        set(FG_ROOM, 0, 1);
+        if (ck(FG_ROOM, 4, 0))
+        {
+            evt_exec(0, 9, event_04);
+        }
+        else if (ck(FG_ROOM, 1, 0))
+        {
+            evt_exec(0, 9, event_00);
+        }
+    }
+    if (ck(FG_COMMON, 173, 1))
+    {
+        if (ck(FG_COMMON, 162, 0))
+        {
+            if (ck(FG_ROOM, 8, 0))
+            {
+                aot_delete(14, SCE_EVENT, 65);
+                set(FG_ROOM, 8, 1);
+            }
+        }
+    }
+    if (ck(FG_COMMON, 171, 1))
+    {
+        if (ck(FG_COMMON, 170, 0))
+        {
+            aot_delete(9, SCE_NONE, 1);
+            aot_delete(10, SCE_NONE, 1);
+            aot_delete(11, SCE_NONE, 1);
+            aot_delete(12, SCE_NONE, 1);
+        }
+        else
+        {
+            aot_delete(7, SCE_NONE, 1);
+            aot_delete(9, SCE_USEITEM, 1);
+            aot_delete(10, SCE_USEITEM, 1);
+            aot_delete(11, SCE_USEITEM, 1);
+            aot_delete(12, SCE_USEITEM, 1);
+        }
+        if (testpickup(ITEM_WOOD_EMBLEM))
+        {
+            set(FG_COMMON, 170, 1);
+        }
+        if (testitem(ITEM_WOOD_EMBLEM))
+        {
+            if (ck(FG_ROOM, 35, 0))
+            {
+                set(FG_ITEM, 42, 0);
+                set(FG_COMMON, 170, 0);
+                objtbl_b_set(1, 1, 1);
+                aot_delete(7, SCE_ITEM, 129);
+                evt_exec(0, 9, event_0C);
+            }
+        }
+        if (testitem(ITEM_GOLD_EMBLEM))
+        {
+            if (ck(FG_ROOM, 34, 0))
+            {
+                set(FG_COMMON, 171, 0);
+                set(FG_COMMON, 170, 0);
+                objtbl_b_set(1, 2, 1);
+                evt_exec(0, 9, event_0B);
+                evt_exec(0, 9, event_0D);
+            }
+        }
+        if (cmpb(2, 0, 0))
+        {
+            snd_pan_vol_set(1, 85, 82);
+        }
+        if (cmpb(2, 0, 1))
+        {
+            snd_pan_vol_set(1, 90, 87);
+        }
+        if (cmpb(2, 0, 2))
+        {
+            snd_pan_vol_set(1, 87, 90);
+        }
+        if (cmpb(2, 0, 3))
+        {
+            snd_pan_vol_set(1, 82, 85);
+        }
+        if (cmpb(2, 0, 4))
+        {
+            snd_pan_vol_set(1, 85, 85);
+        }
+        if (cmpb(2, 0, 5))
+        {
+            snd_pan_vol_set(1, 95, 95);
+        }
+        if (cmpb(2, 0, 6))
+        {
+            snd_pan_vol_set(1, 80, 80);
+        }
+    }
+    else
+    {
+        aot_delete(7, SCE_NONE, 1);
+        aot_delete(9, SCE_NONE, 1);
+        aot_delete(10, SCE_NONE, 1);
+        aot_delete(11, SCE_NONE, 1);
+        aot_delete(12, SCE_NONE, 1);
+    }
+    if (ck(FG_COMMON, 170, 0))
+    {
+        aot_delete(13, SCE_NONE, 129);
+    }
+    else
+    {
+        aot_delete(13, SCE_EVENT, 129);
+    }
+    if (ck(FG_COMMON, 171, 0))
+    {
+        aot_reset(13, SCE_EVENT, 129, 9, event_14, 0);
+        aot_delete(21, SCE_NONE, 129);
+        aot_delete(22, SCE_MESSAGE, 129);
+    }
+    else
+    {
         aot_delete(21, SCE_MESSAGE, 129);
         aot_delete(22, SCE_NONE, 129);
-#endif
     }
-#if JILL
     if (ck(FG_COMMON, 173, 0))
     {
         aot_delete(16, SCE_NONE, 129);
@@ -541,9 +540,11 @@ event event_00
     evt_finish();
 }
 
+#if CHRIS
+event event_01
+#else
 event event_01
 {
-#if JILL
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_anim_seq(56338, 46185, 8493);
@@ -980,8 +981,8 @@ event event_0A
 }
 
 event event_0B
-{
 #endif
+{
     set(FG_6, 23, 1);
     bgm_stop(1);
     sleep(10);
@@ -1059,12 +1060,10 @@ event event_0D
 event event_04
 #else
 event event_0E
-#endif
 {
     run
     {
         set(FG_6, 23, 1);
-#if JILL
         set(FG_STATUS, 15, 0);
         cut_auto(1);
         aot_delete(14, SCE_NONE, 65);
@@ -1734,11 +1733,11 @@ event event_12
 }
 
 event event_13
+#endif
 {
     run
     {
         set(FG_6, 23, 1);
-#endif
         cutnext(6);
         message(144, 0);
     }

@@ -30,15 +30,14 @@ proc init
     }
 #if CHRIS
     if (cmpb(9, 0, 3))
-#else
-    if (ck(FG_COMMON, 178, 1))
-#endif
     {
-#if CHRIS
         aot_reset(3, SCE_MESSAGE, 129, 136, 255, 0);
         aot_reset(4, SCE_MESSAGE, 129, 136, 255, 0);
         aot_reset(7, SCE_MESSAGE, 129, 136, 255, 0);
+    }
 #else
+    if (ck(FG_COMMON, 178, 1))
+    {
         if (ck(FG_COMMON, 174, 0))
         {
             if (ck(FG_COMMON, 176, 1))
@@ -49,8 +48,8 @@ proc init
                 }
             }
         }
-#endif
     }
+#endif
     if (ck(FG_SCENARIO, 62, 0))
     {
         aot_delete(4, SCE_NONE, 129);
@@ -79,18 +78,16 @@ event event_00
     evt_finish();
 }
 
+#if CHRIS
+event event_01
+#else
 event event_01
 {
-#if JILL
     sleep(2);
-#endif
     run
     {
-#if JILL
         set(FG_COMMON, 178, 0);
-#endif
         set(FG_6, 23, 1);
-#if JILL
         set(FG_STATUS, 15, 0);
         dir_set(0, 0, 4085, 0, 2800, 0, 3000);
     }
@@ -565,11 +562,11 @@ event event_03
 }
 
 event event_04
+#endif
 {
     run
     {
         set(FG_6, 23, 1);
-#endif
         message(134, 0);
     }
     do

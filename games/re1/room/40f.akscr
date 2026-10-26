@@ -457,7 +457,11 @@ event event_03
 #if CHRIS
     evt_nop();
     evt_nop();
+#else
+    evt_finish();
+#endif
 }
+#if CHRIS
 
 event event_04
 {
@@ -516,6 +520,6 @@ event event_04
     evt_actor_begin();
     act_idle();
     act_reset();
-#endif
     evt_finish();
 }
+#endif

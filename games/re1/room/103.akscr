@@ -73,7 +73,9 @@ proc init
             evt_exec(0, 9, event_00);
         }
     }
+#endif
 }
+#if MANSION2
 
 proc main
 {
@@ -90,8 +92,8 @@ proc main
             eml_state(0, 0, 0, 9);
         }
     }
-#if CHRIS
 }
+#if CHRIS
 
 event event_00
 {
@@ -122,6 +124,6 @@ event event_01
     sleep(42);
     act_idle();
     act_finish();
-#endif
-#endif
 }
+#endif
+#endif

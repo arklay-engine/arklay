@@ -14,21 +14,17 @@ proc init
     item_aot_set(4, 6762, 15568, 1800, 1800, ITEM_GREEN_HERB, 1, 0, 255, 238, 29, 0, 0, 84, 64, 0, 0, 110, 129, 1, 0);
 #if MANSION1
     if (ck(FG_SCENARIO, 9, 1))
+    {
+        set(FG_SCENARIO, 9, 0);
+    }
+    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 4, 25, 1, 2, 0, 0, 2009, 0, 0, 4089, 0, 13523, 0, 0, 0, 0);
 #else
     obj(0, 1, 255, 10720, -2350, 15120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     eml_rot(128, 0, 248, 0, 4);
     if (ck(FG_STATUS, 8, 1))
-#endif
     {
-#if MANSION1
-        set(FG_SCENARIO, 9, 0);
-#else
         aot_set(5, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-#endif
     }
-#if MANSION1
-    enemy(ENEMY_ZOMBIE_GROUNDSKEEPER_, 4, 25, 1, 2, 0, 0, 2009, 0, 0, 4089, 0, 13523, 0, 0, 0, 0);
-#else
     else
     {
         aot_set(5, 9820, 14220, 1800, 1800, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
@@ -56,8 +52,10 @@ proc init
             }
         }
     }
-#if CHRIS
+#endif
 }
+#if MANSION2
+#if CHRIS
 
 event event_00
 {
@@ -199,6 +197,6 @@ event event_03
     sleep(40);
     act_anim_flags(32 | 8, 32 | 31, 0 | 0);
     act_finish();
-#endif
-#endif
 }
+#endif
+#endif

@@ -10,24 +10,26 @@ proc init
 #if CHRIS
     set(FG_LOCK, 1, 0);
     if (ck(FG_ITEM, 0, 1) && ck(FG_ITEM, 1, 1) && ck(FG_COMMON, 32, 1))
-#else
-    enemy(ENEMY_BARRY_STARS_, 0, 255, 1, 2, 0, 0, 0, 0, 0, 6900, 0, 9600, 0, 0, 0, 0);
-    enemy(ENEMY_BARRY_STARS_, 0, 255, 1, 2, 0, 0, 0, 0, 0, 450, 0, 5000, 1, 0, 0, 0);
-    if (ck(FG_COMMON, 7, 0))
-#endif
     {
-#if CHRIS
         set(FG_LOCK, 0, 1);
         set(FG_LOCK, 2, 1);
         cut_auto(1);
         setb(2, 3, 0);
         evt_exec(0, 9, event_00);
         dir_set(0, 0, 3072, 0, 5200, 0, 2500);
-#else
-        set(FG_COMMON, 33, 0);
-#endif
     }
-#if JILL
+    else
+    {
+        set(FG_LOCK, 0, 0);
+        set(FG_LOCK, 2, 0);
+    }
+#else
+    enemy(ENEMY_BARRY_STARS_, 0, 255, 1, 2, 0, 0, 0, 0, 0, 6900, 0, 9600, 0, 0, 0, 0);
+    enemy(ENEMY_BARRY_STARS_, 0, 255, 1, 2, 0, 0, 0, 0, 0, 450, 0, 5000, 1, 0, 0, 0);
+    if (ck(FG_COMMON, 7, 0))
+    {
+        set(FG_COMMON, 33, 0);
+    }
     if (ck(FG_COMMON, 95, 0))
     {
         set(FG_COMMON, 33, 0);
@@ -59,21 +61,19 @@ proc init
             set(FG_LOCK, 1, 0);
         }
     }
-#endif
     else
     {
         set(FG_LOCK, 0, 0);
-#if CHRIS
-        set(FG_LOCK, 2, 0);
-#else
         set(FG_LOCK, 1, 0);
-#endif
     }
+#endif
 }
 
+#if CHRIS
+event event_00
+#else
 event event_00
 {
-#if JILL
     set(FG_STATUS, 15, 0);
     set(FG_6, 23, 1);
     evt_work_set(WK_PLAYER, 0);
@@ -316,20 +316,13 @@ event event_01
 
 event event_02
 {
-#endif
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4860, -8690, 4860);
     tw_end();
     evt_nop();
     sleep(1);
-#if CHRIS
-    set(FG_STATUS, 15, 0);
-#endif
     set(FG_6, 23, 1);
-#if CHRIS
-    sleep(10);
-#else
     set(FG_STATUS, 15, 0);
     evt_nop();
     evt_nop();
@@ -346,13 +339,11 @@ event event_03
     act_motion_path(19, 6600, 0, 2300, 100, 100);
     act_reset();
     evt_nop();
-#endif
     snd_pan_vol_set(0, 30, 30);
     bgm_play(1);
     sleep(45);
     snd_pan_vol_set(0, 110, 110);
     bgm_play(0);
-#if JILL
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -419,20 +410,25 @@ event event_04
 }
 
 event event_05
+#endif
 {
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
     tw_abs_pos(0, 4860, -8690, 4860);
     tw_end();
     evt_nop();
-#endif
     sleep(1);
-#if JILL
     set(FG_STATUS, 15, 0);
     set(FG_6, 23, 1);
     sleep(10);
-    sleep(1);
+#if CHRIS
+    snd_pan_vol_set(0, 30, 30);
+    bgm_play(1);
+    sleep(45);
+    snd_pan_vol_set(0, 110, 110);
+    bgm_play(0);
 #endif
+    sleep(1);
     run
     {
 #if CHRIS
@@ -553,17 +549,9 @@ event event_05
 event event_01
 #else
 event event_06
-#endif
 {
-#if CHRIS
-    evt_fork(7, event_02, 0);
-    evt_fork(6, event_03, 0);
-#endif
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
-#if CHRIS
-    tw_set_pos(0, 7, 0);
-#else
     tw_set_pos(0, 5, 0);
     for (450)
     {
@@ -577,11 +565,20 @@ event event_06
 }
 
 event event_07
+#endif
 {
+#if CHRIS
+    evt_fork(7, event_02, 0);
+    evt_fork(6, event_03, 0);
+#else
     evt_fork(6, event_0A, 0);
     evt_fork(7, event_0B, 0);
+#endif
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
+#if CHRIS
+    tw_set_pos(0, 7, 0);
+#else
     tw_set_pos(0, 10, 0);
 #endif
     for (140)
@@ -601,9 +598,7 @@ event event_07
 event event_02
 #else
 event event_08
-#endif
 {
-#if JILL
     sleep(100);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -633,8 +628,8 @@ event event_09
 }
 
 event event_0A
-{
 #endif
+{
     run
     {
         effect(8, 20, 128, 12, 244, 20, 0, 62, 244, 0, 0);
@@ -750,8 +745,8 @@ event event_0C
 #endif
     evt_nop();
     evt_nop();
-#if JILL
 }
+#if JILL
 
 event event_0D
 {
@@ -784,5 +779,5 @@ event event_0E
     tw_nop();
     tw_end();
     evt_finish();
-#endif
 }
+#endif

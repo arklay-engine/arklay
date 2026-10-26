@@ -11,18 +11,30 @@ proc init
 #if CHRIS
     aot_set(2, 1100, 6350, 3200, 2750, SCE_ITEMBOX, 129, 4, 0, 0, 0, 0, 0);
     if (ck(FG_COMMON, 75, 0))
+    {
+        enemy(ENEMY_JILL_STARS_, 2, 255, 1, 2, 0, 0, 2368, 0, 0, 8140, 0, 9680, 0, 6, 0, 0);
+        if (ck(FG_COMMON, 91, 1))
+        {
+            evt_exec(0, 9, event_00);
+            set(FG_COMMON, 91, 0);
+        }
+        else
+        {
+            evt_exec(0, 9, event_01);
+        }
+    }
+    aot_reset(0, SCE_EVENT, 129, 9, event_02, 0);
+    if (ck(FG_SCENARIO, 43, 0))
+    {
+        room_bgm_state_set(4, 2, 57);
+    }
 #else
     aot_set(3, 1100, 6350, 3200, 2750, SCE_ITEMBOX, 129, 4, 0, 0, 0, 0, 0);
     aot_reset(0, SCE_EVENT, 129, 9, event_03, 0);
     enemy(ENEMY_BARRY_2, 4, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 0, 50, 99, 0);
     enemy(ENEMY_CHRIS_STARS_, 2, 255, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 1, 0, 0, 0);
     if (ck(FG_COMMON, 75, 0) && ck(FG_COMMON, 78, 1))
-#endif
     {
-#if CHRIS
-        enemy(ENEMY_JILL_STARS_, 2, 255, 1, 2, 0, 0, 2368, 0, 0, 8140, 0, 9680, 0, 6, 0, 0);
-        if (ck(FG_COMMON, 91, 1))
-#else
         pos_set(1, 0, 1504, 0, 3860, 0, 11550);
         evt_exec(0, 7, event_02);
     }
@@ -31,12 +43,7 @@ proc init
         pos_set(0, 0, 0, 0, 2400, 0, 10500);
         aot_set(4, 1900, 9300, 1500, 1500, SCE_MESSAGE, 129, 139, 0, 255, 0, 0, 0);
         if (ck(FG_COMMON, 192, 1))
-#endif
         {
-#if CHRIS
-            evt_exec(0, 9, event_00);
-            set(FG_COMMON, 91, 0);
-#else
             if (ck(FG_COMMON, 75, 0))
             {
                 evt_exec(0, 9, event_01);
@@ -45,35 +52,16 @@ proc init
             {
                 evt_exec(0, 9, event_00);
             }
-#endif
         }
-#if CHRIS
-        else
-#else
         else if (ck(FG_COMMON, 75, 0))
-#endif
         {
-#if CHRIS
-            evt_exec(0, 9, event_01);
-#else
             evt_exec(0, 9, event_04);
-#endif
         }
-#if JILL
         set(FG_COMMON, 192, 0);
         room_bgm_state_set(4, 2, 66);
-#endif
     }
-#if CHRIS
-    aot_reset(0, SCE_EVENT, 129, 9, event_02, 0);
-    if (ck(FG_SCENARIO, 43, 0))
-#else
     if (ck(FG_COMMON, 82, 0) && ck(FG_SCENARIO, 55, 0))
-#endif
     {
-#if CHRIS
-        room_bgm_state_set(4, 2, 57);
-#else
         pos_set(0, 0, 0, 0, 2400, 0, 10500);
         aot_set(4, 1900, 9300, 1500, 1500, SCE_MESSAGE, 129, 139, 0, 255, 0, 0, 0);
         if (ck(FG_COMMON, 192, 1))
@@ -93,9 +81,7 @@ proc init
         }
         set(FG_COMMON, 192, 0);
         room_bgm_state_set(4, 2, 66);
-#endif
     }
-#if JILL
     if (ck(FG_COMMON, 75, 0) && ck(FG_COMMON, 78, 0))
     {
         pos_set(1, 0, 1504, 0, 3860, 0, 11550);
@@ -105,6 +91,9 @@ proc init
 #endif
 }
 
+#if CHRIS
+event event_00
+#else
 event event_00
 {
     sleep(1);
@@ -113,7 +102,6 @@ event event_00
         set(FG_6, 23, 1);
         set(FG_STATUS, 15, 0);
     }
-#if JILL
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
     act_anim_flags(32 | 16, 32 | 0, 0 | 1);
@@ -144,40 +132,26 @@ event event_00
     act_motion_path(50, 0, 65236, 0, 0, 30);
     act_reset();
     evt_nop();
-#endif
     sleep(10);
     run
     {
-#if CHRIS
-        voice_play(1, 70, 0);
-        message(9, 0);
-#else
         voice_play(1, 84, 0);
         message(0, 0);
-#endif
     }
-#if JILL
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 19, 32 | 0, 0 | 1);
     act_flag_op(1, 16, 0);
     act_reset();
     evt_nop();
-#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
-#if CHRIS
-    act_anim_flags(32 | 13, 32 | 0, 0 | 1);
-    act_param_set(0, 12);
-#else
     act_motion_path(51, 65136, 65436, 0, 20, 10);
-#endif
     act_reset();
     evt_nop();
     wait_message();
     run
     {
-#if JILL
         voice_play(1, 85, 0);
         message(1, 0);
     }
@@ -350,39 +324,25 @@ event event_00
     evt_nop();
     run
     {
-#endif
         cutnext(0);
         cut_auto(0);
         set(FG_STATUS, 15, 1);
-#if CHRIS
-        eml_state(0, 0, 8);
-#else
         set(FG_6, 23, 0);
-#endif
     }
-#if CHRIS
-    sleep(20);
-    set(FG_6, 23, 0);
-#endif
     evt_finish();
 }
 
 event event_01
+#endif
 {
-#if CHRIS
-    sleep(5);
-#else
     sleep(1);
+#if JILL
     evt_disable(7);
 #endif
     run
     {
-#if CHRIS
-        eml_state(0, 0, 8);
-#else
         set(FG_6, 23, 1);
         set(FG_STATUS, 15, 0);
-#endif
     }
 #if JILL
     evt_work_set(WK_ENEMY, 0);
@@ -465,20 +425,31 @@ event event_01
     act_motion_path(50, 0, 65236, 0, 0, 30);
     act_reset();
     evt_nop();
+#endif
     sleep(10);
     run
     {
+#if CHRIS
+        voice_play(1, 70, 0);
+        message(9, 0);
+#else
         voice_play(1, 84, 0);
         message(0, 0);
+#endif
     }
+#if JILL
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 19, 32 | 0, 0 | 1);
     act_flag_op(1, 16, 0);
     act_reset();
     evt_nop();
+#endif
     evt_work_set(WK_ENEMY, 0);
     evt_actor_begin();
+#if CHRIS
+    act_anim_flags(32 | 13, 32 | 0, 0 | 1);
+#else
     act_motion_path(51, 65136, 65436, 0, 20, 10);
     act_reset();
     evt_nop();
@@ -685,9 +656,11 @@ event event_01
     evt_actor_begin();
     act_anim_flags(32 | 13, 32 | 0, 0 | 0);
     act_motion_path(49, 65236, 0, 0, 20, 0);
+#endif
     act_param_set(0, 12);
     act_reset();
     evt_nop();
+#if JILL
     sleep(40);
     run
     {
@@ -705,7 +678,9 @@ event event_01
     act_anim_flags(32 | 9, 32 | 0, 0 | 0);
     act_reset();
     evt_nop();
+#endif
     wait_message();
+#if JILL
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(0 | 0, 32 | 0, 0 | 1);
@@ -727,21 +702,41 @@ event event_01
     act_nop();
     act_reset();
     evt_nop();
+#endif
     run
     {
+#if JILL
         eml_state(0, 1, 8);
+#endif
         cutnext(0);
         cut_auto(0);
         set(FG_STATUS, 15, 1);
+#if CHRIS
+        eml_state(0, 0, 8);
+#else
         set(FG_6, 23, 0);
+#endif
     }
+#if CHRIS
+    sleep(20);
+    set(FG_6, 23, 0);
 #endif
     evt_finish();
 }
 
+#if CHRIS
+event event_01
+#else
 event event_02
+#endif
 {
-#if JILL
+#if CHRIS
+    sleep(5);
+    run
+    {
+        eml_state(0, 0, 8);
+    }
+#else
     sleep(1);
     run
     {
@@ -780,12 +775,16 @@ event event_02
         eml_state(0, 1, 8);
         set(FG_6, 23, 0);
     }
+#endif
     evt_finish();
 }
 
+#if CHRIS
+event event_02
+#else
 event event_03
-{
 #endif
+{
     message(138, 255);
     do
     {
@@ -798,10 +797,10 @@ event event_03
         {
             aot_on(0, SCE_DOOR, 0);
         }
-#if JILL
     }
     evt_finish();
 }
+#if JILL
 
 event event_04
 {
@@ -809,7 +808,7 @@ event event_04
     run
     {
         eml_state(0, 1, 8);
-#endif
     }
     evt_finish();
 }
+#endif

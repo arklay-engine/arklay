@@ -213,12 +213,15 @@ event event_02
     evt_finish();
 }
 
+#if MANSION1
 event event_03
 {
-#if MANSION1
     evt_finish();
+}
 #else
 #if CHRIS
+event event_03
+{
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 8, 32 | 31, 0 | 0);
@@ -243,11 +246,14 @@ event event_03
     act_anim_flags(32 | 8, 32 | 31, 0 | 0);
     act_flag_op(0, 16, 0);
     act_finish();
-#else
-    evt_finish();
-#endif
-#endif
 }
+#else
+event event_03
+{
+    evt_finish();
+}
+#endif
+#endif
 
 event event_04
 {

@@ -16,19 +16,18 @@ proc init
     enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 109, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     enemy(ENEMY_ZOMBIE_RESEARCHER_, 0, 168, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
     if (ck(FG_SCENARIO, 5, 1))
+    {
+        set(FG_SCENARIO, 5, 0);
+    }
 #else
     enemy(ENEMY_HUNTER, 32, 110, 1, 2, 0, 0, 0, 0, 0, 0, 0, 10000, 0, 0, 0, 0);
     enemy(ENEMY_HUNTER, 32, 169, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
     if (ck(FG_COMMON, 103, 0) && ck(FG_ENEMY, 111, 1) && cmpb(3, 0, 6))
-#endif
     {
-#if MANSION1
-        set(FG_SCENARIO, 5, 0);
-#else
         set(FG_COMMON, 107, 0);
         set(FG_COMMON, 108, 0);
-#endif
     }
+#endif
 #else
 #if MANSION2
     enemy(ENEMY_HUNTER, 2, 110, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -47,61 +46,71 @@ proc init
 
 proc main
 {
+#if MANSION1
     if (ck(FG_ROOM, 24, 1))
     {
         set(FG_ROOM, 24, 0);
         if (cmpb(3, 0, 3))
         {
-#if MANSION1
             pos_set(0, 0, 0, 0, 5500, 0, 18500);
             pos_set(1, 0, 2048, 0, 19000, 0, 3500);
-#else
-#if CHRIS
-            pos_set(0, 0, 0, 0, 5500, 0, 18500);
-            pos_set(1, 0, 2048, 0, 19000, 0, 3500);
-#else
-            pos_set(0, 0, 2048, 0, 19000, 0, 3500);
-#endif
-#endif
         }
         else if (cmpb(3, 0, 13))
         {
-#if MANSION1
             pos_set(0, 0, 0, 0, 5500, 0, 18500);
             pos_set(1, 0, 2048, 0, 19000, 0, 3500);
-#else
-#if CHRIS
-            pos_set(0, 0, 0, 0, 5500, 0, 18500);
-            pos_set(1, 0, 2048, 0, 19000, 0, 3500);
-#else
-            pos_set(0, 0, 2048, 0, 19000, 0, 3500);
-#endif
-#endif
         }
         else
         {
-#if MANSION1
             pos_set(0, 0, 0, 0, 5500, 0, 3500);
             pos_set(1, 0, 2048, 0, 19000, 0, 18500);
-#else
-#if CHRIS
-            pos_set(0, 0, 0, 0, 5500, 0, 3500);
-            pos_set(1, 0, 2048, 0, 19000, 0, 18500);
-#else
-            pos_set(0, 0, 2048, 0, 19000, 0, 18500);
-#endif
-#endif
         }
-#if MANSION2
+    }
+#else
 #if CHRIS
+    if (ck(FG_ROOM, 24, 1))
+    {
+        set(FG_ROOM, 24, 0);
+        if (cmpb(3, 0, 3))
+        {
+            pos_set(0, 0, 0, 0, 5500, 0, 18500);
+            pos_set(1, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else if (cmpb(3, 0, 13))
+        {
+            pos_set(0, 0, 0, 0, 5500, 0, 18500);
+            pos_set(1, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else
+        {
+            pos_set(0, 0, 0, 0, 5500, 0, 3500);
+            pos_set(1, 0, 2048, 0, 19000, 0, 18500);
+        }
     }
     if (ck(FG_COMMON, 107, 0) && ck(FG_COMMON, 192, 1))
     {
         set(FG_COMMON, 192, 0);
         voice_play(1, 93, 0);
-#endif
-#endif
     }
+#else
+    if (ck(FG_ROOM, 24, 1))
+    {
+        set(FG_ROOM, 24, 0);
+        if (cmpb(3, 0, 3))
+        {
+            pos_set(0, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else if (cmpb(3, 0, 13))
+        {
+            pos_set(0, 0, 2048, 0, 19000, 0, 3500);
+        }
+        else
+        {
+            pos_set(0, 0, 2048, 0, 19000, 0, 18500);
+        }
+    }
+#endif
+#endif
     if (ck(FG_COMMON, 98, 0) && ck(FG_SCENARIO, 77, 1))
     {
         set(FG_STATUS, 22, 0);

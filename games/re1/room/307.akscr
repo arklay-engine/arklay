@@ -40,35 +40,28 @@ proc init
     aot_reset(0, SCE_EVENT, 129, 9, event_05, 0);
     aot_set(5, 6500, 17800, 2800, 1100, SCE_TYPEWRITER, 129, 0, 0, 0, 0, 0, 0);
     if (ck(FG_COMMON, 34, 0) && ck(FG_COMMON, 50, 1) && ck(FG_COMMON, 51, 1))
-#else
-    if (ck(FG_COMMON, 92, 0) && ck(FG_COMMON, 72, 0) && ck(FG_COMMON, 85, 1))
-#endif
     {
-#if CHRIS
         set(FG_COMMON, 192, 0);
         set(FG_COMMON, 48, 0);
         set(FG_COMMON, 51, 0);
         set(FG_COMMON, 35, 0);
+    }
+    if (ck(FG_COMMON, 54, 0) && ck(FG_COMMON, 103, 1) && ck(FG_COMMON, 104, 1))
+    {
+        set(FG_COMMON, 192, 0);
+        set(FG_COMMON, 108, 0);
+    }
 #else
+    if (ck(FG_COMMON, 92, 0) && ck(FG_COMMON, 72, 0) && ck(FG_COMMON, 85, 1))
+    {
         dir_set(0, 0, 2650, 0, 13000, 0, 4040);
         enemy(ENEMY_BARRY_2, 4, 255, 1, 2, 0, 0, 1224, 0, 0, 11700, 0, 4500, 0, 51, 0, 0);
         evt_exec(0, 9, event_06);
-#endif
     }
-#if CHRIS
-    if (ck(FG_COMMON, 54, 0) && ck(FG_COMMON, 103, 1) && ck(FG_COMMON, 104, 1))
-#else
     if (ck(FG_COMMON, 92, 0) && ck(FG_COMMON, 72, 0) && ck(FG_COMMON, 85, 0))
-#endif
     {
-#if CHRIS
-        set(FG_COMMON, 192, 0);
-        set(FG_COMMON, 108, 0);
-#else
         enemy(ENEMY_BARRY_2, 4, 255, 1, 2, 0, 0, 1224, 0, 0, 11700, 0, 4500, 0, 54, 50, 0);
-#endif
     }
-#if JILL
     aot_set(4, 5600, 13700, 1000, 2100, SCE_USEITEM, 1, 9, 0, 3, 0, 1, 0);
     aot_set(5, 5600, 13700, 1000, 2100, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
     aot_reset(0, SCE_EVENT, 129, 9, event_05, 0);
@@ -302,9 +295,9 @@ event event_05
             aot_on(0, SCE_DOOR, 0);
         }
     }
-#if JILL
     evt_finish();
 }
+#if JILL
 
 event event_06
 {
@@ -642,6 +635,6 @@ event event_0A
     evt_nop();
     sleep(45);
     evt_chain(10);
-#endif
     evt_finish();
 }
+#endif

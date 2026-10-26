@@ -29,18 +29,13 @@ proc init
     obj(0, 33, 255, 10000, 0, 12220, 2046, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0);
 #if MANSION1
     if (ck(FG_COMMON, 97, 0) && ck(FG_COMMON, 99, 0))
+    {
+        set(FG_COMMON, 102, 0);
+    }
 #else
 #if CHRIS
     if (ck(FG_COMMON, 108, 1) && ck(FG_COMMON, 103, 1) && ck(FG_COMMON, 104, 1) && ck(FG_COMMON, 54, 0))
-#else
-    if (ck(FG_COMMON, 97, 0) && ck(FG_COMMON, 99, 0))
-#endif
-#endif
     {
-#if MANSION1
-        set(FG_COMMON, 102, 0);
-#else
-#if CHRIS
         if (cmpw(0, 4, 1, 180))
         {
             set(FG_COMMON, 104, 0);
@@ -51,13 +46,7 @@ proc init
             set(FG_COMMON, 103, 0);
             room_bgm_state_set(6, 6, 65);
         }
-#else
-        set(FG_COMMON, 102, 0);
-#endif
-#endif
     }
-#if MANSION2
-#if CHRIS
     else
     {
         room_bgm_state_set(6, 6, 255);
@@ -84,7 +73,16 @@ proc init
     {
         enemy(ENEMY_HUNTER, 2, 111, 0, 2, 0, 0, 1177, 0, 0, 6258, 0, 7748, 1, 0, 0, 0);
     }
+#else
+    if (ck(FG_COMMON, 97, 0) && ck(FG_COMMON, 99, 0))
+    {
+        set(FG_COMMON, 102, 0);
+    }
+#endif
+#endif
 }
+#if MANSION2
+#if CHRIS
 
 proc main
 {
@@ -675,6 +673,6 @@ event event_0B
     evt_nop();
     evt_nop();
     evt_nop();
-#endif
-#endif
 }
+#endif
+#endif

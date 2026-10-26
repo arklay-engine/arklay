@@ -42,9 +42,6 @@ proc init
     }
 #if CHRIS
     if (ck(FG_COMMON, 172, 1))
-#else
-    if (ck(FG_COMMON, 179, 1))
-#endif
     {
         if (ck(FG_COMMON, 75, 0))
         {
@@ -52,6 +49,16 @@ proc init
             evt_exec(0, 9, event_01);
         }
     }
+#else
+    if (ck(FG_COMMON, 179, 1))
+    {
+        if (ck(FG_COMMON, 75, 0))
+        {
+            dir_set(0, 0, 4056, 0, 2600, 0, 2500);
+            evt_exec(0, 9, event_01);
+        }
+    }
+#endif
     if (ck(FG_LOCK, 38, 1))
     {
         aot_reset(1, SCE_EVENT, 129, 9, event_04, 0);
@@ -59,19 +66,21 @@ proc init
     aot_reset(3, SCE_EVENT, 129, 9, event_05, 0);
 #if CHRIS
     if (ck(FG_COMMON, 172, 1))
-#else
-    if (ck(FG_COMMON, 179, 1))
-#endif
     {
         if (ck(FG_COMMON, 75, 0))
         {
-#if CHRIS
             enemy(ENEMY_JILL_STARS_, 0, 255, 1, 1, 0, 0, 4056, 0, 0, 3100, 0, 4300, 0, 0, 0, 0);
-#else
-            enemy(ENEMY_CHRIS_STARS_, 0, 255, 1, 1, 0, 0, 4056, 0, 0, 3100, 0, 4300, 0, 0, 0, 0);
-#endif
         }
     }
+#else
+    if (ck(FG_COMMON, 179, 1))
+    {
+        if (ck(FG_COMMON, 75, 0))
+        {
+            enemy(ENEMY_CHRIS_STARS_, 0, 255, 1, 1, 0, 0, 4056, 0, 0, 3100, 0, 4300, 0, 0, 0, 0);
+        }
+    }
+#endif
 }
 
 proc main

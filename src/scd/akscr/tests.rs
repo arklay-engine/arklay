@@ -380,6 +380,109 @@ fn merged_scripts_reproduce_every_variant() {
     assert!(!merged.contains("MANSION"), "{merged}");
 }
 
+#[test]
+fn merged_blocks_hold_whole_statements() {
+    let chris = "#version 1
+
+proc init
+{
+    if (ck(FG_COMMON, 1, 0))
+    {
+        nop(1);
+        nop(2);
+    }
+    else
+    {
+        nop(3);
+    }
+}
+
+event event_00
+{
+    evt_next();
+    evt_finish();
+}
+";
+    let jill = "#version 1
+
+proc init
+{
+    if (ck(FG_COMMON, 9, 0))
+    {
+        nop(1);
+        nop(2);
+    }
+    else
+    {
+        nop(3);
+    }
+}
+
+event event_00
+{
+    evt_finish();
+}
+
+event event_01
+{
+    evt_next();
+    evt_finish();
+}
+";
+    let merged = merge(&[
+        (Variant::for_room(0x5000), chris),
+        (Variant::for_room(0x5001), jill),
+    ])
+    .unwrap();
+    // The differing `if` head takes its body and `else` along, and Chris's
+    // event_00 pairs with Jill's event_01 under a header-only block.
+    assert_eq!(
+        merged,
+        "#version 1
+
+proc init
+{
+#if CHRIS
+    if (ck(FG_COMMON, 1, 0))
+    {
+        nop(1);
+        nop(2);
+    }
+    else
+    {
+        nop(3);
+    }
+#else
+    if (ck(FG_COMMON, 9, 0))
+    {
+        nop(1);
+        nop(2);
+    }
+    else
+    {
+        nop(3);
+    }
+#endif
+}
+
+#if CHRIS
+event event_00
+#else
+event event_00
+{
+    evt_finish();
+}
+
+event event_01
+#endif
+{
+    evt_next();
+    evt_finish();
+}
+"
+    );
+}
+
 /// Every checked-in room script compiles for each of its variants.
 #[test]
 fn checked_in_room_scripts_compile() {

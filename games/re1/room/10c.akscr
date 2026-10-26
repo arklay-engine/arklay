@@ -16,9 +16,6 @@ proc init
     obj(128, 1, 255, 16850, -390, 6090, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if CHRIS
     if (ck(FG_COMMON, 164, 0))
-#else
-    if (ck(FG_COMMON, 167, 0))
-#endif
     {
         obj(1, 1, 255, 2954, -140, 8330, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(2, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -28,15 +25,24 @@ proc init
         obj(1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         obj(2, 1, 255, 2954, -140, 8330, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
+#else
+    if (ck(FG_COMMON, 167, 0))
+    {
+        obj(1, 1, 255, 2954, -140, 8330, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(2, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    else
+    {
+        obj(1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(2, 1, 255, 2954, -140, 8330, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+#endif
     effect(19, 0, 0, 3, 31, 38, 248, 56, 21, 0, 0);
     effect(27, 0, 0, 4, 31, 234, 247, 74, 21, 0, 0);
     evt_exec(0, 9, event_02);
     snd_pan_vol_set(1, 110, 110);
 #if CHRIS
     if (ck(FG_COMMON, 166, 1))
-#else
-    if (ck(FG_COMMON, 169, 1))
-#endif
     {
         enemy(ENEMY_FOUNTAIN_PLANT, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, 0, 0, 0, 0);
         enemy(ENEMY_FOUNTAIN_PLANT, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8300, 0, 6100, 1, 0, 0, 0);
@@ -54,6 +60,26 @@ proc init
         enemy(ENEMY_FOUNTAIN_PLANT, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, 4, 0, 0, 0);
         enemy(ENEMY_FOUNTAIN_PLANT, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, 5, 0, 0, 0);
     }
+#else
+    if (ck(FG_COMMON, 169, 1))
+    {
+        enemy(ENEMY_FOUNTAIN_PLANT, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, 0, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8300, 0, 6100, 1, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 0, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, 2, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, 3, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, 4, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, 5, 0, 0, 0);
+    }
+    else
+    {
+        enemy(ENEMY_FOUNTAIN_PLANT, 7, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, 0, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 6, 255, 1, 2, 0, 0, 3000, 0, 0, 7900, 0, 6100, 1, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 6, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, 2, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, 3, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, 4, 0, 0, 0);
+        enemy(ENEMY_FOUNTAIN_PLANT, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, 5, 0, 0, 0);
+    }
+#endif
 }
 
 proc main
@@ -76,9 +102,6 @@ proc main
     }
 #if CHRIS
     if (ck(FG_COMMON, 166, 1))
-#else
-    if (ck(FG_COMMON, 169, 1))
-#endif
     {
         if (testitem(ITEM_CHEMICAL))
         {
@@ -88,6 +111,18 @@ proc main
             }
         }
     }
+#else
+    if (ck(FG_COMMON, 169, 1))
+    {
+        if (testitem(ITEM_CHEMICAL))
+        {
+            if (ck(FG_ROOM, 32, 0))
+            {
+                evt_exec(0, 9, event_01);
+            }
+        }
+    }
+#endif
     if (ck(FG_SCENARIO, 91, 0))
     {
         if (ck(FG_SCENARIO, 92, 1))

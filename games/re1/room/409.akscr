@@ -81,56 +81,29 @@ proc main
     set(FG_ITEM, 66, 0);
 #if CHRIS
     if (cmpb(9, 0, 3))
-#else
-    if (ck(FG_ITEM, 78, 0))
-#endif
     {
         if (item_ck(ITEM_EMPTY_BOTTLE))
         {
             aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
-#if CHRIS
             aot_reset(11, SCE_EVENT, 129, 9, event_01, 0);
             aot_reset(12, SCE_EVENT, 129, 9, event_02, 0);
-#endif
         }
         else
         {
             aot_reset(8, SCE_MESSAGE, 129, 132, 77, 0);
-#if CHRIS
             aot_reset(11, SCE_MESSAGE, 129, 136, 77, 0);
             aot_reset(12, SCE_MESSAGE, 129, 137, 77, 0);
-#endif
         }
-#if JILL
-        aot_delete(11, SCE_NONE, 129);
-        aot_delete(12, SCE_NONE, 129);
-#endif
     }
-#if CHRIS
     else if (ck(FG_ITEM, 78, 1))
-#else
-    else if (item_ck(ITEM_EMPTY_BOTTLE))
-#endif
     {
-#if CHRIS
         aot_reset(11, SCE_MESSAGE, 129, 152, 77, 0);
         aot_reset(12, SCE_MESSAGE, 129, 153, 77, 0);
-#else
-        aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
-        aot_reset(11, SCE_EVENT, 129, 9, event_01, 0);
-        aot_reset(12, SCE_EVENT, 129, 9, event_02, 0);
-#endif
     }
     else
     {
-#if CHRIS
         aot_reset(11, SCE_NONE, 129, 152, 77, 0);
         aot_reset(12, SCE_NONE, 129, 153, 77, 0);
-#else
-        aot_reset(8, SCE_MESSAGE, 129, 132, 77, 0);
-        aot_reset(11, SCE_MESSAGE, 129, 136, 77, 0);
-        aot_reset(12, SCE_MESSAGE, 129, 137, 77, 0);
-#endif
     }
     if (ck(FG_SCENARIO, 22, 0))
     {
@@ -145,11 +118,49 @@ proc main
         set(FG_SCENARIO, 22, 1);
         set(FG_ROOM, 24, 0);
     }
-#if CHRIS
     if (ck(FG_ROOM, 1, 0))
     {
         set(FG_ROOM, 1, 1);
         evt_exec(0, 9, event_04);
+    }
+#else
+    if (ck(FG_ITEM, 78, 0))
+    {
+        if (item_ck(ITEM_EMPTY_BOTTLE))
+        {
+            aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
+        }
+        else
+        {
+            aot_reset(8, SCE_MESSAGE, 129, 132, 77, 0);
+        }
+        aot_delete(11, SCE_NONE, 129);
+        aot_delete(12, SCE_NONE, 129);
+    }
+    else if (item_ck(ITEM_EMPTY_BOTTLE))
+    {
+        aot_reset(8, SCE_EVENT, 129, 9, event_00, 0);
+        aot_reset(11, SCE_EVENT, 129, 9, event_01, 0);
+        aot_reset(12, SCE_EVENT, 129, 9, event_02, 0);
+    }
+    else
+    {
+        aot_reset(8, SCE_MESSAGE, 129, 132, 77, 0);
+        aot_reset(11, SCE_MESSAGE, 129, 136, 77, 0);
+        aot_reset(12, SCE_MESSAGE, 129, 137, 77, 0);
+    }
+    if (ck(FG_SCENARIO, 22, 0))
+    {
+        if (ck(FG_ROOM, 24, 1))
+        {
+            evt_exec(0, 9, event_03);
+        }
+        else if (ck(FG_ROOM, 0, 0))
+        {
+            evt_exec(0, 9, event_03);
+        }
+        set(FG_SCENARIO, 22, 1);
+        set(FG_ROOM, 24, 0);
     }
 #endif
 }
@@ -326,9 +337,9 @@ event event_04
     timer_setup(2, 255, 255, 7, 0);
     sleep(1);
     timer_setup(2, 240, 216, 7, 0);
-#if CHRIS
     evt_finish();
 }
+#if CHRIS
 
 event event_05
 {
@@ -776,6 +787,6 @@ event event_17
     evt_nop();
     sleep(10);
     eml_state(0, 0, 3, 514);
-#endif
     evt_finish();
 }
+#endif

@@ -49,20 +49,16 @@ proc init
     eml_rot(131, 0, 0, 0, 4);
 #if MANSION1
     if (ck(FG_SCENARIO, 108, 1))
-#else
-    if (ck(FG_SCENARIO, 23, 0))
-#endif
     {
-#if MANSION1
         objtbl_b_set(0, 3, 0);
-#else
-        enemy(ENEMY_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, 0, 0, 0, 0);
-#endif
     }
-#if MANSION1
     enemy(ENEMY_CERBERUS, 3, 46, 1, 2, 0, 0, 1536, 0, 0, 6500, 0, 24860, 0, 0, 0, 0);
 #else
 #if CHRIS
+    if (ck(FG_SCENARIO, 23, 0))
+    {
+        enemy(ENEMY_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, 0, 0, 0, 0);
+    }
     if (ck(FG_COMMON, 33, 0))
     {
         set(FG_COMMON, 33, 1);
@@ -78,6 +74,11 @@ proc init
             setw(4, 0, 0);
             evt_exec(0, 9, event_05);
         }
+    }
+#else
+    if (ck(FG_SCENARIO, 23, 0))
+    {
+        enemy(ENEMY_HUNTER, 2, 47, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, 0, 0, 0, 0);
     }
 #endif
 #endif
@@ -155,8 +156,8 @@ event event_00
     while (cmpb(5, 2, 128));
     cutcurr(0);
     evt_finish();
-#if MANSION1
 }
+#if MANSION1
 
 event event_01
 {
@@ -302,9 +303,9 @@ event event_07
         se_play_3d(2, 24, 0, 0, 0, 8500, 24600);
     }
     evt_finish();
+}
 #else
 #if CHRIS
-}
 
 event event_01
 {
@@ -532,6 +533,6 @@ event event_06
     act_anim_flags(32 | 8, 32 | 31, 0 | 0);
     act_flag_op(0, 16, 0);
     act_finish();
-#endif
-#endif
 }
+#endif
+#endif

@@ -26,11 +26,7 @@ proc init
 #if CHRIS
     item_aot_set(6, 0, 0, 1, 1, ITEM_4D, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 4, 8, 129, 0, 0);
     if (ck(FG_SCENARIO, 0, 0))
-#else
-    if (ck(FG_COMMON, 174, 0))
-#endif
     {
-#if CHRIS
         if (ck(FG_COMMON, 61, 0))
         {
             if (ck(FG_COMMON, 170, 1))
@@ -38,10 +34,13 @@ proc init
                 evt_exec(0, 9, event_01);
             }
         }
-#else
-        set(FG_COMMON, 177, 0);
-#endif
     }
+#else
+    if (ck(FG_COMMON, 174, 0))
+    {
+        set(FG_COMMON, 177, 0);
+    }
+#endif
     set(FG_ROOM, 29, 0);
     aot_reset(1, SCE_MESSAGE, 129, 143, 255, 0);
     evt_exec(0, 9, event_00);

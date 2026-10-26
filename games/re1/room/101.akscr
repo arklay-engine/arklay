@@ -68,7 +68,14 @@ proc init
         enemy(ENEMY_HUNTER, 23, 14, 1, 2, 0, 0, 3000, 0, 0, 4067, 0, 17454, 1, 0, 0, 0);
         enemy(ENEMY_HUNTER, 23, 15, 1, 2, 0, 0, 2664, 0, 0, 12480, 0, 3562, 2, 0, 0, 0);
     }
+#else
+    enemy(ENEMY_HUNTER, 23, 14, 1, 2, 0, 0, 3000, 0, 0, 4067, 0, 17454, 0, 0, 0, 0);
+    enemy(ENEMY_HUNTER, 23, 15, 1, 2, 0, 0, 2664, 0, 0, 12480, 0, 3562, 1, 0, 0, 0);
+#endif
+#endif
 }
+#if MANSION2
+#if CHRIS
 
 proc main
 {
@@ -581,9 +588,6 @@ event event_17
     sleep(1);
     bgm_stop(0);
     evt_finish();
-#else
-    enemy(ENEMY_HUNTER, 23, 14, 1, 2, 0, 0, 3000, 0, 0, 4067, 0, 17454, 0, 0, 0, 0);
-    enemy(ENEMY_HUNTER, 23, 15, 1, 2, 0, 0, 2664, 0, 0, 12480, 0, 3562, 1, 0, 0, 0);
-#endif
-#endif
 }
+#endif
+#endif

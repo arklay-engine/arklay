@@ -33,18 +33,16 @@ proc init
     }
 #if CHRIS
     if (ck(FG_COMMON, 192, 0))
-#else
-    if (ck(FG_COMMON, 91, 1))
-#endif
     {
         item_aot_set(2, 9975, 7464, 2000, 2000, ITEM_LAB_KEY_1_, 2, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 95, 129, 17, 133);
-#if JILL
-        aot_set(3, 8600, 6500, 1600, 3200, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-#endif
     }
-#if CHRIS
     aot_set(3, 8600, 6500, 1600, 3200, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
 #else
+    if (ck(FG_COMMON, 91, 1))
+    {
+        item_aot_set(2, 9975, 7464, 2000, 2000, ITEM_LAB_KEY_1_, 2, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 95, 129, 17, 133);
+        aot_set(3, 8600, 6500, 1600, 3200, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    }
     else
     {
         aot_reset(2, SCE_NONE, 0, 0, 0, 0);
@@ -64,11 +62,7 @@ proc init
     obj(5, 31, 255, 11100, -20000, 4170, 3192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if CHRIS
     if (ck(FG_COMMON, 192, 0))
-#else
-    if (ck(FG_ROOM, 7, 1))
-#endif
     {
-#if CHRIS
         if (ck(FG_ROOM, 7, 1))
         {
             obj(6, 15, 255, 10060, -20000, 8080, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -79,18 +73,6 @@ proc init
         }
         eml_rot(0, 0, 8, 0, 0);
         eml_rot(134, 0, 8, 0, 0);
-#else
-        obj(6, 15, 255, 10060, -20000, 8080, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    }
-    else
-    {
-        obj(6, 15, 255, 10975, 0, 8464, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    }
-    eml_rot(0, 0, 8, 0, 0);
-    eml_rot(134, 0, 8, 0, 0);
-    if (ck(FG_COMMON, 91, 1))
-    {
-#endif
         if (ck(FG_ROOM, 7, 1))
         {
             objtbl_b_set(0, 6, 0);
@@ -107,16 +89,8 @@ proc init
             objtbl_b_set(1, 0, 0);
         }
     }
-#if JILL
-    else
-    {
-        objtbl_b_set(0, 6, 0);
-        objtbl_b_set(1, 0, 0);
-    }
-#endif
     if (ck(FG_ROOM, 7, 1))
     {
-#if CHRIS
         enemy(ENEMY_WESKER_2_STARS_, 2, 255, 1, 2, 0, 0, 565, 0, 0, 7340, 0, 10250, 0, 50, 14, 0);
         enemy(ENEMY_TYRANT_1, 64, 112, 1, 2, 0, 0, 3072, 0, 0, 10700, 0, 7000, 1, 0, 0, 0);
         eml_state(0, 0, 2, 11);
@@ -128,7 +102,48 @@ proc init
         evt_exec(0, 7, event_02);
         evt_exec(0, 6, event_06);
         evt_exec(0, 0, event_08);
+    }
+    else
+    {
+        enemy(ENEMY_WESKER_2_STARS_, 2, 255, 1, 2, 0, 0, 1155, 0, 0, 9627, 0, 8092, 0, 0, 0, 0);
+        evt_exec(0, 7, event_00);
+    }
 #else
+    if (ck(FG_ROOM, 7, 1))
+    {
+        obj(6, 15, 255, 10060, -20000, 8080, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    else
+    {
+        obj(6, 15, 255, 10975, 0, 8464, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    eml_rot(0, 0, 8, 0, 0);
+    eml_rot(134, 0, 8, 0, 0);
+    if (ck(FG_COMMON, 91, 1))
+    {
+        if (ck(FG_ROOM, 7, 1))
+        {
+            objtbl_b_set(0, 6, 0);
+            objtbl_b_set(1, 0, 0);
+        }
+        else if (ck(FG_ITEM, 95, 0))
+        {
+            objtbl_b_set(0, 6, 1);
+            objtbl_b_set(1, 0, 1);
+        }
+        else
+        {
+            objtbl_b_set(0, 6, 0);
+            objtbl_b_set(1, 0, 0);
+        }
+    }
+    else
+    {
+        objtbl_b_set(0, 6, 0);
+        objtbl_b_set(1, 0, 0);
+    }
+    if (ck(FG_ROOM, 7, 1))
+    {
         if (ck(FG_COMMON, 91, 1))
         {
             enemy(ENEMY_WESKER_2_STARS_, 2, 255, 1, 2, 0, 0, 565, 0, 0, 7340, 0, 10250, 0, 50, 14, 0);
@@ -141,16 +156,10 @@ proc init
             enemy(ENEMY_TYRANT_1, 65, 112, 1, 2, 0, 0, 3072, 0, 0, 10700, 0, 7000, 1, 0, 0, 0);
             eml_state(0, 0, 2, 11);
         }
-#endif
     }
-#if CHRIS
-    else
-#else
     else if (ck(FG_COMMON, 91, 1))
-#endif
     {
         enemy(ENEMY_WESKER_2_STARS_, 2, 255, 1, 2, 0, 0, 1155, 0, 0, 9627, 0, 8092, 0, 0, 0, 0);
-#if JILL
     }
     if (ck(FG_ROOM, 7, 1))
     {
@@ -179,35 +188,20 @@ proc init
     }
     else
     {
-#endif
         evt_exec(0, 7, event_00);
     }
+#endif
 }
 
 proc main
 {
 #if CHRIS
     if (ck(FG_ITEM, 95, 1) && ck(FG_ROOM, 2, 1))
-#else
-    if (ck(FG_COMMON, 91, 1))
-#endif
     {
-#if CHRIS
         set(FG_ROOM, 2, 0);
         objtbl_b_set(0, 6, 0);
-#else
-        if (ck(FG_ITEM, 95, 1) && ck(FG_ROOM, 2, 1))
-        {
-            set(FG_ROOM, 2, 0);
-            objtbl_b_set(0, 6, 0);
-        }
-#endif
     }
-#if CHRIS
     if (ck(FG_ROOM, 7, 1))
-#else
-    if (ck(FG_COMMON, 91, 1) && ck(FG_ROOM, 7, 1))
-#endif
     {
         if (ck(FG_ENEMY, 112, 0))
         {
@@ -218,19 +212,11 @@ proc main
                 aot_reset(0, SCE_MESSAGE, 129, 159, 255, 0);
                 if (ck(FG_ROOM, 4, 1))
                 {
-#if CHRIS
                     aot_reset(1, SCE_EVENT, 129, 0, event_0D, 0);
-#else
-                    aot_reset(1, SCE_EVENT, 129, 0, event_15, 0);
-#endif
                 }
                 else
                 {
-#if CHRIS
                     aot_reset(1, SCE_EVENT, 129, 0, event_0E, 0);
-#else
-                    aot_reset(1, SCE_EVENT, 129, 0, event_16, 0);
-#endif
                 }
             }
         }
@@ -241,14 +227,47 @@ proc main
         if (ck(FG_ROOM, 3, 0) && ck(FG_ROOM, 4, 1) && ck(FG_ROOM, 5, 1) && ck(FG_ROOM, 6, 1) && cmpb(16, 0, 1))
         {
             set(FG_ROOM, 5, 0);
-#if CHRIS
             aot_reset(1, SCE_EVENT, 129, 0, event_0E, 0);
-#else
-            aot_reset(1, SCE_EVENT, 129, 0, event_16, 0);
-#endif
         }
     }
-#if JILL
+#else
+    if (ck(FG_COMMON, 91, 1))
+    {
+        if (ck(FG_ITEM, 95, 1) && ck(FG_ROOM, 2, 1))
+        {
+            set(FG_ROOM, 2, 0);
+            objtbl_b_set(0, 6, 0);
+        }
+    }
+    if (ck(FG_COMMON, 91, 1) && ck(FG_ROOM, 7, 1))
+    {
+        if (ck(FG_ENEMY, 112, 0))
+        {
+            if (ck(FG_ROOM, 3, 1))
+            {
+                set(FG_ROOM, 3, 0);
+                set(FG_SCENARIO, 55, 0);
+                aot_reset(0, SCE_MESSAGE, 129, 159, 255, 0);
+                if (ck(FG_ROOM, 4, 1))
+                {
+                    aot_reset(1, SCE_EVENT, 129, 0, event_15, 0);
+                }
+                else
+                {
+                    aot_reset(1, SCE_EVENT, 129, 0, event_16, 0);
+                }
+            }
+        }
+        else if (cmpb(16, 0, 1))
+        {
+            set(FG_ROOM, 4, 0);
+        }
+        if (ck(FG_ROOM, 3, 0) && ck(FG_ROOM, 4, 1) && ck(FG_ROOM, 5, 1) && ck(FG_ROOM, 6, 1) && cmpb(16, 0, 1))
+        {
+            set(FG_ROOM, 5, 0);
+            aot_reset(1, SCE_EVENT, 129, 0, event_16, 0);
+        }
+    }
     if (ck(FG_COMMON, 91, 0) && ck(FG_ROOM, 7, 1))
     {
         if (ck(FG_ENEMY, 112, 0) && ck(FG_ROOM, 3, 1))
@@ -1587,9 +1606,11 @@ event event_0B
     evt_finish();
 }
 
+#if CHRIS
+event event_0C
+#else
 event event_0C
 {
-#if JILL
     evt_next();
     evt_nop();
     set(FG_6, 23, 1);
@@ -2292,8 +2313,8 @@ event event_13
 }
 
 event event_14
-{
 #endif
+{
     objtbl_b_set(0, 6, 1);
     objtbl_b_set(1, 0, 1);
     evt_next();

@@ -53,7 +53,9 @@ proc init
         set(FG_LOCK, 47, 0);
     }
     set(FG_STATUS, 29, 0);
+#endif
 }
+#if CHRIS
 
 proc main
 {
@@ -537,5 +539,5 @@ event event_07
         cutcurr(0);
     }
     evt_finish();
-#endif
 }
+#endif

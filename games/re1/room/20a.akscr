@@ -21,9 +21,6 @@ proc init
     }
 #if CHRIS
     if (ck(FG_COMMON, 7, 1))
-#else
-    if (ck(FG_COMMON, 8, 1))
-#endif
     {
         if (ck(FG_COMMON, 98, 0))
         {
@@ -31,24 +28,35 @@ proc init
             eml_rot(1, 0, 8, 0, 0);
             aot_reset(1, SCE_EVENT, 129, 0, event_02, 0);
         }
-#if CHRIS
         else
-#else
-        else if (ck(FG_COMMON, 7, 0))
-#endif
         {
             item_aot_set(8, 0, 0, 1, 1, ITEM_60, 1, 1, 255, 66, 29, 96, 250, 80, 10, 0, 0, 16, 129, 0, 0);
             eml_rot(1, 0, 8, 0, 0);
             aot_reset(1, SCE_EVENT, 129, 0, event_02, 0);
         }
-#if JILL
+    }
+#else
+    if (ck(FG_COMMON, 8, 1))
+    {
+        if (ck(FG_COMMON, 98, 0))
+        {
+            item_aot_set(8, 0, 0, 1, 1, ITEM_5F, 1, 1, 255, 66, 29, 96, 250, 80, 10, 0, 0, 16, 129, 0, 0);
+            eml_rot(1, 0, 8, 0, 0);
+            aot_reset(1, SCE_EVENT, 129, 0, event_02, 0);
+        }
+        else if (ck(FG_COMMON, 7, 0))
+        {
+            item_aot_set(8, 0, 0, 1, 1, ITEM_60, 1, 1, 255, 66, 29, 96, 250, 80, 10, 0, 0, 16, 129, 0, 0);
+            eml_rot(1, 0, 8, 0, 0);
+            aot_reset(1, SCE_EVENT, 129, 0, event_02, 0);
+        }
         else
         {
             item_aot_set(8, 0, 0, 1, 1, ITEM_5F, 1, 1, 255, 0, 0, 16, 39, 0, 0, 0, 0, 16, 129, 0, 0);
             set(FG_ROOM, 34, 0);
         }
-#endif
     }
+#endif
     item_aot_set(9, 1000, 6600, 1300, 1600, ITEM_INK_RIBBON, 2, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 184, 129, 0, 0);
     obj(0, 1, 255, 7470, 0, 5850, 2048, 0, 0, 162, 3, 0, 0, 94, 252, 240, 0, 16, 39, 128, 2, 146, 4);
     if (ck(FG_SCENARIO, 18, 0))
@@ -435,8 +443,10 @@ event event_03
     evt_finish();
 }
 
+#if CHRIS
 event event_04
-#if JILL
+#else
+event event_04
 {
     evt_fork(1, event_05, 0);
     evt_next();

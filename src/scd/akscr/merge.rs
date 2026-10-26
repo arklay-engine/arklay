@@ -1,21 +1,198 @@
 //! Merge the scripts of a room's variants into one `#if` script.
 //!
-//! The variants' lines are aligned progressively (a weighted longest common
-//! subsequence against the lines merged so far), so every merged line knows
+//! The variants are aligned progressively, section by section first (a
+//! `proc` or `event` pairs with the most alike section of the other
+//! variants, whatever its number) and then line by line within each section
+//! pair (a weighted longest common subsequence), so every merged line knows
 //! which variants hold it. Lines every variant in scope holds are written
-//! plainly; each run of the others is split on the mansion or the player,
-//! whichever writes fewer lines, into `#if` / `#else` / `#endif` blocks.
+//! plainly. Each run of the others is grown to whole statements (balanced
+//! braces, an `if` with its `else`, a header with its block) and split on
+//! the mansion or the player, whichever writes fewer lines, into
+//! `#if` / `#else` / `#endif` blocks. A section header alone may differ.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
 use super::preprocess::{Variant, kept_lines, merged_id};
 
 /// One merged line and the variants (bit per input) that hold it.
+#[derive(Clone, Copy)]
 struct Entry<'a> {
     line: &'a str,
     mask: u8,
+    /// A section header (`event event_03`), which may differ on its own.
+    header: bool,
+}
+
+impl<'a> Entry<'a> {
+    fn new(line: &'a str, mask: u8) -> Self {
+        Self {
+            line,
+            mask,
+            header: false,
+        }
+    }
+}
+
+/// A top-level piece of a script: a section (its header line, then its
+/// braced body) or one line between sections.
+struct Unit<'a> {
+    header: Option<&'a str>,
+    lines: Vec<&'a str>,
+}
+
+/// Cut a script into its top-level units.
+fn units(text: &str) -> Vec<Unit<'_>> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut units = Vec::new();
+    let mut index = 0;
+    while index < lines.len() {
+        let line = lines[index];
+        if lines.get(index + 1).is_some_and(|next| brace(next) == 1) && brace(line) == 0 {
+            let mut end = index + 1;
+            let mut depth = 0;
+            while end < lines.len() {
+                depth += brace(lines[end]);
+                end += 1;
+                if depth <= 0 {
+                    break;
+                }
+            }
+            units.push(Unit {
+                header: Some(line),
+                lines: lines[index + 1..end].to_vec(),
+            });
+            index = end;
+        } else {
+            units.push(Unit {
+                header: None,
+                lines: vec![line],
+            });
+            index += 1;
+        }
+    }
+    units
+}
+
+/// Merged units: the alternative headers of a section and its merged lines.
+struct Group<'a> {
+    headers: Vec<Entry<'a>>,
+    body: Vec<Entry<'a>>,
+}
+
+/// How alike a merged group and a new unit are, if they may pair at all: a
+/// line pairs with the same line, a `proc` with a `proc` of the same kind and
+/// an event with an event sharing at least half the weight of the smaller.
+fn likeness(group: &Group, unit: &Unit) -> Option<u32> {
+    let Some(header) = unit.header else {
+        return (group.headers.is_empty() && group.body[0].line == unit.lines[0]).then_some(1);
+    };
+    let kind = |header: &str| {
+        let mut words = header.split_whitespace();
+        match words.next() {
+            Some("event") => "event".to_string(),
+            first => format!("{} {}", first.unwrap_or(""), words.next().unwrap_or("")),
+        }
+    };
+    let first = group.headers.first()?;
+    if kind(first.line) != kind(header) {
+        return None;
+    }
+    let mut counts: HashMap<&str, i32> = HashMap::new();
+    for entry in &group.body {
+        *counts.entry(entry.line).or_default() += 1;
+    }
+    let mut shared = 0;
+    for line in &unit.lines {
+        if let Some(count) = counts.get_mut(line)
+            && *count > 0
+        {
+            *count -= 1;
+            shared += weight(line);
+        }
+    }
+    let total = |lines: &mut dyn Iterator<Item = &str>| lines.map(weight).sum::<u32>();
+    let smallest = total(&mut group.body.iter().map(|entry| entry.line))
+        .min(total(&mut unit.lines.iter().copied()));
+    let proc = !header.starts_with("event");
+    (proc || shared * 2 >= smallest).then_some(shared + 1)
+}
+
+/// Align the units of one variant (bit `bit`) against the merged groups,
+/// pairing the alike ones in order.
+fn align_units<'a>(groups: Vec<Group<'a>>, units: Vec<Unit<'a>>, bit: u8) -> Vec<Group<'a>> {
+    let (rows, cols) = (groups.len(), units.len());
+    let width = cols + 1;
+    let mut likeness_of = vec![None; rows * cols];
+    for (i, group) in groups.iter().enumerate() {
+        for (j, unit) in units.iter().enumerate() {
+            likeness_of[i * cols + j] = likeness(group, unit);
+        }
+    }
+    let mut score = vec![0u32; (rows + 1) * width];
+    for i in (0..rows).rev() {
+        for j in (0..cols).rev() {
+            let mut best = score[(i + 1) * width + j].max(score[i * width + j + 1]);
+            if let Some(like) = likeness_of[i * cols + j] {
+                best = best.max(score[(i + 1) * width + j + 1] + like);
+            }
+            score[i * width + j] = best;
+        }
+    }
+
+    let mut groups: Vec<Option<Group>> = groups.into_iter().map(Some).collect();
+    let mut units: Vec<Option<Unit>> = units.into_iter().map(Some).collect();
+    let mut out = Vec::with_capacity(rows + cols);
+    let (mut i, mut j) = (0, 0);
+    while i < rows || j < cols {
+        let here = score[i * width + j];
+        let paired = (i < rows && j < cols)
+            .then(|| likeness_of[i * cols + j])
+            .flatten()
+            .filter(|like| here == score[(i + 1) * width + j + 1] + like);
+        if paired.is_some() {
+            let mut group = groups[i].take().unwrap();
+            let unit = units[j].take().unwrap();
+            if let Some(header) = unit.header {
+                match group.headers.iter_mut().find(|entry| entry.line == header) {
+                    Some(entry) => entry.mask |= bit,
+                    None => group.headers.push(Entry {
+                        line: header,
+                        mask: bit,
+                        header: true,
+                    }),
+                }
+            }
+            group.body = align(group.body, &unit.lines, bit);
+            out.push(group);
+            i += 1;
+            j += 1;
+        } else if i < rows && here == score[(i + 1) * width + j] {
+            out.push(groups[i].take().unwrap());
+            i += 1;
+        } else {
+            let unit = units[j].take().unwrap();
+            out.push(Group {
+                headers: unit
+                    .header
+                    .map(|line| Entry {
+                        line,
+                        mask: bit,
+                        header: true,
+                    })
+                    .into_iter()
+                    .collect(),
+                body: unit
+                    .lines
+                    .iter()
+                    .map(|line| Entry::new(line, bit))
+                    .collect(),
+            });
+            j += 1;
+        }
+    }
+    out
 }
 
 /// Merge the scripts of `variants` (at most eight, each variant once) into a
@@ -31,11 +208,14 @@ pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
         }
     }
 
-    let mut entries: Vec<Entry> = Vec::new();
+    let mut groups: Vec<Group> = Vec::new();
     for (bit, (_, text)) in variants.iter().enumerate() {
-        let lines: Vec<&str> = text.lines().collect();
-        entries = align(entries, &lines, 1 << bit);
+        groups = align_units(groups, units(text), 1 << bit);
     }
+    let entries: Vec<Entry> = groups
+        .into_iter()
+        .flat_map(|group| group.headers.into_iter().chain(group.body))
+        .collect();
 
     let all = (1u8 << variants.len()) - 1;
     let kinds: Vec<Variant> = variants.iter().map(|(variant, _)| *variant).collect();
@@ -124,8 +304,8 @@ fn align<'a>(entries: Vec<Entry<'a>>, lines: &[&'a str], bit: u8) -> Vec<Entry<'
     let mut out: Vec<Entry> = Vec::with_capacity(n + m);
     for (index, entry) in entries.by_ref().take(prefix).enumerate() {
         out.push(Entry {
-            line: entry.line,
             mask: entry.mask | bit,
+            ..entry
         });
         debug_assert_eq!(entry.line, lines[index]);
     }
@@ -136,22 +316,19 @@ fn align<'a>(entries: Vec<Entry<'a>>, lines: &[&'a str], bit: u8) -> Vec<Entry<'
             (Some(i), Some(_)) => {
                 let entry = middle[i].take().unwrap();
                 out.push(Entry {
-                    line: entry.line,
                     mask: entry.mask | bit,
+                    ..entry
                 });
             }
             (Some(i), None) => out.push(middle[i].take().unwrap()),
-            (None, Some(j)) => out.push(Entry {
-                line: right[j],
-                mask: bit,
-            }),
+            (None, Some(j)) => out.push(Entry::new(right[j], bit)),
             (None, None) => unreachable!(),
         }
     }
     for entry in entries {
         out.push(Entry {
-            line: entry.line,
             mask: entry.mask | bit,
+            ..entry
         });
     }
     out
@@ -192,32 +369,133 @@ fn splits(ctx: u8, kinds: &[Variant]) -> Vec<(u8, &'static str, &'static str)> {
 
 /// The lines of `entries` for the variants in `ctx`.
 fn emit(entries: &[Entry], ctx: u8, kinds: &[Variant]) -> Vec<String> {
-    let live: Vec<&Entry> = entries
+    let live: Vec<Entry> = entries
         .iter()
         .filter(|entry| entry.mask & ctx != 0)
+        .copied()
         .collect();
-    let mut out = Vec::new();
+    let covers = |index: usize| live[index].mask & ctx == ctx;
+
+    // The runs of lines some variant lacks, each grown to whole statements.
+    let mut groups: Vec<(usize, usize)> = Vec::new();
     let mut index = 0;
     while index < live.len() {
-        if live[index].mask & ctx == ctx {
-            out.push(live[index].line.to_string());
+        if covers(index) {
             index += 1;
             continue;
         }
-        let start = index;
-        while index < live.len() && live[index].mask & ctx != ctx {
-            index += 1;
+        let mut end = index;
+        while end < live.len() && !covers(end) {
+            end += 1;
         }
-        let run: Vec<Entry> = live[start..index]
-            .iter()
-            .map(|entry| Entry {
-                line: entry.line,
-                mask: entry.mask,
-            })
-            .collect();
-        out.extend(split(&run, ctx, kinds));
+        let (mut start, mut end) = contain(&live, index, end, ctx);
+        while let Some(&(last_start, last_end)) = groups.last()
+            && last_end >= start
+        {
+            groups.pop();
+            (start, end) = contain(&live, last_start.min(start), last_end.max(end), ctx);
+        }
+        groups.push((start, end));
+        index = end;
     }
+
+    let mut out = Vec::new();
+    let mut next = 0;
+    for (start, end) in groups {
+        out.extend(live[next..start].iter().map(|entry| entry.line.to_string()));
+        out.extend(split(&live[start..end], ctx, kinds));
+        next = end;
+    }
+    out.extend(live[next..].iter().map(|entry| entry.line.to_string()));
     out
+}
+
+/// The brace a line opens (1) or closes (-1); the decompiler puts braces on
+/// lines of their own.
+fn brace(line: &str) -> i32 {
+    match line.trim() {
+        "{" => 1,
+        "}" => -1,
+        _ => 0,
+    }
+}
+
+/// Whether `line` continues the statement before it (`else`, or the `while`
+/// of a `do`) or opens the block of the header before it.
+fn continues(line: &str) -> bool {
+    let line = line.trim();
+    line == "{" || line == "else" || line.starts_with("else ") || line.starts_with("while (")
+}
+
+/// The variant bits in `ctx`.
+fn bits(ctx: u8) -> impl Iterator<Item = u8> {
+    (0..8).map(|bit| 1 << bit).filter(move |bit| ctx & bit != 0)
+}
+
+/// For one variant: whether its first line in `live[start..end]` or its
+/// first line after it continues an earlier statement, and whether its
+/// braces close past `start` or stay open at `end`.
+fn breaks(live: &[Entry], start: usize, end: usize, bit: u8) -> (bool, bool, bool) {
+    let held = |entry: &&Entry| entry.mask & bit != 0;
+    let continued = live[start..end]
+        .iter()
+        .find(held)
+        .is_some_and(|entry| continues(entry.line));
+    // A section header may differ on its own, ahead of its shared `{`.
+    let ends_in_header = live[start..end]
+        .iter()
+        .rev()
+        .find(held)
+        .is_some_and(|entry| entry.header);
+    let continued_after = !ends_in_header
+        && live[end..]
+            .iter()
+            .find(held)
+            .is_some_and(|entry| continues(entry.line));
+    let mut depth = 0;
+    let mut closes_past = false;
+    for entry in live[start..end].iter().filter(held) {
+        depth += brace(entry.line);
+        closes_past |= depth < 0;
+    }
+    (
+        continued || closes_past,
+        continued_after,
+        depth > 0 && !closes_past,
+    )
+}
+
+/// Whether a block can start at `live[start]` and end before `live[end]`:
+/// each variant in `ctx` sees balanced braces that never close past the
+/// start, and no statement crosses either end.
+fn contained(live: &[Entry], start: usize, end: usize, ctx: u8) -> bool {
+    bits(ctx).all(|bit| breaks(live, start, end, bit) == (false, false, false))
+}
+
+/// Grow `live[start..end]` until it holds whole statements for every
+/// variant in `ctx`.
+fn contain(live: &[Entry], mut start: usize, mut end: usize, ctx: u8) -> (usize, usize) {
+    loop {
+        let (mut back, mut forward) = (false, false);
+        for bit in bits(ctx) {
+            let (before, after, open) = breaks(live, start, end, bit);
+            back |= before;
+            forward |= after || open;
+        }
+        if !back && !forward {
+            break;
+        }
+        if back && start > 0 {
+            start -= 1;
+        } else if end < live.len() {
+            end += 1;
+        } else if start > 0 {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    (start, end)
 }
 
 /// Write a run of lines not every variant in `ctx` holds as `#if` blocks.
@@ -234,7 +512,7 @@ fn split(run: &[Entry], ctx: u8, kinds: &[Variant]) -> Vec<String> {
     };
     let mut cuts = vec![0];
     for index in 1..run.len() {
-        if class(&run[index]) != class(&run[index - 1]) {
+        if class(&run[index]) != class(&run[index - 1]) && contained(run, 0, index, ctx) {
             cuts.push(index);
         }
     }

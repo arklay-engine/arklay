@@ -17,12 +17,7 @@ proc init
 #if CHRIS
     door_aot_set(4, 200, 10700, 2000, 2300, 0, 1, 8, 0, 64, RDT_01A, 4500, 0, 4100, 2048, UNLOCKED, 129);
     if (ck(FG_COMMON, 43, 1))
-#else
-    door_aot_set(4, 200, 10700, 2000, 2300, 0, 1, 8, 0, 0, RDT_01A, 4500, 0, 4100, 2048, UNLOCKED, 129);
-    if (ck(FG_COMMON, 40, 1))
-#endif
     {
-#if CHRIS
         if (ck(FG_COMMON, 100, 0))
         {
             set(FG_COMMON, 54, 0);
@@ -31,7 +26,6 @@ proc init
         {
             set(FG_COMMON, 54, 0);
         }
-#endif
         aot_set(5, 0, 400, 5600, 6100, SCE_EVENT, 65, 0, 0, event_00, 0, 0, 0);
         enemy(ENEMY_HUNTER, 167, 2, 1, 2, 0, 0, 0, 0, 0, 20000, 20000, 20000, 0, 0, 0, 0);
     }
@@ -39,8 +33,22 @@ proc init
     {
         enemy(ENEMY_HUNTER, 39, 2, 1, 2, 0, 0, 896, 0, 0, 4561, 0, 4818, 0, 0, 0, 0);
     }
+#else
+    door_aot_set(4, 200, 10700, 2000, 2300, 0, 1, 8, 0, 0, RDT_01A, 4500, 0, 4100, 2048, UNLOCKED, 129);
+    if (ck(FG_COMMON, 40, 1))
+    {
+        aot_set(5, 0, 400, 5600, 6100, SCE_EVENT, 65, 0, 0, event_00, 0, 0, 0);
+        enemy(ENEMY_HUNTER, 167, 2, 1, 2, 0, 0, 0, 0, 0, 20000, 20000, 20000, 0, 0, 0, 0);
+    }
+    else
+    {
+        enemy(ENEMY_HUNTER, 39, 2, 1, 2, 0, 0, 896, 0, 0, 4561, 0, 4818, 0, 0, 0, 0);
+    }
+#endif
     return;
+#endif
 }
+#if MANSION2
 
 #if CHRIS
 proc main
@@ -138,8 +146,8 @@ event event_01
     act_finish();
 }
 
-event event_02
 #if CHRIS
+event event_02
 {
     run
     {
@@ -287,6 +295,8 @@ event event_05
 }
 
 event event_06
+#else
+event event_02
 #endif
 {
     sleep(37);
@@ -296,5 +306,5 @@ event event_06
     sleep(25);
     act_idle();
     act_finish();
-#endif
 }
+#endif

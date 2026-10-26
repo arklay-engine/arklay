@@ -612,9 +612,11 @@ mansion visit (stages 6 and 7): `103.akscr` holds RDTs 1030, 1031, 6030 and
 ```
 
 `CHRIS` and `JILL` follow the player digit, `MANSION1` and `MANSION2` the
-stage (neither is defined outside the mansion); blocks nest, and the
-directives work on whole lines, so a block may cover part of a statement or
-a section header. `arklay scd build 103.akscr --room 6031 --out
+stage (neither is defined outside the mansion); blocks nest. The
+directives work on whole lines; the exporter keeps whole statements inside
+each block (balanced braces, an `if` with its `else`), lining up each
+variant's events by content, so only a section header such as
+`event event_01` / `event event_04` stands alone in a block. `arklay scd build 103.akscr --room 6031 --out
 scd/6031.scd` compiles one variant; a script without a variant must not use
 `#if`. The merged scripts are checked in under `games/re1/room/`, and each
 compiles to its RDTs' exact bytecode.

@@ -11,13 +11,12 @@ proc init
     aot_set(7, 7000, 13000, 20000, 6000, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
 #if CHRIS
     if (ck(FG_COMMON, 98, 0) && ck(FG_COMMON, 97, 0) && ck(FG_COMMON, 99, 0))
+    {
+        set(FG_COMMON, 102, 0);
+    }
 #else
     if (ck(FG_COMMON, 10, 1) && ck(FG_COMMON, 7, 1) && ck(FG_ITEM, 13, 1))
-#endif
     {
-#if CHRIS
-        set(FG_COMMON, 102, 0);
-#else
         set(FG_COMMON, 7, 0);
         set(FG_ROOM, 31, 0);
         item_aot_set(8, 0, 0, 16, 16, ITEM_ACID_ROUNDS, 6, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 14, 65, 0, 0);
@@ -25,9 +24,7 @@ proc init
         evt_exec(0, 0, event_00);
         set(FG_ROOM, 10, 0);
         set(FG_ROOM, 11, 0);
-#endif
     }
-#if JILL
     if (ck(FG_COMMON, 5, 1))
     {
         set(FG_COMMON, 7, 0);
@@ -68,8 +65,8 @@ proc main
             aot_switch(0, 2, 1);
         }
     }
-#if JILL
 }
+#if JILL
 
 event event_00
 {
@@ -593,5 +590,5 @@ event event_03
         cut_auto(0);
     }
     evt_finish();
-#endif
 }
+#endif
