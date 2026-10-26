@@ -2013,6 +2013,10 @@ struct GameSession {
     /// Whether the persisted framebuffers show the GPU scene: set by a frame
     /// that recorded one and cleared by any frame that covered it.
     gpu_scene_visible: bool,
+    /// Whether the pause menu has just opened over a room frame that is not
+    /// drawn yet: the next frame draws the room once, through the same
+    /// renderer as every other frame, and the menu then keeps it frozen.
+    freeze_room_frame: bool,
     /// The DIED screen's art under the corpse, the background of the GPU
     /// scene the corpse is recorded in (see
     /// [`GameSession::render_death_screen`]).
@@ -2549,6 +2553,7 @@ impl GameSession {
             view_cut: None,
             view_prev: video::View::default(),
             gpu_scene_visible: false,
+            freeze_room_frame: false,
             death_backdrop: DeathBackdrop::default(),
             layered: false,
             gpu_room: None,
@@ -3849,7 +3854,6 @@ impl GameSession {
         if self.menu.is_some() {
             return;
         }
-        self.render(pack);
         let opened = self.with_menu(pack, |menu, cx, game| {
             let screen =
                 LuaScreen::open_screen_with_game("main_menu", &[], ScreenAction::Resume, cx, game)?;
@@ -3861,6 +3865,7 @@ impl GameSession {
             return;
         }
         self.game.message_menu = true;
+        self.freeze_room_frame = true;
     }
 
     /// Run `f` on the pause-menu slot with the session's game state lent to
@@ -4288,7 +4293,6 @@ impl GameSession {
     /// returning to the menu when backed out of.
     fn open_system_load(&mut self, pack: &Pack) {
         self.close_system_menu();
-        self.render(pack);
         let mut cx = self.ui_context(pack);
         let screen = ui::save_load::open_load_screen(self.game.save_screen.as_deref(), &mut cx);
         let cues = cx.cues.into_inner();
@@ -4378,7 +4382,6 @@ impl GameSession {
             }
             DebugMenuEvent::SaveGame => self.open_typewriter_save(pack, false),
             DebugMenuEvent::LoadGame => {
-                self.render(pack);
                 let mut cx = self.ui_context(pack);
                 let screen =
                     ui::save_load::open_load_screen(self.game.save_screen.as_deref(), &mut cx);
@@ -4829,17 +4832,15 @@ impl GameSession {
     }
 
     /// Open the save screen over the frozen room after the typewriter prompt
-    /// was confirmed. The last gameplay frame is painted first so the screen
-    /// fades in over it; the pending block is the state snapshot plus the
-    /// bio-card prefix, and `ink_ribbon` makes the write consume one. The
-    /// screen is the pack entry its scripts registered (`on_init` has run by
-    /// now), else the ported original; a Lua screen that cannot load falls
-    /// back to the original.
+    /// was confirmed, fading in over the room frame; the pending block is
+    /// the state snapshot plus the bio-card prefix, and `ink_ribbon` makes
+    /// the write consume one. The screen is the pack entry its scripts
+    /// registered (`on_init` has run by now), else the ported original; a
+    /// Lua screen that cannot load falls back to the original.
     fn open_typewriter_save(&mut self, pack: &Pack, ink_ribbon: bool) {
         if self.save_screen.is_some() {
             return;
         }
-        self.render(pack);
         let file = self.snapshot_save();
         let mut cx = self.ui_context(pack);
         let screen = ui::save_load::open_save_screen(
@@ -5880,6 +5881,7 @@ impl GameSession {
         self.framebuffer.hd = None;
         self.render_pass(pack, ScenePass::Software);
         self.draw_ui_layer();
+        self.freeze_room_frame = false;
     }
 
     /// Draw the F1 debug menu into [`GameSession::ui_layer`] at a wider
@@ -5942,16 +5944,16 @@ impl GameSession {
             overlay.scene = self.gpu_scene_visible;
         }
         self.layered = self.gpu_scene_visible || !self.framebuffer.hd_quads().is_empty();
-        if !self.layered {
-            return;
+        if self.layered {
+            self.menu_fade_draw = menu_fade;
+            let mut white = self.framebuffer_white.take().unwrap_or_default();
+            std::mem::swap(&mut self.framebuffer, &mut white);
+            self.framebuffer.capture_hd(255);
+            self.render_pass(pack, ScenePass::White);
+            std::mem::swap(&mut self.framebuffer, &mut white);
+            self.framebuffer_white = Some(white);
         }
-        self.menu_fade_draw = menu_fade;
-        let mut white = self.framebuffer_white.take().unwrap_or_default();
-        std::mem::swap(&mut self.framebuffer, &mut white);
-        self.framebuffer.capture_hd(255);
-        self.render_pass(pack, ScenePass::White);
-        std::mem::swap(&mut self.framebuffer, &mut white);
-        self.framebuffer_white = Some(white);
+        self.freeze_room_frame = false;
     }
 
     /// The frame drawn over a white scene, when the last
@@ -6076,7 +6078,13 @@ impl GameSession {
         }
         // While the menu is up the room is frozen: keep the frame it was
         // opened over instead of re-rendering the scene, then draw the menu
-        // and the window over it. A canvas shows no room at all.
+        // and the window over it. The frame the menu opens on draws the room
+        // one last time, so the frozen frame comes from this pass's renderer
+        // (the GPU keeps compositing its last recorded scene). A canvas shows
+        // no room at all.
+        let fade_hides_room = self.menu.is_some()
+            && self.menu_fade_hides()
+            && !(self.menu_fade_phase == MenuFadePhase::Out && self.menu_fade_pending);
         if canvas.is_some() {
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
@@ -6087,7 +6095,7 @@ impl GameSession {
             // menu shows through.
             self.framebuffer.clear();
             self.gpu_scene_visible = false;
-        } else if self.menu.is_none() {
+        } else if self.menu.is_none() || (self.freeze_room_frame && !fade_hides_room) {
             match pass {
                 // The scene was recorded by the black pass; this pass only
                 // redraws what lies over it.
@@ -6137,9 +6145,7 @@ impl GameSession {
             self.draw_room_fade();
             self.draw_screen_intensity_bars();
             self.draw_death_fade();
-        } else if self.menu_fade_hides()
-            && !(self.menu_fade_phase == MenuFadePhase::Out && self.menu_fade_pending)
-        {
+        } else if fade_hides_room {
             // The original suspends game_loop while the menu opens or closes,
             // so the room is not redrawn: the screen is the menu's black
             // background with the fade over it, not the frozen room darkening
@@ -18353,6 +18359,48 @@ mod tests {
             drawn += 1;
         }
         assert!(drawn > 0);
+    }
+
+    /// The frame the pause menu opens on is the room drawn on the GPU, not a
+    /// software redraw: the menu keeps compositing the last recorded scene.
+    /// Needs `ARKLAY_RE1_PACK` and a SPIR-V capable GPU; skips without a GPU.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn gpu_menu_opens_over_the_gpu_scene() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let Ok(_sdl) = SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let save_dir = TempDir::new();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("106").unwrap(), &save_dir.0).unwrap();
+        for _ in 0..60 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        session.render_layers(&pack, &mut gpu);
+        assert!(session.gpu_scene_visible, "the room is the GPU scene");
+        session.begin_menu_open(&pack);
+        assert!(session.menu.is_some(), "the menu opens");
+        session.render_layers(&pack, &mut gpu);
+        assert!(
+            session.gpu_scene_visible,
+            "the frame the menu opens on keeps the GPU scene"
+        );
+        assert!(session.white_frame().is_some(), "the overlay is layered");
     }
 
     /// The DIED screen's corpse is recorded as the GPU scene over the
