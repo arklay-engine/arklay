@@ -27,7 +27,7 @@
 //! their art is drawn on the GPU as an [`Overlay`] quad while the overlay
 //! leaves a hole for it (see [`Overlay`]).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, Weak};
 
 use anyhow::{Context, Result};
@@ -80,6 +80,11 @@ impl HdTable {
     /// Index every image under [`ROOT`] in the merged view of `pack`. A stem
     /// with a suffix (`C5157461_3B`) only fills a hash no bare stem names.
     pub fn scan(pack: &Pack) -> Self {
+        Self::scan_with(pack, true)
+    }
+
+    /// [`HdTable::scan`], pairing masks by shape only when `shapes`.
+    fn scan_with(pack: &Pack, shapes: bool) -> Self {
         let mut files = HashMap::new();
         let mut suffixed = HashMap::new();
         let mut lists = Vec::new();
@@ -115,13 +120,7 @@ impl HdTable {
         for (hash, path) in suffixed {
             files.entry(hash).or_insert(path);
         }
-        let is_mask = |hash: &u32| {
-            files.get(hash).is_some_and(|path| {
-                path.rsplit('/')
-                    .nth(1)
-                    .is_some_and(|dir| dir.eq_ignore_ascii_case("mask"))
-            })
-        };
+        let is_mask = |hash: &u32| files.get(hash).is_some_and(|path| in_mask_dir(path));
         let mut paired = HashMap::new();
         for path in &lists {
             let Ok(data) = pack.read(path) else {
@@ -138,6 +137,9 @@ impl HdTable {
                     paired.entry(pair[1]).or_insert(pair[0]);
                 }
             }
+        }
+        if shapes {
+            match_mask_shapes(pack, &files, &mut paired);
         }
         HdTable {
             files,
@@ -212,6 +214,277 @@ impl HdTable {
             })
         })
     }
+}
+
+/// Whether `path` sits directly in a `mask/` directory, as a TeamX pack's
+/// room masks do.
+fn in_mask_dir(path: &str) -> bool {
+    path.rsplit('/')
+        .nth(1)
+        .is_some_and(|dir| dir.eq_ignore_ascii_case("mask"))
+}
+
+/// The smallest IoU at which a replacement mask's shape names a camera
+/// ([`match_mask_shapes`]).
+const SHAPE_MIN_IOU: f32 = 0.9;
+/// How far the best camera's IoU must lead the runner-up's.
+const SHAPE_MIN_MARGIN: f32 = 0.05;
+
+/// The coverage of a room mask in its 256 x 256 hash window: which texels
+/// are drawn, within the extent the original page fills.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MaskShape {
+    extent: [usize; 2],
+    covered: Vec<bool>,
+}
+
+impl MaskShape {
+    const SIZE: usize = 256;
+
+    /// The drawn (non-transparent) texels of an original mask page.
+    fn of_page(page: &Image) -> Self {
+        let extent = [
+            (page.width as usize).min(Self::SIZE),
+            (page.height as usize).min(Self::SIZE),
+        ];
+        let mut covered = vec![false; Self::SIZE * Self::SIZE];
+        if page.rgba.len() < page.width as usize * page.height as usize * 4 {
+            return MaskShape { extent, covered };
+        }
+        for y in 0..extent[1] {
+            for x in 0..extent[0] {
+                let alpha = page.rgba[(y * page.width as usize + x) * 4 + 3];
+                covered[y * Self::SIZE + x] = alpha != 0;
+            }
+        }
+        MaskShape { extent, covered }
+    }
+
+    /// The coverage of an HD mask spanning the whole window, brought down
+    /// to one texel per original texel: a texel is drawn when most of the
+    /// HD texels over it are at least half opaque.
+    fn of_replacement(hd: &Image) -> Self {
+        let (width, height) = (hd.width as usize, hd.height as usize);
+        let mut covered = vec![false; Self::SIZE * Self::SIZE];
+        if width >= Self::SIZE && height >= Self::SIZE && hd.rgba.len() >= width * height * 4 {
+            for y in 0..Self::SIZE {
+                let rows = y * height / Self::SIZE..(y + 1) * height / Self::SIZE;
+                for x in 0..Self::SIZE {
+                    let columns = x * width / Self::SIZE..(x + 1) * width / Self::SIZE;
+                    let mut drawn = 0;
+                    for row in rows.clone() {
+                        drawn += columns
+                            .clone()
+                            .filter(|&column| hd.rgba[(row * width + column) * 4 + 3] >= 128)
+                            .count();
+                    }
+                    covered[y * Self::SIZE + x] = drawn * 2 > rows.len() * columns.len();
+                }
+            }
+        }
+        MaskShape {
+            extent: [Self::SIZE; 2],
+            covered,
+        }
+    }
+
+    /// Intersection over union of `self`'s drawn texels and `other`'s,
+    /// within `self`'s extent. A replacement's texels past the original
+    /// page held whatever the loader's surface did, so they don't count.
+    fn iou(&self, other: &MaskShape) -> f32 {
+        let (mut both, mut either) = (0u32, 0u32);
+        for y in 0..self.extent[1] {
+            let row = y * Self::SIZE..y * Self::SIZE + self.extent[0];
+            for (&a, &b) in self.covered[row.clone()].iter().zip(&other.covered[row]) {
+                both += u32::from(a && b);
+                either += u32::from(a || b);
+            }
+        }
+        if either == 0 {
+            0.0
+        } else {
+            both as f32 / either as f32
+        }
+    }
+}
+
+/// The index of the clear winner among `scores`: at least
+/// [`SHAPE_MIN_IOU`], and ahead of every other by [`SHAPE_MIN_MARGIN`].
+fn clear_winner(scores: impl IntoIterator<Item = f32>) -> Option<(usize, f32)> {
+    let mut best: Option<(usize, f32)> = None;
+    let mut second = 0.0f32;
+    for (index, score) in scores.into_iter().enumerate() {
+        match best {
+            Some((_, top)) if score <= top => second = second.max(score),
+            _ => {
+                if let Some((_, top)) = best {
+                    second = second.max(top);
+                }
+                best = Some((index, score));
+            }
+        }
+    }
+    best.filter(|&(_, top)| top >= SHAPE_MIN_IOU && top - second >= SHAPE_MIN_MARGIN)
+}
+
+/// A mask page's width, height and the CRC of its texels.
+type PageId = (u32, u32, u32);
+
+/// A camera of the base game: the stems of its mask page and background.
+struct RoomCamera {
+    mask: String,
+    background: String,
+}
+
+/// Every camera with a mask page in `pack` (`roommask/100_000`), with the
+/// background stem it is drawn over (`roomcut/100_000`).
+fn room_cameras(pack: &Pack) -> Vec<RoomCamera> {
+    let mut stems: Vec<&str> = pack
+        .paths()
+        .filter_map(|path| path.strip_prefix("roommask/"))
+        .map(|name| name.rsplit_once('.').map_or(name, |(stem, _)| stem))
+        .filter(|name| !name.contains('/'))
+        .collect();
+    stems.sort_unstable();
+    stems.dedup();
+    stems
+        .into_iter()
+        .map(|name| RoomCamera {
+            mask: format!("roommask/{name}"),
+            background: format!("roomcut/{name}"),
+        })
+        .collect()
+}
+
+/// Pair the room masks no hash names with their cameras by shape.
+///
+/// A camera's mask is drawn from its own hashes or through a room list
+/// ([`HdTable::paired_masks`]), but some cameras miss both: their room is
+/// absent from the lists, or their background has no replacement to pair
+/// with. Each replacement under a `mask/` directory that no camera already
+/// uses is brought down to one texel per original texel and compared with
+/// the mask page of every camera still missing one. A replacement whose
+/// coverage overlaps one camera's page with an IoU of at least
+/// [`SHAPE_MIN_IOU`], [`SHAPE_MIN_MARGIN`] ahead of any other camera, is
+/// paired with that camera's background as a room list would pair it.
+/// Cameras whose pages are identical are one candidate and share the match,
+/// and one whose page is identical to a camera that has its mask takes
+/// that camera's.
+fn match_mask_shapes(pack: &Pack, files: &HashMap<u32, String>, paired: &mut HashMap<u32, u32>) {
+    if !files.values().any(|path| in_mask_dir(path)) {
+        return;
+    }
+    // Decoded as the runtime decodes them: a mask page keeps the shipped
+    // page's size, a background is any size.
+    let decode = |stem: &str, geometry, key| -> Option<Image> {
+        let asset = pack
+            .read_asset(stem, crate::pack::AssetClass::Image)
+            .ok()??;
+        crate::assets::decode_picture(&asset, geometry, key).ok()
+    };
+    // Each camera's page (identified by its size and texels' CRC) and
+    // either the replacement its mask already has, or its shape and
+    // background hash.
+    let cameras = parallel_map(&room_cameras(pack), |camera| {
+        let page = decode(
+            &camera.mask,
+            crate::assets::Geometry::Shipped,
+            Some([0, 0, 0]),
+        )?;
+        let id = (page.width, page.height, crate::hash::crc32(&page.rgba));
+        if let Some(own) = image_candidates(&page)
+            .iter()
+            .find(|candidate| files.contains_key(&candidate.hash))
+        {
+            return Some((id, Err(own.hash)));
+        }
+        let background = image_candidates(&decode(
+            &camera.background,
+            crate::assets::Geometry::Free,
+            None,
+        )?);
+        match background
+            .iter()
+            .filter_map(|candidate| paired.get(&candidate.hash))
+            .find(|hash| files.contains_key(hash))
+        {
+            Some(&hash) => Some((id, Err(hash))),
+            None => Some((
+                id,
+                Ok((MaskShape::of_page(&page), background.first()?.hash)),
+            )),
+        }
+    });
+    let mut used = HashMap::new();
+    // Cameras still missing a mask, grouped by identical page, with the
+    // background hashes each group is known by.
+    let mut missing: Vec<(PageId, MaskShape, Vec<u32>)> = Vec::new();
+    for (id, camera) in cameras.into_iter().flatten() {
+        match camera {
+            Err(hash) => {
+                used.entry(id).or_insert(hash);
+            }
+            Ok((shape, background)) => match missing.iter_mut().find(|(known, ..)| *known == id) {
+                Some((.., backgrounds)) => backgrounds.push(background),
+                None => missing.push((id, shape, vec![background])),
+            },
+        }
+    }
+    // A camera whose page is identical to a camera that has its mask takes
+    // the same one.
+    missing.retain(|(id, _, backgrounds)| {
+        let Some(&hash) = used.get(id) else {
+            return true;
+        };
+        for &background in backgrounds {
+            paired.entry(background).or_insert(hash);
+        }
+        false
+    });
+    if missing.is_empty() {
+        return;
+    }
+    let used: HashSet<u32> = used.into_values().collect();
+    let mut unused: Vec<(u32, &String)> = files
+        .iter()
+        .filter(|&(hash, path)| in_mask_dir(path) && !used.contains(hash))
+        .map(|(&hash, path)| (hash, path))
+        .collect();
+    unused.sort_unstable();
+    let matches = parallel_map(&unused, |&(hash, path)| {
+        let shape = MaskShape::of_replacement(&load(pack, path).ok()?);
+        let (group, score) = clear_winner(missing.iter().map(|(_, page, _)| page.iou(&shape)))?;
+        Some((group, score, hash))
+    });
+    // The best replacement for each group, by IoU.
+    let mut best: BTreeMap<usize, (f32, u32)> = BTreeMap::new();
+    for (group, score, hash) in matches.into_iter().flatten() {
+        let entry = best.entry(group).or_insert((score, hash));
+        if score > entry.0 {
+            *entry = (score, hash);
+        }
+    }
+    for (group, (_, hash)) in best {
+        for &background in &missing[group].2 {
+            paired.entry(background).or_insert(hash);
+        }
+    }
+}
+
+/// `f` of every item, spread over the available cores, in order.
+fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism().map_or(1, usize::from);
+    let chunk = items.len().div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = items
+            .chunks(chunk)
+            .map(|chunk| scope.spawn(|| chunk.iter().map(&f).collect::<Vec<_>>()))
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("a mask-matching worker panicked"))
+            .collect()
+    })
 }
 
 /// Whether `path` (lower case) is a loader's room list, `ROOM0000.dat`.
@@ -1226,5 +1499,322 @@ mod tests {
                 frame: [128, 1]
             })
         );
+    }
+
+    #[test]
+    fn a_shape_match_needs_the_threshold_and_a_margin() {
+        assert_eq!(clear_winner([0.95, 0.5]), Some((0, 0.95)));
+        assert_eq!(clear_winner([0.5, 0.97, 0.9]), Some((1, 0.97)));
+        assert_eq!(clear_winner([0.95, 0.93]), None, "too close to call");
+        assert_eq!(clear_winner([0.85, 0.1]), None, "below the threshold");
+        assert_eq!(clear_winner([]), None);
+    }
+
+    /// An RGBA image whose texel at `(x, y)` is `texel(x, y)`.
+    fn image_of(width: u32, height: u32, texel: impl Fn(u32, u32) -> [u8; 4]) -> Image {
+        Image {
+            width,
+            height,
+            rgba: (0..width * height)
+                .flat_map(|i| texel(i % width, i / width))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_replacement_shape_is_compared_within_the_original_page() {
+        // A 128 x 128 page drawn in its left half.
+        let page = MaskShape::of_page(&image_of(128, 128, |x, _| {
+            [9, 9, 9, if x < 64 { 255 } else { 0 }]
+        }));
+        // Its 4x replacement covers the whole 256 x 256 window: the same
+        // left half, and junk past the page that doesn't count.
+        let hd = |edge: u32| {
+            MaskShape::of_replacement(&image_of(1024, 1024, |x, y| {
+                let drawn = x < edge || x >= 512 || y >= 512;
+                [9, 9, 9, if drawn { 200 } else { 0 }]
+            }))
+        };
+        assert_eq!(page.iou(&hd(256)), 1.0);
+        // A quarter of the page's texels wider: 64 x 128 of 96 x 128.
+        assert!((page.iou(&hd(384)) - 2.0 / 3.0).abs() < 1e-6);
+        // A texel is drawn when most of the HD texels over it are.
+        assert_eq!(page.iou(&hd(255)), 1.0);
+        assert!(page.iou(&hd(254)) < 1.0);
+    }
+
+    /// A PNG of `image`, alpha kept.
+    #[cfg(feature = "hd")]
+    fn png_of(image: &Image) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let mut encoder = png::Encoder::new(&mut bytes, image.width, image.height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(&image.rgba).unwrap();
+        writer.finish().unwrap();
+        bytes
+    }
+
+    #[test]
+    #[cfg(feature = "hd")]
+    fn an_unnamed_mask_pairs_with_the_camera_its_shape_matches() {
+        // Each camera's page is drawn in one colour inside a rectangle
+        // `[x0, x1, y0, y1)` (black is a hole), and its background is a
+        // solid colour of its own.
+        let inside = |[x0, x1, y0, y1]: [u32; 4], x: u32, y: u32| {
+            (x0..x1).contains(&x) && (y0..y1).contains(&y)
+        };
+        let page = |rect, red| {
+            image_of(256, 256, |x, y| {
+                if inside(rect, x, y) {
+                    [red, 100, 50, 255]
+                } else {
+                    [0, 0, 0, 0]
+                }
+            })
+        };
+        let cameras = [
+            ("100_000", [0, 100, 0, 50], 200),
+            // Named by its own hash.
+            ("100_001", [50, 250, 100, 200], 200),
+            // Two cameras a few texels apart: no replacement can tell them
+            // apart.
+            ("100_002", [0, 120, 150, 250], 200),
+            ("100_003", [0, 121, 150, 250], 200),
+            // Paired by a room list, and a camera with the same page.
+            ("100_004", [100, 200, 0, 90], 200),
+            ("100_005", [100, 200, 0, 90], 200),
+            // The same coverage over different art is still two cameras.
+            ("100_006", [10, 60, 60, 90], 200),
+            ("100_007", [10, 60, 60, 90], 120),
+            // The same page as camera 0.
+            ("100_008", [0, 100, 0, 50], 200),
+        ];
+        let replacement = |rect| {
+            png_of(&image_of(512, 512, |x, y| {
+                [1, 2, 3, if inside(rect, x / 2, y / 2) { 255 } else { 0 }]
+            }))
+        };
+        let mut writer = crate::pack::PackWriter::new();
+        let mut backgrounds = Vec::new();
+        for (index, &(name, rect, red)) in cameras.iter().enumerate() {
+            let background = image_of(320, 240, |_, _| [8 + 16 * index as u8, 0, 0, 255]);
+            writer
+                .add(
+                    &format!("roommask/{name}.bmp"),
+                    crate::bmp::encode_to_vec(&page(rect, red)).unwrap(),
+                )
+                .unwrap();
+            writer
+                .add(
+                    &format!("roomcut/{name}.bmp"),
+                    crate::bmp::encode_to_vec(&background).unwrap(),
+                )
+                .unwrap();
+            backgrounds.push(image_candidates(&background));
+        }
+        // Camera 1's own mask is named by its hash, so its shape is not a
+        // candidate even for the replacement drawn like it.
+        let own = image_candidates(&page(cameras[1].1, cameras[1].2))
+            .into_iter()
+            .find(|candidate| candidate.frame == [256, 256])
+            .unwrap()
+            .hash;
+        for (hash, rect) in [
+            (own, cameras[1].1),
+            (0x1111_1111, cameras[0].1),
+            (0x2222_2222, cameras[1].1),
+            (0x3333_3333, cameras[2].1),
+            (0x4444_4444, [200, 256, 0, 40]),
+            (0x5555_5555, cameras[4].1),
+            (0x6666_6666, cameras[6].1),
+        ] {
+            writer
+                .add(&format!("htexture/mask/{hash:08X}.png"), replacement(rect))
+                .unwrap();
+        }
+        let list: Vec<u8> = [0x5555_5555, backgrounds[4][0].hash]
+            .iter()
+            .flat_map(|hash: &u32| hash.to_le_bytes())
+            .collect();
+        writer.add("htexture/cache/ROOM1000.dat", list).unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let table = HdTable::scan(&pack);
+        let paired: Vec<Option<u32>> = backgrounds
+            .iter()
+            .map(|background| {
+                let hashes: HashSet<u32> = table
+                    .paired_masks(background)
+                    .iter()
+                    .map(|candidate| candidate.hash)
+                    .collect();
+                assert!(hashes.len() <= 1);
+                hashes.into_iter().next()
+            })
+            .collect();
+        assert_eq!(
+            paired,
+            [
+                Some(0x1111_1111),
+                None,
+                None,
+                None,
+                Some(0x5555_5555),
+                Some(0x5555_5555),
+                None,
+                None,
+                Some(0x1111_1111),
+            ]
+        );
+        assert_eq!(HdTable::scan_with(&pack, false).paired.len(), 1);
+    }
+
+    /// Every camera's mask page, background and whether its mask resolves.
+    fn real_cameras(pack: &Pack, table: &HdTable) -> Vec<(String, Image, Option<Found>)> {
+        room_cameras(pack)
+            .into_iter()
+            .filter_map(|camera| {
+                let decode = |stem: &str, geometry, key| {
+                    let asset = pack
+                        .read_asset(stem, crate::pack::AssetClass::Image)
+                        .ok()??;
+                    crate::assets::decode_picture(&asset, geometry, key).ok()
+                };
+                let page = decode(
+                    &camera.mask,
+                    crate::assets::Geometry::Shipped,
+                    Some([0, 0, 0]),
+                )?;
+                let background = decode(&camera.background, crate::assets::Geometry::Free, None)?;
+                let mut candidates = image_candidates(&page);
+                candidates.extend(table.paired_masks(&image_candidates(&background)));
+                let found = table.find_quietly(&candidates);
+                Some((camera.mask, page, found))
+            })
+            .collect()
+    }
+
+    #[test]
+    #[ignore = "requires ARKLAY_RE1_PACK and ARKLAY_ENHANCE_PACK"]
+    fn real_mask_shapes_agree_with_exact_hashes_and_fill_the_gaps() {
+        let (Ok(base), Ok(enhance)) = (
+            std::env::var("ARKLAY_RE1_PACK"),
+            std::env::var("ARKLAY_ENHANCE_PACK"),
+        ) else {
+            return;
+        };
+        let pack = Pack::open_layered(
+            std::path::Path::new(&base),
+            &[std::path::PathBuf::from(enhance)],
+        )
+        .unwrap();
+        let started = std::time::Instant::now();
+        let with_shapes = HdTable::scan(&pack);
+        let scan_time = started.elapsed();
+        let started = std::time::Instant::now();
+        let without = HdTable::scan_with(&pack, false);
+        let base_time = started.elapsed();
+        eprintln!("scan {scan_time:?}, without shapes {base_time:?}");
+
+        // Validate the rule on the masks that name themselves. Each one's
+        // clear winner, among the pages of the cameras still missing a mask
+        // plus its own camera's page (the choice the scan makes), and among
+        // every camera's page (stricter: near-identical cameras then
+        // compete), must be its own camera or none.
+        let cameras = real_cameras(&pack, &without);
+        let mut pages: Vec<&Image> = Vec::new();
+        let group_of: Vec<usize> = cameras
+            .iter()
+            .map(|(_, page, _)| {
+                pages
+                    .iter()
+                    .position(|known| {
+                        (known.width, known.height, &known.rgba)
+                            == (page.width, page.height, &page.rgba)
+                    })
+                    .unwrap_or_else(|| {
+                        pages.push(page);
+                        pages.len() - 1
+                    })
+            })
+            .collect();
+        let groups: Vec<MaskShape> = pages.into_iter().map(MaskShape::of_page).collect();
+        let mut missing_groups: Vec<usize> = cameras
+            .iter()
+            .zip(&group_of)
+            .filter(|((_, _, found), _)| found.is_none())
+            .map(|(_, &group)| group)
+            .collect();
+        missing_groups.sort_unstable();
+        missing_groups.dedup();
+        let (mut exact, mut agreed, mut strict, mut wrong) = (0, 0, 0, 0);
+        let mut seen = HashSet::new();
+        for (index, (name, page, found)) in cameras.iter().enumerate() {
+            let Some(found) = found else { continue };
+            let own_hit = image_candidates(page)
+                .iter()
+                .any(|candidate| without.files.get(&candidate.hash) == Some(&found.path));
+            if !own_hit || !seen.insert(found.path.clone()) {
+                continue;
+            }
+            exact += 1;
+            let own = group_of[index];
+            let hd = MaskShape::of_replacement(&load(&pack, &found.path).unwrap());
+            let choices: Vec<usize> = missing_groups
+                .iter()
+                .copied()
+                .filter(|&group| group != own)
+                .chain([own])
+                .collect();
+            match clear_winner(choices.iter().map(|&group| groups[group].iou(&hd))) {
+                Some((choice, _)) if choices[choice] == own => agreed += 1,
+                Some(_) => wrong += 1,
+                None => eprintln!("no clear match: {name} {}", found.path),
+            }
+            match clear_winner(groups.iter().map(|page| page.iou(&hd))) {
+                Some((group, _)) if group == own => strict += 1,
+                Some(_) => wrong += 1,
+                None => {}
+            }
+        }
+        eprintln!(
+            "exact {exact}: shape agreed {agreed} (against every camera {strict}), wrong {wrong}"
+        );
+        let missing_before: HashSet<&str> = cameras
+            .iter()
+            .filter(|(_, _, found)| found.is_none())
+            .map(|(name, _, _)| name.as_str())
+            .collect();
+        let after = real_cameras(&pack, &with_shapes);
+        let missing_after: Vec<&str> = after
+            .iter()
+            .filter(|(_, _, found)| found.is_none())
+            .map(|(name, _, _)| name.as_str())
+            .collect();
+        let masks = |cameras: &[(String, Image, Option<Found>)]| {
+            cameras
+                .iter()
+                .filter_map(|(_, _, found)| found.as_ref().map(|found| found.path.clone()))
+                .collect::<HashSet<_>>()
+                .len()
+        };
+        let total = with_shapes
+            .files
+            .values()
+            .filter(|path| in_mask_dir(path))
+            .count();
+        eprintln!(
+            "cameras missing {} -> {}; masks used {} -> {} of {total}",
+            missing_before.len(),
+            missing_after.len(),
+            masks(&cameras),
+            masks(&after),
+        );
+        eprintln!("still missing: {missing_after:?}");
+        assert_eq!(wrong, 0, "the rule never picks another camera");
+        assert!(agreed + 1 >= exact, "the rule agrees with the exact hashes");
+        // RE-ENHANCE v2.0: every mask it ships now has a camera.
+        assert_eq!(masks(&after), total);
     }
 }
