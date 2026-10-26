@@ -24,6 +24,11 @@
 #define ENEMY_00_CERBERUS 0x00
 #define ENEMY_01_CERBERUS 0x01
 #define ENEMY_02_CERBERUS 0x02
+#define F_ROOM_20 0x20
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define IMDL_03 0x03
 #define MSG_VO_009_04_22 0x00
 #define MSG_VO_009_04_28 0x02
 #define MSG_VO_009_05 0x01
@@ -41,17 +46,17 @@ proc init
     door_aot_set(AOT_01_DOOR, 3500, 30200, 1500, 1600, 1, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, STAGE_4 | ROOM_400_ENTER_PASSAGE, 3600, 0, 9900, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_02_USEITEM, 0, 0, 32000, 32000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 0, 63, 0, 1, 0);
     aot_reset(AOT_02_USEITEM, SCE_NONE, 0, 0, 0, 0);
-    item_aot_set(AOT_03_ITEM, 27900, 5200, 1700, 1000, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 90, 110, 0, 0, 24, 21, 0, 0, F_ITEM_C1, 129, 1, 0);
-    item_aot_set(AOT_04_ITEM, 27900, 5200, 1700, 1000, IT_44_HEAL_HERB_GREEN, 1, 1, 255, 72, 113, 0, 0, 24, 21, 0, 0, F_ITEM_C2, 129, 1, 0);
-    item_aot_set(AOT_05_ITEM, 27900, 1800, 1700, 800, IT_45_HEAL_HERB_BLUE, 1, 2, 255, 90, 110, 0, 0, 96, 9, 0, 0, F_ITEM_C3, 129, 1, 0);
-    item_aot_set(AOT_06_ITEM, 27900, 1800, 1700, 800, IT_45_HEAL_HERB_BLUE, 1, 3, 255, 72, 113, 0, 0, 96, 9, 0, 0, F_ITEM_C4, 129, 1, 0);
+    item_aot_set(AOT_03_ITEM, 27900, 5200, 1700, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_00, SCA_NONE, 28250, 0, 5400, 0, F_ITEM_C1, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_04_ITEM, 27900, 5200, 1700, 1000, IT_44_HEAL_HERB_GREEN, 1, IMDL_01, SCA_NONE, 29000, 0, 5400, 0, F_ITEM_C2, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_05_ITEM, 27900, 1800, 1700, 800, IT_45_HEAL_HERB_BLUE, 1, IMDL_02, SCA_NONE, 28250, 0, 2400, 0, F_ITEM_C3, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_06_ITEM, 27900, 1800, 1700, 800, IT_45_HEAL_HERB_BLUE, 1, IMDL_03, SCA_NONE, 29000, 0, 2400, 0, F_ITEM_C4, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_02_CERBERUS, 12, F_ENEMY_35, 1, 2, 0, 0, 672, 0, 0, 25657, 0, 11984, ENEMY_00_CERBERUS, 0, 0, 0);
-        enemy(EM_02_CERBERUS, 12, F_ENEMY_36, 1, 2, 0, 0, 336, 0, 0, 19483, 0, 16862, ENEMY_01_CERBERUS, 0, 0, 0);
+        enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_35, SPAWN_FORCE, 2, 0, 672, 0, 25657, 0, 11984, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
+        enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_36, SPAWN_FORCE, 2, 0, 336, 0, 19483, 0, 16862, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
         if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
-            enemy(EM_02_CERBERUS, 12, F_ENEMY_37, 1, 2, 0, 0, 3920, 0, 0, 4200, 0, 21000, ENEMY_02_CERBERUS, 0, 0, 0);
+            enemy(EM_02_CERBERUS, EB_0C, F_ENEMY_37, SPAWN_FORCE, 2, 0, 3920, 0, 4200, 0, 21000, ENEMY_02_CERBERUS, ANIM_00, 0, EVAR_00);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE) && ck(FG_SCENARIO, F_SCENARIO_18, FALSE))
@@ -133,44 +138,44 @@ event from_main
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
-    voice_play(VOICE_PLAY, VO_009_04_22, 0);
+    voice_play(VOICE_PLAY, VO_009_04_22);
     message(MSG_VO_009_04_22, 0);
 #else
-    voice_play(VOICE_PLAY, VO_009_04_28, 0);
+    voice_play(VOICE_PLAY, VO_009_04_28);
     message(MSG_VO_009_04_28, 0);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 16, 32 | 0, 0 | 0);
-    act_flag_op(0, 2, 0);
+    act_anim_flags(ANIM_30, F_ROOM_20, 0);
+    act_flag_op(EF_OR, EF_0002);
     sleep(20);
-    act_anim_flags(32 | 17, 32 | 0, 0 | 0);
-    act_flag_op(0, 144, 0);
+    act_anim_flags(ANIM_31, F_ROOM_20, 0);
+    act_flag_op(EF_OR, EF_0080 | EF_0010);
     act_reset();
     evt_nop();
     wait_message();
 #if CHRIS
-    voice_play(VOICE_PLAY, VO_009_05, 0);
+    voice_play(VOICE_PLAY, VO_009_05);
     message(MSG_VO_009_05, 0);
 #else
-    voice_play(VOICE_PLAY, VO_A05_05, 0);
+    voice_play(VOICE_PLAY, VO_A05_05);
     message(MSG_VO_A05_05, 0);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 18, 32 | 0, 0 | 0);
-    act_flag_op(0, 2, 0);
+    act_anim_flags(ANIM_32, F_ROOM_20, 0);
+    act_flag_op(EF_OR, EF_0002);
     sleep(15);
-    act_anim_flags(32 | 19, 32 | 0, 0 | 0);
-    act_flag_op(0, 144, 0);
+    act_anim_flags(ANIM_33, F_ROOM_20, 0);
+    act_flag_op(EF_OR, EF_0080 | EF_0010);
 #if CHRIS
     sleep(65);
 #else
     sleep(80);
 #endif
-    act_motion_path(113, 600, 0, 1, 120, 64);
+    act_motion_path(MOTION_71, 600, 0, 1, 120, 64);
     sleep(5);
-    act_anim_flags(32 | 20, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_34, F_ROOM_20, 0);
 #if CHRIS
     sleep(33);
 #else
@@ -178,12 +183,12 @@ event from_main
 #endif
     act_reset();
     evt_nop();
-    sys_multi(SYS_04);
+    sys_multi(SYS_FORCE_ACTION);
     sleep(40);
     wait_message();
     run
     {
-        sys_multi(SYS_07);
+        sys_multi(SYS_IDLE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_STATUS, F_STATUS_11, TRUE);

@@ -17,19 +17,20 @@
 #define ENEMY_01_CHIMERA 0x01
 #define ENEMY_02_CHIMERA 0x02
 #define FX_1F 0x1F
+#define IMDL_00 0x00
 #define SE_18_STEAM_A 0x18
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_5A, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_5A, SAT_MANUAL | SAT_PLAYER, 0);
     aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, SAT_PLAYER, 9, 0, 13, 0, 1, 0);
     aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    enemy(EM_09_CHIMERA, 2, F_ENEMY_61, 1, 1, 0, 0, 2500, 0, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, 0, 0, 0);
-    enemy(EM_09_CHIMERA, 2, F_ENEMY_62, 1, 1, 0, 0, 3500, 0, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, 0, 0, 0);
+    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_61, SPAWN_FORCE, 1, 0, 2500, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_62, SPAWN_FORCE, 1, 0, 3500, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
 #if CHRIS
-    enemy(EM_09_CHIMERA, 2, F_ENEMY_B3, 1, 1, 0, 0, 144, 0, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, 0, 0, 0);
+    enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B3, SPAWN_FORCE, 1, 0, 144, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
 #endif
     evt_exec(0, TASK_09, on_enter);
     evt_exec(0, TASK_09, on_enter_2);
@@ -70,7 +71,7 @@ event on_enter
     }
     for (8)
     {
-        effect(FX_1F, 0, 0, 124, 71, 16, 245, 184, 36, 80, 10);
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 18300, -2800, 9400, 2640);
         sleep(3);
     }
     evt_nop();
@@ -87,7 +88,7 @@ event on_enter_2
     }
     for (8)
     {
-        effect(FX_1F, 0, 0, 84, 36, 104, 247, 64, 6, 228, 12);
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 9300, -2200, 1600, 3300);
         sleep(3);
     }
     evt_nop();
@@ -104,7 +105,7 @@ event on_enter_3
     }
     for (8)
     {
-        effect(FX_1F, 0, 0, 64, 31, 184, 242, 152, 33, 152, 8);
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 8000, -3400, 8600, 2200);
         sleep(3);
     }
     evt_chain(3);

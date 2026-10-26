@@ -26,6 +26,8 @@
 #define F_ROOM_02 0x02
 #define F_ROOM_20 0x20
 #define F_ROOM_22 0x22
+#define F_ROOM_3F 0x3F
+#define IMDL_00 0x00
 #define MSG_CRESTS_ARE_PLACED_IN_ALL_THE 0x03
 #define MSG_VO_00B_00 0x04
 #define MSG_VO_00B_01 0x05
@@ -63,70 +65,70 @@ proc init
 #if CHRIS
     if (ck(FG_SCENARIO, F_SCENARIO_7F, FALSE))
     {
-        item_aot_set(AOT_03_ITEM, 6500, 27200, 2000, 1000, IT_4D_KEY_RADIO, 1, 0, 255, 177, 18, 0, 0, 30, 35, 0, 0, F_ITEM_3B, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 6500, 27200, 2000, 1000, IT_4D_KEY_RADIO, 1, IMDL_00, SCA_NONE, 4785, 0, 8990, 0, F_ITEM_3B, SAT_MANUAL | SAT_PLAYER, 0);
         aot_reset(AOT_06_NONE, SCE_NONE, 0, 0, 0, 0);
         set(FG_STATUS, F_STATUS_1D, TRUE);
     }
 #endif
 #endif
-    obj(OBJ_00, 47, 255, 7010, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    eml_rot(128, 0, 0, 0, 4);
+    obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7010, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(ROT_OBJ | OBJ_00, 0, 1024);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_69, FALSE))
     {
-        objtbl_b_set(0, 0, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_00, 0);
     }
 #endif
-    obj(OBJ_01, 47, 255, 8040, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    eml_rot(129, 0, 0, 0, 4);
+    obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 8040, -1910, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(ROT_OBJ | OBJ_01, 0, 1024);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_6B, FALSE))
     {
-        objtbl_b_set(0, 1, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
     }
 #endif
-    obj(OBJ_02, 47, 255, 7540, -2390, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    eml_rot(130, 0, 0, 0, 4);
+    obj(OBJ_02, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7540, -2390, 27220, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(ROT_OBJ | OBJ_02, 0, 1024);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_6A, FALSE))
     {
-        objtbl_b_set(0, 2, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_02, 0);
     }
 #endif
-    obj(OBJ_03, 47, 255, 7530, -1900, 27220, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    eml_rot(131, 0, 0, 0, 4);
+    obj(OBJ_03, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 7530, -1900, 27220, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
+    eml_rot(ROT_OBJ | OBJ_03, 0, 1024);
 #if MANSION1
     if (ck(FG_SCENARIO, F_SCENARIO_6C, FALSE))
     {
-        objtbl_b_set(0, 3, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_03, 0);
     }
-    enemy(EM_02_CERBERUS, 3, F_ENEMY_2E, 1, 2, 0, 0, 1536, 0, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, 0, 0, 0);
+    enemy(EM_02_CERBERUS, EB_03, F_ENEMY_2E, SPAWN_FORCE, 2, 0, 1536, 0, 6500, 0, 24860, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
 #else
 #if CHRIS
     if (ck(FG_SCENARIO, F_SCENARIO_17, TRUE))
     {
-        enemy(EM_06_HUNTER, 2, F_ENEMY_2F, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_02, F_ENEMY_2F, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
     }
     if (ck(FG_COMMON, F_COMMON_21, TRUE))
     {
         set(FG_COMMON, F_COMMON_21, FALSE);
         if (ck(FG_COMMON, F_COMMON_22, TRUE))
         {
-            plw_anim(2, 40, 0);
-            setw(W_04, 0, 0);
+            plw_anim(PLW_02, ANIM_28, 0);
+            setw(W_04, 0);
             evt_exec(0, TASK_09, on_enter);
         }
         if (ck(FG_COMMON, F_COMMON_36, TRUE))
         {
-            plw_anim(2, 40, 0);
-            setw(W_04, 0, 0);
+            plw_anim(PLW_02, ANIM_28, 0);
+            setw(W_04, 0);
             evt_exec(0, TASK_09, on_enter_2);
         }
     }
 #else
     if (ck(FG_SCENARIO, F_SCENARIO_17, TRUE))
     {
-        enemy(EM_06_HUNTER, 2, F_ENEMY_2F, 1, 2, 0, 0, 848, 0, 0, 3826, 0, 22788, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_02, F_ENEMY_2F, SPAWN_FORCE, 2, 0, 848, 0, 3826, 0, 22788, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
     }
 #endif
 #endif
@@ -239,7 +241,7 @@ event from_main_3
     {
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 7027, 27234);
         cutnext(CAM_04);
-        objtbl_b_set(0, 0, 47);
+        objtbl_b_set(TBL_OBJ, OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
         set(FG_SCENARIO, F_SCENARIO_69, TRUE);
     }
     sleep(40);
@@ -266,7 +268,7 @@ event from_main_4
     {
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 8117, 27234);
         cutnext(CAM_04);
-        objtbl_b_set(0, 1, 47);
+        objtbl_b_set(TBL_OBJ, OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
         set(FG_SCENARIO, F_SCENARIO_6B, TRUE);
     }
     sleep(40);
@@ -293,7 +295,7 @@ event from_main_5
     {
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 7597, 27234);
         cutnext(CAM_04);
-        objtbl_b_set(0, 2, 47);
+        objtbl_b_set(TBL_OBJ, OBJ_02, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
         set(FG_SCENARIO, F_SCENARIO_6A, TRUE);
     }
     sleep(40);
@@ -320,7 +322,7 @@ event from_main_6
     {
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 7597, 27234);
         cutnext(CAM_04);
-        objtbl_b_set(0, 3, 47);
+        objtbl_b_set(TBL_OBJ, OBJ_03, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
         set(FG_SCENARIO, F_SCENARIO_6C, TRUE);
     }
     sleep(40);
@@ -360,7 +362,7 @@ event from_main
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(17154, 14346, 553);
+    act_anim_seq(AB_02, 2627, 10552, F_ROOM_02);
     act_reset();
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
@@ -372,47 +374,47 @@ event from_main
     set(FG_ROOM, F_ROOM_02, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(19, 4785, 0, 8990, 192, 64);
+    act_motion_path(MOTION_13, 4785, 0, 8990, 192, 64);
     act_reset();
     evt_nop();
     sleep(10);
-    voice_play(VOICE_PLAY, VO_00B_00, 0);
+    voice_play(VOICE_PLAY, VO_00B_00);
     message(MSG_VO_00B_00, 0);
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(19202, 56592, 8740);
+    act_anim_seq(AB_02, 4171, 9437, F_ROOM_22);
     act_nop();
-    act_param_set(40960, 0);
+    act_param_set(0, 160);
     do
     {
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_22, FALSE));
-    act_anim_flags(0 | 9, 32 | 2, 0 | 0);
+    act_anim_flags(ANIM_09, F_ROOM_22, 0);
     sleep(25);
     act_reset();
     evt_nop();
     wait_message();
-    voice_play(VOICE_PLAY, VO_00B_01, 0);
+    voice_play(VOICE_PLAY, VO_00B_01);
     message(MSG_VO_00B_01, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 16, 32 | 2, 0 | 0);
+    act_anim_flags(ANIM_30, F_ROOM_22, 0);
     sleep(20);
     act_reset();
     evt_nop();
-    objtbl_b_set(1, 0, 0);
+    objtbl_b_set(TBL_ITEM, IMDL_00, 0);
     sleep(10);
     evt_fork(TASK_01, from_main_sub1, 0);
     wait_message();
     evt_disable(TASK_01);
-    sys_multi(SYS_06);
+    sys_multi(SYS_CLEAR_8C);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
-    act_anim_flags(0 | 9, 32 | 2, 0 | 0);
-    act_flag_op(0, 1, 0);
+    act_motion(MOTION_10);
+    act_anim_flags(ANIM_09, F_ROOM_22, 0);
+    act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
     act_reset();
@@ -430,10 +432,10 @@ event from_main_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 18, 32 | 2, 0 | 0);
+    act_anim_flags(ANIM_32, F_ROOM_22, 0);
     sleep(20);
-    act_anim_flags(32 | 18, 32 | 2, 0 | 0);
-    act_flag_op(0, 1, 0);
+    act_anim_flags(ANIM_32, F_ROOM_22, 0);
+    act_flag_op(EF_OR, EF_0001);
     sleep(20);
     act_reset();
     evt_nop();
@@ -448,7 +450,7 @@ event on_enter
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(50, 0, 250, 0, 0, 250);
+    act_motion_path(MOTION_32, 0, 250, 0, 0, 250);
     act_reset();
     evt_nop();
     run
@@ -457,17 +459,17 @@ event on_enter
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_sub1);
-        voice_play(VOICE_PLAY, VO_00C_00, 0);
+        voice_play(VOICE_PLAY, VO_00C_00);
         message(MSG_VO_00C_00, 0);
     }
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(50, 0, 0, 0, 0, 50);
+    act_motion_path(MOTION_32, 0, 0, 0, 0, 50);
     act_reset();
     evt_nop();
     sleep(30);
-    voice_play(VOICE_PLAY, VO_00C_01, 0);
+    voice_play(VOICE_PLAY, VO_00C_01);
     message(MSG_VO_00C_01, 0);
     wait_message();
     evt_work_set(WK_PLAYER, 0);
@@ -476,7 +478,7 @@ event on_enter
     act_reset();
     run
     {
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
     }
@@ -492,22 +494,22 @@ event on_enter_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(20);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(30);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(20);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(30);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(20);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(70);
-    act_motion_path(49, 1250, 0, 0, 50, 0);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_motion_path(MOTION_31, 1250, 0, 0, 50, 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(20);
-    act_motion(16);
+    act_motion(MOTION_10);
     act_reset();
     evt_nop();
     evt_finish();
@@ -520,7 +522,7 @@ event on_enter_2
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(50, 0, 250, 0, 0, 250);
+    act_motion_path(MOTION_32, 0, 250, 0, 0, 250);
     act_reset();
     evt_nop();
     run
@@ -529,27 +531,27 @@ event on_enter_2
         set(FG_RUN, F_RUN_MONSTERS, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         evt_exec(0, TASK_09, on_enter_2_sub1);
-        voice_play(VOICE_PLAY, VO_00C_20, 0);
+        voice_play(VOICE_PLAY, VO_00C_20);
         message(MSG_VO_00C_20, 0);
     }
     sleep(40);
     wait_message();
     sleep(10);
-    voice_play(VOICE_PLAY, VO_00C_21, 0);
+    voice_play(VOICE_PLAY, VO_00C_21);
     sleep(56);
     sleep(10);
-    voice_play(VOICE_PLAY, VO_00C_22, 0);
+    voice_play(VOICE_PLAY, VO_00C_22);
     message(MSG_VO_00C_22, 0);
     wait_message();
     run
     {
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(51, 0, 0, 0, 250, 250);
+    act_motion_path(MOTION_33, 0, 0, 0, 250, 250);
     act_idle();
     act_reset();
     set(FG_STATUS, F_STATUS_0F, FALSE);
@@ -560,27 +562,27 @@ event on_enter_2_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(20);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(30);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(20);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(40);
-    act_motion_path(51, 1700, 60536, 0, 150, 50);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_motion_path(MOTION_33, 1700, -5000, 0, 150, 50);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(20);
-    act_motion_path(51, 63836, 60536, 0, 150, 50);
+    act_motion_path(MOTION_33, -1700, -5000, 0, 150, 50);
     sleep(15);
-    act_motion_path(51, 1700, 60536, 0, 150, 50);
+    act_motion_path(MOTION_33, 1700, -5000, 0, 150, 50);
     sleep(25);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
     sleep(40);
-    act_anim_flags(32 | 10, 32 | 31, 0 | 0);
+    act_anim_flags(ANIM_2A, F_ROOM_3F, 0);
     sleep(40);
-    act_anim_flags(32 | 8, 32 | 31, 0 | 0);
-    act_flag_op(0, 16, 0);
+    act_anim_flags(ANIM_28, F_ROOM_3F, 0);
+    act_flag_op(EF_OR, EF_0010);
     act_finish();
 }
 #endif

@@ -27,11 +27,14 @@
 #define CAM_04 0x04
 #define CAM_05 0x05
 #define F_ROOM_20 0x20
+#define IMDL_00 0x00
 #define MSG_THERE_IS_A_SWITCH_WILL_YOU_PUSH_IT_05 0x05
 #define OBJ_00 0x00
 #define OBJ_01 0x01
 #define SE_17 0x17
 #define SE_18 0x18
+#define SPR_04 0x04
+#define SPR_07 0x07
 
 proc init
 {
@@ -48,7 +51,7 @@ proc init
         aot_set(AOT_03_EVENT, 3400, 14130, 100, 100, SCE_EVENT, 0, 9, 0, on_aot_03, 0, 0, 0);
     }
     aot_set(AOT_04_MESSAGE, 2900, 13700, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
-    item_aot_set(AOT_05_ITEM, 9780, 13010, 1800, 1800, IT_28_KEY_MO_DISK, 1, 0, 255, 202, 42, 84, 252, 238, 52, 0, 0, F_ITEM_4D, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 9780, 13010, 1800, 1800, IT_28_KEY_MO_DISK, 1, IMDL_00, SCA_NONE, 10954, -940, 13550, 0, F_ITEM_4D, SAT_MANUAL | SAT_PLAYER, 0);
     aot_set(AOT_07_MESSAGE, 5700, 6100, 2600, 3000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     aot_set(AOT_08_MESSAGE, 6100, 2500, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_09_MESSAGE, 2100, 1500, 10000, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
@@ -58,13 +61,13 @@ proc init
     aot_set(AOT_0D_MESSAGE, 8500, 11000, 2500, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_68, FALSE))
     {
-        obj(OBJ_00, 1, 255, 5250, 0, 4910, 0, 0, 0, 0, 0, 0, 0, 0, 0, 184, 1, 188, 7, 32, 3, 32, 3);
-        obj(OBJ_01, 33, 255, 8460, 0, 13440, 2048, 48, 253, 0, 0, 208, 2, 0, 0, 28, 2, 72, 18, 26, 4, 8, 7);
+        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 5250, 0, 4910, 0, 0, 0, 0, 0, 440, 1980, 800, 800);
+        obj(OBJ_01, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8460, 0, 13440, 2048, -720, 0, 720, 0, 540, 4680, 1050, 1800);
     }
     else
     {
-        obj(OBJ_00, 1, 255, 3500, 0, 14210, 0, 0, 0, 0, 0, 0, 0, 0, 0, 184, 1, 188, 7, 32, 3, 32, 3);
-        obj(OBJ_01, 33, 255, 8460, 0, 16150, 2048, 48, 253, 0, 0, 208, 2, 0, 0, 28, 2, 72, 18, 26, 4, 8, 7);
+        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 3500, 0, 14210, 0, 0, 0, 0, 0, 440, 1980, 800, 800);
+        obj(OBJ_01, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 8460, 0, 16150, 2048, -720, 0, 720, 0, 540, 4680, 1050, 1800);
     }
     set(FG_STATUS, F_STATUS_3C, TRUE);
 }
@@ -133,11 +136,11 @@ event on_aot_01
         }
         if (ck(FG_SCENARIO, F_SCENARIO_41, FALSE))
         {
-            aot_switch(0, 7, 1);
+            aot_switch(0, SPR_07, SPR_OFF);
         }
         else
         {
-            aot_switch(0, 7, 0);
+            aot_switch(0, SPR_07, SPR_ON);
         }
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
@@ -149,7 +152,7 @@ event on_aot_03
     run
     {
         aot_delete(AOT_03_EVENT, SCE_NONE, 0);
-        objtbl_b_set(0, 0, 1);
+        objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
         set(FG_RUN, F_RUN_CONTROLS, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_SCENARIO, F_SCENARIO_68, TRUE);
@@ -162,12 +165,12 @@ event on_aot_03
     run
     {
         cutnext(CAM_04);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         if (ck(FG_SCENARIO, F_SCENARIO_41, FALSE))
         {
-            aot_switch(0, 4, 1);
+            aot_switch(0, SPR_04, SPR_OFF);
         }
     }
     evt_finish();

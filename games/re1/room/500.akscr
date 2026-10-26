@@ -16,8 +16,10 @@
 #define CAM_04 0x04
 #define ENEMY_00_NPC_CHRIS 0x00
 #define ENEMY_00_NPC_JILL 0x00
+#define ENEMY_01 0x01
 #define ENEMY_01_NPC_BARRY 0x01
 #define FX_0A 0x0A
+#define F_ROOM_00 0x00
 #define MSG_EMERGENCY_EXIT 0x01
 #define MSG_THERE_IS_A_LADDER 0x03
 #define MSG_VO_A00_03_44 0x00
@@ -31,27 +33,27 @@ proc init
     aot_set(AOT_03_EVENT, 2000, 11500, 1000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
     if (ck(FG_COMMON, F_COMMON_4A, FALSE))
     {
-        effect_tracked(FX_0A, 16, 0, 160, 15, 184, 242, 122, 43, 0, 0);
+        effect_tracked(FX_0A, FX_ROW_10, FX_AT_WORLD, 4000, 62136, 11130, 0);
     }
     else
     {
-        effect(FX_0A, 24, 0, 160, 15, 184, 242, 122, 43, 0, 0);
+        effect(FX_0A, FX_ROW_18, FX_AT_WORLD, 4000, -3400, 11130, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
     {
         if (ck(FG_COMMON, F_COMMON_4B, TRUE))
         {
 #if CHRIS
-            enemy(EM_21_NPC_JILL, 2, 255, 1, 2, 0, 0, 1024, 0, 0, 6100, 0, 9200, ENEMY_00_NPC_JILL, 0, 0, 0);
+            enemy(EM_21_NPC_JILL, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 6100, 0, 9200, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
 #else
-            enemy(EM_20_NPC_CHRIS, 2, 255, 1, 2, 0, 0, 1730, 0, 0, 6040, 0, 10070, ENEMY_00_NPC_CHRIS, 0, 0, 0);
+            enemy(EM_20_NPC_CHRIS, EB_02, NO_FLAG, SPAWN_FORCE, 2, 0, 1730, 0, 6040, 0, 10070, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
 #endif
             evt_exec(0, TASK_09, on_enter);
         }
 #if JILL
         if (ck(FG_COMMON, F_COMMON_C0, FALSE))
         {
-            enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 500, 0, 0, 3680, 0, 11310, ENEMY_01_NPC_BARRY, 0, 0, 0);
+            enemy(EM_22_NPC_BARRY, EB_04, NO_FLAG, SPAWN_FORCE, 2, 0, 500, 0, 3680, 0, 11310, ENEMY_01_NPC_BARRY, ANIM_00, 0, EVAR_00);
             if (ck(FG_COMMON, F_COMMON_51, FALSE))
             {
                 evt_exec(0, TASK_09, on_enter_3);
@@ -85,7 +87,7 @@ proc main
         {
             set(FG_COMMON, F_COMMON_4A, TRUE);
             effect_kill_a(0);
-            effect(FX_0A, 24, 0, 160, 15, 184, 242, 122, 43, 0, 0);
+            effect(FX_0A, FX_ROW_18, FX_AT_WORLD, 4000, -3400, 11130, 0);
         }
     }
 }
@@ -109,7 +111,7 @@ event on_enter_2
 {
     sleep(1);
 #if CHRIS
-    eml_state(0, 1, EML_08);
+    eml_state(0, ENEMY_01, EML_08);
 #else
     eml_state(0, ENEMY_01_NPC_BARRY, EML_08);
 #endif
@@ -132,28 +134,28 @@ event on_enter_3
     sleep(20);
     run
     {
-        voice_play(VOICE_PLAY, VO_A00_03_44, 0);
+        voice_play(VOICE_PLAY, VO_A00_03_44);
         message(MSG_VO_A00_03_44, 0);
     }
 #if CHRIS
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01);
 #else
     evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 16, 0 | 0, 0 | 0);
+    act_anim_flags(ANIM_30, F_ROOM_00, 0);
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(113, 0, 250, 1, 0, 40);
+    act_motion_path(MOTION_71, 0, 250, 1, 0, 40);
     act_reset();
     evt_nop();
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_nop();
     act_nop();
     act_nop();
@@ -169,7 +171,7 @@ event on_enter_3
     run
     {
         cutcurr(0);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
     }
     sleep(20);
@@ -177,7 +179,7 @@ event on_enter_3
     {
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
 #if CHRIS
-        eml_state(0, 1, EML_08);
+        eml_state(0, ENEMY_01, EML_08);
 #else
         eml_state(0, ENEMY_01_NPC_BARRY, EML_08);
 #endif
@@ -202,7 +204,7 @@ event on_aot_03
     run
     {
         cutnext(CAM_02);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
@@ -218,7 +220,7 @@ event event_04
     run
     {
         effect_kill_a(0);
-        effect(FX_0A, 24, 0, 160, 15, 184, 242, 122, 43, 0, 0);
+        effect(FX_0A, FX_ROW_18, FX_AT_WORLD, 4000, -3400, 11130, 0);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();

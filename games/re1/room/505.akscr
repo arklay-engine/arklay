@@ -20,6 +20,8 @@
 #define ENEMY_02_ZOMBIE_NAKED 0x02
 #define ENEMY_03_ZOMBIE_NAKED 0x03
 #define FX_0A 0x0A
+#define F_ROOM_20 0x20
+#define IMDL_00 0x00
 #define MSG_IT_IS_TOO_DARK_TO_SEE 0x00
 
 proc init
@@ -30,64 +32,64 @@ proc init
     door_aot_set(AOT_03_DOOR, 0, 16100, 2700, 3400, 9, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_508_DOUBLE_LOCK, 19500, 0, 3500, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_04_DOOR, 22600, 2200, 2700, 2300, 7, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, DOOR_LOCKED | F_LOCK_1D, ROOM_50C_FRONT_OF_ELEVATOR, 2500, 0, 17300, 0, IT_3C_KEY_LAB_POWER_ROOM, SAT_MANUAL | SAT_PLAYER);
 #if JILL
-    item_aot_set(AOT_05_ITEM, 10520, 1390, 1000, 1000, IT_2F_KEY_INK_RIBBON, 3, 0, 255, 12, 43, 0, 0, 98, 7, 0, 0, F_ITEM_C9, 129, 1, 0);
+    item_aot_set(AOT_05_ITEM, 10520, 1390, 1000, 1000, IT_2F_KEY_INK_RIBBON, 3, IMDL_00, SCA_NONE, 11020, 0, 1890, 0, F_ITEM_C9, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
 #endif
     aot_set(AOT_06_EVENT, 10600, 1000, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_06, 0, 0, 0);
     if (ck(FG_LOCK, F_LOCK_1D, TRUE))
     {
-        effect(FX_0A, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
+        effect(FX_0A, FX_ROW_18, FX_AT_WORLD, 22500, -3800, 2300, 0);
     }
     else
     {
-        effect_tracked(FX_0A, 16, 0, 228, 87, 40, 241, 252, 8, 0, 0);
+        effect_tracked(FX_0A, FX_ROW_10, FX_AT_WORLD, 22500, 61736, 2300, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_3F, 1, 2, 0, 0, 15, 0, 0, 4174, 0, 12125, ENEMY_00, 0, 0, 0);
+        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_3F, SPAWN_FORCE, 2, 0, 15, 0, 4174, 0, 12125, ENEMY_00, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_3F, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_40, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, ENEMY_00, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_40, SPAWN_FORCE, 2, 0, 2048, 0, 12430, 0, 18600, ENEMY_00, ANIM_00, 0, EVAR_00);
         }
         if (ck(FG_ENEMY, F_ENEMY_40, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_41, 1, 2, 0, 0, 2048, 0, 0, 12430, 0, 18600, ENEMY_00, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_41, SPAWN_FORCE, 2, 0, 2048, 0, 12430, 0, 18600, ENEMY_00, ANIM_00, 0, EVAR_00);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_42, 1, 2, 0, 0, 495, 0, 0, 11847, 0, 3599, ENEMY_01, 0, 0, 0);
+        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_42, SPAWN_FORCE, 2, 0, 495, 0, 11847, 0, 3599, ENEMY_01, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_42, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_43, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, ENEMY_01, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_43, SPAWN_FORCE, 2, 0, 512, 0, 10316, 0, 6022, ENEMY_01, ANIM_00, 0, EVAR_00);
         }
         if (ck(FG_ENEMY, F_ENEMY_43, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_44, 1, 2, 0, 0, 512, 0, 0, 10316, 0, 6022, ENEMY_01, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_44, SPAWN_FORCE, 2, 0, 512, 0, 10316, 0, 6022, ENEMY_01, ANIM_00, 0, EVAR_00);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_45, 1, 2, 0, 0, 2871, 0, 0, 11775, 0, 1457, ENEMY_02_ZOMBIE_NAKED, 0, 0, 0);
+        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_45, SPAWN_FORCE, 2, 0, 2871, 0, 11775, 0, 1457, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_45, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_46, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_46, SPAWN_FORCE, 2, 0, 1536, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         }
         if (ck(FG_ENEMY, F_ENEMY_46, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_47, 1, 2, 0, 0, 1536, 0, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_47, SPAWN_FORCE, 2, 0, 1536, 0, 13096, 0, 4926, ENEMY_02_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         }
     }
 #if CHRIS
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_48, 1, 2, 0, 0, 3103, 0, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_48, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_48, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_49, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_49, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         }
         if (ck(FG_ENEMY, F_ENEMY_49, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_4A, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_4A, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         }
     }
     if (ck(FG_COMMON, F_COMMON_5C, FALSE) && ck(FG_SCENARIO, F_SCENARIO_37, TRUE) && ck(FG_COMMON, F_COMMON_C0, FALSE))
@@ -121,21 +123,21 @@ proc init
 #else
     if (ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
     {
-        enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_48, 1, 2, 0, 0, 3103, 0, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+        enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_48, SPAWN_FORCE, 2, 0, 3103, 0, 21765, 0, 10142, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         if (ck(FG_ENEMY, F_ENEMY_48, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_49, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_49, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         }
         if (ck(FG_ENEMY, F_ENEMY_49, TRUE))
         {
-            enemy(EM_01_ZOMBIE_NAKED, 4, F_ENEMY_4A, 1, 2, 0, 0, 896, 0, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
+            enemy(EM_01_ZOMBIE_NAKED, EB_04, F_ENEMY_4A, SPAWN_FORCE, 2, 0, 896, 0, 21004, 0, 8192, ENEMY_03_ZOMBIE_NAKED, ANIM_00, 0, EVAR_00);
         }
     }
 #endif
     if (ck(FG_SCENARIO, F_SCENARIO_37, TRUE))
     {
-        enemy(EM_09_CHIMERA, 3, F_ENEMY_A4, 1, 2, 0, 0, 0, 0, 0, 13100, 0, 3070, ENEMY_00, 0, 0, 1);
-        enemy(EM_09_CHIMERA, 3, F_ENEMY_A5, 1, 2, 0, 0, 2072, 0, 0, 10250, 0, 18760, ENEMY_01, 0, 0, 1);
+        enemy(EM_09_CHIMERA, EB_03, F_ENEMY_A4, SPAWN_FORCE, 2, 0, 0, 0, 13100, 0, 3070, ENEMY_00, ANIM_00, 0, EVAR_01);
+        enemy(EM_09_CHIMERA, EB_03, F_ENEMY_A5, SPAWN_FORCE, 2, 0, 2072, 0, 10250, 0, 18760, ENEMY_01, ANIM_00, 0, EVAR_01);
     }
 }
 
@@ -147,7 +149,7 @@ proc main
         {
             set(FG_SCENARIO, F_SCENARIO_63, TRUE);
             effect_kill_a(0);
-            effect(FX_0A, 24, 0, 228, 87, 40, 241, 252, 8, 0, 0);
+            effect(FX_0A, FX_ROW_18, FX_AT_WORLD, 22500, -3800, 2300, 0);
         }
     }
 }
@@ -177,37 +179,37 @@ event event_00
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 7, 32 | 0, 0 | 3);
+    act_anim_flags(ANIM_27, F_ROOM_20, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(51, 400, 65436, 0, 30, 10);
+    act_motion_path(MOTION_33, 400, -100, 0, 30, 10);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(51, 65136, 65436, 0, 30, 10);
+    act_motion_path(MOTION_33, -400, -100, 0, 30, 10);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(51, 400, 65436, 0, 30, 10);
+    act_motion_path(MOTION_33, 400, -100, 0, 30, 10);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(51, 65136, 65436, 0, 30, 10);
+    act_motion_path(MOTION_33, -400, -100, 0, 30, 10);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_nop();
     act_nop();
     act_nop();
@@ -225,7 +227,7 @@ event event_00
     act_nop();
     act_reset();
     evt_nop();
-    cut_auto(0);
+    cut_auto(CUT_FREE);
     set(FG_STATUS, F_STATUS_0F, FALSE);
     run
     {
@@ -245,7 +247,7 @@ event on_aot_06
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 32 | 0, 0 | 3);
+    act_anim_flags(ANIM_09, F_ROOM_20, AFL_02 | AFL_01);
     act_reset();
     evt_nop();
     sleep(25);
@@ -253,8 +255,8 @@ event on_aot_06
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 32 | 0, 0 | 3);
-    act_flag_op(1, 1, 0);
+    act_anim_flags(ANIM_09, F_ROOM_20, AFL_02 | AFL_01);
+    act_flag_op(EF_SET, EF_0001);
     act_reset();
     evt_nop();
     sleep(30);

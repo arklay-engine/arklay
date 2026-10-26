@@ -15,6 +15,7 @@
 #define AOT_04_EVENT 0x04
 #define AOT_05_ITEM 0x05
 #define F_ROOM_18 0x18
+#define IMDL_00 0x00
 #define MSG_I_HOPE_THIS_BLOOD_IS_NOT 0x00
 #define MSG_SPOTS_OF_BLOOD_ARE_HERE_AND 0x02
 #define MSG_THIS_MUST_BE_FORESTS 0x01
@@ -38,8 +39,8 @@ proc init
     aot_set(AOT_04_EVENT, 2500, 7600, 900, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        item_aot_set(AOT_05_ITEM, 2000, 400, 1700, 1700, IT_3D_KEY_DESK, 1, 0, 255, 84, 11, 28, 248, 244, 6, 0, 0, F_ITEM_95, 129, 0, 134);
-        eml_rot(0, 0, 0, 0, 8);
+        item_aot_set(AOT_05_ITEM, 2000, 400, 1700, 1700, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 2900, -2020, 1780, 0, F_ITEM_95, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
+        eml_rot(IMDL_00, 0, 2048);
     }
 }
 
@@ -50,7 +51,7 @@ event on_aot_03
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 0 | 24, 0 | 0);
+    act_anim_flags(ANIM_09, F_ROOM_18, 0);
     act_reset();
     evt_nop();
     sleep(30);
@@ -63,8 +64,8 @@ event on_aot_03
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 0 | 24, 0 | 0);
-    act_flag_op(1, 1, 0);
+    act_anim_flags(ANIM_09, F_ROOM_18, 0);
+    act_flag_op(EF_SET, EF_0001);
     act_reset();
     evt_nop();
     sleep(30);
@@ -87,7 +88,7 @@ event on_aot_03_2
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 0 | 24, 0 | 0);
+    act_anim_flags(ANIM_09, F_ROOM_18, 0);
     act_reset();
     evt_nop();
     sleep(30);
@@ -100,8 +101,8 @@ event on_aot_03_2
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 0 | 24, 0 | 0);
-    act_flag_op(1, 1, 0);
+    act_anim_flags(ANIM_09, F_ROOM_18, 0);
+    act_flag_op(EF_SET, EF_0001);
     act_reset();
     evt_nop();
     sleep(30);
@@ -124,7 +125,7 @@ event on_aot_04
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 0 | 24, 0 | 0);
+    act_anim_flags(ANIM_09, F_ROOM_18, 0);
     act_reset();
     evt_nop();
     sleep(30);
@@ -137,8 +138,8 @@ event on_aot_04
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 0 | 24, 0 | 0);
-    act_flag_op(1, 1, 0);
+    act_anim_flags(ANIM_09, F_ROOM_18, 0);
+    act_flag_op(EF_SET, EF_0001);
     act_reset();
     evt_nop();
     sleep(30);

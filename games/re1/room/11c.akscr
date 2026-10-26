@@ -23,16 +23,24 @@
 #define SE_19_ZIPPER3 0x19
 #define SE_1A_ZIPPER1 0x1A
 #define SE_1B_ZIPPER2 0x1B
+#define SPR_01 0x01
+#define SPR_02 0x02
+#define SPR_03 0x03
+#define SPR_04 0x04
+#define SPR_05 0x05
+#define SPR_06 0x06
+#define SPR_07 0x07
+#define SPR_08 0x08
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 1800, 5100, 2300, 1200, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 7, 0, ROOM_112_WARDROBE, 3500, 0, 7500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    obj(OBJ_00, 0, 255, 10885, -5580, 5935, 2038, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, 0, SCA_NONE, 10885, -5580, 5935, 2038, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_02_MESSAGE, 1900, 1900, 7300, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
     aot_set(AOT_03_MESSAGE, 5600, 4000, 3600, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_2A, TRUE))
     {
-        if (costume_ck(0))
+        if (costume_ck(COSTUME_00))
         {
             aot_set(AOT_04_MESSAGE, 9200, 1900, 7300, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
             aot_set(AOT_05_EVENT, 9200, 4000, 3600, 1600, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
@@ -74,7 +82,7 @@ event on_aot_05
             setb(B_CHARACTER_MODEL, 9, 0);
 #endif
             set(FG_SCENARIO, F_SCENARIO_2A, TRUE);
-            costume_set(0);
+            costume_set(COSTUME_00);
             evt_exec(0, TASK_09, on_aot_05_sub1);
         }
         else
@@ -89,28 +97,28 @@ event on_aot_05
 
 event on_aot_05_sub1
 {
-    timer_setup(2, 128, 8, 7, 0);
+    timer_setup(LIGHT_FADE_VEIL, 2176, FADE_R | FADE_G | FADE_B);
     sleep(15);
     run
     {
-        setw(W_LIGHT_DELTA, 0, 0);
-        objtbl_b_set(0, 0, 1);
+        setw(W_LIGHT_DELTA, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
         if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
         {
             evt_exec(0, TASK_09, on_aot_05_sub1_sub1);
-            aot_switch(0, 1, 1);
-            aot_switch(0, 2, 1);
-            aot_switch(0, 3, 1);
-            aot_switch(0, 4, 1);
-            aot_switch(0, 5, 1);
-            aot_switch(0, 6, 1);
-            aot_switch(0, 7, 1);
-            aot_switch(0, 8, 1);
+            aot_switch(0, SPR_01, SPR_OFF);
+            aot_switch(0, SPR_02, SPR_OFF);
+            aot_switch(0, SPR_03, SPR_OFF);
+            aot_switch(0, SPR_04, SPR_OFF);
+            aot_switch(0, SPR_05, SPR_OFF);
+            aot_switch(0, SPR_06, SPR_OFF);
+            aot_switch(0, SPR_07, SPR_OFF);
+            aot_switch(0, SPR_08, SPR_OFF);
         }
         else
         {
-            aot_switch(0, 1, 1);
-            aot_switch(0, 2, 1);
+            aot_switch(0, SPR_01, SPR_OFF);
+            aot_switch(0, SPR_02, SPR_OFF);
         }
     }
     sleep(1);
@@ -175,7 +183,7 @@ event on_aot_04_message
             setb(B_CHARACTER_MODEL, 9, 0);
 #endif
             set(FG_SCENARIO, F_SCENARIO_2A, TRUE);
-            costume_set(1);
+            costume_set(COSTUME_01);
             evt_exec(0, TASK_09, on_aot_05_sub1);
         }
         else

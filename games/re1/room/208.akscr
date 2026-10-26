@@ -30,7 +30,7 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_05, TRUE))
         {
-            enemy(EM_11_ZOMBIE_LAB, 4, F_ENEMY_17, 1, 2, 0, 0, 3072, 0, 0, 6000, 0, 3300, ENEMY_00_ZOMBIE_LAB, 0, 0, 0);
+            enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 3072, 0, 6000, 0, 3300, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
         }
         else
         {
@@ -45,7 +45,7 @@ proc init
                 aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
                 aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
-            enemy(EM_11_ZOMBIE_LAB, 4, F_ENEMY_17, 1, 2, 0, 0, 0, 0, 0, 20000, 0, 20000, ENEMY_00_ZOMBIE_LAB, 0, 0, 0);
+            enemy(EM_11_ZOMBIE_LAB, EB_04, F_ENEMY_17, SPAWN_FORCE, 2, 0, 0, 0, 20000, 0, 20000, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
         }
     }
 }
@@ -93,10 +93,10 @@ event event_01
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(38918, 31752, 6421);
+    act_anim_seq(AB_06, 2200, 5500, F_ROOM_19);
     act_nop();
-    act_param_set(0, 4);
-    act_flag_op(0, 2, 0);
+    act_param_set(0, 1024);
+    act_flag_op(EF_OR, EF_0002);
     do
     {
         evt_next();
@@ -109,9 +109,9 @@ event event_01
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 14, 0 | 25, 0 | 1);
-    act_param_set(0, 4);
-    act_flag_op(0, 2, 0);
+    act_anim_flags(ANIM_2E, F_ROOM_19, AFL_01);
+    act_param_set(0, 1024);
+    act_flag_op(EF_OR, EF_0002);
     do
     {
         evt_next();
@@ -124,7 +124,7 @@ event event_01
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         pos_set(ENEMY_00_ZOMBIE_LAB, 0, 1600, 0, 5900, 0, 6100);
         se_play_3d(SND_BANK_DOOR, SE_DOOR_01, 0, SND_AT_POINT, 0, 6400, 6300);
-        eml_state(0, ENEMY_00_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
+        eml_state(0, ENEMY_00_ZOMBIE_LAB, EML_BEHAVIOUR, EB_00);
         cutnext(CAM_00);
         set(FG_ROOM, F_ROOM_1A, TRUE);
     }
@@ -149,7 +149,7 @@ event event_03
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(147, 1, 0, 0, 16, 8);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_ZOMBIE_LAB, 0, 16, 8);
     sleep(30);
     act_motion_bitclr();
     act_nop();
@@ -158,7 +158,7 @@ event event_03
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_1A, FALSE));
-    act_motion(16);
+    act_motion(MOTION_10);
     act_nop();
     act_nop();
     act_nop();

@@ -16,6 +16,7 @@
 #define CAM_03 0x03
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
+#define IMDL_00 0x00
 #define MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY 0x00
 #define OBJ_00 0x00
 #define OBJ_01 0x01
@@ -28,15 +29,15 @@ proc init
     {
         if (ck(FG_SCENARIO, F_SCENARIO_02, FALSE))
         {
-            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, IT_3D_KEY_DESK, 1, 0, 255, 32, 78, 0, 0, 32, 78, 4, 247, F_ITEM_03, 129, 0, 0);
+            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 20000, 0, 20000, -2300, F_ITEM_03, SAT_MANUAL | SAT_PLAYER, 0);
         }
         else
         {
-            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, IT_3D_KEY_DESK, 1, 0, 255, 218, 22, 186, 255, 8, 27, 82, 254, F_ITEM_03, 129, 0, 0);
-            eml_rot(0, 0, 0, 248, 7);
+            item_aot_set(AOT_01_ITEM, 20000, 20000, 1, 1, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 5850, -70, 6920, -430, F_ITEM_03, SAT_MANUAL | SAT_PLAYER, 0);
+            eml_rot(IMDL_00, 0, 2040);
         }
-        obj(OBJ_00, 1, 255, 21000, 0, 21000, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_01, 1, 255, 20000, 0, 20000, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 21000, 0, 21000, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01, OF_ACTIVE, SCA_NONE, 20000, 0, 20000, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
         aot_set(AOT_03_NONE, 4500, 6300, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 1, 0, 0, 0);
         aot_set(AOT_04_NONE, 4500, 6300, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 4, 0, 0, 0);
     }
@@ -195,10 +196,10 @@ event from_main
     tw_abs_pos(0, 21000, 0, 21000);
     tw_end();
     evt_nop();
-    evt_work_set(WK_AOT, AOT_00_DOOR);
+    evt_work_set(WK_AOT, IMDL_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 5850, -70, 6920);
-    tw_abs_rot(0, 0, 65106, 2040);
+    tw_abs_rot(0, 0, -430, 2040);
     tw_end();
     evt_next();
     run

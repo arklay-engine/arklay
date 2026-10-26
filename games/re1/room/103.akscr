@@ -24,6 +24,7 @@
 #define F_ROOM_01 0x01
 #define F_ROOM_02 0x02
 #define F_ROOM_03 0x03
+#define F_ROOM_3F 0x3F
 #define VO_A00_00 0x85
 
 proc init
@@ -34,11 +35,11 @@ proc init
     door_aot_set(AOT_02_DOOR, 19000, 17700, 2500, 2400, 2, DOOR_SND_00_DR_WD, DOOR_02_DOOR02, 1, DOOR_LOCK_40, ROOM_10C_GREEN_HOUSE, 13600, 0, 7400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_03_DOOR, 7500, 15100, 2300, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCK_40, ROOM_10D_TIGER_STATUE_ROOM, 5600, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_04_DOOR, 0, 10100, 2400, 1600, 2, DOOR_SND_00_DR_WD, DOOR_1C_DOOR00K, 3, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_0B, ROOM_10E_EMPLOYEE_ROOM, 7400, 0, 10700, 2048, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_29, 1, 2, 0, 0, 1024, 0, 0, 8380, 0, 25515, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_29, SPAWN_FORCE, 2, 0, 1024, 0, 8380, 0, 25515, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
 #if CHRIS
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_2A, 1, 2, 0, 0, 2177, 0, 0, 14813, 0, 22274, ENEMY_01_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_2A, SPAWN_FORCE, 2, 0, 2177, 0, 14813, 0, 22274, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
 #endif
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 1, F_ENEMY_28, 1, 2, 0, 0, 2025, 0, 0, 4210, 0, 14400, ENEMY_02_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_01, F_ENEMY_28, SPAWN_FORCE, 2, 0, 2025, 0, 4210, 0, 14400, ENEMY_02_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_A4, TRUE))
     {
@@ -59,7 +60,7 @@ proc init
     aot_set(AOT_06_USEITEM, 0, 11700, 6400, 6800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 3, 0, 1, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_5D, TRUE))
     {
-        enemy(EM_06_HUNTER, 16, F_ENEMY_3B, 1, 2, 0, 0, 1152, 0, 0, 5219, 0, 15022, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_10, F_ENEMY_3B, SPAWN_FORCE, 2, 0, 1152, 0, 5219, 0, 15022, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
     }
     else
     {
@@ -82,15 +83,15 @@ proc init
     }
     if (ck(FG_ROOM, F_ROOM_00, TRUE))
     {
-        enemy(EM_06_HUNTER, 136, F_ENEMY_3B, 1, 2, 0, 0, 2048, 0, 0, 6819, 0, 14176, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_88, F_ENEMY_3B, SPAWN_FORCE, 2, 0, 2048, 0, 6819, 0, 14176, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
     }
     if (ck(FG_ROOM, F_ROOM_01, TRUE))
     {
-        enemy(EM_06_HUNTER, 137, F_ENEMY_3B, 1, 2, 0, 0, 2048, 0, 0, 6819, 0, 14176, ENEMY_00_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_89, F_ENEMY_3B, SPAWN_FORCE, 2, 0, 2048, 0, 6819, 0, 14176, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        enemy(EM_06_HUNTER, 0, F_ENEMY_3A, 1, 2, 0, 0, 2192, 0, 0, 15874, 0, 22102, ENEMY_01_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_00, F_ENEMY_3A, SPAWN_FORCE, 2, 0, 2192, 0, 15874, 0, 22102, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
         if (ck(FG_COMMON, F_COMMON_2F, TRUE))
         {
             set(FG_COMMON, F_COMMON_30, TRUE);
@@ -114,12 +115,12 @@ proc main
         if (ck(FG_ROOM, F_ROOM_00, TRUE) && ck(FG_ROOM, F_ROOM_02, TRUE))
         {
             set(FG_SCENARIO, F_SCENARIO_5D, TRUE);
-            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, 8);
+            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_08);
         }
         if (ck(FG_ROOM, F_ROOM_01, TRUE) && ck(FG_ROOM, F_ROOM_03, TRUE))
         {
             set(FG_SCENARIO, F_SCENARIO_5D, TRUE);
-            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, 9);
+            eml_state(0, ENEMY_00_HUNTER, EML_BEHAVIOUR, EB_09);
         }
     }
 }
@@ -131,13 +132,13 @@ event on_enter
     sleep(1);
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     set(FG_RUN, F_RUN_MONSTERS, FALSE);
-    voice_play(VOICE_PLAY, VO_A00_00, 0);
+    voice_play(VOICE_PLAY, VO_A00_00);
     wait_message();
     evt_fork(TASK_09, on_enter_sub1, 0);
     sleep(100);
     run
     {
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
@@ -149,8 +150,8 @@ event on_enter_sub1
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 15, 32 | 31, 0 | 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_3F, 0);
+    act_param_set(0, 2048);
     sleep(42);
     act_idle();
     act_finish();

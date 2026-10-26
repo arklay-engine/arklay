@@ -10,7 +10,8 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use super::engine;
+use super::engine::{self, Family};
+use super::layout;
 use super::names::Names;
 use super::preprocess::{merged_id, room_variants};
 use crate::scd::akscr::compile;
@@ -55,6 +56,9 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
         for prefix in ROOM_SLOTS {
             defines.insert(format!("{prefix}{value:02X}"), i64::from(value));
         }
+    }
+    for slot in 0..0x7E {
+        defines.insert(fx_at_enemy(slot), i64::from(slot) + 2);
     }
     let sounds = sound_names(room);
     for (&(_, id), name) in &sounds {
@@ -133,8 +137,17 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     out
 }
 
-/// The prefixes of a room's object, camera and effect slot names.
-const ROOM_SLOTS: [&str; 3] = ["OBJ_", "CAM_", "FX_"];
+/// The prefixes of a room's object, camera, effect, item model, collision,
+/// camera zone and sprite slot names, and of the AOTs and enemy slots that
+/// have no name of their own.
+const ROOM_SLOTS: [&str; 9] = [
+    "OBJ_", "CAM_", "FX_", "IMDL_", "COL_", "ZONE_", "SPR_", "AOT_", "ENEMY_",
+];
+
+/// The effect parent byte of enemy slot `slot`.
+fn fx_at_enemy(slot: u8) -> String {
+    format!("FX_AT_ENEMY_{slot:02X}")
+}
 
 /// Names for the sounds `se_play_3d` can play in RDT `room`, by bank and
 /// id: `SE_<id>_<file>` from the room's sound table when every variant of
@@ -182,7 +195,7 @@ fn sound_names(room: u16) -> BTreeMap<(u8, u8), String> {
 }
 
 /// The opcodes whose first operand is an AOT (room trigger) index.
-const AOT_OPS: [u8; 6] = [0x0C, 0x0D, 0x12, 0x13, 0x18, 0x24];
+const AOT_OPS: [u8; 5] = [0x0C, 0x0D, 0x12, 0x13, 0x24];
 
 /// Names for the room's AOT indices, `AOT_<index>_<kind>`, the kind from
 /// the first command that sets each one up as anything but `SCE_NONE`.
@@ -195,6 +208,8 @@ fn aot_names(scripts: &Scripts) -> BTreeMap<u8, String> {
         let Some(&index) = insn.bytes.get(1) else {
             continue;
         };
+        // `item_aot_set`'s top bit is the item's alternate rotation.
+        let index = if op.op == 0x18 { index & 0x7F } else { index };
         let kind = match op.op {
             0x0C => "DOOR".to_string(),
             0x18 => "ITEM".to_string(),
@@ -1019,15 +1034,27 @@ impl<'a> EventParser<'a> {
 /// `name(args)` for one instruction, naming game data through `ctx`.
 fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
     let (name, mut args) = format_insn(insn, state, None);
+    if let Some(fields) = layout::layout(&name) {
+        let values = layout::unpack(fields, insn.bytes.get(1..).unwrap_or(&[]));
+        let args: Vec<String> = values
+            .iter()
+            .enumerate()
+            .map(|(index, &value)| {
+                name_field(ctx, &name, index, &values).unwrap_or_else(|| value.to_string())
+            })
+            .collect();
+        return format!("{name}({})", args.join(", "));
+    }
     match insn.decoded {
         Decoded::Command(op) => name_command_args(ctx, insn, op.op, &mut args),
         // `evt_work_set(WK_ENEMY, slot)` / `evt_work_set(WK_AOT, index)`.
         Decoded::Event(op) if op.op == 0x04 && insn.bytes.len() == 3 => {
             let value = insn.bytes[2];
             let named = match insn.bytes[1] {
-                1 => ctx.enemies.get(&value).cloned(),
-                2 => ctx.local(format!("OBJ_{value:02X}"), value),
-                3 => ctx.aots.get(&value).cloned(),
+                1 => ctx.enemy(i64::from(value)),
+                2 => ctx.slot("OBJ_", i64::from(value)),
+                // The item model record, not an AOT.
+                3 => ctx.slot("IMDL_", i64::from(value)),
                 _ => None,
             };
             if let Some(named) = named
@@ -1101,7 +1128,7 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
             (0x06, 1, _) | (0x07, 2, _) => engine::CMP.name(byte_value),
             (0x06, 2, _) | (0x08, 1, _) => state_value(ctx, at(0), value),
             // `cmpw` / `setw`: the state word.
-            (0x07, 1, _) | (0x31, 0, _) => engine::WORD.name(byte_value),
+            (0x07, 1, _) => engine::WORD.name(byte_value),
             // The AOT trigger flags.
             (0x0C, 16, _) | (0x0D, 6, _) | (0x12 | 0x13, 2, _) => engine::SAT.bits(byte_value),
             // The camera to cut to.
@@ -1110,18 +1137,15 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
             (0x0C, 6, _) => ctx.names.door_sound(value).map(str::to_string),
             (0x0C, 7, _) => ctx.names.door(value).map(str::to_string),
             (0x0C, 9, _) => door_lock(ctx, value),
-            // `item_aot_set`: the item flag that marks it taken.
-            (0x18, 17, _) => ctx.names.flag(FG_ITEM, value).map(str::to_string),
             // Event slots.
-            (0x14, 1, _) | (0x44, 0, _) => engine::TASK.name(byte_value),
+            (0x14, 1, _) => engine::TASK.name(byte_value),
             // Music channels.
-            (0x15 | 0x16 | 0x2F | 0x43, 0, _) => engine::BGM_CHANNEL.name(byte_value),
-            // Room objects and effects.
-            (0x1F, 0, _) => ctx.local(format!("OBJ_{value:02X}"), value),
-            (0x2A | 0x3D | 0x42, 0, _) => ctx.local(format!("FX_{value:02X}"), value),
+            (0x15 | 0x16, 0, _) => engine::BGM_CHANNEL.name(byte_value),
             (0x29, 0, _) => ctx.names.movie(value).map(str::to_string),
-            (0x2D, 0, _) => ctx.aots.get(&value).cloned(),
+            (0x2D, 0, _) => ctx.aot(byte_value),
+            // `sys_multi`: the sub-command and its value.
             (0x33, 0, _) => engine::SYS.name(byte_value),
+            (0x33, 1, b'U') => sys_value(at(0), word),
             (0x0B, 1, b'U') => engine::RUN.bits(word),
             (_, _, b't') if !matches!(value, 0 | 254 | 255) => Some(
                 ctx.names
@@ -1133,7 +1157,7 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
                     .enemy(value)
                     .map_or_else(|| value.to_string(), str::to_string),
             ),
-            (op, 0, _) if AOT_OPS.contains(&op) => ctx.aots.get(&value).cloned(),
+            (op, 0, _) if AOT_OPS.contains(&op) => ctx.aot(byte_value),
             // `message`: the text id, its top bit asking for the fast reveal.
             (0x0B, 0, _) => {
                 let id = value & 0x7F;
@@ -1164,23 +1188,15 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
                 .get(&(at(0), value))
                 .and_then(|name| ctx.local(name.clone(), value)),
             (0x17, 3, _) => engine::SND_AT.name(byte_value),
-            (0x17, 4, _) if at(3) == 2 => ctx.enemies.get(&value).cloned(),
-            // `enemy`: the enemy flag that keeps it away, and its slot.
-            (0x1B, 2, _) if value != 0xFF => ctx.names.flag(FG_ENEMY, value).map(str::to_string),
-            (0x1B, 13, _) => ctx.enemies.get(&value).cloned(),
-            // `voice_play`: play or stop, and the line.
-            (0x1E, 0, _) => engine::VOICE.name(byte_value),
-            (0x1E, 1, _) if at(0) == 1 && byte(position + 1) == 0 => {
-                let id = u16::from(value);
-                ctx.voices.get(&id).map(|name| {
-                    ctx.used_voices.borrow_mut().insert(id);
-                    name.clone()
-                })
-            }
+            (0x17, 4, _) if at(3) == 2 => ctx.enemy(byte_value),
             // Commands on an enemy slot.
-            (0x21 | 0x39, 0, _) | (0x28, 1, _) => ctx.enemies.get(&value).cloned(),
+            (0x21 | 0x39, 0, _) | (0x28, 1, _) => ctx.enemy(byte_value),
             // `eml_state`: the sub-command, and how the status bits apply.
             (0x28, 2, _) => engine::EML.name(byte_value),
+            (0x28, 3, b'U') if at(2) == 0 => engine::ENEMY_BEHAVIOUR.name(word),
+            (0x28, 3, b'U') if at(2) == 2 => engine::ACTION.name(word),
+            (0x28, 3, b'U') if at(2) == 9 => engine::JOINT.bits(word),
+            (0x23, 0, _) => engine::CUT.name(byte_value),
             (0x28, 3, b'U') if at(2) == 3 => engine::EML_STATUS
                 .name(word & 0xFF00)
                 .map(|mode| format!("{mode} | {}", word & 0xFF)),
@@ -1202,6 +1218,260 @@ fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
         {
             *arg = named;
         }
+    }
+}
+
+/// `sys_multi`'s value for sub-command `sub`: how the player or health
+/// flags apply and which, the hit, the joints or the switch.
+fn sys_value(sub: u8, word: i64) -> Option<String> {
+    let bits = |family: &Family| {
+        let mode = engine::SYS_MODE.name(word & 0xFF00)?;
+        Some(match family.bits(word & 0xFF) {
+            Some(bits) => format!("{mode} | {bits}"),
+            None => mode,
+        })
+    };
+    match sub {
+        1 => engine::HIT.name(word),
+        3 => bits(&engine::PLAYER_FLAG),
+        8 => bits(&engine::HEALTH_STATUS),
+        9 => engine::JOINT.bits(word),
+        10 => engine::SYS_SWITCH.name(word),
+        _ => None,
+    }
+}
+
+/// `parts` ORed together.
+fn or(parts: &[String]) -> String {
+    parts.join(" | ")
+}
+
+/// `value` as `family`'s name for its `mask` bits ORed with the rest, which
+/// `rest` names.
+fn split(
+    value: i64,
+    mask: i64,
+    family: &Family,
+    rest: impl FnOnce(i64) -> Option<String>,
+) -> Option<String> {
+    let low = rest(value & !mask).unwrap_or_else(|| (value & !mask).to_string());
+    if value & mask == 0 {
+        return Some(low);
+    }
+    Some(or(&[family.bits(value & mask)?, low]))
+}
+
+impl Ctx<'_> {
+    /// A room flag bit, defined at the top of the script.
+    fn room_flag(&self, value: i64) -> Option<String> {
+        let bit = u8::try_from(value).ok()?;
+        self.room_flags.borrow_mut().insert(bit);
+        Some(room_flag(bit))
+    }
+
+    /// A room-local slot name, `<prefix><value>`.
+    fn slot(&self, prefix: &str, value: i64) -> Option<String> {
+        let value = u8::try_from(value).ok()?;
+        self.local(format!("{prefix}{value:02X}"), value)
+    }
+
+    /// An enemy slot.
+    fn enemy(&self, value: i64) -> Option<String> {
+        match self.enemies.get(&u8::try_from(value).ok()?) {
+            Some(name) => Some(name.clone()),
+            None => self.slot("ENEMY_", value),
+        }
+    }
+
+    /// An AOT index.
+    fn aot(&self, value: i64) -> Option<String> {
+        match self.aots.get(&u8::try_from(value).ok()?) {
+            Some(name) => Some(name.clone()),
+            None => self.slot("AOT_", value),
+        }
+    }
+
+    /// An effect parent byte: the world, the player, an enemy slot or an
+    /// object.
+    fn fx_parent(&self, value: i64) -> Option<String> {
+        match value {
+            0 | 1 => engine::FX_AT.name(value),
+            2..=0x7F => {
+                let slot = value as u8 - 2;
+                self.local(fx_at_enemy(slot), value as u8)
+            }
+            _ => split(value, 0x80, &engine::FX_AT, |index| {
+                self.slot("OBJ_", index)
+            }),
+        }
+    }
+
+    /// An attachment byte: nothing, the player, an enemy or an object.
+    fn sca(&self, value: i64) -> Option<String> {
+        match value {
+            0xFE | 0xFF => engine::SCA.name(value),
+            0x80.. => split(value, 0x80, &engine::SCA, |slot| self.enemy(slot)),
+            _ => self.slot("OBJ_", value),
+        }
+    }
+}
+
+/// The name of field `index` of `name`, a command or event instruction
+/// written by field ([`layout`]), whose fields hold `values`.
+fn name_field(ctx: &Ctx, name: &str, index: usize, values: &[i64]) -> Option<String> {
+    let value = values[index];
+    let at = |index: usize| values.get(index).copied().unwrap_or(0);
+    let item = |value: i64| {
+        let id = u8::try_from(value).ok()?;
+        (!matches!(id, 0 | 254 | 255)).then(|| {
+            ctx.names
+                .item(id)
+                .map_or_else(|| id.to_string(), str::to_string)
+        })
+    };
+    let flag = |group: u8, value: i64| {
+        ctx.names
+            .flag(group, u8::try_from(value).ok()?)
+            .map(str::to_string)
+    };
+    match (name, index) {
+        // `item_aot_set`: its AOT, the item, its model and parent, the flag
+        // that marks it taken, its trigger and its pick-up flags.
+        ("item_aot_set", 0) => split(value, 0x80, &engine::ITEM, |aot| ctx.aot(aot)),
+        ("item_aot_set", 5) => item(value),
+        ("item_aot_set", 7) => ctx.slot("IMDL_", value),
+        ("item_aot_set", 8) | ("obj", 2) => ctx.sca(value),
+        ("item_aot_set", 13) => flag(FG_ITEM, value),
+        ("item_aot_set", 14) => engine::SAT.bits(value),
+        // The sparkle, its effect, its height (a number) and the reach.
+        ("item_aot_set", 15) if value != 0 && value & 0x700E == 0 => {
+            let parts: Vec<String> = [0x8000, 0x0F00, 0x00F0, 0x0001]
+                .into_iter()
+                .filter(|&mask| value & mask != 0)
+                .map(|mask| {
+                    engine::ITEM
+                        .name(value & mask)
+                        .unwrap_or_else(|| (value & mask).to_string())
+                })
+                .collect();
+            Some(or(&parts))
+        }
+        // `enemy`: its type and behaviour, the flag that keeps it away, how
+        // it starts, its slot, animation and variant.
+        ("enemy", 0) => Some(
+            ctx.names
+                .enemy(u8::try_from(value).ok()?)
+                .map_or_else(|| value.to_string(), str::to_string),
+        ),
+        ("enemy", 1) => engine::ENEMY_BEHAVIOUR.name(value),
+        ("enemy", 2) => engine::NO_FLAG
+            .name(value)
+            .or_else(|| flag(FG_ENEMY, value)),
+        ("enemy", 3) => engine::SPAWN.name(value),
+        ("enemy", 11) => {
+            let slot = ctx.enemy(value & 0x0F)?;
+            Some(match value & !0x0F {
+                0 => slot,
+                rest => format!("{slot} | {rest}"),
+            })
+        }
+        ("enemy", 12) | ("plw_anim", 1) | ("act_anim_flags", 0) | ("act_anim_set", 1) => {
+            engine::ANIM.name(value)
+        }
+        ("enemy", 14) => engine::ENEMY_VARIANT.name(value),
+        // `timer_setup`: the light's mode and channels.
+        ("timer_setup", 0) => engine::LIGHT_FADE.name(value),
+        ("timer_setup", 2) => engine::FADE_CHANNEL.bits(value),
+        ("ck_last_item", 0) => item(value),
+        // `voice_play`: play or stop, and the line.
+        ("voice_play", 0) => engine::VOICE.name(value),
+        ("voice_play", 1) if at(0) == 1 => {
+            let id = u16::try_from(value).ok()?;
+            ctx.voices.get(&id).map(|name| {
+                ctx.used_voices.borrow_mut().insert(id);
+                name.clone()
+            })
+        }
+        // `obj`: the object and how it behaves, and its flags.
+        ("obj", 0) => split(value, 0xC0, &engine::OBJ_SLOT, |slot| {
+            ctx.slot("OBJ_", slot)
+        }),
+        ("obj", 1) => engine::OBJ_FLAG.bits(value),
+        ("ck_item_count", 0) => engine::ITEM_GROUP.name(value),
+        ("ck_item_count" | "ck_anim", 1) => engine::CMP.name(value),
+        ("aot_switch", 1) => ctx.slot("SPR_", value),
+        ("aot_switch", 2) => engine::SPRITE.name(value),
+        // Effects: the type, the animation row and what it is attached to.
+        ("effect" | "effect_tracked" | "effect_kill_b", 0) => ctx.slot("FX_", value),
+        ("effect" | "effect_tracked" | "effect_kill_b", 1) => engine::FX_ROW.name(value),
+        ("effect" | "effect_tracked", 2) => ctx.fx_parent(value),
+        ("plw_anim", 0) => engine::PLW.name(value),
+        ("snd_pan_vol_set" | "bgm_volume_ramp", 0) => engine::BGM_CHANNEL.name(value),
+        // `inst_cfg`: the collision list, its record and flags.
+        ("inst_cfg", 0) => engine::COL_LIST.name(value),
+        ("inst_cfg", 1) => ctx.slot("COL_", value),
+        ("inst_cfg", 2) => engine::COL_FLAG.bits(value),
+        ("setw", 0) => engine::WORD.name(value),
+        ("model_op", 0) => engine::MODEL_OP.name(value),
+        // `objtbl_b_set`: the table, the object or item model, and its flags.
+        ("objtbl_b_set", 0) => engine::TABLE.name(value),
+        ("objtbl_b_set", 1) => match at(0) {
+            0 => ctx.slot("OBJ_", value),
+            1 => ctx.slot("IMDL_", value),
+            _ => None,
+        },
+        ("objtbl_b_set", 2) => engine::OBJ_FLAG.bits(value),
+        ("ck_anim" | "eml_pos", 0) => ctx.slot("OBJ_", value),
+        ("ck_bits", 0) => engine::TRUTH.name(value),
+        ("ck_bits", 1) => engine::PAD.bits(value),
+        ("msgnode_set", 0) => ctx.slot("ZONE_", value),
+        ("msgnode_set", 1 | 2) => ctx.slot("CAM_", value),
+        // `eml_rot`: an object (`ROT_OBJ | n`) or an item model.
+        ("eml_rot", 0) => match value {
+            0x80.. => split(value, 0x80, &engine::ROT, |index| ctx.slot("OBJ_", index)),
+            _ => ctx.slot("IMDL_", value),
+        },
+        // `ck_counter`: the kind of target and which.
+        ("ck_counter", 1) => engine::DIST.name(value),
+        ("ck_counter", 2) => match at(1) {
+            0 => ctx.enemy(value),
+            1 => ctx.slot("OBJ_", value),
+            2 => ctx.slot("IMDL_", value),
+            _ => None,
+        },
+        ("obj_xfm", 0) => engine::LIGHT.name(value),
+        ("spd_set", 0) => engine::ENTITY.name(value),
+        ("task_kill", 0) => engine::TASK.name(value),
+        ("msg_list", 7 | 15 | 23) => engine::LIGHT_KIND.name(value),
+        // `swap_var`: which way, the AOT and the state byte.
+        ("swap_var", 0) => engine::XFER.name(value),
+        ("swap_var", 1) => ctx.aot(value),
+        ("swap_var", 2) => engine::BYTE.name(value),
+        ("mass_mask", 0) => engine::MASK.name(value),
+        ("mass_mask", 1) => engine::FX_FLAG.bits(value),
+        ("costume_set" | "costume_ck", 0) => engine::COSTUME.name(value),
+        // Actors: the motion and its target, the behaviour, the animation,
+        // the room flag raised when it is done and the entity flags.
+        ("act_motion" | "act_motion_path", 0) => engine::MOTION.name(value),
+        ("act_motion_path", 1) if at(0) == 0x93 => engine::LOOK_AT.name(value),
+        ("act_motion_path", 2) if at(0) == 0x93 => match at(1) {
+            1 => ctx.enemy(value),
+            2 => ctx.slot("OBJ_", value),
+            3 => ctx.slot("IMDL_", value),
+            _ => None,
+        },
+        ("act_anim_seq", 0) => split(value, 0x10, &engine::ACTION, |behaviour| {
+            engine::ACTION.name(behaviour)
+        }),
+        ("act_anim_set", 0) => engine::ACTION.name(value),
+        ("act_anim_seq", 3) | ("act_anim_flags", 1) | ("act_anim_set", 2) => ctx.room_flag(value),
+        ("act_anim_flags", 2) => engine::ANIM_FLAG.bits(value),
+        ("act_flag_op", 0) => engine::ENTITY_FLAG_MODE.name(value),
+        ("act_flag_op", 1) => engine::ENTITY_FLAG.bits(value),
+        // Tweens: the state byte or value to write.
+        ("tw_set_field", 0) => engine::TWEEN_FIELD.name(value),
+        ("tw_set_sel", 0) => engine::TWEEN_SEL.name(value),
+        _ => None,
     }
 }
 

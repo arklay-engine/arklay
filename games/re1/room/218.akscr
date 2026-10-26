@@ -12,9 +12,13 @@
 #define AOT_01_EVENT 0x01
 #define AOT_02_ITEM 0x02
 #define AOT_03_ITEM 0x03
+#define AOT_04 0x04
+#define AOT_05 0x05
 #define CAM_01 0x01
 #define CAM_02 0x02
 #define F_ROOM_23 0x23
+#define IMDL_00 0x00
+#define IMDL_01 0x01
 #define MSG_A_BATTERY 0x02
 #define MSG_IT_IS_A_HELICOPTER_PORT 0x01
 #define MSG_I_CAN_LOOK_OVER_THE_COURTYARD 0x00
@@ -23,8 +27,8 @@ proc init
 {
     door_aot_set(AOT_00_DOOR, 4600, 1200, 900, 1300, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_EVENT, 4500, 8500, 2200, 1000, SCE_EVENT, SAT_PLAYER, 0, 0, on_aot_01, 0, 0, 0);
-    item_aot_set(AOT_02_ITEM, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 132, 28, 48, 248, 196, 9, 0, 12, F_ITEM_C7, 129, 0, 0);
-    item_aot_set(AOT_03_ITEM, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, 1, 255, 152, 18, 48, 248, 112, 23, 0, 4, F_ITEM_5B, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 7300, -2000, 2500, 3072, F_ITEM_C7, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_03_ITEM, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, IMDL_01, SCA_NONE, 4760, -2000, 6000, 1024, F_ITEM_5B, SAT_MANUAL | SAT_PLAYER, 0);
     set(FG_SCENARIO, F_SCENARIO_4F, TRUE);
 }
 
@@ -32,7 +36,7 @@ proc main
 {
     if (ck(FG_ITEM, F_ITEM_C7, FALSE))
     {
-        aot_delete(5, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
 }
 
@@ -74,7 +78,7 @@ event on_aot_01
     {
         evt_next();
     }
-    while (ck_bits(1, 255, 255));
+    while (ck_bits(FALSE, PAD_8000 | PAD_4000 | PAD_2000 | PAD_1000 | PAD_0800 | PAD_0400 | PAD_0200 | PAD_0100 | PAD_0080 | PAD_0040 | PAD_0020 | PAD_0010 | PAD_0008 | PAD_0004 | PAD_0002 | PAD_0001));
     set(FG_RUN, F_RUN_CONTROLS, FALSE);
     cutnext(CAM_01);
     sleep(5);
@@ -83,7 +87,7 @@ event on_aot_01
         aot_delete(AOT_01_EVENT, SCE_EVENT, SAT_PLAYER);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -106,7 +110,7 @@ event event_02
     while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 32 | 3, 0 | 0);
+    act_anim_flags(ANIM_09, F_ROOM_23, 0);
     act_reset();
     evt_nop();
     do
@@ -114,7 +118,7 @@ event event_02
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_23, FALSE));
-    aot_on(4, SCE_ITEM, 0);
+    aot_on(AOT_04, SCE_ITEM, 0);
     sleep(1);
     run
     {

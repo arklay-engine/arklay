@@ -43,12 +43,12 @@ event on_aot_04
     run
     {
         aot_delete(AOT_05_EVENT, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        cut_auto(1);
+        cut_auto(CUT_LOCKED);
         dir_set(0, 0, 0, 0, 11336, -4315, 10556);
-        spd_set(0, 37, 239);
+        spd_set(ENT_PLAYER, -4315);
         aot_on(AOT_03_5, SCE_5, 0);
         cutnext(CAM_01);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
     }
     sleep(70);
     run
@@ -63,12 +63,12 @@ event on_aot_05
     run
     {
         aot_delete(AOT_04_EVENT, SCE_NONE, SAT_UNDER | SAT_PLAYER);
-        cut_auto(1);
+        cut_auto(CUT_LOCKED);
         dir_set(0, 0, 2048, 0, 8338, -2885, 10453);
-        spd_set(0, 187, 244);
+        spd_set(ENT_PLAYER, -2885);
         aot_on(AOT_02_5, SCE_5, 0);
         cutnext(CAM_00);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
     }
     sleep(70);
     run

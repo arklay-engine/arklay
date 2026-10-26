@@ -91,7 +91,7 @@ event on_enter_sub1
 event event_03
 {
     sleep(30);
-    voice_play(VOICE_PLAY, VO_016_06, 0);
+    voice_play(VOICE_PLAY, VO_016_06);
     sleep(30);
     message(MSG_VO_016_06, 0);
     evt_finish();

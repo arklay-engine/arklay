@@ -684,12 +684,17 @@ directory at or above `--out`, and from the English text beside it
   the line (`MSG_VO_104_02`);
 - each enemy slot the room fills, `#define ENEMY_02_CROW 0x02` after the type
   `enemy` puts there, for `evt_work_set(WK_ENEMY, ..)`, `eml_state` and the
-  other commands on a slot;
+  other commands on a slot; an AOT or enemy slot the room never sets up is
+  `AOT_05` or `ENEMY_04`;
 - each voice line the room plays, `#define VO_104_02 0x09` after the line's
   file;
 - the room's objects (`OBJ_02`), cameras (`CAM_03`, for `cutnext` and the
-  `B_CAMERA`/`B_CUT` state bytes) and effects (`FX_25`) as local placeholder
-  defines, and its sounds after the bank `se_play_3d` plays from:
+  `B_CAMERA`/`B_CUT` state bytes), effects (`FX_25`), item models (`IMDL_01`,
+  for `item_aot_set`, `eml_rot`, `objtbl_b_set` and `evt_work_set(WK_AOT, ..)`,
+  which selects an item model), collision records (`COL_08`), camera zones
+  (`ZONE_0D`), sprites (`SPR_02`) and effect parents on an enemy slot
+  (`FX_AT_ENEMY_01`) as local placeholder defines, and its sounds after the
+  bank `se_play_3d` plays from:
   `SE_17_SPRAY` from the room's sound table (`SE_17` where the room's
   variants play different files), `SE_DOOR_00`, `SE_WEAPON_xx`, `SE_PL_xx`
   and `SE_BGM_xx` for the banks that depend on the door, weapon or character;
@@ -697,8 +702,26 @@ directory at or above `--out`, and from the English text beside it
 
 Every id, enum and flag argument gets a name, even one whose meaning is not
 known yet (`B_0A`, `TASK_09`, `OBJ_02`), so it can be renamed once it is;
-only plain quantities (positions, angles, counts, frames, volumes) and the
-fields the disassembler still splits into raw bytes stay numbers.
+only plain quantities (positions, angles, counts, frames, volumes) stay
+numbers, along with a few values whose meaning is still unknown (filed as
+issues), padding bytes, and a zero for "no flags".
+
+The commands the `.s` disassembler prints byte by byte, or with words split
+into bytes, take one argument per field the engine reads, at its width:
+`obj`, `item_aot_set`, `enemy`, `effect`, `effect_tracked`, `effect_kill_b`,
+`timer_setup`, `voice_play`, `setw`, `inst_cfg`, `msg_list`, `eml_pos`,
+`eml_rot`, `obj_xfm`, `plw_anim`, `model_op`, `objtbl_b_set`, `ck_anim`,
+`ck_bits`, `ck_counter`, `ck_tween`, `ck_item_count`, `ck_last_item`,
+`aot_switch`, `msgnode_set`, `snd_pan_vol_set`, `bgm_volume_ramp`,
+`task_kill`, `spd_set`, `spd_add`, `swap_var`, `mass_mask`, `costume_set`,
+`costume_ck`, and the `act_motion`, `act_motion_path`, `act_anim_seq`,
+`act_anim_flags`, `act_anim_set`, `act_flag_op`, `act_param_set`,
+`tw_set_pos`, `tw_set_rot`, `tw_abs_pos`, `tw_set_field`, `tw_set_sel` and
+`tw_abs_rot` event instructions. For example `enemy` is type, behaviour,
+guard flag, spawn, hit records, pitch, yaw, roll, x, y, z, slot, animation,
+frame and variant, and `act_anim_seq` is behaviour, walk target x and z, and
+the room flag raised when the animation ends. The compiler packs the fields
+back into the bytes, so `asm { }` keeps the `.s` shapes.
 
 These names are a starting point for hand renaming; re-exporting overwrites
 hand edits, so the checked-in RE1 scripts are no longer re-exported.
@@ -777,12 +800,35 @@ event on_enter
   | `DOOR_LOCKED` `DOOR_LOCK_40` | `door_aot_set`'s lock byte, ORed with the `FG_LOCK` bit |
   | `EML_BEHAVIOUR` `EML_REVIVE` `EML_ACTION` `EML_STATUS` `EML_ANGLE` `EML_BLEND_RESET` `EML_JOINTS` `EML_ACTION_STATE` | `eml_state` sub-commands |
   | `EML_STATUS_SET` `EML_STATUS_OR` `EML_STATUS_XOR` | `eml_state(.., EML_STATUS, EML_STATUS_OR \| 2)`: how the bits apply |
+  | `SYS_UNEQUIP` `SYS_HIT` `SYS_PLAYER_FLAGS` `SYS_FORCE_ACTION` `SYS_ANGLE` `SYS_CLEAR_8C` `SYS_IDLE` `SYS_HEALTH_STATUS` `SYS_JOINTS` `SYS_E0_40` | `sys_multi` sub-commands, all on the player |
+  | `SYS_SET` `SYS_OR` `SYS_XOR`, `PLF_xx`, `HS_LOCKED` `HS_xx` | `sys_multi(SYS_PLAYER_FLAGS, SYS_OR \| PLF_04)` and `SYS_HEALTH_STATUS`: how the player or health-status bits apply, and which |
+  | `SYS_ON` `SYS_OFF`, `HIT_xx`, `JOINT_xxxx` | `sys_multi`'s `SYS_E0_40` switch, `SYS_HIT` kind and `SYS_JOINTS` mask (also `eml_state(.., EML_JOINTS, ..)`) |
+  | `OBJ_PUSH_GRUNT` `OBJ_TEX_QUEUE` | `obj`'s slot byte, ORed with the object |
+  | `OF_ACTIVE` `OF_INTANGIBLE` `OF_NO_FLOOR_PROBE` `OF_NO_COLLISION` `OF_NOT_PUSHABLE` `OF_CLIMBABLE` `OF_xx` | object and item model flags (`obj`, `objtbl_b_set`) |
+  | `SCA_NONE` `SCA_PLAYER` `SCA_ENEMY` | what an object or item model is attached to: nothing, the player, `SCA_ENEMY \| ENEMY_xx`, or an object (`OBJ_xx`) |
+  | `ITEM_ALT_ROT`, `ITEM_SPARKLE` `ITEM_FX_1`..`ITEM_FX_F` `ITEM_REACH` | `item_aot_set`: the AOT byte's alternate rotation, and the flags word (the pick-up sparkle, its effect, the reach animation; the sparkle's height stays a number) |
+  | `NO_FLAG`, `SPAWN_RESTORE` `SPAWN_FORCE`, `EB_xx`, `EVAR_xx` | `enemy`: no guard flag, whether a saved enemy is restored, the behaviour byte (also `eml_state(.., EML_BEHAVIOUR, ..)`) and the model variant |
+  | `ANIM_xx`, `AB_xx` `AB_ADDITIVE`, `PLW_xx` | an animation clip, an action behaviour (`act_anim_seq`, `act_anim_set`, `eml_state(.., EML_ACTION, ..)`), `plw_anim`'s action state |
+  | `MOTION_TARGET` `MOTION_xx`, `LOOK_AT_PLAYER` `LOOK_AT_ENEMY` `LOOK_AT_OBJ` `LOOK_AT_ITEM` | `act_motion`'s mode; `MOTION_TARGET` follows a live target instead of a position |
+  | `EF_OR` `EF_SET` `EF_XOR`, `EF_xxxx`, `AFL_xx` | `act_flag_op`'s mode and entity flags; `act_anim_flags`' flags (shifted down two bits) |
+  | `TW_STATE` `TW_IGNORE` `TW_BEHAVIOUR` `TW_ACTION_STATE` `TW_HEALTH_LO` `TW_HEALTH_HI` `TW_HIT_STATE` | `tw_set_field`: the state byte to write |
+  | `TW_POS_X` `TW_POS_Y` `TW_POS_Z` `TW_HEALTH` `TW_TARGET_X` `TW_TARGET_Z` | `tw_set_sel`: the value to write |
+  | `FX_ROW_xx`, `FX_AT_WORLD` `FX_AT_PLAYER` `FX_AT_OBJ` | an effect's animation row (`effect`, `effect_kill_b`) and what it is attached to (`FX_AT_OBJ \| OBJ_xx`, or `FX_AT_ENEMY_xx`) |
+  | `LIGHT_FADE_VEIL` `LIGHT_FADE_HALF` `LIGHT_FADE_xx`, `FADE_R` `FADE_G` `FADE_B` | `timer_setup`: how the special room light draws, and its channels |
+  | `LIGHT_xx`, `LIGHT_KIND_xx` | one of the room's lights (`obj_xfm`), a light's kind (`msg_list`) |
+  | `COL_LIST_xx`, `CF_x` | `inst_cfg`: the collision list and the flags it sets |
+  | `TBL_OBJ` `TBL_ITEM`, `ROT_OBJ` | `objtbl_b_set`'s table; `eml_rot(ROT_OBJ \| OBJ_xx, ..)` rotates an object, otherwise an item model |
+  | `DIST_ENEMY` `DIST_OBJ` `DIST_ITEM` | `ck_counter`: what the distance is measured to |
+  | `SPR_ON` `SPR_OFF`, `IGRP_ANY` `IGRP_xx`, `PAD_xxxx` | `aot_switch`, `ck_item_count`'s item group, `ck_bits`' d-pad buttons |
+  | `XFER_SAVE` `XFER_RESTORE` `XFER_HELD`, `MASK_OR` `MASK_CLEAR` `MASK_XOR` `FXF_xxxx` | `swap_var`'s direction; `mass_mask`'s mode and effect flags |
+  | `ENT_PLAYER` `ENT_xx`, `CUT_FREE` `CUT_LOCKED`, `MODEL_OP_xx`, `COSTUME_xx` | `spd_set`'s entity, `cut_auto`, `model_op`'s form, the costume |
 
   Values without a known meaning have placeholder names: every state byte and
   word (`B_0A`, `W_04`), `eml_state` sub-command (`EML_08`), `sys_multi`
-  sub-command (`SYS_04`), event slot of `evt_exec`, `evt_fork`,
-  `evt_disable` and `task_kill` (`TASK_09`), and every unnamed bit of the
-  trigger flags (`SAT_02`) and run word (`RUN_0010`).
+  sub-command (`SYS_02`), event slot of `evt_exec`, `evt_fork`,
+  `evt_disable` and `task_kill` (`TASK_09`), every unnamed bit of the
+  trigger flags (`SAT_02`) and run word (`RUN_0010`), and the `xx` forms in
+  the table above.
 - `#define NAME value` names a number (or an earlier name) and
   `#include "inc/items.akinc"` reads a file of defines, resolved against the
   script's directory and then each directory above it. Game data has no

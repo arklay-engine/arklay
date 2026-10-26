@@ -249,10 +249,58 @@ pub(super) const EML_STATUS: Family = Family {
     placeholders: Placeholders::None,
 };
 
-/// `sys_multi` sub-commands.
+/// `sys_multi` sub-commands, all on the player.
 pub(super) const SYS: Family = Family {
-    names: &[],
+    names: &[
+        ("SYS_UNEQUIP", 0),
+        ("SYS_HIT", 1),
+        ("SYS_PLAYER_FLAGS", 3),
+        ("SYS_FORCE_ACTION", 4),
+        ("SYS_ANGLE", 5),
+        ("SYS_CLEAR_8C", 6),
+        ("SYS_IDLE", 7),
+        ("SYS_HEALTH_STATUS", 8),
+        ("SYS_JOINTS", 9),
+        ("SYS_E0_40", 10),
+    ],
     placeholders: Placeholders::Byte("SYS_"),
+};
+
+/// `sys_multi(SYS_PLAYER_FLAGS | SYS_HEALTH_STATUS, mode | bits)`: how the
+/// bits apply.
+pub(super) const SYS_MODE: Family = Family {
+    names: &[("SYS_SET", 0x000), ("SYS_OR", 0x100), ("SYS_XOR", 0x200)],
+    placeholders: Placeholders::None,
+};
+
+/// `sys_multi(SYS_E0_40, ..)`: set or clear the bit.
+pub(super) const SYS_SWITCH: Family = Family {
+    names: &[("SYS_OFF", 0x000), ("SYS_ON", 0x100)],
+    placeholders: Placeholders::None,
+};
+
+/// The player flags byte `sys_multi(SYS_PLAYER_FLAGS, ..)` writes.
+pub(super) const PLAYER_FLAG: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Bits("PLF_", 8),
+};
+
+/// The player's health-status flags; `0x80` locks the controls.
+pub(super) const HEALTH_STATUS: Family = Family {
+    names: &[("HS_LOCKED", 0x80)],
+    placeholders: Placeholders::Bits("HS_", 8),
+};
+
+/// `sys_multi(SYS_HIT, ..)`: how the player is being attacked.
+pub(super) const HIT: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("HIT_"),
+};
+
+/// `sys_multi(SYS_JOINTS, ..)`: the player joints to toggle.
+pub(super) const JOINT: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Bits("JOINT_", 16),
 };
 
 /// The event slots `evt_exec`, `evt_fork`, `evt_disable` and `task_kill`
@@ -269,7 +317,297 @@ pub(super) const DOOR_LOCK: Family = Family {
     placeholders: Placeholders::None,
 };
 
-const FAMILIES: [&Family; 18] = [
+/// `obj`'s slot byte: the object (the low six bits) and how it behaves.
+pub(super) const OBJ_SLOT: Family = Family {
+    names: &[("OBJ_PUSH_GRUNT", 0x40), ("OBJ_TEX_QUEUE", 0x80)],
+    placeholders: Placeholders::None,
+};
+
+/// A room object's (or item model's) flags byte.
+pub(super) const OBJ_FLAG: Family = Family {
+    names: &[
+        ("OF_ACTIVE", 0x01),
+        ("OF_INTANGIBLE", 0x02),
+        ("OF_NO_FLOOR_PROBE", 0x04),
+        ("OF_NO_COLLISION", 0x08),
+        ("OF_NOT_PUSHABLE", 0x20),
+        ("OF_CLIMBABLE", 0x40),
+    ],
+    placeholders: Placeholders::Bits("OF_", 8),
+};
+
+/// What an object or item model is attached to: nothing, the player, an
+/// enemy (`SCA_ENEMY | slot`) or another object (its index).
+pub(super) const SCA: Family = Family {
+    names: &[
+        ("SCA_ENEMY", 0x80),
+        ("SCA_PLAYER", 0xFE),
+        ("SCA_NONE", 0xFF),
+    ],
+    placeholders: Placeholders::None,
+};
+
+/// `item_aot_set`: the AOT byte's alternate rotation, and the flags word:
+/// the reach animation, the pick-up sparkle and its effect (the `0x0F00`
+/// nibble); the `0x00F0` nibble is the sparkle's height and stays a number.
+pub(super) const ITEM: Family = Family {
+    names: &[
+        ("ITEM_ALT_ROT", 0x80),
+        ("ITEM_REACH", 0x0001),
+        ("ITEM_SPARKLE", 0x8000),
+        ("ITEM_FX_1", 0x0100),
+        ("ITEM_FX_2", 0x0200),
+        ("ITEM_FX_3", 0x0300),
+        ("ITEM_FX_4", 0x0400),
+        ("ITEM_FX_5", 0x0500),
+        ("ITEM_FX_6", 0x0600),
+        ("ITEM_FX_7", 0x0700),
+        ("ITEM_FX_8", 0x0800),
+        ("ITEM_FX_9", 0x0900),
+        ("ITEM_FX_A", 0x0A00),
+        ("ITEM_FX_B", 0x0B00),
+        ("ITEM_FX_C", 0x0C00),
+        ("ITEM_FX_D", 0x0D00),
+        ("ITEM_FX_E", 0x0E00),
+        ("ITEM_FX_F", 0x0F00),
+    ],
+    placeholders: Placeholders::None,
+};
+
+/// `enemy`: no flag keeps the enemy away.
+pub(super) const NO_FLAG: Family = Family {
+    names: &[("NO_FLAG", 0xFF)],
+    placeholders: Placeholders::None,
+};
+
+/// `enemy`'s behaviour byte, whose meaning depends on the enemy type.
+pub(super) const ENEMY_BEHAVIOUR: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("EB_"),
+};
+
+/// `enemy`: restore a saved enemy, or set it up afresh.
+pub(super) const SPAWN: Family = Family {
+    names: &[("SPAWN_RESTORE", 0), ("SPAWN_FORCE", 1)],
+    placeholders: Placeholders::None,
+};
+
+/// `enemy`'s model variant.
+pub(super) const ENEMY_VARIANT: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("EVAR_"),
+};
+
+/// An entity's animation clip.
+pub(super) const ANIM: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("ANIM_"),
+};
+
+/// An entity's action behaviour; `0x10` in `act_anim_seq` keeps the
+/// collision lock.
+pub(super) const ACTION: Family = Family {
+    names: &[("AB_ADDITIVE", 0x10)],
+    placeholders: Placeholders::Byte("AB_"),
+};
+
+/// `plw_anim`: the player's action state, less two.
+pub(super) const PLW: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("PLW_"),
+};
+
+/// `act_anim_flags`: the entity flags it sets, shifted down two bits.
+pub(super) const ANIM_FLAG: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Bits("AFL_", 8),
+};
+
+/// `act_flag_op`: how the entity flags apply.
+pub(super) const ENTITY_FLAG_MODE: Family = Family {
+    names: &[("EF_OR", 0), ("EF_SET", 1), ("EF_XOR", 2)],
+    placeholders: Placeholders::None,
+};
+
+/// An entity's flags word.
+pub(super) const ENTITY_FLAG: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Bits("EF_", 16),
+};
+
+/// `act_motion`: the look-at and motion mode; `MOTION_TARGET` follows a live
+/// target instead of a position.
+pub(super) const MOTION: Family = Family {
+    names: &[("MOTION_TARGET", 0x93)],
+    placeholders: Placeholders::Byte("MOTION_"),
+};
+
+/// `act_motion_path(MOTION_TARGET, ..)`: what kind of target.
+pub(super) const LOOK_AT: Family = Family {
+    names: &[
+        ("LOOK_AT_PLAYER", 0),
+        ("LOOK_AT_ENEMY", 1),
+        ("LOOK_AT_OBJ", 2),
+        ("LOOK_AT_ITEM", 3),
+    ],
+    placeholders: Placeholders::None,
+};
+
+/// `ck_counter`: what kind of target the distance is measured to.
+pub(super) const DIST: Family = Family {
+    names: &[("DIST_ENEMY", 0), ("DIST_OBJ", 1), ("DIST_ITEM", 2)],
+    placeholders: Placeholders::None,
+};
+
+/// `tw_set_field`: the entity state byte to write.
+pub(super) const TWEEN_FIELD: Family = Family {
+    names: &[
+        ("TW_STATE", 0),
+        ("TW_IGNORE", 1),
+        ("TW_BEHAVIOUR", 2),
+        ("TW_ACTION_STATE", 3),
+        ("TW_HEALTH_LO", 4),
+        ("TW_HEALTH_HI", 5),
+        ("TW_HIT_STATE", 6),
+    ],
+    placeholders: Placeholders::Byte("TW_FIELD_"),
+};
+
+/// `tw_set_sel`: the value to write.
+pub(super) const TWEEN_SEL: Family = Family {
+    names: &[
+        ("TW_POS_X", 0),
+        ("TW_POS_Y", 1),
+        ("TW_POS_Z", 2),
+        ("TW_HEALTH", 3),
+        ("TW_TARGET_X", 4),
+        ("TW_TARGET_Z", 5),
+    ],
+    placeholders: Placeholders::Byte("TW_SEL_"),
+};
+
+/// The animation row of an effect, which `effect_kill_b` matches.
+pub(super) const FX_ROW: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("FX_ROW_"),
+};
+
+/// What an effect is attached to: the world, the player, an enemy
+/// (`FX_AT_ENEMY_<slot>`, defined per room) or an object (`FX_AT_OBJ | n`).
+pub(super) const FX_AT: Family = Family {
+    names: &[("FX_AT_WORLD", 0), ("FX_AT_PLAYER", 1), ("FX_AT_OBJ", 0x80)],
+    placeholders: Placeholders::None,
+};
+
+/// `timer_setup`: how the special room light draws.
+pub(super) const LIGHT_FADE: Family = Family {
+    names: &[("LIGHT_FADE_VEIL", 2), ("LIGHT_FADE_HALF", 3)],
+    placeholders: Placeholders::Byte("LIGHT_FADE_"),
+};
+
+/// `timer_setup`: the channels the special room light saturates.
+pub(super) const FADE_CHANNEL: Family = Family {
+    names: &[("FADE_B", 1), ("FADE_G", 2), ("FADE_R", 4)],
+    placeholders: Placeholders::Bits("FADE_", 16),
+};
+
+/// One of the room's three lights.
+pub(super) const LIGHT: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("LIGHT_"),
+};
+
+/// `msg_list`: a light's kind.
+pub(super) const LIGHT_KIND: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("LIGHT_KIND_"),
+};
+
+/// `inst_cfg`: one of the room's collision lists.
+pub(super) const COL_LIST: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("COL_LIST_"),
+};
+
+/// `inst_cfg`: the collision flags it sets.
+pub(super) const COL_FLAG: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Bits("CF_", 4),
+};
+
+/// `objtbl_b_set`: the table to write.
+pub(super) const TABLE: Family = Family {
+    names: &[("TBL_OBJ", 0), ("TBL_ITEM", 1)],
+    placeholders: Placeholders::None,
+};
+
+/// `eml_rot`: a room object rather than an item model.
+pub(super) const ROT: Family = Family {
+    names: &[("ROT_OBJ", 0x80)],
+    placeholders: Placeholders::None,
+};
+
+/// `aot_switch`: show or hide the room sprite.
+pub(super) const SPRITE: Family = Family {
+    names: &[("SPR_ON", 0), ("SPR_OFF", 1)],
+    placeholders: Placeholders::None,
+};
+
+/// `ck_item_count`: the item group counted.
+pub(super) const ITEM_GROUP: Family = Family {
+    names: &[("IGRP_ANY", 0x0A)],
+    placeholders: Placeholders::Byte("IGRP_"),
+};
+
+/// `ck_bits`: the d-pad buttons tested.
+pub(super) const PAD: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Bits("PAD_", 16),
+};
+
+/// `swap_var`: which way a pick-up quantity moves.
+pub(super) const XFER: Family = Family {
+    names: &[("XFER_SAVE", 0), ("XFER_RESTORE", 1), ("XFER_HELD", 2)],
+    placeholders: Placeholders::None,
+};
+
+/// `mass_mask`: how the effect flags apply.
+pub(super) const MASK: Family = Family {
+    names: &[("MASK_OR", 0), ("MASK_CLEAR", 1), ("MASK_XOR", 2)],
+    placeholders: Placeholders::None,
+};
+
+/// The flags word of every live effect `mass_mask` changes.
+pub(super) const FX_FLAG: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Bits("FXF_", 16),
+};
+
+/// `spd_set`: the entity; the enemies follow the player.
+pub(super) const ENTITY: Family = Family {
+    names: &[("ENT_PLAYER", 0)],
+    placeholders: Placeholders::Byte("ENT_"),
+};
+
+/// `cut_auto`: whether the camera follows the player's camera zones.
+pub(super) const CUT: Family = Family {
+    names: &[("CUT_FREE", 0), ("CUT_LOCKED", 1)],
+    placeholders: Placeholders::None,
+};
+
+/// `model_op`'s form.
+pub(super) const MODEL_OP: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("MODEL_OP_"),
+};
+
+/// The player's costume.
+pub(super) const COSTUME: Family = Family {
+    names: &[],
+    placeholders: Placeholders::Byte("COSTUME_"),
+};
+
+const FAMILIES: [&Family; 63] = [
     &TRUTH,
     &CMP,
     &BYTE,
@@ -287,6 +625,51 @@ const FAMILIES: [&Family; 18] = [
     &SYS,
     &TASK,
     &DOOR_LOCK,
+    &SYS_MODE,
+    &SYS_SWITCH,
+    &PLAYER_FLAG,
+    &HEALTH_STATUS,
+    &HIT,
+    &JOINT,
+    &OBJ_SLOT,
+    &OBJ_FLAG,
+    &SCA,
+    &ITEM,
+    &NO_FLAG,
+    &ENEMY_BEHAVIOUR,
+    &SPAWN,
+    &ENEMY_VARIANT,
+    &ANIM,
+    &ACTION,
+    &PLW,
+    &ANIM_FLAG,
+    &ENTITY_FLAG_MODE,
+    &ENTITY_FLAG,
+    &MOTION,
+    &LOOK_AT,
+    &DIST,
+    &TWEEN_FIELD,
+    &TWEEN_SEL,
+    &FX_ROW,
+    &FX_AT,
+    &LIGHT_FADE,
+    &FADE_CHANNEL,
+    &LIGHT,
+    &LIGHT_KIND,
+    &COL_LIST,
+    &COL_FLAG,
+    &TABLE,
+    &ROT,
+    &SPRITE,
+    &ITEM_GROUP,
+    &PAD,
+    &XFER,
+    &MASK,
+    &FX_FLAG,
+    &ENTITY,
+    &MODEL_OP,
+    &COSTUME,
+    &CUT,
     &Family {
         // `message`: reveal the text at once.
         names: &[("MSG_FAST", 0x80)],
@@ -299,4 +682,22 @@ pub(super) fn engine_names() -> &'static [(String, i64)] {
     static NAMES: LazyLock<Vec<(String, i64)>> =
         LazyLock::new(|| FAMILIES.iter().flat_map(|family| family.all()).collect());
     &NAMES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// No two families give one name different values.
+    #[test]
+    fn engine_names_are_unique() {
+        let mut seen: HashMap<&str, i64> = HashMap::new();
+        for (name, value) in engine_names() {
+            if let Some(&other) = seen.get(name.as_str()) {
+                assert_eq!(other, *value, "`{name}` names two values");
+            }
+            seen.insert(name, *value);
+        }
+    }
 }

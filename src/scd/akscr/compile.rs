@@ -9,6 +9,7 @@ use anyhow::{Result, bail};
 
 use std::collections::HashMap;
 
+use super::layout;
 use super::preprocess::{Loader, Variant, no_includes, preprocess};
 use crate::budget;
 use crate::scd::asm::{self, Arg, Assembled, InsnSrc, Item, ItemKind, Source};
@@ -810,8 +811,30 @@ impl Lowerer {
         });
     }
 
-    fn push_call(&mut self, call: &Call) {
-        self.push(&call.name, call.args.clone(), call.line, call.col);
+    /// Push `call`; one written by field ([`layout`]) is packed into its
+    /// bytes and handed to the assembler in the `.s` shape.
+    fn push_call(&mut self, call: &Call) -> Result<()> {
+        let args = match layout::layout(&call.name) {
+            Some(fields) => {
+                let values = call
+                    .args
+                    .iter()
+                    .map(|arg| field_value(arg, call))
+                    .collect::<Result<Vec<_>>>()?;
+                let bytes = layout::pack(fields, &values).map_err(|error| {
+                    anyhow::anyhow!(
+                        "line {}, column {}: `{}` {error}",
+                        call.line,
+                        call.col,
+                        call.name
+                    )
+                })?;
+                layout::asm_args(&call.name, &bytes)
+            }
+            None => call.args.clone(),
+        };
+        self.push(&call.name, args, call.line, call.col);
+        Ok(())
     }
 
     fn asm(&mut self, lines: &[(usize, String)]) -> Result<()> {
@@ -839,7 +862,7 @@ impl Lowerer {
                 Stmt::Return { line, col } => self.push("end", vec![Arg::Num(0)], *line, *col),
                 Stmt::Require(call) => {
                     self.condition(call)?;
-                    self.push_call(call);
+                    self.push_call(call)?;
                 }
                 Stmt::If {
                     conditions,
@@ -852,7 +875,7 @@ impl Lowerer {
                     self.push("if", vec![Arg::Symbol(skip.clone())], *line, *col);
                     for condition in conditions {
                         self.condition(condition)?;
-                        self.push_call(condition);
+                        self.push_call(condition)?;
                     }
                     self.commands(then)?;
                     self.pending.push(skip);
@@ -889,8 +912,7 @@ impl Lowerer {
                 call.name
             );
         }
-        self.push_call(call);
-        Ok(())
+        self.push_call(call)
     }
 
     /// Reject a non-condition command in a condition position.
@@ -951,7 +973,7 @@ impl Lowerer {
                     let start = self.label();
                     self.push("evt_do", vec![Arg::Symbol(start.clone())], *line, *col);
                     self.condition(condition)?;
-                    self.push_call(condition);
+                    self.push_call(condition)?;
                     self.pending.push(start);
                     self.events(body)?;
                     self.push("evt_dountil", Vec::new(), *line, *col);
@@ -1022,13 +1044,35 @@ impl Lowerer {
                 self.push("evt_push_cond", Vec::new(), call.line, call.col);
                 self.push("evt_skip_if", Vec::new(), call.line, call.col);
             }
-            name if is_event_mnemonic(name) => self.push_call(call),
+            name if is_event_mnemonic(name) => self.push_call(call)?,
             _ => {
                 self.push("evt_single", Vec::new(), call.line, call.col);
                 self.command_call(call)?;
             }
         }
         Ok(())
+    }
+}
+
+/// The value of an argument to a command written by field.
+fn field_value(arg: &Arg, call: &Call) -> Result<i64> {
+    match arg {
+        Arg::Num(value) => Ok(*value),
+        Arg::Bits(high, low) => Ok(high | low),
+        Arg::Symbol(name) => asm::engine_constant(name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "line {}, column {}: `{name}` is not a value `{}` takes",
+                call.line,
+                call.col,
+                call.name
+            )
+        }),
+        Arg::Label(..) => bail!(
+            "line {}, column {}: `{}` takes no labels",
+            call.line,
+            call.col,
+            call.name
+        ),
     }
 }
 

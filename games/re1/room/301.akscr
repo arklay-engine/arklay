@@ -83,21 +83,21 @@ proc init
     {
         aot_set(AOT_07_EVENT, 4000, 12000, 1000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
     }
-    obj(OBJ_00, 15, 255, 20103, 2303, 13603, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_01, 15, 255, 24180, 870, 17544, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_02, 15, 255, 6350, 3600, 18174, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_03, 15, 255, 10502, 1812, 23202, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_04, 15, 255, 1, 7210, 20411, -2050, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_05, 15, 255, 13080, 3534, 19960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    obj(OBJ_06, 15, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 20103, 2303, 13603, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 24180, 870, 17544, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 6350, 3600, 18174, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_03, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 10502, 1812, 23202, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_04, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 1, 7210, 20411, -2050, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_05, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 13080, 3534, 19960, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    obj(OBJ_06, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_30, FALSE))
     {
-        obj(OBJ_07, 191, 255, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_07, OF_80 | OF_NOT_PUSHABLE | OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     else
     {
-        obj(OBJ_07, 0, 255, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_08, 37, 255, 2810, 0, 11530, 1024, 62, 254, 0, 0, 194, 1, 0, 0, 84, 6, 144, 1, 196, 9, 232, 3);
+        obj(OBJ_07, 0, SCA_NONE, 2810, 0, 11530, 1024, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_08, OF_NOT_PUSHABLE | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 2810, 0, 11530, 1024, -450, 0, 450, 0, 1620, 400, 2500, 1000);
     }
     set(FG_STATUS, F_STATUS_1C, TRUE);
     set(FG_STATUS, F_STATUS_3C, TRUE);
@@ -111,15 +111,15 @@ proc init
     }
     else
     {
-        objtbl_b_set(0, 0, 0);
-        objtbl_b_set(0, 1, 0);
-        eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 78, 1, 248, 77);
+        objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+        objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+        eml_pos(OBJ_05, 0, 0, 0, 13080, 334, 19960);
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_302_FALLS))
     {
         dir_set(0, 0, 3072, 0, 2985, 2500, 11300);
-        eml_pos(7, 0, 0, 0, 4, 0, 0, 250, 10, 196, 9, 10, 45);
-        spd_set(0, 196, 9);
+        eml_pos(OBJ_07, 0, 1024, 0, 2810, 2500, 11530);
+        spd_set(ENT_PLAYER, 2500);
         evt_exec(0, TASK_09, on_enter_2);
         cutnext(CAM_07);
         snd_pan_vol_set(BGM_SUB_1, 60, 45);
@@ -128,13 +128,13 @@ proc init
     {
         snd_pan_vol_set(BGM_SUB_1, 30, 30);
     }
-    enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 1024, 0, 0, 19000, 0, 27000, ENEMY_00_ADDER, 0, 0, 0);
-    enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 1024, 0, 0, 15000, 0, 27000, ENEMY_01_ADDER, 0, 0, 0);
-    enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 4096, 0, 0, 8000, 0, 27000, ENEMY_02_ADDER, 0, 0, 0);
-    enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 1024, 0, 0, 10000, 0, 26000, ENEMY_03_ADDER, 0, 0, 0);
-    enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 4072, 0, 0, 8000, 0, 23800, ENEMY_04_ADDER, 0, 0, 0);
-    enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 0, 0, 0, 3200, 0, 20000, ENEMY_05_ADDER, 0, 0, 0);
-    enemy(EM_0A_ADDER, 1, 255, 1, 1, 0, 0, 0, 0, 0, 2200, 0, 16000, ENEMY_06_ADDER, 0, 0, 0);
+    enemy(EM_0A_ADDER, EB_01, NO_FLAG, SPAWN_FORCE, 1, 0, 1024, 0, 19000, 0, 27000, ENEMY_00_ADDER, ANIM_00, 0, EVAR_00);
+    enemy(EM_0A_ADDER, EB_01, NO_FLAG, SPAWN_FORCE, 1, 0, 1024, 0, 15000, 0, 27000, ENEMY_01_ADDER, ANIM_00, 0, EVAR_00);
+    enemy(EM_0A_ADDER, EB_01, NO_FLAG, SPAWN_FORCE, 1, 0, 4096, 0, 8000, 0, 27000, ENEMY_02_ADDER, ANIM_00, 0, EVAR_00);
+    enemy(EM_0A_ADDER, EB_01, NO_FLAG, SPAWN_FORCE, 1, 0, 1024, 0, 10000, 0, 26000, ENEMY_03_ADDER, ANIM_00, 0, EVAR_00);
+    enemy(EM_0A_ADDER, EB_01, NO_FLAG, SPAWN_FORCE, 1, 0, 4072, 0, 8000, 0, 23800, ENEMY_04_ADDER, ANIM_00, 0, EVAR_00);
+    enemy(EM_0A_ADDER, EB_01, NO_FLAG, SPAWN_FORCE, 1, 0, 0, 0, 3200, 0, 20000, ENEMY_05_ADDER, ANIM_00, 0, EVAR_00);
+    enemy(EM_0A_ADDER, EB_01, NO_FLAG, SPAWN_FORCE, 1, 0, 0, 0, 2200, 0, 16000, ENEMY_06_ADDER, ANIM_00, 0, EVAR_00);
 }
 
 proc main
@@ -149,10 +149,10 @@ proc main
         room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_MAIN_ON);
         room_bgm_state_set(2, ROOM_302_FALLS, BGM_MAIN_ON);
         room_bgm_state_set(2, ROOM_304_SECOND_HOUSE_GATE, BGM_MAIN_ON);
-        objtbl_b_set(0, 0, 1);
-        objtbl_b_set(0, 1, 1);
-        eml_pos(0, 0, 0, 0, 0, 0, 0, 95, 98, 89, 4, 207, 81);
-        eml_pos(1, 0, 0, 0, 0, 0, 0, 72, 93, 218, 2, 132, 77);
+        objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+        objtbl_b_set(TBL_OBJ, OBJ_01, OF_ACTIVE);
+        eml_pos(OBJ_00, 0, 0, 0, 25183, 1113, 20943);
+        eml_pos(OBJ_01, 0, 0, 0, 23880, 730, 19844);
         set(FG_ROOM, F_ROOM_01, FALSE);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
@@ -180,21 +180,21 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
             {
-                objtbl_b_set(0, 0, 1);
-                objtbl_b_set(0, 1, 1);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(0, 0, 0, 0, 0, 0, 0, 135, 78, 255, 8, 35, 53);
-                eml_pos(1, 0, 0, 0, 0, 0, 0, 116, 94, 102, 3, 136, 68);
+                objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_01, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_00, 0, 0, 0, 20103, 2303, 13603);
+                eml_pos(OBJ_01, 0, 0, 0, 24180, 870, 17544);
             }
             else
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
                 snd_pan_vol_set(BGM_SUB_1, 30, 30);
             }
             set(FG_ROOM, F_ROOM_0A, TRUE);
@@ -213,21 +213,21 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
             {
-                objtbl_b_set(0, 0, 1);
-                objtbl_b_set(0, 1, 1);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(0, 0, 0, 0, 0, 0, 0, 15, 73, 31, 17, 71, 92);
-                eml_pos(1, 0, 0, 0, 0, 0, 0, 80, 75, 158, 12, 252, 87);
+                objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_01, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_00, 0, 0, 0, 18703, 4383, 23623);
+                eml_pos(OBJ_01, 0, 0, 0, 19280, 3230, 22524);
             }
             else
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
                 snd_pan_vol_set(BGM_SUB_1, 30, 30);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
@@ -246,23 +246,23 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
             {
-                objtbl_b_set(0, 0, 1);
-                objtbl_b_set(0, 1, 1);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(0, 0, 0, 0, 0, 0, 0, 83, 70, 191, 12, 207, 61);
-                eml_pos(1, 0, 0, 0, 0, 0, 0, 184, 91, 48, 2, 156, 73);
-                eml_pos(5, 0, 0, 0, 0, 0, 0, 212, 48, 58, 16, 238, 77);
+                objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_01, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_00, 0, 0, 0, 18003, 3263, 15823);
+                eml_pos(OBJ_01, 0, 0, 0, 23480, 560, 18844);
+                eml_pos(OBJ_05, 0, 0, 0, 12500, 4154, 19950);
             }
             else
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(5, 0, 0, 0, 0, 0, 0, 212, 48, 18, 6, 238, 77);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_05, 0, 0, 0, 12500, 1554, 19950);
                 snd_pan_vol_set(BGM_SUB_1, 30, 30);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
@@ -273,7 +273,7 @@ proc main
             set(FG_ROOM, F_ROOM_0F, FALSE);
             set(FG_ROOM, F_ROOM_10, FALSE);
             set(FG_ROOM, F_ROOM_11, FALSE);
-            objtbl_b_set(0, 7, 0);
+            objtbl_b_set(TBL_OBJ, OBJ_07, 0);
         }
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
@@ -282,23 +282,23 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
             {
-                objtbl_b_set(0, 0, 1);
-                objtbl_b_set(0, 1, 1);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(0, 0, 0, 0, 0, 0, 0, 95, 98, 89, 4, 207, 81);
-                eml_pos(1, 0, 0, 0, 0, 0, 0, 72, 93, 218, 2, 132, 77);
-                eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 206, 13, 248, 77);
+                objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_01, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_00, 0, 0, 0, 25183, 1113, 20943);
+                eml_pos(OBJ_01, 0, 0, 0, 23880, 730, 19844);
+                eml_pos(OBJ_05, 0, 0, 0, 13080, 3534, 19960);
             }
             else
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 78, 1, 248, 77);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_05, 0, 0, 0, 13080, 334, 19960);
                 snd_pan_vol_set(BGM_SUB_1, 45, 35);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
@@ -326,7 +326,7 @@ proc main
             if (ck(FG_SCENARIO, F_SCENARIO_2F, TRUE))
             {
                 snd_pan_vol_set(BGM_SUB_1, 30, 30);
-                eml_pos(5, 0, 0, 0, 0, 0, 0, 126, 44, 76, 3, 216, 79);
+                eml_pos(OBJ_05, 0, 0, 0, 11390, 844, 20440);
             }
         }
     }
@@ -336,21 +336,21 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
             {
-                objtbl_b_set(0, 0, 1);
-                objtbl_b_set(0, 1, 1);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(0, 0, 0, 0, 0, 0, 0, 131, 57, 13, 20, 51, 87);
-                eml_pos(1, 0, 0, 0, 0, 0, 0, 68, 87, 76, 5, 234, 70);
+                objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_01, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_00, 0, 0, 0, 14723, 5133, 22323);
+                eml_pos(OBJ_01, 0, 0, 0, 22340, 1356, 18154);
             }
             else
             {
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
                 snd_pan_vol_set(BGM_SUB_1, 33, 32);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
@@ -369,22 +369,22 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 206, 13, 248, 77);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_05, 0, 0, 0, 13080, 3534, 19960);
             }
             else
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 1);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                eml_pos(2, 0, 0, 0, 0, 0, 0, 206, 24, 16, 14, 254, 70);
-                eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 78, 1, 248, 77);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                eml_pos(OBJ_02, 0, 0, 0, 6350, 3600, 18174);
+                eml_pos(OBJ_05, 0, 0, 0, 13080, 334, 19960);
                 snd_pan_vol_set(BGM_SUB_1, 33, 33);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
@@ -403,22 +403,22 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_2F, FALSE))
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 0);
-                objtbl_b_set(0, 4, 0);
-                objtbl_b_set(0, 7, 175);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_04, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_07, OF_80 | OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
             }
             else
             {
-                objtbl_b_set(0, 0, 0);
-                objtbl_b_set(0, 1, 0);
-                objtbl_b_set(0, 2, 0);
-                objtbl_b_set(0, 3, 1);
-                objtbl_b_set(0, 4, 1);
-                eml_pos(3, 0, 0, 0, 0, 0, 0, 6, 41, 20, 7, 162, 90);
-                eml_pos(4, 0, 0, 254, 247, 0, 0, 1, 0, 209, 2, 187, 79);
+                objtbl_b_set(TBL_OBJ, OBJ_00, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_01, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_02, 0);
+                objtbl_b_set(TBL_OBJ, OBJ_03, OF_ACTIVE);
+                objtbl_b_set(TBL_OBJ, OBJ_04, OF_ACTIVE);
+                eml_pos(OBJ_03, 0, 0, 0, 10502, 1812, 23202);
+                eml_pos(OBJ_04, 0, -2050, 0, 1, 721, 20411);
                 snd_pan_vol_set(BGM_SUB_1, 60, 45);
             }
             set(FG_ROOM, F_ROOM_0A, FALSE);
@@ -431,7 +431,7 @@ proc main
             set(FG_ROOM, F_ROOM_11, TRUE);
             if (ck(FG_SCENARIO, F_SCENARIO_30, FALSE))
             {
-                objtbl_b_set(0, 7, 175);
+                objtbl_b_set(TBL_OBJ, OBJ_07, OF_80 | OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
             }
         }
     }
@@ -461,7 +461,7 @@ event from_main
     se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_37, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -472,7 +472,7 @@ event from_main
     se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_37, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -483,9 +483,9 @@ event from_main
     run
     {
         bgm_stop_all(0);
-        objtbl_b_set(0, 0, 128);
-        objtbl_b_set(0, 1, 128);
-        eml_pos(5, 0, 0, 0, 0, 0, 0, 24, 51, 78, 1, 248, 77);
+        objtbl_b_set(TBL_OBJ, OBJ_00, OF_80);
+        objtbl_b_set(TBL_OBJ, OBJ_01, OF_80);
+        eml_pos(OBJ_05, 0, 0, 0, 13080, 334, 19960);
         dir_set(0, 0, 3072, 0, 12700, 0, 16700);
         movie_on(MOVIE_0D_DMD);
     }
@@ -538,7 +538,7 @@ event from_main_2
     se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_37, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -549,7 +549,7 @@ event from_main_2
     se_play_3d(SND_BANK_ROOM, SE_18_CRANK, 0, SND_AT_POINT, 0, 11000, 17380);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 23, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_37, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -593,7 +593,7 @@ event from_main_2
         set(FG_ROOM, F_ROOM_01, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_SCENARIO, F_SCENARIO_2F, FALSE);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -641,11 +641,11 @@ event event_04
 
 event event_05
 {
-    objtbl_b_set(0, 0, 1);
+    objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 24180, 4770, 19144);
-    tw_set_pos(0, 179, 0);
+    tw_set_pos(0, -77, 0);
     for (50)
     {
         tw_pos_add();
@@ -659,11 +659,11 @@ event event_05
 
 event event_06
 {
-    objtbl_b_set(0, 1, 1);
+    objtbl_b_set(TBL_OBJ, OBJ_01, OF_ACTIVE);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 8250, 5690, 19634);
-    tw_set_pos(0, 179, 0);
+    tw_set_pos(0, -77, 0);
     for (50)
     {
         tw_pos_add();
@@ -682,367 +682,367 @@ event from_main_sub1
     tw_abs_pos(0, 12690, -2190, 17320);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64531, 35860);
+    tw_abs_rot(0, 3130, -1005, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64511, 35860);
+    tw_abs_rot(0, 3130, -1025, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64482, 35860);
+    tw_abs_rot(0, 3130, -1054, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64443, 35860);
+    tw_abs_rot(0, 3130, -1093, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64395, 35860);
+    tw_abs_rot(0, 3130, -1141, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64335, 35860);
+    tw_abs_rot(0, 3130, -1201, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64265, 35860);
+    tw_abs_rot(0, 3130, -1271, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64183, 35860);
+    tw_abs_rot(0, 3130, -1353, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64089, 35860);
+    tw_abs_rot(0, 3130, -1447, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63980, 35860);
+    tw_abs_rot(0, 3130, -1556, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63854, 35860);
+    tw_abs_rot(0, 3130, -1682, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63714, 35860);
+    tw_abs_rot(0, 3130, -1822, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63561, 35860);
+    tw_abs_rot(0, 3130, -1975, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63398, 35860);
+    tw_abs_rot(0, 3130, -2138, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63226, 35860);
+    tw_abs_rot(0, 3130, -2310, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63049, 35860);
+    tw_abs_rot(0, 3130, -2487, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62867, 35860);
+    tw_abs_rot(0, 3130, -2669, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62683, 35860);
+    tw_abs_rot(0, 3130, -2853, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62498, 35860);
+    tw_abs_rot(0, 3130, -3038, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62314, 35860);
+    tw_abs_rot(0, 3130, -3222, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62127, 35860);
+    tw_abs_rot(0, 3130, -3409, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61942, 35860);
+    tw_abs_rot(0, 3130, -3594, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61760, 35860);
+    tw_abs_rot(0, 3130, -3776, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61584, 35860);
+    tw_abs_rot(0, 3130, -3952, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61415, 35860);
+    tw_abs_rot(0, 3130, -4121, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61258, 35860);
+    tw_abs_rot(0, 3130, -4278, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61113, 35860);
+    tw_abs_rot(0, 3130, -4423, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60983, 35860);
+    tw_abs_rot(0, 3130, -4553, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60871, 35860);
+    tw_abs_rot(0, 3130, -4665, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60780, 35860);
+    tw_abs_rot(0, 3130, -4756, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60710, 35860);
+    tw_abs_rot(0, 3130, -4826, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60657, 35860);
+    tw_abs_rot(0, 3130, -4879, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60618, 35860);
+    tw_abs_rot(0, 3130, -4918, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60587, 35860);
+    tw_abs_rot(0, 3130, -4949, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60563, 35860);
+    tw_abs_rot(0, 3130, -4973, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60541, 35860);
+    tw_abs_rot(0, 3130, -4995, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60518, 35860);
+    tw_abs_rot(0, 3130, -5018, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60488, 35860);
+    tw_abs_rot(0, 3130, -5048, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64546, 35860);
+    tw_abs_rot(0, 3130, -990, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64546, 35860);
+    tw_abs_rot(0, 3130, -990, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64543, 35860);
+    tw_abs_rot(0, 3130, -993, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64531, 35860);
+    tw_abs_rot(0, 3130, -1005, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64511, 35860);
+    tw_abs_rot(0, 3130, -1025, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64482, 35860);
+    tw_abs_rot(0, 3130, -1054, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64443, 35860);
+    tw_abs_rot(0, 3130, -1093, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64395, 35860);
+    tw_abs_rot(0, 3130, -1141, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64335, 35860);
+    tw_abs_rot(0, 3130, -1201, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64265, 35860);
+    tw_abs_rot(0, 3130, -1271, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64183, 35860);
+    tw_abs_rot(0, 3130, -1353, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64089, 35860);
+    tw_abs_rot(0, 3130, -1447, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63980, 35860);
+    tw_abs_rot(0, 3130, -1556, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63854, 35860);
+    tw_abs_rot(0, 3130, -1682, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63714, 35860);
+    tw_abs_rot(0, 3130, -1822, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63561, 35860);
+    tw_abs_rot(0, 3130, -1975, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63398, 35860);
+    tw_abs_rot(0, 3130, -2138, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63226, 35860);
+    tw_abs_rot(0, 3130, -2310, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63049, 35860);
+    tw_abs_rot(0, 3130, -2487, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62867, 35860);
+    tw_abs_rot(0, 3130, -2669, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62683, 35860);
+    tw_abs_rot(0, 3130, -2853, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62498, 35860);
+    tw_abs_rot(0, 3130, -3038, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62314, 35860);
+    tw_abs_rot(0, 3130, -3222, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62127, 35860);
+    tw_abs_rot(0, 3130, -3409, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61942, 35860);
+    tw_abs_rot(0, 3130, -3594, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61760, 35860);
+    tw_abs_rot(0, 3130, -3776, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61584, 35860);
+    tw_abs_rot(0, 3130, -3952, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61415, 35860);
+    tw_abs_rot(0, 3130, -4121, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61258, 35860);
+    tw_abs_rot(0, 3130, -4278, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61113, 35860);
+    tw_abs_rot(0, 3130, -4423, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60983, 35860);
+    tw_abs_rot(0, 3130, -4553, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60871, 35860);
+    tw_abs_rot(0, 3130, -4665, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60780, 35860);
+    tw_abs_rot(0, 3130, -4756, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60710, 35860);
+    tw_abs_rot(0, 3130, -4826, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60657, 35860);
+    tw_abs_rot(0, 3130, -4879, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60618, 35860);
+    tw_abs_rot(0, 3130, -4918, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60587, 35860);
+    tw_abs_rot(0, 3130, -4949, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60563, 35860);
+    tw_abs_rot(0, 3130, -4973, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60541, 35860);
+    tw_abs_rot(0, 3130, -4995, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60518, 35860);
+    tw_abs_rot(0, 3130, -5018, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60488, 35860);
+    tw_abs_rot(0, 3130, -5048, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64546, 35860);
+    tw_abs_rot(0, 3130, -990, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64546, 35860);
+    tw_abs_rot(0, 3130, -990, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64543, 35860);
+    tw_abs_rot(0, 3130, -993, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64531, 35860);
+    tw_abs_rot(0, 3130, -1005, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64511, 35860);
+    tw_abs_rot(0, 3130, -1025, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64482, 35860);
+    tw_abs_rot(0, 3130, -1054, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64443, 35860);
+    tw_abs_rot(0, 3130, -1093, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64395, 35860);
+    tw_abs_rot(0, 3130, -1141, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64335, 35860);
+    tw_abs_rot(0, 3130, -1201, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64265, 35860);
+    tw_abs_rot(0, 3130, -1271, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64183, 35860);
+    tw_abs_rot(0, 3130, -1353, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64089, 35860);
+    tw_abs_rot(0, 3130, -1447, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63980, 35860);
+    tw_abs_rot(0, 3130, -1556, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63854, 35860);
+    tw_abs_rot(0, 3130, -1682, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63714, 35860);
+    tw_abs_rot(0, 3130, -1822, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63561, 35860);
+    tw_abs_rot(0, 3130, -1975, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63398, 35860);
+    tw_abs_rot(0, 3130, -2138, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63226, 35860);
+    tw_abs_rot(0, 3130, -2310, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 63049, 35860);
+    tw_abs_rot(0, 3130, -2487, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62867, 35860);
+    tw_abs_rot(0, 3130, -2669, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62683, 35860);
+    tw_abs_rot(0, 3130, -2853, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62498, 35860);
+    tw_abs_rot(0, 3130, -3038, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62314, 35860);
+    tw_abs_rot(0, 3130, -3222, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 62127, 35860);
+    tw_abs_rot(0, 3130, -3409, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61942, 35860);
+    tw_abs_rot(0, 3130, -3594, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61760, 35860);
+    tw_abs_rot(0, 3130, -3776, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61584, 35860);
+    tw_abs_rot(0, 3130, -3952, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61415, 35860);
+    tw_abs_rot(0, 3130, -4121, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61258, 35860);
+    tw_abs_rot(0, 3130, -4278, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 61113, 35860);
+    tw_abs_rot(0, 3130, -4423, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60983, 35860);
+    tw_abs_rot(0, 3130, -4553, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60871, 35860);
+    tw_abs_rot(0, 3130, -4665, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60780, 35860);
+    tw_abs_rot(0, 3130, -4756, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60710, 35860);
+    tw_abs_rot(0, 3130, -4826, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60657, 35860);
+    tw_abs_rot(0, 3130, -4879, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60618, 35860);
+    tw_abs_rot(0, 3130, -4918, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60587, 35860);
+    tw_abs_rot(0, 3130, -4949, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60563, 35860);
+    tw_abs_rot(0, 3130, -4973, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60541, 35860);
+    tw_abs_rot(0, 3130, -4995, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60518, 35860);
+    tw_abs_rot(0, 3130, -5018, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 60488, 35860);
+    tw_abs_rot(0, 3130, -5048, -29676);
     evt_next();
     tw_nop();
-    tw_abs_rot(0, 3130, 64546, 35860);
+    tw_abs_rot(0, 3130, -990, -29676);
     evt_next();
     tw_nop();
     tw_end();
@@ -1058,14 +1058,14 @@ event on_aot_07
         evt_exec(0, TASK_09, on_aot_07_sub1);
         evt_exec(0, TASK_09, on_aot_07_sub2);
         se_play_3d(SND_BANK_ROOM, SE_21_ELV1, 0, SND_AT_POINT, 0, 3000, 11300);
-        sys_multi(SYS_01, 128);
+        sys_multi(SYS_HIT, HIT_80);
     }
     sleep(70);
-    timer_setup(2, 128, 8, 7, 0);
+    timer_setup(LIGHT_FADE_VEIL, 2176, FADE_R | FADE_G | FADE_B);
     sleep(7);
     run
     {
-        setw(W_LIGHT_DELTA, 0, 0);
+        setw(W_LIGHT_DELTA, 0);
         aot_on(AOT_01_DOOR, SCE_DOOR, 129);
         set(FG_SCENARIO, F_SCENARIO_30, TRUE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
@@ -1119,7 +1119,7 @@ event on_enter_2
     sleep(110);
     run
     {
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
@@ -1129,7 +1129,7 @@ event on_enter_2_sub1
 {
     evt_work_set(WK_OBJ, OBJ_07);
     evt_tween_begin_alt();
-    tw_set_pos(0, 231, 0);
+    tw_set_pos(0, -25, 0);
     for (100)
     {
         tw_pos_add();
@@ -1145,10 +1145,10 @@ event on_enter_2_sub2
 {
     for (100)
     {
-        spd_add(231);
+        spd_add(-25);
         evt_work_set(WK_PLAYER, 0);
         evt_tween_begin_alt();
-        tw_set_pos(0, 231, 0);
+        tw_set_pos(0, -25, 0);
         tw_pos_add();
         evt_next();
         tw_end();
@@ -1312,7 +1312,7 @@ event on_enter_3
     nop_wide(0, 1, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1322,7 +1322,7 @@ event on_enter_3
     nop_wide(0, 2, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1332,7 +1332,7 @@ event on_enter_3
     nop_wide(0, 3, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1342,7 +1342,7 @@ event on_enter_3
     nop_wide(0, 4, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1352,7 +1352,7 @@ event on_enter_3
     nop_wide(0, 5, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1362,7 +1362,7 @@ event on_enter_3
     nop_wide(0, 6, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 253, 0);
+    tw_set_pos(0, -3, 0);
     for (6)
     {
         tw_pos_add();
@@ -1372,7 +1372,7 @@ event on_enter_3
     nop_wide(0, 7, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1382,7 +1382,7 @@ event on_enter_3
     nop_wide(0, 8, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1392,7 +1392,7 @@ event on_enter_3
     nop_wide(0, 9, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1402,7 +1402,7 @@ event on_enter_3
     nop_wide(0, 10, 0);
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1580,7 +1580,7 @@ event on_enter_4
     nop_wide(0, 1, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1590,7 +1590,7 @@ event on_enter_4
     nop_wide(0, 2, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1600,7 +1600,7 @@ event on_enter_4
     nop_wide(0, 3, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1610,7 +1610,7 @@ event on_enter_4
     nop_wide(0, 4, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1620,7 +1620,7 @@ event on_enter_4
     nop_wide(0, 5, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1630,7 +1630,7 @@ event on_enter_4
     nop_wide(0, 6, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 253, 0);
+    tw_set_pos(0, -3, 0);
     for (6)
     {
         tw_pos_add();
@@ -1640,7 +1640,7 @@ event on_enter_4
     nop_wide(0, 7, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1650,7 +1650,7 @@ event on_enter_4
     nop_wide(0, 8, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     for (6)
     {
         tw_pos_add();
@@ -1660,7 +1660,7 @@ event on_enter_4
     nop_wide(0, 9, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1670,7 +1670,7 @@ event on_enter_4
     nop_wide(0, 10, 0);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     for (6)
     {
         tw_pos_add();
@@ -1696,9 +1696,9 @@ event from_main_sub2
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 13, 32 | 0, 0 | 1);
-    act_flag_op(0, 32, 0);
-    act_param_set(0, 252);
+    act_anim_flags(ANIM_2D, F_ROOM_20, AFL_01);
+    act_flag_op(EF_OR, EF_0020);
+    act_param_set(0, 64512);
     act_reset();
     evt_nop();
     do
@@ -1718,7 +1718,7 @@ event from_main_sub2
         aot_reset(AOT_03_C, SCE_C, SAT_MANUAL | SAT_PLAYER, 0, 22250, 25146);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_SCENARIO, F_SCENARIO_2F, TRUE);
         set(FG_SCENARIO, F_SCENARIO_52, TRUE);
         room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_SUB_1_ON | BGM_MAIN_ON);
@@ -1742,7 +1742,7 @@ event from_main_sub3
         aot_reset(AOT_03_C, SCE_C, SAT_MANUAL | SAT_PLAYER, 0, 22250, 25146);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_SCENARIO, F_SCENARIO_2F, TRUE);
         room_bgm_state_set(2, ROOM_300_FIRST_HOUSE_OUT, BGM_SUB_1_ON | BGM_MAIN_ON);
         room_bgm_state_set(2, ROOM_301_WATER_GATE, BGM_SUB_1_ON | BGM_MAIN_ON);

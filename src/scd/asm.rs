@@ -2167,6 +2167,24 @@ pub(crate) fn is_engine_constant(name: &str) -> bool {
         || matches!(name, "UNLOCKED" | "LOCK" | "LOCKED")
 }
 
+/// The value of one of the engine's own constants ([`is_engine_constant`]).
+pub(crate) fn engine_constant(name: &str) -> Option<i64> {
+    let maps = constant_maps();
+    let value = maps
+        .flag
+        .get(name)
+        .or_else(|| maps.sce.get(name))
+        .or_else(|| maps.work.get(name))
+        .copied()
+        .or(match name {
+            "UNLOCKED" => Some(0),
+            "LOCK" => Some(254),
+            "LOCKED" => Some(255),
+            _ => None,
+        })?;
+    Some(i64::from(value))
+}
+
 /// Resolve one named-constant argument. A `hi | lo` pair (a stage and a
 /// room) combines into one byte.
 fn constant_value(kind: char, arg: &Arg) -> Result<u8> {
