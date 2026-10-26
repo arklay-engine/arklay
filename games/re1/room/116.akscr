@@ -16,6 +16,8 @@
 #define AOT_07_NONE 0x07
 #define AOT_08_MESSAGE 0x08
 #define AOT_09_MESSAGE 0x09
+#define IMDL_00 0x00
+#define IMDL_01 0x01
 #define OBJ_00 0x00
 #define SE_17_GATAN 0x17
 #define SE_18_SW_TRAP 0x18
@@ -25,10 +27,10 @@
 proc init
 {
     door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_01, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, 0, 255, 208, 42, 2, 244, 90, 25, 0, 12, F_ITEM_00, 129, 0, 0);
-    swap_var(1, 1, 12);
-    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, 1, 255, 208, 42, 2, 244, 90, 25, 0, 12, F_ITEM_01, 129, 0, 0);
-    obj(OBJ_00, 1, 255, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, IMDL_00, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_00, SAT_MANUAL | SAT_PLAYER, 0);
+    swap_var(XFER_RESTORE, AOT_01_ITEM, B_0C);
+    item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, IMDL_01, SCA_NONE, 10960, -3070, 6490, 3072, F_ITEM_01, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00, OF_ACTIVE, SCA_NONE, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0);
     aot_set(AOT_05_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_PLAYER, 9, 0, 1, 0, 1, 0);
     aot_set(AOT_06_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 5, 0, 0, 0);
     aot_set(AOT_07_NONE, 3800, 10500, 2500, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
@@ -117,41 +119,41 @@ event from_main
     evt_tween_begin_alt();
     evt_next();
     tw_nop();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 252, 0);
+    tw_set_pos(0, -4, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 250, 0);
+    tw_set_pos(0, -6, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 246, 0);
+    tw_set_pos(0, -10, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 243, 0);
+    tw_set_pos(0, -13, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 238, 0);
+    tw_set_pos(0, -18, 0);
     for (4)
     {
         tw_pos_add();
         evt_next();
     }
     tw_nop();
-    tw_set_pos(0, 243, 0);
+    tw_set_pos(0, -13, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 246, 0);
+    tw_set_pos(0, -10, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 250, 0);
+    tw_set_pos(0, -6, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 252, 0);
+    tw_set_pos(0, -4, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 8, 0);
@@ -160,31 +162,31 @@ event from_main
     tw_set_pos(0, 4, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 252, 0);
+    tw_set_pos(0, -4, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 253, 0);
+    tw_set_pos(0, -3, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 3, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 2, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 1, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 1, 0);
@@ -264,10 +266,10 @@ event from_main_2
     tw_set_pos(0, 3, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 252, 0);
+    tw_set_pos(0, -4, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 248, 0);
+    tw_set_pos(0, -8, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 3, 0);
@@ -302,7 +304,7 @@ event from_main_3
 {
     aot_delete(AOT_05_NONE, SCE_NONE, SAT_PLAYER);
     aot_delete(AOT_06_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
-    evt_work_set(WK_AOT, AOT_00_DOOR);
+    evt_work_set(WK_AOT, IMDL_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10950, -3208, 6490);
     tw_set_pos(0, 1, 0);
@@ -364,10 +366,10 @@ event from_main_3
     evt_next();
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 252, 0);
+    tw_set_pos(0, -4, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 2, 0);
@@ -382,13 +384,13 @@ event from_main_3
         evt_next();
     }
     tw_nop();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 1, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 1, 0);
@@ -405,7 +407,7 @@ event from_main_4
     aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     aot_delete(AOT_05_NONE, SCE_NONE, SAT_PLAYER);
     aot_delete(AOT_06_NONE, SCE_NONE, SAT_PLAYER);
-    evt_work_set(WK_AOT, AOT_01_ITEM);
+    evt_work_set(WK_AOT, IMDL_01);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10950, -3208, 6490);
     tw_set_pos(0, 1, 0);
@@ -467,10 +469,10 @@ event from_main_4
     evt_next();
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 254, 0);
+    tw_set_pos(0, -2, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 252, 0);
+    tw_set_pos(0, -4, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 2, 0);
@@ -485,13 +487,13 @@ event from_main_4
         evt_next();
     }
     tw_nop();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 1, 0);
     tw_pos_add();
     evt_next();
-    tw_set_pos(0, 255, 0);
+    tw_set_pos(0, -1, 0);
     tw_pos_add();
     evt_next();
     tw_set_pos(0, 1, 0);
@@ -507,7 +509,7 @@ event event_05
     run
     {
         require(item_ck(IT_03_WEAPON_SHOTGUN));
-        swap_var(2, 1, 12);
+        swap_var(XFER_HELD, AOT_01_ITEM, B_0C);
         setb(B_SELECTED_ITEM, IT_03_WEAPON_SHOTGUN, 0);
         set(FG_STATUS, F_STATUS_12, TRUE);
     }

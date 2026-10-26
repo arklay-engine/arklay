@@ -21,6 +21,9 @@
 #define FX_0F 0x0F
 #define F_ROOM_00 0x00
 #define F_ROOM_01 0x01
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
 #define OBJ_00 0x00
 
 proc init
@@ -28,21 +31,21 @@ proc init
     door_aot_set(AOT_00_DOOR, 4000, 11800, 1300, 1400, 1, DOOR_SND_00_DR_WD, DOOR_01_DOOR01, 4, 0, ROOM_20E_FRONT_OF_ATTIC, 4900, 0, 12500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     aot_set(AOT_01_MESSAGE, 7300, 6700, 2700, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     aot_set(AOT_02_USEITEM, 7300, 6700, 2700, 2000, SCE_USEITEM, SAT_PLAYER, 9, 0, 21, 0, 1, 0);
-    item_aot_set(AOT_03_ITEM, 10000, 11300, 1700, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_0B, 129, 0, 0);
+    item_aot_set(AOT_03_ITEM, 10000, 11300, 1700, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 0, 0, 0, 0, F_ITEM_0B, SAT_MANUAL | SAT_PLAYER, 0);
 #if CHRIS
-    item_aot_set(AOT_04_ITEM, 3200, 1900, 1200, 2400, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_0C, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 3200, 1900, 1200, 2400, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 0, 0, 0, 0, F_ITEM_0C, SAT_MANUAL | SAT_PLAYER, 0);
 #else
-    item_aot_set(AOT_04_ITEM, 3200, 1900, 1200, 2400, IT_11_AMMO_GRENADE_ACID, 6, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_0C, 129, 0, 0);
-    item_aot_set(AOT_05_ITEM, 4800, 7000, 1100, 3400, IT_2F_KEY_INK_RIBBON, 2, 2, 255, 192, 23, 50, 251, 116, 34, 0, 0, F_ITEM_59, 129, 0, 0);
+    item_aot_set(AOT_04_ITEM, 3200, 1900, 1200, 2400, IT_11_AMMO_GRENADE_ACID, 6, IMDL_01, SCA_NONE, 0, 0, 0, 0, F_ITEM_0C, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_05_ITEM, 4800, 7000, 1100, 3400, IT_2F_KEY_INK_RIBBON, 2, IMDL_02, SCA_NONE, 6080, -1230, 8820, 0, F_ITEM_59, SAT_MANUAL | SAT_PLAYER, 0);
 #endif
-    obj(OBJ_00, 17, 255, 7872, 0, 5192, 3072, 0, 0, 106, 4, 0, 0, 150, 251, 40, 0, 232, 3, 146, 4, 28, 2);
+    obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 7872, 0, 5192, 3072, 0, 1130, 0, -1130, 40, 1000, 1170, 540);
     if (ck(FG_SCENARIO, F_SCENARIO_0A, FALSE))
     {
         aot_reset(AOT_04_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     }
     else
     {
-        cut_auto(1);
+        cut_auto(CUT_LOCKED);
         setb(B_CAMERA, CAM_03, 0);
         aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         if (ck(FG_ITEM, F_ITEM_0C, TRUE))
@@ -53,10 +56,10 @@ proc init
         {
             aot_reset(AOT_04_ITEM, SCE_NONE, 0, 0, 0, 0);
         }
-        effect(FX_0F, 0, 0, 254, 31, 194, 248, 200, 31, 0, 0);
-        effect(FX_0F, 0, 0, 124, 32, 122, 248, 70, 32, 0, 0);
-        effect(FX_0F, 0, 0, 12, 33, 194, 248, 196, 32, 0, 0);
-        msg_list(0, 190, 20, 48, 248, 187, 34, 200, 200, 160, 0, 123, 21, 22, 34, 48, 248, 154, 34, 200, 200, 160, 0, 63, 21, 0, 35, 48, 248, 202, 11, 160, 160, 240, 0, 223, 16, 204, 4, 204, 4, 236, 3);
+        effect(FX_0F, FX_ROW_00, FX_AT_WORLD, 8190, -1854, 8136, 0);
+        effect(FX_0F, FX_ROW_00, FX_AT_WORLD, 8316, -1926, 8262, 0);
+        effect(FX_0F, FX_ROW_00, FX_AT_WORLD, 8460, -1854, 8388, 0);
+        msg_list(0, 5310, -2000, 8891, 200, 200, 160, LIGHT_KIND_00, 5499, 8726, -2000, 8858, 200, 200, 160, LIGHT_KIND_00, 5439, 8960, -2000, 3018, 160, 160, 240, LIGHT_KIND_00, 4319, 1228, 1228, 1004);
     }
 }
 
@@ -67,20 +70,20 @@ proc main
         if (testitem(IT_30_KEY_LIGHTER))
         {
             cutnext(CAM_04);
-            cut_auto(0);
+            cut_auto(CUT_FREE);
             aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
             aot_reset(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
-            effect(FX_0F, 0, 0, 254, 31, 194, 248, 200, 31, 0, 0);
-            effect(FX_0F, 0, 0, 124, 32, 122, 248, 70, 32, 0, 0);
-            effect(FX_0F, 0, 0, 12, 33, 194, 248, 196, 32, 0, 0);
+            effect(FX_0F, FX_ROW_00, FX_AT_WORLD, 8190, -1854, 8136, 0);
+            effect(FX_0F, FX_ROW_00, FX_AT_WORLD, 8316, -1926, 8262, 0);
+            effect(FX_0F, FX_ROW_00, FX_AT_WORLD, 8460, -1854, 8388, 0);
             set(FG_ROOM, F_ROOM_00, TRUE);
             set(FG_SCENARIO, F_SCENARIO_0A, TRUE);
-            msg_list(0, 190, 20, 48, 248, 187, 34, 200, 200, 160, 0, 123, 21, 22, 34, 48, 248, 154, 34, 200, 200, 160, 0, 63, 21, 0, 35, 48, 248, 202, 11, 160, 160, 240, 0, 223, 16, 204, 4, 204, 4, 236, 3);
+            msg_list(0, 5310, -2000, 8891, 200, 200, 160, LIGHT_KIND_00, 5499, 8726, -2000, 8858, 200, 200, 160, LIGHT_KIND_00, 5439, 8960, -2000, 3018, 160, 160, 240, LIGHT_KIND_00, 4319, 1228, 1228, 1004);
         }
     }
     else if (ck(FG_ROOM, F_ROOM_01, FALSE))
     {
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_ROOM, F_ROOM_01, TRUE);
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_02))

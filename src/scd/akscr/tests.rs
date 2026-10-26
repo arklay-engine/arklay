@@ -130,7 +130,7 @@ event event_00
         set(FG_RUN, 23, 1);
     }
     evt_exec(0, 6, event_0A);
-    single(10) effect(0, 5, 0, 196, 34, 212, 254, 116);
+    single(10) effect(0, 5, 0, 8900, -300, 0, 0);
     sleep(30);
     wait_message();
     for (3)
@@ -318,6 +318,43 @@ fn errors_name_the_line() {
     );
     assert!(
         compile_error("#version 1\nproc init\n{\n    set(FG_COMMON, 1, 1)\n}\n").contains("`;`")
+    );
+}
+
+/// Commands written by field pack into the engine's operand bytes, words
+/// little-endian and signed fields two's complement.
+#[test]
+fn field_commands_pack_their_operands() {
+    let scripts = round(
+        "#version 1
+proc init
+{
+    voice_play(VOICE_PLAY, 0x0123);
+    sys_multi(SYS_PLAYER_FLAGS, SYS_OR | PLF_04);
+    spd_add(-25);
+}
+event event_00
+{
+    evt_actor_begin();
+    act_anim_seq(AB_ADDITIVE | AB_06, -2, 300, 0x3F);
+    act_finish();
+}
+",
+    );
+    assert_eq!(
+        block_bytes(&scripts.init[0]),
+        [
+            0x1E, 0x01, 0x23, 0x01, 0x33, 0x03, 0x04, 0x01, 0x45, 0xE7, 0x00, 0x00
+        ]
+    );
+    assert_eq!(
+        event_bytes(&scripts.events[0])[..8],
+        [0x01, 0x83, 0x16, 0xFE, 0xFF, 0x2C, 0x01, 0x3F]
+    );
+    let error = compile_error("#version 1\nproc init\n{\n    setw(W_04, 1, 2);\n}\n");
+    assert!(
+        error.contains("line 4") && error.contains("takes 2 arguments"),
+        "{error}"
     );
 }
 
@@ -764,8 +801,9 @@ off_A:
         "#define MSG_VO_",
         "SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER,",
         "cmpb(B_MENU_CHOICE, CMP_GE, 128)",
-        "setw(W_LIGHT_STATE, 0, 0);",
-        "ENEMY_02_CROW, 0, 0, 0);",
+        "setw(W_LIGHT_STATE, 0);",
+        "enemy(EM_05_CROW, EB_01, NO_FLAG, SPAWN_FORCE, 2,",
+        "ENEMY_02_CROW, ANIM_00, 0, EVAR_00);",
         "room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_RELOAD | 1);",
         "voice_play(VOICE_PLAY, VO_",
         "message(MSG_VO_",

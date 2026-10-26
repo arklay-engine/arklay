@@ -37,37 +37,43 @@
 #define FX_21 0x21
 #define F_ROOM_09 0x09
 #define F_ROOM_0A 0x0A
+#define IMDL_01 0x01
 #define OBJ_00 0x00
 #define OBJ_01 0x01
 #define SE_17 0x17
+#define SPR_01 0x01
+#define SPR_02 0x02
+#define SPR_04 0x04
+#define SPR_05 0x05
+#define SPR_06 0x06
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 0, 2900, 3200, 2600, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_107_GALLERY, 15300, 0, 4200, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 23300, 25500, 3000, 2400, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_109_TRAP_PASSAGE, 24400, 0, 2700, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_03_ITEM, 20700, 13200, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 1, 255, 208, 82, 0, 0, 132, 53, 68, 10, F_ITEM_13, 129, 1, 0);
-    obj(OBJ_00, 1, 255, 14160, 0, 5905, 1024, 0, 0, 64, 2, 0, 0, 192, 253, 88, 2, 32, 2, 120, 5, 138, 2);
-    obj(OBJ_01, 1, 255, 21605, 0, 13970, 0, 0, 0, 64, 2, 0, 0, 192, 253, 88, 2, 32, 2, 138, 2, 120, 5);
+    item_aot_set(AOT_03_ITEM, 20700, 13200, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, IMDL_01, SCA_NONE, 21200, 0, 13700, 2628, F_ITEM_13, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    obj(OBJ_00, OF_ACTIVE, SCA_NONE, 14160, 0, 5905, 1024, 0, 576, 0, -576, 600, 544, 1400, 650);
+    obj(OBJ_01, OF_ACTIVE, SCA_NONE, 21605, 0, 13970, 0, 0, 576, 0, -576, 600, 544, 650, 1400);
 #if MANSION1
     if (ck(FG_COMMON, F_COMMON_40, FALSE))
     {
         aot_set(AOT_04_EVENT, 14500, 1560, 800, 5400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
         aot_set(AOT_05_EVENT, 19420, 1560, 800, 5400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
-        enemy(EM_02_CERBERUS, 128, F_ENEMY_00, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, ENEMY_00_CERBERUS, 0, 0, 0);
+        enemy(EM_02_CERBERUS, EB_80, F_ENEMY_00, SPAWN_FORCE, 2, 0, 0, 0, 30000, 30000, 30000, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
     }
     else
     {
-        enemy(EM_02_CERBERUS, 1, F_ENEMY_00, 1, 2, 0, 0, 2048, 0, 0, 10000, 0, 3600, ENEMY_00_CERBERUS, 0, 0, 0);
+        enemy(EM_02_CERBERUS, EB_01, F_ENEMY_00, SPAWN_FORCE, 2, 0, 2048, 0, 10000, 0, 3600, ENEMY_00_CERBERUS, ANIM_00, 0, EVAR_00);
     }
     if (ck(FG_COMMON, F_COMMON_41, FALSE))
     {
         aot_set(AOT_06_EVENT, 21100, 8360, 5400, 800, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_06, 0, 0, 0);
         aot_set(AOT_07_EVENT, 21100, 13080, 5400, 800, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_06, 0, 0, 0);
-        enemy(EM_02_CERBERUS, 128, F_ENEMY_01, 1, 2, 0, 0, 2016, 0, 0, 28400, -3000, 16900, ENEMY_01_CERBERUS, 0, 0, 0);
+        enemy(EM_02_CERBERUS, EB_80, F_ENEMY_01, SPAWN_FORCE, 2, 0, 2016, 0, 28400, -3000, 16900, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
     }
     else
     {
-        enemy(EM_02_CERBERUS, 1, F_ENEMY_01, 1, 2, 0, 0, 3072, 0, 0, 24000, 0, 15080, ENEMY_01_CERBERUS, 0, 0, 0);
+        enemy(EM_02_CERBERUS, EB_01, F_ENEMY_01, SPAWN_FORCE, 2, 0, 3072, 0, 24000, 0, 15080, ENEMY_01_CERBERUS, ANIM_00, 0, EVAR_00);
     }
     aot_set(AOT_09_MESSAGE, 4600, 5000, 2000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_0A_MESSAGE, 9200, 5000, 2000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
@@ -76,8 +82,8 @@ proc init
     aot_set(AOT_0D_MESSAGE, 21300, 17600, 1200, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_0E_MESSAGE, 21300, 22000, 1200, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
 #else
-    enemy(EM_03_SPIDER_WEB_SPINNER, 2, F_ENEMY_AD, 1, 2, 0, 0, 2048, 0, 0, 17700, 0, 3500, ENEMY_00_SPIDER_WEB_SPINNER, 0, 0, 0);
-    enemy(EM_03_SPIDER_WEB_SPINNER, 3, F_ENEMY_AE, 1, 2, 0, 0, 1024, 0, 0, 24000, 0, 20000, ENEMY_01_SPIDER_WEB_SPINNER, 0, 0, 0);
+    enemy(EM_03_SPIDER_WEB_SPINNER, EB_02, F_ENEMY_AD, SPAWN_FORCE, 2, 0, 2048, 0, 17700, 0, 3500, ENEMY_00_SPIDER_WEB_SPINNER, ANIM_00, 0, EVAR_00);
+    enemy(EM_03_SPIDER_WEB_SPINNER, EB_03, F_ENEMY_AE, SPAWN_FORCE, 2, 0, 1024, 0, 24000, 0, 20000, ENEMY_01_SPIDER_WEB_SPINNER, ANIM_00, 0, EVAR_00);
     aot_set(AOT_04_MESSAGE, 4600, 5000, 2000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_05_MESSAGE, 9200, 5000, 2000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     aot_set(AOT_06_MESSAGE, 17500, 5000, 2000, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
@@ -94,39 +100,39 @@ proc main
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
         {
-            aot_switch(0, 1, 1);
-            aot_switch(0, 2, 1);
+            aot_switch(0, SPR_01, SPR_OFF);
+            aot_switch(0, SPR_02, SPR_OFF);
         }
     }
     else if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
     {
-        aot_switch(0, 1, 0);
-        aot_switch(0, 2, 0);
+        aot_switch(0, SPR_01, SPR_ON);
+        aot_switch(0, SPR_02, SPR_ON);
     }
     if (ck(FG_COMMON, F_COMMON_41, FALSE))
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
-            aot_switch(0, 5, 1);
+            aot_switch(0, SPR_05, SPR_OFF);
         }
         if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
         {
-            aot_switch(0, 4, 1);
-            aot_switch(0, 5, 1);
-            aot_switch(0, 6, 1);
+            aot_switch(0, SPR_04, SPR_OFF);
+            aot_switch(0, SPR_05, SPR_OFF);
+            aot_switch(0, SPR_06, SPR_OFF);
         }
     }
     else
     {
         if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
         {
-            aot_switch(0, 5, 0);
+            aot_switch(0, SPR_05, SPR_ON);
         }
         if (cmpb(B_CAMERA, CMP_EQ, CAM_03))
         {
-            aot_switch(0, 4, 0);
-            aot_switch(0, 5, 0);
-            aot_switch(0, 6, 0);
+            aot_switch(0, SPR_04, SPR_ON);
+            aot_switch(0, SPR_05, SPR_ON);
+            aot_switch(0, SPR_06, SPR_ON);
         }
     }
     if (ck(FG_ENEMY, F_ENEMY_00, TRUE) && ck(FG_ROOM, F_ROOM_09, TRUE))
@@ -170,32 +176,32 @@ event on_aot_04
     {
         set(FG_COMMON, F_COMMON_40, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 9200, 1620);
-        effect(FX_15, 0, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_15, 1, 0, 240, 35, 72, 244, 84, 6, 144, 11);
-        effect(FX_15, 2, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_15, 3, 0, 240, 35, 72, 244, 84, 6, 144, 11);
-        effect(FX_15, 4, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_15, 5, 0, 240, 35, 72, 244, 84, 6, 144, 11);
-        effect(FX_15, 6, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_15, 7, 0, 240, 35, 216, 245, 84, 6, 144, 11);
+        effect(FX_15, FX_ROW_00, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_15, FX_ROW_01, FX_AT_WORLD, 9200, -3000, 1620, 2960);
+        effect(FX_15, FX_ROW_02, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_15, FX_ROW_03, FX_AT_WORLD, 9200, -3000, 1620, 2960);
+        effect(FX_15, FX_ROW_04, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_15, FX_ROW_05, FX_AT_WORLD, 9200, -3000, 1620, 2960);
+        effect(FX_15, FX_ROW_06, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_15, FX_ROW_07, FX_AT_WORLD, 9200, -2600, 1620, 2960);
     }
     sleep(5);
     run
     {
-        effect(FX_21, 0, 0, 240, 35, 72, 244, 84, 6, 144, 11);
-        effect(FX_21, 1, 0, 240, 35, 72, 244, 84, 6, 144, 11);
-        effect(FX_21, 2, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_21, 3, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_21, 4, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_21, 5, 0, 240, 35, 72, 244, 84, 6, 144, 11);
-        effect(FX_21, 6, 0, 240, 35, 216, 245, 84, 6, 144, 11);
-        effect(FX_21, 7, 0, 240, 35, 216, 245, 84, 6, 144, 11);
+        effect(FX_21, FX_ROW_00, FX_AT_WORLD, 9200, -3000, 1620, 2960);
+        effect(FX_21, FX_ROW_01, FX_AT_WORLD, 9200, -3000, 1620, 2960);
+        effect(FX_21, FX_ROW_02, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_21, FX_ROW_03, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_21, FX_ROW_04, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_21, FX_ROW_05, FX_AT_WORLD, 9200, -3000, 1620, 2960);
+        effect(FX_21, FX_ROW_06, FX_AT_WORLD, 9200, -2600, 1620, 2960);
+        effect(FX_21, FX_ROW_07, FX_AT_WORLD, 9200, -2600, 1620, 2960);
         pos_set(ENEMY_00_CERBERUS, 0, 3076, 0, 10000, -2000, 0);
     }
     sleep(1);
     run
     {
-        eml_state(0, ENEMY_00_CERBERUS, EML_BEHAVIOUR, 7);
+        eml_state(0, ENEMY_00_CERBERUS, EML_BEHAVIOUR, EB_07);
     }
     evt_finish();
 }
@@ -218,31 +224,31 @@ event on_aot_06
     {
         set(FG_COMMON, F_COMMON_41, TRUE);
         se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 26080, 17900);
-        effect(FX_15, 0, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_15, 1, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_15, 2, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_15, 3, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_15, 4, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_15, 5, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_15, 6, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_15, 7, 0, 224, 101, 16, 245, 236, 69, 192, 7);
+        effect(FX_15, FX_ROW_00, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_15, FX_ROW_01, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_15, FX_ROW_02, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_15, FX_ROW_03, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_15, FX_ROW_04, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_15, FX_ROW_05, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_15, FX_ROW_06, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_15, FX_ROW_07, FX_AT_WORLD, 26080, -2800, 17900, 1984);
     }
     sleep(10);
     run
     {
-        effect(FX_21, 0, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_21, 1, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_21, 2, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_21, 3, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_21, 4, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_21, 5, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_21, 6, 0, 224, 101, 16, 245, 236, 69, 192, 7);
-        effect(FX_21, 7, 0, 224, 101, 16, 245, 236, 69, 192, 7);
+        effect(FX_21, FX_ROW_00, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_21, FX_ROW_01, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_21, FX_ROW_02, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_21, FX_ROW_03, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_21, FX_ROW_04, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_21, FX_ROW_05, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_21, FX_ROW_06, FX_AT_WORLD, 26080, -2800, 17900, 1984);
+        effect(FX_21, FX_ROW_07, FX_AT_WORLD, 26080, -2800, 17900, 1984);
     }
     sleep(10);
     run
     {
-        eml_state(0, ENEMY_01_CERBERUS, EML_BEHAVIOUR, 7);
+        eml_state(0, ENEMY_01_CERBERUS, EML_BEHAVIOUR, EB_07);
     }
     evt_finish();
 }

@@ -14,6 +14,7 @@
 #define AOT_03_DOOR 0x03
 #define AOT_04_USEITEM 0x04
 #define AOT_05_ITEM 0x05
+#define AOT_06 0x06
 #define AOT_06_ITEM 0x06
 #define CAM_02 0x02
 #define CAM_07 0x07
@@ -29,6 +30,8 @@
 #define F_ROOM_1D 0x1D
 #define F_ROOM_20 0x20
 #define F_ROOM_21 0x21
+#define IMDL_00 0x00
+#define IMDL_01 0x01
 #define SE_DOOR_00 0x00
 #define SE_DOOR_01 0x01
 #define VO_00A_20 0x0E
@@ -67,9 +70,9 @@ proc init
 #endif
     }
     aot_set(AOT_04_USEITEM, 7200, 11000, 800, 800, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 32, 0, 1, 0);
-    item_aot_set(AOT_05_ITEM, 15000, 21700, 2000, 1000, IT_39_KEY_GUARDHOUSE_002, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 4, F_ITEM_48, 129, 0, 0);
+    item_aot_set(AOT_05_ITEM, 15000, 21700, 2000, 1000, IT_39_KEY_GUARDHOUSE_002, 1, IMDL_00, SCA_NONE, 0, 0, 0, 1024, F_ITEM_48, SAT_MANUAL | SAT_PLAYER, 0);
 #if CHRIS
-    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_4D_KEY_RADIO, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 4, F_ITEM_08, 129, 0, 0);
+    item_aot_set(AOT_06_ITEM, 0, 0, 1, 1, IT_4D_KEY_RADIO, 1, IMDL_01, SCA_NONE, 0, 0, 0, 1024, F_ITEM_08, SAT_MANUAL | SAT_PLAYER, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
     {
         if (ck(FG_COMMON, F_COMMON_3D, TRUE))
@@ -101,20 +104,20 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_AA, FALSE))
             {
-                enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 3900, 0, 0, 24100, 0, 3200, ENEMY_00_NPC_REBECCA, 0, 0, 0);
+                enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3900, 0, 24100, 0, 3200, ENEMY_00_NPC_REBECCA, ANIM_00, 0, EVAR_00);
             }
         }
     }
 #else
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 17600, -4000, 22700, ENEMY_00_WASP, 0, 0, 0);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -4000, 22700, ENEMY_00_WASP, ANIM_00, 0, EVAR_00);
 #endif
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 17600, -4000, 22700, ENEMY_01_WASP, 0, 0, 0);
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 17600, -3500, 22600, ENEMY_02_WASP, 0, 0, 0);
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 17700, -4000, 22700, ENEMY_03_WASP, 0, 0, 0);
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 17800, -3500, 22800, ENEMY_04_WASP, 0, 0, 0);
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 17900, -4000, 22800, ENEMY_05_WASP, 0, 0, 0);
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 18000, -3500, 22900, ENEMY_06_WASP, 0, 0, 0);
-    enemy(EM_07_WASP, 16, 255, 1, 2, 0, 0, 1024, 0, 0, 18000, -4000, 22900, ENEMY_07_WASP, 0, 0, 0);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -4000, 22700, ENEMY_01_WASP, ANIM_00, 0, EVAR_00);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17600, -3500, 22600, ENEMY_02_WASP, ANIM_00, 0, EVAR_00);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17700, -4000, 22700, ENEMY_03_WASP, ANIM_00, 0, EVAR_00);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17800, -3500, 22800, ENEMY_04_WASP, ANIM_00, 0, EVAR_00);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 17900, -4000, 22800, ENEMY_05_WASP, ANIM_00, 0, EVAR_00);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 18000, -3500, 22900, ENEMY_06_WASP, ANIM_00, 0, EVAR_00);
+    enemy(EM_07_WASP, EB_10, NO_FLAG, SPAWN_FORCE, 2, 0, 1024, 0, 18000, -4000, 22900, ENEMY_07_WASP, ANIM_00, 0, EVAR_00);
 }
 
 proc main
@@ -128,10 +131,10 @@ proc main
 
 event on_enter
 {
-    evt_work_set(WK_AOT, AOT_00_DOOR);
+    evt_work_set(WK_AOT, IMDL_00);
     evt_tween_begin_alt();
     tw_abs_pos(0, 15520, -1590, 22430);
-    tw_abs_rot(0, 1020, 800, 64466);
+    tw_abs_rot(0, 1020, 800, -1070);
     tw_end();
     evt_nop();
     evt_finish();
@@ -157,7 +160,7 @@ event event_01
     run
     {
         message(0, 0);
-        voice_play(VOICE_PLAY, VO_00A_20, 0);
+        voice_play(VOICE_PLAY, VO_00A_20);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -165,15 +168,15 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(0 | 2, 32 | 1, 0 | 0);
+    act_anim_flags(ANIM_02, F_ROOM_21, 0);
     sleep(10);
-    act_anim_flags(0 | 0, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_00, F_ROOM_21, AFL_01);
     sleep(20);
-    act_anim_flags(32 | 3, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_23, F_ROOM_21, AFL_01);
     sleep(50);
-    act_anim_flags(32 | 4, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_24, F_ROOM_21, AFL_01);
     sleep(20);
-    act_anim_flags(32 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_25, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     wait_message();
@@ -183,17 +186,17 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 7, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_27, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     run
     {
         message(1, 0);
-        voice_play(VOICE_PLAY, VO_00A_21, 0);
+        voice_play(VOICE_PLAY, VO_00A_21);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_21, F_ROOM_20, 0);
     act_reset();
     evt_nop();
     do
@@ -203,31 +206,20 @@ event event_01
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(49, 64826, 0, 0, 50, 0);
+    act_motion_path(MOTION_31, -710, 0, 0, 50, 0);
     act_reset();
     evt_nop();
     sleep(30);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
-    act_anim_flags(32 | 0, 32 | 0, 0 | 1);
+    act_motion(MOTION_10);
+    act_anim_flags(ANIM_20, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 1);
-    act_reset();
-    evt_nop();
-    do
-    {
-        evt_next();
-    }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    sleep(20);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 7, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_24, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -238,13 +230,24 @@ event event_01
     sleep(20);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_27, F_ROOM_20, AFL_01);
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_22, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(50, 0, 190, 0, 0, 40);
+    act_motion_path(MOTION_32, 0, 190, 0, 0, 40);
     act_reset();
     evt_nop();
     wait_message();
@@ -255,14 +258,14 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_motion_path(113, 350, 0, 2, 140, 0);
+    act_motion_path(MOTION_71, 350, 0, 2, 140, 0);
     act_reset();
     evt_nop();
     sleep(10);
     run
     {
         message(2, 0);
-        voice_play(VOICE_PLAY, VO_00A_22, 0);
+        voice_play(VOICE_PLAY, VO_00A_22);
     }
     sleep(8);
 #if CHRIS
@@ -271,26 +274,26 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 3, 32 | 1, 0 | 1);
-    act_motion_path(50, 0, 310, 0, 0, 50);
+    act_anim_flags(ANIM_23, F_ROOM_21, AFL_01);
+    act_motion_path(MOTION_32, 0, 310, 0, 0, 50);
     act_reset();
     evt_nop();
     wait_message();
     sleep(15);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_reset();
     evt_nop();
     sleep(15);
     run
     {
         message(3, 0);
-        voice_play(VOICE_PLAY, VO_00A_23, 0);
+        voice_play(VOICE_PLAY, VO_00A_23);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_25, F_ROOM_20, 0);
     act_reset();
     evt_nop();
     do
@@ -301,7 +304,7 @@ event event_01
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 7, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_27, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     wait_message();
@@ -312,7 +315,7 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_motion_path(51, 600, 300, 0, 30, 20);
+    act_motion_path(MOTION_33, 600, 300, 0, 30, 20);
     act_reset();
     evt_nop();
     sleep(40);
@@ -322,13 +325,13 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_reset();
     evt_nop();
     run
     {
         message(4, 0);
-        voice_play(VOICE_PLAY, VO_00A_24, 0);
+        voice_play(VOICE_PLAY, VO_00A_24);
     }
     sleep(10);
 #if CHRIS
@@ -337,7 +340,7 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_25, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -352,7 +355,7 @@ event event_01
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_22, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -364,20 +367,20 @@ event event_01
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(114, 0, 300, 1, 0, 35);
+    act_motion_path(MOTION_72, 0, 300, 1, 0, 35);
     act_reset();
     evt_nop();
     sleep(20);
     run
     {
         message(5, 0);
-        voice_play(VOICE_PLAY, VO_00A_25, 0);
+        voice_play(VOICE_PLAY, VO_00A_25);
     }
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 3, 32 | 0, 0 | 1);
-    act_flag_op(1, 128, 0);
+    act_anim_flags(ANIM_23, F_ROOM_20, AFL_01);
+    act_flag_op(EF_SET, EF_0080);
     act_reset();
     evt_nop();
     do
@@ -388,7 +391,7 @@ event event_01
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 0, 0 | 1);
+    act_anim_flags(ANIM_22, F_ROOM_20, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -430,7 +433,7 @@ event event_02
     run
     {
         message(6, 0);
-        voice_play(VOICE_PLAY, VO_00A_26, 0);
+        voice_play(VOICE_PLAY, VO_00A_26);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -438,7 +441,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_25, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -453,7 +456,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_20, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -468,7 +471,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 3, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_23, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -482,7 +485,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_25, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -496,7 +499,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 9, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_29, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -508,7 +511,11 @@ event event_02
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(147, 1, 0, 0, 100, 0);
+#if CHRIS
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_REBECCA, 0, 100, 0);
+#else
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_WASP, 0, 100, 0);
+#endif
     act_reset();
     evt_nop();
 #if CHRIS
@@ -517,8 +524,8 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 15, 32 | 1, 0 | 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_21, 0);
+    act_param_set(0, 2048);
     act_reset();
     evt_nop();
     do
@@ -532,7 +539,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_seq(10242, 20555, 8468);
+    act_anim_seq(AB_02, 19240, 5200, F_ROOM_21);
     act_reset();
     do
     {
@@ -546,8 +553,8 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 15, 32 | 1, 0 | 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_21, 0);
+    act_param_set(0, 2048);
     act_reset();
     evt_nop();
     do
@@ -559,7 +566,7 @@ event event_02
     run
     {
         message(7, 0);
-        voice_play(VOICE_PLAY, VO_00A_27, 0);
+        voice_play(VOICE_PLAY, VO_00A_27);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -567,7 +574,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     wait_message();
@@ -577,8 +584,8 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 15, 32 | 1, 0 | 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_21, 0);
+    act_param_set(0, 2048);
     act_reset();
     evt_nop();
     do
@@ -592,7 +599,7 @@ event event_02
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_seq(10243, 40995, 8488);
+    act_anim_seq(AB_03, 9000, 10400, F_ROOM_21);
     act_reset();
     do
     {
@@ -617,11 +624,11 @@ event event_02
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_idle();
     act_reset();
     evt_finish();
@@ -637,7 +644,7 @@ event event_03
     run
     {
         message(8, 0);
-        voice_play(VOICE_PLAY, VO_00A_28, 0);
+        voice_play(VOICE_PLAY, VO_00A_28);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -645,7 +652,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_25, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -659,7 +666,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_24, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -673,7 +680,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -687,7 +694,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 8, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_28, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -699,7 +706,7 @@ event event_03
     run
     {
         message(9, 0);
-        voice_play(VOICE_PLAY, VO_00A_29, 0);
+        voice_play(VOICE_PLAY, VO_00A_29);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -707,7 +714,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -721,7 +728,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_22, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -736,7 +743,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -750,36 +757,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 6, 32 | 1, 0 | 1);
-    act_reset();
-    evt_nop();
-    do
-    {
-        evt_next();
-    }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    sleep(10);
-#if CHRIS
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
-#else
-    evt_work_set(WK_ENEMY, ENEMY_00_WASP);
-#endif
-    evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
-    act_reset();
-    evt_nop();
-    do
-    {
-        evt_next();
-    }
-    while (ck(FG_ROOM, F_ROOM_21, FALSE));
-#if CHRIS
-    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
-#else
-    evt_work_set(WK_ENEMY, ENEMY_00_WASP);
-#endif
-    evt_actor_begin();
-    act_anim_flags(32 | 9, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_26, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -794,7 +772,21 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(0 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+#if CHRIS
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+#else
+    evt_work_set(WK_ENEMY, ENEMY_00_WASP);
+#endif
+    evt_actor_begin();
+    act_anim_flags(ANIM_29, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -809,7 +801,22 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(0 | 6, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_05, F_ROOM_21, AFL_01);
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    sleep(10);
+#if CHRIS
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
+#else
+    evt_work_set(WK_ENEMY, ENEMY_00_WASP);
+#endif
+    evt_actor_begin();
+    act_anim_flags(ANIM_06, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -821,7 +828,7 @@ event event_03
     run
     {
         message(10, 0);
-        voice_play(VOICE_PLAY, VO_00A_2A, 0);
+        voice_play(VOICE_PLAY, VO_00A_2A);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -829,7 +836,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -844,8 +851,8 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_motion_path(113, 360, 0, 2, 100, 0);
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_motion_path(MOTION_71, 360, 0, 2, 100, 0);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -860,13 +867,13 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(0 | 6, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_06, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 5, 32 | 0, 0 | 0);
-    act_motion_path(50, 0, 280, 0, 0, 40);
+    act_anim_flags(ANIM_05, F_ROOM_20, 0);
+    act_motion_path(MOTION_32, 0, 280, 0, 0, 40);
     act_reset();
     evt_nop();
     do
@@ -876,19 +883,19 @@ event event_03
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 6, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_06, F_ROOM_20, 0);
     act_reset();
     evt_nop();
     sleep(50);
     run
     {
         message(11, 0);
-        voice_play(VOICE_PLAY, VO_00A_2B, 0);
+        voice_play(VOICE_PLAY, VO_00A_2B);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
-    act_motion(16);
+    act_anim_flags(ANIM_25, F_ROOM_20, 0);
+    act_motion(MOTION_10);
     act_reset();
     evt_nop();
     do
@@ -899,7 +906,7 @@ event event_03
     sleep(25);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(28162, 64100, 8207);
+    act_anim_seq(AB_02, 25710, 4090, F_ROOM_20);
     act_reset();
     do
     {
@@ -908,7 +915,7 @@ event event_03
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(31750, 41056, 8207);
+    act_anim_seq(AB_06, 24700, 4000, F_ROOM_20);
     act_reset();
     do
     {
@@ -917,7 +924,7 @@ event event_03
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_24, F_ROOM_20, 0);
     act_reset();
     evt_nop();
     sleep(10);
@@ -927,7 +934,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -942,51 +949,12 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_20, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 9, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    do
-    {
-        evt_next();
-    }
-    while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    sleep(15);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    sleep(10);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    sleep(15);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 4, 32 | 0, 0 | 0);
-    act_reset();
-    evt_nop();
-    sleep(10);
-    evt_work_set(WK_PLAYER, 0);
-    evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_29, F_ROOM_20, 0);
     act_reset();
     evt_nop();
     do
@@ -996,7 +964,46 @@ event event_03
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_21, F_ROOM_20, 0);
+    act_reset();
+    evt_nop();
+    sleep(15);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_25, F_ROOM_20, 0);
+    act_reset();
+    evt_nop();
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_24, F_ROOM_20, 0);
+    act_reset();
+    evt_nop();
+    sleep(15);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_20, 0);
+    act_reset();
+    evt_nop();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_24, F_ROOM_20, 0);
+    act_reset();
+    evt_nop();
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_20, 0);
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_22, F_ROOM_20, 0);
     act_reset();
     evt_nop();
     wait_message();
@@ -1007,7 +1014,7 @@ event event_03
 #if CHRIS
         give_item(AOT_06_ITEM, 4, 129);
 #else
-        give_item(6, 4, 129);
+        give_item(AOT_06, 4, 129);
 #endif
     }
     sleep(1);
@@ -1016,7 +1023,7 @@ event event_03
     run
     {
         message(12, 0);
-        voice_play(VOICE_PLAY, VO_00A_2C, 0);
+        voice_play(VOICE_PLAY, VO_00A_2C);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -1024,7 +1031,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_25, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -1039,7 +1046,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 0, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_20, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -1054,7 +1061,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 3, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_23, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -1068,7 +1075,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 5, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_25, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -1082,7 +1089,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 9, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_29, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     do
@@ -1094,7 +1101,11 @@ event event_03
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(147, 1, 0, 0, 100, 0);
+#if CHRIS
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_REBECCA, 0, 100, 0);
+#else
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_WASP, 0, 100, 0);
+#endif
     act_reset();
     evt_nop();
 #if CHRIS
@@ -1103,8 +1114,8 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 15, 32 | 1, 0 | 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_21, 0);
+    act_param_set(0, 2048);
     act_reset();
     evt_nop();
     do
@@ -1118,7 +1129,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_seq(10242, 20555, 8468);
+    act_anim_seq(AB_02, 19240, 5200, F_ROOM_21);
     act_reset();
     do
     {
@@ -1132,8 +1143,8 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 15, 32 | 1, 0 | 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_21, 0);
+    act_param_set(0, 2048);
     act_reset();
     evt_nop();
     do
@@ -1145,7 +1156,7 @@ event event_03
     run
     {
         message(7, 0);
-        voice_play(VOICE_PLAY, VO_00A_27, 0);
+        voice_play(VOICE_PLAY, VO_00A_27);
     }
 #if CHRIS
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
@@ -1153,7 +1164,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 1);
+    act_anim_flags(ANIM_21, F_ROOM_21, AFL_01);
     act_reset();
     evt_nop();
     wait_message();
@@ -1163,8 +1174,8 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 15, 32 | 1, 0 | 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_21, 0);
+    act_param_set(0, 2048);
     act_reset();
     evt_nop();
     do
@@ -1178,7 +1189,7 @@ event event_03
     evt_work_set(WK_ENEMY, ENEMY_00_WASP);
 #endif
     evt_actor_begin();
-    act_anim_seq(10243, 40995, 8488);
+    act_anim_seq(AB_03, 9000, 10400, F_ROOM_21);
     act_reset();
     do
     {
@@ -1203,11 +1214,11 @@ event event_03
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_idle();
     act_reset();
     evt_finish();

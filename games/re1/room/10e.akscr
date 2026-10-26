@@ -17,10 +17,16 @@
 #define AOT_06_MESSAGE 0x06
 #define CAM_02 0x02
 #define CAM_03 0x03
+#define COL_08 0x08
+#define COL_09 0x09
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
 #define F_ROOM_00 0x00
 #define F_ROOM_02 0x02
 #define F_ROOM_05 0x05
+#define F_ROOM_20 0x20
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
 #define MSG_IT_IS_A_MAP_OF_1ST_WILL_YOU_TAKE_IT_01 0x01
 #define MSG_YOU_GOT_THE_MAP_OF_1ST 0x04
 #define OBJ_00 0x00
@@ -34,47 +40,47 @@ proc init
     door_aot_set(AOT_00_DOOR, 7700, 9800, 1300, 1800, 1, DOOR_SND_00_DR_WD, DOOR_1C_DOOR00K, 3, 0, ROOM_103_F_PASSAGE, 2700, 0, 10800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_ITEM, F_ITEM_92, TRUE))
     {
-        item_aot_set(AOT_01_ITEM, 3550, 7140, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, 0, 255, 98, 17, 168, 253, 104, 31, 0, 0, F_ITEM_92, 129, 0, 0);
+        item_aot_set(AOT_01_ITEM, 3550, 7140, 1800, 1800, IT_0B_AMMO_HANDGUN, 15, IMDL_00, SCA_NONE, 4450, -600, 8040, 0, F_ITEM_92, SAT_MANUAL | SAT_PLAYER, 0);
     }
     if (ck(FG_COMMON, F_COMMON_60, TRUE))
     {
         if (ck(FG_ITEM, F_ITEM_05, TRUE))
         {
 #if CHRIS
-            item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 252, 8, 0, 0, 240, 10, 156, 253, F_ITEM_05, 129, 1, 0);
+            item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 2300, 0, 2800, -612, F_ITEM_05, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
 #else
-            item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 252, 8, 0, 0, 240, 10, 0, 2, F_ITEM_05, 129, 1, 0);
+            item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 2300, 0, 2800, 512, F_ITEM_05, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
 #endif
         }
         if (ck(FG_ITEM, F_ITEM_04, TRUE))
         {
 #if CHRIS
-            item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, 2, 255, 16, 29, 15, 251, 184, 11, 0, 2, F_ITEM_04, 129, 0, 0);
+            item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02, SCA_NONE, 7440, -1265, 3000, 512, F_ITEM_04, SAT_MANUAL | SAT_PLAYER, 0);
 #else
-            item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, 2, 255, 16, 29, 15, 251, 184, 11, 156, 253, F_ITEM_04, 129, 0, 0);
+            item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02, SCA_NONE, 7440, -1265, 3000, -612, F_ITEM_04, SAT_MANUAL | SAT_PLAYER, 0);
 #endif
         }
         aot_set(AOT_04_NONE, 10, 10, 10, 10, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_00, 45, 255, 3000, 0, 5980, 3036, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_01, 45, 255, 3000, -4320, 1900, 864, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, 0, 5980, 3036, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, -4320, 1900, 864, 0, 0, 0, 0, 0, 0, 0, 0);
         if (ck(FG_ENEMY, F_ENEMY_03, FALSE))
         {
-            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_03, 0, 2, 0, 0, 512, 0, 0, 2320, 0, 4000, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_03, SPAWN_RESTORE, 2, 0, 512, 0, 2320, 0, 4000, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
         }
     }
     if (ck(FG_COMMON, F_COMMON_60, FALSE))
     {
-        item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 252, 8, 0, 0, 240, 10, 156, 253, F_ITEM_05, 129, 0, 0);
+        item_aot_set(AOT_02_ITEM, 1400, 1900, 1800, 1800, IT_0C_AMMO_SHOTGUN, 7, IMDL_01, SCA_NONE, 2300, 0, 2800, -612, F_ITEM_05, SAT_MANUAL | SAT_PLAYER, 0);
         aot_reset(AOT_02_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
-        item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, 2, 255, 16, 29, 15, 251, 184, 11, 0, 2, F_ITEM_04, 129, 0, 0);
+        item_aot_set(AOT_03_ITEM, 6200, 2300, 1800, 1800, IT_61_FILE_KEEPERS_DIARY, 1, IMDL_02, SCA_NONE, 7440, -1265, 3000, 512, F_ITEM_04, SAT_MANUAL | SAT_PLAYER, 0);
         aot_reset(AOT_03_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_03_item, 0);
         aot_set(AOT_04_NONE, 10, 10, 10, 10, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_00, 45, 255, 3000, 0, 5980, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        obj(OBJ_01, 45, 255, 3000, -4320, 1900, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_00, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, 0, 5980, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        obj(OBJ_01, OF_NOT_PUSHABLE | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_ACTIVE, SCA_NONE, 3000, -4320, 1900, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 #if CHRIS
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 128, F_ENEMY_03, 0, 2, 0, 0, 512, 0, 0, 25000, -10000, 25000, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_80, F_ENEMY_03, SPAWN_RESTORE, 2, 0, 512, 0, 25000, -10000, 25000, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
 #else
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 128, F_ENEMY_03, 0, 2, 0, 0, 512, 0, 0, 15000, -10000, 3950, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_80, F_ENEMY_03, SPAWN_RESTORE, 2, 0, 512, 0, 15000, -10000, 3950, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
 #endif
     }
     aot_set(AOT_05_MESSAGE, 4400, 12700, 2400, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
@@ -86,8 +92,8 @@ proc main
     if (ck(FG_COMMON, F_COMMON_60, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
     {
         set(FG_ROOM, F_ROOM_00, TRUE);
-        inst_cfg(3, 8, 3, 232, 3, 254, 21, 136, 19, 88, 27);
-        inst_cfg(3, 9, 3, 232, 3, 100, 0, 136, 19, 96, 9);
+        inst_cfg(COL_LIST_03, COL_08, CF_2 | CF_1, 1000, 5630, 5000, 7000);
+        inst_cfg(COL_LIST_03, COL_09, CF_2 | CF_1, 1000, 100, 5000, 2400);
     }
     if (ck(FG_ENEMY, F_ENEMY_03, TRUE) && ck(FG_ROOM, F_ROOM_05, FALSE))
     {
@@ -105,9 +111,9 @@ event on_aot_03_item
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(59398, 20508, 522);
+    act_anim_seq(AB_06, 7400, 2640, F_ROOM_02);
     act_nop();
-    act_param_set(8192, 0);
+    act_param_set(0, 32);
     do
     {
         evt_next();
@@ -115,22 +121,22 @@ event on_aot_03_item
     while (ck(FG_ROOM, F_ROOM_02, FALSE));
     act_idle();
     act_nop();
-    act_motion_path(19, 7900, 64236, 3300, 32, 32);
+    act_motion_path(MOTION_13, 7900, -1300, 3300, 32, 32);
     sleep(20);
-    act_motion_path(19, 7400, 63986, 2400, 16, 16);
+    act_motion_path(MOTION_13, 7400, -1550, 2400, 16, 16);
     sleep(25);
-    act_motion_path(19, 6800, 64336, 3700, 32, 32);
+    act_motion_path(MOTION_13, 6800, -1200, 3700, 32, 32);
     sleep(22);
     act_reset();
     evt_nop();
     run
     {
-        cut_auto(1);
+        cut_auto(CUT_LOCKED);
         cutnext(CAM_03);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(19, 7400, 64271, 2640, 64, 64);
+    act_motion_path(MOTION_13, 7400, -1265, 2640, 64, 64);
     act_reset();
     evt_nop();
     run
@@ -145,7 +151,7 @@ event on_aot_03_item
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_reset();
     evt_nop();
     run
@@ -155,7 +161,7 @@ event on_aot_03_item
 #if MANSION1
         eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_STATUS, EML_STATUS_SET | 1);
 #endif
-        eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_BEHAVIOUR, 0);
+        eml_state(0, ENEMY_00_ZOMBIE_GROUNDSKEEPER, EML_BEHAVIOUR, EB_00);
         aot_reset(AOT_02_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 1, 1, 0);
         aot_reset(AOT_03_ITEM, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 7, on_aot_03_item_2, 0);
         aot_reset(AOT_04_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
@@ -191,7 +197,7 @@ event on_aot_03_item
     run
     {
         cutnext(CAM_02);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
     }
     evt_finish();
 }
@@ -244,22 +250,22 @@ event on_aot_03_item_sub1
     se_play_3d(SND_BANK_ROOM, SE_18_CLST_HIT, 0, SND_AT_POINT, 0, 4040, 2120);
     evt_work_set(WK_OBJ, OBJ_01);
     evt_tween_begin_alt();
-    tw_set_rot(0, 226, 0);
+    tw_set_rot(0, -30, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 236, 0);
+    tw_set_rot(0, -20, 0);
     tw_rot_add();
     evt_next();
     for (6)
     {
-        tw_set_rot(0, 246, 0);
+        tw_set_rot(0, -10, 0);
         tw_rot_add();
         evt_next();
     }
     tw_nop();
     for (10)
     {
-        tw_set_rot(0, 251, 0);
+        tw_set_rot(0, -5, 0);
         tw_rot_add();
         evt_next();
     }
@@ -273,49 +279,49 @@ event on_aot_03_item_sub2
 {
     evt_work_set(WK_OBJ, OBJ_00);
     evt_tween_begin_alt();
-    tw_set_rot(0, 196, 0);
+    tw_set_rot(0, -60, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 196, 0);
+    tw_set_rot(0, -60, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 196, 0);
+    tw_set_rot(0, -60, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 196, 0);
+    tw_set_rot(0, -60, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 196, 0);
+    tw_set_rot(0, -60, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 186, 0);
+    tw_set_rot(0, -70, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 186, 0);
+    tw_set_rot(0, -70, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 176, 0);
+    tw_set_rot(0, -80, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 176, 0);
+    tw_set_rot(0, -80, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 166, 0);
+    tw_set_rot(0, -90, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 166, 0);
+    tw_set_rot(0, -90, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 156, 0);
+    tw_set_rot(0, -100, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 156, 0);
+    tw_set_rot(0, -100, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 132, 0);
+    tw_set_rot(0, -124, 0);
     tw_rot_add();
     evt_next();
-    tw_set_rot(0, 132, 0);
+    tw_set_rot(0, -124, 0);
     tw_rot_add();
     evt_next();
     tw_end();
@@ -352,9 +358,9 @@ event on_aot_03_item_sub3
 {
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 15, 0 | 2, 0 | 0);
-    act_flag_op(1, 2, 0);
-    act_param_set(0, 8);
+    act_anim_flags(ANIM_2F, F_ROOM_02, 0);
+    act_flag_op(EF_SET, EF_0002);
+    act_param_set(0, 2048);
     for (41)
     {
         evt_next();
@@ -366,7 +372,7 @@ event on_aot_03_item_sub3
 
 event from_main
 {
-    bgm_volume_ramp(BGM_SUB_2, 161, 30);
+    bgm_volume_ramp(BGM_SUB_2, -95, 30);
     sleep(30);
     bgm_stop(BGM_SUB_2);
     sleep(5);
@@ -384,7 +390,7 @@ event event_05
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_09, F_ROOM_20, 0);
     sleep(26);
     act_reset();
     evt_nop();
@@ -405,8 +411,8 @@ event event_05
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(0 | 9, 32 | 0, 0 | 0);
-    act_flag_op(0, 1, 0);
+    act_anim_flags(ANIM_09, F_ROOM_20, 0);
+    act_flag_op(EF_OR, EF_0001);
     sleep(25);
     act_idle();
     act_nop();

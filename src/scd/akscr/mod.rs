@@ -85,6 +85,7 @@
 mod compile;
 mod decompile;
 mod engine;
+mod layout;
 mod merge;
 mod names;
 mod preprocess;

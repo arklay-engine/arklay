@@ -25,6 +25,7 @@
 #define ENEMY_01_ZOMBIE_LAB 0x01
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
+#define IMDL_00 0x00
 #define SE_17 0x17
 
 proc init
@@ -40,17 +41,17 @@ proc init
     aot_set(AOT_08_MESSAGE, 11000, 7800, 1500, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 79, 0, 0, 0);
     aot_set(AOT_09_MESSAGE, 5400, 5200, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 79, 0, 0, 0);
 #if CHRIS
-    item_aot_set(AOT_0A_ITEM, 8500, 7800, 1600, 1000, IT_3D_KEY_DESK, 1, 0, 255, 34, 36, 36, 250, 96, 34, 0, 0, F_ITEM_E4, 129, 0, 134);
+    item_aot_set(AOT_0A_ITEM, 8500, 7800, 1600, 1000, IT_3D_KEY_DESK, 1, IMDL_00, SCA_NONE, 9250, -1500, 8800, 0, F_ITEM_E4, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_6);
 #endif
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, F_ENEMY_6B, 1, 2, 0, 0, 1536, 0, 0, 20000, 0, 4500, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
-    enemy(EM_11_ZOMBIE_LAB, 128, F_ENEMY_6C, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_03, F_ENEMY_6B, SPAWN_FORCE, 2, 0, 1536, 0, 20000, 0, 4500, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+    enemy(EM_11_ZOMBIE_LAB, EB_80, F_ENEMY_6C, SPAWN_FORCE, 2, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
     if (ck(FG_SCENARIO, F_SCENARIO_33, TRUE))
     {
         aot_delete(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         if (ck(FG_ENEMY, F_ENEMY_6C, FALSE))
         {
             pos_set(ENEMY_01_ZOMBIE_LAB, 0, 850, 0, 3450, 0, 4600);
-            eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
+            eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, EB_00);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_33, FALSE))
@@ -89,7 +90,7 @@ event from_main
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(CAM_01);
         dir_set(0, 0, 3200, 0, 3600, 0, 9000);
-        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
+        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, EB_00);
     }
     sleep(20);
     run
@@ -99,7 +100,7 @@ event from_main
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(35845, 18698, 6428);
+    act_anim_seq(AB_05, 2700, 7241, F_ROOM_19);
     act_nop();
     do
     {

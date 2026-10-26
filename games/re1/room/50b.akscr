@@ -62,9 +62,9 @@ proc init
         if (ck(FG_SCENARIO, F_SCENARIO_65, FALSE))
         {
 #if CHRIS
-            enemy(EM_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 3072, 0, 0, 10750, 0, 11000, ENEMY_00_NPC_JILL, 0, 0, 0);
+            enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 3072, 0, 10750, 0, 11000, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
 #else
-            enemy(EM_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 3072, 0, 0, 10750, 0, 11000, ENEMY_00_NPC_CHRIS, 0, 0, 0);
+            enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 3072, 0, 10750, 0, 11000, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
 #endif
         }
     }
@@ -73,7 +73,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_4B, TRUE))
         {
-            enemy(EM_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 2048, 0, 0, 9000, 0, 16100, ENEMY_01_NPC_JILL, 0, 0, 0);
+            enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_JILL, ANIM_00, 0, EVAR_00);
         }
     }
 #else
@@ -81,7 +81,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_4B, TRUE))
         {
-            enemy(EM_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 2048, 0, 0, 9000, 0, 16100, ENEMY_01_NPC_CHRIS, 0, 0, 0);
+            enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_CHRIS, ANIM_00, 0, EVAR_00);
         }
     }
 #endif
@@ -123,7 +123,7 @@ event on_aot_01_door
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_seq(5638, 45094, 8246);
+    act_anim_seq(AB_06, 9750, 14000, F_ROOM_20);
     act_reset();
     do
     {
@@ -135,7 +135,7 @@ event on_aot_01_door
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(50, 0, 310, 0, 30, 0);
+    act_motion_path(MOTION_32, 0, 310, 0, 30, 0);
     act_reset();
     evt_nop();
 #if CHRIS
@@ -149,15 +149,15 @@ event on_aot_01_door
     {
         message(0, 0);
 #if CHRIS
-        voice_play(VOICE_PLAY, VO_00F_10, 0);
+        voice_play(VOICE_PLAY, VO_00F_10);
 #else
-        voice_play(VOICE_PLAY, VO_112_11, 0);
+        voice_play(VOICE_PLAY, VO_112_11);
 #endif
     }
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_reset();
     evt_nop();
     run
@@ -168,16 +168,20 @@ event on_aot_01_door
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(147, 1, 0, 0, 100, 0);
+#if CHRIS
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_JILL, 0, 100, 0);
+#else
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_CHRIS, 0, 100, 0);
+#endif
     act_reset();
     evt_nop();
     run
     {
         message(1, 0);
 #if CHRIS
-        voice_play(VOICE_PLAY, VO_00F_11, 0);
+        voice_play(VOICE_PLAY, VO_00F_11);
 #else
-        voice_play(VOICE_PLAY, VO_112_12, 0);
+        voice_play(VOICE_PLAY, VO_112_12);
 #endif
     }
     wait_message();
@@ -187,7 +191,7 @@ event on_aot_01_door
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
 #endif
     evt_actor_begin();
-    act_anim_seq(65026, 19497, 8502);
+    act_anim_seq(AB_02, 10750, 13900, F_ROOM_21);
     act_reset();
     do
     {
@@ -198,9 +202,9 @@ event on_aot_01_door
     {
         message(2, 0);
 #if CHRIS
-        voice_play(VOICE_PLAY, VO_00F_12, 0);
+        voice_play(VOICE_PLAY, VO_00F_12);
 #else
-        voice_play(VOICE_PLAY, VO_112_13, 0);
+        voice_play(VOICE_PLAY, VO_112_13);
 #endif
     }
 #if CHRIS
@@ -209,8 +213,8 @@ event on_aot_01_door
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 1, 0 | 0);
-    act_motion_path(147, 0, 0, 0, 100, 0);
+    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 100, 0);
     act_reset();
     evt_nop();
     do
@@ -224,7 +228,7 @@ event on_aot_01_door
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 7, 32 | 1, 0 | 0);
+    act_anim_flags(ANIM_27, F_ROOM_21, 0);
     act_reset();
     evt_nop();
 #if CHRIS
@@ -234,13 +238,13 @@ event on_aot_01_door
     run
     {
         message(MSG_THE_DOOR_IS_TIGHTLY_LOCKED_03, 0); // "The door is tightly locked."
-        voice_play(VOICE_PLAY, VO_112_14, 0);
+        voice_play(VOICE_PLAY, VO_112_14);
     }
     wait_message();
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion_path(51, 400, 310, 0, 80, 60);
+    act_motion_path(MOTION_33, 400, 310, 0, 80, 60);
     act_reset();
     evt_nop();
 #if JILL
@@ -259,13 +263,13 @@ event on_aot_01_door
     run
     {
         message(4, 0);
-        voice_play(VOICE_PLAY, VO_112_15, 0);
+        voice_play(VOICE_PLAY, VO_112_15);
     }
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 1, 32 | 0, 0 | 0);
-    act_motion_path(113, 350, 0, 2, 100, 0);
+    act_anim_flags(ANIM_21, F_ROOM_20, 0);
+    act_motion_path(MOTION_71, 350, 0, 2, 100, 0);
     act_reset();
     evt_nop();
     do
@@ -277,8 +281,8 @@ event on_aot_01_door
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #if CHRIS
-    act_anim_flags(32 | 2, 32 | 0, 0 | 0);
-    act_motion_path(147, 1, 0, 0, 100, 0);
+    act_anim_flags(ANIM_22, F_ROOM_20, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_JILL, 0, 100, 0);
     act_reset();
     evt_nop();
     do
@@ -289,9 +293,9 @@ event on_aot_01_door
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
 #endif
-    act_anim_flags(32 | 5, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_25, F_ROOM_20, 0);
 #if JILL
-    act_motion_path(147, 1, 0, 0, 100, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_CHRIS, 0, 100, 0);
 #endif
     act_reset();
     evt_nop();
@@ -303,7 +307,7 @@ event on_aot_01_door
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_anim_flags(32 | 7, 32 | 0, 0 | 0);
+    act_anim_flags(ANIM_27, F_ROOM_20, 0);
     act_reset();
     evt_nop();
 #if CHRIS
@@ -314,12 +318,12 @@ event on_aot_01_door
     run
     {
         message(5, 0);
-        voice_play(VOICE_PLAY, VO_112_16, 0);
+        voice_play(VOICE_PLAY, VO_112_16);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
 #endif
     evt_actor_begin();
-    act_anim_flags(32 | 3, 32 | 1, 0 | 0);
+    act_anim_flags(ANIM_23, F_ROOM_21, 0);
     act_reset();
     evt_nop();
     do
@@ -331,7 +335,7 @@ event on_aot_01_door
     cutnext(CAM_02);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
-    act_motion(16);
+    act_motion(MOTION_10);
     act_reset();
     evt_nop();
     sleep(20);
@@ -344,7 +348,7 @@ event on_aot_01_door
 #endif
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

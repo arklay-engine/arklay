@@ -11,6 +11,7 @@
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
 #define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
 #define AOT_04_MESSAGE 0x04
 #define AOT_05_MESSAGE 0x05
 #define AOT_06_USEITEM 0x06
@@ -25,17 +26,18 @@
 #define AOT_0F_MESSAGE 0x0F
 #define AOT_10_MESSAGE 0x10
 #define AOT_11_USEITEM 0x11
-#define AOT_83_ITEM 0x83
 #define CAM_03 0x03
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
 #define F_ROOM_3B 0x3B
 #define F_ROOM_3C 0x3C
 #define F_ROOM_3D 0x3D
 #define F_ROOM_3E 0x3E
+#define IMDL_00 0x00
+#define IMDL_01 0x01
 #define MSG_IT_IS_A_MAP_OF_1ST 0x09
 #define MSG_YOU_GOT_THE_MAP_OF_1ST 0x0A
+#define OBJ_00 0x00
 #define OBJ_01 0x01
-#define OBJ_40 0x40
 
 proc init
 {
@@ -43,26 +45,26 @@ proc init
     door_aot_set(AOT_01_DOOR, 15400, 2900, 2300, 2600, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | F_LOCK_09, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
     if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_91, TRUE))
     {
-        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, F_ITEM_91, 0, 0, 0);
-        eml_rot(0, 58, 253, 0, 0);
+        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_4E_UNKNOWN_4E, 1, IMDL_00, SCA_NONE, 8920, -4290, 6910, 0, F_ITEM_91, 0, 0);
+        eml_rot(IMDL_00, -710, 0);
         aot_set(AOT_05_MESSAGE, 7950, 5500, 2700, 2300, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
     }
     else if (ck(FG_ITEM, F_ITEM_91, TRUE))
     {
-        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, F_ITEM_91, 0, 0, 0);
-        eml_rot(0, 58, 253, 0, 0);
+        item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_4E_UNKNOWN_4E, 1, IMDL_00, SCA_NONE, 8920, -4290, 6910, 0, F_ITEM_91, 0, 0);
+        eml_rot(IMDL_00, -710, 0);
         aot_set(AOT_05_MESSAGE, 7950, 5500, 2700, 2300, SCE_EVENT, 0, 9, 0, on_aot_05_message, 0, 0, 0);
     }
     if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_27, TRUE))
     {
-        item_aot_set(AOT_83_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, F_ITEM_27, 0, 0, 0);
-        eml_rot(1, 0, 0, 182, 3);
+        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01, SCA_NONE, 12730, -1000, 13590, 0, F_ITEM_27, 0, 0);
+        eml_rot(IMDL_01, 0, 950);
         aot_set(AOT_04_MESSAGE, 12880, 12830, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     }
     else
     {
-        item_aot_set(AOT_83_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, F_ITEM_27, 129, 0, 0);
-        eml_rot(1, 0, 0, 182, 3);
+        item_aot_set(ITEM_ALT_ROT | AOT_03_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, IMDL_01, SCA_NONE, 12730, -1000, 13590, 0, F_ITEM_27, SAT_MANUAL | SAT_PLAYER, 0);
+        eml_rot(IMDL_01, 0, 950);
     }
     aot_set(AOT_06_USEITEM, 7300, 6000, 500, 1800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
     aot_set(AOT_07_MESSAGE, 3400, 300, 2800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
@@ -76,11 +78,11 @@ proc init
     aot_set(AOT_0F_MESSAGE, 7800, 6000, 1900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 255, 0, 0, 0);
     aot_set(AOT_10_MESSAGE, 15200, 5500, 900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 255, 0, 0, 0);
     aot_set(AOT_11_USEITEM, 13700, 6000, 1600, 1700, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 59, 0, 1, 0);
-    obj(OBJ_40, 65, 255, 12500, 0, 4600, 0, 29, 1, 0, 0, 227, 254, 0, 0, 213, 2, 132, 3, 222, 3, 32, 3);
-    obj(OBJ_01, 1, 255, 14345, 0, 8795, 2048, 0, 0, 28, 2, 0, 0, 228, 253, 28, 2, 8, 7, 26, 4, 70, 5);
+    obj(OBJ_PUSH_GRUNT | OBJ_00, OF_CLIMBABLE | OF_ACTIVE, SCA_NONE, 12500, 0, 4600, 0, 285, 0, -285, 0, 725, 900, 990, 800);
+    obj(OBJ_01, OF_ACTIVE, SCA_NONE, 14345, 0, 8795, 2048, 0, 540, 0, -540, 540, 1800, 1050, 1350);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, F_ENEMY_91, 1, 2, 0, 0, 45, 0, 0, 17670, 0, 13522, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_03, F_ENEMY_91, SPAWN_FORCE, 2, 0, 45, 0, 17670, 0, 13522, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
     }
     if (ck(FG_STATUS, F_STATUS_08, TRUE))
     {

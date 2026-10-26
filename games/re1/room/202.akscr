@@ -33,62 +33,62 @@ proc init
     door_aot_set(AOT_01_DOOR, 31000, 6900, 2800, 3300, 9, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_203_HALL_2F, 3400, -2885, 17000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_SCENARIO, F_SCENARIO_0B, FALSE))
     {
-        obj(OBJ_00, 1, 255, 23263, 0, 3510, 3072, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
+        obj(OBJ_00, OF_ACTIVE, SCA_NONE, 23263, 0, 3510, 3072, 0, 0, 0, 0, 512, 0, 512, 408);
         aot_set(AOT_03_EVENT, 16863, 4440, 1250, 501, SCE_EVENT, SAT_UNDER | SAT_OBJECT, 0, 0, on_aot_03, 0, 0, 0);
         aot_set(AOT_02_SAVE, 16863, 3000, 1250, 4900, SCE_SAVE, SAT_UNDER | SAT_OBJECT, 0, 0, 0, 0, 0, 0);
     }
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_A7, TRUE))
     {
-        obj(OBJ_01, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
+        obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
     }
     if (ck(FG_COMMON, F_COMMON_A8, TRUE))
     {
-        obj(OBJ_02, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
+        obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
     }
     if (ck(FG_COMMON, F_COMMON_A8, TRUE))
     {
-        obj(OBJ_03, 1, 255, 16000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
     }
     else
     {
-        obj(OBJ_03, 1, 255, 18000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
     }
 #else
     if (ck(FG_COMMON, F_COMMON_AA, TRUE))
     {
-        obj(OBJ_01, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
+        obj(OBJ_01, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
     }
     if (ck(FG_COMMON, F_COMMON_AB, TRUE))
     {
-        obj(OBJ_02, 15, 255, 2430, 3450, 8200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 152, 1);
+        obj(OBJ_02, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 2430, 3450, 8200, 0, 0, 0, 0, 0, 512, 0, 512, 408);
     }
     if (ck(FG_COMMON, F_COMMON_AB, TRUE))
     {
-        obj(OBJ_03, 1, 255, 16000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 16000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
     }
     else
     {
-        obj(OBJ_03, 1, 255, 18000, 6150, 14300, 1024, 0, 0, 108, 3, 0, 0, 148, 252, 44, 1, 32, 2, 188, 2, 88, 2);
+        obj(OBJ_03, OF_ACTIVE, SCA_NONE, 18000, 6150, 14300, 1024, 0, 876, 0, -876, 300, 544, 700, 600);
     }
 #endif
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 1, F_ENEMY_20, 1, 2, 0, 0, 2932, 0, 0, 16416, 0, 2384, ENEMY_00, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_01, F_ENEMY_20, SPAWN_FORCE, 2, 0, 2932, 0, 16416, 0, 2384, ENEMY_00, ANIM_00, 0, EVAR_00);
 #if CHRIS
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_21, 1, 2, 0, 0, 432, 0, 0, 23542, 0, 13672, ENEMY_01, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_21, SPAWN_FORCE, 2, 0, 432, 0, 23542, 0, 13672, ENEMY_01, ANIM_00, 0, EVAR_00);
 #else
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_21, 1, 2, 0, 0, 432, 0, 0, 24594, 0, 13672, ENEMY_01, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_21, SPAWN_FORCE, 2, 0, 432, 0, 24594, 0, 13672, ENEMY_01, ANIM_00, 0, EVAR_00);
 #endif
     }
     if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE))
     {
 #if CHRIS
-        enemy(EM_06_HUNTER, 7, F_ENEMY_9B, 1, 2, 0, 0, 2276, 0, 0, 2172, 0, 6217, ENEMY_00, 0, 0, 0);
-        enemy(EM_06_HUNTER, 7, F_ENEMY_9C, 1, 2, 0, 0, 3872, 0, 0, 23354, 0, 14662, ENEMY_01, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9B, SPAWN_FORCE, 2, 0, 2276, 0, 2172, 0, 6217, ENEMY_00, ANIM_00, 0, EVAR_00);
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9C, SPAWN_FORCE, 2, 0, 3872, 0, 23354, 0, 14662, ENEMY_01, ANIM_00, 0, EVAR_00);
 #else
-        enemy(EM_06_HUNTER, 7, F_ENEMY_9B, 1, 2, 0, 0, 2932, 0, 0, 10768, 0, 2932, ENEMY_00, 0, 0, 0);
-        enemy(EM_06_HUNTER, 7, F_ENEMY_9C, 1, 2, 0, 0, 1680, 0, 0, 20081, 0, 14326, ENEMY_01, 0, 0, 0);
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9B, SPAWN_FORCE, 2, 0, 2932, 0, 10768, 0, 2932, ENEMY_00, ANIM_00, 0, EVAR_00);
+        enemy(EM_06_HUNTER, EB_07, F_ENEMY_9C, SPAWN_FORCE, 2, 0, 1680, 0, 20081, 0, 14326, ENEMY_01, ANIM_00, 0, EVAR_00);
 #endif
     }
     if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_203_HALL_2F))
@@ -107,11 +107,11 @@ proc main noreturn
     {
         if (cmpb(B_ENT_AOT, CMP_EQ, 3))
         {
-            objtbl_b_set(0, 0, 5);
+            objtbl_b_set(TBL_OBJ, OBJ_00, OF_NO_FLOOR_PROBE | OF_ACTIVE);
         }
         else
         {
-            objtbl_b_set(0, 0, 1);
+            objtbl_b_set(TBL_OBJ, OBJ_00, OF_ACTIVE);
         }
     }
     if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
@@ -139,7 +139,7 @@ proc main noreturn
 event on_aot_03
 {
     aot_reset(AOT_03_EVENT, SCE_NONE, 0, 0, 0, 0);
-    objtbl_b_set(0, 0, 15);
+    objtbl_b_set(TBL_OBJ, OBJ_00, OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE);
     set(FG_SCENARIO, F_SCENARIO_0B, TRUE);
     cutnext(CAM_04);
     evt_work_set(WK_OBJ, OBJ_00);
@@ -197,89 +197,89 @@ event on_aot_03
     evt_next();
     tw_set_pos(0, 0, 22);
     tw_set_rot(0, 0, 35);
-    tw_set_sel(1, 9);
+    tw_set_sel(TW_POS_Y, 9);
     tw_pos_rot_add();
     evt_next();
     tw_set_pos(0, 0, 26);
     tw_set_rot(0, 0, 37);
-    tw_set_sel(1, 39);
+    tw_set_sel(TW_POS_Y, 39);
     tw_pos_rot_add();
     evt_next();
     tw_set_pos(0, 0, 29);
     tw_set_rot(0, 0, 39);
-    tw_set_sel(1, 88);
+    tw_set_sel(TW_POS_Y, 88);
     tw_pos_rot_add();
     evt_next();
     tw_set_pos(0, 0, 32);
     tw_set_rot(0, 0, 42);
-    tw_set_sel(1, 156);
+    tw_set_sel(TW_POS_Y, 156);
     tw_pos_rot_add();
     evt_next();
     tw_set_pos(0, 0, 25);
     tw_set_rot(0, 0, 45);
-    tw_set_sel(1, 245);
+    tw_set_sel(TW_POS_Y, 245);
     tw_pos_rot_add();
     evt_next();
     tw_set_pos(0, 0, 38);
     tw_set_rot(0, 0, 47);
-    tw_set_sel(1, 352);
+    tw_set_sel(TW_POS_Y, 352);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 480);
+    tw_set_sel(TW_POS_Y, 480);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 627);
+    tw_set_sel(TW_POS_Y, 627);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 793);
+    tw_set_sel(TW_POS_Y, 793);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 980);
+    tw_set_sel(TW_POS_Y, 980);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 1185);
+    tw_set_sel(TW_POS_Y, 1185);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 1411);
+    tw_set_sel(TW_POS_Y, 1411);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 1656);
+    tw_set_sel(TW_POS_Y, 1656);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 1920);
+    tw_set_sel(TW_POS_Y, 1920);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 2205);
+    tw_set_sel(TW_POS_Y, 2205);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 2508);
+    tw_set_sel(TW_POS_Y, 2508);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 2832);
+    tw_set_sel(TW_POS_Y, 2832);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 3175);
+    tw_set_sel(TW_POS_Y, 3175);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 3537);
+    tw_set_sel(TW_POS_Y, 3537);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 3920);
+    tw_set_sel(TW_POS_Y, 3920);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 4321);
+    tw_set_sel(TW_POS_Y, 4321);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 4743);
+    tw_set_sel(TW_POS_Y, 4743);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 5184);
+    tw_set_sel(TW_POS_Y, 5184);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 5644);
+    tw_set_sel(TW_POS_Y, 5644);
     tw_pos_rot_add();
     evt_next();
-    tw_set_sel(1, 5900);
+    tw_set_sel(TW_POS_Y, 5900);
     tw_pos_rot_add();
     evt_next();
     tw_abs_pos(0, 30000, 0, 30000);

@@ -23,31 +23,37 @@
 #define CAM_02 0x02
 #define CAM_03 0x03
 #define CAM_04 0x04
+#define CAM_06 0x06
 #define CAM_07 0x07
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
 #define F_ROOM_1A 0x1A
 #define F_ROOM_1B 0x1B
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define IMDL_03 0x03
 #define MSG_JOHN 0x01
 #define MSG_THERE_IS_A_SWITCH 0x00
 #define OBJ_00 0x00
 #define SE_17_SW_BTN 0x17
+#define ZONE_16 0x16
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 10100, 10400, 1300, 1200, 3, DOOR_SND_01_DR_MTL, DOOR_0C_DOOR12, 7, 0, ROOM_508_DOUBLE_LOCK, 18400, 0, 2400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_01_ITEM, 10800, 5000, 2200, 1000, IT_68_FILE_RESEARCHERS_LETTER, 1, 0, 255, 104, 46, 36, 250, 156, 19, 0, 0, F_ITEM_51, 129, 0, 0);
-    obj(OBJ_00, 1, 255, 8200, 0, 2252, 3072, 0, 0, 242, 254, 0, 0, 14, 1, 14, 1, 72, 18, 70, 5, 118, 2);
+    item_aot_set(AOT_01_ITEM, 10800, 5000, 2200, 1000, IT_68_FILE_RESEARCHERS_LETTER, 1, IMDL_00, SCA_NONE, 11880, -1500, 5020, 0, F_ITEM_51, SAT_MANUAL | SAT_PLAYER, 0);
+    obj(OBJ_00, OF_ACTIVE, SCA_NONE, 8200, 0, 2252, 3072, 0, -270, 0, 270, 270, 4680, 1350, 630);
     aot_set(AOT_02_EVENT, 8200, 1600, 600, 600, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
     aot_set(AOT_03_EVENT, 8200, 10500, 1300, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
     aot_set(AOT_04_MESSAGE, 1100, 4500, 1000, 3500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 130, 0, 68, 1, 0, 0);
     aot_set(AOT_05_USEITEM, 7000, 700, 3000, 2300, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 27, 0, 1, 0);
-    item_aot_set(AOT_06_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_A3, 129, 0, 0);
-    item_aot_set(AOT_07_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, F_ITEM_E5, 129, 0, 0);
-    item_aot_set(AOT_08_ITEM, 2100, 4200, 1000, 600, IT_44_HEAL_HERB_GREEN, 1, 3, 255, 40, 10, 0, 0, 148, 17, 0, 0, F_ITEM_A4, 129, 1, 0);
+    item_aot_set(AOT_06_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_01, SCA_NONE, 0, 0, 0, 0, F_ITEM_A3, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_07_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_E5, SAT_MANUAL | SAT_PLAYER, 0);
+    item_aot_set(AOT_08_ITEM, 2100, 4200, 1000, 600, IT_44_HEAL_HERB_GREEN, 1, IMDL_03, SCA_NONE, 2600, 0, 4500, 0, F_ITEM_A4, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
     aot_set(AOT_0A_MESSAGE, 6500, 9600, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 68, 1, 0, 0);
     aot_set(AOT_0B_MESSAGE, 3500, 10600, 900, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 68, 1, 0, 0);
-    eml_rot(0, 250, 7, 0, 0);
+    eml_rot(IMDL_00, 2042, 0);
     scene_setup(0, 6400, 8600, 12000);
     set(FG_STATUS, F_STATUS_1F, TRUE);
 }
@@ -65,11 +71,11 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_19, TRUE))
     {
-        msgnode_set(22, 6, 7);
+        msgnode_set(ZONE_16, CAM_06, CAM_07);
     }
     else
     {
-        msgnode_set(22, 6, 3);
+        msgnode_set(ZONE_16, CAM_06, CAM_03);
     }
     if (testpickup(IT_68_FILE_RESEARCHERS_LETTER))
     {
@@ -142,14 +148,14 @@ event on_aot_02_sub1
 {
     run
     {
-        setw(W_LIGHT_STATE, 0, 0);
-        timer_setup(1, 232, 3, 1, 0);
+        setw(W_LIGHT_STATE, 0);
+        timer_setup(LIGHT_FADE_01, 1000, FADE_B);
     }
     sleep(10);
     run
     {
-        setw(W_LIGHT_DELTA, 0, 0);
-        setw(W_LIGHT_STATE, 16, 39);
+        setw(W_LIGHT_DELTA, 0);
+        setw(W_LIGHT_STATE, 10000);
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
@@ -162,14 +168,14 @@ event on_aot_02_sub2
 {
     run
     {
-        setw(W_LIGHT_STATE, 16, 39);
-        setw(W_LIGHT_DELTA, 24, 252);
+        setw(W_LIGHT_STATE, 10000);
+        setw(W_LIGHT_DELTA, -1000);
     }
     sleep(10);
     run
     {
-        setw(W_LIGHT_DELTA, 0, 0);
-        setw(W_LIGHT_STATE, 0, 0);
+        setw(W_LIGHT_DELTA, 0);
+        setw(W_LIGHT_STATE, 0);
         set(FG_RUN, F_RUN_PLAYER, TRUE);
         set(FG_RUN, F_RUN_MONSTERS, TRUE);
         set(FG_RUN, F_RUN_READY, TRUE);
@@ -230,10 +236,10 @@ event on_aot_03_sub1
 {
     run
     {
-        cut_auto(1);
+        cut_auto(CUT_LOCKED);
         cutnext(CAM_04);
-        cut_auto(0);
-        msg_list(0, 158, 30, 48, 248, 95, 33, 255, 255, 255, 0, 216, 29, 112, 33, 48, 248, 184, 21, 117, 117, 116, 0, 140, 29, 112, 23, 48, 248, 68, 22, 117, 117, 116, 0, 184, 26, 224, 3, 144, 4, 240, 3);
+        cut_auto(CUT_FREE);
+        msg_list(0, 7838, -2000, 8543, 255, 255, 255, LIGHT_KIND_00, 7640, 8560, -2000, 5560, 117, 117, 116, LIGHT_KIND_00, 7564, 6000, -2000, 5700, 117, 117, 116, LIGHT_KIND_00, 6840, 992, 1168, 1008);
     }
     sleep(1);
     run
@@ -272,10 +278,10 @@ event on_aot_03_sub2
 {
     run
     {
-        cut_auto(1);
+        cut_auto(CUT_LOCKED);
         cutnext(CAM_00);
-        cut_auto(0);
-        msg_list(0, 42, 11, 64, 237, 73, 25, 255, 255, 255, 0, 88, 32, 8, 32, 144, 232, 32, 28, 128, 128, 150, 0, 24, 31, 168, 22, 0, 0, 204, 16, 72, 72, 128, 0, 152, 23, 32, 3, 80, 3, 192, 2);
+        cut_auto(CUT_FREE);
+        msg_list(0, 2858, -4800, 6473, 255, 255, 255, LIGHT_KIND_00, 8280, 8200, -6000, 7200, 128, 128, 150, LIGHT_KIND_00, 7960, 5800, 0, 4300, 72, 72, 128, LIGHT_KIND_00, 6040, 800, 848, 704);
     }
     run
     {
@@ -304,27 +310,27 @@ event on_aot_03_sub1_sub1
     run
     {
         set(FG_ROOM, F_ROOM_1A, FALSE);
-        timer_setup(1, 16, 39, 1, 0);
+        timer_setup(LIGHT_FADE_01, 10000, FADE_B);
     }
     sleep(2);
-    timer_setup(2, 255, 255, 7, 0);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
     sleep(1);
-    timer_setup(1, 16, 39, 1, 0);
+    timer_setup(LIGHT_FADE_01, 10000, FADE_B);
     sleep(2);
-    timer_setup(2, 255, 255, 7, 0);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
     sleep(1);
-    timer_setup(1, 16, 39, 1, 0);
+    timer_setup(LIGHT_FADE_01, 10000, FADE_B);
     sleep(2);
     run
     {
-        setw(W_LIGHT_DELTA, 0, 0);
+        setw(W_LIGHT_DELTA, 0);
         if (ck(FG_ROOM, F_ROOM_19, TRUE))
         {
-            setw(W_LIGHT_STATE, 16, 39);
+            setw(W_LIGHT_STATE, 10000);
         }
         else
         {
-            setw(W_LIGHT_STATE, 0, 0);
+            setw(W_LIGHT_STATE, 0);
         }
         set(FG_ROOM, F_ROOM_1A, TRUE);
     }
@@ -340,19 +346,19 @@ event on_aot_03_sub1_sub2
         return;
     }
     sleep(1);
-    timer_setup(2, 255, 255, 7, 0);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
     sleep(1);
-    timer_setup(2, 0, 0, 0, 0);
+    timer_setup(LIGHT_FADE_VEIL, 0, 0);
     sleep(1);
-    timer_setup(2, 255, 255, 7, 0);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
     sleep(1);
-    timer_setup(2, 0, 0, 0, 0);
+    timer_setup(LIGHT_FADE_VEIL, 0, 0);
     sleep(1);
-    timer_setup(2, 255, 255, 7, 0);
+    timer_setup(LIGHT_FADE_VEIL, -1, FADE_R | FADE_G | FADE_B);
     sleep(1);
     run
     {
-        timer_setup(2, 240, 216, 7, 0);
+        timer_setup(LIGHT_FADE_VEIL, -10000, FADE_R | FADE_G | FADE_B);
         set(FG_ROOM, F_ROOM_1A, TRUE);
     }
     evt_finish();

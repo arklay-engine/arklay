@@ -41,14 +41,14 @@ proc init
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        enemy(EM_09_CHIMERA, 2, F_ENEMY_78, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, 0, 0, 0);
-        enemy(EM_09_CHIMERA, 2, F_ENEMY_79, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, 0, 0, 0);
-        enemy(EM_09_CHIMERA, 2, F_ENEMY_B2, 1, 2, 0, 0, 3128, 0, 0, 16093, 0, 4892, ENEMY_02_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_78, SPAWN_FORCE, 2, 0, 3072, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_79, SPAWN_FORCE, 2, 0, 1152, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_B2, SPAWN_FORCE, 2, 0, 3128, 0, 16093, 0, 4892, ENEMY_02_CHIMERA, ANIM_00, 0, EVAR_00);
     }
     else
     {
-        enemy(EM_09_CHIMERA, 2, F_ENEMY_78, 1, 2, 0, 0, 3072, 0, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, 0, 0, 0);
-        enemy(EM_09_CHIMERA, 2, F_ENEMY_79, 1, 2, 0, 0, 1152, 0, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, 0, 0, 0);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_78, SPAWN_FORCE, 2, 0, 3072, 0, 5676, 0, 7812, ENEMY_00_CHIMERA, ANIM_00, 0, EVAR_00);
+        enemy(EM_09_CHIMERA, EB_02, F_ENEMY_79, SPAWN_FORCE, 2, 0, 1152, 0, 16644, 0, 13289, ENEMY_01_CHIMERA, ANIM_00, 0, EVAR_00);
     }
     evt_exec(0, TASK_09, on_enter);
     evt_exec(0, TASK_09, on_enter_2);
@@ -104,7 +104,7 @@ event on_enter
     }
     for (8)
     {
-        effect(FX_1F, 0, 0, 176, 29, 52, 239, 172, 38, 78, 7);
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 7600, -4300, 9900, 1870);
         sleep(3);
     }
     evt_nop();
@@ -121,7 +121,7 @@ event on_enter_2
     }
     for (8)
     {
-        effect(FX_1F, 0, 0, 44, 51, 160, 246, 104, 41, 10, 15);
+        effect(FX_1F, FX_ROW_00, FX_AT_WORLD, 13100, -2400, 10600, 3850);
         sleep(3);
     }
     evt_chain(4);

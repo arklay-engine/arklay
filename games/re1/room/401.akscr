@@ -11,8 +11,10 @@
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
 #define AOT_02_ITEM 0x02
+#define AOT_03 0x03
 #define AOT_03_ITEM 0x03
 #define AOT_04_ITEM 0x04
+#define AOT_05 0x05
 #define AOT_05_EVENT 0x05
 #define AOT_06_HIKIDASHI 0x06
 #define AOT_07_MESSAGE 0x07
@@ -20,20 +22,23 @@
 #define CAM_04 0x04
 #define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
 #define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
 #define MSG_THERE_IS_A_KEY_IN_THE 0x00
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 8800, 400, 1600, 2100, 2, DOOR_SND_00_DR_WD, DOOR_06_DOOR06, 1, 0, ROOM_400_ENTER_PASSAGE, 13300, 0, 13600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 7300, 2200, 1600, 2200, 1, DOOR_SND_00_DR_WD, DOOR_21_DOOR15, 1, 0, ROOM_402_ROOM_001_BATHROOM, 6300, 0, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
-    item_aot_set(AOT_02_ITEM, 9500, 12900, 1000, 1000, IT_3E_KEY_BOOK_BLANK, 1, 0, 255, 16, 39, 42, 254, 88, 52, 0, 0, F_ITEM_63, 129, 0, 0);
+    item_aot_set(AOT_02_ITEM, 9500, 12900, 1000, 1000, IT_3E_KEY_BOOK_BLANK, 1, IMDL_00, SCA_NONE, 10000, -470, 13400, 0, F_ITEM_63, SAT_MANUAL | SAT_PLAYER, 0);
 #if CHRIS
-    item_aot_set(AOT_03_ITEM, 2300, 13500, 1000, 1000, IT_3D_KEY_DESK, 1, 1, 255, 54, 11, 96, 250, 120, 55, 0, 0, F_ITEM_64, 129, 0, 0);
-    eml_rot(1, 0, 8, 150, 0);
+    item_aot_set(AOT_03_ITEM, 2300, 13500, 1000, 1000, IT_3D_KEY_DESK, 1, IMDL_01, SCA_NONE, 2870, -1440, 14200, 0, F_ITEM_64, SAT_MANUAL | SAT_PLAYER, 0);
+    eml_rot(IMDL_01, 2048, 150);
     aot_delete(AOT_03_ITEM, SCE_NONE, 0);
 #endif
-    item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, 2, 255, 106, 39, 60, 0, 42, 38, 240, 251, F_ITEM_A5, 129, 0, 0);
-    eml_rot(2, 116, 255, 186, 255);
+    item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_0C_AMMO_SHOTGUN, 7, IMDL_02, SCA_NONE, 10090, 60, 9770, -1040, F_ITEM_A5, SAT_MANUAL | SAT_PLAYER, 0);
+    eml_rot(IMDL_02, -140, -70);
     setbyte(2, 0, 0);
 #if CHRIS
     if (ck(FG_ITEM, F_ITEM_64, TRUE))
@@ -50,8 +55,8 @@ proc init
 #if JILL
     set(FG_STATUS, F_STATUS_3C, TRUE);
 #endif
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_B7, 1, 2, 0, 0, 413, 0, 0, 4463, 0, 12506, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 0, F_ENEMY_B8, 1, 2, 0, 0, 773, 0, 0, 8350, 0, 11866, ENEMY_01_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_B7, SPAWN_FORCE, 2, 0, 413, 0, 4463, 0, 12506, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_00, F_ENEMY_B8, SPAWN_FORCE, 2, 0, 773, 0, 8350, 0, 11866, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
 #if CHRIS
     set(FG_STATUS, F_STATUS_3C, TRUE);
 #endif
@@ -70,7 +75,7 @@ event event_00
 #if CHRIS
         aot_delete(AOT_05_EVENT, SCE_NONE, 0);
 #else
-        aot_delete(5, SCE_NONE, 0);
+        aot_delete(AOT_05, SCE_NONE, 0);
 #endif
     }
     sleep(1);
@@ -84,10 +89,10 @@ event event_00
 #if CHRIS
         aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
 #else
-        aot_delete(3, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_03, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
 #endif
         cutcurr(0);
-        cut_auto(0);
+        cut_auto(CUT_FREE);
         set(FG_RUN, F_RUN_CONTROLS, TRUE);
     }
     evt_finish();
