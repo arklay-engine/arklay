@@ -449,7 +449,10 @@ into `scd/<stem>.scd` (the `.s` itself is not packed); a `scd/<stem>.akscr`
 script is compiled the same way, and a merged room script named by three hex
 digits (`scd/103.akscr`) is compiled once per variant, into `scd/1030.scd`,
 `scd/1031.scd`, `scd/6030.scd` and `scd/6031.scd`, each built for the
-Steam/GOG release (`#if STEAM` is defined; a mod has no build per release).
+Steam/GOG release (`#if STEAM` is defined). A mod has no build per release
+and its scripts run on either release, so a script that builds differently
+for Mediakite gets a warning: lines that follow one release's RDT data (a
+camera number, an AOT position) may not fit the other's.
 `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
@@ -634,7 +637,7 @@ RDTs' exact bytecode, which the real-data tests check.
 `STEAM` picks the release. The Steam/GOG release defines it and the
 original Mediakite PC release does not; they ship different scripts in 37
 RDTs (19 rooms), and every such difference sits in an `#if STEAM` block, so
-`grep -rn STEAM games/re1/room` lists them all. Most are the Steam release's
+`grep -rnE '^#if !?STEAM' games/re1/room` lists them all. Most are the Steam release's
 changes: two ink ribbons per pickup where Mediakite gives three, `bgm_stop`
 calls added to cutscenes, and adjusted waits and camera cuts. A build is for
 Steam/GOG unless asked for Mediakite (`scd build --room 1001 --mediakite`).

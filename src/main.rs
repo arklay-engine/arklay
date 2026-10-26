@@ -536,9 +536,9 @@ enum ScdAction {
         #[arg(long, short)]
         out: PathBuf,
 
-        /// A pack of the original Mediakite PC release to merge with `PACK`
-        /// (the Steam/GOG release), writing where they differ under
-        /// `#if STEAM`
+        /// A pack of the original Mediakite PC release to merge with `PACK`,
+        /// which must then be the Steam/GOG release, writing where they
+        /// differ under `#if STEAM` (swapped packs invert every block)
         #[arg(long, value_name = "PACK")]
         mediakite: Option<PathBuf>,
     },
@@ -659,8 +659,13 @@ fn export_rooms(pack: &Path, out: &Path, mediakite: Option<&Path>) -> Result<()>
         arklay::atomic::write(&path, text.as_bytes())
             .with_context(|| format!("failed to write {}", path.display()))?;
     }
+    let releases = if mediakite.is_some() {
+        " per release"
+    } else {
+        ""
+    };
     println!(
-        "exported {} rooms ({} RDTs) to {}",
+        "exported {} rooms ({} RDTs{releases}) to {}",
         merged.len(),
         rooms.len(),
         out.display()

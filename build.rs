@@ -235,30 +235,29 @@ fn emit_room_scripts() {
         let text = std::fs::read_to_string(path)
             .unwrap_or_else(|err| panic!("cannot read {}: {err}", path.display()));
         for id in room_variants(*base) {
-            let mut steam_build = None;
-            for (variant, suffix) in [
-                (Variant::for_room(id), ""),
-                (Variant::for_room(id).mediakite(), "-mediakite"),
-            ] {
+            // The digest of a variant's `AUTHENTIC` build and its fixed build.
+            let build = |variant: Variant| {
                 let authentic = compile(&text, variant.authentic(), path);
                 let original = scd::reader::parse(&authentic)
                     .unwrap_or_else(|err| panic!("{} as {id:04X}: {err:#}", path.display()))
                     .digest();
-                let container = compile(&text, variant, path);
-                if let Some((steam_original, steam_container)) = &steam_build {
-                    if *steam_original == original {
-                        assert!(
-                            *steam_container == container,
-                            "{} as {id:04X}: both releases build the same `AUTHENTIC` \
-                             bytecode but different fixed bytecode; `#if STEAM` may only \
-                             hold lines where the releases' own scripts differ",
-                            path.display()
-                        );
-                        continue;
-                    }
-                } else {
-                    steam_build = Some((original, container.clone()));
-                }
+                (original, compile(&text, variant, path))
+            };
+            let steam = build(Variant::for_room(id));
+            let mediakite = build(Variant::for_room(id).mediakite());
+            let releases = if mediakite.0 == steam.0 {
+                assert!(
+                    mediakite.1 == steam.1,
+                    "{} as {id:04X}: both releases build the same `AUTHENTIC` bytecode \
+                     but different fixed bytecode; `#if STEAM` may only hold lines where \
+                     the releases' own scripts differ",
+                    path.display()
+                );
+                vec![("", steam)]
+            } else {
+                vec![("", steam), ("-mediakite", mediakite)]
+            };
+            for (suffix, (original, container)) in releases {
                 let file = scd_dir.join(format!("{id:04x}{suffix}.scd"));
                 std::fs::write(&file, container).expect("failed to write room bytecode");
                 writeln!(

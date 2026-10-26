@@ -116,10 +116,8 @@ const RELEASES: [(&str, bool); 2] = [("Steam/GOG", true), ("Mediakite", false)];
 
 /// The variant of RDT `id` for a release.
 fn release_variant(id: u16, steam: bool) -> akscr::Variant {
-    akscr::Variant {
-        steam,
-        ..akscr::Variant::for_room(id)
-    }
+    let variant = akscr::Variant::for_room(id);
+    if steam { variant } else { variant.mediakite() }
 }
 
 #[test]
@@ -133,10 +131,10 @@ fn checked_in_room_scripts_build_the_original_bytecode() {
     let originals = original_rooms(&pack);
 
     // The pack is one release's: every RDT must build from its script for
-    // the same release.
+    // the same release, the one most of them fit.
     let mut bases = BTreeSet::new();
     let mut builds = BTreeMap::new();
-    let mut releases: Vec<usize> = (0..RELEASES.len()).collect();
+    let mut fits = [0usize; RELEASES.len()];
     for (&id, original) in &originals {
         let base = akscr::merged_id(id);
         bases.insert(format!("{base:03x}"));
@@ -152,20 +150,23 @@ fn checked_in_room_scripts_build_the_original_bytecode() {
                 compile(&text, Some(variant.authentic()))
             })
             .collect();
-        let fits = |release: &usize| compiled[*release].digest() == original.digest();
-        if releases.iter().any(fits) {
-            releases.retain(fits);
+        for (release, compiled) in compiled.iter().enumerate() {
+            fits[release] += usize::from(compiled.digest() == original.digest());
         }
         builds.insert(id, (base, compiled));
     }
-    // With no release left that every RDT fits, the first one's mismatches
-    // are reported below.
-    let release = releases[0];
+    let release = (0..RELEASES.len())
+        .max_by_key(|&release| (fits[release], std::cmp::Reverse(release)))
+        .unwrap();
     let (name, _) = RELEASES[release];
     for (&id, original) in &originals {
         let (base, compiled) = &builds[&id];
         assert_identical(
-            &format!("{base:03x}.akscr as {id:04X} for the {name} release"),
+            &format!(
+                "{base:03x}.akscr as {id:04X} for the {name} release, which {} of {} RDTs fit",
+                fits[release],
+                originals.len()
+            ),
             original,
             &compiled[release],
         );

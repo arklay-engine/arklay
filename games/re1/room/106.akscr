@@ -141,36 +141,26 @@ proc init
         aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
 #else
-#if STEAM
-    if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
-    {
-        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
-    }
-    else
-    {
-        aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    }
-#else
-#if MANSION1
-    if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
-    {
-        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
-    }
-    else
-    {
-        aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
-    }
-#else
+#if MANSION2
+#if !STEAM
     if (ck(FG_COMMON, F_COMMON_0B, FALSE))
+#else
+    if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+#endif
+#else
+    if (ck(FG_COMMON, F_COMMON_0B, FALSE) && ck(FG_SCENARIO, F_SCENARIO_7B, TRUE))
+#endif
     {
+#if STEAM
+        item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+#else
         item_aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_03, SCA_NONE, 0, 20000, 0, 0, F_ITEM_34, SAT_MANUAL | SAT_PLAYER, 0);
+#endif
     }
     else
     {
         aot_set(AOT_05_ITEM, 13000, 16000, 2000, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }
-#endif
-#endif
 #endif
     if (ck(FG_COMMON, F_COMMON_03, TRUE))
     {

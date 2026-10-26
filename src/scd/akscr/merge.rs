@@ -357,7 +357,9 @@ fn align<'a>(entries: Vec<Entry<'a>>, lines: &[&'a str], bit: u8) -> Vec<Entry<'
 
 /// The symbol pairs a context can split on: (mask of the first half, its
 /// symbol, the second half's symbol). An input in either half has all its
-/// variants there.
+/// variants there, so an input both releases share blocks the `STEAM`
+/// split; its variants differ from the others in the mansion or the player,
+/// which split first.
 fn splits(ctx: u8, kinds: &[Vec<Variant>]) -> Vec<(u8, &'static str, &'static str)> {
     let half = |pick: &dyn Fn(Variant) -> bool| -> u8 {
         kinds
@@ -593,7 +595,8 @@ fn split_block(
     for &(first, a, b) in pairs {
         let yes = emit(run, first, kinds);
         let no = emit(run, ctx & !first, kinds);
-        // The halves can line up the same lines differently.
+        // Alignment can give one line several entries with different masks;
+        // when both halves emit the same text, no `#if` is needed.
         if yes == no {
             return yes;
         }
