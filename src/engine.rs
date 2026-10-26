@@ -4958,19 +4958,21 @@ impl GameSession {
             // every frame, which keeps the face and the EKG heartbeat sweeping
             // while the box is up.
             self.tick_menu_screen(pack);
-            // The screen takes the frame's one menu input, like the Lua tabs;
-            // the engine plays its cue and performs a confirmed swap.
+            // The screen takes the frame's one menu input and owns its cues
+            // (`menu_itembox_interaction` plays them per branch, so a refused
+            // empty swap and an input dropped mid-slide stay silent); the
+            // engine performs a confirmed swap.
             let event_input = menu_input(ui);
             let Some(mut item_box) = self.item_box.take() else {
                 return;
             };
-            let result = {
+            let (result, cues) = {
                 let cx = self.ui_context(pack);
-                item_box.update(&cx, event_input.map_or_else(UiInput::default, single_input))
+                let result =
+                    item_box.update(&cx, event_input.map_or_else(UiInput::default, single_input));
+                (result, cx.cues.into_inner())
             };
-            if let Some(cue) = event_input.and_then(menu_cue) {
-                self.play_ui_cue_names(pack, vec![cue]);
-            }
+            self.play_ui_cue_names(pack, cues);
             if item_box.value("swap") != 0 {
                 self.game.item_box_swap(
                     item_box.value("swap_box") as usize,
@@ -5053,6 +5055,13 @@ impl GameSession {
         }
         let event = self.tick_menu_screen(pack);
         self.apply_menu_event(pack, event);
+        // A close the tick completed (a key item's deferred exit after the
+        // submenu's close animation) ends the menu's input on this frame: the
+        // closing fade owns the next ones, so a confirm mashed through the
+        // animation must not reopen the submenu or add its decide cue.
+        if self.menu.is_none() || self.menu_fade_phase != MenuFadePhase::None {
+            return;
+        }
         // START cycles the top tabs; otherwise one pad edge reaches the menu.
         let mut input = menu_input(ui).map_or_else(UiInput::default, single_input);
         input.start = ui.start;
@@ -23585,6 +23594,123 @@ off_0010:
             session.music.as_ref().unwrap().active_sfx(),
             1,
             "the exit tab's confirm played an extra cue"
+        );
+    }
+
+    #[test]
+    fn an_item_box_confirm_on_two_empty_slots_stays_silent() {
+        // The reference's armed item box (`menu_itembox_interaction` state 2)
+        // plays `play_sfx(3, 6)` only inside its swap branch, which needs the
+        // box slot or the selected inventory item to hold something. The
+        // port used to play the decide cue for every confirm it fed the box.
+        let _sdl = crate::audio::test_lock::sdl();
+        let Some(mixer) = dummy_mixer() else {
+            eprintln!("skipping item-box cue test: no audio device");
+            return;
+        };
+        let dir = TempDir::new();
+        let pack_path = menu_cue_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        session.music = Some(mixer);
+        session.open_item_box(&pack);
+        assert!(session.item_box.is_some());
+        let confirm = UiInput {
+            confirm: true,
+            ..UiInput::default()
+        };
+
+        // The browse confirm arms the box with its decide cue.
+        session
+            .tick(&pack, confirm, player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.music.as_ref().unwrap().active_sfx(), 1);
+        // The armed confirm finds nothing to swap: no swap, no cue.
+        session
+            .tick(&pack, confirm, player::Input::default(), false)
+            .unwrap();
+        assert_eq!(
+            session.music.as_ref().unwrap().active_sfx(),
+            1,
+            "the refused empty swap played a cue"
+        );
+        assert!(session.item_box.is_some());
+        assert_eq!(session.game.item_box[0].id, 0);
+    }
+
+    #[test]
+    fn a_confirm_on_the_deferred_close_frame_adds_no_decide_cue() {
+        // A key item's use closes the submenu through its animation and the
+        // tick that finishes it emits the menu close. The reference's menu
+        // then runs `menu_exit_cleanup`, reading no more input; the port used
+        // to feed that frame's pad edge to the menu too, so a mashed confirm
+        // reopened the submenu and layered a decide cue over the close's
+        // cancel.
+        let _sdl = crate::audio::test_lock::sdl();
+        let Some(mixer) = dummy_mixer() else {
+            eprintln!("skipping deferred-close cue test: no audio device");
+            return;
+        };
+        let dir = TempDir::new();
+        let pack_path = menu_cue_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        session.game.add_item(ITEM_SWORD_KEY, 1);
+        session.game.set_item_use_flag(ITEM_SWORD_KEY, true);
+        // The spray slides into the key's slot once the key is used, so the
+        // cursor sits on an item the mashed confirm could open.
+        session.game.add_item(ITEM_FIRST_AID_SPRAY, 1);
+        session.music = Some(mixer);
+        let confirm = UiInput {
+            confirm: true,
+            ..UiInput::default()
+        };
+
+        session
+            .tick(
+                &pack,
+                UiInput {
+                    start: true,
+                    ..UiInput::default()
+                },
+                player::Input::default(),
+                false,
+            )
+            .unwrap();
+        settle_menu_fade(&mut session, &pack);
+        session
+            .tick(&pack, confirm, player::Input::default(), false)
+            .unwrap();
+        settle_submenu_open(&mut session, &pack);
+        session
+            .tick(&pack, confirm, player::Input::default(), false)
+            .unwrap();
+
+        // Mash confirm through the use and the submenu's close animation.
+        let before = session.music.as_ref().unwrap().active_sfx();
+        for _ in 0..64 {
+            if session.menu_fade_phase != MenuFadePhase::None {
+                break;
+            }
+            session
+                .tick(&pack, confirm, player::Input::default(), false)
+                .unwrap();
+        }
+        assert_eq!(session.menu_fade_phase, MenuFadePhase::Closing);
+        assert!(!session.game.has_item(ITEM_SWORD_KEY), "the key was used");
+        assert_eq!(
+            session.music.as_ref().unwrap().active_sfx(),
+            before + 1,
+            "the close should play only its cancel cue"
+        );
+        assert_eq!(
+            session.menu.as_ref().unwrap().value("mode"),
+            0,
+            "the mashed confirm reopened the submenu"
         );
     }
 

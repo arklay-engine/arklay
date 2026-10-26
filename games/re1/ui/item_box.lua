@@ -21,7 +21,9 @@
 -- (the box slot) and `swap_slot` (the inventory slot); the engine performs the
 -- swap. `api:exit()` closes the box and the pause menu. The engine tells the
 -- screen whether the menu has revealed its cursor with `M.cursor_shown(api,
--- shown)` before each draw.
+-- shown)` before each draw. The screen plays its own cues (the
+-- `play_sfx(3, ...)` calls of `menu_itembox_interaction`), so a dropped or
+-- refused input stays silent.
 --
 -- The frame tables preserve the original's memory layout order: entries are
 -- listed in the order the original's backwards walk draws them.
@@ -265,8 +267,12 @@ end
 
 local function browse_input(api, input)
     if input.cancel then
+        api:sound("cancel")
         api:exit()
     elseif input.confirm then
+        -- The browse confirm plays the decide cue before the tab check, so
+        -- the EXIT confirm's close is preceded by it too.
+        api:sound("decide")
         if cursor_on_tab() then
             api:exit()
             return
@@ -283,25 +289,33 @@ local function browse_input(api, input)
             s.player_cursor = Grid.move_sideways(s.player_cursor)
         end
         s.cursor_blink = 0
+        api:sound("cursor")
     elseif input.up then
         s.player_cursor = move_up(s.player_cursor)
         s.cursor_blink = 0
+        api:sound("cursor")
     elseif input.down then
         s.player_cursor = move_down(s.player_cursor)
         s.cursor_blink = 0
+        api:sound("cursor")
     end
 end
 
 local function armed_input(api, input)
     if input.cancel then
+        api:sound("cancel")
         s.mode = "browse"
     elseif input.up or input.page_left then
         -- The original's state 2 pages the box grid with the raw D-pad
         -- up/down; L1/R1 alias them here. Down/R1 is next, up/L1 previous.
+        -- The page plays the room bank's slide sound (`play_sfx(2, 0x21)`),
+        -- not a menu cue, so no UI cue sounds here.
         start_slide(-1)
     elseif input.down or input.page_right then
         start_slide(1)
     elseif input.confirm then
+        -- Swapping two empty slots is refused silently: the original plays
+        -- the decide cue only inside its swap branch.
         local box_id = api:item_box(s.box_cursor)
         if box_id == 0 and selected_item(api) == 0 then
             return
@@ -310,6 +324,7 @@ local function armed_input(api, input)
         if slot == nil then
             return
         end
+        api:sound("decide")
         api:set("swap", true)
         api:set("swap_box", s.box_cursor)
         api:set("swap_slot", slot)
