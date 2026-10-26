@@ -172,9 +172,10 @@ pub struct Options {
     /// Off by default.
     pub no_blood: bool,
     /// The `--authentic` run mode: the original's item rules where the port
-    /// is more lenient. A healing item is refused at full health, and a blue
-    /// herb when the player is not poisoned. Command line only and off by
-    /// default; `arklay.toml` has no key for it.
+    /// is more lenient. A healing item that would do nothing is refused: the
+    /// first-aid spray and the herbs at full health, and a blue herb while the
+    /// player is not poisoned. Command line only and off by default;
+    /// `arklay.toml` has no key for it.
     pub authentic: bool,
 }
 

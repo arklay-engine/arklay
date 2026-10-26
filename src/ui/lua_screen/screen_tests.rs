@@ -3496,6 +3496,12 @@ impl Menu {
     fn eval<T: mlua::FromLuaMulti>(&self, body: &str) -> T {
         self.screen.test_eval(body)
     }
+
+    /// Evaluate `body` with `api` bound to the menu's API over the lent game.
+    fn eval_api<T: mlua::FromLuaMulti>(&mut self, body: &str) -> T {
+        let cx = self.harness.context();
+        self.screen.test_eval_with_game(&cx, &mut self.game, body)
+    }
 }
 
 const MODE_NAVIGATION: i64 = 0;
@@ -3692,10 +3698,27 @@ fn main_menu_full_health_herbs_are_used_up_outside_authentic_mode() {
     let mut menu = Menu::open(game);
     menu.confirm();
     menu.confirm_action();
-    assert_ne!(menu.game.message.id, Some(0xF7 + 7), "no refusal message");
+    assert_eq!(menu.game.message.id, None, "a used herb raises no message");
     assert!(menu.game.inventory.is_empty(), "the herb was used up");
     assert_eq!(menu.game.last_used_item, Some(0x44));
     assert_eq!(menu.game.entities[0].health, 96, "it heals nothing");
+    let started: bool = menu.eval("return M.state.bar.flush ~= nil");
+    assert!(!started, "a use with no effect starts no flush");
+    menu.finish_close();
+    assert_eq!(menu.mode(), MODE_NAVIGATION);
+}
+
+#[test]
+fn the_menu_api_reads_whether_the_run_is_authentic() {
+    let mut menu = Menu::open(menu_game());
+    let authentic: bool = menu.eval_api("return api:authentic()");
+    assert!(!authentic, "a default run is not authentic");
+
+    let mut game = menu_game();
+    game.player_options.authentic = true;
+    let mut menu = Menu::open(game);
+    let authentic: bool = menu.eval_api("return api:authentic()");
+    assert!(authentic, "--authentic reaches the menu API");
 }
 
 #[test]

@@ -747,6 +747,36 @@ fn the_frame_rate_never_changes_a_trace() {
 }
 
 #[test]
+fn the_authentic_mode_never_changes_a_trace_without_a_refusal() {
+    let dir = TempDir::new("authentic-trace");
+    let pack = dir.join("game.akpak");
+    write_room_pack(&pack);
+    let trace = |name: &str, extra: &[&str]| {
+        let path = dir.join(name);
+        let mut args = vec![
+            pack.to_str().unwrap(),
+            "--room",
+            "100",
+            "--ticks",
+            "30",
+            "--trace",
+            path.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra);
+        let output = run_env(&args, &[]);
+        assert!(output.status.success(), "stderr: {}", stderr(&output));
+        fs::read(&path).unwrap()
+    };
+    let plain = trace("plain.trace", &[]);
+    let authentic = trace("authentic.trace", &["--authentic"]);
+    assert!(!plain.is_empty());
+    assert!(
+        plain == authentic,
+        "--authentic changed a trace that uses no healing item"
+    );
+}
+
+#[test]
 fn the_tactical_reload_never_changes_a_trace() {
     let dir = TempDir::new("tactical-reload-trace");
     let pack = dir.join("game.akpak");

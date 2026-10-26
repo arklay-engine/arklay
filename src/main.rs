@@ -164,9 +164,10 @@ struct Cli {
     no_tactical_reload: bool,
 
     /// Play by the original's item rules where the port is more lenient: a
-    /// healing item is refused at full health, and a blue herb when the
-    /// player is not poisoned. Off by default; `arklay.toml` has no key for it
-    #[arg(long, requires = "pack")]
+    /// healing item that would do nothing is refused, such as the first-aid
+    /// spray and the herbs at full health, and a blue herb while the player is
+    /// not poisoned. Off by default; `arklay.toml` has no key for it
+    #[arg(long, requires = "pack", conflicts_with = "fmv")]
     authentic: bool,
 
     /// Render one frame to a file and exit (headless testing)

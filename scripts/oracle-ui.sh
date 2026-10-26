@@ -143,9 +143,11 @@ LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvm
     --test-exit-after "$TICKS" --test-nolimit )
 
 echo "== arklay: $WHAT, input $INPUT, $TICKS ticks"
+# The reference refuses a healing item with no effect, so compare under the
+# authentic item rules.
 "$ARK_BIN" "$PACK" "${ARK_BOOT[@]}" \
     --language "$LANGUAGE" --ticks "$TICKS" --no-mods \
-    --input "$INPUT" \
+    --input "$INPUT" --authentic \
     --trace "$OUT/ark.trace" \
     --capture-every "$EVERY" --capture-dir "$OUT/arkcaps"
 

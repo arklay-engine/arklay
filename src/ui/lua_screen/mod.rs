@@ -453,6 +453,19 @@ impl LuaScreen {
             .unwrap_or_else(|err| panic!("eval {body}: {err}"))
     }
 
+    /// Evaluate `body` with the module table bound to `M` and the API bound
+    /// to `api` over the lent game, for the unit tests that reach the API.
+    pub(crate) fn test_eval_with_game<T: mlua::FromLuaMulti>(
+        &mut self,
+        cx: &UiContext<'_>,
+        game: &mut GameState,
+        body: &str,
+    ) -> T {
+        self.vm
+            .eval_with_game(&mut self.host, cx, game, body)
+            .unwrap_or_else(|err| panic!("eval {body}: {err}"))
+    }
+
     /// Publish `key` as if the script had called `api:set`.
     pub(crate) fn test_set_value(&mut self, key: &str, value: i64) {
         self.host.values.insert(key.to_owned(), value);
@@ -675,6 +688,34 @@ impl ScreenVm {
             .set_environment(self.env.clone())
             .eval()?;
         function.call(self.module.clone())
+    }
+
+    /// Evaluate `body` with the module table bound to `M` and the API bound
+    /// to `api`, built over the lent game the way the callbacks build it.
+    #[cfg(test)]
+    fn eval_with_game<T: mlua::FromLuaMulti>(
+        &self,
+        host: &mut Host,
+        cx: &UiContext<'_>,
+        game: &mut GameState,
+        body: &str,
+    ) -> mlua::Result<T> {
+        let function: Function = self
+            .lua
+            .load(format!("return function(M, api) {body} end"))
+            .set_environment(self.env.clone())
+            .eval()?;
+        self.budget.begin();
+        self.lua.scope(|scope| {
+            let api = scope.create_userdata(Api {
+                host: &mut *host,
+                cx,
+                game_mut: Some(game),
+                framebuffer: None,
+                actors: None,
+            })?;
+            function.call((self.module.clone(), api))
+        })
     }
 
     /// A Lua global, for the unit tests.

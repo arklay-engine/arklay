@@ -319,10 +319,11 @@ pub const ITEM_GREEN_GREEN_GREEN_HERB: u8 = 0x4A;
 /// The item id of the two green herbs and blue herb mix (`GGB`).
 pub const ITEM_GREEN_GREEN_BLUE_HERB: u8 = 0x4B;
 
-/// The heal items the menu takes at full health outside authentic mode, where
-/// the original refuses them. That is the first-aid spray and the `G`, `GR`,
-/// `GG`, `GB`, `GRB`, `GGG` and `GGB` herbs. At full health they heal nothing
-/// and are used up.
+/// The heal items the menu takes at full health outside authentic mode. At
+/// full health they heal nothing, so a use only applies the item's cure, if
+/// it has one, and is otherwise used up. That is the first-aid spray and the
+/// `G`, `GR`, `GG`, `GB`, `GRB`, `GGG` and `GGB` herbs. Authentic mode refuses
+/// a use that does nothing, as the original does.
 pub const FULL_HEALTH_ITEMS: [u8; 8] = [
     ITEM_FIRST_AID_SPRAY,
     ITEM_GREEN_HERB,
