@@ -1,11 +1,10 @@
-//! `.akscr` round trip over every room of a converted pack.
+//! `.akscr` checks over every room of a converted pack.
 //!
-//! Needs `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK`; without them the test skips.
-//! Every room RDT with scripts must decompile to a script that compiles back
-//! to byte-identical init, main and event streams. The checked-in
-//! `games/re1/room/<room>.akscr` must be exactly the merged script of the
-//! room's variants, and compiling it for each variant must give that RDT's
-//! streams again.
+//! Needs `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK`; without them the tests
+//! skip. The checked-in `games/re1/room/<room>.akscr` scripts are edited by
+//! hand: built as `AUTHENTIC` for each variant they must give that RDT's
+//! init, main and event streams byte for byte, and their fixed build must
+//! compile. Separately, the decompiler and merge must round-trip every room.
 
 use crate::common;
 
@@ -80,18 +79,9 @@ fn assert_identical(entry: &str, original: &Scripts, compiled: &Scripts) {
     }
 }
 
-#[test]
-#[ignore = "requires a real RE1 installation via ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
-fn every_room_script_compiles_to_identical_bytecode() {
-    let Some((_root, pack_path)) = common::asset_env() else {
-        return;
-    };
-    let pack = Pack::open(&pack_path).unwrap();
-    let checked_in = room_dir();
-    let names = akscr::load_names(&checked_in).unwrap();
-
-    let mut originals = BTreeMap::new();
-    let mut texts = BTreeMap::new();
+/// Every room RDT with scripts, by id, read from the pack.
+fn original_rooms(pack: &Pack) -> BTreeMap<u16, Scripts> {
+    let mut rooms = BTreeMap::new();
     for entry in pack.entries() {
         let path = entry.path();
         let Some(id) = path
@@ -110,51 +100,86 @@ fn every_room_script_compiles_to_identical_bytecode() {
             );
             continue;
         };
-        let text = akscr::decompile_with(&original, &names, id);
-        assert_identical(
-            path,
-            &original,
-            &compile(&text, Some(akscr::Variant::for_room(id).authentic())),
-        );
-        texts.insert(id, text);
-        originals.insert(id, original);
+        rooms.insert(id, original);
     }
-    assert!(texts.len() > 300, "only {} rooms with scripts", texts.len());
+    assert!(rooms.len() > 300, "only {} rooms with scripts", rooms.len());
+    rooms
+}
 
-    let merged = akscr::merge_rooms(&texts).unwrap();
-    for (base, text) in &merged {
-        let script = checked_in.join(format!("{base:03x}.akscr"));
-        let stored = std::fs::read_to_string(&script)
-            .unwrap_or_else(|error| panic!("{}: {error}", script.display()));
-        assert!(
-            &stored == text,
-            "{} is out of date; re-export it with `arklay scd export-rooms`",
-            script.display()
-        );
-    }
+#[test]
+#[ignore = "requires a real RE1 installation via ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn checked_in_room_scripts_build_the_original_bytecode() {
+    let Some((_root, pack_path)) = common::asset_env() else {
+        return;
+    };
+    let pack = Pack::open(&pack_path).unwrap();
+    let checked_in = room_dir();
+    let originals = original_rooms(&pack);
+
+    let mut bases = BTreeSet::new();
     for (&id, original) in &originals {
         let base = akscr::merged_id(id);
-        let compiled = compile(
-            &merged[&base],
-            Some(akscr::Variant::for_room(id).authentic()),
-        );
-        // The fixed version compiles too.
-        compile(&merged[&base], Some(akscr::Variant::for_room(id)));
+        bases.insert(format!("{base:03x}"));
+        let script = checked_in.join(format!("{base:03x}.akscr"));
+        let text = std::fs::read_to_string(&script)
+            .unwrap_or_else(|error| panic!("{}: {error}", script.display()));
+        let compiled = compile(&text, Some(akscr::Variant::for_room(id).authentic()));
         assert_identical(
             &format!("{base:03x}.akscr as {id:04X}"),
             original,
             &compiled,
         );
+        // The fixed build compiles too.
+        compile(&text, Some(akscr::Variant::for_room(id)));
     }
 
-    let stems: BTreeSet<String> = merged.keys().map(|base| format!("{base:03x}")).collect();
     for entry in std::fs::read_dir(&checked_in).unwrap() {
         let path = entry.unwrap().path();
+        if path
+            .extension()
+            .is_none_or(|extension| extension != "akscr")
+        {
+            continue;
+        }
         let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
         assert!(
-            stems.contains(&stem),
+            bases.contains(&stem),
             "{} has no room in the pack",
             path.display()
         );
+    }
+}
+
+#[test]
+#[ignore = "requires a real RE1 installation via ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn every_room_decompiles_and_merges_to_identical_bytecode() {
+    let Some((_root, pack_path)) = common::asset_env() else {
+        return;
+    };
+    let pack = Pack::open(&pack_path).unwrap();
+    let names = akscr::load_names(&room_dir()).unwrap();
+    let originals = original_rooms(&pack);
+
+    let mut texts = BTreeMap::new();
+    for (&id, original) in &originals {
+        let text = akscr::decompile_with(original, &names, id);
+        assert_identical(
+            &format!("room {id:04X}"),
+            original,
+            &compile(&text, Some(akscr::Variant::for_room(id).authentic())),
+        );
+        texts.insert(id, text);
+    }
+
+    let merged = akscr::merge_rooms(&texts).unwrap();
+    for (&id, original) in &originals {
+        let base = akscr::merged_id(id);
+        let text = &merged[&base];
+        assert_identical(
+            &format!("merged {base:03x} as {id:04X}"),
+            original,
+            &compile(text, Some(akscr::Variant::for_room(id).authentic())),
+        );
+        compile(text, Some(akscr::Variant::for_room(id)));
     }
 }

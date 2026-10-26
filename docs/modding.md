@@ -618,7 +618,10 @@ each block (balanced braces, an `if` with its `else`), lining up each
 variant's events by content, so only a section header such as
 `event event_01` / `event event_04` stands alone in a block. `arklay scd build 103.akscr --room 6031 --out
 scd/6031.scd` compiles one variant; a script without a variant must not use
-`#if`. The merged scripts are checked in under `games/re1/room/`.
+`#if`. The merged scripts are checked in under `games/re1/room/` and are
+maintained by hand from there: the real-data tests build each one for every
+variant and compare it with the original RDT's bytecode, so a rename or
+restructure is safe as long as the `AUTHENTIC` build still matches.
 
 `AUTHENTIC` keeps the original game's exact bytecode where the shipped data
 has a quirk with no structured form, and its `#else` holds the fixed version.
@@ -697,8 +700,8 @@ known yet (`B_0A`, `TASK_09`, `OBJ_02`), so it can be renamed once it is;
 only plain quantities (positions, angles, counts, frames, volumes) and the
 fields the disassembler still splits into raw bytes stay numbers.
 
-These names are a starting point for hand renaming; once a script is edited
-by hand, re-exporting would overwrite it.
+These names are a starting point for hand renaming; re-exporting overwrites
+hand edits, so the checked-in RE1 scripts are no longer re-exported.
 
 ```c
 #version 1
