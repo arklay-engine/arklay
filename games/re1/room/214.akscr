@@ -13,40 +13,43 @@
 #define AOT_03_ITEM 0x03
 #define AOT_04_ITEM 0x04
 #define AOT_05_USEITEM 0x05
+#define ENEMY_00_ZOMBIE_LAB 0x00
+#define ENEMY_01_ZOMBIE_LAB 0x01
+#define ENEMY_02_ZOMBIE_LAB 0x02
 #define F_ROOM_18 0x18
 #define MSG_THE_DOOR_IS_LOCKED 0x00
 
 proc init
 {
 #if CHRIS
-    door_aot_set(AOT_00_DOOR, 22800, 5200, 2900, 1600, 0, 0, 3, 1, 0, ROOM_213_FRONT_ELEVATOR, 2500, 0, 6600, 0, UNLOCKED, 129);
-    aot_set(AOT_01_USEITEM, 10100, 25300, 1700, 2400, SCE_USEITEM, 129, 4, 0, 24, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 22800, 5200, 2900, 1600, 0, 0, 3, 1, 0, ROOM_213_FRONT_ELEVATOR, 2500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_USEITEM, 10100, 25300, 1700, 2400, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 24, 0, 1, 0);
 #else
-    door_aot_set(AOT_00_DOOR, 10100, 25300, 1700, 2400, 2, 0, 0, 1, 0, ROOM_201_2F_LEFT_STAIRS, 15500, 0, 25400, 1024, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 22800, 5200, 2900, 1600, 0, 0, 3, 1, 0, ROOM_213_FRONT_ELEVATOR, 2500, 0, 6600, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 10100, 25300, 1700, 2400, 2, 0, 0, 1, 0, ROOM_201_2F_LEFT_STAIRS, 15500, 0, 25400, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 22800, 5200, 2900, 1600, 0, 0, 3, 1, 0, ROOM_213_FRONT_ELEVATOR, 2500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #endif
     item_aot_set(AOT_02_ITEM, 17200, 2000, 1900, 1900, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 124, 71, 0, 0, 140, 10, 0, 0, 169, 129, 1, 0);
     item_aot_set(AOT_03_ITEM, 21500, 2000, 1900, 1900, IT_45_HEAL_HERB_BLUE, 1, 1, 255, 228, 87, 0, 0, 140, 10, 0, 0, 170, 129, 1, 0);
     item_aot_set(AOT_04_ITEM, 19500, 2000, 1900, 1900, IT_44_HEAL_HERB_GREEN, 1, 2, 255, 20, 80, 0, 0, 140, 10, 0, 0, 171, 129, 1, 0);
 #if JILL
-    aot_set(AOT_05_USEITEM, 10100, 25300, 1700, 2400, SCE_USEITEM, 129, 4, 0, 24, 0, 1, 0);
+    aot_set(AOT_05_USEITEM, 10100, 25300, 1700, 2400, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 24, 0, 1, 0);
 #endif
-    enemy(EM_11_ZOMBIE_LAB, 1, 139, 1, 2, 0, 0, 3584, 0, 0, 19100, 0, 3200, 0, 0, 0, 0);
-    enemy(EM_11_ZOMBIE_LAB, 7, 140, 1, 2, 0, 0, 1656, 0, 0, 15900, 0, 28000, 1, 0, 0, 0);
-    enemy(EM_11_ZOMBIE_LAB, 35, 141, 1, 2, 0, 0, 768, 0, 0, 15000, 0, 27600, 2, 0, 0, 0);
+    enemy(EM_11_ZOMBIE_LAB, 1, 139, 1, 2, 0, 0, 3584, 0, 0, 19100, 0, 3200, ENEMY_00_ZOMBIE_LAB, 0, 0, 0);
+    enemy(EM_11_ZOMBIE_LAB, 7, 140, 1, 2, 0, 0, 1656, 0, 0, 15900, 0, 28000, ENEMY_01_ZOMBIE_LAB, 0, 0, 0);
+    enemy(EM_11_ZOMBIE_LAB, 35, F_ENEMY_8D, 1, 2, 0, 0, 768, 0, 0, 15000, 0, 27600, ENEMY_02_ZOMBIE_LAB, 0, 0, 0);
 #if JILL
     if (ck(FG_SCENARIO, F_SCENARIO_46, FALSE))
     {
-        aot_delete(AOT_00_DOOR, SCE_NONE, 129);
+        aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_05_USEITEM, SCE_NONE, 129);
+        aot_delete(AOT_05_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
 #endif
     if (ck(FG_ENEMY, F_ENEMY_8D, TRUE))
     {
-        eml_state(0, 1, 0, 0);
+        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
     }
 }
 
@@ -54,8 +57,8 @@ proc main
 {
     if (ck(FG_ROOM, F_ROOM_18, TRUE))
     {
-        se_play_3d(2, 20, 0, 0, 0, 11000, 25300);
-        message(MSG_THE_DOOR_IS_LOCKED | 0x80, 255); // "The door is locked."
+        se_play_3d(2, 20, 0, SND_AT_POINT, 0, 11000, 25300);
+        message(MSG_THE_DOOR_IS_LOCKED | MSG_FAST, 255); // "The door is locked."
         set(FG_ROOM, F_ROOM_18, FALSE);
     }
 }

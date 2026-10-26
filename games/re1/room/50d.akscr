@@ -9,14 +9,16 @@
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
 #define F_ROOM_18 0x18
+#define MSG_VO_016_06 0x00
+#define VO_016_06 0x52
 
 proc init
 {
     set(FG_STATUS, F_STATUS_3D, TRUE);
-    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, 13, 17, 64, 0, ROOM_501_HELIPORT_PASSAGE, 3500, 0, 28000, 0, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 13, 17, 64, 0, STAGE_3 | ROOM_303_HELIPORT, 9000, 0, 5500, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, 13, 17, 64, 0, ROOM_501_HELIPORT_PASSAGE, 3500, 0, 28000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 13, 17, 64, 0, STAGE_3 | ROOM_303_HELIPORT, 9000, 0, 5500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     dir_set(0, 0, 2048, 0, 4600, 0, 4600);
-    if (cmpb(3, 0, 1))
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_501_HELIPORT_PASSAGE))
     {
         evt_exec(0, 9, on_enter_2);
     }
@@ -30,7 +32,7 @@ event on_enter
 {
     sleep(1);
     set(FG_6, F_6_17, FALSE);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_fork(9, on_enter_sub1, 0);
     do
     {
@@ -49,7 +51,7 @@ event on_enter_2
 {
     sleep(1);
     set(FG_6, F_6_17, FALSE);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_fork(9, on_enter_sub1, 0);
     do
     {
@@ -86,8 +88,8 @@ event on_enter_sub1
 event event_03
 {
     sleep(30);
-    voice_play(1, 82, 0);
+    voice_play(VOICE_PLAY, VO_016_06, 0);
     sleep(30);
-    message(0, 0);
+    message(MSG_VO_016_06, 0);
     evt_finish();
 }

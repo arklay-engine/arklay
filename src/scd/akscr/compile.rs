@@ -362,15 +362,11 @@ fn substitute(line: &str, defines: &HashMap<String, i64>) -> String {
     out
 }
 
-/// The values of the compiler's own names: `ck` / `set` truth values (the
-/// engine's 0 is true) and `set`'s toggle.
-const BUILTINS: [(&str, i64); 3] = [("TRUE", 0), ("FALSE", 1), ("TOGGLE", 2)];
-
 fn parse(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<Section>> {
     budget::check_len(text.len(), budget::MAX_TEXT_BYTES, "script size")?;
     let tokens = lex(text)?;
     let mut defines = defines.clone();
-    for (name, value) in BUILTINS {
+    for &(name, value) in super::engine::ENGINE_NAMES {
         defines.entry(name.to_string()).or_insert(value);
     }
     // Event names stand for their index, so any event may name any other.
@@ -729,11 +725,22 @@ impl Parser {
             return Ok(Arg::Symbol(name.clone()));
         }
         let value = self.expect_int()?;
-        if self.eat_punct("|") {
-            let low = self.expect_int()?;
-            return Ok(Arg::Bits(value, low));
+        if !self.eat_punct("|") {
+            return Ok(Arg::Num(value));
         }
-        Ok(Arg::Num(value))
+        // `hi | lo`, or any longer run of bits ORed together.
+        let low = self.expect_int()?;
+        let mut rest = 0;
+        let mut more = false;
+        while self.eat_punct("|") {
+            rest |= self.expect_int()?;
+            more = true;
+        }
+        Ok(if more {
+            Arg::Num(value | low | rest)
+        } else {
+            Arg::Bits(value, low)
+        })
     }
 }
 

@@ -18,20 +18,20 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 6600, 2000, 2100, 2300, 2, 0, 33, 1, 0, ROOM_401_ROOM_001, 9200, 0, 3200, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 6600, 2000, 2100, 2300, 2, 0, 33, 1, 0, ROOM_401_ROOM_001, 9200, 0, 3200, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 1300, 2100, 2400, 3200, IT_3B_KEY_CONTROL_ROOM, 1, 0, 255, 10, 10, 208, 253, 30, 15, 246, 0, 156, 129, 0, 0);
     eml_rot(0, 0, 0, 0, 8);
     obj(0, 1, 255, 21000, 0, 21000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(1, 1, 255, 20000, 0, 20000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_03_NONE, 1300, 2100, 2400, 3200, SCE_NONE, 129, 9, 0, 2, 0, 0, 0);
-    aot_set(AOT_04_MESSAGE, 4800, 700, 1500, 2000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_05_MESSAGE, 2000, 6400, 2000, 1600, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_NONE, 1300, 2100, 2400, 3200, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 2, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 4800, 700, 1500, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 2000, 6400, 2000, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     set(FG_STATUS, F_STATUS_1D, TRUE);
     set(FG_ROOM, F_ROOM_1A, TRUE);
     if (ck(FG_SCENARIO, F_SCENARIO_43, FALSE))
     {
-        aot_delete(AOT_01_ITEM, SCE_NONE, 129);
-        aot_delete(AOT_03_NONE, SCE_EVENT, 129);
+        aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         evt_exec(0, 9, on_enter);
     }
 }
@@ -54,11 +54,11 @@ proc main
     }
     if (ck(FG_SCENARIO, F_SCENARIO_43, FALSE) && ck(FG_ROOM, F_ROOM_1A, TRUE))
     {
-        if (cmpb(2, 0, 0) && ck(FG_STATUS, F_STATUS_1A, TRUE))
+        if (cmpb(B_CAMERA, CMP_EQ, 0) && ck(FG_STATUS, F_STATUS_1A, TRUE))
         {
             evt_exec(0, 9, on_enter);
         }
-        if (cmpb(2, 0, 1) && ck(FG_STATUS, F_STATUS_1A, TRUE))
+        if (cmpb(B_CAMERA, CMP_EQ, 1) && ck(FG_STATUS, F_STATUS_1A, TRUE))
         {
             evt_exec(0, 9, from_main);
         }
@@ -110,7 +110,7 @@ event event_02
     evt_nop();
     run
     {
-        aot_delete(AOT_03_NONE, SCE_NONE, 129);
+        aot_delete(AOT_03_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         set(FG_6, F_6_17, FALSE);
         set(FG_6, F_6_19, FALSE);
         cutnext(1);
@@ -120,7 +120,7 @@ event event_02
     sleep(15);
     run
     {
-        message(MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY | 0x80, 255); // "The bathtub is filled with muddy water. Will you unplug it? Nothing special."
+        message(MSG_THE_BATHTUB_IS_FILLED_WITH_MUDDY | MSG_FAST, 255); // "The bathtub is filled with muddy water. Will you unplug it? Nothing special."
     }
     evt_next();
     evt_nop();
@@ -129,12 +129,12 @@ event event_02
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         set(FG_6, F_6_17, FALSE);
         set(FG_ROOM, F_ROOM_18, TRUE);
-        require(cmpb(5, 0, 0));
+        require(cmpb(B_MENU_CHOICE, CMP_EQ, 0));
         set(FG_ROOM, F_ROOM_19, TRUE);
     }
     evt_finish();
@@ -144,7 +144,7 @@ event from_main_2
 {
     run
     {
-        se_play_3d(2, 23, 0, 0, 0, 2400, 3800);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 2400, 3800);
         set(FG_SCENARIO, F_SCENARIO_43, TRUE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
@@ -189,7 +189,7 @@ event from_main_2
     sleep(3);
     run
     {
-        aot_delete(AOT_01_ITEM, SCE_ITEM, 129);
+        aot_delete(AOT_01_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
     }
     evt_finish();
 }
@@ -207,7 +207,7 @@ event from_main_3
     sleep(3);
     run
     {
-        aot_delete(AOT_03_NONE, SCE_EVENT, 129);
+        aot_delete(AOT_03_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
     evt_finish();
 }

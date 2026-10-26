@@ -10,16 +10,18 @@
 #define AOT_01_DOOR 0x01
 #define AOT_02_EVENT 0x02
 #define AOT_03_ITEM 0x03
+#define ENEMY_00_ZOMBIE_LAB 0x00
+#define ENEMY_01_ZOMBIE_LAB 0x01
 #define MSG_THERE_IS_A_LADDER 0x00
 
 proc init
 {
     door_aot_set(AOT_00_DOOR, 29300, 2900, 3000, 2100, 0, 11, 26, 64, 0, ROOM_20C_LESSON_ROOM, 20300, 0, 3500, 0, UNLOCKED, 0);
-    door_aot_set(AOT_01_DOOR, 200, 2800, 1900, 1500, 2, 0, 6, 7, 0, ROOM_21B_UNDER_PASSAGE_2, 27500, 0, 12600, 2048, UNLOCKED, 129);
-    aot_set(AOT_02_EVENT, 29300, 2900, 3000, 2100, SCE_EVENT, 129, 9, 0, on_aot_02, 0, 0, 0);
+    door_aot_set(AOT_01_DOOR, 200, 2800, 1900, 1500, 2, 0, 6, 7, 0, ROOM_21B_UNDER_PASSAGE_2, 27500, 0, 12600, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_02_EVENT, 29300, 2900, 3000, 2100, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
     item_aot_set(AOT_03_ITEM, 28000, 11500, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 84, 111, 0, 0, 224, 46, 0, 0, 219, 129, 1, 0);
-    enemy(EM_11_ZOMBIE_LAB, 0, 128, 1, 2, 0, 0, 1711, 0, 0, 27742, 0, 13736, 0, 0, 0, 1);
-    enemy(EM_11_ZOMBIE_LAB, 0, 180, 1, 2, 0, 0, 3344, 0, 0, 12764, 0, 2397, 1, 0, 0, 1);
+    enemy(EM_11_ZOMBIE_LAB, 0, 128, 1, 2, 0, 0, 1711, 0, 0, 27742, 0, 13736, ENEMY_00_ZOMBIE_LAB, 0, 0, 1);
+    enemy(EM_11_ZOMBIE_LAB, 0, 180, 1, 2, 0, 0, 3344, 0, 0, 12764, 0, 2397, ENEMY_01_ZOMBIE_LAB, 0, 0, 1);
 }
 
 event on_aot_02
@@ -27,16 +29,16 @@ event on_aot_02
     run
     {
         set(FG_6, F_6_17, FALSE);
-        message(MSG_THERE_IS_A_LADDER | 0x80, 255); // "There's a ladder. Will you climb it?"
+        message(MSG_THERE_IS_A_LADDER | MSG_FAST, 255); // "There's a ladder. Will you climb it?"
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             aot_on(AOT_00_DOOR, SCE_DOOR, 0);
             set(FG_6, F_6_17, TRUE);

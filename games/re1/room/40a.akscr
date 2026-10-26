@@ -24,9 +24,9 @@
 proc init
 {
     set(FG_STATUS, F_STATUS_1D, TRUE);
-    door_aot_set(AOT_00_DOOR, 800, 2100, 1500, 1600, 2, 0, 6, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 17800, 0, 7700, 2048, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 2300, 3700, 2000, 1600, 1, 0, 33, 1, 0, ROOM_40B_ROOM_003_BATHROOM, 3400, 0, 6400, 3072, UNLOCKED, 129);
-    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 3, 0, 32, 5, 0, ROOM_40C_PLANT_BOSS_ROOM, 2800, 0, 13600, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 800, 2100, 1500, 1600, 2, 0, 6, 1, 0, ROOM_408_HONEYCOMB_PASSAGE, 17800, 0, 7700, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 2300, 3700, 2000, 1600, 1, 0, 33, 1, 0, ROOM_40B_ROOM_003_BATHROOM, 3400, 0, 6400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 0, 0, 1, 1, 3, 0, 32, 5, 0, ROOM_40C_PLANT_BOSS_ROOM, 2800, 0, 13600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_03_ITEM, 0, 0, 1, 1, IT_69_FILE_V_JOLT_REPORT, 1, 0, 255, 168, 46, 18, 248, 108, 41, 0, 8, 78, 129, 0, 0);
     item_aot_set(AOT_04_ITEM, 0, 0, 1, 1, IT_3E_KEY_BOOK_BLANK, 1, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 255, 129, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_25, TRUE))
@@ -38,19 +38,19 @@ proc init
         obj(0, 49, 255, 14600, 0, 5250, 2048, 0, 0, 228, 253, 0, 0, 28, 2, 28, 2, 168, 12, 188, 2, 220, 5);
     }
     obj(1, 47, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_05_EVENT, 11300, 9600, 1100, 1700, SCE_EVENT, 129, 9, 0, on_aot_05, 0, 0, 0);
-    aot_set(AOT_06_MESSAGE, 11300, 9600, 1100, 1700, SCE_NONE, 129, 128, 0, 69, 0, 0, 0);
-    aot_set(AOT_07_EVENT, 14500, 4200, 1200, 1800, SCE_EVENT, 129, 9, 0, on_aot_07, 0, 0, 0);
+    aot_set(AOT_05_EVENT, 11300, 9600, 1100, 1700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 11300, 9600, 1100, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 69, 0, 0, 0);
+    aot_set(AOT_07_EVENT, 14500, 4200, 1200, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
     item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_2F_KEY_INK_RIBBON, 3, 2, 255, 162, 43, 32, 254, 6, 9, 0, 15, 120, 0, 0, 0);
     eml_rot(0, 0, 0, 0, 4);
     setbyte(2, 0, 0);
-    if (cmpb(9, 0, 3))
+    if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3))
     {
-        aot_set(AOT_09_MESSAGE, 10500, 1600, 1100, 1600, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_09_MESSAGE, 10500, 1600, 1100, 1600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
     else
     {
-        aot_set(AOT_09_MESSAGE, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, 129, 35, 0, 8, 0, 6, 0);
+        aot_set(AOT_09_MESSAGE, 10500, 1600, 1100, 1600, SCE_HIKIDASHI, SAT_MANUAL | SAT_PLAYER, 35, 0, 8, 0, 6, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_24, TRUE))
     {
@@ -69,8 +69,8 @@ proc main
     {
         if (ck(FG_SCENARIO, F_SCENARIO_24, TRUE))
         {
-            aot_delete(AOT_05_EVENT, SCE_NONE, 1);
-            aot_reset(AOT_06_MESSAGE, SCE_MESSAGE, 129, 128, 255, 0);
+            aot_delete(AOT_05_EVENT, SCE_NONE, SAT_PLAYER);
+            aot_reset(AOT_06_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
             if (ck(FG_SCENARIO, F_SCENARIO_26, FALSE))
             {
                 if (ck(FG_ROOM, F_ROOM_01, TRUE))
@@ -85,30 +85,30 @@ proc main
             }
             if (ck(FG_SCENARIO, F_SCENARIO_25, TRUE))
             {
-                aot_delete(AOT_07_EVENT, SCE_EVENT, 129);
+                aot_delete(AOT_07_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
-                aot_delete(AOT_07_EVENT, SCE_NONE, 129);
+                aot_delete(AOT_07_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
             }
         }
         else
         {
-            aot_reset(AOT_05_EVENT, SCE_USEITEM, 1, 9, 35, 1);
-            aot_reset(AOT_06_MESSAGE, SCE_MESSAGE, 129, 130, 255, 0);
-            aot_delete(AOT_07_EVENT, SCE_NONE, 129);
+            aot_reset(AOT_05_EVENT, SCE_USEITEM, SAT_PLAYER, 9, 35, 1);
+            aot_reset(AOT_06_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
+            aot_delete(AOT_07_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
     }
     else
     {
-        aot_reset(AOT_05_EVENT, SCE_EVENT, 129, 9, on_aot_05, 0);
-        aot_delete(AOT_06_MESSAGE, SCE_NONE, 129);
-        aot_delete(AOT_07_EVENT, SCE_NONE, 129);
-        if (cmpb(2, 0, 3))
+        aot_reset(AOT_05_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_05, 0);
+        aot_delete(AOT_06_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        if (cmpb(B_CAMERA, CMP_EQ, 3))
         {
             evt_exec(0, 9, from_main_4);
         }
-        else if (cmpb(2, 0, 4))
+        else if (cmpb(B_CAMERA, CMP_EQ, 4))
         {
             evt_exec(0, 9, from_main_5);
         }
@@ -182,7 +182,7 @@ event from_main_sub1
     run
     {
         set(FG_ROOM, F_ROOM_18, FALSE);
-        se_play_3d(2, 23, 0, 0, 0, 14600, 5350);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 14600, 5350);
     }
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -215,7 +215,7 @@ event from_main_2
     run
     {
         set(FG_ROOM, F_ROOM_18, FALSE);
-        se_play_3d(2, 23, 0, 0, 0, 14600, 5350);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 14600, 5350);
     }
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
@@ -239,19 +239,19 @@ event on_aot_05
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_19, FALSE);
         set(FG_6, F_6_17, FALSE);
-        message(MSG_A_ROW_OF_RED_BOOKS | 0x80, 65406); // "A row of red books. There's one white book. Will you take it? Now a book is missing."
+        message(MSG_A_ROW_OF_RED_BOOKS | MSG_FAST, 65406); // "A row of red books. There's one white book. Will you take it? Now a book is missing."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         set(FG_6, F_6_1D, TRUE);
         set(FG_6, F_6_19, TRUE);
         set(FG_6, F_6_17, TRUE);
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             aot_on(AOT_03_ITEM, SCE_DOCUMENT, 0);
         }
@@ -261,13 +261,13 @@ event on_aot_05
 
 event from_main_3
 {
-    message(MSG_NOW_A_BOOK_IS_MISSING | 0x80, 65406); // "Now a book is missing."
+    message(MSG_NOW_A_BOOK_IS_MISSING | MSG_FAST, 65406); // "Now a book is missing."
     evt_finish();
 }
 
 event from_main_4
 {
-    evt_work_set(WK_AOT, 0);
+    evt_work_set(WK_AOT, AOT_00_DOOR);
     evt_tween_begin_alt();
     tw_abs_rot(0, 0, 2208, 1024);
     tw_abs_pos(0, 12024, -2030, 10604);
@@ -278,7 +278,7 @@ event from_main_4
 
 event from_main_5
 {
-    evt_work_set(WK_AOT, 0);
+    evt_work_set(WK_AOT, AOT_00_DOOR);
     evt_tween_begin_alt();
     tw_abs_pos(0, 11784, -1970, 10664);
     tw_abs_rot(0, 65366, 2048, 3042);

@@ -17,33 +17,33 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, 0, 0, 4, 129, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 3800, 10500, 2500, 2000, 3, 0, 0, 4, 129, ROOM_115_ALMOST_A_SANDWICH, 6000, 0, 2500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 10200, 5700, 1400, 1400, IT_03_WEAPON_SHOTGUN, 7, 0, 255, 208, 42, 2, 244, 90, 25, 0, 12, 0, 129, 0, 0);
     swap_var(1, 1, 12);
     item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_1C_KEY_BROKEN_SHOTGUN, 1, 1, 255, 208, 42, 2, 244, 90, 25, 0, 12, 1, 129, 0, 0);
     obj(0, 1, 255, 10980, -3000, 6490, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_05_NONE, 9820, 5340, 2000, 2000, SCE_NONE, 1, 9, 0, 1, 0, 1, 0);
-    aot_set(AOT_06_NONE, 9820, 5340, 2000, 2000, SCE_NONE, 129, 9, 0, 5, 0, 0, 0);
-    aot_set(AOT_07_NONE, 3800, 10500, 2500, 2000, SCE_NONE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 9500, 1300, 2000, 1900, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 0, 5000, 3600, 3200, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_PLAYER, 9, 0, 1, 0, 1, 0);
+    aot_set(AOT_06_NONE, 9820, 5340, 2000, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 5, 0, 0, 0);
+    aot_set(AOT_07_NONE, 3800, 10500, 2500, 2000, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 9500, 1300, 2000, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 0, 5000, 3600, 3200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
     if (ck(FG_ITEM, F_ITEM_01, FALSE) && ck(FG_ITEM, F_ITEM_00, FALSE))
     {
         evt_exec(0, 0, on_enter);
-        aot_delete(AOT_05_NONE, SCE_USEITEM, 1);
-        aot_delete(AOT_06_NONE, SCE_EVENT, 129);
+        aot_delete(AOT_05_NONE, SCE_USEITEM, SAT_PLAYER);
+        aot_delete(AOT_06_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE) && ck(FG_COMMON, F_COMMON_20, TRUE))
     {
         evt_exec(0, 9, on_enter_2);
-        aot_delete(AOT_00_DOOR, SCE_NONE, 129);
-        aot_delete(AOT_07_NONE, SCE_MESSAGE, 129);
+        aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     if (ck(FG_STATUS, F_STATUS_08, TRUE) && ck(FG_COMMON, F_COMMON_29, TRUE))
     {
         evt_exec(0, 9, on_enter_2);
-        aot_delete(AOT_00_DOOR, SCE_NONE, 129);
-        aot_delete(AOT_07_NONE, SCE_MESSAGE, 129);
+        aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_07_NONE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
 }
 
@@ -62,8 +62,8 @@ proc main
             evt_exec(0, 9, from_main_2);
             evt_exec(0, 9, from_main_3);
             set(FG_COMMON, F_COMMON_20, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
-            aot_delete(AOT_07_NONE, SCE_NONE, 129);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
         if (testitem(IT_1C_KEY_BROKEN_SHOTGUN))
         {
@@ -72,8 +72,8 @@ proc main
             evt_exec(0, 9, from_main_2);
             evt_exec(0, 9, from_main_4);
             set(FG_COMMON, F_COMMON_20, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
-            aot_delete(AOT_07_NONE, SCE_NONE, 129);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
     }
     else
@@ -85,8 +85,8 @@ proc main
             evt_exec(0, 9, from_main_2);
             evt_exec(0, 9, from_main_3);
             set(FG_COMMON, F_COMMON_29, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
-            aot_delete(AOT_07_NONE, SCE_NONE, 129);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
         if (testitem(IT_1C_KEY_BROKEN_SHOTGUN))
         {
@@ -95,17 +95,17 @@ proc main
             evt_exec(0, 9, from_main_2);
             evt_exec(0, 9, from_main_4);
             set(FG_COMMON, F_COMMON_29, FALSE);
-            aot_delete(AOT_00_DOOR, SCE_DOOR, 129);
-            aot_delete(AOT_07_NONE, SCE_NONE, 129);
+            aot_delete(AOT_00_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+            aot_delete(AOT_07_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         }
     }
 }
 
 event from_main
 {
-    se_play_3d(2, 23, 0, 0, 0, 5500, 7070);
+    se_play_3d(2, 23, 0, SND_AT_POINT, 0, 5500, 7070);
     sleep(5);
-    se_play_3d(2, 24, 0, 0, 0, 5500, 7070);
+    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 5500, 7070);
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
     evt_next();
@@ -185,14 +185,14 @@ event from_main
     evt_next();
     tw_end();
     evt_nop();
-    aot_delete(AOT_05_NONE, SCE_USEITEM, 1);
-    aot_delete(AOT_06_NONE, SCE_EVENT, 129);
+    aot_delete(AOT_05_NONE, SCE_USEITEM, SAT_PLAYER);
+    aot_delete(AOT_06_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     evt_finish();
 }
 
 event from_main_2
 {
-    se_play_3d(2, 24, 0, 0, 0, 5500, 7070);
+    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 5500, 7070);
     evt_work_set(WK_OBJ, 0);
     evt_tween_begin_alt();
     evt_next();
@@ -293,9 +293,9 @@ event on_enter
 
 event from_main_3
 {
-    aot_delete(AOT_05_NONE, SCE_NONE, 1);
-    aot_delete(AOT_06_NONE, SCE_NONE, 129);
-    evt_work_set(WK_AOT, 0);
+    aot_delete(AOT_05_NONE, SCE_NONE, SAT_PLAYER);
+    aot_delete(AOT_06_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    evt_work_set(WK_AOT, AOT_00_DOOR);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10950, -3208, 6490);
     tw_set_pos(0, 1, 0);
@@ -389,16 +389,16 @@ event from_main_3
     evt_next();
     tw_end();
     evt_next();
-    aot_delete(AOT_01_ITEM, SCE_ITEM, 129);
+    aot_delete(AOT_01_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
     evt_finish();
 }
 
 event from_main_4
 {
-    aot_delete(AOT_01_ITEM, SCE_NONE, 129);
-    aot_delete(AOT_05_NONE, SCE_NONE, 1);
-    aot_delete(AOT_06_NONE, SCE_NONE, 1);
-    evt_work_set(WK_AOT, 1);
+    aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    aot_delete(AOT_05_NONE, SCE_NONE, SAT_PLAYER);
+    aot_delete(AOT_06_NONE, SCE_NONE, SAT_PLAYER);
+    evt_work_set(WK_AOT, AOT_01_ITEM);
     evt_tween_begin_alt();
     tw_abs_pos(0, 10950, -3208, 6490);
     tw_set_pos(0, 1, 0);
@@ -501,7 +501,7 @@ event event_05
     {
         require(item_ck(IT_03_WEAPON_SHOTGUN));
         swap_var(2, 1, 12);
-        setb(6, 3, 0);
+        setb(B_SELECTED_ITEM, IT_03_WEAPON_SHOTGUN, 0);
         set(FG_STATUS, F_STATUS_12, TRUE);
     }
     evt_finish();
@@ -512,8 +512,8 @@ event on_enter_2
     sleep(10);
     run
     {
-        se_play_3d(2, 25, 6, 0, 0, 4700, 10380);
-        se_play_3d(2, 26, 6, 0, 0, 4700, 10380);
+        se_play_3d(2, 25, 6, SND_AT_POINT, 0, 4700, 10380);
+        se_play_3d(2, 26, 6, SND_AT_POINT, 0, 4700, 10380);
     }
     evt_finish();
 }

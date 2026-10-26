@@ -16,6 +16,7 @@
 #define AOT_07_ITEM 0x07
 #define AOT_08_ITEM 0x08
 #define AOT_09_ITEM 0x09
+#define ENEMY_00_NPC_BARRY 0x00
 #define F_ROOM_01 0x01
 #define F_ROOM_02 0x02
 #define F_ROOM_03 0x03
@@ -27,17 +28,33 @@
 #define F_ROOM_26 0x26
 #define MSG_IT_IS_TOO_HEAVY_TO_MOVE 0x01
 #define MSG_IT_SEEMS_SOMEONE_HAS_SEARCHED_HERE 0x03
+#define MSG_VO_108_00 0x09
+#define MSG_VO_108_01 0x0A
+#define MSG_VO_108_02 0x0B
+#define MSG_VO_108_03 0x0C
+#define MSG_VO_108_04 0x0D
+#define MSG_VO_108_05 0x0E
+#define MSG_VO_108_06 0x0F
+#define MSG_VO_108_07 0x10
+#define VO_108_00 0x19
+#define VO_108_01 0x1A
+#define VO_108_02 0x1B
+#define VO_108_03 0x1C
+#define VO_108_04 0x1D
+#define VO_108_05 0x1E
+#define VO_108_06 0x1F
+#define VO_108_07 0x20
 
 proc init
 {
-    room_bgm_state_set(1, 10, 9);
-    door_aot_set(AOT_00_DOOR, 1000, 5000, 1300, 1600, 2, 0, 0, 7, 0, ROOM_208_DEER_ROOM, 10300, 0, 4400, 2048, UNLOCKED, 129);
-    aot_set(AOT_01_MESSAGE, 5800, 2400, 1900, 900, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
-    aot_set(AOT_02_MESSAGE, 1800, 1700, 2000, 600, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(AOT_03_MESSAGE, 5000, 2400, 800, 500, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
-    aot_set(AOT_04_MESSAGE, 3930, 7500, 1800, 1000, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_05_USEITEM, 6200, 7000, 1530, 900, SCE_USEITEM, 68, 4, 0, 32, 0, 1, 0);
-    aot_set(AOT_06_USEITEM, 6800, 4000, 800, 4000, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
+    room_bgm_state_set(1, ROOM_20A_STUDY_ROOM, BGM_CH0 | 1);
+    door_aot_set(AOT_00_DOOR, 1000, 5000, 1300, 1600, 2, 0, 0, 7, 0, ROOM_208_DEER_ROOM, 10300, 0, 4400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_MESSAGE, 5800, 2400, 1900, 900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_02_MESSAGE, 1800, 1700, 2000, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_MESSAGE, 5000, 2400, 800, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 3930, 7500, 1800, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_USEITEM, 6200, 7000, 1530, 900, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 32, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 6800, 4000, 800, 4000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
 #if CHRIS
     item_aot_set(AOT_07_ITEM, 4110, 7500, 900, 1000, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 210, 20, 176, 185, 200, 35, 0, 0, 15, 129, 0, 0);
 #else
@@ -54,13 +71,13 @@ proc init
         {
             item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, 1, 255, 66, 29, 96, 250, 80, 10, 0, 0, 16, 129, 0, 0);
             eml_rot(1, 0, 8, 0, 0);
-            aot_reset(AOT_01_MESSAGE, SCE_EVENT, 129, 0, on_aot_01_message, 0);
+            aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
         }
         else
         {
             item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, 1, 255, 66, 29, 96, 250, 80, 10, 0, 0, 16, 129, 0, 0);
             eml_rot(1, 0, 8, 0, 0);
-            aot_reset(AOT_01_MESSAGE, SCE_EVENT, 129, 0, on_aot_01_message, 0);
+            aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
         }
     }
 #else
@@ -70,13 +87,13 @@ proc init
         {
             item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_5F_FILE_RESEARCHERS_WILL_1, 1, 1, 255, 66, 29, 96, 250, 80, 10, 0, 0, 16, 129, 0, 0);
             eml_rot(1, 0, 8, 0, 0);
-            aot_reset(AOT_01_MESSAGE, SCE_EVENT, 129, 0, on_aot_01_message, 0);
+            aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
         }
         else if (ck(FG_COMMON, F_COMMON_07, TRUE))
         {
             item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_60_FILE_RESEARCHERS_WILL_2, 1, 1, 255, 66, 29, 96, 250, 80, 10, 0, 0, 16, 129, 0, 0);
             eml_rot(1, 0, 8, 0, 0);
-            aot_reset(AOT_01_MESSAGE, SCE_EVENT, 129, 0, on_aot_01_message, 0);
+            aot_reset(AOT_01_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_01_message, 0);
         }
         else
         {
@@ -93,12 +110,12 @@ proc init
         aot_reset(AOT_06_USEITEM, SCE_NONE, 0, 0, 0, 0);
         obj(1, 47, 0, 0, -20000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         cut_auto(1);
-        setb(2, 3, 0);
+        setb(B_CAMERA, 3, 0);
         set(FG_ROOM, F_ROOM_0A, TRUE);
     }
     else
     {
-        aot_reset(AOT_02_MESSAGE, SCE_EVENT, 129, 0, on_aot_02_message, 0);
+        aot_reset(AOT_02_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, on_aot_02_message, 0);
         obj(1, 47, 255, 7620, -1200, 5920, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 #if CHRIS
@@ -107,10 +124,10 @@ proc init
     obj(2, 1, 255, 4995, 0, 7552, 1024, 0, 0, 82, 3, 0, 0, 174, 252, 64, 1, 16, 39, 46, 4, 172, 3);
     if (ck(FG_ROOM, F_ROOM_22, TRUE))
     {
-        enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 320, 0, 0, 5496, 0, 3240, 0, 35, 8, 0);
+        enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 320, 0, 0, 5496, 0, 3240, ENEMY_00_NPC_BARRY, 35, 8, 0);
         evt_exec(0, 0, on_enter);
         set(FG_STATUS, F_STATUS_1D, TRUE);
-        room_bgm_state_set(1, 10, 64);
+        room_bgm_state_set(1, ROOM_20A_STUDY_ROOM, BGM_RELOAD);
     }
 #endif
 }
@@ -139,192 +156,192 @@ proc main
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
     }
-    if (cmpw(0, 3, 3, 10) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 10) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 174, 252, 0, 0);
     }
-    if (cmpw(0, 3, 3, 20) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 20) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 224, 252, 0, 0);
     }
-    if (cmpw(0, 3, 3, 30) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 30) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 18, 253, 0, 0);
     }
-    if (cmpw(0, 3, 3, 40) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 40) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 68, 253, 0, 0);
     }
-    if (cmpw(0, 3, 3, 50) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 50) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 118, 253, 0, 0);
     }
-    if (cmpw(0, 3, 3, 60) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 60) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 168, 253, 0, 0);
     }
-    if (cmpw(0, 3, 3, 70) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 70) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 218, 253, 0, 0);
     }
-    if (cmpw(0, 3, 3, 80) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 80) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 12, 254, 0, 0);
     }
-    if (cmpw(0, 3, 3, 90) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 90) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 62, 254, 0, 0);
     }
-    if (cmpw(0, 3, 3, 100) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 100) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 112, 254, 0, 0);
     }
-    if (cmpw(0, 3, 3, 110) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 110) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 162, 254, 0, 0);
     }
-    if (cmpw(0, 3, 3, 120) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 120) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 212, 254, 0, 0);
     }
-    if (cmpw(0, 3, 3, 130) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 130) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 6, 255, 0, 0);
     }
-    if (cmpw(0, 3, 3, 140) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 140) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 56, 255, 0, 0);
     }
-    if (cmpw(0, 3, 3, 150) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 150) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 106, 255, 0, 0);
     }
-    if (cmpw(0, 3, 3, 160) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 160) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 156, 255, 0, 0);
     }
-    if (cmpw(0, 3, 3, 170) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 170) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 206, 255, 0, 0);
     }
-    if (cmpw(0, 3, 3, 180) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 180) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 0, 0, 0, 0);
     }
-    if (cmpw(0, 3, 3, 190) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 190) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 50, 0, 0, 0);
     }
-    if (cmpw(0, 3, 3, 200) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 200) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 100, 0, 0, 0);
     }
-    if (cmpw(0, 3, 3, 210) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 210) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 150, 0, 0, 0);
     }
-    if (cmpw(0, 3, 3, 220) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 220) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 200, 0, 0, 0);
     }
-    if (cmpw(0, 3, 3, 230) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 230) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 250, 0, 0, 0);
     }
-    if (cmpw(0, 3, 3, 240) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 240) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 44, 1, 0, 0);
     }
-    if (cmpw(0, 3, 3, 250) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 250) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 94, 1, 0, 0);
     }
-    if (cmpw(0, 3, 3, 260) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 260) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 144, 1, 0, 0);
     }
-    if (cmpw(0, 3, 3, 270) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 270) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 194, 1, 0, 0);
     }
-    if (cmpw(0, 3, 3, 280) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 280) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 244, 1, 0, 0);
     }
-    if (cmpw(0, 3, 3, 290) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 290) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 38, 2, 0, 0);
     }
-    if (cmpw(0, 3, 3, 300) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 300) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 88, 2, 0, 0);
     }
-    if (cmpw(0, 3, 3, 310) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 310) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 138, 2, 0, 0);
     }
-    if (cmpw(0, 3, 3, 320) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 320) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 188, 2, 0, 0);
     }
-    if (cmpw(0, 3, 3, 330) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 330) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 238, 2, 0, 0);
     }
-    if (cmpw(0, 3, 3, 340) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 340) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 32, 3, 0, 0);
     }
-    if (cmpw(0, 3, 3, 350) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 350) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 82, 3, 0, 0);
     }
-    if (cmpw(0, 3, 3, 360) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 360) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 132, 3, 0, 0);
     }
-    if (cmpw(0, 3, 3, 370) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 370) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 182, 3, 0, 0);
     }
-    if (cmpw(0, 3, 3, 380) && ck(FG_ROOM, F_ROOM_26, FALSE))
+    if (cmpw(0, W_RANDOM, CMP_LT, 380) && ck(FG_ROOM, F_ROOM_26, FALSE))
     {
         set(FG_ROOM, F_ROOM_26, TRUE);
         effect(37, 2, 129, 138, 2, 0, 0, 232, 3, 0, 0);
@@ -333,15 +350,15 @@ proc main
 
 event on_aot_02_message
 {
-    message(MSG_IT_SEEMS_SOMEONE_HAS_SEARCHED_HERE | 0x80, 255); // "It seems someone has searched here already... It appears to be a switch. Will you push it? There's something at the back of the shelf."
+    message(MSG_IT_SEEMS_SOMEONE_HAS_SEARCHED_HERE | MSG_FAST, 255); // "It seems someone has searched here already... It appears to be a switch. Will you push it? There's something at the back of the shelf."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 1, on_aot_02_message_sub1);
         }
@@ -353,7 +370,7 @@ event on_aot_02_message_sub1
 {
     run
     {
-        se_play_3d(2, 24, 0, 0, 0, 3200, 1800);
+        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 3200, 1800);
         set(FG_6, F_6_17, FALSE);
         cutnext(5);
         set(FG_ROOM, F_ROOM_0A, TRUE);
@@ -416,8 +433,8 @@ event on_aot_01_message
 {
     run
     {
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 133, 255, 0);
-        aot_reset(AOT_08_ITEM, SCE_DOCUMENT, 129, 0, 0, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
+        aot_reset(AOT_08_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         aot_on(AOT_08_ITEM, SCE_DOCUMENT, 0);
 #if CHRIS
         set(FG_COMMON, F_COMMON_07, TRUE);
@@ -455,13 +472,13 @@ event from_main
     {
         objtbl_b_set(0, 0, 1);
         set(FG_ROOM, F_ROOM_01, FALSE);
-        message(MSG_IT_IS_TOO_HEAVY_TO_MOVE | 0x80, 255); // "It's too heavy to move."
+        message(MSG_IT_IS_TOO_HEAVY_TO_MOVE | MSG_FAST, 255); // "It's too heavy to move."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_6, F_6_19, TRUE);
     set(FG_6, F_6_17, TRUE);
     evt_finish();
@@ -478,7 +495,7 @@ event on_enter
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
     sleep(20);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_motion_path(51, 64824, 0, 0, 192, 64);
     sleep(10);
@@ -491,7 +508,7 @@ event on_enter
     evt_nop();
     cutnext(1);
     evt_disable(1);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 15, 32 | 5, 0 | 0);
     act_flag_op(0, 2, 0);
@@ -507,9 +524,9 @@ event on_enter
     sleep(4);
     act_reset();
     evt_nop();
-    voice_play(1, 25, 0);
-    message(9, 0);
-    evt_work_set(WK_ENEMY, 0);
+    voice_play(VOICE_PLAY, VO_108_00, 0);
+    message(MSG_VO_108_00, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_motion_path(113, 200, 0, 2, 50, 64);
     act_anim_flags(32 | 5, 32 | 5, 0 | 0);
@@ -531,8 +548,8 @@ event on_enter
     act_reset();
     sleep(12);
     cutnext(1);
-    voice_play(1, 26, 0);
-    message(10, 0);
+    voice_play(VOICE_PLAY, VO_108_01, 0);
+    message(MSG_VO_108_01, 0);
     do
     {
         evt_next();
@@ -558,7 +575,7 @@ event on_enter
     act_reset();
     evt_nop();
     wait_message();
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 2, 32 | 5, 0 | 0);
     act_motion_path(50, 0, 200, 0, 192, 64);
@@ -567,9 +584,9 @@ event on_enter
     sleep(10);
     act_reset();
     evt_nop();
-    voice_play(1, 27, 0);
-    message(11, 0);
-    evt_work_set(WK_ENEMY, 0);
+    voice_play(VOICE_PLAY, VO_108_02, 0);
+    message(MSG_VO_108_02, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 1, 32 | 5, 0 | 0);
     sleep(25);
@@ -603,7 +620,7 @@ event on_enter
     act_reset();
     evt_nop();
     sleep(5);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 4, 32 | 5, 0 | 0);
     act_flag_op(0, 1, 0);
@@ -629,18 +646,18 @@ event on_enter
     evt_nop();
     run
     {
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 133, 255, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 255, 0);
         set(FG_6, F_6_17, FALSE);
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 2, 32 | 5, 0 | 0);
     act_reset();
     evt_nop();
     sleep(10);
-    voice_play(1, 28, 0);
-    message(12, 0);
-    evt_work_set(WK_ENEMY, 0);
+    voice_play(VOICE_PLAY, VO_108_03, 0);
+    message(MSG_VO_108_03, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 4, 32 | 5, 0 | 0);
     act_flag_op(0, 2, 0);
@@ -660,8 +677,8 @@ event on_enter
     act_reset();
     evt_nop();
     sleep(10);
-    voice_play(1, 29, 0);
-    message(13, 0);
+    voice_play(VOICE_PLAY, VO_108_04, 0);
+    message(MSG_VO_108_04, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 3, 32 | 5, 0 | 0);
@@ -688,9 +705,9 @@ event on_enter
     evt_nop();
     sys_multi(4);
     evt_fork(1, on_enter_sub2, 0);
-    voice_play(1, 30, 0);
-    message(14, 0);
-    evt_work_set(WK_ENEMY, 0);
+    voice_play(VOICE_PLAY, VO_108_05, 0);
+    message(MSG_VO_108_05, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 1, 32 | 5, 0 | 0);
     sleep(25);
@@ -706,8 +723,8 @@ event on_enter
     act_motion_path(147, 1, 0, 0, 192, 64);
     act_reset();
     evt_nop();
-    voice_play(1, 31, 0);
-    message(15, 0);
+    voice_play(VOICE_PLAY, VO_108_06, 0);
+    message(MSG_VO_108_06, 0);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 4, 32 | 5, 0 | 0);
@@ -728,9 +745,9 @@ event on_enter
     act_reset();
     evt_nop();
     wait_message();
-    voice_play(1, 32, 0);
-    message(16, 0);
-    evt_work_set(WK_ENEMY, 0);
+    voice_play(VOICE_PLAY, VO_108_07, 0);
+    message(MSG_VO_108_07, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 1, 32 | 5, 0 | 0);
     sleep(30);
@@ -759,7 +776,7 @@ event on_enter
     act_reset();
     evt_nop();
     wait_message();
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_seq(36370, 43027, 789);
     act_reset();
@@ -770,7 +787,7 @@ event on_enter
     while (ck(FG_ROOM, F_ROOM_03, FALSE));
     set(FG_ROOM, F_ROOM_03, FALSE);
     cutnext(0);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_seq(30978, 6923, 9493);
     act_reset();
@@ -786,7 +803,7 @@ event on_enter
     act_anim_seq(30982, 6923, 9237);
     act_reset();
     sleep(10);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 13, 32 | 5, 0 | 0);
     act_param_set(0, 252);
@@ -804,7 +821,7 @@ event on_enter
     sleep(5);
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 14, 32 | 5, 0 | 0);
     act_param_set(0, 4);
@@ -814,9 +831,9 @@ event on_enter
     act_reset();
     evt_nop();
     cutnext(1);
-    pos_set(0, 0, 0, 0, 0, 30000, 0);
+    pos_set(ENEMY_00_NPC_BARRY, 0, 0, 0, 0, 30000, 0);
     sleep(10);
-    se_play_3d(0, 0, 0, 0, 0, 2434, 4925);
+    se_play_3d(0, 0, 0, SND_AT_POINT, 0, 2434, 4925);
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -824,7 +841,7 @@ event on_enter
     act_reset();
     evt_nop();
     sleep(50);
-    se_play_3d(0, 1, 0, 0, 0, 2434, 4925);
+    se_play_3d(0, 1, 0, SND_AT_POINT, 0, 2434, 4925);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_motion(16);
@@ -843,7 +860,7 @@ event on_enter
 
 event on_enter_sub1
 {
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_motion_path(51, 65336, 300, 0, 50, 44);
     sleep(10);
@@ -878,7 +895,7 @@ event on_enter_sub2
 #endif
 event on_aot_02_message_sub1_sub1
 {
-    se_play_3d(2, 25, 0, 0, 0, 7470, 5980);
+    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 7470, 5980);
     evt_work_set(WK_OBJ, 1);
     evt_tween_begin_alt();
     tw_set_pos(0, 10, 0);

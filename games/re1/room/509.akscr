@@ -17,31 +17,35 @@
 #define AOT_07_MESSAGE 0x07
 #define AOT_08_MESSAGE 0x08
 #define AOT_09_MESSAGE 0x09
+#define ENEMY_00_ZOMBIE_NAKED 0x00
+#define ENEMY_01_ZOMBIE_NAKED 0x01
+#define ENEMY_02_ZOMBIE_NAKED 0x02
+#define ENEMY_03_ZOMBIE_NAKED 0x03
 #define MSG_IT_IS_A_PASS_CODE_OUTPUT 0x00
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3000, 1300, 1200, 1200, 3, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 11300, 0, 4800, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 3000, 1300, 1200, 1200, 3, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 11300, 0, 4800, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 0, 0, 1, 1, IT_6B_FILE_PASS_CODE_01, 1, 0, 255, 168, 97, 48, 117, 168, 97, 0, 0, 82, 129, 0, 0);
     item_aot_set(AOT_02_ITEM, 1200, 7400, 800, 1300, IT_65_FILE_FAX, 1, 1, 255, 164, 6, 94, 247, 154, 31, 0, 0, 83, 129, 0, 0);
 #if JILL
     item_aot_set(AOT_07_ITEM, 9000, 9000, 2700, 1900, IT_2F_KEY_INK_RIBBON, 2, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 230, 129, 0, 0);
 #endif
-    aot_set(AOT_03_USEITEM, 9900, 1700, 2000, 2100, SCE_USEITEM, 1, 9, 0, 13, 0, 1, 0);
-    aot_set(AOT_04_EVENT, 9900, 1700, 2000, 2100, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_05_MESSAGE, 5900, 1700, 1800, 3400, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(AOT_06_MESSAGE, 11700, 4000, 1100, 1900, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_USEITEM, 9900, 1700, 2000, 2100, SCE_USEITEM, SAT_PLAYER, 9, 0, 13, 0, 1, 0);
+    aot_set(AOT_04_EVENT, 9900, 1700, 2000, 2100, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 5900, 1700, 1800, 3400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 11700, 4000, 1100, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
 #if CHRIS
-    aot_set(AOT_07_MESSAGE, 9000, 9000, 2700, 1900, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 1400, 8900, 800, 1100, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 9000, 9000, 2700, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 1400, 8900, 800, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
 #else
-    aot_set(AOT_08_MESSAGE, 9000, 9000, 2700, 1900, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 1400, 8900, 800, 1100, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 9000, 9000, 2700, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 1400, 8900, 800, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
 #endif
-    enemy(EM_01_ZOMBIE_NAKED, 0, 92, 1, 1, 0, 0, 360, 0, 0, 2900, 0, 6400, 0, 0, 0, 0);
-    enemy(EM_01_ZOMBIE_NAKED, 0, 93, 1, 1, 0, 0, 1024, 0, 0, 6100, 0, 8900, 1, 0, 0, 0);
-    enemy(EM_01_ZOMBIE_NAKED, 0, 94, 1, 1, 0, 0, 1024, 0, 0, 10200, 0, 9700, 2, 0, 0, 0);
-    enemy(EM_01_ZOMBIE_NAKED, 0, 95, 1, 1, 0, 0, 2700, 0, 0, 8500, 0, 3800, 3, 0, 0, 0);
+    enemy(EM_01_ZOMBIE_NAKED, 0, 92, 1, 1, 0, 0, 360, 0, 0, 2900, 0, 6400, ENEMY_00_ZOMBIE_NAKED, 0, 0, 0);
+    enemy(EM_01_ZOMBIE_NAKED, 0, 93, 1, 1, 0, 0, 1024, 0, 0, 6100, 0, 8900, ENEMY_01_ZOMBIE_NAKED, 0, 0, 0);
+    enemy(EM_01_ZOMBIE_NAKED, 0, 94, 1, 1, 0, 0, 1024, 0, 0, 10200, 0, 9700, ENEMY_02_ZOMBIE_NAKED, 0, 0, 0);
+    enemy(EM_01_ZOMBIE_NAKED, 0, 95, 1, 1, 0, 0, 2700, 0, 0, 8500, 0, 3800, ENEMY_03_ZOMBIE_NAKED, 0, 0, 0);
     eml_rot(1, 0, 0, 244, 11);
 }
 
@@ -49,13 +53,13 @@ proc main
 {
     if (ck(FG_ITEM, F_ITEM_52, TRUE))
     {
-        aot_reset(AOT_04_EVENT, SCE_EVENT, 129, 9, on_aot_04, 0);
-        aot_reset(AOT_03_USEITEM, SCE_USEITEM, 1, 9, 13, 1);
+        aot_reset(AOT_04_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_04, 0);
+        aot_reset(AOT_03_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 13, 1);
     }
     else
     {
-        aot_reset(AOT_04_EVENT, SCE_MESSAGE, 129, 129, 69, 0);
-        aot_reset(AOT_03_USEITEM, SCE_NONE, 129, 0, 0, 0);
+        aot_reset(AOT_04_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
+        aot_reset(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
     }
     if (testitem(IT_28_KEY_MO_DISK))
     {
@@ -72,13 +76,13 @@ event on_aot_04
         set(FG_6, F_6_19, FALSE);
         cut_auto(1);
         cutnext(4);
-        message(MSG_IT_IS_A_PASS_CODE_OUTPUT | 0x80, 69); // "It's a pass code output machine. If I had a MO DISK, I could get the code..."
+        message(MSG_IT_IS_A_PASS_CODE_OUTPUT | MSG_FAST, 69); // "It's a pass code output machine. If I had a MO DISK, I could get the code..."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         set(FG_6, F_6_17, TRUE);

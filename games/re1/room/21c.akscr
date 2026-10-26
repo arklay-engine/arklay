@@ -17,38 +17,40 @@
 #define AOT_08_MESSAGE 0x08
 #define AOT_09_MESSAGE 0x09
 #define AOT_0A_ITEM 0x0A
+#define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
+#define ENEMY_01_ZOMBIE_LAB 0x01
 #define F_ROOM_18 0x18
 #define F_ROOM_19 0x19
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 17500, 5300, 2000, 2900, 0, 10, 16, 64, 0, ROOM_200_1F_B1_ELEVATOR, 4600, 0, 4600, 1024, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 5600, 1000, 1900, 1300, 1, 1, 8, 0, 155, ROOM_21B_UNDER_PASSAGE_2, 4800, 0, 4600, 0, LOCKED, 129);
-    door_aot_set(AOT_02_DOOR, 4200, 9600, 1800, 1300, 3, 0, 0, 1, 0, STAGE_1 | ROOM_110_1F_ELEVATOR, 2900, 0, 10400, 0, UNLOCKED, 129);
-    aot_set(AOT_03_USEITEM, 400, 9800, 4900, 12400, SCE_USEITEM, 1, 4, 0, 24, 0, 1, 0);
-    aot_set(AOT_04_MESSAGE, 800, 2300, 1400, 2100, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
-    aot_set(AOT_05_MESSAGE, 14000, 4000, 1400, 3900, SCE_MESSAGE, 129, 129, 0, 79, 0, 0, 0);
-    aot_set(AOT_06_MESSAGE, 800, 6200, 1400, 1200, SCE_MESSAGE, 129, 130, 0, 79, 0, 0, 0);
-    aot_set(AOT_07_MESSAGE, 7300, 7800, 1400, 1500, SCE_MESSAGE, 129, 131, 0, 79, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 11000, 7800, 1500, 1500, SCE_MESSAGE, 129, 132, 0, 79, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 5400, 5200, 2000, 2300, SCE_MESSAGE, 129, 133, 0, 79, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 17500, 5300, 2000, 2900, 0, 10, 16, 64, 0, ROOM_200_1F_B1_ELEVATOR, 4600, 0, 4600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 5600, 1000, 1900, 1300, 1, 1, 8, 0, 155, ROOM_21B_UNDER_PASSAGE_2, 4800, 0, 4600, 0, LOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 4200, 9600, 1800, 1300, 3, 0, 0, 1, 0, STAGE_1 | ROOM_110_1F_ELEVATOR, 2900, 0, 10400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_03_USEITEM, 400, 9800, 4900, 12400, SCE_USEITEM, SAT_PLAYER, 4, 0, 24, 0, 1, 0);
+    aot_set(AOT_04_MESSAGE, 800, 2300, 1400, 2100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 14000, 4000, 1400, 3900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 79, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 800, 6200, 1400, 1200, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 79, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 7300, 7800, 1400, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 79, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 11000, 7800, 1500, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 79, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 5400, 5200, 2000, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 79, 0, 0, 0);
 #if CHRIS
     item_aot_set(AOT_0A_ITEM, 8500, 7800, 1600, 1000, IT_3D_KEY_DESK, 1, 0, 255, 34, 36, 36, 250, 96, 34, 0, 0, 228, 129, 0, 134);
 #endif
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, 107, 1, 2, 0, 0, 1536, 0, 0, 20000, 0, 4500, 0, 0, 0, 0);
-    enemy(EM_11_ZOMBIE_LAB, 128, 108, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, 107, 1, 2, 0, 0, 1536, 0, 0, 20000, 0, 4500, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+    enemy(EM_11_ZOMBIE_LAB, 128, F_ENEMY_6C, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, ENEMY_01_ZOMBIE_LAB, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_33, TRUE))
     {
-        aot_delete(AOT_03_USEITEM, SCE_NONE, 129);
+        aot_delete(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         if (ck(FG_ENEMY, F_ENEMY_6C, FALSE))
         {
-            pos_set(1, 0, 850, 0, 3450, 0, 4600);
-            eml_state(0, 1, 0, 0);
+            pos_set(ENEMY_01_ZOMBIE_LAB, 0, 850, 0, 3450, 0, 4600);
+            eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_33, FALSE))
     {
-        aot_delete(AOT_02_DOOR, SCE_NONE, 129);
+        aot_delete(AOT_02_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     set(FG_STATUS, F_STATUS_1D, TRUE);
     set(FG_STATUS, F_STATUS_1C, TRUE);
@@ -60,8 +62,8 @@ proc main
     {
         evt_exec(0, 9, from_main);
         set(FG_SCENARIO, F_SCENARIO_33, TRUE);
-        aot_delete(AOT_03_USEITEM, SCE_NONE, 129);
-        aot_delete(AOT_02_DOOR, SCE_DOOR, 129);
+        aot_delete(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_02_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
     }
 }
 
@@ -82,12 +84,12 @@ event from_main
         set(FG_STATUS, F_STATUS_0F, TRUE);
         cutnext(1);
         dir_set(0, 0, 3200, 0, 3600, 0, 9000);
-        eml_state(0, 1, 0, 0);
+        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, 0);
     }
     sleep(20);
     run
     {
-        se_play_3d(2, 23, 0, 0, 0, 4200, 10000);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 4200, 10000);
     }
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -108,7 +110,7 @@ event from_main
     act_reset();
     run
     {
-        pos_set(1, 0, 1350, 0, 4000, 0, 9800);
+        pos_set(ENEMY_01_ZOMBIE_LAB, 0, 1350, 0, 4000, 0, 9800);
         cutnext(0);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_6, F_6_17, TRUE);

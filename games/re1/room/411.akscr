@@ -21,23 +21,23 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 8500, 8900, 2300, 3300, 0, 1, 11, 3, 0, ROOM_40E_WATER_TANK, 2900, 0, 23400, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 8500, 8900, 2300, 3300, 0, 1, 11, 3, 0, ROOM_40E_WATER_TANK, 2900, 0, 23400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     obj(0, 63, 255, 5410, -1700, 7280, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_01_EVENT, 8200, 4000, 1700, 1700, SCE_NONE, 129, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_02_NONE, 6300, 11800, 1100, 1500, SCE_NONE, 129, 9, 0, 10, 0, 0, 0);
+    aot_set(AOT_01_EVENT, 8200, 4000, 1700, 1700, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_NONE, 6300, 11800, 1100, 1500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 9, 0, 10, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_23, FALSE))
     {
-        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_B, 65, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_B, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
         set(FG_ROOM, F_ROOM_19, TRUE);
         evt_exec(0, 9, on_enter);
     }
     else
     {
-        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_NONE, 65, 0, 0, 0, 0, 0, 0);
+        aot_set(AOT_03_B, 0, 0, 20000, 20000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
         set(FG_ROOM, F_ROOM_19, FALSE);
         objtbl_b_set(0, 0, 46);
     }
-    aot_set(AOT_04_MESSAGE, 1500, 10000, 1300, 2900, SCE_MESSAGE, 129, 131, 0, 68, 1, 0, 0);
+    aot_set(AOT_04_MESSAGE, 1500, 10000, 1300, 2900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 68, 1, 0, 0);
     eml_rot(128, 246, 255, 0, 0);
 }
 
@@ -45,11 +45,11 @@ proc main
 {
     if (ck(FG_SCENARIO, F_SCENARIO_23, FALSE))
     {
-        aot_reset(AOT_01_EVENT, SCE_EVENT, 129, 9, on_aot_01, 0);
+        aot_reset(AOT_01_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01, 0);
     }
     else
     {
-        aot_delete(AOT_01_EVENT, SCE_NONE, 129);
+        aot_delete(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     if (ck(FG_ROOM, F_ROOM_18, FALSE) && ck(FG_ROOM, F_ROOM_19, TRUE))
     {
@@ -58,7 +58,7 @@ proc main
     }
     if (ck(FG_SCENARIO, F_SCENARIO_23, TRUE) && ck(FG_LOCK, F_LOCK_24, FALSE))
     {
-        aot_delete(AOT_02_NONE, SCE_EVENT, 129);
+        aot_delete(AOT_02_NONE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         if (ck(FG_ROOM, F_ROOM_17, FALSE) && ck(FG_ROOM, F_ROOM_18, FALSE))
         {
             evt_exec(0, 9, from_main_2);
@@ -66,7 +66,7 @@ proc main
     }
     else
     {
-        aot_delete(AOT_02_NONE, SCE_NONE, 129);
+        aot_delete(AOT_02_NONE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         if (ck(FG_ROOM, F_ROOM_17, TRUE))
         {
             evt_exec(0, 9, from_main_3);
@@ -79,29 +79,29 @@ event from_main
     run
     {
         timer_setup(3, 208, 7, 4, 0);
-        setw(1, 232, 3);
+        setw(W_LIGHT_STATE, 232, 3);
         effect_tracked(10, 0, 0, 208, 32, 116, 245, 112, 23, 0, 0);
     }
     for (15)
     {
         run
         {
-            if (cmpw(0, 1, 2, 21000))
+            if (cmpw(0, W_LIGHT_STATE, CMP_GE, 21000))
             {
-                setw(2, 0, 0);
+                setw(W_LIGHT_DELTA, 0, 0);
             }
         }
         sleep(1);
     }
     evt_nop();
     sleep(5);
-    setw(2, 48, 248);
+    setw(W_LIGHT_DELTA, 48, 248);
     sleep(10);
     run
     {
         effect_kill_a(0);
-        setw(2, 0, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_DELTA, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(5);
     set(FG_ROOM, F_ROOM_18, FALSE);
@@ -127,7 +127,7 @@ event on_aot_01
     run
     {
         set(FG_ROOM, F_ROOM_1A, FALSE);
-        message(MSG_THERE_IS_A_LEVER | 0x80, 1); // "There's a lever. Will you move it? There's a button. Will you push it? There was a sound from the room next door."
+        message(MSG_THERE_IS_A_LEVER | MSG_FAST, 1); // "There's a lever. Will you move it? There's a button. Will you push it? There was a sound from the room next door."
         cut_auto(1);
         cutnext(4);
         dir_set(0, 0, 0, 0, 7800, 0, 5000);
@@ -136,10 +136,10 @@ event on_aot_01
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_01_sub1);
         }
@@ -160,7 +160,7 @@ event on_aot_01_sub1
     run
     {
         cutnext(3);
-        se_play_3d(2, 23, 0, 1, 0, 0, 0);
+        se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     sleep(60);
     run
@@ -176,7 +176,7 @@ event on_aot_01_sub1
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_1A, FALSE));
-    aot_delete(AOT_03_B, SCE_NONE, 129);
+    aot_delete(AOT_03_B, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     sleep(60);
     run
     {
@@ -544,20 +544,20 @@ event event_0A
         set(FG_6, F_6_17, FALSE);
         set(FG_6, F_6_1D, FALSE);
         set(FG_6, F_6_19, FALSE);
-        message(MSG_THERE_IS_A_BUTTON | 0x80, 1); // "There's a button. Will you push it? There was a sound from the room next door."
+        message(MSG_THERE_IS_A_BUTTON | MSG_FAST, 1); // "There's a button. Will you push it? There was a sound from the room next door."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     sleep(1);
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             set(FG_LOCK, F_LOCK_24, TRUE);
-            se_play_3d(2, 24, 0, 1, 0, 0, 0);
+            se_play_3d(2, 24, 0, SND_AT_PLAYER, 0, 0, 0);
             evt_exec(0, 9, event_0D);
         }
         else
@@ -593,12 +593,12 @@ event from_main_3
 event event_0D
 {
     sleep(20);
-    message(MSG_THERE_WAS_A_SOUND_FROM_THE | 0x80, 1); // "There was a sound from the room next door."
+    message(MSG_THERE_WAS_A_SOUND_FROM_THE | MSG_FAST, 1); // "There was a sound from the room next door."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         set(FG_6, F_6_17, TRUE);

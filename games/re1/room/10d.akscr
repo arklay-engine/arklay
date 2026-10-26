@@ -19,9 +19,9 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 4600, 1800, 1800, 900, 0, 0, 0, 4, 0, ROOM_103_F_PASSAGE, 8600, 0, 15000, 1024, UNLOCKED, 129);
-    aot_set(AOT_01_SAVE, 3000, 3556, 1600, 1400, SCE_SAVE, 1, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_02_USEITEM, 3000, 3556, 1600, 1400, SCE_USEITEM, 129, 4, 0, 26, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 4600, 1800, 1800, 900, 0, 0, 0, 4, 0, ROOM_103_F_PASSAGE, 8600, 0, 15000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_SAVE, 3000, 3556, 1600, 1400, SCE_SAVE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_02_USEITEM, 3000, 3556, 1600, 1400, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 26, 0, 1, 0);
     item_aot_set(AOT_83_ITEM, 3300, 4292, 1280, 800, IT_29_KEY_CREST_WIND, 1, 0, 0, 62, 254, 242, 249, 18, 2, 0, 0, 174, 192, 1, 0);
     eml_rot(0, 0, 0, 0, 0);
     item_aot_set(AOT_04_ITEM, 3300, 3300, 1280, 800, IT_05_WEAPON_MAGNUM, 6, 1, 0, 62, 254, 36, 250, 152, 254, 252, 3, 175, 192, 1, 0);
@@ -47,14 +47,14 @@ proc init
     if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))
     {
         objtbl_b_set(1, 1, 1);
-        aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 1, 0);
+        aot_reset(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 1, 0);
         aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
         evt_exec(0, 9, on_enter_2);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_0F, TRUE))
     {
         objtbl_b_set(1, 0, 1);
-        aot_reset(AOT_03_ITEM, SCE_ITEM, 129, 0, 0, 0);
+        aot_reset(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         aot_delete(AOT_02_USEITEM, SCE_NONE, 0);
         evt_exec(0, 9, on_enter);
     }
@@ -66,9 +66,9 @@ proc main
     {
         if (ck(FG_SCENARIO, F_SCENARIO_0E, TRUE))
         {
-            if (cmpb(19, 0, 5))
+            if (cmpb(B_PICKED_ITEM, CMP_EQ, IT_05_WEAPON_MAGNUM))
             {
-                aot_delete(AOT_02_USEITEM, SCE_USEITEM, 129);
+                aot_delete(AOT_02_USEITEM, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER);
                 set(FG_ROOM, F_ROOM_18, TRUE);
                 set(FG_SCENARIO, F_SCENARIO_0E, FALSE);
                 cutnext(1);
@@ -79,9 +79,9 @@ proc main
         }
         if (ck(FG_SCENARIO, F_SCENARIO_0F, TRUE))
         {
-            if (cmpb(19, 0, 41))
+            if (cmpb(B_PICKED_ITEM, CMP_EQ, IT_29_KEY_CREST_WIND))
             {
-                aot_delete(AOT_02_USEITEM, SCE_USEITEM, 129);
+                aot_delete(AOT_02_USEITEM, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER);
                 set(FG_ROOM, F_ROOM_18, TRUE);
                 set(FG_SCENARIO, F_SCENARIO_0F, FALSE);
                 cutnext(1);
@@ -92,14 +92,14 @@ proc main
         }
         if (ck(FG_SCENARIO, F_SCENARIO_0C, FALSE))
         {
-            if (cmpb(16, 0, 2))
+            if (cmpb(B_FWD_AOT, CMP_EQ, 2))
             {
                 set(FG_9, F_9_07, TRUE);
             }
-            if (cmpb(18, 0, 34))
+            if (cmpb(B_USED_ITEM, CMP_EQ, IT_22_KEY_JEWEL_RED))
             {
                 objtbl_b_set(1, 1, 1);
-                aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 1, 0);
+                aot_reset(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 1, 0);
                 eml_pos(2, 176, 255, 0, 0, 230, 0, 254, 1, 250, 246, 146, 255);
                 cutnext(1);
                 set(FG_ROOM, F_ROOM_18, TRUE);
@@ -111,14 +111,14 @@ proc main
         }
         if (ck(FG_SCENARIO, F_SCENARIO_0D, FALSE))
         {
-            if (cmpb(16, 0, 2))
+            if (cmpb(B_FWD_AOT, CMP_EQ, 2))
             {
                 set(FG_9, F_9_06, TRUE);
             }
-            if (cmpb(18, 0, 33))
+            if (cmpb(B_USED_ITEM, CMP_EQ, IT_21_KEY_JEWEL_BLUE))
             {
                 objtbl_b_set(1, 0, 1);
-                aot_reset(AOT_03_ITEM, SCE_ITEM, 129, 0, 0, 0);
+                aot_reset(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
                 eml_pos(1, 170, 0, 196, 255, 196, 255, 254, 1, 4, 247, 130, 0);
                 cutnext(1);
                 set(FG_ROOM, F_ROOM_18, TRUE);
@@ -136,11 +136,11 @@ proc main
             if (ck(FG_ROOM, F_ROOM_1A, TRUE))
             {
                 cutnext(1);
-                message(MSG_IT_READS_SOME_TIGERS_HAVE_A | 0x80, 255); // "It reads “Some tigers have a red eye and a blue eye"."
+                message(MSG_IT_READS_SOME_TIGERS_HAVE_A | MSG_FAST, 255); // "It reads “Some tigers have a red eye and a blue eye"."
                 set(FG_ROOM, F_ROOM_19, TRUE);
             }
         }
-        else if (cmpb(5, 3, 128))
+        else if (cmpb(B_MENU_CHOICE, CMP_LT, 128))
         {
             set(FG_ROOM, F_ROOM_19, FALSE);
             set(FG_ROOM, F_ROOM_1A, FALSE);

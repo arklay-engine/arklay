@@ -641,8 +641,15 @@ directory at or above `--out`, and from the English text beside it
   words (`MSG_IT_IS_LOCKED`), adding the next sentence and then the id where
   two would share a name. The global messages (id `0x40` and up) are in
   `inc/messages.akinc` and a room's own are defined in its script;
-  `MSG_.. | 0x80` asks for the fast reveal, and the full text follows as a
-  comment.
+  `MSG_.. | MSG_FAST` asks for the fast reveal, and the full text follows as
+  a comment. A message without text that follows a voice line is named after
+  the line (`MSG_VO_104_02`);
+- each enemy slot the room fills, `#define ENEMY_02_CROW 0x02` after the type
+  `enemy` puts there, for `evt_work_set(WK_ENEMY, ..)`, `eml_state` and the
+  other commands on a slot;
+- each voice line the room plays, `#define VO_104_02 0x09` after the line's
+  file;
+- engine values with the compiler's own names (below).
 
 These names are a starting point for hand renaming; once a script is edited
 by hand, re-exporting would overwrite it.
@@ -701,8 +708,22 @@ event on_enter
   means XX). `//` starts a comment.
 - A command is `name(args);` with the disassembler's mnemonics, the engine's
   constant names (`FG_*`, `SCE_*`, `WK_*`, `UNLOCKED`/`LOCK`/`LOCKED`) and
-  `hi | lo` bit fields. `TRUE` is 0, `FALSE` 1 and `TOGGLE` 2, as `ck` and
-  `set` read their last argument: `ck(.., TRUE)` passes when the bit is set.
+  values ORed together with `|`. `TRUE` is 0, `FALSE` 1 and `TOGGLE` 2, as
+  `ck` and `set` read their last argument: `ck(.., TRUE)` passes when the bit
+  is set. The compiler also names these engine values:
+
+  | Names | For |
+  | --- | --- |
+  | `CMP_EQ` `CMP_GT` `CMP_GE` `CMP_LT` `CMP_LE` `CMP_NE` | `cmpb` / `cmpw` comparisons, the state on the left |
+  | `B_ROOM` `B_CAMERA` `B_PREV_ROOM` `B_CUT` `B_MENU_CHOICE` `B_SELECTED_ITEM` `B_TOTAL_HELD` `B_LIGHT_R` `B_CHARACTER_MODEL` `B_FWD_AOT` `B_ENT_AOT` `B_USED_ITEM` `B_PICKED_ITEM` `B_SAVES` `B_EQUIPPED` `B_CHARACTER` `B_HEALTH_STATUS` | `cmpb` / `setb` state bytes |
+  | `W_LIGHT_STATE` `W_LIGHT_DELTA` `W_RANDOM` `W_DPAD_HELD` `W_DPAD_PRESSED` | `cmpw` / `setw` state words |
+  | `SAT_PLAYER` `SAT_OBJECT` `SAT_UNDER` `SAT_MANUAL` | AOT trigger flags: the player or an object, at its feet rather than its reach, on the action button |
+  | `MSG_FAST` | `message`: show the text at once |
+  | `VOICE_PLAY` `VOICE_STOP` | `voice_play` |
+  | `SND_AT_POINT` `SND_AT_PLAYER` `SND_AT_ENEMY` `SND_NO_POS` | `se_play_3d`: where the sound plays |
+  | `BGM_CH0` `BGM_CH1` `BGM_CH2` `BGM_RELOAD` `BGM_RESTART` `BGM_OFF` | `room_bgm_state_set`: the channels, the load type, no music; the low three bits pick the room's music group |
+  | `EML_BEHAVIOUR` `EML_REVIVE` `EML_ACTION` `EML_STATUS` `EML_ANGLE` `EML_BLEND_RESET` `EML_JOINTS` `EML_ACTION_STATE` | `eml_state` sub-commands |
+  | `EML_STATUS_SET` `EML_STATUS_OR` `EML_STATUS_XOR` | `eml_state(.., EML_STATUS, EML_STATUS_OR \| 2)`: how the bits apply |
 - `#define NAME value` names a number (or an earlier name) and
   `#include "inc/items.akinc"` reads a file of defines, resolved against the
   script's directory and then each directory above it. Game data has no

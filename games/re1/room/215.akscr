@@ -24,9 +24,9 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 8100, 3200, 1800, 1300, 3, 0, 0, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, 129);
-    aot_set(AOT_01_EVENT, 8200, 5100, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_01, 0, 0, 0);
-    aot_set(AOT_02_EVENT, 4450, 10680, 1000, 1500, SCE_EVENT, 129, 9, 0, on_aot_02, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 8100, 3200, 1800, 1300, 3, 0, 0, 4, 0, ROOM_201_2F_LEFT_STAIRS, 15000, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_EVENT, 8200, 5100, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_01, 0, 0, 0);
+    aot_set(AOT_02_EVENT, 4450, 10680, 1000, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
     item_aot_set(AOT_03_ITEM, 1820, 9520, 1000, 1000, IT_0C_AMMO_SHOTGUN, 7, 0, 255, 16, 9, 80, 251, 36, 39, 0, 8, 29, 129, 0, 0);
     item_aot_set(AOT_04_ITEM, 3900, 7500, 1700, 1600, IT_62_FILE_ORDERS, 0, 1, 255, 242, 18, 70, 251, 244, 31, 180, 251, 116, 129, 0, 0);
     eml_rot(1, 124, 1, 232, 8);
@@ -48,18 +48,18 @@ proc init
             effect_tracked(12, 25, 0, 80, 20, 96, 240, 68, 47, 0, 0);
         }
     }
-    aot_set(AOT_07_MESSAGE, 5500, 5200, 1100, 2500, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 3600, 11500, 3500, 600, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 7100, 11500, 1800, 600, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
-    aot_set(AOT_0A_MESSAGE, 1500, 10900, 2000, 1000, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_0B_MESSAGE, 2200, 7500, 300, 2500, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_07_MESSAGE, 5500, 5200, 1100, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 3600, 11500, 3500, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 7100, 11500, 1800, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 1500, 10900, 2000, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 2200, 7500, 300, 2500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
 }
 
 proc main
 {
     if (ck(FG_STATUS, F_STATUS_18, TRUE))
     {
-        aot_delete(AOT_02_EVENT, SCE_EVENT, 129);
+        aot_delete(AOT_02_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         aot_delete(AOT_03_ITEM, SCE_ITEM, 0);
         aot_delete(AOT_04_ITEM, SCE_DOCUMENT, 0);
         aot_delete(AOT_05_ITEM, SCE_ITEM, 0);
@@ -67,9 +67,9 @@ proc main
     else
     {
         aot_delete(AOT_02_EVENT, SCE_EVENT, 0);
-        aot_delete(AOT_03_ITEM, SCE_ITEM, 129);
-        aot_delete(AOT_04_ITEM, SCE_DOCUMENT, 129);
-        aot_delete(AOT_05_ITEM, SCE_ITEM, 129);
+        aot_delete(AOT_03_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_04_ITEM, SCE_DOCUMENT, SAT_MANUAL | SAT_PLAYER);
+        aot_delete(AOT_05_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
     }
     if (ck(FG_ITEM, F_ITEM_1E, FALSE))
     {
@@ -93,20 +93,20 @@ event on_aot_01
 {
     sleep(1);
     set(FG_6, F_6_17, FALSE);
-    message(MSG_THERE_IS_A_SWITCH | 0x80, 0); // "There's a switch. Will you push it? ...Nothing important."
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 0); // "There's a switch. Will you push it? ...Nothing important."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            se_play_3d(2, 23, 0, 0, 0, 8200, 5100);
+            se_play_3d(2, 23, 0, SND_AT_POINT, 0, 8200, 5100);
             if (ck(FG_COMMON, F_COMMON_44, FALSE))
             {
-                if (cmpb(2, 0, 4))
+                if (cmpb(B_CAMERA, CMP_EQ, 4))
                 {
                     cutnext(0);
                 }
@@ -118,7 +118,7 @@ event on_aot_01
             }
             else
             {
-                if (cmpb(2, 0, 0))
+                if (cmpb(B_CAMERA, CMP_EQ, 0))
                 {
                     cutnext(4);
                 }
@@ -226,7 +226,7 @@ event on_aot_02_sub1
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         cutcurr(0);
@@ -243,15 +243,15 @@ event on_aot_02_sub1
 event on_aot_02_sub2
 {
     sleep(50);
-    message(MSG_WILL_YOU_TRY_AND_TAKE_OUT | 0x80, 0); // "Will you try and take out the eyeball? It looks as if it's alive."
+    message(MSG_WILL_YOU_TRY_AND_TAKE_OUT | MSG_FAST, 0); // "Will you try and take out the eyeball? It looks as if it's alive."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_02_sub2_sub1);
         }
@@ -307,7 +307,7 @@ event on_aot_02_sub3
 {
     for (40)
     {
-        evt_work_set(WK_AOT, 2);
+        evt_work_set(WK_AOT, AOT_02_EVENT);
         evt_tween_begin_alt();
         tw_set_rot(20, 0, 0);
         tw_rot_add();

@@ -17,9 +17,9 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 4000, 11800, 1300, 1400, 1, 0, 1, 4, 0, ROOM_20E_FRONT_OF_ATTIC, 4900, 0, 12500, 0, UNLOCKED, 129);
-    aot_set(AOT_01_MESSAGE, 7300, 6700, 2700, 2000, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_02_USEITEM, 7300, 6700, 2700, 2000, SCE_USEITEM, 1, 9, 0, 21, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 4000, 11800, 1300, 1400, 1, 0, 1, 4, 0, ROOM_20E_FRONT_OF_ATTIC, 4900, 0, 12500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_MESSAGE, 7300, 6700, 2700, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_02_USEITEM, 7300, 6700, 2700, 2000, SCE_USEITEM, SAT_PLAYER, 9, 0, 21, 0, 1, 0);
     item_aot_set(AOT_03_ITEM, 10000, 11300, 1700, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 11, 129, 0, 0);
 #if CHRIS
     item_aot_set(AOT_04_ITEM, 3200, 1900, 1200, 2400, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 12, 129, 0, 0);
@@ -30,16 +30,16 @@ proc init
     obj(0, 17, 255, 7872, 0, 5192, 3072, 0, 0, 106, 4, 0, 0, 150, 251, 40, 0, 232, 3, 146, 4, 28, 2);
     if (ck(FG_SCENARIO, F_SCENARIO_0A, FALSE))
     {
-        aot_reset(AOT_04_ITEM, SCE_MESSAGE, 129, 130, 255, 0);
+        aot_reset(AOT_04_ITEM, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     }
     else
     {
         cut_auto(1);
-        setb(2, 3, 0);
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 129, 255, 0);
+        setb(B_CAMERA, 3, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         if (ck(FG_ITEM, F_ITEM_0C, TRUE))
         {
-            aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 0, 0);
+            aot_reset(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
         }
         else
         {
@@ -60,8 +60,8 @@ proc main
         {
             cutnext(4);
             cut_auto(0);
-            aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 129, 255, 0);
-            aot_reset(AOT_04_ITEM, SCE_ITEM, 129, 0, 0, 0);
+            aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
+            aot_reset(AOT_04_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
             effect(15, 0, 0, 254, 31, 194, 248, 200, 31, 0, 0);
             effect(15, 0, 0, 124, 32, 122, 248, 70, 32, 0, 0);
             effect(15, 0, 0, 12, 33, 194, 248, 196, 32, 0, 0);
@@ -75,11 +75,11 @@ proc main
         cut_auto(0);
         set(FG_ROOM, F_ROOM_01, TRUE);
     }
-    if (cmpb(2, 0, 2))
+    if (cmpb(B_CAMERA, CMP_EQ, 2))
     {
         set(FG_MAP, F_MAP_3D, TRUE);
     }
-    if (cmpb(2, 0, 5))
+    if (cmpb(B_CAMERA, CMP_EQ, 5))
     {
         set(FG_MAP, F_MAP_3D, TRUE);
     }

@@ -11,6 +11,10 @@
 #define AOT_02_EVENT 0x02
 #define AOT_03_EVENT 0x03
 #define AOT_89_ITEM 0x89
+#define ENEMY_00_NPC_ENRICO 0x00
+#define ENEMY_01_HUNTER 0x01
+#define ENEMY_01_NPC_BARRY 0x01
+#define ENEMY_02_HUNTER 0x02
 #define F_ROOM_00 0x00
 #define F_ROOM_01 0x01
 #define F_ROOM_08 0x08
@@ -18,15 +22,53 @@
 #define F_ROOM_23 0x23
 #define MSG_BARRY_IS_INVESTIGATING 0x18
 #define MSG_HE_COULD_NOT_HAVE_MOVED_BECAUSE_HE_IS_HOLDING_SOMETHING_06 0x06
+#define MSG_VO_00D_00 0x00
+#define MSG_VO_00D_01 0x01
+#define MSG_VO_00D_03 0x03
+#define MSG_VO_00D_04 0x04
+#define MSG_VO_00D_05 0x05
+#define MSG_VO_10F_00 0x07
+#define MSG_VO_10F_02 0x08
+#define MSG_VO_10F_04 0x09
+#define MSG_VO_10F_05 0x0A
+#define MSG_VO_10F_06 0x0B
+#define MSG_VO_10F_07 0x0C
+#define MSG_VO_10F_08 0x0D
+#define MSG_VO_10F_15 0x0E
+#define MSG_VO_10F_16 0x0F
+#define MSG_VO_10F_17 0x10
+#define MSG_VO_10F_18 0x11
+#define MSG_VO_10F_19 0x12
+#define MSG_VO_10F_1A 0x13
+#define MSG_VO_10F_1B 0x14
+#define VO_00D_00 0x00
+#define VO_00D_01 0x01
+#define VO_00D_03 0x03
+#define VO_00D_04 0x04
+#define VO_00D_05 0x05
+#define VO_10F_00 0x06
+#define VO_10F_02 0x07
+#define VO_10F_04 0x08
+#define VO_10F_05 0x09
+#define VO_10F_06 0x0A
+#define VO_10F_07 0x0B
+#define VO_10F_08 0x0C
+#define VO_10F_15 0x0F
+#define VO_10F_16 0x10
+#define VO_10F_17 0x11
+#define VO_10F_18 0x12
+#define VO_10F_19 0x13
+#define VO_10F_1A 0x14
+#define VO_10F_1B 0x15
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3400, 20200, 1500, 1300, 3, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 15300, 0, 2800, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 3400, 20200, 1500, 1300, 3, 1, 8, 0, 0, ROOM_309_DARKNESS_PASSAGE, 15300, 0, 2800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 0, 0, 1, 1, IT_0B_AMMO_HANDGUN, 15, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 252, 129, 0, 0);
     if (ck(FG_COMMON, F_COMMON_48, FALSE))
     {
         item_aot_set(AOT_89_ITEM, 3330, 11130, 1000, 1000, IT_1E_KEY_CRANK_HEXAGONAL, 0, 1, 255, 48, 117, 48, 117, 48, 117, 0, 0, 46, 129, 1, 134);
-        aot_delete(9, SCE_NONE, 129);
+        aot_delete(9, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
@@ -35,49 +77,49 @@ proc init
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_48, FALSE))
     {
-        aot_set(AOT_02_EVENT, 10600, 1700, 1000, 6300, SCE_EVENT, 65, 9, 0, on_aot_02, 0, 0, 0);
-        enemy(EM_28_NPC_ENRICO, 2, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, 0, 0, 58, 0);
+        aot_set(AOT_02_EVENT, 10600, 1700, 1000, 6300, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
+        enemy(EM_28_NPC_ENRICO, 2, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, ENEMY_00_NPC_ENRICO, 0, 58, 0);
     }
     else
     {
-        enemy(EM_28_NPC_ENRICO, 2, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, 0, 0, 58, 0);
+        enemy(EM_28_NPC_ENRICO, 2, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, ENEMY_00_NPC_ENRICO, 0, 58, 0);
     }
     if (ck(FG_COMMON, F_COMMON_49, FALSE))
     {
-        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
     }
     if (ck(FG_COMMON, F_COMMON_48, FALSE))
     {
-        enemy(EM_06_HUNTER, 136, 80, 1, 2, 0, 0, 2048, 0, 0, 30000, 30000, 30000, 1, 0, 0, 0);
-        enemy(EM_06_HUNTER, 128, 81, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, 2, 0, 0, 0);
+        enemy(EM_06_HUNTER, 136, 80, 1, 2, 0, 0, 2048, 0, 0, 30000, 30000, 30000, ENEMY_01_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, 128, 81, 1, 2, 0, 0, 0, 0, 0, 30000, 30000, 30000, ENEMY_02_HUNTER, 0, 0, 0);
     }
     else
     {
-        enemy(EM_06_HUNTER, 2, 80, 1, 2, 0, 0, 2048, 0, 0, 9270, 0, 3950, 1, 0, 0, 0);
-        enemy(EM_06_HUNTER, 2, 81, 1, 2, 0, 0, 3072, 0, 0, 3530, 0, 8280, 2, 0, 0, 0);
+        enemy(EM_06_HUNTER, 2, 80, 1, 2, 0, 0, 2048, 0, 0, 9270, 0, 3950, ENEMY_01_HUNTER, 0, 0, 0);
+        enemy(EM_06_HUNTER, 2, 81, 1, 2, 0, 0, 3072, 0, 0, 3530, 0, 8280, ENEMY_02_HUNTER, 0, 0, 0);
     }
 #else
     if (ck(FG_COMMON, F_COMMON_48, FALSE) && ck(FG_COMMON, F_COMMON_49, FALSE))
     {
-        aot_set(AOT_02_EVENT, 10600, 1700, 1000, 6300, SCE_EVENT, 65, 9, 0, on_aot_02, 0, 0, 0);
-        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
+        aot_set(AOT_02_EVENT, 10600, 1700, 1000, 6300, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
         if (ck(FG_COMMON, F_COMMON_58, TRUE))
         {
-            enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1024, 0, 0, 3060, 0, 19800, 1, 0, 0, 0);
+            enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 1024, 0, 0, 3060, 0, 19800, ENEMY_01_NPC_BARRY, 0, 0, 0);
             evt_exec(0, 9, on_enter);
-            aot_reset(AOT_00_DOOR, SCE_EVENT, 129, 9, on_aot_00_door, 0);
+            aot_reset(AOT_00_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_00_door, 0);
         }
     }
     if (ck(FG_COMMON, F_COMMON_48, TRUE) && ck(FG_COMMON, F_COMMON_58, TRUE) && ck(FG_COMMON, F_COMMON_50, FALSE))
     {
-        enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3024, 0, 0, 11550, 0, 13650, 1, 9, 24, 0);
-        aot_set(AOT_02_EVENT, 11000, 14000, 1500, 1500, SCE_EVENT, 129, 9, 0, on_aot_02_2, 0, 0, 0);
+        enemy(EM_22_NPC_BARRY, 4, 255, 1, 2, 0, 0, 3024, 0, 0, 11550, 0, 13650, ENEMY_01_NPC_BARRY, 9, 24, 0);
+        aot_set(AOT_02_EVENT, 11000, 14000, 1500, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02_2, 0, 0, 0);
     }
     if (ck(FG_COMMON, F_COMMON_49, FALSE) && ck(FG_COMMON, F_COMMON_48, TRUE))
     {
-        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
+        aot_set(AOT_03_EVENT, 10400, 14800, 1000, 1800, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
     }
-    enemy(EM_28_NPC_ENRICO, 0, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, 0, 0, 59, 0);
+    enemy(EM_28_NPC_ENRICO, 0, 255, 1, 2, 0, 0, 824, 0, 0, 10840, 0, 16490, ENEMY_00_NPC_ENRICO, 0, 59, 0);
 #endif
 }
 
@@ -86,13 +128,13 @@ proc main
 {
     if (ck(FG_ROOM, F_ROOM_08, TRUE))
     {
-        if (cmpb(2, 0, 2))
+        if (cmpb(B_CAMERA, CMP_EQ, 2))
         {
             set(FG_ROOM, F_ROOM_08, FALSE);
-            pos_set(1, 0, 1024, 0, 4644, 0, 8920);
-            pos_set(2, 0, 1024, 0, 5600, 0, 20000);
-            eml_state(0, 1, 0, 8);
-            eml_state(0, 2, 0, 2);
+            pos_set(ENEMY_01_HUNTER, 0, 1024, 0, 4644, 0, 8920);
+            pos_set(ENEMY_02_HUNTER, 0, 1024, 0, 5600, 0, 20000);
+            eml_state(0, ENEMY_01_HUNTER, EML_BEHAVIOUR, 8);
+            eml_state(0, ENEMY_02_HUNTER, EML_BEHAVIOUR, 2);
         }
     }
 }
@@ -102,16 +144,16 @@ event on_aot_02
     run
     {
         aot_delete(AOT_02_EVENT, SCE_NONE, 0);
-        aot_delete(9, SCE_ITEM, 129);
+        aot_delete(9, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
     }
     sleep(1);
-    evt_work_set(WK_AOT, 1);
+    evt_work_set(WK_AOT, AOT_01_ITEM);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3830, 0, 11630);
     tw_abs_rot(0, 0, 1200, 0);
     tw_end();
     evt_nop();
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_anim_flags(0 | 2, 32 | 0, 0 | 3);
     act_reset();
@@ -147,8 +189,8 @@ event on_aot_02
     evt_nop();
     run
     {
-        voice_play(1, 6, 0);
-        message(7, 0);
+        voice_play(VOICE_PLAY, VO_10F_00, 0);
+        message(MSG_VO_10F_00, 0);
     }
     do
     {
@@ -170,11 +212,11 @@ event on_aot_02
     wait_message();
     run
     {
-        voice_play(1, 7, 0);
-        message(8, 0);
+        voice_play(VOICE_PLAY, VO_10F_02, 0);
+        message(MSG_VO_10F_02, 0);
     }
     sleep(30);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_anim_flags(0 | 2, 32 | 0, 0 | 3);
     act_reset();
@@ -205,8 +247,8 @@ event on_aot_02_sub1
 {
     run
     {
-        voice_play(1, 8, 0);
-        message(9, 0);
+        voice_play(VOICE_PLAY, VO_10F_04, 0);
+        message(MSG_VO_10F_04, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -235,8 +277,8 @@ event on_aot_02_sub1
     wait_message();
     run
     {
-        voice_play(1, 9, 0);
-        message(10, 0);
+        voice_play(VOICE_PLAY, VO_10F_05, 0);
+        message(MSG_VO_10F_05, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -244,7 +286,7 @@ event on_aot_02_sub1
     act_flag_op(0, 16, 0);
     act_reset();
     evt_nop();
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_motion_path(113, 300, 0, 1, 8, 0);
     act_reset();
@@ -256,10 +298,10 @@ event on_aot_02_sub1
     }
     run
     {
-        voice_play(1, 10, 0);
-        message(11, 0);
+        voice_play(VOICE_PLAY, VO_10F_06, 0);
+        message(MSG_VO_10F_06, 0);
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_motion_path(113, 300, 0, 1, 8, 0);
     act_reset();
@@ -269,9 +311,9 @@ event on_aot_02_sub1
     sleep(15);
     run
     {
-        se_play_3d(2, 23, 0, 0, 0, 14570, 8460);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 14570, 8460);
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_anim_flags(0 | 0, 32 | 0, 0 | 0);
     act_flag_op(1, 128, 0);
@@ -285,9 +327,9 @@ event on_aot_02_sub1
     sleep(10);
     run
     {
-        se_play_3d(2, 25, 0, 0, 0, 14570, 8460);
+        se_play_3d(2, 25, 0, SND_AT_POINT, 0, 14570, 8460);
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_idle();
     act_nop();
@@ -295,7 +337,7 @@ event on_aot_02_sub1
     evt_nop();
     for (5)
     {
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 128, 0);
@@ -303,7 +345,7 @@ event on_aot_02_sub1
         act_reset();
         evt_nop();
         sleep(3);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 129, 0);
@@ -311,7 +353,7 @@ event on_aot_02_sub1
         act_reset();
         evt_nop();
         sleep(3);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 128, 0);
@@ -319,7 +361,7 @@ event on_aot_02_sub1
         act_reset();
         evt_nop();
         sleep(3);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 129, 0);
@@ -329,7 +371,7 @@ event on_aot_02_sub1
         sleep(2);
     }
     evt_nop();
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_anim_flags(0 | 0, 32 | 0, 0 | 0);
     act_action_a(30);
@@ -337,7 +379,7 @@ event on_aot_02_sub1
     act_reset();
     evt_nop();
     sleep(35);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_flag_op(1, 0, 0);
     act_reset();
@@ -345,7 +387,7 @@ event on_aot_02_sub1
     sleep(20);
     run
     {
-        se_play_3d(2, 26, 0, 1, 0, 0, 0);
+        se_play_3d(2, 26, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     sleep(35);
     evt_fork(9, on_aot_02_sub1_sub1, 0);
@@ -379,8 +421,8 @@ event on_aot_02_sub1
     sleep(20);
     run
     {
-        voice_play(1, 11, 0);
-        message(12, 0);
+        voice_play(VOICE_PLAY, VO_10F_07, 0);
+        message(MSG_VO_10F_07, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -391,8 +433,8 @@ event on_aot_02_sub1
     wait_message();
     run
     {
-        voice_play(1, 12, 0);
-        message(13, 0);
+        voice_play(VOICE_PLAY, VO_10F_08, 0);
+        message(MSG_VO_10F_08, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -445,10 +487,10 @@ event on_aot_02_sub2
     run
     {
         aot_delete(AOT_02_EVENT, SCE_NONE, 0);
-        aot_delete(9, SCE_ITEM, 129);
+        aot_delete(9, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
     }
     sleep(1);
-    evt_work_set(WK_AOT, 1);
+    evt_work_set(WK_AOT, AOT_01_ITEM);
     evt_tween_begin_alt();
     tw_abs_pos(0, 3830, 0, 11630);
     tw_abs_rot(0, 0, 1200, 0);
@@ -460,12 +502,12 @@ event on_aot_02_sub2
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_48, TRUE);
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
 #else
     run
     {
-        voice_play(1, 15, 0);
-        message(14, 0);
+        voice_play(VOICE_PLAY, VO_10F_15, 0);
+        message(MSG_VO_10F_15, 0);
     }
     evt_work_set(WK_PLAYER, 0);
 #endif
@@ -508,7 +550,7 @@ event on_aot_02_sub2
 #if CHRIS
         dir_set(0, 0, 3480, 0, 13220, 0, 4450);
 #else
-        pos_set(1, 0, 2831, 0, 14670, 0, 9220);
+        pos_set(ENEMY_01_NPC_BARRY, 0, 2831, 0, 14670, 0, 9220);
 #endif
     }
 #if CHRIS
@@ -516,10 +558,10 @@ event on_aot_02_sub2
 #else
     run
     {
-        voice_play(1, 16, 0);
-        message(15, 0);
+        voice_play(VOICE_PLAY, VO_10F_16, 0);
+        message(MSG_VO_10F_16, 0);
     }
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -544,7 +586,7 @@ event on_aot_02_sub2
     act_reset();
     evt_nop();
     sleep(45);
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
     act_anim_seq(51203, 33330, 9005);
 #endif
@@ -560,8 +602,8 @@ event on_aot_02_sub2
     sleep(30);
     run
     {
-        voice_play(1, 0, 0);
-        message(0, 0);
+        voice_play(VOICE_PLAY, VO_00D_00, 0);
+        message(MSG_VO_00D_00, 0);
     }
     evt_work_set(WK_PLAYER, 0);
 #else
@@ -570,7 +612,7 @@ event on_aot_02_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_23, FALSE));
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -603,9 +645,9 @@ event on_aot_02_sub2
     evt_nop();
     wait_message();
 #if CHRIS
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
 #else
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -628,11 +670,11 @@ event on_aot_02_sub2
     run
     {
 #if CHRIS
-        voice_play(1, 1, 0);
-        message(1, 0);
+        voice_play(VOICE_PLAY, VO_00D_01, 0);
+        message(MSG_VO_00D_01, 0);
 #else
-        voice_play(1, 17, 0);
-        message(16, 0);
+        voice_play(VOICE_PLAY, VO_10F_17, 0);
+        message(MSG_VO_10F_17, 0);
 #endif
     }
 #if JILL
@@ -643,8 +685,8 @@ event on_aot_02_sub2
     }
     run
     {
-        voice_play(1, 18, 0);
-        message(17, 0);
+        voice_play(VOICE_PLAY, VO_10F_18, 0);
+        message(MSG_VO_10F_18, 0);
     }
 #endif
     evt_work_set(WK_PLAYER, 0);
@@ -665,7 +707,7 @@ event on_aot_02_sub2
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     evt_work_set(WK_PLAYER, 0);
 #else
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -683,7 +725,7 @@ event on_aot_02_sub2
     evt_work_set(WK_PLAYER, 0);
 #else
     sleep(80);
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -709,7 +751,7 @@ event on_aot_02_sub2
     sleep(20);
     evt_disable(7);
     sleep(5);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_anim_flags(0 | 1, 32 | 0, 0 | 0);
     act_reset();
@@ -733,7 +775,7 @@ event on_aot_02_sub2
     act_reset();
     evt_nop();
 #if JILL
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 8, 32 | 0, 0 | 0);
     act_flag_op(1, 16, 0);
@@ -755,17 +797,17 @@ event on_aot_02_sub2
     run
     {
 #if CHRIS
-        se_play_3d(2, 27, 0, 1, 0, 0, 0);
+        se_play_3d(2, 27, 0, SND_AT_PLAYER, 0, 0, 0);
 #else
-        voice_play(1, 19, 0);
-        message(18, 0);
+        voice_play(VOICE_PLAY, VO_10F_19, 0);
+        message(MSG_VO_10F_19, 0);
 #endif
     }
 #if CHRIS
     sleep(35);
     evt_work_set(WK_PLAYER, 0);
 #else
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -781,7 +823,7 @@ event on_aot_02_sub2
     run
     {
 #if CHRIS
-        se_play_3d(2, 23, 0, 0, 0, 14570, 8460);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 14570, 8460);
         effect(0, 2, 0, 248, 42, 24, 252, 172, 63, 144, 1);
 #endif
         cutnext(7);
@@ -792,14 +834,14 @@ event on_aot_02_sub2
     run
     {
 #if CHRIS
-        voice_play(1, 4, 0);
-        message(4, 0);
+        voice_play(VOICE_PLAY, VO_00D_04, 0);
+        message(MSG_VO_00D_04, 0);
 #else
-        voice_play(1, 20, 0);
-        message(19, 0);
+        voice_play(VOICE_PLAY, VO_10F_1A, 0);
+        message(MSG_VO_10F_1A, 0);
 #endif
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
 #if JILL
     act_motion_path(113, 300, 0, 1, 8, 0);
@@ -810,9 +852,9 @@ event on_aot_02_sub2
     sleep(15);
     run
     {
-        se_play_3d(2, 23, 0, 0, 0, 14570, 8460);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 14570, 8460);
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
 #endif
     act_anim_flags(0 | 0, 32 | 0, 0 | 0);
@@ -823,7 +865,7 @@ event on_aot_02_sub2
 #if CHRIS
     run
     {
-        se_play_3d(2, 25, 0, 0, 0, 14570, 8460);
+        se_play_3d(2, 25, 0, SND_AT_POINT, 0, 14570, 8460);
     }
     sleep(40);
 #else
@@ -834,10 +876,10 @@ event on_aot_02_sub2
     sleep(10);
     run
     {
-        se_play_3d(2, 25, 0, 0, 0, 14570, 8460);
+        se_play_3d(2, 25, 0, SND_AT_POINT, 0, 14570, 8460);
     }
 #endif
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_idle();
     act_nop();
@@ -845,7 +887,7 @@ event on_aot_02_sub2
     evt_nop();
     for (5)
     {
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 128, 0);
@@ -853,7 +895,7 @@ event on_aot_02_sub2
         act_reset();
         evt_nop();
         sleep(3);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 129, 0);
@@ -861,7 +903,7 @@ event on_aot_02_sub2
         act_reset();
         evt_nop();
         sleep(3);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 128, 0);
@@ -869,7 +911,7 @@ event on_aot_02_sub2
         act_reset();
         evt_nop();
         sleep(3);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 0, 32 | 0, 0 | 0);
         act_flag_op(1, 129, 0);
@@ -879,7 +921,7 @@ event on_aot_02_sub2
         sleep(2);
     }
     evt_nop();
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_anim_flags(0 | 0, 32 | 0, 0 | 0);
     act_action_a(30);
@@ -891,7 +933,7 @@ event on_aot_02_sub2
 #else
     sleep(35);
 #endif
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
     evt_actor_begin();
     act_flag_op(1, 0, 0);
     act_reset();
@@ -899,7 +941,7 @@ event on_aot_02_sub2
     sleep(20);
     run
     {
-        se_play_3d(2, 26, 0, 1, 0, 0, 0);
+        se_play_3d(2, 26, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     wait_message();
     run
@@ -910,12 +952,12 @@ event on_aot_02_sub2
     sleep(1);
     run
     {
-        voice_play(1, 3, 0);
-        message(3, 0);
+        voice_play(VOICE_PLAY, VO_00D_03, 0);
+        message(MSG_VO_00D_03, 0);
     }
     evt_work_set(WK_PLAYER, 0);
 #else
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
     act_anim_seq(62467, 52782, 9014);
     act_nop();
@@ -926,7 +968,7 @@ event on_aot_02_sub2
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_23, FALSE));
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -942,8 +984,8 @@ event on_aot_02_sub2
 #else
     run
     {
-        voice_play(1, 21, 0);
-        message(20, 0);
+        voice_play(VOICE_PLAY, VO_10F_1B, 0);
+        message(MSG_VO_10F_1B, 0);
     }
 #endif
     evt_work_set(WK_PLAYER, 0);
@@ -972,8 +1014,8 @@ event on_aot_02_sub2
     }
     run
     {
-        voice_play(1, 5, 0);
-        message(5, 0);
+        voice_play(VOICE_PLAY, VO_00D_05, 0);
+        message(MSG_VO_00D_05, 0);
     }
 #else
     evt_fork(9, on_aot_02_sub1_sub1, 0);
@@ -1034,7 +1076,7 @@ event on_aot_02_sub2
     evt_work_set(WK_PLAYER, 0);
 #else
     sleep(50);
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
 #endif
     evt_actor_begin();
 #if CHRIS
@@ -1076,7 +1118,7 @@ event on_aot_02_sub2
         set(FG_STATUS, F_STATUS_0F, FALSE);
         set(FG_6, F_6_17, TRUE);
 #if JILL
-        aot_set(AOT_02_EVENT, 11000, 14000, 1500, 1500, SCE_EVENT, 129, 9, 0, on_aot_02_2, 0, 0, 0);
+        aot_set(AOT_02_EVENT, 11000, 14000, 1500, 1500, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02_2, 0, 0, 0);
 #endif
     }
     evt_finish();
@@ -1124,19 +1166,19 @@ event on_aot_02_sub4
 #if CHRIS
     for (9)
     {
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 3, 32 | 0, 0 | 0);
         act_reset();
         evt_nop();
         sleep(25);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 3, 32 | 0, 0 | 0);
         act_reset();
         evt_nop();
         sleep(18);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 3, 32 | 0, 0 | 0);
         act_reset();
@@ -1146,19 +1188,19 @@ event on_aot_02_sub4
 #else
     for (30)
     {
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 3, 32 | 0, 0 | 0);
         act_reset();
         evt_nop();
         sleep(25);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 3, 32 | 0, 0 | 0);
         act_reset();
         evt_nop();
         sleep(18);
-        evt_work_set(WK_ENEMY, 0);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_ENRICO);
         evt_actor_begin();
         act_anim_flags(0 | 3, 32 | 0, 0 | 0);
         act_reset();
@@ -1173,7 +1215,7 @@ event on_aot_02_sub4
 #if JILL
 event on_aot_02_sub5
 {
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(0 | 0, 32 | 0, 0 | 0);
     act_motion(16);
@@ -1188,7 +1230,7 @@ event on_aot_02_sub5
     act_reset();
     evt_nop();
     sleep(10);
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
     act_motion(16);
     act_nop();
@@ -1315,7 +1357,7 @@ event on_enter
     sleep(5);
     run
     {
-        eml_state(0, 1, 8);
+        eml_state(0, ENEMY_01_NPC_BARRY, 8);
     }
     evt_finish();
 }
@@ -1337,8 +1379,8 @@ event on_aot_02_2
         set(FG_6, F_6_17, FALSE);
     }
     sleep(20);
-    message(MSG_BARRY_IS_INVESTIGATING | 0x80, 0); // "Barry is investigating..."
-    evt_work_set(WK_ENEMY, 1);
+    message(MSG_BARRY_IS_INVESTIGATING | MSG_FAST, 0); // "Barry is investigating..."
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
     act_motion_path(113, 300, 0, 1, 30, 0);
     act_reset();
@@ -1356,48 +1398,48 @@ event on_aot_02_sub1_sub1
 {
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 12200);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 12200);
     }
     sleep(9);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 10800);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 10800);
     }
     sleep(10);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 9400);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 9400);
     }
     sleep(9);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 8000);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 8000);
     }
     sleep(10);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 6600);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 6600);
     }
     sleep(9);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 5200);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 5200);
     }
     sleep(10);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 3800);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 3800);
     }
     sleep(9);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 2400);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 2400);
     }
 #if CHRIS
     sleep(10);
     run
     {
-        se_play_3d(2, 45, 0, 0, 0, 10800, 1000);
+        se_play_3d(2, 45, 0, SND_AT_POINT, 0, 10800, 1000);
     }
 #endif
     evt_finish();

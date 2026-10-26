@@ -14,6 +14,7 @@
 #define AOT_06_USEITEM 0x06
 #define AOT_07_USEITEM 0x07
 #define AOT_08_MESSAGE 0x08
+#define ENEMY_00_TYRANT_2 0x00
 #define F_ROOM_00 0x00
 #define F_ROOM_01 0x01
 #define F_ROOM_02 0x02
@@ -40,12 +41,17 @@
 #define F_ROOM_22 0x22
 #define F_ROOM_23 0x23
 #define F_ROOM_24 0x24
+#define MSG_VO_016_05 0x00
+#define MSG_VO_11B_03 0x01
+#define VO_016_05 0x2A
+#define VO_11B_03 0x2B
+#define VO_B00_30 0x2C
 
 proc init
 {
     set(FG_STATUS, F_STATUS_1D, TRUE);
-    door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, 13, 17, 64, 255, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, 129);
-    aot_reset(AOT_00_DOOR, SCE_MESSAGE, 129, 130, 255, 0);
+    door_aot_set(AOT_00_DOOR, 5800, 3900, 2500, 2700, 0, 13, 17, 64, 255, STAGE_5 | 29, 0, 0, 0, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_reset(AOT_00_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     item_aot_set(AOT_01_ITEM, 20000, 16000, 2000, 2000, IT_0A_WEAPON_ROCKET_LAUNCHER, 4, 0, 255, 8, 82, 176, 185, 104, 66, 0, 0, 71, 129, 0, 0);
     aot_reset(AOT_01_ITEM, SCE_NONE, 0, 0, 0, 0);
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
@@ -57,11 +63,11 @@ proc init
         item_aot_set(AOT_02_ITEM, 8000, 1400, 2000, 1600, IT_2A_KEY_FLARE, 1, 1, 254, 32, 3, 0, 0, 0, 0, 0, 0, 73, 129, 0, 0);
     }
     objtbl_b_set(1, 1, 0);
-    aot_set(AOT_04_USEITEM, 8500, 24000, 7500, 8500, SCE_USEITEM, 65, 4, 0, 33, 0, 1, 0);
-    aot_set(AOT_05_USEITEM, 8500, 22500, 9000, 10000, SCE_USEITEM, 65, 4, 0, 34, 0, 1, 0);
-    aot_set(AOT_06_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, 65, 4, 0, 35, 0, 1, 0);
-    aot_set(AOT_07_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, 66, 4, 0, 36, 0, 1, 0);
-    aot_set(AOT_08_MESSAGE, 29000, 3600, 1000, 3600, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_USEITEM, 8500, 24000, 7500, 8500, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_05_USEITEM, 8500, 22500, 9000, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 35, 0, 1, 0);
+    aot_set(AOT_07_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | 2, 4, 0, 36, 0, 1, 0);
+    aot_set(AOT_08_MESSAGE, 29000, 3600, 1000, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
     obj(0, 31, 255, 22260, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(1, 31, 0, 0, 24, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(2, 31, 0, 0, 24, 2000, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -76,9 +82,9 @@ proc init
     objtbl_b_set(0, 5, 0);
     obj(6, 31, 255, 13250, 0, 28250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232, 3, 190, 10, 154, 16);
     obj(7, 33, 255, 9000, 0, 2310, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 44, 1, 200, 0, 250, 0);
-    enemy(EM_10_TYRANT_2, 128, 89, 1, 2, 0, 0, 800, 0, 0, 0, -32000, 32000, 0, 0, 0, 0);
+    enemy(EM_10_TYRANT_2, 128, F_ENEMY_59, 1, 2, 0, 0, 800, 0, 0, 0, -32000, 32000, ENEMY_00_TYRANT_2, 0, 0, 0);
     cut_auto(1);
-    setb(2, 7, 0);
+    setb(B_CAMERA, 7, 0);
     if (item_ck(IT_0A_WEAPON_ROCKET_LAUNCHER))
     {
         set(FG_ROOM, F_ROOM_0C, TRUE);
@@ -167,7 +173,7 @@ proc main
         objtbl_b_set(0, 5, 0);
         dir_set(0, 0, 0, 0, 10000, -20000, 10000);
         spd_set(0, 224, 177);
-        setb(1, 17, 0);
+        setb(B_ROOM, ROOM_311, 0);
         evt_exec(0, 7, from_main_6);
         set(FG_6, F_6_17, FALSE);
         set(FG_6, F_6_1F, FALSE);
@@ -178,12 +184,12 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_07, FALSE))
     {
-        if (cmpb(2, 0, 2))
+        if (cmpb(B_CAMERA, CMP_EQ, 2))
         {
             bank_bit(255);
             bank_bit(1);
         }
-        else if (cmpb(2, 0, 3))
+        else if (cmpb(B_CAMERA, CMP_EQ, 3))
         {
             bank_bit(255);
             bank_bit(1);
@@ -257,7 +263,7 @@ proc main
     if (ck(FG_COMMON, F_COMMON_20, TRUE))
     {
         set(FG_COMMON, F_COMMON_20, FALSE);
-        setb(1, 19, 0);
+        setb(B_ROOM, 19, 0);
         obj_xfm(0, 66, 42, 164, 251, 212, 91, 210, 60, 0, 247, 92, 85, 33, 1);
         cutnext(0);
         effect(11, 10, 0, 184, 78, 216, 245, 156, 63, 64, 10);
@@ -266,7 +272,7 @@ proc main
     if (ck(FG_COMMON, F_COMMON_21, TRUE))
     {
         set(FG_COMMON, F_COMMON_21, FALSE);
-        setb(1, 19, 0);
+        setb(B_ROOM, 19, 0);
         obj_xfm(1, 184, 89, 58, 237, 40, 62, 186, 111, 218, 251, 4, 71, 33, 1);
         cutnext(1);
         effect(11, 10, 0, 245, 111, 216, 245, 130, 45, 96, 11);
@@ -275,7 +281,7 @@ proc main
     if (ck(FG_COMMON, F_COMMON_22, TRUE))
     {
         set(FG_COMMON, F_COMMON_22, FALSE);
-        setb(1, 19, 0);
+        setb(B_ROOM, 19, 0);
         obj_xfm(2, 130, 71, 140, 230, 98, 79, 164, 58, 116, 245, 116, 88, 33, 1);
         cutnext(2);
         effect(11, 10, 0, 248, 80, 216, 245, 234, 66, 224, 9);
@@ -304,7 +310,7 @@ event from_main
     {
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
-    evt_work_set(WK_AOT, 0);
+    evt_work_set(WK_AOT, AOT_00_DOOR);
     evt_tween_begin_alt();
     tw_set_rot(8, 0, 0);
     tw_set_sel(1, 47536);
@@ -438,8 +444,8 @@ event from_main
     evt_next();
     tw_end();
     evt_nop();
-    se_play_3d(2, 24, 0, 0, 0, 21000, 17000);
-    evt_work_set(WK_AOT, 0);
+    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 21000, 17000);
+    evt_work_set(WK_AOT, AOT_00_DOOR);
     evt_tween_begin_alt();
     tw_set_sel(1, 65515);
     tw_abs_rot(0, 4048, 0, 0);
@@ -472,18 +478,18 @@ event from_main
     sleep(10);
     tw_end();
     evt_nop();
-    aot_reset(AOT_01_ITEM, SCE_ITEM, 129, 0, 0, 0);
+    aot_reset(AOT_01_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
     run
     {
         if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
-            voice_play(1, 42, 0);
-            message(0, 0);
+            voice_play(VOICE_PLAY, VO_016_05, 0);
+            message(MSG_VO_016_05, 0);
         }
         else
         {
-            voice_play(1, 43, 0);
-            message(1, 0);
+            voice_play(VOICE_PLAY, VO_11B_03, 0);
+            message(MSG_VO_11B_03, 0);
         }
     }
     wait_message();
@@ -1224,7 +1230,7 @@ event from_main_2
     sleep(25);
     run
     {
-        voice_play(1, 44, 0);
+        voice_play(VOICE_PLAY, VO_B00_30, 0);
         effect(11, 0, 1, 32, 3, 0, 0, 200, 0, 0, 0);
         objtbl_b_set(1, 1, 0);
     }
@@ -1319,11 +1325,11 @@ event from_main_3
     evt_fork(6, from_main_3_sub5, 0);
     run
     {
-        if (cmpb(2, 0, 2))
+        if (cmpb(B_CAMERA, CMP_EQ, 2))
         {
             set(FG_ROOM, F_ROOM_0F, TRUE);
         }
-        if (cmpb(2, 0, 3))
+        if (cmpb(B_CAMERA, CMP_EQ, 3))
         {
             set(FG_ROOM, F_ROOM_10, TRUE);
         }
@@ -2505,7 +2511,7 @@ event from_main_4
         aot_switch(0, 2, 0);
         set(FG_6, F_6_17, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        pos_set(0, 0, 800, 0, 13873, 0, 24724);
+        pos_set(ENEMY_00_TYRANT_2, 0, 800, 0, 13873, 0, 24724);
         bank_bit(255);
         cutnext(6);
     }
@@ -2514,7 +2520,7 @@ event from_main_4
     {
         bgm_stop(0);
         bgm_stop(1);
-        eml_state(0, 0, 0, 0);
+        eml_state(0, ENEMY_00_TYRANT_2, EML_BEHAVIOUR, 0);
     }
     sleep(20);
     run
@@ -2561,13 +2567,13 @@ event from_main_6
         obj_xfm(0, 66, 42, 164, 251, 212, 91, 210, 60, 0, 247, 92, 85, 33, 1);
         obj_xfm(1, 184, 89, 58, 237, 40, 62, 186, 111, 218, 251, 4, 71, 33, 1);
         obj_xfm(2, 130, 71, 140, 230, 98, 79, 164, 58, 116, 245, 116, 88, 33, 1);
-        pos_set(0, 0, 576, 0, 14933, 0, 22784);
+        pos_set(ENEMY_00_TYRANT_2, 0, 576, 0, 14933, 0, 22784);
         cutnext(0);
         effect(11, 10, 0, 184, 78, 216, 245, 156, 63, 64, 10);
-        se_play_3d(1, 7, 0, 0, 0, 20152, 16284);
-        se_play_3d(1, 8, 0, 0, 0, 20152, 16284);
+        se_play_3d(1, 7, 0, SND_AT_POINT, 0, 20152, 16284);
+        se_play_3d(1, 8, 0, SND_AT_POINT, 0, 20152, 16284);
     }
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_TYRANT_2);
     evt_actor_begin();
     act_motion_path(51, 0, 0, 0, 192, 64);
     act_reset();
@@ -2587,11 +2593,11 @@ event from_main_6
     }
     run
     {
-        pos_set(0, 0, 864, 0, 26692, 0, 19840);
+        pos_set(ENEMY_00_TYRANT_2, 0, 864, 0, 26692, 0, 19840);
         cutnext(1);
         effect(11, 10, 0, 245, 111, 216, 245, 130, 45, 96, 11);
-        se_play_3d(1, 7, 0, 0, 0, 28661, 11650);
-        se_play_3d(1, 8, 0, 0, 0, 28661, 11650);
+        se_play_3d(1, 7, 0, SND_AT_POINT, 0, 28661, 11650);
+        se_play_3d(1, 8, 0, SND_AT_POINT, 0, 28661, 11650);
     }
     sleep(10);
     run
@@ -2609,16 +2615,16 @@ event from_main_6
     run
     {
         effect_clear(0);
-        pos_set(0, 0, 480, 0, 14600, 0, 22800);
+        pos_set(ENEMY_00_TYRANT_2, 0, 480, 0, 14600, 0, 22800);
         cutnext(2);
         effect(11, 10, 0, 248, 80, 216, 245, 234, 66, 224, 9);
-        se_play_3d(1, 7, 0, 0, 0, 20728, 17130);
-        se_play_3d(1, 8, 0, 0, 0, 20728, 17130);
+        se_play_3d(1, 7, 0, SND_AT_POINT, 0, 20728, 17130);
+        se_play_3d(1, 8, 0, SND_AT_POINT, 0, 20728, 17130);
     }
     sleep(10);
     run
     {
-        eml_state(0, 0, 2, 14);
+        eml_state(0, ENEMY_00_TYRANT_2, EML_ACTION, 14);
     }
     evt_fork(6, from_main_6_sub2, 0);
     sleep(2);
@@ -2629,7 +2635,7 @@ event from_main_6
     sleep(12);
     run
     {
-        eml_state(0, 0, 2, 13);
+        eml_state(0, ENEMY_00_TYRANT_2, EML_ACTION, 13);
     }
     evt_fork(6, from_main_6_sub1, 0);
     sleep(20);
@@ -2709,157 +2715,157 @@ event from_main_6_sub1
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
     }
     sleep(1);
     evt_finish();
@@ -2870,7 +2876,7 @@ event from_main_6_sub2
     run
     {
         timer_setup(1, 0, 0, 7, 0);
-        setw(1, 128, 127);
+        setw(W_LIGHT_STATE, 128, 127);
     }
     sleep(1);
     run

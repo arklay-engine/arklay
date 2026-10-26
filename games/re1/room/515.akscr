@@ -8,23 +8,25 @@
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
+#define ENEMY_00_NPC_BARRY 0x00
+#define ENEMY_00_NPC_REBECCA 0x00
 #define F_ROOM_18 0x18
 
 proc init
 {
     set(FG_STATUS, F_STATUS_3D, TRUE);
-    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, 13, 18, 64, 0, ROOM_50C_FRONT_OF_ELEVATOR, 16000, 0, 27900, 2048, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 13, 19, 64, 0, ROOM_514_FRONT_OF_TYRANT, 13300, 0, 10000, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, 13, 18, 64, 0, ROOM_50C_FRONT_OF_ELEVATOR, 16000, 0, 27900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, 13, 19, 64, 0, ROOM_514_FRONT_OF_TYRANT, 13300, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if JILL
     dir_set(0, 0, 2048, 0, 4500, 0, 4200);
 #endif
-    if (cmpb(3, 0, 12))
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_50C_FRONT_OF_ELEVATOR))
     {
 #if CHRIS
         if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5A, FALSE))
         {
             dir_set(0, 0, 1500, 0, 5000, 0, 5500);
-            enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 2000, 0, 0, 4600, 0, 3500, 0, 5, 19, 0);
+            enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 2000, 0, 0, 4600, 0, 3500, ENEMY_00_NPC_REBECCA, 5, 19, 0);
         }
         else
         {
@@ -34,7 +36,7 @@ proc init
         if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_4D, FALSE) && ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
         {
             dir_set(0, 0, 1500, 0, 5000, 0, 5500);
-            enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 2000, 0, 0, 4600, 0, 3500, 0, 5, 34, 0);
+            enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 2000, 0, 0, 4600, 0, 3500, ENEMY_00_NPC_BARRY, 5, 34, 0);
         }
         else
         {
@@ -49,7 +51,7 @@ proc init
         if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5A, FALSE))
         {
             dir_set(0, 0, 1500, 0, 5000, 0, 5500);
-            enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 2500, 0, 0, 4600, 0, 3500, 0, 5, 19, 0);
+            enemy(EM_23_NPC_REBECCA, 0, 255, 1, 2, 0, 0, 2500, 0, 0, 4600, 0, 3500, ENEMY_00_NPC_REBECCA, 5, 19, 0);
         }
         else
         {
@@ -59,7 +61,7 @@ proc init
         if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4D, FALSE))
         {
             dir_set(0, 0, 1500, 0, 5000, 0, 5500);
-            enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 2500, 0, 0, 4600, 0, 3500, 0, 5, 34, 0);
+            enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 2500, 0, 0, 4600, 0, 3500, ENEMY_00_NPC_BARRY, 5, 34, 0);
         }
         else
         {
@@ -74,7 +76,7 @@ event on_enter
 {
     sleep(1);
     set(FG_6, F_6_17, FALSE);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_fork(9, on_enter_sub1, 0);
     do
     {
@@ -93,7 +95,7 @@ event on_enter_2
 {
     sleep(1);
     set(FG_6, F_6_17, FALSE);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     evt_fork(9, on_enter_sub1, 0);
     do
     {

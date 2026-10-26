@@ -17,6 +17,12 @@
 #define AOT_08_ITEM 0x08
 #define AOT_09_ITEM 0x09
 #define AOT_0A_ITEM 0x0A
+#define ENEMY_00_PLANT_FOUNTAIN 0x00
+#define ENEMY_01_PLANT_FOUNTAIN 0x01
+#define ENEMY_02_PLANT_FOUNTAIN 0x02
+#define ENEMY_03_PLANT_FOUNTAIN 0x03
+#define ENEMY_04_PLANT_FOUNTAIN 0x04
+#define ENEMY_05_PLANT_FOUNTAIN 0x05
 #define F_ROOM_00 0x00
 #define F_ROOM_20 0x20
 #define MSG_AN_OLD_PUMP 0x00
@@ -24,10 +30,10 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 14200, 7000, 1800, 2600, 1, 0, 2, 1, 0, ROOM_103_F_PASSAGE, 21800, 0, 19100, 3072, UNLOCKED, 129);
-    aot_set(AOT_01_MESSAGE, 15300, 5100, 1800, 600, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_02_USEITEM, 15300, 5100, 1800, 600, SCE_USEITEM, 1, 9, 0, 11, 0, 1, 0);
-    aot_set(AOT_03_USEITEM, 15300, 5100, 1800, 600, SCE_USEITEM, 1, 4, 0, 32, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 14200, 7000, 1800, 2600, 1, 0, 2, 1, 0, ROOM_103_F_PASSAGE, 21800, 0, 19100, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_MESSAGE, 15300, 5100, 1800, 600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_02_USEITEM, 15300, 5100, 1800, 600, SCE_USEITEM, SAT_PLAYER, 9, 0, 11, 0, 1, 0);
+    aot_set(AOT_03_USEITEM, 15300, 5100, 1800, 600, SCE_USEITEM, SAT_PLAYER, 4, 0, 32, 0, 1, 0);
     item_aot_set(AOT_04_ITEM, 5000, 4500, 800, 2000, IT_34_KEY_MANSION_ARMOR, 6, 0, 255, 228, 22, 12, 244, 34, 21, 0, 0, 27, 129, 0, 0);
     item_aot_set(AOT_05_ITEM, 6000, 2000, 800, 1000, IT_43_HEAL_HERB_RED, 1, 1, 255, 252, 23, 0, 0, 50, 10, 0, 4, 103, 129, 1, 0);
     item_aot_set(AOT_06_ITEM, 6000, 2000, 800, 700, IT_43_HEAL_HERB_RED, 1, 2, 255, 72, 23, 0, 0, 132, 8, 0, 4, 243, 129, 1, 0);
@@ -66,59 +72,59 @@ proc init
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_A6, FALSE))
     {
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, 0, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8300, 0, 6100, 1, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 0, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, 2, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, 3, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, 4, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, 5, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, ENEMY_00_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8300, 0, 6100, ENEMY_01_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 0, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, ENEMY_02_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, ENEMY_03_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, ENEMY_04_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, ENEMY_05_PLANT_FOUNTAIN, 0, 0, 0);
     }
     else
     {
-        enemy(EM_0F_PLANT_FOUNTAIN, 7, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, 0, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 3000, 0, 0, 7900, 0, 6100, 1, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, 2, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, 3, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, 4, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, 5, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 7, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, ENEMY_00_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 3000, 0, 0, 7900, 0, 6100, ENEMY_01_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, ENEMY_02_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, ENEMY_03_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, ENEMY_04_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, ENEMY_05_PLANT_FOUNTAIN, 0, 0, 0);
     }
 #else
     if (ck(FG_COMMON, F_COMMON_A9, FALSE))
     {
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, 0, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8300, 0, 6100, 1, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 0, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, 2, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, 3, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, 4, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, 5, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, ENEMY_00_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 3000, 0, 0, 8300, 0, 6100, ENEMY_01_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 0, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, ENEMY_02_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, ENEMY_03_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, ENEMY_04_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 1, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, ENEMY_05_PLANT_FOUNTAIN, 0, 0, 0);
     }
     else
     {
-        enemy(EM_0F_PLANT_FOUNTAIN, 7, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, 0, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 3000, 0, 0, 7900, 0, 6100, 1, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, 2, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, 3, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, 4, 0, 0, 0);
-        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, 5, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 7, 255, 1, 2, 0, 0, 3000, 0, 0, 8400, 0, 5800, ENEMY_00_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 3000, 0, 0, 7900, 0, 6100, ENEMY_01_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 100, 0, 0, 8200, 0, 6200, ENEMY_02_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 7900, 0, 4700, ENEMY_03_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8400, 0, 4900, ENEMY_04_PLANT_FOUNTAIN, 0, 0, 0);
+        enemy(EM_0F_PLANT_FOUNTAIN, 6, 255, 1, 2, 0, 0, 1000, 0, 0, 8200, 0, 4800, ENEMY_05_PLANT_FOUNTAIN, 0, 0, 0);
     }
 #endif
 }
 
 proc main
 {
-    if (cmpb(2, 0, 0))
+    if (cmpb(B_CAMERA, CMP_EQ, 0))
     {
         snd_pan_vol_set(1, 110, 110);
     }
-    if (cmpb(2, 0, 1))
+    if (cmpb(B_CAMERA, CMP_EQ, 1))
     {
         snd_pan_vol_set(1, 50, 50);
     }
-    if (cmpb(2, 0, 2))
+    if (cmpb(B_CAMERA, CMP_EQ, 2))
     {
         snd_pan_vol_set(1, 50, 50);
     }
-    if (cmpb(2, 0, 3))
+    if (cmpb(B_CAMERA, CMP_EQ, 3))
     {
         snd_pan_vol_set(1, 50, 50);
     }
@@ -160,14 +166,14 @@ event event_00
     run
     {
         set(FG_6, F_6_17, FALSE);
-        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, 129, 129, 255, 0);
+        aot_reset(AOT_01_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         message(MSG_AN_OLD_PUMP, 0); // "An old pump. Water seems to be sent from here. The lid is open!"
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_ROOM, F_ROOM_00, TRUE);
     set(FG_6, F_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
@@ -209,12 +215,12 @@ event from_main
     sleep(50);
     run
     {
-        eml_state(0, 0, 0, 40);
-        eml_state(0, 1, 0, 41);
-        eml_state(0, 2, 0, 40);
-        eml_state(0, 3, 0, 40);
-        eml_state(0, 4, 0, 40);
-        eml_state(0, 5, 0, 40);
+        eml_state(0, ENEMY_00_PLANT_FOUNTAIN, EML_BEHAVIOUR, 40);
+        eml_state(0, ENEMY_01_PLANT_FOUNTAIN, EML_BEHAVIOUR, 41);
+        eml_state(0, ENEMY_02_PLANT_FOUNTAIN, EML_BEHAVIOUR, 40);
+        eml_state(0, ENEMY_03_PLANT_FOUNTAIN, EML_BEHAVIOUR, 40);
+        eml_state(0, ENEMY_04_PLANT_FOUNTAIN, EML_BEHAVIOUR, 40);
+        eml_state(0, ENEMY_05_PLANT_FOUNTAIN, EML_BEHAVIOUR, 40);
     }
     sleep(10);
     evt_work_set(WK_PLAYER, 0);
@@ -227,12 +233,12 @@ event from_main
     cutnext(2);
     run
     {
-        eml_state(0, 0, 0, 64);
-        eml_state(0, 1, 0, 64);
-        eml_state(0, 2, 0, 64);
-        eml_state(0, 3, 0, 64);
-        eml_state(0, 4, 0, 64);
-        eml_state(0, 5, 0, 64);
+        eml_state(0, ENEMY_00_PLANT_FOUNTAIN, EML_BEHAVIOUR, 64);
+        eml_state(0, ENEMY_01_PLANT_FOUNTAIN, EML_BEHAVIOUR, 64);
+        eml_state(0, ENEMY_02_PLANT_FOUNTAIN, EML_BEHAVIOUR, 64);
+        eml_state(0, ENEMY_03_PLANT_FOUNTAIN, EML_BEHAVIOUR, 64);
+        eml_state(0, ENEMY_04_PLANT_FOUNTAIN, EML_BEHAVIOUR, 64);
+        eml_state(0, ENEMY_05_PLANT_FOUNTAIN, EML_BEHAVIOUR, 64);
     }
     sleep(150);
     cutnext(0);
@@ -257,7 +263,7 @@ event from_main
 
 event on_enter
 {
-    evt_work_set(WK_AOT, 0);
+    evt_work_set(WK_AOT, AOT_00_DOOR);
     evt_tween_begin_alt();
     tw_abs_rot(0, 1010, 20, 1130);
     tw_end();
@@ -270,14 +276,14 @@ event from_main_2
     run
     {
         set(FG_6, F_6_17, FALSE);
-        message(MSG_IT_DOES_NOT_SEEM_TO_CAUSE | 0x80, 0); // "It does not seem to cause any damage."
+        message(MSG_IT_DOES_NOT_SEEM_TO_CAUSE | MSG_FAST, 0); // "It does not seem to cause any damage."
     }
     sleep(30);
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_6, F_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

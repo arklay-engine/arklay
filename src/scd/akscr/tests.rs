@@ -664,7 +664,7 @@ fn decompile_names_aots_events_and_messages() {
         "evt_exec(0, 6, on_enter);",
         "#define MSG_A_RED_BOOK 0x02",
         "message(MSG_A_RED_BOOK, 0); // \"A red book.\"",
-        "message(MSG_A_RED_BOOK | 0x80, 0); // \"A red book.\"",
+        "message(MSG_A_RED_BOOK | MSG_FAST, 0); // \"A red book.\"",
         "message(67, 0); // \"Saved.\"",
     ] {
         assert!(text.contains(expected), "{expected}\n{text}");
@@ -672,6 +672,57 @@ fn decompile_names_aots_events_and_messages() {
     let compiled = compile_with(&text, None, &no_includes).unwrap();
     let original = asm::assemble(source).unwrap();
     assert_eq!(compiled, original, "{text}");
+}
+
+/// Engine values decompile to the compiler's names, and a room's enemy
+/// slots and voice lines to defines of their own.
+#[test]
+fn decompile_names_engine_values_and_room_slots() {
+    let names = Names::parse(&[(
+        "inc/game.akinc".to_string(),
+        "#define EM_05_CROW 0x05\n#define ROOM_104_TEA_ROOM 0x04\n".to_string(),
+    )])
+    .unwrap();
+    let source = ".version 1
+
+.init
+.block
+    aot_set                 2, 0, 0, 0, 0, SCE_MESSAGE, 129, 0, 0, 0, 0, 0, 0
+    if                      off_A
+    cmpb                    5, 2, 128
+    setw                    1, 0, 0
+off_A:
+    endif                   0
+    enemy                   5, 1, 255, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0
+    room_bgm_state_set      0, 4, 65
+    voice_play              1, 9, 0
+    message                 3, 0
+    end                     0
+
+.event event_00
+    evt_work_set            WK_ENEMY, 2
+    evt_finish
+";
+    let container = asm::assemble(source).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&container).unwrap();
+    let text = decompile_with(&scripts, &names, 0x6010);
+    for expected in [
+        "#define ENEMY_02_CROW 0x02",
+        "#define VO_",
+        "#define MSG_VO_",
+        "SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER,",
+        "cmpb(B_MENU_CHOICE, CMP_GE, 128)",
+        "setw(W_LIGHT_STATE, 0, 0);",
+        "ENEMY_02_CROW, 0, 0, 0);",
+        "room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_RELOAD | 1);",
+        "voice_play(VOICE_PLAY, VO_",
+        "message(MSG_VO_",
+        "evt_work_set(WK_ENEMY, ENEMY_02_CROW);",
+    ] {
+        assert!(text.contains(expected), "{expected}\n{text}");
+    }
+    // Each section is checked against its bytes, falling back to `asm`.
+    assert!(!text.contains("asm"), "{text}");
 }
 
 /// Every checked-in room script compiles for each of its variants.

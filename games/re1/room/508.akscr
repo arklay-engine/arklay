@@ -11,6 +11,8 @@
 #define AOT_02_DOOR 0x02
 #define AOT_03_DOOR 0x03
 #define AOT_04_EVENT 0x04
+#define ENEMY_00_NPC_CHRIS 0x00
+#define ENEMY_00_NPC_JILL 0x00
 #define F_ROOM_05 0x05
 #define F_ROOM_06 0x06
 #define F_ROOM_07 0x07
@@ -20,34 +22,36 @@
 #define MSG_IT_IS_LOCKED_05 0x05
 #define MSG_YOU_DO_NOT_HAVE_THE_PASS 0x01
 #define MSG_YOU_HAVE_ENTERED_THE_PASS_CODE 0x02
+#define VO_A00_04_5A 0x5A
+#define VO_A00_05_5B 0x5B
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 19500, 2400, 2100, 2500, 6, 1, 12, 7, 0, ROOM_505_O_PASSAGE, 2900, 0, 17500, 0, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 10700, 4800, 2300, 1600, 0, 1, 12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, 129);
-    door_aot_set(AOT_02_DOOR, 17700, 800, 1400, 1600, 0, 1, 12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, 129);
-    door_aot_set(AOT_03_DOOR, 200, 2500, 2100, 2200, 11, 1, 11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 19500, 2400, 2100, 2500, 6, 1, 12, 7, 0, ROOM_505_O_PASSAGE, 2900, 0, 17500, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 10700, 4800, 2300, 1600, 0, 1, 12, 7, 0, ROOM_509_PRIVATE_ROOM_A, 3600, 0, 2700, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 17700, 800, 1400, 1600, 0, 1, 12, 7, 0, ROOM_50A_PRIVATE_ROOM_B, 10800, 0, 10200, 1576, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 200, 2500, 2100, 2200, 11, 1, 11, 3, 0, ROOM_50B_FRONT_OF_CELL, 5300, 0, 4000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     if (ck(FG_ITEM, F_ITEM_52, TRUE))
     {
         if (ck(FG_ITEM, F_ITEM_62, TRUE))
         {
             if (ck(FG_ITEM, F_ITEM_5A, TRUE))
             {
-                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04_2, 0, 0, 0);
+                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04_2, 0, 0, 0);
             }
             else
             {
-                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
+                aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
             }
         }
         else
         {
-            aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
+            aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
         }
     }
     else
     {
-        aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, 129, 0, 0, on_aot_04, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 2000, 4900, 800, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_04, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_34, FALSE))
     {
@@ -82,15 +86,15 @@ proc init
 #endif
     if (ck(FG_LOCK, F_LOCK_26, FALSE))
     {
-        aot_reset(AOT_01_DOOR, SCE_EVENT, 129, 9, on_aot_01_door, 0);
+        aot_reset(AOT_01_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_01_door, 0);
     }
-    aot_reset(AOT_03_DOOR, SCE_EVENT, 129, 9, on_aot_03_door, 0);
+    aot_reset(AOT_03_DOOR, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_03_door, 0);
 #if CHRIS
     if (ck(FG_COMMON, F_COMMON_AC, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_4B, TRUE))
         {
-            enemy(EM_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 4056, 0, 0, 3100, 0, 4300, 0, 0, 0, 0);
+            enemy(EM_21_NPC_JILL, 0, 255, 1, 1, 0, 0, 4056, 0, 0, 3100, 0, 4300, ENEMY_00_NPC_JILL, 0, 0, 0);
         }
     }
 #else
@@ -98,7 +102,7 @@ proc init
     {
         if (ck(FG_COMMON, F_COMMON_4B, TRUE))
         {
-            enemy(EM_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 4056, 0, 0, 3100, 0, 4300, 0, 0, 0, 0);
+            enemy(EM_20_NPC_CHRIS, 0, 255, 1, 1, 0, 0, 4056, 0, 0, 3100, 0, 4300, ENEMY_00_NPC_CHRIS, 0, 0, 0);
         }
     }
 #endif
@@ -139,7 +143,7 @@ proc main
         {
             if (ck(FG_SCENARIO, F_SCENARIO_36, TRUE))
             {
-                aot_delete(AOT_03_DOOR, SCE_DOOR, 129);
+                aot_delete(AOT_03_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             }
         }
     }
@@ -165,7 +169,11 @@ event on_enter
     }
     sleep(20);
     cutnext(2);
-    evt_work_set(WK_ENEMY, 0);
+#if CHRIS
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+#else
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+#endif
     evt_actor_begin();
 #if CHRIS
     act_anim_seq(43011, 25135, 8465);
@@ -184,7 +192,11 @@ event on_enter
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, 0);
+#if CHRIS
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+#else
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+#endif
     evt_actor_begin();
     act_anim_flags(32 | 14, 32 | 1, 0 | 0);
     act_param_set(0, 4);
@@ -195,7 +207,11 @@ event on_enter
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, 0);
+#if CHRIS
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+#else
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+#endif
     evt_actor_begin();
     act_motion_path(49, 710, 0, 0, 80, 0);
     act_reset();
@@ -209,12 +225,16 @@ event on_enter
     {
         message(3, 0);
 #if CHRIS
-        voice_play(1, 91, 0);
+        voice_play(VOICE_PLAY, VO_A00_05_5B, 0);
 #else
-        voice_play(1, 90, 0);
+        voice_play(VOICE_PLAY, VO_A00_04_5A, 0);
 #endif
     }
-    evt_work_set(WK_ENEMY, 0);
+#if CHRIS
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+#else
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+#endif
     evt_actor_begin();
     act_anim_flags(32 | 1, 32 | 1, 0 | 0);
     act_reset();
@@ -226,7 +246,7 @@ event on_enter
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     wait_message();
 #if CHRIS
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     evt_actor_begin();
     act_anim_flags(32 | 13, 32 | 1, 0 | 0);
     act_param_set(0, 252);
@@ -238,7 +258,7 @@ event on_enter
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
     evt_actor_begin();
     act_anim_seq(43011, 52296, 8464);
     act_reset();
@@ -255,12 +275,16 @@ event on_enter
     cutnext(3);
     sleep(10);
 #endif
-    se_play_3d(0, 0, 0, 0, 0, 6388, 14000);
+    se_play_3d(0, 0, 0, SND_AT_POINT, 0, 6388, 14000);
     sleep(30);
     run
     {
-        se_play_3d(0, 1, 0, 0, 0, 6388, 14000);
-        pos_set(0, 0, 4056, 0, 0, 0, 0);
+        se_play_3d(0, 1, 0, SND_AT_POINT, 0, 6388, 14000);
+#if CHRIS
+        pos_set(ENEMY_00_NPC_JILL, 0, 4056, 0, 0, 0, 0);
+#else
+        pos_set(ENEMY_00_NPC_CHRIS, 0, 4056, 0, 0, 0, 0);
+#endif
         set(FG_6, F_6_17, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
@@ -279,22 +303,22 @@ event on_aot_04
         set(FG_6, F_6_17, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
         cutnext(4);
-        message(MSG_A_PASS_CODE_PANEL | 0x80, 0); // "A pass code panel."
+        message(MSG_A_PASS_CODE_PANEL | MSG_FAST, 0); // "A pass code panel."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         if (ck(FG_SCENARIO, F_SCENARIO_34, FALSE))
         {
             if (ck(FG_ITEM, F_ITEM_52, FALSE))
             {
-                message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | 0x80, 0); // "You've entered the pass code."
+                message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_34, TRUE);
-                se_play_3d(2, 23, 0, 0, 0, 2300, 4850);
+                se_play_3d(2, 23, 0, SND_AT_POINT, 0, 2300, 4850);
             }
         }
     }
@@ -302,16 +326,16 @@ event on_aot_04
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         if (ck(FG_SCENARIO, F_SCENARIO_35, FALSE))
         {
             if (ck(FG_ITEM, F_ITEM_62, FALSE))
             {
-                message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | 0x80, 0); // "You've entered the pass code."
+                message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_35, TRUE);
-                se_play_3d(2, 23, 0, 0, 0, 2300, 4850);
+                se_play_3d(2, 23, 0, SND_AT_POINT, 0, 2300, 4850);
             }
         }
     }
@@ -319,16 +343,16 @@ event on_aot_04
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         if (ck(FG_SCENARIO, F_SCENARIO_36, FALSE))
         {
             if (ck(FG_ITEM, F_ITEM_5A, FALSE))
             {
-                message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | 0x80, 0); // "You've entered the pass code."
+                message(MSG_YOU_HAVE_ENTERED_THE_PASS_CODE | MSG_FAST, 0); // "You've entered the pass code."
                 set(FG_SCENARIO, F_SCENARIO_36, TRUE);
-                se_play_3d(2, 23, 0, 0, 0, 2300, 4850);
+                se_play_3d(2, 23, 0, SND_AT_POINT, 0, 2300, 4850);
             }
         }
     }
@@ -336,7 +360,7 @@ event on_aot_04
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         if (ck(FG_SCENARIO, F_SCENARIO_34, TRUE))
@@ -348,7 +372,7 @@ event on_aot_04
                     if (ck(FG_SCENARIO, F_SCENARIO_50, FALSE))
                     {
                         set(FG_SCENARIO, F_SCENARIO_50, TRUE);
-                        se_play_3d(2, 24, 0, 0, 0, 2300, 4850);
+                        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 2300, 4850);
                     }
                 }
             }
@@ -372,19 +396,19 @@ event on_aot_04_2
         set(FG_6, F_6_17, FALSE);
         dir_set(0, 0, 4056, 0, 2600, 0, 2500);
         cutnext(4);
-        message(MSG_A_PASS_CODE_PANEL | 0x80, 0); // "A pass code panel."
+        message(MSG_A_PASS_CODE_PANEL | MSG_FAST, 0); // "A pass code panel."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
-    message(MSG_YOU_DO_NOT_HAVE_THE_PASS | 0x80, 0); // "You don't have the pass code."
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    message(MSG_YOU_DO_NOT_HAVE_THE_PASS | MSG_FAST, 0); // "You don't have the pass code."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         dir_set(0, 0, 3056, 0, 2280, 0, 4850);
@@ -404,14 +428,14 @@ event on_aot_01_door
     run
     {
         set(FG_6, F_6_17, FALSE);
-        se_play_3d(2, 20, 0, 0, 0, 11300, 4850);
-        message(MSG_IT_IS_ELECTRONICALLY_LOCKED | 0x80, 0); // "It's electronically locked."
+        se_play_3d(2, 20, 0, SND_AT_POINT, 0, 11300, 4850);
+        message(MSG_IT_IS_ELECTRONICALLY_LOCKED | MSG_FAST, 0); // "It's electronically locked."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_6, F_6_17, TRUE);
     evt_finish();
 }
@@ -421,14 +445,14 @@ event on_aot_03_door
     run
     {
         set(FG_6, F_6_17, FALSE);
-        se_play_3d(2, 20, 0, 0, 0, 11300, 4850);
-        message(MSG_IT_IS_LOCKED_05 | 0x80, 0); // "It's locked."
+        se_play_3d(2, 20, 0, SND_AT_POINT, 0, 11300, 4850);
+        message(MSG_IT_IS_LOCKED_05 | MSG_FAST, 0); // "It's locked."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_6, F_6_17, TRUE);
     evt_finish();
 }

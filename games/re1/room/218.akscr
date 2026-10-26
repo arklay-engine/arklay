@@ -17,8 +17,8 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 4600, 1200, 900, 1300, 3, 0, 0, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, 129);
-    aot_set(AOT_01_EVENT, 4500, 8500, 2200, 1000, SCE_EVENT, 1, 0, 0, on_aot_01, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 4600, 1200, 900, 1300, 3, 0, 0, 1, 0, ROOM_216_LIBRARY_A, 5200, 0, 15200, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_EVENT, 4500, 8500, 2200, 1000, SCE_EVENT, SAT_PLAYER, 0, 0, on_aot_01, 0, 0, 0);
     item_aot_set(AOT_02_ITEM, 7100, 2000, 1000, 1000, IT_0B_AMMO_HANDGUN, 15, 0, 255, 132, 28, 48, 248, 196, 9, 0, 12, 199, 129, 0, 0);
     item_aot_set(AOT_03_ITEM, 4200, 4600, 2400, 1800, IT_2F_KEY_INK_RIBBON, 2, 1, 255, 152, 18, 48, 248, 112, 23, 0, 4, 91, 129, 0, 0);
     set(FG_SCENARIO, F_SCENARIO_4F, TRUE);
@@ -28,7 +28,7 @@ proc main
 {
     if (ck(FG_ITEM, F_ITEM_C7, FALSE))
     {
-        aot_delete(5, SCE_NONE, 129);
+        aot_delete(5, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
 }
 
@@ -42,14 +42,14 @@ event on_aot_01
     run
     {
         set(FG_6, F_6_17, FALSE);
-        aot_delete(AOT_01_EVENT, SCE_NONE, 129);
-        message(MSG_I_CAN_LOOK_OVER_THE_COURTYARD | 0x80, 0); // "I can look over the courtyard from here."
+        aot_delete(AOT_01_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        message(MSG_I_CAN_LOOK_OVER_THE_COURTYARD | MSG_FAST, 0); // "I can look over the courtyard from here."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         cutnext(2);
@@ -59,12 +59,12 @@ event on_aot_01
             set(FG_SCENARIO, F_SCENARIO_60, TRUE);
         }
     }
-    message(MSG_IT_IS_A_HELICOPTER_PORT | 0x80, 0); // "It's a helicopter port! If I could contact the other members from there..."
+    message(MSG_IT_IS_A_HELICOPTER_PORT | MSG_FAST, 0); // "It's a helicopter port! If I could contact the other members from there..."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_6, F_6_17, TRUE);
     do
     {
@@ -76,7 +76,7 @@ event on_aot_01
     sleep(5);
     run
     {
-        aot_delete(AOT_01_EVENT, SCE_EVENT, 1);
+        aot_delete(AOT_01_EVENT, SCE_EVENT, SAT_PLAYER);
         set(FG_6, F_6_17, TRUE);
         set(FG_STATUS, F_STATUS_0F, FALSE);
         cut_auto(0);
@@ -93,13 +93,13 @@ event event_02
     run
     {
         set(FG_6, F_6_17, FALSE);
-        message(MSG_A_BATTERY | 0x80, 0); // "A battery. Now I can move the elevator in the courtyard."
+        message(MSG_A_BATTERY | MSG_FAST, 0); // "A battery. Now I can move the elevator in the courtyard."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(0 | 9, 32 | 3, 0 | 0);

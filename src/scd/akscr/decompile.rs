@@ -10,6 +10,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+use super::engine;
 use super::names::Names;
 use super::preprocess::merged_id;
 use crate::scd::akscr::compile;
@@ -37,14 +38,30 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     for (&index, name) in &aots {
         defines.insert(name.clone(), i64::from(index));
     }
+    let enemies = enemy_names(scripts, names);
+    for (&slot, name) in &enemies {
+        defines.insert(name.clone(), i64::from(slot));
+    }
+    let voices = voice_names(scripts, room);
+    for (&id, name) in &voices {
+        defines.insert(name.clone(), i64::from(id));
+    }
+    let voice_messages = voice_message_names(scripts, names, room, &voices);
+    for (&id, name) in &voice_messages {
+        defines.insert(name.clone(), i64::from(id));
+    }
     let ctx = Ctx {
         names,
         room,
         aots,
+        enemies,
+        voices,
+        voice_messages,
         stage: (merged_id(room) >> 8) as u8,
         defines,
         room_flags: RefCell::default(),
         room_messages: RefCell::default(),
+        used_voices: RefCell::default(),
     };
     let mut sections: Vec<String> = Vec::new();
     for block in &scripts.init {
@@ -68,10 +85,22 @@ pub fn decompile_with(scripts: &Scripts, names: &Names, room: u16) -> String {
     }
     let room_flags = ctx.room_flags.borrow();
     let room_messages = ctx.room_messages.borrow();
-    if !room_flags.is_empty() || !ctx.aots.is_empty() || !room_messages.is_empty() {
+    let used_voices = ctx.used_voices.borrow();
+    if !room_flags.is_empty()
+        || !ctx.aots.is_empty()
+        || !ctx.enemies.is_empty()
+        || !room_messages.is_empty()
+        || !used_voices.is_empty()
+    {
         out.push('\n');
         for (&index, name) in &ctx.aots {
             out.push_str(&format!("#define {name} 0x{index:02X}\n"));
+        }
+        for (&slot, name) in &ctx.enemies {
+            out.push_str(&format!("#define {name} 0x{slot:02X}\n"));
+        }
+        for &id in used_voices.iter() {
+            out.push_str(&format!("#define {} 0x{id:02X}\n", ctx.voices[&id]));
         }
         for &bit in room_flags.iter() {
             out.push_str(&format!("#define {} 0x{bit:02X}\n", room_flag(bit)));
@@ -93,14 +122,8 @@ const AOT_OPS: [u8; 6] = [0x0C, 0x0D, 0x12, 0x13, 0x18, 0x24];
 /// Names for the room's AOT indices, `AOT_<index>_<kind>`, the kind from
 /// the first command that sets each one up as anything but `SCE_NONE`.
 fn aot_names(scripts: &Scripts) -> BTreeMap<u8, String> {
-    let insns = scripts
-        .init
-        .iter()
-        .chain(&scripts.main)
-        .flat_map(|block| &block.insns)
-        .chain(scripts.events.iter().flat_map(|stream| &stream.insns));
     let mut names: BTreeMap<u8, String> = BTreeMap::new();
-    for insn in insns {
+    for insn in room_insns(scripts) {
         let Decoded::Command(op) = insn.decoded else {
             continue;
         };
@@ -128,6 +151,142 @@ fn aot_names(scripts: &Scripts) -> BTreeMap<u8, String> {
     names
         .into_iter()
         .map(|(index, kind)| (index, format!("AOT_{index:02X}_{kind}")))
+        .collect()
+}
+
+/// Every instruction of the room, in stream order.
+fn room_insns(scripts: &Scripts) -> impl Iterator<Item = &Insn> {
+    scripts
+        .init
+        .iter()
+        .chain(&scripts.main)
+        .flat_map(|block| &block.insns)
+        .chain(scripts.events.iter().flat_map(|stream| &stream.insns))
+}
+
+/// The enemy slot an `enemy` command fills, and its type.
+fn enemy_slot(insn: &Insn) -> Option<(u8, u8)> {
+    let Decoded::Command(op) = insn.decoded else {
+        return None;
+    };
+    if op.op != 0x1B {
+        return None;
+    }
+    let slot = *insn.bytes.get(18)?;
+    (slot < 0x10).then_some((slot, *insn.bytes.get(1)?))
+}
+
+/// Names for the room's enemy slots, `ENEMY_<slot>_<type>` from the
+/// `enemy` commands that fill them; a slot filled with different types
+/// is just `ENEMY_<slot>`.
+fn enemy_names(scripts: &Scripts, names: &Names) -> BTreeMap<u8, String> {
+    let mut types: BTreeMap<u8, BTreeSet<u8>> = BTreeMap::new();
+    for (slot, kind) in room_insns(scripts).filter_map(enemy_slot) {
+        types.entry(slot).or_default().insert(kind);
+    }
+    types
+        .into_iter()
+        .map(|(slot, kinds)| {
+            let kind = match kinds.iter().copied().collect::<Vec<_>>().as_slice() {
+                &[kind] => Some(names.enemy(kind).map_or_else(
+                    || format!("{kind:02X}"),
+                    // `EM_11_ZOMBIE_LAB` is `ZOMBIE_LAB`.
+                    |name| name.splitn(3, '_').nth(2).unwrap_or(name).to_string(),
+                )),
+                _ => None,
+            };
+            let name = match kind {
+                Some(kind) => format!("ENEMY_{slot:02X}_{kind}"),
+                None => format!("ENEMY_{slot:02X}"),
+            };
+            (slot, name)
+        })
+        .collect()
+}
+
+/// The id a `voice_play(VOICE_PLAY, id, ..)` plays.
+fn voice_id(insn: &Insn) -> Option<u16> {
+    let Decoded::Command(op) = insn.decoded else {
+        return None;
+    };
+    (op.op == 0x1E && insn.bytes.len() == 4 && insn.bytes[1] == 1)
+        .then(|| u16::from_le_bytes([insn.bytes[2], insn.bytes[3]]))
+}
+
+/// Names for the voice lines RDT `room` plays, `VO_<file>` after the
+/// line's file (`V104_02` is `VO_104_02`), with the id as a suffix where a
+/// stage's table lists one file twice.
+fn voice_names(scripts: &Scripts, room: u16) -> BTreeMap<u16, String> {
+    let stage = ((room >> 12) as u8).saturating_sub(1);
+    let Some(row) = crate::voice::row_for_stage(stage) else {
+        return BTreeMap::new();
+    };
+    let records = crate::voice_table::ROWS[row];
+    room_insns(scripts)
+        .filter_map(voice_id)
+        .filter_map(|id| {
+            let file = crate::voice_table::name(stage, id)?;
+            let base = file.strip_prefix('V').unwrap_or(file).to_uppercase();
+            let name = if records.iter().filter(|&&other| other == file).count() > 1 {
+                format!("VO_{base}_{id:02X}")
+            } else {
+                format!("VO_{base}")
+            };
+            Some((id, name))
+        })
+        .collect()
+}
+
+/// Names for the room's messages that have no text but follow a voice line:
+/// `MSG_VO_104_02` for the line they caption, with the id as a suffix where
+/// one line has two.
+fn voice_message_names(
+    scripts: &Scripts,
+    names: &Names,
+    room: u16,
+    voices: &BTreeMap<u16, String>,
+) -> BTreeMap<u8, String> {
+    let mut by_id: BTreeMap<u8, String> = BTreeMap::new();
+    let mut last_voice: Option<u16> = None;
+    for insn in room_insns(scripts) {
+        let Decoded::Command(op) = insn.decoded else {
+            continue;
+        };
+        if let Some(voice) = voice_id(insn) {
+            last_voice = Some(voice);
+            continue;
+        }
+        if op.op == 0x0B
+            && insn.bytes.len() == 4
+            && let Some(voice) = last_voice
+            && let Some(name) = voices.get(&voice)
+        {
+            let id = insn.bytes[1] & 0x7F;
+            if names.message_id(room, id).is_none() {
+                by_id.entry(id).or_insert_with(|| format!("MSG_{name}"));
+            }
+        }
+        last_voice = None;
+    }
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for name in by_id.values() {
+        *counts.entry(name).or_default() += 1;
+    }
+    let shared: HashSet<String> = counts
+        .into_iter()
+        .filter(|&(_, count)| count > 1)
+        .map(|(name, _)| name.to_string())
+        .collect();
+    by_id
+        .into_iter()
+        .map(|(id, name)| {
+            let name = if shared.contains(&name) {
+                format!("{name}_{id:02X}")
+            } else {
+                name
+            };
+            (id, name)
+        })
         .collect()
 }
 
@@ -292,6 +451,12 @@ struct Ctx<'n> {
     names: &'n Names,
     /// The room's AOT index names, defined at the top of the script.
     aots: BTreeMap<u8, String>,
+    /// The room's enemy slot names, defined at the top of the script.
+    enemies: BTreeMap<u8, String>,
+    /// The names of the voice lines the room plays, by id.
+    voices: BTreeMap<u16, String>,
+    /// Names for the textless messages that caption a voice line, by id.
+    voice_messages: BTreeMap<u8, String>,
     /// The RDT id, for its message text.
     room: u16,
     /// The room's stage (stages 6/7 as 1/2), for stage-relative door targets.
@@ -302,10 +467,15 @@ struct Ctx<'n> {
     room_flags: RefCell<BTreeSet<u8>>,
     /// The room's own message names used so far, by id.
     room_messages: RefCell<BTreeMap<u8, String>>,
+    /// The voice lines named so far, defined at the top of the script.
+    used_voices: RefCell<BTreeSet<u16>>,
 }
 
 /// The flag group of the room's own flags.
 const FG_ROOM: u8 = 4;
+
+/// The flag group of the enemy flags.
+const FG_ENEMY: u8 = 3;
 
 /// One `proc init`/`proc main` section, verified against the block's bytes.
 fn block_section(ctx: &Ctx, name: &str, block: &Block) -> String {
@@ -722,80 +892,189 @@ impl<'a> EventParser<'a> {
 /// `name(args)` for one instruction, naming game data through `ctx`.
 fn call_text(ctx: &Ctx, insn: &Insn, state: EventState) -> String {
     let (name, mut args) = format_insn(insn, state, None);
-    if let Decoded::Command(op) = insn.decoded
-        && op.width.is_some()
-        && let Some((_, params)) = COMMAND_SIG
-            .get(usize::from(op.op))
-            .and_then(|signature| signature.split_once(':'))
-    {
-        let byte = |position: usize| insn.bytes.get(position).copied().unwrap_or(0);
-        let mut position = 1;
-        for (index, kind) in params.bytes().enumerate() {
-            let value = byte(position);
-            let named = match (op.op, index, kind) {
-                // `ck` / `set`: the flag bit within its group, and the state.
-                (0x04 | 0x05, 1, _) => {
-                    let group = byte(1);
-                    if group == FG_ROOM {
-                        ctx.room_flags.borrow_mut().insert(value);
-                        Some(room_flag(value))
-                    } else {
-                        ctx.names.flag(group, value).map(str::to_string)
-                    }
-                }
-                (0x04 | 0x05, 2, _) => match value {
-                    0 => Some("TRUE".to_string()),
-                    1 => Some("FALSE".to_string()),
-                    2 if op.op == 0x05 => Some("TOGGLE".to_string()),
-                    _ => None,
-                },
-                (_, _, b't') if !matches!(value, 0 | 254 | 255) => Some(
-                    ctx.names
-                        .item(value)
-                        .map_or_else(|| value.to_string(), str::to_string),
-                ),
-                (_, _, b'e') => Some(
-                    ctx.names
-                        .enemy(value)
-                        .map_or_else(|| value.to_string(), str::to_string),
-                ),
-                (op, 0, _) if AOT_OPS.contains(&op) => ctx.aots.get(&value).cloned(),
-                // `message`: the text id, its top bit asking for the fast reveal.
-                (0x0B, 0, _) => {
-                    ctx.names
-                        .message_id(ctx.room, value & 0x7F)
-                        .map(|(name, local)| {
-                            if local {
-                                ctx.room_messages
-                                    .borrow_mut()
-                                    .insert(value & 0x7F, name.to_string());
-                            }
-                            if value & 0x80 != 0 {
-                                format!("{name} | 0x80")
-                            } else {
-                                name.to_string()
-                            }
-                        })
-                }
-                (_, _, b'r') => Some(
-                    ctx.names
-                        .door_target(ctx.stage, value)
-                        .unwrap_or_else(|| value.to_string()),
-                ),
+    match insn.decoded {
+        Decoded::Command(op) => name_command_args(ctx, insn, op.op, &mut args),
+        // `evt_work_set(WK_ENEMY, slot)` / `evt_work_set(WK_AOT, index)`.
+        Decoded::Event(op) if op.op == 0x04 && insn.bytes.len() == 3 => {
+            let value = insn.bytes[2];
+            let named = match insn.bytes[1] {
+                1 => ctx.enemies.get(&value),
+                3 => ctx.aots.get(&value),
                 _ => None,
             };
             if let Some(named) = named
-                && let Some(arg) = args.get_mut(index)
+                && let Some(arg) = args.get_mut(1)
             {
-                *arg = named;
+                *arg = named.clone();
             }
-            position += match kind {
-                b'U' | b'I' => 2,
-                _ => 1,
-            };
         }
+        _ => {}
     }
     format!("{name}({})", args.join(", "))
+}
+
+/// Name the arguments of command `op`, `args` as the disassembler renders
+/// them: by its signature, or one per byte for a command without one.
+fn name_command_args(ctx: &Ctx, insn: &Insn, op: u8, args: &mut [String]) {
+    let kinds: Vec<u8> = match COMMAND_SIG
+        .get(usize::from(op))
+        .map(|signature| signature.split_once(':'))
+    {
+        Some(Some((_, params))) => params.bytes().collect(),
+        Some(None) => vec![b'u'; insn.bytes.len().saturating_sub(1)],
+        None => return,
+    };
+    let byte = |position: usize| insn.bytes.get(position).copied().unwrap_or(0);
+    let mut position = 1;
+    let mut positions = Vec::new();
+    for kind in kinds {
+        let size = match kind {
+            b'U' | b'I' => 2,
+            _ => 1,
+        };
+        if position + size > insn.bytes.len() {
+            break;
+        }
+        positions.push((kind, position));
+        position += size;
+    }
+    let at = |index: usize| {
+        positions
+            .get(index)
+            .map_or(0, |&(_, position)| byte(position))
+    };
+    for (index, &(kind, position)) in positions.iter().enumerate() {
+        let value = byte(position);
+        let word = i64::from(value) | (i64::from(byte(position + 1)) << 8);
+        let engine =
+            |names: &[&'static str], value: i64| engine::name_in(names, value).map(str::to_string);
+        let named = match (op, index, kind) {
+            // `ck` / `set`: the flag bit within its group, and the state.
+            (0x04 | 0x05, 1, _) => {
+                let group = byte(1);
+                if group == FG_ROOM {
+                    ctx.room_flags.borrow_mut().insert(value);
+                    Some(room_flag(value))
+                } else {
+                    ctx.names.flag(group, value).map(str::to_string)
+                }
+            }
+            (0x04 | 0x05, 2, _) => match value {
+                0 => Some("TRUE".to_string()),
+                1 => Some("FALSE".to_string()),
+                2 if op == 0x05 => Some("TOGGLE".to_string()),
+                _ => None,
+            },
+            // `cmpb` / `setb`: the state byte, the comparison and the value.
+            (0x06 | 0x08, 0, _) => engine(&engine::prefixed("B_"), i64::from(value)),
+            (0x06, 1, _) | (0x07, 2, _) => engine(&engine::prefixed("CMP_"), i64::from(value)),
+            (0x06, 2, _) | (0x08, 1, _) => state_value(ctx, at(0), value),
+            // `cmpw` / `setw`: the state word.
+            (0x07, 1, _) | (0x31, 0, _) => engine(&engine::prefixed("W_"), i64::from(value)),
+            // The AOT trigger flags.
+            (0x0C, 16, _) | (0x0D, 6, _) | (0x12 | 0x13, 2, _) => {
+                engine::bits_of("SAT_", i64::from(value))
+            }
+            (_, _, b't') if !matches!(value, 0 | 254 | 255) => Some(
+                ctx.names
+                    .item(value)
+                    .map_or_else(|| value.to_string(), str::to_string),
+            ),
+            (_, _, b'e') => Some(
+                ctx.names
+                    .enemy(value)
+                    .map_or_else(|| value.to_string(), str::to_string),
+            ),
+            (op, 0, _) if AOT_OPS.contains(&op) => ctx.aots.get(&value).cloned(),
+            // `message`: the text id, its top bit asking for the fast reveal.
+            (0x0B, 0, _) => {
+                let id = value & 0x7F;
+                let named = match ctx.names.message_id(ctx.room, id) {
+                    Some((name, local)) => {
+                        if local {
+                            ctx.room_messages.borrow_mut().insert(id, name.to_string());
+                        }
+                        Some(name.to_string())
+                    }
+                    None => ctx.voice_messages.get(&id).map(|name| {
+                        ctx.room_messages.borrow_mut().insert(id, name.clone());
+                        name.clone()
+                    }),
+                };
+                match (named, value & 0x80 != 0) {
+                    (Some(name), true) => Some(format!("{name} | MSG_FAST")),
+                    (Some(name), false) => Some(name),
+                    (None, true) => Some(format!("{id} | MSG_FAST")),
+                    (None, false) => None,
+                }
+            }
+            // `se_play_3d`: where it plays, and the enemy it plays on.
+            (0x17, 3, _) => engine(&engine::prefixed("SND_"), i64::from(value)),
+            (0x17, 4, _) if at(3) == 2 => ctx.enemies.get(&value).cloned(),
+            // `enemy`: the enemy flag that keeps it away, and its slot.
+            (0x1B, 2, _) if value != 0xFF => ctx.names.flag(FG_ENEMY, value).map(str::to_string),
+            (0x1B, 13, _) => ctx.enemies.get(&value).cloned(),
+            // `voice_play`: play or stop, and the line.
+            (0x1E, 0, _) => engine(&["VOICE_PLAY", "VOICE_STOP"], i64::from(value)),
+            (0x1E, 1, _) if at(0) == 1 && byte(position + 1) == 0 => {
+                let id = u16::from(value);
+                ctx.voices.get(&id).map(|name| {
+                    ctx.used_voices.borrow_mut().insert(id);
+                    name.clone()
+                })
+            }
+            // Commands on an enemy slot.
+            (0x21 | 0x39, 0, _) | (0x28, 1, _) => ctx.enemies.get(&value).cloned(),
+            // `eml_state`: the sub-command, and how the status bits apply.
+            (0x28, 2, _) => engine(
+                &[
+                    "EML_BEHAVIOUR",
+                    "EML_REVIVE",
+                    "EML_ACTION",
+                    "EML_STATUS",
+                    "EML_ANGLE",
+                    "EML_BLEND_RESET",
+                    "EML_JOINTS",
+                    "EML_ACTION_STATE",
+                ],
+                i64::from(value),
+            ),
+            (0x28, 3, b'U') if at(2) == 3 => {
+                let mode = engine(
+                    &["EML_STATUS_SET", "EML_STATUS_OR", "EML_STATUS_XOR"],
+                    word & 0xFF00,
+                );
+                mode.map(|mode| format!("{mode} | {}", word & 0xFF))
+            }
+            // `room_bgm_state_set`: the room in the 0-based stage, and the
+            // music state.
+            (0x37, 1, _) if value < 0x20 => ctx.names.door_target(at(0) + 1, value),
+            (0x37, 2, _) => match value {
+                0xFF => Some("BGM_OFF".to_string()),
+                _ => engine::bits_of("BGM_", i64::from(value)),
+            },
+            (_, _, b'r') => Some(
+                ctx.names
+                    .door_target(ctx.stage, value)
+                    .unwrap_or_else(|| value.to_string()),
+            ),
+            _ => None,
+        };
+        if let Some(named) = named
+            && let Some(arg) = args.get_mut(index)
+        {
+            *arg = named;
+        }
+    }
+}
+
+/// A value a state byte holds: a room of this stage, or an item.
+fn state_value(ctx: &Ctx, index: u8, value: u8) -> Option<String> {
+    match index {
+        1 | 3 if value < 0x20 => ctx.names.door_target(ctx.stage, value),
+        6 | 18 | 19 | 41 if value != 0 => ctx.names.item(value).map(str::to_string),
+        _ => None,
+    }
 }
 
 /// `name(args);` for one instruction.

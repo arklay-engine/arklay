@@ -16,19 +16,19 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 9900, 2000, 2500, 2700, 9, 0, 0, 1, 147, ROOM_104_TEA_ROOM, 31800, 0, 3300, 2048, LOCK, 129);
-    door_aot_set(AOT_01_DOOR, 0, 9200, 2500, 2700, 0, 0, 0, 1, 0, STAGE_2 | ROOM_21C_UNDER_KITCHEN, 3800, 0, 10000, 2048, UNLOCKED, 129);
-    aot_set(AOT_02_5, 4500, 9300, 4348, 3500, SCE_5, 129, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_03_5, 11151, 9300, 4148, 3500, SCE_5, 129, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_04_EVENT, 8030, 8400, 500, 4400, SCE_EVENT, 65, 9, 0, on_aot_04, 0, 0, 0);
-    aot_set(AOT_05_EVENT, 11049, 8400, 500, 4400, SCE_EVENT, 65, 9, 0, on_aot_05, 0, 0, 0);
-    aot_set(AOT_06_MESSAGE, 15100, 6200, 1700, 2300, SCE_MESSAGE, 129, 128, 0, 79, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 9900, 2000, 2500, 2700, 9, 0, 0, 1, 147, ROOM_104_TEA_ROOM, 31800, 0, 3300, 2048, LOCK, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 9200, 2500, 2700, 0, 0, 0, 1, 0, STAGE_2 | ROOM_21C_UNDER_KITCHEN, 3800, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_02_5, 4500, 9300, 4348, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_03_5, 11151, 9300, 4148, 3500, SCE_5, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_04_EVENT, 8030, 8400, 500, 4400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
+    aot_set(AOT_05_EVENT, 11049, 8400, 500, 4400, SCE_EVENT, SAT_UNDER | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
+    aot_set(AOT_06_MESSAGE, 15100, 6200, 1700, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 79, 0, 0, 0);
     set(FG_STATUS, F_STATUS_1D, TRUE);
 }
 
 proc main
 {
-    if (cmpb(2, 0, 0))
+    if (cmpb(B_CAMERA, CMP_EQ, 0))
     {
         set(FG_MAP, F_MAP_3E, TRUE);
     }
@@ -38,7 +38,7 @@ event on_aot_04
 {
     run
     {
-        aot_delete(AOT_05_EVENT, SCE_NONE, 65);
+        aot_delete(AOT_05_EVENT, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         cut_auto(1);
         dir_set(0, 0, 0, 0, 11336, -4315, 10556);
         spd_set(0, 37, 239);
@@ -49,7 +49,7 @@ event on_aot_04
     sleep(70);
     run
     {
-        aot_delete(AOT_05_EVENT, SCE_EVENT, 65);
+        aot_delete(AOT_05_EVENT, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
     }
     evt_finish();
 }
@@ -58,7 +58,7 @@ event on_aot_05
 {
     run
     {
-        aot_delete(AOT_04_EVENT, SCE_NONE, 65);
+        aot_delete(AOT_04_EVENT, SCE_NONE, SAT_UNDER | SAT_PLAYER);
         cut_auto(1);
         dir_set(0, 0, 2048, 0, 8338, -2885, 10453);
         spd_set(0, 187, 244);
@@ -69,7 +69,7 @@ event on_aot_05
     sleep(70);
     run
     {
-        aot_delete(AOT_04_EVENT, SCE_EVENT, 65);
+        aot_delete(AOT_04_EVENT, SCE_EVENT, SAT_UNDER | SAT_PLAYER);
     }
     evt_finish();
 }

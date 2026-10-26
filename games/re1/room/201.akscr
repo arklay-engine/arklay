@@ -12,40 +12,46 @@
 #define AOT_03_DOOR 0x03
 #define AOT_04_MESSAGE 0x04
 #define AOT_05_EVENT 0x05
+#define ENEMY_00_HUNTER 0x00
+#define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
+#define ENEMY_01_HUNTER 0x01
+#define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
+#define ENEMY_02_ZOMBIE_GROUNDSKEEPER 0x02
 #define MSG_A_NUMERIC_KEY_PANEL 0x00
 #define MSG_YOU_DO_NOT_KNOW_THE_PASS 0x01
 #define MSG_YOU_HAVE_ENTERED_THE_PASS_NUMBER 0x02
+#define VO_A00_00 0x5D
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 17200, 900, 2000, 2000, 1, 0, 3, 4, 0, ROOM_202_DINING_ROOM_2F, 6400, 0, 14000, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 17200, 900, 2000, 2000, 1, 0, 3, 4, 0, ROOM_202_DINING_ROOM_2F, 6400, 0, 14000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #if MANSION1
     door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 255, ROOM_214_ROUGH_PASSAGE, 6400, 0, 14000, 3072, UNLOCKED, 0);
-    door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 204, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, 129);
-    door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 204, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #else
 #if CHRIS
-    door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 255, ROOM_214_ROUGH_PASSAGE, 11200, 0, 28000, 3072, UNLOCKED, 129);
-    door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 140, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, 129);
-    door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, STAGE_6 | 1, 4300, 0, 3100, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 255, ROOM_214_ROUGH_PASSAGE, 11200, 0, 28000, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 140, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, STAGE_6 | 1, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #else
-    door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 0, ROOM_214_ROUGH_PASSAGE, 11200, 0, 28000, 3072, UNLOCKED, 129);
-    door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 204, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, 129);
-    door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, 0, 0, 1, 0, ROOM_214_ROUGH_PASSAGE, 11200, 0, 28000, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, 0, 0, 4, 204, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, 5, 24, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
 #endif
 #endif
-    aot_set(AOT_04_MESSAGE, 2000, 10300, 300, 1900, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
-    aot_set(AOT_05_EVENT, 14700, 25700, 1500, 1900, SCE_EVENT, 129, 9, 0, on_aot_05, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 2000, 10300, 300, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_EVENT, 14700, 25700, 1500, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
 #if MANSION1
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
         set(FG_COMMON, F_COMMON_2C, FALSE);
     }
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 29, 1, 2, 0, 0, 0, 0, 0, 9500, 0, 8600, 0, 0, 0, 0);
-    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 30, 1, 2, 0, 0, 2039, 0, 0, 9242, 0, 13969, 1, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 29, 1, 2, 0, 0, 0, 0, 0, 9500, 0, 8600, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
+    enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 30, 1, 2, 0, 0, 2039, 0, 0, 9242, 0, 13969, ENEMY_01_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 31, 1, 2, 0, 0, 920, 0, 0, 5213, 0, 10454, 2, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 4, 31, 1, 2, 0, 0, 920, 0, 0, 5213, 0, 10454, ENEMY_02_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
     }
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
@@ -54,15 +60,15 @@ proc init
             if (ck(FG_COMMON, F_COMMON_A1, FALSE))
             {
                 set(FG_COMMON, F_COMMON_A1, TRUE);
-                room_bgm_state_set(0, 4, 10);
-                room_bgm_state_set(0, 15, 65);
+                room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_CH0 | 2);
+                room_bgm_state_set(0, ROOM_10F_BAR, BGM_RELOAD | 1);
             }
         }
     }
 #else
 #if CHRIS
-    enemy(EM_06_HUNTER, 0, 60, 1, 2, 0, 0, 1976, 0, 0, 15656, 0, 21372, 0, 0, 0, 0);
-    enemy(EM_06_HUNTER, 16, 61, 1, 2, 0, 0, 1809, 0, 0, 20872, 0, 4240, 1, 0, 0, 0);
+    enemy(EM_06_HUNTER, 0, 60, 1, 2, 0, 0, 1976, 0, 0, 15656, 0, 21372, ENEMY_00_HUNTER, 0, 0, 0);
+    enemy(EM_06_HUNTER, 16, 61, 1, 2, 0, 0, 1809, 0, 0, 20872, 0, 4240, ENEMY_01_HUNTER, 0, 0, 0);
     if (ck(FG_STATUS, F_STATUS_08, FALSE))
     {
         if (ck(FG_COMMON, F_COMMON_2F, TRUE))
@@ -73,16 +79,16 @@ proc init
             evt_exec(0, 9, on_enter);
         }
     }
-    aot_delete(AOT_01_DOOR, SCE_NONE, 129);
+    aot_delete(AOT_01_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
 #else
-    enemy(EM_06_HUNTER, 2, 60, 1, 2, 0, 0, 1976, 0, 0, 16012, 0, 20724, 0, 0, 0, 0);
+    enemy(EM_06_HUNTER, 2, 60, 1, 2, 0, 0, 1976, 0, 0, 16012, 0, 20724, ENEMY_00_HUNTER, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_46, FALSE))
     {
-        aot_delete(AOT_01_DOOR, SCE_NONE, 129);
+        aot_delete(AOT_01_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_05_EVENT, SCE_NONE, 129);
+        aot_delete(AOT_05_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
 #endif
 #endif
@@ -96,7 +102,7 @@ event on_enter
     sleep(1);
     set(FG_6, F_6_17, FALSE);
     set(FG_6, F_6_1D, FALSE);
-    voice_play(1, 93, 0);
+    voice_play(VOICE_PLAY, VO_A00_00, 0);
     wait_message();
     evt_fork(9, on_enter_sub1, 0);
     sleep(100);
@@ -129,29 +135,29 @@ event on_aot_05
     {
         set(FG_6, F_6_17, FALSE);
         cutnext(7);
-        message(MSG_A_NUMERIC_KEY_PANEL | 0x80, 5); // "A numeric key panel."
+        message(MSG_A_NUMERIC_KEY_PANEL | MSG_FAST, 5); // "A numeric key panel."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
 #if MANSION1
-    message(MSG_YOU_DO_NOT_KNOW_THE_PASS | 0x80, 5); // "You don't know the pass number."
+    message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, 5); // "You don't know the pass number."
 #else
 #if CHRIS
-    message(MSG_YOU_DO_NOT_KNOW_THE_PASS | 0x80, 5); // "You don't know the pass number."
+    message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, 5); // "You don't know the pass number."
 #else
     run
     {
         if (ck(FG_COMMON, F_COMMON_25, FALSE))
         {
-            message(MSG_YOU_DO_NOT_KNOW_THE_PASS | 0x80, 5); // "You don't know the pass number."
+            message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, 5); // "You don't know the pass number."
         }
         else
         {
-            se_play_3d(2, 23, 0, 0, 0, 15500, 26000);
-            message(MSG_YOU_HAVE_ENTERED_THE_PASS_NUMBER | 0x80, 5); // "You've entered the pass number."
+            se_play_3d(2, 23, 0, SND_AT_POINT, 0, 15500, 26000);
+            message(MSG_YOU_HAVE_ENTERED_THE_PASS_NUMBER | MSG_FAST, 5); // "You've entered the pass number."
         }
     }
 #endif
@@ -160,7 +166,7 @@ event on_aot_05
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
 #if MANSION1
@@ -171,7 +177,7 @@ event on_aot_05
 #else
         if (ck(FG_COMMON, F_COMMON_25, TRUE))
         {
-            aot_delete(AOT_01_DOOR, SCE_DOOR, 129);
+            aot_delete(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
             aot_on(AOT_01_DOOR, SCE_DOOR, 0);
             set(FG_SCENARIO, F_SCENARIO_46, TRUE);
             set(FG_6, F_6_17, TRUE);

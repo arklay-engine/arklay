@@ -11,18 +11,21 @@
 #define AOT_02_ITEM 0x02
 #define AOT_03_USEITEM 0x03
 #define AOT_04_MESSAGE 0x04
+#define ENEMY_00_CHIMERA 0x00
+#define ENEMY_01_CHIMERA 0x01
+#define ENEMY_02_CHIMERA 0x02
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, 1, 11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, 1, 11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 21300, 16700, 1400, 1700, 3, 1, 11, 3, 0, ROOM_50F_MAZE_A, 22000, 0, 7500, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 10700, 0, 3400, 2600, 11, 1, 11, 3, 0, ROOM_511_ENGINE_ROOM, 12900, 0, 15600, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_02_ITEM, 0, 0, 1, 1, IT_6D_FILE_PASS_CODE_03, 1, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 90, 129, 0, 0);
-    aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, 1, 9, 0, 13, 0, 1, 0);
-    aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, 1, 0, 0, 0, 0, 0, 0);
-    enemy(EM_09_CHIMERA, 2, 97, 1, 1, 0, 0, 2500, 0, 0, 22000, 0, 7900, 0, 0, 0, 0);
-    enemy(EM_09_CHIMERA, 2, 98, 1, 1, 0, 0, 3500, 0, 0, 6000, 0, 5000, 1, 0, 0, 0);
+    aot_set(AOT_03_USEITEM, 18600, 1500, 1800, 1500, SCE_USEITEM, SAT_PLAYER, 9, 0, 13, 0, 1, 0);
+    aot_set(AOT_04_MESSAGE, 18600, 1500, 1800, 1500, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, 97, 1, 1, 0, 0, 2500, 0, 0, 22000, 0, 7900, ENEMY_00_CHIMERA, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, 98, 1, 1, 0, 0, 3500, 0, 0, 6000, 0, 5000, ENEMY_01_CHIMERA, 0, 0, 0);
 #if CHRIS
-    enemy(EM_09_CHIMERA, 2, 179, 1, 1, 0, 0, 144, 0, 0, 12496, 0, 10163, 2, 0, 0, 0);
+    enemy(EM_09_CHIMERA, 2, 179, 1, 1, 0, 0, 144, 0, 0, 12496, 0, 10163, ENEMY_02_CHIMERA, 0, 0, 0);
 #endif
     evt_exec(0, 9, on_enter);
     evt_exec(0, 9, on_enter_2);
@@ -33,13 +36,13 @@ proc main
 {
     if (ck(FG_ITEM, F_ITEM_5A, TRUE))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, 129, 128, 69, 0);
-        aot_reset(AOT_03_USEITEM, SCE_USEITEM, 1, 9, 13, 1);
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 69, 0);
+        aot_reset(AOT_03_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 13, 1);
     }
     else
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, 129, 129, 69, 0);
-        aot_reset(AOT_03_USEITEM, SCE_NONE, 129, 0, 0, 0);
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 69, 0);
+        aot_reset(AOT_03_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
     }
     if (testitem(IT_28_KEY_MO_DISK))
     {
@@ -59,7 +62,7 @@ event on_enter
     sleep(171);
     run
     {
-        se_play_3d(2, 24, 0, 0, 0, 18300, 9400);
+        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 18300, 9400);
     }
     for (8)
     {
@@ -76,7 +79,7 @@ event on_enter_2
     sleep(285);
     run
     {
-        se_play_3d(2, 24, 0, 0, 0, 9300, 1600);
+        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 9300, 1600);
     }
     for (8)
     {
@@ -93,7 +96,7 @@ event on_enter_3
     sleep(349);
     run
     {
-        se_play_3d(2, 24, 0, 0, 0, 8000, 8600);
+        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 8000, 8600);
     }
     for (8)
     {

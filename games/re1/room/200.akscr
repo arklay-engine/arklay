@@ -13,10 +13,10 @@
 proc init
 {
     set(FG_STATUS, F_STATUS_3D, TRUE);
-    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 0, 10, 16, 64, 0, ROOM_213_FRONT_ELEVATOR, 16000, 0, 7600, 0, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 0, 10, 16, 64, 0, ROOM_21C_UNDER_KITCHEN, 19600, 0, 6800, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 0, 10, 16, 64, 0, ROOM_213_FRONT_ELEVATOR, 16000, 0, 7600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 0, 10, 16, 64, 0, ROOM_21C_UNDER_KITCHEN, 19600, 0, 6800, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     dir_set(0, 0, 0, 0, 2500, 0, 3300);
-    if (cmpb(3, 0, 19))
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_213_FRONT_ELEVATOR))
     {
         evt_exec(0, 9, on_enter);
     }

@@ -13,13 +13,24 @@
 #define AOT_04_ITEM 0x04
 #define AOT_05_ITEM 0x05
 #define AOT_06_ITEM 0x06
+#define ENEMY_00_CERBERUS 0x00
+#define ENEMY_01_CERBERUS 0x01
+#define ENEMY_02_CERBERUS 0x02
+#define MSG_VO_009_04_22 0x00
+#define MSG_VO_009_04_28 0x02
+#define MSG_VO_009_05 0x01
+#define MSG_VO_A05_05 0x03
+#define VO_009_04_22 0x22
+#define VO_009_04_28 0x28
+#define VO_009_05 0x23
+#define VO_A05_05 0x29
 
 proc init
 {
     set(FG_STATUS, F_STATUS_1D, TRUE);
-    door_aot_set(AOT_00_DOOR, 29200, 2600, 2000, 2600, 1, 8, 15, 64, 0, ROOM_302_FALLS, 3500, 0, 23300, 0, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 3500, 30200, 1500, 1600, 1, 0, 3, 1, 0, STAGE_4 | ROOM_400_ENTER_PASSAGE, 3600, 0, 9900, 3072, UNLOCKED, 129);
-    aot_set(AOT_02_USEITEM, 0, 0, 32000, 32000, SCE_USEITEM, 65, 9, 0, 63, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 29200, 2600, 2000, 2600, 1, 8, 15, 64, 0, ROOM_302_FALLS, 3500, 0, 23300, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 3500, 30200, 1500, 1600, 1, 0, 3, 1, 0, STAGE_4 | ROOM_400_ENTER_PASSAGE, 3600, 0, 9900, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_02_USEITEM, 0, 0, 32000, 32000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 0, 63, 0, 1, 0);
     aot_reset(AOT_02_USEITEM, SCE_NONE, 0, 0, 0, 0);
     item_aot_set(AOT_03_ITEM, 27900, 5200, 1700, 1000, IT_44_HEAL_HERB_GREEN, 1, 0, 255, 90, 110, 0, 0, 24, 21, 0, 0, 193, 129, 1, 0);
     item_aot_set(AOT_04_ITEM, 27900, 5200, 1700, 1000, IT_44_HEAL_HERB_GREEN, 1, 1, 255, 72, 113, 0, 0, 24, 21, 0, 0, 194, 129, 1, 0);
@@ -27,27 +38,27 @@ proc init
     item_aot_set(AOT_06_ITEM, 27900, 1800, 1700, 800, IT_45_HEAL_HERB_BLUE, 1, 3, 255, 72, 113, 0, 0, 96, 9, 0, 0, 196, 129, 1, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_02_CERBERUS, 12, 53, 1, 2, 0, 0, 672, 0, 0, 25657, 0, 11984, 0, 0, 0, 0);
-        enemy(EM_02_CERBERUS, 12, 54, 1, 2, 0, 0, 336, 0, 0, 19483, 0, 16862, 1, 0, 0, 0);
+        enemy(EM_02_CERBERUS, 12, 53, 1, 2, 0, 0, 672, 0, 0, 25657, 0, 11984, ENEMY_00_CERBERUS, 0, 0, 0);
+        enemy(EM_02_CERBERUS, 12, 54, 1, 2, 0, 0, 336, 0, 0, 19483, 0, 16862, ENEMY_01_CERBERUS, 0, 0, 0);
         if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
-            enemy(EM_02_CERBERUS, 12, 55, 1, 2, 0, 0, 3920, 0, 0, 4200, 0, 21000, 2, 0, 0, 0);
+            enemy(EM_02_CERBERUS, 12, 55, 1, 2, 0, 0, 3920, 0, 0, 4200, 0, 21000, ENEMY_02_CERBERUS, 0, 0, 0);
         }
     }
     if (ck(FG_SCENARIO, F_SCENARIO_00, TRUE) && ck(FG_SCENARIO, F_SCENARIO_18, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_7F, TRUE))
         {
-            aot_reset(AOT_02_USEITEM, SCE_USEITEM, 65, 9, 63, 1);
+            aot_reset(AOT_02_USEITEM, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 9, 63, 1);
             evt_exec(0, 0, on_enter);
         }
         set(FG_SCENARIO, F_SCENARIO_18, TRUE);
     }
-    if (cmpb(3, 0, 2))
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_302_FALLS))
     {
         snd_pan_vol_set(1, 35, 65);
     }
-    if (cmpb(3, 0, 31))
+    if (cmpb(B_PREV_ROOM, CMP_EQ, 31))
     {
         snd_pan_vol_set(1, 35, 35);
     }
@@ -63,27 +74,27 @@ proc main
     {
         evt_exec(0, 1, from_main);
     }
-    if (cmpb(2, 0, 0))
+    if (cmpb(B_CAMERA, CMP_EQ, 0))
     {
         snd_pan_vol_set(1, 35, 65);
     }
-    if (cmpb(2, 0, 1))
+    if (cmpb(B_CAMERA, CMP_EQ, 1))
     {
         snd_pan_vol_set(1, 35, 65);
     }
-    if (cmpb(2, 0, 2))
+    if (cmpb(B_CAMERA, CMP_EQ, 2))
     {
         snd_pan_vol_set(1, 50, 35);
     }
-    if (cmpb(2, 0, 3))
+    if (cmpb(B_CAMERA, CMP_EQ, 3))
     {
         snd_pan_vol_set(1, 30, 45);
     }
-    if (cmpb(2, 0, 4))
+    if (cmpb(B_CAMERA, CMP_EQ, 4))
     {
         snd_pan_vol_set(1, 30, 45);
     }
-    if (cmpb(2, 0, 5))
+    if (cmpb(B_CAMERA, CMP_EQ, 5))
     {
         snd_pan_vol_set(1, 35, 35);
     }
@@ -92,15 +103,15 @@ proc main
 event on_enter
 {
     sleep(30);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(180);
-    se_play_3d(2, 23, 0, 1, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(480);
     aot_reset(AOT_02_USEITEM, SCE_NONE, 0, 0, 0, 0);
     evt_finish();
@@ -113,11 +124,11 @@ event from_main
     sleep(10);
     set(FG_STATUS, F_STATUS_0F, TRUE);
 #if CHRIS
-    voice_play(1, 34, 0);
-    message(0, 0);
+    voice_play(VOICE_PLAY, VO_009_04_22, 0);
+    message(MSG_VO_009_04_22, 0);
 #else
-    voice_play(1, 40, 0);
-    message(2, 0);
+    voice_play(VOICE_PLAY, VO_009_04_28, 0);
+    message(MSG_VO_009_04_28, 0);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -130,11 +141,11 @@ event from_main
     evt_nop();
     wait_message();
 #if CHRIS
-    voice_play(1, 35, 0);
-    message(1, 0);
+    voice_play(VOICE_PLAY, VO_009_05, 0);
+    message(MSG_VO_009_05, 0);
 #else
-    voice_play(1, 41, 0);
-    message(3, 0);
+    voice_play(VOICE_PLAY, VO_A05_05, 0);
+    message(MSG_VO_A05_05, 0);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

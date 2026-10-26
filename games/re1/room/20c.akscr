@@ -25,6 +25,8 @@
 #define AOT_0C_MESSAGE 0x0C
 #define AOT_0D_USEITEM 0x0D
 #define AOT_0E_MESSAGE 0x0E
+#define ENEMY_00_YAWN_2 0x00
+#define ENEMY_0F_NPC_BARRY_2_STARS 0x0F
 #define F_ROOM_00 0x00
 #define F_ROOM_07 0x07
 #define F_ROOM_08 0x08
@@ -43,27 +45,65 @@
 #define MSG_THERE_IS_A_ROPE_WILL_YOU_CLIMB_IT 0x1A
 #define MSG_THERE_IS_A_ROPE_WILL_YOU_DESCEND_IT 0x03
 #define MSG_THERE_IS_A_SWITCH_BELOW 0x17
+#define MSG_VO_10D_00 0x04
+#define MSG_VO_10D_01 0x05
+#define MSG_VO_10D_02 0x06
+#define MSG_VO_10D_03 0x07
+#define MSG_VO_10D_04 0x08
+#define MSG_VO_10D_05 0x09
+#define MSG_VO_10D_06 0x0A
+#define MSG_VO_10D_07 0x0B
+#define MSG_VO_10D_10 0x0C
+#define MSG_VO_10D_11 0x0D
+#define MSG_VO_10D_13 0x0E
+#define MSG_VO_10D_14 0x0F
+#define MSG_VO_10D_15 0x10
+#define MSG_VO_10D_16 0x11
+#define MSG_VO_10D_17 0x12
+#define MSG_VO_10D_18 0x13
+#define MSG_VO_10D_19 0x14
+#define VO_10D_00 0x48
+#define VO_10D_01 0x49
+#define VO_10D_02 0x4A
+#define VO_10D_03 0x4B
+#define VO_10D_04 0x4C
+#define VO_10D_05 0x4D
+#define VO_10D_06 0x4E
+#define VO_10D_07 0x4F
+#define VO_10D_10 0x50
+#define VO_10D_11 0x51
+#define VO_10D_12 0x52
+#define VO_10D_13 0x53
+#define VO_10D_14 0x54
+#define VO_10D_15 0x55
+#define VO_10D_16 0x56
+#define VO_10D_17 0x57
+#define VO_10D_18 0x58
+#define VO_10D_19 0x59
+#define VO_B00_00 0x5A
+#define VO_B00_01 0x5B
+#define VO_B00_02 0x5C
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 10400, 17500, 2300, 1400, 1, 0, 31, 5, 0, ROOM_20B_FRONT_LESSON_ROOM, 2500, 0, 7400, 0, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 10400, 17500, 2300, 1400, 1, 0, 31, 5, 0, ROOM_20B_FRONT_LESSON_ROOM, 2500, 0, 7400, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     door_aot_set(AOT_01_DOOR, 16650, 2570, 2400, 2080, 1, 11, 26, 64, 0, ROOM_21A_UNDER_PASSAGE_1, 28000, 0, 3550, 2048, UNLOCKED, 0);
 #if CHRIS
-    aot_set(AOT_07_EVENT, 16650, 2570, 2400, 2080, SCE_EVENT, 129, 9, 0, on_aot_07, 0, 0, 0);
+    aot_set(AOT_07_EVENT, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
 #else
-    aot_set(AOT_0A_EVENT, 16650, 2570, 2400, 2080, SCE_EVENT, 129, 9, 0, on_aot_0a, 0, 0, 0);
+    aot_set(AOT_0A_EVENT, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_0a, 0, 0, 0);
 #endif
     set(FG_STATUS, F_STATUS_1D, TRUE);
 #if JILL
-    room_bgm_state_set(6, 12, 65);
+    room_bgm_state_set(6, 12, BGM_RELOAD | 1);
 #endif
     if (ck(FG_SCENARIO, F_SCENARIO_27, FALSE))
     {
-        enemy(EM_12_YAWN_2, 132, 62, 1, 2, 0, 0, 2048, 0, 0, 13000, 0, 11150, 0, 0, 0, 0);
+        enemy(EM_12_YAWN_2, 132, F_ENEMY_3E, 1, 2, 0, 0, 2048, 0, 0, 13000, 0, 11150, ENEMY_00_YAWN_2, 0, 0, 0);
     }
     else
     {
-        enemy(EM_12_YAWN_2, 6, 62, 1, 2, 0, 0, 3072, 0, 0, 5300, 0, 17500, 0, 0, 0, 0);
+        enemy(EM_12_YAWN_2, 6, F_ENEMY_3E, 1, 2, 0, 0, 3072, 0, 0, 5300, 0, 17500, ENEMY_00_YAWN_2, 0, 0, 0);
         inst_cfg(3, 2, 0, 252, 0, 64, 7, 188, 16, 120, 23);
         if (ck(FG_ENEMY, F_ENEMY_3E, FALSE))
         {
@@ -73,12 +113,12 @@ proc init
 #if CHRIS
     if (ck(FG_ENEMY, F_ENEMY_3E, TRUE))
     {
-        room_bgm_state_set(6, 12, 8);
+        room_bgm_state_set(6, 12, BGM_CH0);
     }
 #else
-    enemy(EM_2B_NPC_BARRY_2_STARS, 0, 255, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 15, 0, 0, 0);
+    enemy(EM_2B_NPC_BARRY_2_STARS, 0, 255, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, ENEMY_0F_NPC_BARRY_2_STARS, 0, 0, 0);
 #endif
-    aot_set(AOT_02_EVENT, 1200, 1400, 3000, 2000, SCE_EVENT, 129, 9, 0, on_aot_02, 0, 0, 0);
+    aot_set(AOT_02_EVENT, 1200, 1400, 3000, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
 #if CHRIS
     aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, 0, 9, 0, on_aot_03, 0, 0, 0);
 #else
@@ -93,28 +133,28 @@ proc init
         {
             if (ck(FG_COMMON, F_COMMON_25, TRUE))
             {
-                aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, 129, 9, 0, on_aot_03_2, 0, 0, 0);
+                aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03_2, 0, 0, 0);
             }
             else
             {
-                aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+                aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
             }
         }
         else
         {
-            aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
+            aot_set(AOT_03_EVENT, 1400, 3400, 3200, 2700, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
         }
     }
 #endif
     if (ck(FG_SCENARIO, F_SCENARIO_28, FALSE))
     {
 #if CHRIS
-        aot_set(AOT_04_EVENT, 16650, 2570, 2400, 2080, SCE_EVENT, 129, 9, 0, on_aot_04, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 16650, 2570, 2400, 2080, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
 #else
-        aot_set(AOT_04_USEITEM, 16650, 2570, 2400, 2080, SCE_USEITEM, 129, 4, 0, 9, 0, 1, 0);
+        aot_set(AOT_04_USEITEM, 16650, 2570, 2400, 2080, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 9, 0, 1, 0);
 #endif
     }
-    aot_set(AOT_06_USEITEM, 19000, 2570, 1400, 2080, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 19000, 2570, 1400, 2080, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
 #if JILL
     item_aot_set(AOT_07_ITEM, 0, 0, 1, 1, IT_4D_KEY_RADIO, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 85, 65, 0, 0);
     item_aot_set(AOT_08_ITEM, 0, 0, 1, 1, IT_63_FILE_PASS_NUMBER, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 86, 65, 0, 0);
@@ -122,11 +162,11 @@ proc init
 #endif
     if (ck(FG_SCENARIO, F_SCENARIO_28, FALSE))
     {
-        aot_set(AOT_0B_USEITEM, 13800, 1710, 2100, 3700, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
+        aot_set(AOT_0B_USEITEM, 13800, 1710, 2100, 3700, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
     }
 #if CHRIS
     aot_set(AOT_08_MESSAGE, 14400, 2810, 1800, 1900, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_USEITEM, 8700, 10210, 1800, 1900, SCE_USEITEM, 65, 4, 0, 60, 0, 1, 0);
+    aot_set(AOT_09_USEITEM, 8700, 10210, 1800, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
     aot_set(AOT_0A_MESSAGE, 9300, 9710, 1800, 2800, SCE_MESSAGE, 0, 156, 0, 255, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_28, FALSE))
     {
@@ -137,30 +177,30 @@ proc init
         obj(0, 33, 255, 15460, 0, 3610, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 8, 176, 4, 16, 4);
         set(FG_ROOM, F_ROOM_0E, TRUE);
     }
-    if (cmpb(3, 0, 26))
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_21A_UNDER_PASSAGE_1))
     {
         msg_list(0, 252, 101, 120, 236, 213, 14, 60, 60, 60, 0, 217, 54, 126, 52, 120, 236, 63, 14, 60, 60, 60, 0, 249, 52, 128, 47, 120, 236, 96, 14, 60, 60, 60, 0, 3, 52, 191, 3, 1, 3, 33, 3);
     }
 #else
     aot_set(AOT_0C_MESSAGE, 14400, 2810, 1800, 1900, SCE_MESSAGE, 0, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_0D_USEITEM, 8700, 10210, 1800, 1900, SCE_USEITEM, 65, 4, 0, 60, 0, 1, 0);
+    aot_set(AOT_0D_USEITEM, 8700, 10210, 1800, 1900, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
     aot_set(AOT_0E_MESSAGE, 9300, 9710, 1800, 2800, SCE_MESSAGE, 0, 156, 0, 255, 0, 0, 0);
     if (ck(FG_COMMON, F_COMMON_25, TRUE))
     {
         effect(13, 0, 0, 204, 91, 160, 246, 216, 14, 0, 0);
-        aot_delete(AOT_09_EVENT, SCE_EVENT, 129);
+        aot_delete(AOT_09_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
-    if (cmpb(3, 0, 26))
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_21A_UNDER_PASSAGE_1))
     {
         msg_list(0, 252, 101, 120, 236, 213, 14, 60, 60, 60, 0, 217, 54, 126, 52, 120, 236, 63, 14, 60, 60, 60, 0, 249, 52, 128, 47, 120, 236, 96, 14, 60, 60, 60, 0, 3, 52, 191, 3, 1, 3, 33, 3);
         if (ck(FG_COMMON, F_COMMON_25, FALSE))
         {
-            room_bgm_state_set(6, 12, 8);
+            room_bgm_state_set(6, 12, BGM_CH0);
         }
     }
     else if (ck(FG_COMMON, F_COMMON_25, TRUE))
     {
-        room_bgm_state_set(6, 12, 8);
+        room_bgm_state_set(6, 12, BGM_CH0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_28, FALSE))
     {
@@ -179,12 +219,12 @@ proc main
 #if CHRIS
     if (ck(FG_ENEMY, F_ENEMY_3E, TRUE))
     {
-        aot_delete(AOT_03_EVENT, SCE_EVENT, 129);
+        aot_delete(AOT_03_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
 #else
     if (ck(FG_ENEMY, F_ENEMY_3E, TRUE) && ck(FG_ROOM, F_ROOM_08, FALSE))
     {
-        aot_delete(AOT_03_EVENT, SCE_EVENT, 129);
+        aot_delete(AOT_03_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         set(FG_ROOM, F_ROOM_08, TRUE);
     }
 #endif
@@ -199,19 +239,19 @@ proc main
         {
 #if CHRIS
             aot_delete(AOT_07_EVENT, SCE_EVENT, 0);
-            aot_delete(AOT_04_EVENT, SCE_EVENT, 129);
+            aot_delete(AOT_04_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
 #else
             aot_delete(AOT_0A_EVENT, SCE_EVENT, 0);
-            aot_delete(AOT_04_USEITEM, SCE_USEITEM, 129);
+            aot_delete(AOT_04_USEITEM, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER);
 #endif
         }
         else
         {
 #if CHRIS
-            aot_delete(AOT_07_EVENT, SCE_EVENT, 129);
+            aot_delete(AOT_07_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             aot_delete(AOT_04_EVENT, SCE_EVENT, 0);
 #else
-            aot_delete(AOT_0A_EVENT, SCE_EVENT, 129);
+            aot_delete(AOT_0A_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             aot_delete(AOT_04_USEITEM, SCE_USEITEM, 0);
 #endif
         }
@@ -254,12 +294,12 @@ proc main
         }
     }
 #endif
-    if (cmpb(2, 0, 2) && ck(FG_SCENARIO, F_SCENARIO_27, FALSE))
+    if (cmpb(B_CAMERA, CMP_EQ, 2) && ck(FG_SCENARIO, F_SCENARIO_27, FALSE))
     {
         bank_bit(255);
         bank_bit(2);
     }
-    if (cmpb(2, 0, 1) && ck(FG_SCENARIO, F_SCENARIO_27, FALSE))
+    if (cmpb(B_CAMERA, CMP_EQ, 1) && ck(FG_SCENARIO, F_SCENARIO_27, FALSE))
     {
         bank_bit(255);
         bank_bit(3);
@@ -279,9 +319,9 @@ proc main
     else
     {
 #if CHRIS
-        aot_delete(AOT_08_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_08_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
 #else
-        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
 #endif
     }
     if (ck(FG_ROOM, F_ROOM_3C, FALSE))
@@ -295,12 +335,12 @@ proc main
     else
     {
 #if CHRIS
-        aot_delete(AOT_0A_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_0A_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
 #else
-        aot_delete(AOT_0E_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_0E_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
 #endif
     }
-    if (cmpb(2, 0, 4))
+    if (cmpb(B_CAMERA, CMP_EQ, 4))
     {
         set(FG_MAP, F_MAP_1F, TRUE);
     }
@@ -317,25 +357,25 @@ event on_aot_03
         set(FG_6, F_6_17, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_COMMON, F_COMMON_26, TRUE);
-        aot_reset(AOT_03_EVENT, SCE_MESSAGE, 129, 129, 255, 0);
+        aot_reset(AOT_03_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
     }
 #endif
     sleep(26);
 #if CHRIS
     set(FG_6, F_6_17, FALSE);
-    message(MSG_IT_IS_TOO_DARK_TO_SEEWILL | 0x80, 255); // "It's too dark to see.Will you jump down? There's a rope. Will you descend it?"
+    message(MSG_IT_IS_TOO_DARK_TO_SEEWILL | MSG_FAST, 255); // "It's too dark to see.Will you jump down? There's a rope. Will you descend it?"
 #else
-    message(MSG_IT_IS_TOO_DARK_TO_SEE | 0x80, 255); // "It's too dark to see anything."
+    message(MSG_IT_IS_TOO_DARK_TO_SEE | MSG_FAST, 255); // "It's too dark to see anything."
 #endif
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
 #if CHRIS
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_03_sub1);
         }
@@ -346,11 +386,11 @@ event on_aot_03
         }
     }
 #else
-    pos_set(15, 0, 1240, 0, 8768, 0, 14600);
-    se_play_3d(0, 0, 0, 2, 0, 0, 0);
+    pos_set(ENEMY_0F_NPC_BARRY_2_STARS, 0, 1240, 0, 8768, 0, 14600);
+    se_play_3d(0, 0, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
     evt_fork(9, on_aot_03_sub2, 0);
     sleep(80);
-    se_play_3d(0, 1, 0, 2, 0, 0, 0);
+    se_play_3d(0, 1, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
     sleep(10);
     evt_fork(9, on_aot_03_sub3, 0);
     sleep(10);
@@ -362,34 +402,34 @@ event on_aot_03
     }
     sleep(60);
     cutnext(2);
-    voice_play(1, 72, 0);
-    message(4, 0);
+    voice_play(VOICE_PLAY, VO_10D_00, 0);
+    message(MSG_VO_10D_00, 0);
     sleep(90);
     wait_message();
     cutnext(3);
     dir_set(0, 0, 982, 0, 3796, 0, 6495);
     evt_fork(9, on_aot_03_sub4, 0);
-    voice_play(1, 73, 0);
-    message(5, 0);
+    voice_play(VOICE_PLAY, VO_10D_01, 0);
+    message(MSG_VO_10D_01, 0);
     wait_message();
     evt_fork(9, on_aot_03_sub5, 0);
-    voice_play(1, 74, 0);
-    message(6, 0);
+    voice_play(VOICE_PLAY, VO_10D_02, 0);
+    message(MSG_VO_10D_02, 0);
     wait_message();
     evt_fork(9, on_aot_03_sub6, 0);
-    voice_play(1, 75, 0);
-    message(7, 0);
+    voice_play(VOICE_PLAY, VO_10D_03, 0);
+    message(MSG_VO_10D_03, 0);
     wait_message();
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion_path(19, 2634, 0, 4825, 200, 100);
     act_reset();
     evt_nop();
-    voice_play(1, 76, 0);
-    message(8, 0);
+    voice_play(VOICE_PLAY, VO_10D_04, 0);
+    message(MSG_VO_10D_04, 0);
     wait_message();
     evt_fork(9, on_aot_03_sub7, 0);
-    voice_play(1, 90, 0);
+    voice_play(VOICE_PLAY, VO_B00_00, 0);
     wait_message();
     run
     {
@@ -422,7 +462,7 @@ event on_aot_02
         bank_bit(2);
         cutnext(1);
         dir_set(0, 0, 1208, 0, 3607, 0, 5516);
-        eml_state(0, 0, 0, 4);
+        eml_state(0, ENEMY_00_YAWN_2, EML_BEHAVIOUR, 4);
     }
     evt_fork(9, on_enter, 0);
     evt_fork(9, on_aot_02_sub3, 0);
@@ -431,11 +471,11 @@ event on_aot_02
     cutnext(2);
     evt_fork(9, on_aot_02_sub2, 0);
     sleep(70);
-    se_play_3d(2, 25, 0, 2, 0, 0, 0);
-    se_play_3d(2, 27, 0, 2, 0, 0, 0);
+    se_play_3d(2, 25, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
+    se_play_3d(2, 27, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
     sleep(1);
-    se_play_3d(2, 25, 0, 2, 0, 0, 0);
-    se_play_3d(2, 27, 0, 2, 0, 0, 0);
+    se_play_3d(2, 25, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
+    se_play_3d(2, 27, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
     sleep(1);
 #if CHRIS
     sleep(98);
@@ -560,7 +600,7 @@ event event_04
         cutnext(4);
         cut_auto(0);
         timer_setup(2, 255, 255, 7, 0);
-        se_play_3d(2, 45, 0, 1, 0, 0, 0);
+        se_play_3d(2, 45, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     sleep(30);
     set(FG_ROOM, F_ROOM_0F, TRUE);
@@ -630,9 +670,9 @@ event from_main_sub1_sub1
     }
     tw_end();
 #if CHRIS
-    aot_delete(AOT_07_EVENT, SCE_EVENT, 129);
+    aot_delete(AOT_07_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
 #else
-    aot_delete(AOT_0A_EVENT, SCE_EVENT, 129);
+    aot_delete(AOT_0A_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
 #endif
     set(FG_SCENARIO, F_SCENARIO_28, TRUE);
     evt_finish();
@@ -655,16 +695,16 @@ event from_main
     evt_fork(9, on_aot_03_sub1, 0);
 #endif
     sleep(40);
-    message(MSG_THERE_IS_A_SWITCH_BELOW | 0x80, 255); // "There's a switch below. Will you push it?"
+    message(MSG_THERE_IS_A_SWITCH_BELOW | MSG_FAST, 255); // "There's a switch below. Will you push it?"
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
         set(FG_ROOM, F_ROOM_0F, TRUE);
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             set(FG_ROOM, F_ROOM_0E, TRUE);
             aot_delete(AOT_0B_USEITEM, SCE_NONE, 0);
@@ -719,7 +759,7 @@ event from_main_sub1
 #else
     evt_fork(5, from_main_sub1_sub1, 0);
 #endif
-    voice_play(1, 92, 0);
+    voice_play(VOICE_PLAY, VO_B00_02, 0);
     sleep(205);
     wait_message();
     set(FG_ROOM, F_ROOM_0F, TRUE);
@@ -754,7 +794,7 @@ event on_aot_03_sub2
 
 event on_aot_03_sub3
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_seq(39442, 60960, 16154);
     act_nop();
@@ -792,7 +832,7 @@ event on_aot_03_sub4
 
 event on_aot_03_sub5
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion_path(19, 3521, 62936, 6601, 200, 100);
     act_anim_flags(32 | 16, 32 | 31, 0 | 0);
@@ -841,7 +881,7 @@ event on_aot_03_sub6
 
 event on_aot_03_sub7
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_flags(0 | 9, 32 | 31, 0 | 0);
     act_flag_op(0, 32, 0);
@@ -855,13 +895,13 @@ event on_aot_03_sub7
 event on_aot_03_sub8
 {
     evt_fork(9, on_aot_03_sub8_sub1, 0);
-    voice_play(1, 77, 0);
-    message(9, 0);
+    voice_play(VOICE_PLAY, VO_10D_05, 0);
+    message(MSG_VO_10D_05, 0);
     wait_message();
     sleep(30);
     evt_fork(9, on_aot_03_sub8_sub2, 0);
-    voice_play(1, 78, 0);
-    message(10, 0);
+    voice_play(VOICE_PLAY, VO_10D_06, 0);
+    message(MSG_VO_10D_06, 0);
     wait_message();
     sleep(30);
     run
@@ -873,8 +913,8 @@ event on_aot_03_sub8
     set(FG_6, F_6_17, FALSE);
     sleep(10);
     evt_fork(9, on_aot_03_sub8_sub3, 0);
-    voice_play(1, 79, 0);
-    message(11, 0);
+    voice_play(VOICE_PLAY, VO_10D_07, 0);
+    message(MSG_VO_10D_07, 0);
     wait_message();
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -924,7 +964,7 @@ event event_13
 #endif
     evt_nop();
 #if JILL
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion(16);
     act_reset();
@@ -936,11 +976,11 @@ event event_13
     sleep(47);
     set(FG_ROOM, F_ROOM_00, TRUE);
     evt_fork(9, event_18, 0);
-    voice_play(1, 91, 0);
+    voice_play(VOICE_PLAY, VO_B00_01, 0);
     wait_message();
     bgm_play(0);
-    voice_play(1, 80, 0);
-    message(12, 0);
+    voice_play(VOICE_PLAY, VO_10D_10, 0);
+    message(MSG_VO_10D_10, 0);
     wait_message();
     run
     {
@@ -948,8 +988,8 @@ event event_13
         cutnext(3);
     }
     evt_fork(9, event_19, 0);
-    voice_play(1, 81, 0);
-    message(13, 0);
+    voice_play(VOICE_PLAY, VO_10D_11, 0);
+    message(MSG_VO_10D_11, 0);
     wait_message();
     run
     {
@@ -957,7 +997,7 @@ event event_13
         cutnext(4);
     }
     evt_fork(9, event_1A, 0);
-    voice_play(1, 82, 0);
+    voice_play(VOICE_PLAY, VO_10D_12, 0);
     sleep(20);
     sleep(60);
     evt_fork(9, event_1B, 0);
@@ -968,7 +1008,7 @@ event event_13
 #if JILL
 event on_aot_03_sub8_sub1
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion_path(147, 0, 0, 0, 200, 100);
     act_anim_flags(32 | 16, 32 | 31, 0 | 0);
@@ -1017,7 +1057,7 @@ event on_aot_03_sub8_sub2
 
 event on_aot_03_sub8_sub3
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion(16);
     act_anim_flags(32 | 16, 32 | 31, 0 | 0);
@@ -1039,7 +1079,7 @@ event on_aot_03_sub8_sub3
 
 event on_aot_03_sub9_sub1
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion_path(147, 0, 0, 0, 100, 50);
     act_reset();
@@ -1077,7 +1117,7 @@ event event_18
 
 event event_19
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion(16);
     act_anim_flags(32 | 16, 32 | 31, 0 | 0);
@@ -1140,7 +1180,7 @@ event event_1A
 event event_1B
 {
     sleep(600);
-    single(4) set(FG_ROOM, F_ROOM_00, TRUE);
+    single(4) set(FG_ROOM, 0, 0);
     raw(0x0A, 0x00, 0xFF, 0x00);
 }
 
@@ -1162,7 +1202,7 @@ event from_main_2_sub1
 
 event from_main_2_sub2
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_seq(18691, 5657, 16146);
     act_nop();
@@ -1186,7 +1226,7 @@ event from_main_2_sub3
 
 event from_main_2_sub4
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_flags(0 | 9, 32 | 31, 0 | 0);
     act_flag_op(0, 32, 0);
@@ -1219,7 +1259,7 @@ event from_main_2_sub5
 
 event from_main_2_sub6
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_flags(32 | 5, 32 | 31, 0 | 0);
     act_motion_path(113, 500, 0, 1, 150, 0);
@@ -1261,7 +1301,7 @@ event from_main_2_sub7
 event from_main_2_sub8
 {
     sleep(80);
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_motion_path(51, 0, 300, 0, 0, 100);
     act_anim_flags(32 | 1, 32 | 31, 0 | 0);
@@ -1300,7 +1340,7 @@ event from_main_2_sub9
 
 event from_main_2_sub10
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_flags(32 | 1, 32 | 31, 0 | 0);
     act_motion(16);
@@ -1322,7 +1362,7 @@ event from_main_2_sub10
 
 event from_main_2_sub11
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_flags(32 | 1, 32 | 31, 0 | 0);
     sleep(10);
@@ -1339,7 +1379,7 @@ event from_main_2_sub11
     act_anim_seq(57090, 31762, 16149);
     act_reset();
     sleep(30);
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_flags(32 | 10, 32 | 31, 0 | 0);
     act_flag_op(0, 16, 0);
@@ -1375,7 +1415,7 @@ event from_main_2_sub13
 
 event from_main_2_sub14
 {
-    evt_work_set(WK_ENEMY, 15);
+    evt_work_set(WK_ENEMY, ENEMY_0F_NPC_BARRY_2_STARS);
     evt_actor_begin();
     act_anim_seq(23554, 56350, 16153);
     act_nop();
@@ -1393,15 +1433,15 @@ event from_main_2_sub14
 event on_aot_09
 {
     set(FG_6, F_6_17, FALSE);
-    message(MSG_THERE_IS_A_ROPE_WILL_YOU_CLIMB_IT | 0x80, 255); // "There's a rope. Will you climb it? There's a ladder. Will you descend it? A hole opens in the fireplace."
+    message(MSG_THERE_IS_A_ROPE_WILL_YOU_CLIMB_IT | MSG_FAST, 255); // "There's a rope. Will you climb it? There's a ladder. Will you descend it? A hole opens in the fireplace."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_09_sub2);
         }
@@ -1434,15 +1474,15 @@ event on_aot_09_sub2
 event on_aot_03_2
 {
     set(FG_6, F_6_17, FALSE);
-    message(MSG_THERE_IS_A_ROPE_WILL_YOU_DESCEND_IT | 0x80, 255); // "There's a rope. Will you descend it?"
+    message(MSG_THERE_IS_A_ROPE_WILL_YOU_DESCEND_IT | MSG_FAST, 255); // "There's a rope. Will you descend it?"
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_03_2_sub1);
         }
@@ -1476,15 +1516,15 @@ event from_main_2
 {
     run
     {
-        aot_delete(AOT_09_EVENT, SCE_EVENT, 129);
+        aot_delete(AOT_09_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
         set(FG_COMMON, F_COMMON_25, TRUE);
         set(FG_6, F_6_17, FALSE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
-        pos_set(15, 0, 1184, 0, 9578, 0, 16571);
+        pos_set(ENEMY_0F_NPC_BARRY_2_STARS, 0, 1184, 0, 9578, 0, 16571);
     }
     evt_fork(9, from_main_2_sub1, 0);
     sleep(100);
-    se_play_3d(0, 1, 0, 2, 0, 0, 0);
+    se_play_3d(0, 1, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
     evt_fork(9, from_main_2_sub2, 0);
     run
     {
@@ -1502,10 +1542,10 @@ event from_main_2
     }
     evt_fork(9, from_main_2_sub3, 0);
     sleep(20);
-    pos_set(15, 0, 1479, 0, 5087, 0, 5353);
+    pos_set(ENEMY_0F_NPC_BARRY_2_STARS, 0, 1479, 0, 5087, 0, 5353);
     sleep(60);
-    voice_play(1, 83, 0);
-    message(14, 0);
+    voice_play(VOICE_PLAY, VO_10D_13, 0);
+    message(MSG_VO_10D_13, 0);
     wait_message();
     run
     {
@@ -1513,7 +1553,7 @@ event from_main_2
         cutnext(3);
     }
     evt_fork(9, from_main_2_sub4, 0);
-    voice_play(1, 90, 0);
+    voice_play(VOICE_PLAY, VO_B00_00, 0);
     wait_message();
     run
     {
@@ -1529,7 +1569,7 @@ event from_main_2
         msg_list(0, 252, 26, 48, 248, 253, 14, 255, 255, 255, 0, 193, 53, 158, 25, 122, 244, 159, 63, 255, 255, 255, 0, 9, 52, 0, 0, 91, 1, 0, 0, 230, 230, 230, 1, 155, 35, 239, 2, 79, 3, 209, 3);
         timer_setup(2, 0, 0, 7, 0);
         dir_set(0, 0, 464, 0, 3575, 0, 6509);
-        pos_set(15, 0, 2916, 0, 5014, 0, 3721);
+        pos_set(ENEMY_0F_NPC_BARRY_2_STARS, 0, 2916, 0, 5014, 0, 3721);
         cutnext(3);
         cut_auto(0);
         timer_setup(2, 255, 255, 7, 0);
@@ -1539,28 +1579,28 @@ event from_main_2
     sleep(47);
     cutnext(3);
     evt_fork(9, from_main_2_sub6, 0);
-    voice_play(1, 84, 0);
-    message(15, 0);
+    voice_play(VOICE_PLAY, VO_10D_14, 0);
+    message(MSG_VO_10D_14, 0);
     wait_message();
     evt_fork(9, from_main_2_sub7, 0);
     evt_fork(9, from_main_2_sub8, 0);
-    voice_play(1, 85, 0);
-    message(16, 0);
+    voice_play(VOICE_PLAY, VO_10D_15, 0);
+    message(MSG_VO_10D_15, 0);
     wait_message();
     evt_fork(9, from_main_2_sub9, 0);
-    voice_play(1, 86, 0);
-    message(17, 0);
+    voice_play(VOICE_PLAY, VO_10D_16, 0);
+    message(MSG_VO_10D_16, 0);
     wait_message();
     evt_fork(9, from_main_2_sub10, 0);
-    voice_play(1, 87, 0);
-    message(18, 0);
+    voice_play(VOICE_PLAY, VO_10D_17, 0);
+    message(MSG_VO_10D_17, 0);
     wait_message();
     sleep(10);
     cutnext(2);
     dir_set(0, 0, 976, 0, 4771, 0, 6430);
     evt_fork(9, from_main_2_sub11, 0);
-    voice_play(1, 88, 0);
-    message(19, 0);
+    voice_play(VOICE_PLAY, VO_10D_18, 0);
+    message(MSG_VO_10D_18, 0);
     wait_message();
     sleep(30);
     set(FG_6, F_6_17, TRUE);
@@ -1568,21 +1608,21 @@ event from_main_2
     sleep(1);
     set(FG_6, F_6_17, FALSE);
     evt_fork(9, from_main_2_sub12, 0);
-    voice_play(1, 89, 0);
-    message(20, 0);
+    voice_play(VOICE_PLAY, VO_10D_19, 0);
+    message(MSG_VO_10D_19, 0);
     wait_message();
     cutnext(2);
     sleep(20);
     evt_fork(9, from_main_2_sub13, 0);
     evt_fork(9, from_main_2_sub14, 0);
     sleep(120);
-    se_play_3d(0, 0, 0, 2, 0, 0, 0);
+    se_play_3d(0, 0, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
     sleep(20);
     run
     {
-        se_play_3d(0, 1, 0, 2, 0, 0, 0);
+        se_play_3d(0, 1, 0, SND_AT_ENEMY, ENEMY_00_YAWN_2, 0, 0);
         set(FG_ROOM, F_ROOM_0C, FALSE);
-        aot_reset(AOT_03_EVENT, SCE_EVENT, 129, 9, on_aot_03_2, 0);
+        aot_reset(AOT_03_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, on_aot_03_2, 0);
     }
     evt_chain(8);
     evt_nop();
@@ -1614,16 +1654,16 @@ event on_aot_0a
     run
     {
         set(FG_6, F_6_17, FALSE);
-        message(MSG_THERE_IS_A_LADDER | 0x80, 255); // "There's a ladder. Will you descend it? A hole opens in the fireplace."
+        message(MSG_THERE_IS_A_LADDER | MSG_FAST, 255); // "There's a ladder. Will you descend it? A hole opens in the fireplace."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             aot_on(AOT_01_DOOR, SCE_DOOR, 0);
             set(FG_6, F_6_17, TRUE);

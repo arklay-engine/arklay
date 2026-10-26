@@ -24,6 +24,7 @@
 #define AOT_10_MESSAGE 0x10
 #define AOT_11_USEITEM 0x11
 #define AOT_83_ITEM 0x83
+#define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
 #define F_ROOM_3B 0x3B
 #define F_ROOM_3C 0x3C
 #define F_ROOM_3D 0x3D
@@ -33,9 +34,9 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 0, 4700, 2650, 4100, 9, 0, 4, 7, 0, ROOM_106_MAIN_HALL, 30700, 0, 12400, 2048, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 15400, 2900, 2300, 2600, 2, 0, 0, 1, 137, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, IT_33_KEY_MANSION_SWORD, 129);
-    if (cmpb(9, 0, 3) && ck(FG_ITEM, F_ITEM_91, TRUE))
+    door_aot_set(AOT_00_DOOR, 0, 4700, 2650, 4100, 9, 0, 4, 7, 0, ROOM_106_MAIN_HALL, 30700, 0, 12400, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 15400, 2900, 2300, 2600, 2, 0, 0, 1, 137, ROOM_108_L_PASSAGE, 3400, 0, 4000, 0, IT_33_KEY_MANSION_SWORD, SAT_MANUAL | SAT_PLAYER);
+    if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_91, TRUE))
     {
         item_aot_set(AOT_02_ITEM, 0, 0, 0, 0, IT_4E_UNKNOWN_4E, 1, 0, 255, 216, 34, 62, 239, 254, 26, 0, 0, 145, 0, 0, 0);
         eml_rot(0, 58, 253, 0, 0);
@@ -47,34 +48,34 @@ proc init
         eml_rot(0, 58, 253, 0, 0);
         aot_set(AOT_05_MESSAGE, 7950, 5500, 2700, 2300, SCE_EVENT, 0, 9, 0, on_aot_05_message, 0, 0, 0);
     }
-    if (cmpb(9, 0, 3) && ck(FG_ITEM, F_ITEM_27, TRUE))
+    if (cmpb(B_CHARACTER_MODEL, CMP_EQ, 3) && ck(FG_ITEM, F_ITEM_27, TRUE))
     {
         item_aot_set(AOT_83_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 0, 0, 0);
         eml_rot(1, 0, 0, 182, 3);
-        aot_set(AOT_04_MESSAGE, 12880, 12830, 1800, 1800, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+        aot_set(AOT_04_MESSAGE, 12880, 12830, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     }
     else
     {
         item_aot_set(AOT_83_ITEM, 12880, 12830, 1800, 1800, IT_2F_KEY_INK_RIBBON, 3, 1, 255, 186, 49, 24, 252, 22, 53, 0, 0, 39, 129, 0, 0);
         eml_rot(1, 0, 0, 182, 3);
     }
-    aot_set(AOT_06_USEITEM, 7300, 6000, 500, 1800, SCE_USEITEM, 65, 4, 0, 62, 0, 1, 0);
-    aot_set(AOT_07_MESSAGE, 3400, 300, 2800, 1800, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_08_MESSAGE, 7600, 300, 2200, 1800, SCE_MESSAGE, 129, 130, 0, 255, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 11000, 300, 3500, 1800, SCE_MESSAGE, 129, 131, 0, 255, 0, 0, 0);
-    aot_set(AOT_0A_MESSAGE, 3300, 11300, 3700, 1800, SCE_MESSAGE, 129, 132, 0, 255, 0, 0, 0);
-    aot_set(AOT_0B_MESSAGE, 11200, 11300, 2600, 1800, SCE_MESSAGE, 129, 133, 0, 255, 0, 0, 0);
-    aot_set(AOT_0C_MESSAGE, 16400, 11000, 1900, 1400, SCE_MESSAGE, 129, 134, 0, 255, 0, 0, 0);
-    aot_set(AOT_0D_USEITEM, 16400, 12100, 1900, 1400, SCE_USEITEM, 65, 4, 0, 61, 0, 1, 0);
-    aot_set(AOT_0E_USEITEM, 11200, 10000, 2600, 1800, SCE_USEITEM, 65, 4, 0, 60, 0, 1, 0);
-    aot_set(AOT_0F_MESSAGE, 7800, 6000, 1900, 1800, SCE_MESSAGE, 129, 135, 0, 255, 0, 0, 0);
-    aot_set(AOT_10_MESSAGE, 15200, 5500, 900, 1800, SCE_MESSAGE, 129, 136, 0, 255, 0, 0, 0);
-    aot_set(AOT_11_USEITEM, 13700, 6000, 1600, 1700, SCE_USEITEM, 65, 4, 0, 59, 0, 1, 0);
+    aot_set(AOT_06_USEITEM, 7300, 6000, 500, 1800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 62, 0, 1, 0);
+    aot_set(AOT_07_MESSAGE, 3400, 300, 2800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_08_MESSAGE, 7600, 300, 2200, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 11000, 300, 3500, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 3300, 11300, 3700, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 11200, 11300, 2600, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 255, 0, 0, 0);
+    aot_set(AOT_0C_MESSAGE, 16400, 11000, 1900, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+    aot_set(AOT_0D_USEITEM, 16400, 12100, 1900, 1400, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 61, 0, 1, 0);
+    aot_set(AOT_0E_USEITEM, 11200, 10000, 2600, 1800, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 60, 0, 1, 0);
+    aot_set(AOT_0F_MESSAGE, 7800, 6000, 1900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 255, 0, 0, 0);
+    aot_set(AOT_10_MESSAGE, 15200, 5500, 900, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 136, 0, 255, 0, 0, 0);
+    aot_set(AOT_11_USEITEM, 13700, 6000, 1600, 1700, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 59, 0, 1, 0);
     obj(64, 65, 255, 12500, 0, 4600, 0, 29, 1, 0, 0, 227, 254, 0, 0, 213, 2, 132, 3, 222, 3, 32, 3);
     obj(1, 1, 255, 14345, 0, 8795, 2048, 0, 0, 28, 2, 0, 0, 228, 253, 28, 2, 8, 7, 26, 4, 70, 5);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, 145, 1, 2, 0, 0, 45, 0, 0, 17670, 0, 13522, 0, 0, 0, 0);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, 3, 145, 1, 2, 0, 0, 45, 0, 0, 17670, 0, 13522, ENEMY_00_ZOMBIE_GROUNDSKEEPER, 0, 0, 0);
     }
     if (ck(FG_STATUS, F_STATUS_08, TRUE))
     {
@@ -84,13 +85,13 @@ proc init
 
 proc main
 {
-    if (cmpb(9, 5, 3))
+    if (cmpb(B_CHARACTER_MODEL, CMP_NE, 3))
     {
         if (ck(FG_ITEM, F_ITEM_91, TRUE))
         {
             if (ck(FG_STATUS, F_STATUS_18, TRUE))
             {
-                aot_delete(AOT_05_MESSAGE, SCE_EVENT, 129);
+                aot_delete(AOT_05_MESSAGE, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
             }
             else
             {
@@ -102,20 +103,20 @@ proc main
     {
         if (ck(FG_STATUS, F_STATUS_18, TRUE))
         {
-            aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, 129);
+            aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
         }
         else
         {
             aot_delete(AOT_05_MESSAGE, SCE_MESSAGE, 0);
         }
     }
-    if (cmpb(2, 0, 3))
+    if (cmpb(B_CAMERA, CMP_EQ, 3))
     {
         set(FG_MAP, F_MAP_1D, TRUE);
     }
     if (ck(FG_ROOM, F_ROOM_3E, TRUE))
     {
-        aot_delete(AOT_0F_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_0F_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
@@ -123,7 +124,7 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_3D, TRUE))
     {
-        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_0C_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
@@ -131,7 +132,7 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_3C, TRUE))
     {
-        aot_delete(AOT_0B_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_0B_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
@@ -139,7 +140,7 @@ proc main
     }
     if (ck(FG_ROOM, F_ROOM_3B, TRUE))
     {
-        aot_delete(AOT_10_MESSAGE, SCE_MESSAGE, 129);
+        aot_delete(AOT_10_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
@@ -149,15 +150,15 @@ proc main
 
 event on_aot_05_message
 {
-    message(MSG_IT_IS_A_MAP_OF_1ST | 0x80, 255); // "It's a map of 1ST FLOOR. Will you take it? You got the map of 1ST FLOOR."
+    message(MSG_IT_IS_A_MAP_OF_1ST | MSG_FAST, 255); // "It's a map of 1ST FLOOR. Will you take it? You got the map of 1ST FLOOR."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_05_message_sub1);
         }
@@ -170,6 +171,6 @@ event on_aot_05_message_sub1
     aot_on(AOT_02_ITEM, SCE_F, 0);
     sleep(1);
     aot_delete(AOT_05_MESSAGE, SCE_NONE, 0);
-    message(MSG_YOU_GOT_THE_MAP_OF_1ST | 0x80, 255); // "You got the map of 1ST FLOOR."
+    message(MSG_YOU_GOT_THE_MAP_OF_1ST | MSG_FAST, 255); // "You got the map of 1ST FLOOR."
     evt_finish();
 }

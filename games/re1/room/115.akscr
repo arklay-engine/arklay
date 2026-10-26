@@ -8,12 +8,24 @@
 
 #define AOT_00_DOOR 0x00
 #define AOT_01_DOOR 0x01
+#define ENEMY_00_NPC_BARRY 0x00
+#define ENEMY_01_NPC_BARRY 0x01
 #define F_ROOM_04 0x04
+#define MSG_VO_105_00 0x00
+#define MSG_VO_105_01 0x01
+#define MSG_VO_105_02 0x02
+#define MSG_VO_105_03 0x03
+#define MSG_VO_105_04 0x04
+#define VO_105_00 0x30
+#define VO_105_01 0x31
+#define VO_105_02 0x32
+#define VO_105_03 0x33
+#define VO_105_04 0x34
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 1, 0, 0, 1, 128, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, 129);
-    door_aot_set(AOT_01_DOOR, 5300, 1400, 2400, 1000, 0, 0, 0, 4, 129, ROOM_116_LIVING_ROOM, 4850, 0, 10250, 1024, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 1, 0, 0, 1, 128, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 5300, 1400, 2400, 1000, 0, 0, 0, 4, 129, ROOM_116_LIVING_ROOM, 4850, 0, 10250, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     obj(0, 15, 255, 4860, -10280, 4860, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(1, 15, 255, 1760, 0, 3960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(2, 15, 255, 7590, 0, 8680, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -24,7 +36,7 @@ proc init
         set(FG_LOCK, F_LOCK_00, FALSE);
         set(FG_LOCK, F_LOCK_02, FALSE);
         cut_auto(1);
-        setb(2, 3, 0);
+        setb(B_CAMERA, 3, 0);
         evt_exec(0, 9, on_enter);
         dir_set(0, 0, 3072, 0, 5200, 0, 2500);
     }
@@ -34,8 +46,8 @@ proc init
         set(FG_LOCK, F_LOCK_02, TRUE);
     }
 #else
-    enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 0, 0, 0, 6900, 0, 9600, 0, 0, 0, 0);
-    enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 0, 0, 0, 450, 0, 5000, 1, 0, 0, 0);
+    enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 0, 0, 0, 6900, 0, 9600, ENEMY_00_NPC_BARRY, 0, 0, 0);
+    enemy(EM_22_NPC_BARRY, 0, 255, 1, 2, 0, 0, 0, 0, 0, 450, 0, 5000, ENEMY_01_NPC_BARRY, 0, 0, 0);
     if (ck(FG_COMMON, F_COMMON_07, TRUE))
     {
         set(FG_COMMON, F_COMMON_21, TRUE);
@@ -51,7 +63,7 @@ proc init
             set(FG_LOCK, F_LOCK_00, FALSE);
             set(FG_LOCK, F_LOCK_01, FALSE);
             cut_auto(1);
-            setb(2, 3, 0);
+            setb(B_CAMERA, 3, 0);
             dir_set(0, 0, 3072, 0, 5200, -400, 2500);
             evt_exec(0, 9, on_enter);
         }
@@ -60,7 +72,7 @@ proc init
             set(FG_LOCK, F_LOCK_00, FALSE);
             set(FG_LOCK, F_LOCK_01, FALSE);
             cut_auto(1);
-            setb(2, 3, 0);
+            setb(B_CAMERA, 3, 0);
             dir_set(0, 0, 3072, 0, 5200, -400, 2500);
             set(FG_LOCK, F_LOCK_01, TRUE);
             evt_exec(0, 9, on_enter_2);
@@ -92,21 +104,21 @@ event event_00
     act_reset();
     evt_nop();
     sleep(10);
-    voice_play(1, 48, 0);
-    message(0, 0);
+    voice_play(VOICE_PLAY, VO_105_00, 0);
+    message(MSG_VO_105_00, 0);
     wait_message();
     dir_set(0, 0, 1648, 0, 12700, 0, 15500);
     cutnext(4);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 8, 32 | 31, 0 | 0);
     sleep(30);
     act_reset();
     evt_nop();
-    voice_play(1, 49, 0);
-    message(1, 0);
+    voice_play(VOICE_PLAY, VO_105_01, 0);
+    message(MSG_VO_105_01, 0);
     evt_fork(9, event_0D, 0);
-    evt_work_set(WK_ENEMY, 0);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();
     act_anim_flags(32 | 6, 32 | 31, 0 | 3);
     sleep(10);
@@ -133,8 +145,8 @@ event event_00
     {
         dir_set(0, 0, 1648, 0, 2700, 0, 5500);
         cutnext(1);
-        voice_play(1, 50, 0);
-        message(2, 0);
+        voice_play(VOICE_PLAY, VO_105_02, 0);
+        message(MSG_VO_105_02, 0);
     }
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -164,8 +176,8 @@ event event_01
     run
     {
         set(FG_6, F_6_17, FALSE);
-        voice_play(1, 51, 0);
-        message(3, 0);
+        voice_play(VOICE_PLAY, VO_105_03, 0);
+        message(MSG_VO_105_03, 0);
     }
     sleep(50);
     evt_work_set(WK_PLAYER, 0);
@@ -179,7 +191,7 @@ event event_01
     while (ck(FG_ROOM, F_ROOM_04, FALSE));
     evt_fork(9, event_09, 0);
     sleep(20);
-    se_play_3d(2, 23, 0, 2, 0, 0, 0);
+    se_play_3d(2, 23, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
     evt_work_set(WK_OBJ, 1);
     evt_tween_begin_alt();
     tw_set_rot(0, 80, 0);
@@ -310,9 +322,9 @@ event event_01
     evt_nop();
     run
     {
-        door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 4, 2, 0, 0, 128, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, 65);
-        voice_play(1, 52, 0);
-        message(4, 0);
+        door_aot_set(AOT_00_DOOR, 900, 4000, 1350, 2500, 4, 2, 0, 0, 128, ROOM_109_TRAP_PASSAGE, 6700, 0, 9800, 2048, UNLOCKED, SAT_UNDER | SAT_PLAYER);
+        voice_play(VOICE_PLAY, VO_105_04, 0);
+        message(MSG_VO_105_04, 0);
     }
     wait_message();
     set(FG_LOCK, F_LOCK_00, TRUE);
@@ -342,7 +354,7 @@ event event_03
 {
     set(FG_LOCK, F_LOCK_02, FALSE);
     sleep(15);
-    se_play_3d(2, 24, 0, 1, 0, 0, 0);
+    se_play_3d(2, 24, 0, SND_AT_PLAYER, 0, 0, 0);
     sleep(5);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -511,10 +523,10 @@ event on_enter_2
     {
         bgm_stop(0);
         bgm_stop(1);
-        se_play_3d(2, 25, 0, 1, 0, 0, 0);
-        se_play_3d(2, 26, 0, 1, 0, 0, 0);
-        se_play_3d(2, 27, 0, 1, 0, 0, 0);
-        se_play_3d(2, 28, 0, 1, 0, 0, 0);
+        se_play_3d(2, 25, 0, SND_AT_PLAYER, 0, 0, 0);
+        se_play_3d(2, 26, 0, SND_AT_PLAYER, 0, 0, 0);
+        se_play_3d(2, 27, 0, SND_AT_PLAYER, 0, 0, 0);
+        se_play_3d(2, 28, 0, SND_AT_PLAYER, 0, 0, 0);
     }
     sleep(1);
     evt_work_set(WK_PLAYER, 0);
@@ -623,7 +635,7 @@ event event_08
 
 event event_09
 {
-    evt_work_set(WK_ENEMY, 1);
+    evt_work_set(WK_ENEMY, ENEMY_01_NPC_BARRY);
     evt_actor_begin();
     sleep(1);
     act_anim_flags(32 | 18, 32 | 31, 0 | 1);
@@ -674,9 +686,9 @@ event event_0C
 {
     run
     {
-        if (cmpw(0, 3, 1, 10000))
+        if (cmpw(0, W_RANDOM, CMP_GT, 10000))
         {
-            if (cmpw(0, 3, 3, 20000))
+            if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
                 effect(8, 20, 128, 208, 253, 20, 0, 62, 244, 0, 0);
             }
@@ -693,9 +705,9 @@ event event_0C
     sleep(1);
     run
     {
-        if (cmpw(0, 3, 1, 10000))
+        if (cmpw(0, W_RANDOM, CMP_GT, 10000))
         {
-            if (cmpw(0, 3, 3, 20000))
+            if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
                 effect(8, 20, 128, 208, 253, 20, 0, 68, 12, 0, 0);
             }
@@ -712,9 +724,9 @@ event event_0C
     sleep(1);
     run
     {
-        if (cmpw(0, 3, 1, 10000))
+        if (cmpw(0, W_RANDOM, CMP_GT, 10000))
         {
-            if (cmpw(0, 3, 3, 20000))
+            if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
                 effect(8, 20, 128, 12, 244, 20, 0, 242, 249, 0, 0);
             }
@@ -731,9 +743,9 @@ event event_0C
     sleep(1);
     run
     {
-        if (cmpw(0, 3, 1, 10000))
+        if (cmpw(0, W_RANDOM, CMP_GT, 10000))
         {
-            if (cmpw(0, 3, 3, 20000))
+            if (cmpw(0, W_RANDOM, CMP_LT, 20000))
             {
                 effect(8, 20, 128, 104, 11, 20, 0, 242, 249, 0, 0);
             }
@@ -761,11 +773,11 @@ event event_0C
 event event_0D
 {
     sleep(10);
-    se_play_3d(2, 29, 0, 2, 0, 0, 0);
+    se_play_3d(2, 29, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
     sleep(30);
-    se_play_3d(2, 29, 0, 2, 0, 0, 0);
+    se_play_3d(2, 29, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
     sleep(30);
-    se_play_3d(2, 29, 0, 2, 0, 0, 0);
+    se_play_3d(2, 29, 0, SND_AT_ENEMY, ENEMY_00_NPC_BARRY, 0, 0);
     evt_finish();
 }
 

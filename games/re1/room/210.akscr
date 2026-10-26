@@ -11,34 +11,35 @@
 #define AOT_02_ITEM 0x02
 #define AOT_03_MESSAGE 0x03
 #define AOT_04_EVENT 0x04
+#define ENEMY_00_YAWN_1 0x00
 #define F_ROOM_0F 0x0F
 #define F_ROOM_1E 0x1E
 #define F_ROOM_1F 0x1F
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 3200, 2200, 2400, 2100, 1, 0, 7, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 9400, -1402, 3300, 2048, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 3200, 2200, 2400, 2100, 1, 0, 7, 1, 0, ROOM_20E_FRONT_OF_ATTIC, 9400, -1402, 3300, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 3712, 23040, 1792, 2000, IT_2C_KEY_CREST_MOON, 1, 0, 255, 62, 18, 0, 0, 80, 95, 0, 0, 129, 0, 32, 128);
     eml_rot(0, 158, 12, 0, 0);
     item_aot_set(AOT_02_ITEM, 3840, 13568, 1280, 1500, IT_0C_AMMO_SHOTGUN, 7, 1, 255, 18, 17, 252, 249, 40, 55, 80, 251, 130, 129, 0, 0);
-    aot_set(AOT_03_MESSAGE, 2300, 4500, 2000, 1300, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_MESSAGE, 2300, 4500, 2000, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
     if (ck(FG_ITEM, F_ITEM_81, TRUE))
     {
-        aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_EVENT, 129, 9, 0, on_aot_04, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_04, 0, 0, 0);
     }
     else
     {
-        aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
+        aot_set(AOT_04_EVENT, 3712, 23040, 1792, 2000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
         if (ck(FG_SCENARIO, F_SCENARIO_10, FALSE))
         {
-            enemy(EM_0D_YAWN_1, 128, 24, 1, 2, 0, 0, 0, 0, 0, 4500, 0, 24500, 0, 0, 0, 0);
+            enemy(EM_0D_YAWN_1, 128, F_ENEMY_18, 1, 2, 0, 0, 0, 0, 0, 4500, 0, 24500, ENEMY_00_YAWN_1, 0, 0, 0);
         }
         else
         {
-            enemy(EM_0D_YAWN_1, 2, 24, 1, 2, 0, 0, 1024, 0, 0, 11000, 0, 10000, 0, 0, 0, 0);
+            enemy(EM_0D_YAWN_1, 2, F_ENEMY_18, 1, 2, 0, 0, 1024, 0, 0, 11000, 0, 10000, ENEMY_00_YAWN_1, 0, 0, 0);
             set(FG_ROOM, F_ROOM_1E, TRUE);
             if (ck(FG_ENEMY, F_ENEMY_18, FALSE))
             {
@@ -48,11 +49,11 @@ proc init
     }
     if (ck(FG_ENEMY, F_ENEMY_18, FALSE))
     {
-        room_bgm_state_set(1, 16, 64);
+        room_bgm_state_set(1, ROOM_210_ATTIC, BGM_RELOAD);
     }
     else
     {
-        room_bgm_state_set(1, 16, 255);
+        room_bgm_state_set(1, ROOM_210_ATTIC, BGM_OFF);
     }
     set(FG_STATUS, F_STATUS_1D, TRUE);
 }
@@ -73,7 +74,7 @@ proc main
                 bgm_volume_ramp(0, 161, 30);
             }
         }
-        if (ck(FG_ROOM, F_ROOM_1E, FALSE) && ck(FG_ENEMY, F_ENEMY_18, FALSE) && cmpb(2, 0, 2))
+        if (ck(FG_ROOM, F_ROOM_1E, FALSE) && ck(FG_ENEMY, F_ENEMY_18, FALSE) && cmpb(B_CAMERA, CMP_EQ, 2))
         {
             set(FG_ROOM, F_ROOM_1E, TRUE);
             set(FG_STATUS, F_STATUS_1D, FALSE);
@@ -98,7 +99,7 @@ event from_main
         dir_set(0, 0, 0, 0, 11130, 0, 2640);
     }
     sleep(20);
-    eml_state(0, 0, 0, 0);
+    eml_state(0, ENEMY_00_YAWN_1, EML_BEHAVIOUR, 0);
     sleep(33);
     cutnext(6);
     sleep(200);
@@ -134,7 +135,7 @@ event on_aot_04
         set(FG_6, F_6_17, FALSE);
         if (ck(FG_ITEM, F_ITEM_81, FALSE))
         {
-            aot_reset(AOT_04_EVENT, SCE_MESSAGE, 129, 129, 255, 0);
+            aot_reset(AOT_04_EVENT, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
         }
     }
     sleep(1);

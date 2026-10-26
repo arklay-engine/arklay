@@ -26,18 +26,18 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 10100, 10400, 1300, 1200, 3, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 18400, 0, 2400, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 10100, 10400, 1300, 1200, 3, 1, 12, 7, 0, ROOM_508_DOUBLE_LOCK, 18400, 0, 2400, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 10800, 5000, 2200, 1000, IT_68_FILE_RESEARCHERS_LETTER, 1, 0, 255, 104, 46, 36, 250, 156, 19, 0, 0, 81, 129, 0, 0);
     obj(0, 1, 255, 8200, 0, 2252, 3072, 0, 0, 242, 254, 0, 0, 14, 1, 14, 1, 72, 18, 70, 5, 118, 2);
-    aot_set(AOT_02_EVENT, 8200, 1600, 600, 600, SCE_EVENT, 129, 9, 0, on_aot_02, 0, 0, 0);
-    aot_set(AOT_03_EVENT, 8200, 10500, 1300, 1000, SCE_EVENT, 129, 9, 0, on_aot_03, 0, 0, 0);
-    aot_set(AOT_04_MESSAGE, 1100, 4500, 1000, 3500, SCE_NONE, 129, 130, 0, 68, 1, 0, 0);
-    aot_set(AOT_05_USEITEM, 7000, 700, 3000, 2300, SCE_USEITEM, 68, 4, 0, 27, 0, 1, 0);
+    aot_set(AOT_02_EVENT, 8200, 1600, 600, 600, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_02, 0, 0, 0);
+    aot_set(AOT_03_EVENT, 8200, 10500, 1300, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_03, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 1100, 4500, 1000, 3500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 130, 0, 68, 1, 0, 0);
+    aot_set(AOT_05_USEITEM, 7000, 700, 3000, 2300, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 27, 0, 1, 0);
     item_aot_set(AOT_06_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 163, 129, 0, 0);
     item_aot_set(AOT_07_ITEM, 4500, 9700, 1400, 1700, IT_0B_AMMO_HANDGUN, 15, 2, 255, 0, 0, 0, 0, 0, 0, 0, 0, 229, 129, 0, 0);
     item_aot_set(AOT_08_ITEM, 2100, 4200, 1000, 600, IT_44_HEAL_HERB_GREEN, 1, 3, 255, 40, 10, 0, 0, 148, 17, 0, 0, 164, 129, 1, 0);
-    aot_set(AOT_0A_MESSAGE, 6500, 9600, 2000, 1400, SCE_MESSAGE, 129, 132, 0, 68, 1, 0, 0);
-    aot_set(AOT_0B_MESSAGE, 3500, 10600, 900, 1300, SCE_MESSAGE, 129, 133, 0, 68, 1, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 6500, 9600, 2000, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 68, 1, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 3500, 10600, 900, 1300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 68, 1, 0, 0);
     eml_rot(0, 250, 7, 0, 0);
     scene_setup(0, 6400, 8600, 12000);
     set(FG_STATUS, F_STATUS_1F, TRUE);
@@ -47,11 +47,11 @@ proc main
 {
     if (ck(FG_ROOM, F_ROOM_1B, FALSE))
     {
-        aot_delete(AOT_02_EVENT, SCE_EVENT, 129);
+        aot_delete(AOT_02_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
-        aot_delete(AOT_02_EVENT, SCE_NONE, 129);
+        aot_delete(AOT_02_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         set(FG_ROOM, F_ROOM_1B, FALSE);
     }
     if (ck(FG_ROOM, F_ROOM_19, TRUE))
@@ -66,18 +66,18 @@ proc main
     {
         evt_exec(0, 9, from_main);
     }
-    aot_delete(AOT_04_MESSAGE, SCE_NONE, 129);
-    if (cmpb(2, 0, 3))
+    aot_delete(AOT_04_MESSAGE, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    if (cmpb(B_CAMERA, CMP_EQ, 3))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, 129, 130, 255, 0);
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     }
-    if (cmpb(2, 0, 7))
+    if (cmpb(B_CAMERA, CMP_EQ, 7))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, 129, 130, 255, 0);
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 130, 255, 0);
     }
-    if (cmpb(2, 0, 2))
+    if (cmpb(B_CAMERA, CMP_EQ, 2))
     {
-        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, 129, 131, 255, 0);
+        aot_reset(AOT_04_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
     }
 }
 
@@ -96,17 +96,17 @@ event on_aot_02
     act_reset();
     evt_nop();
     sleep(15);
-    message(MSG_THERE_IS_A_SWITCH | 0x80, 69); // "There's a switch. Will you push it? John. ADA..."
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 69); // "There's a switch. Will you push it? John. ADA..."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            se_play_3d(2, 23, 0, 1, 0, 0, 0);
+            se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
             if (ck(FG_ROOM, F_ROOM_19, FALSE))
             {
                 evt_exec(0, 9, on_aot_02_sub1);
@@ -133,14 +133,14 @@ event on_aot_02_sub1
 {
     run
     {
-        setw(1, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
         timer_setup(1, 232, 3, 1, 0);
     }
     sleep(10);
     run
     {
-        setw(2, 0, 0);
-        setw(1, 16, 39);
+        setw(W_LIGHT_DELTA, 0, 0);
+        setw(W_LIGHT_STATE, 16, 39);
         set(FG_6, F_6_1F, TRUE);
         set(FG_6, F_6_1D, TRUE);
         set(FG_6, F_6_19, TRUE);
@@ -153,14 +153,14 @@ event on_aot_02_sub2
 {
     run
     {
-        setw(1, 16, 39);
-        setw(2, 24, 252);
+        setw(W_LIGHT_STATE, 16, 39);
+        setw(W_LIGHT_DELTA, 24, 252);
     }
     sleep(10);
     run
     {
-        setw(2, 0, 0);
-        setw(1, 0, 0);
+        setw(W_LIGHT_DELTA, 0, 0);
+        setw(W_LIGHT_STATE, 0, 0);
         set(FG_6, F_6_1F, TRUE);
         set(FG_6, F_6_1D, TRUE);
         set(FG_6, F_6_19, TRUE);
@@ -184,17 +184,17 @@ event on_aot_03
     act_reset();
     evt_nop();
     sleep(15);
-    message(MSG_THERE_IS_A_SWITCH | 0x80, 69); // "There's a switch. Will you push it? John. ADA..."
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 69); // "There's a switch. Will you push it? John. ADA..."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
-            se_play_3d(2, 23, 0, 1, 0, 0, 0);
+            se_play_3d(2, 23, 0, SND_AT_PLAYER, 0, 0, 0);
             if (ck(FG_ROOM, F_ROOM_18, FALSE))
             {
                 evt_exec(0, 9, on_aot_03_sub1);
@@ -308,14 +308,14 @@ event on_aot_03_sub1_sub1
     sleep(2);
     run
     {
-        setw(2, 0, 0);
+        setw(W_LIGHT_DELTA, 0, 0);
         if (ck(FG_ROOM, F_ROOM_19, TRUE))
         {
-            setw(1, 16, 39);
+            setw(W_LIGHT_STATE, 16, 39);
         }
         else
         {
-            setw(1, 0, 0);
+            setw(W_LIGHT_STATE, 0, 0);
         }
         set(FG_ROOM, F_ROOM_1A, TRUE);
     }
@@ -327,7 +327,7 @@ event on_aot_03_sub1_sub2
     run
     {
         set(FG_ROOM, F_ROOM_1A, FALSE);
-        require(cmpw(8, 28, 2, 0));
+        require(cmpw(8, 28, CMP_GE, 0));
         return;
     }
     sleep(1);
@@ -352,11 +352,11 @@ event on_aot_03_sub1_sub2
 event from_main
 {
     sleep(1);
-    message(MSG_JOHN | 0x80, 69); // "John. ADA..."
+    message(MSG_JOHN | MSG_FAST, 69); // "John. ADA..."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     evt_finish();
 }

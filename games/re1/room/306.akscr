@@ -25,14 +25,14 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 10100, 5200, 1700, 2200, 3, 1, 8, 0, 0, ROOM_30F_CRANK_PASSAGE, 13000, 0, 16000, 0, UNLOCKED, 129);
-    aot_set(AOT_01_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, 1, 9, 0, 3, 0, 1, 0);
-    aot_set(AOT_02_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, 1, 4, 0, 33, 0, 1, 0);
-    aot_set(AOT_03_MESSAGE, 5500, 10200, 500, 500, SCE_MESSAGE, 129, 128, 0, 255, 0, 0, 0);
-    aot_set(AOT_04_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, 69, 4, 0, 34, 0, 1, 0);
-    aot_set(AOT_05_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, 68, 4, 0, 35, 0, 1, 0);
+    door_aot_set(AOT_00_DOOR, 10100, 5200, 1700, 2200, 3, 1, 8, 0, 0, ROOM_30F_CRANK_PASSAGE, 13000, 0, 16000, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_01_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, SAT_PLAYER, 9, 0, 3, 0, 1, 0);
+    aot_set(AOT_02_USEITEM, 5500, 10200, 500, 500, SCE_USEITEM, SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+    aot_set(AOT_03_MESSAGE, 5500, 10200, 500, 500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
+    aot_set(AOT_05_USEITEM, 7750, 3100, 700, 1000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 35, 0, 1, 0);
     item_aot_set(AOT_06_ITEM, 10000, 3200, 1000, 600, IT_3F_KEY_BOOK_DOOM_2, 1, 0, 255, 42, 43, 186, 245, 236, 13, 0, 8, 119, 129, 0, 0);
-    aot_set(AOT_07_USEITEM, 5300, 8200, 1500, 2000, SCE_USEITEM, 68, 4, 0, 36, 0, 1, 0);
+    aot_set(AOT_07_USEITEM, 5300, 8200, 1500, 2000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 36, 0, 1, 0);
     obj(0, 15, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_3C, FALSE))
     {
@@ -45,7 +45,7 @@ proc init
     }
     obj(2, 1, 255, 3830, 0, 9722, 0, 0, 0, 200, 0, 0, 0, 56, 255, 144, 1, 108, 2, 88, 2, 88, 2);
     obj(3, 31, 255, 10750, -2110, 3550, 2048, 0, 0, 200, 0, 0, 0, 56, 255, 144, 1, 108, 2, 88, 2, 88, 2);
-    aot_delete(AOT_06_ITEM, SCE_NONE, 129);
+    aot_delete(AOT_06_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     evt_exec(0, 9, on_enter);
 }
 
@@ -53,15 +53,15 @@ proc main
 {
     if (ck(FG_ROOM, F_ROOM_24, TRUE))
     {
-        aot_delete(AOT_01_USEITEM, SCE_NONE, 1);
-        aot_delete(AOT_02_USEITEM, SCE_NONE, 1);
-        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, 129, 129, 255, 0);
+        aot_delete(AOT_01_USEITEM, SCE_NONE, SAT_PLAYER);
+        aot_delete(AOT_02_USEITEM, SCE_NONE, SAT_PLAYER);
+        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 255, 0);
     }
     else
     {
-        aot_delete(AOT_01_USEITEM, SCE_USEITEM, 1);
-        aot_delete(AOT_02_USEITEM, SCE_USEITEM, 1);
-        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, 129, 128, 255, 0);
+        aot_delete(AOT_01_USEITEM, SCE_USEITEM, SAT_PLAYER);
+        aot_delete(AOT_02_USEITEM, SCE_USEITEM, SAT_PLAYER);
+        aot_reset(AOT_03_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 255, 0);
     }
     if (testitem(IT_1E_KEY_CRANK_HEXAGONAL))
     {
@@ -77,8 +77,8 @@ proc main
             if (ck(FG_ROOM, F_ROOM_02, FALSE))
             {
                 evt_exec(0, 9, from_main_2);
-                se_play_3d(2, 23, 0, 0, 0, 8000, 3650);
-                se_play_3d(2, 26, 0, 0, 0, 9150, 3500);
+                se_play_3d(2, 23, 0, SND_AT_POINT, 0, 8000, 3650);
+                se_play_3d(2, 26, 0, SND_AT_POINT, 0, 9150, 3500);
                 set(FG_ROOM, F_ROOM_01, TRUE);
                 set(FG_ROOM, F_ROOM_02, TRUE);
             }
@@ -89,8 +89,8 @@ proc main
         if (ck(FG_ROOM, F_ROOM_02, FALSE))
         {
             evt_exec(0, 9, from_main_3);
-            se_play_3d(2, 23, 0, 0, 0, 8000, 3650);
-            se_play_3d(2, 26, 0, 0, 0, 9150, 3500);
+            se_play_3d(2, 23, 0, SND_AT_POINT, 0, 8000, 3650);
+            se_play_3d(2, 26, 0, SND_AT_POINT, 0, 9150, 3500);
             set(FG_ROOM, F_ROOM_01, FALSE);
             set(FG_ROOM, F_ROOM_02, TRUE);
         }
@@ -99,18 +99,18 @@ proc main
     {
         if (ck(FG_ITEM, F_ITEM_77, TRUE))
         {
-            aot_delete(AOT_06_ITEM, SCE_ITEM, 129);
+            aot_delete(AOT_06_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
         }
     }
     else
     {
-        aot_delete(AOT_06_ITEM, SCE_NONE, 129);
+        aot_delete(AOT_06_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
 }
 
 event on_enter
 {
-    evt_work_set(WK_AOT, 0);
+    evt_work_set(WK_AOT, AOT_00_DOOR);
     evt_tween_begin_alt();
     tw_abs_rot(0, 0, 63488, 62464);
     tw_end();
@@ -134,7 +134,7 @@ event from_main
         set(FG_STATUS, F_STATUS_0F, TRUE);
         set(FG_STATUS, F_STATUS_3E, TRUE);
         cutnext(1);
-        se_play_3d(2, 24, 0, 0, 0, 5850, 10000);
+        se_play_3d(2, 24, 0, SND_AT_POINT, 0, 5850, 10000);
         evt_exec(0, 9, from_main_sub1);
         if (ck(FG_SCENARIO, F_SCENARIO_3C, FALSE))
         {
@@ -150,7 +150,7 @@ event from_main
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    se_play_3d(2, 24, 0, 0, 0, 5850, 10000);
+    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 5850, 10000);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
@@ -161,7 +161,7 @@ event from_main
         evt_next();
     }
     while (ck(FG_ROOM, F_ROOM_20, FALSE));
-    se_play_3d(2, 24, 0, 0, 0, 5850, 10000);
+    se_play_3d(2, 24, 0, SND_AT_POINT, 0, 5850, 10000);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
     act_anim_flags(32 | 23, 32 | 0, 0 | 1);
@@ -572,7 +572,7 @@ event from_main_sub1
 
 event from_main_sub2
 {
-    se_play_3d(2, 25, 0, 0, 0, 9150, 10000);
+    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 9150, 10000);
     evt_work_set(WK_OBJ, 1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 228);
@@ -591,7 +591,7 @@ event from_main_sub2
 
 event from_main_sub3
 {
-    se_play_3d(2, 25, 0, 0, 0, 9150, 10000);
+    se_play_3d(2, 25, 0, SND_AT_POINT, 0, 9150, 10000);
     evt_work_set(WK_OBJ, 1);
     evt_tween_begin_alt();
     tw_set_pos(0, 0, 28);
@@ -647,13 +647,13 @@ event event_07
     run
     {
         set(FG_6, F_6_17, FALSE);
-        message(MSG_I_CANNOT_USE_THE_CRANK_BECAUSE | 0x80, 0); // "I can't use the crank because of the statue."
+        message(MSG_I_CANNOT_USE_THE_CRANK_BECAUSE | MSG_FAST, 0); // "I can't use the crank because of the statue."
     }
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     set(FG_6, F_6_17, TRUE);
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

@@ -23,7 +23,7 @@
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 6100, 14200, 2400, 2700, 7, 1, 12, 7, 0, ROOM_503_STAIRS, 8800, 0, 16600, 3072, UNLOCKED, 129);
+    door_aot_set(AOT_00_DOOR, 6100, 14200, 2400, 2700, 7, 1, 12, 7, 0, ROOM_503_STAIRS, 8800, 0, 16600, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
     item_aot_set(AOT_01_ITEM, 2000, 8000, 1000, 1000, IT_3C_KEY_LAB_POWER_ROOM, 1, 0, 255, 208, 7, 164, 247, 118, 32, 0, 0, 137, 129, 0, 0);
     eml_rot(0, 0, 0, 0, 12);
     item_aot_set(AOT_02_ITEM, 10000, 12500, 3000, 2000, IT_67_FILE_SECURITY_SYSTEM, 0, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 136, 129, 0, 0);
@@ -32,36 +32,36 @@ proc init
         obj(0, 1, 255, 12640, -2230, 3960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 250, 0, 250, 0, 20, 0);
         eml_rot(128, 0, 0, 0, 8);
         obj(1, 1, 255, 1870, 0, 8440, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 44, 1, 32, 3, 88, 2);
-        aot_delete(AOT_01_ITEM, SCE_NONE, 129);
+        aot_delete(AOT_01_ITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
     }
     else
     {
         obj(0, 1, 255, 30000, 0, 30000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 250, 0, 250, 0, 20, 0);
         obj(1, 1, 255, 2130, 0, 7340, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 44, 1, 32, 3, 88, 2);
     }
-    aot_set(AOT_03_MESSAGE, 1700, 5800, 500, 2300, SCE_MESSAGE, 129, 135, 0, 255, 0, 0, 0);
-    aot_set(AOT_04_MESSAGE, 5000, 1200, 3500, 1100, SCE_MESSAGE, 129, 139, 0, 255, 0, 0, 0);
-    aot_set(AOT_05_MESSAGE, 1800, 10800, 1100, 2100, SCE_MESSAGE, 129, 140, 0, 255, 0, 0, 0);
+    aot_set(AOT_03_MESSAGE, 1700, 5800, 500, 2300, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 0, 255, 0, 0, 0);
+    aot_set(AOT_04_MESSAGE, 5000, 1200, 3500, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_MESSAGE, 1800, 10800, 1100, 2100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 140, 0, 255, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_3F, TRUE) && ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
     {
-        aot_set(AOT_06_USEITEM, 6750, 5400, 1300, 1100, SCE_USEITEM, 129, 0, 0, 32, 0, 1, 0);
+        aot_set(AOT_06_USEITEM, 6750, 5400, 1300, 1100, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 32, 0, 1, 0);
     }
     else
     {
-        aot_set(AOT_06_USEITEM, 6750, 5400, 1300, 1100, SCE_MESSAGE, 129, 138, 0, 255, 0, 0, 0);
+        aot_set(AOT_06_USEITEM, 6750, 5400, 1300, 1100, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 138, 0, 255, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_66, FALSE))
     {
-        aot_set(AOT_07_EVENT, 11400, 3600, 1000, 1000, SCE_EVENT, 129, 9, 0, on_aot_07, 0, 0, 0);
+        aot_set(AOT_07_EVENT, 11400, 3600, 1000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_07, 0, 0, 0);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_3F, FALSE) && ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
     {
-        aot_set(AOT_08_USEITEM, 6750, 5400, 1300, 1100, SCE_USEITEM, 1, 9, 0, 16, 0, 1, 0);
+        aot_set(AOT_08_USEITEM, 6750, 5400, 1300, 1100, SCE_USEITEM, SAT_PLAYER, 9, 0, 16, 0, 1, 0);
     }
     set(FG_ROOM, F_ROOM_1F, TRUE);
     set(FG_STATUS, F_STATUS_1D, TRUE);
     obj(2, 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    aot_set(AOT_09_MESSAGE, 2600, 1900, 600, 3700, SCE_MESSAGE, 129, 141, 0, 255, 0, 0, 0);
+    aot_set(AOT_09_MESSAGE, 2600, 1900, 600, 3700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 141, 0, 255, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_3F, FALSE))
     {
         bank_bit(12);
@@ -72,19 +72,19 @@ proc main
 {
     if (testitem(IT_2B_KEY_SLIDES))
     {
-        aot_reset(AOT_06_USEITEM, SCE_USEITEM, 129, 0, 32, 1);
+        aot_reset(AOT_06_USEITEM, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 32, 1);
         set(FG_SCENARIO, F_SCENARIO_20, TRUE);
         set(FG_SCENARIO, F_SCENARIO_3F, TRUE);
         set(FG_STATUS, F_STATUS_0F, TRUE);
     }
     if (ck(FG_SCENARIO, F_SCENARIO_3F, FALSE))
     {
-        if (cmpb(2, 0, 0))
+        if (cmpb(B_CAMERA, CMP_EQ, 0))
         {
             bank_bit(12);
             aot_switch(0, 9, 0);
         }
-        if (cmpb(2, 0, 1))
+        if (cmpb(B_CAMERA, CMP_EQ, 1))
         {
             bank_bit(9);
             aot_switch(0, 12, 0);
@@ -111,15 +111,15 @@ event on_aot_07
 
 event on_aot_07_sub1
 {
-    message(MSG_THERE_IS_A_PANEL | 0x80, 0); // "There's a panel. Will you open it? There's a switch. Will you push it? A projector."
+    message(MSG_THERE_IS_A_PANEL | MSG_FAST, 0); // "There's a panel. Will you open it? There's a switch. Will you push it? A projector."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_07_sub1_sub1);
             set(FG_ROOM, F_ROOM_00, TRUE);
@@ -136,7 +136,7 @@ event on_aot_07_sub1_sub1
 {
     run
     {
-        se_play_3d(2, 23, 0, 0, 0, 12640, 3960);
+        se_play_3d(2, 23, 0, SND_AT_POINT, 0, 12640, 3960);
     }
     for (20)
     {
@@ -159,18 +159,18 @@ event on_aot_07_sub1_sub1
 
 event on_aot_07_sub2
 {
-    message(MSG_THERE_IS_A_SWITCH | 0x80, 0); // "There's a switch. Will you push it? A projector."
+    message(MSG_THERE_IS_A_SWITCH | MSG_FAST, 0); // "There's a switch. Will you push it? A projector."
     do
     {
         evt_next();
     }
-    while (cmpb(5, 2, 128));
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
     run
     {
-        if (cmpb(5, 0, 0))
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
         {
             evt_exec(0, 9, on_aot_07_sub2_sub1);
-            se_play_3d(2, 24, 0, 0, 0, 2130, 8240);
+            se_play_3d(2, 24, 0, SND_AT_POINT, 0, 2130, 8240);
         }
         else
         {
@@ -190,7 +190,7 @@ event on_aot_07_sub2_sub1
     sleep(20);
     run
     {
-        se_play_3d(2, 25, 0, 0, 0, 2130, 8240);
+        se_play_3d(2, 25, 0, SND_AT_POINT, 0, 2130, 8240);
     }
     evt_fork(9, on_aot_07_sub2_sub1_sub1, 0);
     for (50)
@@ -209,7 +209,7 @@ event on_aot_07_sub2_sub1
     {
         if (ck(FG_ITEM, F_ITEM_89, TRUE))
         {
-            aot_delete(AOT_01_ITEM, SCE_ITEM, 129);
+            aot_delete(AOT_01_ITEM, SCE_ITEM, SAT_MANUAL | SAT_PLAYER);
         }
     }
     run

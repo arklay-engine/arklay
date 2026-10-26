@@ -14,24 +14,27 @@
 #define AOT_05_6 0x05
 #define AOT_08_EVENT 0x08
 #define AOT_09_EVENT 0x09
+#define ENEMY_00 0x00
+#define ENEMY_01 0x01
+#define ENEMY_02_ZOMBIE_LAB 0x02
 
 proc init
 {
-    door_aot_set(AOT_00_DOOR, 2500, 2400, 1000, 1300, 3, 0, 0, 7, 150, ROOM_204_C_PASSAGE, 13000, 0, 19200, 1024, LOCK, 129);
-    door_aot_set(AOT_01_DOOR, 16900, 9500, 1900, 1700, 1, 0, 29, 5, 208, ROOM_208_DEER_ROOM, 6500, 0, 6300, 1024, IT_34_KEY_MANSION_ARMOR, 129);
-    door_aot_set(AOT_02_DOOR, 29800, 3000, 700, 1700, 0, 0, 4, 4, 64, ROOM_20B_FRONT_LESSON_ROOM, 7800, 0, 8000, 1024, UNLOCKED, 129);
-    door_aot_set(AOT_03_DOOR, 5995, 18200, 2605, 2100, 1, 5, 23, 96, 0, STAGE_1 | ROOM_10B_1F_RIGHT_STAIRS, 2900, 0, 19000, 2048, UNLOCKED, 129);
-    aot_set(AOT_04_MESSAGE, 800, 10400, 1900, 1700, SCE_MESSAGE, 129, 129, 0, 255, 0, 0, 0);
-    aot_set(AOT_05_6, 8600, 13600, 2000, 3300, SCE_6, 129, 1, 0, 0, 0, 0, 0);
-    aot_set(AOT_08_EVENT, 8600, 13600, 2000, 1000, SCE_EVENT, 129, 9, 0, on_aot_08, 0, 0, 0);
-    aot_set(AOT_09_EVENT, 8600, 15900, 2000, 1000, SCE_EVENT, 129, 9, 0, on_aot_09, 0, 0, 0);
+    door_aot_set(AOT_00_DOOR, 2500, 2400, 1000, 1300, 3, 0, 0, 7, 150, ROOM_204_C_PASSAGE, 13000, 0, 19200, 1024, LOCK, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 16900, 9500, 1900, 1700, 1, 0, 29, 5, 208, ROOM_208_DEER_ROOM, 6500, 0, 6300, 1024, IT_34_KEY_MANSION_ARMOR, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_02_DOOR, 29800, 3000, 700, 1700, 0, 0, 4, 4, 64, ROOM_20B_FRONT_LESSON_ROOM, 7800, 0, 8000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_03_DOOR, 5995, 18200, 2605, 2100, 1, 5, 23, 96, 0, STAGE_1 | ROOM_10B_1F_RIGHT_STAIRS, 2900, 0, 19000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    aot_set(AOT_04_MESSAGE, 800, 10400, 1900, 1700, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_6, 8600, 13600, 2000, 3300, SCE_6, SAT_MANUAL | SAT_PLAYER, 1, 0, 0, 0, 0, 0);
+    aot_set(AOT_08_EVENT, 8600, 13600, 2000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_08, 0, 0, 0);
+    aot_set(AOT_09_EVENT, 8600, 15900, 2000, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_09, 0, 0, 0);
     if (ck(FG_SCENARIO, F_SCENARIO_00, FALSE))
     {
-        enemy(EM_11_ZOMBIE_LAB, 4, 19, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, 0, 0, 0, 0);
-        enemy(EM_11_ZOMBIE_LAB, 8, 20, 1, 2, 0, 0, 2341, 0, 0, 13775, 0, 12089, 1, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 4, F_ENEMY_13, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, ENEMY_00, 0, 0, 0);
+        enemy(EM_11_ZOMBIE_LAB, 8, F_ENEMY_14, 1, 2, 0, 0, 2341, 0, 0, 13775, 0, 12089, ENEMY_01, 0, 0, 0);
         if (ck(FG_STATUS, F_STATUS_08, FALSE))
         {
-            enemy(EM_11_ZOMBIE_LAB, 8, 175, 1, 2, 0, 0, 2579, 0, 0, 31491, 0, 9874, 2, 0, 0, 0);
+            enemy(EM_11_ZOMBIE_LAB, 8, 175, 1, 2, 0, 0, 2579, 0, 0, 31491, 0, 9874, ENEMY_02_ZOMBIE_LAB, 0, 0, 0);
         }
         if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_61, TRUE) && ck(FG_COMMON, F_COMMON_63, TRUE))
         {
@@ -40,10 +43,10 @@ proc init
     }
     else
     {
-        enemy(EM_06_HUNTER, 18, 21, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, 0, 0, 0, 0);
-        enemy(EM_06_HUNTER, 18, 22, 1, 2, 0, 0, 0, 0, 0, 21600, 0, 11700, 1, 0, 0, 0);
+        enemy(EM_06_HUNTER, 18, 21, 1, 2, 0, 0, 3072, 0, 0, 3000, 0, 8000, ENEMY_00, 0, 0, 0);
+        enemy(EM_06_HUNTER, 18, 22, 1, 2, 0, 0, 0, 0, 0, 21600, 0, 11700, ENEMY_01, 0, 0, 0);
     }
-    aot_delete(AOT_05_6, SCE_NONE, 129);
+    aot_delete(AOT_05_6, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
 }
 
 event on_aot_09
@@ -52,13 +55,13 @@ event on_aot_09
     {
         cut_auto(1);
         cutnext(1);
-        aot_delete(AOT_05_6, SCE_6, 129);
+        aot_delete(AOT_05_6, SCE_6, SAT_MANUAL | SAT_PLAYER);
         aot_on(AOT_05_6, SCE_6, 0);
     }
     sleep(73);
     run
     {
-        aot_delete(AOT_05_6, SCE_NONE, 129);
+        aot_delete(AOT_05_6, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         cut_auto(0);
     }
     evt_finish();
@@ -69,13 +72,13 @@ event on_aot_08
     run
     {
         cut_auto(1);
-        aot_delete(AOT_05_6, SCE_6, 129);
+        aot_delete(AOT_05_6, SCE_6, SAT_MANUAL | SAT_PLAYER);
         aot_on(AOT_05_6, SCE_6, 0);
     }
     sleep(73);
     run
     {
-        aot_delete(AOT_05_6, SCE_NONE, 129);
+        aot_delete(AOT_05_6, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
         cutnext(0);
         cut_auto(0);
     }
