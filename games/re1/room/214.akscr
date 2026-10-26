@@ -24,6 +24,7 @@
 #define IMDL_02 0x02
 #define MSG_THE_DOOR_IS_LOCKED 0x00
 #define SE_14 0x14
+#if MANSION2
 
 proc init
 {
@@ -68,3 +69,4 @@ proc main
         set(FG_ROOM, F_ROOM_18, FALSE);
     }
 }
+#endif

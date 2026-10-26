@@ -449,10 +449,10 @@ into `scd/<stem>.scd` (the `.s` itself is not packed); a `scd/<stem>.akscr`
 script is compiled the same way, and a merged room script named by three hex
 digits (`scd/103.akscr`) is compiled once per variant, into `scd/1030.scd`,
 `scd/1031.scd`, `scd/6030.scd` and `scd/6031.scd`, each built for the
-Steam/GOG release (`#if STEAM` is defined). A mod has no build per release
-and its scripts run on either release, so a script that builds differently
-for Mediakite gets a warning: lines that follow one release's RDT data (a
-camera number, an AOT position) may not fit the other's.
+USA region (`#if USA` is defined). A mod has no build per region and its
+scripts run on every region, so a script that builds differently for JPN or
+EUR gets a warning: lines that follow one region's RDT data (a camera
+number, an AOT position) may not fit another's.
 `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
@@ -634,28 +634,34 @@ A build uses the fixed version unless asked for the original (`scd build
 --room 1051 --authentic`); built as `AUTHENTIC`, every script compiles to its
 RDTs' exact bytecode, which the real-data tests check.
 
-`STEAM` picks the release. The Steam/GOG release defines it and the
-original Mediakite PC release does not; they ship different scripts in 37
-RDTs (19 rooms), and every such difference sits in an `#if STEAM` block, so
-`grep -rnE '^#if !?STEAM' games/re1/room` lists them all. Most are the Steam release's
-changes: two ink ribbons per pickup where Mediakite gives three, `bgm_stop`
-calls added to cutscenes, and adjusted waits and camera cuts. A build is for
-Steam/GOG unless asked for Mediakite (`scd build --room 1001 --mediakite`).
-`#if !SYMBOL` takes its block when `SYMBOL` is not defined, which reads
-better than an empty `#if STEAM` before `#else`. To give Mediakite one of
-the Steam changes, keep the Mediakite line under `#if AUTHENTIC` inside the
-`#else` of `#if STEAM`, with the Steam line as its fix.
+`USA`, `JPN` and `EUR` pick the region; a build defines exactly one. The
+regions ship different scripts: the English release (USA) gives two ink
+ribbons per pickup where JPN gives three, and adds `bgm_stop` calls to
+cutscenes and adjusts waits and camera cuts; the French and German releases
+(EUR) ship identical scripts to each other, mostly following JPN for the
+ribbons, plus rooms 313 and 412 that only they use. The Steam/GOG Japanese
+release ships the same scripts as the original Mediakite PC release, so the
+differences are regional, not per store. Every such difference sits in an
+`#if USA`, `#if JPN` or `#if EUR` block, so
+`grep -rnE '^#if !?(USA|JPN|EUR)' games/re1/room` lists them all. A build is
+for USA unless asked for another region (`scd build --room 1001 --region
+jpn`). `#if !SYMBOL` takes its block when `SYMBOL` is not defined, which
+reads better than an empty `#if USA` before `#else`. To give another region
+one of the USA changes, keep that region's line under `#if AUTHENTIC` inside
+the `#else` of `#if USA`, with the USA line as its fix.
 
-`scd export-rooms steam.akpak --mediakite mediakite.akpak --out DIR` merges
-both releases this way; without `--mediakite` it exports one release.
+`scd export-rooms usa=en.akpak jpn=ja.akpak eur=fr.akpak --out DIR` merges
+the regions this way; a pack without a region is USA, and a single pack
+exports one region. The EUR releases also hold leftover RDTs whose scripts
+are empty.
 
 These scripts are what the game runs. The build compiles each one, fixed,
-for every RDT it covers and for both releases, and carries the bytecode in
+for every RDT it covers and for every region, and carries the bytecode in
 the executable; `convert-game` packs it as `scd/{id}.scd` beside the RDT,
-picking the release whose `AUTHENTIC` build has the same digest as the RDT's
-own scripts. An RDT whose scripts are neither release's keeps its own
-scripts, with a warning. A script may use `STEAM` only where the releases'
-own scripts differ: the build stops if both releases' `AUTHENTIC` builds of
+picking the region whose `AUTHENTIC` build has the same digest as the RDT's
+own scripts. An RDT whose scripts are no region's keeps its own scripts,
+with a warning. A script may use a region symbol only where the regions'
+own scripts differ: the build stops if two regions' `AUTHENTIC` builds of
 an RDT match but their fixed builds do not. A mod's `scd/{id}.scd` overrides the
 packed one, and a mod that replaces an RDT without shipping a script keeps
 that RDT's scripts: a script only applies over an RDT from its own layer

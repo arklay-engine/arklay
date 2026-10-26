@@ -3180,10 +3180,10 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
 /// The checked-in room script's bytecode to pack as `scd/<id>.scd` beside
 /// RDT `id`, so the engine runs it in place of the RDT's own scripts.
 ///
-/// The build for the RDT's release is the one whose `AUTHENTIC` digest equals
+/// The build for the RDT's region is the one whose `AUTHENTIC` digest equals
 /// the RDT's own scripts'. `None` for a room without a script or an RDT
-/// without scripts. A room whose scripts are neither release's (a modified
-/// RDT) is an error naming the room: it keeps its own scripts.
+/// without scripts. A room whose scripts are no region's (a modified RDT) is
+/// an error naming the room: it keeps its own scripts.
 fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static [u8]>, String> {
     let number = id.rdt_number();
     let mut builds = crate::scd::ROOM_SCRIPTS
@@ -3339,8 +3339,8 @@ mod tests {
         assert!(error.contains("room/1000.rdt"), "{error}");
         assert_eq!(room_script(id, &[0; 4]), Ok(None), "a stub RDT");
 
-        // Jill's ink ribbons differ by release (`#if STEAM`), so RDT 1001
-        // has a build per release and each RDT takes its own.
+        // Jill's ink ribbons differ by region (`#if USA`), so RDT 1001 has a
+        // USA build and one JPN and EUR share, and each RDT takes its own.
         let builds: Vec<&[u8]> = crate::scd::ROOM_SCRIPTS
             .iter()
             .filter(|script| script.id == 0x1001)
@@ -5700,16 +5700,17 @@ mod tests {
 
         let pack = crate::pack::Pack::open(&out).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("room/"), 348);
-        // Every RDT with scripts runs its checked-in room script (the other 28
-        // are the stubs of unused room slots), except, in the original PC
-        // release, the 37 rooms the Steam release's scripts fix.
-        let scripts = count("scd/");
-        assert!(matches!(scripts, 283 | 320), "{scripts} room scripts");
-        // One cut set per distinct room; stages 6/7 reuse the stage 1/2 pak
-        // files (620 distinct paks) but still name their cuts with their own
+        // Every RDT with scripts runs its checked-in room script. USA and JPN
+        // leave 28 unused room slots as stubs without scripts; the French and
+        // German (EUR) installs fill most of them with leftover RDTs and add
+        // rooms 313 and 412. One cut set per distinct room; stages 6/7 reuse
+        // the stage 1/2 pak files but still name their cuts with their own
         // room id, e.g. roomcut/600_000.bmp.
-        assert_eq!(count("roomcut/"), 842);
+        let counts = (count("room/"), count("scd/"), count("roomcut/"));
+        assert!(
+            matches!(counts, (348, 320, 842) | (352, 351, 920)),
+            "{counts:?} rooms, room scripts and cuts"
+        );
         // One mask page per camera that carries sprite groups; stages 6/7
         // reuse the stage 1/2 pages.
         assert_eq!(count("roommask/"), 601);

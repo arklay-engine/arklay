@@ -103,6 +103,7 @@
 #define VO_B00_00 0x5A
 #define VO_B00_01 0x5B
 #define VO_B00_02 0x5C
+#if MANSION2
 
 proc init
 {
@@ -1709,3 +1710,4 @@ event on_aot_02_sub3
     act_reset();
     evt_finish();
 }
+#endif

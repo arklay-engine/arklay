@@ -749,10 +749,10 @@ event on_enter_2
     act_nop();
     act_reset();
     evt_nop();
-#if STEAM
-    sleep(20);
-#else
+#if JPN
     wait_message();
+#else
+    sleep(20);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();
@@ -1835,10 +1835,10 @@ event on_enter_3
     act_nop();
     act_reset();
     evt_nop();
-#if STEAM
-    sleep(20);
-#else
+#if JPN
     wait_message();
+#else
+    sleep(20);
 #endif
     evt_work_set(WK_PLAYER, 0);
     evt_actor_begin();

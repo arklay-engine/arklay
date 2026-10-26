@@ -54,6 +54,7 @@ proc init
     enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_01, F_ENEMY_5B, SPAWN_FORCE, 2, 0, 2048, 0, 4000, 0, 9000, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
     set(FG_SCENARIO, F_SCENARIO_17, TRUE);
 }
+#if MANSION2
 
 proc main
 {
@@ -67,3 +68,4 @@ proc main
         aot_delete(AOT_02_DOOR, SCE_DOOR, 0);
     }
 }
+#endif

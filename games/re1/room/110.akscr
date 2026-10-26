@@ -17,6 +17,7 @@
 #define AOT_06_MESSAGE 0x06
 #define CAM_00 0x00
 #define CAM_01 0x01
+#if MANSION2
 
 proc init
 {
@@ -77,3 +78,4 @@ event on_aot_05
     }
     evt_finish();
 }
+#endif

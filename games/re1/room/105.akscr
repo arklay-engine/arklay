@@ -1321,8 +1321,13 @@ event event_0E
     }
     while (ck(FG_ROOM, F_ROOM_21, FALSE));
     bgm_volume_ramp(BGM_SUB_2, -95, 60);
+#if !EUR
     bgm_stop(BGM_SUB_2);
+#endif
     sleep(60);
+#if EUR
+    bgm_stop(BGM_SUB_2);
+#endif
     cutnext(CAM_02);
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_BARRY);
     evt_actor_begin();

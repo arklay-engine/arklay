@@ -76,8 +76,8 @@
 //! One merged script covers every variant of a room: `#if CHRIS`, `#if JILL`,
 //! `#if MANSION1` and `#if MANSION2` (with `#else` / `#endif`, nestable) keep
 //! or drop whole lines per variant before the script is parsed, and
-//! `#if STEAM` per release (Steam/GOG, or the original Mediakite PC
-//! release); see [`compile_variant`], [`merge`] and [`merge_releases`].
+//! `#if USA`, `#if JPN` and `#if EUR` per region; see [`compile_variant`],
+//! [`merge`] and [`merge_regions`].
 //!
 //! Anywhere a statement is allowed, `asm { ... }` embeds `.s` assembly lines
 //! verbatim (closed by a line holding only `}`); the decompiler uses it for
@@ -93,11 +93,11 @@ mod preprocess;
 
 pub use compile::{compile, compile_variant, compile_with};
 pub use decompile::{decompile, decompile_with};
-pub use merge::{merge, merge_releases, merge_rooms};
+pub use merge::{merge, merge_regions, merge_rooms};
 pub use names::{Names, load_names};
 pub use preprocess::{
-    Loader, Preprocessed, SYMBOLS, Variant, includes_from, merged_id, no_includes, preprocess,
-    room_variants,
+    Loader, Preprocessed, Region, SYMBOLS, Variant, includes_from, merged_id, no_includes,
+    preprocess, room_variants,
 };
 
 #[cfg(test)]

@@ -123,10 +123,10 @@ proc init
     {
         aot_set(AOT_0D_NONE, 27400, 22100, 5000, 6000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 18, 0, 1, 0);
     }
-#if STEAM
-    aot_set(AOT_0E_NONE, 10000, 21200, 8000, 2000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
-#else
+#if JPN
     aot_set(AOT_0E_NONE, 10000, 21000, 8000, 2000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
+#else
+    aot_set(AOT_0E_NONE, 10000, 21200, 8000, 2000, SCE_NONE, SAT_UNDER | SAT_PLAYER, 4, 0, 33, 0, 1, 0);
 #endif
     set(FG_ROOM, F_ROOM_1D, TRUE);
     set(FG_ROOM, F_ROOM_14, TRUE);
@@ -148,13 +148,13 @@ proc init
 
 proc main
 {
-#if STEAM
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
+#if JPN
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
     {
         set(FG_MAP, F_MAP_VISITED_312, TRUE);
     }
 #else
-    if (cmpb(B_CAMERA, CMP_EQ, CAM_05))
+    if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
     {
         set(FG_MAP, F_MAP_VISITED_312, TRUE);
     }

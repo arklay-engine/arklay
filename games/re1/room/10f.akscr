@@ -470,13 +470,21 @@ event from_main
 #if MANSION1
     sleep(15);
 #else
+#if EUR
+    sleep(15);
+#else
     sleep(55);
+#endif
 #endif
     act_anim_flags(ANIM_39, F_ROOM_20, 0);
 #if MANSION1
     sleep(95);
 #else
+#if EUR
+    sleep(95);
+#else
     sleep(75);
+#endif
 #endif
     act_anim_flags(ANIM_38, F_ROOM_20, 0);
     act_reset();
@@ -782,7 +790,11 @@ event from_main
 #if MANSION1
     sleep(20);
 #else
+#if EUR
+    sleep(20);
+#else
     sleep(30);
+#endif
 #endif
     act_anim_flags(ANIM_39, F_ROOM_20, 0);
     sleep(22);
@@ -790,12 +802,21 @@ event from_main
 #if MANSION1
     sleep(20);
     act_anim_flags(ANIM_38, F_ROOM_20, 0);
+#else
+#if EUR
+    sleep(20);
+    act_anim_flags(ANIM_38, F_ROOM_20, 0);
+#endif
 #endif
     sleep(25);
 #if MANSION1
     act_anim_flags(ANIM_39, F_ROOM_20, 0);
 #else
+#if EUR
+    act_anim_flags(ANIM_39, F_ROOM_20, 0);
+#else
     act_anim_flags(ANIM_38, F_ROOM_20, 0);
+#endif
 #endif
     sleep(50);
     act_reset();
@@ -947,13 +968,21 @@ event from_main_2
 #if MANSION1
     sleep(15);
 #else
+#if EUR
+    sleep(15);
+#else
     sleep(55);
+#endif
 #endif
     act_anim_flags(ANIM_39, F_ROOM_20, 0);
 #if MANSION1
     sleep(95);
 #else
+#if EUR
+    sleep(95);
+#else
     sleep(75);
+#endif
 #endif
     act_anim_flags(ANIM_38, F_ROOM_20, 0);
     act_reset();
@@ -1217,7 +1246,11 @@ event from_main_2
 #if MANSION1
     sleep(20);
 #else
+#if EUR
+    sleep(20);
+#else
     sleep(30);
+#endif
 #endif
     act_anim_flags(ANIM_39, F_ROOM_20, 0);
     sleep(22);
@@ -1225,12 +1258,21 @@ event from_main_2
 #if MANSION1
     sleep(20);
     act_anim_flags(ANIM_38, F_ROOM_20, 0);
+#else
+#if EUR
+    sleep(20);
+    act_anim_flags(ANIM_38, F_ROOM_20, 0);
+#endif
 #endif
     sleep(25);
 #if MANSION1
     act_anim_flags(ANIM_39, F_ROOM_20, 0);
 #else
+#if EUR
+    act_anim_flags(ANIM_39, F_ROOM_20, 0);
+#else
     act_anim_flags(ANIM_38, F_ROOM_20, 0);
+#endif
 #endif
     sleep(50);
     act_reset();
@@ -1368,6 +1410,10 @@ event from_main_sub1
     act_reset();
 #if MANSION1
     bgm_play(BGM_SUB_1);
+#else
+#if EUR
+    bgm_play(BGM_SUB_1);
+#endif
 #endif
     evt_chain(5);
 }
@@ -1445,6 +1491,10 @@ event from_main_sub2
     act_reset();
 #if MANSION1
     bgm_play(BGM_SUB_1);
+#else
+#if EUR
+    bgm_play(BGM_SUB_1);
+#endif
 #endif
     evt_chain(5);
 }
@@ -1491,11 +1541,13 @@ event from_main_2
 event event_05
 {
 #if MANSION1
-#if STEAM
+#if !JPN
     bgm_play(BGM_SUB_1);
 #endif
 #else
+#if !EUR
     bgm_play(BGM_SUB_1);
+#endif
 #endif
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_REBECCA);
     evt_actor_begin();
@@ -1543,18 +1595,31 @@ event event_05
     act_anim_flags(ANIM_38, F_ROOM_21, 0);
     sleep(15);
     act_anim_flags(ANIM_38, F_ROOM_21, 0);
+#else
+#if EUR
+    sleep(23);
+    act_anim_flags(ANIM_39, F_ROOM_20, 0);
+    sleep(15);
+    act_anim_flags(ANIM_38, F_ROOM_20, 0);
+    sleep(15);
+    act_anim_flags(ANIM_38, F_ROOM_21, 0);
+    sleep(15);
+    act_anim_flags(ANIM_38, F_ROOM_21, 0);
+#endif
 #endif
     sleep(10);
     act_reset();
     evt_nop();
     sleep(10);
 #if MANSION1
-#if STEAM
+#if !JPN
     evt_nop();
     evt_work_set(22, 1);
 #endif
 #else
+#if !EUR
     bgm_stop(BGM_SUB_1);
+#endif
 #endif
     sleep(15);
     evt_chain(5);

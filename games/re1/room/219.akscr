@@ -17,6 +17,7 @@
 #define IMDL_01 0x01
 #define IMDL_02 0x02
 #define MSG_A_BATTERY 0x00
+#if MANSION2
 
 proc init
 {
@@ -68,3 +69,4 @@ event on_aot_04
     }
     evt_finish();
 }
+#endif

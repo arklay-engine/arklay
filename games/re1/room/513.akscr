@@ -1902,7 +1902,7 @@ event on_enter_6
     }
     while (ck(FG_ROOM, F_ROOM_00, FALSE));
     set(FG_ROOM, F_ROOM_00, FALSE);
-#if !STEAM
+#if JPN
     cutnext(CAM_05);
 #endif
     evt_fork(TASK_07, on_enter_5_sub1, 0);
@@ -1920,7 +1920,7 @@ event on_enter_6
     act_reset();
     evt_next();
     evt_nop();
-#if STEAM
+#if !JPN
     cutnext(CAM_05);
     sleep(1);
 #endif
@@ -2932,13 +2932,13 @@ event on_aot_03_message
     act_reset();
     evt_nop();
     wait_message();
-#if STEAM
+#if !JPN
     evt_fork(TASK_07, on_enter_3, 0);
     evt_next();
     evt_nop();
 #endif
     cutnext(CAM_02);
-#if !STEAM
+#if JPN
     evt_fork(TASK_07, on_enter_3, 0);
 #endif
     sleep(10);

@@ -36,6 +36,7 @@
 #define MSG_WILL_YOU_TRY_AND_TAKE_OUT 0x02
 #define OBJ_00 0x00
 #define SE_17_SW_BTN 0x17
+#if MANSION2
 
 proc init
 {
@@ -336,3 +337,4 @@ event on_aot_02_sub3
     evt_chain(9);
     evt_finish();
 }
+#endif

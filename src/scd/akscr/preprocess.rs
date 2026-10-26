@@ -10,9 +10,11 @@
 //! data has a quirk: `#if AUTHENTIC` keeps the original, its `#else` holds
 //! the fixed version a build uses by default.
 //!
-//! `STEAM` picks the release: the Steam/GOG release defines it, the original
-//! Mediakite PC release does not. The two ship different scripts in a few
-//! rooms, and `#if STEAM` blocks hold every such difference.
+//! `USA`, `JPN` and `EUR` pick the region, one defined per build. The PC
+//! releases ship three sets of room scripts: the English (USA) one, the
+//! Japanese one (the original Mediakite release and the Steam/GOG Japanese
+//! build) and the French and German one (EUR), and `#if` blocks on the
+//! region hold every difference between them.
 //!
 //! `#if !SYMBOL` takes the block when `SYMBOL` is not defined.
 //!
@@ -27,13 +29,15 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 /// The defined symbols.
-pub const SYMBOLS: [&str; 6] = [
+pub const SYMBOLS: [&str; 8] = [
     "CHRIS",
     "JILL",
     "MANSION1",
     "MANSION2",
     "AUTHENTIC",
-    "STEAM",
+    "USA",
+    "JPN",
+    "EUR",
 ];
 
 /// The room variant a script is compiled for.
@@ -47,14 +51,52 @@ pub struct Variant {
     /// Compile the original game's exact bytecode rather than the fixed
     /// version of its quirks.
     pub authentic: bool,
-    /// Compile for the Steam/GOG release rather than the original Mediakite
-    /// PC release.
-    pub steam: bool,
+    /// The region whose scripts to compile.
+    pub region: Region,
+}
+
+/// The region of a release, which picks its set of room scripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Region {
+    /// The English release, which the checked-in scripts were written from.
+    Usa,
+    /// The Japanese release: the original Mediakite one and the Steam/GOG
+    /// Japanese build.
+    Jpn,
+    /// The French and German releases.
+    Eur,
+}
+
+impl Region {
+    /// Every region, in the order a merge splits on them.
+    pub const ALL: [Region; 3] = [Region::Usa, Region::Jpn, Region::Eur];
+
+    /// The preprocessor symbol the region defines.
+    pub fn symbol(self) -> &'static str {
+        match self {
+            Region::Usa => "USA",
+            Region::Jpn => "JPN",
+            Region::Eur => "EUR",
+        }
+    }
+
+    /// The region named `name` (`usa`, `jpn` or `eur`, any case).
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|region| region.symbol().eq_ignore_ascii_case(name))
+    }
+}
+
+impl std::fmt::Display for Region {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.symbol())
+    }
 }
 
 impl Variant {
     /// The variant of RDT `id` (`0x1030` is stage 1, room 03, player 0), for
-    /// the Steam/GOG release.
+    /// the USA region.
     pub fn for_room(id: u16) -> Self {
         let stage = id >> 12;
         Self {
@@ -65,16 +107,13 @@ impl Variant {
                 _ => None,
             },
             authentic: false,
-            steam: true,
+            region: Region::Usa,
         }
     }
 
-    /// This variant for the original Mediakite PC release.
-    pub fn mediakite(self) -> Self {
-        Self {
-            steam: false,
-            ..self
-        }
+    /// This variant for `region`.
+    pub fn in_region(self, region: Region) -> Self {
+        Self { region, ..self }
     }
 
     /// This variant compiled to the original game's exact bytecode.
@@ -93,7 +132,9 @@ impl Variant {
             "MANSION1" => Some(self.mansion == Some(1)),
             "MANSION2" => Some(self.mansion == Some(2)),
             "AUTHENTIC" => Some(self.authentic),
-            "STEAM" => Some(self.steam),
+            "USA" => Some(self.region == Region::Usa),
+            "JPN" => Some(self.region == Region::Jpn),
+            "EUR" => Some(self.region == Region::Eur),
             _ => None,
         }
     }

@@ -3,11 +3,11 @@
 //! Needs `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK`; without them the tests
 //! skip. The checked-in `games/re1/room/<room>.akscr` scripts are edited by
 //! hand: built as `AUTHENTIC` for each variant they must give that RDT's
-//! init, main and event streams byte for byte, for the pack's release
-//! (`#if STEAM` for Steam/GOG, not for Mediakite), and their fixed build
-//! must compile. Separately, the decompiler and merge must round-trip every
-//! room, and with `ARKLAY_RE1_MEDIAKITE_PACK` set to a pack of the Mediakite
-//! release beside a Steam/GOG `ARKLAY_RE1_PACK`, the merge of both releases
+//! init, main and event streams byte for byte, for the pack's region
+//! (`#if USA`, `#if JPN` or `#if EUR`), and their fixed build must compile.
+//! Separately, the decompiler and merge must round-trip every room, and with
+//! `ARKLAY_RE1_JPN_PACK` and `ARKLAY_RE1_EUR_PACK` set to packs of those
+//! regions beside a USA `ARKLAY_RE1_PACK`, the merge of the three regions
 //! must too.
 
 use crate::common;
@@ -110,15 +110,9 @@ fn original_rooms(pack: &Pack) -> BTreeMap<u16, Scripts> {
     rooms
 }
 
-/// The releases the checked-in scripts cover: each name and whether it
-/// defines `STEAM`.
-const RELEASES: [(&str, bool); 2] = [("Steam/GOG", true), ("Mediakite", false)];
-
-/// The variant of RDT `id` for a release.
-fn release_variant(id: u16, steam: bool) -> akscr::Variant {
-    let variant = akscr::Variant::for_room(id);
-    if steam { variant } else { variant.mediakite() }
-}
+/// Rooms only the French and German releases ship (USA and JPN have no RDT
+/// for them), so a pack of another region has no room for their scripts.
+const EUR_ONLY_ROOMS: [&str; 2] = ["313", "412"];
 
 #[test]
 #[ignore = "requires a real RE1 installation via ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
@@ -130,45 +124,46 @@ fn checked_in_room_scripts_build_the_original_bytecode() {
     let checked_in = room_dir();
     let originals = original_rooms(&pack);
 
-    // The pack is one release's: every RDT must build from its script for
-    // the same release, the one most of them fit.
+    // The pack is one region's: every RDT must build from its script for the
+    // same region, the one most of them fit.
+    let regions = akscr::Region::ALL;
     let mut bases = BTreeSet::new();
     let mut builds = BTreeMap::new();
-    let mut fits = [0usize; RELEASES.len()];
+    let mut fits = [0usize; akscr::Region::ALL.len()];
     for (&id, original) in &originals {
         let base = akscr::merged_id(id);
         bases.insert(format!("{base:03x}"));
         let script = checked_in.join(format!("{base:03x}.akscr"));
         let text = std::fs::read_to_string(&script)
             .unwrap_or_else(|error| panic!("{}: {error}", script.display()));
-        let compiled: Vec<Scripts> = RELEASES
+        let compiled: Vec<Scripts> = regions
             .iter()
-            .map(|&(_, steam)| {
-                let variant = release_variant(id, steam);
+            .map(|&region| {
+                let variant = akscr::Variant::for_room(id).in_region(region);
                 // The fixed build compiles too.
                 compile(&text, Some(variant));
                 compile(&text, Some(variant.authentic()))
             })
             .collect();
-        for (release, compiled) in compiled.iter().enumerate() {
-            fits[release] += usize::from(compiled.digest() == original.digest());
+        for (region, compiled) in compiled.iter().enumerate() {
+            fits[region] += usize::from(compiled.digest() == original.digest());
         }
         builds.insert(id, (base, compiled));
     }
-    let release = (0..RELEASES.len())
-        .max_by_key(|&release| (fits[release], std::cmp::Reverse(release)))
+    let region = (0..regions.len())
+        .max_by_key(|&region| (fits[region], std::cmp::Reverse(region)))
         .unwrap();
-    let (name, _) = RELEASES[release];
+    let name = regions[region];
     for (&id, original) in &originals {
         let (base, compiled) = &builds[&id];
         assert_identical(
             &format!(
-                "{base:03x}.akscr as {id:04X} for the {name} release, which {} of {} RDTs fit",
-                fits[release],
+                "{base:03x}.akscr as {id:04X} for the {name} region, which {} of {} RDTs fit",
+                fits[region],
                 originals.len()
             ),
             original,
-            &compiled[release],
+            &compiled[region],
         );
     }
 
@@ -182,7 +177,8 @@ fn checked_in_room_scripts_build_the_original_bytecode() {
         }
         let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
         assert!(
-            bases.contains(&stem),
+            bases.contains(&stem)
+                || (name != akscr::Region::Eur && EUR_ONLY_ROOMS.contains(&stem.as_str())),
             "{} has no room in the pack",
             path.display()
         );
@@ -224,32 +220,55 @@ fn every_room_decompiles_and_merges_to_identical_bytecode() {
 }
 
 #[test]
-#[ignore = "requires both RE1 releases via ARKLAY_RE1_ROOT, ARKLAY_RE1_PACK and ARKLAY_RE1_MEDIAKITE_PACK"]
-fn both_releases_merge_to_identical_bytecode() {
+#[ignore = "requires every RE1 region via ARKLAY_RE1_ROOT, ARKLAY_RE1_PACK, ARKLAY_RE1_JPN_PACK and ARKLAY_RE1_EUR_PACK"]
+fn every_region_merges_to_identical_bytecode() {
     let Some((_root, pack_path)) = common::asset_env() else {
         return;
     };
-    let Some(mediakite_path) = std::env::var_os("ARKLAY_RE1_MEDIAKITE_PACK") else {
+    let (Some(jpn), Some(eur)) = (
+        std::env::var_os("ARKLAY_RE1_JPN_PACK"),
+        std::env::var_os("ARKLAY_RE1_EUR_PACK"),
+    ) else {
         return;
     };
     let names = akscr::load_names(&room_dir()).unwrap();
-    let steam = original_rooms(&Pack::open(&pack_path).unwrap());
-    let mediakite = original_rooms(&Pack::open(Path::new(&mediakite_path)).unwrap());
-    let decompile = |rooms: &BTreeMap<u16, Scripts>| -> BTreeMap<u16, String> {
-        rooms
-            .iter()
-            .map(|(&id, scripts)| (id, akscr::decompile_with(scripts, &names, id)))
-            .collect()
-    };
+    let regions: Vec<(akscr::Region, BTreeMap<u16, Scripts>)> = [
+        (akscr::Region::Usa, pack_path.as_os_str()),
+        (akscr::Region::Jpn, &jpn),
+        (akscr::Region::Eur, &eur),
+    ]
+    .into_iter()
+    .map(|(region, path)| {
+        (
+            region,
+            original_rooms(&Pack::open(Path::new(path)).unwrap()),
+        )
+    })
+    .collect();
+    let texts: Vec<(akscr::Region, BTreeMap<u16, String>)> = regions
+        .iter()
+        .map(|(region, rooms)| {
+            let texts = rooms
+                .iter()
+                .map(|(&id, scripts)| (id, akscr::decompile_with(scripts, &names, id)))
+                .collect();
+            (*region, texts)
+        })
+        .collect();
 
-    let merged = akscr::merge_releases(&decompile(&steam), &decompile(&mediakite)).unwrap();
-    for (originals, release) in [(&steam, RELEASES[0]), (&mediakite, RELEASES[1])] {
-        let (name, steam) = release;
+    let merged = akscr::merge_regions(
+        &texts
+            .iter()
+            .map(|(region, texts)| (*region, texts))
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    for (region, originals) in &regions {
         for (&id, original) in originals {
             let base = akscr::merged_id(id);
-            let variant = release_variant(id, steam);
+            let variant = akscr::Variant::for_room(id).in_region(*region);
             assert_identical(
-                &format!("merged {base:03x} as {id:04X} for the {name} release"),
+                &format!("merged {base:03x} as {id:04X} for the {region} region"),
                 original,
                 &compile(&merged[&base], Some(variant.authentic())),
             );

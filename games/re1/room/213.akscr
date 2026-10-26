@@ -17,6 +17,7 @@
 #define ENEMY_01_ZOMBIE_LAB 0x01
 #define ENEMY_02_ZOMBIE_LAB 0x02
 #define IMDL_00 0x00
+#if MANSION2
 
 proc init
 {
@@ -34,3 +35,4 @@ proc init
     enemy(EM_11_ZOMBIE_LAB, EB_01, F_ENEMY_86, SPAWN_FORCE, 2, 0, 1136, 0, 16355, 0, 21978, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
 #endif
 }
+#endif

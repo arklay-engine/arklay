@@ -498,7 +498,10 @@ impl RoomState {
 /// Parse one 44-byte camera record and its mask table.
 ///
 /// Fields 0 and 1 are direct file offsets to the camera's mask sprite table
-/// and its embedded mask TIM; the table itself is parsed into the cut.
+/// and its embedded mask TIM; the table itself is parsed into the cut. A
+/// negative offset reads as none, like 0: the French and German releases'
+/// leftover `ROOM1100.RDT` (an unused room slot, a 4-byte stub elsewhere)
+/// has -1 for camera 0's table.
 fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
     let record = &data[start..start + CAMERA_SIZE];
     let mut fields = [0i32; CAMERA_FIELDS];
@@ -506,10 +509,8 @@ fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
         *field = i32::from_le_bytes(*bytes);
     }
 
-    let mask_pointer = u32::try_from(fields[0])
-        .with_context(|| format!("camera {index} has negative mask pointer {}", fields[0]))?;
-    let tim_mask_pointer = u32::try_from(fields[1])
-        .with_context(|| format!("camera {index} has negative mask TIM pointer {}", fields[1]))?;
+    let mask_pointer = u32::try_from(fields[0]).unwrap_or(0);
+    let tim_mask_pointer = u32::try_from(fields[1]).unwrap_or(0);
     let table = mask::MaskTable::parse(data, mask_pointer)
         .with_context(|| format!("failed to parse the mask table of camera {index}"))?;
 
@@ -790,12 +791,15 @@ mod tests {
     }
 
     #[test]
-    fn errors_on_negative_mask_pointer() {
+    fn negative_mask_pointers_read_as_none() {
         let mut data = build_rdt(1, &[[0; CAMERA_FIELDS]]);
         data[CAMERAS_OFFSET..CAMERAS_OFFSET + 4].copy_from_slice(&(-1i32).to_le_bytes());
+        data[CAMERAS_OFFSET + 4..CAMERAS_OFFSET + 8].copy_from_slice(&(-1i32).to_le_bytes());
 
-        let message = parse(&data, ROOM_ID).unwrap_err().to_string();
-        assert!(message.contains("negative mask pointer"), "{message}");
+        let state = parse(&data, ROOM_ID).unwrap();
+        let cut = &state.cuts[0];
+        assert_eq!((cut.mask_pointer, cut.tim_mask_pointer), (0, 0));
+        assert!(cut.masks.is_empty());
     }
 
     #[test]

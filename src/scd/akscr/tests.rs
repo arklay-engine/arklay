@@ -467,20 +467,23 @@ fn merged_scripts_reproduce_every_variant() {
 }
 
 #[test]
-fn steam_picks_the_release() {
+fn region_symbols_pick_the_region() {
     let text = "#version 1
 proc main noreturn
 {
-#if STEAM
+#if USA
     nop(1);
 #else
     nop(2);
 #endif
-#if !STEAM
+#if !JPN
     nop(3);
 #endif
-#if !JILL
+#if EUR
     nop(4);
+#endif
+#if !JILL
+    nop(5);
 #endif
 }
 ";
@@ -494,12 +497,14 @@ proc main noreturn
             .map(|insn| insn[1])
             .collect()
     };
-    assert_eq!(nops(Variant::for_room(0x1030)), [1, 4]);
-    assert_eq!(nops(Variant::for_room(0x1031).mediakite()), [2, 3]);
+    assert_eq!(nops(Variant::for_room(0x1030)), [1, 3, 5]);
+    assert_eq!(nops(Variant::for_room(0x1031).in_region(Region::Jpn)), [2]);
     assert_eq!(
-        nops(Variant::for_room(0x1030).mediakite().authentic()),
-        [2, 3, 4]
+        nops(Variant::for_room(0x1030).in_region(Region::Eur).authentic()),
+        [2, 3, 4, 5]
     );
+    assert_eq!(Region::parse("eur"), Some(Region::Eur));
+    assert_eq!(Region::parse("STEAM"), None);
     let unknown = format!(
         "{:#}",
         compile_variant("#version 1\n#if !GOG\n#endif\n", Variant::for_room(0x1030)).unwrap_err()
@@ -508,7 +513,7 @@ proc main noreturn
 }
 
 #[test]
-fn merged_releases_differ_under_steam() {
+fn merged_regions_differ_under_their_symbols() {
     let rooms = |second: &str| -> BTreeMap<u16, String> {
         [
             (
@@ -521,24 +526,39 @@ fn merged_releases_differ_under_steam() {
         .map(|(id, text)| (id, text.to_string()))
         .collect()
     };
-    let steam = rooms("#version 1\n\nproc main\n{\n    nop(1);\n    nop(3);\n}\n");
-    let mediakite = rooms("#version 1\n\nproc main\n{\n    nop(1);\n    nop(4);\n}\n");
-    let merged = merge_releases(&steam, &mediakite).unwrap();
-    // Chris's script is the same in both releases, so only Jill's differs.
+    let usa = rooms("#version 1\n\nproc main\n{\n    nop(1);\n    nop(3);\n}\n");
+    let jpn = rooms("#version 1\n\nproc main\n{\n    nop(1);\n    nop(4);\n}\n");
+    let merged = merge_regions(&[
+        (Region::Usa, &usa),
+        (Region::Jpn, &jpn),
+        (Region::Eur, &jpn),
+    ])
+    .unwrap();
+    // Chris's script is the same in every region, and Jill's in JPN and EUR,
+    // so only Jill's USA line stands apart.
     assert_eq!(
         merged[&0x103],
         "#version 1\n\nproc main\n{\n    nop(1);\n#if CHRIS\n    nop(2);\n#else\n\
-         #if STEAM\n    nop(3);\n#else\n    nop(4);\n#endif\n#endif\n}\n"
+         #if USA\n    nop(3);\n#else\n    nop(4);\n#endif\n#endif\n}\n"
     );
-    // Releases with the same scripts merge as one.
+    // Regions with the same scripts merge as one.
     assert_eq!(
-        merge_releases(&steam, &steam).unwrap(),
-        merge_rooms(&steam).unwrap()
+        merge_regions(&[(Region::Usa, &usa), (Region::Eur, &usa)]).unwrap(),
+        merge_rooms(&usa).unwrap()
     );
-    let mut missing = mediakite.clone();
-    missing.remove(&0x1031);
-    let error = format!("{:#}", merge_releases(&steam, &missing).unwrap_err());
-    assert!(error.contains("1031"), "{error}");
+    // A region may hold RDTs the others lack.
+    let mut extra = jpn.clone();
+    extra.insert(
+        0x6030,
+        "#version 1\n\nproc main\n{\n    nop(5);\n}\n".to_string(),
+    );
+    let merged = merge_regions(&[(Region::Usa, &usa), (Region::Jpn, &extra)]).unwrap();
+    assert!(merged[&0x103].contains("#if MANSION"), "{}", merged[&0x103]);
+    let error = format!(
+        "{:#}",
+        merge_regions(&[(Region::Usa, &usa), (Region::Usa, &jpn)]).unwrap_err()
+    );
+    assert!(error.contains("given twice"), "{error}");
 }
 
 #[test]
@@ -921,13 +941,10 @@ fn checked_in_room_scripts_compile() {
         let base = u16::from_str_radix(&stem, 16).unwrap();
         let load = includes_from(&dir);
         for id in room_variants(base) {
-            let steam = Variant::for_room(id);
-            for variant in [
-                steam,
-                steam.authentic(),
-                steam.mediakite(),
-                steam.mediakite().authentic(),
-            ] {
+            for variant in Region::ALL.into_iter().flat_map(|region| {
+                let variant = Variant::for_room(id).in_region(region);
+                [variant, variant.authentic()]
+            }) {
                 if let Err(error) = compile_with(&text, Some(variant), &load)
                     .and_then(|assembled| assembled.to_container())
                 {
