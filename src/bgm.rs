@@ -324,7 +324,7 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
 /// always-reload types 1 and 2 run `bgm_fade_out_all`.
 ///
 /// The original's attract demo also forces the room's target to `0xFF` in
-/// `init_room`; the port does not model that override yet (#141).
+/// `init_room` ([`init_room_demo_override`]), which this reads back.
 ///
 /// The port keeps the outgoing state across the load (its BGM handoff tears
 /// the old banks down itself), so only the timing follows `init_room` here.
@@ -334,6 +334,21 @@ pub fn init_room_sleep(game: &GameState, id: RoomId) -> u8 {
     match game.room_bgm.get(stage * 32 + room) {
         Some(&target) if target != 0xFF && matches!(target >> 6, 1 | 2) => FADE_OUT_ALL_FRAMES,
         _ => 0,
+    }
+}
+
+/// `init_room`'s attract-demo override (0x004099f6): while `MSF2_ATTRACT_DEMO`
+/// is set, the destination room's row in the save's BGM table is forced to
+/// `0xFF` (no BGM) before `room_set` runs its init script. The write is
+/// persistent, like the original's, and a same-stage door's bare `room_set`
+/// does not make it.
+pub fn init_room_demo_override(game: &mut GameState, id: RoomId) {
+    if !game.flags[5].bit(crate::game::MSF2_ATTRACT_DEMO) {
+        return;
+    }
+    let stage = usize::from(id.stage.saturating_sub(1));
+    if let Some(target) = game.room_bgm.get_mut(stage * 32 + usize::from(id.room)) {
+        *target = 0xFF;
     }
 }
 
@@ -696,6 +711,22 @@ mod tests {
             game.bgm.state = 0x08;
             assert_eq!(init_room_sleep(&game, id), frames, "target {target:#04x}");
         }
+    }
+
+    #[test]
+    fn init_room_demo_override_silences_the_row_only_in_the_demo() {
+        let id = RoomId::parse("1000").unwrap();
+        let mut game = game_for(id);
+        set_row(&mut game, id, 0x48);
+        init_room_demo_override(&mut game, id);
+        assert_eq!(game.room_bgm[usize::from(id.room)], 0x48);
+        assert_eq!(init_room_sleep(&game, id), FADE_OUT_ALL_FRAMES);
+
+        game.apply_flag(5, crate::game::MSF2_ATTRACT_DEMO, 0);
+        init_room_demo_override(&mut game, id);
+        assert_eq!(game.room_bgm[usize::from(id.room)], 0xFF);
+        // The forced target drops the type-1 reload's `bgm_fade_out_all`.
+        assert_eq!(init_room_sleep(&game, id), 0);
     }
 
     #[test]
