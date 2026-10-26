@@ -875,3 +875,155 @@ end
         assert_eq!(image.image.width, 8);
     }
 }
+
+/// The frame the `draw` body leaves on a `size` framebuffer capturing for
+/// `hole`, with `art/bg.bmp` (`art`) replaced by an 8x8 blue BMP, and the
+/// replaced art's frame.
+fn capture_entry_art(
+    body: &str,
+    art: Vec<u8>,
+    size: [u32; 2],
+    hole: u8,
+) -> (crate::render::Framebuffer, [u32; 2]) {
+    use crate::pack::PackWriter;
+
+    let source = format!("function update(api, input) end\nfunction draw(api)\n{body}\nend\n");
+    let build = |hd: Option<(u32, Vec<u8>)>| {
+        let mut writer = PackWriter::new();
+        writer
+            .add("screen/save.lua", source.as_bytes().to_vec())
+            .unwrap();
+        writer.add("art/bg.bmp", art.clone()).unwrap();
+        if let Some((hash, bytes)) = hd {
+            writer
+                .add(&format!("htexture/misc/{hash:08X}.bmp"), bytes)
+                .unwrap();
+        }
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    };
+    let picture =
+        crate::ui::load_picture(&build(None), "art/bg", crate::assets::Geometry::Free, None)
+            .unwrap();
+    let candidate = crate::htexture::image_candidates(&picture)[0];
+    let hd = crate::bmp::encode_to_vec(&crate::state::Image {
+        width: 8,
+        height: 8,
+        rgba: [0, 0, 255, 255].repeat(64),
+    })
+    .unwrap();
+    let pack: &'static Pack = Box::leak(Box::new(build(Some((candidate.hash, hd)))));
+    let fixture = Fixture {
+        pack,
+        text: Text::load(pack, Some("en-US")),
+        font: test_font(),
+        dir: TempDir::new("hd-entry-art"),
+    };
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    let mut framebuffer = crate::render::Framebuffer::with_size(size[0], size[1]);
+    framebuffer.capture_hd(hole);
+    screen.draw(&cx, &mut framebuffer);
+    (framebuffer, candidate.frame)
+}
+
+#[test]
+fn replaced_entry_art_leaves_a_hole_and_a_quad_while_capturing() {
+    let pixel = |framebuffer: &crate::render::Framebuffer, x: usize, y: usize| {
+        let index = (y * 320 + x) * 4;
+        [
+            framebuffer.rgba[index],
+            framebuffer.rgba[index + 1],
+            framebuffer.rgba[index + 2],
+        ]
+    };
+    let full = crate::render::brightness_scale(2);
+    let sprite_colour = [f32::from(full) / 255.0; 3];
+    for hole in [0, 255] {
+        // A region stretched over a larger rect.
+        let (framebuffer, frame) = capture_entry_art(
+            r#"api:sprite_region("art/bg.bmp", 0, 0, 4, 4, 10, 20, 40, 40)"#,
+            test_bmp(),
+            [320, 240],
+            hole,
+        );
+        let [fw, fh] = frame.map(|v| v as f32);
+        assert_eq!(pixel(&framebuffer, 10, 20), [hole; 3]);
+        assert_eq!(pixel(&framebuffer, 49, 59), [hole; 3]);
+        assert_eq!(pixel(&framebuffer, 50, 60), [0; 3]);
+        let quads = framebuffer.hd_quads();
+        assert_eq!(quads.len(), 1);
+        assert_eq!(quads[0].dst, [10.0, 20.0, 50.0, 60.0]);
+        assert_eq!(quads[0].uv, [0.0, 0.0, 4.0 / fw, 4.0 / fh]);
+        assert_eq!(quads[0].colour, sprite_colour);
+        assert_eq!(quads[0].clip, [0, 0, 320, 240]);
+        let crate::htexture::QuadImage::Art(image) = &quads[0].image else {
+            panic!("a model quad");
+        };
+        assert_eq!(image.image.width, 8);
+
+        // A whole sprite at its own size.
+        let (framebuffer, _) = capture_entry_art(
+            r#"api:sprite("art/bg.bmp", 10, 20)"#,
+            test_bmp(),
+            [320, 240],
+            hole,
+        );
+        assert_eq!(pixel(&framebuffer, 13, 23), [hole; 3]);
+        assert_eq!(pixel(&framebuffer, 14, 24), [0; 3]);
+        let quads = framebuffer.hd_quads();
+        assert_eq!(quads.len(), 1);
+        assert_eq!(quads[0].dst, [10.0, 20.0, 14.0, 24.0]);
+        assert_eq!(quads[0].uv, [0.0, 0.0, 4.0 / fw, 4.0 / fh]);
+        assert_eq!(quads[0].colour, sprite_colour);
+
+        // A background stretched over the frame, ignoring the clip; it is
+        // always opaque, so a blend does not keep the HD art off it.
+        let (framebuffer, _) = capture_entry_art(
+            r##"api:clip(0, 0, 10, 10)
+api:background("art/bg.bmp", {colour = "#FF8000", blend = "half"})"##,
+            test_bmp(),
+            [320, 240],
+            hole,
+        );
+        assert_eq!(pixel(&framebuffer, 0, 0), [hole; 3]);
+        assert_eq!(pixel(&framebuffer, 319, 239), [hole; 3]);
+        let quads = framebuffer.hd_quads();
+        assert_eq!(quads.len(), 1);
+        assert_eq!(quads[0].dst, [0.0, 0.0, 320.0, 240.0]);
+        assert_eq!(quads[0].uv, [0.0, 0.0, 4.0 / fw, 4.0 / fh]);
+        assert_eq!(quads[0].colour, [1.0, 128.0 / 255.0, 0.0]);
+        assert_eq!(quads[0].clip, [0, 0, 320, 240]);
+
+        // A blended draw has no replacement: the quad cannot blend.
+        let (framebuffer, _) = capture_entry_art(
+            r#"api:sprite("art/bg.bmp", 10, 20, {blend = "half"})"#,
+            test_bmp(),
+            [320, 240],
+            hole,
+        );
+        assert!(framebuffer.hd_quads().is_empty());
+        assert_ne!(pixel(&framebuffer, 10, 20), [hole; 3]);
+
+        // A frame-sized background is copied one to one, on a wide frame too.
+        let wide = crate::bmp::encode_to_vec(&crate::state::Image {
+            width: 400,
+            height: 240,
+            rgba: [255, 0, 0, 255].repeat(400 * 240),
+        })
+        .unwrap();
+        let (framebuffer, frame) =
+            capture_entry_art(r#"api:background("art/bg.bmp")"#, wide, [400, 240], hole);
+        let [fw, fh] = frame.map(|v| v as f32);
+        let wide_pixel = |x: usize, y: usize| {
+            let index = (y * 400 + x) * 4;
+            framebuffer.rgba[index..index + 3].to_vec()
+        };
+        assert_eq!(wide_pixel(0, 0), [hole; 3]);
+        assert_eq!(wide_pixel(399, 239), [hole; 3]);
+        let quads = framebuffer.hd_quads();
+        assert_eq!(quads.len(), 1);
+        assert_eq!(quads[0].dst, [0.0, 0.0, 400.0, 240.0]);
+        assert_eq!(quads[0].uv, [0.0, 0.0, 400.0 / fw, 240.0 / fh]);
+        assert_eq!(quads[0].colour, [1.0; 3]);
+    }
+}

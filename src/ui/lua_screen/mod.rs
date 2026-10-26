@@ -172,6 +172,26 @@ impl Host {
         }
         Ok(self.images.get(entry).expect("just inserted"))
     }
+
+    /// The decoded pack image `entry` and, when `framebuffer` captures
+    /// replacements, the HD replacement `pack` carries for it drawn with
+    /// `opts`.
+    fn entry_art(
+        &mut self,
+        pack: &Pack,
+        entry: &str,
+        framebuffer: &Framebuffer,
+        opts: &Options,
+    ) -> Result<(&Decoded, draw::HdArt)> {
+        self.image(pack, entry)?;
+        let image = self.images.get(entry).expect("just loaded");
+        let hd = if framebuffer.captures_hd() {
+            self.assets.entry_replacement(pack, entry, image, opts.clut)
+        } else {
+            None
+        };
+        Ok((image, hd))
+    }
 }
 
 /// A save/load screen driven by a Lua script.
@@ -883,17 +903,20 @@ fn coord(value: i32) -> i32 {
     value.clamp(-DRAW_LIMIT, DRAW_LIMIT)
 }
 
-/// Draw one decoded image at `dst`, scaling `src` into it.
+/// Draw one decoded image at `dst`, scaling `src` into it, or its HD
+/// replacement `hd` in its place. A blended draw keeps the original art: the
+/// GPU quad cannot blend like the software sprite does.
 fn draw_image(
     framebuffer: &mut Framebuffer,
     image: &Decoded,
+    hd: draw::HdArt,
     src: Option<[i32; 4]>,
     dst: [i32; 4],
     opts: &Options,
 ) {
     let (width, height) = image.size();
     let src = src.unwrap_or([0, 0, width as i32, height as i32]);
-    match image {
+    let draw = |framebuffer: &mut Framebuffer| match image {
         Decoded::Rgba(image) => {
             if opts.blend == SpriteBlend::Opaque {
                 framebuffer.draw_rgba_sprite(image, src, dst, opts.brightness);
@@ -923,6 +946,20 @@ fn draw_image(
                 );
             }
         }
+    };
+    match hd.filter(|_| opts.blend == SpriteBlend::Opaque) {
+        Some(hd) => {
+            let (corners, uv) = draw::sprite_quad(&hd, src, dst, [false; 2]);
+            // An RGBA sprite ignores the tint; an indexed one mixes it in.
+            let tint = match image {
+                Decoded::Rgba(_) => Tint::White,
+                Decoded::Indexed(_) => opts.tint,
+            };
+            let scale = crate::render::brightness_scale(opts.brightness);
+            let colour = draw::sprite_colour(tint, scale);
+            framebuffer.draw_replaced(hd, corners, uv, colour, draw);
+        }
+        None => draw(framebuffer),
     }
 }
 
@@ -1423,23 +1460,50 @@ impl UserData for Api<'_> {
                     ..
                 } = api;
                 let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
-                let image = host.image(cx.pack, &entry).map_err(mlua::Error::external)?;
+                let (image, hd) = host
+                    .entry_art(cx.pack, &entry, framebuffer, &opts)
+                    .map_err(mlua::Error::external)?;
                 let (width, height) = image.size();
                 let full = [0, 0, framebuffer.width as i32, framebuffer.height as i32];
-                if let Decoded::Rgba(image) = image
-                    && width == framebuffer.width
-                    && height == framebuffer.height
-                    && opts.tint == Tint::White
-                    && opts.brightness == 2
-                {
-                    framebuffer.blit(image);
-                    return Ok(());
-                }
                 if let Decoded::Rgba(image) = image {
-                    framebuffer.draw_background(image, [0, 0], opts.tint.rgb());
+                    let blit = width == framebuffer.width
+                        && height == framebuffer.height
+                        && opts.tint == Tint::White
+                        && opts.brightness == 2;
+                    let tint = if blit { Tint::White } else { opts.tint };
+                    let draw = |framebuffer: &mut Framebuffer| {
+                        if blit {
+                            framebuffer.blit(image);
+                        } else {
+                            framebuffer.draw_background(image, [0, 0], tint.rgb());
+                        }
+                    };
+                    match hd {
+                        Some(hd) => {
+                            // The blit copies the image one to one; the
+                            // stretch covers the logical quad.
+                            let (corners, uv) = if blit {
+                                draw::sprite_quad(&hd, full, full, [false; 2])
+                            } else {
+                                draw::background_quad(&hd, image, framebuffer, [0, 0])
+                            };
+                            let colour = tint.rgb().map(|channel| f32::from(channel) / 255.0);
+                            // A background ignores the clip, so its quad must
+                            // too; the blit punches no hole of its own.
+                            let clip = framebuffer.clip.take();
+                            framebuffer.draw_replaced(hd, corners, uv, colour, |framebuffer| {
+                                draw(framebuffer);
+                                if blit {
+                                    framebuffer.punch_rect(full);
+                                }
+                            });
+                            framebuffer.clip = clip;
+                        }
+                        None => draw(framebuffer),
+                    }
                     return Ok(());
                 }
-                draw_image(framebuffer, image, None, full, &opts);
+                draw_image(framebuffer, image, hd, None, full, &opts);
                 Ok(())
             },
         );
@@ -1502,11 +1566,14 @@ impl UserData for Api<'_> {
                     ..
                 } = api;
                 let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
-                let image = host.image(cx.pack, &entry).map_err(mlua::Error::external)?;
+                let (image, hd) = host
+                    .entry_art(cx.pack, &entry, framebuffer, &opts)
+                    .map_err(mlua::Error::external)?;
                 let (width, height) = image.size();
                 draw_image(
                     framebuffer,
                     image,
+                    hd,
                     None,
                     [x, y, width as i32, height as i32],
                     &opts,
@@ -1542,10 +1609,13 @@ impl UserData for Api<'_> {
                     ..
                 } = api;
                 let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
-                let image = host.image(cx.pack, &entry).map_err(mlua::Error::external)?;
+                let (image, hd) = host
+                    .entry_art(cx.pack, &entry, framebuffer, &opts)
+                    .map_err(mlua::Error::external)?;
                 draw_image(
                     framebuffer,
                     image,
+                    hd,
                     Some([sx, sy, sw, sh]),
                     [dx, dy, dw, dh],
                     &opts,

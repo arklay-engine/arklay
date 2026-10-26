@@ -23,7 +23,7 @@ use crate::pack::{AssetClass, Pack};
 use crate::render::{Camera, EntityLight, EntityLightSource, Framebuffer};
 use crate::state::Image;
 
-use super::{Api, colour_rgb, colour_tint, coord, no_draw};
+use super::{Api, Decoded, colour_rgb, colour_tint, coord, no_draw};
 
 /// One loaded piece of art.
 enum Asset {
@@ -74,10 +74,13 @@ pub(super) struct Assets {
     /// the script's, so it is not budgeted.
     hd: RefCell<HashMap<(usize, usize), HdArt>>,
     hd_cells: RefCell<HashMap<(usize, [i32; 4]), HdArt>>,
+    /// The HD replacement of each `(entry, CLUT row)` the entry-based draws
+    /// (`api:background`, `api:sprite`, `api:sprite_region`) looked up.
+    hd_entries: RefCell<HashMap<(String, usize), HdArt>>,
 }
 
 /// A looked-up HD replacement of screen art; `None` when the pack has none.
-type HdArt = Option<Arc<Replacement>>;
+pub(super) type HdArt = Option<Arc<Replacement>>;
 
 impl Assets {
     /// Load `key`'s art with `load` once, returning its 1-based handle. The
@@ -207,6 +210,38 @@ impl Assets {
         found
     }
 
+    /// The HD replacement `pack` carries for `image`, decoded from pack
+    /// `entry`, drawn through CLUT row `row` (ignored but for an indexed
+    /// image), looked up once.
+    pub(super) fn entry_replacement(
+        &self,
+        pack: &Pack,
+        entry: &str,
+        image: &Decoded,
+        row: usize,
+    ) -> HdArt {
+        let row = match image {
+            Decoded::Indexed(_) => row,
+            Decoded::Rgba(_) => 0,
+        };
+        let key = (entry.to_string(), row);
+        if let Some(found) = self.hd_entries.borrow().get(&key) {
+            return found.clone();
+        }
+        let candidates = match image {
+            _ if pack.htexture().is_empty() => Vec::new(),
+            Decoded::Rgba(image) => htexture::image_candidates(image),
+            Decoded::Indexed(texture) => htexture::page_candidates(texture, row),
+        };
+        let found = if candidates.is_empty() {
+            None
+        } else {
+            htexture::replacement(pack, &candidates, || format!("{entry} (row {row})"))
+        };
+        self.hd_entries.borrow_mut().insert(key, found.clone());
+        found
+    }
+
     fn model(&self, handle: usize) -> mlua::Result<&Arc<Ivm>> {
         match self.get(handle)? {
             Asset::Model(model, _) => Ok(model),
@@ -263,7 +298,7 @@ fn crop(image: &Image, [x, y, w, h]: [i32; 4]) -> Option<Image> {
 /// The destination corners and normalised texture coordinates of a sprite
 /// drawing the `src` texels of art `hd` replaces into `dst`, flipped per
 /// axis by `mirror`.
-fn sprite_quad(
+pub(super) fn sprite_quad(
     hd: &Replacement,
     src: [i32; 4],
     dst: [i32; 4],
@@ -285,7 +320,7 @@ fn sprite_quad(
 
 /// A sprite's colour multiplier: `tint` and then `scale`, as the software
 /// sprite applies them.
-fn sprite_colour(tint: Tint, scale: u8) -> [f32; 3] {
+pub(super) fn sprite_colour(tint: Tint, scale: u8) -> [f32; 3] {
     tint.rgb()
         .map(|channel| f32::from(channel) / 255.0 * f32::from(scale) / 255.0)
 }
@@ -964,7 +999,7 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
 /// the logical 320x240 quad centred in the frame and repeats its edges past
 /// it, so the quad covers the whole framebuffer and samples past `0..=1`
 /// there.
-fn background_quad(
+pub(super) fn background_quad(
     hd: &Replacement,
     image: &Image,
     framebuffer: &Framebuffer,
