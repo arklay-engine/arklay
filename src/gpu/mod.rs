@@ -40,25 +40,17 @@
 //!   transparency and STP and takes each CLUT row's colours from a layer of
 //!   an array texture (`mesh.frag`).
 //!
-//! The 2D overlays (menus, messages, fades) stay software. The session draws
-//! them twice, once over a black scene and once over a white one; every
-//! overlay operation is affine in the destination, so the composite shader
-//! recovers `black + scene * (white - black)` exactly (see
-//! `composite.frag`).
-//!
-//! A 2D draw with an HD replacement (file pages, item pictures, map and
-//! menu art, PIX screens) still runs in software, but writes the hole grey
-//! (0 in the black pass, 255 in the white one) so the composite takes the
-//! "scene" there, and queues a quad ([`htexture::Overlay`]). Before
-//! compositing, the overlay pass draws the scene (or black, on app screens)
-//! into its own target with those quads alpha-blended on top, each kept
-//! only where its original draw wrote last (the overlay's coverage mask),
-//! and the composite samples that instead of the scene.
-//! Text and anything blended over the art stays software, so it lands on top.
-//! The examine viewer's model takes the same route as a quad of its own
-//! ([`htexture::QuadImage::Model`]): the CPU projects it, and the overlay
-//! pass first renders it into a target at the window's resolution
-//! (`ivm.vert` with `mesh.frag`), cleared to the flat colour under it.
+//! The 2D drawing (menus, messages, fades, HD art) is the 2D pass's
+//! ([`crate::draw2d`]): while the GPU renderer draws a frame, its
+//! [`Framebuffer`] records each 2D primitive as an item of a list instead of
+//! writing pixels, and the scene is an item of its own where the frame shows
+//! it. The pass draws the items in order into a target at the scene's
+//! resolution (`draw2d.frag`), which the composite scales into the window:
+//! the original art is sampled per frame pixel, so it keeps its pixels,
+//! while the scene, the pack's HD art and the examine viewer's model (which
+//! the CPU projects and the pass first renders into a target of its own,
+//! `ivm.vert` with `mesh.frag`) are drawn at the target's resolution. The
+//! software 3D rasterizer is never reached from this backend.
 //!
 //! The shaders are SPIR-V only for now, so the renderer needs a Vulkan
 //! driver. Device creation failing is not an error for the engine: it warns
@@ -77,10 +69,11 @@ use sdl3_sys::pixels::SDL_FColor;
 use sdl3_sys::rect::SDL_Rect;
 use sdl3_sys::video::{SDL_GetWindowSizeInPixels, SDL_Window};
 
+use crate::draw2d::{self, DrawList};
 use crate::htexture;
 use crate::model::{Texture8, Tmd};
 use crate::pack::Pack;
-use crate::render::{Framebuffer, GameplayScene, ImageGeneration, root_position};
+use crate::render::{Framebuffer, GameplayScene, root_position};
 use crate::state::Image;
 use crate::video;
 
@@ -92,14 +85,15 @@ const SPRITE_VERT: &[u8] = include_bytes!("shaders/sprite.vert.spv");
 const SPRITE_FRAG: &[u8] = include_bytes!("shaders/sprite.frag.spv");
 const COMPOSITE_VERT: &[u8] = include_bytes!("shaders/composite.vert.spv");
 const COMPOSITE_FRAG: &[u8] = include_bytes!("shaders/composite.frag.spv");
-const OVERLAY_FRAG: &[u8] = include_bytes!("shaders/overlay.frag.spv");
+const DRAW2D_VERT: &[u8] = include_bytes!("shaders/draw2d.vert.spv");
+const DRAW2D_FRAG: &[u8] = include_bytes!("shaders/draw2d.frag.spv");
 const UI_FRAG: &[u8] = include_bytes!("shaders/ui.frag.spv");
 const IVM_VERT: &[u8] = include_bytes!("shaders/ivm.vert.spv");
 
 /// Scene frames an unused upload stays resident before it is released.
 pub const EVICT_AFTER_FRAMES: u64 = 300;
 
-/// The rows of `overlay.frag`'s `lut` per recoloured quad: each index's
+/// The rows of `draw2d.frag`'s `lut` per recoloured item: each index's
 /// [`htexture::Recolour`] scale (alpha 1 when the index draws), luma weight
 /// and flat colour.
 const LUT_ROWS: u32 = 3;
@@ -112,14 +106,99 @@ const MAX_SCENE_SIDE: u32 = 8192;
 /// back only by vsync does not spin while the window is hidden.
 const HIDDEN_PRESENT_WAIT: std::time::Duration = std::time::Duration::from_millis(4);
 
-/// What [`GpuRenderer::composite`] uploads before drawing.
-enum Layers<'a> {
-    /// The overlay drawn over a black scene and over a white one.
-    Pair([&'a [u8]; 2]),
-    /// One opaque image, composited over itself.
-    Single(&'a [u8]),
-    /// The single image already in `layer_black`.
+/// What [`GpuRenderer::composite`] presents.
+enum Layer<'a> {
+    /// An image, uploaded into `layer` first.
+    Upload(&'a [u8]),
+    /// The image already in `layer`.
     Kept,
+    /// The 2D pass's `overlay_target`.
+    Target,
+}
+
+/// How a pipeline blends into its target.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Blend {
+    /// The fragment replaces the target.
+    None,
+    /// By the fragment's alpha. The target's alpha keeps the coverage, so a
+    /// target cleared to transparent ends up premultiplied.
+    Alpha,
+    /// A premultiplied fragment over the target.
+    Premultiplied,
+}
+
+/// One corner of a 2D pass item (`draw2d.vert`'s input, 96 bytes).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct ItemVertex {
+    /// In frame pixels.
+    position: [f32; 2],
+    uv: [f32; 2],
+    colour: [f32; 4],
+    /// [`draw2d::Map::dst`].
+    dst: [i32; 4],
+    /// [`draw2d::Map::src`] and [`draw2d::Map::atlas`].
+    source: [i32; 4],
+    /// `[x0, y0, x1, y1]` in frame pixels.
+    clip: [i32; 4],
+    /// The mode, the map's flags `<< 8`; the first `lut` row.
+    mode: [u32; 2],
+    /// A recoloured item's original texels per unit of `uv`.
+    index_frame: [f32; 2],
+}
+
+// SAFETY: only 4-byte fields, so no padding.
+unsafe impl scene::Plain for ItemVertex {}
+
+/// [`ItemVertex::mode`]s, as `draw2d.frag` reads them.
+const MODE_SOLID: u32 = 0;
+const MODE_SPRITE: u32 = 1;
+const MODE_ART: u32 = 2;
+const MODE_RECOLOURED: u32 = 3;
+const MODE_PREMULTIPLIED: u32 = 4;
+
+/// The atlas texture's fewest rows.
+const MIN_ATLAS_ROWS: u32 = 256;
+
+/// [`GpuRenderer::atlases`]' slots.
+const FRAME_ATLAS: usize = 0;
+const UI_ATLAS: usize = 1;
+
+/// An atlas texture of the 2D pass.
+#[derive(Clone, Copy)]
+struct AtlasTexture {
+    /// [`draw2d::ATLAS_WIDTH`] wide, `rows` high; null until used.
+    texture: *mut SDL_GPUTexture,
+    rows: u32,
+    /// The [`draw2d::Atlas::revision`] it holds and the rows uploaded.
+    revision: (u64, u32),
+}
+
+impl AtlasTexture {
+    const EMPTY: Self = Self {
+        texture: std::ptr::null_mut(),
+        rows: 0,
+        revision: (0, 0),
+    };
+}
+
+/// What an item of the 2D pass samples besides the atlas.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ItemImage {
+    None,
+    Scene,
+    /// The `model_targets` slot.
+    Model(usize),
+    /// The `overlay_images` key, and a recoloured item's `overlay_indices`
+    /// key.
+    Art(usize, Option<usize>),
+}
+
+/// An item's six vertices from `first`, and what it samples.
+struct ItemDraw {
+    image: ItemImage,
+    first: u32,
 }
 
 const LAYER_WIDTH: u32 = 320;
@@ -175,9 +254,6 @@ struct PageKey {
 struct Resident<T> {
     value: T,
     fingerprint: u64,
-    /// The owner's [`ImageGeneration`] of an image upload, which stands in
-    /// for `fingerprint` while it is unchanged.
-    generation: Option<ImageGeneration>,
     last_used: u64,
 }
 
@@ -223,9 +299,9 @@ struct Pipelines {
     sprite: *mut SDL_GPUGraphicsPipeline,
     /// [`Pipelines::sprite`] writing depth: the F4 debug geometry.
     sprite_depth: *mut SDL_GPUGraphicsPipeline,
-    /// The scene and a frame's 2D replacements into `overlay_target`.
-    overlay: *mut SDL_GPUGraphicsPipeline,
-    /// An overlay's projected models into their [`ModelTarget`]s.
+    /// The 2D pass's items into `overlay_target` or `ui_texture`.
+    draw2d: *mut SDL_GPUGraphicsPipeline,
+    /// The 2D pass's projected models into their [`ModelTarget`]s.
     model_opaque: *mut SDL_GPUGraphicsPipeline,
     model_blend: *mut SDL_GPUGraphicsPipeline,
     /// Present-only: built for the swapchain's format.
@@ -234,8 +310,8 @@ struct Pipelines {
     ui: *mut SDL_GPUGraphicsPipeline,
 }
 
-/// The target an overlay's model ([`htexture::QuadImage::Model`]) renders
-/// into before the overlay pass samples `colour`.
+/// The target a 2D pass's model ([`draw2d::Kind::Model`]) renders into
+/// before the pass samples `colour`.
 struct ModelTarget {
     colour: *mut SDL_GPUTexture,
     /// The multisampled colour target; null without MSAA.
@@ -244,7 +320,7 @@ struct ModelTarget {
     size: (u32, u32),
 }
 
-/// An overlay model to draw: its page, its run of vertices in
+/// A 2D pass model to draw: its page, its run of vertices in
 /// `model_buffer` and the `model_targets` slot it renders into.
 #[derive(Clone, Copy)]
 struct ModelRun {
@@ -317,22 +393,25 @@ pub struct GpuRenderer {
     mask_keys: *mut SDL_GPUTexture,
     /// A 1x1 cleared `mask_keys` (no mask) for the draws outside the scene.
     no_mask_keys: *mut SDL_GPUTexture,
-    layer_black: *mut SDL_GPUTexture,
-    layer_white: *mut SDL_GPUTexture,
-    /// The persistent staging buffer of both overlay layers, cycled per
-    /// present.
+    /// An image presented as the frame: a frame drawn in software, an HD
+    /// film frame.
+    layer: *mut SDL_GPUTexture,
+    /// The persistent staging buffer of `layer`, cycled per present.
     layer_transfer: *mut SDL_GPUTransferBuffer,
-    /// The layers' size: 320x240, or a wider aspect's canvas while a screen
-    /// presents one ([`GpuRenderer::ensure_layers`]).
+    /// `layer`'s size ([`GpuRenderer::ensure_layer`]).
     layer_size: (u32, u32),
     /// The [`VideoFrame::serial`](crate::hdfilm::VideoFrame::serial) of the
-    /// image `layer_black` holds alone, so a film frame shown across several
-    /// presents is uploaded once.
+    /// image `layer` holds, so a film frame shown across several presents is
+    /// uploaded once.
     layer_image: Option<u64>,
     /// The UI layer presented over the frame (the F1 debug menu at a wider
-    /// aspect), premultiplied; null until one is presented.
+    /// aspect), premultiplied: the 2D pass's target for its list; null until
+    /// one is presented.
     ui_texture: *mut SDL_GPUTexture,
+    /// The UI layer's frame size, which it is fitted to the window by.
     ui_size: (u32, u32),
+    /// `ui_texture`'s size in pixels.
+    ui_target_size: (u32, u32),
     /// Whether the present being recorded draws `ui_texture`.
     ui_shown: bool,
     /// The native-resolution GUI layer ([`crate::gui::Canvas`]), drawn
@@ -345,42 +424,40 @@ pub struct GpuRenderer {
     native_shown: bool,
     sprite_buffer: *mut SDL_GPUBuffer,
     sprite_capacity: u32,
-    /// The scene with a frame's 2D replacements drawn over it
-    /// ([`htexture::Overlay`]), composited in place of `scene_colour`; null
-    /// until a frame has any.
+    /// The 2D pass's target ([`crate::draw2d`]): the presented frame, with
+    /// the scene drawn into it; null until a frame is drawn.
     overlay_target: *mut SDL_GPUTexture,
     overlay_size: (u32, u32),
-    /// [`htexture::Overlay::coverage`] as an `R16_UINT` texture.
-    overlay_coverage: *mut SDL_GPUTexture,
-    overlay_coverage_size: [u32; 2],
+    /// The 2D pass's atlases ([`draw2d::Atlas`]): the frame's
+    /// ([`FRAME_ATLAS`]) and the UI layer's ([`UI_ATLAS`]).
+    atlases: [AtlasTexture; 2],
     overlay_buffer: *mut SDL_GPUBuffer,
     overlay_capacity: u32,
-    /// One per drawn model quad of the overlay, in order, kept for the next
+    /// One per drawn model item of the 2D pass, in order, kept for the next
     /// frame.
     model_targets: Vec<ModelTarget>,
     /// The overlay frame that last drew a model.
     model_frame: u64,
     model_buffer: *mut SDL_GPUBuffer,
     model_capacity: u32,
-    /// The 2D replacements' textures by [`htexture::Replacement`], kept
+    /// The HD art's textures by [`htexture::Replacement`], kept
     /// alive so the key is not reused, and the presented frame each was
     /// last drawn in. Unlike the scene's uploads they outlive gameplay, so
     /// menus and title screens do not upload them every frame.
     overlay_images: HashMap<usize, (Arc<htexture::Replacement>, *mut SDL_GPUTexture, u64)>,
-    /// The recoloured quads' original page indices as `R8_UINT` textures,
+    /// The recoloured items' original page indices as `R8_UINT` textures,
     /// by [`htexture::Indices`], kept like `overlay_images`.
     overlay_indices: HashMap<usize, (Arc<htexture::Indices>, *mut SDL_GPUTexture, u64)>,
     /// The frame's recolourings, [`LUT_ROWS`] rows of 256 per recoloured
-    /// quad (`overlay.frag`'s `lut`), and the rows it holds.
+    /// item (`draw2d.frag`'s `lut`), and the rows it holds.
     overlay_lut: *mut SDL_GPUTexture,
     overlay_lut_rows: u32,
-    /// Bound in place of the indices for a quad that is not recoloured.
+    /// Bound in place of the indices for an item that is not recoloured.
     no_indices: *mut SDL_GPUTexture,
-    /// The presented frame count the overlay's eviction runs on.
+    /// Bound in place of the image for an item that samples none.
+    no_image: *mut SDL_GPUTexture,
+    /// The presented frame count the 2D pass's eviction runs on.
     overlay_frame: u64,
-    /// Whether an overlay failure has been reported; it is not repeated
-    /// every frame.
-    overlay_warned: bool,
     meshes: HashMap<usize, Resident<MeshBuffer>>,
     pages: HashMap<PageKey, Resident<PageTextures>>,
     /// The named replacement each page key names, kept alive so its address
@@ -534,7 +611,7 @@ impl GpuRenderer {
                 mask_keys: std::ptr::null_mut(),
                 sprite: std::ptr::null_mut(),
                 sprite_depth: std::ptr::null_mut(),
-                overlay: std::ptr::null_mut(),
+                draw2d: std::ptr::null_mut(),
                 model_opaque: std::ptr::null_mut(),
                 model_blend: std::ptr::null_mut(),
                 composite: std::ptr::null_mut(),
@@ -547,13 +624,13 @@ impl GpuRenderer {
             scene_depth: std::ptr::null_mut(),
             mask_keys: std::ptr::null_mut(),
             no_mask_keys: std::ptr::null_mut(),
-            layer_black: std::ptr::null_mut(),
-            layer_white: std::ptr::null_mut(),
+            layer: std::ptr::null_mut(),
             layer_transfer: std::ptr::null_mut(),
             layer_size: (0, 0),
             layer_image: None,
             ui_texture: std::ptr::null_mut(),
             ui_size: (0, 0),
+            ui_target_size: (0, 0),
             ui_shown: false,
             native_texture: std::ptr::null_mut(),
             native_size: (0, 0),
@@ -563,21 +640,20 @@ impl GpuRenderer {
             sprite_capacity: 0,
             overlay_target: std::ptr::null_mut(),
             overlay_size: (0, 0),
+            atlases: [AtlasTexture::EMPTY; 2],
             overlay_buffer: std::ptr::null_mut(),
             overlay_capacity: 0,
             model_targets: Vec::new(),
             model_frame: 0,
             model_buffer: std::ptr::null_mut(),
             model_capacity: 0,
-            overlay_coverage: std::ptr::null_mut(),
-            overlay_coverage_size: [0, 0],
             overlay_images: HashMap::new(),
             overlay_indices: HashMap::new(),
             overlay_lut: std::ptr::null_mut(),
             overlay_lut_rows: 0,
             no_indices: std::ptr::null_mut(),
+            no_image: std::ptr::null_mut(),
             overlay_frame: 0,
-            overlay_warned: false,
             meshes: HashMap::new(),
             pages: HashMap::new(),
             page_keeps: HashMap::new(),
@@ -607,7 +683,7 @@ impl GpuRenderer {
         };
         renderer.samples = renderer.sample_count(msaa);
         renderer.create_scene_targets()?;
-        renderer.ensure_layers(LAYER_WIDTH, LAYER_HEIGHT)?;
+        renderer.ensure_layer(LAYER_WIDTH, LAYER_HEIGHT)?;
         renderer.sampler = renderer.create_sampler(SDL_GPU_FILTER_NEAREST)?;
         renderer.linear = renderer.create_sampler(SDL_GPU_FILTER_LINEAR)?;
         renderer.no_hd = renderer.array_texture(SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, 1, 1, 1)?;
@@ -623,6 +699,12 @@ impl GpuRenderer {
             1,
             SDL_GPU_TEXTUREUSAGE_SAMPLER,
         )?;
+        renderer.no_image = renderer.texture(
+            SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+            1,
+            1,
+            SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        )?;
         renderer.ensure_overlay_lut(LUT_ROWS)?;
         renderer.no_mask_keys = renderer.mask_key_texture(1, 1)?;
         renderer.build_scene_pipelines()?;
@@ -630,35 +712,26 @@ impl GpuRenderer {
         Ok(renderer)
     }
 
-    /// (Re)create both overlay layers and their staging buffer at `width` x
-    /// `height` unless they already have that size. The released ones stay
-    /// alive until the presents still reading them finish.
-    fn ensure_layers(&mut self, width: u32, height: u32) -> Result<()> {
+    /// (Re)create `layer` and its staging buffer at `width` x `height`
+    /// unless they already have that size. The released ones stay alive
+    /// until the presents still reading them finish.
+    fn ensure_layer(&mut self, width: u32, height: u32) -> Result<()> {
         if self.layer_size == (width, height) && !self.layer_transfer.is_null() {
             return Ok(());
         }
         unsafe {
-            for texture in [self.layer_black, self.layer_white] {
-                if !texture.is_null() {
-                    SDL_ReleaseGPUTexture(self.device, texture);
-                }
+            if !self.layer.is_null() {
+                SDL_ReleaseGPUTexture(self.device, self.layer);
             }
             if !self.layer_transfer.is_null() {
                 SDL_ReleaseGPUTransferBuffer(self.device, self.layer_transfer);
             }
         }
-        self.layer_black = std::ptr::null_mut();
-        self.layer_white = std::ptr::null_mut();
+        self.layer = std::ptr::null_mut();
         self.layer_transfer = std::ptr::null_mut();
         self.layer_size = (0, 0);
         self.layer_image = None;
-        self.layer_black = self.texture(
-            SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-            width,
-            height,
-            SDL_GPU_TEXTUREUSAGE_SAMPLER,
-        )?;
-        self.layer_white = self.texture(
+        self.layer = self.texture(
             SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
             width,
             height,
@@ -666,7 +739,7 @@ impl GpuRenderer {
         )?;
         let transfer_info = SDL_GPUTransferBufferCreateInfo {
             usage: SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-            size: width * height * 4 * 2,
+            size: width * height * 4,
             ..Default::default()
         };
         self.layer_transfer = unsafe { SDL_CreateGPUTransferBuffer(self.device, &transfer_info) };
@@ -912,7 +985,7 @@ impl GpuRenderer {
         stride: u32,
         attributes: &[SDL_GPUVertexAttribute],
         cull: SDL_GPUCullMode,
-        blend: bool,
+        blend: Blend,
         depth: Option<(SDL_GPUTextureFormat, bool)>,
         colour_format: Option<SDL_GPUTextureFormat>,
         samples: SDL_GPUSampleCount,
@@ -923,19 +996,22 @@ impl GpuRenderer {
             input_rate: SDL_GPU_VERTEXINPUTRATE_VERTEX,
             instance_step_rate: 0,
         };
-        let blend_state = if blend {
-            SDL_GPUColorTargetBlendState {
-                src_color_blendfactor: SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+        let blend_state = match blend {
+            Blend::None => SDL_GPUColorTargetBlendState::default(),
+            Blend::Alpha | Blend::Premultiplied => SDL_GPUColorTargetBlendState {
+                src_color_blendfactor: if blend == Blend::Alpha {
+                    SDL_GPU_BLENDFACTOR_SRC_ALPHA
+                } else {
+                    SDL_GPU_BLENDFACTOR_ONE
+                },
                 dst_color_blendfactor: SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                 color_blend_op: SDL_GPU_BLENDOP_ADD,
-                src_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ZERO,
-                dst_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ONE,
+                src_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ONE,
+                dst_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                 alpha_blend_op: SDL_GPU_BLENDOP_ADD,
                 enable_blend: true,
                 ..Default::default()
-            }
-        } else {
-            SDL_GPUColorTargetBlendState::default()
+            },
         };
         let colour_target = SDL_GPUColorTargetDescription {
             format: colour_format.unwrap_or(SDL_GPU_TEXTUREFORMAT_INVALID),
@@ -1059,7 +1135,11 @@ impl GpuRenderer {
                 sprite_stride,
                 &sprite_attributes,
                 SDL_GPU_CULLMODE_NONE,
-                colour.is_some(),
+                if colour.is_some() {
+                    Blend::Alpha
+                } else {
+                    Blend::None
+                },
                 Some(depth),
                 colour,
                 samples,
@@ -1067,8 +1147,8 @@ impl GpuRenderer {
         };
         // Each pipeline is stored as soon as it exists, so a later failure
         // still releases it (via `Drop`).
-        self.pipelines.mesh_opaque = mesh(self, false, true)?;
-        self.pipelines.mesh_blend = mesh(self, true, false)?;
+        self.pipelines.mesh_opaque = mesh(self, Blend::None, true)?;
+        self.pipelines.mesh_blend = mesh(self, Blend::Alpha, false)?;
         self.pipelines.mask_keys = sprite(
             self,
             (SDL_GPU_TEXTUREFORMAT_D16_UNORM, true),
@@ -1100,16 +1180,27 @@ impl GpuRenderer {
                 this.samples,
             )
         };
-        self.pipelines.model_opaque = model(self, false, true)?;
-        self.pipelines.model_blend = model(self, true, false)?;
-        let overlay_frag = self.shader(OVERLAY_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 4, 1)?;
-        self.pipelines.overlay = self.pipeline(
-            sprite_vert.shader,
-            overlay_frag.shader,
-            sprite_stride,
-            &sprite_attributes,
+        self.pipelines.model_opaque = model(self, Blend::None, true)?;
+        self.pipelines.model_blend = model(self, Blend::Alpha, false)?;
+        let item_attributes = [
+            attribute(0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 0),
+            attribute(1, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 8),
+            attribute(2, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, 16),
+            attribute(3, SDL_GPU_VERTEXELEMENTFORMAT_INT4, 32),
+            attribute(4, SDL_GPU_VERTEXELEMENTFORMAT_INT4, 48),
+            attribute(5, SDL_GPU_VERTEXELEMENTFORMAT_INT4, 64),
+            attribute(6, SDL_GPU_VERTEXELEMENTFORMAT_UINT2, 80),
+            attribute(7, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 88),
+        ];
+        let draw2d_vert = self.shader(DRAW2D_VERT, SDL_GPU_SHADERSTAGE_VERTEX, 0, 1)?;
+        let draw2d_frag = self.shader(DRAW2D_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 4, 1)?;
+        self.pipelines.draw2d = self.pipeline(
+            draw2d_vert.shader,
+            draw2d_frag.shader,
+            std::mem::size_of::<ItemVertex>() as u32,
+            &item_attributes,
             SDL_GPU_CULLMODE_NONE,
-            true,
+            Blend::Premultiplied,
             None,
             Some(colour),
             SDL_GPU_SAMPLECOUNT_1,
@@ -1122,14 +1213,14 @@ impl GpuRenderer {
         format: SDL_GPUTextureFormat,
     ) -> Result<*mut SDL_GPUGraphicsPipeline> {
         let vertex = self.shader(COMPOSITE_VERT, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0)?;
-        let fragment = self.shader(COMPOSITE_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 3, 0)?;
+        let fragment = self.shader(COMPOSITE_FRAG, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0)?;
         self.pipeline(
             vertex.shader,
             fragment.shader,
             0,
             &[],
             SDL_GPU_CULLMODE_NONE,
-            false,
+            Blend::None,
             None,
             Some(format),
             SDL_GPU_SAMPLECOUNT_1,
@@ -1145,7 +1236,7 @@ impl GpuRenderer {
             0,
             &[],
             SDL_GPU_CULLMODE_NONE,
-            true,
+            Blend::Alpha,
             None,
             Some(format),
             SDL_GPU_SAMPLECOUNT_1,
@@ -1351,7 +1442,6 @@ impl GpuRenderer {
             Resident {
                 value,
                 fingerprint,
-                generation: None,
                 last_used: self.frame,
             },
         ) {
@@ -1454,7 +1544,6 @@ impl GpuRenderer {
             Resident {
                 value,
                 fingerprint,
-                generation: None,
                 last_used: self.frame,
             },
         ) {
@@ -1641,14 +1730,12 @@ impl GpuRenderer {
     }
 
     /// Make an RGBA image, or the HD replacement `pack` carries for it,
-    /// resident. An image its owner tags with a `generation` is not
-    /// fingerprinted again while the generation is unchanged.
+    /// resident.
     fn ensure_image(
         &mut self,
         copy: *mut SDL_GPUCopyPass,
         image: &Image,
         background: Option<&Image>,
-        generation: Option<ImageGeneration>,
         pack: Option<&Pack>,
     ) -> Result<Option<ImageTexture>> {
         if image.width == 0
@@ -1658,18 +1745,10 @@ impl GpuRenderer {
             return Ok(None);
         }
         let key = image as *const Image as usize;
-        if let Some(entry) = self.images.get_mut(&key)
-            && generation.is_some()
-            && entry.generation == generation
-        {
-            entry.last_used = self.frame;
-            return Ok(Some(entry.value));
-        }
         let fingerprint = scene::image_fingerprint(image);
         if let Some(entry) = self.images.get_mut(&key)
             && entry.fingerprint == fingerprint
         {
-            entry.generation = generation;
             entry.last_used = self.frame;
             return Ok(Some(entry.value));
         }
@@ -1698,7 +1777,6 @@ impl GpuRenderer {
             Resident {
                 value,
                 fingerprint,
-                generation,
                 last_used: self.frame,
             },
         ) {
@@ -1883,7 +1961,7 @@ impl GpuRenderer {
                 let key = run.image as *const Image as usize;
                 if let std::collections::hash_map::Entry::Vacant(slot) = sprite_textures.entry(key)
                     && let Some(texture) =
-                        self.ensure_image(copy, run.image, run.background, run.generation, pack)?
+                        self.ensure_image(copy, run.image, run.background, pack)?
                 {
                     slot.insert(texture);
                 }
@@ -1906,11 +1984,14 @@ impl GpuRenderer {
         unsafe { SDL_EndGPUCopyPass(copy) };
         let (meshes, sprites, sprite_textures) = uploads?;
 
+        // Without a background the scene is transparent where nothing is
+        // drawn, so the 2D pass shows what it drew under it (the DIED
+        // screen's backdrop).
         let clear_color = SDL_FColor {
             r: 0.0,
             g: 0.0,
             b: 0.0,
-            a: 1.0,
+            a: if scene.background.is_some() { 1.0 } else { 0.0 },
         };
         // With MSAA the samples resolve into the target the composite reads.
         let colour = if self.scene_samples.is_null() {
@@ -2115,86 +2196,63 @@ impl GpuRenderer {
         Ok(())
     }
 
-    /// Composite the software layers over the scene and present.
+    /// Present `frame`, and `ui` over it.
     ///
-    /// `black` is the frame drawn over a black scene and `white` the same
-    /// frame over a white one; `None` (a screen with no gameplay scene under
-    /// it) shows `black` as is. `ui`, a premultiplied RGBA canvas of the
-    /// aspect's full size (the F1 debug menu at a wider aspect), is blended
-    /// over the result across the rectangle that canvas fits.
-    pub fn present(
-        &mut self,
-        black: &Framebuffer,
-        white: Option<&Framebuffer>,
-        ui: Option<&Framebuffer>,
-    ) -> Result<()> {
+    /// A frame drawn for the GPU ([`Framebuffer::record`]) is drawn by the
+    /// 2D pass ([`crate::draw2d`]), with the gameplay scene wherever it
+    /// shows it; a frame drawn in software (a capture driver's) is presented
+    /// as its pixels. `ui`, a canvas of the aspect's full size (the F1 debug
+    /// menu at a wider aspect), is drawn the same way into a clear layer
+    /// and blended over the frame across the rectangle that canvas fits.
+    pub fn present(&mut self, frame: &Framebuffer, ui: Option<&Framebuffer>) -> Result<()> {
         if self.window.is_null() || self.pipelines.composite.is_null() {
             bail!("the GPU renderer has no window to present to");
         }
+        // A 320x240 frame, or a wider aspect's full-height canvas.
+        let size = (frame.width, frame.height);
+        if size.1 != LAYER_HEIGHT || size.0 < LAYER_WIDTH || size.0 > video::MAX_CANVAS_WIDTH {
+            bail!(
+                "expected a {LAYER_WIDTH}x{LAYER_HEIGHT} framebuffer, got {}x{}",
+                size.0,
+                size.1
+            );
+        }
+        self.overlay_frame += 1;
         self.ui_shown = false;
+        if frame.list().is_some_and(|list| !list.shows_scene()) {
+            // No scene was recorded to size the targets this frame: follow
+            // the window before the UI layer is sized from them.
+            self.follow_window()?;
+        }
         if let Some(ui) = ui {
-            self.upload_ui(ui)?;
+            self.draw_ui(ui)?;
             self.ui_shown = true;
         }
-        // A 320x240 frame, or a wider aspect's full-height canvas (which
-        // never shows the gameplay scene, so it has a white layer only for
-        // its HD replacements).
-        let (layer_w, layer_h) = (black.width, black.height);
-        let layer_bytes = layer_w * layer_h * 4;
-        let overlay = black
-            .hd
-            .as_deref()
-            .filter(|overlay| white.is_some() && !overlay.quads.is_empty());
-        let canvas = layer_h == LAYER_HEIGHT
-            && layer_w > LAYER_WIDTH
-            && (white.is_none() || overlay.is_some());
-        for layer in std::iter::once(black).chain(white) {
-            if !(canvas || (layer.width == LAYER_WIDTH && layer.height == LAYER_HEIGHT))
-                || layer.width != layer_w
-                || layer.height != layer_h
-                || layer.rgba.len() != layer_bytes as usize
-            {
-                bail!(
-                    "expected a {LAYER_WIDTH}x{LAYER_HEIGHT} framebuffer, got {}x{}",
-                    layer.width,
-                    layer.height
-                );
+        let layer = match frame.list() {
+            Some(list) => {
+                self.draw_frame(list)?;
+                Layer::Target
             }
-        }
+            None => {
+                if frame.rgba.len() != size.0 as usize * size.1 as usize * 4 {
+                    bail!(
+                        "a {}x{} frame of {} bytes",
+                        size.0,
+                        size.1,
+                        frame.rgba.len()
+                    );
+                }
+                Layer::Upload(&frame.rgba)
+            }
+        };
+        self.evict_overlay_images();
         // The whole 4:3 frame is composited into the viewport that puts its
         // visible band on the fitted rectangle, and the scissor crops the
         // rest (the band is the whole frame at 4:3).
-        let shown = video::shown(black.width, black.height, black.view);
-        let mut layers = Layers::Pair([&black.rgba, &white.unwrap_or(black).rgba]);
-        self.overlay_frame += 1;
-        let scene = match overlay {
-            Some(overlay) => {
-                if !overlay.scene {
-                    // No scene was recorded to size the targets this frame.
-                    self.follow_window()?;
-                }
-                match self.draw_overlay(overlay, (layer_w, layer_h)) {
-                    Ok(()) => self.overlay_target,
-                    Err(err) => {
-                        if !self.overlay_warned {
-                            eprintln!("gpu: HD 2D replacements not drawn: {err:#}");
-                            self.overlay_warned = true;
-                        }
-                        // The holes show the scene, or black (`black` as is)
-                        // where none lies under them; the frame goes on.
-                        if !overlay.scene {
-                            layers = Layers::Single(&black.rgba);
-                        }
-                        self.scene_colour
-                    }
-                }
-            }
-            None => self.scene_colour,
-        };
-        self.evict_overlay_images();
-        self.composite(layers, (layer_w, layer_h), scene, |width, height| {
+        let shown = video::shown(frame.width, frame.height, frame.view);
+        self.composite(layer, size, |width, height| {
             let fit = video::fit_size(width, height, shown.width, shown.height);
-            (video::frame_viewport(fit, shown, black.height), fit)
+            (video::frame_viewport(fit, shown, frame.height), fit)
         })
     }
 
@@ -2222,21 +2280,16 @@ impl GpuRenderer {
         }
         self.ui_shown = false;
         let shown = video::shown(frame.width, frame.height, frame.view);
-        let layers = if self.layer_image == Some(serial) && self.layer_size == (width, height) {
-            Layers::Kept
+        let layer = if self.layer_image == Some(serial) && self.layer_size == (width, height) {
+            Layer::Kept
         } else {
-            Layers::Single(rgba)
+            Layer::Upload(rgba)
         };
-        self.composite(
-            layers,
-            (width, height),
-            self.scene_colour,
-            |target_w, target_h| {
-                let fit = video::fit_size(target_w, target_h, shown.width, shown.height);
-                let frame_viewport = video::frame_viewport(fit, shown, frame.height);
-                (video::image_viewport(frame_viewport, width, height), fit)
-            },
-        )?;
+        self.composite(layer, (width, height), |target_w, target_h| {
+            let fit = video::fit_size(target_w, target_h, shown.width, shown.height);
+            let frame_viewport = video::frame_viewport(fit, shown, frame.height);
+            (video::image_viewport(frame_viewport, width, height), fit)
+        })?;
         self.layer_image = Some(serial);
         Ok(())
     }
@@ -2301,33 +2354,84 @@ impl GpuRenderer {
         Ok(())
     }
 
-    /// Upload `ui` into `ui_texture`, recreating it on a size change.
+    /// `texture`, `current` in size, if it is `size`; otherwise a new `size`
+    /// target of the 2D pass, `texture` released once it exists.
+    fn refit_target(
+        &self,
+        texture: *mut SDL_GPUTexture,
+        current: (u32, u32),
+        size: (u32, u32),
+    ) -> Result<*mut SDL_GPUTexture> {
+        if !texture.is_null() && current == size {
+            return Ok(texture);
+        }
+        let fresh = self.texture(
+            SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+            size.0,
+            size.1,
+            SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
+        )?;
+        if !texture.is_null() {
+            unsafe { SDL_ReleaseGPUTexture(self.device, texture) };
+        }
+        Ok(fresh)
+    }
+
+    /// The size the 2D pass draws a `width` x `height` frame at: the scene
+    /// target's resolution.
+    fn pass_size(&self, (width, height): (u32, u32)) -> (u32, u32) {
+        let (scene_w, scene_h) = self.scene_size;
+        let side = |scene: u32, frame: u32, layer: u32| {
+            (scene as u64 * frame as u64 / layer as u64).clamp(1, MAX_SCENE_SIDE as u64) as u32
+        };
+        (
+            side(scene_w, width, LAYER_WIDTH),
+            side(scene_h, height, LAYER_HEIGHT),
+        )
+    }
+
+    /// Draw `list` into `overlay_target` (tests and tools; presenting a
+    /// recorded frame draws it).
+    pub fn draw_frame(&mut self, list: &DrawList) -> Result<()> {
+        if !list.shows_scene() {
+            // No scene was recorded to size the targets this frame.
+            self.follow_window()?;
+        }
+        let size = self.pass_size((list.size[0], list.size[1]));
+        self.overlay_target = self.refit_target(self.overlay_target, self.overlay_size, size)?;
+        self.overlay_size = size;
+        self.draw_list(list, FRAME_ATLAS, self.overlay_target, size, true)
+    }
+
+    /// Draw `ui` into `ui_texture`: its list, or its pixels.
+    fn draw_ui(&mut self, ui: &Framebuffer) -> Result<()> {
+        let frame = (ui.width, ui.height);
+        if frame.0 == 0 || frame.1 == 0 || frame.0 > video::MAX_CANVAS_WIDTH {
+            bail!("unexpected {}x{} UI layer", frame.0, frame.1);
+        }
+        let size = match ui.list() {
+            Some(_) => self.pass_size(frame),
+            None => frame,
+        };
+        self.ui_texture = self.refit_target(self.ui_texture, self.ui_target_size, size)?;
+        self.ui_target_size = size;
+        self.ui_size = frame;
+        match ui.list() {
+            Some(list) => self.draw_list(list, UI_ATLAS, self.ui_texture, size, false),
+            None => self.upload_ui(ui),
+        }
+    }
+
+    /// Upload `ui`'s premultiplied pixels into `ui_texture`, which is their
+    /// size: the software backend's UI layer (its coverage), presented here
+    /// after a session falls back to software.
     fn upload_ui(&mut self, ui: &Framebuffer) -> Result<()> {
-        let size = (ui.width, ui.height);
-        if size.0 == 0
-            || size.1 == 0
-            || size.0 > video::MAX_CANVAS_WIDTH
-            || ui.rgba.len() != size.0 as usize * size.1 as usize * 4
-        {
+        let (width, height) = (ui.width, ui.height);
+        if ui.rgba.len() != width as usize * height as usize * 4 {
             bail!(
-                "unexpected {}x{} UI layer of {} bytes",
-                size.0,
-                size.1,
+                "unexpected {width}x{height} UI layer of {} bytes",
                 ui.rgba.len()
             );
-        }
-        if self.ui_texture.is_null() || self.ui_size != size {
-            if !self.ui_texture.is_null() {
-                unsafe { SDL_ReleaseGPUTexture(self.device, self.ui_texture) };
-                self.ui_texture = std::ptr::null_mut();
-            }
-            self.ui_texture = self.texture(
-                SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-                size.0,
-                size.1,
-                SDL_GPU_TEXTUREUSAGE_SAMPLER,
-            )?;
-            self.ui_size = size;
         }
         let command = self.command_buffer()?;
         let copy = unsafe { SDL_BeginGPUCopyPass(command) };
@@ -2335,7 +2439,7 @@ impl GpuRenderer {
             unsafe { SDL_CancelGPUCommandBuffer(command) };
             bail!("SDL_BeginGPUCopyPass failed: {}", sdl_error());
         }
-        let uploaded = self.upload_texture(copy, self.ui_texture, size.0, size.1, &ui.rgba);
+        let uploaded = self.upload_texture(copy, self.ui_texture, width, height, &ui.rgba);
         unsafe { SDL_EndGPUCopyPass(copy) };
         if let Err(err) = uploaded {
             unsafe { SDL_CancelGPUCommandBuffer(command) };
@@ -2344,58 +2448,24 @@ impl GpuRenderer {
         Self::submit(command)
     }
 
-    /// Draw `overlay_target` for a `layer_w` x `layer_h` frame: the scene
-    /// (or black when `overlay` has none under it) with `overlay`'s HD
-    /// replacements over it in order, each cut to its clip.
-    fn draw_overlay(
+    /// Draw `list`'s items in order into `target`, a `size` 2D pass target,
+    /// over black (`opaque`) or clear, its sprites from atlas `slot`.
+    fn draw_list(
         &mut self,
-        overlay: &htexture::Overlay,
-        (layer_w, layer_h): (u32, u32),
+        list: &DrawList,
+        slot: usize,
+        target: *mut SDL_GPUTexture,
+        size: (u32, u32),
+        opaque: bool,
     ) -> Result<()> {
-        let (scene_w, scene_h) = self.scene_size;
-        let size = (
-            (scene_w as u64 * layer_w as u64 / LAYER_WIDTH as u64).clamp(1, MAX_SCENE_SIDE as u64)
-                as u32,
-            scene_h.max(1),
-        );
-        if self.overlay_target.is_null() || self.overlay_size != size {
-            if !self.overlay_target.is_null() {
-                unsafe { SDL_ReleaseGPUTexture(self.device, self.overlay_target) };
-                self.overlay_target = std::ptr::null_mut();
-            }
-            self.overlay_target = self.texture(
-                SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-                size.0,
-                size.1,
-                SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
-            )?;
-            self.overlay_size = size;
-        }
-        let [cover_w, cover_h] = overlay.size;
-        if cover_w == 0
-            || cover_h == 0
-            || overlay.coverage.len() != cover_w as usize * cover_h as usize
-        {
-            bail!("a {cover_w}x{cover_h} overlay without its coverage");
-        }
-        if self.overlay_coverage.is_null() || self.overlay_coverage_size != overlay.size {
-            if !self.overlay_coverage.is_null() {
-                unsafe { SDL_ReleaseGPUTexture(self.device, self.overlay_coverage) };
-                self.overlay_coverage = std::ptr::null_mut();
-            }
-            self.overlay_coverage = self.texture(
-                SDL_GPU_TEXTUREFORMAT_R16_UINT,
-                cover_w,
-                cover_h,
-                SDL_GPU_TEXTUREUSAGE_SAMPLER,
-            )?;
-            self.overlay_coverage_size = overlay.size;
+        if let Some(error) = list.error {
+            bail!("the 2D pass cannot draw the frame: {error}");
         }
         let command = self.command_buffer()?;
         let mut fresh = Vec::new();
         // The models' pages join the scene's residency.
         self.fresh.clear();
-        let recorded = self.record_overlay(command, overlay, (layer_w, layer_h), &mut fresh);
+        let recorded = self.record_list(command, list, slot, (target, size, opaque), &mut fresh);
         let submitted = match recorded {
             Ok(()) => Self::submit(command),
             Err(err) => {
@@ -2408,6 +2478,7 @@ impl GpuRenderer {
         } else {
             // Their uploads were cancelled with the command buffer.
             self.forget_fresh();
+            self.atlases[slot].revision = (0, 0);
             for key in fresh {
                 let texture = match self.overlay_images.remove(&key) {
                     Some((_, texture, _)) => Some(texture),
@@ -2422,6 +2493,95 @@ impl GpuRenderer {
             }
         }
         submitted
+    }
+
+    /// Make atlas `slot` hold at least `rows` rows (a power of two),
+    /// forgetting what it holds when it grows.
+    fn ensure_atlas(&mut self, slot: usize, rows: u32) -> Result<()> {
+        let atlas = self.atlases[slot];
+        if !atlas.texture.is_null() && atlas.rows >= rows {
+            return Ok(());
+        }
+        let rows = rows
+            .next_power_of_two()
+            .clamp(MIN_ATLAS_ROWS, draw2d::ATLAS_MAX_HEIGHT);
+        let texture = self.texture(
+            SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+            draw2d::ATLAS_WIDTH,
+            rows,
+            SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        )?;
+        if !atlas.texture.is_null() {
+            unsafe { SDL_ReleaseGPUTexture(self.device, atlas.texture) };
+        }
+        self.atlases[slot] = AtlasTexture {
+            texture,
+            rows,
+            revision: (0, 0),
+        };
+        Ok(())
+    }
+
+    /// Upload `atlas` into atlas `slot` unless it already holds it.
+    fn upload_atlas(
+        &mut self,
+        copy: *mut SDL_GPUCopyPass,
+        slot: usize,
+        atlas: &draw2d::Atlas,
+    ) -> Result<()> {
+        let stride = draw2d::ATLAS_WIDTH as usize * 4;
+        let rows = atlas.height.min((atlas.texels.len() / stride) as u32);
+        if rows == 0 {
+            return Ok(());
+        }
+        self.ensure_atlas(slot, rows)?;
+        // The texels are the ones uploaded while the revision holds; a
+        // rewound frame using fewer rows needs nothing new.
+        let (revision, held) = self.atlases[slot].revision;
+        if revision == atlas.revision && held >= rows {
+            return Ok(());
+        }
+        let bytes = &atlas.texels[..rows as usize * stride];
+        self.upload_texture(
+            copy,
+            self.atlases[slot].texture,
+            draw2d::ATLAS_WIDTH,
+            rows,
+            bytes,
+        )?;
+        self.atlases[slot].revision = (atlas.revision, rows);
+        Ok(())
+    }
+
+    /// Upload `replacement`'s image unless it is resident, noting a new
+    /// texture in `fresh`.
+    fn ensure_overlay_image(
+        &mut self,
+        copy: *mut SDL_GPUCopyPass,
+        replacement: &Arc<htexture::Replacement>,
+        fresh: &mut Vec<usize>,
+    ) -> Result<()> {
+        let key = Arc::as_ptr(replacement) as usize;
+        if let Some(entry) = self.overlay_images.get_mut(&key) {
+            entry.2 = self.overlay_frame;
+            return Ok(());
+        }
+        let image = &replacement.image;
+        let texture = self.texture(
+            SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+            image.width,
+            image.height,
+            SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        )?;
+        let bytes = &image.rgba[..(image.width * image.height * 4) as usize];
+        if let Err(err) = self.upload_texture(copy, texture, image.width, image.height, bytes) {
+            unsafe { SDL_ReleaseGPUTexture(self.device, texture) };
+            return Err(err);
+        }
+        self.overlay_images
+            .insert(key, (replacement.clone(), texture, self.overlay_frame));
+        fresh.push(key);
+        Ok(())
     }
 
     /// Make `model_targets[index]` exist at `size`.
@@ -2493,21 +2653,24 @@ impl GpuRenderer {
         }
     }
 
-    /// Record a pass drawing `model`, whose vertices are `run`'s in
-    /// `model_buffer`, into `target` over its backdrop: the opaque texels,
-    /// then the blended ones.
+    /// Record a pass drawing a model, whose vertices are `run`'s in
+    /// `model_buffer`, into `target` cleared to transparent, premultiplied:
+    /// the opaque texels, then the blended ones.
     fn render_model(
         &self,
         command: *mut SDL_GPUCommandBuffer,
         target: &ModelTarget,
-        model: &htexture::Model,
         run: ModelRun,
     ) -> Result<()> {
         let ModelRun {
             page, first, count, ..
         } = run;
-        let [r, g, b] = model.backdrop.map(|channel| f32::from(channel) / 255.0);
-        let clear_color = SDL_FColor { r, g, b, a: 1.0 };
+        let clear_color = SDL_FColor {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.0,
+        };
         // With MSAA the samples resolve into the target the overlay samples.
         let colour = if target.samples.is_null() {
             SDL_GPUColorTargetInfo {
@@ -2663,32 +2826,63 @@ impl GpuRenderer {
         Ok(())
     }
 
-    /// Record [`GpuRenderer::draw_overlay`]'s uploads and pass into
+    /// Record [`GpuRenderer::draw_list`]'s uploads and passes into
     /// `command`, noting the textures it creates in `fresh`.
-    fn record_overlay(
+    fn record_list(
         &mut self,
         command: *mut SDL_GPUCommandBuffer,
-        overlay: &htexture::Overlay,
-        (layer_w, layer_h): (u32, u32),
+        list: &DrawList,
+        slot: usize,
+        (target, (target_w, target_h), opaque): (*mut SDL_GPUTexture, (u32, u32), bool),
         fresh: &mut Vec<usize>,
     ) -> Result<()> {
+        let [frame_w, frame_h] = list.size.map(|side| side.max(1));
         let copy = unsafe { SDL_BeginGPUCopyPass(command) };
         if copy.is_null() {
             bail!("SDL_BeginGPUCopyPass failed: {}", sdl_error());
         }
-        let uploads = (|| -> Result<(Vec<SpriteVertex>, Vec<Option<ModelRun>>)> {
+        let uploads = (|| -> Result<(Vec<ItemVertex>, Vec<ItemDraw>, Vec<ModelRun>)> {
+            self.upload_atlas(copy, slot, &list.atlas)?;
+            let mut vertices = Vec::with_capacity(list.items.len() * 6);
+            let mut draws = Vec::with_capacity(list.items.len());
             let mut models = Vec::new();
             let mut model_vertices = Vec::new();
             let mut lut = Vec::new();
-            for quad in &overlay.quads {
-                let replacement = match &quad.image {
-                    htexture::QuadImage::Art(replacement) => replacement,
-                    htexture::QuadImage::Recoloured(recoloured) => {
-                        self.ensure_overlay_indices(copy, &recoloured.indices, fresh)?;
-                        lut.extend(lut_texels(&recoloured.lut));
-                        &recoloured.art
+            let mut lut_rows: Vec<(usize, u32)> = Vec::new();
+            for item in &list.items {
+                if item.map.flags & draw2d::PUNCH != 0 {
+                    continue;
+                }
+                let mut lut_row = 0;
+                let mut index_frame = [0.0; 2];
+                let (mode, image) = match &item.kind {
+                    draw2d::Kind::Solid => (MODE_SOLID, ItemImage::None),
+                    draw2d::Kind::Sprite => (MODE_SPRITE, ItemImage::None),
+                    draw2d::Kind::Scene => (MODE_PREMULTIPLIED, ItemImage::Scene),
+                    draw2d::Kind::Art(art) => {
+                        self.ensure_overlay_image(copy, art, fresh)?;
+                        (MODE_ART, ItemImage::Art(Arc::as_ptr(art) as usize, None))
                     }
-                    htexture::QuadImage::Model(model) => {
+                    draw2d::Kind::Recoloured(recoloured) => {
+                        self.ensure_overlay_image(copy, &recoloured.art, fresh)?;
+                        self.ensure_overlay_indices(copy, &recoloured.indices, fresh)?;
+                        // Items sharing a recolouring share its rows.
+                        let key = Arc::as_ptr(recoloured) as usize;
+                        lut_row = match lut_rows.iter().find(|&&(at, _)| at == key) {
+                            Some(&(_, row)) => row,
+                            None => {
+                                let row = (lut.len() / crate::model::PALETTE_ROW_LEN) as u32;
+                                lut.extend(lut_texels(&recoloured.lut));
+                                lut_rows.push((key, row));
+                                row
+                            }
+                        };
+                        index_frame = recoloured.art.frame.map(|side| side as f32);
+                        let indices = Arc::as_ptr(&recoloured.indices) as usize;
+                        let art = Arc::as_ptr(&recoloured.art) as usize;
+                        (MODE_RECOLOURED, ItemImage::Art(art, Some(indices)))
+                    }
+                    draw2d::Kind::Model(model) => {
                         let page = self.ensure_page(
                             copy,
                             &model.ivm.texture,
@@ -2696,42 +2890,35 @@ impl GpuRenderer {
                             None,
                             model.page.as_ref(),
                         )?;
+                        let count = model.vertices.len() as u32;
+                        let Some(page) = page.filter(|_| count > 0) else {
+                            continue;
+                        };
                         let first = model_vertices.len() as u32;
                         model_vertices.extend_from_slice(&model.vertices);
-                        let count = model.vertices.len() as u32;
-                        // Only the models that draw take a target slot.
-                        let slot = models.iter().flatten().count();
-                        models.push(page.filter(|_| count > 0).map(|page| ModelRun {
+                        // The item's own rect at the target's resolution.
+                        let [x0, y0, x1, y1] = item.rect;
+                        let side = |extent: f32, target: u32, frame: u32| {
+                            ((extent * target as f32 / frame as f32).ceil() as u32)
+                                .clamp(1, MAX_SCENE_SIDE)
+                        };
+                        let size = (
+                            side(x1 - x0, target_w, frame_w),
+                            side(y1 - y0, target_h, frame_h),
+                        );
+                        let run = ModelRun {
                             page,
                             first,
                             count,
-                            slot,
-                        }));
-                        continue;
+                            slot: models.len(),
+                        };
+                        models.push((run, size));
+                        (MODE_PREMULTIPLIED, ItemImage::Model(run.slot))
                     }
                 };
-                let key = Arc::as_ptr(replacement) as usize;
-                if let Some(entry) = self.overlay_images.get_mut(&key) {
-                    entry.2 = self.overlay_frame;
-                    continue;
-                }
-                let image = &replacement.image;
-                let texture = self.texture(
-                    SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-                    image.width,
-                    image.height,
-                    SDL_GPU_TEXTUREUSAGE_SAMPLER,
-                )?;
-                let bytes = &image.rgba[..(image.width * image.height * 4) as usize];
-                if let Err(err) =
-                    self.upload_texture(copy, texture, image.width, image.height, bytes)
-                {
-                    unsafe { SDL_ReleaseGPUTexture(self.device, texture) };
-                    return Err(err);
-                }
-                self.overlay_images
-                    .insert(key, (replacement.clone(), texture, self.overlay_frame));
-                fresh.push(key);
+                let first = vertices.len() as u32;
+                vertices.extend(item_vertices(item, mode, lut_row, index_frame));
+                draws.push(ItemDraw { image, first });
             }
             if !lut.is_empty() {
                 let rows = (lut.len() / crate::model::PALETTE_ROW_LEN) as u32;
@@ -2739,15 +2926,6 @@ impl GpuRenderer {
                 let width = crate::model::PALETTE_ROW_LEN as u32;
                 self.upload_texture(copy, self.overlay_lut, width, rows, as_bytes(&lut))?;
             }
-            let [cover_w, cover_h] = overlay.size;
-            self.upload_texture(
-                copy,
-                self.overlay_coverage,
-                cover_w,
-                cover_h,
-                as_bytes(&overlay.coverage),
-            )?;
-            let vertices = overlay_vertices(overlay, (layer_w, layer_h));
             let bytes = as_bytes(&vertices);
             if !bytes.is_empty() {
                 if self.overlay_capacity < bytes.len() as u32 {
@@ -2774,49 +2952,43 @@ impl GpuRenderer {
                 }
                 self.upload_buffer(copy, self.model_buffer, bytes, true)?;
             }
-            Ok((vertices, models))
+            for &(run, size) in &models {
+                self.ensure_model_target(run.slot, size)?;
+            }
+            Ok((
+                vertices,
+                draws,
+                models.into_iter().map(|(run, _)| run).collect(),
+            ))
         })();
         unsafe { SDL_EndGPUCopyPass(copy) };
-        let (vertices, models) = uploads?;
+        let (vertices, draws, models) = uploads?;
 
-        let (target_w, target_h) = self.overlay_size;
-        let model_quads = overlay.quads.iter().filter_map(|quad| match &quad.image {
-            htexture::QuadImage::Model(model) => Some((quad, model)),
-            htexture::QuadImage::Art(_) | htexture::QuadImage::Recoloured(_) => None,
-        });
-        for ((quad, model), run) in model_quads.zip(&models) {
-            let Some(run) = *run else {
-                continue;
-            };
-            // The quad's own rect at the overlay target's resolution.
-            let [x0, y0, x1, y1] = quad.dst;
-            let side = |extent: f32, target: u32, layer: u32| {
-                ((extent * target as f32 / layer as f32).ceil() as u32).clamp(1, MAX_SCENE_SIDE)
-            };
-            let size = (
-                side(x1 - x0, target_w, layer_w),
-                side(y1 - y0, target_h, layer_h),
-            );
-            self.ensure_model_target(run.slot, size)?;
-            self.render_model(command, &self.model_targets[run.slot], model, run)?;
+        for run in &models {
+            self.render_model(command, &self.model_targets[run.slot], *run)?;
             self.model_frame = self.overlay_frame;
         }
 
         let target = SDL_GPUColorTargetInfo {
-            texture: self.overlay_target,
+            texture: target,
             clear_color: SDL_FColor {
                 r: 0.0,
                 g: 0.0,
                 b: 0.0,
-                a: 1.0,
+                a: if opaque { 1.0 } else { 0.0 },
             },
             load_op: SDL_GPU_LOADOP_CLEAR,
             store_op: SDL_GPU_STOREOP_STORE,
+            cycle: true,
             ..Default::default()
         };
         let pass = unsafe { SDL_BeginGPURenderPass(command, &target, 1, std::ptr::null()) };
         if pass.is_null() {
             bail!("SDL_BeginGPURenderPass failed: {}", sdl_error());
+        }
+        if vertices.is_empty() {
+            unsafe { SDL_EndGPURenderPass(pass) };
+            return Ok(());
         }
         let viewport = SDL_GPUViewport {
             x: 0.0,
@@ -2830,201 +3002,163 @@ impl GpuRenderer {
             buffer: self.overlay_buffer,
             offset: 0,
         };
-        let coverage_scale = [
-            overlay.size[0] as f32 / target_w as f32,
-            overlay.size[1] as f32 / target_h as f32,
+        let frame_size: [f32; 4] = [frame_w as f32, frame_h as f32, 0.0, 0.0];
+        let frame_per_target: [f32; 4] = [
+            frame_w as f32 / target_w as f32,
+            frame_h as f32 / target_h as f32,
+            0.0,
+            0.0,
         ];
         unsafe {
-            SDL_BindGPUGraphicsPipeline(pass, self.pipelines.overlay);
+            SDL_BindGPUGraphicsPipeline(pass, self.pipelines.draw2d);
             SDL_SetGPUViewport(pass, &viewport);
-            if !vertices.is_empty() {
-                SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
-            }
+            SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
+            SDL_PushGPUVertexUniformData(
+                command,
+                0,
+                frame_size.as_ptr().cast::<c_void>(),
+                std::mem::size_of_val(&frame_size) as u32,
+            );
+            SDL_PushGPUFragmentUniformData(
+                command,
+                0,
+                frame_per_target.as_ptr().cast::<c_void>(),
+                std::mem::size_of_val(&frame_per_target) as u32,
+            );
         }
-        // `recolour`: the original's index texture, its frame and the first
-        // of its `lut` rows, for a recoloured quad.
-        let draw = |texture: *mut SDL_GPUTexture,
-                    recolour: Option<(*mut SDL_GPUTexture, [u32; 2], u32)>,
-                    first: u32,
-                    scissor: SDL_Rect| {
-            let (indices, [frame_w, frame_h], lut_row) =
-                recolour.unwrap_or((self.no_indices, [0, 0], 0));
-            let uniforms: [f32; 8] = [
-                coverage_scale[0],
-                coverage_scale[1],
-                frame_w as f32,
-                frame_h as f32,
-                lut_row as f32,
-                0.0,
-                0.0,
-                0.0,
-            ];
-            let nearest = |texture| SDL_GPUTextureSamplerBinding {
-                texture,
-                sampler: self.sampler,
+        let or_none = |texture: *mut SDL_GPUTexture| {
+            if texture.is_null() {
+                self.no_image
+            } else {
+                texture
+            }
+        };
+        let atlas = or_none(self.atlases[slot].texture);
+        let lut = or_none(self.overlay_lut);
+        let textures = |image: ItemImage| -> [*mut SDL_GPUTexture; 2] {
+            let resident = |key: usize| {
+                self.overlay_images
+                    .get(&key)
+                    .map_or(self.no_image, |(_, texture, _)| *texture)
             };
+            match image {
+                ItemImage::None => [self.no_image, self.no_indices],
+                ItemImage::Scene => [self.scene_colour, self.no_indices],
+                ItemImage::Model(slot) => [self.model_targets[slot].colour, self.no_indices],
+                ItemImage::Art(art, indices) => [
+                    resident(art),
+                    indices
+                        .and_then(|key| self.overlay_indices.get(&key))
+                        .map_or(self.no_indices, |(_, texture, _)| *texture),
+                ],
+            }
+        };
+        // Runs of items drawing from the same textures are one draw.
+        let mut start = 0;
+        while start < draws.len() {
+            let bound = textures(draws[start].image);
+            let mut end = start + 1;
+            while end < draws.len() && textures(draws[end].image) == bound {
+                end += 1;
+            }
+            let first = draws[start].first;
+            let count = draws
+                .get(end)
+                .map_or(vertices.len() as u32, |draw| draw.first)
+                - first;
             let samplers = [
-                SDL_GPUTextureSamplerBinding {
-                    texture,
-                    sampler: self.linear,
-                },
-                nearest(self.overlay_coverage),
-                nearest(indices),
-                nearest(self.overlay_lut),
-            ];
+                (atlas, self.sampler),
+                (bound[0], self.linear),
+                (bound[1], self.sampler),
+                (lut, self.sampler),
+            ]
+            .map(|(texture, sampler)| SDL_GPUTextureSamplerBinding { texture, sampler });
             unsafe {
-                SDL_PushGPUFragmentUniformData(
-                    command,
-                    0,
-                    uniforms.as_ptr().cast::<c_void>(),
-                    std::mem::size_of_val(&uniforms) as u32,
-                );
-                SDL_SetGPUScissor(pass, &scissor);
                 SDL_BindGPUFragmentSamplers(pass, 0, samplers.as_ptr(), samplers.len() as u32);
-                SDL_DrawGPUPrimitives(pass, 6, 1, first, 0);
+                SDL_DrawGPUPrimitives(pass, count, 1, first, 0);
             }
-        };
-        let mut first = 0;
-        if overlay.scene {
-            let whole = SDL_Rect {
-                x: 0,
-                y: 0,
-                w: target_w as i32,
-                h: target_h as i32,
-            };
-            draw(self.scene_colour, None, 0, whole);
-            first = 6;
-        }
-        let mut models = models.iter();
-        let mut lut_row = 0;
-        let art = |image: &Arc<htexture::Replacement>| {
-            self.overlay_images
-                .get(&(Arc::as_ptr(image) as usize))
-                .map(|(_, texture, _)| *texture)
-        };
-        for quad in &overlay.quads {
-            let scissor = overlay_scissor(quad.clip, (layer_w, layer_h), (target_w, target_h));
-            let mut recolour = None;
-            let texture = match &quad.image {
-                htexture::QuadImage::Art(image) => art(image),
-                htexture::QuadImage::Recoloured(recoloured) => {
-                    let indices = self
-                        .overlay_indices
-                        .get(&(Arc::as_ptr(&recoloured.indices) as usize))
-                        .map(|(_, texture, _)| *texture);
-                    recolour = indices.map(|indices| (indices, recoloured.art.frame, lut_row));
-                    lut_row += LUT_ROWS;
-                    art(&recoloured.art).filter(|_| recolour.is_some())
-                }
-                htexture::QuadImage::Model(_) => models
-                    .next()
-                    .and_then(|run| run.map(|run| self.model_targets[run.slot].colour)),
-            };
-            if let (Some(scissor), Some(texture)) = (scissor, texture) {
-                draw(texture, recolour, first, scissor);
-            }
-            first += 6;
+            start = end;
         }
         unsafe { SDL_EndGPURenderPass(pass) };
         Ok(())
     }
 
-    /// Upload the `size` layers and composite them over `scene` into the
-    /// viewport `place` returns for the swapchain size, clipped to its
-    /// rectangle.
+    /// Present `layer`, `size` in pixels, into the viewport `place` returns
+    /// for the swapchain size, clipped to its rectangle.
     fn composite(
         &mut self,
-        layers: Layers<'_>,
+        layer: Layer<'_>,
         (layer_w, layer_h): (u32, u32),
-        scene: *mut SDL_GPUTexture,
         place: impl FnOnce(u32, u32) -> ((f32, f32, f32, f32), video::Viewport),
     ) -> Result<()> {
-        let layer_bytes = layer_w * layer_h * 4;
-        self.ensure_layers(layer_w, layer_h)?;
-        let uploads: &[&[u8]] = match &layers {
-            Layers::Pair(pair) => pair,
-            Layers::Single(image) => std::slice::from_ref(image),
-            Layers::Kept => &[],
-        };
-        if !uploads.is_empty() {
-            // A layer pair replaces any single image.
+        if let Layer::Upload(image) = layer {
+            self.ensure_layer(layer_w, layer_h)?;
+            // Whatever it held is replaced.
             self.layer_image = None;
-            // Cycling the staging buffer and the layer textures lets this
-            // upload proceed while the previous present may still read them.
+            // Cycling the staging buffer and the texture lets this upload
+            // proceed while the previous present may still read them.
             let mapped =
                 unsafe { SDL_MapGPUTransferBuffer(self.device, self.layer_transfer, true) };
             if mapped.is_null() {
                 bail!("SDL_MapGPUTransferBuffer failed: {}", sdl_error());
             }
+            let bytes = (layer_w * layer_h * 4) as usize;
             unsafe {
-                for (index, layer) in uploads.iter().enumerate() {
-                    std::ptr::copy_nonoverlapping(
-                        layer.as_ptr(),
-                        mapped.cast::<u8>().add(index * layer_bytes as usize),
-                        layer_bytes as usize,
-                    );
-                }
+                std::ptr::copy_nonoverlapping(image.as_ptr(), mapped.cast::<u8>(), bytes);
                 SDL_UnmapGPUTransferBuffer(self.device, self.layer_transfer);
             }
         }
         let command = self.command_buffer()?;
-        if !uploads.is_empty() {
-            self.upload_layers(command, uploads.len(), (layer_w, layer_h))?;
-        }
-        // A single image is composited over itself: `black + scene * 0`.
-        let white = match layers {
-            Layers::Pair(_) => self.layer_white,
-            Layers::Single(_) | Layers::Kept => self.layer_black,
+        let texture = match layer {
+            Layer::Upload(_) => {
+                self.upload_layer_image(command, (layer_w, layer_h))?;
+                self.layer
+            }
+            Layer::Kept => self.layer,
+            Layer::Target => self.overlay_target,
         };
-        self.composite_pass(command, white, scene, place)?;
+        self.composite_pass(command, texture, place)?;
         Self::submit(command)
     }
 
-    /// Upload `count` staged layers into `layer_black` (then `layer_white`).
-    fn upload_layers(
+    /// Upload the staged image into `layer`.
+    fn upload_layer_image(
         &self,
         command: *mut SDL_GPUCommandBuffer,
-        count: usize,
         (layer_w, layer_h): (u32, u32),
     ) -> Result<()> {
-        let layer_bytes = layer_w * layer_h * 4;
         let copy = unsafe { SDL_BeginGPUCopyPass(command) };
         if copy.is_null() {
             unsafe { SDL_CancelGPUCommandBuffer(command) };
             bail!("SDL_BeginGPUCopyPass failed: {}", sdl_error());
         }
-        for (index, texture) in [self.layer_black, self.layer_white]
-            .into_iter()
-            .enumerate()
-            .take(count)
-        {
-            let source = SDL_GPUTextureTransferInfo {
-                transfer_buffer: self.layer_transfer,
-                offset: index as u32 * layer_bytes,
-                pixels_per_row: layer_w,
-                rows_per_layer: layer_h,
-            };
-            let destination = SDL_GPUTextureRegion {
-                texture,
-                w: layer_w,
-                h: layer_h,
-                d: 1,
-                ..Default::default()
-            };
-            unsafe { SDL_UploadToGPUTexture(copy, &source, &destination, true) };
+        let source = SDL_GPUTextureTransferInfo {
+            transfer_buffer: self.layer_transfer,
+            offset: 0,
+            pixels_per_row: layer_w,
+            rows_per_layer: layer_h,
+        };
+        let destination = SDL_GPUTextureRegion {
+            texture: self.layer,
+            w: layer_w,
+            h: layer_h,
+            d: 1,
+            ..Default::default()
+        };
+        unsafe {
+            SDL_UploadToGPUTexture(copy, &source, &destination, true);
+            SDL_EndGPUCopyPass(copy);
         }
-        unsafe { SDL_EndGPUCopyPass(copy) };
         Ok(())
     }
 
-    /// Record the composite of `layer_black` and `white` over `scene` into
-    /// the swapchain, placed by `place`. The command buffer is cancelled on
-    /// failure and left to the caller to submit otherwise.
+    /// Record the composite of `frame` into the swapchain, placed by
+    /// `place`. The command buffer is cancelled on failure and left to the
+    /// caller to submit otherwise.
     fn composite_pass(
         &self,
         command: *mut SDL_GPUCommandBuffer,
-        white: *mut SDL_GPUTexture,
-        scene: *mut SDL_GPUTexture,
+        frame: *mut SDL_GPUTexture,
         place: impl FnOnce(u32, u32) -> ((f32, f32, f32, f32), video::Viewport),
     ) -> Result<()> {
         // Never wait for an image: with every image in flight (or a hidden
@@ -3063,11 +3197,10 @@ impl GpuRenderer {
             };
             let pass = unsafe { SDL_BeginGPURenderPass(command, &target, 1, std::ptr::null()) };
             if !pass.is_null() {
-                let samplers =
-                    [self.layer_black, white, scene].map(|texture| SDL_GPUTextureSamplerBinding {
-                        texture,
-                        sampler: self.linear,
-                    });
+                let sampler = SDL_GPUTextureSamplerBinding {
+                    texture: frame,
+                    sampler: self.linear,
+                };
                 let ((x, y, w, h), fit) = place(width, height);
                 let viewport = SDL_GPUViewport {
                     x,
@@ -3087,7 +3220,7 @@ impl GpuRenderer {
                     SDL_BindGPUGraphicsPipeline(pass, self.pipelines.composite);
                     SDL_SetGPUViewport(pass, &viewport);
                     SDL_SetGPUScissor(pass, &scissor);
-                    SDL_BindGPUFragmentSamplers(pass, 0, samplers.as_ptr(), 3);
+                    SDL_BindGPUFragmentSamplers(pass, 0, &sampler, 1);
                     SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
                 }
                 if self.ui_shown && !self.pipelines.ui.is_null() {
@@ -3158,6 +3291,16 @@ impl GpuRenderer {
     /// Read the scene target back as RGBA rows (tests and tools).
     pub fn read_scene(&self) -> Result<Vec<u8>> {
         self.read_texture(self.scene_colour, self.scene_size())
+    }
+
+    /// Read the frame the 2D pass last drew back as RGBA rows, and its size
+    /// (tests and tools).
+    pub fn read_frame(&self) -> Result<(Vec<u8>, (u32, u32))> {
+        if self.overlay_target.is_null() {
+            bail!("no frame has been drawn");
+        }
+        let size = self.overlay_size;
+        Ok((self.read_texture(self.overlay_target, size)?, size))
     }
 
     /// Read a `width` x `height` RGBA texture back as rows.
@@ -3265,84 +3408,38 @@ fn draw_mesh(
     }
 }
 
-/// The triangles [`GpuRenderer::draw_overlay`] draws for a `layer` sized
-/// frame: six vertices for the scene when `overlay` has it under it, then six
-/// per quad.
-fn overlay_vertices(
-    overlay: &htexture::Overlay,
-    (layer_w, layer_h): (u32, u32),
-) -> Vec<SpriteVertex> {
-    let corner = |x: f32, y: f32, u: f32, v: f32, colour: [f32; 4], mode: u32| SpriteVertex {
-        clip: [
-            x / layer_w as f32 * 2.0 - 1.0,
-            1.0 - y / layer_h as f32 * 2.0,
-            0.0,
-            1.0,
-        ],
+/// The two triangles of `item`, drawn in `mode` (the map's flags joined to
+/// it) from `lut_row` of the recolourings.
+fn item_vertices(
+    item: &draw2d::Item,
+    mode: u32,
+    lut_row: u32,
+    index_frame: [f32; 2],
+) -> [ItemVertex; 6] {
+    let map = item.map;
+    let corner = |x: f32, y: f32, u: f32, v: f32| ItemVertex {
+        position: [x, y],
         uv: [u, v],
-        colour,
-        mode,
-        key: scene::NEVER_MASKED,
+        colour: item.colour,
+        dst: map.dst,
+        source: [map.src[0], map.src[1], map.atlas[0], map.atlas[1]],
+        clip: item.clip,
+        mode: [mode | map.flags << 8, lut_row],
+        index_frame,
     };
-    let rectangle = |dst: [f32; 4], uv: [f32; 4], colour: [f32; 4], mode: u32| {
-        let [x0, y0, x1, y1] = dst;
-        let [u0, v0, u1, v1] = uv;
-        [
-            corner(x0, y0, u0, v0, colour, mode),
-            corner(x1, y0, u1, v0, colour, mode),
-            corner(x1, y1, u1, v1, colour, mode),
-            corner(x0, y0, u0, v0, colour, mode),
-            corner(x1, y1, u1, v1, colour, mode),
-            corner(x0, y1, u0, v1, colour, mode),
-        ]
-    };
-    let mut vertices = Vec::with_capacity((overlay.quads.len() + 1) * 6);
-    if overlay.scene {
-        let whole = [0.0, 0.0, layer_w as f32, layer_h as f32];
-        vertices.extend(rectangle(whole, [0.0, 0.0, 1.0, 1.0], [1.0; 4], 1));
-    }
-    for (index, quad) in overlay.quads.iter().enumerate() {
-        let [r, g, b] = quad.colour;
-        let mode = 2 + index.min(usize::from(u16::MAX) - 1) as u32;
-        vertices.extend(rectangle(quad.dst, quad.uv, [r, g, b, 1.0], mode));
-    }
-    vertices
+    let [x0, y0, x1, y1] = item.rect;
+    let [u0, v0, u1, v1] = item.uv;
+    [
+        corner(x0, y0, u0, v0),
+        corner(x1, y0, u1, v0),
+        corner(x1, y1, u1, v1),
+        corner(x0, y0, u0, v0),
+        corner(x1, y1, u1, v1),
+        corner(x0, y1, u0, v1),
+    ]
 }
 
-/// A quad's `[x, y, w, h]` clip in frame pixels as a scissor on a `target`
-/// sized render of a `layer` sized frame: the target pixels whose centres
-/// fall in the clip, as the coverage mask samples them. `None` when nothing
-/// is left.
-fn overlay_scissor(
-    clip: [i32; 4],
-    (layer_w, layer_h): (u32, u32),
-    (target_w, target_h): (u32, u32),
-) -> Option<SDL_Rect> {
-    let [x, y, w, h] = clip;
-    // The first target pixel `i` with `(i + 0.5) * layer / target >= value`.
-    let scale = |value: i32, layer: u32, target: u32| {
-        let (value, layer, target) = (
-            value.clamp(0, layer as i32) as u64,
-            layer as u64,
-            target as u64,
-        );
-        (2 * value * target)
-            .saturating_sub(layer)
-            .div_ceil(2 * layer) as i32
-    };
-    let x0 = scale(x, layer_w, target_w);
-    let y0 = scale(y, layer_h, target_h);
-    let x1 = scale(x.saturating_add(w), layer_w, target_w);
-    let y1 = scale(y.saturating_add(h), layer_h, target_h);
-    (x1 > x0 && y1 > y0).then_some(SDL_Rect {
-        x: x0,
-        y: y0,
-        w: x1 - x0,
-        h: y1 - y0,
-    })
-}
-
-/// A recoloured quad's [`LUT_ROWS`] rows of `overlay.frag`'s `lut`.
+/// A recoloured item's [`LUT_ROWS`] rows of `draw2d.frag`'s `lut`.
 fn lut_texels(lut: &[Option<htexture::Recolour>; 256]) -> Vec<[f32; 4]> {
     let row = |texel: fn(&htexture::Recolour) -> [f32; 4]| {
         lut.iter()
@@ -3385,7 +3482,7 @@ impl Drop for GpuRenderer {
                 self.pipelines.mask_keys,
                 self.pipelines.sprite,
                 self.pipelines.sprite_depth,
-                self.pipelines.overlay,
+                self.pipelines.draw2d,
                 self.pipelines.model_opaque,
                 self.pipelines.model_blend,
                 self.pipelines.composite,
@@ -3395,17 +3492,18 @@ impl Drop for GpuRenderer {
                 SDL_ReleaseGPUGraphicsPipeline(self.device, pipeline);
             }
             let textures = [
-                self.layer_black,
-                self.layer_white,
+                self.layer,
                 self.ui_texture,
                 self.native_texture,
                 self.no_hd,
                 self.no_hd_rows,
                 self.no_mask_keys,
                 self.overlay_target,
-                self.overlay_coverage,
+                self.atlases[FRAME_ATLAS].texture,
+                self.atlases[UI_ATLAS].texture,
                 self.overlay_lut,
                 self.no_indices,
+                self.no_image,
             ];
             for texture in textures.into_iter().filter(|t| !t.is_null()) {
                 SDL_ReleaseGPUTexture(self.device, texture);
@@ -3443,7 +3541,7 @@ mod tests {
     use super::*;
     use crate::anim::Mat4x3;
     use crate::model::{TmdObject, TmdPrim};
-    use crate::render::{Camera, EntityMesh, Lighting};
+    use crate::render::{self, Camera, EntityMesh, Lighting, SpriteBlend};
 
     /// A cube with a different palette colour on each face.
     fn cube() -> (Tmd, Texture8) {
@@ -3563,7 +3661,6 @@ mod tests {
         };
         let scene = GameplayScene {
             background: None,
-            background_generation: None,
             origin: [0, 0],
             colour: [0x80; 3],
             meshes: &meshes,
@@ -3625,11 +3722,10 @@ mod tests {
         assert_eq!(gpu.resident_counts(), (0, 0, 0));
     }
 
-    /// A background tagged with a generation keeps its upload, unhashed,
-    /// until the generation changes; an untagged one is fingerprinted, so an
-    /// in-place edit is still seen.
+    /// A background is fingerprinted each frame, so an in-place edit is
+    /// seen and uploaded again.
     #[test]
-    fn gpu_image_generation_stands_in_for_the_fingerprint() {
+    fn gpu_image_fingerprint_sees_an_in_place_edit() {
         let _lock = crate::audio::test_lock::sdl();
         let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
             eprintln!("skipping: SDL video unavailable");
@@ -3652,10 +3748,9 @@ mod tests {
             height: 240,
             rgba: [200, 0, 0, 255].repeat(320 * 240),
         };
-        let mut draw = |background: &Image, generation| {
+        let mut draw = |background: &Image| {
             let scene = GameplayScene {
                 background: Some(background),
-                background_generation: generation,
                 origin: [0, 0],
                 colour: [255; 3],
                 meshes: &[],
@@ -3680,19 +3775,9 @@ mod tests {
                 pixel.copy_from_slice(&colour);
             }
         };
-        let first = ImageGeneration::next();
-        assert_eq!(draw(&background, Some(first)), [200, 0, 0]);
-        // An edit the owner did not tag is not looked for.
+        assert_eq!(draw(&background), [200, 0, 0]);
         paint(&mut background, [0, 200, 0, 255]);
-        assert_eq!(draw(&background, Some(first)), [200, 0, 0]);
-        // A new generation re-checks the pixels and uploads them.
-        assert_eq!(
-            draw(&background, Some(ImageGeneration::next())),
-            [0, 200, 0]
-        );
-        // Untagged, the fingerprint sees an in-place edit.
-        paint(&mut background, [0, 0, 200, 255]);
-        assert_eq!(draw(&background, None), [0, 0, 200]);
+        assert_eq!(draw(&background), [0, 200, 0]);
     }
 
     /// A pack's `htexture/` replacements are drawn in place of the background
@@ -3774,7 +3859,6 @@ mod tests {
         };
         let scene = GameplayScene {
             background: Some(&background),
-            background_generation: None,
             origin: [0, 0],
             colour: [255; 3],
             meshes: &meshes,
@@ -3832,32 +3916,40 @@ mod tests {
         );
     }
 
-    /// The overlay target is the scene with each 2D replacement over it,
-    /// cut to its clip and times its colour, the later over the earlier.
-    #[test]
-    fn an_overlay_scissor_keeps_the_target_pixels_centred_in_its_clip() {
-        let rect = |clip, layer, target| {
-            overlay_scissor(clip, layer, target).map(|r| [r.x, r.y, r.w, r.h])
-        };
-        // An integer scale maps edges exactly.
-        assert_eq!(
-            rect([10, 20, 30, 40], (320, 240), (1280, 960)),
-            Some([40, 80, 120, 160])
-        );
-        // A 426-column canvas on a 1708-wide target: pixel 212's centre
-        // (53.0006) is in a clip from 53 and pixel 211's (52.75) is not;
-        // pixel 1495's (372.999) is before its end at 373 and 1496's
-        // (373.25) is not.
-        assert_eq!(
-            rect([53, 0, 320, 240], (426, 240), (1708, 960)),
-            Some([212, 0, 1284, 960])
-        );
-        assert_eq!(rect([0, 0, 0, 240], (320, 240), (1280, 960)), None);
-        assert_eq!(rect([400, 0, 10, 10], (320, 240), (1280, 960)), None);
+    /// An item of the 2D pass over `rect`, cut to `clip`, sampling its
+    /// image whole.
+    fn item(kind: draw2d::Kind, rect: [f32; 4], clip: [i32; 4], colour: [f32; 4]) -> draw2d::Item {
+        draw2d::Item {
+            kind,
+            rect,
+            uv: [0.0, 0.0, 1.0, 1.0],
+            clip,
+            colour,
+            map: draw2d::Map::default(),
+        }
+    }
+
+    /// A 320x240 list of `items`.
+    fn list_of(items: Vec<draw2d::Item>) -> DrawList {
+        let mut list = DrawList::new([LAYER_WIDTH, LAYER_HEIGHT]);
+        list.items = items;
+        list
+    }
+
+    /// `overlay_target` read back, and a reader of its RGB at a frame
+    /// pixel (`scale` target pixels per frame pixel).
+    fn read_target(gpu: &GpuRenderer) -> (Vec<u8>, (u32, u32)) {
+        let size = gpu.overlay_size;
+        (gpu.read_texture(gpu.overlay_target, size).unwrap(), size)
+    }
+
+    fn rgb_at(pixels: &[u8], size: (u32, u32), scale: usize, x: usize, y: usize) -> [u8; 3] {
+        let i = (scale * y * size.0 as usize + scale * x) * 4;
+        [pixels[i], pixels[i + 1], pixels[i + 2]]
     }
 
     #[test]
-    fn overlay_vertices_follow_the_scene_then_each_quad_in_order() {
+    fn item_vertices_carry_the_item_to_each_corner() {
         let image = Arc::new(htexture::Replacement {
             image: Image {
                 width: 1,
@@ -3866,36 +3958,138 @@ mod tests {
             },
             frame: [1, 1],
         });
-        let quad = |uv| htexture::Quad {
-            image: image.clone().into(),
-            dst: [0.0, 0.0, 160.0, 120.0],
-            uv,
-            colour: [0.5; 3],
-            clip: [0, 0, 320, 240],
+        let mut item = item(
+            draw2d::Kind::Art(image),
+            [0.0, 0.0, 160.0, 120.0],
+            [1, 2, 3, 4],
+            [0.5, 0.5, 0.5, 1.0],
+        );
+        // Mirrored horizontally: its u runs backwards.
+        item.uv = [1.0, 0.0, 0.0, 1.0];
+        item.map = draw2d::Map {
+            dst: [5, 6, 7, 8],
+            src: [9, 10],
+            atlas: [11, 12],
+            flags: draw2d::MASKED,
         };
-        let overlay = htexture::Overlay {
-            // The second is mirrored horizontally: its u runs backwards.
-            quads: vec![quad([0.0, 0.0, 1.0, 1.0]), quad([1.0, 0.0, 0.0, 1.0])],
-            scene: true,
-            ..htexture::Overlay::new(0, [320, 240])
-        };
-        let vertices = overlay_vertices(&overlay, (320, 240));
-        assert_eq!(vertices.len(), 18);
-        assert_eq!(vertices[0].mode, 1);
-        // Quad `k` is mode `k + 2`, matching coverage `k + 1`.
-        assert!(vertices[6..12].iter().all(|v| v.mode == 2));
-        assert!(vertices[12..].iter().all(|v| v.mode == 3));
-        let top_left = &vertices[12];
-        assert_eq!(top_left.clip, [-1.0, 1.0, 0.0, 1.0]);
+        let vertices = item_vertices(&item, MODE_ART, 6, [3.0, 1.0]);
+        let top_left = &vertices[0];
+        assert_eq!(top_left.position, [0.0, 0.0]);
         assert_eq!(top_left.uv, [1.0, 0.0]);
-        assert_eq!(vertices[13].clip[..2], [0.0, 1.0]);
-        assert_eq!(vertices[13].uv, [0.0, 0.0]);
-        assert_eq!(vertices[14].clip[..2], [0.0, 0.0]);
-        assert_eq!(vertices[14].colour, [0.5, 0.5, 0.5, 1.0]);
+        assert_eq!(vertices[1].position, [160.0, 0.0]);
+        assert_eq!(vertices[1].uv, [0.0, 0.0]);
+        assert_eq!(vertices[2].position, [160.0, 120.0]);
+        assert!(vertices.iter().all(|vertex| {
+            vertex.colour == [0.5, 0.5, 0.5, 1.0]
+                && vertex.dst == [5, 6, 7, 8]
+                && vertex.source == [9, 10, 11, 12]
+                && vertex.clip == [1, 2, 3, 4]
+                && vertex.mode == [MODE_ART | draw2d::MASKED << 8, 6]
+                && vertex.index_frame == [3.0, 1.0]
+        }));
+        assert_eq!(std::mem::size_of::<ItemVertex>(), 96);
     }
 
+    /// At one target pixel per frame pixel the 2D pass draws the frame the
+    /// software rasterizer draws, but for the GPU's blend rounding.
     #[test]
-    fn gpu_overlay_draws_2d_replacements_over_the_scene() {
+    fn gpu_2d_pass_matches_the_software_frame() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        // A 7x5 image of distinct colours with a clear column.
+        let mut rgba = Vec::new();
+        for y in 0..5u8 {
+            for x in 0..7u8 {
+                let alpha = if x == 3 { 0 } else { 255 };
+                rgba.extend_from_slice(&[x * 36, y * 60, 255 - x * 30, alpha]);
+            }
+        }
+        let image = Image {
+            width: 7,
+            height: 5,
+            rgba,
+        };
+        let draw = |framebuffer: &mut Framebuffer| {
+            framebuffer.draw_background(&image, [3, -2], [200, 180, 255]);
+            framebuffer.fill_rect([4, 4, 300, 100], [30, 60, 90, 255]);
+            framebuffer.draw_rgba_sprite(&image, [0, 0, 7, 5], [10, 10, 21, 15], 0);
+            framebuffer.draw_rgba_sprite(&image, [1, 1, 5, 4], [40, 12, 11, 9], 14);
+            let blends = [
+                SpriteBlend::Half,
+                SpriteBlend::HalfVariant,
+                SpriteBlend::BlackAlpha(128),
+            ];
+            for (index, blend) in blends.into_iter().enumerate() {
+                let x = 60 + 30 * index as i32;
+                framebuffer.draw_sprites(&mut [render::SpriteDraw::rgba(
+                    &image,
+                    [0, 0, 7, 5],
+                    [x, 8, 21, 15],
+                    0,
+                )
+                .with_blend(blend)
+                .with_mirror([index == 1, index == 2])]);
+            }
+            framebuffer.set_clip_rect(Some([12, 11, 5, 3]));
+            framebuffer.draw_rgba_sprite(&image, [0, 0, 7, 5], [10, 40, 14, 10], 0);
+            framebuffer.set_clip_rect(None);
+            framebuffer.blend_rect([100, 100, 50, 40], [255, 0, 0], 100);
+            framebuffer.blend_black_rect([120, 120, 40, 40], 80);
+            framebuffer.blend_black_rect_weighted([10, 150, 40, 40], 200);
+            framebuffer.draw_line([0, 200], [319, 180], [255, 255, 0]);
+            framebuffer.draw_line([200, 10], [190, 230], [0, 255, 0]);
+            framebuffer.fade_to_black_weighted(64);
+        };
+        let mut software = Framebuffer::new();
+        draw(&mut software);
+        let mut recorded = Framebuffer::new();
+        recorded.record();
+        draw(&mut recorded);
+        assert!(
+            recorded.rgba.iter().all(|&byte| byte == 0),
+            "a recording draws no pixels"
+        );
+        gpu.draw_frame(recorded.list().unwrap()).unwrap();
+        let (pixels, size) = read_target(&gpu);
+        assert_eq!(size, (LAYER_WIDTH, LAYER_HEIGHT));
+        let mut worst = (0, 0, 0);
+        for (index, (got, want)) in pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(software.rgba.as_chunks::<4>().0)
+            .enumerate()
+        {
+            for channel in 0..3 {
+                let diff = got[channel].abs_diff(want[channel]);
+                if diff > worst.0 {
+                    worst = (diff, index % 320, index / 320);
+                }
+            }
+        }
+        assert!(
+            worst.0 <= 1,
+            "({}, {}) is {} off the software frame",
+            worst.1,
+            worst.2,
+            worst.0
+        );
+    }
+
+    /// The 2D pass draws its items in order, each cut to its clip and times
+    /// its colour, the scene where an item shows it.
+    #[test]
+    fn gpu_2d_pass_draws_its_items_over_the_scene_in_order() {
         let _lock = crate::audio::test_lock::sdl();
         let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
             eprintln!("skipping: SDL video unavailable");
@@ -3921,7 +4115,6 @@ mod tests {
         };
         let scene = GameplayScene {
             background: Some(&background),
-            background_generation: None,
             origin: [0, 0],
             colour: [255; 3],
             meshes: &[],
@@ -3941,76 +4134,66 @@ mod tests {
                 frame: [32, 32],
             })
         };
-        let mut overlay = htexture::Overlay {
-            quads: vec![
-                // Green over x 40..120, y 40..120, cut at x 100.
-                htexture::Quad {
-                    image: replacement([0, 240, 0, 255]).into(),
-                    dst: [40.0, 40.0, 120.0, 120.0],
-                    uv: [0.0, 0.0, 1.0, 1.0],
-                    colour: [1.0; 3],
-                    clip: [0, 0, 100, 240],
-                },
-                // Half-bright blue over the lower right of the green.
-                htexture::Quad {
-                    image: replacement([0, 0, 240, 255]).into(),
-                    dst: [80.0, 80.0, 160.0, 160.0],
-                    uv: [0.0, 0.0, 1.0, 1.0],
-                    colour: [0.5; 3],
-                    clip: [0, 0, 320, 240],
-                },
-            ],
-            scene: true,
-            ..htexture::Overlay::new(0, [LAYER_WIDTH, LAYER_HEIGHT])
-        };
-        // The texels each original wrote: the green's whole clipped quad,
-        // then the blue's but for its transparent top-left corner, where the
-        // green stays.
-        let mut cover = |quad: u16, x: std::ops::Range<usize>, y: std::ops::Range<usize>| {
-            for y in y {
-                for x in x.clone() {
-                    overlay.coverage[y * LAYER_WIDTH as usize + x] = quad;
-                }
-            }
-        };
-        cover(1, 40..100, 40..120);
-        cover(2, 100..160, 80..160);
-        cover(2, 80..100, 100..160);
-        gpu.draw_overlay(&overlay, (LAYER_WIDTH, LAYER_HEIGHT))
-            .unwrap();
-        let size = gpu.overlay_size;
+        let whole = [0, 0, 320, 240];
+        let items = vec![
+            item(
+                draw2d::Kind::Scene,
+                [0.0, 0.0, 320.0, 240.0],
+                whole,
+                [1.0; 4],
+            ),
+            // Green over x 40..120, y 40..120, cut at x 100.
+            item(
+                draw2d::Kind::Art(replacement([0, 240, 0, 255])),
+                [40.0, 40.0, 120.0, 120.0],
+                [0, 0, 100, 240],
+                [1.0; 4],
+            ),
+            // Half-bright blue over the lower right of the green.
+            item(
+                draw2d::Kind::Art(replacement([0, 0, 240, 255])),
+                [80.0, 80.0, 160.0, 160.0],
+                whole,
+                [0.5, 0.5, 0.5, 1.0],
+            ),
+            // A half black over the lower right of that.
+            item(
+                draw2d::Kind::Solid,
+                [150.0, 150.0, 170.0, 170.0],
+                whole,
+                [0.0, 0.0, 0.0, 0.5],
+            ),
+        ];
+        let list = list_of(items);
+        gpu.draw_frame(&list).unwrap();
+        let (pixels, size) = read_target(&gpu);
         assert_eq!(size, (LAYER_WIDTH, LAYER_HEIGHT));
-        let pixels = gpu.read_texture(gpu.overlay_target, size).unwrap();
-        let at = |x: usize, y: usize| {
-            let i = (y * LAYER_WIDTH as usize + x) * 4;
-            [pixels[i], pixels[i + 1], pixels[i + 2]]
-        };
+        let at = |x, y| rgb_at(&pixels, size, 1, x, y);
         let near =
             |got: [u8; 3], want: [u8; 3]| got.iter().zip(want).all(|(&g, w)| g.abs_diff(w) <= 2);
         for (x, y, want) in [
             (10, 10, [200, 0, 0]),
             (60, 60, [0, 240, 0]),
             (110, 60, [200, 0, 0]),
-            (90, 90, [0, 240, 0]),
-            (90, 110, [0, 0, 120]),
-            (150, 150, [0, 0, 120]),
+            (90, 90, [0, 0, 120]),
+            (150, 150, [0, 0, 60]),
+            (165, 165, [100, 0, 0]),
             (200, 200, [200, 0, 0]),
         ] {
             assert!(near(at(x, y), want), "({x}, {y}) is {:?}", at(x, y));
         }
 
-        // Without the scene the replacements are drawn over black.
-        gpu.draw_overlay(
-            &htexture::Overlay {
-                scene: false,
-                ..overlay
-            },
-            (LAYER_WIDTH, LAYER_HEIGHT),
-        )
-        .unwrap();
-        let pixels = gpu.read_texture(gpu.overlay_target, size).unwrap();
-        assert_eq!(&pixels[..3], &[0, 0, 0]);
+        // Without the scene the items are drawn over black.
+        let mut list = list;
+        list.items.remove(0);
+        gpu.draw_frame(&list).unwrap();
+        let (pixels, _) = read_target(&gpu);
+        assert_eq!(&pixels[..4], &[0, 0, 0, 255]);
         assert_eq!(gpu.overlay_images.len(), 2);
+
+        // An atlas that filled up is refused.
+        list.error = Some("the 2D atlas is full");
+        assert!(gpu.draw_frame(&list).is_err());
 
         // Replacements not drawn for long enough are released.
         gpu.overlay_frame += EVICT_AFTER_FRAMES;
@@ -4021,10 +4204,67 @@ mod tests {
         assert!(gpu.overlay_images.is_empty());
     }
 
-    /// A recoloured quad takes each original texel's recolouring, and an
+    /// A clear scene (the DIED screen's, with no background) shows the
+    /// items drawn under it where it draws nothing.
+    #[test]
+    fn gpu_2d_pass_shows_what_lies_under_a_clear_scene() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let mut gpu = match GpuRenderer::offscreen(1) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let camera = Camera::from_points([0, 0, 5000], [0, 0, 0], 600);
+        let lighting = Lighting {
+            ambient: [4096; 3],
+            lights: Default::default(),
+        };
+        let scene = GameplayScene {
+            background: None,
+            origin: [0, 0],
+            colour: [255; 3],
+            meshes: &[],
+            shadows: &[],
+            camera: &camera,
+            lighting: &lighting,
+            mask_layer: None,
+            effect_layer: None,
+            mirror_from: 0,
+            mirror: None,
+            debug: &[],
+        };
+        gpu.record_scene(&scene, None).unwrap();
+        let whole = [0, 0, 320, 240];
+        let list = list_of(vec![
+            item(
+                draw2d::Kind::Solid,
+                [0.0, 0.0, 320.0, 240.0],
+                whole,
+                [0.0, 0.5, 0.0, 1.0],
+            ),
+            item(
+                draw2d::Kind::Scene,
+                [0.0, 0.0, 320.0, 240.0],
+                whole,
+                [1.0; 4],
+            ),
+        ]);
+        gpu.draw_frame(&list).unwrap();
+        let (pixels, size) = read_target(&gpu);
+        let green = rgb_at(&pixels, size, 1, 160, 120);
+        assert!(green[0] == 0 && green[1].abs_diff(128) <= 1 && green[2] == 0);
+    }
+
+    /// A recoloured item takes each original texel's recolouring, and an
     /// index without one stays clear.
     #[test]
-    fn gpu_overlay_recolours_a_quad_by_its_originals_indices() {
+    fn gpu_2d_pass_recolours_an_item_by_its_originals_indices() {
         let _lock = crate::audio::test_lock::sdl();
         let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
             eprintln!("skipping: SDL video unavailable");
@@ -4060,35 +4300,19 @@ mod tests {
             }),
             lut,
         };
-        let mut overlay = htexture::Overlay {
-            quads: vec![htexture::Quad {
-                image: htexture::QuadImage::Recoloured(Arc::new(recoloured)),
-                dst: [0.0, 0.0, 300.0, 240.0],
-                uv: [0.0, 0.0, 1.0, 1.0],
-                colour: [1.0; 3],
-                clip: [0, 0, 320, 240],
-            }],
-            scene: false,
-            ..htexture::Overlay::new(0, [LAYER_WIDTH, LAYER_HEIGHT])
-        };
-        for y in 0..LAYER_HEIGHT as usize {
-            for x in 0..300 {
-                overlay.coverage[y * LAYER_WIDTH as usize + x] = 1;
-            }
-        }
-        gpu.draw_overlay(&overlay, (LAYER_WIDTH, LAYER_HEIGHT))
-            .unwrap();
-        let size = gpu.overlay_size;
-        assert_eq!(size, (LAYER_WIDTH, LAYER_HEIGHT));
-        let pixels = gpu.read_texture(gpu.overlay_target, size).unwrap();
-        let at = |x: usize, y: usize| {
-            let i = (y * LAYER_WIDTH as usize + x) * 4;
-            [pixels[i], pixels[i + 1], pixels[i + 2]]
-        };
+        let list = list_of(vec![item(
+            draw2d::Kind::Recoloured(Arc::new(recoloured)),
+            [0.0, 0.0, 300.0, 240.0],
+            [0, 0, 320, 240],
+            [1.0; 4],
+        )]);
+        gpu.draw_frame(&list).unwrap();
+        let (pixels, size) = read_target(&gpu);
+        let at = |x| rgb_at(&pixels, size, 1, x, 100);
         let near =
             |got: [u8; 3], want: [u8; 3]| got.iter().zip(want).all(|(&g, w)| g.abs_diff(w) <= 2);
         for (x, want) in [(50, [100, 50, 25]), (150, [255, 0, 0]), (250, [0, 0, 0])] {
-            assert!(near(at(x, 100), want), "({x}, 100) is {:?}", at(x, 100));
+            assert!(near(at(x), want), "({x}, 100) is {:?}", at(x));
         }
         assert_eq!(gpu.overlay_indices.len(), 1);
         gpu.overlay_frame += EVICT_AFTER_FRAMES + 1;
@@ -4096,11 +4320,11 @@ mod tests {
         assert!(gpu.overlay_indices.is_empty());
     }
 
-    /// A model quad renders into its own target at the overlay's resolution,
-    /// over its backdrop and depth tested, and lands on the overlay in its
-    /// rect.
+    /// A model item renders into its own clear target at the pass's
+    /// resolution, depth tested, and lands in its rect over what the frame
+    /// drew under it.
     #[test]
-    fn gpu_overlay_renders_a_model_over_its_backdrop() {
+    fn gpu_2d_pass_renders_a_model_over_what_lies_under_it() {
         let _lock = crate::audio::test_lock::sdl();
         let Ok(_sdl) = crate::engine::SdlHandle::acquire() else {
             eprintln!("skipping: SDL video unavailable");
@@ -4125,7 +4349,7 @@ mod tests {
             },
             objects: Vec::new(),
         });
-        // The quad's top-left half, untextured: red in front, then green
+        // The item's top-left half, untextured: red in front, then green
         // behind it.
         let corner = |x: f32, y: f32, depth: f32, shade: [f32; 3]| htexture::ModelVertex {
             clip: [x, y, depth, 1.0],
@@ -4142,44 +4366,35 @@ mod tests {
         };
         let mut vertices = half(0.5, [1.0, 0.0, 0.0]).to_vec();
         vertices.extend(half(0.9, [0.0, 1.0, 0.0]));
-        let quad = |vertices: Vec<htexture::ModelVertex>| htexture::Quad {
-            image: htexture::QuadImage::Model(Arc::new(htexture::Model {
-                ivm: ivm.clone(),
-                vertices,
-                backdrop: [0, 0, 32],
-                page: None,
-            })),
-            dst: [100.0, 80.0, 200.0, 160.0],
-            uv: [0.0, 0.0, 1.0, 1.0],
-            colour: [1.0; 3],
-            clip: [100, 80, 100, 80],
+        let rect = [100.0, 80.0, 200.0, 160.0];
+        let clip = [100, 80, 200, 160];
+        let model = |vertices: Vec<htexture::ModelVertex>| {
+            item(
+                draw2d::Kind::Model(Arc::new(htexture::Model {
+                    ivm: ivm.clone(),
+                    vertices,
+                    page: None,
+                })),
+                rect,
+                clip,
+                [1.0; 4],
+            )
         };
-        let mut overlay = htexture::Overlay {
-            quads: vec![quad(vertices.clone())],
-            scene: false,
-            ..htexture::Overlay::new(0, [LAYER_WIDTH, LAYER_HEIGHT])
-        };
-        let cover = |overlay: &mut htexture::Overlay, quad: u16| {
-            for y in 80..160 {
-                for x in 100..200 {
-                    overlay.coverage[y * LAYER_WIDTH as usize + x] = quad;
-                }
-            }
-        };
-        cover(&mut overlay, 1);
-        let check = |gpu: &mut GpuRenderer, overlay: &htexture::Overlay| {
-            gpu.draw_overlay(overlay, (LAYER_WIDTH, LAYER_HEIGHT))
-                .unwrap();
-            let size = gpu.overlay_size;
+        // The navy the viewer draws under the model.
+        let navy = item(
+            draw2d::Kind::Solid,
+            rect,
+            clip,
+            [0.0, 0.0, 32.0 / 255.0, 1.0],
+        );
+        let mut list = list_of(vec![navy, model(vertices.clone())]);
+        let check = |gpu: &mut GpuRenderer, list: &DrawList| {
+            gpu.draw_frame(list).unwrap();
+            let (pixels, size) = read_target(gpu);
             assert_eq!(size, (2 * LAYER_WIDTH, 2 * LAYER_HEIGHT));
             assert_eq!(gpu.model_targets.len(), 1);
             assert_eq!(gpu.model_targets[0].size, (200, 160));
-            let pixels = gpu.read_texture(gpu.overlay_target, size).unwrap();
             // In frame pixels, read at the target's double resolution.
-            let at = |x: usize, y: usize| {
-                let i = (2 * y * size.0 as usize + 2 * x) * 4;
-                [pixels[i], pixels[i + 1], pixels[i + 2]]
-            };
             for (x, y, want) in [
                 (120, 90, [255, 0, 0]),
                 (190, 150, [0, 0, 32]),
@@ -4187,18 +4402,17 @@ mod tests {
                 (50, 50, [0, 0, 0]),
                 (210, 100, [0, 0, 0]),
             ] {
-                assert_eq!(at(x, y), want, "({x}, {y})");
+                assert_eq!(rgb_at(&pixels, size, 2, x, y), want, "({x}, {y})");
             }
         };
-        check(&mut gpu, &overlay);
+        check(&mut gpu, &list);
         // The page joined the scene's residency.
         assert_eq!(gpu.resident_counts().1, 1);
 
         // A model with nothing to draw takes no target; the next one still
         // lands in its own.
-        overlay.quads.insert(0, quad(Vec::new()));
-        cover(&mut overlay, 2);
-        check(&mut gpu, &overlay);
+        list.items.insert(1, model(Vec::new()));
+        check(&mut gpu, &list);
 
         // The targets are released once no model is drawn for long enough.
         gpu.overlay_frame += EVICT_AFTER_FRAMES;
@@ -4249,49 +4463,31 @@ mod tests {
             height: 1,
             rgba: rgba.to_vec(),
         };
-        let model = |page: Option<Arc<htexture::Replacement>>| htexture::Quad {
-            image: htexture::QuadImage::Model(Arc::new(htexture::Model {
-                ivm: ivm.clone(),
-                vertices: vertices.clone(),
-                backdrop: [0, 0, 32],
-                page,
-            })),
-            dst: [100.0, 80.0, 200.0, 160.0],
-            uv: [0.0, 0.0, 1.0, 1.0],
-            colour: [1.0; 3],
-            clip: [100, 80, 100, 80],
+        let model = |page: Option<Arc<htexture::Replacement>>| {
+            list_of(vec![item(
+                draw2d::Kind::Model(Arc::new(htexture::Model {
+                    ivm: ivm.clone(),
+                    vertices: vertices.clone(),
+                    page,
+                })),
+                [100.0, 80.0, 200.0, 160.0],
+                [100, 80, 200, 160],
+                [1.0; 4],
+            )])
         };
-        let overlay = |quad| {
-            let mut overlay = htexture::Overlay {
-                quads: vec![quad],
-                scene: false,
-                ..htexture::Overlay::new(0, [LAYER_WIDTH, LAYER_HEIGHT])
-            };
-            for y in 80..160 {
-                for x in 100..200 {
-                    overlay.coverage[y * LAYER_WIDTH as usize + x] = 1;
-                }
-            }
-            overlay
-        };
-        let pixel = |gpu: &mut GpuRenderer, overlay: &htexture::Overlay| {
-            gpu.draw_overlay(overlay, (LAYER_WIDTH, LAYER_HEIGHT))
-                .unwrap();
-            let size = gpu.overlay_size;
-            let pixels = gpu.read_texture(gpu.overlay_target, size).unwrap();
-            let i = (90 * size.0 as usize + 120) * 4;
-            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        let pixel = |gpu: &mut GpuRenderer, list: &DrawList| {
+            gpu.draw_frame(list).unwrap();
+            let (pixels, size) = read_target(gpu);
+            rgb_at(&pixels, size, 1, 120, 90)
         };
 
         // The base page is white.
-        let plain = overlay(model(None));
-        assert_eq!(pixel(&mut gpu, &plain), [255, 255, 255]);
+        assert_eq!(pixel(&mut gpu, &model(None)), [255, 255, 255]);
         // The named replacement is red, at its own resolution.
         let red = Arc::new(htexture::Replacement {
             image: solid([255, 0, 0, 255]),
             frame: [1, 1],
         });
-        let replaced = overlay(model(Some(red)));
-        assert_eq!(pixel(&mut gpu, &replaced), [255, 0, 0]);
+        assert_eq!(pixel(&mut gpu, &model(Some(red))), [255, 0, 0]);
     }
 }

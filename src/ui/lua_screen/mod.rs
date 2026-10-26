@@ -185,7 +185,7 @@ impl Host {
     ) -> Result<(&Decoded, draw::HdArt)> {
         self.image(pack, entry)?;
         let image = self.images.get(entry).expect("just loaded");
-        let hd = if framebuffer.captures_hd() {
+        let hd = if framebuffer.records() {
             self.assets.entry_replacement(pack, entry, image, opts.clut)
         } else {
             None

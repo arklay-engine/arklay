@@ -1,8 +1,8 @@
 #version 450
-// A premultiplied RGBA UI layer (the F1 debug menu at a wider aspect) over
-// the composited frame, sampled sharply like the composite's layers. The
-// pipeline blends by source alpha, so the filtered colour is divided back
-// out of its coverage.
+// A premultiplied RGBA UI layer (the F1 debug menu at a wider aspect, drawn
+// by the 2D pass into a clear target) over the composited frame, sampled
+// sharply like the composite's frame. The pipeline blends by source alpha,
+// so the filtered colour is divided back out of its coverage.
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 0) out vec4 out_colour;
