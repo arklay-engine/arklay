@@ -34,7 +34,7 @@ proc main
 {
     if (cmpb(B_CAMERA, CMP_EQ, CAM_00))
     {
-        set(FG_MAP, F_MAP_3E, TRUE);
+        set(FG_MAP, F_MAP_VISITED_21E, TRUE);
     }
 }
 

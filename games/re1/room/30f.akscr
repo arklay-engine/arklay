@@ -146,7 +146,7 @@ proc main
 {
     if (cmpb(B_CAMERA, CMP_EQ, CAM_06))
     {
-        set(FG_MAP, F_MAP_51, TRUE);
+        set(FG_MAP, F_MAP_VISITED_312, TRUE);
     }
     if (ck(FG_ITEM, F_ITEM_76, FALSE) && ck(FG_ROOM, F_ROOM_1F, TRUE))
     {
