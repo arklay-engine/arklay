@@ -332,6 +332,158 @@ pub fn encode_texture8_to_vec(texture: &Texture8) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Encode an 8bpp indexed texture page as a BMP that keeps its texel indices.
+///
+/// The palette holds `row` of the page's CLUT as 256 entries; the reserved
+/// palette byte carries each entry's STP bit, so [`decode_indexed_page`]
+/// restores the exact page, including transparency. Unlike
+/// [`encode_texture8_to_vec`], indices are not merged or renumbered: a model
+/// page's UVs and its index-0 holes depend on them.
+pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
+    let width = texture.width as usize;
+    let height = texture.height as usize;
+    let expected = width * height;
+    if texture.indices.len() != expected {
+        bail!(
+            "texture has {} indices but a {}x{} image needs {expected}",
+            texture.indices.len(),
+            texture.width,
+            texture.height
+        );
+    }
+
+    let palette_len = 256usize;
+    let row_bytes = width;
+    let row_stride = (row_bytes + 3) & !3;
+    let image_size = row_stride
+        .checked_mul(height)
+        .ok_or_else(|| anyhow!("BMP dimensions {width}x{height} are too large"))?;
+    let pixel_offset = FILE_HEADER_LEN + DIB_HEADER_LEN + palette_len * 4;
+    let file_size = pixel_offset + image_size;
+
+    let mut out = Vec::with_capacity(file_size);
+    out.extend_from_slice(b"BM");
+    out.extend_from_slice(&(file_size as u32).to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&(pixel_offset as u32).to_le_bytes());
+    out.extend_from_slice(&(DIB_HEADER_LEN as u32).to_le_bytes());
+    out.extend_from_slice(&(texture.width as i32).to_le_bytes());
+    out.extend_from_slice(&(texture.height as i32).to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&8u16.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&(image_size as u32).to_le_bytes());
+    out.extend_from_slice(&0i32.to_le_bytes());
+    out.extend_from_slice(&0i32.to_le_bytes());
+    out.extend_from_slice(&(palette_len as u32).to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+
+    for index in 0..=255u8 {
+        let [r, g, b, _] = texture.palette(row, index);
+        let stp = u8::from(texture.palette_stp(row, index));
+        out.extend_from_slice(&[b, g, r, stp]);
+    }
+
+    for y in (0..height).rev() {
+        let row = &texture.indices[y * width..(y + 1) * width];
+        out.extend_from_slice(row);
+        out.resize(out.len() + (row_stride - row_bytes), 0);
+    }
+
+    Ok(out)
+}
+
+/// Decode an 8bpp indexed BMP produced by [`encode_indexed_page`].
+///
+/// The palette becomes one 256-entry CLUT row and each palette entry's
+/// reserved byte is read back as its STP flag. A 24-bit or shorter-palette
+/// file is refused: only an indexed page can preserve a model's texel
+/// indices.
+pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
+    if data.len() < 2 || &data[0..2] != b"BM" {
+        bail!("not a BMP file: bad magic");
+    }
+    if data.len() < FILE_HEADER_LEN + DIB_HEADER_LEN {
+        bail!("truncated BMP: missing file or DIB header");
+    }
+    let pixel_offset = u32_at(data, 10) as usize;
+    let dib_size = u32_at(data, 14) as usize;
+    if dib_size < DIB_HEADER_LEN {
+        bail!("unsupported BMP DIB header size {dib_size} (expected at least {DIB_HEADER_LEN})");
+    }
+    let dib_end = FILE_HEADER_LEN + dib_size;
+    if data.len() < dib_end {
+        bail!("truncated BMP: DIB header ends past the file");
+    }
+
+    let width = i32_at(data, 18);
+    let height = i32_at(data, 22);
+    let planes = u16_at(data, 26);
+    let bpp = u16_at(data, 28);
+    let compression = u32_at(data, 30);
+    if width <= 0 || height <= 0 {
+        bail!("unsupported BMP dimensions {width}x{height} (must be positive, bottom-up)");
+    }
+    if planes != 1 {
+        bail!("unsupported BMP planes {planes} (expected 1)");
+    }
+    if compression != 0 {
+        bail!("unsupported BMP compression {compression} (expected 0)");
+    }
+    if bpp != 8 {
+        bail!("model page BMP is {bpp}-bit (expected an 8-bit indexed page)");
+    }
+
+    let width = width as usize;
+    let height = height as usize;
+    let pixel_count = width
+        .checked_mul(height)
+        .context("BMP dimensions overflow")?;
+    budget::check_len(pixel_count, budget::MAX_PIXELS, "BMP pixel count")?;
+    let row_stride = (width + 3) & !3;
+    let image_size = row_stride
+        .checked_mul(height)
+        .ok_or_else(|| anyhow!("BMP dimensions {width}x{height} are too large"))?;
+    let end = pixel_offset
+        .checked_add(image_size)
+        .ok_or_else(|| anyhow!("BMP pixel data offset overflows"))?;
+    if end > data.len() {
+        bail!(
+            "truncated BMP: pixel data ends at {end}, file has {} bytes",
+            data.len()
+        );
+    }
+    if pixel_offset < dib_end {
+        bail!("BMP pixel data starts inside its header");
+    }
+    let entries = (pixel_offset - dib_end) / 4;
+    if entries < 256 {
+        bail!("model page BMP palette has {entries} entries (expected 256)");
+    }
+    let palette = data.get(dib_end..dib_end + 256 * 4).unwrap();
+    let mut palettes = Vec::with_capacity(256);
+    let mut stp = Vec::with_capacity(256);
+    for entry in palette.as_chunks::<4>().0 {
+        palettes.push([entry[2], entry[1], entry[0], 255]);
+        stp.push(entry[3] != 0);
+    }
+
+    let mut indices = budget::alloc::<u8>(pixel_count, "BMP indexed page")?;
+    indices.resize(pixel_count, 0);
+    for y in 0..height {
+        let src = &data[pixel_offset + (height - 1 - y) * row_stride..][..width];
+        indices[y * width..(y + 1) * width].copy_from_slice(src);
+    }
+
+    Ok(Texture8 {
+        width: width as u32,
+        height: height as u32,
+        indices,
+        palettes,
+        stp,
+    })
+}
+
 fn u16_at(data: &[u8], offset: usize) -> u16 {
     u16::from_le_bytes([data[offset], data[offset + 1]])
 }
@@ -610,6 +762,81 @@ mod tests {
         let mask = decode_mask(&data).unwrap();
         assert_eq!(&mask.rgba[0..4], &[0, 0, 0, 0]);
         assert_eq!(&mask.rgba[4..8], &[0, 0, 8, 255]);
+    }
+
+    #[test]
+    fn indexed_page_round_trips_indices_palette_and_stp() {
+        let mut palettes = vec![[0u8; 4]; 256];
+        palettes[1] = [10, 20, 30, 255];
+        palettes[7] = [200, 100, 50, 255];
+        palettes[255] = [1, 2, 3, 255];
+        let mut stp = vec![false; 256];
+        stp[7] = true;
+        stp[255] = true;
+        let texture = Texture8 {
+            width: 3,
+            height: 2,
+            indices: vec![0, 7, 255, 1, 0, 7],
+            palettes,
+            stp,
+        };
+
+        let data = encode_indexed_page(&texture, 0).unwrap();
+        assert_eq!(&data[0..2], b"BM");
+        assert_eq!(u16_at(&data, 28), 8, "the page is an 8-bit BMP");
+        let decoded = decode_indexed_page(&data).unwrap();
+        assert_eq!(decoded.width, 3);
+        assert_eq!(decoded.height, 2);
+        assert_eq!(decoded.indices, texture.indices, "indices are preserved");
+        assert_eq!(decoded.palette(0, 0), [0, 0, 0, 255]);
+        assert_eq!(decoded.palette(0, 7), [200, 100, 50, 255]);
+        assert_eq!(decoded.palette(0, 255), [1, 2, 3, 255]);
+        assert!(!decoded.palette_stp(0, 0));
+        assert!(decoded.palette_stp(0, 7));
+        assert!(decoded.palette_stp(0, 255));
+        assert_eq!(decoded.palettes.len(), 256);
+        assert_eq!(decoded.stp.len(), 256);
+    }
+
+    #[test]
+    fn indexed_page_rejects_a_direct_colour_bmp() {
+        let mut many = Vec::new();
+        for index in 0..300u32 {
+            many.extend_from_slice(&[(index & 0xFF) as u8, (index >> 8) as u8, 0, 255]);
+        }
+        let data24 = encode_to_vec(&Image {
+            width: 300,
+            height: 1,
+            rgba: many,
+        })
+        .unwrap();
+        assert_eq!(u16_at(&data24, 28), 24);
+        assert!(decode_indexed_page(&data24).is_err());
+    }
+
+    #[test]
+    fn indexed_page_rejects_a_short_palette() {
+        let mut data = encode_indexed_page(
+            &Texture8 {
+                width: 1,
+                height: 1,
+                indices: vec![0],
+                palettes: vec![[0u8; 4]; 256],
+                stp: vec![false; 256],
+            },
+            0,
+        )
+        .unwrap();
+        // Shrink the palette by moving the pixel data over its last entry.
+        let colors_used = u32_at(&data, 46);
+        let pixel_offset = u32_at(&data, 10);
+        assert_eq!(colors_used, 256);
+        let shorter = (pixel_offset - 4) as usize;
+        data.drain(shorter..shorter + 4);
+        data[10..14].copy_from_slice(&((pixel_offset - 4) as u32).to_le_bytes());
+        let file_size = u32_at(&data, 2);
+        data[2..6].copy_from_slice(&(file_size - 4).to_le_bytes());
+        assert!(decode_indexed_page(&data).is_err());
     }
 
     #[test]

@@ -18,8 +18,10 @@ use crate::common;
 
 use arklay::engine;
 use arklay::examine::{self, ConfirmOutcome, ExamineContext};
+use arklay::item_art;
+use arklay::items;
 use arklay::ivm;
-use arklay::pack::Pack;
+use arklay::pack::{Pack, PackWriter};
 use arklay::render::Framebuffer;
 use arklay::text::Text;
 use arklay::ui::lua_screen::{LuaScreen, ScreenArg};
@@ -63,6 +65,91 @@ fn every_shipped_item_model_parses_from_the_pack() {
             "{entry} has no primitives"
         );
     }
+}
+
+#[test]
+#[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn per_item_art_covers_shared_classes_and_the_pc_only_items() {
+    let Some(pack) = pack() else {
+        return;
+    };
+    // One icon for every item with an ITEM_ALL row, and the two PC-only
+    // machineguns from STAITEM.
+    assert!(pack.contains("item/02.bmp"), "the Beretta icon");
+    assert!(pack.contains("item/6f.bmp"), "the Ingram icon");
+    assert!(pack.contains("item/70.bmp"), "the Minimi icon");
+    // The Beretta and these ids share image class 2: identical copies.
+    for item in [0x5F, 0x60, 0x62, 0x63] {
+        assert_eq!(items::image_class(0x02), items::image_class(item));
+        for suffix in [".bmp", "_model.tmd", "_model.bmp"] {
+            let shared = format!("item/02{suffix}");
+            let own = format!("item/{item:02x}{suffix}");
+            assert_eq!(
+                pack.read(&own).unwrap().as_ref(),
+                pack.read(&shared).unwrap().as_ref(),
+                "{own} differs from {shared}"
+            );
+        }
+    }
+    // Class 0 has no art at all, so the viewer reports no model.
+    assert!(!pack.contains("item/6e.bmp"));
+    assert!(!pack.contains("item/6e_model.tmd"));
+    assert!(!pack.contains("item/6e_model.bmp"));
+    assert!(item_art::load_model(&pack, 0x6E).unwrap().is_none());
+
+    // The PC-only machineguns map into 0x6f/0x70 from ING/MINI.
+    for item in [items::ITEM_INGRAM, items::ITEM_MINIMI] {
+        let model = item_art::load_model(&pack, item).unwrap().unwrap();
+        assert!(model.per_item, "item {item:#04x}");
+        assert!(!model.untextured, "item {item:#04x}");
+        assert!(!model.ivm.objects.is_empty(), "item {item:#04x}");
+    }
+
+    // Splitting must not change the model: the per-item mesh and page equal
+    // what the shared .ivm parses to, including the palette's STP bits.
+    for item in [0x01u8, 0x02, 0x44, 0x4C] {
+        let loaded = item_art::load_model(&pack, item).unwrap().unwrap();
+        assert!(loaded.per_item, "item {item:#04x}");
+        let legacy = item_art::legacy_model_entry(item).unwrap();
+        let legacy = ivm::parse(&pack.read(&legacy).unwrap()).unwrap();
+        assert_eq!(loaded.ivm.texture.indices, legacy.texture.indices);
+        assert_eq!(loaded.ivm.texture.palettes, legacy.texture.palettes);
+        assert_eq!(loaded.ivm.texture.stp, legacy.texture.stp);
+        assert_eq!(
+            arklay::htexture::page_candidates(&loaded.ivm.texture, 0),
+            arklay::htexture::page_candidates(&legacy.texture, 0),
+            "the split page keeps the shared IVM's content hashes"
+        );
+        assert_eq!(loaded.ivm.objects, legacy.objects);
+    }
+}
+
+#[test]
+#[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn real_per_item_entries_verify_and_a_tmd_only_model_loads() {
+    let Some(pack) = pack() else {
+        return;
+    };
+    // A small pack of real item entries: verify parses the TMDs, the indexed
+    // pages and the icons.
+    let tmd = pack.read("item/01_model.tmd").unwrap();
+    let page = pack.read("item/02_model.bmp").unwrap();
+    let icon = pack.read("item/02.bmp").unwrap();
+    let mut writer = PackWriter::new();
+    writer.add("item/01_model.tmd", tmd.to_vec()).unwrap();
+    writer.add("item/02_model.bmp", page.to_vec()).unwrap();
+    writer.add("item/02.bmp", icon.to_vec()).unwrap();
+    let small = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+    let report = arklay::verify::verify_pack(&small, true);
+    assert!(report.valid(), "{:?}", report.failures);
+    assert_eq!(report.formats[&arklay::verify::Format::Tmd].ok, 1);
+    assert_eq!(report.formats[&arklay::verify::Format::Bmp].ok, 2);
+
+    // The TMD without its page is an untextured model, not an error.
+    let loaded = item_art::load_model(&small, 0x01).unwrap().unwrap();
+    assert!(loaded.untextured);
+    assert!(loaded.ivm.texture.indices.iter().all(|&index| index == 1));
+    assert!(!loaded.ivm.objects.is_empty());
 }
 
 /// The shipped `ui/item_view.lua` examine viewer on the real pack.

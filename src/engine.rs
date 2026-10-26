@@ -18155,6 +18155,14 @@ mod tests {
                 })
                 .to_vec(),
             backdrop: [0, 0, 32],
+            page: Some(std::sync::Arc::new(crate::htexture::Replacement {
+                image: crate::state::Image {
+                    width: 2,
+                    height: 2,
+                    rgba: [32, 64, 128, 255].repeat(4),
+                },
+                frame: [1, 1],
+            })),
         });
         for (layer, hole) in [(&mut black, 0), (&mut white, 255)] {
             layer.capture_hd(hole);

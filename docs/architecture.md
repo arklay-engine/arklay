@@ -56,6 +56,7 @@ responsibility.
 | `enemy` | Runtime | Entities: the shared character/monster runtime, the pack-script host, movement/pathfinding/SCA helpers, the scripted-character and monster machines |
 | `effects` | Runtime | The 64-slot billboard effect pool, per-room sprite tables, packed texture pages, behaviours |
 | `items` | Runtime | Item tables: names, classes, pickup rules, stacking |
+| `item_art` | Runtime | Per-item inventory art: icon/model/texture entry names, the TMD+page loader, icon baking and named HD keys |
 | `examine` | Runtime | The item viewer's game rules: the examine check, turntable spin and viewer camera |
 | `demo` | Runtime | The attract-demo reels (`demo/<hex>.dat`) and their recorded pad words |
 | `message` | Runtime | The seven-state message window and its byte grammar |

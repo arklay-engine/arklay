@@ -613,13 +613,37 @@ pub fn model_name_for_class(image_class: u8) -> Option<&'static str> {
     std::str::from_utf8(&name[..end]).ok()
 }
 
+/// The `ITEM_ALL` row (zero-based) of `item`'s 40x30 icon, or `None` when the
+/// item has no icon there.
+pub fn icon_row(item: u8) -> Option<u8> {
+    let class = image_class(item);
+    let row = class.checked_sub(1)?;
+    (usize::from(row) < ITEM_ALL_ROWS).then_some(row)
+}
+
 /// The item-view file name for `item`, including the two PC-only machineguns.
+///
+/// An item whose image class is 0 has no art: it must not resolve to the
+/// placeholder `m` entry.
 pub fn model_name(item: u8) -> Option<&'static str> {
     match item {
         ITEM_INGRAM => Some("ING"),
         ITEM_MINIMI => Some("MINI"),
-        _ => model_name_for_class(record(item)?.image_class),
+        _ => {
+            let class = image_class(item);
+            (class != 0).then(|| model_name_for_class(class)).flatten()
+        }
     }
+}
+
+/// Every item id that has a per-item icon or model, in id order.
+///
+/// The two PC-only machineguns are included; they are past [`MAX_ITEM`] but
+/// still have art.
+pub fn art_items() -> impl Iterator<Item = u8> {
+    (1..=MAX_ITEM)
+        .filter(|&item| icon_row(item).is_some() || model_name(item).is_some())
+        .chain([ITEM_INGRAM, ITEM_MINIMI])
 }
 
 #[cfg(test)]
@@ -859,5 +883,42 @@ mod tests {
         assert_eq!(model_name(ITEM_INGRAM), Some("ING"));
         assert_eq!(model_name(ITEM_MINIMI), Some("MINI"));
         assert_eq!(model_name(0), None);
+        // A class-0 record must not resolve the placeholder "m" name.
+        assert_eq!(model_name(0x6E), None);
+        assert_eq!(model_name_for_class(0), Some("m"));
+    }
+
+    #[test]
+    fn icon_rows_are_zero_based_and_bounded_by_the_atlas() {
+        assert_eq!(icon_row(0), None);
+        assert_eq!(icon_row(1), Some(0));
+        assert_eq!(icon_row(2), Some(1));
+        // Classes 73 and 74 have models but no ITEM_ALL row (the sheet is 72
+        // rows).
+        assert_eq!(image_class(0x4C), 73);
+        assert_eq!(icon_row(0x4C), None);
+        assert_eq!(icon_row(0x4D), None);
+        // Class 0 and the two PC-only ids have no atlas row.
+        assert_eq!(icon_row(0x6E), None);
+        assert_eq!(icon_row(ITEM_INGRAM), None);
+        assert_eq!(icon_row(ITEM_MINIMI), None);
+        assert_eq!(icon_row(0x57), None);
+    }
+
+    #[test]
+    fn art_items_cover_the_shared_classes_and_the_pc_only_ids() {
+        let ids: Vec<u8> = art_items().collect();
+        assert!(ids.contains(&0x01));
+        assert!(ids.contains(&0x4C), "a model-only item is still art");
+        assert!(ids.contains(&ITEM_INGRAM));
+        assert!(ids.contains(&ITEM_MINIMI));
+        assert!(!ids.contains(&0x6E), "no class means no art");
+        assert!(!ids.contains(&0x57), "an invalid class has no art");
+        assert_eq!(
+            ids.len(),
+            94,
+            "92 item ids with a class plus the two PC-only ids"
+        );
+        assert!(ids.windows(2).all(|pair| pair[0] < pair[1]), "{ids:?}");
     }
 }

@@ -1617,6 +1617,7 @@ impl Framebuffer {
         joints: &[anim::Mat4x3],
         camera: &Camera,
         light: Option<&EntityLight>,
+        page: Option<std::sync::Arc<crate::htexture::Replacement>>,
     ) {
         let Some((rect, backdrop)) = self.model_backdrop() else {
             self.draw_ivm(ivm, joints, camera, light);
@@ -1660,6 +1661,7 @@ impl Framebuffer {
                 ivm: ivm.clone(),
                 vertices,
                 backdrop,
+                page,
             })),
             dst: [x0, y0, x0 + width as f32, y0 + height as f32],
             uv: [0.0, 0.0, 1.0, 1.0],
@@ -6859,7 +6861,7 @@ mod tests {
         framebuffer.capture_hd(255);
         framebuffer.hd.as_mut().unwrap().offset = [8, 0];
         framebuffer.set_clip_rect(Some(clip));
-        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None);
+        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
         // The clip is punched whole and the model queued over its navy.
         assert_eq!(pixel(&framebuffer, 150, 110), [255; 3]);
         assert_eq!(pixel(&framebuffer, 169, 129), [255; 3]);
@@ -6897,7 +6899,7 @@ mod tests {
         framebuffer.rgba[(120 * 320 + 160) * 4] = 1;
         framebuffer.capture_hd(255);
         framebuffer.set_clip_rect(Some(clip));
-        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None);
+        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
         assert!(framebuffer.hd_quads().is_empty());
         assert_eq!(pixel(&framebuffer, 150, 110), [255; 3]);
         assert_eq!(
@@ -6912,7 +6914,7 @@ mod tests {
         framebuffer.capture_hd(255);
         framebuffer.hd.as_mut().unwrap().coverage[129 * 320 + 169] = 1;
         framebuffer.set_clip_rect(Some(clip));
-        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None);
+        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
         assert!(framebuffer.hd_quads().is_empty());
         assert_eq!(pixel(&framebuffer, 150, 110), [255; 3]);
 
@@ -6920,7 +6922,7 @@ mod tests {
         let mut framebuffer = Framebuffer::new();
         navy(&mut framebuffer);
         framebuffer.set_clip_rect(Some(clip));
-        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None);
+        framebuffer.draw_ivm_captured(&model, &[identity()], &straight_camera(), None, None);
         assert_eq!(pixel(&framebuffer, 160, 120), [255; 3]);
 
         // A model with nothing to draw queues nothing and leaves the
@@ -6933,7 +6935,7 @@ mod tests {
         navy(&mut framebuffer);
         framebuffer.capture_hd(255);
         framebuffer.set_clip_rect(Some(clip));
-        framebuffer.draw_ivm_captured(&empty, &[], &straight_camera(), None);
+        framebuffer.draw_ivm_captured(&empty, &[], &straight_camera(), None, None);
         assert!(framebuffer.hd_quads().is_empty());
         assert_eq!(pixel(&framebuffer, 160, 120), [0, 0, 0x20]);
         assert_eq!(

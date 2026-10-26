@@ -1467,6 +1467,9 @@ mod tests {
         let paths = [
             "hires/bgd/0a1b2c3d.webp",
             "hires/cache/ROOM1000.dat",
+            "hires/Item/0B.webp",
+            "hires/Data/ITEM_ALL/05.webp",
+            "hires/Data/Item_m2/I00V.webp",
             "movie/OJ.mp4",
             "movie/Capcom.mp4",
             "movie/Dme_PSX.mp4",
@@ -1488,6 +1491,17 @@ mod tests {
         assert_eq!(
             one(&map, "hires/cache/ROOM1000.dat"),
             "htexture/cache/room1000.dat"
+        );
+        // Both item HD routes land under `htexture/`: the new per-item names
+        // and the legacy CR `ITEM_ALL`/`ITEM_M2` names.
+        assert_eq!(one(&map, "hires/Item/0B.webp"), "htexture/item/0b.webp");
+        assert_eq!(
+            one(&map, "hires/Data/ITEM_ALL/05.webp"),
+            "htexture/data/item_all/05.webp"
+        );
+        assert_eq!(
+            one(&map, "hires/Data/Item_m2/I00V.webp"),
+            "htexture/data/item_m2/i00v.webp"
         );
         assert_eq!(one(&map, "movie/OJ.mp4"), "movie/oj.mp4");
         assert_eq!(one(&map, "movie/Capcom.mp4"), "movie/capcom.mp4");

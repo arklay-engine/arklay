@@ -650,7 +650,28 @@ fn conversion_adds_exactly_the_manifest_entry() {
             .collect()
     };
     let previous_paths = filter(previous.paths().collect());
-    let converted_paths = filter(converted.paths().collect());
+    let mut converted_paths = filter(converted.paths().collect());
+    // A pack converted before the per-item item art (#181) only has the
+    // shared sheets and IVMs; a current conversion adds the per-item files.
+    // They are expected additions, not content changes.
+    let per_item = |path: &str| {
+        let Some(name) = path.strip_prefix("item/") else {
+            return false;
+        };
+        if name.ends_with("_model.tmd") || name.ends_with("_model.bmp") {
+            return true;
+        }
+        name.strip_suffix(".bmp")
+            .is_some_and(|id| id.len() == 2 && id.bytes().all(|b| b.is_ascii_hexdigit()))
+    };
+    let added: Vec<&String> = converted_paths
+        .iter()
+        .filter(|path| !previous_paths.contains(path))
+        .collect();
+    for path in &added {
+        assert!(per_item(path), "the conversion added {path}");
+    }
+    converted_paths.retain(|path| previous_paths.contains(path));
     assert_eq!(converted_paths, previous_paths);
     for path in &previous_paths {
         assert_eq!(

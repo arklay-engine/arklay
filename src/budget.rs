@@ -48,7 +48,7 @@
 //! | [`MAX_LUA_CHUNKS`] | 256 | a handful | loaded Lua chunks |
 //! | [`MAX_LUA_CHUNK`] | 1 MiB | a few KiB | one Lua chunk |
 //! | [`MAX_SAVE_BYTES`] | 1 MiB | 2 KiB | save slot file |
-//! | [`MAX_SCREEN_IMAGES`] | 64 | a handful | Lua screen image cache |
+//! | [`MAX_SCREEN_IMAGES`] | 64 | a handful | Lua screen art cache (per-item icons are exempt; the item table bounds them) |
 //! | [`MAX_SCREEN_IMAGE_BYTES`] | 64 MiB | a few hundred KiB | Lua screen image cache |
 //! | [`MAX_COMBAT_TABLE_BYTES`] | 64 KiB | ~7 KiB | `data/combat.bin` |
 //!

@@ -33,7 +33,7 @@ use crate::sfx;
 use crate::state::{Image, RoomId};
 use crate::voice;
 use crate::voice_table;
-use crate::{bmp, door, lzw, rdt, tim};
+use crate::{bmp, door, ivm, lzw, rdt, tim};
 
 /// How many directory levels below the root are searched for the stage and
 /// `sound` directories.
@@ -528,7 +528,8 @@ pub fn convert_game_observed(
         copy_effect_sheets(&effects, &mut writer, &mut progress, jobs)?;
     let (font_count, font_bytes) = copy_font(&fonts, &mut writer, &mut progress)?;
     let (ui_count, ui_bytes) = copy_ui_art(&data, &mut writer, &mut progress, jobs)?;
-    let (item_count, item_bytes) = copy_item_art(&data, &mut writer, &mut progress, jobs)?;
+    let (item_count, item_bytes) =
+        copy_item_art(&data, &mut writer, &mut progress, &mut warnings, jobs)?;
     let (demo_count, demo_bytes) = copy_demos(&data, &mut writer, &mut progress)?;
     let (core_count, core_bytes) = copy_core_effects(&data, &mut writer, &mut progress, jobs)?;
     let (shadow_count, shadow_bytes) = copy_shadow(&data, &mut writer, &mut progress)?;
@@ -1097,11 +1098,13 @@ fn copy_ui_art(
     Ok((count, bytes))
 }
 
-/// Bake the three item icon atlases through `STATUS.TIM`'s second CLUT row.
+/// Bake the three item icon atlases through `STATUS.TIM`'s second CLUT row,
+/// and the per-item icon of every item that has one.
 fn copy_item_art(
     data: &DataPlan,
     writer: &mut PackWriter,
     progress: &mut Progress,
+    warnings: &mut Vec<String>,
     jobs: usize,
 ) -> Result<(usize, usize)> {
     let Some(palette_path) = &data.palette else {
@@ -1115,7 +1118,71 @@ fn copy_item_art(
     let texture = tim::decode_8bpp(&palette_raw)
         .with_context(|| format!("failed to decode {} as a CLUT TIM", palette_path.display()))?;
 
-    progress.begin("item", data.items.len() as u64);
+    // The per-item icons are cut from ITEM_ALL.PIX; the two PC-only
+    // machineguns come from STAITEM.TIM instead.
+    let mut per_item: Vec<(String, Vec<u8>)> = Vec::new();
+    let item_all = data
+        .items
+        .iter()
+        .find(|asset| asset.entry == items::ITEM_ALL_ENTRY);
+    let special_page = data
+        .ui
+        .iter()
+        .find(|asset| asset.entry == "ui/staitem.tim")
+        .and_then(|asset| match fs::read(&asset.source) {
+            Ok(raw) => match tim::decode_8bpp(&raw) {
+                Ok(page) => Some(page),
+                Err(error) => {
+                    warnings.push(format!(
+                        "failed to decode {} as a TIM; the per-item Ingram/Minimi icons are skipped: {error:#}",
+                        asset.source.display()
+                    ));
+                    None
+                }
+            },
+            Err(error) => {
+                warnings.push(format!(
+                    "failed to read {}; the per-item Ingram/Minimi icons are skipped: {error}",
+                    asset.source.display()
+                ));
+                None
+            }
+        });
+    let pix = match item_all {
+        Some(asset) => Some(
+            fs::read(&asset.source)
+                .with_context(|| format!("failed to read {}", asset.source.display()))?,
+        ),
+        None => None,
+    };
+    for item in items::art_items() {
+        let bytes = if let Some(row) = items::icon_row(item) {
+            let Some(pix) = &pix else {
+                continue;
+            };
+            crate::item_art::bake_icon(pix, usize::from(row), &texture)
+                .with_context(|| format!("failed to bake item {item:#04x}'s icon"))?
+        } else if matches!(item, items::ITEM_INGRAM | items::ITEM_MINIMI) {
+            let Some(page) = &special_page else {
+                continue;
+            };
+            let row = usize::from(item - items::ITEM_INGRAM);
+            match crate::item_art::bake_page_icon(page, row * items::ICON_HEIGHT as usize) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    warnings.push(format!(
+                        "failed to bake item {item:#04x}'s icon from ui/staitem.tim; the item uses the shared page: {error:#}"
+                    ));
+                    continue;
+                }
+            }
+        } else {
+            continue;
+        };
+        per_item.push((format!("{}{item:02x}.bmp", crate::item_art::PREFIX), bytes));
+    }
+
+    progress.begin("item", (data.items.len() + per_item.len()) as u64);
     let results = parallel_map(data.items.len(), jobs, progress, |index| {
         let asset = &data.items[index];
         let pix = fs::read(&asset.source)
@@ -1132,6 +1199,14 @@ fn copy_item_art(
         writer
             .add(&entry, bmp_bytes)
             .with_context(|| format!("failed to add {entry}"))?;
+    }
+    for (entry, bmp_bytes) in per_item {
+        bytes += bmp_bytes.len();
+        count += 1;
+        writer
+            .add(&entry, bmp_bytes)
+            .with_context(|| format!("failed to add {entry}"))?;
+        progress.advance(&entry);
     }
     progress.end_phase();
     Ok((count, bytes))
@@ -1586,7 +1661,8 @@ fn copy_language_files(writer: &mut PackWriter, progress: &mut Progress) -> Resu
     Ok((count, bytes))
 }
 
-/// Add every `ITEM_M2/*.IVM` item-view model to the pack under `item/`.
+/// Add every `ITEM_M2/*.IVM` item-view model to the pack under `item/`, and
+/// the per-item split mesh and texture page of every item that has art.
 ///
 /// The pack stores the canonical lower-case file name; the install's names are
 /// matched case-insensitively. Every language tree is searched, the conversion
@@ -1606,9 +1682,9 @@ fn copy_item_models(
 
     let index = index_dirs(item_m2, warnings)?;
     let mut files: Vec<(String, PathBuf)> = index
-        .into_iter()
+        .iter()
         .filter(|(name, _)| name.ends_with(".ivm"))
-        .map(|(name, path)| (format!("item/{name}"), path))
+        .map(|(name, path)| (format!("item/{name}"), path.clone()))
         .collect();
     files.sort_by(|a, b| a.0.cmp(&b.0));
     if files.len() != IVM_COUNT {
@@ -1619,7 +1695,106 @@ fn copy_item_models(
         ));
     }
 
-    copy_raw_files(files, "item", writer, progress, jobs)
+    // Group the item ids that share one `.ivm` so the split is done once per
+    // model and the resulting entries are copied to every sharing item.
+    let all_names: Vec<&str> = items::art_items().filter_map(items::model_name).collect();
+    let mut names: Vec<&str> = all_names;
+    names.sort_unstable();
+    names.dedup();
+    let mut present = Vec::new();
+    let mut missing = Vec::new();
+    for name in names {
+        let file = format!("{}.ivm", name.to_ascii_lowercase());
+        if index.contains_key(&file) {
+            present.push(name);
+        } else {
+            missing.push(name);
+        }
+    }
+    if !missing.is_empty() {
+        warnings.push(format!(
+            "missing {} item model(s) in {}: {}",
+            missing.len(),
+            searched_dirs(item_m2),
+            missing.join(", ")
+        ));
+    }
+
+    progress.begin("item", (files.len() + present.len()) as u64);
+    let copies = parallel_map(files.len(), jobs, progress, |index| {
+        let (entry, source) = &files[index];
+        let data =
+            fs::read(source).with_context(|| format!("failed to read {}", source.display()))?;
+        Ok((entry.clone(), 1, data))
+    })?;
+    let mut count = 0usize;
+    let mut bytes = 0usize;
+    for (entry, data) in copies {
+        bytes += data.len();
+        count += 1;
+        writer
+            .add(&entry, data)
+            .with_context(|| format!("failed to add {entry}"))?;
+    }
+
+    type Split = Result<(Vec<u8>, Vec<u8>), String>;
+    let splits = parallel_map(present.len(), jobs, progress, |slot| {
+        let name = present[slot];
+        let file = format!("{}.ivm", name.to_ascii_lowercase());
+        let source = &index[&file];
+        let split = fs::read(source)
+            .map_err(|error| format!("failed to read {}: {error}", source.display()))
+            .and_then(|raw| {
+                let (_, tmd) = ivm::split(&raw).map_err(|error| format!("{error:#}"))?;
+                let texture = tim::decode_8bpp(&raw).map_err(|error| format!("{error:#}"))?;
+                let page =
+                    bmp::encode_indexed_page(&texture, 0).map_err(|error| format!("{error:#}"))?;
+                Ok((tmd.to_vec(), page))
+            });
+        Ok((name.to_string(), 1, split as Split))
+    })?;
+    let mut failed = 0usize;
+    let mut first_error = None;
+    for (name, split) in splits {
+        let (tmd, page) = match split {
+            Ok(parts) => parts,
+            Err(error) => {
+                failed += 1;
+                first_error.get_or_insert(error);
+                continue;
+            }
+        };
+        let name_ids: Vec<u8> = items::art_items()
+            .filter(|&item| items::model_name(item) == Some(name.as_str()))
+            .collect();
+        for item in name_ids {
+            let entries = [
+                (
+                    format!("{}{item:02x}_model.tmd", crate::item_art::PREFIX),
+                    tmd.clone(),
+                ),
+                (
+                    format!("{}{item:02x}_model.bmp", crate::item_art::PREFIX),
+                    page.clone(),
+                ),
+            ];
+            for (entry, data) in entries {
+                bytes += data.len();
+                count += 1;
+                writer
+                    .add(&entry, data)
+                    .with_context(|| format!("failed to add {entry}"))?;
+            }
+        }
+    }
+    if failed > 0 {
+        warnings.push(format!(
+            "failed to split {failed} item model(s); their per-item files are missing: {}",
+            first_error.unwrap_or_default()
+        ));
+    }
+    progress.end_phase();
+    Ok((count, bytes))
 }
 
 /// Add the document-reader art to the pack under `file/`: the `FILE` covers,
@@ -4880,7 +5055,10 @@ mod tests {
         let pack = crate::pack::Pack::open(&out).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("ui/"), UI_ASSETS.len() + crate::ui::UI_SCRIPTS.len());
-        assert_eq!(count("item/"), 1);
+        // The atlas plus one icon for every item id with an ITEM_ALL row.
+        // STAITEM.TIM is not a TIM in this fixture, so the two PC-only
+        // specials fall back to the shared sheet.
+        assert_eq!(count("item/"), 1 + 90);
         assert_eq!(count("shadow/"), 1);
         assert_eq!(
             pack.read(crate::shadow::KAGE_ENTRY).unwrap(),
@@ -4899,6 +5077,14 @@ mod tests {
             )
         );
         assert_eq!(&image.rgba[0..4], &[255, 0, 0, 255]);
+
+        // The per-item icon is the atlas row through the same palette.
+        let icon = bmp::decode(&pack.read("item/02.bmp").unwrap()).unwrap();
+        assert_eq!(
+            (icon.width, icon.height),
+            (items::ICON_WIDTH, items::ICON_HEIGHT)
+        );
+        assert_eq!(&icon.rgba[0..4], &[255, 0, 0, 255]);
     }
 
     /// A synthetic 1x1 white 16bpp TIM.
@@ -4954,10 +5140,16 @@ mod tests {
         let mut writer = PackWriter::new();
         let mut progress = Progress::new("test", 1);
         let (ui_count, _) = copy_ui_art(&plan, &mut writer, &mut progress, 1).unwrap();
-        let (item_count, _) = copy_item_art(&plan, &mut writer, &mut progress, 1).unwrap();
+        let (item_count, _) =
+            copy_item_art(&plan, &mut writer, &mut progress, &mut Vec::new(), 1).unwrap();
         let (shadow_count, _) = copy_shadow(&plan, &mut writer, &mut progress).unwrap();
         assert_eq!(ui_count, UI_ASSETS.len());
-        assert_eq!(item_count, ITEM_ASSETS.len());
+        // The shared atlases plus one icon per item with an ITEM_ALL row (or
+        // a STAITEM row for the two PC-only machineguns).
+        let icons = items::art_items()
+            .filter(|&item| crate::item_art::icon_entry(item).is_some())
+            .count();
+        assert_eq!(item_count, ITEM_ASSETS.len() + icons);
         assert_eq!(shadow_count, 1);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         assert_eq!(
@@ -5010,6 +5202,55 @@ mod tests {
 
         let layout = discover_layout(&root.path).unwrap();
         assert_eq!(layout.item_m2.unwrap(), root.path.join("install/ItEm_M2"));
+    }
+
+    #[test]
+    fn splits_a_synthetic_item_model_per_item_id() {
+        let root = TempDir::new("item-split");
+        let dir = root.path.join("ITEM_M2");
+        fs::create_dir_all(&dir).unwrap();
+        let sample = crate::ivm::sample_ivm();
+        fs::write(dir.join("I00V.IVM"), &sample).unwrap();
+        fs::write(dir.join("ING.IVM"), &sample).unwrap();
+
+        let mut writer = PackWriter::new();
+        let mut progress = Progress::new("test", 1);
+        let mut warnings = Vec::new();
+        let (items, _bytes) = copy_item_models(
+            std::slice::from_ref(&dir),
+            &mut writer,
+            &mut progress,
+            &mut warnings,
+            1,
+        )
+        .unwrap();
+        // Five item ids share image class 2 (i00v) and one is the Ingram.
+        assert_eq!(items, 2 + 2 * 6);
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+
+        let (_, tmd) = crate::ivm::split(&sample).unwrap();
+        assert_eq!(pack.read("item/02_model.tmd").unwrap().as_ref(), tmd);
+        for item in [0x02u8, 0x5F, 0x60, 0x62, 0x63] {
+            let entry = format!("item/{item:02x}_model.tmd");
+            assert_eq!(pack.read(&entry).unwrap().as_ref(), tmd, "{entry}");
+            let page = crate::bmp::decode_indexed_page(
+                &pack.read(&format!("item/{item:02x}_model.bmp")).unwrap(),
+            )
+            .unwrap();
+            let expected = crate::tim::decode_8bpp(&sample).unwrap();
+            assert_eq!(page.indices, expected.indices, "item {item:#04x}");
+            assert_eq!(page.palettes, expected.palettes, "item {item:#04x}");
+            assert_eq!(page.stp, expected.stp, "item {item:#04x}");
+        }
+        assert!(pack.contains("item/6f_model.tmd"));
+        assert!(pack.contains("item/6f_model.bmp"));
+        // An item whose model name is not in the directory has no per-item
+        // files, and the missing names are reported once.
+        assert!(!pack.contains("item/01_model.tmd"));
+        assert!(
+            warnings.iter().any(|warning| warning.contains("missing")),
+            "{warnings:?}"
+        );
     }
 
     #[test]
@@ -5339,13 +5580,18 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(items, 77);
+        // The 77 shared IVMs plus a TMD and page for every item id with a
+        // model.
+        let models = items::art_items()
+            .filter(|&item| items::model_name(item).is_some())
+            .count();
+        assert_eq!(items, 77 + 2 * models);
         assert_eq!(files, 2 + FILEI_COUNT + TEXTM_COUNT);
         assert_eq!(maps, 16);
         assert!(items_bytes > 0 && files_bytes > 0 && maps_bytes > 0);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("item/"), 77);
+        assert_eq!(count("item/"), 77 + 2 * models);
         assert_eq!(count("file/"), 62);
         assert_eq!(count("map/"), 16);
         assert_eq!(

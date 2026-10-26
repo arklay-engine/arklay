@@ -170,6 +170,9 @@ is exact.
 | full-frame UI backdrop | `ui/title`, `ui/sel_back`, `ui/type00`, `ui/chris02`, `ui/jill02`, `ui/clis01`, `ui/jill01`, `ui/rc1121` | webp, png, bmp, tim | any size: stretched |
 | UI sheets | `ui/status`, `ui/blue`, `ui/statface`, `ui/staitem`, `ui/itemboxn`, `ui/select_b`, `ui/select_k`, `ui/t_press`, `ui/t_start`, `ui/died`, `ui/en05`, `ui/en07` | webp, png, bmp, tim | the shipped page's; an RGBA replacement uses its own alpha |
 | item art | `item/item_all`, `item/item_mix`, `item/medal` | webp, png, bmp, tim | the shipped sheet's; black is a hole |
+| item icon | `item/0b`, `item/44`, `item/6f` | webp, png, bmp, tim | the shipped 40x30 icon's; black is a hole |
+| item viewer model | `item/0b_model.tmd` | tmd | the shipped mesh |
+| item viewer texture | `item/0b_model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b_model` |
 | item-view / enemy / player art | (inside `item/*.ivm`, `enemy/em*.emd`, `player/*.emd`) | — | override the whole model entry |
 | doors | (inside `door/*.dor`) | — | override the whole entry |
 | font sheets | `font/font`, `font/jpn`, `font/latin` | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
@@ -189,6 +192,60 @@ stage row and the lowercase hex id (`voice::entry_path`), and everything else
 is the literal name `arklay list` prints. Music tracks, including the former
 `Se_*` group layers, are all `bgm/<track id>`; the converter owns the only
 name-to-id table.
+
+### Item art
+
+The original keys an item's inventory art by its *image type*: one
+`DATA/ITEM_ALL.PIX` row and one `ITEM_M2/I<imageType>V.IVM` serve every item
+that shares a class. `convert-game` keeps those shared entries, and also writes
+the art per item id:
+
+```text
+item/0b.bmp          the 40x30 inventory icon
+item/0b_model.tmd    the inventory 3D model
+item/0b_model.bmp    its 256x256 indexed texture page
+```
+
+`<id>` is the lower-case two-digit hex item id (`0b`, `44`, `6f`). A pack
+converted before this split still works: the engine falls back to
+`item/item_all.bmp` and `item/<name>.ivm`. The files are independently
+optional:
+
+- no `item/<id>.bmp`: the inventory draws the item's shared `ITEM_ALL` row
+  (or `STAITEM` for the Ingram and Minimi);
+- no `item/<id>_model.tmd`: the viewer loads the shared `.ivm`;
+- `item/<id>_model.tmd` without `_model.bmp`: the model is untextured;
+- neither `_model` file and no `.ivm`: the item has no model, as the
+  item viewer and the examine screen expect.
+
+The texture page keeps the IVM's exact 256x256 indices, palette and
+semi-transparency bits, so the content-hash HD names of an existing pack still
+match. An item that shares its image type with another gets its own copy of
+the files, so editing one item's art no longer changes its class.
+
+For HD packs the per-item names are under `htexture/`:
+
+```text
+htexture/item/0b.webp          the inventory icon, covering its 40x30 cell
+htexture/item/0b_model.webp    the model's 256x256 page
+```
+
+These are preferred over the older names, which keep working unchanged:
+`htexture/data/item_all/<row:02>` (`<row>` is `imageType - 1`, the file
+Classic REbirth's `hires/Data/ITEM_ALL/<NN>.webp` becomes through
+`convert-mod`) and `htexture/data/item_m2/<name>` (the `ITEM_M2` TIM). The
+content hash remains the final fallback, so an HD pack that predates both
+named routes still replaces the art it did before. `convert-mod` maps a
+`hires/` tree verbatim, so the new keys are the tree's own paths
+(`hires/Item/0B.webp` becomes `htexture/item/0b.webp`).
+
+A mod authors per-item base art by shipping the entry itself (`item/0b.bmp`,
+`item/0b_model.tmd`, `item/0b_model.bmp`) in a mod source directory. An older
+mod that replaces the shared `item/item_all` sheet or `item/<name>.ivm` still
+affects a pack that predates the per-item files, but a converted pack draws
+the per-item copies first; retarget the art at the item ids. There is no
+separate "no icon" marker: omitting `item/<id>.bmp` falls back to the shared
+row, so ship a fully transparent 40x30 image to blank one item's icon.
 
 ### Mismatch behaviour
 
@@ -817,7 +874,8 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:line(x0, y0, x1, y1, r, g, b)` | A one-pixel opaque line as the original's line primitive draws it: a quad half a pixel either side of the segment, filled with the GPU's top-left rule, so the far end of each axis is excluded (a run from 10 to 13 paints 10..12, a downward run at x=20 paints column 19) and each colour byte goes through the primitive's `byte / 256 * 255` step (0xD8 draws 0xD7). |
 | `api:blend_black_rect(x, y, w, h, alpha)` | Darken a rectangle. |
 | `api:draw_background(picture, x, y[, r, g, b])` | Draw a picture tinted by `r, g, b`. |
-| `api:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh, scale[, cell])` | A picture region, scaled. `cell` (`{x, y, w, h}`) names the atlas cell the region lies in, so an HD replacement is looked up for that cell alone (an item icon) rather than the whole picture. |
+| `api:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh, scale[, cell])` | A picture region, scaled. `cell` (`{x, y, w, h}`) names the atlas cell the region lies in, so an HD replacement is looked up for that cell alone rather than the whole picture. |
+| `api:item_icon(item)` | The item's 40x30 inventory icon as a picture handle, or `nil`: its own `item/<id>.bmp`, else the shared atlas row. HD names `htexture/item/<id>` and `htexture/data/item_all/<row>` are preferred over the content hash. |
 | `api:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale[, tint])` | A sheet region through CLUT row `clut`, scaled and tinted. |
 | `api:page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, brightness, mirror_u, mirror_v[, whole])` | A sheet region flipped per axis. With `whole`, an HD replacement covers the region's transparent texels too and its own alpha decides what shows, for art the HD page redraws rather than upscales (the ECG condition label). |
 | `api:page_lut(page, sx, sy, w, h, dx, dy, lut)` | An unscaled rect of an indexed page drawn through `lut`, a table of opaque `0xRRGGBB` colours keyed by texel index; an index without an entry (index 0 included) is transparent. |

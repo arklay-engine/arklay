@@ -117,6 +117,27 @@ impl Format {
     }
 }
 
+/// The item id of a per-item icon path (`item/0b.bmp`), if `path` is one.
+fn item_icon_id(path: &str) -> Option<u8> {
+    let lower = path.to_ascii_lowercase();
+    let id = lower.strip_prefix("item/")?.strip_suffix(".bmp")?;
+    (id.len() == 2 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .then(|| u8::from_str_radix(id, 16).ok())
+        .flatten()
+}
+
+/// Whether `path` is a per-item model page (`item/0b_model.bmp`).
+fn is_item_model_page(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    let Some(name) = lower.strip_prefix("item/") else {
+        return false;
+    };
+    let Some(id) = name.strip_suffix("_model.bmp") else {
+        return false;
+    };
+    id.len() == 2 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 /// The lowercased extension of a pack path.
 fn path_extension(path: &str) -> &str {
     path.rsplit_once('.').map_or("", |(_, extension)| extension)
@@ -366,11 +387,35 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
         Format::Mask => {
             crate::assets::decode_image_bytes(path_extension(path), data)?;
         }
+        Format::Bmp if is_item_model_page(path) => {
+            let texture = crate::bmp::decode_indexed_page(data)?;
+            if (texture.width, texture.height) != (256, 256) {
+                bail!(
+                    "item model page is {}x{}, expected 256x256",
+                    texture.width,
+                    texture.height
+                );
+            }
+        }
         Format::Bmp => {
-            crate::bmp::decode(data)?;
+            let image = crate::bmp::decode(data)?;
+            if item_icon_id(path).is_some() && (image.width, image.height) != (40, 30) {
+                bail!(
+                    "item icon is {}x{}, expected 40x30",
+                    image.width,
+                    image.height
+                );
+            }
         }
         Format::Png | Format::Webp => {
-            crate::assets::decode_image_bytes(path_extension(path), data)?;
+            let image = crate::assets::decode_image_bytes(path_extension(path), data)?;
+            if item_icon_id(path).is_some() && (image.width, image.height) != (40, 30) {
+                bail!(
+                    "item icon is {}x{}, expected 40x30",
+                    image.width,
+                    image.height
+                );
+            }
         }
         Format::Ogg => {
             crate::assets::decode_audio_bytes("ogg", data)?;
@@ -531,6 +576,53 @@ mod tests {
         assert_eq!(classify("room/bonus.rdt"), Format::Opaque);
         assert_eq!(classify("room/100.rdt"), Format::Opaque);
         assert_eq!(classify("room/zzzz.rdt"), Format::Opaque);
+    }
+
+    #[test]
+    fn item_art_entries_are_checked_at_their_required_shapes() {
+        let page = |width, height| {
+            crate::bmp::encode_indexed_page(
+                &crate::model::Texture8 {
+                    width,
+                    height,
+                    indices: vec![1; (width * height) as usize],
+                    palettes: vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN],
+                    stp: vec![false; crate::model::PALETTE_ROW_LEN],
+                },
+                0,
+            )
+            .unwrap()
+        };
+        let icon = |width, height| {
+            crate::bmp::encode_to_vec(&Image {
+                width,
+                height,
+                rgba: [1, 2, 3, 255].repeat((width * height) as usize),
+            })
+            .unwrap()
+        };
+        let mut writer = PackWriter::new();
+        writer.add("item/01_model.bmp", page(256, 256)).unwrap();
+        writer.add("item/01.bmp", icon(40, 30)).unwrap();
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let report = verify_pack(&pack, true);
+        assert!(report.valid(), "{:?}", report.failures);
+
+        // A model page must be the indexed 256x256 page the loader reads.
+        let mut writer = PackWriter::new();
+        writer.add("item/01_model.bmp", icon(256, 256)).unwrap();
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let report = verify_pack(&pack, true);
+        assert!(!report.valid());
+        assert!(report.failures[0].error.contains("256"));
+
+        // An icon is exactly 40x30.
+        let mut writer = PackWriter::new();
+        writer.add("item/01.bmp", icon(80, 60)).unwrap();
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let report = verify_pack(&pack, true);
+        assert!(!report.valid());
+        assert!(report.failures[0].error.contains("40x30"));
     }
 
     #[test]

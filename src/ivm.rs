@@ -93,13 +93,55 @@ pub struct IvmPrim {
 
 /// Parse one `.IVM` file.
 pub fn parse(data: &[u8]) -> Result<Ivm> {
+    let (texture, tmd) = split(data)?;
+    let texture = tim::decode_8bpp(texture).context("failed to decode the IVM texture")?;
+    let objects = parse_tmd(tmd)?;
+    Ok(Ivm { texture, objects })
+}
+
+/// Split an `.IVM` into its TIM texture bytes and the TMD mesh that follows.
+///
+/// The split point is the end of the TIM (`8 + clut_len + img_len`), so the
+/// two halves are the exact bytes [`parse`] decodes.
+pub fn split(data: &[u8]) -> Result<(&[u8], &[u8])> {
     let tmd_offset = texture_end(data)?;
-    let texture = tim::decode_8bpp(data).context("failed to decode the IVM texture")?;
+    let texture = data
+        .get(..tmd_offset)
+        .context("IVM texture bytes are truncated")?;
     let tmd = data
         .get(tmd_offset..)
         .with_context(|| format!("IVM TMD offset 0x{tmd_offset:X} is out of bounds"))?;
-    let objects = parse_tmd(tmd)?;
-    Ok(Ivm { texture, objects })
+    Ok((texture, tmd))
+}
+
+/// Build an item-view model from a TMD mesh and its texture page.
+///
+/// The pack's per-item art stores the mesh and page separately
+/// (`item/<id>_model.tmd` and `item/<id>_model.bmp`); this is the same model
+/// [`parse`] would produce from the equivalent `.IVM`.
+pub fn from_parts(texture: Texture8, tmd: &[u8]) -> Result<Ivm> {
+    Ok(Ivm {
+        texture,
+        objects: parse_tmd(tmd)?,
+    })
+}
+
+/// A 256 x 256 opaque white page for a TMD-only model.
+///
+/// A model whose pack has `item/<id>_model.tmd` but no `_model.bmp` is
+/// untextured; its textured polygons sample this page at their own UVs
+/// instead of failing, while untextured polygons keep their packet colour.
+pub fn blank_texture() -> Texture8 {
+    const SIDE: usize = 256;
+    let mut palettes = vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN];
+    palettes[1] = [255, 255, 255, 255];
+    Texture8 {
+        width: SIDE as u32,
+        height: SIDE as u32,
+        indices: vec![1; SIDE * SIDE],
+        palettes,
+        stp: vec![false; crate::model::PALETTE_ROW_LEN],
+    }
 }
 
 /// Compute the TMD offset (`8 + clut_len + img_len`) after validating the TIM
@@ -437,6 +479,9 @@ fn read_u32(data: &[u8], offset: usize) -> Result<u32> {
 }
 
 #[cfg(test)]
+pub(crate) use tests::sample_ivm;
+
+#[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
 
@@ -444,7 +489,7 @@ mod tests {
     use crate::tim::decode_8bpp;
 
     /// A 256x256 8bpp TIM with one 256-entry CLUT row.
-    fn sample_texture() -> Vec<u8> {
+    pub(crate) fn sample_texture() -> Vec<u8> {
         let mut palette = Vec::new();
         for index in 0..256u16 {
             palette.push(index.wrapping_mul(0x0841));
@@ -471,7 +516,7 @@ mod tests {
     }
 
     /// One TMD object with a single gouraud textured triangle.
-    fn sample_tmd() -> Vec<u8> {
+    pub(crate) fn sample_tmd() -> Vec<u8> {
         let vertices = [[1i16, 2, 3], [4, 5, 6], [7, 8, 9]];
         let normals = [[0i16, 0, 4096], [0, 4096, 0], [4096, 0, 0]];
         let prim = [
@@ -526,7 +571,7 @@ mod tests {
         data
     }
 
-    fn sample_ivm() -> Vec<u8> {
+    pub(crate) fn sample_ivm() -> Vec<u8> {
         let mut data = sample_texture();
         data.extend_from_slice(&sample_tmd());
         data

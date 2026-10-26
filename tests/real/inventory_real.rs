@@ -16,8 +16,12 @@
 
 use crate::common;
 
+use arklay::assets::Geometry;
 use arklay::bmp;
 use arklay::engine;
+use arklay::items;
+use arklay::pack::Pack;
+use arklay::ui;
 
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
@@ -60,4 +64,71 @@ fn menu_capture_is_deterministic_and_draws_the_panel_art() {
     assert!(painted > 5000, "the menu only painted {painted} pixels");
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn per_item_icons_match_the_shared_atlas_cells() {
+    let Some((_root, path)) = common::asset_env() else {
+        return;
+    };
+    let pack = Pack::open(&path).unwrap();
+    let atlas =
+        ui::load_picture(&pack, "item/item_all", Geometry::Shipped, Some([0, 0, 0])).unwrap();
+    let row = items::icon_row(0x02).unwrap();
+    let y = usize::from(row) * items::ICON_HEIGHT as usize;
+    let per_item = ui::load_picture(&pack, "item/02", Geometry::Shipped, Some([0, 0, 0])).unwrap();
+    assert_eq!(
+        (per_item.width, per_item.height),
+        (items::ICON_WIDTH, items::ICON_HEIGHT)
+    );
+    for row in 0..items::ICON_HEIGHT as usize {
+        let atlas_row =
+            &atlas.rgba[(y + row) * atlas.width as usize * 4..][..items::ICON_WIDTH as usize * 4];
+        let icon_row = &per_item.rgba[row * items::ICON_WIDTH as usize * 4..]
+            [..items::ICON_WIDTH as usize * 4];
+        assert_eq!(atlas_row, icon_row, "row {row}");
+    }
+}
+
+#[test]
+#[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn per_item_icons_match_the_staitem_rows_for_the_machineguns() {
+    let Some((_root, path)) = common::asset_env() else {
+        return;
+    };
+    let pack = Pack::open(&path).unwrap();
+    let arklay::assets::Artwork::Indexed(page) = ui::load_page(&pack, "ui/staitem").unwrap() else {
+        panic!("ui/staitem is an indexed page");
+    };
+    for (item, row) in [(items::ITEM_INGRAM, 0usize), (items::ITEM_MINIMI, 1)] {
+        let icon = ui::load_picture(
+            &pack,
+            &format!("item/{item:02x}"),
+            Geometry::Shipped,
+            Some([0, 0, 0]),
+        )
+        .unwrap();
+        assert_eq!(
+            (icon.width, icon.height),
+            (items::ICON_WIDTH, items::ICON_HEIGHT)
+        );
+        for y in 0..items::ICON_HEIGHT as usize {
+            for x in 0..items::ICON_WIDTH as usize {
+                let index =
+                    page.indices[(row * items::ICON_HEIGHT as usize + y) * page.width as usize + x];
+                let expected = if index == 0 {
+                    [0, 0, 0, 0]
+                } else {
+                    page.palette(0, index)
+                };
+                let at = (y * items::ICON_WIDTH as usize + x) * 4;
+                assert_eq!(
+                    &icon.rgba[at..at + 4],
+                    &expected,
+                    "item {item:#04x} at ({x}, {y})"
+                );
+            }
+        }
+    }
 }
