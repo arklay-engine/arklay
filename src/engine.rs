@@ -18555,6 +18555,7 @@ mod tests {
     /// A session the GPU backend draws refuses a software frame: one would
     /// silently switch renderers for that frame.
     #[test]
+    #[cfg(debug_assertions)]
     #[should_panic(expected = "a software frame drawn under the GPU backend")]
     fn software_frame_is_refused_under_the_gpu_backend() {
         let dir = TempDir::new();
