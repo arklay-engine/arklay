@@ -71,7 +71,6 @@ impl From<QuadImage> for Kind {
         match image {
             QuadImage::Art(art) => Self::Art(art),
             QuadImage::Recoloured(recoloured) => Self::Recoloured(recoloured),
-            QuadImage::Model(model) => Self::Model(model),
         }
     }
 }
@@ -143,7 +142,7 @@ pub struct Item {
 /// texels outlive [`DrawList::rewind`], so a frame redrawing what the frame
 /// before drew finds its blocks already in place and leaves the atlas (and
 /// its [`Atlas::revision`]) as it was, and the GPU does not upload it again.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Atlas {
     /// `ATLAS_WIDTH` texels per row, at least `height` rows.
     pub texels: Vec<u8>,
@@ -156,44 +155,6 @@ pub struct Atlas {
     /// Changes whenever any atlas's texels change: the GPU compares it with
     /// the revision it uploaded.
     pub revision: u64,
-}
-
-impl Clone for Atlas {
-    fn clone(&self) -> Self {
-        let mut atlas = Self::default();
-        atlas.clone_from(self);
-        atlas
-    }
-
-    /// Copies into the existing buffers: a session's frame is copied to
-    /// the app's every frame.
-    fn clone_from(&mut self, source: &Self) {
-        if self.revision != source.revision || self.texels.len() != source.texels.len() {
-            self.texels.clone_from(&source.texels);
-        }
-        self.height = source.height;
-        self.shelf = source.shelf;
-        self.stored.clone_from(&source.stored);
-        self.revision = source.revision;
-    }
-}
-
-impl Clone for DrawList {
-    fn clone(&self) -> Self {
-        let mut list = Self::default();
-        list.clone_from(self);
-        list
-    }
-
-    fn clone_from(&mut self, source: &Self) {
-        self.size = source.size;
-        self.items.clone_from(&source.items);
-        self.atlas.clone_from(&source.atlas);
-        self.offset = source.offset;
-        self.replacing = source.replacing;
-        self.mark = source.mark;
-        self.error = source.error;
-    }
 }
 
 /// The source of [`Atlas::revision`]s, unique across every atlas.
@@ -261,7 +222,7 @@ impl Atlas {
 }
 
 /// A frame's 2D drawing, in order (see the [module docs](self)).
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct DrawList {
     /// The frame's `[width, height]`.
     pub size: [u32; 2],
@@ -276,8 +237,9 @@ pub struct DrawList {
     /// What [`DrawList::rewind`] keeps: the items and the atlas packing of
     /// the frame a frozen screen draws over.
     mark: Option<(usize, (u32, [u32; 3]))>,
-    /// Why a draw could not be recorded (the atlas filled up); the GPU
-    /// refuses to present the frame.
+    /// Why a draw could not be recorded (the atlas filled up, or a draw
+    /// only the software backend makes); the GPU refuses to present the
+    /// frame.
     pub error: Option<&'static str>,
 }
 
@@ -381,7 +343,17 @@ impl DrawList {
         let [last_x, last_y] = map.texel(x1 - 1, y1 - 1);
         let (left, right) = (first_x.min(last_x), first_x.max(last_x));
         let (top, bottom) = (first_y.min(last_y), first_y.max(last_y));
-        let (width, height) = ((right - left + 1) as u32, (bottom - top + 1) as u32);
+        let (mut width, mut height) = ((right - left + 1) as u32, (bottom - top + 1) as u32);
+        let (frame_w, frame_h) = ((x1 - x0) as u32, (y1 - y0) as u32);
+        // A source shrunk onto fewer pixels than it has texels is stored as
+        // the texels those pixels sample, one per pixel, so the atlas holds
+        // no more than the frame shows.
+        let per_pixel =
+            u64::from(frame_w) * u64::from(frame_h) < u64::from(width) * u64::from(height);
+        let origin = if per_pixel { [x0, y0] } else { [left, top] };
+        if per_pixel {
+            (width, height) = (frame_w, frame_h);
+        }
         if width > ATLAS_WIDTH || height > ATLAS_MAX_HEIGHT {
             self.error = Some("a 2D draw is larger than the atlas");
             return;
@@ -389,7 +361,9 @@ impl DrawList {
         let mut texels = vec![0; width as usize * height as usize * 4];
         for (row, line) in texels.chunks_exact_mut(width as usize * 4).enumerate() {
             for (column, texel) in line.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                if let Some(rgba) = sample(left + column as i32, top + row as i32) {
+                let [x, y] = [origin[0] + column as i32, origin[1] + row as i32];
+                let [x, y] = if per_pixel { map.texel(x, y) } else { [x, y] };
+                if let Some(rgba) = sample(x, y) {
                     *texel = [rgba[0], rgba[1], rgba[2], 255];
                 }
             }
@@ -397,7 +371,21 @@ impl DrawList {
         let Some([atlas_x, atlas_y]) = self.store(width, height, &texels) else {
             return;
         };
-        map.atlas = [atlas_x as i32 - left, atlas_y as i32 - top];
+        if per_pixel {
+            // One texel per frame pixel of the draw, at the pixel's place.
+            let [_, _, w, h] = map.dst;
+            map = Map {
+                dst: [map.dst[0], map.dst[1], w, h],
+                src: [w, h],
+                atlas: [
+                    atlas_x as i32 - x0 + map.dst[0],
+                    atlas_y as i32 - y0 + map.dst[1],
+                ],
+                flags: map.flags & !(MIRROR_X | MIRROR_Y | CENTRED),
+            };
+        } else {
+            map.atlas = [atlas_x as i32 - left, atlas_y as i32 - top];
+        }
         self.push(Item {
             kind: Kind::Sprite,
             rect: visible.map(|side| side as f32),
@@ -487,6 +475,32 @@ mod tests {
         let blue = [0, 0, 255, 255].repeat(4);
         assert_eq!(list.store(2, 2, &blue), Some(origin));
         assert_ne!(list.atlas.revision, revision);
+    }
+
+    #[test]
+    fn a_source_shrunk_onto_fewer_pixels_stores_a_texel_per_pixel() {
+        let mut list = DrawList::new([320, 240]);
+        // A 4096x8 source over 64x2 pixels, mirrored across.
+        let map = Map {
+            dst: [10, 20, 64, 2],
+            src: [4096, 8],
+            atlas: [0, 0],
+            flags: MIRROR_X,
+        };
+        let texel = |x: i32, y: i32| [(x / 16) as u8, y as u8, 0, 255];
+        list.sprite(map, [10, 20, 74, 22], [1.0; 4], |x, y| Some(texel(x, y)));
+        assert!(list.error.is_none());
+        assert_eq!(list.atlas.height, 2, "one atlas row per frame row");
+        let [item] = &list.items[..] else {
+            panic!("one item");
+        };
+        for (x, y) in [(10, 20), (41, 21), (73, 21)] {
+            let [sx, sy] = map.texel(x, y);
+            let [ax, ay] = item.map.texel(x, y);
+            let [ax, ay] = [ax + item.map.atlas[0], ay + item.map.atlas[1]];
+            let offset = (ay as usize * ATLAS_WIDTH as usize + ax as usize) * 4;
+            assert_eq!(list.atlas.texels[offset..offset + 4], texel(sx, sy));
+        }
     }
 
     #[test]

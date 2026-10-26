@@ -604,9 +604,6 @@ fn decoded_replacement(
 pub enum QuadImage {
     /// A pack's HD image of 2D art.
     Art(Arc<Replacement>),
-    /// A model the GPU renders at its own resolution first: the examine
-    /// viewer's item ([`crate::render::Framebuffer::draw_ivm_captured`]).
-    Model(Arc<Model>),
     /// A pack's HD image of an indexed page, recoloured per texel by the
     /// original's index (the map's room highlighting).
     Recoloured(Arc<Recoloured>),

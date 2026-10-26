@@ -50,9 +50,10 @@ const uint CENTRED = 4u;
 const uint MASKED = 8u;
 
 int source_texel(int pixel, int start, int extent, int source, bool centred, bool mirror) {
-    int local = max(pixel - start, 0);
+    // As `draw2d::Map::texel` computes it.
+    int local = pixel - start;
     int offset = centred
-        ? min((local * 2 + 1) * source / (2 * extent), source - 1)
+        ? min(max(local * 2 + 1, 0) * source / (2 * extent), source - 1)
         : local * source / extent;
     return mirror ? source - 1 - offset : offset;
 }

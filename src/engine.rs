@@ -5566,7 +5566,6 @@ impl GameSession {
             }];
             let scene = render::GameplayScene {
                 background: None,
-                background_generation: None,
                 origin: [0, 0],
                 colour: [255; 3],
                 meshes: &meshes,
@@ -5957,6 +5956,11 @@ impl GameSession {
             || self.death_screen.is_some()
         {
             self.gpu_scene_visible = false;
+            // Nothing of a frozen room's items carries into them, even where
+            // the screen clears only its band of a wider frame.
+            if let Some(list) = self.framebuffer.list_mut() {
+                list.reset();
+            }
         }
         // The loading narration shows only its typewriter message over black;
         // no world frame is drawn under it.
@@ -8188,7 +8192,6 @@ impl App {
                 // drew the session before.
                 session.use_software();
                 session.render(pack);
-                framebuffer.copy_from(session.frame());
             }
             Mode::Movie(session) => {
                 framebuffer.clear();
@@ -8205,7 +8208,6 @@ impl App {
     fn draw_layers(&mut self, gpu: &mut GpuRenderer) -> Result<()> {
         if let Mode::Play(session) = &mut self.mode {
             session.render_layers(&self.pack, gpu)?;
-            self.framebuffer.copy_from(session.frame());
         } else {
             // Gameplay has ended (or yielded to a film): its uploads go.
             gpu.release_residency();
@@ -8224,9 +8226,13 @@ impl App {
         self.draw_frame();
     }
 
-    /// The app framebuffer.
+    /// The frame to present: a game session's own, else the app
+    /// framebuffer.
     fn frame(&self) -> &Framebuffer {
-        &self.framebuffer
+        match &self.mode {
+            Mode::Play(session) => session.frame(),
+            _ => &self.framebuffer,
+        }
     }
 
     /// The layer presented over the frame: the F1 debug menu at a wider
@@ -8354,7 +8360,7 @@ impl App {
 
     /// Write the current app frame as a BMP.
     fn capture(&self, path: &Path) -> Result<()> {
-        capture_bmp(&presented_image(&self.framebuffer), path)
+        capture_bmp(&presented_image(self.frame()), path)
     }
 }
 
@@ -8955,7 +8961,7 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
         return Ok(());
     };
     capture_bmp(
-        &presented_image(&app.framebuffer),
+        &presented_image(app.frame()),
         &dir.join(format!("f{index:05}.bmp")),
     )
 }
@@ -9987,10 +9993,9 @@ fn transition_frame(session: &TransitionMode) -> Option<(&door::Dor, door::vm::F
 
 /// [`render_transition`] for one of [`GameSession::render_pass`]'s passes:
 /// the GPU draws the door so its page takes the pack's HD replacement, and
-/// the fade overlays it in both passes. The GPU passes never reach the
-/// software rasterizer: a recording failure is an error. `scene_shown` is
-/// whether the black pass showed a scene, for the white pass. Returns
-/// whether the GPU scene shows.
+/// the fade is a 2D item over it. The GPU pass never reaches the software
+/// rasterizer: a recording failure is an error. Returns whether the GPU
+/// scene shows.
 fn render_transition_on(
     framebuffer: &mut Framebuffer,
     pass: ScenePass<'_>,
@@ -14008,8 +14013,9 @@ fn render_frame(
 /// [`render_frame`], recording the scene on `gpu` when given.
 ///
 /// The GPU path leaves the framebuffer's 2D pass with the GPU scene as its
-/// first item and the special-light overlay over it, and returns `true`; it never reaches the software rasterizer, so a recording failure
-/// is an error for the caller (see [`GameSession::render_layers`]). It
+/// first item and the special-light overlay over it, and returns `true`;
+/// it never reaches the software rasterizer, so a recording failure is an
+/// error for the caller (see [`GameSession::render_layers`]). It
 /// returns `false` when the frame has no scene: there is no camera cut, or
 /// `gpu` is `None` and the software rasterizer drew it.
 #[allow(clippy::too_many_arguments)]
@@ -14897,7 +14903,6 @@ fn render_frame_on(
     let layer = layer.filter(|_| render_mode.masks());
     let scene = render::GameplayScene {
         background,
-        background_generation: None,
         origin: display_origin,
         colour: global_colour,
         meshes: &meshes,
@@ -18471,7 +18476,22 @@ mod tests {
     #[test]
     #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
     fn gpu_death_screen_records_the_corpse_as_the_scene() {
+        gpu_death_screen_matches_software(video::Aspect::default());
+    }
+
+    /// [`gpu_death_screen_records_the_corpse_as_the_scene`] at 16:9, where
+    /// the screen draws in a band of a wider frame.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn gpu_death_screen_records_the_corpse_as_the_scene_at_16_9() {
+        let aspect = video::Aspect::parse("16:9").unwrap();
+        gpu_death_screen_matches_software(aspect);
+        video::set_aspect(video::Aspect::default());
+    }
+
+    fn gpu_death_screen_matches_software(aspect: video::Aspect) {
         let _lock = crate::audio::test_lock::sdl();
+        video::set_aspect(aspect);
         let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
             return;
         };
@@ -18499,6 +18519,9 @@ mod tests {
         let save_dir = TempDir::new();
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("106").unwrap(), &save_dir.0).unwrap();
+        // A GPU room frame first: its marked items must not carry into the
+        // DIED screen's frames.
+        session.render_layers(&pack, &mut gpu).unwrap();
         session.game.apply_player_hurt(i16::MAX, 0);
         // Run into the screen until its strip has settled.
         let mut screen_ticks = 0;
@@ -18514,15 +18537,22 @@ mod tests {
             }
         }
         assert_eq!(screen_ticks, 120, "the DIED screen opens");
-        session.render(&pack);
-        let software = session.framebuffer.rgba.clone();
         session.render_layers(&pack, &mut gpu).unwrap();
         assert!(session.gpu_scene_visible, "the corpse is the GPU scene");
         let list = session.framebuffer.list().expect("a recorded frame");
         assert!(list.shows_scene(), "the 2D pass draws the scene");
+        let scenes = list
+            .items
+            .iter()
+            .filter(|item| matches!(item.kind, crate::draw2d::Kind::Scene))
+            .count();
+        assert_eq!(scenes, 1, "only the corpse's scene, not the room's");
         gpu.draw_frame(list).unwrap();
         let (hardware, (frame_w, _)) = gpu.read_frame().unwrap();
         assert_eq!(frame_w, gpu_width);
+        session.use_software();
+        session.render(&pack);
+        let software = session.framebuffer.rgba.clone();
         if let Ok(dir) = std::env::var("ARKLAY_GPU_TEST_DUMP") {
             for (name, rgba, width, height) in [
                 ("software", &software, WIDTH as u32, HEIGHT as u32),
@@ -18547,7 +18577,7 @@ mod tests {
             })
             .count();
         let total = (WIDTH * HEIGHT) as usize;
-        eprintln!("DIED screen: {different} of {total} pixels differ");
+        eprintln!("DIED screen at {aspect:?}: {different} of {total} pixels differ");
         assert!(different * 10 < total, "{different} pixels differ");
     }
 

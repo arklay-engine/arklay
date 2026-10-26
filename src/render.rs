@@ -382,7 +382,7 @@ impl Framebuffer {
 
     /// Whether the GPU renderer draws this frame's 2D, so a caller can draw
     /// a pack's HD art in place of the original's.
-    pub fn captures_hd(&self) -> bool {
+    pub fn records(&self) -> bool {
         self.list.is_some()
     }
 
@@ -488,7 +488,12 @@ impl Framebuffer {
         let Some(list) = self.list.as_deref_mut() else {
             return;
         };
-        let start = std::mem::replace(&mut list.replacing, outer).unwrap_or(0);
+        let Some(start) = std::mem::replace(&mut list.replacing, outer) else {
+            // `draw` started the frame over: none of the frame is the
+            // replaced art, and an enclosing replacement's start is gone too.
+            list.replacing = None;
+            return;
+        };
         let kind = crate::draw2d::Kind::from(image.into());
         let [x, y] = list.offset.map(|side| side as f32);
         let [x0, y0, x1, y1] = [dst[0] + x, dst[1] + y, dst[2] + x, dst[3] + y];
@@ -1911,16 +1916,17 @@ impl Framebuffer {
     }
 
     /// The software 3D rasterizer is the software backend's: a framebuffer
-    /// recording the GPU's 2D pass never reaches it.
-    fn assert_software_3d(&self) {
-        debug_assert!(
-            self.list.is_none(),
-            "the software 3D rasterizer under the GPU backend"
-        );
+    /// recording the GPU's 2D pass never reaches it. If one does, the frame
+    /// is refused (a release build switches the session to software rather
+    /// than presenting it without the drawing).
+    fn assert_software_3d(&mut self) {
+        if let Some(list) = self.list.as_deref_mut() {
+            debug_assert!(false, "the software 3D rasterizer under the GPU backend");
+            list.error = Some("the software 3D rasterizer under the GPU backend");
+        }
     }
 
     fn rasterize_triangles(&mut self, texture: &Texture8, mut triangles: Vec<Triangle>) {
-        self.assert_software_3d();
         triangles.sort_by(|a, b| b.depth.total_cmp(&a.depth));
         let mut depth = self.depth_buffer();
         let mut twins = KnockoutTwins::default();
@@ -1950,6 +1956,7 @@ impl Framebuffer {
         twin: bool,
         depth: &mut [u32],
     ) {
+        self.assert_software_3d();
         if texture.width == 0 || texture.height == 0 {
             return;
         }
@@ -2371,7 +2378,6 @@ impl DoorScene {
     pub fn scene<'a>(&'a self, meshes: &'a [EntityMesh<'a>]) -> GameplayScene<'a> {
         GameplayScene {
             background: None,
-            background_generation: None,
             origin: [0, 0],
             colour: [255; 3],
             meshes,
@@ -2559,22 +2565,6 @@ impl<'a> MaskLayer<'a> {
     }
 }
 
-/// One version of an image's contents, handed out by [`ImageGeneration::next`]
-/// and unique for the process. An owner that keeps an image across frames
-/// tags it with a generation and takes a new one whenever it changes the
-/// pixels, size or allocation, so the GPU renderer can keep the upload
-/// without hashing every byte each frame (`crate::gpu::scene::image_fingerprint`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ImageGeneration(u64);
-
-impl ImageGeneration {
-    /// A generation no other image has been tagged with.
-    pub fn next() -> Self {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        Self(NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
-    }
-}
-
 /// Every input of one gameplay frame, bundled so the software rasterizer
 /// ([`GameplayScene::draw`]) and the optional GPU renderer (`crate::gpu`) draw
 /// from the same description. The fields are the arguments of
@@ -2582,9 +2572,6 @@ impl ImageGeneration {
 #[derive(Debug, Clone, Copy)]
 pub struct GameplayScene<'a> {
     pub background: Option<&'a Image>,
-    /// The generation `background`'s owner tagged it with, if it tracks one;
-    /// `None` has the GPU renderer fingerprint the pixels instead.
-    pub background_generation: Option<ImageGeneration>,
     pub origin: [i32; 2],
     pub colour: [u8; 3],
     pub meshes: &'a [EntityMesh<'a>],
@@ -4650,13 +4637,6 @@ pub fn mesh_depth(meshes: &[EntityMesh<'_>], camera: &Camera, width: u32, height
 mod tests {
     use super::*;
     use crate::model::{TmdObject, TmdPrim};
-
-    #[test]
-    fn image_generations_are_unique() {
-        let a = ImageGeneration::next();
-        let b = ImageGeneration::next();
-        assert_ne!(a, b);
-    }
 
     #[test]
     fn draw_line_covers_the_quad_and_skips_offscreen_pixels() {

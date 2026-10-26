@@ -761,7 +761,7 @@ impl Font {
             return;
         }
         let hd = self.hd.as_ref().filter(|hd| {
-            framebuffer.captures_hd() && hd.covers(src, self.metrics.glyph_w, self.script())
+            framebuffer.records() && hd.covers(src, self.metrics.glyph_w, self.script())
         });
         let Some(hd) = hd else {
             sprites.push(SpriteDraw::indexed(
