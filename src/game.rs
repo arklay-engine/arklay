@@ -8189,30 +8189,30 @@ impl GameState {
         self.state_bytes[usize::from(STATE_BYTE_MENU_CHOICE)] = 0;
     }
 
-    /// Run the message window to its end at once, as a cutscene skip's
-    /// fast-forward does: alternating action presses flip every page and
-    /// dismiss the finished text through [`Self::update_message`], so the
-    /// dismissal bookkeeping and any chained message run as if the player had
-    /// pressed through it. A yes/no prompt is left up for the player to
-    /// answer; returns whether one is waiting.
-    pub fn flush_message(&mut self, room: &RoomState, text: &Text) -> bool {
-        for step in 0..8192u32 {
-            if !self.message.active {
-                return false;
-            }
-            if self.message.phase() == crate::message::MessagePhase::YesNo {
-                return true;
-            }
-            let input = MessageInput {
-                action: step % 2 == 1,
-                ..MessageInput::default()
-            };
-            self.update_message(input, room, text);
+    /// Press the action key for a message window that is waiting on one (a
+    /// page break or finished text), as a cutscene skip's fast-forward does
+    /// before each scene tick. The press goes through
+    /// [`Self::update_message`], so the dismissal bookkeeping and any chained
+    /// message run as if the player had pressed it. A reveal, a timed pause,
+    /// a line timing itself out and a yes/no prompt are left alone.
+    pub fn press_through_message(&mut self, room: &RoomState, text: &Text) {
+        use crate::message::MessagePhase;
+        if !self.message.active
+            || !matches!(
+                self.message.phase(),
+                MessagePhase::PageWait | MessagePhase::WaitInput
+            )
+        {
+            return;
         }
-        // A window that never finishes (a malformed stream) is dropped rather
-        // than stalling the skip.
-        self.cancel_message();
-        false
+        // Release first so the press is a fresh edge whatever the window saw
+        // last.
+        self.update_message(MessageInput::default(), room, text);
+        let press = MessageInput {
+            action: true,
+            ..MessageInput::default()
+        };
+        self.update_message(press, room, text);
     }
 
     /// Mirror the window's menu-choice byte into the BioCard state byte the

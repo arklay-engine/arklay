@@ -510,11 +510,24 @@ pub fn apply_live(
         if !enabled && mixer.bgm_channel_playing(index) {
             mixer.stop_bgm_channel(index);
         }
-        let bank = game.bgm.channels[index];
-        if bank.track.is_some() {
-            mixer.set_bgm_channel_volume(index, sfx::volume_gain(bank.volume));
-            mixer.set_bgm_channel_pan(index, sfx::pan_from_raw(bank.pan));
-        }
+        apply_channel_levels(mixer, game, index);
+    }
+}
+
+/// Hand every loaded bank's scripted volume and pan to `mixer` and nothing
+/// else: a cutscene skip's parked mixer keeps streaming the music while the
+/// scene's loads, stops and restarts stay queued for [`apply_live`].
+pub fn apply_levels(mixer: &mut Mixer, game: &GameState) {
+    for index in 0..BGM_CHANNELS {
+        apply_channel_levels(mixer, game, index);
+    }
+}
+
+fn apply_channel_levels(mixer: &mut Mixer, game: &GameState, index: usize) {
+    let bank = game.bgm.channels[index];
+    if bank.track.is_some() {
+        mixer.set_bgm_channel_volume(index, sfx::volume_gain(bank.volume));
+        mixer.set_bgm_channel_pan(index, sfx::pan_from_raw(bank.pan));
     }
 }
 

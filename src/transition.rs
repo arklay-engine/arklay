@@ -496,16 +496,6 @@ impl<S: DoorStepper> Transition<S> {
         self.tick_frame(skip_pressed && self.skip_released)
     }
 
-    /// Advance one frame with the skip gate forced.
-    ///
-    /// The engine's cutscene fast-forward skips a door the scene walks through
-    /// under the letterbox. That is not a player press, so it does not wait
-    /// for a release, and it must not arm the gate for a later normal tick;
-    /// everything else matches [`Transition::tick`].
-    pub fn tick_forced(&mut self) -> TransitionFrame {
-        self.tick_frame(true)
-    }
-
     /// One `main_loop` frame with the skip gate already resolved.
     fn tick_frame(&mut self, skip: bool) -> TransitionFrame {
         let mut out = FrameOut::default();
@@ -1034,17 +1024,6 @@ mod tests {
         transition.tick(false);
         let frame = transition.tick(true);
         assert!(frame.frame > SKIP_AFTER_FRAME);
-        assert_eq!(transition.stepper().finish_calls, 1);
-    }
-
-    /// The cutscene fast-forward skips a door the scene walks through, and is
-    /// not a player press, so it does not wait for a release.
-    #[test]
-    fn the_cutscene_fast_forward_skips_a_held_button() {
-        let mut transition = transition();
-        for _ in 0..SKIP_AFTER_FRAME as usize + 8 {
-            transition.tick_forced();
-        }
         assert_eq!(transition.stepper().finish_calls, 1);
     }
 

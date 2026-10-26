@@ -144,16 +144,22 @@ like Classic REbirth 1.1.4's hidden `CutSkip`, a letterboxed cutscene (bank-5
 `MSF_SCREEN_INTENSITY`). The cutscene skip never jumps the script: it fades
 to black over ten ticks with the scene still running, then runs the scene's
 ticks back to back under a black frame (up to 12 ms of them per 30 Hz
-gameplay tick) with the mixer parked and its sounds stopped, every message
-window pressed through and the play timer held, until the letterbox flag
-drops, and fades back in over ten ticks. A press while a scene's line is up
-pages the line instead, and a line the scene raises on its last tick stays up.
-A door the scene walks through under the letterbox runs with its animation
-skipped; a film, the death sequence, a modal screen or a yes/no prompt ends
-the skip so the player gets them. When the mixer comes back every loaded BGM
-bank reloads, so the music is the scene's end state. Both skips are on only in
-the interactive loops, so scripted `--input` and `--trace` runs play every
-scene out like the reference.
+gameplay tick) with the play timer held, until the letterbox flag drops, and
+fades back in over ten ticks. The mixer is parked with the voice and
+one-shots stopped; the music keeps streaming from it, with the scene's volume
+and pan, while the scene's BGM loads, stops and restarts stay queued for the
+first tick after the skip (a restart of a still-playing track is dropped, so
+the music carries on). A line waiting on a press is pressed through, but a
+timed line (a voiced line's subtitle) runs out on its own clock: scenes fork
+their actors' animations onto events that pace themselves with sleeps, and
+dropping the lines early would end the main event while the forks still hold
+the room. A press while a scene's line waits on the player pages the line
+instead, and a line the scene raises on its last tick stays up. A yes/no
+prompt ends the skip with the fade-in for the player to answer; a door the
+scene opens, a film, the death sequence or a modal screen ends it at once so
+the player gets them, and a scene that carries on past its door can be
+skipped again. Both skips are on only in the interactive loops, so scripted
+`--input` and `--trace` runs play every scene out like the reference.
 
 Whenever a room load completes, gameplay re-arms the
 original's entry fade: a black veil at accumulator `0x7FFF` whose alpha steps
