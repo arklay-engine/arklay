@@ -5961,11 +5961,11 @@ impl GameState {
         if self.player_options.authentic {
             return false;
         }
-        // The poison drain's bits, so a fast `0x40` drain counts as poisoned.
-        // Cures still test `0x22` in `items::cured_status`, as the original's
-        // herb rule does.
+        // Poisoned means the `0x22` bits, as in `items::cured_status`, the
+        // health bar and the original's herb rule. The `0x40` fast drain is
+        // not counted, so a herb used with only that set changes nothing.
         if item == items::ITEM_BLUE_HERB {
-            return self.health_status & 0x62 == 0;
+            return self.health_status & 0x22 == 0;
         }
         items::FULL_HEALTH_ITEMS.contains(&item) && self.entities[0].health >= self.max_health
     }
@@ -15922,9 +15922,16 @@ mod tests {
             }
         );
 
-        // A fast `0x40` drain is poison too, so the herb is refused as well.
+        // The fast `0x40` drain is not herb poison, so the herb is used up
+        // without curing anything and the status byte is unchanged.
         state.set_health_status(0x40);
-        assert_eq!(state.use_item(items::ITEM_BLUE_HERB), UseResult::Unusable);
+        assert_eq!(
+            state.use_item(items::ITEM_BLUE_HERB),
+            UseResult::Used {
+                healed: false,
+                cured: false
+            }
+        );
         assert_eq!(state.health_status, 0x40);
 
         // The blue-herb mixes at full health are used up without curing the 0x20

@@ -49,7 +49,7 @@ fn room_scripts(root: &Path, room: &str) -> Scripts {
 /// A fresh state with the room's init script run, the way the engine boots it.
 fn game_state(id: RoomId) -> GameState {
     let mut game = GameState::new(id, &RoomState::default());
-    game.music = arklay::music::load_builtin();
+    game.music = arklay::music::load_builtin(arklay::player::Options::default());
     game
 }
 

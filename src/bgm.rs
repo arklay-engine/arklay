@@ -538,7 +538,7 @@ mod tests {
 
     fn game_for(id: RoomId) -> GameState {
         let mut game = GameState::new(id, &RoomState::default());
-        game.music = crate::music::load_builtin();
+        game.music = crate::music::load_builtin(crate::player::Options::default());
         game
     }
 

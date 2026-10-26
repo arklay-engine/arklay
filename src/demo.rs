@@ -322,10 +322,11 @@ impl AttractState {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn reel_bytes() -> Vec<u8> {
+    /// A minimal reel for stage 1, room `0x07`, player flag 1.
+    pub(crate) fn reel_bytes() -> Vec<u8> {
         let mut data = vec![0u8; HEADER_LEN + PAD_WORDS * 2];
         data[0] = 0x07;
         data[1] = 0x00;

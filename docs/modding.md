@@ -830,7 +830,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:rand()` | *Lent.* The next draw of the game's shared `rand()` stream, `0..=0x7FFF`. |
 | `api:select_item(item)` | *Lent.* Mirror the item under the cursor into the state byte the scripts test (`0` for none). |
 | `api:equip(item)` | *Lent.* Equip `item`, or unequip with `0`. |
-| `api:use_item(slot)` | *Lent.* USE the item in `slot`: `true, healed, cured, closes` (the item is consumed; `closes` exits the whole menu), `false, category` for a refusal, nothing for an empty slot. Outside authentic mode a use with no effect is still consumed and returns `true, false, false`; authentic mode refuses it. |
+| `api:use_item(slot)` | *Lent.* USE the item in `slot`: `true, healed, cured, closes` (the item is consumed; `closes` exits the whole menu), `false, category` for a refusal, nothing for an empty slot. Outside authentic mode the full-health heal items, and a blue herb while the player is not poisoned, are consumed with no effect and return `true, false, false`; authentic mode refuses them. |
 | `api:combine(slot, target)` | *Lent.* MOVE `slot` onto `target`: `"applied", herb`, `"drug_store"`, `"herb_no_recipe"` or `"none"`. |
 | `api:show_message(id)` | *Lent.* Open the game's message window on global message `id`. |
 | `api:item_icon_row(item)` | The item's 40x30 row in `item/item_all`, or `nil`. |

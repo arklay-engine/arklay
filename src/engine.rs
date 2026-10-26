@@ -408,9 +408,7 @@ pub fn run_with_options(
         let mut timings = stats::Stats::new();
         let load_start = Instant::now();
         let mut loaded = load_room(&pack, id)?;
-        let mut game = new_game_state(&pack, id, &loaded.room);
-        // The seed chunk reads the run options, so they land first.
-        game.player_options = player_options;
+        let mut game = new_game_state(&pack, id, &loaded.room, player_options);
         seed_fresh_state(&pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
@@ -2264,8 +2262,7 @@ impl GameSession {
         let character = character & 1;
         let id = new_game_id(character);
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
-        game.player_options = options;
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
@@ -2293,8 +2290,7 @@ impl GameSession {
     ) -> Result<Box<Self>> {
         let character = character & 1;
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
-        game.player_options = options;
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
@@ -2341,8 +2337,7 @@ impl GameSession {
         let reel = demo::DemoReel::parse(entry, &bytes)?;
         let id = reel.room;
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
-        game.player_options = options;
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, reel.character);
         // The attract branch sets the mode bit before the room loads, so every
         // script and entity driver sees it, and seeds the PRNG as game_loop
@@ -2421,8 +2416,7 @@ impl GameSession {
         options: player::Options,
     ) -> Result<Box<Self>> {
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
-        game.player_options = options;
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_fresh_state(pack, &mut game);
         let player_state = player::spawn(id, &loaded.room);
         game.sync_entity_from_player(&player_state);
@@ -2453,7 +2447,7 @@ impl GameSession {
             player_flag: file.character & 1,
         };
         let loaded = load_room(pack, id)?;
-        let mut game = new_game_state(pack, id, &loaded.room);
+        let mut game = new_game_state(pack, id, &loaded.room, options);
         file.apply_to(&mut game);
         // `InitializeGame`'s continue branch: a zero save counter also zeroes
         // the play timer, then every load advances the counter.
@@ -6877,8 +6871,7 @@ fn build_next_cycle_save(
     let character = stats.character & 1;
     let id = new_game_id(character);
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
-    game.player_options = options;
+    let mut game = new_game_state(pack, id, &loaded.room, options);
     seed_new_game(pack, &mut game, character);
 
     // The reference reloads the blank card and never runs `InitializeGame`'s
@@ -10283,7 +10276,7 @@ pub fn simulate_door(
     frame_dir: Option<&Path>,
 ) -> Result<SimulatedDoor> {
     let mut loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let mut player_state = player::spawn(id, &loaded.room);
     run_room_init(&mut loaded, &mut game);
@@ -10478,7 +10471,7 @@ pub fn simulate_room_with_input(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let player_state = player::spawn(id, &loaded.room);
     game.sync_entity_from_player(&player_state);
@@ -10496,7 +10489,7 @@ pub fn simulate_room_seeded(
     input: player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -10518,7 +10511,7 @@ pub fn simulate_room_prepared(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -10545,7 +10538,7 @@ pub fn simulate_room_with_movie(
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedMovie> {
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
         game.apply_flag(bank, bit, 0);
@@ -10617,7 +10610,7 @@ pub fn simulate_new_game(
     let character = character & 1;
     let id = new_game_id(character);
     let loaded = load_room(pack, id)?;
-    let mut game = new_game_state(pack, id, &loaded.room);
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_new_game(pack, &mut game, character);
     let mut player_state = player::spawn(id, &loaded.room);
     player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
@@ -12367,10 +12360,17 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
 /// Build a fresh game state for `id`/`room` with the pack's static music
 /// tables and global weapon-FX metadata installed, so room entry and script
 /// effect spawns resolve both the room's declared sprites and the `core00`
-/// types.
-fn new_game_state(pack: &Pack, id: RoomId, room: &RoomState) -> game::GameState {
+/// types. `options`, the run's mode, are set first, so the music chunk and the
+/// seed scripts that run after it read them.
+fn new_game_state(
+    pack: &Pack,
+    id: RoomId,
+    room: &RoomState,
+    options: player::Options,
+) -> game::GameState {
     let mut game = game::GameState::new(id, room);
-    game.music = crate::music::load(pack);
+    game.player_options = options;
+    game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -15299,7 +15299,7 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
 /// running engine goes through [`bgm::BgmCache`] instead.
 #[cfg(test)]
 fn load_room_music(pack: &Pack, id: RoomId) -> Option<audio::Wav> {
-    let tables = crate::music::load(pack);
+    let tables = crate::music::load(pack, player::Options::default());
     let stage = usize::from(id.stage.checked_sub(1)?);
     let group = tables.group_for(stage, usize::from(id.room), 0x08)?;
     let track = tables.group(group)?.tracks.into_iter().flatten().next()?;
@@ -24744,7 +24744,7 @@ off_0010:
         // The flags round-trip through the scenario bank.
         let id = new_game_id(0);
         let loaded = load_room(&pack, id).unwrap();
-        let mut state = new_game_state(&pack, id, &loaded.room);
+        let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
         file.apply_to(&mut state);
         assert!(state.flag_test(
             game::BANK_SCENARIO,
@@ -24767,7 +24767,7 @@ off_0010:
             has_infinite_launcher: false,
         };
         let file = build_next_cycle_save(&pack, &jill, player::Options::default()).unwrap();
-        let mut state = new_game_state(&pack, id, &loaded.room);
+        let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
         file.apply_to(&mut state);
         assert!(
             state.flag_test(
@@ -26569,6 +26569,178 @@ off_0010:
         };
         assert_eq!(start_items(authentic), [(3, 7)]);
         assert_eq!(start_items(player::Options::default()), [(5, 6)]);
+    }
+
+    /// A `--room` boot into a new game reads the run mode in its start items
+    /// and in its room music, both seeded from the options it was given.
+    #[test]
+    fn new_in_room_with_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script: &[u8] = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let music: &[u8] = b"local api = ...\n\
+            api:set_music_group(0x01, { { 0x013, true } })\n\
+            api:set_music_group(0x02, { { 0x005, true } })\n\
+            api:set_room_music(1, 0x00, { api:authentic() and 0x02 or 0x01 })\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[
+                (crate::lua::NEW_GAME_ENTRY, script),
+                (crate::music::MUSIC_ENTRY, music),
+            ],
+        ))
+        .unwrap();
+        let id = RoomId {
+            stage: 1,
+            room: NEW_GAME_ROOM,
+            player_flag: 0,
+        };
+        let boot = |options| {
+            let session =
+                GameSession::new_in_room_with(&pack, id, 0, Path::new("saves"), options).unwrap();
+            let items: Vec<(u8, u8)> = session
+                .game
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect();
+            (items, session.game.music.group_for(0, 0x00, 0x08))
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(boot(player::Options::default()), (vec![(5, 6)], Some(0x01)));
+        assert_eq!(boot(authentic), (vec![(3, 7)], Some(0x02)));
+    }
+
+    /// A `--room` boot seeds the pack's `game/initial_state.lua`, which reads
+    /// the run mode the way the new-game script does.
+    #[test]
+    fn room_boot_initial_state_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script: &[u8] = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[(crate::music::INITIAL_STATE_ENTRY, script)],
+        ))
+        .unwrap();
+        let id = RoomId {
+            stage: 1,
+            room: NEW_GAME_ROOM,
+            player_flag: 0,
+        };
+        let start_items = |options| {
+            let session =
+                GameSession::from_room_with(&pack, id, Path::new("saves"), options).unwrap();
+            session
+                .game
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect::<Vec<(u8, u8)>>()
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(start_items(authentic), [(3, 7)]);
+        assert_eq!(start_items(player::Options::default()), [(5, 6)]);
+    }
+
+    /// The next cycle's card is built under the run mode too: a
+    /// `game/new_game.lua` that reads it seeds the carried-over card's items.
+    #[test]
+    fn next_cycle_card_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let script: &[u8] = b"local api, character = ...\n\
+            if api:authentic() then\n\
+              api:set_item_slot(0, 3, 7)\n\
+            else\n\
+              api:set_item_slot(0, 5, 6)\n\
+            end\n";
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[(crate::lua::NEW_GAME_ENTRY, script)],
+        ))
+        .unwrap();
+        let flow = EndingFlow {
+            stats: ending::EndStats::debug(6, 0, 1),
+            second_playthrough: false,
+            has_special_key: false,
+            has_infinite_launcher: false,
+        };
+        let card_items = |options| {
+            let file = build_next_cycle_save(&pack, &flow, options).unwrap();
+            let mut restored = game::GameState::default();
+            file.apply_to(&mut restored);
+            restored
+                .inventory
+                .iter()
+                .map(|slot| (slot.id, slot.quantity))
+                .collect::<Vec<(u8, u8)>>()
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(card_items(authentic).first(), Some(&(3, 7)));
+        assert_eq!(
+            card_items(player::Options::default()).first(),
+            Some(&(5, 6))
+        );
+    }
+
+    /// An attract reel boots its recorded room under the run mode, so that
+    /// room's music follows it the way a new game's does.
+    #[test]
+    fn attract_reel_boot_reads_the_run_mode() {
+        let dir = TempDir::new();
+        let music: &[u8] = b"local api = ...\n\
+            api:set_music_group(0x01, { { 0x013, true } })\n\
+            api:set_music_group(0x02, { { 0x005, true } })\n\
+            api:set_room_music(1, 0x07, { api:authentic() and 0x02 or 0x01 })\n";
+        // The reel records stage 1, room 0x07, player flag 1, so the pack
+        // needs that room's RDT and its cut background too.
+        let room = RoomId {
+            stage: 1,
+            room: 0x07,
+            player_flag: 1,
+        };
+        let room_rdt = synthetic_rdt(&[0x00, 0x00]);
+        let cut = bmp::encode_to_vec(&test_image()).unwrap();
+        let reel = demo::tests::reel_bytes();
+        let pack = Pack::open(&new_game_pack_with(
+            &dir,
+            &[
+                (&room.rdt_entry(), &room_rdt),
+                (&room.cut_entry(0), &cut),
+                (crate::music::MUSIC_ENTRY, music),
+                ("demo/02.dat", &reel),
+            ],
+        ))
+        .unwrap();
+        let music_group = |options| {
+            let session =
+                GameSession::from_demo_with(&pack, "demo/02.dat", Path::new("saves"), options)
+                    .unwrap();
+            session.game.music.group_for(0, 0x07, 0x08)
+        };
+        let authentic = player::Options {
+            authentic: true,
+            ..player::Options::default()
+        };
+        assert_eq!(music_group(player::Options::default()), Some(0x01));
+        assert_eq!(music_group(authentic), Some(0x02));
     }
 
     /// A failing `game/new_game.lua` falls back to the shipped start items.
