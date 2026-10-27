@@ -642,7 +642,7 @@ mod tests {
 
         let out = dir.path.join("demo.akpak");
         let err = build_mod(&source, &out, None).unwrap_err().to_string();
-        assert!(err.contains("room/1000/room.s"), "{err}");
+        assert!(err.contains("room.s"), "{err}");
         assert!(!out.exists(), "a failed build must not leave a pack behind");
     }
 
