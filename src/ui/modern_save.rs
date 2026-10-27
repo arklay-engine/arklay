@@ -174,10 +174,15 @@ impl Screen for ModernSaveScreen {
                 play_time: play_time(file.timer),
                 date: local_date(entry.timestamp),
                 saves: u32::from(file.saves),
-                tag: slot.map_or_else(|| entry.base.clone(), |slot| format!("{:02}", slot + 1)),
+                tag: match (slot, entry.autosave) {
+                    (Some(slot), _) => format!("{:02}", slot + 1),
+                    (None, Some(index)) => format!("A{index}"),
+                    (None, None) => entry.base.clone(),
+                },
                 thumbnail: art.thumbnail(cx, file),
                 portrait: art.portrait(cx, file.character),
                 latest: index == 0 && newest.is_some_and(|t| t > 0.0),
+                autosave: entry.autosave.is_some(),
             });
             self.files.push(Listed {
                 path: entry.path.clone(),
