@@ -81,8 +81,8 @@ fn real_ui_captures_are_deterministic_and_the_map_draws() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     assert!(
-        pack.contains("map/map0e.tim"),
-        "ARKLAY_RE1_PACK predates M16's map entries; re-convert the install"
+        pack.contains("map/0e.bmp"),
+        "ARKLAY_RE1_PACK predates the id-based map entries; re-convert the install"
     );
 
     let dir = TempDir::new("ui-captures");

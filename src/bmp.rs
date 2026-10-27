@@ -3,6 +3,12 @@
 //! Encoding picks 8-bit indexed when the image has at most 256 unique RGB
 //! colors and 24-bit BGR otherwise. Rows are stored bottom-up, padded to a
 //! 4-byte boundary, and alpha is discarded.
+//!
+//! Magenta (`#FF00FF`, [`TRANSPARENT`]) is the transparent colour of every
+//! BMP: decoding makes its texels transparent black. An 8-bit BMP whose palette
+//! entry 0 is magenta is an indexed page ([`is_indexed_page`]): its texel
+//! indices and palette order are meaningful, index 0 is the transparent
+//! entry and each palette entry's reserved byte carries its STP bit.
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -13,6 +19,9 @@ use anyhow::{Context, Result, anyhow, bail};
 use crate::budget;
 use crate::model::Texture8;
 use crate::state::Image;
+
+/// The transparent colour of every BMP.
+pub const TRANSPARENT: [u8; 3] = [0xFF, 0x00, 0xFF];
 
 const FILE_HEADER_LEN: usize = 14;
 const DIB_HEADER_LEN: usize = 40;
@@ -26,8 +35,9 @@ pub fn encode(image: &Image, path: &Path) -> Result<()> {
 
 /// Decode a bottom-up 8-bit indexed or 24-bit BMP into an RGBA8 image.
 ///
-/// Alpha is set to 255. Top-down images, compressed data, and other bit
-/// depths are rejected.
+/// Magenta texels decode as transparent black and every other texel is
+/// opaque.
+/// Top-down images, compressed data, and other bit depths are rejected.
 pub fn decode(data: &[u8]) -> Result<Image> {
     decode_with_key(data, None)
 }
@@ -42,8 +52,8 @@ pub fn decode_mask(data: &[u8]) -> Result<Image> {
     decode_with_key(data, Some([0, 0, 0]))
 }
 
-/// Decode a BMP into RGBA8, giving texels equal to `key` a zero alpha when a
-/// key is supplied. Every other texel is opaque.
+/// Decode a BMP into RGBA8, giving magenta texels and texels equal to `key`
+/// (when a key is supplied) a zero alpha. Every other texel is opaque.
 fn decode_with_key(data: &[u8], key: Option<[u8; 3]>) -> Result<Image> {
     if data.len() < 2 || &data[0..2] != b"BM" {
         bail!("not a BMP file: bad magic");
@@ -156,14 +166,14 @@ fn decode_with_key(data: &[u8], key: Option<[u8; 3]>) -> Result<Image> {
             } else {
                 (src[x * 3 + 2], src[x * 3 + 1], src[x * 3])
             };
-            dst[x * 4] = r;
-            dst[x * 4 + 1] = g;
-            dst[x * 4 + 2] = b;
-            dst[x * 4 + 3] = if key.is_some_and(|key| [r, g, b] == key) {
-                0
+            let pixel = if [r, g, b] == TRANSPARENT {
+                [0, 0, 0, 0]
+            } else if key.is_some_and(|key| [r, g, b] == key) {
+                [r, g, b, 0]
             } else {
-                255
+                [r, g, b, 255]
             };
+            dst[x * 4..x * 4 + 4].copy_from_slice(&pixel);
         }
     }
 
@@ -336,7 +346,9 @@ pub fn encode_texture8_to_vec(texture: &Texture8) -> Result<Vec<u8>> {
 ///
 /// The palette holds `row` of the page's CLUT as 256 entries; the reserved
 /// palette byte carries each entry's STP bit, so [`decode_indexed_page`]
-/// restores the exact page, including transparency. Unlike
+/// restores the exact page, including transparency. A black entry 0, the
+/// page's transparent entry, is written as magenta so any decoder sees it as
+/// transparent and [`is_indexed_page`] recognises the page. Unlike
 /// [`encode_texture8_to_vec`], indices are not merged or renumbered: a model
 /// page's UVs and its index-0 holes depend on them.
 pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
@@ -379,7 +391,10 @@ pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
     out.extend_from_slice(&0u32.to_le_bytes());
 
     for index in 0..=255u8 {
-        let [r, g, b, _] = texture.palette(row, index);
+        let [mut r, mut g, mut b, _] = texture.palette(row, index);
+        if index == 0 && [r, g, b] == [0, 0, 0] {
+            [r, g, b] = TRANSPARENT;
+        }
         let stp = u8::from(texture.palette_stp(row, index));
         out.extend_from_slice(&[b, g, r, stp]);
     }
@@ -396,7 +411,8 @@ pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
 /// Decode an 8bpp indexed BMP produced by [`encode_indexed_page`].
 ///
 /// The palette becomes one 256-entry CLUT row and each palette entry's
-/// reserved byte is read back as its STP flag. A 24-bit or shorter-palette
+/// reserved byte is read back as its STP flag. A magenta entry 0 is read back
+/// as the black it was written for. A 24-bit or shorter-palette
 /// file is refused: only an indexed page can preserve a model's texel
 /// indices.
 pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
@@ -463,8 +479,14 @@ pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
     let palette = data.get(dib_end..dib_end + 256 * 4).unwrap();
     let mut palettes = Vec::with_capacity(256);
     let mut stp = Vec::with_capacity(256);
-    for entry in palette.as_chunks::<4>().0 {
-        palettes.push([entry[2], entry[1], entry[0], 255]);
+    for (index, entry) in palette.as_chunks::<4>().0.iter().enumerate() {
+        let rgb = [entry[2], entry[1], entry[0]];
+        let [r, g, b] = if index == 0 && rgb == TRANSPARENT {
+            [0, 0, 0]
+        } else {
+            rgb
+        };
+        palettes.push([r, g, b, 255]);
         stp.push(entry[3] != 0);
     }
 
@@ -482,6 +504,23 @@ pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
         palettes,
         stp,
     })
+}
+
+/// Whether `data` is an indexed page: an uncompressed 8-bit BMP with a full
+/// 256-entry palette whose entry 0 is magenta, as [`encode_indexed_page`]
+/// writes it. Such a page decodes through [`decode_indexed_page`] so its
+/// indices, palette order and STP bits survive.
+pub fn is_indexed_page(data: &[u8]) -> bool {
+    if data.len() < FILE_HEADER_LEN + DIB_HEADER_LEN || &data[0..2] != b"BM" {
+        return false;
+    }
+    let pixel_offset = u32_at(data, 10) as usize;
+    let dib_end = FILE_HEADER_LEN + u32_at(data, 14) as usize;
+    if u16_at(data, 28) != 8 || u32_at(data, 30) != 0 || pixel_offset < dib_end + 256 * 4 {
+        return false;
+    }
+    data.get(dib_end..dib_end + 3)
+        .is_some_and(|entry| [entry[2], entry[1], entry[0]] == TRANSPARENT)
 }
 
 fn u16_at(data: &[u8], offset: usize) -> u16 {
@@ -796,6 +835,42 @@ mod tests {
         assert!(decoded.palette_stp(0, 255));
         assert_eq!(decoded.palettes.len(), 256);
         assert_eq!(decoded.stp.len(), 256);
+    }
+
+    #[test]
+    fn magenta_is_transparent_and_marks_an_indexed_page() {
+        let mut palettes = vec![[0, 0, 0, 255]; 256];
+        palettes[1] = [255, 0, 0, 255];
+        let page = Texture8 {
+            width: 2,
+            height: 1,
+            indices: vec![0, 1],
+            palettes,
+            stp: (0..256).map(|index| index == 0).collect(),
+        };
+        let data = encode_indexed_page(&page, 0).unwrap();
+        assert!(is_indexed_page(&data));
+        // Entry 0 is stored as magenta and read back as the black it was.
+        let decoded = decode_indexed_page(&data).unwrap();
+        assert_eq!(decoded.palette(0, 0), [0, 0, 0, 255]);
+        assert!(decoded.palette_stp(0, 0));
+        assert_eq!(decoded.indices, page.indices);
+        // A true-colour decode cuts the magenta texel out.
+        let image = decode(&data).unwrap();
+        assert_eq!(image.rgba, [0, 0, 0, 0, 255, 0, 0, 255]);
+
+        // A generic BMP is not an indexed page, but its magenta is still
+        // transparent.
+        let opaque = encode_to_vec(&build(2, 1, |x, _| {
+            if x == 0 {
+                [0, 0, 0, 255]
+            } else {
+                [255, 0, 255, 255]
+            }
+        }))
+        .unwrap();
+        assert!(!is_indexed_page(&opaque));
+        assert_eq!(decode(&opaque).unwrap().rgba, [0, 0, 0, 255, 0, 0, 0, 0]);
     }
 
     #[test]

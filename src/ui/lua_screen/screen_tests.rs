@@ -1709,7 +1709,7 @@ fn map_display_reddens_the_current_room_over_the_grid() {
     // The grid's index 0 is a solid colour; index 1 is the grid line.
     writer
         .add(
-            "map/blue.tim",
+            "map/bg.tim",
             map_tim(&[0, 1, 0, 1], |index| match index {
                 0 => BLUE,
                 1 => GREEN,
@@ -1720,7 +1720,7 @@ fn map_display_reddens_the_current_room_over_the_grid() {
     // The 2F plan: the keyed index 0, room 0's marker (13), an ordinary
     // index (200) and room 1's marker (19).
     writer
-        .add("map/map03.tim", map_tim(&[0, 13, 200, 19], |_| WHITE))
+        .add("map/03.tim", map_tim(&[0, 13, 200, 19], |_| WHITE))
         .unwrap();
     let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
     // Room 1110's first camera opens on area 2 (layout 0's room slot 0).
@@ -1916,34 +1916,8 @@ fn file_tables_match_the_shipped_jpn_tables() {
             0x0E, 0xFF
         ]
     );
-    assert_eq!(tab.int("M.page_index(0, 0)"), 0);
-    assert_eq!(tab.int("M.page_index(0, 1)"), 0);
-    assert_eq!(tab.int("M.page_index(0, 2)"), 1);
-    assert_eq!(tab.int("M.page_index(1, 0)"), 2);
-    assert_eq!(tab.int("M.page_index(2, 10)"), 10);
-    assert!(
-        tab.flag("M.page_index(2, 11) == nil"),
-        "past the page count"
-    );
-    assert!(
-        tab.flag("M.page_index(16, 0) == nil"),
-        "past the document table"
-    );
-    // The starts are the cumulative ceil(count/2), ending at the 43 TIMs, and
-    // every backdrop index names one of the 14 shipped FILEI pages.
-    let mut expected = 0;
-    for entry in 0..16 {
-        assert_eq!(tab.int(&format!("M.tables.page_start[{entry}]")), expected);
-        let count = tab.int(&format!("M.tables.page_count[{entry}]"));
-        expected += (count + 1) / 2;
-        let filei = tab.int(&format!("M.tables.filei_index[{entry}]"));
-        assert!(
-            tab.flag(&format!("M.tables.filei[{filei}] ~= nil")),
-            "entry {entry}"
-        );
-    }
-    assert_eq!(expected, 43);
-    assert!(tab.flag("M.tables.textm[42] == 'textm_02' and M.tables.textm[43] == nil"));
+    let stem: String = tab.screen.test_eval("return M.page_stem(0x0F, 5, 'ja-JP')");
+    assert_eq!(stem, "file/0f_05_fg_ja-JP");
     assert_eq!(tab.int("M.tables.title_x[0]"), 42);
     assert_eq!(tab.int("M.tables.title_x[15]"), 63);
 }
@@ -2436,17 +2410,12 @@ fn sheet_tim(width: u16, height: u16, pixels: &[u8]) -> Vec<u8> {
 /// A pack of Western document pages: under each `(language, documents)`,
 /// every page of the listed documents (all sixteen for None). Page `n` is a
 /// one-row sheet of palette index `n + 1` with a white texel at x 1. The
-/// arrow sheet's 8-pixel columns are indices 20..=23, and `textm` adds those
-/// Japanese build pages.
-fn west_pack(languages: &[(&str, Option<&[usize]>)], textm: &[&str]) -> &'static Pack {
-    const STEMS: [&str; 16] = [
-        "filem_l0", "filem_m0", "filem_n0", "filem_o0", "filem_p0", "filem_q0", "filem_r0",
-        "filem_s0", "filem_t0", "filem_u0", "filem_v0", "filem_w0", "filem_x0", "filem_y0",
-        "filem_z0", "filem_00",
-    ];
+/// arrow sheet's 8-pixel columns are indices 20..=23, and `jpn` adds the
+/// first Japanese page of those documents.
+fn west_pack(languages: &[(&str, Option<&[usize]>)], jpn: &[usize]) -> &'static Pack {
     let mut writer = crate::pack::PackWriter::new();
     for &(language, documents) in languages {
-        for (entry, (stem, count)) in STEMS.iter().zip(WEST_COUNTS).enumerate() {
+        for (entry, count) in WEST_COUNTS.into_iter().enumerate() {
             if documents.is_some_and(|documents| !documents.contains(&entry)) {
                 continue;
             }
@@ -2455,7 +2424,7 @@ fn west_pack(languages: &[(&str, Option<&[usize]>)], textm: &[&str]) -> &'static
                 pixels[1] = 15;
                 writer
                     .add(
-                        &format!("file/{language}/{stem}_{page:02}.tim"),
+                        &format!("file/{entry:02x}_{page:02x}_fg_{language}.tim"),
                         sheet_tim(256, 1, &pixels),
                     )
                     .unwrap();
@@ -2464,12 +2433,12 @@ fn west_pack(languages: &[(&str, Option<&[usize]>)], textm: &[&str]) -> &'static
     }
     let arrows: Vec<u8> = (0..32 * 8).map(|i| 20 + (i % 32) as u8 / 8).collect();
     writer
-        .add("file/arror.tim", sheet_tim(32, 8, &arrows))
+        .add("ui/file_arrows.tim", sheet_tim(32, 8, &arrows))
         .unwrap();
-    for name in textm {
+    for entry in jpn {
         writer
             .add(
-                &format!("file/{name}.tim"),
+                &format!("file/{entry:02x}_00_fg_ja-JP.tim"),
                 map_tim(&[1; 256], west_palette),
             )
             .unwrap();
@@ -2500,34 +2469,31 @@ fn file_reader_follows_the_session_language() {
         .screen
         .test_eval("return M.state.west")
     };
-    let both = west_file_pack(&["en", "fr"]);
-    assert_eq!(west(both, Some("fr-FR"), 0x0F).as_deref(), Some("file/fr"));
+    let both = west_file_pack(&["en-US", "fr-FR"]);
+    assert_eq!(west(both, Some("fr-FR"), 0x0F).as_deref(), Some("fr-FR"));
     assert_eq!(
         west(both, Some("de-DE"), 0x0F).as_deref(),
-        Some("file/en"),
+        Some("en-US"),
         "a language without pages reads the English ones"
     );
-    assert_eq!(west(both, None, 0x0F).as_deref(), Some("file/en"));
+    assert_eq!(west(both, None, 0x0F).as_deref(), Some("en-US"));
     assert_eq!(
         west(both, Some("ja-JP"), 0x0F).as_deref(),
-        Some("file/en"),
+        Some("en-US"),
         "Japanese falls back to the English pages without its own"
     );
-    let french = west_file_pack(&["fr"]);
+    let french = west_file_pack(&["fr-FR"]);
     assert_eq!(
         west(french, Some("en-US"), 0x0F).as_deref(),
-        Some("file/fr"),
+        Some("fr-FR"),
         "a French-only tree serves an English session"
     );
     // A partial tree: the German pages of document 0x0F only.
-    let partial = west_pack(&[("de", Some(&[0x0F])), ("en", None)], &["textm_n0"]);
-    assert_eq!(
-        west(partial, Some("de-DE"), 0x0F).as_deref(),
-        Some("file/de")
-    );
+    let partial = west_pack(&[("de-DE", Some(&[0x0F])), ("en-US", None)], &[0x02]);
+    assert_eq!(west(partial, Some("de-DE"), 0x0F).as_deref(), Some("de-DE"));
     assert_eq!(
         west(partial, Some("de-DE"), 0x02).as_deref(),
-        Some("file/en"),
+        Some("en-US"),
         "each document falls back on its own"
     );
     assert_eq!(
@@ -2537,10 +2503,10 @@ fn file_reader_follows_the_session_language() {
     );
     assert_eq!(
         west(partial, Some("ja-JP"), 0x0F).as_deref(),
-        Some("file/en"),
+        Some("en-US"),
         "a Japanese document without its pages reads the English ones"
     );
-    let japanese = west_pack(&[], &["textm_00"]);
+    let japanese = west_pack(&[], &[0x0F]);
     assert_eq!(west(japanese, Some("en-US"), 0x0F), None);
     assert_eq!(
         west(empty_pack(), Some("en-US"), 0x0F),
@@ -2556,7 +2522,7 @@ fn file_west_tables_match_the_reference() {
         0,
         &[],
         &[],
-        west_file_pack(&["en"]),
+        west_file_pack(&["en-US"]),
         None,
     );
     let counts: Vec<i64> = tab.screen.test_eval(
@@ -2574,10 +2540,8 @@ fn file_west_tables_match_the_reference() {
     assert_eq!(tab.int("M.tables.title_y.jpn"), 0xC0);
     assert_eq!(tab.int("M.tables.scroll_x.west"), 0x67);
     assert_eq!(tab.int("M.tables.scroll_x.jpn"), 0x6F);
-    let stem: String = tab
-        .screen
-        .test_eval("return M.west_page_stem('file/en', 15, 3)");
-    assert_eq!(stem, "file/en/filem_00_03");
+    let stem: String = tab.screen.test_eval("return M.page_stem(15, 3, 'en-US')");
+    assert_eq!(stem, "file/0f_03_fg_en-US");
 }
 
 #[test]
@@ -2587,7 +2551,7 @@ fn file_west_reader_draws_whole_pages_and_holds_one() {
         0,
         &[0x0F],
         &[],
-        west_file_pack(&["en"]),
+        west_file_pack(&["en-US"]),
         Some("en-US"),
     );
     tab.settle_list();
@@ -2638,7 +2602,7 @@ fn file_west_reader_draws_whole_pages_and_holds_one() {
             "page {page}"
         );
         // The next arrow always shows; the previous one from page 1 on.
-        // Each blink frame is its own 8-pixel column of `file/arror`.
+        // Each blink frame is its own 8-pixel column of `ui/file_arrows`.
         let blink = tab.int("(M.state.blink & 0x30) == 0 and 1 or 0") as u32;
         assert_eq!(
             pixel(&framebuffer, 0x110, 0x74),
@@ -2653,7 +2617,7 @@ fn file_west_reader_draws_whole_pages_and_holds_one() {
         }
         // Only the current page's art is held.
         let held: i64 = tab.screen.test_eval(
-            "local n = 0 for stem, h in pairs(M.state.pages) do if stem:match('^file/en/') and h then n = n + 1 end end return n",
+            "local n = 0 for stem, h in pairs(M.state.pages) do if stem:match('_fg_en%-US$') and h then n = n + 1 end end return n",
         );
         assert_eq!(held, 1, "page {page}");
     }
@@ -2679,7 +2643,7 @@ fn file_west_reader_draws_whole_pages_and_holds_one() {
     tab.settle_reader();
     assert_eq!(tab.mode(), "list", "confirm exits on the last page");
     tab.draw();
-    assert!(tab.flag("M.state.west_held == nil"), "the page is released");
+    assert!(tab.flag("M.state.held == nil"), "the page is released");
 }
 
 /// `ui/item_view.lua` against a game state the test drives (the message

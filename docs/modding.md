@@ -154,7 +154,7 @@ skipped. H.264 is decoded by Cisco's OpenH264 (built from source by the
 that does not open logs a warning and the shipped film it shadows plays
 instead; a damaged frame later on holds the previous picture.
 
-Jill's prologue (`movie/pj`) removes 177.8 s to 188.5 s of the film, so
+Jill's prologue (`movie/01`) removes 177.8 s to 188.5 s of the film, so
 playback jumps to 188.5 s. Decoding resumes from the keyframe at or before that
 point and catches up from there, so a keyframe exactly at 188.5 s avoids a
 brief freeze at the jump (for example ffmpeg's `-force_key_frames 188.5`, or
@@ -174,24 +174,36 @@ is exact.
 | item viewer model | `item/0b_model.tmd` | tmd | the shipped mesh |
 | item viewer texture | `item/0b_model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b_model` |
 | item-view / enemy / player art | (inside `item/*.ivm`, `enemy/em*.emd`, `player/*.emd`) | — | override the whole model entry |
-| doors | (inside `door/*.dor`) | — | override the whole entry |
+| doors | (inside `door/<type>.dor`, the RDT door-type byte `00`-`21`) | — | override the whole entry |
 | font sheets | `font/font`, `font/jpn`, `font/latin` | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
-| map pages | `map/blue`, `map/map00` … `map/map0e` | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
-| FILE pages | `file/file000`, `file/file001`, `file/filei*`, `file/textm_*`, `file/arror`, `file/en/filem_l0_00` … `file/en/filem_00_03` (also `file/de/`, `file/fr/`) | webp, png, bmp, tim | the shipped page's; a converted `filem` page carries its black key at index 0 |
-| room effect sheets | `effspr/esp000`, `effspr/esp2xx` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
+| map pages | `map/00` … `map/0e`, `map/bg` (the full floor-plan view's backdrop) | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
+| FILE pages | `file/<doc>_bg` (the book backdrop), `file/<doc>_<page>_fg_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `file/0f_03_fg_en-US`; `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
+| room effect sheets | `effect/00` … `effect/20` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
 | player shadow | `shadow/kage` | webp, png, bmp, tim | the shipped page's; an RGBA page's alpha is the coverage |
 | BGM | `bgm/013`, `bgm/100` | ogg, wav | any |
 | sound effect | `se/a_mcn03`, `se/ft_wda` | ogg, wav | any |
 | voice | `voice/01_09` | ogg, wav | any |
-| film | `movie/oj`, `movie/capcom`, `movie/ed1` | mp4, avi | any size up to 4096x4096, any frame rate |
+| film | `movie/00`, `movie/17`, `movie/0f` (the film id) | mp4, avi | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' names without their extensions: `roomcut` and
 `roommask` use `{stage}{room:02X}_{camera:03}` (`RoomId::cut_stem`), `bgm` uses
 the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
-stage row and the lowercase hex id (`voice::entry_path`), and everything else
-is the literal name `arklay list` prints. Music tracks, including the former
+stage row and the lowercase hex id (`voice::entry_path`), `door`, `movie`,
+`effect`, `map` and `file` use two lower-case hex digits of the door type,
+film id, room effect-sheet index, map number and document (item `0x5F + doc`)
+and page, and everything else is the literal name `arklay list` prints. Music tracks, including the former
 `Se_*` group layers, are all `bgm/<track id>`; the converter owns the only
 name-to-id table.
+
+### BMP transparency
+
+Magenta (`#FF00FF`) is the transparent colour of every BMP. An 8-bit BMP
+whose palette entry 0 is magenta is an indexed page: its texel indices and
+palette order are kept as they are, index 0 is transparent, and each palette
+entry's reserved byte is its PSX semi-transparency (STP) bit. `convert-game`
+writes the map, FILE, effect and item model pages this way, so screens that
+recolour by palette index and the HD texture hashes keep working. Any other
+BMP is read as true colour.
 
 ### Item art
 
@@ -538,13 +550,13 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | CR file | Pack entry |
 | --- | --- |
 | `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `htexture/**` |
-| `movie/*.mp4`, `movie/*.avi` | `movie/<film>.<ext>`; an AVI beside an MP4 of the same film is dropped |
+| `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
 | `STAGEn/ROOM####.RDT` | `room/####.rdt` |
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `roomcut/*.bmp`, `roommask/*.bmp` (copied to stages 6/7 where the room exists) |
 | `ENEMY/*.EMD`, `PLAYERS/*.EMW`, `PLAYERS/*.TMD` | `enemy/*`, `player/*` |
 | `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `voice/*` record playing the file |
 | `DATA/*` (UI art, item icons, demos, effects) | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
-| `ITEM_M1/*.DOR`, `effspr/*.TIM` | `door/*`, `effspr/*` |
+| `ITEM_M1/*.DOR`, `effspr/*.TIM` | `door/<type>.dor`, `effect/<id>.tim` |
 | `TEXT/ROOM_###.xml` | `ROOM_###_TEXT_##` keys in `language/en-US.txt` |
 | BioRand `init.xml` | `game/new_game.lua` (the start inventory above) |
 | BioRand `type.png` | `ui/type00.png` |

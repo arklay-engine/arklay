@@ -229,6 +229,64 @@ fn copy_raw_files(
     Ok((count, bytes))
 }
 
+/// Add every `(entry, source)` file to the pack through `convert`, in
+/// parallel like [`copy_raw_files`].
+fn copy_converted_files(
+    files: Vec<(String, PathBuf)>,
+    label: &str,
+    writer: &mut PackWriter,
+    progress: &mut Progress,
+    jobs: usize,
+    convert: fn(&[u8]) -> Result<Vec<u8>>,
+) -> Result<(usize, usize)> {
+    progress.begin(label, files.len() as u64);
+    let results = parallel_map(files.len(), jobs, progress, |index| {
+        let (entry, source) = &files[index];
+        let data =
+            fs::read(source).with_context(|| format!("failed to read {}", source.display()))?;
+        let data =
+            convert(&data).with_context(|| format!("failed to convert {}", source.display()))?;
+        Ok((entry.clone(), 1, data))
+    })?;
+    let mut count = 0usize;
+    let mut bytes = 0usize;
+    for (entry, data) in results {
+        bytes += data.len();
+        count += 1;
+        writer
+            .add(&entry, data)
+            .with_context(|| format!("failed to add {entry}"))?;
+    }
+    progress.end_phase();
+    Ok((count, bytes))
+}
+
+/// Convert a single-CLUT 4bpp or 8bpp TIM into an indexed BMP page
+/// ([`bmp::encode_indexed_page`]): the texel indices, palette order and STP
+/// bits are kept and the black entry 0 becomes the magenta transparent key.
+pub(crate) fn indexed_tim_bmp(raw: &[u8]) -> Result<Vec<u8>> {
+    let texture = indexed_tim(raw)?;
+    bmp::encode_indexed_page(&texture, 0)
+}
+
+/// Decode a single-CLUT 4bpp or 8bpp TIM; a page with more CLUT rows is
+/// refused, since its BMP keeps one.
+fn indexed_tim(raw: &[u8]) -> Result<Texture8> {
+    let texture = match tim::mode(raw)? {
+        0 => tim::decode_4bpp(raw)?,
+        1 => tim::decode_8bpp(raw)?,
+        mode => bail!("TIM colour mode {mode} is not an indexed page"),
+    };
+    let rows = texture
+        .palettes
+        .len()
+        .div_ceil(crate::model::PALETTE_ROW_LEN);
+    if rows > 1 {
+        bail!("TIM carries {rows} CLUT rows; an indexed page keeps one");
+    }
+    Ok(texture)
+}
+
 /// One `--verbose` report line:
 /// `path: plain -> stored bytes (75.0% smaller, zstd)`.
 ///
@@ -675,7 +733,7 @@ pub fn convert_game_observed(
         )?;
         writeln!(
             report,
-            "effspr: {effect_count} entries, {effect_bytes} bytes"
+            "effect: {effect_count} entries, {effect_bytes} bytes"
         )?;
         writeln!(report, "font: {font_count} entries, {font_bytes} bytes")?;
         writeln!(report, "ui: {ui_count} entries, {ui_bytes} bytes")?;
@@ -904,9 +962,8 @@ fn copy_movies(
 
 /// Add every door animation named by the door type table.
 ///
-/// The pack stores `door/{stem}.dor` (the stems are already lower-case); the
-/// install's `ITEM_M1` file names are matched case-insensitively and copied
-/// raw. Every type byte `0x00..=0x21` names a distinct `.dor`; higher bytes
+/// The pack stores `door/<type>.dor` under the door-type byte; the install's
+/// `ITEM_M1` file names are matched case-insensitively and copied raw. Every type byte `0x00..=0x21` names a distinct `.dor`; higher bytes
 /// reuse `door00`, so they add no extra file.
 fn copy_doors(
     item_m1: &Option<PathBuf>,
@@ -925,7 +982,7 @@ fn copy_doors(
         let name = door::type_name(door_type);
         let file = format!("{name}.dor");
         match index.get(&file) {
-            Some(path) => files.push((format!("door/{file}"), path.clone())),
+            Some(path) => files.push((door::entry(door_type), path.clone())),
             None => missing.push(format!("{}.DOR", name.to_ascii_uppercase())),
         }
     }
@@ -969,18 +1026,30 @@ fn copy_weapon_assets(
     copy_raw_files(files, "weapon", writer, progress, jobs)
 }
 
-/// The 33 shipped effect-sheet names: `esp000`, `esp001` and `esp200`..`esp230`.
+/// The 33 shipped effect-sheet names in pack-id order: `effect/<id>.bmp` is
+/// the sheet at index `id`.
 ///
-/// The room→sheet map references 31 of them; `esp221` and `esp224` ship
-/// unreferenced and are packed anyway.
+/// The first 32 are the room→sheet map's
+/// [`EFFECT_SHEET_NAMES`](crate::effects::pages::EFFECT_SHEET_NAMES), so a
+/// room's sheet index is its pack id; `esp224` ships unreferenced and is
+/// packed after them as `20`.
 pub(crate) const EFFECT_SHEET_FILES: [&str; 33] = [
     "esp000", "esp001", "esp200", "esp201", "esp202", "esp203", "esp204", "esp205", "esp206",
     "esp207", "esp208", "esp209", "esp210", "esp211", "esp212", "esp213", "esp214", "esp215",
-    "esp216", "esp217", "esp218", "esp219", "esp220", "esp221", "esp222", "esp223", "esp224",
-    "esp225", "esp226", "esp227", "esp228", "esp229", "esp230",
+    "esp216", "esp217", "esp218", "esp219", "esp220", "esp221", "esp222", "esp223", "esp225",
+    "esp226", "esp227", "esp228", "esp229", "esp230", "esp224",
 ];
 
-/// Add every resolved effect-sheet TIM to the pack raw.
+/// The pack-id of a shipped effect-sheet stem (any case), its index in
+/// [`EFFECT_SHEET_FILES`].
+pub(crate) fn effect_sheet_id(stem: &str) -> Option<u8> {
+    EFFECT_SHEET_FILES
+        .iter()
+        .position(|name| name.eq_ignore_ascii_case(stem))
+        .map(|id| id as u8)
+}
+
+/// Add every resolved effect-sheet TIM to the pack as an indexed BMP page.
 fn copy_effect_sheets(
     assets: &[EffectSheet],
     writer: &mut PackWriter,
@@ -991,7 +1060,7 @@ fn copy_effect_sheets(
         .iter()
         .map(|asset| (asset.entry.clone(), asset.source.clone()))
         .collect();
-    copy_raw_files(files, "effspr", writer, progress, jobs)
+    copy_converted_files(files, "effect", writer, progress, jobs, indexed_tim_bmp)
 }
 
 /// Add every resolved scripted-character (NPC) model to the pack raw.
@@ -1643,10 +1712,8 @@ fn resolve_data_assets(data: Option<&Path>) -> Result<DataPlan> {
     Ok(plan)
 }
 
-/// Shipped item-view model and document-art counts.
+/// Shipped item-view model count.
 const IVM_COUNT: usize = 77;
-const FILEI_COUNT: usize = 17;
-const TEXTM_COUNT: usize = 43;
 
 /// Add the checked-in `language/<tag>.txt` sources to the pack.
 ///
@@ -1812,9 +1879,16 @@ fn copy_item_models(
     Ok((count, bytes))
 }
 
-/// Add the document-reader art to the pack under `file/`: the `FILE` covers,
-/// the `FILEI` backdrops and every `TEXTM_*.TIM` page, copied raw with
-/// lower-case names.
+/// Add the document-reader art to the pack as indexed BMP pages.
+///
+/// Every document `doc` (`00`-`0f`, item `0x5F + doc`) gets its `FILEI` book
+/// backdrop as `file/<doc>_bg.bmp` and its pages as
+/// `file/<doc>_<page>_fg_<language>.bmp`: the Western trees' `filem_*`
+/// containers (`en-US`, `de-DE`, `fr-FR`) and the Japanese build's `TEXTM`
+/// sheets (`ja-JP`), each of which holds two half-pages and is split into
+/// them. The selector's two book covers and the Western page arrows are
+/// screen furniture, packed as `ui/file_book_<n>.bmp` and
+/// `ui/file_arrows.bmp`.
 fn copy_file_art(
     item_m2: &[PathBuf],
     writer: &mut PackWriter,
@@ -1830,16 +1904,17 @@ fn copy_file_art(
     let index = index_dirs(item_m2, warnings)?;
     let mut missing = Vec::new();
     let mut files = Vec::new();
-    for name in ["file000.tim", "file001.tim"] {
+    for (book, name) in ["file000.tim", "file001.tim"].into_iter().enumerate() {
         match index.get(name) {
-            Some(path) => files.push((format!("file/{name}"), path.clone())),
+            Some(path) => files.push((format!("ui/file_book_{book}.bmp"), path.clone())),
             None => missing.push(name.to_string()),
         }
     }
-    for number in 1..=FILEI_COUNT {
-        let name = format!("filei{number:02}.tim");
+    for (document, name) in DOCUMENT_BACKDROPS.iter().enumerate() {
+        let name = format!("{name}.tim");
         match index.get(&name) {
-            Some(path) => files.push((format!("file/{name}"), path.clone())),
+            Some(path) => files.push((format!("file/{document:02x}_bg.bmp"), path.clone())),
+            None if missing.contains(&name) => {}
             None => missing.push(name),
         }
     }
@@ -1852,20 +1927,29 @@ fn copy_file_art(
         ));
     }
 
-    let mut pages: Vec<&String> = index
-        .keys()
-        .filter(|name| name.starts_with("textm_") && name.ends_with(".tim"))
-        .collect();
-    pages.sort();
-    if pages.len() != TEXTM_COUNT {
-        warnings.push(format!(
-            "found {} TEXTM page(s) in {}, expected {TEXTM_COUNT}",
-            pages.len(),
-            searched_dirs(item_m2)
-        ));
+    // The Japanese reader's sheets: absent from a Western install, so only
+    // an incomplete set is reported.
+    let mut sheets = Vec::new();
+    let mut missing = Vec::new();
+    for (document, &first) in TEXTM_START.iter().enumerate() {
+        let end = TEXTM_START
+            .get(document + 1)
+            .copied()
+            .unwrap_or(TEXTM_STEMS.len());
+        for (sheet, stem) in TEXTM_STEMS[first..end].iter().enumerate() {
+            match index.get(&format!("{stem}.tim")) {
+                Some(path) => sheets.push((document, sheet, path.clone())),
+                None => missing.push(format!("{stem}.tim")),
+            }
+        }
     }
-    for name in pages {
-        files.push((format!("file/{name}"), index[name].clone()));
+    if !sheets.is_empty() && !missing.is_empty() {
+        warnings.push(format!(
+            "missing {} TEXTM page file(s) in {}: {}",
+            missing.len(),
+            searched_dirs(item_m2),
+            missing.join(", ")
+        ));
     }
 
     // The Western reader's document containers, one set per language tree,
@@ -1875,9 +1959,9 @@ fn copy_file_art(
     for (language, extension) in DOCUMENT_LANGUAGES {
         let mut missing = Vec::new();
         let mut found = Vec::new();
-        for stem in FILEM_STEMS {
+        for (document, stem) in FILEM_STEMS.iter().enumerate() {
             match index.get(&format!("{stem}.{extension}")) {
-                Some(path) => found.push((language, stem, path.clone())),
+                Some(path) => found.push((language, document, path.clone())),
                 None => missing.push(format!("{stem}.{extension}")),
             }
         }
@@ -1892,7 +1976,7 @@ fn copy_file_art(
         documents.extend(found);
     }
     match index.get("arror.tim") {
-        Some(path) => files.push(("file/arror.tim".to_string(), path.clone())),
+        Some(path) => files.push(("ui/file_arrows.bmp".to_string(), path.clone())),
         None if !documents.is_empty() => warnings.push(format!(
             "missing arror.tim in {}; the document reader draws no page arrows",
             searched_dirs(item_m2)
@@ -1900,33 +1984,134 @@ fn copy_file_art(
         None => {}
     }
 
-    let (count, bytes) = copy_raw_files(files, "file", writer, progress, jobs)?;
+    let (count, bytes) =
+        copy_converted_files(files, "file", writer, progress, jobs, indexed_tim_bmp)?;
+    let (sheet_count, sheet_bytes) = copy_jpn_document_pages(sheets, writer, progress, jobs)?;
     let (page_count, page_bytes) =
         copy_document_pages(documents, writer, progress, warnings, jobs)?;
-    Ok((count + page_count, bytes + page_bytes))
+    Ok((
+        count + sheet_count + page_count,
+        bytes + sheet_bytes + page_bytes,
+    ))
+}
+
+/// The reader's document count: items `0x5F..=0x6E`.
+const DOCUMENT_COUNT: usize = 16;
+
+/// Each document's `FILEI` book backdrop (the reader's per-document index
+/// into its 14 used backdrops). `filei01`, `02` and `05` are unused.
+const DOCUMENT_BACKDROPS: [&str; DOCUMENT_COUNT] = [
+    "filei04", "filei03", "filei06", "filei07", "filei12", "filei16", "filei07", "filei09",
+    "filei11", "filei03", "filei08", "filei15", "filei10", "filei13", "filei14", "filei17",
+];
+
+/// The Japanese reader's 43 `TEXTM` sheets in table order; document `n`
+/// reads `TEXTM_STEMS[TEXTM_START[n]..TEXTM_START[n + 1]]`.
+const TEXTM_STEMS: [&str; 43] = [
+    "textm_l0", "textm_l1", "textm_m0", "textm_m1", "textm_m2", "textm_n0", "textm_n1", "textm_n2",
+    "textm_n3", "textm_n4", "textm_n5", "textm_o0", "textm_o1", "textm_p0", "textm_q0", "textm_q1",
+    "textm_q2", "textm_r0", "textm_r1", "textm_r2", "textm_r3", "textm_s0", "textm_s1", "textm_s2",
+    "textm_s3", "textm_t0", "textm_t1", "textm_t2", "textm_t3", "textm_u0", "textm_u1", "textm_u2",
+    "textm_v0", "textm_v1", "textm_v2", "textm_w0", "textm_w1", "textm_x0", "textm_y0", "textm_z0",
+    "textm_00", "textm_01", "textm_02",
+];
+
+/// Each document's first sheet in [`TEXTM_STEMS`].
+const TEXTM_START: [usize; DOCUMENT_COUNT] =
+    [0, 2, 5, 11, 13, 14, 17, 21, 25, 29, 32, 35, 37, 38, 39, 40];
+
+/// The height of one Japanese half-page; a `TEXTM` sheet stacks two.
+const TEXTM_PAGE_HEIGHT: usize = 128;
+
+/// The language tag of the Japanese reader's pages.
+const JPN_DOCUMENT_LANGUAGE: &str = "ja-JP";
+
+/// The pack entry of page `page` of document `document` in `language`.
+fn document_page_entry(document: usize, page: usize, language: &str) -> String {
+    format!("file/{document:02x}_{page:02x}_fg_{language}.bmp")
+}
+
+/// Split every Japanese `TEXTM` sheet into its two half-pages: sheet `n` of a
+/// document holds its pages `2n` and `2n + 1`.
+fn copy_jpn_document_pages(
+    sheets: Vec<(usize, usize, PathBuf)>,
+    writer: &mut PackWriter,
+    progress: &mut Progress,
+    jobs: usize,
+) -> Result<(usize, usize)> {
+    progress.begin("jpn documents", sheets.len() as u64);
+    let results = parallel_map(sheets.len(), jobs, progress, |index| {
+        let (document, sheet, source) = &sheets[index];
+        let data =
+            fs::read(source).with_context(|| format!("failed to read {}", source.display()))?;
+        let halves = split_textm_sheet(&data)
+            .with_context(|| format!("failed to convert {}", source.display()))?;
+        Ok((file_name(source), 1, (*document, *sheet, halves)))
+    })?;
+    let mut count = 0usize;
+    let mut bytes = 0usize;
+    for (_, (document, sheet, halves)) in results {
+        for (half, page) in halves.into_iter().enumerate() {
+            let entry = document_page_entry(document, sheet * 2 + half, JPN_DOCUMENT_LANGUAGE);
+            bytes += page.len();
+            count += 1;
+            writer
+                .add(&entry, page)
+                .with_context(|| format!("failed to add {entry}"))?;
+        }
+    }
+    progress.end_phase();
+    Ok((count, bytes))
+}
+
+/// Split a `TEXTM` sheet into its top and bottom half-pages, each an indexed
+/// BMP page through the sheet's palette.
+fn split_textm_sheet(raw: &[u8]) -> Result<[Vec<u8>; 2]> {
+    let texture = indexed_tim(raw)?;
+    let width = texture.width as usize;
+    if texture.height as usize != TEXTM_PAGE_HEIGHT * 2 {
+        bail!(
+            "TEXTM sheet is {}x{}, expected {} rows",
+            texture.width,
+            texture.height,
+            TEXTM_PAGE_HEIGHT * 2
+        );
+    }
+    let half = |index: usize| {
+        let rows = width * TEXTM_PAGE_HEIGHT;
+        let page = Texture8 {
+            height: TEXTM_PAGE_HEIGHT as u32,
+            indices: texture.indices[index * rows..(index + 1) * rows].to_vec(),
+            ..texture.clone()
+        };
+        bmp::encode_indexed_page(&page, 0)
+    };
+    Ok([half(0)?, half(1)?])
 }
 
 /// The Western reader's per-document containers in document order
 /// (`0x004d2350`): `filem_l0` is document 0 through `filem_00`, document 15.
-const FILEM_STEMS: [&str; 16] = [
+const FILEM_STEMS: [&str; DOCUMENT_COUNT] = [
     "filem_l0", "filem_m0", "filem_n0", "filem_o0", "filem_p0", "filem_q0", "filem_r0", "filem_s0",
     "filem_t0", "filem_u0", "filem_v0", "filem_w0", "filem_x0", "filem_y0", "filem_z0", "filem_00",
 ];
 
 /// The reader's page count of each document in [`FILEM_STEMS`] order
 /// (`g_itemMaxCounts`); every shipped tree matches it.
-const FILEM_PAGE_COUNTS: [usize; 16] = [4, 6, 11, 4, 2, 6, 7, 7, 10, 5, 5, 4, 3, 3, 3, 4];
+const FILEM_PAGE_COUNTS: [usize; DOCUMENT_COUNT] =
+    [4, 6, 11, 4, 2, 6, 7, 7, 10, 5, 5, 4, 3, 3, 3, 4];
 
-/// The Western trees' document containers: the pack's language directory
+/// The Western trees' document containers: the language tag of their pages
 /// and the container extension each release uses.
-const DOCUMENT_LANGUAGES: [(&str, &str); 3] = [("en", "pix"), ("de", "gpx"), ("fr", "fpx")];
+const DOCUMENT_LANGUAGES: [(&str, &str); 3] =
+    [("en-US", "pix"), ("de-DE", "gpx"), ("fr-FR", "fpx")];
 
 /// Unpack every `filem_*` container into its pages, packed as
-/// `file/<language>/<stem>_<page>.tim` (two-digit page numbers). The pages
-/// are optional art, so a container that fails to unpack is reported and
-/// skipped, as is a page count the reader's table does not expect.
+/// `file/<doc>_<page>_fg_<language>.bmp`. The pages are optional art, so a
+/// container that fails to unpack is reported and skipped, as is a page
+/// count the reader's table does not expect.
 fn copy_document_pages(
-    documents: Vec<(&str, &str, PathBuf)>,
+    documents: Vec<(&str, usize, PathBuf)>,
     writer: &mut PackWriter,
     progress: &mut Progress,
     warnings: &mut Vec<String>,
@@ -1934,37 +2119,34 @@ fn copy_document_pages(
 ) -> Result<(usize, usize)> {
     progress.begin("documents", documents.len() as u64);
     let results = parallel_map(documents.len(), jobs, progress, |index| {
-        let (language, stem, source) = &documents[index];
+        let (language, document, source) = &documents[index];
         let pages = fs::read(source)
             .with_context(|| format!("failed to read {}", source.display()))
             .and_then(|data| unpack_document_pages(&data))
+            .and_then(|pages| pages.iter().map(|page| indexed_tim_bmp(page)).collect())
             .map_err(|error| format!("skipped {}: {error:#}", source.display()));
-        Ok((format!("file/{language}/{stem}"), 1, (*stem, source, pages)))
+        Ok((file_name(source), 1, (*language, *document, source, pages)))
     })?;
     let mut count = 0usize;
     let mut bytes = 0usize;
-    for (prefix, (stem, source, pages)) in results {
-        let pages = match pages {
+    for (_, (language, document, source, pages)) in results {
+        let pages: Vec<Vec<u8>> = match pages {
             Ok(pages) => pages,
             Err(warning) => {
                 warnings.push(warning);
                 continue;
             }
         };
-        let expected = FILEM_STEMS
-            .iter()
-            .position(|known| *known == stem)
-            .map(|document| FILEM_PAGE_COUNTS[document]);
-        if expected.is_some_and(|expected| expected != pages.len()) {
+        let expected = FILEM_PAGE_COUNTS[document];
+        if expected != pages.len() {
             warnings.push(format!(
-                "{} holds {} page(s), the reader expects {}",
+                "{} holds {} page(s), the reader expects {expected}",
                 source.display(),
                 pages.len(),
-                expected.unwrap_or_default()
             ));
         }
         for (number, page) in pages.into_iter().enumerate() {
-            let entry = format!("{prefix}_{number:02}.tim");
+            let entry = document_page_entry(document, number, language);
             bytes += page.len();
             count += 1;
             writer
@@ -2057,9 +2239,10 @@ fn key_document_page(page: &mut [u8]) {
     }
 }
 
-/// Add the map floor-plan TIMs to the pack under `map/`: the fifteen
-/// `MAP00`-`MAP0E` browser/display plans plus the `Map_blue` backdrop. The
-/// engine decodes them itself, so no conversion is needed.
+/// Add the map floor-plan TIMs to the pack under `map/` as indexed BMP pages:
+/// the fifteen `MAP00`-`MAP0E` browser/display plans as `map/<id>.bmp` plus
+/// the full display's `Map_blue` backdrop as `map/bg.bmp`. The map screen
+/// composites by palette index, which the indexed pages keep.
 fn copy_map_art(
     item_m2: &[PathBuf],
     writer: &mut PackWriter,
@@ -2078,12 +2261,12 @@ fn copy_map_art(
     for number in 0..=0x0Eu32 {
         let name = format!("map{number:02x}.tim");
         match index.get(&name) {
-            Some(path) => files.push((format!("map/{name}"), path.clone())),
+            Some(path) => files.push((format!("map/{number:02x}.bmp"), path.clone())),
             None => missing.push(name),
         }
     }
     match index.get("map_blue.tim") {
-        Some(path) => files.push(("map/blue.tim".to_string(), path.clone())),
+        Some(path) => files.push(("map/bg.bmp".to_string(), path.clone())),
         None => missing.push("map_blue.tim".to_string()),
     }
     if !missing.is_empty() {
@@ -2095,7 +2278,7 @@ fn copy_map_art(
         ));
     }
 
-    copy_raw_files(files, "map", writer, progress, jobs)
+    copy_converted_files(files, "map", writer, progress, jobs, indexed_tim_bmp)
 }
 
 /// The id of the pack `convert-game` writes.
@@ -2108,7 +2291,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 2;
+pub const CONVERT_VERSION: u32 = 3;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, and the language sheets.
@@ -2558,7 +2741,7 @@ struct MovieAsset {
 /// One effect-sheet TIM resolved to its pack entry.
 #[derive(Debug)]
 struct EffectSheet {
-    /// Pack entry, e.g. `effspr/esp000.tim`.
+    /// Pack entry, e.g. `effect/00.bmp`.
     entry: String,
     /// Source file in the installation.
     source: PathBuf,
@@ -2660,7 +2843,8 @@ fn conversion_phase_count(
     phases += u64::from(data.palette.is_some() && !data.items.is_empty()); // item
     phases += u64::from(data.demos.iter().any(Option::is_some)); // demo
     phases += u64::from(data.shadow.is_some()); // shadow
-    phases += 3 * u64::from(item_m2.is_some()); // item, file, map
+    // item, file, the Western and Japanese document pages, map
+    phases += 5 * u64::from(item_m2.is_some());
     phases
 }
 
@@ -2802,11 +2986,11 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
     let effspr_index = effspr.as_deref().map(index_dir).transpose()?;
     let mut effects = Vec::new();
     let mut missing_effects = Vec::new();
-    for name in EFFECT_SHEET_FILES {
+    for (id, name) in EFFECT_SHEET_FILES.iter().enumerate() {
         let file = format!("{name}.tim");
         match effspr_index.as_ref().and_then(|index| index.get(&file)) {
             Some(source) => effects.push(EffectSheet {
-                entry: format!("effspr/{file}"),
+                entry: format!("effect/{id:02x}.bmp"),
                 source: source.clone(),
             }),
             None => missing_effects.push(file.to_ascii_uppercase()),
@@ -2931,7 +3115,7 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
             });
             match source {
                 Some(source) => movie_assets.push(MovieAsset {
-                    entry: movie::pack_path(name),
+                    entry: movie::pack_path(id),
                     source,
                 }),
                 None if !movie::is_shipped(name) => {}
@@ -3745,14 +3929,15 @@ mod tests {
         assert_eq!(pack.read("enemy/em23.emd").unwrap().as_ref(), b"npc-23");
     }
 
-    /// Write all 33 effect-sheet files under `EFFSPR` with mixed-case names.
+    /// Write all 33 effect-sheet files under `EFFSPR` with mixed-case names,
+    /// each tagged with its pack id.
     fn write_effect_sheets(root: &Path) {
         let dir = root.join("EFFSPR");
         fs::create_dir_all(&dir).unwrap();
-        for name in EFFECT_SHEET_FILES {
+        for (id, name) in EFFECT_SHEET_FILES.iter().enumerate() {
             fs::write(
                 dir.join(format!("{}.TIM", name.to_ascii_uppercase())),
-                name.as_bytes(),
+                tagged_tim(2, 1, id as u16),
             )
             .unwrap();
         }
@@ -3773,7 +3958,7 @@ mod tests {
             plan.warnings
         );
         for asset in &plan.effects {
-            assert!(asset.entry.starts_with("effspr/"), "{}", asset.entry);
+            assert!(asset.entry.starts_with("effect/"), "{}", asset.entry);
         }
 
         let mut writer = PackWriter::new();
@@ -3781,18 +3966,21 @@ mod tests {
         let (count, bytes) =
             copy_effect_sheets(&plan.effects, &mut writer, &mut progress, 1).unwrap();
         assert_eq!(count, 33);
-        assert_eq!(
-            bytes,
-            EFFECT_SHEET_FILES.iter().map(|n| n.len()).sum::<usize>()
-        );
+        assert!(bytes > 0);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-        for name in EFFECT_SHEET_FILES {
-            assert!(
-                pack.contains(&format!("effspr/{name}.tim")),
-                "missing {name}"
-            );
+        for (id, name) in EFFECT_SHEET_FILES.iter().enumerate() {
+            let entry = format!("effect/{id:02x}.bmp");
+            let data = pack
+                .read(&entry)
+                .unwrap_or_else(|_| panic!("missing {name}"));
+            assert_eq!(page_tag(&data), tag_colour(id as u16), "{name}");
         }
-        assert_eq!(pack.read("effspr/esp224.tim").unwrap().as_ref(), b"esp224");
+        // The room map's sheet indices are the pack ids; `esp224` follows.
+        assert_eq!(
+            EFFECT_SHEET_FILES[..32],
+            crate::effects::pages::EFFECT_SHEET_NAMES
+        );
+        assert_eq!(effect_sheet_id("ESP224"), Some(0x20));
     }
 
     #[test]
@@ -3813,7 +4001,7 @@ mod tests {
         let out = root.path.join("out.akpak");
         convert_game(&root.path, &out).unwrap();
         let pack = crate::pack::Pack::open(&out).unwrap();
-        assert!(!pack.paths().any(|path| path.starts_with("effspr/")));
+        assert!(!pack.paths().any(|path| path.starts_with("effect/")));
     }
 
     #[test]
@@ -4132,12 +4320,9 @@ mod tests {
                 .sum::<usize>()
         );
 
-        assert_eq!(
-            pack.read("door/door00.dor").unwrap().as_ref(),
-            b"dor-door00"
-        );
-        assert_eq!(pack.read("door/kai03.dor").unwrap().as_ref(), b"dor-kai03");
-        assert_eq!(pack.read("door/lad01.dor").unwrap().as_ref(), b"dor-lad01");
+        assert_eq!(pack.read("door/00.dor").unwrap().as_ref(), b"dor-door00");
+        assert_eq!(pack.read("door/17.dor").unwrap().as_ref(), b"dor-kai03");
+        assert_eq!(pack.read("door/1b.dor").unwrap().as_ref(), b"dor-lad01");
 
         assert_eq!(pack.read("player/01.emd").unwrap().as_ref(), b"emd1");
         assert_eq!(pack.read("player/01.emw").unwrap().as_ref(), b"emw1");
@@ -4272,8 +4457,8 @@ mod tests {
 
         let plan = build_plan(&root.path).unwrap();
         assert_eq!(plan.movie.len(), 2);
-        assert!(plan.movie.iter().any(|asset| asset.entry == "movie/pj.avi"));
-        assert!(plan.movie.iter().any(|asset| asset.entry == "movie/oj.avi"));
+        assert!(plan.movie.iter().any(|asset| asset.entry == "movie/01.avi"));
+        assert!(plan.movie.iter().any(|asset| asset.entry == "movie/00.avi"));
         assert!(plan.movie_dir_found);
         let warning = plan
             .warnings
@@ -4331,11 +4516,11 @@ mod tests {
                 .map(|asset| file_name(&asset.source))
                 .unwrap_or_default()
         };
-        assert_eq!(source("movie/oj.avi"), "OU.AVI");
-        assert_eq!(source("movie/pj.avi"), "PU.AVI");
-        assert_eq!(source("movie/ed4.avi"), "EU4.AVI");
-        assert_eq!(source("movie/ed5.avi"), "EU5.AVI");
-        assert_eq!(source("movie/staf_b.avi"), "STAF_R.AVI");
+        assert_eq!(source("movie/00.avi"), "OU.AVI");
+        assert_eq!(source("movie/01.avi"), "PU.AVI");
+        assert_eq!(source("movie/12.avi"), "EU4.AVI");
+        assert_eq!(source("movie/13.avi"), "EU5.AVI");
+        assert_eq!(source("movie/1b.avi"), "STAF_R.AVI");
     }
 
     #[test]
@@ -4366,18 +4551,18 @@ mod tests {
                 .map(|asset| file_name(&asset.source))
                 .unwrap_or_default()
         };
-        assert_eq!(source("movie/oj.avi"), "OJ.AVI", "primary canonical wins");
+        assert_eq!(source("movie/00.avi"), "OJ.AVI", "primary canonical wins");
         assert_eq!(
-            source("movie/pj.avi"),
+            source("movie/01.avi"),
             "PU.AVI",
             "the primary tree's Western spelling beats a fallback canonical"
         );
         assert_eq!(
-            source("movie/ed4.avi"),
+            source("movie/12.avi"),
             "ED4.AVI",
             "a film only the fallback tree has is still packed"
         );
-        assert_eq!(source("movie/staf_b.avi"), "STAF_R.AVI");
+        assert_eq!(source("movie/1b.avi"), "STAF_R.AVI");
     }
 
     #[test]
@@ -4394,31 +4579,17 @@ mod tests {
         fs::create_dir_all(&japanese).unwrap();
         fs::write(english.join("MINI.IVM"), b"ivm1").unwrap();
         fs::write(japanese.join("I00V.IVM"), b"ivm0").unwrap();
-        fs::write(english.join("FILE000.TIM"), b"cover0").unwrap();
-        fs::write(english.join("FILE001.TIM"), b"cover1").unwrap();
+        write_covers(&english);
         for number in 0..0x0Eu32 {
             fs::write(
                 english.join(format!("MAP{number:02X}.TIM")),
-                format!("plan{number}"),
+                tagged_tim(2, 1, number as u16),
             )
             .unwrap();
         }
-        fs::write(japanese.join("MAP0E.TIM"), b"plan14").unwrap();
-        fs::write(japanese.join("Map_blue.TIM"), b"blue").unwrap();
-        for number in 1..=FILEI_COUNT {
-            fs::write(
-                japanese.join(format!("FILEI{number:02}.TIM")),
-                format!("i{number}"),
-            )
-            .unwrap();
-        }
-        for number in 0..TEXTM_COUNT {
-            fs::write(
-                japanese.join(format!("TEXTM_{number:02}.TIM")),
-                format!("page{number}"),
-            )
-            .unwrap();
-        }
+        fs::write(japanese.join("MAP0E.TIM"), tagged_tim(2, 1, 14)).unwrap();
+        fs::write(japanese.join("Map_blue.TIM"), tagged_tim(2, 1, BLUE_TAG)).unwrap();
+        write_jpn_document_pages(&japanese);
 
         let plan = build_plan(&root.path).unwrap();
         assert_eq!(plan.item_m2_dirs.len(), 2);
@@ -4452,7 +4623,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(items, 2);
-        assert_eq!(files, 2 + FILEI_COUNT + TEXTM_COUNT);
+        assert_eq!(files, JPN_FILE_ART);
         assert_eq!(maps, 16);
         // The two-IVM fixture legitimately warns about the count; the merged
         // file and map lookups must not warn at all.
@@ -4466,10 +4637,12 @@ mod tests {
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         assert_eq!(pack.read("item/i00v.ivm").unwrap().as_ref(), b"ivm0");
         assert_eq!(pack.read("item/mini.ivm").unwrap().as_ref(), b"ivm1");
-        assert_eq!(pack.read("file/filei17.tim").unwrap().as_ref(), b"i17");
-        assert_eq!(pack.read("file/textm_42.tim").unwrap().as_ref(), b"page42");
-        assert_eq!(pack.read("map/map0e.tim").unwrap().as_ref(), b"plan14");
-        assert_eq!(pack.read("map/blue.tim").unwrap().as_ref(), b"blue");
+        assert_jpn_document_art(&pack);
+        assert_eq!(page_tag(&pack.read("map/0e.bmp").unwrap()), tag_colour(14));
+        assert_eq!(
+            page_tag(&pack.read("map/bg.bmp").unwrap()),
+            tag_colour(BLUE_TAG)
+        );
     }
 
     #[test]
@@ -4480,22 +4653,8 @@ mod tests {
         make_stage_dirs(&root.path);
         let japanese = root.path.join("japanese/JPN/Item_m2");
         fs::create_dir_all(&japanese).unwrap();
-        fs::write(japanese.join("FILE000.TIM"), b"cover0").unwrap();
-        fs::write(japanese.join("FILE001.TIM"), b"cover1").unwrap();
-        for number in 1..=FILEI_COUNT {
-            fs::write(
-                japanese.join(format!("FILEI{number:02}.TIM")),
-                format!("i{number}"),
-            )
-            .unwrap();
-        }
-        for number in 0..TEXTM_COUNT {
-            fs::write(
-                japanese.join(format!("TEXTM_{number:02}.TIM")),
-                format!("page{number}"),
-            )
-            .unwrap();
-        }
+        write_covers(&japanese);
+        write_jpn_document_pages(&japanese);
 
         let plan = build_plan(&root.path).unwrap();
         assert_eq!(plan.item_m2_dirs, [japanese]);
@@ -4510,7 +4669,7 @@ mod tests {
             1,
         )
         .unwrap();
-        assert_eq!(files, 2 + FILEI_COUNT + TEXTM_COUNT);
+        assert_eq!(files, JPN_FILE_ART);
         assert!(warnings.is_empty(), "{warnings:?}");
     }
 
@@ -4529,22 +4688,8 @@ mod tests {
         fs::create_dir_all(&english_item).unwrap();
         fs::create_dir_all(&japanese_item).unwrap();
         fs::write(english_item.join("MINI.IVM"), b"ivm1").unwrap();
-        fs::write(english_item.join("FILE000.TIM"), b"cover0").unwrap();
-        fs::write(english_item.join("FILE001.TIM"), b"cover1").unwrap();
-        for number in 1..=FILEI_COUNT {
-            fs::write(
-                japanese_item.join(format!("FILEI{number:02}.TIM")),
-                format!("i{number}"),
-            )
-            .unwrap();
-        }
-        for number in 0..TEXTM_COUNT {
-            fs::write(
-                japanese_item.join(format!("TEXTM_{number:02}.TIM")),
-                format!("page{number}"),
-            )
-            .unwrap();
-        }
+        write_covers(&english_item);
+        write_jpn_document_pages(&japanese_item);
 
         let english_movie = root.path.join("english/USA/Movie");
         fs::create_dir_all(&english_movie).unwrap();
@@ -4589,7 +4734,7 @@ mod tests {
             pack.paths()
                 .filter(|path| path.starts_with("file/"))
                 .count(),
-            2 + FILEI_COUNT + TEXTM_COUNT
+            JPN_FILE_ENTRIES
         );
         for id in 0..=28u8 {
             let Some(name) = movie::name(id) else {
@@ -4599,13 +4744,13 @@ mod tests {
                 continue;
             }
             assert_eq!(
-                pack.read(&movie::pack_path(name)).unwrap().as_ref(),
+                pack.read(&movie::pack_path(id)).unwrap().as_ref(),
                 format!("film-{name}").as_bytes(),
                 "{name}"
             );
         }
-        assert_eq!(pack.read("file/textm_42.tim").unwrap().as_ref(), b"page42");
-        assert!(!pack.contains("movie/vlogo.avi"));
+        assert_jpn_document_art(&pack);
+        assert!(!pack.contains("movie/1c.avi"));
     }
 
     #[test]
@@ -4626,15 +4771,12 @@ mod tests {
         let out = root.path.join("out.akpak");
         convert_game_with_options(&root.path, &out, 1, false).unwrap();
         let main = crate::pack::Pack::open(&out).unwrap();
-        assert_eq!(main.read("movie/oj.avi").unwrap().as_ref(), b"movie-oj");
-        assert_eq!(
-            main.read("movie/capcom.avi").unwrap().as_ref(),
-            b"movie-capcom"
-        );
+        assert_eq!(main.read("movie/00.avi").unwrap().as_ref(), b"movie-oj");
+        assert_eq!(main.read("movie/17.avi").unwrap().as_ref(), b"movie-capcom");
         // The issue's policy end to end: an already-compressed film stays
         // borrowed (raw), a compressible RDT is owned (zstd).
         assert!(matches!(
-            main.read("movie/oj.avi").unwrap(),
+            main.read("movie/00.avi").unwrap(),
             std::borrow::Cow::Borrowed(_)
         ));
         assert!(matches!(
@@ -4836,8 +4978,8 @@ mod tests {
 
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("door/"), 34);
-        assert_eq!(pack.read("door/ele01.dor").unwrap().as_ref(), b"dor-ele01");
-        assert_eq!(pack.read("door/mon.dor").unwrap().as_ref(), b"dor-mon");
+        assert_eq!(pack.read("door/11.dor").unwrap().as_ref(), b"dor-ele01");
+        assert_eq!(pack.read("door/0f.dor").unwrap().as_ref(), b"dor-mon");
         // Every door type byte maps to a distinct pack entry.
         let mut entries: Vec<&str> = pack
             .paths()
@@ -5179,6 +5321,114 @@ mod tests {
         out
     }
 
+    /// A 256-colour 8bpp TIM `width` x `height` whose CLUT entry 1 is `tag`
+    /// over the black entry 0, every texel but the first at index 1.
+    fn tagged_tim(width: u16, height: u16, tag: u16) -> Vec<u8> {
+        let mut clut = [0u16; 256];
+        clut[1] = tag;
+        let mut out = Vec::new();
+        out.extend_from_slice(&0x10u32.to_le_bytes());
+        out.extend_from_slice(&9u32.to_le_bytes());
+        out.extend_from_slice(&(12u32 + 512).to_le_bytes());
+        out.extend_from_slice(&[0, 0, 0, 0]);
+        out.extend_from_slice(&256u16.to_le_bytes());
+        out.extend_from_slice(&1u16.to_le_bytes());
+        for entry in clut {
+            out.extend_from_slice(&entry.to_le_bytes());
+        }
+        let texels = usize::from(width) * usize::from(height);
+        out.extend_from_slice(&(12 + texels as u32).to_le_bytes());
+        out.extend_from_slice(&[0, 0, 0, 0]);
+        out.extend_from_slice(&(width / 2).to_le_bytes());
+        out.extend_from_slice(&height.to_le_bytes());
+        out.push(0);
+        out.resize(out.len() + texels - 1, 1);
+        out
+    }
+
+    /// The colour [`tagged_tim`] stores for `tag`.
+    fn tag_colour(tag: u16) -> [u8; 4] {
+        tim::decode_8bpp(&tagged_tim(2, 1, tag))
+            .unwrap()
+            .palette(0, 1)
+    }
+
+    /// The tag of a converted indexed BMP page: its palette entry 1.
+    fn page_tag(data: &[u8]) -> [u8; 4] {
+        bmp::decode_indexed_page(data).unwrap().palette(0, 1)
+    }
+
+    /// The tags of the fixture's map backdrop, book covers and TEXTM sheets.
+    const BLUE_TAG: u16 = 0x300;
+    const COVER_TAG: u16 = 0x200;
+    const TEXTM_TAG: u16 = 0x100;
+
+    /// The document entries the Japanese fixture packs under `file/`: one
+    /// backdrop per document and two half-pages per TEXTM sheet.
+    const JPN_FILE_ENTRIES: usize = DOCUMENT_COUNT + 2 * TEXTM_STEMS.len();
+    /// Everything [`copy_file_art`] packs from the Japanese fixture: the
+    /// document entries and the two book covers.
+    const JPN_FILE_ART: usize = 2 + JPN_FILE_ENTRIES;
+
+    /// Check the Japanese fixture's document art: document 15 reads the
+    /// `filei17` backdrop and the TEXTM sheets 40-42, the last one's bottom
+    /// half as its page 5.
+    fn assert_jpn_document_art(pack: &crate::pack::Pack) {
+        assert_eq!(
+            page_tag(&pack.read("file/0f_bg.bmp").unwrap()),
+            tag_colour(17)
+        );
+        assert_eq!(
+            page_tag(&pack.read("file/01_bg.bmp").unwrap()),
+            tag_colour(3)
+        );
+        let page =
+            bmp::decode_indexed_page(&pack.read("file/0f_05_fg_ja-JP.bmp").unwrap()).unwrap();
+        assert_eq!((page.width, page.height), (256, 128));
+        assert_eq!(page.palette(0, 1), tag_colour(TEXTM_TAG + 42));
+        let top = bmp::decode_indexed_page(&pack.read("file/0e_00_fg_ja-JP.bmp").unwrap()).unwrap();
+        assert_eq!(
+            top.indices[0], 0,
+            "the sheet's first texel opens the top half"
+        );
+        assert_eq!(top.palette(0, 1), tag_colour(TEXTM_TAG + 39));
+        assert!(
+            !pack.contains("file/0e_02_fg_ja-JP.bmp"),
+            "document 14 has one sheet"
+        );
+    }
+
+    /// Write the two book covers into `dir`, tagged `COVER_TAG + book`.
+    fn write_covers(dir: &Path) {
+        for book in 0..2u16 {
+            fs::write(
+                dir.join(format!("FILE00{book}.TIM")),
+                tagged_tim(2, 1, COVER_TAG + book),
+            )
+            .unwrap();
+        }
+    }
+
+    /// Write the Japanese reader's art into `dir`: all 17 FILEI backdrops
+    /// (tagged with their number) and the 43 256x256 TEXTM sheets (tagged
+    /// `TEXTM_TAG` plus their table index).
+    fn write_jpn_document_pages(dir: &Path) {
+        for number in 1..=17u16 {
+            fs::write(
+                dir.join(format!("FILEI{number:02}.TIM")),
+                tagged_tim(2, 1, number),
+            )
+            .unwrap();
+        }
+        for (index, stem) in TEXTM_STEMS.iter().enumerate() {
+            fs::write(
+                dir.join(format!("{}.TIM", stem.to_ascii_uppercase())),
+                tagged_tim(256, 256, TEXTM_TAG + index as u16),
+            )
+            .unwrap();
+        }
+    }
+
     /// A synthetic 8bpp TIM carrying a flattened CLUT of `entries` colors.
     fn tim_8bpp_palette(entries: &[u16]) -> Vec<u8> {
         let mut out = Vec::new();
@@ -5338,22 +5588,8 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("I00V.IVM"), b"ivm0").unwrap();
         fs::write(dir.join("ING.ivm"), b"ivm1").unwrap();
-        fs::write(dir.join("FILE000.TIM"), b"cover0").unwrap();
-        fs::write(dir.join("FILE001.TIM"), b"cover1").unwrap();
-        for number in 1..=FILEI_COUNT {
-            fs::write(
-                dir.join(format!("FILEI{number:02}.TIM")),
-                format!("i{number}"),
-            )
-            .unwrap();
-        }
-        for number in 0..TEXTM_COUNT {
-            fs::write(
-                dir.join(format!("TEXTM_{number:02}.TIM")),
-                format!("page{number}"),
-            )
-            .unwrap();
-        }
+        write_covers(&dir);
+        write_jpn_document_pages(&dir);
 
         let mut writer = PackWriter::new();
         let mut progress = Progress::new("test", 1);
@@ -5376,17 +5612,19 @@ mod tests {
         .unwrap();
 
         assert_eq!(items, 2);
-        assert_eq!(files, 2 + FILEI_COUNT + TEXTM_COUNT);
+        assert_eq!(files, JPN_FILE_ART);
         assert!(item_bytes > 0 && file_bytes > 0);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         assert_eq!(pack.read("item/i00v.ivm").unwrap().as_ref(), b"ivm0");
         assert_eq!(pack.read("item/ing.ivm").unwrap().as_ref(), b"ivm1");
-        assert_eq!(pack.read("file/file000.tim").unwrap().as_ref(), b"cover0");
-        assert_eq!(pack.read("file/filei17.tim").unwrap().as_ref(), b"i17");
-        assert_eq!(pack.read("file/textm_42.tim").unwrap().as_ref(), b"page42");
+        assert_eq!(
+            page_tag(&pack.read("ui/file_book_0.bmp").unwrap()),
+            tag_colour(COVER_TAG)
+        );
+        assert_jpn_document_art(&pack);
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("item/"), 2);
-        assert_eq!(count("file/"), 62);
+        assert_eq!(count("file/"), JPN_FILE_ENTRIES);
     }
 
     /// A `filem_*` container over already-encoded page streams: a 16-slot
@@ -5430,8 +5668,11 @@ mod tests {
         let root = TempDir::new("document-pages");
         let dir = root.path.join("Item_m2");
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("ARROR.TIM"), b"arrows").unwrap();
-        let container = document_container(&[camera_pak_at(2, 1), camera_pak_at(2, 2)]);
+        fs::write(dir.join("ARROR.TIM"), tagged_tim(2, 1, 0x400)).unwrap();
+        let container = document_container(&[
+            lzw_literals(&tagged_tim(2, 1, 0x500)),
+            lzw_literals(&tagged_tim(2, 2, 0x501)),
+        ]);
         for stem in FILEM_STEMS {
             fs::write(dir.join(format!("{stem}.pix")), &container).unwrap();
         }
@@ -5452,17 +5693,22 @@ mod tests {
         )
         .unwrap();
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-        assert_eq!(pack.read("file/arror.tim").unwrap().as_ref(), b"arrows");
-        let page = lzw::decode(&camera_pak_at(2, 2)).unwrap();
         assert_eq!(
-            pack.read("file/en/filem_00_01.tim").unwrap().as_ref(),
-            page.as_slice()
+            page_tag(&pack.read("ui/file_arrows.bmp").unwrap()),
+            tag_colour(0x400)
         );
-        assert!(pack.read("file/fr/filem_l0_01.tim").is_ok());
-        let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("file/en/"), 32);
-        assert_eq!(count("file/fr/"), 2);
-        assert_eq!(count("file/de/"), 0);
+        let page =
+            bmp::decode_indexed_page(&pack.read("file/0f_01_fg_en-US.bmp").unwrap()).unwrap();
+        assert_eq!((page.width, page.height), (2, 2));
+        assert_eq!(page.palette(0, 1), tag_colour(0x501));
+        assert!(pack.read("file/00_01_fg_fr-FR.bmp").is_ok());
+        let count = |language: &str| {
+            let suffix = format!("_fg_{language}.bmp");
+            pack.paths().filter(|path| path.ends_with(&suffix)).count()
+        };
+        assert_eq!(count("en-US"), 32);
+        assert_eq!(count("fr-FR"), 2);
+        assert_eq!(count("de-DE"), 0);
         assert!(
             warnings
                 .iter()
@@ -5572,30 +5818,16 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("I00V.IVM"), b"ivm0").unwrap();
         fs::write(dir.join("MINI.ivm"), b"ivm1").unwrap();
-        fs::write(dir.join("FILE000.TIM"), b"cover0").unwrap();
-        fs::write(dir.join("FILE001.TIM"), b"cover1").unwrap();
-        for number in 1..=FILEI_COUNT {
-            fs::write(
-                dir.join(format!("FILEI{number:02}.TIM")),
-                format!("i{number}"),
-            )
-            .unwrap();
-        }
-        for number in 0..TEXTM_COUNT {
-            fs::write(
-                dir.join(format!("TEXTM_{number:02}.TIM")),
-                format!("page{number}"),
-            )
-            .unwrap();
-        }
+        write_covers(&dir);
+        write_jpn_document_pages(&dir);
         for number in 0..=0x0Eu32 {
             fs::write(
                 dir.join(format!("MAP{number:02X}.TIM")),
-                format!("plan{number}"),
+                tagged_tim(2, 1, number as u16),
             )
             .unwrap();
         }
-        fs::write(dir.join("Map_blue.TIM"), b"blue").unwrap();
+        fs::write(dir.join("Map_blue.TIM"), tagged_tim(2, 1, BLUE_TAG)).unwrap();
 
         let out = root.path.join("out.akpak");
         convert_game(&root.path, &out).unwrap();
@@ -5608,12 +5840,15 @@ mod tests {
             assert_eq!(pack.read(entry).unwrap().as_ref(), source.as_bytes());
         }
         assert_eq!(count("item/"), 2);
-        assert_eq!(count("file/"), 62);
+        assert_eq!(count("file/"), JPN_FILE_ENTRIES);
         assert_eq!(count("map/"), 16, "15 plans and the backdrop");
         assert_eq!(pack.read("item/mini.ivm").unwrap().as_ref(), b"ivm1");
-        assert_eq!(pack.read("file/textm_42.tim").unwrap().as_ref(), b"page42");
-        assert_eq!(pack.read("map/map0e.tim").unwrap().as_ref(), b"plan14");
-        assert_eq!(pack.read("map/blue.tim").unwrap().as_ref(), b"blue");
+        assert_jpn_document_art(&pack);
+        assert_eq!(page_tag(&pack.read("map/0e.bmp").unwrap()), tag_colour(14));
+        assert_eq!(
+            page_tag(&pack.read("map/bg.bmp").unwrap()),
+            tag_colour(BLUE_TAG)
+        );
         assert!(!pack.contains("map/tables.bin"), "no map tables are packed");
         assert!(
             !pack.contains(crate::combat::COMBAT_ENTRY),
@@ -5664,26 +5899,20 @@ mod tests {
             .filter(|&item| items::model_name(item).is_some())
             .count();
         assert_eq!(items, 77 + 2 * models);
-        assert_eq!(files, 2 + FILEI_COUNT + TEXTM_COUNT);
+        assert_eq!(files, JPN_FILE_ART);
         assert_eq!(maps, 16);
         assert!(items_bytes > 0 && files_bytes > 0 && maps_bytes > 0);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("item/"), 77 + 2 * models);
-        assert_eq!(count("file/"), 62);
+        assert_eq!(count("file/"), JPN_FILE_ENTRIES);
         assert_eq!(count("map/"), 16);
         assert_eq!(
             pack.read("item/i00v.ivm").unwrap(),
             fs::read(dir.join("I00V.IVM")).unwrap()
         );
-        assert_eq!(
-            pack.read("file/textm_z0.tim").unwrap(),
-            fs::read(dir.join("TEXTM_Z0.TIM")).unwrap()
-        );
-        assert_eq!(
-            pack.read("map/map0b.tim").unwrap(),
-            fs::read(dir.join("MAP0B.TIM")).unwrap()
-        );
+        assert_jpn_document_art(&pack);
+        assert_eq!(page_tag(&pack.read("map/0b.bmp").unwrap()), tag_colour(11));
     }
 
     #[test]
@@ -5725,7 +5954,7 @@ mod tests {
             15 + 44 + crate::enemy::ENEMY_SCRIPTS.len() + enemy_sounds,
             "15 character models, 44 monster models, their sounds and the checked-in scripts"
         );
-        assert_eq!(count("effspr/"), 33);
+        assert_eq!(count("effect/"), 33);
         assert_eq!(count("map/"), 16, "15 plans and the backdrop");
         assert!(!pack.contains("map/tables.bin"), "no map tables are packed");
         assert!(
@@ -5737,8 +5966,8 @@ mod tests {
         assert!(pack.contains("enemy/em000.emd"));
         assert!(pack.contains("enemy/em151.emd"));
         assert!(pack.contains("enemy/em13.lua"));
-        assert!(pack.contains("effspr/esp000.tim"));
-        assert!(pack.contains("effspr/esp224.tim"));
+        assert!(pack.contains("effect/00.bmp"));
+        assert!(pack.contains("effect/20.bmp"));
         assert!(pack.contains(crate::effects::room::CORE_ESP_ENTRY));
         assert!(pack.contains(crate::effects::room::CORE_ETM_ENTRY));
 
@@ -5800,14 +6029,14 @@ mod tests {
         assert!(pack.contains("bgm/013.wav"));
         assert!(pack.contains("se/ft_wda.wav"));
         assert!(pack.contains("se/dr_wd01.wav"));
-        assert!(pack.contains("door/door00.dor"));
-        assert!(pack.contains("door/ele01a.dor"));
-        assert!(pack.contains("door/kai02.dor"));
-        assert!(pack.contains("door/door06k.dor"));
+        assert!(pack.contains("door/00.dor"));
+        assert!(pack.contains("door/12.dor"));
+        assert!(pack.contains("door/18.dor"));
+        assert!(pack.contains("door/20.dor"));
 
         // Door art is a raw copy of the matched, case-insensitive source.
         assert_eq!(
-            pack.read("door/door00.dor").unwrap(),
+            pack.read("door/00.dor").unwrap(),
             std::fs::read(root.join("JPN/ITEM_M1/door00.dor")).unwrap()
         );
 

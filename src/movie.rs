@@ -103,6 +103,15 @@ pub fn name(id: u8) -> Option<&'static str> {
     NAMES.get(usize::from(id)).copied().flatten()
 }
 
+/// The film id a shipped basename (either release spelling, any case) plays
+/// under.
+pub fn id(basename: &str) -> Option<u8> {
+    let basename = basename.to_ascii_lowercase();
+    (0..NAMES.len() as u8).find(|&id| {
+        name(id).is_some_and(|name| release_names(name).any(|spelling| spelling == basename))
+    })
+}
+
 /// Every shipped basename for a canonical table name, the canonical one
 /// first.
 ///
@@ -148,21 +157,21 @@ pub fn required_name_count() -> usize {
         .count()
 }
 
-/// Pack path for a film basename: `movie/{name}.avi`.
-pub fn pack_path(name: &str) -> String {
-    format!("movie/{}.avi", name.to_ascii_lowercase())
+/// Pack path for a film id: `movie/<id>.avi`, two hex digits.
+pub fn pack_path(id: u8) -> String {
+    format!("{}.avi", stem(id))
 }
 
-/// The asset stem of a film basename, `movie/{name}`: the shipped AVI and
-/// an HD replacement (`movie/{name}.mp4`, or an H.264 AVI at the shipped
-/// path) both resolve through it.
-pub fn stem(name: &str) -> String {
-    format!("movie/{}", name.to_ascii_lowercase())
+/// The asset stem of a film id, `movie/<id>`: the shipped AVI and an HD
+/// replacement (`movie/<id>.mp4`, or an H.264 AVI at the shipped path) both
+/// resolve through it.
+pub fn stem(id: u8) -> String {
+    format!("movie/{id:02x}")
 }
 
-/// Whether any layer of `pack` carries film `name` in any accepted format.
-pub fn exists(pack: &Pack, name: &str) -> bool {
-    pack.has_asset(&stem(name), AssetClass::Movie)
+/// Whether any layer of `pack` carries film `id` in any accepted format.
+pub fn exists(pack: &Pack, id: u8) -> bool {
+    pack.has_asset(&stem(id), AssetClass::Movie)
 }
 
 /// The accept/skip button mask of film `id`: `0x0FFF` for every skippable
@@ -285,18 +294,17 @@ impl MovieSession {
     /// Resolve `id`, read its film from `pack`, parse it, check the format
     /// and arm playback at frame 0.
     ///
-    /// The film resolves by stem (`movie/{name}`) through
-    /// [`AssetClass::Movie`], so an HD mod's `movie/{name}.mp4` or its H.264
+    /// The film resolves by stem (`movie/<id>`) through
+    /// [`AssetClass::Movie`], so an HD mod's `movie/<id>.mp4` or its H.264
     /// AVI at the shipped path wins over the shipped Cinepak film, and the
     /// decoder is chosen from the container and codec. A replacement that
     /// cannot be played (a build without the `hd` decoders, or a corrupt
     /// file) falls back to the copy it shadows with a warning.
     pub fn open(pack: &Pack, id: u8, character: u8) -> Result<Self> {
-        let name = name(id).with_context(|| format!("film id {id} has no file"))?;
-        let stem = stem(name);
+        name(id).with_context(|| format!("film id {id} has no file"))?;
         let asset = pack
-            .read_asset(&stem, AssetClass::Movie)?
-            .with_context(|| format!("missing film {}", pack_path(name)))?;
+            .read_asset(&stem(id), AssetClass::Movie)?
+            .with_context(|| format!("missing film {}", pack_path(id)))?;
         let path = asset.path().to_owned();
         let err = match Self::from_bytes(asset.data().to_vec(), id, character)
             .with_context(|| format!("failed to open film {path}"))
@@ -931,7 +939,7 @@ mod tests {
     fn session(frames: usize, rate: (u32, u32), audio_frames: usize) -> MovieSession {
         let mut writer = PackWriter::new();
         writer
-            .add("movie/oj.avi", synthetic_avi(frames, rate, audio_frames))
+            .add("movie/00.avi", synthetic_avi(frames, rate, audio_frames))
             .unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         MovieSession::open(&pack, 0, 0).unwrap()
@@ -957,8 +965,12 @@ mod tests {
         assert_eq!(required_name_count(), 27);
         assert!(!is_shipped(name(28).unwrap()));
         assert!(is_shipped("staf_b"));
-        assert_eq!(pack_path("PJ"), "movie/pj.avi");
-        assert_eq!(pack_path("staf_b"), "movie/staf_b.avi");
+        assert_eq!(id("OU"), Some(0));
+        assert_eq!(id("dmf"), Some(2));
+        assert_eq!(id("staf_r"), id("staf_b"));
+        assert_eq!(id("nope"), None);
+        assert_eq!(pack_path(1), "movie/01.avi");
+        assert_eq!(pack_path(0x1A), "movie/1a.avi");
 
         // The Western PC release's names resolve to the same table row.
         let western = [
@@ -1211,7 +1223,7 @@ mod tests {
         let mut avi = synthetic_avi(400, (10, 1), 400);
         let mut writer = PackWriter::new();
         writer
-            .add("movie/dmf.avi", std::mem::take(&mut avi))
+            .add("movie/02.avi", std::mem::take(&mut avi))
             .unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let mut session = MovieSession::open(&pack, 2, 0).unwrap();
@@ -1250,7 +1262,7 @@ mod tests {
     fn open_rejects_the_null_id_and_missing_entries() {
         let mut writer = PackWriter::new();
         writer
-            .add("movie/oj.avi", synthetic_avi(2, (10, 1), 2))
+            .add("movie/00.avi", synthetic_avi(2, (10, 1), 2))
             .unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         assert!(MovieSession::open(&pack, 10, 0).is_err());

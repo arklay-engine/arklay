@@ -31,7 +31,7 @@ pub const ORDER_COUNT: usize = 12;
 /// Sanity bound on the number of scripts in the NULL-terminated table.
 const MAX_SCRIPTS: usize = 0x100;
 
-/// `.dor` file stem for each door-type byte, `0x00..=0x21`.
+/// Shipped `.dor` file stem for each door-type byte, `0x00..=0x21`.
 ///
 /// The record byte `+0x0A` selects the animation: plain doors `00`-`0E`,
 /// the monitor and elevator cages, the four stairwells, the two ladders and
@@ -43,15 +43,28 @@ static DOOR_TYPE_NAMES: [&str; 0x22] = [
     "door01k", "door03k", "door05k", "door06k", "door15",
 ];
 
-/// The pack entry stem (`door/{name}.dor`) for a door-type byte.
+/// The shipped `.dor` file stem for a door-type byte.
 ///
 /// Values outside the shipped table use `door00`, matching the original's
 /// default animation selection.
 pub fn type_name(door_type: u8) -> &'static str {
-    DOOR_TYPE_NAMES
-        .get(usize::from(door_type))
-        .copied()
-        .unwrap_or(DOOR_TYPE_NAMES[0])
+    DOOR_TYPE_NAMES[usize::from(animation_type(door_type))]
+}
+
+/// The door type whose animation a door-type byte plays: the byte itself for
+/// the shipped `0x00..=0x21`, and `0x00` for every value past the table.
+pub fn animation_type(door_type: u8) -> u8 {
+    if usize::from(door_type) < DOOR_TYPE_NAMES.len() {
+        door_type
+    } else {
+        0
+    }
+}
+
+/// The pack entry (`door/<type>.dor`, two hex digits) of a door-type byte's
+/// animation.
+pub fn entry(door_type: u8) -> String {
+    format!("door/{:02x}.dor", animation_type(door_type))
 }
 
 /// Whether the door-type byte selects a stairwell (`kai01`-`kai04`) or ladder
@@ -355,6 +368,11 @@ mod tests {
         ] {
             assert_eq!(type_name(byte), name, "door type {byte:#04x}");
         }
+
+        assert_eq!(entry(0x00), "door/00.dor");
+        assert_eq!(entry(0x1A), "door/1a.dor");
+        assert_eq!(entry(0x21), "door/21.dor");
+        assert_eq!(entry(0x22), "door/00.dor");
 
         // The shipped table has one distinct stem per animated kind.
         let mut names: Vec<&str> = (0..=0x21).map(type_name).collect();
