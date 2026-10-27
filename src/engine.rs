@@ -890,7 +890,7 @@ fn write_save_file(game: &game::GameState, path: &Path) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    crate::atomic::write(path, &file.to_bytes())
+    crate::atomic::write(path, &file.to_file_bytes())
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
@@ -2392,9 +2392,11 @@ impl GameSession {
         }
         game.increment_saves();
         let mut player_state = player::spawn(id, &loaded.room);
+        // The original loads at height 0; the port-only height puts an
+        // autosave taken on a stair landing or raised floor back on it.
         player_state.pos = [
             i32::from(file.pos_x),
-            player_state.pos[1],
+            i32::from(file.pos_y),
             i32::from(file.pos_z),
         ];
         player_state.angle = file.angle as u16 & 0x0FFF;
@@ -5509,8 +5511,9 @@ impl GameSession {
     /// Whether the session is somewhere the original would let the player
     /// save: no door, film, death, menu, screen or message owns the tick,
     /// the entry fade has opened the room, no letterboxed cutscene or demo is
-    /// playing, and the pad drives the player (no scripted state or control
-    /// lock), so a load never starts inside a scene.
+    /// playing, no timed sequence runs, and the pad drives the player (no
+    /// scripted state or control lock), so a load never starts inside a
+    /// scene.
     fn autosave_ready(&self) -> bool {
         let flags = &self.game.flags[5];
         !self.room_boot_gate
@@ -5521,6 +5524,7 @@ impl GameSession {
             && self.clear_game_requested.is_none()
             && !flags.bit(game::MSF_SCREEN_INTENSITY)
             && !flags.bit(game::MSF2_ATTRACT_DEMO)
+            && !self.timed_sequence_running()
             && !self.game.fmv_requested()
             && !self.game.menu_pending()
             && !flags.bit(game::MSF_VOICE_PLAYING)
@@ -5531,6 +5535,16 @@ impl GameSession {
             && self.game.entities[0].state() == 1
             && self.game.entities[0].health >= 0
             && !self.hostile_near_player()
+    }
+
+    /// Whether a timed sequence is running, whose clock the save block does
+    /// not carry: the lab's self-destruct countdown (`MSF2_COUNTDOWN_ACTIVE`;
+    /// a load would drop it, or with seconds left start a run that cannot be
+    /// won) or the boulder tunnel's chase (`MSF2_SCREEN_SHAKE`, raised while
+    /// the boulder rolls).
+    fn timed_sequence_running(&self) -> bool {
+        let flags = &self.game.flags[5];
+        flags.bit(game::MSF2_COUNTDOWN_ACTIVE) || flags.bit(game::MSF2_SCREEN_SHAKE)
     }
 
     /// Whether a live monster stands within [`AUTOSAVE_HOSTILE_RANGE`] of the
@@ -19652,6 +19666,133 @@ mod tests {
         assert_eq!(loaded.loaded.id, *visited.last().unwrap());
     }
 
+    /// One app-style gameplay step of `session`: the door timeline while it
+    /// runs, else a gameplay tick; then the autosave it hands out, if any.
+    fn step_session(
+        pack: &Pack,
+        session: &mut GameSession,
+        input: player::Input,
+        action: bool,
+    ) -> Option<save::SaveFile> {
+        if !session.transition_finished {
+            if session.transition.is_some() {
+                session.tick_transition(pack, false);
+            } else {
+                session
+                    .tick(pack, UiInput::default(), input, action)
+                    .unwrap();
+            }
+        }
+        let autosave = session.take_autosave();
+        if session.transition_finished {
+            session.finish_transition(pack);
+        }
+        autosave
+    }
+
+    /// Walk `session` through its door `door` and return the destination's
+    /// autosave with the live player position and camera it captured.
+    fn autosave_through_door(
+        pack: &Pack,
+        session: &mut GameSession,
+        door: usize,
+    ) -> Option<(save::SaveFile, [i32; 3], usize)> {
+        for _ in 0..30 {
+            step_session(pack, session, player::Input::default(), false);
+        }
+        let from = session.loaded.id;
+        let record = session.game.doors.iter().flatten().nth(door).copied()?;
+        let (dx, dz) = player::reach_offset(0);
+        session.player.pos = [
+            i32::from(record.zone[0]) + i32::from(record.zone[2]) / 2 - dx,
+            session.player.pos[1],
+            i32::from(record.zone[1]) + i32::from(record.zone[3]) / 2 - dz,
+        ];
+        session.player.angle = 0;
+        session.game.sync_entity_from_player(&session.player);
+        let press = player::Input {
+            action_pressed: true,
+            action_held: true,
+            ..player::Input::default()
+        };
+        let mut entered = false;
+        for tick in 0..900 {
+            let pressing = !entered && tick % 2 == 0;
+            let input = if pressing {
+                press
+            } else {
+                player::Input::default()
+            };
+            let autosave = step_session(pack, session, input, pressing);
+            entered |= session.transition.is_some();
+            if let Some(file) = autosave {
+                if session.loaded.id == from {
+                    return None;
+                }
+                return Some((
+                    file,
+                    session.game.entities[0].pos,
+                    session.game.camera.current_cut,
+                ));
+            }
+        }
+        None
+    }
+
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn real_autosaves_load_where_they_were_taken() {
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let dir = TempDir::new();
+        let saves = dir.0.join("saves");
+        let mut checked = 0;
+        let mut failures = Vec::new();
+        let rooms = std::env::var("ARKLAY_AUTOSAVE_ROOMS")
+            .unwrap_or_else(|_| "100 101 102 103 104 105 106 107 10A 10B 10C 10D 10E 10F 110 111 112 113 114 115 116 117 118 119 11A 11B 11C 200 201 202 203 204 205 206 207 208 209 20A 20B 20C 20D 20E".to_string());
+        for room in rooms.split_whitespace() {
+            let Ok(start) = RoomId::parse(room) else {
+                continue;
+            };
+            let Ok(probe) = GameSession::from_room(&pack, start, &saves) else {
+                continue;
+            };
+            let doors = probe.game.doors.iter().flatten().count();
+            drop(probe);
+            for door in 0..doors {
+                let Ok(mut session) = GameSession::from_room(&pack, start, &saves) else {
+                    continue;
+                };
+                let Some((file, pos, cut)) = autosave_through_door(&pack, &mut session, door)
+                else {
+                    continue;
+                };
+                let id = session.loaded.id;
+                // Through the file bytes, so the height trailer is exercised.
+                let file = save::SaveFile::from_bytes(&file.to_file_bytes()).unwrap();
+                let mut loaded = GameSession::from_save(&pack, &file, &saves).unwrap();
+                for _ in 0..3 {
+                    step_session(&pack, &mut loaded, player::Input::default(), false);
+                }
+                checked += 1;
+                let got_pos = loaded.game.entities[0].pos;
+                let got_cut = loaded.game.camera.current_cut;
+                let close = (0..3).all(|axis| (got_pos[axis] - pos[axis]).abs() <= 64);
+                if !close || got_cut != cut {
+                    failures.push(format!(
+                        "{start:?} door {door} -> {id:?}: live pos {pos:?} cut {cut}, \
+                         loaded pos {got_pos:?} cut {got_cut}"
+                    ));
+                }
+            }
+        }
+        eprintln!("checked {checked} autosaves");
+        assert!(checked > 0, "no door autosaved");
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
     #[test]
     #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
     fn real_transition_capture_is_deterministic() {
@@ -22709,6 +22850,27 @@ mod tests {
             tick_until_autosave(&pack, &mut session, 90).is_some(),
             "the room autosaves once the scene hands back control"
         );
+    }
+
+    #[test]
+    fn a_timed_sequence_holds_the_autosave_back() {
+        let dir = TempDir::new();
+        let (pack, a, _b) = two_room_door_pack(&dir);
+        for flag in [game::MSF2_COUNTDOWN_ACTIVE, game::MSF2_SCREEN_SHAKE] {
+            let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+            walk_through_test_door(&pack, &mut session);
+            // `apply_flag` mode 0 raises the bit, mode 1 clears it.
+            session.game.apply_flag(5, flag, 0);
+            assert!(
+                tick_until_autosave(&pack, &mut session, 300).is_none(),
+                "no autosave while flag {flag:#x} runs"
+            );
+            session.game.apply_flag(5, flag, 1);
+            assert!(
+                tick_until_autosave(&pack, &mut session, 90).is_some(),
+                "the room autosaves once flag {flag:#x} clears"
+            );
+        }
     }
 
     #[test]

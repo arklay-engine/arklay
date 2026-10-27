@@ -4,6 +4,8 @@
 //! (magic, timestamp and unused icon data, hardcoded in [`BIOCARD_PREFIX`])
 //! followed by the little-endian state fields at their original offsets. The
 //! block is 0x800 bytes long; everything past the last field is zero padding.
+//! A save away from floor level appends the port-only height trailer
+//! ([`HEIGHT_TRAILER`]) after the block.
 //!
 //! [`SaveFile`] can be built from a [`GameState`], serialized, parsed back and
 //! applied to a state, so a load rebuilds the room identity, position, health,
@@ -40,6 +42,20 @@ use crate::state::RoomId;
 pub const SAVE_BLOCK_SIZE: usize = 0x800;
 /// Bytes of the block the field layout actually uses (0x000..=0x41B).
 pub const SAVE_LAYOUT_SIZE: usize = 0x41C;
+/// Port-only: the magic of the player-height trailer appended after the
+/// 0x800 block (`AKY`, version 1), followed by the height as a little-endian
+/// `i16` and two reserved zero bytes. The original stores only X and Z and
+/// always loads the player at height 0, which is right at a typewriter but
+/// not for an autosave taken on a stair landing or a raised floor. The
+/// trailer is written only for a non-zero height, so a save at floor level
+/// stays the plain block, and it is read only from a file exactly
+/// [`SAVE_BLOCK_SIZE`] + [`HEIGHT_TRAILER_LEN`] long: the original's own
+/// 0xA82-byte files keep their pad remap at 0x41C and controls past 0x800,
+/// and are never mistaken for it.
+pub const HEIGHT_TRAILER: [u8; 4] = *b"AKY\x01";
+/// Bytes of the height trailer: the magic, the `i16` height and two
+/// reserved bytes.
+pub const HEIGHT_TRAILER_LEN: usize = 8;
 /// Bytes of the bio-card prefix at the start of the block.
 pub const PREFIX_LEN: usize = 0x200;
 /// BioCard offset the [`GameState`] state image starts at.
@@ -143,6 +159,9 @@ pub struct SaveFile {
     pub pos_x: i16,
     /// Player position Z (0x22E).
     pub pos_z: i16,
+    /// Port-only player height ([`HEIGHT_TRAILER`]); `0` for an original
+    /// block.
+    pub pos_y: i16,
     /// Player facing angle (0x230).
     pub angle: i16,
     /// Health status flags (0x232).
@@ -193,6 +212,7 @@ impl Default for SaveFile {
             character: 0,
             pos_x: 0,
             pos_z: 0,
+            pos_y: 0,
             angle: 0,
             health_status: 0,
             scenario2: [0; 32],
@@ -285,6 +305,7 @@ impl SaveFile {
             character: state.state_bytes[usize::from(STATE_BYTE_CHARACTER)],
             pos_x: state.entities[0].pos[0] as i16,
             pos_z: state.entities[0].pos[2] as i16,
+            pos_y: state.entities[0].pos[1] as i16,
             angle: state.entities[0].angle as i16,
             health_status: state.health_status,
             examined: state.examined_flags(),
@@ -370,7 +391,7 @@ impl SaveFile {
         state.entities[0].health = self.health;
         state.entities[0].pos = [
             i32::from(self.pos_x),
-            state.entities[0].pos[1],
+            i32::from(self.pos_y),
             i32::from(self.pos_z),
         ];
         state.entities[0].angle = self.angle as u16 & 0x0FFF;
@@ -429,7 +450,20 @@ impl SaveFile {
         state.state_bytes[usize::from(STATE_BYTE_HEALTH_STATUS)] = self.health_status;
     }
 
-    /// Serialize the block: 0x800 bytes, little-endian, zero-padded.
+    /// The bytes a save file holds: the block, then the height trailer when
+    /// the player is off floor level ([`HEIGHT_TRAILER`]).
+    pub fn to_file_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.to_bytes().to_vec();
+        if self.pos_y != 0 {
+            bytes.extend_from_slice(&HEIGHT_TRAILER);
+            bytes.extend_from_slice(&self.pos_y.to_le_bytes());
+            bytes.extend_from_slice(&[0, 0]);
+        }
+        bytes
+    }
+
+    /// Serialize the block: 0x800 bytes, little-endian, zero-padded. The
+    /// port-only height is not part of it ([`Self::to_file_bytes`]).
     pub fn to_bytes(&self) -> [u8; SAVE_BLOCK_SIZE] {
         let mut bytes = [0u8; SAVE_BLOCK_SIZE];
         bytes[..PREFIX_LEN].copy_from_slice(&self.prefix);
@@ -512,6 +546,7 @@ impl SaveFile {
             character: bytes[0x22B],
             pos_x: get_i16(bytes, 0x22C),
             pos_z: get_i16(bytes, 0x22E),
+            pos_y: height_trailer(bytes).unwrap_or(0),
             angle: get_i16(bytes, 0x230),
             health_status: bytes[0x232],
             ..Self::default()
@@ -538,6 +573,13 @@ impl SaveFile {
         file.state_bytes[0] = file.stage.saturating_add(1);
         Ok(file)
     }
+}
+
+/// The height a file's trailer carries ([`HEIGHT_TRAILER`]), if it has one.
+fn height_trailer(bytes: &[u8]) -> Option<i16> {
+    let trailer = bytes.get(SAVE_BLOCK_SIZE..)?;
+    (trailer.len() == HEIGHT_TRAILER_LEN && trailer[..4] == HEIGHT_TRAILER)
+        .then(|| i16::from_le_bytes([trailer[4], trailer[5]]))
 }
 
 /// The block's 1-based file name for a zero-based slot index.
@@ -579,7 +621,7 @@ pub fn write_autosave(dir: &Path, file: &SaveFile) -> Result<()> {
     let newest = dir.join(autosave_name(1).expect("in range"));
     let temp = crate::atomic::temp_path(&newest)?;
     let rotate = || -> Result<()> {
-        crate::atomic::write(&temp, &file.to_bytes())?;
+        crate::atomic::write(&temp, &file.to_file_bytes())?;
         for index in (1..AUTOSAVE_COUNT).rev() {
             let from = dir.join(autosave_name(index).expect("in range"));
             let to = dir.join(autosave_name(index + 1).expect("in range"));
@@ -824,7 +866,8 @@ pub fn save_to_path(path: &Path, file: &SaveFile) -> Result<()> {
     {
         fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
     }
-    fs::write(path, file.to_bytes()).with_context(|| format!("failed to write {}", path.display()))
+    fs::write(path, file.to_file_bytes())
+        .with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// Remove a save file. A missing file is not an error.
@@ -867,7 +910,8 @@ pub fn save(dir: &Path, index: usize, file: &SaveFile) -> Result<()> {
     let path =
         slot_path(dir, index).with_context(|| format!("save slot {index} is out of range"))?;
     fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
-    fs::write(&path, file.to_bytes()).with_context(|| format!("failed to write {}", path.display()))
+    fs::write(&path, file.to_file_bytes())
+        .with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// Read slot `index` from `dir`.
@@ -1046,8 +1090,40 @@ mod tests {
     #[test]
     fn bytes_round_trip() {
         let file = filled();
-        let bytes = file.to_bytes();
+        assert_eq!(SaveFile::from_bytes(&file.to_bytes()).unwrap(), file);
+    }
+
+    #[test]
+    fn a_height_rides_in_the_trailer() {
+        let file = SaveFile {
+            pos_y: -2885,
+            ..filled()
+        };
+        let bytes = file.to_file_bytes();
+        assert_eq!(bytes.len(), SAVE_BLOCK_SIZE + HEIGHT_TRAILER_LEN);
         assert_eq!(SaveFile::from_bytes(&bytes).unwrap(), file);
+        // The bare block drops only the port-only height.
+        let block = SaveFile::from_bytes(&file.to_bytes()).unwrap();
+        assert_eq!(block.pos_y, 0);
+        assert_eq!(SaveFile { pos_y: 0, ..file }, block);
+    }
+
+    #[test]
+    fn a_floor_level_save_is_the_plain_block() {
+        let file = filled();
+        assert_eq!(file.to_file_bytes(), file.to_bytes().to_vec());
+    }
+
+    #[test]
+    fn an_original_file_never_reads_as_a_height() {
+        // The original's 0xA82-byte file keeps the pad remap at 0x41C and
+        // the key bindings past 0x800; neither is a height.
+        let mut bytes = vec![0u8; 0xA82];
+        bytes[..SAVE_BLOCK_SIZE].copy_from_slice(&filled().to_bytes());
+        bytes[0x41C..0x420].copy_from_slice(&[0x00, 0x10, 0x00, 0x20]);
+        bytes[SAVE_BLOCK_SIZE..SAVE_BLOCK_SIZE + 4].copy_from_slice(&HEIGHT_TRAILER);
+        bytes[SAVE_BLOCK_SIZE + 4] = 0x45;
+        assert_eq!(SaveFile::from_bytes(&bytes).unwrap().pos_y, 0);
     }
 
     #[test]
@@ -1240,7 +1316,7 @@ mod tests {
         assert_eq!(file.examined[3] & 0x10, 0x10);
         assert_eq!(file.to_bytes()[0x29F] & 0x10, 0x10);
 
-        let parsed = SaveFile::from_bytes(&file.to_bytes()).unwrap();
+        let parsed = SaveFile::from_bytes(&file.to_file_bytes()).unwrap();
         let mut restored = GameState::default();
         parsed.apply_to(&mut restored);
 
@@ -1254,6 +1330,10 @@ mod tests {
         assert_eq!(restored.entities[0].health, 96);
         assert_eq!(restored.entities[0].pos[0], 1234);
         assert_eq!(restored.entities[0].pos[2], -2345);
+        assert_eq!(
+            restored.entities[0].pos[1], 7,
+            "the height rides in the trailer"
+        );
         assert_eq!(restored.entities[0].angle, 0x456);
         assert_eq!(restored.health_status, 0x20);
         assert_eq!(restored.examined_flags(), state.examined_flags());

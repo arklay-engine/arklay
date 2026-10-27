@@ -401,6 +401,12 @@ pub const MSF2_DOOR_TURN_PENDING: u8 = 0x29;
 /// demo playback. The second dword of flag bank 5, i.e. selector
 /// `0x20 + 3 = 0x23` in the MSB-first flag bank.
 pub const MSF2_ATTRACT_DEMO: u8 = 0x23;
+/// `main_state_flags2` bit 0x08000000 (`MSF2_COUNTDOWN_ACTIVE`): the lab's
+/// self-destruct countdown is running. The escape-sequence scripts raise it
+/// with the generic flag op (and seed BioCard 0x21C, the elapsed seconds,
+/// through `state_word_set` index 4); `game_loop` draws the timer and fires
+/// the explosion film while it is set. Selector `0x20 + 4 = 0x24`.
+pub const MSF2_COUNTDOWN_ACTIVE: u8 = 0x24;
 /// `main_state_flags2` bit 0x04000000 (`MSF2_COSTUME_VARIANT`): the player
 /// wears an alternate outfit, picked by [`GameState::costume_variant`]. The
 /// original's `RoomInit` raises it when the wardrobe stores model id `8`, and
