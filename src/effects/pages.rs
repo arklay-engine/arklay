@@ -175,14 +175,20 @@ pub fn pack(weapon: &WeaponEffects, room: &mut RoomEffects) -> PackCursor {
     cursor
 }
 
-/// The effect-sheet name for `(stage, room, page)`, or `None` when the slot is
-/// free (`0xFF`) or the indices are out of range.
+/// The shipped effect-sheet name for `(stage, room, page)`, or `None` when
+/// the slot is free (`0xFF`) or the indices are out of range.
 ///
 /// `stage` is the zero-based stage id and `room` the room byte; `page` is the
 /// zero-based effspr page index (0-3).
 pub fn room_effect_sheet(stage: usize, room: usize, page: usize) -> Option<&'static str> {
     let name = room_effect_sheet_index(stage, room, page)?;
     EFFECT_SHEET_NAMES.get(usize::from(name)).copied()
+}
+
+/// The pack stem (`effect/<id>`, two hex digits) of effect sheet `id`, the
+/// room map's sheet index.
+pub fn sheet_stem(id: u8) -> String {
+    format!("effect/{id:02x}")
 }
 
 /// The effect-sheet name index for `(stage, room, page)`, which also selects
@@ -1030,6 +1036,7 @@ mod tests {
         assert_eq!(room_effect_sheet(1, 1, 1), Some("esp201"));
         assert_eq!(room_effect_sheet(2, 2, 3), Some("esp214"));
         assert_eq!(room_effect_sheet(1, 0, 2), None);
+        assert_eq!(sheet_stem(0x1F), "effect/1f");
     }
 
     #[test]

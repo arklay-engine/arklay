@@ -3,7 +3,7 @@
 -- The tab is always available: the original's `menu_tab_map` runs the map
 -- state machine without a scenario check (the radio's flag gates only the
 -- radio tab). The browser composites the highest available layout's art
--- (`map/map0e`, `map00`, `map0c` or `map0d` - `map_tab_load_map` loads the
+-- (`map/0e`, `00`, `0c` or `0d` - `map_tab_load_map` loads the
 -- file of the mask's highest set bit, one page for every browser sprite):
 -- the 160x72 base window at (33,32), the four layout markers (the current
 -- layout's at full brightness, the others at half), the current area's name
@@ -36,13 +36,14 @@ local BROWSER_RECT = { 33, 32, 160, 96 }
 local DISPLAY_RECT = { 48, 28, 128, 100 }
 
 local TABLES_ENTRY = "map/tables.bin"
-local BLUE_STEM = "map/blue"
+-- The full display's blue grid backdrop (`Map_blue`).
+local BACKDROP_STEM = "map/bg"
 -- The four browser floor-plan stems, indexed by layout.
-local TAB_STEMS = { [0] = "map/map0d", "map/map0c", "map/map00", "map/map0e" }
+local TAB_STEMS = { [0] = "map/0d", "map/0c", "map/00", "map/0e" }
 -- The eleven full-display floor-plan stems, indexed by area.
 local AREA_STEMS = {
-    [0] = "map/map01", "map/map02", "map/map03", "map/map04", "map/map05", "map/map06",
-    "map/map07", "map/map08", "map/map09", "map/map0a", "map/map0b",
+    [0] = "map/01", "map/02", "map/03", "map/04", "map/05", "map/06",
+    "map/07", "map/08", "map/09", "map/0a", "map/0b",
 }
 
 -- The flag bank the visited rooms and owned maps live in, and the owned-map
@@ -358,7 +359,7 @@ function M.open(api)
         pages = {},
     }
     M.state = s
-    page(api, BLUE_STEM, BACKDROP_WARNING)
+    page(api, BACKDROP_STEM, BACKDROP_WARNING)
     local stage, room, cut = api:room()
     local group = (((stage or 1) - 1) & 0xFF) % 5
     s.area = initial_area(group, room or 0, cut or 0)
@@ -561,7 +562,7 @@ local function draw_display(api, ox, oy)
     local width, height = api:art_size(plan)
     width = width < DISPLAY_W and width or DISPLAY_W
     height = height < DISPLAY_H and height or DISPLAY_H
-    local backdrop = page(api, BLUE_STEM, BACKDROP_WARNING)
+    local backdrop = page(api, BACKDROP_STEM, BACKDROP_WARNING)
     if backdrop then
         local palette = api:page_palette(backdrop)
         local lut = {}

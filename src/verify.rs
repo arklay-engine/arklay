@@ -388,6 +388,9 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
                 );
             }
         }
+        Format::Bmp if crate::bmp::is_indexed_page(data) && item_icon_id(path).is_none() => {
+            crate::bmp::decode_indexed_page(data)?;
+        }
         Format::Bmp => {
             let image = crate::bmp::decode(data)?;
             if item_icon_id(path).is_some() && (image.width, image.height) != (40, 30) {
@@ -550,7 +553,7 @@ mod tests {
         assert_eq!(classify("enemy/em20.emd"), Format::Emd);
         assert_eq!(classify("player/00.emw"), Format::Emw);
         assert_eq!(classify("player/ws202.tmd"), Format::Tmd);
-        assert_eq!(classify("door/door00.dor"), Format::Dor);
+        assert_eq!(classify("door/00.dor"), Format::Dor);
         assert_eq!(classify("se/a_mcn03.wav"), Format::Wav);
         assert_eq!(classify("language/en-US.txt"), Format::Language);
         assert_eq!(classify("Language/JA-JP.TXT"), Format::Language);

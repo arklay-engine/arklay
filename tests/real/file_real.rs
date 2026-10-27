@@ -5,12 +5,13 @@
 //!
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must carry
-//! the `file/*.tim` entries the `ui/file.lua` reader draws (two covers, 14
-//! backdrops, 43 page packs) plus the menu sheets and font. The first test
-//! loads every TIM and checks the sizes the JPN reader indexes; the reader's
-//! paging is covered by the Lua screen's unit tests. The second renders the
-//! `--ui file` capture twice and requires it to be deterministic and to draw
-//! its own layer over the menu.
+//! the entries the `ui/file.lua` reader draws (two `ui/file_book_<n>` covers,
+//! a `file/<doc>_bg` backdrop per document and the Japanese half-pages
+//! `file/<doc>_<page>_fg_ja-JP`) plus the menu sheets and font. The first
+//! test loads every page and checks the sizes the JPN reader indexes; the
+//! reader's paging is covered by the Lua screen's unit tests. The second
+//! renders the `--ui file` capture twice and requires it to be deterministic
+//! and to draw its own layer over the menu.
 
 use crate::common;
 
@@ -19,19 +20,9 @@ use arklay::engine;
 use arklay::pack::Pack;
 use arklay::state::Image;
 
-/// The 14 backdrops and 43 page packs `ui/file.lua` names.
-const FILEI_NAMES: [&str; 14] = [
-    "filei03", "filei04", "filei06", "filei07", "filei08", "filei09", "filei10", "filei11",
-    "filei12", "filei13", "filei14", "filei15", "filei16", "filei17",
-];
-const TEXTM_NAMES: [&str; 43] = [
-    "textm_l0", "textm_l1", "textm_m0", "textm_m1", "textm_m2", "textm_n0", "textm_n1", "textm_n2",
-    "textm_n3", "textm_n4", "textm_n5", "textm_o0", "textm_o1", "textm_p0", "textm_q0", "textm_q1",
-    "textm_q2", "textm_r0", "textm_r1", "textm_r2", "textm_r3", "textm_s0", "textm_s1", "textm_s2",
-    "textm_s3", "textm_t0", "textm_t1", "textm_t2", "textm_t3", "textm_u0", "textm_u1", "textm_u2",
-    "textm_v0", "textm_v1", "textm_v2", "textm_w0", "textm_w1", "textm_x0", "textm_y0", "textm_z0",
-    "textm_00", "textm_01", "textm_02",
-];
+/// The TEXTM sheets each document's Japanese pages were split from; each
+/// sheet is two half-pages.
+const JPN_SHEETS: [usize; 16] = [2, 3, 6, 2, 1, 3, 4, 4, 4, 3, 3, 2, 1, 1, 1, 3];
 
 fn pack() -> Option<Pack> {
     let (_, path) = common::asset_env()?;
@@ -59,14 +50,18 @@ fn real_file_art_has_the_sizes_the_reader_indexes() {
             arklay::ui::load_page(&pack, stem).unwrap_or_else(|err| panic!("{stem}: {err:#}"));
         (art.width(), art.height())
     };
-    for cover in ["file/file000", "file/file001"] {
+    for cover in ["ui/file_book_0", "ui/file_book_1"] {
         assert_eq!(size(cover), (256, 256), "{cover}");
     }
-    for name in FILEI_NAMES {
-        assert_eq!(size(&format!("file/{name}")), (256, 120), "{name}");
-    }
-    for name in TEXTM_NAMES {
-        assert_eq!(size(&format!("file/{name}")), (256, 256), "{name}");
+    for (document, sheets) in JPN_SHEETS.into_iter().enumerate() {
+        let backdrop = format!("file/{document:02x}_bg");
+        assert_eq!(size(&backdrop), (256, 120), "{backdrop}");
+        for page in 0..sheets * 2 {
+            let stem = format!("file/{document:02x}_{page:02x}_fg_ja-JP");
+            assert_eq!(size(&stem), (256, 128), "{stem}");
+        }
+        let past = format!("file/{document:02x}_{:02x}_fg_ja-JP.bmp", sheets * 2);
+        assert!(!pack.contains(&past), "{past}");
     }
 }
 

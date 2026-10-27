@@ -214,7 +214,7 @@ pub fn decode_audio_bytes(extension: &str, data: &[u8]) -> Result<Wav> {
     }
 }
 
-/// Decode an artwork page: an indexed TIM or an RGBA replacement.
+/// Decode an artwork page: an indexed TIM or BMP page, or an RGBA replacement.
 ///
 /// A page is addressed by fixed UVs or sprite rectangles, so
 /// [`Geometry::Shipped`] refuses a replacement whose dimensions differ from
@@ -228,6 +228,8 @@ pub fn decode_page(asset: &PackAsset<'_>, geometry: Geometry) -> Result<Artwork>
             2 => Artwork::Rgba(tim::decode(asset.data()).context("invalid TIM replacement")?),
             _ => Artwork::Indexed(decode_indexed_tim(asset.data())?),
         }
+    } else if extension == "bmp" && bmp::is_indexed_page(asset.data()) {
+        Artwork::Indexed(bmp::decode_indexed_page(asset.data()).context("invalid BMP page")?)
     } else {
         Artwork::Rgba(decode_image_bytes(&extension, asset.data())?)
     };
@@ -249,6 +251,8 @@ pub fn decode_texture(asset: &PackAsset<'_>, geometry: Geometry) -> Result<Textu
     let extension = asset.extension();
     let texture = if extension == "tim" {
         decode_indexed_tim(asset.data())?
+    } else if extension == "bmp" && bmp::is_indexed_page(asset.data()) {
+        bmp::decode_indexed_page(asset.data()).context("invalid BMP page")?
     } else {
         reindex(&decode_image_bytes(&extension, asset.data())?, 1)?
     };

@@ -377,13 +377,13 @@ fn every_shipped_movie_on_site_resolves_to_a_packed_film() {
                 // high byte of the original's id word, which is the id.
                 let id = insn.operands.first().map_or(0, |operand| operand.value) as u8;
                 match movie::name(id) {
-                    Some(name) if pack.contains(&movie::pack_path(name)) => {
+                    Some(_) if pack.contains(&movie::pack_path(id)) => {
                         sites += 1;
                         ids.insert(id);
                     }
-                    Some(name) => missing.push(format!(
+                    Some(_) => missing.push(format!(
                         "{} (room {digits} movie_on {id})",
-                        movie::pack_path(name)
+                        movie::pack_path(id)
                     )),
                     None => missing.push(format!("null id {id} (room {digits})")),
                 }
@@ -414,7 +414,7 @@ fn the_movie_pack_carries_the_shipped_films() {
         let Some(name) = movie::name(id) else {
             continue;
         };
-        let entry = movie::pack_path(name);
+        let entry = movie::pack_path(id);
         if name == "vlogo" {
             assert!(!pack.contains(&entry), "vlogo is absent from this install");
             continue;
@@ -942,9 +942,10 @@ fn conversion_packs_the_shipped_films_in_the_single_pack() {
         .sum();
     assert_eq!(bytes, TOTAL_BYTES);
     for &(name, _, _) in FILMS {
-        assert!(pack.contains(&movie::pack_path(name)), "missing {name}");
+        let id = movie::id(name).unwrap();
+        assert!(pack.contains(&movie::pack_path(id)), "missing {name}");
     }
-    assert!(!pack.contains("movie/vlogo.avi"));
+    assert!(!pack.contains("movie/1c.avi"));
     // No companion pack is written beside the single game pack.
     assert!(!dir.0.join("re1.movie.akpak").exists());
     println!(

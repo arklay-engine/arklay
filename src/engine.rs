@@ -9538,8 +9538,7 @@ pub fn run_ending(
     // Keep the missing-film diagnostic the pre-sequence entry had: a pack
     // without the films would otherwise warn per film and run the RESULT
     // screen silently.
-    let first = movie::name(films[0]);
-    if !first.is_some_and(|name| movie::exists(&app.pack, name)) {
+    if !movie::exists(&app.pack, films[0]) {
         bail!("no ending film could be opened; re-run convert-game with the films");
     }
     app.ending = Some(flow);
@@ -9928,8 +9927,7 @@ fn start_transition(
 /// Parse the record's `.dor` from the pack, falling back to a black screen
 /// when the art is missing or invalid.
 fn load_door_animation(pack: &Pack, record: &game::Door, entry_camera: u8) -> DoorAnimation {
-    let name = door::type_name(record.door_type);
-    let path = format!("door/{name}.dor");
+    let path = door::entry(record.door_type);
     let bytes = match pack.read(&path) {
         Ok(bytes) => bytes,
         Err(err) => {
@@ -11986,10 +11984,10 @@ fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> E
     let mut pages = EffectPages::default();
 
     for page in 0..4 {
-        let Some(name) = effects::pages::room_effect_sheet(stage, room_byte, page) else {
+        let Some(sheet) = effects::pages::room_effect_sheet_index(stage, room_byte, page) else {
             continue;
         };
-        let stem = format!("effspr/{name}");
+        let stem = effects::pages::sheet_stem(sheet);
         // The RDT's sprite TIMs composite onto the sheet at fixed V offsets,
         // so a replacement keeps the shipped sheet's dimensions.
         match pack.read_asset(&stem, AssetClass::Image) {
@@ -21101,8 +21099,8 @@ mod tests {
         writer
             .add(&id.cut_entry(0), bmp::encode_to_vec(&test_image()).unwrap())
             .unwrap();
-        writer.add("map/map0d.tim", synthetic_map_tim()).unwrap();
-        writer.add("map/blue.tim", synthetic_map_tim()).unwrap();
+        writer.add("map/0d.tim", synthetic_map_tim()).unwrap();
+        writer.add("map/bg.tim", synthetic_map_tim()).unwrap();
         writer.write(&pack_path).unwrap();
 
         let pack = Pack::open(&pack_path).unwrap();
@@ -22163,7 +22161,7 @@ mod tests {
             .unwrap();
         writer.add(&id.cut_entry(0), bmp_bytes).unwrap();
         writer
-            .add("movie/oj.avi", crate::movie::test_avi(30))
+            .add("movie/00.avi", crate::movie::test_avi(30))
             .unwrap();
         writer.write(&pack_path).unwrap();
         let pack = Pack::open(&pack_path).unwrap();
@@ -24192,7 +24190,7 @@ off_0010:
             .unwrap();
         writer.add(&id.cut_entry(0), bmp_bytes).unwrap();
         writer
-            .add("movie/oj.avi", crate::movie::test_avi(30))
+            .add("movie/00.avi", crate::movie::test_avi(30))
             .unwrap();
         writer.write(&pack_path).unwrap();
         let pack = Pack::open(&pack_path).unwrap();
@@ -24309,7 +24307,7 @@ off_0010:
             .unwrap();
         writer.add(&id.cut_entry(0), bmp_bytes).unwrap();
         writer
-            .add("movie/dm3.avi", crate::movie::test_avi(30))
+            .add("movie/03.avi", crate::movie::test_avi(30))
             .unwrap();
         writer.write(&pack_path).unwrap();
         let pack = Pack::open(&pack_path).unwrap();
@@ -24421,10 +24419,12 @@ off_0010:
                 bmp_bytes,
             )
             .unwrap();
-        for &(film_id, name) in films {
-            let _ = film_id;
+        for &(film_id, _) in films {
             writer
-                .add(&crate::movie::pack_path(name), crate::movie::test_avi(30))
+                .add(
+                    &crate::movie::pack_path(film_id),
+                    crate::movie::test_avi(30),
+                )
                 .unwrap();
         }
         writer.write(&pack_path).unwrap();
@@ -24754,7 +24754,7 @@ off_0010:
         let pack_path = dir.0.join("film.akpak");
         let mut writer = PackWriter::new();
         writer
-            .add("movie/oj.avi", crate::movie::test_avi(400))
+            .add("movie/00.avi", crate::movie::test_avi(400))
             .unwrap();
         writer.write(&pack_path).unwrap();
         let pack = Pack::open(&pack_path).unwrap();
@@ -24780,7 +24780,7 @@ off_0010:
         let pack_path = dir.0.join("film.akpak");
         let mut writer = PackWriter::new();
         writer
-            .add("movie/oj.avi", crate::movie::test_avi(400))
+            .add("movie/00.avi", crate::movie::test_avi(400))
             .unwrap();
         writer.write(&pack_path).unwrap();
         let pack = Pack::open(&pack_path).unwrap();

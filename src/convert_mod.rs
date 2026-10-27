@@ -940,17 +940,14 @@ fn classify_voice(name: &str) -> Class {
     }
 }
 
-/// `movie/`: films by their table name (either release spelling).
+/// `movie/`: films by their table name (either release spelling), packed
+/// under the film id.
 fn classify_movie(stem: &str, extension: &str) -> Class {
     if extension != "mp4" && extension != "avi" {
         return Class::Unmapped;
     }
-    let canonical = (0..=u8::MAX)
-        .map_while(|id| (usize::from(id) < 64).then(|| crate::movie::name(id)))
-        .flatten()
-        .find(|name| crate::movie::release_names(name).any(|spelling| spelling == stem));
-    match canonical {
-        Some(name) => raw(format!("{}.{extension}", crate::movie::stem(name))),
+    match crate::movie::id(stem) {
+        Some(id) => raw(format!("{}.{extension}", crate::movie::stem(id))),
         None => Class::Unmapped,
     }
 }
@@ -993,26 +990,20 @@ fn classify_data(name: &str, stem: &str, extension: &str) -> Class {
     Class::Unmapped
 }
 
-/// `effspr/`: the effect sheets.
+/// `effspr/`: the effect sheets, packed under their sheet id.
 fn classify_effect(stem: &str, extension: &str) -> Class {
-    if extension == "tim"
-        && convert::EFFECT_SHEET_FILES
-            .iter()
-            .any(|name| name.eq_ignore_ascii_case(stem))
-    {
-        raw(format!("effspr/{stem}.tim"))
-    } else {
-        Class::Unmapped
+    match convert::effect_sheet_id(stem) {
+        Some(id) if extension == "tim" => raw(format!("effect/{id:02x}.tim")),
+        _ => Class::Unmapped,
     }
 }
 
 /// `ITEM_M1/`: door animations.
 fn classify_door(stem: &str, extension: &str) -> Class {
-    let known = (0..=0x21u8).any(|door_type| crate::door::type_name(door_type) == stem);
-    if extension == "dor" && known {
-        raw(format!("door/{stem}.dor"))
-    } else {
-        Class::Unmapped
+    let door_type = (0..=0x21u8).find(|&door_type| crate::door::type_name(door_type) == stem);
+    match door_type {
+        Some(door_type) if extension == "dor" => raw(crate::door::entry(door_type)),
+        _ => Class::Unmapped,
     }
 }
 
@@ -1503,10 +1494,10 @@ mod tests {
             one(&map, "hires/Data/Item_m2/I00V.webp"),
             "htexture/data/item_m2/i00v.webp"
         );
-        assert_eq!(one(&map, "movie/OJ.mp4"), "movie/oj.mp4");
-        assert_eq!(one(&map, "movie/Capcom.mp4"), "movie/capcom.mp4");
+        assert_eq!(one(&map, "movie/OJ.mp4"), "movie/00.mp4");
+        assert_eq!(one(&map, "movie/Capcom.mp4"), "movie/17.mp4");
         assert_eq!(one(&map, "movie/Dme_PSX.mp4"), "<unmapped>");
-        assert_eq!(one(&map, "jpn/movie/oj.avi"), "movie/oj.avi");
+        assert_eq!(one(&map, "jpn/movie/oj.avi"), "movie/00.avi");
         assert_eq!(one(&map, "jpn/PLAYERS/w03.EMW"), "player/w03.emw");
         for skipped in [
             "_bio1dc/hires/bgd/0a1b2c3d.webp",

@@ -182,8 +182,8 @@ pub fn load_model(pack: &Pack, item: u8) -> Result<Option<LoadedModel>> {
 
 /// Bake one 40x30 icon row of `ITEM_ALL.PIX` through a STATUS.TIM CLUT row.
 ///
-/// `row` is zero-based. Index 0 is written as black, the key
-/// [`crate::ui::load_picture`] cuts out, exactly like the shared atlas.
+/// `row` is zero-based. Index 0 is the BMP's transparent magenta entry, cut
+/// out by [`crate::ui::load_picture`].
 pub fn bake_icon(pix: &[u8], row: usize, palette: &Texture8) -> Result<Vec<u8>> {
     let start = row
         .checked_mul(ICON_BYTES)
@@ -205,7 +205,7 @@ pub fn bake_icon(pix: &[u8], row: usize, palette: &Texture8) -> Result<Vec<u8>> 
 /// its first CLUT row.
 ///
 /// `row` is zero-based and `page_y` is the row's first scanline. Index 0 is
-/// written as black, the key the inventory loader cuts out.
+/// the BMP's transparent magenta entry, cut out by the inventory loader.
 pub fn bake_page_icon(page: &Texture8, page_y: usize) -> Result<Vec<u8>> {
     let width = items::ICON_WIDTH as usize;
     let height = items::ICON_HEIGHT as usize;
@@ -242,7 +242,7 @@ pub fn bake_page_icon(page: &Texture8, page_y: usize) -> Result<Vec<u8>> {
 }
 
 /// A 40x30 indexed icon page through `palette`'s `row`, with index 0 forced
-/// to black so it is the transparent entry of the BMP.
+/// to black so the BMP writes it as the transparent magenta entry.
 fn icon_texture(indices: Vec<u8>, palette: &Texture8, row: usize) -> Texture8 {
     let mut palettes = Vec::with_capacity(crate::model::PALETTE_ROW_LEN);
     let mut stp = Vec::with_capacity(crate::model::PALETTE_ROW_LEN);
@@ -444,7 +444,11 @@ mod tests {
         assert_eq!((icon.width, icon.height), (40, 30));
         assert_eq!(&icon.rgba[0..4], &[0, 0, 255, 255]);
         assert_eq!(&icon.rgba[4..8], &[0, 255, 0, 255]);
-        assert_eq!(&icon.rgba[8..12], &[0, 0, 0, 255]);
+        assert_eq!(
+            &icon.rgba[8..12],
+            &[0, 0, 0, 0],
+            "index 0 is the magenta key"
+        );
     }
 
     #[test]
@@ -493,7 +497,11 @@ mod tests {
         assert_eq!(indexed.palette(0, 0), [0, 0, 0, 255]);
         assert_eq!(&icon.rgba[0..4], &[255, 0, 0, 255]);
         assert_eq!(&icon.rgba[4..8], &[0, 255, 0, 255]);
-        assert_eq!(&icon.rgba[8..12], &[0, 0, 0, 255]);
+        assert_eq!(
+            &icon.rgba[8..12],
+            &[0, 0, 0, 0],
+            "index 0 is the magenta key"
+        );
         // The atlas has two rows in this fixture.
         assert!(bake_icon(&pix, 2, &palette).is_err());
     }
