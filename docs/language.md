@@ -105,8 +105,9 @@ It redraws most of the `0xFA` rows (14-17) with other kanji, so the same bytes
 read differently in the laboratory. The conversion copies that page into
 `FONT.TIM`'s empty third page, and `0xFA 0x80+n` draws its cell `n`.
 `charset::stage_five_text` moves a stage-5 stream's codes for the redrawn cells
-onto that page. Room messages go through it at conversion and at runtime, so
-the ja-JP language file spells stage-5 text with the kanji the game shows.
+onto that page. A stage-5 RDT's messages go through it when the room is
+converted to XML or loaded raw, so the ja-JP language file and the room XML
+spell stage-5 text with the kanji the game shows.
 
 A session draws one script, chosen by the language (`ja` keeps the Japanese
 sheet, every other tag prefers the Western one) and resolved against the

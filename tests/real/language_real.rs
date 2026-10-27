@@ -136,13 +136,6 @@ fn the_japanese_seed_matches_every_room_message() {
             let Some(rdt_bytes) = room.message(index) else {
                 continue;
             };
-            // Stage 5 draws from the PBFONT3N page the seed spells, the same
-            // remap `Text::message` applies to raw RDT text.
-            let rdt_bytes = if id.stage == 5 {
-                arklay::charset::stage_five_text(rdt_bytes)
-            } else {
-                rdt_bytes.to_vec()
-            };
             let variant = format!("ROOM_{room3}{}_TEXT_{index:02X}", id.player_flag);
             let shared = format!("ROOM_{room3}_TEXT_{index:02X}");
             let entry = file.get(&variant).or_else(|| file.get(&shared));
@@ -158,7 +151,7 @@ fn the_japanese_seed_matches_every_room_message() {
             let matched = if rdt_bytes.len() >= encoded.len() {
                 rdt_bytes.starts_with(&encoded)
             } else {
-                rdt_bytes[..] == encoded[..text_len]
+                rdt_bytes == &encoded[..text_len]
             };
             assert!(
                 matched,
@@ -167,7 +160,7 @@ fn the_japanese_seed_matches_every_room_message() {
                 &encoded[..encoded.len().min(64)]
             );
             assert_eq!(
-                text.message(&room, index).as_deref(),
+                text.message(&room, index),
                 Some(encoded.as_slice()),
                 "the runtime lookup resolves {variant} / {shared}"
             );

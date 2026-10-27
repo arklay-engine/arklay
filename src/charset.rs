@@ -714,6 +714,12 @@ mod tests {
         let mut five = String::new();
         decode(&[0xFA, 0x80], Script::Japanese, &mut five);
         assert_eq!(five, "委");
+        // Control operands are not glyphs, even when they look like one.
+        let controls = [0x05, 0xFA, 0x08, 0xFA, 0x26, 0xFA, 0xFA, 0x26];
+        assert_eq!(
+            stage_five_text(&controls),
+            [0x05, 0xFA, 0x08, 0xFA, 0x26, 0xFA, 0xFA, 0xA6]
+        );
     }
 
     #[test]

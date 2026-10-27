@@ -217,6 +217,18 @@ impl Messages {
     }
 }
 
+/// An RDT message block as the game draws it: a Japanese stage-5 block has
+/// its streams moved onto the stage-five kanji rows, any other is unchanged.
+pub(super) fn drawn_message_block(block: &[u8], script: Script, stage: u8) -> Vec<u8> {
+    if script != Script::Japanese || stage != STAGE_FIVE {
+        return block.to_vec();
+    }
+    // The remap rewrites operands in place, so the block keeps its length.
+    Messages::from_block(block, script, stage)
+        .to_block()
+        .unwrap_or_else(|_| block.to_vec())
+}
+
 /// One declared effect sprite slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectSlot {

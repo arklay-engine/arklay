@@ -160,7 +160,8 @@ pub fn load(pack: &Pack, id: RoomId) -> Result<Loaded> {
         Some(Format::Rdt) => {
             let data = pack.read(&id.rdt_entry())?.into_owned();
             let state = crate::rdt::parse(&data, id)?;
-            Ok(Loaded::from_rdt(state, data))
+            let script = crate::text::pack_script(pack);
+            Ok(Loaded::from_rdt(drawn_messages(state, script), data))
         }
         Some(Format::Xml) => {
             let entry = id.xml_entry();
@@ -171,6 +172,16 @@ pub fn load(pack: &Pack, id: RoomId) -> Result<Loaded> {
         }
         None => anyhow::bail!("{}", missing(id)),
     }
+}
+
+/// `state` with its RDT message block as the game draws it in `script`: a
+/// Japanese stage-5 room's text moves onto the stage-five kanji rows
+/// ([`crate::charset::stage_five_text`]), the same form the room's XML holds.
+fn drawn_messages(mut state: RoomState, script: crate::charset::Script) -> RoomState {
+    if let Some(block) = state.messages.as_mut() {
+        *block = source::drawn_message_block(block, script, state.stage);
+    }
+    state
 }
 
 /// The error of a room the pack does not define.
@@ -249,7 +260,7 @@ pub fn convert_rdt(
     }
     let pack = Pack::from_bytes(writer.to_bytes()?)?;
     let loaded = Loaded::from_xml(&pack, id, &text).context("the written room does not build")?;
-    let expected = crate::rdt::parse(data, id)?;
+    let expected = drawn_messages(crate::rdt::parse(data, id)?, script);
     let mut built = loaded.state.clone();
     // The prop stems only name HD replacements, which an RDT has none of.
     for asset in built.object_models.iter_mut().chain(&mut built.item_models) {

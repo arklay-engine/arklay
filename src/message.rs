@@ -1634,11 +1634,7 @@ mod tests {
         }
         let expected = text.message(&room, u16::from(message_id)).unwrap();
         assert!(!expected.is_empty(), "global message {message_id} is empty");
-        assert_eq!(
-            state.message.source(),
-            &*expected,
-            "text comes from the pack"
-        );
+        assert_eq!(state.message.source(), expected, "text comes from the pack");
 
         let mut first = Framebuffer::new();
         state.message.draw(&mut first, &font, &text);

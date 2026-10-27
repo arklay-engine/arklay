@@ -237,8 +237,10 @@ local function save_over(api, entry)
         return
     end
     api:sound("save_confirm")
-    -- CR overwrites by deleting the old file and writing a new one.
-    if entry.loadable and string.lower(entry.name) ~= string.lower(name) then
+    -- CR overwrites by deleting the old file and writing a new one. Only an
+    -- exact name match is overwritten in place: a case variant is a second
+    -- file on a case-sensitive file system.
+    if entry.loadable and entry.name ~= name then
         api:remove(entry.name)
     end
     local ok, err = api:save(name)
