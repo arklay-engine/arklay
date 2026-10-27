@@ -23,6 +23,7 @@
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
@@ -56,10 +57,6 @@ const HEADER_LEN: usize = 10;
 /// Size of one table-of-contents entry.
 const ENTRY_LEN: usize = 32;
 
-/// Largest slice of a spilled entry held in memory while it is copied into
-/// the pack.
-const SPILL_COPY_CHUNK: usize = 1 << 20;
-
 /// How one entry's bytes are stored in the pack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Compression {
@@ -89,25 +86,18 @@ impl Compression {
 }
 
 /// One entry's compression result: its index and, when the frame paid for
-/// itself, where the compressed bytes now live. An `Err` aborts the
-/// compression pass.
-type CompressResult = (usize, Result<Option<EntryData>>);
+/// itself, the compressed bytes. An `Err` aborts the compression pass.
+type CompressResult = (usize, Result<Option<Vec<u8>>>);
 
-/// Builds an `.akpak` pack from named byte blobs.
+/// Builds an `.akpak` pack from named byte blobs held in memory.
 ///
-/// [`PackWriter::new`] keeps every entry in memory until the pack is written,
-/// which suits small packs and tests. [`PackWriter::spilling`] instead appends
-/// each entry to a temporary spill file as it is added and copies the bytes
-/// back out when the pack is written, so a large pack's peak memory is one
-/// entry per compression worker rather than the whole pack. Both modes write
-/// byte-identical packs for the same entries.
+/// A pack too large to hold whose entry paths are known up front is written
+/// with [`stream_pack`] instead, which lays out the same bytes.
 #[derive(Debug, Default)]
 pub struct PackWriter {
     entries: Vec<WriterEntry>,
     /// ASCII-lowercased entry paths, for O(1) duplicate detection.
     seen: HashSet<String>,
-    /// Where entry bytes go when the writer spills to disk.
-    spill: Option<Spill>,
 }
 
 /// One entry being assembled.
@@ -115,120 +105,11 @@ pub struct PackWriter {
 struct WriterEntry {
     path: String,
     /// The bytes as added; replaced by the zstd frame once compressed.
-    data: EntryData,
+    data: Vec<u8>,
     /// Plain (uncompressed) byte count, kept after compression replaces
     /// `data` so the conversion report can still name both sizes.
     plain_len: usize,
     compression: Compression,
-}
-
-/// Where one entry's stored bytes live.
-#[derive(Debug)]
-enum EntryData {
-    /// Held in memory.
-    Memory(Vec<u8>),
-    /// A byte range of the writer's spill file.
-    Spilled { offset: u64, len: usize },
-}
-
-impl EntryData {
-    /// The stored byte count.
-    fn len(&self) -> usize {
-        match self {
-            Self::Memory(data) => data.len(),
-            Self::Spilled { len, .. } => *len,
-        }
-    }
-}
-
-/// The temporary file a spilling writer appends entry bytes to.
-///
-/// The file is unlinked as soon as it is created on Unix and opened
-/// delete-on-close on Windows, so it never outlives the writer, even when the
-/// process is killed.
-#[derive(Debug)]
-struct Spill {
-    inner: Mutex<SpillFile>,
-}
-
-/// The spill file and its append position, guarded together so a worker's
-/// seek and read or write cannot interleave with another's.
-#[derive(Debug)]
-struct SpillFile {
-    file: std::fs::File,
-    /// The end of the bytes written so far, where the next append lands.
-    end: u64,
-}
-
-impl Spill {
-    /// Create the spill file at `path`.
-    fn create(path: &Path) -> Result<Self> {
-        let mut options = std::fs::OpenOptions::new();
-        options.read(true).write(true).create_new(true);
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            // FILE_FLAG_DELETE_ON_CLOSE: Windows cannot unlink an open file,
-            // so the handle removes it when the writer drops it.
-            options.custom_flags(0x0400_0000);
-        }
-        let file = options
-            .open(path)
-            .with_context(|| format!("failed to create spill file {}", path.display()))?;
-        #[cfg(unix)]
-        std::fs::remove_file(path)
-            .with_context(|| format!("failed to unlink spill file {}", path.display()))?;
-        Ok(Self {
-            inner: Mutex::new(SpillFile { file, end: 0 }),
-        })
-    }
-
-    /// Lock the spill file; a poisoned lock still guards a usable file.
-    fn lock(&self) -> std::sync::MutexGuard<'_, SpillFile> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    /// Append `data` and return where it landed.
-    fn append(&self, data: &[u8]) -> Result<EntryData> {
-        let mut spill = self.lock();
-        let offset = spill.end;
-        spill.file.seek(SeekFrom::Start(offset))?;
-        spill.file.write_all(data)?;
-        spill.end = offset
-            .checked_add(to_u64(data.len())?)
-            .context("spill file exceeds addressable size")?;
-        Ok(EntryData::Spilled {
-            offset,
-            len: data.len(),
-        })
-    }
-
-    /// Read back `len` bytes at `offset`.
-    fn read(&self, offset: u64, len: usize) -> Result<Vec<u8>> {
-        let mut data = vec![0; len];
-        let mut spill = self.lock();
-        spill.file.seek(SeekFrom::Start(offset))?;
-        spill.file.read_exact(&mut data)?;
-        Ok(data)
-    }
-
-    /// Copy `len` bytes at `offset` to `out` without buffering the whole
-    /// range.
-    fn copy_to(&self, offset: u64, len: usize, out: &mut impl Write) -> Result<()> {
-        let mut spill = self.lock();
-        spill.file.seek(SeekFrom::Start(offset))?;
-        let mut buffer = vec![0; len.min(SPILL_COPY_CHUNK)];
-        let mut left = len;
-        while left > 0 {
-            let chunk = &mut buffer[..left.min(SPILL_COPY_CHUNK)];
-            spill.file.read_exact(chunk)?;
-            out.write_all(chunk)?;
-            left -= chunk.len();
-        }
-        Ok(())
-    }
 }
 
 /// Entry order and offsets of a serialized pack.
@@ -275,51 +156,23 @@ impl<'a> WrittenEntry<'a> {
 }
 
 impl PackWriter {
-    /// Create a writer that keeps every entry in memory.
+    /// Create a writer with no entries.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Create a writer that spills entry bytes to a temporary file beside
-    /// `out`, the pack it will write.
-    ///
-    /// The spill file sits next to the output rather than in the system
-    /// temporary directory, which is often memory-backed, so the bytes really
-    /// leave RAM. It keeps every plain entry and every compressed frame until
-    /// the writer is dropped, and [`PackWriter::write`] creates the pack beside
-    /// it, so the directory needs about the plain size plus twice the
-    /// compressed size of free space. The directory of `out` must already
-    /// exist.
-    pub fn spilling(out: &Path) -> Result<Self> {
-        let path = spill_path(out)?;
-        Ok(Self {
-            spill: Some(Spill::create(&path)?),
-            ..Self::default()
-        })
     }
 
     /// Add one entry.
     ///
     /// Paths must be non-empty and relative, must not contain backslashes,
     /// NUL bytes or `..` components, and must be unique ignoring ASCII case.
-    /// A spilling writer appends `data` to its spill file and frees it.
     pub fn add(&mut self, path: &str, data: Vec<u8>) -> Result<()> {
         validate_path(path)?;
-        let key = path.to_ascii_lowercase();
-        if self.seen.contains(&key) {
+        if !self.seen.insert(path.to_ascii_lowercase()) {
             bail!("duplicate pack entry: {path}");
         }
-        let plain_len = data.len();
-        let data = match &self.spill {
-            Some(spill) => spill
-                .append(&data)
-                .with_context(|| format!("failed to spill pack entry {path}"))?,
-            None => EntryData::Memory(data),
-        };
-        self.seen.insert(key);
         self.entries.push(WriterEntry {
             path: path.to_owned(),
-            plain_len,
+            plain_len: data.len(),
             data,
             compression: Compression::None,
         });
@@ -341,12 +194,9 @@ impl PackWriter {
     /// Workers run to completion before any entry is replaced, and the results
     /// are applied in entry order, so a failed pass leaves every entry raw and
     /// a successful one is byte-deterministic for a given libzstd build
-    /// whatever the worker count or scheduling. An in-memory writer holds the
-    /// raw entries and every compressed frame at once, so its peak memory is
-    /// the plain pack size plus the compressed pack size; a spilling writer
-    /// reads each entry back and appends its frame to the spill file, so it
-    /// holds only one entry and its frame per worker (the frames of a failed
-    /// pass stay unreferenced in the spill file until the writer is dropped).
+    /// whatever the worker count or scheduling. The pass holds the raw entries
+    /// and every compressed frame at once, so its peak memory is the plain
+    /// pack size plus the compressed pack size.
     pub fn compress_entries(
         &mut self,
         jobs: usize,
@@ -399,8 +249,7 @@ impl PackWriter {
                             && !keep_raw(&entry.path)
                             && entry.data.len() <= cap
                         {
-                            let compressed = self
-                                .compress_entry(&entry.data)
+                            let compressed = zstd_frame(&entry.data)
                                 .with_context(|| format!("failed to zstd-compress {}", entry.path));
                             results
                                 .lock()
@@ -432,36 +281,6 @@ impl PackWriter {
             }
         }
         Ok(count)
-    }
-
-    /// Zstd-compress one entry's bytes, returning the frame's new home, or
-    /// `None` when the frame does not pay for itself, whatever the policy
-    /// says. A spilled entry is read back and its frame appended to the spill
-    /// file, so only this one entry is held in memory.
-    fn compress_entry(&self, data: &EntryData) -> Result<Option<EntryData>> {
-        let spilled;
-        let plain = match data {
-            EntryData::Memory(data) => data.as_slice(),
-            EntryData::Spilled { offset, len } => {
-                spilled = self.spill()?.read(*offset, *len)?;
-                spilled.as_slice()
-            }
-        };
-        let frame = zstd::bulk::compress(plain, ZSTD_LEVEL)?;
-        if frame.len() >= plain.len() {
-            return Ok(None);
-        }
-        Ok(Some(match &self.spill {
-            Some(spill) => spill.append(&frame)?,
-            None => EntryData::Memory(frame),
-        }))
-    }
-
-    /// The spill file a spilled entry lives in.
-    fn spill(&self) -> Result<&Spill> {
-        self.spill
-            .as_ref()
-            .context("spilled pack entry without a spill file")
     }
 
     /// The number of entries added so far.
@@ -517,13 +336,7 @@ impl PackWriter {
             .checked_add(toc_len)
             .context("pack table of contents is too large")?;
 
-        let mut order: Vec<(String, usize)> = self
-            .entries
-            .iter()
-            .enumerate()
-            .map(|(index, entry)| (entry.path.to_ascii_lowercase(), index))
-            .collect();
-        order.sort_by(|a, b| a.0.cmp(&b.0));
+        let order = pack_order(self.entries.iter().map(|entry| entry.path.as_str()));
 
         let mut data_start = paths_start;
         for (_, index) in &order {
@@ -537,11 +350,13 @@ impl PackWriter {
         let mut data_offset = data_start;
         for (_, index) in &order {
             let entry = &self.entries[*index];
-            toc.extend_from_slice(&to_u64(path_offset)?.to_le_bytes());
-            toc.extend_from_slice(&to_u64(data_offset)?.to_le_bytes());
-            toc.extend_from_slice(&to_u64(entry.data.len())?.to_le_bytes());
-            toc.push(entry.compression.mode());
-            toc.extend_from_slice(&[0; 7]);
+            push_toc_entry(
+                &mut toc,
+                path_offset,
+                data_offset,
+                entry.data.len(),
+                entry.compression,
+            )?;
             path_offset += entry.path.len() + 1;
             data_offset += entry.data.len();
         }
@@ -555,19 +370,14 @@ impl PackWriter {
 
     /// Write a prepared layout to `out`.
     fn write_layout(&self, layout: &SerializeLayout, out: &mut impl Write) -> Result<()> {
-        out.write_all(&MAGIC)?;
-        out.write_all(&VERSION.to_le_bytes())?;
-        out.write_all(&layout.entry_count.to_le_bytes())?;
+        write_header(out, layout.entry_count)?;
         out.write_all(&layout.toc)?;
         for (_, index) in &layout.order {
             out.write_all(self.entries[*index].path.as_bytes())?;
             out.write_all(&[0])?;
         }
         for (_, index) in &layout.order {
-            match &self.entries[*index].data {
-                EntryData::Memory(data) => out.write_all(data)?,
-                EntryData::Spilled { offset, len } => self.spill()?.copy_to(*offset, *len, out)?,
-            }
+            out.write_all(&self.entries[*index].data)?;
         }
         Ok(())
     }
@@ -575,8 +385,7 @@ impl PackWriter {
     /// Write the pack to `out`, sorting entries by ASCII-lowercased path.
     ///
     /// Unlike [`PackWriter::to_bytes`] this never materializes a second copy
-    /// of the entry data; a spilling writer copies each entry from its spill
-    /// file without loading it whole.
+    /// of the entry data.
     pub fn stream_to(&self, out: &mut impl Write) -> Result<()> {
         let layout = self.serialize_layout()?;
         self.write_layout(&layout, out)
@@ -599,42 +408,403 @@ impl PackWriter {
     /// behind.
     pub fn write(&self, path: &Path) -> Result<()> {
         let layout = self.serialize_layout()?;
-        let temp = crate::atomic::temp_path(path)?;
-        let file = std::fs::File::create(&temp)
-            .with_context(|| format!("failed to write pack {}", path.display()))?;
-        let mut out = BufWriter::new(file);
-        let result = self
-            .write_layout(&layout, &mut out)
-            .with_context(|| format!("failed to write pack {}", path.display()))
-            .and_then(|()| {
-                out.flush()
-                    .with_context(|| format!("failed to write pack {}", path.display()))
-            });
-        drop(out);
-        if let Err(err) = result {
-            let _ = std::fs::remove_file(&temp);
-            return Err(err);
-        }
-        std::fs::rename(&temp, path).with_context(|| {
-            let _ = std::fs::remove_file(&temp);
-            format!("failed to move the written pack into {}", path.display())
+        write_atomically(path, |file| {
+            let mut out = BufWriter::new(file);
+            self.write_layout(&layout, &mut out)?;
+            out.flush()?;
+            Ok(())
         })
     }
 }
 
-/// The spill file path for a pack written to `out`: a sibling named after
-/// the pack, the process and a per-process counter, distinct from
-/// [`crate::atomic::temp_path`] so the spill, the pack being written and any
-/// other writer's spill never collide.
-fn spill_path(out: &Path) -> Result<PathBuf> {
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let name = out
-        .file_name()
-        .with_context(|| format!("{} has no file name to write", out.display()))?;
-    let mut spill = name.to_os_string();
-    let serial = NEXT.fetch_add(1, Ordering::Relaxed);
-    spill.push(format!(".{}-{serial}.spill", std::process::id()));
-    Ok(out.with_file_name(spill))
+/// Write the pack at `path` through `write`, which gets a sibling temporary
+/// file that is renamed into place once `write` succeeds, so an error cannot
+/// leave a truncated or partial pack behind.
+fn write_atomically(path: &Path, write: impl FnOnce(&mut File) -> Result<()>) -> Result<()> {
+    let temp = crate::atomic::temp_path(path)?;
+    let mut file =
+        File::create(&temp).with_context(|| format!("failed to write pack {}", path.display()))?;
+    // Removes the temporary file on every way out short of the rename, a
+    // panic included.
+    let mut cleanup = RemoveOnDrop(Some(&temp));
+    write(&mut file).with_context(|| format!("failed to write pack {}", path.display()))?;
+    drop(file);
+    std::fs::rename(&temp, path)
+        .with_context(|| format!("failed to move the written pack into {}", path.display()))?;
+    cleanup.0 = None;
+    Ok(())
+}
+
+/// Removes the file it names, if any, when dropped.
+struct RemoveOnDrop<'a>(Option<&'a Path>);
+
+impl Drop for RemoveOnDrop<'_> {
+    fn drop(&mut self) {
+        if let Some(path) = self.0 {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// Entry indices in pack order, each with the ASCII-lowercased path it is
+/// sorted by.
+fn pack_order<'a>(paths: impl Iterator<Item = &'a str>) -> Vec<(String, usize)> {
+    let mut order: Vec<(String, usize)> = paths
+        .enumerate()
+        .map(|(index, path)| (path.to_ascii_lowercase(), index))
+        .collect();
+    order.sort_by(|a, b| a.0.cmp(&b.0));
+    order
+}
+
+/// Write the pack header for `entry_count` entries.
+fn write_header(out: &mut impl Write, entry_count: u32) -> Result<()> {
+    out.write_all(&MAGIC)?;
+    out.write_all(&VERSION.to_le_bytes())?;
+    out.write_all(&entry_count.to_le_bytes())?;
+    Ok(())
+}
+
+/// Append one table-of-contents entry to `toc`.
+fn push_toc_entry(
+    toc: &mut Vec<u8>,
+    path_offset: usize,
+    data_offset: usize,
+    length: usize,
+    compression: Compression,
+) -> Result<()> {
+    toc.extend_from_slice(&to_u64(path_offset)?.to_le_bytes());
+    toc.extend_from_slice(&to_u64(data_offset)?.to_le_bytes());
+    toc.extend_from_slice(&to_u64(length)?.to_le_bytes());
+    toc.push(compression.mode());
+    toc.extend_from_slice(&[0; 7]);
+    Ok(())
+}
+
+/// Zstd-compress `data` at [`ZSTD_LEVEL`], or `None` when the frame does not
+/// pay for itself: an entry is kept raw rather than allowed to grow, whatever
+/// the caller's policy says.
+fn zstd_frame(data: &[u8]) -> Result<Option<Vec<u8>>> {
+    let frame = zstd::bulk::compress(data, ZSTD_LEVEL)?;
+    Ok((frame.len() < data.len()).then_some(frame))
+}
+
+/// Write a pack straight to `path` whose entry paths are all known before any
+/// entry's bytes are, which keeps a gigabyte pack out of memory without a
+/// second copy on disk.
+///
+/// `paths` follows the same rules as [`PackWriter::add`]. The entries are
+/// written in ASCII-lowercased path order, so the pack is byte-identical to the
+/// one [`PackWriter`] writes for the same entries after
+/// [`PackWriter::compress_entries`]: `produce(index)` is called on the calling
+/// thread exactly once per entry, in that order, for the bytes of
+/// `paths[index]`. Up to `jobs` workers (clamped to at least one)
+/// zstd-compress the entries `keep_raw` does not exempt, under the same rules
+/// as [`PackWriter::compress_entries`], and a writer thread appends them to the
+/// pack in order, so at most about two entries per worker are held in memory
+/// at once. The table of contents is written last, once every entry's stored
+/// size is known.
+///
+/// The pack is assembled in a sibling temporary file and renamed into place
+/// only when every entry was produced and written, so an error leaves no
+/// partial pack behind.
+pub fn stream_pack(
+    path: &Path,
+    paths: &[String],
+    jobs: usize,
+    keep_raw: impl Fn(&str) -> bool + Sync,
+    mut produce: impl FnMut(usize) -> Result<Vec<u8>>,
+) -> Result<()> {
+    let mut seen = HashSet::with_capacity(paths.len());
+    for entry in paths {
+        validate_path(entry)?;
+        if !seen.insert(entry.to_ascii_lowercase()) {
+            bail!("duplicate pack entry: {entry}");
+        }
+    }
+    let entry_count = u32::try_from(paths.len()).context("too many pack entries")?;
+    let order = pack_order(paths.iter().map(String::as_str));
+
+    let toc_len = paths
+        .len()
+        .checked_mul(ENTRY_LEN)
+        .context("pack table of contents is too large")?;
+    let paths_start = HEADER_LEN
+        .checked_add(toc_len)
+        .context("pack table of contents is too large")?;
+
+    write_atomically(path, |file| {
+        let mut out = BufWriter::new(file);
+        write_header(&mut out, entry_count)?;
+        // A placeholder table of contents, rewritten once the data is in.
+        out.write_all(&vec![0; toc_len])?;
+        let mut path_offsets = Vec::with_capacity(order.len());
+        let mut offset = paths_start;
+        for (_, index) in &order {
+            path_offsets.push(offset);
+            out.write_all(paths[*index].as_bytes())?;
+            out.write_all(&[0])?;
+            offset = offset
+                .checked_add(paths[*index].len() + 1)
+                .context("pack paths exceed addressable size")?;
+        }
+
+        let stored = stream_entries(
+            &order,
+            paths,
+            jobs,
+            &keep_raw,
+            &mut produce,
+            &mut out,
+            offset,
+        )?;
+
+        let mut toc = Vec::with_capacity(toc_len);
+        for (path_offset, (data_offset, length, compression)) in
+            path_offsets.into_iter().zip(stored)
+        {
+            push_toc_entry(&mut toc, path_offset, data_offset, length, compression)?;
+        }
+        let file = out.into_inner().map_err(|err| err.into_error())?;
+        file.seek(SeekFrom::Start(HEADER_LEN as u64))?;
+        file.write_all(&toc)?;
+        Ok(())
+    })
+}
+
+/// The plain bytes [`stream_pack`] lets wait between being produced and being
+/// written, beyond the one entry always allowed through. A film runs to
+/// hundreds of megabytes and films sort together, so the cap is on bytes as
+/// well as on entries.
+const STREAM_IN_FLIGHT_BYTES: usize = 64 << 20;
+
+/// One streamed entry as it landed in the pack: data offset, stored length
+/// and how it is stored.
+type StoredEntry = (usize, usize, Compression);
+
+/// A compressed entry on its way to the writer: its position, plain size and
+/// stored bytes.
+type Compressed = (usize, usize, Result<(Vec<u8>, Compression)>);
+
+/// The entries and plain bytes between being produced and being written.
+#[derive(Default)]
+struct InFlight {
+    state: Mutex<InFlightState>,
+    changed: std::sync::Condvar,
+}
+
+#[derive(Default)]
+struct InFlightState {
+    entries: usize,
+    bytes: usize,
+    /// The writer stopped, so nothing in flight will ever be written.
+    closed: bool,
+}
+
+impl InFlight {
+    fn lock(&self) -> std::sync::MutexGuard<'_, InFlightState> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Wait until another entry may be produced, or `false` once the writer
+    /// stopped. An entry may always be produced when nothing is in flight.
+    fn wait_for_room(&self, max_entries: usize) -> bool {
+        let mut state = self.lock();
+        loop {
+            if state.closed {
+                return false;
+            }
+            if state.entries == 0
+                || (state.entries < max_entries && state.bytes < STREAM_IN_FLIGHT_BYTES)
+            {
+                return true;
+            }
+            state = self
+                .changed
+                .wait(state)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+
+    fn produced(&self, bytes: usize) {
+        let mut state = self.lock();
+        state.entries += 1;
+        state.bytes += bytes;
+    }
+
+    fn written(&self, bytes: usize) {
+        let mut state = self.lock();
+        state.entries -= 1;
+        state.bytes -= bytes;
+        self.changed.notify_all();
+    }
+
+    fn close(&self) {
+        self.lock().closed = true;
+        self.changed.notify_all();
+    }
+}
+
+/// Closes an [`InFlight`] when dropped, so a writer that stops for any
+/// reason, a panic included, releases a producer waiting for room.
+struct CloseOnDrop<'a>(&'a InFlight);
+
+impl Drop for CloseOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.close();
+    }
+}
+
+/// Produce, compress and append every entry of `order` to `out`, whose data
+/// area starts at `data_start`, returning where each one landed in `order`
+/// order.
+///
+/// The calling thread produces entries in order and hands them to the
+/// compression workers; a writer thread puts the finished entries back in
+/// order and appends them. [`InFlight`] bounds the entries and bytes between
+/// being produced and being written, and every thread stops as soon as any
+/// other one fails, because each sees its channel close or the writer close
+/// the in-flight count.
+fn stream_entries(
+    order: &[(String, usize)],
+    paths: &[String],
+    jobs: usize,
+    keep_raw: &(impl Fn(&str) -> bool + Sync),
+    produce: &mut impl FnMut(usize) -> Result<Vec<u8>>,
+    out: &mut (impl Write + Send),
+    data_start: usize,
+) -> Result<Vec<StoredEntry>> {
+    use std::sync::mpsc::sync_channel;
+
+    let jobs = jobs.clamp(1, order.len().max(1));
+    let max_entries = jobs * 2;
+    let in_flight = InFlight::default();
+    let (work_tx, work_rx) = sync_channel::<(usize, Vec<u8>)>(jobs);
+    let work_rx = Mutex::new(work_rx);
+    let (done_tx, done_rx) = sync_channel::<Compressed>(max_entries);
+
+    std::thread::scope(|scope| {
+        for _ in 0..jobs {
+            let done_tx = done_tx.clone();
+            let work_rx = &work_rx;
+            scope.spawn(move || {
+                loop {
+                    let next = work_rx
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .recv();
+                    let Ok((position, data)) = next else {
+                        return;
+                    };
+                    let entry = &paths[order[position].1];
+                    let plain_len = data.len();
+                    // A panic becomes this entry's error: the writer waits
+                    // for every position in order, so a worker that died
+                    // holding one would stall the whole pack.
+                    let stored = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        compress_streamed(entry, data, keep_raw)
+                    }))
+                    .unwrap_or_else(|_| Err(anyhow!("compression panicked")))
+                    .with_context(|| format!("failed to zstd-compress {entry}"));
+                    if done_tx.send((position, plain_len, stored)).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+        drop(done_tx);
+
+        let in_flight = &in_flight;
+        let writer = scope.spawn(move || {
+            let _close = CloseOnDrop(in_flight);
+            write_in_order(order.len(), done_rx, in_flight, out, data_start)
+        });
+
+        // Produce on this thread; a closed channel or in-flight count means a
+        // worker or the writer stopped, and the writer's result says why.
+        let mut produced: Result<()> = Ok(());
+        for (position, (_, index)) in order.iter().enumerate() {
+            if !in_flight.wait_for_room(max_entries) {
+                break;
+            }
+            match produce(*index) {
+                Ok(data) => {
+                    in_flight.produced(data.len());
+                    if work_tx.send((position, data)).is_err() {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    produced = Err(err);
+                    break;
+                }
+            }
+        }
+        drop(work_tx);
+        let written = writer
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        produced?;
+        written
+    })
+}
+
+/// The bytes to store for `entry` and how they are stored.
+fn compress_streamed(
+    entry: &str,
+    data: Vec<u8>,
+    keep_raw: &impl Fn(&str) -> bool,
+) -> Result<(Vec<u8>, Compression)> {
+    // The reader refuses to decompress beyond its cap, so an over-cap entry
+    // stays raw and keeps reading back.
+    if !keep_raw(entry)
+        && data.len() <= budget::MAX_ZSTD_OUTPUT
+        && let Some(frame) = zstd_frame(&data)?
+    {
+        return Ok((frame, Compression::Zstd));
+    }
+    Ok((data, Compression::None))
+}
+
+/// Append the `count` entries arriving on `done` to `out` in position order,
+/// releasing each one from `in_flight` once written.
+fn write_in_order(
+    count: usize,
+    done: std::sync::mpsc::Receiver<Compressed>,
+    in_flight: &InFlight,
+    out: &mut impl Write,
+    data_start: usize,
+) -> Result<Vec<StoredEntry>> {
+    let mut stored = Vec::with_capacity(count);
+    let mut waiting = HashMap::new();
+    let mut offset = data_start;
+    while stored.len() < count {
+        let position = stored.len();
+        let (plain_len, data, compression) = match waiting.remove(&position) {
+            Some(entry) => entry,
+            None => {
+                let Ok((arrived, plain_len, entry)) = done.recv() else {
+                    // Production stopped early; its error is reported instead.
+                    bail!("pack entries stopped arriving");
+                };
+                let (data, compression) = entry?;
+                if arrived != position {
+                    waiting.insert(arrived, (plain_len, data, compression));
+                    continue;
+                }
+                (plain_len, data, compression)
+            }
+        };
+        out.write_all(&data)?;
+        stored.push((offset, data.len(), compression));
+        offset = offset
+            .checked_add(data.len())
+            .context("pack data exceeds addressable size")?;
+        in_flight.written(plain_len);
+    }
+    Ok(stored)
 }
 
 /// One entry of a pack, as reported by [`Pack::entries`].
@@ -2409,133 +2579,219 @@ mod tests {
         std::fs::write(path.join("x.txt"), data).unwrap();
     }
 
-    /// Entries mixing compressible, incompressible, exempt and over-cap data,
-    /// added out of path order.
-    fn spill_entries() -> Vec<(&'static str, Vec<u8>)> {
+    /// Entries in unsorted, mixed-case order: compressible, exempt,
+    /// incompressible, tiny and empty.
+    fn stream_entries() -> Vec<(String, Vec<u8>)> {
         vec![
-            ("room/1000.rdt", vec![3u8; 1_000]),
-            ("movie/oj.avi", vec![5u8; 4_096]),
-            ("big.tim", vec![1u8; 8_192]),
-            ("A.txt", b"x".to_vec()),
-            ("empty.bin", Vec::new()),
+            ("room/1000.rdt".into(), vec![3u8; 1_000]),
+            ("movie/oj.avi".into(), vec![5u8; 4_096]),
+            ("big.tim".into(), vec![1u8; 8_192]),
+            ("A.txt".into(), b"x".to_vec()),
+            ("empty.bin".into(), Vec::new()),
             (
-                "roomcut/100_000.bmp",
+                "roomcut/100_000.bmp".into(),
                 (0..=255u8).cycle().take(4_096).collect(),
             ),
         ]
     }
 
-    /// Add `entries` to `writer` and compress them as `convert-mod` does,
-    /// with a cap that keeps `big.tim` raw.
-    fn fill_and_compress(writer: &mut PackWriter, entries: &[(&str, Vec<u8>)]) -> usize {
+    /// The pack the in-memory writer produces for `entries`, compressed as
+    /// `convert-mod` compresses them.
+    fn in_memory_pack(entries: &[(String, Vec<u8>)]) -> Vec<u8> {
+        let mut writer = PackWriter::new();
         for (path, data) in entries {
             writer.add(path, data.clone()).unwrap();
         }
         writer
-            .compress_entries_capped(3, |path| path.ends_with(".avi"), 4_096, |_| {})
-            .unwrap()
+            .compress_entries(3, |path| path.ends_with(".avi"))
+            .unwrap();
+        writer.to_bytes().unwrap()
+    }
+
+    /// Stream `entries` to `out` with `jobs` workers.
+    fn stream(out: &Path, entries: &[(String, Vec<u8>)], jobs: usize) -> Result<()> {
+        let paths: Vec<String> = entries.iter().map(|(path, _)| path.clone()).collect();
+        stream_pack(
+            out,
+            &paths,
+            jobs,
+            |path| path.ends_with(".avi"),
+            |index| Ok(entries[index].1.clone()),
+        )
     }
 
     #[test]
-    fn a_spilling_writer_writes_the_same_bytes_as_an_in_memory_one() {
-        let dir = TempDir::new("spill-identical");
-        let entries = spill_entries();
-        let mut memory = PackWriter::new();
-        let mut spilling = PackWriter::spilling(&dir.join("out.akpak")).unwrap();
-        let compressed = fill_and_compress(&mut memory, &entries);
-        assert_eq!(fill_and_compress(&mut spilling, &entries), compressed);
-        assert_eq!(compressed, 2);
-
-        let expected = memory.to_bytes().unwrap();
-        assert_eq!(spilling.to_bytes().unwrap(), expected);
-        assert_eq!(spilling.pack_size().unwrap(), expected.len());
-        assert!(memory.entries().eq(spilling.entries()));
-
-        let mut streamed = Vec::new();
-        spilling.stream_to(&mut streamed).unwrap();
-        assert_eq!(streamed, expected);
-        spilling.write(&dir.join("out.akpak")).unwrap();
-        assert_eq!(std::fs::read(dir.join("out.akpak")).unwrap(), expected);
-
-        let pack = Pack::from_bytes(expected).unwrap();
+    fn a_streamed_pack_matches_the_in_memory_writer() {
+        let dir = TempDir::new("stream-identical");
+        let entries = stream_entries();
+        let expected = in_memory_pack(&entries);
+        for jobs in [0, 1, 3, 16] {
+            let out = dir.join(&format!("out-{jobs}.akpak"));
+            stream(&out, &entries, jobs).unwrap();
+            assert_eq!(std::fs::read(&out).unwrap(), expected, "jobs {jobs}");
+        }
+        let pack = Pack::open(&dir.join("out-1.akpak")).unwrap();
         for (path, data) in &entries {
-            assert_eq!(&*pack.read(path).unwrap(), data.as_slice(), "{path}");
+            assert_eq!(*pack.read(path).unwrap(), **data, "{path}");
         }
     }
 
     #[test]
-    fn concurrent_spilled_compression_matches_the_in_memory_writer() {
-        let dir = TempDir::new("spill-concurrent");
-        let entries: Vec<(String, Vec<u8>)> = (0..200)
+    fn a_streamed_pack_produces_each_entry_once_in_path_order() {
+        let dir = TempDir::new("stream-order");
+        let entries = stream_entries();
+        let paths: Vec<String> = entries.iter().map(|(path, _)| path.clone()).collect();
+        let mut produced = Vec::new();
+        stream_pack(
+            &dir.join("out.akpak"),
+            &paths,
+            4,
+            |_| false,
+            |index| {
+                produced.push(paths[index].to_ascii_lowercase());
+                Ok(entries[index].1.clone())
+            },
+        )
+        .unwrap();
+        let mut sorted: Vec<String> = paths.iter().map(|path| path.to_ascii_lowercase()).collect();
+        sorted.sort();
+        assert_eq!(produced, sorted);
+    }
+
+    #[test]
+    fn a_streamed_pack_matches_with_many_entries_and_workers() {
+        let dir = TempDir::new("stream-many");
+        let entries: Vec<(String, Vec<u8>)> = (0..300u32)
+            .rev()
             .map(|index| {
-                let data = (0..=index as u8).cycle().take(500 + index * 7).collect();
-                (format!("room/{index:04}.rdt"), data)
+                let data = (0..(index % 37) * 211)
+                    .map(|byte| (byte * index % 7) as u8)
+                    .collect();
+                (format!("dir{}/entry{index:03}.bin", index % 5), data)
             })
             .collect();
-        let mut memory = PackWriter::new();
-        let mut spilling = PackWriter::spilling(&dir.join("out.akpak")).unwrap();
-        for (path, data) in &entries {
-            memory.add(path, data.clone()).unwrap();
-            spilling.add(path, data.clone()).unwrap();
-        }
-        let compressed = memory.compress_entries(1, |_| false).unwrap();
-        assert!(compressed > 100, "{compressed}");
-        assert_eq!(spilling.compress_entries(8, |_| false).unwrap(), compressed);
-        assert_eq!(spilling.to_bytes().unwrap(), memory.to_bytes().unwrap());
-    }
-
-    #[test]
-    fn two_spilling_writers_for_one_output_do_not_share_a_spill_file() {
-        let dir = TempDir::new("spill-two");
         let out = dir.join("out.akpak");
-        let mut one = PackWriter::spilling(&out).unwrap();
-        let mut two = PackWriter::spilling(&out).unwrap();
-        one.add("a.txt", b"one".to_vec()).unwrap();
-        two.add("a.txt", b"two!".to_vec()).unwrap();
-        let one = Pack::from_bytes(one.to_bytes().unwrap()).unwrap();
-        let two = Pack::from_bytes(two.to_bytes().unwrap()).unwrap();
-        assert_eq!(&*one.read("a.txt").unwrap(), b"one");
-        assert_eq!(&*two.read("a.txt").unwrap(), b"two!");
+        stream(&out, &entries, 8).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), in_memory_pack(&entries));
     }
 
     #[test]
-    fn a_spilling_writer_copies_entries_larger_than_one_chunk() {
-        let dir = TempDir::new("spill-chunks");
-        let large: Vec<u8> = (0..SPILL_COPY_CHUNK * 2 + 17)
-            .map(|index| (index % 251) as u8)
+    fn a_streamed_pack_lets_entries_larger_than_the_in_flight_cap_through() {
+        let dir = TempDir::new("stream-large");
+        // Exempt from compression so the test stays fast.
+        let entries: Vec<(String, Vec<u8>)> = (0..3u8)
+            .map(|index| {
+                (
+                    format!("movie/{index}.avi"),
+                    vec![index; STREAM_IN_FLIGHT_BYTES + 1],
+                )
+            })
             .collect();
-        let mut writer = PackWriter::spilling(&dir.join("out.akpak")).unwrap();
-        writer.add("movie/large.avi", large.clone()).unwrap();
-        writer.add("a.txt", b"before".to_vec()).unwrap();
-        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-        assert_eq!(&*pack.read("movie/large.avi").unwrap(), large.as_slice());
-        assert_eq!(&*pack.read("a.txt").unwrap(), b"before");
-    }
-
-    #[test]
-    fn a_spilling_writer_rejects_duplicates_and_leaves_no_spill_file() {
-        let dir = TempDir::new("spill-cleanup");
         let out = dir.join("out.akpak");
-        {
-            let mut writer = PackWriter::spilling(&out).unwrap();
-            writer.add("a.txt", vec![1]).unwrap();
-            let err = writer.add("A.TXT", vec![2]).unwrap_err().to_string();
-            assert!(err.contains("duplicate"), "{err}");
-            writer.write(&out).unwrap();
-        }
-        let names: Vec<_> = std::fs::read_dir(&dir.path)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name())
-            .collect();
-        assert_eq!(names, ["out.akpak"]);
+        stream(&out, &entries, 2).unwrap();
         let pack = Pack::open(&out).unwrap();
-        assert_eq!(&*pack.read("a.txt").unwrap(), &[1]);
+        for (path, data) in &entries {
+            assert_eq!(*pack.read(path).unwrap(), **data, "{path}");
+        }
     }
 
     #[test]
-    fn a_spilling_writer_needs_an_existing_output_directory() {
-        let dir = TempDir::new("spill-missing-dir");
-        assert!(PackWriter::spilling(&dir.join("missing/out.akpak")).is_err());
+    fn an_empty_streamed_pack_matches_the_in_memory_writer() {
+        let dir = TempDir::new("stream-empty");
+        let out = dir.join("out.akpak");
+        stream(&out, &[], 4).unwrap();
+        assert_eq!(
+            std::fs::read(&out).unwrap(),
+            PackWriter::new().to_bytes().unwrap()
+        );
+    }
+
+    #[test]
+    fn a_streamed_pack_rejects_bad_paths_before_writing() {
+        let dir = TempDir::new("stream-paths");
+        let out = dir.join("out.akpak");
+        let duplicate = vec![
+            ("a.bin".to_string(), vec![1]),
+            ("A.BIN".to_string(), vec![2]),
+        ];
+        assert!(stream(&out, &duplicate, 2).is_err());
+        assert!(stream(&out, &[("../x".to_string(), vec![1])], 2).is_err());
+        assert_eq!(std::fs::read_dir(&dir.path).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_panicking_compression_fails_the_pack_instead_of_hanging() {
+        let dir = TempDir::new("stream-worker-panic");
+        let out = dir.join("out.akpak");
+        let entries: Vec<(String, Vec<u8>)> = (0..50u32)
+            .map(|index| (format!("e{index:03}.bin"), vec![index as u8; 512]))
+            .collect();
+        let paths: Vec<String> = entries.iter().map(|(path, _)| path.clone()).collect();
+        let err = stream_pack(
+            &out,
+            &paths,
+            2,
+            |path| {
+                assert!(path != "e010.bin", "keep_raw panicked");
+                false
+            },
+            |index| Ok(entries[index].1.clone()),
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("e010.bin"), "{err:#}");
+        assert_eq!(std::fs::read_dir(&dir.path).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_panicking_producer_leaves_no_temporary_file() {
+        let dir = TempDir::new("stream-produce-panic");
+        let out = dir.join("out.akpak");
+        let paths = vec!["a.bin".to_string(), "b.bin".to_string()];
+        let panicked = std::panic::catch_unwind(|| {
+            stream_pack(
+                &out,
+                &paths,
+                2,
+                |_| false,
+                |index| {
+                    assert!(index == 0, "produce panicked");
+                    Ok(vec![1; 64])
+                },
+            )
+        });
+        assert!(panicked.is_err());
+        assert_eq!(std::fs::read_dir(&dir.path).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_failed_entry_leaves_no_pack_behind() {
+        let dir = TempDir::new("stream-fail");
+        let out = dir.join("out.akpak");
+        std::fs::write(&out, b"previous").unwrap();
+        let entries = stream_entries();
+        let paths: Vec<String> = entries.iter().map(|(path, _)| path.clone()).collect();
+        for jobs in [1, 4] {
+            let err = stream_pack(
+                &out,
+                &paths,
+                jobs,
+                |_| false,
+                |index| {
+                    if paths[index] == "movie/oj.avi" {
+                        bail!("cannot read the film");
+                    }
+                    Ok(entries[index].1.clone())
+                },
+            )
+            .unwrap_err();
+            assert!(
+                format!("{err:#}").contains("cannot read the film"),
+                "{err:#}"
+            );
+            // The previous pack is untouched and no temporary file is left.
+            assert_eq!(std::fs::read(&out).unwrap(), b"previous");
+            assert_eq!(std::fs::read_dir(&dir.path).unwrap().count(), 1);
+        }
     }
 
     /// Self-deleting temporary directory unique to this process and label.
