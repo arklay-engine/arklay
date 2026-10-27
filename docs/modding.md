@@ -3,7 +3,7 @@
 An `.akpak` pack is a flat store of named entries; a mod is a second pack whose
 entries layer over a base pack. Nothing about the engine is special-cased for a
 particular mod: every loader reads through the layered `Pack`, so any entry
-(room RDT, background, `scd/{id}.scd` script override, BGM, UI art, Lua source,
+(room definition, background, `room/{id}/room.scd` scripts, BGM, UI art, Lua source,
 ...) can be shadowed by a later layer.
 
 ## The pack manifest
@@ -122,8 +122,8 @@ audio the original shipped. Every loader therefore looks an asset up by *stem*
 
 **Any entry in a mod whose stem matches a known asset is an override.** The
 winning layer is still decided by `(load_order, id)` exactly as above, and only
-then does the extension priority pick within that layer: `roomcut/100_000.png`
-replaces the background `roomcut/100_000.bmp`, `ui/itemboxn.webp` replaces the
+then does the extension priority pick within that layer: `room/1000/cut/00.png`
+replaces the background `room/1000/cut/00.bmp`, `ui/itemboxn.webp` replaces the
 page `ui/itemboxn.tim`, `bgm/013.ogg` replaces `bgm/013.wav`, and a layer that
 ships both `x.png` and `x.webp` gets the WebP. A higher layer's PNG beats a
 lower layer's WebP, because the override is decided per layer first.
@@ -165,8 +165,8 @@ is exact.
 
 | class | entry stems (one example) | formats | size |
 | --- | --- | --- | --- |
-| room background | `roomcut/100_000` | webp, png, bmp, tim, pix | any size: stretched over the 320x240 frame |
-| camera mask | `roommask/100_000` | webp, png, bmp, tim, pix | the shipped page's; black is a hole |
+| room background | `room/1000/cut/00` | webp, png, bmp, tim, pix | any size: stretched over the 320x240 frame |
+| camera mask | `room/1000/mask/00` | webp, png, bmp, tim, pix | the shipped page's; black is a hole |
 | full-frame UI backdrop | `ui/title`, `ui/sel_back`, `ui/type00`, `ui/chris02`, `ui/jill02`, `ui/clis01`, `ui/jill01`, `ui/rc1121` | webp, png, bmp, tim | any size: stretched |
 | UI sheets | `ui/status`, `ui/blue`, `ui/statface`, `ui/staitem`, `ui/itemboxn`, `ui/select_b`, `ui/select_k`, `ui/t_press`, `ui/t_start`, `ui/died`, `ui/en05`, `ui/en07` | webp, png, bmp, tim | the shipped page's; an RGBA replacement uses its own alpha |
 | item art | `item/item_all`, `item/item_mix`, `item/medal` | webp, png, bmp, tim | the shipped sheet's; black is a hole |
@@ -179,19 +179,22 @@ is exact.
 | map pages | `map/00` … `map/0e`, `map/bg` (the full floor-plan view's backdrop) | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
 | FILE pages | `file/<doc>_bg` (the book backdrop), `file/<doc>_<page>_fg_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `file/0f_03_fg_en-US`; `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
 | room effect sheets | `effect/00` … `effect/20` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
-| room definition | `room/1000.xml` | xml (see [Room definitions](#room-definitions)); a raw `rdt` still loads | — |
-| room prop model | `prop/1a2b3c4d.tmd` | tmd | the shipped mesh |
-| room prop texture | `prop/1a2b3c4d.bmp`; HD replacements use `htexture/prop/1a2b3c4d` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
-| room effect sprite | `effect/5e6f7a8b.tim` | tim | the shipped sprite's |
-| room player animation | `animation/9c0d1e2f.emr` + `.edd` | emr, edd | — |
+| room definition | `room/1000/room.xml` | xml (see [Room definitions](#room-definitions)); a raw `room/1000/room.rdt` still loads | — |
+| room scripts | `room/1000/room.scd` | scd | — |
+| room object / item model | `room/1000/object/00.tmd`, `room/1000/item/00.tmd` | tmd | the shipped mesh |
+| room model texture | `room/1000/object/00.bmp`; HD replacements use `htexture/room/1000/object/00` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
+| room effect sprite | `room/1000/effect/00.xml` + `.bmp` | xml; bmp (16-wide CLUT sheet), tim | the shipped sprite's |
+| room player animation | `room/1000/anim/00.emr` + `.edd` | emr, edd | — |
 | player shadow | `shadow/kage` | webp, png, bmp, tim | the shipped page's; an RGBA page's alpha is the coverage |
 | BGM | `bgm/013`, `bgm/100` | ogg, wav | any |
 | sound effect | `se/a_mcn03`, `se/ft_wda` | ogg, wav | any |
 | voice | `voice/01_09` | ogg, wav | any |
 | film | `movie/00`, `movie/17`, `movie/0f` (the film id) | mp4, avi | any size up to 4096x4096, any frame rate |
 
-The stems are the shipped entries' names without their extensions: `roomcut` and
-`roommask` use `{stage}{room:02X}_{camera:03}` (`RoomId::cut_stem`), `bgm` uses
+The stems are the shipped entries' names without their extensions: a room's
+files sit in its folder `room/<id>` (the four-digit lower-case RDT number),
+with cameras and slots numbered by two lower-case hex digits
+(`RoomId::cut_stem`), `bgm` uses
 the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
 stage row and the lowercase hex id (`voice::entry_path`), `door`, `movie`,
 `effect`, `map` and `file` use two lower-case hex digits of the door type,
@@ -212,31 +215,51 @@ BMP is read as true colour.
 
 ### Room definitions
 
-`convert-game` writes each room as `room/<id>.xml` (`<id>` is the four-digit
-lower-case RDT number, e.g. `room/1000.xml` for `ROOM1000.RDT`) and the files
-it names:
+`convert-game` writes each room as a folder `room/<id>` (`<id>` is the
+four-digit lower-case RDT number, e.g. `room/1000` for `ROOM1000.RDT`). Every
+file in it is found by its name, so nothing in a room refers to a path:
 
 ```text
-room/1000.xml            the room: lights, cameras and masks, zones, collision, messages, effects, model slots
-room/1000.scd            the room's own init, per-frame and event scripts
-prop/1a2b3c4d.tmd        a model an object or item slot names
-prop/1a2b3c4d.bmp        its texture page (a .tim when the page has more than one CLUT row)
-prop/props.toml          which rooms and slots use each prop, for people
-effect/5e6f7a8b.tim      a room effect sprite sheet
-animation/9c0d1e2f.emr   a room player-animation pair, with animation/9c0d1e2f.edd
+room/1000/room.xml        the room: lights, cameras and masks, zones, collision, messages
+room/1000/room.scd        the scripts the room runs: init, per-frame and events
+room/1000/original.scd    the original bytecode, when room.scd carries the port's fixes
+room/1000/cut/00.bmp      camera 0's background
+room/1000/mask/00.bmp     camera 0's mask page
+room/1000/object/00.tmd   object model slot 0, with its texture object/00.bmp
+room/1000/item/00.tmd     item model slot 0, with its texture item/00.bmp
+room/1000/effect/00.xml   effect sprite slot 0, with its sheet effect/00.bmp
+room/1000/anim/00.emr     the room's player animation, with anim/00.edd
 ```
 
-A sidecar id is eight hex digits, the CRC-32 of the file's content, so
-identical content is stored once (one prop can serve many rooms and both an
-object and an item slot) and a file has the same id in every pack converted
-from any release that ships it. A mod adding its own files may use any id no
-other file has. The
-XML is the format the loader reads, so a hand edit (a moved light, a retimed
-message, a slot pointed at another prop) needs no tool. An unknown element or
+Camera and slot numbers are two lower-case hex digits counting from zero
+(`cut/0a.bmp` is camera 10). A room is self-contained: copying or renaming its
+folder moves the whole room to another id or another pack, and the definition
+carries no id of its own. The background and mask of
+a camera shared by the two player variants, or by the stage 6 and 7 return
+visits, are copied into each variant's folder.
+
+Model slots are probed in order from `00`; a model texture that does not
+round-trip as an 8-bit BMP is kept as a `.tim`. When the room declares more
+object or item slots than it has files (trailing empty slots), the `<room>`
+element carries `objectSlots` or `itemSlots`. Effect slots are read from `00`
+up to the first missing `.xml`. An effect sheet is an 8-bit BMP with one
+16-colour palette row per CLUT row: texel indices `0`-`15`, magenta for
+palette entry 0 and each entry's reserved byte its STP bit.
+
+The XML is the format the loader reads, so a hand edit (a moved light, a
+retimed message, a reshaped collision box) needs no tool. An unknown element or
 attribute is refused rather than ignored. Integers are decimal or `0x` hex.
 The camera switch zones are grouped by their source camera, but each carries a
 flat `zoneIndex`: the index scripts and the SCD `zone` opcodes use, which must
-stay contiguous from 0.
+stay contiguous from 0. Packed flag words are split into named attributes:
+
+- a collision `<box>` has its `shape` (the low byte of the RDT kind), a
+  signed `step` height (a multiple of 100), the `cf1`/`cf2`/`cf4`/`cf8`
+  collision flags (the `CF_*` bits `inst_cfg` toggles) and any remaining high
+  bits as `otherBits`;
+- a mask `<sprite>` has its texture `page`, `blend`, `colorMode` and
+  `otherBits`, and a square `size` or explicit `width` and `height`;
+- a `<walk>` zone lists the zones it connects to as `links="1 7"`.
 
 Messages are text plus elements for the control bytes (`<br/>`, `<page n>`,
 `<speed n>`, `<color n>`, `<item n>`, `<itemEnd/>`, `<yesno a b c>`,
@@ -245,19 +268,19 @@ Messages are text plus elements for the control bytes (`<br/>`, `<page n>`,
 markup reproduces exactly is kept as a `raw` hex attribute. Text the room's
 font cannot spell exactly is refused rather than drawn as another glyph.
 
-A room's scripts are the `<scripts src>` container unless the pack carries a
-`scd/<id>.scd` override from the same or a later layer than that container.
-A mod that only edits a room's XML keeps naming the base container, so the
-base override still runs; a mod that ships its own container (or an RDT)
-from a later layer runs that. A pack
-converted before the XML format, and a mod that ships `room/<id>.rdt`, still
-load: when both a `.xml` and a `.rdt` define a room, the one from the later
-layer wins, and the XML wins a tie.
+A room runs `room.scd`. With `[game] room_script_fixes = false` it runs
+`original.scd` instead, unless a later layer ships its own `room.scd`: a mod's
+scripts win either way. A mod that only edits `room.xml` keeps the base
+scripts. A mod that ships `room/<id>/room.rdt` still loads: when both a `room.xml` and a `room.rdt`
+define a room, the one from the later layer wins, and the XML wins a tie. An
+RDT room runs its embedded scripts unless a `room.scd` comes from the same or
+a later layer.
 
-An HD pack can name a prop's page `htexture/prop/<id>` (covering the whole
-page) instead of by content hash. A page with more than one CLUT row is only
-replaced by its per-row content hashes. The hash names still
-work, so an HD pack made for RDT rooms keeps replacing the same textures.
+An HD pack can name a model's page `htexture/room/<id>/object/<slot>` (or
+`item/<slot>`, covering the whole page) instead of by content hash. A page
+with more than one CLUT row is only replaced by its per-row content hashes.
+The hash names still work, so an HD pack made for RDT rooms keeps replacing
+the same textures.
 
 ### Item art
 
@@ -340,7 +363,7 @@ entry, with these extra rules:
 
 ### The checked-in example
 
-`mods/hd/` is the reference replacement mod: a 640x480 PNG `roomcut/100_000`
+`mods/hd/` is the reference replacement mod: a 640x480 PNG `room/1000/cut/00`
 (a 2x background), a 128x208 `ui/itemboxn` shipped as both PNG and WebP (so the
 layer's own priority picks the WebP), and an OGG Vorbis `bgm/013`.
 
@@ -352,7 +375,7 @@ arklay re1.akpak --mod hd.akpak --ui box --capture hd-box.bmp
 ```
 
 `arklay mod build --base <base.akpak>` counts a format override as an override:
-`roomcut/100_000.png` over the base's `.bmp` is not reported as a new file.
+`room/1000/cut/00.png` over the base's `.bmp` is not reported as a new file.
 
 ### HD texture-pack names
 
@@ -510,11 +533,12 @@ arklay re1.akpak --mod fr.akpak --language fr-FR --room 100
 
 `arklay mod build <dir> --out <pack.akpak>` builds a mod from a directory:
 `manifest.toml` is required and packed, every other file maps to a pack entry
-equal to its directory-relative path, and a `scd/<stem>.s` source is assembled
-into `scd/<stem>.scd` (the `.s` itself is not packed); a `scd/<stem>.akscr`
-script is compiled the same way, and a merged room script named by three hex
-digits (`scd/103.akscr`) is compiled once per variant, into `scd/1030.scd`,
-`scd/1031.scd`, `scd/6030.scd` and `scd/6031.scd`, each built for the
+equal to its directory-relative path, and a `room/<id>/<stem>.s` source is
+assembled into `room/<id>/<stem>.scd` (the `.s` itself is not packed); a
+`room/<id>/<stem>.akscr` script is compiled the same way, and a merged room
+script named by three hex digits (`room/103.akscr`) is compiled once per
+variant, into `room/1030/room.scd`, `room/1031/room.scd`, `room/6030/room.scd`
+and `room/6031/room.scd`, each built for the
 USA region (`#if USA` is defined). A mod has no build per region and its
 scripts run on every region, so a script that builds differently for JPN or
 EUR gets a warning: lines that follow one region's RDT data (a camera
@@ -605,8 +629,8 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | --- | --- |
 | `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `htexture/**` |
 | `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
-| `STAGEn/ROOM####.RDT` | `room/####.rdt` (the engine loads a raw RDT as well as the converted XML) |
-| `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `roomcut/*.bmp`, `roommask/*.bmp` (copied to stages 6/7 where the room exists) |
+| `STAGEn/ROOM####.RDT` | `room/####/room.rdt` (the engine loads a raw RDT as well as the converted XML) |
+| `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/####/cut/*.bmp`, `room/####/mask/*.bmp` (copied to every player and stage 6/7 variant of the room) |
 | `ENEMY/*.EMD`, `PLAYERS/*.EMW`, `PLAYERS/*.TMD` | `enemy/*`, `player/*` |
 | `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `voice/*` record playing the file |
 | `DATA/*` (UI art, item icons, demos, effects) | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
@@ -650,8 +674,8 @@ arklay convert-mod re-hd.zip --root re1hd --base re1.akpak
 ## The `.s` script assembler
 
 `arklay scd export ROOM1000.RDT --out 1000.s` writes the lossless
-disassembly; `arklay scd build 1000.s --out scd/1000.scd` assembles it back
-into a standalone container that `scd/{id}.scd` overrides and the engine both
+disassembly; `arklay scd build 1000.s --out room/1000/room.scd` assembles it back
+into a standalone container that `room/{id}/room.scd` and the engine both
 read through the RDT pointer-table ABI. `--list` also writes a `.lst`
 listing. The assembler accepts exactly the disassembler's grammar, including
 `.block` section markers, `off_XXXX` labels, `db` trailing chunks, the named
@@ -662,7 +686,7 @@ events are inert.
 ## `.akscr` room scripts
 
 `arklay scd export ROOM1000.RDT --out 1000.akscr` decompiles a room's scripts
-to structured code, and `arklay scd build 1000.akscr --out scd/1000.scd`
+to structured code, and `arklay scd build 1000.akscr --out room/1000/room.scd`
 compiles it back. Every room of the shipped game decompiles to a script that
 compiles to byte-identical init, main and event streams.
 
@@ -688,7 +712,7 @@ directives work on whole lines; the exporter keeps whole statements inside
 each block (balanced braces, an `if` with its `else`), lining up each
 variant's events by content, so only a section header such as
 `event event_01` / `event event_04` stands alone in a block. `arklay scd build 103.akscr --room 6031 --out
-scd/6031.scd` compiles one variant; a script without a variant must not use
+room/6031/room.scd` compiles one variant; a script without a variant must not use
 `#if`. The merged scripts are checked in under `games/re1/room/` and are
 maintained by hand from there: the real-data tests build each one for every
 variant and compare it with the original RDT's bytecode, so a rename or
@@ -723,13 +747,14 @@ are empty.
 
 These scripts are what the game runs. The build compiles each one, fixed,
 for every RDT it covers and for every region, and carries the bytecode in
-the executable; `convert-game` packs it as `scd/{id}.scd` beside the RDT,
+the executable; `convert-game` packs it as `room/{id}/room.scd`, moving the
+room's own scripts to `original.scd`,
 picking the region whose `AUTHENTIC` build has the same digest as the RDT's
 own scripts. An RDT whose scripts are no region's keeps its own scripts,
 with a warning. A script may use a region symbol only where the regions'
 own scripts differ: the build stops if two regions' `AUTHENTIC` builds of
-an RDT match but their fixed builds do not. A mod's `scd/{id}.scd` overrides the
-packed one, and a mod that replaces an RDT without shipping a script keeps
+an RDT match but their fixed builds do not. A mod's `room/{id}/room.scd`
+overrides the packed one, and a mod that replaces an RDT without shipping a script keeps
 that RDT's scripts: a script only applies over an RDT from its own layer
 or a lower one.
 

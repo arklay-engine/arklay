@@ -513,8 +513,6 @@ fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
         roll: fields[8],
         fov: fields[10],
         background: None,
-        background_stem: None,
-        mask_stem: None,
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,

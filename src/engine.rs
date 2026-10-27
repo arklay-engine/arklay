@@ -137,7 +137,7 @@ use crate::scd;
 use crate::sfx;
 use crate::shadow;
 use crate::speed::Speed;
-use crate::state::{Cut, Image, RoomId, RoomState};
+use crate::state::{Image, RoomId, RoomState};
 use crate::stats;
 use crate::text::Text;
 use crate::trace;
@@ -10533,8 +10533,8 @@ pub struct SimulatedRoom {
     /// The final state rendered with every character slot deactivated, so a
     /// test can assert the characters actually painted something.
     pub baseline: Image,
-    /// Where the room's SCD scripts were loaded from: the RDT or a standalone
-    /// `scd/{id}.scd` override.
+    /// Where the room's SCD scripts were loaded from: the RDT, `room.scd` or
+    /// `original.scd`.
     pub script_source: ScriptSource,
     /// Destination rooms a scripted door entered during the run, in order.
     /// The final [`SimulatedRoom::room`] is the last destination.
@@ -12011,17 +12011,17 @@ struct MaskCache {
 }
 
 impl MaskCache {
-    /// The mask page of `cut` (camera `camera`), loading its mask stem
-    /// (`roommask/{room3}_{camera:03}` unless the room names another) from
-    /// the pack on first use. Missing pages are remembered as absent.
-    fn page_for(&mut self, pack: &Pack, id: RoomId, camera: usize, cut: &Cut) -> Option<&Image> {
+    /// The mask page of camera `camera`, loading its mask stem
+    /// (`room/{id}/mask/{camera:02}`) from the pack on first use. Missing
+    /// pages are remembered as absent.
+    fn page_for(&mut self, pack: &Pack, id: RoomId, camera: usize) -> Option<&Image> {
         if self.room != Some(id) {
             self.room = Some(id);
             self.pages.clear();
             self.missing.clear();
         }
         if !self.pages.contains_key(&camera) && !self.missing.contains(&camera) {
-            let stem = cut.mask_stem(id);
+            let stem = id.mask_stem(camera);
             // A mask page is addressed by the cut's sprite UVs, so a
             // replacement keeps the shipped page's dimensions.
             match pack.read_asset(&stem, AssetClass::Image) {
@@ -12440,51 +12440,21 @@ fn select_effect_page(
     pages.base[page].as_ref().map(|_| page)
 }
 
-/// Where a room's SCD scripts were loaded from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScriptSource {
-    /// The room's own scripts: embedded in its RDT, or the `room/{id}.scd`
-    /// container its XML definition names.
-    Rdt,
-    /// A standalone `scd/{id}.scd` container.
-    Override,
-}
-
-/// Where room `id` takes its scripts from: a `scd/{id}.scd` container
-/// (`convert-game` packs the checked-in room scripts as these, and a mod can
-/// ship its own) unless the room's own scripts (an RDT, or the container an
-/// XML definition names) come from a later layer than it, so a mod that
-/// replaces a room's scripts keeps them.
-///
-/// With `original_scripts` (the `room_script_fixes = false` option) the base
-/// pack's `scd/{id}.scd` is ignored, so the room runs its own scripts: the
-/// original bytecode `convert-game` keeps as the RDT's scripts or the XML
-/// definition's `room/{id}.scd`. A mod layer's container still wins.
-pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptSource {
-    let scd = pack
-        .depth_of(&id.scd_entry())
-        .filter(|&depth| !(original_scripts && depth == 0));
-    match (scd, crate::room::scripts_depth(pack, id)) {
-        (Some(scd), rdt) if rdt.is_none_or(|rdt| scd >= rdt) => ScriptSource::Override,
-        _ => ScriptSource::Rdt,
-    }
-}
+pub use crate::room::{ScriptSource, script_source};
 
 /// Room `id`'s scripts, from where [`script_source`] says, given its loaded
 /// definition.
+///
+/// `original_scripts` is the `room_script_fixes = false` option: the room
+/// runs the `original.scd` `convert-game` keeps beside a fixed `room.scd`.
 pub fn room_scripts(
     pack: &Pack,
     id: RoomId,
     loaded: &crate::room::Loaded,
     original_scripts: bool,
 ) -> Result<(scd::ir::Scripts, ScriptSource)> {
-    let source = script_source(pack, id, original_scripts);
-    let scripts = match source {
-        ScriptSource::Override => scd::reader::parse(&pack.read(&id.scd_entry())?)
-            .with_context(|| format!("invalid SCD override {}", id.scd_entry()))?,
-        ScriptSource::Rdt => loaded.own_scripts(pack)?,
-    };
-    Ok((scripts, source))
+    debug_assert_eq!(loaded.id, id);
+    loaded.scripts(pack, original_scripts)
 }
 
 /// Everything loaded for one room, so a transition can load the next room with
@@ -12513,7 +12483,7 @@ fn load_room(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<LoadedRo
         bail!("room {} has no camera cuts", id.room3());
     }
     for cut in &mut room.cuts {
-        let stem = cut.background_stem(id);
+        let stem = id.cut_stem(cut.index);
         let asset = pack
             .read_asset(&stem, AssetClass::Image)?
             .with_context(|| format!("missing background for cut {}", cut.index))?;
@@ -14241,7 +14211,7 @@ fn render_frame_on(
     let page = if cut.masks.is_empty() || cut.mask_active == 0 {
         None
     } else {
-        masks.page_for(pack, id, room.current_cut, cut)
+        masks.page_for(pack, id, room.current_cut)
     };
     let layer = page.map(|page| MaskLayer {
         room: id,
@@ -14545,7 +14515,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
-            hd_name: asset.prop.as_deref(),
+            hd_name: asset.hd_name.as_deref(),
         });
     }
     for ((asset, _, _, _), joints) in visible_item_models.iter().zip(&item_joints) {
@@ -14562,7 +14532,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
-            hd_name: asset.prop.as_deref(),
+            hd_name: asset.hd_name.as_deref(),
         });
     }
     // The NPC joint gates pair with `models`/`npc_joints`/`npc_hidden`, all
@@ -15741,7 +15711,7 @@ mod tests {
             room: 0x07,
             object_models: vec![ObjectAsset {
                 pair_index: 0,
-                prop: None,
+                hd_name: None,
                 model: crate::model::Tmd::default(),
                 texture: crate::model::Texture8 {
                     width: 0,
@@ -15793,7 +15763,7 @@ mod tests {
 
         let asset = |pair: usize| ObjectAsset {
             pair_index: pair,
-            prop: None,
+            hd_name: None,
             model: crate::model::Tmd::default(),
             texture: crate::model::Texture8 {
                 width: 0,
@@ -15854,7 +15824,7 @@ mod tests {
 
         let asset = |pair: usize| ObjectAsset {
             pair_index: pair,
-            prop: None,
+            hd_name: None,
             model: crate::model::Tmd::default(),
             texture: crate::model::Texture8 {
                 width: 0,
@@ -15989,7 +15959,7 @@ mod tests {
 
         let asset = ObjectAsset {
             pair_index: 0,
-            prop: None,
+            hd_name: None,
             model: crate::model::Tmd::default(),
             texture: crate::model::Texture8 {
                 width: 0,
@@ -17448,10 +17418,7 @@ mod tests {
                     synthetic_rdt_with_blocking_collision(&door),
                 )
                 .unwrap();
-            // The backgrounds are shared between the character variants.
-            if id.player_flag == 0 {
-                writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
-            }
+            writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
         }
         writer
             .add(
@@ -19386,7 +19353,7 @@ mod tests {
         }];
         let camera = Camera::from_cut(cut);
         let lighting = Lighting::from_room(&loaded.room);
-        let page = bmp::decode_mask(&pack.read(&id.roommask_entry(0)).unwrap()).unwrap();
+        let page = bmp::decode_mask(&pack.read(&id.mask_entry(0)).unwrap()).unwrap();
         let layer = MaskLayer {
             room: id,
             camera: 0,
@@ -20059,18 +20026,8 @@ mod tests {
             writer
                 .add(&id.rdt_entry(), synthetic_rdt(&[0x00, 0x00]))
                 .unwrap();
+            writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
         }
-        writer
-            .add(
-                &RoomId {
-                    stage: 1,
-                    room: NEW_GAME_ROOM,
-                    player_flag: 0,
-                }
-                .cut_entry(0),
-                bmp_bytes.clone(),
-            )
-            .unwrap();
         for (entry, bytes) in extra {
             writer.add(entry, bytes.to_vec()).unwrap();
         }
@@ -25006,18 +24963,8 @@ off_0010:
             writer
                 .add(&id.rdt_entry(), synthetic_rdt(&[0x00, 0x00]))
                 .unwrap();
+            writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
         }
-        writer
-            .add(
-                &RoomId {
-                    stage: 1,
-                    room: NEW_GAME_ROOM,
-                    player_flag: 0,
-                }
-                .cut_entry(0),
-                bmp_bytes,
-            )
-            .unwrap();
         for &(film_id, _) in films {
             writer
                 .add(
@@ -28557,10 +28504,10 @@ off_0010:
             &[rdt.clone(), scd.clone()],
         );
         for (layer, expected) in [
-            (vec![], ScriptSource::Override),
+            (vec![], ScriptSource::Room),
             (vec![rdt.clone()], ScriptSource::Rdt),
-            (vec![rdt.clone(), scd.clone()], ScriptSource::Override),
-            (vec![scd.clone()], ScriptSource::Override),
+            (vec![rdt.clone(), scd.clone()], ScriptSource::Room),
+            (vec![scd.clone()], ScriptSource::Room),
         ] {
             let layer = write("layer", manifest::PackKind::Mod, &layer);
             let pack = Pack::open_layered(&base, &[layer]).unwrap();
@@ -28585,7 +28532,7 @@ off_0010:
 
         let pack = Pack::open(&pack_path).unwrap();
         let loaded = load_room(&pack, id, false).unwrap();
-        assert_eq!(loaded.script_source, ScriptSource::Override);
+        assert_eq!(loaded.script_source, ScriptSource::Room);
         assert_eq!(loaded.scripts.init.len(), 1);
         assert_eq!(
             loaded.scripts.init[0].insns[0].bytes,
@@ -28630,7 +28577,7 @@ off_0010:
 
         let pack = Pack::open(&pack_path).unwrap();
         let run = simulate_room(&pack, id, 1, player::Input::default()).unwrap();
-        assert_eq!(run.script_source, ScriptSource::Override);
+        assert_eq!(run.script_source, ScriptSource::Room);
         assert!(
             run.game.flag_test(0, 1, false),
             "the override init set FG_SCENARIO bit 1"

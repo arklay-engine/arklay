@@ -216,7 +216,7 @@ artifact behind.
 ## Mods and authoring
 
 Packs layer. Any entry of a mod pack shadows the base pack's entry, including a
-whole-room `scd/{id}.scd` script override and `lua/**` hooks. Art and audio may
+whole-room `room/{id}/room.scd` script override and `lua/**` hooks. Art and audio may
 be shipped in the format they are authored in — WebP or PNG images and OGG
 Vorbis audio — and the engine resolves them by entry stem with a fixed
 extension priority (`webp > png > bmp > tim > pix`, `ogg > wav`):
@@ -254,19 +254,19 @@ cargo run -- pack info re1.akpak --mod demo.akpak
 
 # Disassemble/reassemble a room's scripts
 cargo run -- scd export ROOM1000.RDT --out 1000.s
-cargo run -- scd build 1000.s --out scd/1000.scd
+cargo run -- scd build 1000.s --out room/1000/room.scd
 
 # Decompile/recompile a room's scripts as structured code
 cargo run -- scd export ROOM1000.RDT --out 1000.akscr
-cargo run -- scd build 1000.akscr --out scd/1000.scd
+cargo run -- scd build 1000.akscr --out room/1000/room.scd
 
 # Export every room as one merged script (players and mansion visits under
 # #if CHRIS/JILL/MANSION1/MANSION2, and regions under #if USA/JPN/EUR) and
 # compile one variant of it
 cargo run -- scd export-rooms re1.akpak --out games/re1/room
 cargo run -- scd export-rooms usa=en.akpak jpn=ja.akpak eur=fr.akpak --out games/re1/room
-cargo run -- scd build games/re1/room/103.akscr --room 6031 --out scd/6031.scd
-cargo run -- scd build games/re1/room/103.akscr --room 6031 --region jpn --out scd/6031.scd
+cargo run -- scd build games/re1/room/103.akscr --room 6031 --out room/6031/room.scd
+cargo run -- scd build games/re1/room/103.akscr --room 6031 --region jpn --out room/6031/room.scd
 ```
 
 `docs/modding.md` documents the manifest grammar, the replacement formats and
@@ -341,11 +341,11 @@ back ribbons from rooms already visited.
 
 `room_script_fixes` (Gameplay › Room Scripts in the menu) chooses which room
 scripts run. `convert-game` packs the checked-in room scripts
-(`games/re1/room/*.akscr`) as `scd/{id}.scd`, built with the port's fixes (the
-`#else` of each `#if AUTHENTIC` block). Turned off, the engine ignores the base
-pack's `scd/{id}.scd` entries and runs each room's own scripts, the original
-bytecode the pack keeps with the room (`room/{id}.scd`, or the scripts in a raw
-`room/{id}.rdt`). A mod layer's `scd/{id}.scd` still applies either way. A
+(`games/re1/room/*.akscr`) as `room/{id}/room.scd`, built with the port's
+fixes (the `#else` of each `#if AUTHENTIC` block), and keeps the room's original
+bytecode beside it as `room/{id}/original.scd`. Turned off, the engine runs
+`original.scd` (or the scripts in a raw `room/{id}/room.rdt`) instead. A mod
+layer's `room/{id}/room.scd` still applies either way. A
 change takes effect from the next room load. `--room-script-fixes` and
 `--no-room-script-fixes` override the file for one run, and `--authentic`
 implies `--no-room-script-fixes` unless `--room-script-fixes` is also given.

@@ -13774,13 +13774,13 @@ mod tests {
             item_models: vec![
                 ObjectAsset {
                     pair_index: 0,
-                    prop: None,
+                    hd_name: None,
                     model: Tmd::default(),
                     texture: texture(),
                 },
                 ObjectAsset {
                     pair_index: 1,
-                    prop: None,
+                    hd_name: None,
                     model: Tmd::default(),
                     texture: texture(),
                 },

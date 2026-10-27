@@ -354,22 +354,24 @@ struct RoomCamera {
     background: String,
 }
 
-/// Every camera with a mask page in `pack` (`roommask/100_000`), with the
-/// background stem it is drawn over (`roomcut/100_000`).
+/// Every camera with a mask page in `pack` (`room/1000/mask/00`), with the
+/// background stem it is drawn over (`room/1000/cut/00`).
 fn room_cameras(pack: &Pack) -> Vec<RoomCamera> {
-    let mut stems: Vec<&str> = pack
+    let mut cameras: Vec<(&str, &str)> = pack
         .paths()
-        .filter_map(|path| path.strip_prefix("roommask/"))
-        .map(|name| name.rsplit_once('.').map_or(name, |(stem, _)| stem))
-        .filter(|name| !name.contains('/'))
+        .filter_map(|path| {
+            let (room, file) = path.strip_prefix("room/")?.split_once("/mask/")?;
+            let camera = file.rsplit_once('.').map_or(file, |(stem, _)| stem);
+            (!room.contains('/') && !camera.contains('/')).then_some((room, camera))
+        })
         .collect();
-    stems.sort_unstable();
-    stems.dedup();
-    stems
+    cameras.sort_unstable();
+    cameras.dedup();
+    cameras
         .into_iter()
-        .map(|name| RoomCamera {
-            mask: format!("roommask/{name}"),
-            background: format!("roomcut/{name}"),
+        .map(|(room, camera)| RoomCamera {
+            mask: format!("room/{room}/mask/{camera}"),
+            background: format!("room/{room}/cut/{camera}"),
         })
         .collect()
 }
@@ -1102,7 +1104,7 @@ mod tests {
             "htexture/misc/ABCDEF01_8E.webp",
             "htexture/notes.txt",
             "htexture/misc/XYZ.webp",
-            "roomcut/12345678.webp",
+            "room/1000/cut/12345678.webp",
         ]);
         let table = HdTable::scan(&pack);
         // Three content hashes plus the named `misc/XYZ` image.
@@ -1648,21 +1650,21 @@ mod tests {
             })
         };
         let cameras = [
-            ("100_000", [0, 100, 0, 50], 200),
+            ("00", [0, 100, 0, 50], 200),
             // Named by its own hash.
-            ("100_001", [50, 250, 100, 200], 200),
+            ("01", [50, 250, 100, 200], 200),
             // Two cameras a few texels apart: no replacement can tell them
             // apart.
-            ("100_002", [0, 120, 150, 250], 200),
-            ("100_003", [0, 121, 150, 250], 200),
+            ("02", [0, 120, 150, 250], 200),
+            ("03", [0, 121, 150, 250], 200),
             // Paired by a room list, and a camera with the same page.
-            ("100_004", [100, 200, 0, 90], 200),
-            ("100_005", [100, 200, 0, 90], 200),
+            ("04", [100, 200, 0, 90], 200),
+            ("05", [100, 200, 0, 90], 200),
             // The same coverage over different art is still two cameras.
-            ("100_006", [10, 60, 60, 90], 200),
-            ("100_007", [10, 60, 60, 90], 120),
+            ("06", [10, 60, 60, 90], 200),
+            ("07", [10, 60, 60, 90], 120),
             // The same page as camera 0.
-            ("100_008", [0, 100, 0, 50], 200),
+            ("08", [0, 100, 0, 50], 200),
         ];
         let replacement = |rect| {
             png_of(&image_of(512, 512, |x, y| {
@@ -1675,13 +1677,13 @@ mod tests {
             let background = image_of(320, 240, |_, _| [8 + 16 * index as u8, 0, 0, 255]);
             writer
                 .add(
-                    &format!("roommask/{name}.bmp"),
+                    &format!("room/1000/mask/{name}.bmp"),
                     crate::bmp::encode_to_vec(&page(rect, red)).unwrap(),
                 )
                 .unwrap();
             writer
                 .add(
-                    &format!("roomcut/{name}.bmp"),
+                    &format!("room/1000/cut/{name}.bmp"),
                     crate::bmp::encode_to_vec(&background).unwrap(),
                 )
                 .unwrap();

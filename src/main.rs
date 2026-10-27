@@ -1420,7 +1420,9 @@ mod tests {
     /// A two-entry pack written to `path`, also opened for comparison.
     fn sample_pack(path: &Path) -> Pack {
         let mut writer = PackWriter::new();
-        writer.add("room/1001.rdt", vec![0x11, 0x22, 0x33]).unwrap();
+        writer
+            .add("room/1001/room.rdt", vec![0x11, 0x22, 0x33])
+            .unwrap();
         writer.add("bgm/013.wav", b"RIFF....WAVE".to_vec()).unwrap();
         writer.write(path).unwrap();
         Pack::open(path).unwrap()
@@ -1537,8 +1539,8 @@ mod tests {
             assert_eq!(extracted, pack.read(entry.path()).unwrap().as_ref());
         }
         assert_eq!(
-            fs::read(out.join("room/1001.rdt")).unwrap(),
-            pack.read("room/1001.rdt").unwrap().as_ref()
+            fs::read(out.join("room/1001/room.rdt")).unwrap(),
+            pack.read("room/1001/room.rdt").unwrap().as_ref()
         );
     }
 
@@ -1555,7 +1557,7 @@ mod tests {
         let out = dir.path.join("out");
         extract_pack(&pack_path, &out, &[]).unwrap();
 
-        for sample in ["room/1001.xml", "roomcut/100_000.bmp", "bgm/013.wav"] {
+        for sample in ["room/1001/room.xml", "room/1000/cut/00.bmp", "bgm/013.wav"] {
             let extracted = fs::read(out.join(sample)).unwrap();
             assert_eq!(extracted, pack.read(sample).unwrap().as_ref(), "{sample}");
         }
@@ -1577,7 +1579,7 @@ mod tests {
             "RIFF....WAVE".len(),
             "bgm/013.wav",
             3,
-            "room/1001.rdt"
+            "room/1001/room.rdt"
         );
         assert_eq!(String::from_utf8(out).unwrap(), expected);
     }
@@ -1597,7 +1599,7 @@ mod tests {
             manifest::Manifest::base("re1").render().into_bytes(),
         )
         .unwrap();
-        base.add("room/1000.rdt", b"base".to_vec()).unwrap();
+        base.add("room/1000/room.rdt", b"base".to_vec()).unwrap();
         base.write(&base_path).unwrap();
 
         let manifest_bytes = |id: &str, load_order: i32| {
@@ -1614,14 +1616,16 @@ mod tests {
         first
             .add(manifest::ENTRY, manifest_bytes("first", 0))
             .unwrap();
-        first.add("room/1000.rdt", b"first".to_vec()).unwrap();
+        first.add("room/1000/room.rdt", b"first".to_vec()).unwrap();
         first.write(&first_path).unwrap();
         let second_manifest = manifest_bytes("second", 10);
         let mut second = PackWriter::new();
         second
             .add(manifest::ENTRY, second_manifest.clone())
             .unwrap();
-        second.add("room/1000.rdt", b"second".to_vec()).unwrap();
+        second
+            .add("room/1000/room.rdt", b"second".to_vec())
+            .unwrap();
         second.write(&second_path).unwrap();
 
         let pack = open_game_pack(&base_path, &[first_path, second_path]).unwrap();
@@ -1632,7 +1636,7 @@ mod tests {
         assert_eq!(
             String::from_utf8(out).unwrap(),
             format!(
-                "{:>12} manifest.toml\n{:>12} room/1000.rdt\n",
+                "{:>12} manifest.toml\n{:>12} room/1000/room.rdt\n",
                 second_manifest.len(),
                 "second".len()
             )
@@ -1678,7 +1682,7 @@ mod tests {
         let mut base = PackWriter::new();
         base.add(manifest::ENTRY, base_manifest.render().into_bytes())
             .unwrap();
-        base.add("room/1000.rdt", b"base".to_vec()).unwrap();
+        base.add("room/1000/room.rdt", b"base".to_vec()).unwrap();
         base.write(&base_path).unwrap();
 
         let mod_manifest = manifest::Manifest {
@@ -1716,7 +1720,7 @@ layers: 1
 entries:
 {lua_size:>12} lua/demo.lua
 {manifest_size:>12} manifest.toml
-{room_size:>12} room/1000.rdt
+{room_size:>12} room/1000/room.rdt
 3 entries, {bytes} bytes
 ",
             base = base_path.display(),
@@ -1884,13 +1888,13 @@ entries:
 
         let dir = TempDir::new("runtime-global-mods");
         let game_dir = dir.path.join("game");
-        fs::create_dir_all(game_dir.join("room")).unwrap();
+        fs::create_dir_all(game_dir.join("room/1000")).unwrap();
         fs::write(
             game_dir.join(manifest::ENTRY),
             manifest::Manifest::base("re1").render(),
         )
         .unwrap();
-        fs::write(game_dir.join("room/1000.rdt"), b"base").unwrap();
+        fs::write(game_dir.join("room/1000/room.rdt"), b"base").unwrap();
 
         let global = dir.path.join("config/mods");
         let one = global.join("one.akpak");
@@ -1906,12 +1910,12 @@ entries:
         };
         let mut writer = PackWriter::new();
         writer.add(manifest::ENTRY, mod_manifest("one")).unwrap();
-        writer.add("room/1000.rdt", b"one".to_vec()).unwrap();
+        writer.add("room/1000/room.rdt", b"one".to_vec()).unwrap();
         fs::create_dir_all(&global).unwrap();
         writer.write(&one).unwrap();
-        fs::create_dir_all(two.join("room")).unwrap();
+        fs::create_dir_all(two.join("room/1000")).unwrap();
         fs::write(two.join(manifest::ENTRY), mod_manifest("two")).unwrap();
-        fs::write(two.join("room/1000.rdt"), b"two").unwrap();
+        fs::write(two.join("room/1000/room.rdt"), b"two").unwrap();
 
         // A directory game pack plus the per-user mods directory: only the
         // enabled mod applies.
@@ -1925,7 +1929,7 @@ entries:
         };
         let pack = arklay::engine::open_game_pack(&game_dir, &options, None).unwrap();
         assert!(pack.is_layered());
-        assert_eq!(&*pack.read("room/1000.rdt").unwrap(), b"one");
+        assert_eq!(&*pack.read("room/1000/room.rdt").unwrap(), b"one");
 
         // Config order names the later layer: `two` wins over `one`.
         let options = arklay::engine::ModOptions {
@@ -1937,7 +1941,7 @@ entries:
             ..arklay::engine::ModOptions::default()
         };
         let pack = arklay::engine::open_game_pack(&game_dir, &options, None).unwrap();
-        assert_eq!(&*pack.read("room/1000.rdt").unwrap(), b"two");
+        assert_eq!(&*pack.read("room/1000/room.rdt").unwrap(), b"two");
 
         // `--no-mods` ignores the per-user directory too.
         let options = arklay::engine::ModOptions {
@@ -1947,7 +1951,7 @@ entries:
         };
         let vanilla = arklay::engine::open_game_pack(&game_dir, &options, None).unwrap();
         assert!(!vanilla.is_layered());
-        assert_eq!(&*vanilla.read("room/1000.rdt").unwrap(), b"base");
+        assert_eq!(&*vanilla.read("room/1000/room.rdt").unwrap(), b"base");
     }
 
     #[test]
@@ -1966,7 +1970,7 @@ entries:
             manifest::Manifest::base("re1").render().into_bytes(),
         )
         .unwrap();
-        base.add("room/1000.rdt", b"base".to_vec()).unwrap();
+        base.add("room/1000/room.rdt", b"base".to_vec()).unwrap();
         base.write(&pack_path).unwrap();
 
         let mod_path = game_dir.join("mods/demo.akpak");
@@ -1980,7 +1984,7 @@ entries:
         layer
             .add(manifest::ENTRY, mod_manifest.render().into_bytes())
             .unwrap();
-        layer.add("room/1000.rdt", b"layer".to_vec()).unwrap();
+        layer.add("room/1000/room.rdt", b"layer".to_vec()).unwrap();
         layer.write(&mod_path).unwrap();
 
         // The sibling directory is discovered.
@@ -1991,7 +1995,10 @@ entries:
         )
         .unwrap();
         assert!(discovered.is_layered());
-        assert_eq!(discovered.read("room/1000.rdt").unwrap().as_ref(), b"layer");
+        assert_eq!(
+            discovered.read("room/1000/room.rdt").unwrap().as_ref(),
+            b"layer"
+        );
 
         // `--no-mods` ignores both the discovery and an explicit `--mod`.
         let vanilla = arklay::engine::open_game_pack(
@@ -2005,7 +2012,10 @@ entries:
         )
         .unwrap();
         assert!(!vanilla.is_layered());
-        assert_eq!(vanilla.read("room/1000.rdt").unwrap().as_ref(), b"base");
+        assert_eq!(
+            vanilla.read("room/1000/room.rdt").unwrap().as_ref(),
+            b"base"
+        );
         assert_eq!(
             vanilla.paths().collect::<Vec<_>>(),
             Pack::open(&pack_path).unwrap().paths().collect::<Vec<_>>()

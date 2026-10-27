@@ -2,10 +2,9 @@
 //!
 //! Discovers `STAGE1`..`STAGE7`, `ENEMY`, `PLAYERS`, `sound`, `objspr`,
 //! `ITEM_M1`, `effspr`, `voice`, `movie` and `DATA` (case-insensitively, up to
-//! two levels below the root), writes every `ROOM####.RDT` as a
-//! `room/<id>.xml` definition and its shared sidecars ([`crate::room`]),
-//! converts the camera
-//! backgrounds of every distinct room once, converts the room mask pages of
+//! two levels below the root), writes every `ROOM####.RDT` as a room folder
+//! `room/<id>/` ([`crate::room`]), converts the camera backgrounds of every
+//! room into each player variant's folder, converts the room mask pages of
 //! every camera that has sprite groups, copies the door animations named by the
 //! door type table, copies the numbered music tracks, the named sound
 //! effects, the four player models plus the two no-weapon locomotion clips,
@@ -420,7 +419,7 @@ pub fn convert_game_observed(
         weapons,
         npc,
         enemy_models,
-        roommask,
+        masks,
         effects,
         data,
         fonts,
@@ -464,13 +463,16 @@ pub fn convert_game_observed(
     // entry. Entry order does not matter: the pack writer sorts by path.
     let mut cut_sources: BTreeMap<PathBuf, Vec<(RoomId, usize)>> = BTreeMap::new();
     let mut cut_total = 0u64;
+    // Every variant's folder holds its own copy of the room's cameras.
     for room in &rooms {
         for (camera, pak) in room.paks.iter().enumerate() {
-            cut_sources
-                .entry(pak.clone())
-                .or_default()
-                .push((room.id, camera));
-            cut_total += 1;
+            for rdt in &room.rdts {
+                cut_sources
+                    .entry(pak.clone())
+                    .or_default()
+                    .push((rdt.id, camera));
+                cut_total += 1;
+            }
         }
     }
 
@@ -482,54 +484,67 @@ pub fn convert_game_observed(
         .primary
         .as_deref()
         .map_or(crate::charset::Script::Japanese, sheet_script_of);
-    // Sidecar ids number in first use over the sorted rooms, so a conversion
-    // of the same tree always names the same files.
     let mut rdts: Vec<Rdt> = rooms.into_iter().flat_map(|room| room.rdts).collect();
     rdts.sort_by_key(|rdt| rdt.id.rdt_number());
-    let mut sidecars = crate::room::Sidecars::default();
+    let mut sidecar_count = 0usize;
+    let mut sidecar_bytes = 0usize;
     for rdt in rdts {
         stage_counts[rdt.id.stage_index() as usize].0 += 1;
+        let definition;
+        // A room the XML cannot carry exactly stays a raw RDT, which the
+        // engine still loads.
+        let mut files = match crate::room::convert_rdt(&rdt.bytes, rdt.id, text_script) {
+            Ok(files) => {
+                definition = rdt.id.xml_entry();
+                files
+            }
+            Err(err) => {
+                warnings.push(format!("{}: kept as an RDT: {err:#}", rdt.id.rdt_entry()));
+                definition = rdt.id.rdt_entry();
+                vec![(definition.clone(), rdt.bytes.clone())]
+            }
+        };
         match room_script(rdt.id, &rdt.bytes) {
             Ok(Some(container)) => {
-                scd_count += 1;
-                scd_bytes += container.len();
+                // The fixed build runs as `room.scd`; the original bytecode
+                // stays beside it for `room_script_fixes = false`.
                 let scd = rdt.id.scd_entry();
-                writer
-                    .add(&scd, container.to_vec())
-                    .with_context(|| format!("failed to add {scd}"))?;
+                let original = match files.iter().position(|(entry, _)| *entry == scd) {
+                    Some(at) => Some(files.remove(at).1),
+                    None => crate::scd::reader::extract_container(&rdt.bytes)
+                        .ok()
+                        .flatten(),
+                };
+                // A room the fixes leave untouched needs no second copy.
+                if let Some(original) = original.filter(|original| original.as_slice() != container)
+                {
+                    files.push((rdt.id.original_scd_entry(), original));
+                }
+                files.push((scd, container.to_vec()));
             }
             Ok(None) => {}
             Err(warning) => warnings.push(warning),
         }
-        // A room the XML cannot carry exactly stays a raw RDT, which the
-        // engine still loads.
-        let (entry, data) =
-            match crate::room::convert_rdt(&rdt.bytes, rdt.id, text_script, &mut sidecars) {
-                Ok(text) => (rdt.id.xml_entry(), text.into_bytes()),
-                Err(err) => {
-                    warnings.push(format!("{}: kept as an RDT: {err:#}", rdt.id.rdt_entry()));
-                    (rdt.id.rdt_entry(), rdt.bytes)
-                }
-            };
-        rdt_bytes += data.len();
-        rdt_count += 1;
-        writer
-            .add(&entry, data)
-            .with_context(|| format!("failed to add {entry}"))?;
-        progress.advance(&entry);
-    }
-    let mut sidecar_count = 0usize;
-    let mut sidecar_bytes = 0usize;
-    for (entry, data) in sidecars.into_entries() {
-        sidecar_count += 1;
-        sidecar_bytes += data.len();
-        writer
-            .add(&entry, data)
-            .with_context(|| format!("failed to add {entry}"))?;
+        for (entry, data) in files {
+            if entry == definition {
+                rdt_count += 1;
+                rdt_bytes += data.len();
+            } else if entry.ends_with(".scd") {
+                scd_count += 1;
+                scd_bytes += data.len();
+            } else {
+                sidecar_count += 1;
+                sidecar_bytes += data.len();
+            }
+            writer
+                .add(&entry, data)
+                .with_context(|| format!("failed to add {entry}"))?;
+        }
+        progress.advance(&definition);
     }
     progress.end_phase();
 
-    progress.begin("roomcut", cut_total);
+    progress.begin("cut", cut_total);
     let cut_groups: Vec<(PathBuf, Vec<(RoomId, usize)>)> = cut_sources.into_iter().collect();
     let cut_results = parallel_map(cut_groups.len(), jobs, &mut progress, |index| {
         let (pak, targets) = &cut_groups[index];
@@ -566,17 +581,17 @@ pub fn convert_game_observed(
 
     // Mask pages sharing a source `OSP*.pak` decode once too.
     let mut mask_sources: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
-    for asset in &roommask {
+    for asset in &masks {
         mask_sources
             .entry(asset.source.clone())
             .or_default()
             .push(asset.entry.clone());
     }
-    progress.begin("roommask", roommask.len() as u64);
+    progress.begin("mask", masks.len() as u64);
     let mask_groups: Vec<(PathBuf, Vec<String>)> = mask_sources.into_iter().collect();
     let mask_results = parallel_map(mask_groups.len(), jobs, &mut progress, |index| {
         let (pak, targets) = &mask_groups[index];
-        let mut bmp_bytes = convert_roommask(pak)?;
+        let mut bmp_bytes = convert_mask(pak)?;
         let label = targets.first().cloned().unwrap_or_default();
         debug_assert!(!targets.is_empty(), "mask groups are never empty");
         let mut entries = Vec::with_capacity(targets.len());
@@ -737,8 +752,8 @@ pub fn convert_game_observed(
             "room sidecars: {sidecar_count} entries, {sidecar_bytes} bytes"
         )?;
         writeln!(report, "scd: {scd_count} entries, {scd_bytes} bytes")?;
-        writeln!(report, "roomcut: {cut_count} entries, {cut_bytes} bytes")?;
-        writeln!(report, "roommask: {mask_count} entries, {mask_bytes} bytes")?;
+        writeln!(report, "cut: {cut_count} entries, {cut_bytes} bytes")?;
+        writeln!(report, "mask: {mask_count} entries, {mask_bytes} bytes")?;
         writeln!(report, "bgm: {bgm_count} entries, {bgm_bytes} bytes")?;
         writeln!(report, "se: {se_count} entries, {se_bytes} bytes")?;
         writeln!(report, "door: {door_count} entries, {door_bytes} bytes")?;
@@ -851,13 +866,13 @@ pub(crate) fn camera_bmp(source: &str, compressed: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// Decode one `OSP*.pak` room mask page into BMP bytes.
-fn convert_roommask(pak: &Path) -> Result<Vec<u8>> {
+fn convert_mask(pak: &Path) -> Result<Vec<u8>> {
     let compressed = fs::read(pak).with_context(|| format!("failed to read {}", pak.display()))?;
-    roommask_bmp(&file_name(pak), &compressed)
+    mask_bmp(&file_name(pak), &compressed)
 }
 
 /// Decode one `OSP*.pak` room mask page (`source` names it in errors).
-pub(crate) fn roommask_bmp(source: &str, compressed: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn mask_bmp(source: &str, compressed: &[u8]) -> Result<Vec<u8>> {
     let decoded = lzw::decode(compressed)
         .with_context(|| format!("failed to LZW-decode room mask {source}"))?;
     let texture = tim::decode_8bpp(&decoded)
@@ -2324,7 +2339,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 3;
+pub const CONVERT_VERSION: u32 = 4;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, and the language sheets.
@@ -2824,8 +2839,8 @@ struct EffectSheet {
 
 /// One room mask page resolved to its pack entry.
 #[derive(Debug)]
-struct RoomMask {
-    /// Pack entry, e.g. `roommask/100_000.bmp`.
+struct CameraMask {
+    /// Pack entry, e.g. `room/1000/mask/00.bmp`.
     entry: String,
     /// Source `objspr` pak in the installation.
     source: PathBuf,
@@ -2863,7 +2878,7 @@ struct Plan {
     npc: Vec<NpcAsset>,
     /// The monster models of both scenario blocks, resolved by entity id.
     enemy_models: Vec<EnemyAsset>,
-    roommask: Vec<RoomMask>,
+    masks: Vec<CameraMask>,
     /// The 33 effect-sheet TIMs, resolved by shipped name.
     effects: Vec<EffectSheet>,
     /// Resolved `DATA` UI, item and save-prefix assets.
@@ -2908,7 +2923,7 @@ fn conversion_phase_count(
     fonts: &Fonts,
     data: &DataPlan,
 ) -> u64 {
-    // scan, room, roomcut, roommask, six model phases (player, weapon, npc,
+    // scan, room, cut, mask, six model phases (player, weapon, npc,
     // monster, enemy scripts, effect sheets), ui, core00, language, voice,
     // film, compress, write.
     let mut phases: u64 = 17;
@@ -3036,7 +3051,7 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
     // Mask pages are optional: a missing page only drops that camera's
     // foreground layer, so unresolved files are collected as warnings.
     let objspr_index = objspr.as_deref().map(index_dir).transpose()?;
-    let mut roommask = Vec::new();
+    let mut masks = Vec::new();
     let mut missing_masks = Vec::new();
     for room in rooms.values() {
         for camera in 0..room.cameras {
@@ -3048,10 +3063,10 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
                 .as_ref()
                 .and_then(|index| index.get(&name.to_ascii_lowercase()))
             {
-                Some(path) => roommask.push(RoomMask {
-                    entry: room.id.roommask_entry(camera),
+                Some(path) => masks.extend(room.rdts.iter().map(|rdt| CameraMask {
+                    entry: rdt.id.mask_entry(camera),
                     source: path.clone(),
-                }),
+                })),
                 None => missing_masks.push(name),
             }
         }
@@ -3220,7 +3235,7 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
         weapons: resolve_weapon_assets(players.as_deref())?,
         npc,
         enemy_models,
-        roommask,
+        masks,
         effects,
         data,
         fonts,
@@ -3436,8 +3451,8 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
     Ok(assets)
 }
 
-/// The checked-in room script's bytecode to pack as `scd/<id>.scd` beside
-/// RDT `id`, so the engine runs it in place of the RDT's own scripts.
+/// The checked-in room script's bytecode to pack as `room/<id>/room.scd`
+/// for RDT `id`, so the engine runs it in place of the RDT's own scripts.
 ///
 /// The build for the RDT's region is the one whose `AUTHENTIC` digest equals
 /// the RDT's own scripts'. `None` for a room without a script or an RDT
@@ -3595,7 +3610,7 @@ mod tests {
         // original scripts in the RDT pointer-table layout.
         assert_eq!(room_script(id, script(0x1000)), Ok(Some(script(0x1000))));
         let error = room_script(id, script(0x1010)).unwrap_err();
-        assert!(error.contains("room/1000.rdt"), "{error}");
+        assert!(error.contains("room/1000/room.rdt"), "{error}");
         assert_eq!(room_script(id, &[0; 4]), Ok(None), "a stub RDT");
 
         // Jill's ink ribbons differ by region (`#if USA`), so RDT 1001 has a
@@ -3627,7 +3642,7 @@ mod tests {
             assert!(is_precompressed(entry), "{entry}");
         }
         for entry in [
-            "room/1000.rdt",
+            "room/1000/room.rdt",
             "bgm/013.wav",
             "ui/title.bmp",
             "manifest.toml",
@@ -4363,11 +4378,11 @@ mod tests {
         convert_game(&root.path, &out).unwrap();
         let pack = crate::pack::Pack::open(&out).unwrap();
 
-        assert!(pack.contains("room/1000.xml"));
-        assert!(pack.contains("room/1001.xml"));
-        assert!(pack.contains("room/6000.xml"));
-        assert!(pack.contains("roomcut/100_000.bmp"));
-        assert!(pack.contains("roomcut/600_000.bmp"));
+        assert!(pack.contains("room/1000/room.xml"));
+        assert!(pack.contains("room/1001/room.xml"));
+        assert!(pack.contains("room/6000/room.xml"));
+        assert!(pack.contains("room/1000/cut/00.bmp"));
+        assert!(pack.contains("room/6000/cut/00.bmp"));
         assert!(pack.contains("bgm/013.wav"));
         assert!(pack.contains("bgm/200.wav"));
         assert!(pack.contains("bgm/002.wav"));
@@ -4427,9 +4442,11 @@ mod tests {
 
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("manifest"), 1);
-        assert_eq!(count("room/"), 3);
-        assert_eq!(count("roomcut/"), 2);
-        assert_eq!(count("roommask/"), 0);
+        let rooms = |file: &str| pack.paths().filter(|path| path.contains(file)).count();
+        assert_eq!(rooms("/room.xml"), 3);
+        // The stage 1 cut is shared by both players and the stage 6 copy.
+        assert_eq!(rooms("/cut/"), 3);
+        assert_eq!(rooms("/mask/"), 0);
         assert_eq!(count("bgm/"), 3);
         assert_eq!(count("se/"), sfx::SE_NAMES.len());
         assert_eq!(count("door/"), 34);
@@ -4463,7 +4480,7 @@ mod tests {
             2
         );
 
-        let image = bmp::decode(&pack.read("roomcut/100_000.bmp").unwrap()).unwrap();
+        let image = bmp::decode(&pack.read("room/1000/cut/00.bmp").unwrap()).unwrap();
         assert_eq!((image.width, image.height), (CUT_WIDTH, CUT_HEIGHT));
     }
 
@@ -4855,7 +4872,7 @@ mod tests {
             std::borrow::Cow::Borrowed(_)
         ));
         assert!(matches!(
-            main.read("room/1000.xml").unwrap(),
+            main.read("room/1000/room.xml").unwrap(),
             std::borrow::Cow::Owned(_)
         ));
         // No companion pack is written beside the main one.
@@ -4934,8 +4951,8 @@ mod tests {
     #[test]
     fn entry_report_lines_name_both_sizes() {
         assert_eq!(
-            entry_report_line("room/1000.rdt", 1000, 250, true),
-            "room/1000.rdt: 1000 -> 250 bytes (75.0% smaller, zstd)"
+            entry_report_line("room/1000/room.rdt", 1000, 250, true),
+            "room/1000/room.rdt: 1000 -> 250 bytes (75.0% smaller, zstd)"
         );
         assert_eq!(
             entry_report_line("movie/oj.avi", 1000, 1000, false),
@@ -4969,7 +4986,7 @@ mod tests {
     #[test]
     fn the_verbose_report_lists_every_entry_in_processing_order() {
         let entries = [
-            ("room/1000.rdt", vec![3u8; 9_000]),
+            ("room/1000/room.rdt", vec![3u8; 9_000]),
             ("movie/oj.avi", vec![1u8, 2, 3, 4]),
             ("manifest.toml", b"format = 1\n".to_vec()),
         ];
@@ -4995,7 +5012,10 @@ mod tests {
         let text = String::from_utf8(serial).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), entries.len());
-        assert!(lines[0].starts_with("room/1000.rdt: 9000 -> "), "{text}");
+        assert!(
+            lines[0].starts_with("room/1000/room.rdt: 9000 -> "),
+            "{text}"
+        );
         assert!(lines[0].ends_with("% smaller, zstd)"), "{text}");
         assert_eq!(lines[1], "movie/oj.avi: 4 -> 4 bytes (stored raw)");
         assert_eq!(lines[2], "manifest.toml: 11 -> 11 bytes (stored raw)");
@@ -5016,14 +5036,16 @@ mod tests {
         convert_game(&root.path, &out).unwrap();
         let pack = crate::pack::Pack::open(&out).unwrap();
 
-        assert!(pack.contains("roommask/100_000.bmp"));
-        assert!(pack.contains("roommask/600_000.bmp"));
-        let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("roommask/"), 2);
+        assert!(pack.contains("room/1000/mask/00.bmp"));
+        assert!(pack.contains("room/6000/mask/00.bmp"));
+        assert_eq!(
+            pack.paths().filter(|path| path.contains("/mask/")).count(),
+            2
+        );
 
         let decoded = tim::decode_8bpp(&lzw::decode(&mask).unwrap()).unwrap();
         let expected = bmp::encode_texture8_to_vec(&decoded).unwrap();
-        assert_eq!(pack.read("roommask/100_000.bmp").unwrap(), expected);
+        assert_eq!(pack.read("room/1000/mask/00.bmp").unwrap(), expected);
         let image = bmp::decode(&expected).unwrap();
         assert_eq!((image.width, image.height), (16, 8));
         let direct = bmp::encode_texture8_to_vec(&decoded).unwrap();
@@ -5107,7 +5129,7 @@ mod tests {
 
         let plan = build_plan(&root.path).unwrap();
 
-        assert!(plan.roommask.is_empty());
+        assert!(plan.masks.is_empty());
         assert_eq!(
             plan.warnings
                 .iter()
@@ -5121,8 +5143,7 @@ mod tests {
         let out = root.path.join("out.akpak");
         convert_game(&root.path, &out).unwrap();
         let pack = crate::pack::Pack::open(&out).unwrap();
-        let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("roommask/"), 0);
+        assert!(!pack.paths().any(|path| path.contains("/mask/")));
     }
 
     #[test]
@@ -5134,7 +5155,7 @@ mod tests {
 
         let plan = build_plan(&root.path).unwrap();
 
-        assert!(plan.roommask.is_empty());
+        assert!(plan.masks.is_empty());
         assert_eq!(
             plan.warnings
                 .iter()
@@ -5157,7 +5178,7 @@ mod tests {
         convert_game(&root.path, &out).unwrap();
 
         let pack = crate::pack::Pack::open(&out).unwrap();
-        let image = bmp::decode(&pack.read("roomcut/300_000.bmp").unwrap()).unwrap();
+        let image = bmp::decode(&pack.read("room/3000/cut/00.bmp").unwrap()).unwrap();
         assert_eq!((image.width, image.height), (316, 236));
     }
 
@@ -6007,17 +6028,25 @@ mod tests {
         // Every RDT with scripts runs its checked-in room script. USA and JPN
         // leave 28 unused room slots as stubs without scripts; the French and
         // German (EUR) installs fill most of them with leftover RDTs and add
-        // rooms 313 and 412. One cut set per distinct room; stages 6/7 reuse
-        // the stage 1/2 pak files but still name their cuts with their own
-        // room id, e.g. roomcut/600_000.bmp.
-        let counts = (count("room/"), count("scd/"), count("roomcut/"));
-        assert!(
-            matches!(counts, (348, 320, 842) | (352, 351, 920)),
-            "{counts:?} rooms, room scripts and cuts"
+        // rooms 313 and 412. Every room folder carries its own cuts, so the
+        // two player variants and the stage 6/7 return visits each hold a
+        // copy. Only the rooms whose fixes change their bytecode keep an
+        // `original.scd`.
+        let files = |suffix: &str| pack.paths().filter(|path| path.ends_with(suffix)).count();
+        let within = |dir: &str| pack.paths().filter(|path| path.contains(dir)).count();
+        let counts = (
+            files("/room.xml") + files("/room.rdt"),
+            files("/room.scd"),
+            files("/original.scd"),
+            within("/cut/"),
         );
-        // One mask page per camera that carries sprite groups; stages 6/7
-        // reuse the stage 1/2 pages.
-        assert_eq!(count("roommask/"), 601);
+        assert!(
+            matches!(counts, (348, 320, 4, 1684) | (352, 351, 4, 1840)),
+            "{counts:?} rooms, room scripts, original scripts and cuts"
+        );
+        // One mask page per camera that carries sprite groups, in every
+        // variant's folder.
+        assert_eq!(within("/mask/"), 1202);
         assert_eq!(count("bgm/"), crate::music::MUSIC_TRACKS.len());
         assert_eq!(count("se/"), sfx::SE_NAMES.len());
         assert_eq!(count("door/"), 34);
@@ -6098,9 +6127,9 @@ mod tests {
                 (1, 123)
             ]
         );
-        assert!(pack.contains("room/1001.rdt"));
-        assert!(pack.contains("roomcut/100_000.bmp"));
-        assert!(pack.contains("roommask/100_000.bmp"));
+        assert!(pack.contains("room/1001/room.xml"));
+        assert!(pack.contains("room/1000/cut/00.bmp"));
+        assert!(pack.contains("room/1000/mask/00.bmp"));
         assert!(pack.contains("bgm/013.wav"));
         assert!(pack.contains("se/ft_wda.wav"));
         assert!(pack.contains("se/dr_wd01.wav"));
@@ -6120,7 +6149,7 @@ mod tests {
         let decoded = lzw::decode(&pak).unwrap();
         let texture = tim::decode_8bpp(&decoded).unwrap();
         let expected = bmp::encode_texture8_to_vec(&texture).unwrap();
-        assert_eq!(pack.read("roommask/100_000.bmp").unwrap(), expected);
+        assert_eq!(pack.read("room/1000/mask/00.bmp").unwrap(), expected);
 
         // Four character models (Char10..Char13), the four alternate outfits
         // (EM1030..EM1033), the two no-weapon locomotion clips (W00, W10) and
@@ -6139,7 +6168,7 @@ mod tests {
         assert!(pack.contains("player/01.emd"));
         assert!(pack.contains("player/01.emw"));
 
-        let image = bmp::decode(&pack.read("roomcut/100_000.bmp").unwrap()).unwrap();
+        let image = bmp::decode(&pack.read("room/1000/cut/00.bmp").unwrap()).unwrap();
         assert_eq!((image.width, image.height), (CUT_WIDTH, CUT_HEIGHT));
     }
 

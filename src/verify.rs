@@ -5,11 +5,11 @@
 //! parser the engine would use for that entry. An entry whose format is not in
 //! the table is *opaque*: it is counted and never fails, so a pack carrying a
 //! future or third-party asset cannot break the command. That includes a
-//! `text/*.bin` name with no table parser and a `room/*.rdt` whose stem is not
-//! a four-digit room id. `--strict` turns an opaque entry into a failure.
+//! `text/*.bin` name with no table parser and a `room/` folder not named by a
+//! four-digit room id. `--strict` turns an opaque entry into a failure.
 //!
-//! For every RDT the command checks that the room has at least one camera
-//! cut, that each cut's background (`roomcut/{room}_{camera:03}.bmp`) is
+//! For every room the command checks that the room has at least one camera
+//! cut, that each cut's background (`room/<id>/cut/<camera>.bmp`) is
 //! present in the merged pack, and that the embedded init/main/event scripts
 //! parse, so a room the engine cannot load fails even when every present entry
 //! parses.
@@ -34,19 +34,19 @@ const MAP_TABLES_BYTES: usize = 4 + 6 + 6 + 16 + 16 + 16 + 4 + 4;
 pub enum Format {
     /// `manifest.toml`, the pack manifest.
     Manifest,
-    /// `room/*.rdt`, a room plus its embedded SCD streams.
+    /// `room/<id>/room.rdt`, a room plus its embedded SCD streams.
     Rdt,
-    /// `room/*.xml`, a room definition naming its sidecars.
+    /// `room/<id>/room.xml`, a room definition.
     RoomXml,
-    /// `animation/*.emr` / `.edd`, one half of a room player-animation pair.
+    /// `room/<id>/effect/*.xml`, one effect slot's sprite table.
+    RoomEffect,
+    /// `room/<id>/anim/*.emr` / `.edd`, one half of a room player-animation pair.
     RoomAnimation,
-    /// `prop/props.toml`, the room prop index written for people.
-    PropManifest,
-    /// `scd/*.scd`, a standalone script override.
+    /// `room/<id>/*.scd`, a room's script container.
     Scd,
-    /// `roomcut/*`, a camera background.
+    /// `room/<id>/cut/*`, a camera background.
     Cut,
-    /// `roommask/*`, a camera mask page.
+    /// `room/<id>/mask/*`, a camera mask page.
     Mask,
     /// Any other `*.bmp`.
     Bmp,
@@ -95,10 +95,10 @@ impl Format {
             Self::Rdt => "rdt",
             Self::RoomXml => "room-xml",
             Self::RoomAnimation => "animation",
-            Self::PropManifest => "prop-manifest",
+            Self::RoomEffect => "room-effect",
             Self::Scd => "scd",
-            Self::Cut => "roomcut",
-            Self::Mask => "roommask",
+            Self::Cut => "cut",
+            Self::Mask => "mask",
             Self::Bmp => "bmp",
             Self::Tim => "tim",
             Self::Png => "png",
@@ -160,6 +160,20 @@ fn is_image_extension(lower: &str) -> bool {
         .any(|extension| lower.ends_with(&format!(".{extension}")))
 }
 
+/// The path of a lowercased entry inside its room folder (`room.xml`,
+/// `cut/00.bmp`), when it is in one. A folder not named by a four-digit room
+/// id is not a room the loader can ever ask for, so its entries stay opaque
+/// rather than failing third-party packs.
+fn room_file(lower: &str) -> Option<&str> {
+    let (id, file) = lower.strip_prefix("room/")?.split_once('/')?;
+    (id.len() == 4 && RoomId::parse(id).is_ok()).then_some(file)
+}
+
+/// Whether a lowercased path is a room's effect sheet (`effect/<slot>.bmp`).
+fn is_effect_sheet(lower: &str) -> bool {
+    room_file(lower).is_some_and(|file| file.starts_with("effect/") && file.ends_with(".bmp"))
+}
+
 /// Select the format for one pack path.
 pub fn classify(path: &str) -> Format {
     let lower = path.to_ascii_lowercase();
@@ -172,45 +186,26 @@ pub fn classify(path: &str) -> Format {
     if lower == "data/combat.bin" {
         return Format::Combat;
     }
-    if lower.starts_with("room/") && lower.ends_with(".rdt") {
-        return match lower
-            .strip_prefix("room/")
-            .and_then(|rest| rest.strip_suffix(".rdt"))
-        {
-            Some(stem) if stem.len() == 4 && RoomId::parse(stem).is_ok() => Format::Rdt,
-            // A non-four-digit name is not a room the loader can ever ask for,
-            // so it stays opaque rather than failing third-party packs.
-            _ => Format::Opaque,
-        };
-    }
-    if lower.starts_with("room/") && lower.ends_with(".xml") {
-        return match lower
-            .strip_prefix("room/")
-            .and_then(|rest| rest.strip_suffix(".xml"))
-        {
-            Some(stem) if stem.len() == 4 && RoomId::parse(stem).is_ok() => Format::RoomXml,
-            _ => Format::Opaque,
-        };
-    }
-    if lower == crate::room::source::PROP_MANIFEST {
-        return Format::PropManifest;
-    }
-    if lower.starts_with(crate::room::source::ANIMATION_DIR)
-        && (lower.ends_with(".emr") || lower.ends_with(".edd"))
-    {
-        return Format::RoomAnimation;
-    }
-    if (lower.starts_with("scd/") || lower.starts_with("room/")) && lower.ends_with(".scd") {
-        return Format::Scd;
+    if let Some(file) = room_file(&lower) {
+        match file {
+            "room.rdt" => return Format::Rdt,
+            "room.xml" => return Format::RoomXml,
+            _ if file.ends_with(".scd") => return Format::Scd,
+            _ if file.starts_with("effect/") && file.ends_with(".xml") => {
+                return Format::RoomEffect;
+            }
+            _ if file.starts_with("anim/")
+                && (file.ends_with(".emr") || file.ends_with(".edd")) =>
+            {
+                return Format::RoomAnimation;
+            }
+            _ if file.starts_with("cut/") && is_image_extension(file) => return Format::Cut,
+            _ if file.starts_with("mask/") && is_image_extension(file) => return Format::Mask,
+            _ => {}
+        }
     }
     if lower.starts_with("language/") && lower.ends_with(".txt") {
         return Format::Language;
-    }
-    if lower.starts_with("roomcut/") && is_image_extension(&lower) {
-        return Format::Cut;
-    }
-    if lower.starts_with("roommask/") && is_image_extension(&lower) {
-        return Format::Mask;
     }
     if lower.starts_with("movie/") && lower.ends_with(".avi") {
         return Format::Avi;
@@ -376,23 +371,30 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
         }
         Format::Rdt => {
             let id = room_id_from_path(path)?;
-            let state = crate::rdt::parse(data, id)?;
-            let loaded = crate::room::Loaded::from_rdt(state, data.to_vec());
+            let loaded = crate::room::Loaded::from_rdt(pack, id, data.to_vec())?;
             verify_room(pack, id, &loaded)?;
         }
         Format::RoomXml => {
             let id = room_id_from_path(path)?;
             let text = std::str::from_utf8(data).context("room XML is not valid UTF-8")?;
-            // The engine skips a model, sheet or animation that does not load
-            // with a warning; a pack that names a missing one is still broken.
-            let source = crate::room::xml::parse(text, id)?;
-            for entry in source.references() {
-                if !pack.contains(&entry) {
-                    bail!("room references missing {entry}");
-                }
-            }
             let loaded = crate::room::Loaded::from_xml(pack, id, text)?;
+            // The engine skips a model, animation or effect sheet that does
+            // not load with a warning; a pack that ships a broken one is still
+            // broken.
+            let warnings = &loaded.state;
+            if let Some(warning) = warnings
+                .model_warnings
+                .iter()
+                .chain(&warnings.effects.warnings)
+                .next()
+            {
+                bail!("{warning}");
+            }
             verify_room(pack, id, &loaded)?;
+        }
+        Format::RoomEffect => {
+            let text = std::str::from_utf8(data).context("effect XML is not valid UTF-8")?;
+            crate::room::xml::parse_effect(text)?;
         }
         Format::Scd => {
             crate::scd::reader::parse(data)?;
@@ -407,15 +409,14 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
             };
             crate::emd::parse_room_anim_files(&half("emr")?, &half("edd")?)?;
         }
-        Format::PropManifest => {
-            let text = std::str::from_utf8(data).context("prop/props.toml is not valid UTF-8")?;
-            crate::manifest::parse_items(text)?;
-        }
         Format::Cut => {
             crate::assets::decode_image_bytes(path_extension(path), data)?;
         }
         Format::Mask => {
             crate::assets::decode_image_bytes(path_extension(path), data)?;
+        }
+        Format::Bmp if is_effect_sheet(&path.to_ascii_lowercase()) => {
+            crate::bmp::decode_clut_sheet(data)?;
         }
         Format::Bmp if is_item_model_page(path) => {
             let texture = crate::bmp::decode_indexed_page(data)?;
@@ -533,7 +534,7 @@ fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<
         bail!("room has no camera cuts");
     }
     for cut in &loaded.state.cuts {
-        let stem = cut.background_stem(id);
+        let stem = id.cut_stem(cut.index);
         if !pack.has_asset(&stem, crate::pack::AssetClass::Image) {
             bail!("room references missing background {stem}.bmp");
         }
@@ -544,16 +545,15 @@ fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<
     Ok(())
 }
 
-/// The [`RoomId`] named by a `room/{id}.rdt` or `room/{id}.xml` path.
+/// The [`RoomId`] named by a path inside a room folder (`room/<id>/...`),
+/// whatever its case.
 fn room_id_from_path(path: &str) -> Result<RoomId> {
-    let name = path
-        .rsplit('/')
-        .next()
-        .with_context(|| format!("`{path}` is not a room path"))?;
-    let stem = name
-        .rsplit_once('.')
+    let stem = path
+        .split_once('/')
+        .filter(|(prefix, _)| prefix.eq_ignore_ascii_case("room"))
+        .and_then(|(_, rest)| rest.split_once('/'))
         .map(|(stem, _)| stem)
-        .with_context(|| format!("`{path}` is not a room/<id>.rdt path"))?;
+        .with_context(|| format!("`{path}` is not a room/<id>/ path"))?;
     if stem.len() != 4 {
         bail!("`{path}` does not name a four-digit room id");
     }
@@ -597,24 +597,30 @@ mod tests {
     #[test]
     fn classify_maps_prefixes_and_extensions() {
         assert_eq!(classify("manifest.toml"), Format::Manifest);
-        assert_eq!(classify("room/1000.rdt"), Format::Rdt);
-        assert_eq!(classify("ROOM/1000.RDT"), Format::Rdt);
-        assert_eq!(classify("room/1000.xml"), Format::RoomXml);
-        assert_eq!(classify("room/1000.scd"), Format::Scd);
+        assert_eq!(classify("room/1000/room.rdt"), Format::Rdt);
+        assert_eq!(classify("ROOM/1000/ROOM.RDT"), Format::Rdt);
+        assert_eq!(
+            room_id_from_path("ROOM/1000/ROOM.RDT").unwrap(),
+            RoomId::parse("1000").unwrap()
+        );
+        assert_eq!(classify("room/1000/room.xml"), Format::RoomXml);
+        assert_eq!(classify("room/1000/room.scd"), Format::Scd);
+        assert_eq!(classify("room/1000/original.scd"), Format::Scd);
         assert_eq!(classify("room/notes.xml"), Format::Opaque);
-        assert_eq!(classify("animation/0000.emr"), Format::RoomAnimation);
-        assert_eq!(classify("animation/0000.edd"), Format::RoomAnimation);
-        assert_eq!(classify("prop/props.toml"), Format::PropManifest);
-        assert_eq!(classify("prop/0000.tmd"), Format::Tmd);
-        assert_eq!(classify("roomcut/100_000.bmp"), Format::Cut);
-        assert_eq!(classify("roomcut/100_000.png"), Format::Cut);
-        assert_eq!(classify("roommask/100_000.webp"), Format::Mask);
-        assert_eq!(classify("roommask/100_000.bmp"), Format::Mask);
+        assert_eq!(classify("room/1000/notes.xml"), Format::Opaque);
+        assert_eq!(classify("room/1000/anim/00.emr"), Format::RoomAnimation);
+        assert_eq!(classify("room/1000/anim/00.edd"), Format::RoomAnimation);
+        assert_eq!(classify("room/1000/effect/00.xml"), Format::RoomEffect);
+        assert_eq!(classify("room/1000/object/00.tmd"), Format::Tmd);
+        assert_eq!(classify("room/1000/cut/00.bmp"), Format::Cut);
+        assert_eq!(classify("room/1000/cut/00.png"), Format::Cut);
+        assert_eq!(classify("room/1000/mask/00.webp"), Format::Mask);
+        assert_eq!(classify("room/1000/mask/00.bmp"), Format::Mask);
         assert_eq!(classify("ui/blue.tim"), Format::Tim);
         assert_eq!(classify("ui/blue.png"), Format::Png);
         assert_eq!(classify("ui/blue.webp"), Format::Webp);
         assert_eq!(classify("bgm/013.ogg"), Format::Ogg);
-        assert_eq!(classify("roomcut/100_000.ogg"), Format::Ogg);
+        assert_eq!(classify("room/1000/cut/00.ogg"), Format::Ogg);
         assert_eq!(classify("item/i00v.ivm"), Format::Ivm);
         assert_eq!(classify("enemy/em20.emd"), Format::Emd);
         assert_eq!(classify("player/00.emw"), Format::Emw);
@@ -633,9 +639,10 @@ mod tests {
         // A retired text table stays opaque instead of breaking the command.
         assert_eq!(classify("text/credits.bin"), Format::Opaque);
         assert_eq!(classify("language/notes.md"), Format::Opaque);
-        assert_eq!(classify("room/bonus.rdt"), Format::Opaque);
-        assert_eq!(classify("room/100.rdt"), Format::Opaque);
-        assert_eq!(classify("room/zzzz.rdt"), Format::Opaque);
+        assert_eq!(classify("room/1000.rdt"), Format::Opaque);
+        assert_eq!(classify("room/bonus/room.rdt"), Format::Opaque);
+        assert_eq!(classify("room/100/room.rdt"), Format::Opaque);
+        assert_eq!(classify("room/zzzz/room.rdt"), Format::Opaque);
     }
 
     #[test]
@@ -711,7 +718,7 @@ mod tests {
         // a room with no camera cuts on load.
         let rdt = vec![0u8; 0x94];
         let mut writer = PackWriter::new();
-        writer.add("room/1000.rdt", rdt).unwrap();
+        writer.add("room/1000/room.rdt", rdt).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let report = verify_pack(&pack, false);
@@ -736,15 +743,15 @@ mod tests {
         let events = 0x48 + 8 * 4;
         rdt[events..events + 4].copy_from_slice(&u32::MAX.to_le_bytes());
         let mut writer = PackWriter::new();
-        writer.add("room/1000.rdt", rdt).unwrap();
-        writer.add("roomcut/100_000.bmp", tiny_bmp()).unwrap();
+        writer.add("room/1000/room.rdt", rdt).unwrap();
+        writer.add("room/1000/cut/00.bmp", tiny_bmp()).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let report = verify_pack(&pack, false);
 
         assert!(!report.valid(), "a corrupt script table must fail");
         assert_eq!(report.failures.len(), 1);
-        assert_eq!(report.failures[0].path, "room/1000.rdt");
+        assert_eq!(report.failures[0].path, "room/1000/room.rdt");
         assert!(
             report.failures[0].error.contains("event SCD table pointer"),
             "{}",
@@ -785,8 +792,8 @@ mod tests {
             )
             .unwrap();
         writer.add("ui/blue.tim", tiny_tim()).unwrap();
-        writer.add("roomcut/100_000.bmp", tiny_bmp()).unwrap();
-        writer.add("roommask/100_000.bmp", tiny_bmp()).unwrap();
+        writer.add("room/1000/cut/00.bmp", tiny_bmp()).unwrap();
+        writer.add("room/1000/mask/00.bmp", tiny_bmp()).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let report = verify_pack(&pack, false);
@@ -856,14 +863,14 @@ mod tests {
             rdt.push(0);
         }
         let mut writer = PackWriter::new();
-        writer.add("room/1000.rdt", rdt).unwrap();
+        writer.add("room/1000/room.rdt", rdt).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let report = verify_pack(&pack, false);
 
-        assert!(!report.valid(), "a missing roomcut must fail verification");
+        assert!(!report.valid(), "a missing cut must fail verification");
         assert_eq!(report.failures.len(), 1);
         assert!(
-            report.failures[0].error.contains("roomcut/100_000.bmp"),
+            report.failures[0].error.contains("room/1000/cut/00.bmp"),
             "{}",
             report.failures[0].error
         );
@@ -888,9 +895,9 @@ mod tests {
         scd[0x48 + 6 * 4..0x48 + 7 * 4].copy_from_slice(&(init as u32).to_le_bytes());
 
         let mut writer = PackWriter::new();
-        writer.add("room/1000.rdt", rdt).unwrap();
-        writer.add("roomcut/100_000.bmp", tiny_bmp()).unwrap();
-        writer.add("scd/1000.scd", scd).unwrap();
+        writer.add("room/1000/room.rdt", rdt).unwrap();
+        writer.add("room/1000/cut/00.bmp", tiny_bmp()).unwrap();
+        writer.add("room/1000/room.scd", scd).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let report = verify_pack(&pack, false);

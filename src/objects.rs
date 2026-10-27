@@ -58,10 +58,10 @@ pub struct ObjectAsset {
     pub model: Tmd,
     /// The decoded 8bpp texture.
     pub texture: Texture8,
-    /// The `prop/<id>` stem the pair was loaded from, which names its HD
-    /// replacement (`htexture/prop/<id>`); `None` for a pair embedded in an
-    /// RDT.
-    pub prop: Option<String>,
+    /// The room-folder stem the pair was loaded from (`room/<id>/object/00`),
+    /// which names its HD replacement (`htexture/room/<id>/object/00`); `None`
+    /// for a pair embedded in an RDT.
+    pub hd_name: Option<String>,
 }
 
 /// Parse a flat `{TMD*, TIM*}` pair table.
@@ -128,7 +128,7 @@ pub fn parse_assets(data: &[u8], pointer: u32, count: u8) -> (Vec<ObjectAsset>, 
             let texture = tim::decode_8bpp(texture_bytes)?;
             Ok(ObjectAsset {
                 pair_index: pair,
-                prop: None,
+                hd_name: None,
                 model,
                 texture,
             })

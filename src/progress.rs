@@ -75,7 +75,7 @@ pub struct Progress {
     phases_total: u64,
     /// Phases finished so far.
     phases_done: u64,
-    /// Label of the active phase, e.g. `roomcut`.
+    /// Label of the active phase, e.g. `cut`.
     label: String,
     /// Total units in the active phase.
     total: u64,

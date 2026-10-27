@@ -112,12 +112,12 @@ fn hd_pack_swaps_a_background_a_ui_page_and_a_bgm_track() {
     // still reachable for the geometry check.
     let layered = Pack::open_layered(&pack_path, std::slice::from_ref(&hd_pack)).unwrap();
     let background = layered
-        .read_asset("roomcut/100_000", AssetClass::Image)
+        .read_asset("room/1000/cut/00", AssetClass::Image)
         .unwrap()
         .unwrap();
-    assert_eq!(background.path(), "roomcut/100_000.png");
+    assert_eq!(background.path(), "room/1000/cut/00.png");
     let shipped = background.shadowed().unwrap().unwrap();
-    assert_eq!(shipped.path(), "roomcut/100_000.bmp");
+    assert_eq!(shipped.path(), "room/1000/cut/00.bmp");
     // The UI page ships as both PNG and WebP: the layer's own extension
     // priority picks the WebP, and the shadowed PNG stays reachable.
     let page = layered

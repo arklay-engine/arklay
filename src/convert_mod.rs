@@ -12,8 +12,8 @@
 //! |---|---|
 //! | `hires/**` (HD textures and `cache/ROOM####.dat`) | `htexture/**` |
 //! | `movie/*.mp4`, `movie/*.avi` | `movie/<film>.{mp4,avi}` |
-//! | `STAGEn/ROOM####.RDT` | `room/####.rdt` |
-//! | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `roomcut/*.bmp`, `roommask/*.bmp` |
+//! | `STAGEn/ROOM####.RDT` | `room/####/room.rdt` |
+//! | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/####/cut/*.bmp`, `room/####/mask/*.bmp` (every variant of the room) |
 //! | `ENEMY/*.EMD`, `PLAYERS/*` | `enemy/*`, `player/*` |
 //! | `sound/*.wav`, `voice/*.wav` | `bgm/*`, `se/*`, `voice/*` |
 //! | `DATA/*` | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
@@ -185,7 +185,7 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         }
     }
     plan.drop_shadowed_films();
-    plan.add_late_stage_copies(base.as_ref());
+    plan.add_variant_copies(base.as_ref());
 
     // Settle every entry before writing any: the pack's table of contents and
     // path list come first, so the entry set must be final. Only an override
@@ -351,7 +351,7 @@ fn produce(
     Ok(match convert {
         Convert::Raw => raw,
         Convert::Camera => convert::camera_bmp(&file.path, &raw)?,
-        Convert::Mask => convert::roommask_bmp(&file.path, &raw)?,
+        Convert::Mask => convert::mask_bmp(&file.path, &raw)?,
         Convert::Ui(kind) => convert::convert_ui_asset(*kind, &raw)
             .with_context(|| format!("failed to convert {}", file.path))?,
         Convert::ItemAtlas(rows) => {
@@ -852,6 +852,8 @@ fn classify_stage(name: &str) -> Class {
         )
         && (1..=5).contains(&stage)
     {
+        // Planned for the player 0 variant; `add_variant_copies` fills in
+        // the others.
         let id = RoomId {
             stage,
             room,
@@ -888,7 +890,7 @@ fn classify_mask(name: &str) -> Class {
         room,
         player_flag: 0,
     };
-    converted(id.roommask_entry(camera), Convert::Mask)
+    converted(id.mask_entry(camera), Convert::Mask)
 }
 
 /// `ENEMY/`: player, costume, scripted-character and monster models.
@@ -1165,40 +1167,44 @@ impl Plan {
         });
     }
 
-    /// Stages 6 and 7 reuse the stage 1 and 2 background files: copy a cut or
-    /// mask override to the late stage when the base (or the mod) has that
-    /// room there.
-    fn add_late_stage_copies(&mut self, base: Option<&Pack>) {
-        let rooms: HashSet<String> = self
-            .targets
-            .keys()
-            .filter_map(|entry| entry.strip_prefix("room/"))
-            .map(|rdt| rdt[..3.min(rdt.len())].to_ascii_uppercase())
-            .collect();
+    /// A CR camera background or mask file serves every variant of its room:
+    /// both player variants, and stages 6 and 7 reuse the stage 1 and 2
+    /// files. Copy each cut or mask override (planned for the player 0
+    /// variant) into every other variant's folder the base pack (or the mod
+    /// itself) defines.
+    fn add_variant_copies(&mut self, base: Option<&Pack>) {
+        let defined = |id: RoomId| {
+            [id.xml_entry(), id.rdt_entry()].iter().any(|entry| {
+                self.targets.contains_key(entry) || base.is_some_and(|base| base.contains(entry))
+            })
+        };
         let mut copies = Vec::new();
         for (entry, planned) in &self.targets {
-            let Some((dir, rest)) = entry.split_once('/') else {
-                continue;
-            };
             if !matches!(planned.convert, Convert::Camera | Convert::Mask) {
                 continue;
             }
-            let late = match rest.as_bytes().first() {
-                Some(b'1') => '6',
-                Some(b'2') => '7',
-                _ => continue,
+            let Some((id, file)) = entry
+                .strip_prefix("room/")
+                .and_then(|rest| rest.split_once('/'))
+                .and_then(|(id, file)| Some((RoomId::parse(id).ok()?, file)))
+            else {
+                continue;
             };
-            let late_rest = format!("{late}{}", &rest[1..]);
-            let late_entry = format!("{dir}/{late_rest}");
-            let room3 = late_rest[..3].to_ascii_uppercase();
-            let in_base = base.is_some_and(|base| {
-                base.has_asset(
-                    crate::assets::stem(&late_entry),
-                    crate::pack::AssetClass::Image,
-                )
-            });
-            if in_base || rooms.contains(&room3) {
-                copies.push((late_entry, planned.clone()));
+            let stages = match id.stage {
+                1 | 2 => vec![id.stage, id.stage + 5],
+                stage => vec![stage],
+            };
+            for stage in stages {
+                for player_flag in 0..=1 {
+                    let variant = RoomId {
+                        stage,
+                        room: id.room,
+                        player_flag,
+                    };
+                    if variant != id && defined(variant) {
+                        copies.push((format!("{}/{file}", variant.dir()), planned.clone()));
+                    }
+                }
             }
         }
         for (entry, planned) in copies {
@@ -1619,19 +1625,19 @@ mod tests {
         assert_eq!(one(&map, "mod_biorand/description.txt"), "<consumed>");
         assert_eq!(
             one(&map, "mod_biorand/STAGE1/ROOM1060.RDT"),
-            "room/1060.rdt"
+            "room/1060/room.rdt"
         );
         assert_eq!(
             one(&map, "mod_biorand/STAGE6/ROOM6011.RDT"),
-            "room/6011.rdt"
+            "room/6011/room.rdt"
         );
         assert_eq!(
             one(&map, "mod_biorand/STAGE1/RC1060.pak"),
-            "roomcut/106_000.bmp"
+            "room/1060/cut/00.bmp"
         );
         assert_eq!(
             one(&map, "mod_biorand/objspr/OSP00061.pak"),
-            "roommask/106_001.bmp"
+            "room/1060/mask/01.bmp"
         );
         assert_eq!(one(&map, "mod_biorand/enemy/EM1000.EMD"), "enemy/em000.emd");
         assert_eq!(one(&map, "mod_biorand/enemy/EM1115.EMD"), "enemy/em151.emd");
@@ -1789,12 +1795,13 @@ mod tests {
     }
 
     #[test]
-    fn late_stages_copy_shared_backgrounds_only_when_the_room_exists() {
+    fn shared_backgrounds_copy_to_every_variant_that_exists() {
         let mut plan = Plan::default();
         for (entry, convert) in [
-            ("roomcut/106_000.bmp", Convert::Camera),
-            ("roomcut/203_000.bmp", Convert::Camera),
-            ("room/6060.rdt", Convert::Raw),
+            ("room/1060/cut/00.bmp", Convert::Camera),
+            ("room/2030/mask/01.bmp", Convert::Mask),
+            ("room/6060/room.rdt", Convert::Raw),
+            ("room/1061/room.rdt", Convert::Raw),
         ] {
             plan.targets.insert(
                 entry.to_string(),
@@ -1805,9 +1812,22 @@ mod tests {
                 },
             );
         }
-        plan.add_late_stage_copies(None);
-        assert!(plan.targets.contains_key("roomcut/606_000.bmp"));
-        assert!(!plan.targets.contains_key("roomcut/703_000.bmp"));
+        plan.add_variant_copies(None);
+        let planned: Vec<&str> = plan
+            .targets
+            .keys()
+            .map(String::as_str)
+            .filter(|entry| !entry.ends_with(".rdt"))
+            .collect();
+        assert_eq!(
+            planned,
+            [
+                "room/1060/cut/00.bmp",
+                "room/1061/cut/00.bmp",
+                "room/2030/mask/01.bmp",
+                "room/6060/cut/00.bmp"
+            ]
+        );
     }
 
     #[test]
@@ -1855,8 +1875,10 @@ mod tests {
         .unwrap();
         let base = dir.join("base.akpak");
         let mut writer = crate::pack::PackWriter::new();
-        writer.add("room/1000.rdt", b"same".to_vec()).unwrap();
-        writer.add("room/1010.rdt", b"original".to_vec()).unwrap();
+        writer.add("room/1000/room.rdt", b"same".to_vec()).unwrap();
+        writer
+            .add("room/1010/room.rdt", b"original".to_vec())
+            .unwrap();
         writer.write(&base).unwrap();
 
         let out = dir.join("out.akpak");
@@ -1882,12 +1904,12 @@ mod tests {
             [
                 TEXT_ENTRY,
                 manifest::ENTRY,
-                "room/1010.rdt",
-                "room/1020.rdt"
+                "room/1010/room.rdt",
+                "room/1020/room.rdt"
             ]
         );
-        assert_eq!(*pack.read("room/1010.rdt").unwrap(), *b"changed");
-        assert_eq!(*pack.read("room/1020.rdt").unwrap(), *b"new");
+        assert_eq!(*pack.read("room/1010/room.rdt").unwrap(), *b"changed");
+        assert_eq!(*pack.read("room/1020/room.rdt").unwrap(), *b"new");
         let language = pack.read(TEXT_ENTRY).unwrap();
         assert!(String::from_utf8_lossy(&language).contains("Hello"));
         assert_eq!(

@@ -118,7 +118,7 @@ fn player_shadow_capture_is_deterministic_and_present_at_spawn() {
     let page = if cut.masks.is_empty() || cut.mask_active == 0 {
         None
     } else {
-        pack.read(&id.roommask_entry(camera_index))
+        pack.read(&id.mask_entry(camera_index))
             .ok()
             .and_then(|bytes| bmp::decode_mask(&bytes).ok())
     };

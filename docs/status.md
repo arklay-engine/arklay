@@ -726,7 +726,7 @@ whose pair parser is not in the path classifier; `--strict` turns them into
 failures by design.
 
 A mod layer's replacement entries are classified by their own formats too:
-`roomcut/*` and `roommask/*` accept any image-class extension, and `png`,
+a room's `cut/*` and `mask/*` accept any image-class extension, and `png`,
 `webp` and `ogg` get their own rows with the replacement decoders behind them
 (the `hd` feature). The converted base pack above carries none of them, so its
 table is unchanged. `arklay verify` therefore validates a replacement mod pack

@@ -743,7 +743,7 @@ mod tests {
     #[test]
     fn stems_strip_only_the_final_extension() {
         assert_eq!(stem("bgm/013.wav"), "bgm/013");
-        assert_eq!(stem("roomcut/100_000.bmp"), "roomcut/100_000");
+        assert_eq!(stem("room/1000/cut/00.bmp"), "room/1000/cut/00");
         assert_eq!(stem("se/40s&w.wav"), "se/40s&w");
         assert_eq!(stem("font/font.tim"), "font/font");
         assert_eq!(stem("no-extension"), "no-extension");
@@ -798,9 +798,9 @@ mod tests {
     #[test]
     fn a_pix_replacement_needs_the_shipped_geometry() {
         // A lone `.pix` has no entry to take its dimensions from.
-        let pack = pack_of(&[("roommask/100_000.pix", &[0x1F, 0x00, 0xE0, 0x03])]);
+        let pack = pack_of(&[("room/1000/mask/00.pix", &[0x1F, 0x00, 0xE0, 0x03])]);
         let asset = pack
-            .read_asset("roommask/100_000", crate::pack::AssetClass::Image)
+            .read_asset("room/1000/mask/00", crate::pack::AssetClass::Image)
             .unwrap()
             .unwrap();
         let err = decode_picture(&asset, Geometry::Shipped, None)
@@ -814,14 +814,14 @@ mod tests {
         // A higher layer's headerless .pix takes its size from the base's BMP.
         let bmp = bmp_of(2, 1, &[[9, 9, 9, 255], [9, 9, 9, 255]]);
         let pack = layered_pack(
-            &[("roommask/100_000.bmp", &bmp)],
-            &[("roommask/100_000.pix", &[0x1F, 0x00, 0xE0, 0x03])],
+            &[("room/1000/mask/00.bmp", &bmp)],
+            &[("room/1000/mask/00.pix", &[0x1F, 0x00, 0xE0, 0x03])],
         );
         let asset = pack
-            .read_asset("roommask/100_000", crate::pack::AssetClass::Image)
+            .read_asset("room/1000/mask/00", crate::pack::AssetClass::Image)
             .unwrap()
             .unwrap();
-        assert_eq!(asset.path(), "roommask/100_000.pix");
+        assert_eq!(asset.path(), "room/1000/mask/00.pix");
         let image = decode_picture(&asset, Geometry::Shipped, None).unwrap();
         assert_eq!((image.width, image.height), (2, 1));
         assert_eq!(image.rgba, [255, 0, 0, 255, 0, 255, 0, 255]);

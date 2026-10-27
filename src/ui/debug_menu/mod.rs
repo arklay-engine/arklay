@@ -845,7 +845,11 @@ mod tests {
     }
 
     fn menu(game: &GameState) -> DebugMenu {
-        let pack = pack_with(&["room/1000.rdt", "room/1001.rdt", "room/1010.rdt"]);
+        let pack = pack_with(&[
+            "room/1000/room.rdt",
+            "room/1001/room.rdt",
+            "room/1010/room.rdt",
+        ]);
         DebugMenu::open(
             &pack,
             RoomId::parse("1000").unwrap(),

@@ -401,7 +401,7 @@ pub struct Game {
     pub autosave: bool,
     /// The room scripts run with the port's fixes (the `#else` of each
     /// `#if AUTHENTIC` block in `games/re1/room/*.akscr`, which
-    /// `convert-game` packs as `scd/<id>.scd`). Off runs each room's original
+    /// `convert-game` packs as `room/<id>/room.scd`). Off runs each room's original
     /// bytecode instead; a mod's own scripts still apply. On by default.
     pub room_script_fixes: bool,
     /// The face the native-resolution menus draw with: `"modern"` (the

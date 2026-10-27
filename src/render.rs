@@ -23,7 +23,7 @@
 //!   triangle, so equal-depth masks are submitted after player triangles here
 //!   too and win the tie.
 //!
-//! A [`MaskLayer`] carries the camera's decoded `roommask/{room}_{cam}.bmp`
+//! A [`MaskLayer`] carries the camera's decoded `room/<id>/mask/<camera>.bmp`
 //! page and its [`Cut`]; a later engine step only has to load and decode that
 //! page, then pass the layer to [`draw_gameplay_scene`]. An [`EffectLayer`]
 //! carries the room's composited effect pages and this frame's
@@ -2465,7 +2465,7 @@ pub struct EntityMesh<'a> {
     /// entry draws the joint unlit in that colour.
     pub joint_colours: [[u8; 3]; 32],
     /// The stem under `htexture/` that names the texture page's HD
-    /// replacement (a room prop's `prop/<id>`); the content hashes remain
+    /// replacement (a room model's `room/<id>/object/<slot>`); the content hashes remain
     /// the fallback. `None` for a page with no stable name.
     pub hd_name: Option<&'a str>,
 }
@@ -2538,7 +2538,7 @@ pub struct Shadow<'a> {
 
 /// One camera's room-mask layer: its decoded page plus the ordering inputs.
 ///
-/// The engine loads the camera's `roommask/{room}_{camera:03}.bmp` entry from
+/// The engine loads the camera's `room/<id>/mask/<camera>.bmp` entry from
 /// the pack, decodes it with [`crate::bmp::decode_mask`] (which cuts the
 /// page's black key colour to transparent) and pairs it with the camera's
 /// [`Cut`]. [`MaskLayer::new`] starts from the cut's own
