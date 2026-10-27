@@ -1640,9 +1640,11 @@ ROOM_71C_TEXT_05 = "Темные кровавые пятна.\nЧто здесь
 
 UI_SAVE_CHARACTER_0_NAME = "Крис"
 UI_SAVE_CHARACTER_1_NAME = "Джилл"
+UI_SAVE_ERROR_0 = "Недостаточно места"
+UI_SAVE_ERROR_1 = "на жёстком диске."
 UI_SAVE_EXIT_0 = "Не сохранять"
 UI_SAVE_EXIT_1 = "Не загружать"
 UI_SAVE_HEADER_0 = "Сохранение"
 UI_SAVE_HEADER_1 = "Загрузка"
 UI_SAVE_OVERWRITE_PROMPT = "Перезаписать сохранение?"
-UI_SAVE_YES_NO = "Да   Нет"
+UI_SAVE_YES_NO = " Да  Нет"

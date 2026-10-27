@@ -1741,6 +1741,22 @@ impl UserData for Api<'_> {
             },
         );
 
+        // `glyphs_width(bytes[, opts])`: the pixel advance `api:glyphs`
+        // draws already font-encoded bytes at with the same options (the
+        // session's metrics unless `opts.tight` says otherwise). 0 without
+        // a font.
+        methods.add_method_mut(
+            "glyphs_width",
+            |_lua, api, (bytes, opts_table): (mlua::String, Option<Table>)| {
+                let opts = options(api.host, opts_table.as_ref())?;
+                let Some(font) = api.cx.font else {
+                    api.host.note_missing_font();
+                    return Ok(0);
+                };
+                Ok(font.advance(opts.tight, &bytes.as_bytes()))
+            },
+        );
+
         // `text_8x14(x, y, bytes[, opts])`: raw bytes through the original's
         // unshadowed `PrintText8x14` grid, in `opts.colour`.
         methods.add_method_mut(

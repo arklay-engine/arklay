@@ -1693,9 +1693,11 @@ ROOM_71C_TEXT_05 = "Pinttyneitä veritahroja...\nMitä täällä on kokkailtu?{s
 
 UI_SAVE_CHARACTER_0_NAME = "Chris"
 UI_SAVE_CHARACTER_1_NAME = "Jill"
+UI_SAVE_ERROR_0 = "Kiintolevyllä ei ole"
+UI_SAVE_ERROR_1 = "tarpeeksi tilaa."
 UI_SAVE_EXIT_0 = "Älä tallenna"
 UI_SAVE_EXIT_1 = "Älä lataa"
 UI_SAVE_HEADER_0 = "Tallenna"
 UI_SAVE_HEADER_1 = "Lataa"
 UI_SAVE_OVERWRITE_PROMPT = "Ylikirjoita?"
-UI_SAVE_YES_NO = "Kyllä   Ei"
+UI_SAVE_YES_NO = " Kyllä  Ei"

@@ -51,6 +51,10 @@ M.LAYOUTS = {
         loc_x = 0x99, -- cell 7
         header_x = 0x61, -- the 9-cell "SAVE GAME" centred
         cursor_x = 0x29, -- one cell left of ROW_X
+        -- FONT.TIM's arrow is drawn where the reference draws it.
+        cursor_dx = 0,
+        -- The arrow's inked width from where it is drawn: the whole cell.
+        cursor_w = 14,
         confirm_stride = 56, -- 4 cells: " はい" -> "  いいえ"
         name_cells = 3,
         loc_cells = 8,
@@ -66,6 +70,16 @@ M.LAYOUTS = {
         loc_x = 127, -- cell 9
         header_x = 124,
         cursor_x = 47,
+        -- The reference blits fontus.tim's 8px arrow cell (U 16, V 28),
+        -- whose ink starts one pixel in. The Western sheet keeps the arrow
+        -- at the plain byte 0x02 too, but in a 14px cell with its ink four
+        -- pixels in, so drawing that cell at cursor_x would push the arrow
+        -- against the text at ROW_X. Shift it back so the ink starts where
+        -- the USA arrow's does.
+        cursor_dx = -3,
+        -- The shifted arrow's ink ends 7px right of cursor_x (the USA
+        -- arrow's 6px), still short of the next cell's text.
+        cursor_w = 7,
         confirm_stride = 40, -- 5 cells: " YES" -> " NO"
         name_cells = 5,
         loc_cells = 19,
@@ -79,6 +93,9 @@ M.LAYOUTS = {
 }
 -- Without a font the screen draws no text; keep the Japanese table.
 local DEFAULT_GLYPH_W = 14
+-- The header's cells: the reference's header_x centres the 9-cell
+-- "SAVE GAME" (x = 160 on both grids).
+local HEADER_CELLS = 9
 
 local BLINK_TICKS = 5
 local REVEAL_TICKS = 5
@@ -278,6 +295,86 @@ local function confirm(api)
     end
 end
 
+--- The header's x: the reference's header_x centres its 9 cells on the
+--- 320 frame, so a label of any length is centred on that same column by
+--- its measured width. The header and its suffix overlay from one x, so
+--- the wider of the two is the label's extent. On the Japanese grid the
+--- ja-JP "SAVE" + "     GAME" measures nine full cells and lands on
+--- header_x exactly; the USA grid's nine 8px cells do the same.
+function M.header_x(api, mode)
+    local centre = L.header_x + HEADER_CELLS * L.glyph_w // 2
+    local width = 0
+    for _, key in ipairs({ "UI_SAVE_HEADER_" .. mode, "UI_SAVE_HEADER_SUFFIX" }) do
+        local w = api:glyphs_width(api:ui_bytes(key) or "")
+        if w > width then
+            width = w
+        end
+    end
+    return centre - (width + 1) // 2
+end
+
+--- The overwrite dialog's answers line and the NO cursor's offset from
+--- the YES cursor.
+---
+--- The reference's line is a blank, YES, two blanks and NO, so the YES
+--- cursor sits on the leading blank and the NO cursor confirm_stride
+--- further on, on the blank before NO. A line that does not open with a
+--- blank gets one, so the YES cursor never covers its first letter. The
+--- reference stride stands whenever the arrow drawn there falls between
+--- the two answers; a longer first answer (or a shorter gap) puts the NO
+--- cursor on the blank just before the second answer instead, measured
+--- in the session font.
+function M.confirm_line(api, bytes)
+    bytes = bytes or ""
+    local steps = {}
+    local i = 1
+    while i <= #bytes do
+        local byte = bytes:byte(i)
+        if byte == TERMINATOR or byte == 0x07 then
+            break
+        elseif byte == PAD then
+            i = i + 1
+        else
+            local len = (byte >= 0xF8 and byte <= 0xFA) and 2 or 1
+            steps[#steps + 1] = { at = i, blank = byte == 0x00 or byte == 0xFF }
+            i = i + len
+        end
+    end
+    if steps[1] and not steps[1].blank then
+        return M.confirm_line(api, "\0" .. bytes)
+    end
+    local k = 1
+    while steps[k] and steps[k].blank do
+        k = k + 1
+    end
+    while steps[k] and not steps[k].blank do
+        k = k + 1
+    end
+    local first_end_step = steps[k]
+    while steps[k] and steps[k].blank do
+        k = k + 1
+    end
+    if not first_end_step or not steps[k] or not api:has_font() then
+        -- One answer (or none): nothing to measure the NO cursor against.
+        return bytes, L.confirm_stride
+    end
+    local function width(stop)
+        return api:glyphs_width(bytes:sub(1, stop))
+    end
+    local first_end = width(first_end_step.at - 1)
+    local second_start = width(steps[k].at - 1)
+    local stride = L.confirm_stride
+    if stride >= first_end and stride + L.cursor_w <= second_start then
+        return bytes, stride
+    end
+    -- The last blank before the second answer.
+    local no_dx = width(steps[k - 1].at - 1)
+    if no_dx < first_end then
+        no_dx = first_end
+    end
+    return bytes, no_dx
+end
+
 function M.open(api)
     local err
     background, err = api:picture("ui/type00")
@@ -314,6 +411,8 @@ function M.open(api)
         exit = nil,
         fade = 0,
     }
+    local confirm_bytes, no_dx = M.confirm_line(api, api:ui_bytes("UI_SAVE_YES_NO"))
+    s.confirm = { bytes = confirm_bytes, no_dx = no_dx }
     M.state = s
 end
 
@@ -458,7 +557,7 @@ end
 
 local function cursor(api, x, y)
     if api:has_font() then
-        api:glyphs(x, y, CURSOR_GLYPH, { tight = false })
+        api:glyphs(x + L.cursor_dx, y, CURSOR_GLYPH, { tight = false })
     else
         api:fill_rect(x, y, 8, 12, 255, 255, 255, 255)
     end
@@ -538,9 +637,11 @@ function M.draw(api)
     end
 
     -- The header is the original's formatted path, so the suffix's M is
-    -- the sheet's letter M.
-    text(L.header_x, rows.header, "UI_SAVE_HEADER_" .. mode)
-    text(L.header_x, rows.header, "UI_SAVE_HEADER_SUFFIX")
+    -- the sheet's letter M. Both parts start at the same x, as the
+    -- reference draws "SAVE" under "     GAME".
+    local header_x = M.header_x(api, mode)
+    text(header_x, rows.header, "UI_SAVE_HEADER_" .. mode)
+    text(header_x, rows.header, "UI_SAVE_HEADER_SUFFIX")
 
     for index = 0, SLOT_COUNT - 1 do
         local y = rows.row + index * rows.pitch
@@ -568,7 +669,7 @@ function M.draw(api)
 
     if s.stage == "confirm_overwrite" then
         text(PROMPT_X, rows.prompt, "UI_SAVE_OVERWRITE_PROMPT")
-        text(CONFIRM_X, rows.confirm, "UI_SAVE_YES_NO")
+        api:glyphs(ox + CONFIRM_X, oy + rows.confirm, s.confirm.bytes)
     elseif s.stage == "error" then
         text(PROMPT_X, rows.error, "UI_SAVE_ERROR_0")
         text(PROMPT_X, rows.error2, "UI_SAVE_ERROR_1")
@@ -578,7 +679,7 @@ function M.draw(api)
         -- The slot cursor stays visible while the confirm cursor blinks.
         cursor(api, ox + L.cursor_x, row_y)
         if not s.blink_state then
-            cursor(api, ox + CONFIRM_X + s.confirm_choice * L.confirm_stride, oy + rows.confirm)
+            cursor(api, ox + CONFIRM_X + s.confirm_choice * s.confirm.no_dx, oy + rows.confirm)
         end
     elseif not s.blink_state then
         cursor(api, ox + L.cursor_x, row_y)
