@@ -285,7 +285,7 @@ fn an_xml_only_mod_keeps_the_scripts_override() {
     // layer's override keeps winning.
     let only_xml = vec![(ID.xml_entry(), edited.clone().into_bytes())];
     let (pack, dir) = layered("xml-mod", base.clone(), only_xml);
-    assert_eq!(script_source(&pack, ID), ScriptSource::Override);
+    assert_eq!(script_source(&pack, ID, false), ScriptSource::Override);
     let _ = std::fs::remove_dir_all(&dir);
 
     // A mod that ships the scripts too runs its own.
@@ -294,7 +294,61 @@ fn an_xml_only_mod_keeps_the_scripts_override() {
         (scripts_entry(ID), container),
     ];
     let (pack, dir) = layered("scripts-mod", base, with_scripts);
-    assert_eq!(script_source(&pack, ID), ScriptSource::Rdt);
+    assert_eq!(script_source(&pack, ID, false), ScriptSource::Rdt);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A standalone container whose init sets flag `bit` of `FG_SCENARIO`, so
+/// each script set is told apart by what it parses to.
+fn flag_container(bit: u8) -> Vec<u8> {
+    crate::scd::asm::assemble(&format!(
+        ".version 1\n\n.init\n.block\n    set FG_SCENARIO, {bit}, 0\n\n.main\n"
+    ))
+    .unwrap()
+    .to_container()
+    .unwrap()
+}
+
+#[test]
+fn original_scripts_skip_the_base_override_but_keep_a_mods() {
+    use crate::engine::{ScriptSource, room_scripts, script_source};
+    let parse = |container: &[u8]| crate::scd::reader::parse(container).unwrap().digest();
+    let (_, mut base) = converted_entries();
+    let own = base
+        .iter()
+        .find(|(path, _)| *path == scripts_entry(ID))
+        .unwrap()
+        .1
+        .clone();
+    let (fixed, modded) = (flag_container(1), flag_container(2));
+    assert_ne!(parse(&own), parse(&fixed));
+    assert_ne!(parse(&fixed), parse(&modded));
+    base.push((ID.scd_entry(), fixed.clone()));
+
+    // A mod that ships nothing for the room: the base pack's override runs
+    // unless the original scripts are asked for, which run the room's own.
+    let unrelated = vec![("lua/unrelated.lua".to_string(), b"-- nothing".to_vec())];
+    let (pack, dir) = layered("original-base", base.clone(), unrelated);
+    let loaded = load(&pack, ID).unwrap();
+    for (original, source, digest) in [
+        (false, ScriptSource::Override, parse(&fixed)),
+        (true, ScriptSource::Rdt, parse(&own)),
+    ] {
+        assert_eq!(script_source(&pack, ID, original), source);
+        let (scripts, from) = room_scripts(&pack, ID, &loaded, original).unwrap();
+        assert_eq!((scripts.digest(), from), (digest, source), "{original}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // A mod's own `scd/{id}.scd` wins either way.
+    let with_scripts = vec![(ID.scd_entry(), modded.clone())];
+    let (pack, dir) = layered("original-mod", base, with_scripts);
+    let loaded = load(&pack, ID).unwrap();
+    for original in [false, true] {
+        assert_eq!(script_source(&pack, ID, original), ScriptSource::Override);
+        let (scripts, _) = room_scripts(&pack, ID, &loaded, original).unwrap();
+        assert_eq!(scripts.digest(), parse(&modded), "{original}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

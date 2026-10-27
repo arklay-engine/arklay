@@ -33,6 +33,8 @@
 //! chris_ink_ribbons = true # saving as Chris needs an ink ribbon
 //! jill_ink_ribbons = false # saving as Jill needs an ink ribbon
 //! autosave = true        # each door's room load writes autosave1.dat
+//! room_script_fixes = true # run the room scripts with the port's fixes;
+//!                        # false runs the original bytecode
 //! ui_font = "modern"     # the menus' face: "modern" or "retro"
 //! menu_text_size = "standard" # "small", "standard", "large"
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
@@ -397,6 +399,11 @@ pub struct Game {
     /// previous one to `autosave2.dat`) once the player has control. On by
     /// default.
     pub autosave: bool,
+    /// The room scripts run with the port's fixes (the `#else` of each
+    /// `#if AUTHENTIC` block in `games/re1/room/*.akscr`, which
+    /// `convert-game` packs as `scd/<id>.scd`). Off runs each room's original
+    /// bytecode instead; a mod's own scripts still apply. On by default.
+    pub room_script_fixes: bool,
     /// The face the native-resolution menus draw with: `"modern"` (the
     /// default) or `"retro"`.
     pub ui_font: crate::gui::FontFamily,
@@ -446,6 +453,7 @@ impl Default for Game {
             chris_ink_ribbons: true,
             jill_ink_ribbons: false,
             autosave: true,
+            room_script_fixes: true,
             ui_font: crate::gui::FontFamily::Modern,
             menu_text_size: TextSize::Standard,
             button_style: None,
@@ -1210,6 +1218,7 @@ fn parse_game_line(
         "chris_ink_ribbons" => game.chris_ink_ribbons = boolean()?,
         "jill_ink_ribbons" => game.jill_ink_ribbons = boolean()?,
         "autosave" => game.autosave = boolean()?,
+        "room_script_fixes" => game.room_script_fixes = boolean()?,
         "ui_font" => {
             game.ui_font = match parse_quoted(value, line)?.as_str() {
                 "modern" => crate::gui::FontFamily::Modern,
@@ -1289,6 +1298,11 @@ fn render_game(game: &Game) -> String {
             defaults.jill_ink_ribbons,
         ),
         ("autosave", game.autosave, defaults.autosave),
+        (
+            "room_script_fixes",
+            game.room_script_fixes,
+            defaults.room_script_fixes,
+        ),
     ] {
         if value != default {
             out.push_str(&format!("{key} = {value}\n"));
@@ -2071,6 +2085,7 @@ menu_text_size = \"huge\"
             chris_ink_ribbons: false,
             jill_ink_ribbons: true,
             autosave: false,
+            room_script_fixes: false,
             ui_font: crate::gui::FontFamily::Retro,
             menu_text_size: TextSize::Large,
             button_style: Some(crate::gui::PadStyle::Nintendo),

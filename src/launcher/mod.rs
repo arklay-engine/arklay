@@ -2010,6 +2010,7 @@ impl Launcher {
             no_chris_ink_ribbons: !self.config.game.chris_ink_ribbons,
             jill_ink_ribbons: self.config.game.jill_ink_ribbons,
             no_autosave: !self.config.game.autosave,
+            no_room_script_fixes: !self.config.game.room_script_fixes,
             // Only the command line runs in authentic mode.
             authentic: false,
         };

@@ -117,6 +117,7 @@ fn switch_mut<'a>(game: &'a mut config::Game, id: &str) -> Option<&'a mut bool> 
         "chris_ink_ribbons" => &mut game.chris_ink_ribbons,
         "jill_ink_ribbons" => &mut game.jill_ink_ribbons,
         "autosave" => &mut game.autosave,
+        "room_script_fixes" => &mut game.room_script_fixes,
         "subtitles" => &mut game.subtitles,
         "speaker_names" => &mut game.speaker_names,
         _ => return None,
@@ -307,6 +308,7 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
     let language_list = languages();
     const INK_RIBBONS: (&str, &str, &str) = ("gameplay", "general", "ink_ribbons");
     const SAVING: (&str, &str, &str) = ("gameplay", "general", "saving");
+    const ROOM_SCRIPTS: (&str, &str, &str) = ("gameplay", "general", "room_scripts");
     const CHARACTER: (&str, &str, &str) = ("controls", "basic", "character_controls");
     const AIMING: (&str, &str, &str) = ("controls", "basic", "when_aiming");
     const BUTTONS: (&str, &str, &str) = ("controls", "controller", "button_settings");
@@ -354,6 +356,11 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
             on_off(text, "jill_ink_ribbons"),
         ),
         row("autosave", SAVING, on_off(text, "autosave")),
+        row(
+            "room_script_fixes",
+            ROOM_SCRIPTS,
+            on_off(text, "room_script_fixes"),
+        ),
         row("quick_turn", CHARACTER, on_off(text, "quick_turn")),
         row(
             "analog_movement",

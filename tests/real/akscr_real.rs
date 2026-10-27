@@ -269,3 +269,77 @@ fn every_region_merges_to_identical_bytecode() {
         }
     }
 }
+
+/// Room `id`'s RDT in the installation under `root` (`<region>/STAGE<n>/`),
+/// if the installation has it.
+fn installed_rdt(root: &Path, id: arklay::state::RoomId) -> Option<Vec<u8>> {
+    let name = format!("ROOM{:04X}.RDT", id.rdt_number());
+    let stage = format!("STAGE{}", id.stage);
+    std::fs::read_dir(root)
+        .ok()?
+        .flatten()
+        .find_map(|region| std::fs::read(region.path().join(&stage).join(&name)).ok())
+}
+
+/// With the room script fixes off (`[game] room_script_fixes = false`), a
+/// room runs the original bytecode instead of the fixed `scd/<id>.scd` the
+/// conversion packed: byte for byte the scripts of the installed RDT, which is
+/// also what the checked-in script builds as `AUTHENTIC`.
+#[test]
+#[ignore = "requires a real RE1 installation via ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn original_room_scripts_are_the_installed_rdt_bytecode() {
+    use arklay::engine::{ScriptSource, room_scripts};
+    let Some((root, pack_path)) = common::asset_env() else {
+        return;
+    };
+    let pack = Pack::open(&pack_path).unwrap();
+    let mut differing = Vec::new();
+    for id in room::ids(&pack) {
+        let Ok(loaded) = room::load(&pack, id) else {
+            continue;
+        };
+        if loaded.state.cuts.is_empty() || !pack.contains(&id.scd_entry()) {
+            continue;
+        }
+        let (fixed, source) = room_scripts(&pack, id, &loaded, false).unwrap();
+        assert_eq!(source, ScriptSource::Override, "{id:?}");
+        let (original, source) = room_scripts(&pack, id, &loaded, true).unwrap();
+        assert_eq!(source, ScriptSource::Rdt, "{id:?}");
+        if fixed.digest() == original.digest() {
+            continue;
+        }
+        let entry = format!("room {:04X}", id.rdt_number());
+        if let Some(rdt) = installed_rdt(&root, id) {
+            assert_identical(&entry, &reader::parse(&rdt).unwrap(), &original);
+        }
+        let text = std::fs::read_to_string(
+            room_dir().join(format!("{:03x}.akscr", akscr::merged_id(id.rdt_number()))),
+        )
+        .unwrap();
+        let authentic = akscr::Region::ALL
+            .iter()
+            .map(|&region| {
+                compile(
+                    &text,
+                    Some(
+                        akscr::Variant::for_room(id.rdt_number())
+                            .in_region(region)
+                            .authentic(),
+                    ),
+                )
+            })
+            .find(|compiled| compiled.digest() == original.digest())
+            .unwrap_or_else(|| panic!("{entry}: no region builds the original as AUTHENTIC"));
+        assert_identical(&entry, &original, &authentic);
+        differing.push(id);
+    }
+    // The fixes change many rooms; at least one must have been checked
+    // against its installed RDT.
+    assert!(
+        differing
+            .iter()
+            .any(|&id| installed_rdt(&root, id).is_some()),
+        "no room with fixed scripts has an installed RDT ({} differ)",
+        differing.len()
+    );
+}
