@@ -356,20 +356,19 @@ fn local_date(timestamp: f64) -> String {
     )
 }
 
+/// A picture in colour and in grey.
+type PicturePair = (Arc<Picture>, Arc<Picture>);
+
 /// The pictures the rows share, loaded once per screen.
 #[derive(Default)]
 struct Art {
-    thumbnails: HashMap<(u8, u8, u8), Option<(Arc<Picture>, Arc<Picture>)>>,
+    thumbnails: HashMap<(u8, u8, u8), Option<PicturePair>>,
     faces: Option<Option<Image>>,
 }
 
 impl Art {
     /// The camera the save was made in, in colour and in grey.
-    fn thumbnail(
-        &mut self,
-        cx: &UiContext<'_>,
-        file: &SaveFile,
-    ) -> Option<(Arc<Picture>, Arc<Picture>)> {
+    fn thumbnail(&mut self, cx: &UiContext<'_>, file: &SaveFile) -> Option<PicturePair> {
         self.thumbnails
             .entry((file.stage, file.room, file.camera))
             .or_insert_with(|| {
@@ -383,11 +382,7 @@ impl Art {
     }
 
     /// The character's status-screen face, in colour and in grey.
-    fn portrait(
-        &mut self,
-        cx: &UiContext<'_>,
-        character: u8,
-    ) -> Option<(Arc<Picture>, Arc<Picture>)> {
+    fn portrait(&mut self, cx: &UiContext<'_>, character: u8) -> Option<PicturePair> {
         let sheet = self
             .faces
             .get_or_insert_with(|| {
@@ -420,7 +415,7 @@ impl Art {
 /// A decoded picture as an opaque GUI picture.
 fn opaque(image: Image) -> Picture {
     let mut rgba = image.rgba;
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         px[3] = 255;
     }
     Picture {
@@ -430,7 +425,7 @@ fn opaque(image: Image) -> Picture {
     }
 }
 
-fn pair(picture: Picture) -> (Arc<Picture>, Arc<Picture>) {
+fn pair(picture: Picture) -> PicturePair {
     let grey = save_screen::greyscale(&picture);
     (Arc::new(picture), Arc::new(grey))
 }

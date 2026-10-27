@@ -890,7 +890,9 @@ fn colours(selected: bool) -> (Color, Color) {
 pub fn greyscale(picture: &Picture) -> Picture {
     let rgba = picture
         .rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|px| {
             let luma =
                 (u32::from(px[0]) * 54 + u32::from(px[1]) * 183 + u32::from(px[2]) * 19) >> 8;
@@ -924,8 +926,8 @@ pub fn downscale(picture: Picture, max_width: u32) -> Picture {
                     let sx = (x * factor + dx).min(picture.width - 1);
                     let sy = (y * factor + dy).min(picture.height - 1);
                     let at = ((sy * picture.width + sx) * 4) as usize;
-                    for c in 0..4 {
-                        sum[c] += u32::from(picture.rgba[at + c]);
+                    for (s, &v) in sum.iter_mut().zip(&picture.rgba[at..at + 4]) {
+                        *s += u32::from(v);
                     }
                 }
             }
