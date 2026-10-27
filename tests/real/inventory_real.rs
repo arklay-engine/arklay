@@ -6,7 +6,7 @@
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must contain
 //! the menu art (`ui/status.tim`, `ui/blue.tim`, `ui/statface.tim`,
-//! `ui/staitem.tim`, `item/item_all.bmp`, `font/font.tim`); a stale pack fails
+//! `ui/staitem.tim`, `item/item_all.bmp`, `font/01.bmp`); a stale pack fails
 //! the test rather than silently skipping.
 //!
 //! The test renders the `--ui menu` capture (`ui/main_menu.lua` over the

@@ -43,10 +43,11 @@ widen when it does not:
 | MediaKite JPN install (no Western sheet) | 40 px | 74 px | 125 px |
 
 CR draws its English screen text with the Western font even on the MediaKite
-install, which has no `fontus.tim`; a pack converted from that install has
-only the 14-px Japanese sheet, so a Latin session falls back to the Japanese
-sheet's wider advances (the documented `font::session_entry` fallback, shared
-with every other screen). The list contents, row order and labels match
+install, which has no `fontus.tim`. The MediaKite row above was measured when
+a pack converted from that install had only the 14-px Japanese sheet, so a
+Latin session fell back to its wider advances; every pack now carries the
+Western sheet as font `00`, so a Latin session draws with it on either
+install. The list contents, row order and labels match
 either way.
 
 The Western sheet has no `/` cell, so `charset::latin` now substitutes one

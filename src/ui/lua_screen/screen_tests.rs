@@ -1059,18 +1059,21 @@ fn save_load_count_digits_follow_the_original_table() {
 /// The Western sheet (8px grid) and a blank 768-wide Japanese sheet (14px
 /// grid), as the session fonts the save screen's column tables key on.
 fn western_font() -> crate::font::Font {
-    crate::font::Font::new(crate::tim::decode_4bpp(crate::font::WESTERN_SHEET).unwrap())
+    crate::font::western()
 }
 
 fn japanese_font() -> crate::font::Font {
     let (width, height) = (crate::font::JPN_SHEET_WIDTH, 256);
-    crate::font::Font::new(crate::model::Texture8 {
-        width,
-        height,
-        indices: vec![0; (width * height) as usize],
-        palettes: vec![[0; 4]; crate::model::PALETTE_ROW_LEN],
-        stp: Vec::new(),
-    })
+    crate::font::Font::new(
+        crate::model::Texture8 {
+            width,
+            height,
+            indices: vec![0; (width * height) as usize],
+            palettes: vec![[0; 4]; crate::model::PALETTE_ROW_LEN],
+            stp: Vec::new(),
+        },
+        crate::font::FontDef::japanese(),
+    )
 }
 
 /// The layout field `key` of the screen's running column table.
@@ -1326,10 +1329,10 @@ fn western_pack() -> &'static Pack {
     PACK.get_or_init(|| {
         let mut writer = crate::pack::PackWriter::new();
         writer
-            .add(
-                crate::font::LATIN_ENTRY,
-                crate::font::WESTERN_SHEET.to_vec(),
-            )
+            .add("font/00.bmp", crate::font::WESTERN_SHEET.to_vec())
+            .unwrap();
+        writer
+            .add("font/00.xml", crate::font::xml::WESTERN.as_bytes().to_vec())
             .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     })

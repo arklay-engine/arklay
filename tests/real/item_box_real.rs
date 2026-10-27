@@ -6,7 +6,7 @@
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must carry
 //! the slice-5/6 art (`ui/itemboxn.tim`, the menu sheets, `item/item_all.bmp`,
-//! `font/font.tim`); a stale pack fails rather than
+//! `font/01.bmp`); a stale pack fails rather than
 //! silently skipping.
 //!
 //! The first test deposits a stack in room 1001, changes rooms, withdraws it

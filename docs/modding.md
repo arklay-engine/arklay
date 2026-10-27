@@ -175,7 +175,8 @@ is exact.
 | item viewer texture | `item/0b_model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b_model` |
 | item-view / enemy / player art | (inside `item/*.ivm`, `enemy/em*.emd`, `player/*.emd`) | — | override the whole model entry |
 | doors | (inside `door/<type>.dor`, the RDT door-type byte `00`-`21`) | — | override the whole entry |
-| font sheets | `font/font`, `font/jpn`, `font/latin` | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
+| font sheets | `font/00` (Western), `font/01` (Japanese), or a new two-digit hex id | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
+| font metrics | `font/00.xml`, `font/01.xml`, or a new font's `font/<id>.xml` | xml: `<font format="1" script advance cellWidth margin textY menuY>` with a `<glyph cell advance indent>` per non-default cell (see `games/re1/font/`) | — |
 | map pages | `map/00` … `map/0e`, `map/bg` (the full floor-plan view's backdrop) | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
 | FILE pages | `file/<doc>_bg` (the book backdrop), `file/<doc>_<page>_fg_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `file/0f_03_fg_en-US`; `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
 | room effect sheets | `effect/00` … `effect/20` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
@@ -197,11 +198,18 @@ with cameras and slots numbered by two lower-case hex digits
 (`RoomId::cut_stem`), `bgm` uses
 the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
 stage row and the lowercase hex id (`voice::entry_path`), `door`, `movie`,
-`effect`, `map` and `file` use two lower-case hex digits of the door type,
-film id, room effect-sheet index, map number and document (item `0x5F + doc`)
-and page, and everything else is the literal name `arklay list` prints. Music tracks, including the former
+`effect`, `map`, `file` and `font` use two lower-case hex digits of the door
+type, film id, room effect-sheet index, map number, document (item
+`0x5F + doc`) and page, and font id, and everything else is the literal name `arklay list` prints. Music tracks, including the former
 `Se_*` group layers, are all `bgm/<track id>`; the converter owns the only
 name-to-id table.
+
+A font is a sheet and a `font/<id>.xml` description sharing an id; a sheet
+without a description is not drawn. The description declares the script the
+sheet's cells are encoded in, so a mod may add a font under a new id and the
+sessions of that script pick the lowest id. The earlier `font/font`,
+`font/latin` and `font/jpn` names are no longer read: rename a Western sheet
+to `font/00` and a Japanese one to `font/01`.
 
 ### BMP transparency
 

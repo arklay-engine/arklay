@@ -1477,7 +1477,7 @@ mod tests {
 
     #[test]
     fn the_shipped_western_sheet_names_classic_rebirths_hd_font_page() {
-        let sheet = crate::tim::decode_4bpp(crate::font::WESTERN_SHEET).unwrap();
+        let sheet = crate::font::western().texture;
         let hashes: Vec<u32> = font_candidates(&sheet).iter().map(|c| c.hash).collect();
         assert!(hashes.contains(&0xc428_814d), "{hashes:08x?}");
         assert!(hashes.contains(&0xcff9_d54d), "{hashes:08x?}");
