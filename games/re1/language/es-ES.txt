@@ -1686,5 +1686,3 @@ ROOM_71C_TEXT_03 = "Un hornillo de gas... \nPero no hay gas...{scroll 2}"
 ROOM_71C_TEXT_04 = "\nNo hay agua...{scroll 2}"
 ROOM_71C_TEXT_05 = "Tiene pegada sangre oscura...\n¿Qué cocinaban aquí?{scroll 2}"
 
-UI_SAVE_SLOT_EMPTY = "ーーー/ーー/ーーーーー/ーー"
-UI_SAVE_SLOT_FILLED = " {s} {s} {s}/ {s} {s}/ {s} {s} {s} {s} {s}/ {s} {s}"

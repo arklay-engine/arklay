@@ -1271,6 +1271,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:room()` | The paused session's stage, room, camera cut and player (0 Chris, 1 Jill). |
 | `api:item_name_bytes(id[, examined])` | The font-encoded item name; with `examined`, the menu's name, which stays the unchecked one until the item's class is examined. |
 | `api:font_margin()` | The session font's left text margin. |
+| `api:glyph_width()` | The session font's fixed glyph advance: 14 on the Japanese sheet, 8 on the Western one; `nil` without a font. The vanilla save screen picks its Japanese or USA column table by it. |
 | `api:message_active()` | Whether the game's message window is up. |
 | `api:examine_spin(pitch, yaw, roll, sx, sy, sz)` | The item viewer's pose after pre-multiplying a spin, re-extracted the reference way. |
 | `api:examine_check(item, pitch, yaw, roll, zoom_spin, quantity)` | The examine check: `"description"`, `"zoom"` or `"message", id, mark, select`. |

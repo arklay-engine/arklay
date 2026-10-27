@@ -410,13 +410,13 @@ mod tests {
     fn the_save_strings_read_their_keys() {
         let pack = pack_with(&[(
             "language/en-US.txt",
-            "UI_SAVE_HEADER_0 = \"A\"\nUI_SAVE_SLOT_EMPTY = \"B\"\n",
+            "UI_SAVE_HEADER_0 = \"A\"\nUI_SAVE_OVERWRITE_PROMPT = \"B\"\n",
         )]);
         let text = Text::load(&pack, Some("en-US"));
         let save = text.save();
         assert_eq!(save.header(0), [0x1D, 0x01]);
         assert!(!save.header(1).is_empty(), "the embedded file fills it");
-        assert_eq!(save.slot_empty(), [0x1E, 0x01]);
+        assert_eq!(save.overwrite_prompt(), [0x1E, 0x01]);
     }
 }
 
@@ -462,16 +462,6 @@ impl SaveStrings<'_> {
     /// The `   しない` suffix drawn over the exit verb.
     pub fn exit_suffix(&self) -> &[u8] {
         self.text.ui("UI_SAVE_EXIT_SUFFIX")
-    }
-
-    /// The filled-slot row template (`   /  /     /  `).
-    pub fn slot_filled(&self) -> &[u8] {
-        self.text.ui("UI_SAVE_SLOT_FILLED")
-    }
-
-    /// The empty-slot row template (`ーーー/ーー/ーーーーー/ーー`).
-    pub fn slot_empty(&self) -> &[u8] {
-        self.text.ui("UI_SAVE_SLOT_EMPTY")
     }
 
     /// The overwrite confirmation line.
