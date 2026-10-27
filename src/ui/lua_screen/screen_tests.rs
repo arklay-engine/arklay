@@ -902,13 +902,12 @@ fn save_load_the_reveal_grows_two_bytes_per_step_and_names_the_location() {
         &[0x38, 0xFB, 0x0C, 0xFB, 0x13, 0xFB, 0x38, 0xFB],
         "separator, count 07, separator"
     );
+    let blank_cells = |bytes: &[u8]| bytes.chunks(2).all(|cell| cell == [0x00, 0xFB]);
     assert!(
-        reveal[..6]
-            .iter()
-            .chain(&reveal[14..])
-            .all(|&byte| byte == 0),
-        "the test context has no text, so the name and location are blank-padded"
+        blank_cells(&reveal[..6]) && blank_cells(&reveal[14..30]),
+        "the test context has no text, so the name and location are blank cells"
     );
+    assert_eq!(reveal[30], 0x01, "the slice takes the terminator too");
 
     // The assembled layout against real-shaped strings.
     let assembled = lua_bytes(
@@ -921,9 +920,10 @@ fn save_load_the_reveal_grows_two_bytes_per_step_and_names_the_location() {
         &assembled[6..14],
         &[0x38, 0xFB, 0x0C, 0xFB, 0x13, 0xFB, 0x38, 0xFB]
     );
-    assert_eq!(&assembled[14..19], &[0xF9, 0x09, 0x00, 0xFB, 0x01]);
+    assert_eq!(&assembled[14..18], &[0xF9, 0x09, 0x00, 0xFB]);
     assert_eq!(assembled.len(), REVEAL_LEN);
-    assert!(assembled[19..].iter().all(|&byte| byte == 0));
+    assert!(blank_cells(&assembled[18..30]));
+    assert_eq!(assembled[30], 0x01);
 
     // Steps advance every five ticks.
     let mut lengths = vec![reveal_len(&screen)];
@@ -1050,7 +1050,272 @@ fn save_load_count_digits_follow_the_original_table() {
     assert_eq!(count(7), [0x0C, 0xFB, 0x13, 0xFB]);
     assert_eq!(count(42), [0x10, 0xFB, 0x0E, 0xFB]);
     assert_eq!(count(107), [0x0C, 0xFB, 0x13, 0xFB]);
-    assert_eq!(screen.test_eval::<usize>("return M.REVEAL_LEN"), REVEAL_LEN);
+    assert_eq!(
+        screen.test_eval::<usize>("return #M.build_reveal('', 0, '')"),
+        REVEAL_LEN
+    );
+}
+
+/// The Western sheet (8px grid) and a blank 768-wide Japanese sheet (14px
+/// grid), as the session fonts the save screen's column tables key on.
+fn western_font() -> crate::font::Font {
+    crate::font::Font::new(crate::tim::decode_4bpp(crate::font::WESTERN_SHEET).unwrap())
+}
+
+fn japanese_font() -> crate::font::Font {
+    let (width, height) = (crate::font::JPN_SHEET_WIDTH, 256);
+    crate::font::Font::new(crate::model::Texture8 {
+        width,
+        height,
+        indices: vec![0; (width * height) as usize],
+        palettes: vec![[0; 4]; crate::model::PALETTE_ROW_LEN],
+        stp: Vec::new(),
+    })
+}
+
+/// The layout field `key` of the screen's running column table.
+fn layout_field(screen: &LuaScreen, key: &str) -> i64 {
+    screen.test_eval(&format!("return M.layout.{key}"))
+}
+
+#[test]
+fn save_load_picks_the_column_table_of_the_session_fonts_grid() {
+    let harness = Harness::new("sl-layout");
+    let western = western_font();
+    let japanese = japanese_font();
+
+    // SaveLoadScreen.cpp's GetSaveScreenLayout, per release.
+    let cases: [(Option<&crate::font::Font>, [i64; 7]); 3] = [
+        (Some(&japanese), [14, 0x6F, 0x99, 0x61, 0x29, 56, 3]),
+        (Some(&western), [8, 103, 127, 124, 47, 40, 5]),
+        // No font draws no text; the Japanese table stands.
+        (None, [14, 0x6F, 0x99, 0x61, 0x29, 56, 3]),
+    ];
+    for (font, expected) in cases {
+        let mut cx = harness.context();
+        cx.font = font;
+        let screen = open_load(&mut cx);
+        let fields = [
+            "glyph_w",
+            "count_x",
+            "loc_x",
+            "header_x",
+            "cursor_x",
+            "confirm_stride",
+            "name_cells",
+        ]
+        .map(|key| layout_field(&screen, key));
+        assert_eq!(fields, expected);
+    }
+
+    // Every column is a whole cell of its grid from the row start, as the
+    // reference's comments derive them.
+    let mut cx = harness.context();
+    for font in [&japanese, &western] {
+        cx.font = Some(font);
+        let screen = open_load(&mut cx);
+        let w = layout_field(&screen, "glyph_w");
+        let name = layout_field(&screen, "name_cells");
+        assert_eq!(layout_field(&screen, "count_x"), 55 + (name + 1) * w);
+        assert_eq!(layout_field(&screen, "loc_x"), 55 + (name + 4) * w);
+        assert_eq!(layout_field(&screen, "cursor_x"), 55 - w);
+        // The 9-cell "SAVE GAME" centred on the 320 frame.
+        assert_eq!(layout_field(&screen, "header_x"), 160 - 9 * w / 2);
+    }
+}
+
+#[test]
+fn save_load_slot_art_matches_the_releases_templates() {
+    let harness = Harness::new("sl-art");
+    let mut cx = harness.context();
+    let decode = |bytes: Vec<u8>| -> String {
+        bytes
+            .iter()
+            .map(|&byte| match byte {
+                0x00 => ' ',
+                0x38 => '/',
+                0x3B => '-',
+                _ => '?',
+            })
+            .collect()
+    };
+    let japanese = japanese_font();
+    cx.font = Some(&japanese);
+    let screen = open_load(&mut cx);
+    // 0x004b0fa0 / 0x004b0fc0: the 15-cell Japanese row.
+    assert_eq!(
+        decode(lua_bytes(&screen, "return M.layout.filled")),
+        "   /  /     /  "
+    );
+    assert_eq!(
+        decode(lua_bytes(&screen, "return M.layout.empty")),
+        "---/--/-----/--"
+    );
+
+    let western = western_font();
+    cx.font = Some(&western);
+    let screen = open_load(&mut cx);
+    // DAT_004d4058 / DAT_004d4070: the 28-cell USA row (0x38 is the
+    // backslash on the Western sheets).
+    assert_eq!(
+        decode(lua_bytes(&screen, "return M.layout.filled")),
+        "     /  /"
+    );
+    let empty = decode(lua_bytes(&screen, "return M.layout.empty"));
+    assert_eq!(empty, "-----/--/  -----------------");
+    assert_eq!(empty.len(), 28);
+}
+
+#[test]
+fn save_load_usa_reveal_spans_the_28_cell_row() {
+    let harness = Harness::new("sl-usa-reveal");
+    let western = western_font();
+    let text = crate::text::Text::embedded();
+    let mut cx = harness.context();
+    cx.font = Some(&western);
+    cx.text = Some(&text);
+    let file = SaveFile {
+        character: 1,
+        stage: 0,
+        room: 6,
+        saves: 3,
+        ..SaveFile::default()
+    };
+    let mut screen = open_save(&mut cx, file, false);
+    screen.update(&cx, confirm());
+    assert_eq!(stage(&screen), "save_anim");
+
+    let reveal = reveal_bytes(&screen);
+    // name(5) \ count(2) \ location(19) + the terminator: the reference's
+    // 57-byte USA reveal string.
+    assert_eq!(reveal.len(), 57);
+    let mut name = Vec::new();
+    crate::charset::encode("Jill", crate::charset::Script::Latin, &mut name);
+    let mut expected = Vec::new();
+    for byte in name {
+        expected.extend([byte, 0xFB]);
+    }
+    expected.extend([0x00, 0xFB]);
+    assert_eq!(&reveal[..10], expected.as_slice(), "Jill as five cells");
+    assert_eq!(
+        &reveal[10..18],
+        &[0x38, 0xFB, 0x0C, 0xFB, 0x0F, 0xFB, 0x38, 0xFB]
+    );
+    // The location field opens with the USA names' two blank cells.
+    assert_eq!(&reveal[18..22], &[0x00, 0xFB, 0x00, 0xFB]);
+    let mut label = Vec::new();
+    crate::charset::encode("Hall 1F", crate::charset::Script::Latin, &mut label);
+    let cells: Vec<u8> = reveal[22..22 + label.len() * 2]
+        .chunks(2)
+        .map(|cell| {
+            assert_eq!(cell[1], 0xFB);
+            cell[0]
+        })
+        .collect();
+    assert_eq!(cells, label);
+    assert_eq!(reveal[56], 0x01);
+
+    // Every slice of the reveal draws, and the screen finishes back in
+    // gameplay.
+    let mut framebuffer = crate::render::Framebuffer::new();
+    let mut result = ScreenResult::Continue;
+    for _ in 0..1000 {
+        screen.draw(&cx, &mut framebuffer);
+        assert!(!screen.failed(), "the reveal draws");
+        result = screen.update(&cx, neutral());
+        if result != ScreenResult::Continue {
+            break;
+        }
+    }
+    assert_eq!(result, ScreenResult::Done(ScreenAction::Resume));
+
+    // The overwrite dialog over the now-filled slot draws too.
+    let mut screen = open_save(&mut cx, SaveFile::default(), false);
+    screen.update(&cx, confirm());
+    assert_eq!(stage(&screen), "confirm_overwrite");
+    screen.draw(&cx, &mut framebuffer);
+    assert!(!screen.failed());
+}
+
+#[test]
+fn save_load_autosave_rows_use_the_selected_grid() {
+    // An autosave row draws exactly like a filled slot row of the same block,
+    // on either grid, and pushes the exit row down one row.
+    let harness = Harness::new("sl-autosave-grid");
+    let file = SaveFile {
+        character: 0,
+        stage: 0,
+        room: 6,
+        saves: 12,
+        ..SaveFile::default()
+    };
+    save::save(&harness.dir.0, 0, &file).unwrap();
+    crate::save::write_autosave(&harness.dir.0, &file).unwrap();
+    let text = crate::text::Text::embedded();
+    let western = western_font();
+    let japanese = japanese_font();
+    for font in [&western, &japanese] {
+        let mut cx = harness.context();
+        cx.font = Some(font);
+        cx.text = Some(&text);
+        let mut screen = open_load(&mut cx);
+        assert_eq!(screen.test_eval::<i64>("return #M.state.autosaves"), 1);
+        // Park the cursor on the exit row so neither compared row has it.
+        screen.test_eval::<()>("M.state.cursor = 9 M.state.blink_state = true");
+        let mut framebuffer = crate::render::Framebuffer::new();
+        screen.draw(&cx, &mut framebuffer);
+        assert!(!screen.failed());
+        let row = |y0: usize| -> Vec<u8> {
+            let stride = 320 * 4;
+            (y0..y0 + 14)
+                .flat_map(|y| framebuffer.rgba[y * stride..(y + 1) * stride].to_vec())
+                .collect()
+        };
+        let slot = row(45);
+        assert!(slot.iter().any(|&byte| byte != 0), "the slot row has ink");
+        assert_eq!(row(45 + 8 * 16), slot, "the autosave row matches slot 1");
+        assert!(
+            row(45 + 9 * 16).iter().any(|&byte| byte != 0),
+            "the exit row"
+        );
+    }
+}
+
+#[test]
+fn save_load_japanese_fields_keep_their_authored_cells() {
+    // The ja-JP names and save labels are authored cell-encoded (the
+    // reference's STR_JP_CELL), so the reveal's cell padding leaves them
+    // byte-identical: three and eight cells.
+    let harness = Harness::new("sl-jpn-cells");
+    let text = crate::text::Text::load(empty_pack(), Some("ja-JP"));
+    let japanese = japanese_font();
+    let mut cx = harness.context();
+    cx.font = Some(&japanese);
+    cx.text = Some(&text);
+    let screen = open_load(&mut cx);
+    let cells = |bytes: &[u8], count: usize| {
+        let literal: String = bytes.iter().map(|byte| format!("\\x{byte:02X}")).collect();
+        lua_bytes(&screen, &format!("return M.cells('{literal}', {count})"))
+    };
+    let strip = |bytes: &[u8]| bytes.strip_suffix(&[0x01]).unwrap_or(bytes).to_vec();
+    for character in 0..2 {
+        let authored = strip(text.save().character_name(character));
+        assert_eq!(authored.len(), 6);
+        assert_eq!(cells(&authored, 3), authored);
+    }
+    // One room of every save location the reference names.
+    for (stage, room) in [
+        (0, 0x00),
+        (0, 0x06),
+        (1, 0x00),
+        (2, 0x00),
+        (3, 0x00),
+        (4, 0x00),
+    ] {
+        let authored = strip(text.save().location(stage, room));
+        assert_eq!(authored.len(), 16, "stage {stage} room {room:02X}");
+        assert_eq!(cells(&authored, 8), authored);
+    }
 }
 
 #[test]

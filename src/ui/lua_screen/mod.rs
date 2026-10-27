@@ -1171,6 +1171,16 @@ impl UserData for Api<'_> {
             Ok(api.cx.font.map_or(0, |font| font.metrics.left_margin))
         });
 
+        // `glyph_width()`: the session font's fixed glyph advance, the cell
+        // the original's text grid steps by: 14 for the Japanese `FONT.TIM`,
+        // 8 for the Western sheet (the USA `fontus.tim` pitch). Nil without
+        // a font. Screens with per-release column tables pick theirs by it,
+        // as the reference's `GetAssetVersion()` picks font and columns
+        // together.
+        methods.add_method("glyph_width", |_lua, api, ()| {
+            Ok(api.cx.font.map(|font| font.metrics.glyph_w))
+        });
+
         // `message_active()`: whether the game's message window is up.
         methods.add_method("message_active", |_lua, api, ()| {
             Ok(api.game().is_some_and(|game| game.message.active))

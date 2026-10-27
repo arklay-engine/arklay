@@ -13,42 +13,90 @@
 -- extra rows, newest first, and push the exit row down. With no autosave on
 -- disk the screen is the original's exactly.
 --
--- Column positions are the Japanese glyph grid's: the save-count digits at
--- countX 0x6F, the location at locX 0x99, the header at 0x61 and the slot
--- cursor one glyph cell left of the text at 0x29. The reveal string is
--- assembled exactly like the original's: three name cells, a separator, the
--- two count digits, a separator and the eight-cell location name. All text
--- is the text table's font-encoded bytes, drawn with api:glyphs.
+-- The column positions are the release's glyph grid's, picked like the
+-- reference's GetSaveScreenLayout: the Japanese FONT.TIM's 14px cells
+-- (name(3) / count(2) / location(8), a 15-cell row) or the USA fontus.tim's
+-- 8px cells (name(5) \ count(2) \ location(19), a 28-cell row). The port's
+-- session font follows the language, so the grid follows the font that is
+-- actually drawing: api:glyph_width() is 14 on the Japanese sheet and 8 on
+-- the Western one. The reveal string is assembled exactly like the
+-- original's: the name cells, a separator, the two count digits, a
+-- separator and the location cells. All text is the text table's
+-- font-encoded bytes, drawn with api:glyphs.
 
 local M = {}
 
-local HEADER_X, HEADER_Y = 0x61, 13
+local HEADER_Y = 13
 local ROW_X, ROW_Y, ROW_HEIGHT = 55, 45, 16
-local COUNT_X, LOC_X = 0x6F, 0x99
-local CURSOR_X = 0x29
--- The overwrite-confirm cursor; YES and NO are four Japanese cells apart.
-local CONFIRM_X, CONFIRM_Y, CONFIRM_STRIDE = 118, 209, 56
+local CONFIRM_X, CONFIRM_Y = 118, 209
 local PROMPT_X, PROMPT_Y = 49, 193
 local ERROR_Y, ERROR_Y2 = 209, 225
 local SLOT_COUNT = 8
--- Bytes of the three-cell name and the eight-cell location (terminator
--- included), and of the assembled reveal.
-local NAME_LEN, LOC_LEN = 6, 17
-M.REVEAL_LEN = NAME_LEN + 8 + LOC_LEN
+
+-- The slot-row art's cells: a blank, the separator glyph (0x38, a forward
+-- slash in FONT.TIM and a backslash in fontus.tim) and the dash (0x3B, the
+-- katakana long-vowel mark in FONT.TIM and '-' in fontus.tim). Both sheets
+-- share these bytes, so the art belongs to the grid, not to a language.
+local function art(cells)
+    return (cells:gsub(".", { [" "] = "\0", ["/"] = "\x38", ["-"] = "\x3B" }))
+end
+
+-- The two releases' column tables (SaveLoadScreen.cpp's SaveScreenLayout),
+-- keyed by glyph width.
+M.LAYOUTS = {
+    -- The Japanese screen (0x00435af0).
+    [14] = {
+        glyph_w = 14,
+        count_x = 0x6F, -- cell 4 of the grid from ROW_X
+        loc_x = 0x99, -- cell 7
+        header_x = 0x61, -- the 9-cell "SAVE GAME" centred
+        cursor_x = 0x29, -- one cell left of ROW_X
+        confirm_stride = 56, -- 4 cells: " はい" -> "  いいえ"
+        name_cells = 3,
+        loc_cells = 8,
+        -- Leading blank cells the original's location names carry.
+        loc_indent = 0,
+        filled = art("   /  /     /  "),
+        empty = art("---/--/-----/--"),
+    },
+    -- The USA screen (0x00493310).
+    [8] = {
+        glyph_w = 8,
+        count_x = 103, -- cell 6
+        loc_x = 127, -- cell 9
+        header_x = 124,
+        cursor_x = 47,
+        confirm_stride = 40, -- 5 cells: " YES" -> " NO"
+        name_cells = 5,
+        loc_cells = 19,
+        -- The USA location names start with two blanks ("  M.Room 1F"),
+        -- which the empty row's two blanks after the second separator
+        -- mirror; the language files' labels do not carry them.
+        loc_indent = 2,
+        filled = art("     /  /"),
+        empty = art("-----/--/  -----------------"),
+    },
+}
+-- Without a font the screen draws no text; keep the Japanese table.
+local DEFAULT_GLYPH_W = 14
+
 local BLINK_TICKS = 5
 local REVEAL_TICKS = 5
 local REVEAL_STEP = 2
 -- The black-overlay steps of the fade-in and the (faster) fade-out.
 local FADE_STEP, FADE_OUT_STEP = 8, 16
--- The slash separator glyph (cell 2 of row 2) and the blinking cursor: the
--- reference's DrawSaveCursor blits the arrowhead at the glyph grid's plain
--- byte 0x02.
+-- The separator glyph and the blinking cursor: the reference's
+-- DrawSaveCursor blits the arrowhead at the glyph grid's plain byte 0x02.
 local SEPARATOR = 0x38
 local CURSOR_GLYPH = string.char(0x02)
 local PAD = 0xFB
+local BLANK_CELL = string.char(0x00, PAD)
+local TERMINATOR = 0x01
 
 local background
 local s
+-- The running grid's column table.
+local L = M.LAYOUTS[DEFAULT_GLYPH_W]
 
 --- The save-count digits as the original's %02d line: tens, units, each in
 --- its own cell with a 0xFB pad.
@@ -57,27 +105,60 @@ function M.count_bytes(saves)
     return string.char(0x0C + (saves // 10) % 10, PAD, 0x0C + saves % 10, PAD)
 end
 
---- `src` cut or zero-padded to `len` bytes.
-local function padded(src, len)
-    src = src:sub(1, len)
-    return src .. string.rep("\0", len - #src)
+--- `src` (up to its terminator) as two-byte glyph cells, blank-padded to
+--- at least `cells`: a plain glyph takes a 0xFB pad, an extended-page glyph
+--- is already two bytes. The original's name and location tables are
+--- authored this way (STR_CELL), because the reveal lengthens its slice two
+--- bytes a step; the language files spell Latin text unpadded. Text longer
+--- than its field is kept whole, as the filled rows draw it.
+function M.cells(src, cells)
+    local out = {}
+    local i = 1
+    while i <= #src do
+        local byte = src:byte(i)
+        if byte == TERMINATOR then
+            break
+        elseif byte == PAD or byte == 0xFF then
+            i = i + 1
+        elseif byte >= 0xF8 and byte <= 0xFA then
+            out[#out + 1] = src:sub(i, i + 1)
+            i = i + 2
+        else
+            out[#out + 1] = string.char(byte, PAD)
+            i = i + 1
+        end
+    end
+    for _ = #out + 1, cells do
+        out[#out + 1] = BLANK_CELL
+    end
+    return table.concat(out)
+end
+
+--- The location field: the grid's leading blanks, then the label.
+local function location_field(location)
+    return string.rep(BLANK_CELL, L.loc_indent) .. M.cells(location or "", 0)
 end
 
 --- Assemble the reveal string: name, separator, count digits, separator,
---- location.
+--- location and its terminator (the original's slice takes the 0x01 too).
+--- Also returns the byte offsets the count and the location start at.
 function M.build_reveal(name, saves, location)
-    return padded(name, NAME_LEN)
+    local name_field = M.cells(name or "", L.name_cells)
+    local loc_field = M.cells(location_field(location), L.loc_cells)
+    local bytes = name_field
         .. string.char(SEPARATOR, PAD)
         .. M.count_bytes(saves)
         .. string.char(SEPARATOR, PAD)
-        .. padded(location, LOC_LEN)
+        .. loc_field
+        .. string.char(TERMINATOR)
+    return bytes, #name_field, #name_field + 8
 end
 
 --- Whether the reveal has shown everything the original shows. The last
---- printed slice is REVEAL_LEN - 1 bytes: the final pass's check steps past
---- the string before it draws the terminator-only slice.
+--- printed slice is one byte short of the string: the final pass's check
+--- steps past the string before it draws the terminator-only slice.
 local function reveal_finished(reveal)
-    return reveal.length + REVEAL_STEP + REVEAL_STEP > M.REVEAL_LEN + 1
+    return reveal.length + REVEAL_STEP + REVEAL_STEP > #reveal.bytes + 1
 end
 
 --- Whether the slice drawn at the current length asks for the reference's
@@ -151,8 +232,11 @@ local function begin_save(api, slot_cued)
         info.character & 1 == 0 and "UI_SAVE_CHARACTER_0_NAME" or "UI_SAVE_CHARACTER_1_NAME"
     ) or ""
     local location = api:location_bytes(info.stage, info.room) or ""
+    local bytes, name_len, loc_base = M.build_reveal(name, info.saves, location)
     local reveal = {
-        bytes = M.build_reveal(name, info.saves, location),
+        bytes = bytes,
+        name_len = name_len,
+        loc_base = loc_base,
         length = REVEAL_STEP,
         timer = REVEAL_TICKS,
     }
@@ -200,6 +284,8 @@ function M.open(api)
     if not background then
         api:log("warning: no save/load background: " .. err)
     end
+    L = M.LAYOUTS[api:glyph_width() or DEFAULT_GLYPH_W] or M.LAYOUTS[DEFAULT_GLYPH_W]
+    M.layout = L
     local save = api:mode() == "save"
     -- The loadable autosaves, newest first; save mode never writes them.
     local autosaves = {}
@@ -378,6 +464,50 @@ local function cursor(api, x, y)
     end
 end
 
+--- Draw `bytes` one glyph cell per grid column from `x`, the original's
+--- fixed-advance PrintFormattedText. The Western sheet always draws at its
+--- proportional advances (its dash is 7px), so the slot art and the
+--- reveal's separators place every cell on the grid themselves.
+local function grid(api, x, y, bytes)
+    local column = 0
+    local i = 1
+    while i <= #bytes do
+        local byte = bytes:byte(i)
+        if byte == TERMINATOR then
+            break
+        elseif byte == PAD or byte == 0xFF then
+            i = i + 1
+        else
+            local len = (byte >= 0xF8 and byte <= 0xFA) and 2 or 1
+            if byte ~= 0 then
+                api:glyphs(x + column * L.glyph_w, y, bytes:sub(i, i + len - 1), { tight = false })
+            end
+            column = column + 1
+            i = i + len
+        end
+    end
+end
+
+local function min(a, b)
+    return a < b and a or b
+end
+
+--- Draw the reveal's first `length` bytes field by field, so each lands on
+--- the columns the filled rows use: the name at the row's start, the
+--- separators and count digits on the grid, the location at its column.
+local function draw_reveal(api, ox, y, reveal)
+    local length = reveal.length
+    local bytes = reveal.bytes
+    api:glyphs(ox + ROW_X, y, bytes:sub(1, min(length, reveal.name_len)))
+    if length > reveal.name_len then
+        local x = ox + ROW_X + L.name_cells * L.glyph_w
+        grid(api, x, y, bytes:sub(reveal.name_len + 1, min(length, reveal.loc_base)))
+    end
+    if length > reveal.loc_base then
+        api:glyphs(ox + L.loc_x, y, bytes:sub(reveal.loc_base + 1, length))
+    end
+end
+
 function M.draw(api)
     local ox, oy = origin(api)
     local rows = layout(api, oy)
@@ -391,18 +521,26 @@ function M.draw(api)
     end
     local row_y = oy + rows.row + s.cursor * rows.pitch
     if not (api:has_font() and api:has_text()) then
-        cursor(api, ox + CURSOR_X, row_y)
+        cursor(api, ox + L.cursor_x, row_y)
         return
     end
-    local function text(x, y, key, fixed)
-        api:glyphs(ox + x, oy + y, api:ui_bytes(key), fixed and { tight = false } or nil)
+    local function text(x, y, key)
+        api:glyphs(ox + x, oy + y, api:ui_bytes(key))
     end
     local mode = s.save and 0 or 1
+    -- A filled row: the slot art keeps its separators on the count and
+    -- location columns; the name, count and location overlay its blanks.
+    local function filled_row(y, info)
+        grid(api, ox + ROW_X, oy + y, L.filled)
+        text(ROW_X, y, "UI_SAVE_CHARACTER_" .. (info.character & 1) .. "_NAME")
+        grid(api, ox + L.count_x, oy + y, M.count_bytes(info.saves))
+        api:glyphs(ox + L.loc_x, oy + y, location_field(api:location_bytes(info.stage, info.room)))
+    end
 
     -- The header is the original's formatted path, so the suffix's M is
     -- the sheet's letter M.
-    text(HEADER_X, rows.header, "UI_SAVE_HEADER_" .. mode)
-    text(HEADER_X, rows.header, "UI_SAVE_HEADER_SUFFIX")
+    text(L.header_x, rows.header, "UI_SAVE_HEADER_" .. mode)
+    text(L.header_x, rows.header, "UI_SAVE_HEADER_SUFFIX")
 
     for index = 0, SLOT_COUNT - 1 do
         local y = rows.row + index * rows.pitch
@@ -410,35 +548,22 @@ function M.draw(api)
         if s.stage == "save_anim" and s.cursor == index then
             -- The reveal draws this row.
         elseif info then
-            -- The slot template is fixed-width art authored on the
-            -- Japanese 14px grid: keep its separators on the count and
-            -- location columns.
-            text(ROW_X, y, "UI_SAVE_SLOT_FILLED", true)
-            text(ROW_X, y, "UI_SAVE_CHARACTER_" .. (info.character & 1) .. "_NAME")
-            api:glyphs(ox + COUNT_X, oy + y, M.count_bytes(info.saves))
-            api:glyphs(ox + LOC_X, oy + y, api:location_bytes(info.stage, info.room))
+            filled_row(y, info)
         else
-            -- The empty-slot row is fixed-width art too.
-            text(ROW_X, y, "UI_SAVE_SLOT_EMPTY", true)
+            grid(api, ox + ROW_X, oy + y, L.empty)
         end
     end
 
     -- The autosave rows draw like filled slots.
     for index, info in ipairs(s.autosaves) do
-        local y = rows.row + (SLOT_COUNT + index - 1) * rows.pitch
-        text(ROW_X, y, "UI_SAVE_SLOT_FILLED", true)
-        text(ROW_X, y, "UI_SAVE_CHARACTER_" .. (info.character & 1) .. "_NAME")
-        api:glyphs(ox + COUNT_X, oy + y, M.count_bytes(info.saves))
-        api:glyphs(ox + LOC_X, oy + y, api:location_bytes(info.stage, info.room))
+        filled_row(rows.row + (SLOT_COUNT + index - 1) * rows.pitch, info)
     end
 
     text(ROW_X, rows.exit, "UI_SAVE_EXIT_" .. mode)
     text(ROW_X, rows.exit, "UI_SAVE_EXIT_SUFFIX")
 
     if s.reveal then
-        -- The reveal is assembled on the fixed 14px grid to line up with
-        -- the row's separators.
-        api:glyphs(ox + ROW_X, row_y, s.reveal.bytes:sub(1, s.reveal.length), { tight = false })
+        draw_reveal(api, ox, row_y, s.reveal)
     end
 
     if s.stage == "confirm_overwrite" then
@@ -451,12 +576,12 @@ function M.draw(api)
 
     if s.stage == "confirm_overwrite" then
         -- The slot cursor stays visible while the confirm cursor blinks.
-        cursor(api, ox + CURSOR_X, row_y)
+        cursor(api, ox + L.cursor_x, row_y)
         if not s.blink_state then
-            cursor(api, ox + CONFIRM_X + s.confirm_choice * CONFIRM_STRIDE, oy + rows.confirm)
+            cursor(api, ox + CONFIRM_X + s.confirm_choice * L.confirm_stride, oy + rows.confirm)
         end
     elseif not s.blink_state then
-        cursor(api, ox + CURSOR_X, row_y)
+        cursor(api, ox + L.cursor_x, row_y)
     end
 end
 

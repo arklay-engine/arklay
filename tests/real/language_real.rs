@@ -85,8 +85,8 @@ fn the_japanese_seed_matches_the_executable_tables() {
             5 => "UI_SAVE_EXIT_0",
             6 => "UI_SAVE_EXIT_1",
             7 => "UI_SAVE_EXIT_SUFFIX",
-            8 => "UI_SAVE_SLOT_FILLED",
-            9 => "UI_SAVE_SLOT_EMPTY",
+            // 8 and 9 are the slot-row art, which belongs to the glyph grid
+            // and lives in `ui/save_load.lua`'s column tables.
             10 => "UI_SAVE_OVERWRITE_PROMPT",
             11 => "UI_SAVE_YES_NO",
             12 => "UI_SAVE_ERROR_0",
