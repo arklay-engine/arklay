@@ -154,6 +154,9 @@ pub enum UiCue {
     SaveConfirm,
     /// A FILE reader page turn (`Chris10`, character-table slot 8).
     PageTurn,
+    /// A current-room bank sound (`play_sfx(2, slot)`): the slot of the
+    /// loaded room's sound-table row, which only the session can resolve.
+    RoomSound(u8),
 }
 
 impl UiCue {
@@ -170,6 +173,7 @@ impl UiCue {
             UiCue::SaveCursor => crate::sfx::global_sfx(12, 14),
             UiCue::SaveConfirm => crate::sfx::global_sfx(12, 15),
             UiCue::PageTurn => Some(crate::sfx::UI_PAGE_TURN),
+            UiCue::RoomSound(_) => None,
         }
     }
 }
@@ -290,6 +294,11 @@ mod tests {
         assert_eq!(UiCue::SaveCursor.name(), Some("type01"));
         assert_eq!(UiCue::SaveConfirm.name(), Some("type02"));
         assert_eq!(UiCue::PageTurn.name(), Some("Chris10"));
+        assert_eq!(
+            UiCue::RoomSound(0x21).name(),
+            None,
+            "the session resolves it"
+        );
     }
 
     #[test]

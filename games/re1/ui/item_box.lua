@@ -7,7 +7,7 @@
 -- stays on the inventory grid (it only leaves it for the box's tab row):
 -- confirming an inventory stack arms the swap, up/down (or L1/R1) page the box
 -- cursor with a slide, and confirming again performs it. Cancel (or confirming
--- on a top-tab cursor) closes the screen.
+-- on a top-tab cursor) closes the screen, and START closes it from any state.
 -- The box only ever reaches the EXIT tab of the pause menu's top row: the
 -- greyed-out Map, File and Radio tabs are unselectable (`itembox_draw_cursor`
 -- draws every tab-row cursor on EXIT, and left/right do nothing there).
@@ -22,8 +22,9 @@
 -- swap. `api:exit()` closes the box and the pause menu. The engine tells the
 -- screen whether the menu has revealed its cursor with `M.cursor_shown(api,
 -- shown)` before each draw. The screen plays its own cues (the
--- `play_sfx(3, ...)` calls of `menu_itembox_interaction`), so a dropped or
--- refused input stays silent.
+-- `play_sfx(3, ...)` calls of `menu_itembox_interaction`, plus the page
+-- slide's room-bank `play_sfx(2, 0x21)`), so a dropped or refused input stays
+-- silent.
 --
 -- The frame tables preserve the original's memory layout order: entries are
 -- listed in the order the original's backwards walk draws them.
@@ -42,6 +43,8 @@ local SLOTS_TOTAL = 48
 -- counter steps by the slide direction and wraps to 0 there, which ends the
 -- slide. The drawn states are 1..14, moving the list one row (15px).
 local SLIDE_WRAP = 0x0F
+-- The room-bank slot the page slide plays (`play_sfx(2, 0x21)`).
+local PAGE_SOUND = 0x21
 -- The cursor blink counter's dim phase: while bit `0x20` of `DAT_00ae9f18` is
 -- clear the original draws the slot cursor's dim cell (`texU 0xA8`).
 local CURSOR_DIM_BIT = 0x20
@@ -252,8 +255,10 @@ end
 -- Start a page slide: the original's state-2 page branch plus the first step
 -- of the state-3 slide it falls into. The backward branch moves the box
 -- cursor immediately; the forward one only advances it when the slide ends,
--- which keeps the drawn list and the swapped slot in step.
-local function start_slide(direction)
+-- which keeps the drawn list and the swapped slot in step. The branch plays
+-- the room bank's slide sound, not a menu cue.
+local function start_slide(api, direction)
+    api:room_sound(PAGE_SOUND)
     if direction > 0 then
         s.slide = 0
         s.slide_dir = 1
@@ -308,11 +313,9 @@ local function armed_input(api, input)
     elseif input.up or input.page_left then
         -- The original's state 2 pages the box grid with the raw D-pad
         -- up/down; L1/R1 alias them here. Down/R1 is next, up/L1 previous.
-        -- The page plays the room bank's slide sound (`play_sfx(2, 0x21)`),
-        -- not a menu cue, so no UI cue sounds here.
-        start_slide(-1)
+        start_slide(api, -1)
     elseif input.down or input.page_right then
-        start_slide(1)
+        start_slide(api, 1)
     elseif input.confirm then
         -- Swapping two empty slots is refused silently: the original plays
         -- the decide cue only inside its swap branch.
@@ -334,6 +337,13 @@ end
 
 function M.update(api, input)
     api:set("swap", false)
+    -- START closes the box from every state, before the state switch (so
+    -- neither the blink nor a running slide steps), with the cancel cue.
+    if input.start then
+        api:sound("cancel")
+        api:exit()
+        return
+    end
     -- The tick: `DAT_00ae9f18` counts down only in the browse state (state
     -- 1); the armed and sliding states (2/3) leave it alone, which is why an
     -- armed box keeps drawing the cursor's dim frame. The tick sits before
@@ -342,16 +352,19 @@ function M.update(api, input)
     if s.mode == "browse" then
         s.cursor_blink = (s.cursor_blink - 1) & 0xFF
     end
-    if s.slide_dir ~= 0 then
+    -- The original's state 3 (a slide is running) reads no buttons at all,
+    -- including on the step that ends the slide (it hands back to state 2
+    -- and breaks): a confirm that lands mid-slide or on its last frame is
+    -- dropped, which is why a page-then-confirm sequence swaps the slot the
+    -- slide landed on.
+    local sliding = s.slide_dir ~= 0
+    if sliding then
         advance_slide()
     end
 
     if s.mode == "browse" then
         browse_input(api, input)
-    elseif s.slide_dir == 0 then
-        -- The original's state 3 (a slide is running) reads no buttons at
-        -- all: the confirm that lands mid-slide is dropped, which is why a
-        -- page-then-confirm sequence swaps the slot the slide landed on.
+    elseif not sliding then
         armed_input(api, input)
     end
     api:set("cursor", drawn_cursor())

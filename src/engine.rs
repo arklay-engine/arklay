@@ -3428,20 +3428,10 @@ impl GameSession {
         // bank-2 calls: the item-box lid (0x20), the locked-door rattles, the
         // key turn and the desk cues all arrive here.
         let requests = std::mem::take(&mut self.game.sfx_requests);
-        if !requests.is_empty() && self.music.is_some() {
-            let row = sfx::room_row(self.loaded.room.stage, self.loaded.room.room);
+        if self.music.is_some() {
             for id in requests {
-                let Ok(column) = u8::try_from(id) else {
-                    continue;
-                };
-                let Some(name) = sfx::room_sound(row, usize::from(column)) else {
-                    continue;
-                };
-                let Some(wav) = self.sfx_cache.load(pack, name) else {
-                    continue;
-                };
-                if let Some(mixer) = &mut self.music {
-                    mixer.play_sfx_on_bank(sfx_bank_key(2, column), wav, 1.0, 0.0);
+                if let Ok(column) = u8::try_from(id) {
+                    self.play_room_bank_sound(pack, column);
                 }
             }
         }
@@ -3935,6 +3925,21 @@ impl GameSession {
         self.menu_fade_started = false;
         self.menu_exit_restored = false;
         self.menu_fade_phase = MenuFadePhase::Closing;
+    }
+
+    /// Play one non-positional room-bank (bank 2) sound through the mixer:
+    /// the `column` slot of the loaded room's sound-table row, keyed by its
+    /// bank slot like the original's `play_sfx(2, column)`.
+    fn play_room_bank_sound(&mut self, pack: &Pack, column: u8) {
+        let row = sfx::room_row(self.loaded.room.stage, self.loaded.room.room);
+        let Some(name) = sfx::room_sound(row, usize::from(column)) else {
+            return;
+        };
+        if let Some(wav) = self.sfx_cache.load(pack, name)
+            && let Some(mixer) = &mut self.music
+        {
+            mixer.play_sfx_on_bank(sfx_bank_key(2, column), wav, 1.0, 0.0);
+        }
     }
 
     /// Play one character-bank (bank 3) cue through the mixer. The cue is
@@ -4959,14 +4964,16 @@ impl GameSession {
             // (`menu_itembox_interaction` plays them per branch, so a refused
             // empty swap and an input dropped mid-slide stay silent); the
             // engine performs a confirmed swap.
-            let event_input = menu_input(ui);
+            // START reaches it too: `menu_itembox_interaction` checks it
+            // before every state and closes the box with the cancel cue.
+            let mut event_input = menu_input(ui).map_or_else(UiInput::default, single_input);
+            event_input.start = ui.start;
             let Some(mut item_box) = self.item_box.take() else {
                 return;
             };
             let (result, cues) = {
                 let cx = self.ui_context(pack);
-                let result =
-                    item_box.update(&cx, event_input.map_or_else(UiInput::default, single_input));
+                let result = item_box.update(&cx, event_input);
                 (result, cx.cues.into_inner())
             };
             self.play_ui_cue_names(pack, cues);
@@ -4977,8 +4984,9 @@ impl GameSession {
                 );
             }
             if !matches!(result, ScreenResult::Continue) {
-                // `menu_itembox_interaction` returns 1 for a browse cancel and
-                // for a confirm on a cursor without a slot; the menu driver
+                // `menu_itembox_interaction` returns 1 for START (in every
+                // state), a browse cancel and for a confirm on a cursor
+                // without a slot; the menu driver
                 // turns that into `menu_exit_cleanup`, so the whole pause menu
                 // fades out and the room resumes - the box never drops back to
                 // the inventory panel. The overlay stays drawn through the
@@ -6682,14 +6690,20 @@ impl GameSession {
         if cues.is_empty() {
             return;
         }
-        let Some(mixer) = self.music.as_mut() else {
+        if self.music.is_none() {
             return;
-        };
+        }
         for cue in cues {
+            if let ui::UiCue::RoomSound(column) = cue {
+                self.play_room_bank_sound(pack, column);
+                continue;
+            }
             let Some(name) = cue.name() else {
                 continue;
             };
-            if let Some(wav) = self.sfx_cache.load(pack, name) {
+            if let Some(wav) = self.sfx_cache.load(pack, name)
+                && let Some(mixer) = self.music.as_mut()
+            {
                 mixer.play_sfx(wav, 1.0, 0.0);
             }
         }
@@ -24593,6 +24607,49 @@ off_0010:
         );
         assert!(session.item_box.is_some());
         assert_eq!(session.game.item_box[0].id, 0);
+    }
+
+    #[test]
+    fn start_closes_the_item_box_with_the_cancel_cue() {
+        // `menu_itembox_interaction` checks START before its state switch:
+        // `play_sfx(3, 5)` and a return of 1, which `menu_exit_cleanup` turns
+        // into the pause menu's closing fade. The engine used to drop START
+        // before the item-box screen saw it.
+        let _sdl = crate::audio::test_lock::sdl();
+        let mixer = dummy_mixer();
+        let dir = TempDir::new();
+        let pack_path = menu_cue_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        let has_mixer = mixer.is_some();
+        session.music = mixer;
+        session.open_item_box(&pack);
+        assert!(session.item_box.is_some());
+        let confirm = UiInput {
+            confirm: true,
+            ..UiInput::default()
+        };
+        session
+            .tick(&pack, confirm, player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.menu_fade_phase, MenuFadePhase::None);
+        let start = UiInput {
+            start: true,
+            ..UiInput::default()
+        };
+        session
+            .tick(&pack, start, player::Input::default(), false)
+            .unwrap();
+        assert_eq!(session.menu_fade_phase, MenuFadePhase::Closing);
+        if has_mixer {
+            assert_eq!(
+                session.music.as_ref().unwrap().active_sfx(),
+                2,
+                "the arm's decide cue and START's cancel cue"
+            );
+        }
     }
 
     #[test]
