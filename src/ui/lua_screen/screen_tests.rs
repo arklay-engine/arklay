@@ -1318,6 +1318,192 @@ fn save_load_japanese_fields_keep_their_authored_cells() {
     }
 }
 
+/// A pack carrying the Western sheet, so a non-Japanese language's text is
+/// encoded for it.
+fn western_pack() -> &'static Pack {
+    use std::sync::OnceLock;
+    static PACK: OnceLock<Pack> = OnceLock::new();
+    PACK.get_or_init(|| {
+        let mut writer = crate::pack::PackWriter::new();
+        writer
+            .add(
+                crate::font::LATIN_ENTRY,
+                crate::font::WESTERN_SHEET.to_vec(),
+            )
+            .unwrap();
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    })
+}
+
+/// The Western languages the save screen draws on the USA grid.
+const WESTERN_LANGUAGES: [&str; 7] = [
+    "en-US", "de-DE", "es-ES", "fr-FR", "it-IT", "fi-FI", "ru-RU",
+];
+
+/// `M.header_x(api, mode)` and `M.confirm_line(api, bytes)`'s NO offset
+/// with the API bound.
+fn header_x(screen: &mut LuaScreen, cx: &UiContext<'_>, mode: i64) -> i64 {
+    screen.test_eval_with_game(cx, None, &format!("return M.header_x(api, {mode})"))
+}
+
+fn width_of(screen: &mut LuaScreen, cx: &UiContext<'_>, bytes: &[u8]) -> i64 {
+    let literal: String = bytes.iter().map(|byte| format!("\\x{byte:02X}")).collect();
+    screen.test_eval_with_game(cx, None, &format!("return api:glyphs_width('{literal}')"))
+}
+
+#[test]
+fn save_load_header_is_centred_on_the_reference_column() {
+    let harness = Harness::new("sl-header");
+    let western = western_font();
+    // en-US on the USA grid: the nine cells of "Save game" start at the
+    // reference's headerX.
+    let text = crate::text::Text::load(western_pack(), Some("en-US"));
+    let mut cx = harness.context();
+    cx.font = Some(&western);
+    cx.text = Some(&text);
+    let mut screen = open_load(&mut cx);
+    assert_eq!(header_x(&mut screen, &cx, 0), 124);
+    assert_eq!(header_x(&mut screen, &cx, 1), 124);
+
+    // ja-JP on the Japanese grid: "SAVE" under "     GAME", nine full
+    // cells from 0x61.
+    let japanese = japanese_font();
+    let text = crate::text::Text::load(empty_pack(), Some("ja-JP"));
+    cx.font = Some(&japanese);
+    cx.text = Some(&text);
+    let mut screen = open_load(&mut cx);
+    assert_eq!(header_x(&mut screen, &cx, 0), 0x61);
+    assert_eq!(header_x(&mut screen, &cx, 1), 0x61);
+
+    // Every Western language's label is centred on the same column (x 160)
+    // by its measured width; no suffix is inherited from en-US.
+    for language in WESTERN_LANGUAGES {
+        let text = crate::text::Text::load(western_pack(), Some(language));
+        assert!(
+            text.ui("UI_SAVE_HEADER_SUFFIX").is_empty(),
+            "{language} draws its header as one label"
+        );
+        let mut cx = harness.context();
+        cx.font = Some(&western);
+        cx.text = Some(&text);
+        let mut screen = open_load(&mut cx);
+        for mode in 0..2 {
+            let label = text.ui(&format!("UI_SAVE_HEADER_{mode}")).to_vec();
+            let width = width_of(&mut screen, &cx, &label);
+            let x = header_x(&mut screen, &cx, mode);
+            assert!(x >= 0, "{language} header {mode} fits the frame");
+            let centre2 = 2 * x + width;
+            assert!(
+                (319..=320).contains(&centre2),
+                "{language} header {mode} centred: x {x}, width {width}"
+            );
+        }
+    }
+}
+
+#[test]
+fn save_load_yes_no_cursors_sit_on_the_blanks_before_each_answer() {
+    let harness = Harness::new("sl-yes-no");
+    let western = western_font();
+    let mut cx = harness.context();
+
+    // en-US keeps the reference exactly: " Yes  No" and a 40px stride.
+    let text = crate::text::Text::load(western_pack(), Some("en-US"));
+    cx.font = Some(&western);
+    cx.text = Some(&text);
+    let screen = open_load(&mut cx);
+    assert_eq!(
+        lua_bytes(&screen, "return M.state.confirm.bytes"),
+        text.ui("UI_SAVE_YES_NO")
+    );
+    assert_eq!(screen.test_eval::<i64>("return M.state.confirm.no_dx"), 40);
+
+    // ja-JP keeps the Japanese stride of four 14px cells.
+    let japanese = japanese_font();
+    let jtext = crate::text::Text::load(empty_pack(), Some("ja-JP"));
+    cx.font = Some(&japanese);
+    cx.text = Some(&jtext);
+    let screen = open_load(&mut cx);
+    assert_eq!(screen.test_eval::<i64>("return M.state.confirm.no_dx"), 56);
+
+    // Every Western language: the line opens with a blank for the YES
+    // cursor, and the NO cursor's arrow (7px of ink from where it is
+    // drawn) lies between the two answers.
+    for language in WESTERN_LANGUAGES {
+        let text = crate::text::Text::load(western_pack(), Some(language));
+        let mut cx = harness.context();
+        cx.font = Some(&western);
+        cx.text = Some(&text);
+        let mut screen = open_load(&mut cx);
+        let line = lua_bytes(&screen, "return M.state.confirm.bytes");
+        let no_dx: i64 = screen.test_eval("return M.state.confirm.no_dx");
+        let cells: Vec<u8> = line.iter().copied().filter(|&b| b != 0xFB).collect();
+        assert_eq!(cells[0], 0x00, "{language}: a leading blank");
+        let first_end = cells[1..].iter().position(|&b| b == 0).unwrap() + 1;
+        let second = first_end + cells[first_end..].iter().position(|&b| b != 0).unwrap();
+        let first_w = width_of(&mut screen, &cx, &cells[..first_end]);
+        let second_x = width_of(&mut screen, &cx, &cells[..second]);
+        assert!(
+            no_dx >= first_w && no_dx + 7 <= second_x,
+            "{language}: NO cursor {no_dx} between {first_w} and {second_x}"
+        );
+    }
+
+    // The long Finnish YES moves the NO cursor past the reference stride;
+    // a line without the leading blank gets one.
+    let text = crate::text::Text::load(western_pack(), Some("fi-FI"));
+    let mut cx = harness.context();
+    cx.font = Some(&western);
+    cx.text = Some(&text);
+    let mut screen = open_load(&mut cx);
+    assert!(screen.test_eval::<i64>("return M.state.confirm.no_dx") > 40);
+    let mut line = |body: &str| -> (Vec<u8>, i64) {
+        let (bytes, no_dx): (mlua::String, i64) =
+            screen.test_eval_with_game(&cx, None, &format!("return M.confirm_line(api, '{body}')"));
+        (bytes.as_bytes().to_vec(), no_dx)
+    };
+    // "YES  NO" without its leading blank: the blank is added, and the
+    // reference stride lands between the answers, as in the USA original.
+    let (bytes, no_dx) = line("\\x35\\x21\\x2F\\x00\\x00\\x2A\\x2B");
+    assert_eq!(bytes, [0x00, 0x35, 0x21, 0x2F, 0x00, 0x00, 0x2A, 0x2B]);
+    assert_eq!(no_dx, 40, "a reference-length pair keeps the stride");
+    // " T  U": the stride would land on U, so the NO cursor takes the
+    // blank before it (8 + 8 + 8).
+    let (_, no_dx) = line("\\x00\\x30\\x00\\x00\\x31");
+    assert_eq!(no_dx, 24, "a short pair puts the cursor on its blank");
+}
+
+#[test]
+fn save_load_usa_cursor_ink_matches_the_fontus_arrow() {
+    // The reference blits fontus.tim's 8px arrow cell at cursorX 47, its ink
+    // one pixel in (x 48..52) and clear of the row text at 55. The Western
+    // sheet's arrow is drawn so its ink starts at that same x and still ends
+    // before 55.
+    let harness = Harness::new("sl-cursor");
+    let western = western_font();
+    let text = crate::text::Text::load(western_pack(), Some("en-US"));
+    let mut cx = harness.context();
+    cx.font = Some(&western);
+    cx.text = Some(&text);
+    let mut screen = open_load(&mut cx);
+    let frame = |screen: &mut LuaScreen, visible: bool| {
+        screen.test_eval::<()>(&format!("M.state.blink_state = {}", !visible));
+        let mut framebuffer = crate::render::Framebuffer::new();
+        screen.draw(&cx, &mut framebuffer);
+        assert!(!screen.failed());
+        framebuffer.rgba
+    };
+    let shown = frame(&mut screen, true);
+    let hidden = frame(&mut screen, false);
+    let columns: Vec<usize> = (0..shown.len() / 4)
+        .filter(|&i| shown[i * 4..i * 4 + 4] != hidden[i * 4..i * 4 + 4])
+        .map(|i| i % 320)
+        .collect();
+    assert!(!columns.is_empty(), "the cursor draws");
+    assert_eq!(columns.iter().min(), Some(&48));
+    assert!(*columns.iter().max().unwrap() < 55, "{columns:?}");
+}
+
 #[test]
 fn save_load_save_mode_cancel_returns_to_gameplay_without_writing() {
     let harness = Harness::new("sl-save-cancel");

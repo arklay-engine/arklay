@@ -1238,6 +1238,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:location_bytes(stage, room)` | The font-encoded location label of a save's room. |
 | `api:wrap(bytes, max_width[, opts])` | Font-encoded `bytes` broken at spaces into a table of rows no wider than `max_width` pixels; one row without a font. |
 | `api:glyphs(x, y, bytes[, opts])` | Draw font-encoded bytes (white, brightness 2, the session's metrics; `{tight = false}` draws on the fixed grid). `{fit = width}` condenses a row wider than `width` pixels. |
+| `api:glyphs_width(bytes[, opts])` | The pixel width `api:glyphs` draws the same bytes at with the same `opts` (only `tight` matters); `0` without a font. |
 | `api:text_8x14(x, y, bytes[, opts])` | Draw raw bytes through the original's unshadowed 8x14 grid in `opts.colour`. |
 | `api:grid_text(x, y, scale, bytes)` | Draw raw font-sheet cells. |
 | `api:save_slots()` | Eight booleans: which numbered slots hold a save. |
