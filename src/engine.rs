@@ -629,11 +629,7 @@ pub fn run_with_options(
             let target = band_target(&loaded.room, player_state.pos);
             framebuffer.view =
                 video::View::at(video::follow(0, height, target, true) as i32, height);
-            let title = window_title(
-                &loaded.id.room3(),
-                loaded.room.current_cut,
-                loaded.room.cuts.len(),
-            );
+            let title = window_title(pack.manifest());
             let mut display = Display::new(&title, true, Graphics::default())?;
             display.present(&framebuffer)?;
             display.capture(capture_path)?;
@@ -649,11 +645,7 @@ pub fn run_with_options(
 
     let mut session = GameSession::from_room_with(&pack, id, &save_dir, player_options)?;
     session.run_setup_script(authoring.setup_script)?;
-    let title = window_title(
-        &session.loaded.id.room3(),
-        session.loaded.room.current_cut,
-        session.loaded.room.cuts.len(),
-    );
+    let title = window_title(pack.manifest());
     let mut display = Display::new(&title, false, authoring.renderer)?;
     // The room boot runs on the app's Play mode, not a bare session loop: a
     // confirmed F9 return and the debug tools' load/clear game requests all
@@ -1580,6 +1572,15 @@ impl Display {
         }
     }
 
+    /// Set the window's title.
+    pub(crate) fn set_title(&self, title: &str) -> Result<()> {
+        let title = CString::new(title).context("window title contains a NUL byte")?;
+        if !unsafe { SDL_SetWindowTitle(self.window, title.as_ptr()) } {
+            bail!("SDL_SetWindowTitle failed: {}", sdl_error());
+        }
+        Ok(())
+    }
+
     /// The raw SDL window, for the folder picker.
     pub(crate) fn window_ptr(&self) -> *mut SDL_Window {
         self.window
@@ -1942,7 +1943,6 @@ struct GameSession {
     /// The room the GPU residency was last recorded for; a change retires
     /// the previous room's uploads.
     gpu_room: Option<RoomId>,
-    titled_cut: usize,
     transition: Option<TransitionMode>,
     transition_finished: bool,
     /// The ground/scripted item pick-up viewer. It is engine-driven because
@@ -2479,7 +2479,6 @@ impl GameSession {
             freeze_room_frame: false,
             gpu_backend: false,
             gpu_room: None,
-            titled_cut: usize::MAX,
             transition: None,
             transition_finished: false,
             pickup_view: None,
@@ -6796,11 +6795,6 @@ impl GameSession {
         self.game.camera.current_cut = self.loaded.room.current_cut;
     }
 
-    /// Refresh the window title when the active cut changed.
-    fn update_window_title(&mut self, window: *mut SDL_Window) -> Result<()> {
-        update_window_title(window, &self.loaded, &mut self.titled_cut)
-    }
-
     /// Open the audio device and load the room's BGM banks, if not already
     /// open. A missing device logs a warning and leaves the engine silent.
     fn start_audio(&mut self, pack: &Pack) {
@@ -8585,14 +8579,6 @@ impl App {
         }
     }
 
-    /// Refresh the window title when playing.
-    fn update_window_title(&mut self, window: *mut SDL_Window) -> Result<()> {
-        if let Mode::Play(session) = &mut self.mode {
-            session.update_window_title(window)?;
-        }
-        Ok(())
-    }
-
     /// After presenting: tear down a finished transition, then feed the
     /// mixer.
     fn post_present(&mut self) {
@@ -9288,6 +9274,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     crate::audio::set_volumes(game_options.volumes());
     ui::save_load::set_modern(game_options.modern_save_screen);
     let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
+    display.set_title(&window_title(app.pack.manifest()))?;
     loop {
         let mut keys = PortKeys::default();
         if poll_events(&mut event, &mut input, &mut keys, Some(display)) {
@@ -9319,7 +9306,6 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         }
         drive_system_menu(app, display, &mut input, &mut clock)?;
         app.set_frame_rate(display.frame_rate());
-        app.update_window_title(display.window)?;
 
         clock.advance();
         // The film skip state advances on every loop pass, not the fixed
@@ -13333,28 +13319,6 @@ fn enter_transition(
     Ok(loaded)
 }
 
-/// Update the window title when the active camera cut changed.
-fn update_window_title(
-    window: *mut SDL_Window,
-    loaded: &LoadedRoom,
-    titled_cut: &mut usize,
-) -> Result<()> {
-    if loaded.room.current_cut == *titled_cut {
-        return Ok(());
-    }
-    *titled_cut = loaded.room.current_cut;
-    let title = CString::new(window_title(
-        &loaded.id.room3(),
-        loaded.room.current_cut,
-        loaded.room.cuts.len(),
-    ))
-    .context("window title contains a NUL byte")?;
-    if !unsafe { SDL_SetWindowTitle(window, title.as_ptr()) } {
-        bail!("SDL_SetWindowTitle failed: {}", sdl_error());
-    }
-    Ok(())
-}
-
 /// `room_set`'s camera block: the room camera id is zeroed before the
 /// switch-zone scan, so the walk starts from camera 0 and the pre-scan id is
 /// discarded - whether the room's init script wrote it or a save block was
@@ -15957,8 +15921,13 @@ fn sdl_error() -> String {
         .into_owned()
 }
 
-fn window_title(room: &str, cut: usize, count: usize) -> String {
-    format!("Arklay - room {room} cut {cut}/{}", count - 1)
+/// The game window's title: the base pack's manifest `name`, or the engine's
+/// name when the pack has none.
+fn window_title(manifest: Option<&crate::manifest::Manifest>) -> String {
+    manifest
+        .and_then(|manifest| manifest.name.as_deref())
+        .unwrap_or("Arklay")
+        .to_string()
 }
 
 fn capture_frame(renderer: *mut SDL_Renderer, path: &Path) -> Result<()> {
@@ -20843,6 +20812,31 @@ mod tests {
 
         drop(display);
         drop(mixer);
+    }
+
+    /// The window carries the title it is given, which is how the pack's name
+    /// reaches the screen.
+    #[test]
+    #[ignore = "requires SDL offscreen video"]
+    fn display_sets_the_window_title() {
+        use sdl3_sys::video::SDL_GetWindowTitle;
+
+        let display = Display::new("Arklay", true, Graphics::default()).expect("offscreen display");
+        display.set_title("Resident Evil").expect("title");
+        let title = unsafe { CStr::from_ptr(SDL_GetWindowTitle(display.window)) };
+        assert_eq!(title.to_str().unwrap(), "Resident Evil");
+    }
+
+    #[test]
+    fn window_title_is_the_manifest_name() {
+        let named = crate::manifest::Manifest::parse(
+            "format = 1\nid = \"re1\"\nname = \"Resident Evil\"\nkind = \"base\"\n",
+        )
+        .unwrap();
+        assert_eq!(window_title(Some(&named)), "Resident Evil");
+        let unnamed = crate::manifest::Manifest::base("re1");
+        assert_eq!(window_title(Some(&unnamed)), "Arklay");
+        assert_eq!(window_title(None), "Arklay");
     }
 
     #[test]

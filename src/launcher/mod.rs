@@ -84,6 +84,9 @@ impl Color {
     }
 }
 
+/// The launcher's window title. Play replaces it with the pack's name, and a
+/// failed game puts it back.
+const WINDOW_TITLE: &str = "Arklay";
 /// The deflection that starts a gamepad menu direction.
 const PAD_DEADZONE: i16 = 16_000;
 /// The deflection a held direction releases at (hysteresis, so a stick
@@ -2034,6 +2037,7 @@ impl Launcher {
                 let mut software = graphics;
                 software.renderer = RendererKind::Software;
                 let _ = display.set_renderer(software);
+                let _ = display.set_title(WINDOW_TITLE);
                 self.show_message("GAME FAILED", &[&format!("{err:#}")], Screen::Play);
                 false
             }
@@ -2851,7 +2855,7 @@ pub fn run() -> Result<()> {
     // The launcher is 2D text; the game backend is chosen when Play hands the
     // window over.
     graphics.renderer = RendererKind::Software;
-    let mut display = Display::new("Arklay", capture.is_some(), graphics)?;
+    let mut display = Display::new(WINDOW_TITLE, capture.is_some(), graphics)?;
     if capture.is_none() {
         display.set_resizable(true);
     }
