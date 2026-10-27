@@ -1347,6 +1347,12 @@ impl Display {
         }
     }
 
+    /// Whether the window draws with the GPU renderer, so the native GUI
+    /// records its frames for it to draw.
+    fn gpu_active(&self) -> bool {
+        matches!(self.backend, Backend::Gpu(_))
+    }
+
     /// Switch the window to the backend `graphics` selects, keeping the
     /// window itself (the launcher hands it to the game). A GPU failure falls
     /// back to software, exactly like `Display::new`.
@@ -7969,9 +7975,33 @@ impl App {
         warm_gui_fonts(language);
     }
 
-    /// The in-game menu's canvas, when it is up, for the present.
+    /// The in-game menu's canvas, when it is up, or the open save screen's,
+    /// for the present.
     fn native_layer(&self) -> Option<&gui::Canvas> {
-        self.system_menu.as_deref().map(gui::SystemMenu::canvas)
+        self.system_menu
+            .as_deref()
+            .map(gui::SystemMenu::canvas)
+            .or_else(|| self.save_screen()?.native_canvas())
+    }
+
+    /// The open save/load screen: the title's, the next-cycle save's or the
+    /// session's.
+    fn save_screen(&self) -> Option<&dyn ui::save_load::SaveScreen> {
+        match &self.mode {
+            Mode::Load(screen) | Mode::Save(screen) => Some(screen.as_ref()),
+            Mode::Play(session) => session.save_screen.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// The open save/load screen's native side, when it has one.
+    fn native_screen(&mut self) -> Option<&mut dyn ui::save_load::NativeScreen> {
+        let screen = match &mut self.mode {
+            Mode::Load(screen) | Mode::Save(screen) => screen.as_mut(),
+            Mode::Play(session) => session.save_screen.as_deref_mut()?,
+            _ => return None,
+        };
+        screen.native()
     }
 
     /// Whether the session asked for the in-game menu; taken once.
@@ -9133,6 +9163,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     warm_gui_fonts(app.pack.language());
     let game_options = crate::config::Config::load_default().0.game;
     crate::audio::set_volumes(game_options.volumes());
+    ui::save_load::set_modern(game_options.modern_save_screen);
     let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
     loop {
         let mut keys = PortKeys::default();
@@ -9194,7 +9225,11 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         let draw = Instant::now();
         if let Some(menu) = app.system_menu.as_mut() {
             let (width, height) = display.drawable_size();
+            menu.set_recording(display.gpu_active());
             menu.draw(width, height);
+        } else if let Some(screen) = app.native_screen() {
+            let (width, height) = display.drawable_size();
+            screen.draw(width, height, display.gpu_active());
         }
         hud.draw(app, display, &clock, &input);
         // A frame the GPU fails to draw switches the whole run to the
@@ -9250,6 +9285,10 @@ fn drive_system_menu(
         }
         return Ok(());
     }
+    if app.system_menu.is_none() {
+        drive_native_screen(app, display, input, events);
+        return Ok(());
+    }
     let Some(menu) = app.system_menu.as_mut() else {
         return Ok(());
     };
@@ -9262,20 +9301,7 @@ fn drive_system_menu(
             ..menu.settings().clone()
         });
     }
-    // SDL reports the pointer in window coordinates; the canvas is in pixels.
-    let (window_width, window_height) = display.window_size();
-    let (width, height) = display.drawable_size();
-    let scale_x = width as f32 / window_width.max(1) as f32;
-    let scale_y = height as f32 / window_height.max(1) as f32;
-    for event in &mut events {
-        if let gui::GuiEvent::PointerMove { x, y }
-        | gui::GuiEvent::PointerDown { x, y }
-        | gui::GuiEvent::PointerUp { x, y } = event
-        {
-            *x *= scale_x;
-            *y *= scale_y;
-        }
-    }
+    scale_pointer(display, &mut events);
     // A key being captured is the first raw press after the frame that
     // started it, so the press that started it is never taken for it.
     let captured = input.captured.take();
@@ -9322,6 +9348,60 @@ fn drive_system_menu(
         }
     }
     Ok(())
+}
+
+/// SDL reports the pointer in window coordinates; the GUI canvases are in
+/// pixels.
+fn scale_pointer(display: &Display, events: &mut [gui::GuiEvent]) {
+    let (window_width, window_height) = display.window_size();
+    let (width, height) = display.drawable_size();
+    let scale_x = width as f32 / window_width.max(1) as f32;
+    let scale_y = height as f32 / window_height.max(1) as f32;
+    for event in events {
+        if let gui::GuiEvent::PointerMove { x, y }
+        | gui::GuiEvent::PointerDown { x, y }
+        | gui::GuiEvent::PointerUp { x, y } = event
+        {
+            *x *= scale_x;
+            *y *= scale_y;
+        }
+    }
+}
+
+/// One presented frame of a native save/load screen: hand it the menus'
+/// settings once, then this frame's GUI input. Input it sees never reaches
+/// the game; what it chose reaches the app on the next tick.
+fn drive_native_screen(
+    app: &mut App,
+    display: &Display,
+    input: &mut InputState,
+    mut events: Vec<gui::GuiEvent>,
+) {
+    if app
+        .native_screen()
+        .is_some_and(|screen| screen.needs_settings())
+    {
+        let settings = menu_settings(app, display);
+        if let Some(screen) = app.native_screen() {
+            screen.configure(settings);
+        }
+    }
+    let Some(screen) = app.native_screen() else {
+        return;
+    };
+    scale_pointer(display, &mut events);
+    let sounds = screen.handle(&events);
+    input.discard_presses();
+    app.play_ui_cues(
+        sounds
+            .into_iter()
+            .map(|sound| match sound {
+                gui::Sound::Cursor => ui::UiCue::Cursor,
+                gui::Sound::Decide => ui::UiCue::Decide,
+                gui::Sound::Cancel => ui::UiCue::Cancel,
+            })
+            .collect(),
+    );
 }
 
 /// Load the system faces the in-game menu needs for `language`'s strings
@@ -9470,6 +9550,7 @@ fn persisted_options(
         room_script_fixes: _,
         ui_font: _,
         menu_text_size: _,
+        modern_save_screen: _,
         button_style: _,
         control_type: _,
         vibration: _,
@@ -9503,6 +9584,7 @@ fn persisted_options(
             room_script_fixes,
             ui_font,
             menu_text_size,
+            modern_save_screen,
             button_style,
             control_type,
             vibration,
@@ -9591,6 +9673,7 @@ fn apply_menu_settings(
     app.player_options.jill_ink_ribbons = settings.game.jill_ink_ribbons;
     app.player_options.no_autosave = !settings.game.autosave;
     app.player_options.no_room_script_fixes = !settings.game.room_script_fixes;
+    ui::save_load::set_modern(settings.game.modern_save_screen);
     app.vibration = settings.game.vibration;
     // A control type change arrives with its preset already in the bindings.
     if settings.bindings != before.bindings {
@@ -15202,7 +15285,10 @@ fn present_native_layer(
     canvas: &gui::Canvas,
 ) -> Result<()> {
     let (width, height) = (canvas.width, canvas.height);
-    if width == 0 || height == 0 || canvas.rgba.len() != width as usize * height as usize * 4 {
+    if width == 0
+        || height == 0
+        || (canvas.ops().is_none() && canvas.rgba.len() != width as usize * height as usize * 4)
+    {
         bail!(
             "GUI layer is {} bytes, expected {width}x{height}x4",
             canvas.rgba.len()
@@ -15224,11 +15310,14 @@ fn present_native_layer(
         bail!("SDL_SetTextureScaleMode failed: {}", sdl_error());
     }
     if stale {
+        // A frame recorded for the GPU (one it failed to present) is drawn
+        // here in software.
+        let pixels = canvas.pixels();
         if !unsafe {
             SDL_UpdateTexture(
                 texture,
                 std::ptr::null(),
-                canvas.rgba.as_ptr().cast::<c_void>(),
+                pixels.as_ptr().cast::<c_void>(),
                 width as i32 * 4,
             )
         } {

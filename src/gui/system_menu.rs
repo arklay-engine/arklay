@@ -136,6 +136,11 @@ impl SystemMenu {
         &self.canvas
     }
 
+    /// Record the canvas for the GPU (or paint it) from the next draw.
+    pub fn set_recording(&mut self, on: bool) {
+        self.dirty |= self.canvas.set_recording(on);
+    }
+
     /// The settings as the menu last left them.
     pub fn settings(&self) -> &Settings {
         &self.settings

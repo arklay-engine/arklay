@@ -471,6 +471,20 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
             HUD,
             named::<TextSize>(text, "menu_text_size"),
         ),
+        row(
+            "save_screen",
+            HUD,
+            OptionKind::Choice(vec![
+                Choice::described(
+                    text.get("save_screen.modern"),
+                    text.get("save_screen.modern_note"),
+                ),
+                Choice::described(
+                    text.get("save_screen.classic"),
+                    text.get("save_screen.classic_note"),
+                ),
+            ]),
+        ),
         // Shows the machine's specifications; it has no value.
         row("pc_specs", IMAGE, OptionKind::Info),
         row("blood", IMAGE, on_off(text, "blood")),
@@ -630,6 +644,7 @@ pub fn value(id: &str, settings: &Settings) -> i32 {
                 .unwrap_or(0),
         ),
         "ui_font" => i32::from(game.ui_font == FontFamily::Retro),
+        "save_screen" => i32::from(!game.modern_save_screen),
         "voice_language" => 0,
         "language" => index(
             languages()
@@ -737,6 +752,7 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
                 FontFamily::Modern
             }
         }
+        "save_screen" => game.modern_save_screen = !on,
         "language" => {
             if let Some(choice) = languages().get(index) {
                 settings.language = choice.clone();

@@ -173,7 +173,7 @@ struct Glyph {
     /// Offset of the bitmap's bottom edge above the baseline.
     bottom: i32,
     advance: f32,
-    bitmap: Vec<u8>,
+    bitmap: std::sync::Arc<[u8]>,
 }
 
 /// Vertical metrics of a style, in pixels.

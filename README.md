@@ -317,6 +317,7 @@ jill_ink_ribbons = false # saving as Jill uses up an ink ribbon
 autosave = true        # each door's room load writes autosave1.dat
 room_script_fixes = true # false runs the rooms' original script bytecode
 ui_font = "modern"     # the menus' face: "modern" or "retro"
+modern_save_screen = true # the full-screen save/load list, or false for the original's
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
 button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation", "nintendo"
 music_volume = 100     # volumes in percent (0 to 100): music,
@@ -331,6 +332,12 @@ the original USA release. `blood` controls the engine's blood billboards,
 spurts and pools; a room script's own effect spawns are untouched. Neither
 option has a per-run command-line flag; set them in `arklay.toml` or the
 in-game menu.
+
+`modern_save_screen` (Graphics › Display › HUD › Save Screen in the menu)
+picks the save/load screen: a full-screen list of every save in the save
+directory, newest first, with the room and the play time, where saving can
+always add a new save; or the original's eight slots. `--authentic` runs and a
+mod's own save screen are unaffected.
 
 `chris_ink_ribbons` and `jill_ink_ribbons` (Gameplay › Ink Ribbons in the menu)
 choose whether saving at a typewriter uses up an ink ribbon, on every

@@ -56,6 +56,7 @@
 //! driver. Device creation failing is not an error for the engine: it warns
 //! and falls back to the software renderer.
 
+mod gui;
 pub mod scene;
 
 use std::collections::HashMap;
@@ -164,6 +165,7 @@ const MIN_ATLAS_ROWS: u32 = 256;
 /// [`GpuRenderer::atlases`]' slots.
 const FRAME_ATLAS: usize = 0;
 const UI_ATLAS: usize = 1;
+const GUI_ATLAS: usize = 2;
 
 /// An atlas texture of the 2D pass.
 #[derive(Clone, Copy)]
@@ -308,6 +310,8 @@ struct Pipelines {
     composite: *mut SDL_GPUGraphicsPipeline,
     /// Present-only: a UI layer blended over the composite.
     ui: *mut SDL_GPUGraphicsPipeline,
+    /// Present-only: the native GUI's recorded frame ([`gui`]).
+    gui: *mut SDL_GPUGraphicsPipeline,
 }
 
 /// The target a 2D pass's model ([`draw2d::Kind::Model`]) renders into
@@ -422,6 +426,8 @@ pub struct GpuRenderer {
     native_serial: u64,
     /// Whether the next present draws `native_texture`.
     native_shown: bool,
+    /// The native GUI layer recorded for the GPU, drawn in its place.
+    gui: gui::GuiLayer,
     sprite_buffer: *mut SDL_GPUBuffer,
     sprite_capacity: u32,
     /// The 2D pass's target ([`crate::draw2d`]): the presented frame, with
@@ -429,8 +435,9 @@ pub struct GpuRenderer {
     overlay_target: *mut SDL_GPUTexture,
     overlay_size: (u32, u32),
     /// The 2D pass's atlases ([`draw2d::Atlas`]): the frame's
-    /// ([`FRAME_ATLAS`]) and the UI layer's ([`UI_ATLAS`]).
-    atlases: [AtlasTexture; 2],
+    /// ([`FRAME_ATLAS`]) and the UI layer's ([`UI_ATLAS`]), and the native
+    /// GUI's masks and pictures ([`GUI_ATLAS`]).
+    atlases: [AtlasTexture; 3],
     overlay_buffer: *mut SDL_GPUBuffer,
     overlay_capacity: u32,
     /// One per drawn model item of the 2D pass, in order, kept for the next
@@ -517,6 +524,7 @@ impl GpuRenderer {
         let format = unsafe { SDL_GetGPUSwapchainTextureFormat(renderer.device, window) };
         renderer.pipelines.composite = renderer.composite_pipeline(format)?;
         renderer.pipelines.ui = renderer.ui_pipeline(format)?;
+        renderer.pipelines.gui = renderer.gui_pipeline(format)?;
         Ok(renderer)
     }
 
@@ -620,6 +628,7 @@ impl GpuRenderer {
                 model_blend: std::ptr::null_mut(),
                 composite: std::ptr::null_mut(),
                 ui: std::ptr::null_mut(),
+                gui: std::ptr::null_mut(),
             },
             sampler: std::ptr::null_mut(),
             linear: std::ptr::null_mut(),
@@ -640,11 +649,12 @@ impl GpuRenderer {
             native_size: (0, 0),
             native_serial: 0,
             native_shown: false,
+            gui: gui::GuiLayer::default(),
             sprite_buffer: std::ptr::null_mut(),
             sprite_capacity: 0,
             overlay_target: std::ptr::null_mut(),
             overlay_size: (0, 0),
-            atlases: [AtlasTexture::EMPTY; 2],
+            atlases: [AtlasTexture::EMPTY; 3],
             overlay_buffer: std::ptr::null_mut(),
             overlay_capacity: 0,
             model_targets: Vec::new(),
@@ -2336,9 +2346,13 @@ impl GpuRenderer {
     /// window, uploading it; `None` draws none.
     pub fn set_native(&mut self, canvas: Option<&crate::gui::Canvas>) -> Result<()> {
         self.native_shown = false;
+        self.gui.shown = false;
         let Some(canvas) = canvas else {
             return Ok(());
         };
+        if canvas.ops().is_some() {
+            return self.set_gui(canvas);
+        }
         let size = (canvas.width, canvas.height);
         if size.0 == 0
             || size.1 == 0
@@ -3320,6 +3334,7 @@ impl GpuRenderer {
                         SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
                     }
                 }
+                self.draw_gui(command, pass, (width, height));
                 unsafe { SDL_EndGPURenderPass(pass) };
             }
         }
@@ -3525,6 +3540,7 @@ impl Drop for GpuRenderer {
                 self.pipelines.model_blend,
                 self.pipelines.composite,
                 self.pipelines.ui,
+                self.pipelines.gui,
             ];
             for pipeline in pipelines.into_iter().filter(|p| !p.is_null()) {
                 SDL_ReleaseGPUGraphicsPipeline(self.device, pipeline);
@@ -3539,6 +3555,7 @@ impl Drop for GpuRenderer {
                 self.overlay_target,
                 self.atlases[FRAME_ATLAS].texture,
                 self.atlases[UI_ATLAS].texture,
+                self.atlases[GUI_ATLAS].texture,
                 self.overlay_lut,
                 self.no_indices,
                 self.no_image,
@@ -3553,7 +3570,12 @@ impl Drop for GpuRenderer {
                 SDL_ReleaseGPUTexture(self.device, texture);
             }
             self.release_model_targets();
-            for buffer in [self.sprite_buffer, self.overlay_buffer, self.model_buffer] {
+            for buffer in [
+                self.sprite_buffer,
+                self.overlay_buffer,
+                self.model_buffer,
+                self.gui.buffer,
+            ] {
                 if !buffer.is_null() {
                     SDL_ReleaseGPUBuffer(self.device, buffer);
                 }

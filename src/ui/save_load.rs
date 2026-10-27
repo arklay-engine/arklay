@@ -6,6 +6,12 @@
 //! [`LuaScreen`] in load or save mode: the title's load path opens it in
 //! load mode, and a room typewriter (or the next-cycle ending save) opens it
 //! in save mode over the frozen gameplay frame.
+//!
+//! Unless a mod registered its own, the modern screen
+//! ([`super::modern_save`]) stands in for the shipped one while the Save
+//! Screen option picks it.
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
 
@@ -16,6 +22,27 @@ use crate::save::{PLAYER_SLOT_COUNT, SaveFile};
 use super::Screen;
 use super::UiContext;
 use super::lua_screen::LuaScreen;
+use super::modern_save::ModernSaveScreen;
+use crate::gui;
+
+/// Whether the modern screen stands in for the shipped one.
+/// Scripted and headless runs keep the shipped screen; the interactive app
+/// sets it from `arklay.toml`.
+static MODERN: AtomicBool = AtomicBool::new(false);
+
+/// Pick the modern screen (or the shipped one) for the screens opened from
+/// now on.
+pub fn set_modern(modern: bool) {
+    MODERN.store(modern, Ordering::Relaxed);
+}
+
+/// Whether the modern screen opens: picked, and not an `--authentic` run.
+fn modern(cx: &UiContext<'_>) -> bool {
+    let authentic = cx
+        .game
+        .map_or(cx.authentic, |game| game.player_options.authentic);
+    MODERN.load(Ordering::Relaxed) && !authentic
+}
 
 /// The shipped save/load screen script.
 const SAVE_LOAD_ENTRY: &str = "ui/save_load.lua";
@@ -39,10 +66,38 @@ pub struct SaveOutcome {
 pub trait SaveScreen: Screen {
     /// The completed save, once the screen left through a write.
     fn take_outcome(&mut self) -> Option<SaveOutcome>;
+
+    /// The screen's native-resolution side, when it draws at the window's
+    /// size and takes its input per frame.
+    fn native(&mut self) -> Option<&mut dyn NativeScreen> {
+        None
+    }
+
+    /// The canvas the native side last drew.
+    fn native_canvas(&self) -> Option<&gui::Canvas> {
+        None
+    }
 }
 
-/// Open the load screen: the pack entry its scripts registered, or the
-/// shipped screen. A registered screen that cannot load falls back to the
+/// A screen drawn at the window's resolution: the app hands it the menus'
+/// settings, each presented frame's GUI input, and draws it each frame.
+pub trait NativeScreen {
+    /// Whether [`NativeScreen::configure`] has yet to run.
+    fn needs_settings(&self) -> bool;
+
+    /// Take the menus' settings (face, text size, language, button style).
+    fn configure(&mut self, settings: gui::Settings);
+
+    /// Feed one frame's events; returns the sounds to play.
+    fn handle(&mut self, events: &[gui::GuiEvent]) -> Vec<gui::Sound>;
+
+    /// Draw at `width` x `height` pixels, recorded for the GPU when `gpu`;
+    /// returns whether anything was repainted.
+    fn draw(&mut self, width: u32, height: u32, gpu: bool) -> bool;
+}
+
+/// Open the load screen: the pack entry its scripts registered, the modern
+/// screen, or the shipped screen. A registered screen that cannot load falls back to the
 /// shipped one with a warning, so a broken mod never leaves the player
 /// without a screen.
 pub fn open_load_screen(
@@ -54,12 +109,17 @@ pub fn open_load_screen(
             Ok(screen) => return Ok(Box::new(screen)),
             Err(err) => eprintln!("warning: lua save screen {entry} unavailable: {err:#}"),
         }
+    } else if modern(cx) {
+        match ModernSaveScreen::open_load(cx) {
+            Ok(screen) => return Ok(Box::new(screen)),
+            Err(err) => eprintln!("warning: modern load screen unavailable: {err:#}"),
+        }
     }
     Ok(Box::new(LuaScreen::open_load(SAVE_LOAD_ENTRY, cx)?))
 }
 
 /// Open the save screen for the pending `file`: the pack entry its scripts
-/// registered, or the shipped screen. `ink_ribbon` makes the write consume
+/// registered, the modern screen, or the shipped screen. `ink_ribbon` makes the write consume
 /// one.
 pub fn open_save_screen(
     entry: Option<&str>,
@@ -71,6 +131,11 @@ pub fn open_save_screen(
         match LuaScreen::open_save(entry, cx, file.clone(), ink_ribbon) {
             Ok(screen) => return Ok(Box::new(screen)),
             Err(err) => eprintln!("warning: lua save screen {entry} unavailable: {err:#}"),
+        }
+    } else if modern(cx) {
+        match ModernSaveScreen::open_save(cx, file.clone(), ink_ribbon) {
+            Ok(screen) => return Ok(Box::new(screen)),
+            Err(err) => eprintln!("warning: modern save screen unavailable: {err:#}"),
         }
     }
     Ok(Box::new(LuaScreen::open_save(
