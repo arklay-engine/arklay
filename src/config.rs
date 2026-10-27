@@ -37,6 +37,8 @@
 //!                        # false runs the original bytecode
 //! ui_font = "modern"     # the menus' face: "modern" or "retro"
 //! menu_text_size = "standard" # "small", "standard", "large"
+//! modern_save_screen = true # the full-screen save/load list; false keeps
+//!                        # the original's eight-slot screen
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
 //!                        # or "nintendo"
 //! control_type = "a"     # the gamepad layout preset last picked in the
@@ -409,6 +411,10 @@ pub struct Game {
     pub ui_font: crate::gui::FontFamily,
     /// The size of the native-resolution menus' text.
     pub menu_text_size: TextSize,
+    /// The save/load screen: the modern full-screen list of every save (the
+    /// default), or the original's eight slots. `--authentic` runs and a
+    /// mod's own screen keep theirs.
+    pub modern_save_screen: bool,
     /// The controller glyphs the menus draw; `None` (`"auto"`, the default)
     /// follows the controller in use.
     pub button_style: Option<crate::gui::PadStyle>,
@@ -456,6 +462,7 @@ impl Default for Game {
             room_script_fixes: true,
             ui_font: crate::gui::FontFamily::Modern,
             menu_text_size: TextSize::Standard,
+            modern_save_screen: true,
             button_style: None,
             control_type: ControlType::A,
             vibration: Vibration::Normal,
@@ -1219,6 +1226,7 @@ fn parse_game_line(
         "jill_ink_ribbons" => game.jill_ink_ribbons = boolean()?,
         "autosave" => game.autosave = boolean()?,
         "room_script_fixes" => game.room_script_fixes = boolean()?,
+        "modern_save_screen" => game.modern_save_screen = boolean()?,
         "ui_font" => {
             game.ui_font = match parse_quoted(value, line)?.as_str() {
                 "modern" => crate::gui::FontFamily::Modern,
@@ -1302,6 +1310,11 @@ fn render_game(game: &Game) -> String {
             "room_script_fixes",
             game.room_script_fixes,
             defaults.room_script_fixes,
+        ),
+        (
+            "modern_save_screen",
+            game.modern_save_screen,
+            defaults.modern_save_screen,
         ),
     ] {
         if value != default {
@@ -2088,6 +2101,7 @@ menu_text_size = \"huge\"
             room_script_fixes: false,
             ui_font: crate::gui::FontFamily::Retro,
             menu_text_size: TextSize::Large,
+            modern_save_screen: false,
             button_style: Some(crate::gui::PadStyle::Nintendo),
             control_type: ControlType::C,
             vibration: Vibration::Off,

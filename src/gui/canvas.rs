@@ -4,6 +4,14 @@
 //! coverage masks and scaled images. Coordinates are `f32` pixels; edges are
 //! anti-aliased by their fractional coverage, so a layout computed in scaled
 //! units never snaps unevenly at odd window sizes.
+//!
+//! A canvas can instead *record* ([`Canvas::set_recording`]): every primitive
+//! is kept as an [`Op`] rather than drawn, so the GPU backend draws the frame
+//! itself (`gpu::gui`) at the same coverage. [`Canvas::pixels`] rasterises a
+//! recording in software for a frame the GPU could not present.
+
+use std::borrow::Cow;
+use std::sync::Arc;
 
 /// A straight (non-premultiplied) RGBA colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,16 +118,66 @@ pub enum Axis {
     Vertical,
 }
 
+/// A straight RGBA image the canvas can draw scaled, shared so a recorded
+/// frame keeps it without a copy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Picture {
+    pub width: u32,
+    pub height: u32,
+    /// Straight RGBA rows, top first.
+    pub rgba: Vec<u8>,
+}
+
+/// One recorded primitive, with the clip it was drawn under.
+#[derive(Debug, Clone)]
+pub enum Op {
+    /// A rectangle: solid (`from == to`), a gradient along `axis`, or a
+    /// rounded rectangle when `radius` is above zero (solid `from`).
+    Fill {
+        rect: Rect,
+        clip: Rect,
+        from: Color,
+        to: Color,
+        axis: Axis,
+        radius: f32,
+    },
+    /// A convex polygon.
+    Polygon {
+        points: Vec<(f32, f32)>,
+        clip: Rect,
+        color: Color,
+    },
+    /// An 8-bit coverage mask (a glyph) at integer `(x, y)`, tinted.
+    Mask {
+        x: i32,
+        y: i32,
+        width: usize,
+        height: usize,
+        mask: Arc<[u8]>,
+        clip: Rect,
+        color: Color,
+    },
+    /// A picture scaled into `dest`.
+    Image {
+        picture: Arc<Picture>,
+        dest: Rect,
+        clip: Rect,
+        opacity: f32,
+    },
+}
+
 /// A premultiplied RGBA pixel canvas.
 pub struct Canvas {
     pub width: u32,
     pub height: u32,
-    /// Premultiplied RGBA rows, top first.
+    /// Premultiplied RGBA rows, top first; empty while recording.
     pub rgba: Vec<u8>,
     /// Changes on every [`Self::reset`] and is unique across canvases, so a
     /// presenter can skip re-uploading a frame it already has.
     pub serial: u64,
     clip: Vec<Rect>,
+    /// The frame's primitives while recording.
+    ops: Option<Vec<Op>>,
 }
 
 /// The next [`Canvas::serial`]; zero is never handed out.
@@ -139,6 +197,128 @@ impl Canvas {
             rgba: vec![0; width as usize * height as usize * 4],
             serial: next_serial(),
             clip: Vec::new(),
+            ops: None,
+        }
+    }
+
+    /// Record the primitives from the next [`Self::reset`] on instead of
+    /// drawing them (the GPU backend draws them), or draw them again.
+    /// Returns whether the mode changed, which makes the canvas stale.
+    pub fn set_recording(&mut self, on: bool) -> bool {
+        if on == self.ops.is_some() {
+            return false;
+        }
+        if on {
+            self.ops = Some(Vec::new());
+            self.rgba = Vec::new();
+        } else {
+            self.ops = None;
+            self.rgba = vec![0; self.width as usize * self.height as usize * 4];
+        }
+        self.serial = next_serial();
+        true
+    }
+
+    /// The recorded primitives, in order, while recording.
+    pub fn ops(&self) -> Option<&[Op]> {
+        self.ops.as_deref()
+    }
+
+    /// Start this frame with another canvas's (its recording, or its
+    /// pixels): the debug HUD composes over the menu. A canvas of another
+    /// size is ignored.
+    pub fn copy_from(&mut self, base: &Canvas) {
+        if (base.width, base.height) != (self.width, self.height) {
+            return;
+        }
+        match (&mut self.ops, base.ops()) {
+            (Some(ops), Some(base)) => ops.extend_from_slice(base),
+            (None, None) => self.rgba.copy_from_slice(&base.rgba),
+            (Some(ops), None) => ops.push(Op::Image {
+                picture: Arc::new(unpremultiplied(base)),
+                dest: base.bounds(),
+                clip: base.bounds(),
+                opacity: 1.0,
+            }),
+            (None, Some(_)) => {
+                let pixels = base.pixels();
+                self.rgba.copy_from_slice(&pixels);
+            }
+        }
+    }
+
+    /// The premultiplied pixels: the canvas's own, or a recording drawn in
+    /// software.
+    pub fn pixels(&self) -> Cow<'_, [u8]> {
+        let Some(ops) = &self.ops else {
+            return Cow::Borrowed(&self.rgba);
+        };
+        let mut canvas = Canvas::new(self.width, self.height);
+        for op in ops {
+            canvas.replay(op);
+        }
+        Cow::Owned(canvas.rgba)
+    }
+
+    /// Draw one recorded primitive under its own clip.
+    fn replay(&mut self, op: &Op) {
+        let clip = match op {
+            Op::Fill { clip, .. }
+            | Op::Polygon { clip, .. }
+            | Op::Mask { clip, .. }
+            | Op::Image { clip, .. } => *clip,
+        };
+        self.clip.clear();
+        self.clip.push(clip);
+        match op {
+            Op::Fill {
+                rect,
+                from,
+                to,
+                axis,
+                radius,
+                ..
+            } => {
+                if *radius > 0.0 {
+                    self.fill_round_rect(*rect, *radius, *from);
+                } else if from == to {
+                    self.fill_rect(*rect, *from);
+                } else {
+                    self.fill_gradient(*rect, *axis, *from, *to);
+                }
+            }
+            Op::Polygon { points, color, .. } => self.fill_polygon(points, *color),
+            Op::Mask {
+                x,
+                y,
+                width,
+                height,
+                mask,
+                color,
+                ..
+            } => self.draw_mask(*x, *y, *width, *height, mask, *color),
+            Op::Image {
+                picture,
+                dest,
+                opacity,
+                ..
+            } => self.draw_image(picture, *dest, *opacity),
+        }
+        self.clip.clear();
+    }
+
+    /// Record the primitive `op` builds from the clip when recording;
+    /// returns whether it was taken.
+    fn record(&mut self, op: impl FnOnce(Rect) -> Op) -> bool {
+        let clip = self.current_clip();
+        match &mut self.ops {
+            Some(ops) => {
+                if clip.w > 0.0 && clip.h > 0.0 {
+                    ops.push(op(clip));
+                }
+                true
+            }
+            None => false,
         }
     }
 
@@ -147,7 +327,11 @@ impl Canvas {
     pub fn reset(&mut self, width: u32, height: u32) {
         let width = width.max(1);
         let height = height.max(1);
-        if (self.width, self.height) != (width, height) {
+        if let Some(ops) = &mut self.ops {
+            ops.clear();
+            self.width = width;
+            self.height = height;
+        } else if (self.width, self.height) != (width, height) {
             self.width = width;
             self.height = height;
             self.rgba = vec![0; width as usize * height as usize * 4];
@@ -162,6 +346,10 @@ impl Canvas {
     /// full-window shade costs a fill rather than a blend.
     pub fn reset_to(&mut self, width: u32, height: u32, color: Color) {
         self.reset(width, height);
+        if self.ops.is_some() {
+            self.fill_rect(self.bounds(), color);
+            return;
+        }
         let [r, g, b, a] = premultiply(color, u32::from(color.a)).map(|c| c as u8);
         if a != 0 {
             for pixel in self.rgba.as_chunks_mut::<4>().0 {
@@ -230,6 +418,16 @@ impl Canvas {
         if color.a == 0 {
             return;
         }
+        if self.record(|clip| Op::Fill {
+            rect,
+            clip,
+            from: color,
+            to: color,
+            axis: Axis::Horizontal,
+            radius: 0.0,
+        }) {
+            return;
+        }
         let Some(span) = self.span(rect) else {
             return;
         };
@@ -263,6 +461,16 @@ impl Canvas {
     /// A rectangle filled with a two-stop linear gradient along `axis`.
     pub fn fill_gradient(&mut self, rect: Rect, axis: Axis, from: Color, to: Color) {
         if from.a == 0 && to.a == 0 {
+            return;
+        }
+        if self.record(|clip| Op::Fill {
+            rect,
+            clip,
+            from,
+            to,
+            axis,
+            radius: 0.0,
+        }) {
             return;
         }
         let Some(span) = self.span(rect) else {
@@ -326,6 +534,16 @@ impl Canvas {
         if color.a == 0 {
             return;
         }
+        if self.record(|clip| Op::Fill {
+            rect,
+            clip,
+            from: color,
+            to: color,
+            axis: Axis::Horizontal,
+            radius: radius.min(rect.w / 2.0).min(rect.h / 2.0).max(0.0),
+        }) {
+            return;
+        }
         let Some(span) = self.span(rect) else {
             return;
         };
@@ -368,6 +586,13 @@ impl Canvas {
     /// widgets need.
     pub fn fill_polygon(&mut self, points: &[(f32, f32)], color: Color) {
         if points.len() < 3 || color.a == 0 {
+            return;
+        }
+        if self.record(|clip| Op::Polygon {
+            points: points.to_vec(),
+            clip,
+            color,
+        }) {
             return;
         }
         let (mut min_x, mut min_y) = (f32::MAX, f32::MAX);
@@ -428,10 +653,21 @@ impl Canvas {
         y: i32,
         width: usize,
         height: usize,
-        mask: &[u8],
+        mask: &Arc<[u8]>,
         color: Color,
     ) {
         if width == 0 || color.a == 0 {
+            return;
+        }
+        if self.record(|clip| Op::Mask {
+            x,
+            y,
+            width,
+            height,
+            mask: mask.clone(),
+            clip,
+            color,
+        }) {
             return;
         }
         let clip = self.current_clip();
@@ -460,12 +696,26 @@ impl Canvas {
         }
     }
 
-    /// Draw a straight RGBA image scaled into `dest` with bilinear filtering
-    /// at `opacity`.
-    pub fn draw_image(&mut self, image: &[u8], width: u32, height: u32, dest: Rect, opacity: f32) {
-        if width == 0 || height == 0 || image.len() < width as usize * height as usize * 4 {
+    /// Draw a picture scaled into `dest` with bilinear filtering at
+    /// `opacity`.
+    pub fn draw_image(&mut self, picture: &Arc<Picture>, dest: Rect, opacity: f32) {
+        let (width, height) = (picture.width, picture.height);
+        if width == 0
+            || height == 0
+            || picture.rgba.len() < width as usize * height as usize * 4
+            || opacity <= 0.0
+        {
             return;
         }
+        if self.record(|clip| Op::Image {
+            picture: picture.clone(),
+            dest,
+            clip,
+            opacity,
+        }) {
+            return;
+        }
+        let image = &picture.rgba;
         let Some(span) = self.span(dest) else {
             return;
         };
@@ -495,6 +745,24 @@ impl Canvas {
                 self.blend(x, y, color, coverage);
             }
         }
+    }
+}
+
+/// A premultiplied canvas's pixels as a straight picture.
+fn unpremultiplied(canvas: &Canvas) -> Picture {
+    let mut rgba = canvas.rgba.clone();
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        let alpha = u32::from(pixel[3]);
+        if alpha != 0 && alpha != 255 {
+            for channel in &mut pixel[..3] {
+                *channel = (u32::from(*channel) * 255 / alpha).min(255) as u8;
+            }
+        }
+    }
+    Picture {
+        width: canvas.width,
+        height: canvas.height,
+        rgba,
     }
 }
 

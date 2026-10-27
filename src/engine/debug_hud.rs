@@ -136,7 +136,7 @@ impl DebugHud {
             overlay.set_report(report, now);
         }
         let (width, height) = display.drawable_size();
-        overlay.draw(width, height, app.native_layer());
+        overlay.draw(width, height, app.native_layer(), display.gpu_active());
     }
 
     /// The layer to present over the frame: the overlay (already composed

@@ -17,6 +17,7 @@ pub mod death;
 pub mod debug_menu;
 pub mod item_icons;
 pub mod lua_screen;
+pub mod modern_save;
 pub mod save_load;
 
 use std::path::Path;

@@ -219,6 +219,12 @@ impl Atlas {
         self.shelf = shelf;
         self.stored.clear();
     }
+
+    /// Pack from the top again, keeping the texels: a frame storing what the
+    /// last one stored, in the same order, changes nothing.
+    pub fn repack(&mut self) {
+        self.restore((0, [0; 3]));
+    }
 }
 
 /// A frame's 2D drawing, in order (see the [module docs](self)).

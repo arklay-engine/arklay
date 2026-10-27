@@ -254,9 +254,11 @@ impl Overlay {
 
     /// Paint at `width` x `height` pixels over `base` (the in-game menu's
     /// layer, when open), returning whether anything was repainted. Nothing
-    /// is painted while [`Self::visible`] is false.
-    pub fn draw(&mut self, width: u32, height: u32, base: Option<&Canvas>) -> bool {
+    /// is painted while [`Self::visible`] is false. With `gpu` the canvas
+    /// records its frame for the GPU backend to draw.
+    pub fn draw(&mut self, width: u32, height: u32, base: Option<&Canvas>, gpu: bool) -> bool {
         let now = Instant::now();
+        self.dirty |= self.canvas.set_recording(gpu);
         let before = self.notices.len();
         self.notices.retain(|notice| !notice.expired(now));
         if self.notices.len() != before || self.notices.iter().any(|notice| notice.animating(now)) {
@@ -279,7 +281,7 @@ impl Overlay {
         self.base = base_serial;
         self.canvas.reset(width, height);
         if let Some(base) = base {
-            self.canvas.rgba.copy_from_slice(&base.rgba);
+            self.canvas.copy_from(base);
         }
         let theme = Theme::new(width, height, self.family);
         let mut p = Painter {
@@ -485,7 +487,7 @@ mod tests {
     #[test]
     fn the_overlay_paints_only_what_changed() {
         let mut overlay = Overlay::new(FontFamily::Modern).unwrap();
-        assert!(!overlay.draw(640, 480, None), "nothing to show");
+        assert!(!overlay.draw(640, 480, None, false), "nothing to show");
         overlay.cycle();
         let mut section = Section::new("PLAYER");
         section.line("Health", "140 / 140");
@@ -495,11 +497,11 @@ mod tests {
         };
         let now = Instant::now();
         overlay.set_report(report.clone(), now);
-        assert!(overlay.draw(640, 480, None));
+        assert!(overlay.draw(640, 480, None, false));
         assert!(overlay.canvas().rgba.chunks(4).any(|px| px[3] != 0));
         overlay.set_report(report, now);
-        assert!(!overlay.draw(640, 480, None), "an unchanged report");
-        assert!(overlay.draw(800, 600, None), "a resize");
+        assert!(!overlay.draw(640, 480, None, false), "an unchanged report");
+        assert!(overlay.draw(800, 600, None, false), "a resize");
     }
 
     #[test]
@@ -508,13 +510,13 @@ mod tests {
         overlay.notify("speed", "2.0x");
         let mut menu = Canvas::new(64, 48);
         menu.rgba.fill(0x40);
-        assert!(overlay.draw(64, 48, Some(&menu)));
+        assert!(overlay.draw(64, 48, Some(&menu), false));
         assert_eq!(&overlay.canvas().rgba[..4], &[0x40; 4]);
         // The menu repainting forces the overlay to compose again.
         overlay.notices[0].shown -= Duration::from_secs(1);
-        overlay.draw(64, 48, Some(&menu));
-        assert!(!overlay.draw(64, 48, Some(&menu)), "nothing changed");
+        overlay.draw(64, 48, Some(&menu), false);
+        assert!(!overlay.draw(64, 48, Some(&menu), false), "nothing changed");
         menu.reset(64, 48);
-        assert!(overlay.draw(64, 48, Some(&menu)), "a new menu frame");
+        assert!(overlay.draw(64, 48, Some(&menu), false), "a new menu frame");
     }
 }
