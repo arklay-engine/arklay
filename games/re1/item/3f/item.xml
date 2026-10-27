@@ -1,0 +1,36 @@
+<item kind="book" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Doom Book 2</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">FLÜCHE:BAND 2</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LIBRO DEL DESTINO 2</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TUOMIOKIRJA 2</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Livre Maudit 2</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">LIBRO DESTINO 2</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">最後の書(下)</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Книга судьбы 2</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

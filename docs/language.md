@@ -76,6 +76,10 @@ formatted-text renderers index the sheet. Only the original's ASCII-buffer
 | `UI_LAB_*` | lab terminal labels and the expected `UI_LAB_PASSWORD_*` credentials |
 | `UI_PROMPT_RETURN_TITLE_*`, `UI_DEBUG_*` | the F9 prompt and the F1 debug tools (tool labels, hints, stage columns, ending names, flag group names; individual flag names are port-only code tables) |
 
+The item keys for an item with a definition come from the `<strings>` of its
+`item/<nn>/item.xml` (see [Item definitions](modding.md#item-definitions)); a
+language file may still set them, and its value wins over the item file's.
+
 ## Mods
 
 A mod pack may ship `language/<tag>.txt` with any subset of keys. Every layer's
@@ -111,14 +115,17 @@ spell stage-5 text with the kanji the game shows.
 
 A session draws one script, chosen by the language (`ja` keeps the Japanese
 sheet, every other tag prefers the Western one) and resolved against the
-sheets the pack carries: `font/font.tim` is the install's own sheet,
-`font/latin.tim` and `font/jpn.tim` are the other script's. `convert-game`
+fonts the pack carries. A font is a `font/<id>.bmp` sheet and a
+`font/<id>.xml` description sharing a two-digit hex id; the description
+declares the script the sheet's cells are encoded in, its metrics and its
+per-glyph advances. The session draws the lowest id of its script, else the
+lowest id of any. Every pack carries Classic REbirth's Western sheet as font
+`00`, and the Japanese sheet as font `01` when the install has one; both
+descriptions live in `games/re1/font/`. `convert-game`
 walks the root for the sheets, so one pack converted from the Steam release's
 install root — whose language trees each hold a complete game — renders every
-language with its own sheet. A sheet the root does not carry is a conversion
-warning: a Japanese install alone draws Latin languages with the Japanese
-sheet's tight metrics, and a lone Steam tree draws Japanese with the Western
-sheet. The catalog encodes every language file in the selected script, and
+language with its own sheet. A Japanese sheet the root does not carry is a
+conversion warning: a lone Steam tree draws Japanese with the Western sheet. The catalog encodes every language file in the selected script, and
 `text::script_for` is the one rule both the encoding and the font loading
 follow.
 
@@ -131,9 +138,9 @@ including the controller symbols and the `0x0B` page-wait ▼ — stay intact.
 The Japanese sheet has no accented Latin, Cyrillic or the symbols `>`, `=`,
 `+`; the Western one has no Cyrillic, Nordic or Iberian letters and no `>`. A
 language that needs glyphs its sheets lack must ship one as a mod asset
-(`font/font.tim`, or `font/latin.tim`/`font/jpn.tim`), which the pack layering
-already supports. Per-font character tables beyond the two shipped sheets are
-not implemented yet.
+(a replacement `font/00` or `font/01` sheet, or a new `font/<id>` sheet with
+its own description), which the pack layering already supports. Per-font
+character tables beyond the two shipped sheets are not implemented yet.
 
 ## Latin spacing (per-glyph metrics)
 
@@ -163,8 +170,8 @@ templates and reveal string.
 `font::Font::draw_text` takes a tight flag, `font::advance`
 returns a stream's advance, and `font::wrap_pixels`/`font::fit_pixels` wrap and
 clip by advances instead of cell counts. Encoding is unchanged, and the metrics
-come from the sheet, so a mod that ships a redrawn narrow `font/font.tim` is
-measured automatically.
+come from the font's `font/<id>.xml`, so a mod that ships a redrawn sheet ships
+its advances beside it.
 
 ## Licensing
 

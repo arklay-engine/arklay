@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Wolf Medal</string>
+            <string key="description">A medal from the\nsecond Doom Book.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">WOLF MEDAILLE</string>
+            <string key="description">Eine Medaille aus dem zweiten\nBuch des Verderbens.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">MEDALLA DEL LOBO</string>
+            <string key="description">Una medalla del\nsegundo Libro del Destino.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">SUSI-MITALI</string>
+            <string key="description">Mitali toisen Tuomiokirjan sisältä.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Médaille Loup</string>
+            <string key="description">Une médaille du second\nLivre Maudit.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">MEDAGLIA LUPO</string>
+            <string key="description">Il medaglione del\nsecondo Libro del Destino.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">オオカミのメダル</string>
+            <string key="description">最後の書(下)に入っていたメダルだ\n何か特別な使い方でもあるのだろうか?</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Медаль волка</string>
+            <string key="description">Медаль из второй\nкниги судьбы.</string>
+        </language>
+    </strings>
+</item>

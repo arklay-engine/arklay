@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Broken Shotgun</string>
+            <string key="description">It's too dangerous to fire!\nDose it have another use?</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">DEFEKTES GEWEHR</string>
+            <string key="description">Abfeuern ist zu gefährlich!\nDient es einem anderen Zweck?</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">ESCOPETA ROTA</string>
+            <string key="description">¡Dispararlo es peligroso!\n¿Servirá para algo más?</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">RIKKINÄINEN HAUL.</string>
+            <string key="description">Liian vaarallinen ampumiseen!\nOnko sillä jokin muu käyttötarkoitus?</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Fusil Cassé</string>
+            <string key="description">Faire feu est trop dangereux !\nAutre usage possible ?</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">FUCILE ROTTO</string>
+            <string key="description">È troppo pericoloso spararci!\nServe per qualcos'altro?</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">壊れたショットガン</string>
+            <string key="description">銃身が壊れていて装備すると危険だ\n他の使い方でもあるのだろうか・・・</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Сломан. дробовик</string>
+            <string key="description">Стрелять слишком опасно!\nЕсть ли у него другое применение?</string>
+        </language>
+    </strings>
+</item>

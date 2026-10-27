@@ -54,13 +54,14 @@ fn real_file_art_has_the_sizes_the_reader_indexes() {
         assert_eq!(size(cover), (256, 256), "{cover}");
     }
     for (document, sheets) in JPN_SHEETS.into_iter().enumerate() {
-        let backdrop = format!("file/{document:02x}_bg");
+        let folder = format!("item/{:02x}", 0x5F + document);
+        let backdrop = format!("{folder}/file_bg");
         assert_eq!(size(&backdrop), (256, 120), "{backdrop}");
         for page in 0..sheets * 2 {
-            let stem = format!("file/{document:02x}_{page:02x}_fg_ja-JP");
+            let stem = format!("{folder}/file_fg_{page:02x}_ja-JP");
             assert_eq!(size(&stem), (256, 128), "{stem}");
         }
-        let past = format!("file/{document:02x}_{:02x}_fg_ja-JP.bmp", sheets * 2);
+        let past = format!("{folder}/file_fg_{:02x}_ja-JP.bmp", sheets * 2);
         assert!(!pack.contains(&past), "{past}");
     }
 }

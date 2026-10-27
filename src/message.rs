@@ -869,7 +869,7 @@ mod tests {
     /// A font whose sheet carries a white cell for every byte in `bytes`.
     fn font_for(bytes: &[u8]) -> Font {
         let cells: Vec<(i32, i32)> = bytes.iter().map(|&byte| cell(byte)).collect();
-        Font::new(sheet(&cells))
+        Font::new(sheet(&cells), crate::font::FontDef::japanese())
     }
 
     /// A language file with the given `ITEM_<id>_NAME` entries (`names[i]` is
@@ -1181,7 +1181,7 @@ mod tests {
         // Only the letter's own cell is inked on this sheet, so a renderer that
         // still redirected 0x28 to the ASCII path's parenthesis cell would
         // leave the name blank.
-        let font = Font::new(sheet(&[cell(0x28)]));
+        let font = Font::new(sheet(&[cell(0x28)]), crate::font::FontDef::japanese());
         let text = text_tables(&[&[0x28, 0x07]], &[]);
         let bytes = [0x05, 0x01, 0x06, 0x00, 0x05, 0x00, 0x01, 0x00];
         let mut window = MessageWindow::default();
@@ -1369,7 +1369,10 @@ mod tests {
 
     #[test]
     fn extended_glyphs_spend_their_operand_and_one_tick() {
-        let font = Font::new(sheet(&[cell(0x0C), (256 + 28, 14)]));
+        let font = Font::new(
+            sheet(&[cell(0x0C), (256 + 28, 14)]),
+            crate::font::FontDef::japanese(),
+        );
         let text = text();
         let bytes = [0xF9, 20, 0x01, 0x00];
         let mut window = MessageWindow::default();
@@ -1436,7 +1439,7 @@ mod tests {
     #[test]
     fn synthetic_message_renders_deterministically() {
         let cells = [cell(0x02), cell(0x0C), cell(0x0D), cell(0x11)];
-        let font = Font::new(sheet(&cells));
+        let font = Font::new(sheet(&cells), crate::font::FontDef::japanese());
         let text = text_tables(&[&[0x0C, 0x07]], &[]);
         // "AB\nC" with the second line green.
         let bytes = [0x0C, 0x0D, 0x02, 0x05, 0x01, 0x11, 0x08, 0x00, 0x01, 0x00];
@@ -1523,8 +1526,7 @@ mod tests {
             return;
         };
         let pack = Pack::open(std::path::Path::new(&path)).unwrap();
-        let font =
-            Font::new(crate::tim::decode_4bpp(&pack.read("font/font.tim").unwrap()).unwrap());
+        let font = crate::font::load(&pack, crate::font::JAPANESE_ID).unwrap();
         // This draws the RDT's own Japanese message bytes, the ja-JP flow, so
         // the golden below also pins that the tight metrics leave Japanese
         // rendering byte-identical to the original.
@@ -1596,8 +1598,7 @@ mod tests {
             return;
         };
         let pack = Pack::open(std::path::Path::new(&path)).unwrap();
-        let font =
-            Font::new(crate::tim::decode_4bpp(&pack.read("font/font.tim").unwrap()).unwrap());
+        let font = crate::font::load(&pack, crate::font::JAPANESE_ID).unwrap();
         let text = Text::load(&pack, Some("en-US"));
 
         // ROOM1010 slot 1 is the sword-key locked door; probe it without the

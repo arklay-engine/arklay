@@ -117,7 +117,7 @@ pub fn split(data: &[u8]) -> Result<(&[u8], &[u8])> {
 /// Build an item-view model from a TMD mesh and its texture page.
 ///
 /// The pack's per-item art stores the mesh and page separately
-/// (`item/<id>_model.tmd` and `item/<id>_model.bmp`); this is the same model
+/// (`item/<id>/model.tmd` and `item/<id>/model.bmp`); this is the same model
 /// [`parse`] would produce from the equivalent `.IVM`.
 pub fn from_parts(texture: Texture8, tmd: &[u8]) -> Result<Ivm> {
     Ok(Ivm {
@@ -128,7 +128,7 @@ pub fn from_parts(texture: Texture8, tmd: &[u8]) -> Result<Ivm> {
 
 /// A 256 x 256 opaque white page for a TMD-only model.
 ///
-/// A model whose pack has `item/<id>_model.tmd` but no `_model.bmp` is
+/// A model whose pack has `item/<id>/model.tmd` but no `model.bmp` is
 /// untextured; its textured polygons sample this page at their own UVs
 /// instead of failing, while untextured polygons keep their packet colour.
 pub fn blank_texture() -> Texture8 {

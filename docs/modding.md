@@ -169,15 +169,17 @@ is exact.
 | camera mask | `room/1000/mask/00` | webp, png, bmp, tim, pix | the shipped page's; black is a hole |
 | full-frame UI backdrop | `ui/title`, `ui/sel_back`, `ui/type00`, `ui/chris02`, `ui/jill02`, `ui/clis01`, `ui/jill01`, `ui/rc1121` | webp, png, bmp, tim | any size: stretched |
 | UI sheets | `ui/status`, `ui/blue`, `ui/statface`, `ui/staitem`, `ui/itemboxn`, `ui/select_b`, `ui/select_k`, `ui/t_press`, `ui/t_start`, `ui/died`, `ui/en05`, `ui/en07` | webp, png, bmp, tim | the shipped page's; an RGBA replacement uses its own alpha |
-| item art | `item/item_all`, `item/item_mix`, `item/medal` | webp, png, bmp, tim | the shipped sheet's; black is a hole |
-| item icon | `item/0b`, `item/44`, `item/6f` | webp, png, bmp, tim | the shipped 40x30 icon's; black is a hole |
-| item viewer model | `item/0b_model.tmd` | tmd | the shipped mesh |
-| item viewer texture | `item/0b_model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b_model` |
-| item-view / enemy / player art | (inside `item/*.ivm`, `enemy/em*.emd`, `player/*.emd`) | — | override the whole model entry |
+| item art | `item/item_mix`, `item/medal` | webp, png, bmp, tim | the shipped sheet's; black is a hole |
+| item definition | `item/0b/item.xml` | xml (see [Item definitions](#item-definitions)) | — |
+| item icon | `item/0b/item`, `item/44/item`, `item/6f/item` | webp, png, bmp, tim | the shipped 40x30 icon's; black is a hole |
+| item viewer model | `item/0b/model.tmd` | tmd | the shipped mesh |
+| item viewer texture | `item/0b/model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b/model` |
+| enemy / player art | (inside `enemy/em*.emd`, `player/*.emd`) | — | override the whole model entry |
 | doors | (inside `door/<type>.dor`, the RDT door-type byte `00`-`21`) | — | override the whole entry |
-| font sheets | `font/font`, `font/jpn`, `font/latin` | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
+| font sheets | `font/00` (Western), `font/01` (Japanese), or a new two-digit hex id | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
+| font metrics | `font/00.xml`, `font/01.xml`, or a new font's `font/<id>.xml` | xml: `<font format="1" script advance cellWidth margin textY menuY>` with a `<glyph cell advance indent>` per non-default cell (see `games/re1/font/`) | — |
 | map pages | `map/00` … `map/0e`, `map/bg` (the full floor-plan view's backdrop) | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
-| FILE pages | `file/<doc>_bg` (the book backdrop), `file/<doc>_<page>_fg_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `file/0f_03_fg_en-US`; `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
+| FILE pages | `item/<id>/file_bg` (the book backdrop), `item/<id>/file_fg_<page>_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `item/6e/file_fg_03_en-US`, where `<id>` is the document's item (`5f` + the document number); `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
 | room effect sheets | `effect/00` … `effect/20` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
 | room definition | `room/1000/room.xml` | xml (see [Room definitions](#room-definitions)); a raw `room/1000/room.rdt` still loads | — |
 | room scripts | `room/1000/room.scd` | scd | — |
@@ -197,11 +199,18 @@ with cameras and slots numbered by two lower-case hex digits
 (`RoomId::cut_stem`), `bgm` uses
 the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
 stage row and the lowercase hex id (`voice::entry_path`), `door`, `movie`,
-`effect`, `map` and `file` use two lower-case hex digits of the door type,
-film id, room effect-sheet index, map number and document (item `0x5F + doc`)
-and page, and everything else is the literal name `arklay list` prints. Music tracks, including the former
+`effect`, `map`, `file` and `font` use two lower-case hex digits of the door
+type, film id, room effect-sheet index, map number, document (item
+`0x5F + doc`) and page, and font id, and everything else is the literal name `arklay list` prints. Music tracks, including the former
 `Se_*` group layers, are all `bgm/<track id>`; the converter owns the only
 name-to-id table.
+
+A font is a sheet and a `font/<id>.xml` description sharing an id; a sheet
+without a description is not drawn. The description declares the script the
+sheet's cells are encoded in, so a mod may add a font under a new id and the
+sessions of that script pick the lowest id. The earlier `font/font`,
+`font/latin` and `font/jpn` names are no longer read: rename a Western sheet
+to `font/00` and a Japanese one to `font/01`.
 
 ### BMP transparency
 
@@ -284,39 +293,42 @@ the same textures.
 
 ### Item art
 
-The original keys an item's inventory art by its *image type*: one
-`DATA/ITEM_ALL.PIX` row and one `ITEM_M2/I<imageType>V.IVM` serve every item
-that shares a class. `convert-game` keeps those shared entries, and also writes
-the art per item id:
+Everything about one item lives in its own folder, `item/<id>/`, where `<id>`
+is the lower-case two-digit hex item id (`0b`, `44`, `6f`):
 
 ```text
-item/0b.bmp          the 40x30 inventory icon
-item/0b_model.tmd    the inventory 3D model
-item/0b_model.bmp    its 256x256 indexed texture page
+item/0b/item.xml               the item definition (see below)
+item/0b/item.bmp               the 40x30 inventory icon
+item/0b/model.tmd              the inventory 3D model
+item/0b/model.bmp              its 256x256 indexed texture page
+item/6e/file_bg.bmp            a document's book backdrop
+item/6e/file_fg_03_en-US.bmp   a document's page, per language
 ```
 
-`<id>` is the lower-case two-digit hex item id (`0b`, `44`, `6f`). A pack
-converted before this split still works: the engine falls back to
-`item/item_all.bmp` and `item/<name>.ivm`. The files are independently
-optional:
+The original keys an item's art by its *image type*: one `DATA/ITEM_ALL.PIX`
+row and one `ITEM_M2/I<imageType>V.IVM` serve every item that shares a class.
+`convert-game` splits those per item id and does not pack the shared
+`ITEM_ALL` sheet or the `.ivm` files. An item that shares its image type with
+another gets its own copy, so editing one item's art never changes its class.
+Documents are the items `0x5f` onwards (document `n` is item `0x5f + n`), so
+their FILE pages live in those items' folders.
 
-- no `item/<id>.bmp`: the inventory draws the item's shared `ITEM_ALL` row
-  (or `STAITEM` for the Ingram and Minimi);
-- no `item/<id>_model.tmd`: the viewer loads the shared `.ivm`;
-- `item/<id>_model.tmd` without `_model.bmp`: the model is untextured;
-- neither `_model` file and no `.ivm`: the item has no model, as the
-  item viewer and the examine screen expect.
+The files are independently optional:
+
+- no `item.bmp`: the item has no inventory icon;
+- `model.tmd` without `model.bmp`: the model is untextured;
+- no `model.tmd`: the item has no model, as the item viewer and the examine
+  screen expect.
 
 The texture page keeps the IVM's exact 256x256 indices, palette and
 semi-transparency bits, so the content-hash HD names of an existing pack still
-match. An item that shares its image type with another gets its own copy of
-the files, so editing one item's art no longer changes its class.
+match.
 
 For HD packs the per-item names are under `htexture/`:
 
 ```text
-htexture/item/0b.webp          the inventory icon, covering its 40x30 cell
-htexture/item/0b_model.webp    the model's 256x256 page
+htexture/item/0b/item.webp     the inventory icon, covering its 40x30 cell
+htexture/item/0b/model.webp    the model's 256x256 page
 ```
 
 These are preferred over the older names, which keep working unchanged:
@@ -324,17 +336,55 @@ These are preferred over the older names, which keep working unchanged:
 Classic REbirth's `hires/Data/ITEM_ALL/<NN>.webp` becomes through
 `convert-mod`) and `htexture/data/item_m2/<name>` (the `ITEM_M2` TIM). The
 content hash remains the final fallback, so an HD pack that predates both
-named routes still replaces the art it did before. `convert-mod` maps a
-`hires/` tree verbatim, so the new keys are the tree's own paths
-(`hires/Item/0B.webp` becomes `htexture/item/0b.webp`).
+named routes still replaces the art it did before.
 
-A mod authors per-item base art by shipping the entry itself (`item/0b.bmp`,
-`item/0b_model.tmd`, `item/0b_model.bmp`) in a mod source directory. An older
-mod that replaces the shared `item/item_all` sheet or `item/<name>.ivm` still
-affects a pack that predates the per-item files, but a converted pack draws
-the per-item copies first; retarget the art at the item ids. There is no
-separate "no icon" marker: omitting `item/<id>.bmp` falls back to the shared
-row, so ship a fully transparent 40x30 image to blank one item's icon.
+A mod authors an item's base art by shipping the entry itself
+(`item/0b/item.bmp`, `item/0b/model.tmd`, `item/0b/model.bmp`) in a mod
+source directory. To blank one item's icon, ship a fully transparent 40x30
+image.
+
+### Item definitions
+
+`item/<id>/item.xml` describes how the item behaves and what it is called.
+The engine embeds a definition for every original item, and a pack's
+`item.xml` replaces that item's definition whole (a mod restates every field
+it keeps). A definition that does not parse is reported and the item is left
+undefined.
+
+```xml
+<item kind="heal" stack="1">
+    <effects>
+        <effect kind="heal" amount="third" />
+        <effect kind="cure_poison" />
+    </effects>
+    <strings>
+        <language lang="en-US">
+            <string key="name">Mixed Herbs</string>
+            <string key="description">It's a mixture of green\nand blue herbs.</string>
+        </language>
+    </strings>
+</item>
+```
+
+- `kind`: `weapon`, `ammo`, `bottle`, `chemical`, `special`, `key`, `book`,
+  `heal`, `file` or `other` (the default). It picks what *Use* does from the
+  inventory and which refusal message an unusable item shows.
+- `stack`: the most the item holds, a weapon's loaded rounds or an ammo
+  box's count; omitted (0) for an item whose quantity is not shown.
+- `merge="true"`: picking the item up adds to an existing stack of the same
+  item instead of taking a new slot.
+- `<effect kind="heal" amount="third|two_thirds|full" />`: restore that much
+  health on use.
+- `<effect kind="cure_poison" />` and `<effect kind="cure_serious_poison" />`:
+  clear the two poison states on use.
+- `<strings>`: per-language `name`, `name_unchecked` (the name shown before
+  the item is examined) and `description`, in the language files' escape
+  syntax (`\n`, `{color 1}`). Each language feeds the
+  `ITEM_<id>_*` keys of the same tag, and a `language/<tag>.txt` key still
+  overrides it (see [Language files](#language-files)).
+
+Unknown elements and attributes are errors, so a typo fails `arklay verify`
+instead of being ignored silently.
 
 ### Mismatch behaviour
 
@@ -1281,7 +1331,6 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:page(stem)` | Load an indexed UI sheet and return a handle. |
 | `api:indexed_page(stem)` | Like `api:page`, but always indexed: a true-colour replacement is re-indexed colour for colour, for screens that composite by texel index (`api:page_lut`). |
 | `api:page_palette(page[, row])` | An indexed page's CLUT row (default 0) as a table of `0xRRGGBB` colours keyed by texel index `0..=255`; `nil` for a full-colour page. |
-| `api:ivm(entry)` | Load a model and return a handle. |
 | `api:art_size(handle)` | A handle's width and height. |
 | `api:release(handle)` | Drop loaded art the screen no longer draws, returning it to the cache's budget (64 handles); the handle is invalid afterwards. |
 | `api:clear()` | Clear the frame to black. |
@@ -1290,7 +1339,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:blend_black_rect(x, y, w, h, alpha)` | Darken a rectangle. |
 | `api:draw_background(picture, x, y[, r, g, b])` | Draw a picture tinted by `r, g, b`. |
 | `api:picture_sprite_scaled(picture, sx, sy, sw, sh, dx, dy, dw, dh, scale[, cell])` | A picture region, scaled. `cell` (`{x, y, w, h}`) names the atlas cell the region lies in, so an HD replacement is looked up for that cell alone rather than the whole picture. |
-| `api:item_icon(item)` | The item's 40x30 inventory icon as a picture handle, or `nil`: its own `item/<id>.bmp`, else the shared atlas row. HD names `htexture/item/<id>` and `htexture/data/item_all/<row>` are preferred over the content hash. |
+| `api:item_icon(item)` | The item's 40x30 inventory icon as a picture handle, or `nil`: its own `item/<id>/item.bmp`. HD names `htexture/item/<id>/item` and `htexture/data/item_all/<row>` are preferred over the content hash. |
 | `api:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale[, tint])` | A sheet region through CLUT row `clut`, scaled and tinted. |
 | `api:page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, brightness, mirror_u, mirror_v[, whole])` | A sheet region flipped per axis. With `whole`, an HD replacement covers the region's transparent texels too and its own alpha decides what shows, for art the HD page redraws rather than upscales (the ECG condition label). |
 | `api:page_lut(page, sx, sy, w, h, dx, dy, lut)` | An unscaled rect of an indexed page drawn through `lut`, a table of opaque `0xRRGGBB` colours keyed by texel index; an index without an entry (index 0 included) is transparent. |
@@ -1324,7 +1373,6 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:use_item(slot)` | *Lent.* USE the item in `slot`: `true, healed, cured, closes` (the item is consumed; `closes` exits the whole menu), `false, category` for a refusal, nothing for an empty slot. Outside authentic mode the full-health heal items, and a blue herb while the player is not poisoned, are consumed with no effect and return `true, false, false`; authentic mode refuses them. |
 | `api:combine(slot, target)` | *Lent.* MOVE `slot` onto `target`: `"applied", herb`, `"drug_store"`, `"herb_no_recipe"` or `"none"`. |
 | `api:show_message(id)` | *Lent.* Open the game's message window on global message `id`. |
-| `api:item_icon_row(item)` | The item's 40x30 row in `item/item_all`, or `nil`. |
 | `api:draw_actor(name, {from, to, fov})` | Draw an engine-owned actor through the camera and return whether it drew; the DIED screen offers `"player"`, the posed corpse. |
 
 ## Enemy scripts

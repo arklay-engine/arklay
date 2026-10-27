@@ -1,0 +1,44 @@
+<item kind="key">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Power Room Key</string>
+            <string key="name_unchecked">Laboratory Key</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">P.RAUMSCHLÜS.</string>
+            <string key="name_unchecked">LABOR-SCHLÜSSEL</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LLAVE SALA GENERADORES</string>
+            <string key="name_unchecked">LLAVE LABORATORIO</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">SÄHKÖAS. AVAIN</string>
+            <string key="name_unchecked">LAB. AVAIN</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Clé S.Machines</string>
+            <string key="name_unchecked">Clé du Labo</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">CHIAVE S.GENERAT.</string>
+            <string key="name_unchecked">CHIAVE LAB.</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">動力室のカギ</string>
+            <string key="name_unchecked">研究所のカギ</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Ключ от энергоснаб.</string>
+            <string key="name_unchecked">Ключ лаборатории</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

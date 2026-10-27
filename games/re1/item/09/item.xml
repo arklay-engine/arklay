@@ -1,0 +1,36 @@
+<item kind="weapon" stack="6">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Grenade Gun</string>
+            <string key="description">A launcher can be loaded\nwith various rounds.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">BAZOOKA</string>
+            <string key="description">Ein Raketenwerfer: wird mit ver-\nschiedenen Geschossen geladen.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BAZUCA</string>
+            <string key="description">Una bazuca se puede cargar\ncon diferente munición.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">ARWEN 37</string>
+            <string key="description">Kranaattikiväärin voi ladata\nmonenlaisilla ammuksilla.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Lance-Grenades</string>
+            <string key="description">Un lanceur peut être chargé\navec diverses cartouches.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">BAZOOKA</string>
+            <string key="description">Un Bazooka caricabile con\ndiverse munizioni.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">グレネードガン</string>
+            <string key="description">グレネード弾、火炎弾、硫酸弾\nこれらの弾薬を射出できるランチャー</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Гранатомет</string>
+            <string key="description">Ракетница может быть\nзаряжена различными снарядами.</string>
+        </language>
+    </strings>
+</item>

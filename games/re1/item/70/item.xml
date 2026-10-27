@@ -1,0 +1,28 @@
+<item kind="weapon">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Minimi</string>
+            <string key="description"> A full-automatic\nlight-weight machine gun.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">FN MINIMI</string>
+            <string key="description">Täysautomaattinen\nkevytkonekivääri.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Mitraillette</string>
+            <string key="description">Une mitraillete complètement\nautomatique.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">MINIMI</string>
+            <string key="description">Un mitragliatore completamente\nautomatico</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ミニミ</string>
+            <string key="description">フルオートで射撃できる\nライトウェイトマシンガンだ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Миними</string>
+            <string key="description">Полностью автомататический,\nлёгкий пулемёт.</string>
+        </language>
+    </strings>
+</item>

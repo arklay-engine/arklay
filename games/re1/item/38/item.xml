@@ -1,0 +1,44 @@
+<item kind="key">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Closet Key</string>
+            <string key="name_unchecked">Special Key</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">WANDS.SCHLÜS.</string>
+            <string key="name_unchecked">SPEZIALSCHLÜS.</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LLAVE ARMARIO</string>
+            <string key="name_unchecked">LLAVE ESPECIAL</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">VAATEHUON. AVAIN</string>
+            <string key="name_unchecked">ERIKOISAVAIN</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Clé Penderie</string>
+            <string key="name_unchecked">Clé Spéciale</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">CHIAVE ARMARIO</string>
+            <string key="name_unchecked">CHIAVE SPECIALE</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">クローゼットのカギ</string>
+            <string key="name_unchecked">スペシャルキー</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Ключ гардеробной</string>
+            <string key="name_unchecked">Специальный ключ</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

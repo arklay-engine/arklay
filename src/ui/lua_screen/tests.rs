@@ -126,7 +126,7 @@ fn test_font() -> crate::font::Font {
         palettes: (0..256).map(|index| [index as u8, 0, 0, 255]).collect(),
         stp: vec![false; 256],
     };
-    crate::font::Font::new(texture)
+    crate::font::Font::new(texture, crate::font::FontDef::western())
 }
 
 /// The shared test setup: a pack, the text tables, a font and a temp save
@@ -1337,13 +1337,13 @@ end
         use crate::pack::PackWriter;
         let mut writer = PackWriter::new();
         writer
-            .add("item/0b.bmp", solid_bmp(40, 30, [255, 0, 0]))
+            .add("item/0b/item.bmp", solid_bmp(40, 30, [255, 0, 0]))
             .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     };
     let per_item = crate::ui::load_picture(
         &per_item_pack,
-        "item/0b",
+        "item/0b/item",
         crate::assets::Geometry::Shipped,
         Some([0, 0, 0]),
     )
@@ -1354,10 +1354,9 @@ end
         "item-icon-hd",
         source,
         vec![
-            ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0])),
-            ("item/0b.bmp", solid_bmp(40, 30, [255, 0, 0])),
+            ("item/0b/item.bmp", solid_bmp(40, 30, [255, 0, 0])),
             (hash_entry, solid_bmp(40, 30, [0, 255, 0])),
-            ("htexture/item/0b.bmp", solid_bmp(80, 60, [0, 0, 255])),
+            ("htexture/item/0b/item.bmp", solid_bmp(80, 60, [0, 0, 255])),
         ],
     );
     let mut screen = fixture.load();
@@ -1371,7 +1370,7 @@ end
             framebuffer.rgba[index + 2],
         ]
     };
-    // Without a capture the per-item picture draws, not the atlas.
+    // Without a capture the per-item picture draws.
     assert_eq!(pixel(&plain, 11, 21), [255, 0, 0]);
 
     let mut framebuffer = crate::render::Framebuffer::new();
@@ -1390,7 +1389,7 @@ end
 }
 
 #[test]
-fn legacy_item_all_hd_name_replaces_the_atlas_cell() {
+fn legacy_item_all_hd_name_replaces_the_per_item_icon() {
     let source = r#"
 function update(api, input) end
 function draw(api)
@@ -1400,13 +1399,13 @@ if icon ~= nil then
 end
 end
 "#;
-    // Only the shared atlas exists, so the icon is its row-0 crop. The
-    // legacy HD name (`hires/Data/ITEM_ALL/00.webp`) wins over the hash.
+    // Item 1's icon is the atlas's row 0, so the CR HD name for that row
+    // (`hires/Data/ITEM_ALL/00.webp`) wins over the hash.
     let fixture = art_pack(
         "item-icon-legacy-hd",
         source,
         vec![
-            ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0])),
+            ("item/01/item.bmp", solid_bmp(40, 30, [0, 255, 0])),
             (
                 "htexture/data/item_all/00.bmp",
                 solid_bmp(80, 60, [0, 0, 255]),
@@ -1424,57 +1423,6 @@ end
     };
     assert_eq!((image.image.width, image.image.height), (80, 60));
     assert_eq!(image.frame, [40, 30]);
-}
-
-#[test]
-fn an_old_pack_hash_still_replaces_the_shared_atlas_icon() {
-    let source = r#"
-function update(api, input) end
-function draw(api)
-local icon = api:item_icon(0x01)
-if icon ~= nil then
-    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
-end
-end
-"#;
-    // No per-item and no named file: the icon is the atlas crop, whose
-    // content hash an older HD pack still names.
-    let atlas_only = crate::pack::Pack::from_bytes({
-        use crate::pack::PackWriter;
-        let mut writer = PackWriter::new();
-        writer
-            .add("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0]))
-            .unwrap();
-        writer.to_bytes().unwrap()
-    })
-    .unwrap();
-    let icon = crate::ui::load_picture(
-        &atlas_only,
-        "item/item_all",
-        crate::assets::Geometry::Shipped,
-        Some([0, 0, 0]),
-    )
-    .unwrap();
-    let hash = crate::htexture::image_candidates(&icon)[0].hash;
-    let hash_entry = Box::leak(format!("htexture/misc/{hash:08X}.bmp").into_boxed_str());
-    let fixture = art_pack(
-        "item-icon-atlas-hash",
-        source,
-        vec![
-            ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0])),
-            (hash_entry, solid_bmp(80, 60, [0, 0, 255])),
-        ],
-    );
-    let mut screen = fixture.load();
-    let cx = fixture.context();
-    let mut framebuffer = crate::render::Framebuffer::new();
-    framebuffer.record();
-    screen.draw(&cx, &mut framebuffer);
-    let quad = one_quad(&framebuffer);
-    let crate::draw2d::Kind::Art(image) = &quad.image else {
-        panic!("an icon quad");
-    };
-    assert_eq!((image.image.width, image.image.height), (80, 60));
 }
 
 #[test]
@@ -1531,14 +1479,14 @@ if icon ~= nil then
 end
 end
 "#;
-    let atlas = || ("item/item_all.bmp", solid_bmp(40, 30, [0, 255, 0]));
+    let atlas = || ("item/01/item.bmp", solid_bmp(40, 30, [0, 255, 0]));
     let legacy = || {
         (
             "htexture/data/item_all/00.bmp",
             solid_bmp(100, 60, [255, 255, 0]),
         )
     };
-    let primary = || ("htexture/item/01.bmp", solid_bmp(120, 60, [0, 0, 255]));
+    let primary = || ("htexture/item/01/item.bmp", solid_bmp(120, 60, [0, 0, 255]));
     let hd_size = |label: &str, entries: Vec<(&str, Vec<u8>)>| {
         let fixture = art_pack(label, source, entries);
         let mut screen = fixture.load();
@@ -1565,23 +1513,19 @@ end
 }
 
 #[test]
-fn a_broken_per_item_icon_falls_back_to_the_shared_atlas() {
+fn a_broken_per_item_icon_is_no_icon() {
     let source = r#"
 function update(api, input) end
 function draw(api)
-local icon = api:item_icon(0x01)
-if icon ~= nil then
-    api:picture_sprite_scaled(icon, 0, 0, 40, 30, 10, 20, 40, 30, 255)
+if api:item_icon(0x01) == nil then
+    api:fill_rect(10, 20, 4, 4, 255, 0, 0, 255)
 end
 end
 "#;
     let fixture = art_pack(
         "item-icon-broken",
         source,
-        vec![
-            ("item/01.bmp", b"not a BMP".to_vec()),
-            ("item/item_all.bmp", solid_bmp(40, 30, [255, 0, 0])),
-        ],
+        vec![("item/01/item.bmp", b"not a BMP".to_vec())],
     );
     let mut screen = fixture.load();
     let cx = fixture.context();
@@ -1590,7 +1534,7 @@ end
     assert_eq!(
         &framebuffer.rgba[index..index + 3],
         &[255, 0, 0],
-        "the atlas row still draws"
+        "the script sees no icon"
     );
 }
 
@@ -1627,10 +1571,10 @@ end
         "item-model-hd",
         source,
         vec![
-            ("item/02_model.tmd", tmd.clone()),
-            ("item/02_model.bmp", page),
+            ("item/02/model.tmd", tmd.clone()),
+            ("item/02/model.bmp", page),
             (
-                "htexture/item/02_model.bmp",
+                "htexture/item/02/model.bmp",
                 solid_bmp(512, 512, [0, 0, 255]),
             ),
         ],
@@ -1716,13 +1660,13 @@ end
         use crate::pack::PackWriter;
         let mut writer = PackWriter::new();
         writer
-            .add("item/01.bmp", solid_bmp(40, 30, [255, 0, 0]))
+            .add("item/01/item.bmp", solid_bmp(40, 30, [255, 0, 0]))
             .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     };
     let icon = crate::ui::load_picture(
         &per_item_pack,
-        "item/01",
+        "item/01/item",
         crate::assets::Geometry::Shipped,
         Some([0, 0, 0]),
     )
@@ -1733,7 +1677,7 @@ end
         "item-icon-hash",
         icon_source,
         vec![
-            ("item/01.bmp", solid_bmp(40, 30, [255, 0, 0])),
+            ("item/01/item.bmp", solid_bmp(40, 30, [255, 0, 0])),
             (icon_entry, solid_bmp(80, 60, [0, 0, 255])),
         ],
     );
@@ -1780,8 +1724,8 @@ end
         "item-model-hash",
         source,
         vec![
-            ("item/02_model.tmd", sample_item_tmd()),
-            ("item/02_model.bmp", page),
+            ("item/02/model.tmd", sample_item_tmd()),
+            ("item/02/model.bmp", page),
             (page_entry, solid_bmp(512, 512, [0, 0, 255])),
         ],
     );
@@ -1827,7 +1771,7 @@ end
     let fixture = art_pack(
         "item-model-tmd-only",
         source,
-        vec![("item/01_model.tmd", tmd)],
+        vec![("item/01/model.tmd", tmd)],
     );
     let mut screen = fixture.load();
     let cx = fixture.context();

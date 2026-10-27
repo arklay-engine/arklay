@@ -1,0 +1,36 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Fax</string>
+            <string key="name_unchecked">Mansion Key</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">FAX</string>
+            <string key="name_unchecked">HERRENH.SCHLÜS.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">FAX</string>
+            <string key="name_unchecked">LLAVE MANSIÓN</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">FAKSI</string>
+            <string key="name_unchecked">KARTANON AVAIN</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Télécopie</string>
+            <string key="name_unchecked">Clé du Manoir</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">FAX</string>
+            <string key="name_unchecked">CHIAVE VILLA</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ファックス</string>
+            <string key="name_unchecked">館のカギ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Факс</string>
+            <string key="name_unchecked">Ключ особняка</string>
+        </language>
+    </strings>
+</item>

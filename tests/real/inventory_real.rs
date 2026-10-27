@@ -6,7 +6,7 @@
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must contain
 //! the menu art (`ui/status.tim`, `ui/blue.tim`, `ui/statface.tim`,
-//! `ui/staitem.tim`, `item/item_all.bmp`, `font/font.tim`); a stale pack fails
+//! `ui/staitem.tim`, the `item/<id>/item.bmp` icons, `font/01.bmp`); a stale pack fails
 //! the test rather than silently skipping.
 //!
 //! The test renders the `--ui menu` capture (`ui/main_menu.lua` over the
@@ -68,26 +68,34 @@ fn menu_capture_is_deterministic_and_draws_the_panel_art() {
 
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
-fn per_item_icons_match_the_shared_atlas_cells() {
+fn every_item_with_an_atlas_row_has_its_own_icon() {
     let Some((_root, path)) = common::asset_env() else {
         return;
     };
     let pack = Pack::open(&path).unwrap();
-    let atlas =
-        ui::load_picture(&pack, "item/item_all", Geometry::Shipped, Some([0, 0, 0])).unwrap();
-    let row = items::icon_row(0x02).unwrap();
-    let y = usize::from(row) * items::ICON_HEIGHT as usize;
-    let per_item = ui::load_picture(&pack, "item/02", Geometry::Shipped, Some([0, 0, 0])).unwrap();
-    assert_eq!(
-        (per_item.width, per_item.height),
-        (items::ICON_WIDTH, items::ICON_HEIGHT)
-    );
-    for row in 0..items::ICON_HEIGHT as usize {
-        let atlas_row =
-            &atlas.rgba[(y + row) * atlas.width as usize * 4..][..items::ICON_WIDTH as usize * 4];
-        let icon_row = &per_item.rgba[row * items::ICON_WIDTH as usize * 4..]
-            [..items::ICON_WIDTH as usize * 4];
-        assert_eq!(atlas_row, icon_row, "row {row}");
+    // The shared atlas is only the converter's source; it is not packed.
+    assert!(!pack.contains(items::ITEM_ALL_ENTRY));
+    for item in items::art_items().filter(|&item| items::icon_row(item).is_some()) {
+        let icon = ui::load_picture(
+            &pack,
+            &format!("item/{item:02x}/item"),
+            Geometry::Shipped,
+            Some([0, 0, 0]),
+        )
+        .unwrap_or_else(|error| panic!("item {item:#04x}: {error:#}"));
+        assert_eq!(
+            (icon.width, icon.height),
+            (items::ICON_WIDTH, items::ICON_HEIGHT),
+            "item {item:#04x}"
+        );
+        assert!(
+            icon.rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[3] != 0),
+            "item {item:#04x} is blank"
+        );
     }
 }
 
@@ -104,7 +112,7 @@ fn per_item_icons_match_the_staitem_rows_for_the_machineguns() {
     for (item, row) in [(items::ITEM_INGRAM, 0usize), (items::ITEM_MINIMI, 1)] {
         let icon = ui::load_picture(
             &pack,
-            &format!("item/{item:02x}"),
+            &format!("item/{item:02x}/item"),
             Geometry::Shipped,
             Some([0, 0, 0]),
         )

@@ -1,0 +1,36 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Keeper's Diary</string>
+            <string key="name_unchecked">Crank</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">TAGEBUCH DES WÄRTERS</string>
+            <string key="name_unchecked">KURBEL</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">DIARIO DEL CRIADOR</string>
+            <string key="name_unchecked">MANIVELA</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TALONMIEHEN PÄIVÄKIRJA</string>
+            <string key="name_unchecked">KAMPI</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Journal du gardien</string>
+            <string key="name_unchecked">Manivelle</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">DIARIO DEL CUSTODE</string>
+            <string key="name_unchecked">MANOVELLA</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">飼育係の日誌</string>
+            <string key="name_unchecked">クランク</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Дневник сторожа</string>
+            <string key="name_unchecked">Рукоятка</string>
+        </language>
+    </strings>
+</item>

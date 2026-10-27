@@ -1,0 +1,28 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">V-Jolt Report</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">\"V-JOLT\" BERICHT</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">INFORME V-JOLT</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">V-JOLT RAPORTTI</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Rapport \"CHOC-V\"</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">RAPPORTO \"V-JOLT\"</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">有機化学実験ファイル</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Доклад В-Шок</string>
+        </language>
+    </strings>
+</item>

@@ -9,7 +9,6 @@ use crate::common;
 
 use arklay::bmp;
 use arklay::engine;
-use arklay::font::Font;
 use arklay::game::{GameState, ScdGameHost};
 use arklay::message::MessageInput;
 use arklay::pack::Pack;
@@ -17,7 +16,6 @@ use arklay::render::Framebuffer;
 use arklay::room;
 use arklay::state::{Image, RoomId};
 use arklay::text::Text;
-use arklay::tim;
 
 fn non_black(image: &Image) -> usize {
     image
@@ -115,9 +113,7 @@ fn real_save_room_door_walk_runs_the_destination_message_path() {
 
     // A global message requested in the destination room resolves and draws
     // over the frozen gameplay frame the transition left behind.
-    let font = Font::new(
-        tim::decode_4bpp(&pack.read("font/font.tim").unwrap()).expect("font/font.tim decodes"),
-    );
+    let font = arklay::font::load(&pack, arklay::font::JAPANESE_ID).expect("the Japanese font");
     game.cancel_message();
     game.show_message(0x40, 0x145);
     for _ in 0..600 {
@@ -188,9 +184,7 @@ fn real_locked_door_message_renders_over_a_frozen_frame() {
     engine::run(&path, id, Some(&capture), 0).unwrap();
     let frozen = bmp::decode(&std::fs::read(&capture).unwrap()).unwrap();
 
-    let font = Font::new(
-        tim::decode_4bpp(&pack.read("font/font.tim").unwrap()).expect("font/font.tim decodes"),
-    );
+    let font = arklay::font::load(&pack, arklay::font::JAPANESE_ID).expect("the Japanese font");
     let mut framebuffer = Framebuffer::new();
     framebuffer.blit(&frozen);
     let before = framebuffer.rgba.clone();

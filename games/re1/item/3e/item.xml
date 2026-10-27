@@ -1,0 +1,44 @@
+<item kind="book" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Blank Book</string>
+            <string key="name_unchecked">Red Book</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">LEERES BUCH</string>
+            <string key="name_unchecked">ROTES BUCH</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LIBRO EN BLANCO</string>
+            <string key="name_unchecked">LIBRO ROJO</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TYHJÄ KIRJA</string>
+            <string key="name_unchecked">PUNAINEN KIRJA</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Livre Vide</string>
+            <string key="name_unchecked">Livre Rouge</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">LIBRO VUOTO</string>
+            <string key="name_unchecked">LIBRO ROSSO</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">白紙の本</string>
+            <string key="name_unchecked">赤い本</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Пустая книга</string>
+            <string key="name_unchecked">Красная книга</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

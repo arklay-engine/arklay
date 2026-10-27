@@ -23,6 +23,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use crate::effects;
+use crate::item_catalog::{ItemKind, StatusCure};
 use crate::items;
 use crate::message::{MessageAction, MessageInput, MessageWindow};
 use crate::movie;
@@ -3754,6 +3755,9 @@ pub struct GameState {
     /// The gamepad rumble this tick's events asked for, taken by the window.
     /// Runtime state, not part of a save block.
     pub rumble: Option<Rumble>,
+    /// The pack's item definitions (`item/<id>/item.xml`): kinds, stacks and
+    /// heal effects. Static pack data, not part of a save block.
+    pub item_defs: std::sync::Arc<crate::item_catalog::ItemCatalog>,
 }
 
 /// A gamepad rumble a game event asks for, at full strength: the low- and
@@ -3951,6 +3955,7 @@ impl Default for GameState {
             save_screen: None,
             player_options: crate::player::Options::default(),
             rumble: None,
+            item_defs: crate::item_catalog::ItemCatalog::embedded(),
         }
     }
 }
@@ -5410,10 +5415,11 @@ impl GameState {
 
     /// Add `quantity` of `item` with the original's merge rules.
     ///
-    /// Stackable items (the ammunition range and the ink ribbon) merge into an
-    /// existing stack; the ribbon is always taken three at a time. A merge that
-    /// would pass [`items::ITEM_QUANTITY_CAP`] caps the stack and spills the
-    /// remainder into a new slot, exactly like the original's pickup path.
+    /// Items whose definition sets `merge` (the ammunition and the ink
+    /// ribbon) merge into an existing stack; the ribbon is always taken
+    /// three at a time. A merge that would pass [`items::ITEM_QUANTITY_CAP`]
+    /// caps the stack and spills the remainder into a new slot, exactly like
+    /// the original's pickup path.
     pub fn add_item(&mut self, item: u8, quantity: u8) {
         let quantity = if item == items::ITEM_INK_RIBBONS {
             3
@@ -5421,7 +5427,7 @@ impl GameState {
             quantity
         };
         let capacity = self.inventory_capacity();
-        if items::is_stackable(item)
+        if self.item_defs.get(item).merge
             && let Some(index) = self.inventory.iter().position(|stack| stack.id == item)
         {
             let merged = u16::from(self.inventory[index].quantity) + u16::from(quantity);
@@ -5877,37 +5883,38 @@ impl GameState {
     /// Apply the menu USE action for `item`, exactly as the original's
     /// category dispatch does:
     ///
-    /// - heal items run the heal table and update health/status; outside
-    ///   authentic mode the [`items::FULL_HEALTH_ITEMS`] at full health, and a
-    ///   blue herb while the player is not poisoned, are still used up with no
-    ///   effect;
+    /// - heal items apply their definition's heal effects and update
+    ///   health/status; outside authentic mode a health item at full health,
+    ///   and a `cure_poison`-only item while the player is not poisoned, are
+    ///   still used up with no effect;
     /// - key, special and chemical items need their per-item use flag;
     /// - books only accept the red book, with flag bit `0x23`;
     /// - weapons, ammo, the empty bottle and unusable ids do nothing.
     ///
     /// It never consumes the item; the caller records and decrements it.
     pub fn use_item(&mut self, item: u8) -> UseResult {
-        match items::use_category(item) {
-            items::UseCategory::Heal => {
-                let effect = items::heal_effect(item);
+        let def = self.item_defs.get(item);
+        let (kind, effect) = (def.kind, def.heal);
+        match kind {
+            ItemKind::Heal => {
                 let health = self.entities[0].health;
                 let max = self.max_health;
                 let mut healed = false;
                 if health < max {
-                    let raised = items::healed_health(effect.amount, health, max);
+                    let raised = effect.amount.apply(health, max);
                     if raised != health {
                         self.entities[0].health = raised;
                         healed = true;
                     }
                 }
                 let mut cured = false;
-                if effect.cure != items::StatusCure::None && self.health_status & 0x22 != 0 {
-                    let cleared = items::cured_status(effect.cure, self.health_status);
+                if effect.cure != StatusCure::None && self.health_status & 0x22 != 0 {
+                    let cleared = effect.cure.apply(self.health_status);
                     match effect.cure {
                         // The 0x20 cure counts as used whenever either poison
                         // flag is up, even when only the 0x02 bit is set and
                         // nothing is actually cleared.
-                        items::StatusCure::Poison20 => {
+                        StatusCure::Poison20 => {
                             if cleared != self.health_status {
                                 self.apply_flag(1, SCENARIO2_FLAG_YAWN_POISONED, 1);
                                 self.set_health_status(cleared);
@@ -5915,7 +5922,7 @@ impl GameState {
                             cured = true;
                         }
                         // The 0x02 cure only counts when the 0x02 bit is set.
-                        items::StatusCure::Poison02 if self.health_status & 0x02 != 0 => {
+                        StatusCure::Poison02 if self.health_status & 0x02 != 0 => {
                             self.set_health_status(cleared);
                             cured = true;
                         }
@@ -5928,9 +5935,7 @@ impl GameState {
                     UseResult::Unusable
                 }
             }
-            items::UseCategory::Chemicals
-            | items::UseCategory::Special
-            | items::UseCategory::Keys => {
+            ItemKind::Chemical | ItemKind::Special | ItemKind::Key => {
                 if self.item_use_flag(item) {
                     UseResult::Used {
                         healed: false,
@@ -5940,7 +5945,7 @@ impl GameState {
                     UseResult::Unusable
                 }
             }
-            items::UseCategory::Books => {
+            ItemKind::Book => {
                 if item == ITEM_RED_BOOK
                     && self.flags[usize::from(BANK_ITEM_USE)].bit(ITEM_RED_BOOK_FLAG)
                 {
@@ -5952,19 +5957,17 @@ impl GameState {
                     UseResult::Unusable
                 }
             }
-            items::UseCategory::Always => UseResult::Used {
-                healed: false,
-                cured: false,
-            },
             _ => UseResult::Unusable,
         }
     }
 
     /// Whether a heal item with no effect this use is still used up.
     ///
-    /// The original refuses these. Outside authentic mode the menu takes the
-    /// [`items::FULL_HEALTH_ITEMS`] at full health, and a blue herb while the
-    /// player is not poisoned; the use changes nothing but consumes the item.
+    /// The original refuses these. Outside authentic mode the menu takes a
+    /// health item at full health, and a `cure_poison`-only item (the blue
+    /// herb) while the player is not poisoned
+    /// ([`crate::item_catalog::ItemDef::accepts_ineffective_use`]); the use
+    /// changes nothing but consumes the item.
     fn accepts_ineffective_heal(&self, item: u8) -> bool {
         if self.player_options.authentic {
             return false;
@@ -5972,10 +5975,10 @@ impl GameState {
         // Poisoned means the `0x22` bits, as in `items::cured_status`, the
         // health bar and the original's herb rule. The `0x40` fast drain is
         // not counted, so a herb used with only that set changes nothing.
-        if item == items::ITEM_BLUE_HERB {
-            return self.health_status & 0x22 == 0;
-        }
-        items::FULL_HEALTH_ITEMS.contains(&item) && self.entities[0].health >= self.max_health
+        self.item_defs.get(item).accepts_ineffective_use(
+            self.entities[0].health >= self.max_health,
+            self.health_status & 0x22 != 0,
+        )
     }
 
     /// Apply the menu MOVE/combine between the cursor and target slots.
@@ -6097,7 +6100,7 @@ impl GameState {
         match effect {
             1 => {
                 let sum = u16::from(target.quantity) + (u16::from(cursor.quantity) & 0x7F);
-                let max = u16::from(items::max_quantity(cursor.id));
+                let max = u16::from(self.item_defs.get(cursor.id).stack);
                 if max < sum {
                     self.inventory[cursor_slot].quantity = max as u8;
                     self.inventory[target_slot].quantity = (sum as u8).wrapping_sub(max as u8);
@@ -6108,7 +6111,7 @@ impl GameState {
             }
             2 => {
                 let sum = u16::from(cursor.quantity) + (u16::from(target.quantity) & 0x7F);
-                let max = u16::from(items::max_quantity(target.id));
+                let max = u16::from(self.item_defs.get(target.id).stack);
                 if max < sum {
                     self.inventory[target_slot].quantity = max as u8;
                     self.inventory[cursor_slot].quantity = (sum as u8).wrapping_sub(max as u8);
@@ -6133,7 +6136,7 @@ impl GameState {
             5 => {}
             6 => {
                 let other = target.quantity;
-                let max = items::max_quantity(cursor.id);
+                let max = self.item_defs.get(cursor.id).stack;
                 if max < other {
                     self.inventory[cursor_slot].quantity = max;
                     self.inventory[target_slot].quantity = other - max;
@@ -6144,7 +6147,7 @@ impl GameState {
             }
             7 => {
                 let other = cursor.quantity;
-                let max = items::max_quantity(target.id);
+                let max = self.item_defs.get(target.id).stack;
                 if max < other {
                     self.inventory[target_slot].quantity = max;
                     self.inventory[cursor_slot].quantity = other - max;
@@ -6919,7 +6922,7 @@ impl GameState {
             return true;
         }
         let item = action.item_id();
-        if !items::is_stackable(item) {
+        if !self.item_defs.get(item).merge {
             return false;
         }
         let quantity = if item == items::ITEM_INK_RIBBONS {
@@ -16143,18 +16146,17 @@ mod tests {
         assert_eq!(state.health_status, 0x10);
     }
 
+    /// The heal items the menu takes at full health outside authentic mode:
+    /// every item whose definition restores health.
+    const FULL_HEALTH_ITEMS: [u8; 8] = [0x41, 0x44, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B];
+
     #[test]
     fn full_health_items_are_used_up_without_effect_outside_authentic_mode() {
         let mut state = game();
-        // The eight heal items the menu takes at full health, in id order.
-        assert_eq!(
-            items::FULL_HEALTH_ITEMS,
-            [0x41, 0x44, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B]
-        );
         state.max_health = 96;
         state.entities[0].health = 96;
         state.set_health_status(0);
-        for item in items::FULL_HEALTH_ITEMS {
+        for item in FULL_HEALTH_ITEMS {
             assert_eq!(
                 state.use_item(item),
                 UseResult::Used {
@@ -16238,7 +16240,7 @@ mod tests {
         state.entities[0].health = 96;
         state.set_health_status(0);
         state.player_options.authentic = true;
-        for item in items::FULL_HEALTH_ITEMS {
+        for item in FULL_HEALTH_ITEMS {
             assert_eq!(
                 state.use_item(item),
                 UseResult::Unusable,

@@ -10,10 +10,10 @@
 //!
 //! One session draws one byte space. [`Text::script`] is the script the
 //! selected language renders in — Japanese for `ja`, the Western sheet for
-//! every other tag when the pack carries one, else the Japanese sheet whose
-//! tight metrics stand in for the missing Western one. The catalog encodes
+//! every other tag — falling back to the script of whichever font the pack
+//! does carry. The catalog encodes
 //! every language-file entry in that script, and the engine loads the sheet
-//! [`crate::font::session_entry`] names for it, so the strings and the font
+//! [`crate::font::session_font`] picks for it, so the strings and the font
 //! can never disagree.
 
 use crate::charset::{self, Script};
@@ -195,37 +195,32 @@ impl Text {
 /// The script a session for `requested` draws in.
 ///
 /// The language decides: `ja` (in any region) keeps the Japanese sheet, every
-/// other tag prefers the Western one. When the pack does not carry that
-/// sheet, the default sheet's own script decides — the same sheet
-/// [`crate::font::session_entry`] loads — so the text and the font agree even
-/// for a pack converted from a single tree.
+/// other tag prefers the Western one. When the pack carries no font of that
+/// script, the script of the font [`crate::font::session_font`] falls back to
+/// decides, so the text and the font agree even for a pack with one sheet.
 pub fn script_for(pack: &Pack, requested: Option<&str>) -> Script {
     let script = if language::is_japanese(&language::resolve_tag(requested)) {
         Script::Japanese
     } else {
         Script::Latin
     };
-    sheet_script(pack, font::session_entry(pack, script)).unwrap_or_default()
+    font::session_font(pack, script)
+        .map(|(_, def)| def.script)
+        .unwrap_or_default()
 }
 
-/// The script of the pack's own text: its default sheet's, which the RDTs'
-/// message bytes are encoded in.
+/// The script of the pack's own text, which the RDTs' message bytes are
+/// encoded in: Japanese when the base manifest's room-text language is, else
+/// Latin.
 pub fn pack_script(pack: &Pack) -> Script {
-    sheet_script(pack, font::DEFAULT_STEM).unwrap_or_default()
-}
-
-/// The script a sheet's stem selects, read from its header where it has one.
-fn sheet_script(pack: &Pack, stem: &str) -> Option<Script> {
-    let asset = pack
-        .read_asset(stem, crate::pack::AssetClass::Image)
-        .ok()
-        .flatten()?;
-    let (width, _) = crate::assets::image_dimensions(&asset).ok()?;
-    Some(if width >= font::JPN_SHEET_WIDTH {
-        Script::Japanese
-    } else {
-        Script::Latin
-    })
+    match pack
+        .manifest()
+        .and_then(|manifest| manifest.language.as_deref())
+    {
+        Some(tag) if language::is_japanese(tag) => Script::Japanese,
+        Some(_) => Script::Latin,
+        None => Script::default(),
+    }
 }
 
 #[cfg(test)]
@@ -263,8 +258,26 @@ mod tests {
         out
     }
 
-    fn pack_with_bytes(files: &[(&str, &[u8])]) -> Pack {
+    /// A font's sheet and description entries, `id` drawing in `script`.
+    fn font(id: u8, script: Script) -> [(String, Vec<u8>); 2] {
+        let (width_units, description) = match script {
+            Script::Japanese => (192, crate::font::xml::JAPANESE),
+            Script::Latin => (64, crate::font::xml::WESTERN),
+        };
+        let stem = crate::font::xml::stem(id);
+        [
+            (format!("{stem}.tim"), font_tim(width_units)),
+            (format!("{stem}.xml"), description.as_bytes().to_vec()),
+        ]
+    }
+
+    fn pack_with_fonts(fonts: &[(u8, Script)], files: &[(&str, &[u8])]) -> Pack {
         let mut writer = PackWriter::new();
+        for &(id, script) in fonts {
+            for (path, bytes) in font(id, script) {
+                writer.add(&path, bytes).unwrap();
+            }
+        }
         for (path, bytes) in files {
             writer.add(path, bytes.to_vec()).unwrap();
         }
@@ -272,56 +285,60 @@ mod tests {
     }
 
     #[test]
-    fn the_script_follows_the_language_and_the_packs_sheets() {
-        let jpn = font_tim(192);
-        let latin = font_tim(64);
-
-        // A pack converted from the Japanese tree keeps its sheet for every
-        // language: non-Japanese tags fall back to it (and its tight metrics).
-        let pack = pack_with_bytes(&[("font/font.tim", &jpn)]);
+    fn the_script_follows_the_language_and_the_packs_fonts() {
+        // A pack with only a Japanese font draws every language with it:
+        // non-Japanese tags fall back to it (and its tight metrics).
+        let pack = pack_with_fonts(&[(1, Script::Japanese)], &[]);
         assert_eq!(Text::load(&pack, Some("en-US")).script(), Script::Japanese);
         assert_eq!(Text::load(&pack, Some("ja-JP")).script(), Script::Japanese);
 
-        // With the Western sheet packed as the override, every non-Japanese
-        // tag draws with it while `ja` keeps the Japanese one.
-        let pack = pack_with_bytes(&[("font/font.tim", &jpn), ("font/latin.tim", &latin)]);
+        // With both, every non-Japanese tag draws with the Western font while
+        // `ja` keeps the Japanese one.
+        let pack = pack_with_fonts(&[(0, Script::Latin), (1, Script::Japanese)], &[]);
         assert_eq!(Text::load(&pack, Some("en-US")).script(), Script::Latin);
         assert_eq!(Text::load(&pack, Some("fr-FR")).script(), Script::Latin);
         assert_eq!(Text::load(&pack, Some("ja-JP")).script(), Script::Japanese);
         assert_eq!(Text::load(&pack, Some("ja")).script(), Script::Japanese);
 
-        // A pack converted from a Western tree has the Western sheet as its
-        // default; a Japanese tag then falls back to it too.
-        let pack = pack_with_bytes(&[("font/font.tim", &latin)]);
+        // A pack with only the Western font: a Japanese tag falls back to it.
+        let pack = pack_with_fonts(&[(0, Script::Latin)], &[]);
         assert_eq!(Text::load(&pack, Some("en-US")).script(), Script::Latin);
         assert_eq!(Text::load(&pack, Some("ja-JP")).script(), Script::Latin);
 
-        // Both sheets as script-specific entries with a Japanese default.
-        let pack = pack_with_bytes(&[
-            ("font/font.tim", &jpn),
-            ("font/jpn.tim", &jpn),
-            ("font/latin.tim", &latin),
-        ]);
+        // The script is the description's, not the id's: the lowest id of the
+        // wanted script wins.
+        let pack = pack_with_fonts(&[(0, Script::Japanese), (7, Script::Latin)], &[]);
         assert_eq!(Text::load(&pack, Some("en-US")).script(), Script::Latin);
-        assert_eq!(Text::load(&pack, Some("ja-JP")).script(), Script::Japanese);
+        assert_eq!(
+            crate::font::session_font(&pack, Script::Latin).unwrap().0,
+            7
+        );
+
+        // A description without its sheet is no font.
+        let pack = pack_with(&[("font/00.xml", crate::font::xml::WESTERN)]);
+        assert!(crate::font::session_font(&pack, Script::Latin).is_none());
     }
 
     #[test]
     fn the_rdt_fallback_needs_the_packs_own_script() {
-        // A Japanese pack with the Western sheet packed for English: the RDT
+        // A Japanese pack with the Western font packed for English: the RDT
         // text is Japanese bytes, so an untranslated message must not be
         // drawn with the Western font. It reads as its registry id instead.
-        let jpn = font_tim(192);
-        let latin = font_tim(64);
-        let pack = pack_with_bytes(&[
-            ("font/font.tim", &jpn),
-            ("font/latin.tim", &latin),
-            ("language/en-US.txt", b"ROOM_FFF_TEXT_00 = \"A\"\n"),
-            // A third language's file carries the key's name, so the
-            // registry-id fallback has something to draw; neither selected
-            // chain carries the entry itself.
-            ("language/fr-FR.txt", b"ROOM_FFF_TEXT_01 = \"A\"\n"),
-        ]);
+        let mut manifest = crate::manifest::Manifest::base("re1");
+        manifest.language = Some("ja-JP".to_string());
+        let manifest = manifest.render();
+        let pack = pack_with_fonts(
+            &[(0, Script::Latin), (1, Script::Japanese)],
+            &[
+                (crate::manifest::ENTRY, manifest.as_bytes()),
+                ("language/en-US.txt", b"ROOM_FFF_TEXT_00 = \"A\"\n"),
+                // A third language's file carries the key's name, so the
+                // registry-id fallback has something to draw; neither
+                // selected chain carries the entry itself.
+                ("language/fr-FR.txt", b"ROOM_FFF_TEXT_01 = \"A\"\n"),
+            ],
+        );
+        assert_eq!(pack_script(&pack), Script::Japanese);
         let text = Text::load(&pack, Some("en-US"));
         assert_eq!(text.script(), Script::Latin);
         let room = RoomState {

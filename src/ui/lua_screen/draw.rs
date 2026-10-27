@@ -18,7 +18,7 @@ use crate::assets::{Artwork, Geometry};
 use crate::budget;
 use crate::font::{GLYPH_HEIGHT, Tint};
 use crate::htexture::{self, Replacement};
-use crate::ivm::{self, Ivm};
+use crate::ivm::Ivm;
 use crate::pack::{AssetClass, Pack};
 use crate::render::{Camera, EntityLight, EntityLightSource, Framebuffer};
 use crate::state::Image;
@@ -84,10 +84,6 @@ pub(super) struct Assets {
     /// The named HD keys (`htexture/<stem>`) a handle's art answers to, most
     /// specific first.
     hd_names: RefCell<HashMap<usize, Vec<String>>>,
-    /// The shared icon sheets, decoded once: the `ITEM_ALL` picture and the
-    /// `STAITEM` page. An old pack has no per-item icons, so every item crops
-    /// the same sheet instead of decoding it again.
-    item_sources: RefCell<HashMap<String, Arc<Image>>>,
     /// The texel indices of each indexed page a recoloured HD draw
     /// (`api:page_lut`) used, shared by its draws.
     indices: RefCell<HashMap<usize, Arc<htexture::Indices>>>,
@@ -181,24 +177,6 @@ impl Assets {
         if !names.is_empty() {
             self.hd_names.borrow_mut().insert(handle, names);
         }
-    }
-
-    /// The decoded shared icon sheet `stem` (`item/item_all` or
-    /// `ui/staitem`), cached for the screen's lifetime.
-    fn item_source(&self, pack: &Pack, stem: &str) -> anyhow::Result<Arc<Image>> {
-        if let Some(image) = self.item_sources.borrow().get(stem) {
-            return Ok(Arc::clone(image));
-        }
-        let image = if stem == "ui/staitem" {
-            crate::ui::load_page(pack, stem)?.to_rgba()
-        } else {
-            crate::ui::load_picture(pack, stem, Geometry::Shipped, Some([0, 0, 0]))?
-        };
-        let image = Arc::new(image);
-        self.item_sources
-            .borrow_mut()
-            .insert(stem.to_string(), Arc::clone(&image));
-        Ok(image)
     }
 
     /// The handle `key`'s art was loaded under, if it is still live.
@@ -383,31 +361,6 @@ fn hd_art(
     } else {
         None
     }
-}
-
-/// The 40x30 RGBA icon of `item`.
-///
-/// A pack converted since the per-item split has `item/<id>.bmp`; an older
-/// pack, or an item the split skips, falls back to the shared `ITEM_ALL` row
-/// (and `STAITEM` for the two PC-only machineguns) cut out here.
-fn load_item_icon(item: u8, source: &Image) -> anyhow::Result<Image> {
-    let y = if let Some(row) = crate::items::icon_row(item) {
-        usize::from(row) * crate::items::ICON_HEIGHT as usize
-    } else if matches!(item, crate::items::ITEM_INGRAM | crate::items::ITEM_MINIMI) {
-        usize::from(item - crate::items::ITEM_INGRAM) * crate::items::ICON_HEIGHT as usize
-    } else {
-        anyhow::bail!("item {item:#04x} has no icon");
-    };
-    crop(
-        source,
-        [
-            0,
-            y as i32,
-            crate::items::ICON_WIDTH as i32,
-            crate::items::ICON_HEIGHT as i32,
-        ],
-    )
-    .ok_or_else(|| anyhow::anyhow!("the shared icon sheet has no row at y={y}"))
 }
 
 /// The `[x, y, w, h]` region of `image`, or `None` when it is empty or not
@@ -650,47 +603,26 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         })))
     });
 
-    // `item_icon(item)`: the item's 40x30 inventory icon as a picture handle.
+    // `item_icon(item)`: the item's 40x30 inventory icon as a picture handle,
+    // from its folder's `item.bmp`; nil and a message when it has none.
     //
-    // The per-item `item/<id>.bmp` wins; an older pack falls back to the
-    // shared atlas row. The handle's HD names are registered so a named
-    // `htexture/item/<id>` (or the older `htexture/data/item_all/<row>`)
+    // The handle's HD names are registered so a named
+    // `htexture/item/<id>/item` (or the CR `htexture/data/item_all/<row>`)
     // replacement wins over the content hash while the frame is captured.
     methods.add_method_mut("item_icon", |_lua, api, item: u8| {
         let pack: &Pack = api.cx.pack;
-        let source_stem = if crate::items::icon_row(item).is_some() {
-            "item/item_all"
-        } else if matches!(item, crate::items::ITEM_INGRAM | crate::items::ITEM_MINIMI) {
-            "ui/staitem"
-        } else {
+        let Some(entry) = crate::item_art::icon_entry(item) else {
             return Ok((None, Some(format!("item {item:#04x} has no icon"))));
         };
+        let stem = crate::assets::stem(&entry).to_string();
         let cache_key = format!("icon:{item:02x}");
         if let Some(handle) = api.host.assets.handle(&cache_key) {
             return Ok((Some(handle), None));
         }
-        let icon = (|| -> anyhow::Result<Image> {
-            if let Some(stem) = crate::item_art::icon_entry(item)
-                .map(|entry| crate::assets::stem(&entry).to_string())
-                .filter(|stem| pack.has_asset(stem, AssetClass::Image))
-                // A corrupt per-item icon is an authoring error `verify`
-                // reports; the inventory still shows the shared row instead
-                // of a hole.
-                && let Ok(image) =
-                    crate::ui::load_picture(pack, &stem, Geometry::Shipped, Some([0, 0, 0]))
-            {
-                return Ok(image);
-            }
-            let source = api.host.assets.item_source(pack, source_stem)?;
-            load_item_icon(item, &source)
-        })();
-        let result = match icon {
-            Ok(image) => api
-                .host
-                .assets
-                .load_icon(cache_key, || Ok(Asset::Picture(image))),
-            Err(err) => Err(err),
-        };
+        let result = api.host.assets.load_icon(cache_key, || {
+            crate::ui::load_picture(pack, &stem, Geometry::Shipped, Some([0, 0, 0]))
+                .map(Asset::Picture)
+        });
         if let Ok(handle) = result {
             api.host
                 .assets
@@ -715,31 +647,10 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         })))
     });
 
-    methods.add_method_mut("ivm", |_lua, api, entry: String| {
-        let pack: &Pack = api.cx.pack;
-        let cache_key = format!("ivm:{entry}");
-        let result = api.host.assets.load(cache_key, || {
-            let bytes = pack.read(&entry)?;
-            let model = ivm::parse(&bytes)?;
-            Ok(Asset::Model(Arc::new(model), bytes.len()))
-        });
-        if let Ok(handle) = result
-            && let Some(name) = entry
-                .strip_prefix(crate::item_art::PREFIX)
-                .and_then(|rest| rest.strip_suffix(".ivm"))
-        {
-            api.host
-                .assets
-                .set_hd_names(handle, crate::item_art::model_hd_names_for_name(name));
-        }
-        Ok(loaded(result))
-    });
-
     // `item_model(item)`: the item viewer's model for `item`; nil and a
     // message when the item has none or its file is missing.
     //
-    // A pack converted since the per-item split carries `item/<id>_model.tmd`
-    // and `_model.bmp`; older packs fall back to the shared `.ivm`.
+    // The model is the item folder's `model.tmd` with its `model.bmp` page.
     methods.add_method_mut("item_model", |_lua, api, item: u8| {
         let pack: &Pack = api.cx.pack;
         let cache_key = format!("item-model:{item:02x}");

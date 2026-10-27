@@ -22,53 +22,94 @@ use crate::render::{Framebuffer, SpriteDraw};
 
 pub use crate::render::Tint;
 
+pub mod xml;
+
+pub use xml::FontDef;
+
 /// Glyph height in pixels for both sheet widths.
 pub const GLYPH_HEIGHT: i32 = 14;
-/// Width at which a sheet selects the 14px Japanese metrics.
+/// Width at which an install's sheet is the 768-wide Japanese one rather than
+/// a 256-wide Western `fontus.tim`.
 pub const JPN_SHEET_WIDTH: u32 = 768;
 
-/// The default sheet entry: the Japanese `FONT.TIM` when the converted
-/// install ships it, otherwise [`WESTERN_SHEET`].
-pub const DEFAULT_ENTRY: &str = "font/font.tim";
-/// The Japanese sheet as a script-specific override, packed when the install
-/// carries a Western default too.
-pub const JAPANESE_ENTRY: &str = "font/jpn.tim";
-/// The Western sheet as a script-specific override: always
-/// [`WESTERN_SHEET`].
-pub const LATIN_ENTRY: &str = "font/latin.tim";
-/// Classic REbirth's Western sheet (its `DATA/PBFONT0.TIM`), which every
-/// pack carries as [`LATIN_ENTRY`]: the Japanese sheet's 14px cells with the
-/// kana replaced by accented Latin, drawn at CR's proportional advances. HD
-/// packs made for CR replace this sheet, not the releases' `fontus.tim`.
-pub const WESTERN_SHEET: &[u8] = include_bytes!("../games/re1/font/latin.tim");
-/// The default sheet's pack stem, the key a replacement resolves by.
-pub const DEFAULT_STEM: &str = "font/font";
+/// Classic REbirth's Western sheet, which every pack carries: font `00`.
+pub const WESTERN_ID: u8 = 0x00;
+/// The Japanese sheet, packed when the install ships one: font `01`.
+pub const JAPANESE_ID: u8 = 0x01;
+/// Classic REbirth's Western sheet (its `DATA/PBFONT0.TIM`) as the indexed
+/// BMP every pack carries as font [`WESTERN_ID`]: the Japanese sheet's 14px
+/// cells with the kana replaced by accented Latin, drawn at CR's proportional
+/// advances ([`xml::WESTERN`]). HD packs made for CR replace this sheet, not
+/// the releases' `fontus.tim`.
+pub const WESTERN_SHEET: &[u8] = include_bytes!("../games/re1/font/00.bmp");
 
-/// The pack stem a session in `script` draws with: the script's own sheet
-/// when the pack ships one, else the default.
-///
-/// The lookup is by stem, so a mod may replace a sheet with any image format
-/// and either script's override may be introduced by a mod.
-pub fn session_entry(pack: &Pack, script: crate::charset::Script) -> &'static str {
-    let stem = match script {
-        crate::charset::Script::Japanese => "font/jpn",
-        crate::charset::Script::Latin => "font/latin",
-    };
-    if pack.has_asset(stem, AssetClass::Image) {
-        stem
-    } else {
-        DEFAULT_STEM
+/// The pack's font ids, ascending: every `font/<id>.xml` entry.
+pub fn ids(pack: &Pack) -> Vec<u8> {
+    let mut ids: Vec<u8> = pack
+        .paths()
+        .filter(|path| path.to_ascii_lowercase().ends_with(".xml"))
+        .filter_map(xml::entry_id)
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
+/// Read and parse font `id`'s description, warning and returning `None` when
+/// it is missing or invalid.
+pub fn read_def(pack: &Pack, id: u8) -> Option<FontDef> {
+    let entry = xml::entry(id);
+    let text = pack.read(&entry).ok()?;
+    let parsed = std::str::from_utf8(&text)
+        .map_err(anyhow::Error::from)
+        .and_then(FontDef::parse);
+    match parsed {
+        Ok(def) => Some(def),
+        Err(err) => {
+            eprintln!("warning: invalid {entry}: {err:#}");
+            None
+        }
     }
+}
+
+/// The font a session in `script` draws with: the lowest id whose sheet and
+/// description are both packed and declare `script`, else the lowest usable
+/// id of any script.
+pub fn session_font(pack: &Pack, script: crate::charset::Script) -> Option<(u8, FontDef)> {
+    let usable: Vec<(u8, FontDef)> = ids(pack)
+        .into_iter()
+        .filter(|&id| pack.has_asset(&xml::stem(id), AssetClass::Image))
+        .filter_map(|id| Some((id, read_def(pack, id)?)))
+        .collect();
+    let index = usable
+        .iter()
+        .position(|(_, def)| def.script == script)
+        .unwrap_or(0);
+    usable.into_iter().nth(index)
 }
 
 /// Decode the sheet a session in `script` draws with, or `None` when the pack
 /// carries no usable font.
 pub fn load_session(pack: &Pack, script: crate::charset::Script) -> Option<Font> {
-    let stem = session_entry(pack, script);
-    let asset = pack.read_asset(stem, AssetClass::Image).ok().flatten()?;
+    let (id, def) = session_font(pack, script)?;
+    load_with(pack, id, def)
+}
+
+/// Decode font `id`, or `None` when the pack carries no usable sheet and
+/// description for it.
+///
+/// The sheet is looked up by stem, so a mod may replace it with any image
+/// format, and a mod may add fonts of its own.
+pub fn load(pack: &Pack, id: u8) -> Option<Font> {
+    load_with(pack, id, read_def(pack, id)?)
+}
+
+fn load_with(pack: &Pack, id: u8, def: FontDef) -> Option<Font> {
+    let stem = xml::stem(id);
+    let asset = pack.read_asset(&stem, AssetClass::Image).ok().flatten()?;
     match crate::assets::decode_texture(&asset, crate::assets::Geometry::Shipped) {
         Ok(texture) => {
-            let mut font = Font::new(texture);
+            let mut font = Font::new(texture, def);
             if !pack.htexture().is_empty() {
                 let candidates = crate::htexture::font_candidates(&font.texture);
                 font.hd = crate::htexture::replacement(pack, &candidates, || {
@@ -85,12 +126,20 @@ pub fn load_session(pack: &Pack, script: crate::charset::Script) -> Option<Font>
     }
 }
 
-/// A font sheet's glyph metrics, selected by the sheet width.
+/// Classic REbirth's Western sheet as the engine draws it: the shipped
+/// [`WESTERN_SHEET`] with its [`xml::WESTERN`] description.
+pub fn western() -> Font {
+    let texture = crate::bmp::decode_indexed_page(WESTERN_SHEET)
+        .expect("the shipped Western sheet is an indexed BMP");
+    Font::new(texture, FontDef::western())
+}
+
+/// A font sheet's sheet-wide metrics, read from its `font/<id>.xml`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FontMetrics {
-    /// Glyph advance: 14 for the 768-wide Japanese sheet, 8 for the 256-wide
-    /// Western sheet (the original's `fontus.tim` pitch, which Classic
-    /// REbirth's sheet keeps as its default advance).
+    /// Default glyph advance: 14 for the Japanese sheet, 8 for the Western
+    /// sheet (the original's `fontus.tim` pitch, which Classic REbirth's
+    /// sheet keeps as its default advance).
     pub glyph_w: i32,
     /// The sheet's cell pitch: 14 on both sheets. Classic REbirth's Western
     /// sheet lays its glyphs out in the Japanese sheet's cells.
@@ -101,32 +150,6 @@ pub struct FontMetrics {
     pub text_y: i32,
     /// Menu and item-name/description y.
     pub menu_y: i32,
-}
-
-impl FontMetrics {
-    /// Select the metrics from the sheet width: 768-wide selects 14px glyphs
-    /// with margin `0x22`; anything narrower is Classic REbirth's Western
-    /// sheet, 14px cells laid out at the USA 8px metrics with margin `0x30`.
-    /// Both share the room-message y `181` and menu y `186`.
-    pub fn from_sheet_width(width: u32) -> Self {
-        if width >= JPN_SHEET_WIDTH {
-            Self {
-                glyph_w: 14,
-                cell_w: 14,
-                left_margin: 0x22,
-                text_y: 181,
-                menu_y: 186,
-            }
-        } else {
-            Self {
-                glyph_w: 8,
-                cell_w: 14,
-                left_margin: 0x30,
-                text_y: 181,
-                menu_y: 186,
-            }
-        }
-    }
 }
 
 /// One glyph cell's tight metrics: its left trim and advance.
@@ -161,8 +184,8 @@ const RIGHT_PAGE_X: i32 = 256;
 ///
 /// The table covers the two glyph pages [`Glyphs`] decodes: the plain/`0xF8`
 /// left page at x 0 and the `0xF9`/`0xFA` right page at x 256. Every cell
-/// defaults to the full-cell [`GlyphMetric`]; [`GlyphTable::western`] and
-/// [`GlyphTable::japanese`] replace the entries CR's own width tables list.
+/// defaults to the full-cell [`GlyphMetric`] of the default advance; the
+/// font's `<glyph>` entries replace the cells CR's own width tables list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlyphTable {
     glyph_w: i32,
@@ -170,66 +193,24 @@ pub struct GlyphTable {
 }
 
 impl GlyphTable {
-    /// A table of `rows` full cells per page with CR's `(cell, width, indent)`
-    /// entries applied to the left page. `cell` is the left grid's index: a
-    /// plain byte, or `0xEA + nn` for `0xF8 nn`.
-    fn from_widths(
-        rows: usize,
-        glyph_w: i32,
-        entries: impl IntoIterator<Item = (usize, u8, u8)>,
-    ) -> Self {
-        let full = GlyphMetric::full(glyph_w);
+    /// The table `def` describes for `texture`: `rows` full cells per page
+    /// with the description's glyph entries applied to the left page. An
+    /// entry's cell is the left grid's index: a plain byte, or `0xEA + nn`
+    /// for `0xF8 nn`.
+    pub fn new(texture: &Texture8, def: &FontDef) -> Self {
+        let rows = (texture.height as i32 / GLYPH_HEIGHT).max(0) as usize;
+        let full = GlyphMetric::full(def.metrics.glyph_w);
         let mut table = Self {
-            glyph_w,
+            glyph_w: def.metrics.glyph_w,
             pages: [
                 vec![full; rows * PAGE_COLUMNS],
                 vec![full; rows * PAGE_COLUMNS],
             ],
         };
-        for (cell, width, indent) in entries {
-            table.set(
-                0,
-                2 + cell / PAGE_COLUMNS,
-                cell % PAGE_COLUMNS,
-                GlyphMetric {
-                    indent: i32::from(indent),
-                    advance: i32::from(width),
-                },
-            );
+        for &(cell, metric) in &def.glyphs {
+            table.set(0, 2 + cell / PAGE_COLUMNS, cell % PAGE_COLUMNS, metric);
         }
         table
-    }
-
-    /// Classic REbirth's proportional metrics for its Western sheet: every
-    /// plain cell advances the default 8px but for the cells
-    /// [`crate::charset::western_widths`] lists. The digits keep the default,
-    /// so counters stay monospaced.
-    pub fn western(texture: &Texture8, metrics: FontMetrics) -> Self {
-        let rows = (texture.height as i32 / GLYPH_HEIGHT).max(0) as usize;
-        let mut table = Self::from_widths(
-            rows,
-            metrics.glyph_w,
-            crate::charset::western_widths()
-                .iter()
-                .map(|&(byte, width, indent)| (usize::from(byte), width, indent)),
-        );
-        table.pages[1].clear();
-        table
-    }
-
-    /// Classic REbirth's metrics for the Japanese sheet, the table its
-    /// Japanese mode draws with ([`crate::charset::japanese_widths`]): an 8px
-    /// space, 11px digits, a proportional advance per Latin glyph and the
-    /// full 14px cell for the kana, kanji and the right page.
-    pub fn japanese(texture: &Texture8, metrics: FontMetrics) -> Self {
-        let rows = (texture.height as i32 / GLYPH_HEIGHT).max(0) as usize;
-        Self::from_widths(
-            rows,
-            metrics.cell_w,
-            crate::charset::japanese_widths()
-                .iter()
-                .map(|&(cell, width, indent)| (usize::from(cell), width, indent)),
-        )
     }
 
     /// The metric of the cell at `(page, row, col)`, falling back to the full
@@ -540,11 +521,13 @@ impl Glyphs<'_> {
     }
 }
 
-/// A loaded font sheet with the metrics its width selects.
+/// A loaded font sheet with the script and metrics its description declares.
 #[derive(Debug, Clone)]
 pub struct Font {
     pub texture: Texture8,
     pub metrics: FontMetrics,
+    /// The byte space the sheet's cells are encoded in.
+    script: crate::charset::Script,
     /// The synthetic hollow box the reserved missing-glyph cell draws; see
     /// [`crate::charset::MISSING`]. Kept out of `texture` so the decoded sheet
     /// is never mutated.
@@ -556,36 +539,27 @@ pub struct Font {
 }
 
 impl Font {
-    /// Pair `texture` with the metrics its width selects.
+    /// Pair `texture` with the script and metrics `def` describes.
     ///
     /// The decoded sheet is left byte-identical; the missing-glyph placeholder
     /// is a separate synthetic texture, so no sheet cell is ever clobbered.
-    pub fn new(texture: Texture8) -> Self {
-        let metrics = FontMetrics::from_sheet_width(texture.width);
-        let missing = missing_box_texture(&texture, metrics.glyph_w);
-        let glyph_table = if texture.width >= JPN_SHEET_WIDTH {
-            GlyphTable::japanese(&texture, metrics)
-        } else {
-            GlyphTable::western(&texture, metrics)
-        };
+    pub fn new(texture: Texture8, def: FontDef) -> Self {
+        let missing = missing_box_texture(&texture, def.metrics.glyph_w);
+        let glyph_table = GlyphTable::new(&texture, &def);
         Self {
             texture,
-            metrics,
+            metrics: def.metrics,
+            script: def.script,
             missing,
             glyph_table,
             hd: None,
         }
     }
 
-    /// The script the sheet's width selects: the 768-wide Japanese sheet or
-    /// the 256-wide Western one. Every stream the session draws must be
-    /// encoded in this script's byte space.
+    /// The script the font's description declares. Every stream the session
+    /// draws must be encoded in this script's byte space.
     pub fn script(&self) -> crate::charset::Script {
-        if self.texture.width >= JPN_SHEET_WIDTH {
-            crate::charset::Script::Japanese
-        } else {
-            crate::charset::Script::Latin
-        }
+        self.script
     }
 
     /// The decoded glyph stream of game-text `bytes`, with the tight table
@@ -1090,11 +1064,11 @@ mod tests {
     }
 
     fn metrics_jpn() -> FontMetrics {
-        FontMetrics::from_sheet_width(768)
+        FontDef::japanese().metrics
     }
 
     fn metrics_usa() -> FontMetrics {
-        FontMetrics::from_sheet_width(256)
+        FontDef::western().metrics
     }
 
     fn steps(bytes: &[u8], metrics: FontMetrics) -> Vec<Glyph> {
@@ -1178,7 +1152,7 @@ mod tests {
     #[test]
     fn the_japanese_sheet_uses_classic_rebirths_widths() {
         // CR's Japanese-mode table (issue #63), whatever ink the sheet has.
-        let font = Font::new(sheet_with_ink(&[]));
+        let font = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         let cr = |indent, advance| GlyphMetric { indent, advance };
         // The space is 8px and the digits a monospaced 11px.
         assert_eq!(metric(&font, 0x00), cr(0, 8));
@@ -1200,7 +1174,7 @@ mod tests {
 
     #[test]
     fn tight_glyphs_use_the_table_advance_and_indent() {
-        let font = Font::new(sheet_with_ink(&[]));
+        let font = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         let tight = Glyphs::new(&[0x45], font.metrics)
             .tight(&font.glyph_table)
             .next()
@@ -1221,7 +1195,7 @@ mod tests {
         // `.` is `0xF8 0x1C`, CR's cell 0x106: indent 2, width 4. CR's draw
         // skips an `0xF8` cell's indent shift but still advances past it, so
         // the cell draws at the cursor and moves it 6px.
-        let font = Font::new(sheet_with_ink(&[]));
+        let font = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         let glyph = Glyphs::new(&[0xF8, 0x1C], font.metrics)
             .tight(&font.glyph_table)
             .next()
@@ -1235,7 +1209,7 @@ mod tests {
 
     #[test]
     fn classic_rebirths_measure_keeps_its_quirks() {
-        let font = Font::new(sheet_with_ink(&[]));
+        let font = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         // Plain cells measure their table width: "1:" is 11 + 4.
         assert_eq!(font.classic_rebirth_width(&[0x0D, 0x16]), 15);
         // An `0xF8` cell counts its width without the indent it draws past.
@@ -1249,20 +1223,23 @@ mod tests {
         assert_eq!(font.classic_rebirth_width(&[0x0D, 0xFB, 0x0D]), 22);
         assert_eq!(font.classic_rebirth_width(&[0x0D, 0x01, 0x0D]), 11);
         // The Western sheet measures by its own table.
-        let western = Font::new(Texture8 {
-            width: 256,
-            height: 256,
-            indices: vec![0; 256 * 256],
-            palettes: vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN],
-            stp: Vec::new(),
-        });
+        let western = Font::new(
+            Texture8 {
+                width: 256,
+                height: 256,
+                indices: vec![0; 256 * 256],
+                palettes: vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN],
+                stp: Vec::new(),
+            },
+            FontDef::western(),
+        );
         assert_eq!(western.classic_rebirth_width(&[0x25, 0x1D]), 13);
     }
 
     #[test]
     fn wrap_pixels_budgets_by_the_advances() {
         // 'i' 0x45 has a 5px advance and a 14px full width on this sheet.
-        let font = Font::new(sheet_with_ink(&[]));
+        let font = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         let text = [0x45, 0x45, 0x45, 0x45];
         // Four 5px glyphs fit in 40px tight; the full cells fit only two.
         assert_eq!(wrap_pixels(&text, 40, &font, true), [text.as_slice()]);
@@ -1274,7 +1251,7 @@ mod tests {
 
     #[test]
     fn fit_pixels_clips_at_the_budget() {
-        let font = Font::new(sheet_with_ink(&[]));
+        let font = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         let text = [0x45, 0x45, 0x45];
         // Two 5px glyphs fit in 14px, and so does one 14px glyph.
         assert_eq!(fit_pixels(&text, 14, &font, true), &text[..2]);
@@ -1350,7 +1327,7 @@ mod tests {
 
     #[test]
     fn the_missing_glyph_cell_is_a_hollow_box() {
-        let font = Font::new(sheet_with_cell(168, 28));
+        let font = Font::new(sheet_with_cell(168, 28), FontDef::japanese());
         let glyph = Glyphs::new(&crate::charset::MISSING, font.metrics)
             .next()
             .expect("the missing sequence decodes to a cell");
@@ -1383,7 +1360,7 @@ mod tests {
         // constructor must not paint over it (or anywhere else).
         let sheet = sheet_with_cells(&[(154, 28)]);
         let before = sheet.clone();
-        let font = Font::new(sheet);
+        let font = Font::new(sheet, FontDef::japanese());
         assert_eq!(font.texture, before, "Font::new mutated the decoded sheet");
     }
 
@@ -1404,7 +1381,7 @@ mod tests {
         // the synthetic box's palette index.
         let mut sheet = sheet_with_cell(154, 28);
         sheet.palettes[8] = [9, 8, 7, 255];
-        let font = Font::new(sheet);
+        let font = Font::new(sheet, FontDef::japanese());
 
         fn pixel(framebuffer: &Framebuffer, x: i32, y: i32) -> [u8; 4] {
             let offset = (y as usize * 320 + x as usize) * 4;
@@ -1503,7 +1480,7 @@ mod tests {
 
         // The measure path follows the same cells: 0x28 spends the letter
         // cell's 12px advance, where the parenthesis cell's is the full 14.
-        let font = Font::new(sheet_with_ink(&[]));
+        let font = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         assert_eq!(font.advance(true, &[0x28]), 12, "the letter's advance");
         assert_eq!(
             font.advance(true, &[0xF8, 0x16]),
@@ -1517,13 +1494,16 @@ mod tests {
         // The Western sheet's advances come from Classic REbirth's width
         // table whatever the tight flag says, and never from the ink
         // (issue #32, #63).
-        let font = Font::new(Texture8 {
-            width: 256,
-            height: 256,
-            indices: vec![0; 256 * 256],
-            palettes: vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN],
-            stp: Vec::new(),
-        });
+        let font = Font::new(
+            Texture8 {
+                width: 256,
+                height: 256,
+                indices: vec![0; 256 * 256],
+                palettes: vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN],
+                stp: Vec::new(),
+            },
+            FontDef::western(),
+        );
         assert_eq!(font.script(), crate::charset::Script::Latin);
         assert_eq!(font.metrics.glyph_w, 8);
         // `I` is plain cell 0x25: CR draws it 2px left and advances 5.
@@ -1536,7 +1516,7 @@ mod tests {
         assert_eq!(font.advance(false, &[0x1D]), 8);
 
         // The Japanese sheet takes CR's Japanese table only when tight.
-        let jpn = Font::new(sheet_with_ink(&[]));
+        let jpn = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         assert_eq!(jpn.script(), crate::charset::Script::Japanese);
         assert_eq!(jpn.advance(true, &[0x25]), 6, "CR's Japanese width");
         assert_eq!(jpn.advance(false, &[0x25]), 14);
@@ -1566,7 +1546,7 @@ mod tests {
 
     #[test]
     fn draw_text_places_glyphs_at_the_cursor() {
-        let font = Font::new(sheet_with_cell(168, 28));
+        let font = Font::new(sheet_with_cell(168, 28), FontDef::japanese());
         let mut framebuffer = Framebuffer::new();
 
         font.draw_text(&mut framebuffer, 10, 10, Tint::Green, 2, &[0x0C], false);
@@ -1601,7 +1581,7 @@ mod tests {
 
     #[test]
     fn draw_text_fit_condenses_only_a_line_wider_than_the_budget() {
-        let font = Font::new(sheet_with_cell(168, 28));
+        let font = Font::new(sheet_with_cell(168, 28), FontDef::japanese());
         let line = [0x0C, 0x0C, 0x0C];
         let inked = |framebuffer: &Framebuffer| -> Vec<usize> {
             (0..320)
@@ -1626,7 +1606,7 @@ mod tests {
 
     #[test]
     fn draw_text_draws_no_drop_shadow() {
-        let font = Font::new(sheet_with_cell(168, 28));
+        let font = Font::new(sheet_with_cell(168, 28), FontDef::japanese());
         fn pixel(framebuffer: &Framebuffer, x: i32, y: i32) -> [u8; 4] {
             let offset = (y as usize * 320 + x as usize) * 4;
             framebuffer.rgba[offset..offset + 4].try_into().unwrap()
@@ -1658,14 +1638,17 @@ mod tests {
         // cell, and split halves at the plain 0x28 letter and the 0xF8 0x16
         // parenthesis beside it, so the step sequence below also shows which
         // of the two cells 0x28 sampled.
-        let font = Font::new(sheet_with_ink(&[
-            (168, 28, 0, 13),
-            (28, 224, 0, 13),
-            (256 + 28, 14, 0, 13),
-            (256 + 28, 210, 0, 13),
-            (56, 56, 0, 4),
-            (56, 224, 5, 13),
-        ]));
+        let font = Font::new(
+            sheet_with_ink(&[
+                (168, 28, 0, 13),
+                (28, 224, 0, 13),
+                (256 + 28, 14, 0, 13),
+                (256 + 28, 210, 0, 13),
+                (56, 56, 0, 4),
+                (56, 224, 5, 13),
+            ]),
+            FontDef::japanese(),
+        );
 
         fn pixel(framebuffer: &Framebuffer, x: i32, y: i32) -> [u8; 4] {
             let offset = (y as usize * 320 + x as usize) * 4;
@@ -1743,7 +1726,10 @@ mod tests {
         // the letter cell, never the parenthesis the ASCII path's remap
         // selects. Two disjoint ink strips tell the two cells apart at draw
         // time: the letter covers columns 0..=3, the parenthesis 4..=6.
-        let font = Font::new(sheet_with_ink(&[(56, 56, 0, 3), (56, 224, 4, 6)]));
+        let font = Font::new(
+            sheet_with_ink(&[(56, 56, 0, 3), (56, 224, 4, 6)]),
+            FontDef::japanese(),
+        );
         let mut name = Vec::new();
         crate::charset::encode("Lockpick", crate::charset::Script::Japanese, &mut name);
         assert_eq!(name[0], 0x28, "the charset spells L as 0x28");
@@ -1775,12 +1761,17 @@ mod tests {
             return;
         };
         let pack = crate::pack::Pack::open(std::path::Path::new(&path)).unwrap();
-        let sheet = crate::tim::decode_4bpp(&pack.read("font/font.tim").unwrap()).unwrap();
+        let asset = pack
+            .read_asset(&xml::stem(JAPANESE_ID), AssetClass::Image)
+            .unwrap()
+            .unwrap();
+        let sheet =
+            crate::assets::decode_texture(&asset, crate::assets::Geometry::Shipped).unwrap();
         let before = sheet.clone();
-        let font = Font::new(sheet);
+        let font = Font::new(sheet, FontDef::japanese());
         assert_eq!(
             font.texture, before,
-            "Font::new mutated the decoded font/font.tim"
+            "Font::new mutated the decoded Japanese sheet"
         );
 
         // The shipped 0x0B cell (u 154, v 28) is the real ▼ and must stay
@@ -1843,9 +1834,12 @@ mod tests {
 
     #[test]
     fn a_recorded_frame_draws_covered_glyphs_as_hd_items() {
-        let probe = Font::new(sheet_with_ink(&[]));
+        let probe = Font::new(sheet_with_ink(&[]), FontDef::japanese());
         let glyph = steps(b"\x20", probe.metrics)[0];
-        let mut font = Font::new(sheet_with_ink(&[(glyph.u, glyph.v, 0, 13)]));
+        let mut font = Font::new(
+            sheet_with_ink(&[(glyph.u, glyph.v, 0, 13)]),
+            FontDef::japanese(),
+        );
         font.hd = Some(hd_glyphs([256, 256], |_, _| true));
         let glyph = font.glyphs(false, b"\x20").next().unwrap();
         assert!(glyph.visible());

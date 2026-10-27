@@ -23,10 +23,6 @@ pub const MODEL_REST_X: i32 = 0x1980;
 pub const MENU_CENTER: [i32; 2] = [112, 76];
 /// Viewer focal length in pixels.
 pub const VIEWER_FOV: i32 = 0xC0;
-/// The description table index the Ingram maps to (1-based).
-const INGRAM_DESCRIPTION: u16 = 0x4E;
-/// The description table index the Minimi maps to (1-based).
-const MINIMI_DESCRIPTION: u16 = 0x4F;
 /// Global message: "`<ammo>` loaded." for a weapon holding rounds.
 pub const MESSAGE_WEAPON_LOADED: u8 = 0xF0;
 /// Global message for item 0x13 once its scenario flags are up.
@@ -227,22 +223,11 @@ pub fn examine_check(
     }
 }
 
-/// The item's description-table entry: descriptions are item id - 1, except
-/// the two PC-only items, which have entries past the item table.
+/// The item's description: its `ITEM_<id>_DESCRIPTION` string. (The
+/// original stores the two PC-only machineguns' descriptions past the item
+/// table, as entries `0x4E`/`0x4F`; their `item.xml` carries them directly.)
 pub fn description_bytes(text: &Text, item: u8) -> Option<&[u8]> {
-    let id = match item {
-        items::ITEM_INGRAM => INGRAM_DESCRIPTION,
-        items::ITEM_MINIMI => MINIMI_DESCRIPTION,
-        _ => u16::from(item),
-    };
-    text.description(id)
-}
-
-/// The pack entry of the item's shared `.ivm` model; `None` for an item
-/// without a model name. New packs also carry the per-item split files
-/// ([`crate::item_art::load_model`] prefers those).
-pub fn model_entry(item: u8) -> Option<String> {
-    crate::item_art::legacy_model_entry(item)
+    text.description(u16::from(item))
 }
 
 #[cfg(test)]
@@ -427,7 +412,6 @@ mod tests {
         // placeholder "m" name, which no pack carries.
         let dir = TempDir::new();
         let pack = empty_pack(&dir);
-        assert_eq!(model_entry(0x6E), None);
         assert_eq!(crate::items::model_name(0x6E), None);
         assert!(crate::item_art::load_model(&pack, 0x6E).unwrap().is_none());
         assert_eq!(description_bytes(&Text::default(), 0x6E), None);
@@ -438,30 +422,14 @@ mod tests {
     }
 
     #[test]
-    fn ingram_and_minimi_descriptions_use_their_own_entries() {
-        // A language file where the 1-based item ids 0x4E/0x4F have
-        // descriptions but the direct item-id entries do not.
+    fn ingram_and_minimi_descriptions_come_from_their_own_items() {
         let dir = TempDir::new();
-        let path = dir.0.join("game.akpak");
-        let mut writer = PackWriter::new();
-        writer
-            .add(
-                "language/en-US.txt",
-                b"ITEM_4E_DESCRIPTION = \"0\"\nITEM_4F_DESCRIPTION = \"1\"\n".to_vec(),
-            )
-            .unwrap();
-        writer.write(&path).unwrap();
-        let pack = Pack::open(&path).unwrap();
-        let text = Text::load(&pack, Some("en-US"));
-
+        let text = Text::load(&empty_pack(&dir), Some("en-US"));
         assert_eq!(
-            description_bytes(&text, items::ITEM_INGRAM),
-            Some([0x0C, 0x01, 0x00].as_slice())
+            text.decode(description_bytes(&text, items::ITEM_INGRAM).unwrap()),
+            "A sub machine gun loaded\nwith 9mm bullets."
         );
-        assert_eq!(
-            description_bytes(&text, items::ITEM_MINIMI),
-            Some([0x0D, 0x01, 0x00].as_slice())
-        );
+        assert!(description_bytes(&text, items::ITEM_MINIMI).is_some());
         assert_eq!(description_bytes(&text, 0x6E), None);
     }
 }

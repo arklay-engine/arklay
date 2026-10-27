@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">V-Jolt</string>
+            <string key="description">Now I can destroy that ivy\nmonster.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">V-JOLT</string>
+            <string key="description">Jetzt kann ich das Efeu-Monster\nerledigen.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">V-JOLT</string>
+            <string key="description">Ahora podré destruir\nla hiedra monstruosa.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">V-JOLT</string>
+            <string key="description">Nyt voin tuhota sen murattihirviön.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">CHOC-V</string>
+            <string key="description">A présent je peux détruire ce \nmonstre grimpant.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">V-JOLT</string>
+            <string key="description">Ora posso distruggere\nl'edera mostruosa.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">VーJOLT</string>
+            <string key="description">これでツタの化け物を倒す事が出来る</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">В-Шок</string>
+            <string key="description">Теперь я могу уничтожить\nэтого плющевого монстра.</string>
+        </language>
+    </strings>
+</item>

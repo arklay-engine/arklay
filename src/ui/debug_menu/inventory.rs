@@ -10,6 +10,7 @@
 
 use super::{BODY_Y, Pen, Step, TEXT_LEFT, TITLE_Y};
 use crate::game::{GameState, InventoryItem};
+use crate::item_catalog::ItemCatalog;
 use crate::items;
 use crate::render::Tint;
 use crate::ui::UiInput;
@@ -31,20 +32,22 @@ const PICKER_ROW_HEIGHT: i32 = 32;
 /// The picker grid's top edge.
 const PICKER_Y: i32 = 28;
 
-/// The highest quantity `item` can hold: the stack cap for the ammunition
-/// range and the ribbon, the table maximum otherwise (0: no quantity).
-pub fn quantity_limit(item: u8) -> u8 {
-    if items::is_stackable(item) {
+/// The highest quantity `item` can hold: the merge cap for an item that
+/// merges (the ammunition and the ribbon), its `stack` otherwise (0: no
+/// quantity).
+pub fn quantity_limit(defs: &ItemCatalog, item: u8) -> u8 {
+    let def = defs.get(item);
+    if def.merge {
         items::ITEM_QUANTITY_CAP
     } else {
-        items::max_quantity(item)
+        def.stack
     }
 }
 
-/// The quantity a freshly picked item starts with: its table maximum, and at
-/// least one.
-pub fn default_quantity(item: u8) -> u8 {
-    items::max_quantity(item).max(1)
+/// The quantity a freshly picked item starts with: its `stack`, and at least
+/// one.
+pub fn default_quantity(defs: &ItemCatalog, item: u8) -> u8 {
+    defs.get(item).stack.max(1)
 }
 
 /// Put `item` into `slot` (`0` clears it) and return the slot it landed in.
@@ -62,7 +65,7 @@ pub fn assign(game: &mut GameState, slot: usize, item: u8) -> usize {
     } else {
         let stack = InventoryItem {
             id: item,
-            quantity: default_quantity(item),
+            quantity: default_quantity(&game.item_defs, item),
         };
         match game.inventory.get_mut(slot) {
             Some(existing) => *existing = stack,
@@ -83,7 +86,7 @@ pub fn adjust(game: &mut GameState, slot: usize, delta: i32) {
     let Some(stack) = game.inventory.get(slot).copied() else {
         return;
     };
-    let limit = i32::from(quantity_limit(stack.id));
+    let limit = i32::from(quantity_limit(&game.item_defs, stack.id));
     if limit == 0 {
         return;
     }
@@ -243,7 +246,7 @@ impl InventoryEditor {
                 Some(stack) => {
                     pen.icon(stack.id, [TEXT_LEFT + 14, y]);
                     pen.item_name(name_x, y + 1, name_tint, stack.id);
-                    let limit = quantity_limit(stack.id);
+                    let limit = quantity_limit(&game.item_defs, stack.id);
                     let quantity = if limit == 0 {
                         format!("{:02X}", stack.id)
                     } else {
@@ -337,7 +340,7 @@ mod tests {
         adjust(&mut game, 0, 1);
         assert_eq!(game.inventory[0].quantity, 250, "capped");
         // A weapon caps at its own maximum.
-        let limit = items::max_quantity(0x02);
+        let limit = game.item_defs.get(0x02).stack;
         assert!(limit > 0);
         adjust(&mut game, 1, 1);
         assert_eq!(game.inventory[1].quantity, limit);
@@ -391,7 +394,7 @@ mod tests {
         let mut game = game(0);
         // The knife has no quantity.
         game.add_item(0x01, 0);
-        assert_eq!(quantity_limit(0x01), 0);
+        assert_eq!(quantity_limit(&game.item_defs, 0x01), 0);
         adjust(&mut game, 0, -1);
         adjust(&mut game, 0, 1);
         assert_eq!(

@@ -1,0 +1,36 @@
+<item kind="weapon">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Combat Knife</string>
+            <string key="description">This doesn't seem to be\nenough for this mission.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">KAMPFMESSER</string>
+            <string key="description">Das dürfte für diese Mission\nnicht ausreichen.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">CUCHILLO</string>
+            <string key="description">No parece suficiente\npara esta misión.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">METSÄSTYSVEITSI</string>
+            <string key="description">Tämä ei taida olla riittävä\ntähän tehtävään.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Couteau</string>
+            <string key="description">Ceci ne semble pas être\nsuffisant pour cette mission.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">COLTELLO</string>
+            <string key="description">Sembra non basterà\nper questa missione.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">コンバットナイフ</string>
+            <string key="description">この装備だけで調査を\n進めていくのはむずかしいだろう</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Боевой нож</string>
+            <string key="description">Кажется, этого будет\nмаловато для этой миссии.</string>
+        </language>
+    </strings>
+</item>

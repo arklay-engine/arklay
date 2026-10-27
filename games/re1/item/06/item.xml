@@ -1,0 +1,36 @@
+<item kind="weapon" stack="240">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Flamethrower</string>
+            <string key="description">Can throw flame for 9 sec.\nwith max. fuel.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">FLAMMENWERFER</string>
+            <string key="description">Kann bei voller Ladung\n8 Sek. lang Flammen schleudern.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LANZALLAMAS</string>
+            <string key="description">Puede lanzar llamas 8 seg.\nsi tiene el combustible máx.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">LIEKINHEITIN</string>
+            <string key="description">Täydellä säiliöllä polttoainetta\nriittää 9 sekunnin ajaksi.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Lance-Flammes</string>
+            <string key="description">Peut lancer des flammes pendant\n9s quand le réservoir est plein.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">LANCIAFIAMME</string>
+            <string key="description">Può lanciare fiamme per 9 sec.\ncon il combustibile al massimo.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">火炎放射器</string>
+            <string key="description">燃料がMAXの時なら\n8secは火炎を射出し続けられる</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Огнемёт</string>
+            <string key="description">Может выбрасывать пламя в.\nтечении 9 сек., с макс. топливом.</string>
+        </language>
+    </strings>
+</item>

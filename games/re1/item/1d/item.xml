@@ -1,0 +1,44 @@
+<item kind="special">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Square Crank</string>
+            <string key="name_unchecked">Crank</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">VIERKANTKURBEL</string>
+            <string key="name_unchecked">KURBEL</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">MANIVELA CUADRADA</string>
+            <string key="name_unchecked">MANIVELA</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">NELIKULMIO-KAMPI</string>
+            <string key="name_unchecked">KAMPI</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Manivelle Carré</string>
+            <string key="name_unchecked">Manivelle</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">MANOV. QUADRATA</string>
+            <string key="name_unchecked">MANOVELLA</string>
+            <string key="description">Nulla di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">四角クランク</string>
+            <string key="name_unchecked">クランク</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Рукоятка квадрат.</string>
+            <string key="name_unchecked">Рукоятка</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

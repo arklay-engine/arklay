@@ -1263,14 +1263,6 @@ impl UserData for Api<'_> {
             Ok((stack.id, stack.quantity))
         });
 
-        // `item_icon_row(item)`: the item's 40x30 row in `item/item_all`, or
-        // nil when it has no icon there.
-        methods.add_method("item_icon_row", |_lua, _api, item: u8| {
-            let class = crate::items::image_class(item);
-            let row = usize::from(class.wrapping_sub(1));
-            Ok((class != 0 && row < crate::items::ITEM_ALL_ROWS).then_some(row))
-        });
-
         // The font-encoded shorthand location label of a save's room.
         methods.add_method("location_bytes", |lua, api, (stage, room): (u8, u8)| {
             api.cx

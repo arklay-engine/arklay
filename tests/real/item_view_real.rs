@@ -5,11 +5,12 @@
 //!
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must carry
-//! the converted `item/*.ivm` models, `font/font.tim`, the text tables and the
-//! slice-5 UI art; a stale pack fails the test rather than silently skipping.
+//! the converted `item/<id>/model.tmd` models, `font/01.bmp`, the text
+//! tables and the slice-5 UI art; a stale pack fails the test rather than
+//! silently skipping.
 //!
-//! The tests cover the four slice-7 acceptance paths: every shipped `.ivm`
-//! parses, the shipped `ui/item_view.lua` renders the combat knife as a
+//! The tests cover the four slice-7 acceptance paths: every shipped item
+//! model loads, the shipped `ui/item_view.lua` renders the combat knife as a
 //! non-empty model (stable across two draws, and different after a
 //! rotation), the knife's confirm asks for its description, and the
 //! `--ui view` capture is deterministic.
@@ -20,7 +21,6 @@ use arklay::engine;
 use arklay::examine::{self, ConfirmOutcome, ExamineContext};
 use arklay::item_art;
 use arklay::items;
-use arklay::ivm;
 use arklay::pack::{Pack, PackWriter};
 use arklay::render::Framebuffer;
 use arklay::text::Text;
@@ -44,27 +44,24 @@ fn painted(framebuffer: &Framebuffer) -> usize {
 
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
-fn every_shipped_item_model_parses_from_the_pack() {
+fn every_shipped_item_model_loads_from_the_pack() {
     let Some(pack) = pack() else {
         return;
     };
-    let mut entries: Vec<&str> = pack
-        .entries()
-        .map(|entry| entry.path())
-        .filter(|path| path.starts_with("item/") && path.ends_with(".ivm"))
-        .collect();
-    entries.sort();
-    assert_eq!(entries.len(), 77, "the pack holds 77 item models");
-
-    for entry in entries {
-        let model = ivm::parse(&pack.read(entry).unwrap())
-            .unwrap_or_else(|error| panic!("{entry}: {error:#}"));
+    for item in items::art_items().filter(|&item| items::model_name(item).is_some()) {
+        let loaded = item_art::load_model(&pack, item)
+            .unwrap_or_else(|error| panic!("item {item:#04x}: {error:#}"))
+            .unwrap_or_else(|| panic!("item {item:#04x} has no model"));
+        assert!(!loaded.untextured, "item {item:#04x}");
+        let model = loaded.ivm;
         assert_eq!((model.texture.width, model.texture.height), (256, 256));
         assert!(
             model.objects.iter().any(|object| !object.prims.is_empty()),
-            "{entry} has no primitives"
+            "item {item:#04x} has no primitives"
         );
     }
+    // The shared files themselves are not packed.
+    assert!(!pack.paths().any(|path| path.ends_with(".ivm")));
 }
 
 #[test]
@@ -75,15 +72,15 @@ fn per_item_art_covers_shared_classes_and_the_pc_only_items() {
     };
     // One icon for every item with an ITEM_ALL row, and the two PC-only
     // machineguns from STAITEM.
-    assert!(pack.contains("item/02.bmp"), "the Beretta icon");
-    assert!(pack.contains("item/6f.bmp"), "the Ingram icon");
-    assert!(pack.contains("item/70.bmp"), "the Minimi icon");
+    assert!(pack.contains("item/02/item.bmp"), "the Beretta icon");
+    assert!(pack.contains("item/6f/item.bmp"), "the Ingram icon");
+    assert!(pack.contains("item/70/item.bmp"), "the Minimi icon");
     // The Beretta and these ids share image class 2: identical copies.
     for item in [0x5F, 0x60, 0x62, 0x63] {
         assert_eq!(items::image_class(0x02), items::image_class(item));
-        for suffix in [".bmp", "_model.tmd", "_model.bmp"] {
-            let shared = format!("item/02{suffix}");
-            let own = format!("item/{item:02x}{suffix}");
+        for file in ["item.bmp", "model.tmd", "model.bmp"] {
+            let shared = format!("item/02/{file}");
+            let own = format!("item/{item:02x}/{file}");
             assert_eq!(
                 pack.read(&own).unwrap().as_ref(),
                 pack.read(&shared).unwrap().as_ref(),
@@ -92,35 +89,16 @@ fn per_item_art_covers_shared_classes_and_the_pc_only_items() {
         }
     }
     // Class 0 has no art at all, so the viewer reports no model.
-    assert!(!pack.contains("item/6e.bmp"));
-    assert!(!pack.contains("item/6e_model.tmd"));
-    assert!(!pack.contains("item/6e_model.bmp"));
+    assert!(!pack.contains("item/6e/item.bmp"));
+    assert!(!pack.contains("item/6e/model.tmd"));
+    assert!(!pack.contains("item/6e/model.bmp"));
     assert!(item_art::load_model(&pack, 0x6E).unwrap().is_none());
 
     // The PC-only machineguns map into 0x6f/0x70 from ING/MINI.
     for item in [items::ITEM_INGRAM, items::ITEM_MINIMI] {
         let model = item_art::load_model(&pack, item).unwrap().unwrap();
-        assert!(model.per_item, "item {item:#04x}");
         assert!(!model.untextured, "item {item:#04x}");
         assert!(!model.ivm.objects.is_empty(), "item {item:#04x}");
-    }
-
-    // Splitting must not change the model: the per-item mesh and page equal
-    // what the shared .ivm parses to, including the palette's STP bits.
-    for item in [0x01u8, 0x02, 0x44, 0x4C] {
-        let loaded = item_art::load_model(&pack, item).unwrap().unwrap();
-        assert!(loaded.per_item, "item {item:#04x}");
-        let legacy = item_art::legacy_model_entry(item).unwrap();
-        let legacy = ivm::parse(&pack.read(&legacy).unwrap()).unwrap();
-        assert_eq!(loaded.ivm.texture.indices, legacy.texture.indices);
-        assert_eq!(loaded.ivm.texture.palettes, legacy.texture.palettes);
-        assert_eq!(loaded.ivm.texture.stp, legacy.texture.stp);
-        assert_eq!(
-            arklay::htexture::page_candidates(&loaded.ivm.texture, 0),
-            arklay::htexture::page_candidates(&legacy.texture, 0),
-            "the split page keeps the shared IVM's content hashes"
-        );
-        assert_eq!(loaded.ivm.objects, legacy.objects);
     }
 }
 
@@ -132,13 +110,13 @@ fn real_per_item_entries_verify_and_a_tmd_only_model_loads() {
     };
     // A small pack of real item entries: verify parses the TMDs, the indexed
     // pages and the icons.
-    let tmd = pack.read("item/01_model.tmd").unwrap();
-    let page = pack.read("item/02_model.bmp").unwrap();
-    let icon = pack.read("item/02.bmp").unwrap();
+    let tmd = pack.read("item/01/model.tmd").unwrap();
+    let page = pack.read("item/02/model.bmp").unwrap();
+    let icon = pack.read("item/02/item.bmp").unwrap();
     let mut writer = PackWriter::new();
-    writer.add("item/01_model.tmd", tmd.to_vec()).unwrap();
-    writer.add("item/02_model.bmp", page.to_vec()).unwrap();
-    writer.add("item/02.bmp", icon.to_vec()).unwrap();
+    writer.add("item/01/model.tmd", tmd.to_vec()).unwrap();
+    writer.add("item/02/model.bmp", page.to_vec()).unwrap();
+    writer.add("item/02/item.bmp", icon.to_vec()).unwrap();
     let small = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
     let report = arklay::verify::verify_pack(&small, true);
     assert!(report.valid(), "{:?}", report.failures);

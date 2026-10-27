@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Classic REbirth's Western sheet (its DATA/PBFONT0.TIM): the Japanese
+  sheet's 14px cells with the kana replaced by accented Latin, drawn at CR's
+  proportional advances. Every cell advances the 8px default (the original
+  fontus.tim pitch) but for those listed; the digits keep the default, so
+  counters stay monospaced.
+-->
+<font format="1" script="latin" advance="8" cellWidth="14" margin="0x30" textY="181" menuY="186">
+  <glyph cell="0x02" advance="14"/>
+  <glyph cell="0x05" advance="5" indent="3"/>
+  <glyph cell="0x06" advance="5"/>
+  <glyph cell="0x09" advance="7" indent="6"/>
+  <glyph cell="0x0A" advance="7" indent="1"/>
+  <glyph cell="0x0B" advance="14"/>
+  <glyph cell="0x16" advance="4" indent="2"/>
+  <glyph cell="0x17" advance="4" indent="2"/>
+  <glyph cell="0x18" advance="4" indent="2"/>
+  <glyph cell="0x19" advance="7"/>
+  <glyph cell="0x1A" advance="3" indent="2"/>
+  <glyph cell="0x1B" advance="7"/>
+  <glyph cell="0x25" advance="5" indent="2"/>
+  <glyph cell="0x26" advance="7"/>
+  <glyph cell="0x37" advance="5" indent="3"/>
+  <glyph cell="0x39" advance="5" indent="3"/>
+  <glyph cell="0x3A" advance="4"/>
+  <glyph cell="0x3B" advance="7"/>
+  <glyph cell="0x3C" advance="7"/>
+  <glyph cell="0x45" advance="5" indent="2"/>
+  <glyph cell="0x46" advance="4" indent="2"/>
+  <glyph cell="0x48" advance="5" indent="2"/>
+  <glyph cell="0x49" advance="7"/>
+  <glyph cell="0x4E" advance="7"/>
+  <glyph cell="0x4F" advance="7"/>
+  <glyph cell="0x50" advance="6" indent="1"/>
+  <glyph cell="0x54" advance="7"/>
+  <glyph cell="0x68" advance="5" indent="2"/>
+  <glyph cell="0x69" advance="5" indent="2"/>
+  <glyph cell="0x6A" advance="5" indent="2"/>
+  <glyph cell="0x6B" advance="5" indent="2"/>
+  <glyph cell="0x78" advance="7"/>
+  <glyph cell="0x79" advance="4"/>
+  <glyph cell="0x7E" advance="7"/>
+  <glyph cell="0x88" advance="5"/>
+  <glyph cell="0x89" advance="7"/>
+  <glyph cell="0x8C" advance="5" indent="2"/>
+  <glyph cell="0x8D" advance="5" indent="2"/>
+  <glyph cell="0x92" advance="7"/>
+  <glyph cell="0x93" advance="3" indent="2"/>
+  <glyph cell="0x94" advance="5" indent="2"/>
+  <glyph cell="0x95" advance="5" indent="2"/>
+  <glyph cell="0x9A" advance="7"/>
+  <glyph cell="0x9B" advance="7"/>
+  <glyph cell="0x9D" advance="4" indent="2"/>
+  <glyph cell="0x9E" advance="11"/>
+  <glyph cell="0x9F" advance="11"/>
+</font>

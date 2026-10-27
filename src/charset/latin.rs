@@ -1,7 +1,7 @@
-//! The Western game-text map: Classic REbirth's sheet (`font/latin.tim`).
+//! The Western game-text map: Classic REbirth's sheet (font `00`).
 //!
 //! Classic REbirth draws every Western language with its own sheet,
-//! `DATA/PBFONT0.TIM`, which ships here as `games/re1/font/latin.tim`: the
+//! `DATA/PBFONT0.TIM`, which ships here as `games/re1/font/00.bmp`: the
 //! Japanese `FONT.TIM` left page's 14px cells, with the kana rows replaced by
 //! accented Latin letters. Its byte assignment is the Western releases'
 //! `fontus.tim` one for everything those sheets share (`,` is `0x18`, `;`
@@ -14,7 +14,8 @@
 //! The sheet is a single page: the `0xF9`/`0xFA` extended escapes have no
 //! cells here. `LEFT` names each plain cell, `ENCODE_ONE`/`ENCODE_TWO` are the
 //! inverse map, `SUBSTITUTIONS` aliases the characters the sheet has no cell
-//! for, and `WIDTHS` carries CR's proportional advances.
+//! for. CR's proportional advances live in the font's own
+//! `games/re1/font/00.xml`.
 
 /// plain byte b -> LEFT row b/18, col b%18; `""` marks a cell with no
 /// Unicode spelling (the `0x02`/`0x0B` symbols and the `0x80..=0x83` fill
@@ -246,58 +247,4 @@ pub(super) static SUBSTITUTIONS: [(char, &str); 15] = [
     ('\u{3000}', " "),
     ('\u{30fc}', "-"),
     ('\u{ff3f}', "-"),
-];
-
-/// Classic REbirth's per-glyph `(byte, width, indent)` for the cells whose
-/// advance is not the default 8px: the cell draws shifted left by `indent`
-/// and the cursor advances by `width`.
-#[rustfmt::skip]
-pub(super) static WIDTHS: [(u8, u8, u8); 47] = [
-    (0x02, 14, 0),
-    (0x05, 5, 3),
-    (0x06, 5, 0),
-    (0x09, 7, 6),
-    (0x0A, 7, 1),
-    (0x0B, 14, 0),
-    (0x16, 4, 2),
-    (0x17, 4, 2),
-    (0x18, 4, 2),
-    (0x19, 7, 0),
-    (0x1A, 3, 2),
-    (0x1B, 7, 0),
-    (0x25, 5, 2),
-    (0x26, 7, 0),
-    (0x37, 5, 3),
-    (0x39, 5, 3),
-    (0x3A, 4, 0),
-    (0x3B, 7, 0),
-    (0x3C, 7, 0),
-    (0x45, 5, 2),
-    (0x46, 4, 2),
-    (0x48, 5, 2),
-    (0x49, 7, 0),
-    (0x4E, 7, 0),
-    (0x4F, 7, 0),
-    (0x50, 6, 1),
-    (0x54, 7, 0),
-    (0x68, 5, 2),
-    (0x69, 5, 2),
-    (0x6A, 5, 2),
-    (0x6B, 5, 2),
-    (0x78, 7, 0),
-    (0x79, 4, 0),
-    (0x7E, 7, 0),
-    (0x88, 5, 0),
-    (0x89, 7, 0),
-    (0x8C, 5, 2),
-    (0x8D, 5, 2),
-    (0x92, 7, 0),
-    (0x93, 3, 2),
-    (0x94, 5, 2),
-    (0x95, 5, 2),
-    (0x9A, 7, 0),
-    (0x9B, 7, 0),
-    (0x9D, 4, 2),
-    (0x9E, 11, 0),
-    (0x9F, 11, 0),
 ];

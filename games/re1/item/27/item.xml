@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Battery</string>
+            <string key="description">Now I can move the\nelevator.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">BATTERIE</string>
+            <string key="description">Jetzt kann ich den Aufzug in\nGang setzen.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BATERÍA</string>
+            <string key="description">Ahora puedo hacer que\nel ascensor funcione.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">AKKU</string>
+            <string key="description">Nyt voin käyttää sitä hissiä.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Batterie</string>
+            <string key="description">A présent je peux actionner \nl'ascenseur.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">BATTERIA</string>
+            <string key="description">Adesso posso far funzionare\nl'ascensore.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">バッテリー</string>
+            <string key="description">これでエレベータを動かす事が出来る</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Батарея</string>
+            <string key="description">Теперь я могу\nперемещаться на лифте</string>
+        </language>
+    </strings>
+</item>
