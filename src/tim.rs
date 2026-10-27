@@ -368,6 +368,36 @@ fn block_header(data: &[u8], offset: usize, what: &str) -> Result<[u8; BLOCK_HEA
 /// four times it: the Japanese `FONT.TIM` declares 192 and is 768 wide, the
 /// Western `fontus.tim` declares 64 and is 256 wide.
 pub fn image_width(data: &[u8]) -> Result<u32> {
+    let block = block_header(data, image_block_offset(data)?, "image")?;
+    let width_units = u16::from_le_bytes(block[8..10].try_into().unwrap()) as u32;
+    width_units
+        .checked_mul(4)
+        .context("TIM image width overflows")
+}
+
+/// Where a 4bpp TIM's pixel rows sit: the offset of the first row, the bytes
+/// in a row and the row count. The rows are bounds-checked against `data`.
+pub fn pixel_rows(data: &[u8]) -> Result<(usize, usize, usize)> {
+    let offset = image_block_offset(data)?;
+    let block = block_header(data, offset, "image")?;
+    let row_bytes = usize::from(u16::from_le_bytes(block[8..10].try_into().unwrap())) * PIXEL_BYTES;
+    let height = usize::from(u16::from_le_bytes(block[10..12].try_into().unwrap()));
+    let start = offset + IMAGE_BLOCK_HEADER_LEN;
+    let end = row_bytes
+        .checked_mul(height)
+        .and_then(|len| len.checked_add(start))
+        .context("TIM image size overflows")?;
+    if end > data.len() {
+        bail!(
+            "truncated TIM image data: need {end} bytes, have {}",
+            data.len()
+        );
+    }
+    Ok((start, row_bytes, height))
+}
+
+/// The offset of a 4bpp TIM's image block header, past its CLUT block.
+fn image_block_offset(data: &[u8]) -> Result<usize> {
     if data.len() < HEADER_LEN {
         bail!(
             "TIM is truncated: {} bytes, need at least {HEADER_LEN}",
@@ -393,11 +423,7 @@ pub fn image_width(data: &[u8]) -> Result<u32> {
             .checked_add(length)
             .context("TIM CLUT block length overflows")?;
     }
-    let block = block_header(data, offset, "image")?;
-    let width_units = u16::from_le_bytes(block[8..10].try_into().unwrap()) as u32;
-    width_units
-        .checked_mul(4)
-        .context("TIM image width overflows")
+    Ok(offset)
 }
 
 fn expand_bgr555(value: u16) -> [u8; 4] {

@@ -2411,14 +2411,11 @@ fn copy_font(
     writer: &mut PackWriter,
     progress: &mut Progress,
 ) -> Result<(usize, usize)> {
-    let read = |path: &Path| -> Result<Vec<u8>> {
-        fs::read(path).with_context(|| format!("failed to read {}", path.display()))
-    };
     let primary = match fonts.primary.as_deref() {
         Some(path) if sheet_script_of(path) == crate::charset::Script::Latin => {
             Some(crate::font::WESTERN_SHEET.to_vec())
         }
-        Some(path) => Some(read(path)?),
+        Some(path) => Some(japanese_sheet(path)?),
         None => None,
     };
     let sheets = [
@@ -2426,7 +2423,7 @@ fn copy_font(
         ("font/latin.tim", Some(crate::font::WESTERN_SHEET.to_vec())),
         (
             "font/jpn.tim",
-            fonts.japanese.as_deref().map(read).transpose()?,
+            fonts.japanese.as_deref().map(japanese_sheet).transpose()?,
         ),
     ];
     let packed = sheets.iter().filter(|(_, data)| data.is_some()).count();
@@ -2446,6 +2443,48 @@ fn copy_font(
     }
     progress.end_phase();
     Ok((count, bytes))
+}
+
+/// The pages the Japanese PC release draws its text from, in the sheet's
+/// page order: `Bio.exe` uploads `PBFONT0.TIM` (kana, Latin and symbols) and
+/// `PBFONT1.TIM` (kanji) at start-up and never reads `FONT.TIM`, whose two
+/// pages hold the same glyphs in the same cells, drawn differently.
+const JAPANESE_PC_PAGES: [&str; 2] = ["pbfont0.tim", "pbfont1.tim"];
+
+/// The Japanese sheet at `path` (`FONT.TIM`) with the PC release's own glyph
+/// pages ([`JAPANESE_PC_PAGES`]) from the same directory copied over its left
+/// and middle pages, as the game draws them. A page that is missing or not a
+/// 256x256 4bpp image leaves `FONT.TIM`'s own.
+fn japanese_sheet(path: &Path) -> Result<Vec<u8>> {
+    let read = |path: &Path| -> Result<Vec<u8>> {
+        fs::read(path).with_context(|| format!("failed to read {}", path.display()))
+    };
+    let mut sheet = read(path)?;
+    let Some(index) = path.parent().and_then(|dir| index_dir(dir).ok()) else {
+        return Ok(sheet);
+    };
+    let Ok((start, row_bytes, height)) = crate::tim::pixel_rows(&sheet) else {
+        return Ok(sheet);
+    };
+    for (page, name) in JAPANESE_PC_PAGES.iter().enumerate() {
+        let Some(page_path) = index.get(*name) else {
+            continue;
+        };
+        let bytes = read(page_path)?;
+        let Ok((page_start, page_row, page_height)) = crate::tim::pixel_rows(&bytes) else {
+            continue;
+        };
+        let left = page * page_row;
+        if page_row != 128 || page_height != height || left + page_row > row_bytes {
+            continue;
+        }
+        for row in 0..height {
+            let from = page_start + row * page_row;
+            let to = start + row * row_bytes + left;
+            sheet[to..to + page_row].copy_from_slice(&bytes[from..from + page_row]);
+        }
+    }
+    Ok(sheet)
 }
 
 /// Stage, sound, enemy-model, player, room-mask, door-art, data, item-view and
@@ -6318,6 +6357,40 @@ mod tests {
             b"raw-font-sheet"
         );
         assert_eq!(pack.read("font/latin.tim").unwrap().as_ref(), western);
+    }
+
+    /// A one-row 4bpp TIM `width_units` wide whose pixel bytes are all `fill`.
+    fn filled_tim(width_units: u16, fill: u8) -> Vec<u8> {
+        let mut bytes = font_tim_bytes(width_units);
+        let (start, row_bytes, _) = crate::tim::pixel_rows(&bytes).unwrap();
+        bytes[start..start + row_bytes].fill(fill);
+        bytes
+    }
+
+    #[test]
+    fn the_japanese_sheet_takes_the_pc_releases_glyph_pages() {
+        let root = TempDir::new("font-pc-pages");
+        let data = root.path.join("DATA");
+        fs::create_dir_all(&data).unwrap();
+        fs::write(data.join("FONT.TIM"), filled_tim(192, 0x11)).unwrap();
+        fs::write(data.join("Pbfont0.tim"), filled_tim(64, 0x22)).unwrap();
+        fs::write(data.join("PBFONT1.TIM"), filled_tim(64, 0x33)).unwrap();
+
+        let sheet = japanese_sheet(&data.join("FONT.TIM")).unwrap();
+        let (start, row_bytes, height) = crate::tim::pixel_rows(&sheet).unwrap();
+        assert_eq!((row_bytes, height), (384, 1));
+        let row = &sheet[start..start + row_bytes];
+        assert!(row[..128].iter().all(|&b| b == 0x22), "left page");
+        assert!(row[128..256].iter().all(|&b| b == 0x33), "middle page");
+        assert!(
+            row[256..].iter().all(|&b| b == 0x11),
+            "the third page stays"
+        );
+
+        // A page of the wrong size leaves the sheet's own.
+        fs::write(data.join("PBFONT1.TIM"), filled_tim(32, 0x44)).unwrap();
+        let sheet = japanese_sheet(&data.join("FONT.TIM")).unwrap();
+        assert!(sheet[start + 128..start + 256].iter().all(|&b| b == 0x11));
     }
 
     #[test]

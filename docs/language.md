@@ -95,6 +95,14 @@ Two game-text sheets ship with the releases, and each has its own byte space
 | Japanese `DATA/FONT.TIM` | 768x256 | 14x14, kana/kanji through the `0xF8`/`0xF9`/`0xFA` pages | Japanese and the plain Latin letters |
 | Western `Data/fontus.tim` | 256x256 | 8x14, a single page | the accented Latin letters (`ÄÖÜäöüßÀÂÈÉÊÏÎÔÙÛÇç`) and the European punctuation (`; , " ( ) \ - · … – + =`) |
 
+`convert-game` packs the Japanese sheet the way the Japanese PC release draws
+it. That release's `Bio.exe` never reads `FONT.TIM`. It uploads `PBFONT0.TIM`
+(kana, Latin and symbols) and `PBFONT1.TIM` (kanji), which hold the same
+glyphs in the same cells but drawn differently, so the conversion copies those
+two pages over `FONT.TIM`'s left and middle pages when they sit beside it. In
+stage index 4 the game swaps `PBFONT3N.TIM` in for `PBFONT1.TIM`; the
+converted sheet does not.
+
 A session draws one script, chosen by the language (`ja` keeps the Japanese
 sheet, every other tag prefers the Western one) and resolved against the
 sheets the pack carries: `font/font.tim` is the install's own sheet,
