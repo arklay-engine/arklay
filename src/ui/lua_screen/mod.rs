@@ -1276,6 +1276,7 @@ impl UserData for Api<'_> {
                 row.set("base", entry.base.clone())?;
                 row.set("loadable", entry.loadable())?;
                 row.set("timestamp", entry.timestamp)?;
+                row.set("autosave", entry.autosave)?;
                 if let Some(info) = entry.info {
                     row.set("character", info.character)?;
                     row.set("saves", info.saves)?;

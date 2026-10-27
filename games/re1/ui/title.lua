@@ -164,6 +164,13 @@ function M.open(api, args)
                 break
             end
         end
+        -- The ported load screen also lists the autosaves.
+        for _, entry in ipairs(api:saves()) do
+            if entry.autosave and entry.loadable then
+                s.any_saves = true
+                break
+            end
+        end
     end
     s.selection = s.any_saves and 2 or 1
     publish(api)

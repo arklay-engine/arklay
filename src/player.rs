@@ -177,6 +177,9 @@ pub struct Options {
     /// Saving as Jill needs an ink ribbon, as in the USA release. Off by
     /// default (the Japanese release's rule).
     pub jill_ink_ribbons: bool,
+    /// Port-only: a door's room load does not write an autosave. Off by
+    /// default; only the interactive window autosaves either way.
+    pub no_autosave: bool,
     /// The `--authentic` run mode: the original's item rules where the port
     /// is more lenient. A healing item that would do nothing is refused: the
     /// first-aid spray and the herbs at full health, and a blue herb while the

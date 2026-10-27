@@ -2009,6 +2009,7 @@ impl Launcher {
             no_blood: !self.config.game.blood,
             no_chris_ink_ribbons: !self.config.game.chris_ink_ribbons,
             jill_ink_ribbons: self.config.game.jill_ink_ribbons,
+            no_autosave: !self.config.game.autosave,
             // Only the command line runs in authentic mode.
             authentic: false,
         };

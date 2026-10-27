@@ -1132,6 +1132,8 @@ fn main() -> Result<()> {
                     || tracing
                     || cli.input.is_some()),
                 jill_ink_ribbons: config.game.jill_ink_ribbons && !(tracing || cli.input.is_some()),
+                // A scripted run never writes into the save directory.
+                no_autosave: !config.game.autosave || tracing || cli.input.is_some(),
                 authentic: cli.authentic,
             };
             let mut renderer = config.graphics;

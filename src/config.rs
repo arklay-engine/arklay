@@ -32,6 +32,7 @@
 //! blood = true           # blood billboards, spurts and pools
 //! chris_ink_ribbons = true # saving as Chris needs an ink ribbon
 //! jill_ink_ribbons = false # saving as Jill needs an ink ribbon
+//! autosave = true        # each door's room load writes autosave1.dat
 //! ui_font = "modern"     # the menus' face: "modern" or "retro"
 //! menu_text_size = "standard" # "small", "standard", "large"
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
@@ -392,6 +393,10 @@ pub struct Game {
     /// Saving as Jill needs an ink ribbon, as in the USA release; the
     /// Japanese release lets her save without one. Off by default.
     pub jill_ink_ribbons: bool,
+    /// A door's room load writes an autosave (`autosave1.dat`, rotating the
+    /// previous one to `autosave2.dat`) once the player has control. On by
+    /// default.
+    pub autosave: bool,
     /// The face the native-resolution menus draw with: `"modern"` (the
     /// default) or `"retro"`.
     pub ui_font: crate::gui::FontFamily,
@@ -440,6 +445,7 @@ impl Default for Game {
             blood: true,
             chris_ink_ribbons: true,
             jill_ink_ribbons: false,
+            autosave: true,
             ui_font: crate::gui::FontFamily::Modern,
             menu_text_size: TextSize::Standard,
             button_style: None,
@@ -1203,6 +1209,7 @@ fn parse_game_line(
         "blood" => game.blood = boolean()?,
         "chris_ink_ribbons" => game.chris_ink_ribbons = boolean()?,
         "jill_ink_ribbons" => game.jill_ink_ribbons = boolean()?,
+        "autosave" => game.autosave = boolean()?,
         "ui_font" => {
             game.ui_font = match parse_quoted(value, line)?.as_str() {
                 "modern" => crate::gui::FontFamily::Modern,
@@ -1281,6 +1288,7 @@ fn render_game(game: &Game) -> String {
             game.jill_ink_ribbons,
             defaults.jill_ink_ribbons,
         ),
+        ("autosave", game.autosave, defaults.autosave),
     ] {
         if value != default {
             out.push_str(&format!("{key} = {value}\n"));
@@ -2062,6 +2070,7 @@ menu_text_size = \"huge\"
             blood: false,
             chris_ink_ribbons: false,
             jill_ink_ribbons: true,
+            autosave: false,
             ui_font: crate::gui::FontFamily::Retro,
             menu_text_size: TextSize::Large,
             button_style: Some(crate::gui::PadStyle::Nintendo),

@@ -319,6 +319,7 @@ end
     assert_eq!(first.get::<u8>("stage").unwrap(), 0);
     assert_eq!(first.get::<String>("location").unwrap(), "M. Room 1F");
     assert!(first.get::<i64>("timestamp").unwrap() > 0);
+    assert_eq!(first.get::<Option<usize>>("autosave").unwrap(), None);
     let second: mlua::Table = screen.test_global("second");
     assert_eq!(second.get::<String>("name").unwrap(), "notes.txt");
     assert!(!second.get::<bool>("loadable").unwrap());

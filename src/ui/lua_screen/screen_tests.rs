@@ -146,8 +146,12 @@ fn title_the_folder_probe_follows_a_registered_save_screen() {
             screen.test_eval("return M.state.selection"),
         )
     };
-    // The ported original's probe only looks at `savedat1..8.dat`.
+    // The ported original's probe only looks at `savedat1..8.dat` and the
+    // autosaves its load screen lists.
     assert_eq!(any_saves(false), (false, 1));
+    crate::save::write_autosave(&harness.dir.0, &crate::save::SaveFile::default()).unwrap();
+    assert_eq!(any_saves(false), (true, 2));
+    std::fs::remove_file(harness.dir.0.join("autosave1.dat")).unwrap();
     // A registered save screen lists the folder, like CR's replacement for
     // the original's "does a save exist" check.
     assert_eq!(any_saves(true), (true, 2));

@@ -8,6 +8,11 @@
 -- path opens it in load mode, and a room typewriter opens it in save mode
 -- over the frozen gameplay frame.
 --
+-- Port-only: in load mode the autosaves (autosave1.dat, autosave2.dat) the
+-- interactive game writes on each door's room load follow the eight slots as
+-- extra rows, newest first, and push the exit row down. With no autosave on
+-- disk the screen is the original's exactly.
+--
 -- Column positions are the Japanese glyph grid's: the save-count digits at
 -- countX 0x6F, the location at locX 0x99, the header at 0x61 and the slot
 -- cursor one glyph cell left of the text at 0x29. The reveal string is
@@ -26,9 +31,6 @@ local CONFIRM_X, CONFIRM_Y, CONFIRM_STRIDE = 118, 209, 56
 local PROMPT_X, PROMPT_Y = 49, 193
 local ERROR_Y, ERROR_Y2 = 209, 225
 local SLOT_COUNT = 8
--- The exit row's index (one past the slot rows, 0-based).
-local EXIT_ROW = SLOT_COUNT
-local EXIT_Y = ROW_Y + SLOT_COUNT * ROW_HEIGHT
 -- Bytes of the three-cell name and the eight-cell location (terminator
 -- included), and of the assembled reveal.
 local NAME_LEN, LOC_LEN = 6, 17
@@ -95,9 +97,20 @@ local function reset_blink(visible)
     s.blink_timer = BLINK_TICKS
 end
 
+--- The exit row's index (0-based): past the slot rows and the load mode's
+--- autosave rows.
+local function exit_row()
+    return SLOT_COUNT + #s.autosaves
+end
+
+--- The autosave entry under the cursor, or nil on a slot or the exit row.
+local function selected_autosave()
+    return s.autosaves[s.cursor - SLOT_COUNT + 1]
+end
+
 --- Move the cursor, wrapping through the exit row.
 local function move_cursor(delta)
-    s.cursor = (s.cursor + delta) % (SLOT_COUNT + 1)
+    s.cursor = (s.cursor + delta) % (exit_row() + 1)
     reset_blink()
 end
 
@@ -152,8 +165,15 @@ end
 
 --- Confirm the current row.
 local function confirm(api)
-    if s.cursor == EXIT_ROW then
+    if s.cursor == exit_row() then
         leave()
+        return
+    end
+    local autosave = selected_autosave()
+    if autosave then
+        s.exit = "load_autosave"
+        s.load_name = autosave.name
+        s.stage = "fade_out"
         return
     end
     local occupied = s.slots[s.cursor + 1] ~= false
@@ -180,10 +200,24 @@ function M.open(api)
     if not background then
         api:log("warning: no save/load background: " .. err)
     end
+    local save = api:mode() == "save"
+    -- The loadable autosaves, newest first; save mode never writes them.
+    local autosaves = {}
+    if not save then
+        for _, entry in ipairs(api:saves()) do
+            if entry.autosave and entry.loadable then
+                autosaves[#autosaves + 1] = entry
+            end
+        end
+        table.sort(autosaves, function(a, b)
+            return a.autosave < b.autosave
+        end)
+    end
     s = {
-        save = api:mode() == "save",
+        save = save,
         slots = api:slot_info(),
-        -- 0-7 are the slot rows, EXIT_ROW the exit row.
+        autosaves = autosaves,
+        -- 0-7 are the slot rows, then the autosave rows, then the exit row.
         cursor = 0,
         stage = "idle",
         blink_timer = BLINK_TICKS,
@@ -200,6 +234,12 @@ end
 local function finish(api)
     if s.exit == "load_game" then
         api:exit("load_game", s.cursor)
+    elseif s.exit == "load_autosave" then
+        local ok, err = api:load(s.load_name)
+        if not ok then
+            api:log("warning: failed to load " .. s.load_name .. ": " .. tostring(err))
+            api:exit("title")
+        end
     else
         api:exit(s.exit or "resume")
     end
@@ -218,7 +258,7 @@ local function step(api, input)
         if input.confirm then
             -- The exit row uses the cancel slot; the slots use the confirm
             -- slot (the original's play_sfx 29/31).
-            api:sound(s.cursor == EXIT_ROW and "cancel" or "save_confirm")
+            api:sound(s.cursor == exit_row() and "cancel" or "save_confirm")
             confirm(api)
         elseif input.cancel then
             api:sound("cancel")
@@ -317,7 +357,8 @@ local COMPACT = {
 local function layout(api, oy)
     if api:height() >= 240 then
         return {
-            header = HEADER_Y, row = ROW_Y, pitch = ROW_HEIGHT, exit = EXIT_Y,
+            header = HEADER_Y, row = ROW_Y, pitch = ROW_HEIGHT,
+            exit = ROW_Y + exit_row() * ROW_HEIGHT,
             prompt = PROMPT_Y, confirm = CONFIRM_Y, error = ERROR_Y, error2 = ERROR_Y2,
         }
     end
@@ -325,7 +366,7 @@ local function layout(api, oy)
     for key, y in pairs(COMPACT) do
         rows[key] = key == "pitch" and y or y - oy
     end
-    rows.exit = rows.row + SLOT_COUNT * rows.pitch
+    rows.exit = rows.row + exit_row() * rows.pitch
     return rows
 end
 
@@ -380,6 +421,15 @@ function M.draw(api)
             -- The empty-slot row is fixed-width art too.
             text(ROW_X, y, "UI_SAVE_SLOT_EMPTY", true)
         end
+    end
+
+    -- The autosave rows draw like filled slots.
+    for index, info in ipairs(s.autosaves) do
+        local y = rows.row + (SLOT_COUNT + index - 1) * rows.pitch
+        text(ROW_X, y, "UI_SAVE_SLOT_FILLED", true)
+        text(ROW_X, y, "UI_SAVE_CHARACTER_" .. (info.character & 1) .. "_NAME")
+        api:glyphs(ox + COUNT_X, oy + y, M.count_bytes(info.saves))
+        api:glyphs(ox + LOC_X, oy + y, api:location_bytes(info.stage, info.room))
     end
 
     text(ROW_X, rows.exit, "UI_SAVE_EXIT_" .. mode)
