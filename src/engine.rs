@@ -21123,6 +21123,21 @@ mod tests {
         );
     }
 
+    /// The one file in `saves` other than `existing`: the file the CR screen
+    /// wrote, whose name carries the local time.
+    fn written_save(saves: &Path, existing: &[&str]) -> PathBuf {
+        let written: Vec<PathBuf> = std::fs::read_dir(saves)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                let name = path.file_name().unwrap().to_string_lossy();
+                !existing.contains(&name.as_ref())
+            })
+            .collect();
+        assert_eq!(written.len(), 1, "expected one new save: {written:?}");
+        written.into_iter().next().unwrap()
+    }
+
     #[test]
     fn the_lua_save_screen_writes_a_file_and_consumes_the_ribbon() {
         let dir = TempDir::new();
@@ -21169,7 +21184,16 @@ mod tests {
             saves.join("old.dat").exists(),
             "Create New replaced an existing file"
         );
-        let written = save::load_file(&saves.join("save_01.dat")).unwrap();
+        let path = written_save(&saves, &["old.dat"]);
+        assert!(
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("Jill_"),
+            "the new save is named the way CR names one: {}",
+            path.display()
+        );
+        let written = save::load_file(&path).unwrap();
         assert_eq!(written.used_item, items::ITEM_INK_RIBBONS);
         assert_eq!(
             session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)],
@@ -21222,12 +21246,12 @@ mod tests {
             !saves.join("old.dat").exists(),
             "the selected row was not replaced"
         );
-        let written = save::load_file(&saves.join("save_01.dat")).unwrap();
+        let written = save::load_file(&written_save(&saves, &[])).unwrap();
         assert_eq!(written.used_item, items::ITEM_INK_RIBBONS);
     }
 
     #[test]
-    fn the_lua_save_screen_create_new_skips_a_case_variant_name() {
+    fn the_lua_save_screen_create_new_keeps_an_upper_case_file() {
         let dir = TempDir::new();
         let base = new_game_pack(&dir);
         let (pack_path, mod_path) = pack_with_lua_screen(&dir, &base);
@@ -21257,9 +21281,7 @@ mod tests {
             saves.join("SAVE_01.DAT").exists(),
             "Create New overwrote a case variant"
         );
-        // The scan lowercases names, so the free name after SAVE_01.DAT is
-        // save_02.dat rather than an overlapping save_01.dat.
-        let written = save::load_file(&saves.join("save_02.dat")).unwrap();
+        let written = save::load_file(&written_save(&saves, &["SAVE_01.DAT"])).unwrap();
         assert_eq!(written.used_item, items::ITEM_INK_RIBBONS);
     }
 

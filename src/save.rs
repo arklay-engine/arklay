@@ -708,7 +708,7 @@ impl SaveSlotInfo {
 }
 
 /// One file in the save directory, as the folder-based screen sees it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SaveEntry {
     /// The file's path.
     pub path: PathBuf,
@@ -716,8 +716,9 @@ pub struct SaveEntry {
     pub name: String,
     /// The file's name without its extension, the screen's row label.
     pub base: String,
-    /// Modification time in Unix seconds, or `0` when unavailable.
-    pub timestamp: i64,
+    /// Modification time in Unix seconds, with the filesystem's sub-second
+    /// part, or `0` when unavailable.
+    pub timestamp: f64,
     /// The parsed header, when the file is a loadable save block.
     pub info: Option<SaveSlotInfo>,
     /// The autosave rotation index (`1` newest) when the file is one of the
@@ -784,14 +785,15 @@ fn read_slot_info_path(path: &Path) -> Option<SaveSlotInfo> {
     Some(SaveSlotInfo::from_file(&file))
 }
 
-/// A directory entry's modification time in Unix seconds, or `0`.
-fn timestamp(entry: &fs::DirEntry) -> i64 {
+/// A directory entry's modification time in Unix seconds, with the
+/// filesystem's sub-second part, or `0`.
+fn timestamp(entry: &fs::DirEntry) -> f64 {
     entry
         .metadata()
         .and_then(|metadata| metadata.modified())
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-        .map_or(0, |since| since.as_secs().min(i64::MAX as u64) as i64)
+        .map_or(0.0, |since| since.as_secs_f64())
 }
 
 /// Resolve a screen-supplied file name under `dir`.
@@ -1349,7 +1351,7 @@ mod tests {
         assert!(entries[0].loadable());
         assert_eq!(entries[0].info, Some(SaveSlotInfo::from_file(&file)));
         assert_eq!(entries[0].path, dir.path.join("alpha.dat"));
-        assert!(entries[0].timestamp > 0, "the mtime is recorded");
+        assert!(entries[0].timestamp > 0.0, "the mtime is recorded");
         assert!(!entries[2].loadable());
         assert_eq!(entries[2].info, None);
 

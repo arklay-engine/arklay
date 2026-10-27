@@ -89,6 +89,14 @@ impl Text {
         self.get(key).map(|bytes| self.decode(bytes))
     }
 
+    /// `KEY` in language `tag` alone, decoded to characters; `None` when the
+    /// pack carries no such language or it lacks the key.
+    pub fn text_in(&self, tag: &str, key: &str) -> Option<String> {
+        self.catalog
+            .lookup_in(tag, key)
+            .map(|bytes| self.decode(bytes))
+    }
+
     /// The save screen's shorthand location label of the room a block was
     /// saved in; `stage` is the block's 0-based stage byte.
     pub fn save_location(&self, stage: u8, room: u8) -> Option<&[u8]> {

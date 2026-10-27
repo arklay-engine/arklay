@@ -318,7 +318,7 @@ end
     assert_eq!(first.get::<u8>("saves").unwrap(), 7);
     assert_eq!(first.get::<u8>("stage").unwrap(), 0);
     assert_eq!(first.get::<String>("location").unwrap(), "M. Room 1F");
-    assert!(first.get::<i64>("timestamp").unwrap() > 0);
+    assert!(first.get::<f64>("timestamp").unwrap() > 0.0);
     assert_eq!(first.get::<Option<usize>>("autosave").unwrap(), None);
     let second: mlua::Table = screen.test_global("second");
     assert_eq!(second.get::<String>("name").unwrap(), "notes.txt");
@@ -1840,4 +1840,99 @@ end
     };
     assert!(model.page.is_none(), "no texture means no HD page");
     assert!(!model.vertices.is_empty());
+}
+
+#[test]
+fn pending_local_time_and_tagged_strings_reach_the_script() {
+    let fixture = Fixture::new(
+        "pending",
+        r#"
+function update(api)
+pending = api:pending()
+time = api:local_time()
+chris = api:string("UI_SAVE_CHARACTER_0_NAME", "en-US")
+missing = api:string("UI_SAVE_CHARACTER_0_NAME", "xx-XX")
+end
+"#,
+    );
+    let file = SaveFile {
+        character: 1,
+        saves: 12,
+        stage: 2,
+        room: 5,
+        ..SaveFile::default()
+    };
+    let mut screen = fixture.save(file, false);
+    let cx = fixture.context();
+    screen.update(&cx, UiInput::default());
+    let pending: mlua::Table = screen.test_global("pending");
+    assert_eq!(pending.get::<u8>("character").unwrap(), 1);
+    assert_eq!(pending.get::<u8>("saves").unwrap(), 12);
+    assert_eq!(pending.get::<u8>("stage").unwrap(), 2);
+    assert_eq!(pending.get::<u8>("room").unwrap(), 5);
+    let time: Option<mlua::Table> = screen.test_global("time");
+    if let Some(time) = time {
+        assert!((1..=12).contains(&time.get::<u8>("month").unwrap()));
+    }
+    assert_eq!(
+        screen.test_global::<Option<String>>("chris").as_deref(),
+        Some("Chris")
+    );
+    assert_eq!(screen.test_global::<Option<String>>("missing"), None);
+
+    // Load mode has no pending block.
+    let fixture = Fixture::new(
+        "pending-load",
+        r#"function update(api) has = api:pending() ~= nil end"#,
+    );
+    let mut screen = fixture.load();
+    let cx = fixture.context();
+    screen.update(&cx, UiInput::default());
+    assert!(!screen.test_global::<bool>("has"));
+}
+
+#[test]
+fn the_cr_mod_names_a_new_save_like_classic_rebirth() {
+    let fixture = Fixture::new(
+        "cr-name",
+        include_str!("../../../mods/crloadsave/script/loadsave.lua"),
+    );
+    let file = SaveFile {
+        character: 1,
+        saves: 4,
+        ..SaveFile::default()
+    };
+    let mut screen = fixture.save(file, false);
+    let cx = fixture.context();
+    // The cursor opens on `Create New`.
+    screen.update(
+        &cx,
+        UiInput {
+            confirm: true,
+            ..UiInput::default()
+        },
+    );
+    let names: Vec<String> = fixture
+        .dir
+        .path
+        .read_dir()
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(names.len(), 1, "{names:?}");
+    let name = &names[0];
+    if crate::local_time::now().is_some() {
+        // `Jill_04_YYYY-MM-DD HH^MM.SS.dat`
+        let rest = name.strip_prefix("Jill_04_").expect(name);
+        let date = rest.strip_suffix(".dat").expect(name);
+        let bytes = date.as_bytes();
+        assert_eq!(bytes.len(), 19, "{name}");
+        assert_eq!(
+            (bytes[4], bytes[7], bytes[10], bytes[13], bytes[16]),
+            (b'-', b'-', b' ', b'^', b'.'),
+            "{name}"
+        );
+    } else {
+        assert_eq!(name, "save_01.dat");
+    }
 }

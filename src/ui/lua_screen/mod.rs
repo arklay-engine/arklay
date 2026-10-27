@@ -1311,8 +1311,40 @@ impl UserData for Api<'_> {
             Ok(table)
         });
 
-        methods.add_method("string", |_lua, api, key: String| {
-            Ok(api.cx.text.and_then(|text| text.text(&key)))
+        methods.add_method(
+            "string",
+            |_lua, api, (key, tag): (String, Option<String>)| {
+                Ok(api.cx.text.and_then(|text| match &tag {
+                    Some(tag) => text.text_in(tag, &key),
+                    None => text.text(&key),
+                }))
+            },
+        );
+
+        // The block a save screen would write, as `{character, saves, stage,
+        // room}`; `nil` outside save mode.
+        methods.add_method("pending", |lua, api, ()| {
+            let Mode::Save { file, .. } = &api.host.mode else {
+                return Ok(None);
+            };
+            slot_table(lua, &save::SaveSlotInfo::from_file(file)).map(Some)
+        });
+
+        // The local wall-clock time as `{year, month, day, hour, minute,
+        // second, millisecond}`; `nil` when the platform cannot say.
+        methods.add_method("local_time", |lua, _api, ()| {
+            let Some(time) = crate::local_time::now() else {
+                return Ok(None);
+            };
+            let table = lua.create_table()?;
+            table.set("year", time.year)?;
+            table.set("month", time.month)?;
+            table.set("day", time.day)?;
+            table.set("hour", time.hour)?;
+            table.set("minute", time.minute)?;
+            table.set("second", time.second)?;
+            table.set("millisecond", time.millisecond)?;
+            Ok(Some(table))
         });
 
         methods.add_method("character_name", |_lua, api, index: usize| {

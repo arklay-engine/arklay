@@ -1,10 +1,11 @@
 -- Classic REbirth-style save/load screen.
 --
 -- The folder-based typewriter screen: every save file in the save directory
--- is a row (labelled with its base name), the selected row is a highlight
--- band, and a detail line shows the highlighted save's character, save count
--- and location. Save mode puts a `Create New` row above the files; the last
--- row is `Exit`.
+-- is a row (labelled with its base name, CR's `_`/`^` file-name stand-ins
+-- shown as `/`/`:`), the selected row is a highlight band, and a detail line
+-- shows the highlighted save's character, save count and location. Save mode puts a `Create New` row above the files; the last
+-- row is `Exit`. A new save is named the way CR names one
+-- (`Chris_00_2026-10-23 17^50.18.dat`).
 --
 -- The mod's `mod.lua` registers this entry with `api:register_save_screen`;
 -- the engine knows nothing about the screen itself. The API it uses is the
@@ -103,24 +104,69 @@ local function character_colour(entry)
     return entry.character == 0 and GREEN or BLUE
 end
 
--- The first free `save_NN.dat` name, or nil when every candidate is taken.
--- Save names compare case-insensitively, like the save directory's own listing
--- (Windows filesystems may hand back either case).
-local function new_name()
-    local used = {}
+-- Whether `name` is taken by a listed save. Save names compare
+-- case-insensitively, like the save directory's own listing (Windows
+-- filesystems may hand back either case).
+local function name_used(name, except)
+    local lower = string.lower(name)
     for _, entry in ipairs(saves) do
-        used[string.lower(entry.name)] = true
+        if entry ~= except and string.lower(entry.name) == lower then
+            return true
+        end
+    end
+    return false
+end
+
+-- CR's name for the pending save: `<character>_<saves>_<local time>.dat`,
+-- e.g. `Chris_00_2026-10-23 17^50.18.dat`. CR names the file with the English
+-- character name in every language, so the name is read from `en-US`. Nil
+-- when the engine cannot supply the parts.
+local function classic_rebirth_name(api)
+    local pending = api:pending()
+    local time = api:local_time()
+    if not pending or not time then
+        return nil
+    end
+    local character = api:string(string.format("UI_SAVE_CHARACTER_%d_NAME", pending.character & 1), "en-US")
+    if not character then
+        return nil
+    end
+    local date = string.format(
+        "%d-%02d-%02d %02d^%02d.%02d",
+        time.year,
+        time.month,
+        time.day,
+        time.hour,
+        time.minute,
+        time.second
+    )
+    return string.format("%s_%02d_%s.dat", character, pending.saves, date)
+end
+
+-- The name a new save takes: CR's, else the first free `save_NN.dat`; nil
+-- when every candidate is taken. `replacing` is the row a save over will
+-- delete, whose name is free to reuse.
+local function new_name(api, replacing)
+    local name = classic_rebirth_name(api)
+    if name and not name_used(name, replacing) then
+        return name
     end
     for index = 1, 9999 do
-        local name = string.format("save_%02d.dat", index)
-        if not used[string.lower(name)] then
+        name = string.format("save_%02d.dat", index)
+        if not name_used(name, replacing) then
             return name
         end
     end
-    if not used["save.dat"] then
+    if not name_used("save.dat", replacing) then
         return "save.dat"
     end
     return nil
+end
+
+-- A save file's row label: its base name with CR's file-name stand-ins
+-- shown as the characters they replace (`_` for `/`, `^` for `:`).
+local function row_label(entry)
+    return (string.gsub(entry.base, "[_^]", { ["_"] = "/", ["^"] = ":" }))
 end
 
 function on_open(api)
@@ -133,7 +179,8 @@ function on_open(api)
             saves[#saves + 1] = entry
         end
     end
-    -- CR lists the most recently written file first.
+    -- CR lists the most recently written file first, by its sub-second
+    -- modification time.
     table.sort(saves, function(a, b)
         if a.timestamp ~= b.timestamp then
             return a.timestamp > b.timestamp
@@ -166,7 +213,7 @@ end
 
 -- Write the pending block to a fresh name and leave on success.
 local function save_new(api)
-    local name = new_name()
+    local name = new_name(api)
     if not name then
         no_name(api)
         return
@@ -184,14 +231,14 @@ end
 -- Replace the selected row: delete its file (when it is a save), write a new
 -- one and leave on success.
 local function save_over(api, entry)
-    local name = new_name()
+    local name = new_name(api, entry.loadable and entry or nil)
     if not name then
         no_name(api)
         return
     end
     api:sound("save_confirm")
     -- CR overwrites by deleting the old file and writing a new one.
-    if entry.loadable then
+    if entry.loadable and string.lower(entry.name) ~= string.lower(name) then
         api:remove(entry.name)
     end
     local ok, err = api:save(name)
@@ -302,7 +349,7 @@ function draw(api)
             -- CR draws a save file's name in its character's colour and the
             -- exit row white. An autosave is labelled as one, with its
             -- rotation index.
-            local label = entry.base
+            local label = row_label(entry)
             if entry.autosave then
                 label = string_or(api, "UI_SAVE_CR_AUTOSAVE", "Autosave") .. " " .. entry.autosave
             end

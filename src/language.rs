@@ -313,6 +313,16 @@ impl Catalog {
             .find_map(|&index| self.files[index].entries.get(key).map(Vec::as_slice))
     }
 
+    /// `key` in the file tagged `tag` alone (no fallback chain), when the
+    /// catalog carries that tag.
+    pub fn lookup_in(&self, tag: &str, key: &str) -> Option<&[u8]> {
+        self.files
+            .iter()
+            .find(|file| file.tag.eq_ignore_ascii_case(tag))
+            .and_then(|file| file.entries.get(key))
+            .map(Vec::as_slice)
+    }
+
     /// [`Catalog::lookup`], then the key's own name for a key the chain does
     /// not carry.
     pub fn get(&self, key: &str) -> Option<&[u8]> {
