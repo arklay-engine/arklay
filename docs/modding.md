@@ -1070,7 +1070,7 @@ the load screen).
 | --- | --- |
 | `api:mode()` | `"save"` or `"load"`. |
 | `api:ticks()` | Fixed ticks since the screen opened (0 during the first `update`). |
-| `api:saves()` | The save directory's files, sorted by name. Each entry is a table: `path`, `name` (`savedat1.dat`), `base` (`savedat1`), `timestamp` (Unix seconds), `loadable`; a loadable file also carries `character` (`0` Chris, `1` Jill), `character_name`, `saves`, `stage` (the block's 0-based stage byte), `room` and `location` (the resolved room label). The list is rescanned after a save or remove. |
+| `api:saves()` | The save directory's files, sorted by name. Each entry is a table: `path`, `name` (`savedat1.dat`), `base` (`savedat1`), `timestamp` (Unix seconds), `loadable`, `autosave` (the autosave rotation index, `1` newest, for `autosave1.dat`/`autosave2.dat`, else `nil`); a loadable file also carries `character` (`0` Chris, `1` Jill), `character_name`, `saves`, `stage` (the block's 0-based stage byte), `room` and `location` (the resolved room label). The list is rescanned after a save or remove. |
 | `api:string(key)` | A `language/<tag>.txt` string, decoded to characters; `nil` when no language carries the key. |
 | `api:character_name(index)` | The save screen's name for character `0`/`1`, decoded. |
 | `api:text_width(text[, tight])` | The pixel width `text` draws at (the session's tight metrics unless `tight` is given). |

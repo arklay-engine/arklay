@@ -15,6 +15,11 @@
 //! directory is `<config dir>/save` ([`crate::config`]); [`scan_dir`] is the
 //! folder-wide variant the Lua save screen uses: every regular file, sorted,
 //! with the parsed header and modification time of each.
+//!
+//! The interactive game also autosaves into the same directory each time a
+//! door loads a room ([`write_autosave`]): `autosave1.dat` is the newest and
+//! `autosave2.dat` the one before it, so the pair is typically the start of
+//! the current room and the start of the previous one.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -84,6 +89,8 @@ pub const ROOM_BGM_LEN: usize = crate::game::ROOM_BGM_LEN;
 pub const PLAYER_SLOT_COUNT: usize = 12;
 /// Longest file name a save-screen action accepts, in bytes.
 pub const MAX_FILE_NAME: usize = 255;
+/// Number of autosave files kept in rotation.
+pub const AUTOSAVE_COUNT: usize = 2;
 
 /// One parsed save block.
 ///
@@ -543,6 +550,132 @@ pub fn slot_path(dir: &Path, index: usize) -> Option<PathBuf> {
     slot_name(index).map(|name| dir.join(name))
 }
 
+/// The file name of autosave `index`: `1` is the newest, up to
+/// [`AUTOSAVE_COUNT`].
+pub fn autosave_name(index: usize) -> Option<String> {
+    (1..=AUTOSAVE_COUNT)
+        .contains(&index)
+        .then(|| format!("autosave{index}.dat"))
+}
+
+/// The rotation index (`1` newest) of an autosave file name, compared
+/// case-insensitively like the folder scan, or `None` for any other file.
+pub fn autosave_index(name: &str) -> Option<usize> {
+    (1..=AUTOSAVE_COUNT).find(|&index| {
+        autosave_name(index).is_some_and(|autosave| autosave.eq_ignore_ascii_case(name))
+    })
+}
+
+/// Write `file` as the newest autosave under `dir`, creating the directory.
+///
+/// The rotation keeps [`AUTOSAVE_COUNT`] files: the new block is first
+/// written and synced to a sibling temporary file, then each older autosave
+/// moves one place down (`autosave1.dat` becomes `autosave2.dat`, replacing
+/// it) and the temporary file is renamed to `autosave1.dat`. A failed write
+/// leaves the existing autosaves untouched, and no step leaves a partial save
+/// under an autosave name.
+pub fn write_autosave(dir: &Path, file: &SaveFile) -> Result<()> {
+    fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
+    let newest = dir.join(autosave_name(1).expect("in range"));
+    let temp = crate::atomic::temp_path(&newest)?;
+    let rotate = || -> Result<()> {
+        crate::atomic::write(&temp, &file.to_bytes())?;
+        for index in (1..AUTOSAVE_COUNT).rev() {
+            let from = dir.join(autosave_name(index).expect("in range"));
+            let to = dir.join(autosave_name(index + 1).expect("in range"));
+            match fs::rename(&from, &to) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => {
+                    return Err(err).with_context(|| {
+                        format!("failed to move {} to {}", from.display(), to.display())
+                    });
+                }
+            }
+        }
+        fs::rename(&temp, &newest).with_context(|| {
+            format!(
+                "failed to move {} into place at {}",
+                temp.display(),
+                newest.display()
+            )
+        })
+    };
+    let result = rotate();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
+/// Writes autosaves on a background thread, in the order they are queued, so
+/// the disk write (and its sync) never stalls a game tick.
+///
+/// The thread starts with the first autosave, so a run that never autosaves
+/// never spawns it. Dropping the writer waits for the queued writes to finish.
+#[derive(Default)]
+pub struct AutosaveWriter {
+    worker: Option<(
+        std::sync::mpsc::Sender<AutosaveJob>,
+        std::thread::JoinHandle<()>,
+    )>,
+}
+
+/// One queued autosave: the save directory and the block.
+type AutosaveJob = (PathBuf, Box<SaveFile>);
+
+impl AutosaveWriter {
+    /// Queue `file` as the newest autosave under `dir`. A failed write is
+    /// reported on stderr.
+    pub fn write(&mut self, dir: &Path, file: SaveFile) {
+        let job = (dir.to_path_buf(), Box::new(file));
+        let job = match &self.worker {
+            Some((sender, _)) => match sender.send(job) {
+                Ok(()) => return,
+                Err(std::sync::mpsc::SendError(job)) => job,
+            },
+            None => job,
+        };
+        // No worker yet, or it is gone: start one.
+        let (sender, receiver) = std::sync::mpsc::channel::<AutosaveJob>();
+        let spawned = std::thread::Builder::new()
+            .name("autosave".to_string())
+            .spawn(move || {
+                for (dir, file) in receiver {
+                    if let Err(err) = write_autosave(&dir, &file) {
+                        eprintln!("warning: autosave failed: {err:#}");
+                    }
+                }
+            });
+        match spawned {
+            Ok(handle) => {
+                let _ = sender.send(job);
+                self.worker = Some((sender, handle));
+            }
+            Err(err) => {
+                eprintln!("warning: autosave thread unavailable ({err}); writing inline");
+                if let Err(err) = write_autosave(&job.0, &job.1) {
+                    eprintln!("warning: autosave failed: {err:#}");
+                }
+            }
+        }
+    }
+
+    /// Wait for every queued autosave to be written.
+    pub fn flush(&mut self) {
+        if let Some((sender, handle)) = self.worker.take() {
+            drop(sender);
+            let _ = handle.join();
+        }
+    }
+}
+
+impl Drop for AutosaveWriter {
+    fn drop(&mut self) {
+        self.flush();
+    }
+}
+
 /// The default save directory: `<config dir>/save` (`~/.config/arklay/save`
 /// on Linux, `%APPDATA%\arklay\save` on Windows).
 pub fn default_save_dir() -> PathBuf {
@@ -587,6 +720,9 @@ pub struct SaveEntry {
     pub timestamp: i64,
     /// The parsed header, when the file is a loadable save block.
     pub info: Option<SaveSlotInfo>,
+    /// The autosave rotation index (`1` newest) when the file is one of the
+    /// autosaves ([`autosave_index`]).
+    pub autosave: Option<usize>,
 }
 
 impl SaveEntry {
@@ -619,6 +755,7 @@ pub fn scan_dir(dir: &Path) -> Vec<SaveEntry> {
                 .unwrap_or_default()
                 .to_string();
             Some(SaveEntry {
+                autosave: autosave_index(&name),
                 path,
                 name,
                 base,
@@ -1218,6 +1355,86 @@ mod tests {
 
         // A missing directory is an empty list, not an error.
         assert!(scan_dir(&dir.path.join("missing")).is_empty());
+    }
+
+    #[test]
+    fn autosaves_rotate_two_files_and_list_as_autosaves() {
+        let dir = TempDir::new("autosave");
+        let save_dir = dir.path.join("nested");
+        let mut first = filled();
+        first.room = 1;
+        let mut second = filled();
+        second.room = 2;
+        let mut third = filled();
+        third.room = 3;
+
+        write_autosave(&save_dir, &first).unwrap();
+        assert_eq!(load_file(&save_dir.join("autosave1.dat")).unwrap().room, 1);
+        assert!(!save_dir.join("autosave2.dat").exists());
+
+        write_autosave(&save_dir, &second).unwrap();
+        write_autosave(&save_dir, &third).unwrap();
+        assert_eq!(load_file(&save_dir.join("autosave1.dat")).unwrap().room, 3);
+        assert_eq!(load_file(&save_dir.join("autosave2.dat")).unwrap().room, 2);
+        let names: Vec<String> = fs::read_dir(&save_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert_eq!(names.len(), 2, "only the two autosaves remain: {names:?}");
+
+        fs::write(save_dir.join("savedat1.dat"), first.to_bytes()).unwrap();
+        let entries = scan_dir(&save_dir);
+        let marks: Vec<(&str, Option<usize>)> = entries
+            .iter()
+            .map(|entry| (entry.name.as_str(), entry.autosave))
+            .collect();
+        assert_eq!(
+            marks,
+            [
+                ("autosave1.dat", Some(1)),
+                ("autosave2.dat", Some(2)),
+                ("savedat1.dat", None),
+            ]
+        );
+        assert_eq!(autosave_index("AUTOSAVE2.DAT"), Some(2));
+        assert_eq!(autosave_index("autosave3.dat"), None);
+    }
+
+    #[test]
+    fn the_autosave_writer_writes_in_queue_order() {
+        let dir = TempDir::new("autosave-writer");
+        let mut writer = AutosaveWriter::default();
+        for room in 1..=3 {
+            let mut file = filled();
+            file.room = room;
+            writer.write(&dir.path, file);
+        }
+        writer.flush();
+        assert_eq!(load_file(&dir.path.join("autosave1.dat")).unwrap().room, 3);
+        assert_eq!(load_file(&dir.path.join("autosave2.dat")).unwrap().room, 2);
+        // A writer is reusable after a flush.
+        let mut file = filled();
+        file.room = 4;
+        writer.write(&dir.path, file);
+        drop(writer);
+        assert_eq!(load_file(&dir.path.join("autosave1.dat")).unwrap().room, 4);
+    }
+
+    #[test]
+    fn a_failed_autosave_keeps_the_previous_pair() {
+        let dir = TempDir::new("autosave-failed");
+        let mut first = filled();
+        first.room = 1;
+        let mut second = filled();
+        second.room = 2;
+        write_autosave(&dir.path, &first).unwrap();
+        write_autosave(&dir.path, &second).unwrap();
+        // A directory squatting on the temporary name makes the write fail.
+        let temp = crate::atomic::temp_path(&dir.path.join("autosave1.dat")).unwrap();
+        fs::create_dir_all(&temp).unwrap();
+        assert!(write_autosave(&dir.path, &filled()).is_err());
+        assert_eq!(load_file(&dir.path.join("autosave1.dat")).unwrap().room, 2);
+        assert_eq!(load_file(&dir.path.join("autosave2.dat")).unwrap().room, 1);
     }
 
     #[test]

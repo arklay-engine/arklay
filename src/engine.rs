@@ -2042,6 +2042,14 @@ struct GameSession {
     /// The slot the last typewriter save wrote, taken once by the app as
     /// the in-game menu's restart point.
     saved_slot: Option<usize>,
+    /// A door loaded a room and its autosave has not been taken yet: the app
+    /// takes it once the player has control ([`GameSession::take_autosave`]).
+    autosave_pending: bool,
+    /// Consecutive ticks the pending autosave has been ready for, with the
+    /// same event slots running ([`GameSession::autosave_events`]).
+    autosave_settle: u32,
+    /// The active event slots when the settle count started.
+    autosave_events: u32,
     /// A save the debug menu's LOAD GAME picked, taken once by the app.
     load_requested: Option<LoadRequest>,
     /// An ending id the debug menu's CLEAR GAME picked, taken once by the app.
@@ -2509,6 +2517,9 @@ impl GameSession {
             system_menu_requested: false,
             load_from_system_menu: false,
             saved_slot: None,
+            autosave_pending: false,
+            autosave_settle: 0,
+            autosave_events: 0,
             load_requested: None,
             clear_game_requested: None,
             attract: None,
@@ -5317,7 +5328,93 @@ impl GameSession {
         play_room_close_sfx(&mut self.music, &mut self.sfx_cache, pack, session);
         if session.entered {
             self.arm_room_entry_fade();
+            self.autosave_pending = true;
+            self.autosave_settle = 0;
         }
+    }
+
+    /// The autosave a door's room load armed, once the destination is live
+    /// and the player has had control for [`AUTOSAVE_SETTLE_TICKS`] with no
+    /// event starting or ending; `None` until then. Taking it clears the
+    /// request, so one room load yields at most one autosave.
+    ///
+    /// The settle window keeps a scene that starts a few ticks after the
+    /// entry (and raises its "seen" flags before it takes control) out of the
+    /// save: the save does not carry running events, so a load would skip
+    /// it. A long-running background event that never changes does not hold
+    /// the save back. A room that opens with a scene autosaves once the
+    /// scene hands control back and the room settles; a room the player never
+    /// controls (a cutscene that leads straight through another door) never
+    /// autosaves, and the next door re-arms the request for its own
+    /// destination. The capture is the typewriter's
+    /// ([`GameSession::snapshot_save`]) without its save-counter bump, so an
+    /// autosave never counts as a save.
+    fn take_autosave(&mut self) -> Option<save::SaveFile> {
+        if !self.autosave_pending {
+            return None;
+        }
+        if !self.autosave_ready() {
+            self.autosave_settle = 0;
+            return None;
+        }
+        let events = self.event_vm.active_mask();
+        if self.autosave_settle == 0 || events != self.autosave_events {
+            self.autosave_events = events;
+            self.autosave_settle = 1;
+            return None;
+        }
+        self.autosave_settle += 1;
+        if self.autosave_settle < AUTOSAVE_SETTLE_TICKS {
+            return None;
+        }
+        self.autosave_pending = false;
+        self.autosave_settle = 0;
+        Some(self.snapshot_save())
+    }
+
+    /// Whether the session is somewhere the original would let the player
+    /// save: no door, film, death, menu, screen or message owns the tick,
+    /// the entry fade has opened the room, no letterboxed cutscene or demo is
+    /// playing, and the pad drives the player (no scripted state or control
+    /// lock), so a load never starts inside a scene.
+    fn autosave_ready(&self) -> bool {
+        let flags = &self.game.flags[5];
+        !self.room_boot_gate
+            && self.cutscene_skip.is_none()
+            && self.attract.is_none()
+            && !self.cutscene_skip_taken_over()
+            && !self.return_title_requested
+            && self.clear_game_requested.is_none()
+            && !flags.bit(game::MSF_SCREEN_INTENSITY)
+            && !flags.bit(game::MSF2_ATTRACT_DEMO)
+            && !self.game.fmv_requested()
+            && !self.game.menu_pending()
+            && !flags.bit(game::MSF_VOICE_PLAYING)
+            && !self.game.message.active
+            && !self.game.message_locks_controls()
+            && self.game.message_flags & game::MESSAGE_FLAG_CONTROLS != 0
+            && self.game.entities[0].zone_flags & 0x20 == 0
+            && self.game.entities[0].state() == 1
+            && self.game.entities[0].health >= 0
+            && !self.hostile_near_player()
+    }
+
+    /// Whether a live monster stands within [`AUTOSAVE_HOSTILE_RANGE`] of the
+    /// player, so a load would start within its reach. The human characters
+    /// (`enemy::data::FIRST_ID..=LAST_ID`) are not monsters.
+    fn hostile_near_player(&self) -> bool {
+        let player = self.game.entities[0].pos;
+        self.game.entities[1..].iter().any(|entity| {
+            entity.active()
+                && entity.id != 0
+                && !(enemy::data::FIRST_ID..=enemy::data::LAST_ID).contains(&entity.id)
+                && entity.health > 0
+                && {
+                    let dx = i64::from(entity.pos[0] - player[0]);
+                    let dz = i64::from(entity.pos[2] - player[2]);
+                    dx * dx + dz * dz < AUTOSAVE_HOSTILE_RANGE * AUTOSAVE_HOSTILE_RANGE
+                }
+        })
     }
 
     /// Run a full-load transition's destination `room_set` while the `.dor`
@@ -7027,6 +7124,12 @@ struct App {
     /// Whether sessions let the action button skip the loading narration and
     /// cutscenes: on for the interactive window, off for scripted runs.
     skips_enabled: bool,
+    /// Whether a door's room load writes an autosave (when the player's
+    /// autosave option is on): only the interactive window does, so traces,
+    /// captures, the oracle and the tests never touch the save directory.
+    autosave: bool,
+    /// The background thread that writes the autosaves.
+    autosave_writer: save::AutosaveWriter,
     /// Films queued to play back to back, with `(id, character)`; the chain's
     /// last film is followed by [`App::chain_action`] (or a quit when `None`).
     film_chain: VecDeque<(u8, u8)>,
@@ -7074,11 +7177,23 @@ struct App {
     restart_point: Option<RestartPoint>,
 }
 
+/// Ticks (one second) the player must keep control, with no event starting
+/// or ending, before a door's room load writes its autosave.
+const AUTOSAVE_SETTLE_TICKS: u32 = 30;
+/// Floor distance within which a live monster holds the autosave back.
+const AUTOSAVE_HOSTILE_RANGE: i64 = 3000;
+
 /// The in-game menu's RESTART target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RestartPoint {
-    Save(LoadRequest),
-    NewGame { character: u8 },
+    /// A numbered slot, reloaded from disk like the original's.
+    Slot(usize),
+    /// The block a file load read. Kept in memory rather than by path: a
+    /// file such as `autosave1.dat` is rewritten by later autosaves.
+    File(Box<save::SaveFile>),
+    NewGame {
+        character: u8,
+    },
 }
 
 /// How one app tick ended.
@@ -7117,6 +7232,8 @@ impl App {
             movie_action: None,
             pending_movie: None,
             skips_enabled: false,
+            autosave: false,
+            autosave_writer: save::AutosaveWriter::default(),
             film_chain: VecDeque::new(),
             chain_action: None,
             chain_active: false,
@@ -7519,6 +7636,11 @@ impl App {
         }
     }
 
+    /// Let door room loads write autosaves (see [`Self::autosave`]).
+    fn enable_autosave(&mut self) {
+        self.autosave = true;
+    }
+
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
         session.set_debug_menu(self.debug_menu);
@@ -7563,15 +7685,15 @@ impl App {
     fn continue_from_slot(&mut self, slot: usize) -> Result<()> {
         let file = save::load(&self.save_dir, slot)?;
         self.continue_from_file(file)?;
-        self.restart_point = Some(RestartPoint::Save(LoadRequest::Slot(slot)));
+        self.restart_point = Some(RestartPoint::Slot(slot));
         Ok(())
     }
 
     /// Continue from the save file at `path` (a Lua screen's chosen file).
     fn continue_from_path(&mut self, path: &Path) -> Result<()> {
         let file = save::load_file(path)?;
-        self.continue_from_file(file)?;
-        self.restart_point = Some(RestartPoint::Save(LoadRequest::File(path.to_path_buf())));
+        self.continue_from_file(file.clone())?;
+        self.restart_point = Some(RestartPoint::File(Box::new(file)));
         Ok(())
     }
 
@@ -7583,8 +7705,8 @@ impl App {
             _ => 0,
         };
         let result = match self.restart_point.clone() {
-            Some(RestartPoint::Save(LoadRequest::Slot(slot))) => self.continue_from_slot(slot),
-            Some(RestartPoint::Save(LoadRequest::File(path))) => self.continue_from_path(&path),
+            Some(RestartPoint::Slot(slot)) => self.continue_from_slot(slot),
+            Some(RestartPoint::File(file)) => self.continue_from_file(*file),
             Some(RestartPoint::NewGame { character }) => self.start_new_game(character),
             None => self.start_new_game(character),
         };
@@ -8012,6 +8134,7 @@ impl App {
         let mut load_request = None;
         let mut clear_game = None;
         let mut saved_slot = None;
+        let mut autosave = None;
         {
             let App { pack, mode, .. } = self;
             let Mode::Play(session) = mode else {
@@ -8033,13 +8156,20 @@ impl App {
                 death_finished = session.death.finished;
                 load_request = session.take_load_request();
                 saved_slot = session.saved_slot.take();
+                autosave = session.take_autosave();
                 clear_game = session
                     .take_clear_game_request()
                     .map(|id| (id, session.ending_flow(id)));
             }
         }
         if let Some(slot) = saved_slot {
-            self.restart_point = Some(RestartPoint::Save(LoadRequest::Slot(slot)));
+            self.restart_point = Some(RestartPoint::Slot(slot));
+        }
+        if let Some(file) = autosave
+            && self.autosave
+            && !self.player_options.no_autosave
+        {
+            self.autosave_writer.write(&self.save_dir, file);
         }
         if let Some(request) = load_request {
             let outcome = match &request {
@@ -8974,6 +9104,7 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
 fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()> {
     let mut input = InputState::interactive();
     app.enable_skips();
+    app.enable_autosave();
     app.set_bindings(input.bindings().clone());
     let mut event = SDL_Event::default();
     let mut clock = LoopClock::new(display.frame_rate(), stats);
@@ -9206,6 +9337,7 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
     game.blood = !app.player_options.no_blood;
     game.chris_ink_ribbons = !app.player_options.no_chris_ink_ribbons;
     game.jill_ink_ribbons = app.player_options.jill_ink_ribbons;
+    game.autosave = !app.player_options.no_autosave;
     gui::Settings {
         graphics: display.graphics().copied().unwrap_or(config.graphics),
         game,
@@ -9311,6 +9443,7 @@ fn persisted_options(
         blood: _,
         chris_ink_ribbons: _,
         jill_ink_ribbons: _,
+        autosave: _,
         ui_font: _,
         menu_text_size: _,
         button_style: _,
@@ -9342,6 +9475,7 @@ fn persisted_options(
             blood,
             chris_ink_ribbons,
             jill_ink_ribbons,
+            autosave,
             ui_font,
             menu_text_size,
             button_style,
@@ -9430,6 +9564,7 @@ fn apply_menu_settings(
     app.player_options.no_blood = !settings.game.blood;
     app.player_options.no_chris_ink_ribbons = !settings.game.chris_ink_ribbons;
     app.player_options.jill_ink_ribbons = settings.game.jill_ink_ribbons;
+    app.player_options.no_autosave = !settings.game.autosave;
     app.vibration = settings.game.vibration;
     // A control type change arrives with its preset already in the bindings.
     if settings.bindings != before.bindings {
@@ -19002,6 +19137,93 @@ mod tests {
 
     #[test]
     #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn real_doors_autosave_each_room_and_load_back() {
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let dir = TempDir::new();
+        let saves = dir.0.join("saves");
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let start = RoomId::parse("1001").unwrap();
+        let session = GameSession::from_room(&pack, start, &saves).unwrap();
+        let mut app = App::new(pack, saves.clone(), false);
+        app.enable_autosave();
+        app.start_session(session);
+        let room_of =
+            |name: &str| save::load_file(&saves.join(name)).map(|file| (file.stage, file.room));
+        let mut visited = vec![start];
+        for _ in 0..3 {
+            // Let the entry fade and any boot movement settle first.
+            for _ in 0..30 {
+                app.update(UiInput::default(), player::Input::default(), false)
+                    .unwrap();
+            }
+            let Mode::Play(session) = &mut app.mode else {
+                panic!("the app left gameplay");
+            };
+            let from = session.loaded.id;
+            let door = session
+                .game
+                .doors
+                .iter()
+                .flatten()
+                .copied()
+                .next()
+                .expect("the room has a door");
+            let (dx, dz) = player::reach_offset(0);
+            session.player.pos = [
+                i32::from(door.zone[0]) + i32::from(door.zone[2]) / 2 - dx,
+                0,
+                i32::from(door.zone[1]) + i32::from(door.zone[3]) / 2 - dz,
+            ];
+            session.player.angle = 0;
+            session.game.sync_entity_from_player(&session.player);
+            let press = player::Input {
+                action_pressed: true,
+                action_held: true,
+                ..player::Input::default()
+            };
+            let mut arrived = None;
+            let mut entered = false;
+            for tick in 0..600 {
+                // Tap the action button until the door opens, then let go.
+                let pressing = !entered && tick % 2 == 0;
+                let input = if pressing {
+                    press
+                } else {
+                    player::Input::default()
+                };
+                app.update(UiInput::default(), input, pressing).unwrap();
+                app.post_present();
+                let Mode::Play(session) = &app.mode else {
+                    panic!("the app left gameplay");
+                };
+                entered |= session.transition.is_some();
+                let id = session.loaded.id;
+                if id != from && room_of("autosave1.dat").ok() == Some((id.stage - 1, id.room)) {
+                    arrived = Some(id);
+                    break;
+                }
+            }
+            let id = arrived.unwrap_or_else(|| panic!("no autosave after leaving {from:?}"));
+            if visited.len() > 1 {
+                let prev = visited[visited.len() - 1];
+                assert_eq!(
+                    room_of("autosave2.dat").unwrap(),
+                    (prev.stage - 1, prev.room),
+                    "the previous room's autosave rotates down"
+                );
+            }
+            visited.push(id);
+        }
+        let file = save::load_file(&saves.join("autosave1.dat")).unwrap();
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let loaded = GameSession::from_save(&pack, &file, &saves).unwrap();
+        assert_eq!(loaded.loaded.id, *visited.last().unwrap());
+    }
+
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
     fn real_transition_capture_is_deterministic() {
         let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
             return;
@@ -20316,6 +20538,53 @@ mod tests {
         };
         assert!(session.save_screen.is_none());
         assert_eq!(session.game.entities[0].health, 77, "slot 0 loaded");
+    }
+
+    #[test]
+    fn the_ported_load_screen_lists_and_loads_the_autosaves() {
+        use crate::ui::debug_menu::{TOOLS, Tool};
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let saves = dir.0.join("saves");
+        let file = |health| save::SaveFile {
+            stage: 0,
+            room: NEW_GAME_ROOM,
+            health,
+            ..save::SaveFile::default()
+        };
+        save::write_autosave(&saves, &file(44)).unwrap();
+        save::write_autosave(&saves, &file(66)).unwrap();
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, saves, false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+
+        app_press(&mut app, |ui| ui.debug_menu = true);
+        for _ in 0..TOOLS.iter().position(|tool| *tool == Tool::Save).unwrap() {
+            app_press(&mut app, |ui| ui.down = true);
+        }
+        app_press(&mut app, |ui| ui.confirm = true);
+        app_press(&mut app, |ui| ui.down = true);
+        app_press(&mut app, |ui| ui.confirm = true);
+        // The rows draw like filled slots.
+        app.draw();
+        // Past the eight empty slots, the newest autosave is the first extra
+        // row; the exit row follows both autosaves.
+        for _ in 0..8 {
+            app_press(&mut app, |ui| ui.down = true);
+        }
+        app_press(&mut app, |ui| ui.confirm = true);
+        for _ in 0..24 {
+            app_press(&mut app, |_| {});
+        }
+        let Mode::Play(session) = &app.mode else {
+            panic!("expected a play mode");
+        };
+        assert!(session.save_screen.is_none());
+        assert_eq!(
+            session.game.entities[0].health, 66,
+            "the newest autosave loaded"
+        );
     }
 
     #[test]
@@ -21755,6 +22024,145 @@ mod tests {
         session.render(&pack);
         assert_eq!(session.room_fade_alpha(), None);
         assert_eq!(session.room_fade_draw_alpha(), None);
+    }
+
+    /// Tick `session` with a neutral pad until it hands out its autosave.
+    fn tick_until_autosave(pack: &Pack, session: &mut GameSession, ticks: u32) -> Option<u32> {
+        for tick in 0..ticks {
+            session
+                .tick(pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            if let Some(file) = session.take_autosave() {
+                assert_eq!(file.room, session.loaded.id.room);
+                return Some(tick);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn a_door_room_load_autosaves_once_the_player_has_control() {
+        let dir = TempDir::new();
+        let (pack, a, b) = two_room_door_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        assert!(
+            tick_until_autosave(&pack, &mut session, 10).is_none(),
+            "booting a room is not a door load"
+        );
+        trigger_test_door(&pack, &mut session);
+        for _ in 0..MAX_TRANSITION_FRAMES {
+            assert!(session.take_autosave().is_none(), "nothing mid-transition");
+            session.tick_transition(&pack, false);
+            if session.transition_finished {
+                break;
+            }
+        }
+        session.finish_transition(&pack);
+        assert_eq!(session.loaded.id, b);
+        assert!(
+            session.take_autosave().is_none(),
+            "the entry fade has not opened the room yet"
+        );
+        let saves_before = session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)];
+        let tick = tick_until_autosave(&pack, &mut session, 90).expect("the room autosaves");
+        assert!(
+            tick >= AUTOSAVE_SETTLE_TICKS,
+            "the entry fade and the settle window run first (tick {tick})"
+        );
+        assert_eq!(
+            session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)],
+            saves_before,
+            "an autosave is not a save"
+        );
+        assert!(
+            tick_until_autosave(&pack, &mut session, 90).is_none(),
+            "one room load autosaves once"
+        );
+    }
+
+    #[test]
+    fn a_letterboxed_scene_holds_the_autosave_back() {
+        let dir = TempDir::new();
+        let (pack, a, _b) = two_room_door_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        walk_through_test_door(&pack, &mut session);
+        session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
+        assert!(tick_until_autosave(&pack, &mut session, 90).is_none());
+        session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 1);
+        assert!(
+            tick_until_autosave(&pack, &mut session, 90).is_some(),
+            "the room autosaves once the scene hands back control"
+        );
+    }
+
+    #[test]
+    fn a_nearby_monster_holds_the_autosave_back() {
+        let dir = TempDir::new();
+        let (pack, a, _b) = two_room_door_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        walk_through_test_door(&pack, &mut session);
+        let player = session.game.entities[0].pos;
+        let monster = &mut session.game.entities[1];
+        monster.id = 0x01;
+        monster.health = 100;
+        monster.pos = [player[0] + 1000, player[1], player[2]];
+        monster.set_active(true);
+        let mut held = true;
+        for _ in 0..90 {
+            // Keep the monster in reach whatever its own tick does.
+            let player = session.game.entities[0].pos;
+            let monster = &mut session.game.entities[1];
+            monster.pos = [player[0] + 1000, player[1], player[2]];
+            monster.set_active(true);
+            monster.health = 100;
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            held &= session.take_autosave().is_none();
+        }
+        assert!(held, "no autosave with a monster in reach");
+        session.game.entities[1].set_active(false);
+        assert!(
+            tick_until_autosave(&pack, &mut session, 90).is_some(),
+            "the room autosaves once the monster is gone"
+        );
+    }
+
+    #[test]
+    fn only_the_interactive_app_writes_autosaves() {
+        let dir = TempDir::new();
+        let (pack, a, _b) = two_room_door_pack(&dir);
+        let saves = dir.0.join("saves");
+        let run = |interactive: bool, no_autosave: bool| {
+            let pack = Pack::open(&dir.0.join("game.akpak")).unwrap();
+            let mut session = GameSession::from_room(&pack, a, &saves).unwrap();
+            walk_through_test_door(&pack, &mut session);
+            let mut app = App::new(pack, saves.clone(), false);
+            app.player_options.no_autosave = no_autosave;
+            if interactive {
+                app.enable_autosave();
+            }
+            app.start_session(session);
+            for _ in 0..90 {
+                app.update(UiInput::default(), player::Input::default(), false)
+                    .unwrap();
+            }
+        };
+        drop(pack);
+        run(false, false);
+        assert!(!saves.exists(), "a scripted app never autosaves");
+        run(true, true);
+        assert!(!saves.exists(), "the option turns autosave off");
+        run(true, false);
+        assert!(saves.join("autosave1.dat").is_file());
+        assert!(!saves.join("autosave2.dat").exists());
+        run(true, false);
+        assert!(
+            saves.join("autosave2.dat").is_file(),
+            "the rotation keeps two"
+        );
+        let loaded = save::load_file(&saves.join("autosave1.dat")).unwrap();
+        assert_eq!(loaded.room, 1);
     }
 
     #[test]

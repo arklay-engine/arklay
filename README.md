@@ -310,6 +310,7 @@ auto_aim = true        # raising a weapon locks on to the nearest enemy
 blood = true           # blood billboards, spurts and pools
 chris_ink_ribbons = true # saving as Chris uses up an ink ribbon
 jill_ink_ribbons = false # saving as Jill uses up an ink ribbon
+autosave = true        # each door's room load writes autosave1.dat
 ui_font = "modern"     # the menus' face: "modern" or "retro"
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
 button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation", "nintendo"
@@ -504,7 +505,33 @@ between the plans the owned maps unlock, and confirm shows the full plan of
 the current area. A pack without `map/` leaves the tab blank.
 
 Saves live as `savedat*.dat` under `--save-dir` (default `<config
-dir>/save`, `~/.config/arklay/save`). The title starts on LOAD GAME when a
+dir>/save`, `~/.config/arklay/save`).
+
+`autosave` (Gameplay › Saving › Autosave in the menu, on by default) saves the
+game each time a door loads a room. The save is written once the destination's
+entry fade has opened and the player has kept control for a second with no
+script event starting or ending, no message, menu or letterboxed scene up and
+no live monster within reach, so a load never starts inside a scene. A room
+that opens with a scene autosaves once the scene hands control back; a room
+the player never controls (a cutscene leading straight through another door)
+is not autosaved. Two autosaves rotate in the save directory: `autosave1.dat`
+is the newest (typically the start of the current room) and `autosave2.dat`
+the one before it (typically the start of the previous room). Each new
+autosave is written and synced to a temporary file first, then
+`autosave1.dat` moves over `autosave2.dat` and the new file takes its place,
+on a background thread. An autosave does not count towards the ending's save
+count, and loading a save or starting a game does not autosave. Only the
+interactive window autosaves: `--trace`, `--input`, captures, the oracle
+scripts, the soak and the tests never write one.
+
+Both save/load screens list the autosaves. The ported original shows them in
+load mode as extra rows after the eight slots, newest first (with no autosave
+on disk it is the original screen exactly), and the title offers LOAD GAME
+when only an autosave exists. The folder-based screen lists them like any
+other save, labelled "Autosave 1" and "Autosave 2" (`api:saves()` marks them
+with `autosave`), and does not offer them as overwrite targets when saving.
+RESTART in the in-game menu after loading an autosave returns to the state
+that was loaded, even after later autosaves have replaced the file. The title starts on LOAD GAME when a
 save exists; with none, LOAD is refused. `arklay.toml` in the same config
 directory sets the save directory, the language, the control bindings and
 the graphics options. The save/load screen is a

@@ -1,3 +1,4 @@
+UI_SAVE_CR_AUTOSAVE = "Autosave"
 UI_SAVE_CR_CREATE_NEW = "Create New"
 UI_SAVE_CR_DO_NOT_LOAD = "Do not load"
 UI_SAVE_CR_DO_NOT_SAVE = "Do not save"

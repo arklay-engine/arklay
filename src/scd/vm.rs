@@ -324,6 +324,15 @@ impl EventVm {
         }
     }
 
+    /// The currently active slots, one bit per slot index.
+    pub fn active_mask(&self) -> u32 {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter(|(_, slot)| slot.active)
+            .fold(0, |mask, (index, _)| mask | 1 << index)
+    }
+
     /// Number of currently active slots.
     pub fn active_slots(&self) -> usize {
         self.slots.iter().filter(|slot| slot.active).count()

@@ -106,7 +106,14 @@ end
 
 function on_open(api)
     mode = api:mode()
-    saves = api:saves()
+    saves = {}
+    for _, entry in ipairs(api:saves()) do
+        -- The engine rotates the autosaves itself; a typewriter save never
+        -- overwrites one.
+        if mode ~= "save" or not entry.autosave then
+            saves[#saves + 1] = entry
+        end
+    end
     cursor = 0
     scroll = 0
     message = nil
@@ -266,8 +273,13 @@ function draw(api)
         if is_new_row(row) then
             draw_line(api, string_or(api, "UI_SAVE_CR_CREATE_NEW", "Create New"), y)
         elseif entry then
-            -- CR draws a save file's name blue and the exit row white.
-            draw_line(api, entry.base, y, entry.loadable and BLUE or "grey")
+            -- CR draws a save file's name blue and the exit row white. An
+            -- autosave is labelled as one, with its rotation index.
+            local label = entry.base
+            if entry.autosave then
+                label = string_or(api, "UI_SAVE_CR_AUTOSAVE", "Autosave") .. " " .. entry.autosave
+            end
+            draw_line(api, label, y, entry.loadable and BLUE or "grey")
         else
             draw_line(api, string_or(api, "UI_SAVE_CR_EXIT", "Exit"), y)
         end
