@@ -540,7 +540,7 @@ fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<
     }
     // The scripts the engine runs: a corrupt embedded table is not a failure
     // when the merged pack carries an override it prefers.
-    crate::engine::room_scripts(pack, id, loaded)?;
+    crate::engine::room_scripts(pack, id, loaded, false)?;
     Ok(())
 }
 

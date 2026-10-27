@@ -408,7 +408,7 @@ pub fn run_with_options(
     {
         let mut timings = stats::Stats::new();
         let load_start = Instant::now();
-        let mut loaded = load_room(&pack, id)?;
+        let mut loaded = load_room(&pack, id, player_options.no_room_script_fixes)?;
         let mut game = new_game_state(&pack, id, &loaded.room, player_options);
         seed_fresh_state(&pack, &mut game);
         let mut player_state = player::spawn(id, &loaded.room);
@@ -522,6 +522,7 @@ pub fn run_with_options(
                             &request,
                             loaded.id,
                             &transition::Fade::inactive(),
+                            game.player_options.no_room_script_fixes,
                         )?);
                     }
                     play_snd3d_requests(
@@ -2186,7 +2187,7 @@ impl GameSession {
     ) -> Result<Box<Self>> {
         let character = character & 1;
         let id = new_game_id(character);
-        let loaded = load_room(pack, id)?;
+        let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
@@ -2214,7 +2215,7 @@ impl GameSession {
         options: player::Options,
     ) -> Result<Box<Self>> {
         let character = character & 1;
-        let loaded = load_room(pack, id)?;
+        let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
@@ -2261,7 +2262,7 @@ impl GameSession {
             .with_context(|| format!("missing attract demo reel {entry}"))?;
         let reel = demo::DemoReel::parse(entry, &bytes)?;
         let id = reel.room;
-        let loaded = load_room(pack, id)?;
+        let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, reel.character);
         // The attract branch sets the mode bit before the room loads, so every
@@ -2340,7 +2341,7 @@ impl GameSession {
         save_dir: &Path,
         options: player::Options,
     ) -> Result<Box<Self>> {
-        let loaded = load_room(pack, id)?;
+        let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_fresh_state(pack, &mut game);
         let player_state = player::spawn(id, &loaded.room);
@@ -2371,7 +2372,7 @@ impl GameSession {
             room: file.room,
             player_flag: file.character & 1,
         };
-        let loaded = load_room(pack, id)?;
+        let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         file.apply_to(&mut game);
         // `InitializeGame`'s continue branch: a zero save counter also zeroes
@@ -3452,6 +3453,7 @@ impl GameSession {
                     &transition,
                     self.loaded.id,
                     &self.room_fade,
+                    self.game.player_options.no_room_script_fixes,
                 )?);
                 if let Some(session) = self.transition.as_mut() {
                     session.door_yield = door_yield;
@@ -4323,7 +4325,7 @@ impl GameSession {
     /// settles it, exactly like a door arrival.
     fn debug_jump(&mut self, pack: &Pack, target: RoomId) -> Result<()> {
         let from = self.loaded.id;
-        let loaded = load_room(pack, target)?;
+        let loaded = load_room(pack, target, self.game.player_options.no_room_script_fixes)?;
         self.loaded = loaded;
         self.tween.reset();
         let scripts = Rc::new(self.loaded.scripts.clone());
@@ -6774,7 +6776,7 @@ pub fn room_entry_placement(
     if let Some(door) = door
         && let Some(dest) = game.door_destination(target, door.next_room)
         && dest != target
-        && let Ok(neighbour) = room_door_state(pack, dest)
+        && let Ok(neighbour) = room_door_state(pack, dest, game.player_options.no_room_script_fixes)
         && let Some(back) = neighbour
             .doors
             .iter()
@@ -6802,9 +6804,9 @@ fn entry_door(doors: &[Option<game::Door>; game::ROOM_ACTION_SLOTS]) -> Option<g
 /// Build a neighbour room's door table: parse its RDT and SCD override and run
 /// the init script, without loading backgrounds or player assets, and return
 /// the state the `door_aot_set` records landed in.
-fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
+fn room_door_state(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<game::GameState> {
     let loaded = crate::room::load(pack, id)?;
-    let (scripts, _) = room_scripts(pack, id, &loaded)?;
+    let (scripts, _) = room_scripts(pack, id, &loaded, original_scripts)?;
     let mut game = game::GameState::new(id, &loaded.state);
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
@@ -6937,7 +6939,7 @@ fn build_next_cycle_save(
     let stats = flow.stats;
     let character = stats.character & 1;
     let id = new_game_id(character);
-    let loaded = load_room(pack, id)?;
+    let loaded = load_room(pack, id, options.no_room_script_fixes)?;
     let mut game = new_game_state(pack, id, &loaded.room, options);
     seed_new_game(pack, &mut game, character);
 
@@ -9358,6 +9360,7 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
     game.chris_ink_ribbons = !app.player_options.no_chris_ink_ribbons;
     game.jill_ink_ribbons = app.player_options.jill_ink_ribbons;
     game.autosave = !app.player_options.no_autosave;
+    game.room_script_fixes = !app.player_options.no_room_script_fixes;
     gui::Settings {
         graphics: display.graphics().copied().unwrap_or(config.graphics),
         game,
@@ -9464,6 +9467,7 @@ fn persisted_options(
         chris_ink_ribbons: _,
         jill_ink_ribbons: _,
         autosave: _,
+        room_script_fixes: _,
         ui_font: _,
         menu_text_size: _,
         button_style: _,
@@ -9496,6 +9500,7 @@ fn persisted_options(
             chris_ink_ribbons,
             jill_ink_ribbons,
             autosave,
+            room_script_fixes,
             ui_font,
             menu_text_size,
             button_style,
@@ -9585,6 +9590,7 @@ fn apply_menu_settings(
     app.player_options.no_chris_ink_ribbons = !settings.game.chris_ink_ribbons;
     app.player_options.jill_ink_ribbons = settings.game.jill_ink_ribbons;
     app.player_options.no_autosave = !settings.game.autosave;
+    app.player_options.no_room_script_fixes = !settings.game.room_script_fixes;
     app.vibration = settings.game.vibration;
     // A control type change arrives with its preset already in the bindings.
     if settings.bindings != before.bindings {
@@ -10053,6 +10059,7 @@ fn start_transition(
     transition: &game::RoomTransition,
     source: RoomId,
     fade: &transition::Fade,
+    original_scripts: bool,
 ) -> Result<TransitionMode> {
     let camera_only = record.camera & 0x80 != 0;
     let silent = record.camera & 0x40 != 0;
@@ -10061,7 +10068,7 @@ fn start_transition(
     let destination = if camera_only {
         None
     } else {
-        Some(load_room(pack, transition.target)?)
+        Some(load_room(pack, transition.target, original_scripts)?)
     };
     // A destination byte of 0x20 and up changes stage: `init_room` yields a
     // frame before its `room_set`.
@@ -10365,7 +10372,7 @@ pub fn simulate_door(
     slot: u8,
     frame_dir: Option<&Path>,
 ) -> Result<SimulatedDoor> {
-    let mut loaded = load_room(pack, id)?;
+    let mut loaded = load_room(pack, id, false)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let mut player_state = player::spawn(id, &loaded.room);
@@ -10400,6 +10407,7 @@ pub fn simulate_door(
         &request,
         loaded.id,
         &transition::Fade::inactive(),
+        game.player_options.no_room_script_fixes,
     )?;
     let mut mixer: Option<Mixer> = None;
     let mut sfx_cache = SfxCache::default();
@@ -10560,7 +10568,7 @@ pub fn simulate_room_with_input(
     ticks: usize,
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
-    let loaded = load_room(pack, id)?;
+    let loaded = load_room(pack, id, false)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     let player_state = player::spawn(id, &loaded.room);
@@ -10578,7 +10586,7 @@ pub fn simulate_room_seeded(
     ticks: usize,
     input: player::Input,
 ) -> Result<SimulatedRoom> {
-    let loaded = load_room(pack, id)?;
+    let loaded = load_room(pack, id, false)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
@@ -10600,7 +10608,7 @@ pub fn simulate_room_prepared(
     prepare: impl FnOnce(&mut game::GameState, &mut player::PlayerState),
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedRoom> {
-    let loaded = load_room(pack, id)?;
+    let loaded = load_room(pack, id, false)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
@@ -10627,7 +10635,7 @@ pub fn simulate_room_with_movie(
     ticks: usize,
     input: impl FnMut(usize) -> player::Input,
 ) -> Result<SimulatedMovie> {
-    let loaded = load_room(pack, id)?;
+    let loaded = load_room(pack, id, false)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_fresh_state(pack, &mut game);
     for &(bank, bit) in flags {
@@ -10699,7 +10707,7 @@ pub fn simulate_new_game(
 ) -> Result<SimulatedRoom> {
     let character = character & 1;
     let id = new_game_id(character);
-    let loaded = load_room(pack, id)?;
+    let loaded = load_room(pack, id, false)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_new_game(pack, &mut game, character);
     let mut player_state = player::spawn(id, &loaded.room);
@@ -10882,6 +10890,7 @@ fn simulate_loaded_with(
                 &request,
                 loaded.id,
                 &transition::Fade::inactive(),
+                game.player_options.no_room_script_fixes,
             )?);
         }
         play_snd3d_requests(
@@ -12446,11 +12455,16 @@ pub enum ScriptSource {
 /// ship its own) unless the room's own scripts (an RDT, or the container an
 /// XML definition names) come from a later layer than it, so a mod that
 /// replaces a room's scripts keeps them.
-pub fn script_source(pack: &Pack, id: RoomId) -> ScriptSource {
-    match (
-        pack.depth_of(&id.scd_entry()),
-        crate::room::scripts_depth(pack, id),
-    ) {
+///
+/// With `original_scripts` (the `room_script_fixes = false` option) the base
+/// pack's `scd/{id}.scd` is ignored, so the room runs its own scripts: the
+/// original bytecode `convert-game` keeps as the RDT's scripts or the XML
+/// definition's `room/{id}.scd`. A mod layer's container still wins.
+pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptSource {
+    let scd = pack
+        .depth_of(&id.scd_entry())
+        .filter(|&depth| !(original_scripts && depth == 0));
+    match (scd, crate::room::scripts_depth(pack, id)) {
         (Some(scd), rdt) if rdt.is_none_or(|rdt| scd >= rdt) => ScriptSource::Override,
         _ => ScriptSource::Rdt,
     }
@@ -12462,8 +12476,9 @@ pub fn room_scripts(
     pack: &Pack,
     id: RoomId,
     loaded: &crate::room::Loaded,
+    original_scripts: bool,
 ) -> Result<(scd::ir::Scripts, ScriptSource)> {
-    let source = script_source(pack, id);
+    let source = script_source(pack, id, original_scripts);
     let scripts = match source {
         ScriptSource::Override => scd::reader::parse(&pack.read(&id.scd_entry())?)
             .with_context(|| format!("invalid SCD override {}", id.scd_entry()))?,
@@ -12485,10 +12500,11 @@ struct LoadedRoom {
 /// Load `id` from `pack`: RDT, camera backgrounds, SCD scripts and player
 /// assets.
 ///
-/// The scripts come from [`room_scripts`].
-fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
+/// The scripts come from [`room_scripts`]; `original_scripts` is
+/// [`player::Options::no_room_script_fixes`].
+fn load_room(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<LoadedRoom> {
     let loaded = crate::room::load(pack, id)?;
-    let (scripts, script_source) = room_scripts(pack, id, &loaded)?;
+    let (scripts, script_source) = room_scripts(pack, id, &loaded, original_scripts)?;
     let mut room = loaded.state;
     for warning in &room.model_warnings {
         eprintln!("warning: {}: {warning}", crate::room::entry(pack, id));
@@ -13093,7 +13109,11 @@ fn enter_transition(
     player_state: &mut player::PlayerState,
     transition: &game::RoomTransition,
 ) -> Result<LoadedRoom> {
-    let mut loaded = load_room(pack, transition.target)?;
+    let mut loaded = load_room(
+        pack,
+        transition.target,
+        game.player_options.no_room_script_fixes,
+    )?;
     // A door load snapshots the outgoing enemies and clears the live list
     // before the destination boots (see `finish_transition`).
     game.snapshot_enemies(transition.target.room as i8 != game.id.room as i8);
@@ -16226,7 +16246,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("1060").unwrap();
-        let mut loaded = load_room(&pack, id).unwrap();
+        let mut loaded = load_room(&pack, id, false).unwrap();
         let mut game = new_game_state(&pack, id, &loaded.room, player::Options::default());
         seed_new_game(&pack, &mut game, 0);
         let mut player_state = player::spawn(id, &loaded.room);
@@ -16481,7 +16501,7 @@ mod tests {
         writer.write(&pack_path).unwrap();
 
         let pack = Pack::open(&pack_path).unwrap();
-        let mut loaded = load_room(&pack, a).unwrap();
+        let mut loaded = load_room(&pack, a, false).unwrap();
         assert_eq!(loaded.id, a);
         let mut game = game::GameState::new(a, &loaded.room);
         let mut player_state = player::spawn(a, &loaded.room);
@@ -16581,7 +16601,7 @@ mod tests {
         writer.write(&pack_path).unwrap();
         let pack = Pack::open(&pack_path).unwrap();
 
-        let mut loaded = load_room(&pack, a).unwrap();
+        let mut loaded = load_room(&pack, a, false).unwrap();
         let mut game = game::GameState::new(a, &loaded.room);
         let mut player_state = player::spawn(a, &loaded.room);
         // One live, non-force monster in room A.
@@ -17880,7 +17900,7 @@ mod tests {
         writer.write(&pack_path).unwrap();
 
         let pack = Pack::open(&pack_path).unwrap();
-        let mut loaded = load_room(&pack, id).unwrap();
+        let mut loaded = load_room(&pack, id, false).unwrap();
         let mut game = game::GameState::new(id, &loaded.room);
         let mut player_state = player::spawn(id, &loaded.room);
         // The desk sits mid-pan; the empty script cannot advance it.
@@ -18038,7 +18058,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("4010").unwrap();
-        let mut loaded = load_room(&pack, id).unwrap();
+        let mut loaded = load_room(&pack, id, false).unwrap();
         let mut game = game::GameState::new(id, &loaded.room);
         // The new-game room-items bank registers the desk's item edge.
         game.flags[7]
@@ -18113,7 +18133,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("1060").unwrap();
-        let mut loaded = load_room(&pack, id).unwrap();
+        let mut loaded = load_room(&pack, id, false).unwrap();
         let mut game = game::GameState::new(id, &loaded.room);
         let mut player_state = player::spawn(id, &loaded.room);
         {
@@ -18172,7 +18192,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("40D0").unwrap();
-        let mut loaded = load_room(&pack, id).unwrap();
+        let mut loaded = load_room(&pack, id, false).unwrap();
         let mut game = game::GameState::new(id, &loaded.room);
         let mut player_state = player::spawn(id, &loaded.room);
         let scripts = &loaded.scripts;
@@ -19328,7 +19348,7 @@ mod tests {
         // Rebuild the same pose through the render API. The init script writes
         // state byte 2 (`roomCameraId`), which moves the camera to cut 2; that
         // cut has no mask sprites, so compare a masked cut's render instead.
-        let mut loaded = load_room(&pack, id).unwrap();
+        let mut loaded = load_room(&pack, id, false).unwrap();
         let mut game = game::GameState::new(id, &loaded.room);
         run_room_init(&mut loaded, &mut game);
         apply_camera(&mut loaded.room, &mut game, None);
@@ -21577,7 +21597,7 @@ mod tests {
         let dir = TempDir::new();
         let (pack_path, a, _b, _red, _blue) = walk_in_door_pack(&dir);
         let pack = Pack::open(&pack_path).unwrap();
-        let loaded = load_room(&pack, a).unwrap();
+        let loaded = load_room(&pack, a, false).unwrap();
         let room = loaded.room;
         let mut game = game::GameState::new(a, &room);
         game.light_fade_set(0, 0x4000, 0b111);
@@ -25629,7 +25649,7 @@ off_0010:
 
         // The flags round-trip through the scenario bank.
         let id = new_game_id(0);
-        let loaded = load_room(&pack, id).unwrap();
+        let loaded = load_room(&pack, id, false).unwrap();
         let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
         file.apply_to(&mut state);
         assert!(state.flag_test(
@@ -28522,7 +28542,7 @@ off_0010:
         ] {
             let layer = write("layer", manifest::PackKind::Mod, &layer);
             let pack = Pack::open_layered(&base, &[layer]).unwrap();
-            assert_eq!(script_source(&pack, id), expected);
+            assert_eq!(script_source(&pack, id, false), expected);
         }
     }
 
@@ -28542,7 +28562,7 @@ off_0010:
         writer.write(&pack_path).unwrap();
 
         let pack = Pack::open(&pack_path).unwrap();
-        let loaded = load_room(&pack, id).unwrap();
+        let loaded = load_room(&pack, id, false).unwrap();
         assert_eq!(loaded.script_source, ScriptSource::Override);
         assert_eq!(loaded.scripts.init.len(), 1);
         assert_eq!(
@@ -28566,7 +28586,7 @@ off_0010:
         writer.write(&pack_path).unwrap();
 
         let pack = Pack::open(&pack_path).unwrap();
-        let loaded = load_room(&pack, id).unwrap();
+        let loaded = load_room(&pack, id, false).unwrap();
         assert_eq!(loaded.script_source, ScriptSource::Rdt);
         assert_eq!(loaded.scripts.init[0].insns[0].bytes, [0x0E, 0x00]);
     }
