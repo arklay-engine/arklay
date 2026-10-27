@@ -1,0 +1,36 @@
+<item kind="other">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Comm. Radio</string>
+            <string key="description">The battery is still\ncharged.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">FUNKGERÄT</string>
+            <string key="description">Die Batterie ist noch geladen.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">RADIO TRANSMISOR</string>
+            <string key="description">La batería aún\ntiene carga.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">RADIOPUHELIN</string>
+            <string key="description">Siinä on akkua jäljellä.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Radio</string>
+            <string key="description">La batterie est encore\nchargée.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">RADIO</string>
+            <string key="description">La batteria è ancora carica.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">通信機</string>
+            <string key="description">バッテリーはまだ生きている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Радиосвязь</string>
+            <string key="description">Батарея всё ещё\nзаряжена.</string>
+        </language>
+    </strings>
+</item>

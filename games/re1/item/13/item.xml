@@ -1,0 +1,36 @@
+<item kind="bottle" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Empty Bottle</string>
+            <string key="description">A glass bottle to put\nchemicals in.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">LEERE FLASCHE</string>
+            <string key="description">Eine Glasflasche für\nChemikalien.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BOTELLA VACÍA</string>
+            <string key="description">Botella de cristal para\nproductos químicos.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TYHJÄ PULLO</string>
+            <string key="description">Lasipullo jonne voin laittaa\nkemikaaleja.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Bouteille Vide</string>
+            <string key="description">Une bouteille en verre \npour les produits chimiques.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">BOTTIGLIA VUOTA</string>
+            <string key="description">Una bottiglia di vetro\nper sostanze chimiche.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">空ビン</string>
+            <string key="description">薬剤を入れるためのガラスビンだ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Пустая бутылка</string>
+            <string key="description">Стеклянная бутылка\nдля химикатов.</string>
+        </language>
+    </strings>
+</item>

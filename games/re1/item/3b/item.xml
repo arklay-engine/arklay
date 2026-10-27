@@ -1,0 +1,36 @@
+<item kind="key">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Control Room Key</string>
+            <string key="description">A key to enter the Control\nRoom.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">KONTROL.SCHLÜS.</string>
+            <string key="description">Ein Schlüssel, mit dem man in\nden Kontrollraum kommt.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LLAVE SALA DE CONTROL</string>
+            <string key="description">Una llave para la\nsala de control.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">OHJAAMON AVAIN</string>
+            <string key="description">Avain, jolla pääsee ohjaamoon.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Clé S.Contrôle</string>
+            <string key="description">Une clé pour accéder à la \nSalle de Contrôle.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">CHIAVE S.CONTROL.</string>
+            <string key="description">Una chiave per accedere alla\nSala di Controllo.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">制御室のカギ</string>
+            <string key="description">これは制御室に入るためのカギだ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Ключ от комн. управ.</string>
+            <string key="description">Ключ для входа\nв комнату управления.</string>
+        </language>
+    </strings>
+</item>

@@ -1,0 +1,32 @@
+<item kind="special" stack="2">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Oil Tank</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">ÖLJYKANISTERI</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">Oil Tank</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">オイル</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

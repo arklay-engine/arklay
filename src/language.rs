@@ -34,7 +34,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 use crate::pack::Pack;
 use crate::{budget, charset};
@@ -185,10 +185,11 @@ impl Language {
                 bail!("language file line {line}: expected `KEY = \"value\"`");
             };
             let key = content[..equals].trim();
-            validate_key(key, line)?;
-            let kind = kind_of(key, line)?;
+            let at_line = |error: anyhow::Error| anyhow!("language file line {line}: {error:#}");
+            validate_key(key).map_err(at_line)?;
+            let kind = kind_of(key).map_err(at_line)?;
             let value = quoted(content[equals + 1..].trim_start(), line)?;
-            let pieces = parse_value(value, kind, line)?;
+            let pieces = parse_value(value, kind).map_err(at_line)?;
             budget::check_len(
                 entries.len() + 1,
                 budget::MAX_LANGUAGE_ENTRIES,
@@ -199,6 +200,30 @@ impl Language {
                 .is_some()
             {
                 bail!("language file line {line}: duplicate key `{key}`");
+            }
+        }
+        Ok(Self { entries })
+    }
+
+    /// Build a file from `(KEY, value)` pairs, each value written in the
+    /// same syntax as a quoted language-file value but without the quotes
+    /// (an `item.xml` `<string>` element's text). `origin` names the source
+    /// in errors.
+    pub fn from_values<'a>(
+        values: impl IntoIterator<Item = (String, &'a str)>,
+        origin: &str,
+    ) -> Result<Self> {
+        let mut entries = HashMap::new();
+        for (key, value) in values {
+            let at_key = |error: anyhow::Error| anyhow!("{origin}: `{key}`: {error:#}");
+            validate_key(&key).map_err(at_key)?;
+            let kind = kind_of(&key).map_err(at_key)?;
+            let pieces = parse_value(value, kind).map_err(at_key)?;
+            if entries
+                .insert(key.clone(), Entry { kind, pieces })
+                .is_some()
+            {
+                bail!("{origin}: duplicate key `{key}`");
             }
         }
         Ok(Self { entries })
@@ -280,10 +305,15 @@ impl Catalog {
                 }
             }
         }
-        assemble(
-            sources
-                .iter()
-                .map(|(entry, source)| (entry.as_str(), source.as_str())),
+        // Item names and descriptions come from each `item/<id>/item.xml`;
+        // they go in first so a language file's own `ITEM_` key still wins.
+        let items = crate::item_catalog::language_layers(pack);
+        assemble_layers(
+            items.into_iter().chain(parse_sources(
+                sources
+                    .iter()
+                    .map(|(entry, source)| (entry.as_str(), source.as_str())),
+            )),
             requested,
             script,
         )
@@ -337,28 +367,47 @@ impl Catalog {
 }
 
 /// Assemble a catalog from `(pack entry, source)` pairs, in merge order.
+#[cfg(test)]
 fn assemble<'a>(
     sources: impl Iterator<Item = (&'a str, &'a str)>,
     requested: Option<&str>,
     script: charset::Script,
 ) -> Catalog {
-    let mut files: Vec<TagEntries> = Vec::new();
-    let mut index_of: HashMap<String, usize> = HashMap::new();
-    for (entry, source) in sources {
-        let Some(tag) = entry_tag(entry) else {
-            continue;
-        };
+    assemble_layers(parse_sources(sources), requested, script)
+}
+
+/// Parse `(pack entry, source)` language files into `(tag, file)` layers,
+/// skipping (with a warning) an entry that is not a valid language file.
+fn parse_sources<'a>(
+    sources: impl Iterator<Item = (&'a str, &'a str)>,
+) -> impl Iterator<Item = (String, Language)> {
+    sources.filter_map(|(entry, source)| {
+        let tag = entry_tag(entry)?;
         if !valid_tag(&tag) {
             eprintln!("warning: ignoring language entry {entry}: `{tag}` is not a language tag");
-            continue;
+            return None;
         }
-        let language = match Language::parse(source) {
-            Ok(language) => language,
+        match Language::parse(source) {
+            Ok(language) => Some((tag, language)),
             Err(error) => {
                 eprintln!("warning: invalid language file {entry}: {error:#}");
-                continue;
+                None
             }
-        };
+        }
+    })
+}
+
+/// Assemble a catalog from `(tag, file)` layers, in merge order: a later
+/// layer's key replaces an earlier one's in the same tag.
+fn assemble_layers(
+    layers: impl Iterator<Item = (String, Language)>,
+    requested: Option<&str>,
+    script: charset::Script,
+) -> Catalog {
+    let mut files: Vec<TagEntries> = Vec::new();
+    let mut index_of: HashMap<String, usize> = HashMap::new();
+    for (tag, language) in layers {
+        let tag = tag.to_ascii_lowercase();
         let index = *index_of.entry(tag.clone()).or_insert_with(|| {
             files.push(TagEntries {
                 tag: tag.clone(),
@@ -410,7 +459,7 @@ fn entry_tag(entry: &str) -> Option<String> {
 }
 
 /// Whether a file name stem is a language tag (`en`, `en-us`).
-fn valid_tag(tag: &str) -> bool {
+pub(crate) fn valid_tag(tag: &str) -> bool {
     !tag.is_empty()
         && tag
             .chars()
@@ -501,25 +550,23 @@ fn key_fallbacks(files: &[TagEntries], script: charset::Script) -> HashMap<Strin
 }
 
 /// Validate one key's spelling and prefix.
-fn validate_key(key: &str, line: usize) -> Result<()> {
+fn validate_key(key: &str) -> Result<()> {
     if key.is_empty()
         || !key
             .chars()
             .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
     {
-        bail!("language file line {line}: invalid key `{key}`");
+        bail!("invalid key `{key}`");
     }
     let known = ["MESSAGE_", "ROOM_", "ITEM_", "UI_"];
     if !known.iter().any(|prefix| key.starts_with(prefix)) {
-        bail!(
-            "language file line {line}: key `{key}` must start with MESSAGE_, ROOM_, ITEM_ or UI_"
-        );
+        bail!("key `{key}` must start with MESSAGE_, ROOM_, ITEM_ or UI_");
     }
     Ok(())
 }
 
 /// The stream kind a key selects.
-fn kind_of(key: &str, line: usize) -> Result<Kind> {
+fn kind_of(key: &str) -> Result<Kind> {
     if key.starts_with("MESSAGE_") {
         return Ok(Kind::Message);
     }
@@ -530,9 +577,7 @@ fn kind_of(key: &str, line: usize) -> Result<Kind> {
         if rest.ends_with("_NAME") || rest.ends_with("_NAME_SAVE") {
             return Ok(Kind::Plain);
         }
-        bail!(
-            "language file line {line}: room key `{key}` must be a `_TEXT_` message or a `_NAME`/`_NAME_SAVE` label"
-        );
+        bail!("room key `{key}` must be a `_TEXT_` message or a `_NAME`/`_NAME_SAVE` label");
     }
     if let Some(rest) = key.strip_prefix("ITEM_") {
         if rest.ends_with("_NAME") || rest.ends_with("_NAME_UNCHECKED") {
@@ -541,9 +586,7 @@ fn kind_of(key: &str, line: usize) -> Result<Kind> {
         if rest.ends_with("_DESCRIPTION") {
             return Ok(Kind::Message);
         }
-        bail!(
-            "language file line {line}: item key `{key}` must be a `_NAME`/`_NAME_UNCHECKED`/`_DESCRIPTION` entry"
-        );
+        bail!("item key `{key}` must be a `_NAME`/`_NAME_UNCHECKED`/`_DESCRIPTION` entry");
     }
     // `UI_`: plain labels and save-screen strings.
     Ok(Kind::Plain)
@@ -578,7 +621,7 @@ fn quoted(text: &str, line: usize) -> Result<&str> {
 }
 
 /// Parse a value's escapes and tags into pieces.
-fn parse_value(content: &str, kind: Kind, line: usize) -> Result<Vec<Piece>> {
+fn parse_value(content: &str, kind: Kind) -> Result<Vec<Piece>> {
     let mut pieces = Vec::new();
     let mut text = String::new();
     let mut chars = content.chars().peekable();
@@ -586,7 +629,7 @@ fn parse_value(content: &str, kind: Kind, line: usize) -> Result<Vec<Piece>> {
         match ch {
             '\\' => {
                 let Some(escape) = chars.next() else {
-                    bail!("language file line {line}: dangling `\\`");
+                    bail!("dangling `\\`");
                 };
                 match escape {
                     'n' => {
@@ -596,16 +639,14 @@ fn parse_value(content: &str, kind: Kind, line: usize) -> Result<Vec<Piece>> {
                     '"' => text.push('"'),
                     '\\' => text.push('\\'),
                     'x' => {
-                        let byte = hex(chars.next(), chars.next(), line)?;
+                        let byte = hex(chars.next(), chars.next())?;
                         if byte == 0x01 || byte == 0x07 {
-                            bail!(
-                                "language file line {line}: a value must not spell its own `\\x{byte:02X}` stream end"
-                            );
+                            bail!("a value must not spell its own `\\x{byte:02X}` stream end");
                         }
                         flush(&mut text, &mut pieces);
                         pieces.push(Piece::Raw(byte));
                     }
-                    other => bail!("language file line {line}: unknown escape `\\{other}`"),
+                    other => bail!("unknown escape `\\{other}`"),
                 }
             }
             '{' => {
@@ -619,9 +660,9 @@ fn parse_value(content: &str, kind: Kind, line: usize) -> Result<Vec<Piece>> {
                     inner.push(inner_ch);
                 }
                 if !closed {
-                    bail!("language file line {line}: unterminated tag `{{{inner}`");
+                    bail!("unterminated tag `{{{inner}`");
                 }
-                match parse_tag(&inner, kind, line)? {
+                match parse_tag(&inner, kind)? {
                     Tag::S => {
                         flush(&mut text, &mut pieces);
                         pieces.push(Piece::Tag(Tag::S));
@@ -650,14 +691,12 @@ fn parse_value(content: &str, kind: Kind, line: usize) -> Result<Vec<Piece>> {
                         flush(&mut text, &mut pieces);
                         pieces.push(Piece::Dismiss(value));
                         if chars.peek().is_some() {
-                            bail!(
-                                "language file line {line}: nothing may follow `{{timed {value}}}`"
-                            );
+                            bail!("nothing may follow `{{timed {value}}}`");
                         }
                     }
                 }
             }
-            '}' => bail!("language file line {line}: unexpected `}}`"),
+            '}' => bail!("unexpected `}}`"),
             text_ch => text.push(text_ch),
         }
     }
@@ -666,26 +705,26 @@ fn parse_value(content: &str, kind: Kind, line: usize) -> Result<Vec<Piece>> {
 }
 
 /// Parse one tag body (the text between `{` and `}`).
-fn parse_tag(inner: &str, kind: Kind, line: usize) -> Result<Tag> {
+fn parse_tag(inner: &str, kind: Kind) -> Result<Tag> {
     let mut parts = inner.split_ascii_whitespace();
     let name = parts.next().unwrap_or("");
     let mut arguments = Vec::new();
     for part in parts {
-        let value: u16 = part.parse().map_err(|_| {
-            anyhow::anyhow!("language file line {line}: `{name}` argument `{part}` is not a number")
-        })?;
+        let value: u16 = part
+            .parse()
+            .map_err(|_| anyhow::anyhow!("`{name}` argument `{part}` is not a number"))?;
         if value > u16::from(u8::MAX) {
-            bail!("language file line {line}: `{name}` argument `{part}` does not fit a byte");
+            bail!("`{name}` argument `{part}` does not fit a byte");
         }
         arguments.push(value as u8);
         if arguments.len() > 3 {
-            bail!("language file line {line}: too many arguments for `{name}`");
+            bail!("too many arguments for `{name}`");
         }
     }
     let one = |tag: &str| -> Result<u8> {
         match arguments.as_slice() {
             [value] => Ok(*value),
-            _ => bail!("language file line {line}: `{tag}` takes exactly one argument"),
+            _ => bail!("`{tag}` takes exactly one argument"),
         }
     };
     match name {
@@ -695,22 +734,22 @@ fn parse_tag(inner: &str, kind: Kind, line: usize) -> Result<Tag> {
         "string" => Ok(Tag::String(one("string")?)),
         "branch" => match arguments.as_slice() {
             [a, b, c] => Ok(Tag::Branch(*a, *b, *c)),
-            _ => bail!("language file line {line}: `branch` takes exactly three arguments"),
+            _ => bail!("`branch` takes exactly three arguments"),
         },
         "s" => {
             if arguments.is_empty() {
                 Ok(Tag::S)
             } else {
-                bail!("language file line {line}: `s` takes no arguments");
+                bail!("`s` takes no arguments");
             }
         }
         "timed" => {
             if kind != Kind::Message {
-                bail!("language file line {line}: `timed` is only for messages and descriptions");
+                bail!("`timed` is only for messages and descriptions");
             }
             Ok(Tag::Timed(one("timed")?))
         }
-        other => bail!("language file line {line}: unknown tag `{{{other}}}`"),
+        other => bail!("unknown tag `{{{other}}}`"),
     }
 }
 
@@ -722,11 +761,11 @@ fn flush(text: &mut String, pieces: &mut Vec<Piece>) {
 }
 
 /// Parse the two hex digits of a `\xNN` escape.
-fn hex(high: Option<char>, low: Option<char>, line: usize) -> Result<u8> {
+fn hex(high: Option<char>, low: Option<char>) -> Result<u8> {
     let value = |ch: Option<char>| -> Result<u8> {
         ch.and_then(|ch| ch.to_digit(16))
             .map(|digit| digit as u8)
-            .ok_or_else(|| anyhow::anyhow!("language file line {line}: `\\x` needs two hex digits"))
+            .ok_or_else(|| anyhow::anyhow!("`\\x` needs two hex digits"))
     };
     Ok((value(high)? << 4) | value(low)?)
 }
@@ -875,8 +914,16 @@ ITEM_05_DESCRIPTION = \"A\"
     fn parses_and_encodes_the_japanese_seed() {
         let source = include_str!("../games/re1/language/ja-JP.txt");
         let language = Language::parse(source).unwrap();
-        assert!(language.len() > 1_600, "{} entries", language.len());
-        for (key, entry) in language.iter() {
+        assert!(language.len() > 1_400, "{} entries", language.len());
+        // The item names and descriptions live in each item's `item.xml`.
+        let empty = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap()).unwrap();
+        let items = crate::item_catalog::language_layers(&empty)
+            .into_iter()
+            .find(|(tag, _)| tag == "ja-jp")
+            .map(|(_, language)| language)
+            .unwrap();
+        assert!(items.len() > 200, "{} item entries", items.len());
+        for (key, entry) in language.iter().chain(items.iter()) {
             assert_eq!(
                 entry.missing_glyphs(charset::Script::Japanese),
                 0,

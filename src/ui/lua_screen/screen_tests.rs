@@ -2375,7 +2375,7 @@ fn file_tables_match_the_shipped_jpn_tables() {
         ]
     );
     let stem: String = tab.screen.test_eval("return M.page_stem(0x0F, 5, 'ja-JP')");
-    assert_eq!(stem, "file/0f_05_fg_ja-JP");
+    assert_eq!(stem, "item/6e/file_fg_05_ja-JP");
     assert_eq!(tab.int("M.tables.title_x[0]"), 42);
     assert_eq!(tab.int("M.tables.title_x[15]"), 63);
 }
@@ -2882,7 +2882,10 @@ fn west_pack(languages: &[(&str, Option<&[usize]>)], jpn: &[usize]) -> &'static 
                 pixels[1] = 15;
                 writer
                     .add(
-                        &format!("file/{entry:02x}_{page:02x}_fg_{language}.tim"),
+                        &format!(
+                            "item/{:02x}/file_fg_{page:02x}_{language}.tim",
+                            0x5F + entry
+                        ),
                         sheet_tim(256, 1, &pixels),
                     )
                     .unwrap();
@@ -2896,7 +2899,7 @@ fn west_pack(languages: &[(&str, Option<&[usize]>)], jpn: &[usize]) -> &'static 
     for entry in jpn {
         writer
             .add(
-                &format!("file/{entry:02x}_00_fg_ja-JP.tim"),
+                &format!("item/{:02x}/file_fg_00_ja-JP.tim", 0x5F + entry),
                 map_tim(&[1; 256], west_palette),
             )
             .unwrap();
@@ -2999,7 +3002,7 @@ fn file_west_tables_match_the_reference() {
     assert_eq!(tab.int("M.tables.scroll_x.west"), 0x67);
     assert_eq!(tab.int("M.tables.scroll_x.jpn"), 0x6F);
     let stem: String = tab.screen.test_eval("return M.page_stem(15, 3, 'en-US')");
-    assert_eq!(stem, "file/0f_03_fg_en-US");
+    assert_eq!(stem, "item/6e/file_fg_03_en-US");
 }
 
 #[test]
@@ -3075,7 +3078,7 @@ fn file_west_reader_draws_whole_pages_and_holds_one() {
         }
         // Only the current page's art is held.
         let held: i64 = tab.screen.test_eval(
-            "local n = 0 for stem, h in pairs(M.state.pages) do if stem:match('_fg_en%-US$') and h then n = n + 1 end end return n",
+            "local n = 0 for stem, h in pairs(M.state.pages) do if stem:match('file_fg_.*_en%-US$') and h then n = n + 1 end end return n",
         );
         assert_eq!(held, 1, "page {page}");
     }

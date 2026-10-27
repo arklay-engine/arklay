@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Sun Crest</string>
+            <string key="description">A carving of the sun.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SONNENWAPPEN</string>
+            <string key="description">Eine Sonne ist eingraviert.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BLASÓN DEL SOL</string>
+            <string key="description">Un grabado del sol.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">AURINKO-LAATTA</string>
+            <string key="description">Kaiverrus jossa aurinko.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Symbole Soleil</string>
+            <string key="description">Un soleil gravé.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">STEMMA SOLE</string>
+            <string key="description">Un intaglio del sole.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">サンクレスト</string>
+            <string key="description">日をかたどった絵が刻まれている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Табличка Солнца</string>
+            <string key="description">Табличка с Солнцем.</string>
+        </language>
+    </strings>
+</item>

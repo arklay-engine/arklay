@@ -1,0 +1,36 @@
+<item kind="heal" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Red Herb</string>
+            <string key="description">It's a local herb.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">ROTE KRÄUTER</string>
+            <string key="description">Das sind Kräuter aus dieser\nGegend.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">HIERBAS ROJAS</string>
+            <string key="description">Es una hierba local.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">PUNAINEN YRTTI</string>
+            <string key="description">Paikallinen yrttikasvi.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">L'Herbe Rouge</string>
+            <string key="description">C'est une herbe de la région.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">ERBA ROSSA</string>
+            <string key="description">Un'erba del luogo.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">レッドハーブ</string>
+            <string key="description">この地方に自生しているハーブだ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Красная трава</string>
+            <string key="description">Это местная трава.</string>
+        </language>
+    </strings>
+</item>

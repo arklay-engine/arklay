@@ -1,0 +1,39 @@
+<item kind="heal" stack="1">
+    <effects>
+        <effect kind="cure_poison" />
+    </effects>
+    <strings>
+        <language lang="en-US">
+            <string key="name">Blue Herb</string>
+            <string key="description">It's a local herb.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">BLAUE KRÄUTER</string>
+            <string key="description">Das sind Kräuter aus dieser\nGegend.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">HIERBAS AZULES</string>
+            <string key="description">Es una hierba local.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">SININEN YRTTI</string>
+            <string key="description">Paikallinen yrttikasvi.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">L'Herbe Bleue</string>
+            <string key="description">C'est une herbe de la région.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">ERBA BLU</string>
+            <string key="description">Un'erba del luogo.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ブルーハーブ</string>
+            <string key="description">この地方に自生しているハーブだ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Синяя трава</string>
+            <string key="description">Это местная трава.</string>
+        </language>
+    </strings>
+</item>

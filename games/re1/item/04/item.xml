@@ -1,0 +1,36 @@
+<item kind="weapon" stack="6">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Colt Python</string>
+            <string key="description">Powerful gun can be loaded\nwith .357 magnum rounds.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">PISTOLE</string>
+            <string key="description">Automatik mit panzerbr.\n9 mm-Kugeln.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">PISTOLA</string>
+            <string key="description">Automática que usa\nbalas perforantes de 9 mm.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">COLT PYTHON</string>
+            <string key="description">Tehokas revolveri jonka voi ladata\n.357 kaliiperin Magnum -patruunoilla.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Magnum (DUMDUM)</string>
+            <string key="description">Colt Python (DUMDUM).</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">COLT PYTHON</string>
+            <string key="description">Potente arma che usa\ncartucce magnum.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">コルトパイソン</string>
+            <string key="description">357マグナム弾を撃ち出せる銃\n強力だが、あつかいづらい</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Кольт Питон</string>
+            <string key="description">Мощная пушка, может быть заряжена\nпатронами .357 Магнум.</string>
+        </language>
+    </strings>
+</item>

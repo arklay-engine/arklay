@@ -12586,7 +12586,7 @@ fn load_room(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<LoadedRo
 }
 
 /// Build a fresh game state for `id`/`room` with the pack's static music
-/// tables and global weapon-FX metadata installed, so room entry and script
+/// tables, item definitions and global weapon-FX metadata installed, so room entry and script
 /// effect spawns resolve both the room's declared sprites and the `core00`
 /// types. `options`, the run's mode, are set first, so the music chunk and the
 /// seed scripts that run after it read them.
@@ -12601,6 +12601,7 @@ fn new_game_state(
     game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
+    game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
     if pack.contains(effects::room::CORE_ESP_ENTRY) || pack.contains(effects::room::CORE_ETM_ENTRY)
     {

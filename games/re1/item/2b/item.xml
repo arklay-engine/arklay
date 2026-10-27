@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Slides</string>
+            <string key="description">It seems to be some kind\nof research report.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">DIAS</string>
+            <string key="description">Das scheint eine Art\nForschungsbericht zu sein.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">DIAPOSITIVAS</string>
+            <string key="description">Parece ser una especie\nde informe.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">DIOJA</string>
+            <string key="description">Diakaruselli jossa lukee\n\"tutkimusraportti\".</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Diapos</string>
+            <string key="description">On dirait un rapport \nde recherche.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">DIAPOSITIVE</string>
+            <string key="description">Sembra sia il rapporto\ndi una ricerca.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">スライド</string>
+            <string key="description">研究レポートかなにかのようだが\nこのままではよくわからない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Слайды</string>
+            <string key="description">Кажется, это какой-то\nисследовательский отчёт.</string>
+        </language>
+    </strings>
+</item>

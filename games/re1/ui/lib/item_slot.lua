@@ -1,9 +1,8 @@
 -- The pause menu's 40x30 item slot: an item's icon and its quantity digits.
 --
--- Regular items draw their own `item/<id>.bmp` when the pack has it, and the
--- shared `item/item_all` row otherwise. The Ingram and Minimi draw the
--- `ui/staitem` page cells so an HD pack's page hash keeps replacing them. The
--- quantity digits and the infinity mark come from `ui/status`. Positions are
+-- Regular items draw their own `item/<id>/item.bmp`. The Ingram and Minimi
+-- draw the `ui/staitem` page cells so an HD pack's page hash keeps replacing
+-- them. The quantity digits and the infinity mark come from `ui/status`. Positions are
 -- screen coordinates; the callers add their own origin.
 
 local Slot = {}
@@ -16,13 +15,11 @@ Slot.W, Slot.H = 40, 30
 local STATUS_STEM = "ui/status"
 local BLUE_STEM = "ui/blue"
 local STAITEM_STEM = "ui/staitem"
-local ITEM_ALL_STEM = "item/item_all"
 
 --- Whether every sheet the slots draw from is in the pack.
 function Slot.art_present(api)
     return api:page(STATUS_STEM) ~= nil and api:page(BLUE_STEM) ~= nil
         and api:page(STAITEM_STEM) ~= nil
-        and api:picture(ITEM_ALL_STEM, 0x000000, "shipped") ~= nil
 end
 
 --- An empty slot's plate (`ui/blue`), `height` rows of it.

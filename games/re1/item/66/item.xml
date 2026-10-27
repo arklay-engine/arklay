@@ -1,0 +1,36 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Scrapbook</string>
+            <string key="name_unchecked">Crank</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SAMMELMAPPE</string>
+            <string key="name_unchecked">KURBEL</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">ÁLBUM DE RECORTES</string>
+            <string key="name_unchecked">MANIVELA</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">LEIKEKIRJA</string>
+            <string key="name_unchecked">KAMPI</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Coupures de journaux</string>
+            <string key="name_unchecked">Manivelle</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">ALBUM DI RITAGLI</string>
+            <string key="name_unchecked">MANOVELLA</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">スクラップブック</string>
+            <string key="name_unchecked">クランク</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Альбом</string>
+            <string key="name_unchecked">Рукоятка</string>
+        </language>
+    </strings>
+</item>

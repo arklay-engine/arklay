@@ -1,0 +1,36 @@
+<item kind="special">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Lockpick</string>
+            <string key="description">A simple lock can be\nopened with this.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">DIETRICH</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">GANZÚA</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TIIRIKKA</string>
+            <string key="description">Tällä aukeaa yksinkertaiset lukot.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Kit de Crochetage</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">GRIMALDELLO</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">キーピック</string>
+            <string key="description">カギ開け用のツール\n単純な構造のカギを開ける事が出来る</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Отмычка</string>
+            <string key="description">Позволяет вскрывать\nпростые замки.</string>
+        </language>
+    </strings>
+</item>

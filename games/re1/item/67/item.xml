@@ -1,0 +1,28 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Security System</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SICHERHEITS-SYSTEM</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">SISTEMA DE SEGURIDAD</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TURVALLISUUSOHJEET</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Système de sécurité</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">SISTEMA DI SICUREZZA</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">研究所・警備システム資料</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Система безопасности</string>
+        </language>
+    </strings>
+</item>

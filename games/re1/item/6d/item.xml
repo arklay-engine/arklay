@@ -1,0 +1,36 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Pass Code 03</string>
+            <string key="name_unchecked">Crank</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">PASSCODE 03</string>
+            <string key="name_unchecked">KURBEL</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">CONTRASEÑA 03</string>
+            <string key="name_unchecked">MANIVELA</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">KULKUKOODI 03</string>
+            <string key="name_unchecked">KAMPI</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Code d'accès 03</string>
+            <string key="name_unchecked">Manivelle</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">CODICE 03</string>
+            <string key="name_unchecked">MANOVELLA</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">パスコード03</string>
+            <string key="name_unchecked">クランク</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Пароль 03</string>
+            <string key="name_unchecked">Рукоятка</string>
+        </language>
+    </strings>
+</item>

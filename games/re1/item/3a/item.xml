@@ -1,0 +1,44 @@
+<item kind="key">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Key for Room 003</string>
+            <string key="name_unchecked">Guardhouse Key</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SCHLÜSSEL 003</string>
+            <string key="name_unchecked">SCHLAFR.SCHLÜS.</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LLAVE 003</string>
+            <string key="name_unchecked">LLAVE GARITA</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">HUON. 003 AVAIN</string>
+            <string key="name_unchecked">ASUNTOLAN AVAIN</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Clé 003</string>
+            <string key="name_unchecked">Clé d'un Dortoir</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">CHIAVE 003</string>
+            <string key="name_unchecked">CHIAVE GUARDIOLA</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">003号室のカギ</string>
+            <string key="name_unchecked">寄宿舎のカギ</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Ключ от комнаты 003</string>
+            <string key="name_unchecked">Ключ охраны</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

@@ -1,0 +1,39 @@
+<item kind="heal" stack="1">
+    <effects>
+        <effect kind="cure_serious_poison" />
+    </effects>
+    <strings>
+        <language lang="en-US">
+            <string key="name">Serum</string>
+            <string key="description">Only one dose is left.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SERUM</string>
+            <string key="description">Es ist nur noch eine Dosis\nübrig.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">SUERO</string>
+            <string key="description">Sólo queda una dosis.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">SEERUMI</string>
+            <string key="description">Vain yksi annos jäljellä.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Sérum</string>
+            <string key="description">Il ne reste plus qu'une dose.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">SIERO</string>
+            <string key="description">Ne resta solo una dose.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">血清</string>
+            <string key="description">1回分しかない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Сыворотка</string>
+            <string key="description">Этой дозы должно хватить.</string>
+        </language>
+    </strings>
+</item>

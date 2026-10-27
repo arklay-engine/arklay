@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Wind Crest</string>
+            <string key="description">It represents wind.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">WINDWAPPEN</string>
+            <string key="description">Es verkörpert den Wind.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BLASÓN DEL VIENTO</string>
+            <string key="description">Representa el viento.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TUULI-LAATTA</string>
+            <string key="description">Kuvitus symboloi tuulta.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Symbole Vent</string>
+            <string key="description">Cela représente le vent.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">STEMMA VENTO</string>
+            <string key="description">Rappresenta il vento.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ウィンドクレスト</string>
+            <string key="description">風をかたどった絵が刻まれている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Табличка Ветра</string>
+            <string key="description">Похоже на ветер.</string>
+        </language>
+    </strings>
+</item>

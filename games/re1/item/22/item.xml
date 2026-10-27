@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Red Jewel</string>
+            <string key="description">It's shining beautifully.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">ROTES JUWEL</string>
+            <string key="description">Es glänzt wunderschön.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">JOYA ROJA</string>
+            <string key="description">Resplandece hermosamente.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">PUN. JALOKIVI</string>
+            <string key="description">Se kiiltää kauniisti.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Pierre Rouge</string>
+            <string key="description">Ça brille magnifiquement.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">GEMMA ROSSA</string>
+            <string key="description">Brilla meravigliosamente.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">赤い宝石</string>
+            <string key="description">美しく光りかがやいている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Красный камень</string>
+            <string key="description">Прекрасное сияние.</string>
+        </language>
+    </strings>
+</item>

@@ -1,0 +1,36 @@
+<item kind="weapon" stack="4">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Rocket Launcher</string>
+            <string key="description">One shot can destroy any\ntarget.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">RAKETENWERFER</string>
+            <string key="description">Ein Schuss kann jedes beliebige\nZiel zerstören.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LANZACOHETES</string>
+            <string key="description">Un disparo puede destruir\ncualquier objetivo.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">M202 FLASH</string>
+            <string key="description">Yksi raketti voi tuhota lähes\nminkä tahansa kohteen.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Lance-Missiles</string>
+            <string key="description">La cible peut être détruite\nd'un seul coup.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">LANCIARAZZI</string>
+            <string key="description">Un colpo può distruggere\nqualsiasi bersaglio.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ロケットランチャー</string>
+            <string key="description">これならどんなヤツでも一撃だ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Ракетница</string>
+            <string key="description">Один выстрел может\nуничтожить любую цель.</string>
+        </language>
+    </strings>
+</item>

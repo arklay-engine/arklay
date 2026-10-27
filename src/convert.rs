@@ -649,7 +649,8 @@ pub fn convert_game_observed(
     let (core_count, core_bytes) = copy_core_effects(&data, &mut writer, &mut progress, jobs)?;
     let (shadow_count, shadow_bytes) = copy_shadow(&data, &mut writer, &mut progress)?;
     let (language_count, language_bytes) = copy_language_files(&mut writer, &mut progress)?;
-    let (ivm_count, ivm_bytes) = copy_item_models(
+    let (item_def_count, item_def_bytes) = copy_item_definitions(&mut writer, &mut progress)?;
+    let (item_model_count, item_model_bytes) = copy_item_models(
         &item_m2_dirs,
         &mut writer,
         &mut progress,
@@ -795,7 +796,14 @@ pub fn convert_game_observed(
             report,
             "language: {language_count} entries, {language_bytes} bytes"
         )?;
-        writeln!(report, "ivm: {ivm_count} entries, {ivm_bytes} bytes")?;
+        writeln!(
+            report,
+            "item definition: {item_def_count} entries, {item_def_bytes} bytes"
+        )?;
+        writeln!(
+            report,
+            "item model: {item_model_count} entries, {item_model_bytes} bytes"
+        )?;
         writeln!(report, "file: {file_count} entries, {file_bytes} bytes")?;
         writeln!(report, "map: {map_count} entries, {map_bytes} bytes")?;
         writeln!(
@@ -1302,7 +1310,7 @@ fn copy_item_art(
                 Ok(bytes) => bytes,
                 Err(error) => {
                     warnings.push(format!(
-                        "failed to bake item {item:#04x}'s icon from ui/staitem.tim; the item uses the shared page: {error:#}"
+                        "failed to bake item {item:#04x}'s icon from ui/staitem.tim; the item has no icon: {error:#}"
                     ));
                     continue;
                 }
@@ -1310,12 +1318,22 @@ fn copy_item_art(
         } else {
             continue;
         };
-        per_item.push((format!("{}{item:02x}.bmp", crate::item_art::PREFIX), bytes));
+        let Some(entry) = crate::item_art::icon_entry(item) else {
+            continue;
+        };
+        per_item.push((entry, bytes));
     }
 
-    progress.begin("item", (data.items.len() + per_item.len()) as u64);
-    let results = parallel_map(data.items.len(), jobs, progress, |index| {
-        let asset = &data.items[index];
+    // `ITEM_ALL` is only the source of the per-item icons; the other sheets
+    // (`ITEM_MIX`, `MEDAL`) are drawn whole and packed as they are.
+    let shared: Vec<&ItemAsset> = data
+        .items
+        .iter()
+        .filter(|asset| asset.entry != items::ITEM_ALL_ENTRY)
+        .collect();
+    progress.begin("item", (shared.len() + per_item.len()) as u64);
+    let results = parallel_map(shared.len(), jobs, progress, |index| {
+        let asset = shared[index];
         let pix = fs::read(&asset.source)
             .with_context(|| format!("failed to read {}", asset.source.display()))?;
         let bmp_bytes = bake_item_atlas(&pix, asset.rows, &texture)
@@ -1540,7 +1558,7 @@ struct UiAsset {
 /// One resolved item atlas.
 #[derive(Debug)]
 struct ItemAsset {
-    /// Pack entry, e.g. `item/item_all.bmp`.
+    /// Pack entry, e.g. `item/item_mix.bmp`.
     entry: &'static str,
     /// Source `.PIX` in the installation.
     source: PathBuf,
@@ -1790,8 +1808,30 @@ fn copy_language_files(writer: &mut PackWriter, progress: &mut Progress) -> Resu
     Ok((count, bytes))
 }
 
-/// Add every `ITEM_M2/*.IVM` item-view model to the pack under `item/`, and
-/// the per-item split mesh and texture page of every item that has art.
+/// Add every checked-in `item/<id>/item.xml`, refusing one that does not
+/// parse.
+fn copy_item_definitions(
+    writer: &mut PackWriter,
+    progress: &mut Progress,
+) -> Result<(usize, usize)> {
+    let files = crate::item_catalog::ITEM_FILES;
+    progress.begin("item definitions", files.len() as u64);
+    let mut bytes = 0usize;
+    for (entry, source) in files {
+        crate::item_catalog::ItemDef::parse(source)
+            .with_context(|| format!("invalid item definition {entry}"))?;
+        bytes += source.len();
+        writer
+            .add(entry, source.as_bytes().to_vec())
+            .with_context(|| format!("failed to add {entry}"))?;
+        progress.advance(entry);
+    }
+    progress.end_phase();
+    Ok((files.len(), bytes))
+}
+
+/// Split every `ITEM_M2/*.IVM` item-view model into the mesh and texture page
+/// of each item that uses it: `item/<id>/model.tmd` and `model.bmp`.
 ///
 /// The pack stores the canonical lower-case file name; the install's names are
 /// matched case-insensitively. Every language tree is searched, the conversion
@@ -1810,16 +1850,10 @@ fn copy_item_models(
     }
 
     let index = index_dirs(item_m2, warnings)?;
-    let mut files: Vec<(String, PathBuf)> = index
-        .iter()
-        .filter(|(name, _)| name.ends_with(".ivm"))
-        .map(|(name, path)| (format!("item/{name}"), path.clone()))
-        .collect();
-    files.sort_by(|a, b| a.0.cmp(&b.0));
-    if files.len() != IVM_COUNT {
+    let found = index.keys().filter(|name| name.ends_with(".ivm")).count();
+    if found != IVM_COUNT {
         warnings.push(format!(
-            "found {} item model(s) in {}, expected {IVM_COUNT}",
-            files.len(),
+            "found {found} item model(s) in {}, expected {IVM_COUNT}",
             searched_dirs(item_m2)
         ));
     }
@@ -1849,22 +1883,9 @@ fn copy_item_models(
         ));
     }
 
-    progress.begin("item", (files.len() + present.len()) as u64);
-    let copies = parallel_map(files.len(), jobs, progress, |index| {
-        let (entry, source) = &files[index];
-        let data =
-            fs::read(source).with_context(|| format!("failed to read {}", source.display()))?;
-        Ok((entry.clone(), 1, data))
-    })?;
+    progress.begin("item model", present.len() as u64);
     let mut count = 0usize;
     let mut bytes = 0usize;
-    for (entry, data) in copies {
-        bytes += data.len();
-        count += 1;
-        writer
-            .add(&entry, data)
-            .with_context(|| format!("failed to add {entry}"))?;
-    }
 
     type Split = Result<(Vec<u8>, Vec<u8>), String>;
     let splits = parallel_map(present.len(), jobs, progress, |slot| {
@@ -1897,17 +1918,13 @@ fn copy_item_models(
             .filter(|&item| items::model_name(item) == Some(name.as_str()))
             .collect();
         for item in name_ids {
-            let entries = [
-                (
-                    format!("{}{item:02x}_model.tmd", crate::item_art::PREFIX),
-                    tmd.clone(),
-                ),
-                (
-                    format!("{}{item:02x}_model.bmp", crate::item_art::PREFIX),
-                    page.clone(),
-                ),
-            ];
-            for (entry, data) in entries {
+            let (Some(tmd_entry), Some(page_entry)) = (
+                crate::item_art::model_tmd_entry(item),
+                crate::item_art::model_texture_entry(item),
+            ) else {
+                continue;
+            };
+            for (entry, data) in [(tmd_entry, tmd.clone()), (page_entry, page.clone())] {
                 bytes += data.len();
                 count += 1;
                 writer
@@ -1929,8 +1946,8 @@ fn copy_item_models(
 /// Add the document-reader art to the pack as indexed BMP pages.
 ///
 /// Every document `doc` (`00`-`0f`, item `0x5F + doc`) gets its `FILEI` book
-/// backdrop as `file/<doc>_bg.bmp` and its pages as
-/// `file/<doc>_<page>_fg_<language>.bmp`: the Western trees' `filem_*`
+/// backdrop as `item/<id>/file_bg.bmp` and its pages as
+/// `item/<id>/file_fg_<page>_<language>.bmp`: the Western trees' `filem_*`
 /// containers (`en-US`, `de-DE`, `fr-FR`) and the Japanese build's `TEXTM`
 /// sheets (`ja-JP`), each of which holds two half-pages and is split into
 /// them. The selector's two book covers and the Western page arrows are
@@ -1960,7 +1977,7 @@ fn copy_file_art(
     for (document, name) in DOCUMENT_BACKDROPS.iter().enumerate() {
         let name = format!("{name}.tim");
         match index.get(&name) {
-            Some(path) => files.push((format!("file/{document:02x}_bg.bmp"), path.clone())),
+            Some(path) => files.push((document_backdrop_entry(document), path.clone())),
             None if missing.contains(&name) => {}
             None => missing.push(name),
         }
@@ -2045,6 +2062,19 @@ fn copy_file_art(
 /// The reader's document count: items `0x5F..=0x6E`.
 const DOCUMENT_COUNT: usize = 16;
 
+/// The item id of the first document.
+const DOCUMENT_ITEM_BASE: usize = 0x5F;
+
+/// The item folder of document `document` (item `0x5F + document`).
+fn document_folder(document: usize) -> String {
+    crate::item_art::folder((DOCUMENT_ITEM_BASE + document) as u8)
+}
+
+/// The pack entry of document `document`'s book backdrop.
+fn document_backdrop_entry(document: usize) -> String {
+    format!("{}file_bg.bmp", document_folder(document))
+}
+
 /// Each document's `FILEI` book backdrop (the reader's per-document index
 /// into its 14 used backdrops). `filei01`, `02` and `05` are unused.
 const DOCUMENT_BACKDROPS: [&str; DOCUMENT_COUNT] = [
@@ -2075,7 +2105,10 @@ const JPN_DOCUMENT_LANGUAGE: &str = "ja-JP";
 
 /// The pack entry of page `page` of document `document` in `language`.
 fn document_page_entry(document: usize, page: usize, language: &str) -> String {
-    format!("file/{document:02x}_{page:02x}_fg_{language}.bmp")
+    format!(
+        "{}file_fg_{page:02x}_{language}.bmp",
+        document_folder(document)
+    )
 }
 
 /// Split every Japanese `TEXTM` sheet into its two half-pages: sheet `n` of a
@@ -2154,7 +2187,7 @@ const DOCUMENT_LANGUAGES: [(&str, &str); 3] =
     [("en-US", "pix"), ("de-DE", "gpx"), ("fr-FR", "fpx")];
 
 /// Unpack every `filem_*` container into its pages, packed as
-/// `file/<doc>_<page>_fg_<language>.bmp`. The pages are optional art, so a
+/// `item/<id>/file_fg_<page>_<language>.bmp`. The pages are optional art, so a
 /// container that fails to unpack is reported and skipped, as is a page
 /// count the reader's table does not expect.
 fn copy_document_pages(
@@ -2338,7 +2371,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 5;
+pub const CONVERT_VERSION: u32 = 6;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, and the language sheets.
@@ -2360,6 +2393,7 @@ pub fn packed_source_hash() -> String {
         .chain(crate::enemy::ENEMY_SCRIPTS.iter())
         .chain(crate::lua::GAME_SCRIPTS.iter())
         .chain(crate::language::LANGUAGE_FILES.iter())
+        .chain(crate::item_catalog::ITEM_FILES.iter())
     {
         feed(name.as_bytes());
         feed(&[0]);
@@ -2944,15 +2978,15 @@ fn conversion_phase_count(
     data: &DataPlan,
 ) -> u64 {
     // scan, room, cut, mask, six model phases (player, weapon, npc,
-    // monster, enemy scripts, effect sheets), font, ui, core00, language,
-    // voice, film, compress, write.
-    let mut phases: u64 = 18;
+    // monster, enemy scripts, effect sheets), font, ui, core00, language, item
+    // definitions, voice, film, compress, write.
+    let mut phases: u64 = 19;
     phases += 2 * u64::from(sound.is_some()); // bgm, se
     phases += u64::from(item_m1.is_some()); // door
     phases += u64::from(data.palette.is_some() && !data.items.is_empty()); // item
     phases += u64::from(data.demos.iter().any(Option::is_some)); // demo
     phases += u64::from(data.shadow.is_some()); // shadow
-    // item, file, the Western and Japanese document pages, map
+    // item model, file, the Western and Japanese document pages, map
     phases += 5 * u64::from(item_m2.is_some());
     phases
 }
@@ -4686,8 +4720,8 @@ mod tests {
         let japanese = root.path.join("japanese/JPN/Item_m2");
         fs::create_dir_all(&english).unwrap();
         fs::create_dir_all(&japanese).unwrap();
-        fs::write(english.join("MINI.IVM"), b"ivm1").unwrap();
-        fs::write(japanese.join("I00V.IVM"), b"ivm0").unwrap();
+        fs::write(english.join("MINI.IVM"), crate::ivm::sample_ivm()).unwrap();
+        fs::write(japanese.join("I00V.IVM"), crate::ivm::sample_ivm()).unwrap();
         write_covers(&english);
         for number in 0..0x0Eu32 {
             fs::write(
@@ -4731,7 +4765,8 @@ mod tests {
             1,
         )
         .unwrap();
-        assert_eq!(items, 2);
+        // The Minimi and the five items that share i00v, a mesh and a page each.
+        assert_eq!(items, 2 * 6);
         assert_eq!(files, JPN_FILE_ART);
         assert_eq!(maps, 16);
         // The two-IVM fixture legitimately warns about the count; the merged
@@ -4744,8 +4779,8 @@ mod tests {
         );
 
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-        assert_eq!(pack.read("item/i00v.ivm").unwrap().as_ref(), b"ivm0");
-        assert_eq!(pack.read("item/mini.ivm").unwrap().as_ref(), b"ivm1");
+        assert!(pack.contains("item/02/model.tmd"));
+        assert!(pack.contains("item/70/model.tmd"));
         assert_jpn_document_art(&pack);
         assert_eq!(page_tag(&pack.read("map/0e.bmp").unwrap()), tag_colour(14));
         assert_eq!(
@@ -4839,12 +4874,7 @@ mod tests {
                 .count(),
             27
         );
-        assert_eq!(
-            pack.paths()
-                .filter(|path| path.starts_with("file/"))
-                .count(),
-            JPN_FILE_ENTRIES
-        );
+        assert_eq!(file_art_count(&pack), JPN_FILE_ENTRIES);
         for id in 0..=28u8 {
             let Some(name) = movie::name(id) else {
                 continue;
@@ -5388,10 +5418,15 @@ mod tests {
         let pack = crate::pack::Pack::open(&out).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
         assert_eq!(count("ui/"), UI_ASSETS.len() + crate::ui::UI_SCRIPTS.len());
-        // The atlas plus one icon for every item id with an ITEM_ALL row.
-        // STAITEM.TIM is not a TIM in this fixture, so the two PC-only
-        // specials fall back to the shared sheet.
-        assert_eq!(count("item/"), 1 + 90);
+        // One icon for every item id with an ITEM_ALL row; the atlas itself
+        // is not packed. STAITEM.TIM is not a TIM in this fixture, so the two
+        // PC-only specials have no icon.
+        let icons = pack
+            .paths()
+            .filter(|path| path.starts_with("item/") && path.ends_with("/item.bmp"))
+            .count();
+        assert_eq!(icons, 90);
+        assert!(!pack.contains(items::ITEM_ALL_ENTRY));
         assert_eq!(count("shadow/"), 1);
         assert_eq!(
             pack.read(crate::shadow::KAGE_ENTRY).unwrap(),
@@ -5401,18 +5436,8 @@ mod tests {
             pack.read("ui/statface.tim").unwrap(),
             b"STATFACE.TIM".as_slice()
         );
-        let image = bmp::decode(&pack.read("item/item_all.bmp").unwrap()).unwrap();
-        assert_eq!(
-            (image.width, image.height),
-            (
-                items::ICON_WIDTH,
-                items::ICON_HEIGHT * items::ITEM_ALL_ROWS as u32
-            )
-        );
-        assert_eq!(&image.rgba[0..4], &[255, 0, 0, 255]);
-
-        // The per-item icon is the atlas row through the same palette.
-        let icon = bmp::decode(&pack.read("item/02.bmp").unwrap()).unwrap();
+        // The per-item icon is the atlas row through the status palette.
+        let icon = bmp::decode(&pack.read("item/02/item.bmp").unwrap()).unwrap();
         assert_eq!(
             (icon.width, icon.height),
             (items::ICON_WIDTH, items::ICON_HEIGHT)
@@ -5476,37 +5501,55 @@ mod tests {
     const COVER_TAG: u16 = 0x200;
     const TEXTM_TAG: u16 = 0x100;
 
-    /// The document entries the Japanese fixture packs under `file/`: one
-    /// backdrop per document and two half-pages per TEXTM sheet.
+    /// The document entries the Japanese fixture packs into the item
+    /// folders: one backdrop per document and two half-pages per TEXTM sheet.
     const JPN_FILE_ENTRIES: usize = DOCUMENT_COUNT + 2 * TEXTM_STEMS.len();
     /// Everything [`copy_file_art`] packs from the Japanese fixture: the
     /// document entries and the two book covers.
     const JPN_FILE_ART: usize = 2 + JPN_FILE_ENTRIES;
+
+    /// The pack's document art: every `item/<id>/file_*` entry.
+    fn file_art_count(pack: &crate::pack::Pack) -> usize {
+        pack.paths()
+            .filter(|path| path.starts_with("item/") && path.contains("/file_"))
+            .count()
+    }
+
+    /// The pack's item-view model entries: `item/<id>/model.tmd` and `.bmp`.
+    fn model_entry_count(pack: &crate::pack::Pack) -> usize {
+        pack.paths()
+            .filter(|path| {
+                path.starts_with("item/")
+                    && (path.ends_with("/model.tmd") || path.ends_with("/model.bmp"))
+            })
+            .count()
+    }
 
     /// Check the Japanese fixture's document art: document 15 reads the
     /// `filei17` backdrop and the TEXTM sheets 40-42, the last one's bottom
     /// half as its page 5.
     fn assert_jpn_document_art(pack: &crate::pack::Pack) {
         assert_eq!(
-            page_tag(&pack.read("file/0f_bg.bmp").unwrap()),
+            page_tag(&pack.read("item/6e/file_bg.bmp").unwrap()),
             tag_colour(17)
         );
         assert_eq!(
-            page_tag(&pack.read("file/01_bg.bmp").unwrap()),
+            page_tag(&pack.read("item/60/file_bg.bmp").unwrap()),
             tag_colour(3)
         );
         let page =
-            bmp::decode_indexed_page(&pack.read("file/0f_05_fg_ja-JP.bmp").unwrap()).unwrap();
+            bmp::decode_indexed_page(&pack.read("item/6e/file_fg_05_ja-JP.bmp").unwrap()).unwrap();
         assert_eq!((page.width, page.height), (256, 128));
         assert_eq!(page.palette(0, 1), tag_colour(TEXTM_TAG + 42));
-        let top = bmp::decode_indexed_page(&pack.read("file/0e_00_fg_ja-JP.bmp").unwrap()).unwrap();
+        let top =
+            bmp::decode_indexed_page(&pack.read("item/6d/file_fg_00_ja-JP.bmp").unwrap()).unwrap();
         assert_eq!(
             top.indices[0], 0,
             "the sheet's first texel opens the top half"
         );
         assert_eq!(top.palette(0, 1), tag_colour(TEXTM_TAG + 39));
         assert!(
-            !pack.contains("file/0e_02_fg_ja-JP.bmp"),
+            !pack.contains("item/6d/file_fg_02_ja-JP.bmp"),
             "document 14 has one sheet"
         );
     }
@@ -5665,17 +5708,19 @@ mod tests {
             1,
         )
         .unwrap();
-        // Five item ids share image class 2 (i00v) and one is the Ingram.
-        assert_eq!(items, 2 + 2 * 6);
+        // Five item ids share image class 2 (i00v) and one is the Ingram; the
+        // shared files themselves are not packed.
+        assert_eq!(items, 2 * 6);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let (_, tmd) = crate::ivm::split(&sample).unwrap();
-        assert_eq!(pack.read("item/02_model.tmd").unwrap().as_ref(), tmd);
+        assert!(!pack.contains("item/i00v.ivm"));
+        assert_eq!(pack.read("item/02/model.tmd").unwrap().as_ref(), tmd);
         for item in [0x02u8, 0x5F, 0x60, 0x62, 0x63] {
-            let entry = format!("item/{item:02x}_model.tmd");
+            let entry = format!("item/{item:02x}/model.tmd");
             assert_eq!(pack.read(&entry).unwrap().as_ref(), tmd, "{entry}");
             let page = crate::bmp::decode_indexed_page(
-                &pack.read(&format!("item/{item:02x}_model.bmp")).unwrap(),
+                &pack.read(&format!("item/{item:02x}/model.bmp")).unwrap(),
             )
             .unwrap();
             let expected = crate::tim::decode_8bpp(&sample).unwrap();
@@ -5683,11 +5728,11 @@ mod tests {
             assert_eq!(page.palettes, expected.palettes, "item {item:#04x}");
             assert_eq!(page.stp, expected.stp, "item {item:#04x}");
         }
-        assert!(pack.contains("item/6f_model.tmd"));
-        assert!(pack.contains("item/6f_model.bmp"));
+        assert!(pack.contains("item/6f/model.tmd"));
+        assert!(pack.contains("item/6f/model.bmp"));
         // An item whose model name is not in the directory has no per-item
         // files, and the missing names are reported once.
-        assert!(!pack.contains("item/01_model.tmd"));
+        assert!(!pack.contains("item/01/model.tmd"));
         assert!(
             warnings.iter().any(|warning| warning.contains("missing")),
             "{warnings:?}"
@@ -5699,8 +5744,8 @@ mod tests {
         let root = TempDir::new("item-art");
         let dir = root.path.join("ITEM_M2");
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("I00V.IVM"), b"ivm0").unwrap();
-        fs::write(dir.join("ING.ivm"), b"ivm1").unwrap();
+        fs::write(dir.join("I00V.IVM"), crate::ivm::sample_ivm()).unwrap();
+        fs::write(dir.join("ING.ivm"), crate::ivm::sample_ivm()).unwrap();
         write_covers(&dir);
         write_jpn_document_pages(&dir);
 
@@ -5724,20 +5769,18 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(items, 2);
+        assert_eq!(items, 2 * 6);
         assert_eq!(files, JPN_FILE_ART);
         assert!(item_bytes > 0 && file_bytes > 0);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-        assert_eq!(pack.read("item/i00v.ivm").unwrap().as_ref(), b"ivm0");
-        assert_eq!(pack.read("item/ing.ivm").unwrap().as_ref(), b"ivm1");
+        assert!(pack.contains("item/6f/model.tmd"));
         assert_eq!(
             page_tag(&pack.read("ui/file_book_0.bmp").unwrap()),
             tag_colour(COVER_TAG)
         );
         assert_jpn_document_art(&pack);
-        let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("item/"), 2);
-        assert_eq!(count("file/"), JPN_FILE_ENTRIES);
+        assert_eq!(model_entry_count(&pack), 2 * 6);
+        assert_eq!(file_art_count(&pack), JPN_FILE_ENTRIES);
     }
 
     /// A `filem_*` container over already-encoded page streams: a 16-slot
@@ -5811,13 +5854,15 @@ mod tests {
             tag_colour(0x400)
         );
         let page =
-            bmp::decode_indexed_page(&pack.read("file/0f_01_fg_en-US.bmp").unwrap()).unwrap();
+            bmp::decode_indexed_page(&pack.read("item/6e/file_fg_01_en-US.bmp").unwrap()).unwrap();
         assert_eq!((page.width, page.height), (2, 2));
         assert_eq!(page.palette(0, 1), tag_colour(0x501));
-        assert!(pack.read("file/00_01_fg_fr-FR.bmp").is_ok());
+        assert!(pack.read("item/5f/file_fg_01_fr-FR.bmp").is_ok());
         let count = |language: &str| {
-            let suffix = format!("_fg_{language}.bmp");
-            pack.paths().filter(|path| path.ends_with(&suffix)).count()
+            let suffix = format!("_{language}.bmp");
+            pack.paths()
+                .filter(|path| path.contains("/file_fg_") && path.ends_with(&suffix))
+                .count()
         };
         assert_eq!(count("en-US"), 32);
         assert_eq!(count("fr-FR"), 2);
@@ -5929,8 +5974,8 @@ mod tests {
         fs::write(root.path.join("STAGE1/ROOM1100.RDT"), [0u8; 4]).unwrap();
         let dir = root.path.join("ITEM_M2");
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("I00V.IVM"), b"ivm0").unwrap();
-        fs::write(dir.join("MINI.ivm"), b"ivm1").unwrap();
+        fs::write(dir.join("I00V.IVM"), crate::ivm::sample_ivm()).unwrap();
+        fs::write(dir.join("MINI.ivm"), crate::ivm::sample_ivm()).unwrap();
         write_covers(&dir);
         write_jpn_document_pages(&dir);
         for number in 0..=0x0Eu32 {
@@ -5952,10 +5997,19 @@ mod tests {
         for (entry, source) in crate::language::LANGUAGE_FILES {
             assert_eq!(pack.read(entry).unwrap().as_ref(), source.as_bytes());
         }
-        assert_eq!(count("item/"), 2);
-        assert_eq!(count("file/"), JPN_FILE_ENTRIES);
+        for (entry, source) in crate::item_catalog::ITEM_FILES {
+            assert_eq!(pack.read(entry).unwrap().as_ref(), source.as_bytes());
+        }
+        assert_eq!(
+            pack.paths()
+                .filter(|path| crate::item_catalog::entry_item(path).is_some())
+                .count(),
+            crate::item_catalog::ITEM_FILES.len()
+        );
+        assert_eq!(model_entry_count(&pack), 2 * 6);
+        assert_eq!(file_art_count(&pack), JPN_FILE_ENTRIES);
         assert_eq!(count("map/"), 16, "15 plans and the backdrop");
-        assert_eq!(pack.read("item/mini.ivm").unwrap().as_ref(), b"ivm1");
+        assert!(pack.contains("item/70/model.tmd"));
         assert_jpn_document_art(&pack);
         assert_eq!(page_tag(&pack.read("map/0e.bmp").unwrap()), tag_colour(14));
         assert_eq!(
@@ -6006,24 +6060,22 @@ mod tests {
         )
         .unwrap();
 
-        // The 77 shared IVMs plus a TMD and page for every item id with a
-        // model.
+        // A TMD and page for every item id with a model.
         let models = items::art_items()
             .filter(|&item| items::model_name(item).is_some())
             .count();
-        assert_eq!(items, 77 + 2 * models);
+        assert_eq!(items, 2 * models);
         assert_eq!(files, JPN_FILE_ART);
         assert_eq!(maps, 16);
         assert!(items_bytes > 0 && files_bytes > 0 && maps_bytes > 0);
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let count = |prefix: &str| pack.paths().filter(|path| path.starts_with(prefix)).count();
-        assert_eq!(count("item/"), 77 + 2 * models);
-        assert_eq!(count("file/"), JPN_FILE_ENTRIES);
+        assert_eq!(model_entry_count(&pack), 2 * models);
+        assert_eq!(file_art_count(&pack), JPN_FILE_ENTRIES);
         assert_eq!(count("map/"), 16);
-        assert_eq!(
-            pack.read("item/i00v.ivm").unwrap(),
-            fs::read(dir.join("I00V.IVM")).unwrap()
-        );
+        let ivm = fs::read(dir.join("I00V.IVM")).unwrap();
+        let (_, tmd) = crate::ivm::split(&ivm).unwrap();
+        assert_eq!(pack.read("item/02/model.tmd").unwrap().as_ref(), tmd);
         assert_jpn_document_art(&pack);
         assert_eq!(page_tag(&pack.read("map/0b.bmp").unwrap()), tag_colour(11));
     }

@@ -56,7 +56,8 @@ responsibility.
 | `objects` | Runtime | RDT-embedded object TMD/TIM pairs, runtime object records and transforms |
 | `enemy` | Runtime | Entities: the shared character/monster runtime, the pack-script host, movement/pathfinding/SCA helpers, the scripted-character and monster machines |
 | `effects` | Runtime | The 64-slot billboard effect pool, per-room sprite tables, packed texture pages, behaviours |
-| `items` | Runtime | Item tables: names, classes, pickup rules, stacking |
+| `items` | Runtime | The original's item tables: image classes, icon rows, model names, combine rules |
+| `item_catalog` | Runtime | Item definitions (`item/<id>/item.xml`): kind, stack, merge, heal/cure effects and per-language strings; embedded defaults overridden per item by the pack |
 | `item_art` | Runtime | Per-item inventory art: icon/model/texture entry names, the TMD+page loader, icon baking and named HD keys |
 | `examine` | Runtime | The item viewer's game rules: the examine check, turntable spin and viewer camera |
 | `demo` | Runtime | The attract-demo reels (`demo/<hex>.dat`) and their recorded pad words |

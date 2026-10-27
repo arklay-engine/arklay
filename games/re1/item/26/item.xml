@@ -1,0 +1,44 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Herbicide</string>
+            <string key="name_unchecked">Chemical</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">HERBIZID</string>
+            <string key="name_unchecked">CHEMIKALIE</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">HERBICIDA</string>
+            <string key="name_unchecked">PRODUCTO QUÍMICO</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">KASVINTORJ.-AINE</string>
+            <string key="name_unchecked">KEMIKAALI</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Désherbant</string>
+            <string key="name_unchecked">Produit Chimique</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">ERBICIDA</string>
+            <string key="name_unchecked">SOSTANZA CHIMICA</string>
+            <string key="description">Nulla di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">除草剤</string>
+            <string key="name_unchecked">薬</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Гербицид</string>
+            <string key="name_unchecked">Химикат</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

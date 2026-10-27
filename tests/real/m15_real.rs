@@ -626,44 +626,28 @@ fn conversion_adds_exactly_the_manifest_entry() {
     assert_eq!(manifest.kind, manifest::PackKind::Base);
     assert_eq!(manifest.version.as_deref(), Some(env!("CARGO_PKG_VERSION")));
 
-    // The manifest is part of every converted pack, and the map art and the
-    // optional combat-table entry may differ between an older pack and a
-    // current conversion; filter them from both sides so the comparison
-    // covers the game content.
+    // The manifest is part of every converted pack, and the map art, the
+    // optional combat-table entry, the item folders (whose layout moved from
+    // shared IVMs and `file/` to `item/<id>/`) and the language files (whose
+    // item strings moved into `item.xml`) may differ between an older pack
+    // and a current conversion; filter them from both sides so the
+    // comparison covers the rest of the game content.
     let filter = |paths: Vec<&str>| -> Vec<String> {
         paths
             .into_iter()
             .filter(|path| {
                 !path.eq_ignore_ascii_case(manifest::ENTRY)
                     && !path.starts_with("map/")
+                    && !path.starts_with("item/")
+                    && !path.starts_with("file/")
+                    && !path.starts_with("language/")
                     && !path.eq_ignore_ascii_case(arklay::combat::COMBAT_ENTRY)
             })
             .map(str::to_owned)
             .collect()
     };
     let previous_paths = filter(previous.paths().collect());
-    let mut converted_paths = filter(converted.paths().collect());
-    // A pack converted before the per-item item art (#181) only has the
-    // shared sheets and IVMs; a current conversion adds the per-item files.
-    // They are expected additions, not content changes.
-    let per_item = |path: &str| {
-        let Some(name) = path.strip_prefix("item/") else {
-            return false;
-        };
-        if name.ends_with("_model.tmd") || name.ends_with("_model.bmp") {
-            return true;
-        }
-        name.strip_suffix(".bmp")
-            .is_some_and(|id| id.len() == 2 && id.bytes().all(|b| b.is_ascii_hexdigit()))
-    };
-    let added: Vec<&String> = converted_paths
-        .iter()
-        .filter(|path| !previous_paths.contains(path))
-        .collect();
-    for path in &added {
-        assert!(per_item(path), "the conversion added {path}");
-    }
-    converted_paths.retain(|path| previous_paths.contains(path));
+    let converted_paths = filter(converted.paths().collect());
     assert_eq!(converted_paths, previous_paths);
     for path in &previous_paths {
         assert_eq!(

@@ -1,0 +1,36 @@
+<item kind="chemical" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Water</string>
+            <string key="description">There's water in the\nbottle.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">WASSER</string>
+            <string key="description">In der Flasche ist Wasser.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">AGUA</string>
+            <string key="description">En la botella hay\nagua.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">VETTÄ</string>
+            <string key="description">Pullossa on vettä.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Eau</string>
+            <string key="description">Il y a de l'eau dans \nla bouteille.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">ACQUA</string>
+            <string key="description">C'è dell'acqua\nnella bottiglia</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">水</string>
+            <string key="description">ビンの中に水が入っている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Вода</string>
+            <string key="description">Бутылка с водой.</string>
+        </language>
+    </strings>
+</item>
