@@ -2007,6 +2007,8 @@ impl Launcher {
             analog_movement: self.config.game.analog_movement,
             no_auto_aim: !self.config.game.auto_aim,
             no_blood: !self.config.game.blood,
+            no_chris_ink_ribbons: !self.config.game.chris_ink_ribbons,
+            jill_ink_ribbons: self.config.game.jill_ink_ribbons,
             // Only the command line runs in authentic mode.
             authentic: false,
         };

@@ -308,6 +308,8 @@ tactical_reload = true # AIM + RUN reloads the equipped gun
 analog_movement = true # the left stick moves relative to the camera
 auto_aim = true        # raising a weapon locks on to the nearest enemy
 blood = true           # blood billboards, spurts and pools
+chris_ink_ribbons = true # saving as Chris uses up an ink ribbon
+jill_ink_ribbons = false # saving as Jill uses up an ink ribbon
 ui_font = "modern"     # the menus' face: "modern" or "retro"
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
 button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation", "nintendo"
@@ -323,6 +325,13 @@ the original USA release. `blood` controls the engine's blood billboards,
 spurts and pools; a room script's own effect spawns are untouched. Neither
 option has a per-run command-line flag; set them in `arklay.toml` or the
 in-game menu.
+
+`chris_ink_ribbons` and `jill_ink_ribbons` (Gameplay › Ink Ribbons in the menu)
+choose whether saving at a typewriter uses up an ink ribbon, on every
+playthrough. The defaults follow the Japanese release, where Jill saves without
+one. A character who needs no ink ribbons finds none either: their pickups are
+hidden and count as taken, so turning the option back on mid-game does not bring
+back ribbons from rooms already visited.
 
 The Language › Subtitles options (`subtitles`, `subtitle_size`,
 `subtitle_background`, `subtitle_color`, `speaker_names`, `speaker_name_color`)

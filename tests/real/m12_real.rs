@@ -12,7 +12,8 @@ use std::path::Path;
 use std::process::Command;
 
 use arklay::engine::{
-    NEW_GAME_ROOM_ITEMS, SimulatedRoom, render_game_frame, simulate_room, simulate_room_seeded,
+    NEW_GAME_ROOM_ITEMS, SimulatedRoom, render_game_frame, simulate_room, simulate_room_prepared,
+    simulate_room_seeded,
 };
 use arklay::game::{FlagBank, GameState, RoomAction, RoomActionKind};
 use arklay::message::MessageWindow;
@@ -39,12 +40,18 @@ fn new_game_room_item_bits() -> Vec<(u8, u8)> {
 }
 
 /// The shipped room-items bank plus the second playthrough flag, so no item
-/// build is conditionally skipped.
+/// build is conditionally skipped (with Jill's ink ribbons on, see
+/// [`with_ink_ribbons`]).
 fn seeded_flags(extra: &[(u8, u8)]) -> Vec<(u8, u8)> {
     let mut flags = new_game_room_item_bits();
     flags.push((0, 0x7B));
     flags.extend_from_slice(extra);
     flags
+}
+
+/// Jill's ink ribbons on, so her ribbon pickups build like Chris's.
+fn with_ink_ribbons(game: &mut GameState, _: &mut player::PlayerState) {
+    game.player_options.jill_ink_ribbons = true;
 }
 
 /// Boot `room` with the new-game room-items bank and run it idle.
@@ -154,7 +161,7 @@ fn drive_desk(game: &mut GameState, desk_slot: u8) -> u8 {
         "the room-items bit is cleared"
     );
     assert!(
-        game.room_actions[usize::from(item_slot)].is_none(),
+        game.room_actions[usize::from(item_slot)].is_none_or(|a| a.handler == 0),
         "the desk consumes its item edge"
     );
     game.check_desk_state();
@@ -257,7 +264,7 @@ fn room_401_desk_locked_refuses_then_opens_after_the_key_turns() {
     sim.game.check_desk_state();
     assert_eq!(sim.game.last_picked_item, Some(0x0C));
     assert!(
-        sim.game.room_actions[usize::from(item_slot)].is_none(),
+        sim.game.room_actions[usize::from(item_slot)].is_none_or(|a| a.handler == 0),
         "the drawer edge is consumed"
     );
     sim.game.check_desk_state();
@@ -329,12 +336,13 @@ fn corpus_desks_run_the_full_flow_and_items_stay_in_bounds() {
     let mut built_items = 0usize;
     let mut hidden_items = 0usize;
     for id in &ids {
-        let Ok(mut sim) = simulate_room_seeded(
+        let Ok(mut sim) = simulate_room_prepared(
             &pack,
             *id,
             &seeded_flags(&[]),
             300,
-            player::Input::default(),
+            with_ink_ribbons,
+            |_| player::Input::default(),
         ) else {
             // Stub rooms without camera cuts cannot load.
             continue;

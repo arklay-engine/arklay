@@ -8,7 +8,8 @@
 use crate::common;
 
 use arklay::engine::{
-    NEW_GAME_ROOM_ITEMS, SimulatedRoom, render_game_frame, simulate_new_game, simulate_room_seeded,
+    NEW_GAME_ROOM_ITEMS, SimulatedRoom, render_game_frame, simulate_new_game,
+    simulate_room_prepared, simulate_room_seeded,
 };
 use arklay::game::{FlagBank, GameState, RoomAction, RoomActionKind};
 use arklay::objects;
@@ -318,7 +319,10 @@ fn room_300_courtyard_map_raises_the_room_flag_without_inventory() {
         0,
         "the map model is cleared"
     );
-    assert!(game.room_actions[4].is_none(), "the map action is consumed");
+    assert!(
+        game.room_actions[4].is_none_or(|a| a.handler == 0),
+        "the map action is consumed"
+    );
 }
 
 #[test]
@@ -341,7 +345,7 @@ fn room_406_guardhouse_map_raises_its_room_flag() {
         "the guardhouse map's RoomFlags bit is raised"
     );
     assert_eq!(sim.game.last_picked_item, Some(0x52));
-    assert!(sim.game.room_actions[usize::from(action.slot)].is_none());
+    assert!(sim.game.room_actions[usize::from(action.slot)].is_none_or(|a| a.handler == 0));
 }
 
 #[test]
@@ -413,35 +417,89 @@ fn room_303_flare_follows_the_player_when_they_move() {
 
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
-fn room_30e_jill_skips_the_ink_ribbon_until_the_second_playthrough() {
+fn room_106_without_ink_ribbons_has_its_typewriter_at_once() {
     let Some(pack) = assets() else {
         return;
     };
-    // Jill's variant is the player digit 1. The first playthrough clears the
-    // ribbon site's room-items bit without building the model.
-    let first = simulate_with_flags(&pack, "30E1", &[]);
-    assert!(
-        !first.game.room_item_present(0xF0),
-        "the ribbon site is marked taken"
-    );
-    assert_eq!(
-        first.game.items.built, 2,
-        "only the two non-ribbon items build"
-    );
-    assert_eq!(
-        first.game.items.record(2).unwrap(),
-        &objects::ItemRecord::default(),
-        "the ribbon model is not built"
-    );
-    assert!(item_action(&first.game, 0x2F).is_none());
+    // The main hall's ribbon sits on the typewriter; its script swaps in the
+    // typewriter once the ribbon is taken. A skipped ribbon counts as taken.
+    // Jill's second playthrough is the one her script puts the ribbon there.
+    for (room, chris_off, extra) in [
+        ("1060", true, &[][..]),
+        ("1061", false, &[][..]),
+        ("1061", false, &[(0, 0x7B)][..]),
+    ] {
+        let mut flags = new_game_shape();
+        flags.extend_from_slice(extra);
+        let sim = simulate_room_prepared(
+            &pack,
+            RoomId::parse(room).unwrap(),
+            &flags,
+            60,
+            |game, _| game.player_options.no_chris_ink_ribbons = chris_off,
+            |_| player::Input::default(),
+        )
+        .unwrap();
+        let kinds: Vec<RoomActionKind> = sim
+            .game
+            .room_actions
+            .iter()
+            .flatten()
+            .map(|action| action.kind)
+            .collect();
+        assert!(
+            kinds.contains(&RoomActionKind::Typewriter),
+            "ROOM{room} {extra:?}: {kinds:?}"
+        );
+        assert!(
+            item_action(&sim.game, 0x2F).is_none(),
+            "ROOM{room} {extra:?}"
+        );
+    }
+}
 
-    // The second-playthrough flag lets the ribbon site build normally.
-    let second = simulate_with_flags(&pack, "30E1", &[(0, 0x7B)]);
-    assert!(second.game.room_item_present(0xF0));
-    assert_eq!(second.game.items.built, 3);
-    let action = item_action(&second.game, 0x2F).expect("the ribbon registers");
+#[test]
+#[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn room_30e_jill_skips_the_ink_ribbon_unless_she_needs_them() {
+    let Some(pack) = assets() else {
+        return;
+    };
+    // Jill's variant is the player digit 1. By default she needs no ink
+    // ribbons, so the ribbon site's room-items bit is cleared without
+    // building the model, on any playthrough.
+    for flags in [&[][..], &[(0, 0x7B)]] {
+        let skipped = simulate_with_flags(&pack, "30E1", flags);
+        assert!(
+            !skipped.game.room_item_present(0xF0),
+            "the ribbon site is marked taken"
+        );
+        assert_eq!(
+            skipped.game.items.built, 2,
+            "only the two non-ribbon items build"
+        );
+        assert_eq!(
+            skipped.game.items.record(2).unwrap(),
+            &objects::ItemRecord::default(),
+            "the ribbon model is not built"
+        );
+        assert!(item_action(&skipped.game, 0x2F).is_none());
+    }
+
+    // With her ink ribbon option on the ribbon site builds normally.
+    let shown = simulate_room_prepared(
+        &pack,
+        RoomId::parse("30E1").unwrap(),
+        &new_game_shape(),
+        60,
+        |game, _| game.player_options.jill_ink_ribbons = true,
+        |_| player::Input::default(),
+    )
+    .unwrap();
+    assert!(shown.game.room_item_present(0xF0));
+    assert_eq!(shown.game.items.built, 3);
+    let action = item_action(&shown.game, 0x2F).expect("the ribbon registers");
     assert_eq!(action.item_model(), 2);
-    let record = item_record(&second.game, action).unwrap();
+    let record = item_record(&shown.game, action).unwrap();
     assert_eq!(record.flag, 1);
     assert_ne!(record.sparkle, 0, "the 0x8700 ribbon sparkle is live");
 }

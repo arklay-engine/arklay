@@ -4448,6 +4448,7 @@ impl GameSession {
             .get(usize::from(request.slot))
             .copied()
             .flatten()
+            .filter(|action| action.handler != 0)
         else {
             self.game.clear_item_view_flags();
             return;
@@ -9203,6 +9204,8 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
     game.analog_movement = app.player_options.analog_movement;
     game.auto_aim = !app.player_options.no_auto_aim;
     game.blood = !app.player_options.no_blood;
+    game.chris_ink_ribbons = !app.player_options.no_chris_ink_ribbons;
+    game.jill_ink_ribbons = app.player_options.jill_ink_ribbons;
     gui::Settings {
         graphics: display.graphics().copied().unwrap_or(config.graphics),
         game,
@@ -9306,6 +9309,8 @@ fn persisted_options(
         analog_movement: _,
         auto_aim: _,
         blood: _,
+        chris_ink_ribbons: _,
+        jill_ink_ribbons: _,
         ui_font: _,
         menu_text_size: _,
         button_style: _,
@@ -9335,6 +9340,8 @@ fn persisted_options(
             analog_movement,
             auto_aim,
             blood,
+            chris_ink_ribbons,
+            jill_ink_ribbons,
             ui_font,
             menu_text_size,
             button_style,
@@ -9421,6 +9428,8 @@ fn apply_menu_settings(
     app.player_options.analog_movement = settings.game.analog_movement;
     app.player_options.no_auto_aim = !settings.game.auto_aim;
     app.player_options.no_blood = !settings.game.blood;
+    app.player_options.no_chris_ink_ribbons = !settings.game.chris_ink_ribbons;
+    app.player_options.jill_ink_ribbons = settings.game.jill_ink_ribbons;
     app.vibration = settings.game.vibration;
     // A control type change arrives with its preset already in the bindings.
     if settings.bindings != before.bindings {
@@ -16036,6 +16045,64 @@ mod tests {
 
     #[test]
     #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn room_106_turns_the_taken_ribbon_into_the_typewriter() {
+        // The main hall's ribbon sits on the typewriter; once Chris takes it
+        // the script re-arms the ribbon's zone as the typewriter, so the
+        // pickup must leave the slot in place.
+        let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
+            return;
+        };
+        let pack = Pack::open(Path::new(&path)).unwrap();
+        let id = RoomId::parse("1060").unwrap();
+        let mut loaded = load_room(&pack, id).unwrap();
+        let mut game = new_game_state(&pack, id, &loaded.room, player::Options::default());
+        seed_new_game(&pack, &mut game, 0);
+        let mut player_state = player::spawn(id, &loaded.room);
+        game.sync_entity_from_player(&player_state);
+        run_room_init(&mut loaded, &mut game);
+        let scripts = Rc::new(loaded.scripts.clone());
+        let mut command_vm = scd::vm::CommandVm::from_scripts(Rc::clone(&scripts));
+        let mut event_vm = scd::vm::EventVm::from_scripts(scripts);
+        apply_event_requests(&mut game, &mut event_vm);
+        let mut npc_models = enemy::EntityModelCache::default();
+        let mut tick = |game: &mut game::GameState, player_state: &mut player::PlayerState, n| {
+            for _ in 0..n {
+                tick_room(
+                    &mut command_vm,
+                    &mut event_vm,
+                    RoomContext {
+                        room: &mut loaded.room,
+                        game,
+                        player: player_state,
+                        player_assets: loaded.player_assets.as_ref(),
+                        pack: &pack,
+                        npc_models: &mut npc_models,
+                        enemy_lua: None,
+                    },
+                    player::Input::default(),
+                );
+            }
+        };
+        tick(&mut game, &mut player_state, 30);
+        let slot = game
+            .room_actions
+            .iter()
+            .flatten()
+            .find(|a| {
+                a.kind == game::RoomActionKind::Item && a.item_id() == items::ITEM_INK_RIBBONS
+            })
+            .map(|a| a.slot)
+            .expect("the ribbon is there");
+        assert!(game.pick_up(slot));
+        tick(&mut game, &mut player_state, 30);
+        assert_eq!(
+            game.room_actions[usize::from(slot)].map(|a| a.kind),
+            Some(game::RoomActionKind::Typewriter)
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
     fn walk_animation_moves_the_model() {
         let _sdl = crate::audio::test_lock::sdl();
         let Ok(path) = std::env::var("ARKLAY_RE1_PACK") else {
@@ -16151,13 +16218,12 @@ mod tests {
         let scripts = scd::reader::parse(rdt_bytes).unwrap();
 
         let mut game = game::GameState::new(id, &room);
-        // The new-game room-items bank registers the item edges; the
-        // second-playthrough flag keeps ROOM1001's ink ribbon, which Jill's
-        // first playthrough skips.
+        // The new-game room-items bank registers the item edges; Jill's ink
+        // ribbons on keep ROOM1001's ink ribbon, which she otherwise skips.
         game.flags[7]
             .bytes_mut()
             .copy_from_slice(&NEW_GAME_ROOM_ITEMS);
-        game.apply_flag(0, 0x7B, 0);
+        game.player_options.jill_ink_ribbons = true;
         let mut command_vm = scd::vm::CommandVm::new(&scripts);
         let mut event_vm = scd::vm::EventVm::new(&scripts);
         {
@@ -25332,7 +25398,7 @@ off_0010:
             "the post-action pickup reached the session"
         );
         assert!(
-            session.game.room_actions[3].is_none(),
+            session.game.room_actions[3].is_none_or(|a| a.handler == 0),
             "the action is consumed"
         );
     }
@@ -25458,7 +25524,7 @@ off_0010:
             "the yes branch awarded the item"
         );
         assert!(
-            session.game.room_actions[1].is_none(),
+            session.game.room_actions[1].is_none_or(|a| a.handler == 0),
             "the take consumed the action"
         );
 
@@ -25827,7 +25893,7 @@ off_0010:
             .unwrap();
         assert!(!session.game.has_item(ITEM_FIRST_AID_SPRAY));
         assert!(
-            session.game.room_actions[1].is_some(),
+            session.game.room_actions[1].is_some_and(|a| a.handler != 0),
             "the item stays in the room"
         );
 
@@ -25880,7 +25946,7 @@ off_0010:
         });
         assert!(!session.game.has_item(ITEM_SWORD_KEY), "nothing was taken");
         assert!(
-            session.game.room_actions[1].is_some(),
+            session.game.room_actions[1].is_some_and(|a| a.handler != 0),
             "the item stays in the room"
         );
         settle_menu_fade(&mut session, &pack);
@@ -25928,7 +25994,7 @@ off_0010:
             session.game.has_item(ITEM_FIRST_AID_SPRAY),
             "closing the read awarded the item"
         );
-        assert!(session.game.room_actions[1].is_none());
+        assert!(session.game.room_actions[1].is_none_or(|a| a.handler == 0));
         assert!(!session.game.menu_pending());
 
         tick_until(&mut session, &pack, 300, "the viewer close", |session| {
@@ -26027,7 +26093,7 @@ off_0010:
             );
         }
         assert!(
-            session.game.room_actions[1].is_some(),
+            session.game.room_actions[1].is_some_and(|a| a.handler != 0),
             "the entry is consumed only once the message clears"
         );
 
@@ -26038,7 +26104,7 @@ off_0010:
             .tick(&pack, UiInput::default(), pressed(), true)
             .unwrap();
         assert!(
-            session.game.room_actions[1].is_none(),
+            session.game.room_actions[1].is_none_or(|a| a.handler == 0),
             "the entry is consumed"
         );
         tick_until(&mut session, &pack, 300, "the viewer close", |session| {
