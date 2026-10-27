@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Japanese sheet (DATA/FONT.TIM, or the PC release's PBFONT pages):
+  14px cells and glyphs. The listed cells are CR 1.1.3's Japanese-mode
+  table (DLL VA 0x1028BAE0): an 8px space, 11px digits and a proportional
+  advance per Latin glyph; the kana, kanji and the right page take the full
+  cell. The Japanese text draws whole cells unless asked for tight metrics,
+  as the original does.
+-->
+<font format="1" script="japanese" advance="14" cellWidth="14" margin="0x22" textY="181" menuY="186">
+  <glyph cell="0x000" advance="8"/>
+  <glyph cell="0x001" advance="8"/>
+  <glyph cell="0x002" advance="8"/>
+  <glyph cell="0x003" advance="8"/>
+  <glyph cell="0x004" advance="8"/>
+  <glyph cell="0x005" advance="8"/>
+  <glyph cell="0x006" advance="8"/>
+  <glyph cell="0x007" advance="8"/>
+  <glyph cell="0x008" advance="8"/>
+  <glyph cell="0x009" advance="8"/>
+  <glyph cell="0x00A" advance="8"/>
+  <glyph cell="0x00B" advance="8"/>
+  <glyph cell="0x00C" advance="11" indent="1"/>
+  <glyph cell="0x00D" advance="11" indent="1"/>
+  <glyph cell="0x00E" advance="11" indent="1"/>
+  <glyph cell="0x00F" advance="11" indent="1"/>
+  <glyph cell="0x010" advance="11" indent="1"/>
+  <glyph cell="0x011" advance="11" indent="1"/>
+  <glyph cell="0x012" advance="11" indent="1"/>
+  <glyph cell="0x013" advance="11" indent="1"/>
+  <glyph cell="0x014" advance="11" indent="1"/>
+  <glyph cell="0x015" advance="11" indent="1"/>
+  <glyph cell="0x016" advance="4" indent="5"/>
+  <glyph cell="0x017" advance="8"/>
+  <glyph cell="0x018" advance="8"/>
+  <glyph cell="0x019" advance="8"/>
+  <glyph cell="0x01A" advance="8"/>
+  <glyph cell="0x01B" advance="7" indent="3"/>
+  <glyph cell="0x01C" advance="8"/>
+  <glyph cell="0x01D" advance="13"/>
+  <glyph cell="0x01E" advance="12" indent="1"/>
+  <glyph cell="0x01F" advance="11" indent="1"/>
+  <glyph cell="0x020" advance="11" indent="1"/>
+  <glyph cell="0x021" advance="11" indent="1"/>
+  <glyph cell="0x022" advance="10" indent="2"/>
+  <glyph cell="0x023" advance="12" indent="1"/>
+  <glyph cell="0x024" advance="13"/>
+  <glyph cell="0x025" advance="6" indent="4"/>
+  <glyph cell="0x026" advance="12" indent="1"/>
+  <glyph cell="0x027" advance="12" indent="1"/>
+  <glyph cell="0x028" advance="12" indent="1"/>
+  <glyph cell="0x02A" advance="13"/>
+  <glyph cell="0x02B" advance="12" indent="1"/>
+  <glyph cell="0x02C" advance="11" indent="1"/>
+  <glyph cell="0x02D" advance="13"/>
+  <glyph cell="0x02E" advance="13"/>
+  <glyph cell="0x02F" advance="11" indent="1"/>
+  <glyph cell="0x030" advance="12" indent="1"/>
+  <glyph cell="0x031" advance="12" indent="1"/>
+  <glyph cell="0x032" advance="12" indent="1"/>
+  <glyph cell="0x034" advance="12" indent="1"/>
+  <glyph cell="0x035" advance="12" indent="1"/>
+  <glyph cell="0x036" advance="12" indent="1"/>
+  <glyph cell="0x037" advance="8"/>
+  <glyph cell="0x039" advance="8"/>
+  <glyph cell="0x03A" advance="8"/>
+  <glyph cell="0x03B" advance="11" indent="1"/>
+  <glyph cell="0x03C" advance="4" indent="5"/>
+  <glyph cell="0x03D" advance="9" indent="2"/>
+  <glyph cell="0x03E" advance="9" indent="2"/>
+  <glyph cell="0x03F" advance="8" indent="3"/>
+  <glyph cell="0x040" advance="9" indent="2"/>
+  <glyph cell="0x041" advance="8" indent="3"/>
+  <glyph cell="0x042" advance="7" indent="3"/>
+  <glyph cell="0x043" advance="9" indent="2"/>
+  <glyph cell="0x044" advance="10" indent="2"/>
+  <glyph cell="0x045" advance="5" indent="4"/>
+  <glyph cell="0x046" advance="5" indent="4"/>
+  <glyph cell="0x047" advance="10" indent="2"/>
+  <glyph cell="0x048" advance="5" indent="4"/>
+  <glyph cell="0x049" advance="13"/>
+  <glyph cell="0x04A" advance="10" indent="2"/>
+  <glyph cell="0x04B" advance="9" indent="2"/>
+  <glyph cell="0x04C" advance="9" indent="2"/>
+  <glyph cell="0x04D" advance="9" indent="2"/>
+  <glyph cell="0x04E" advance="7" indent="3"/>
+  <glyph cell="0x04F" advance="8" indent="3"/>
+  <glyph cell="0x050" advance="7" indent="3"/>
+  <glyph cell="0x051" advance="10" indent="2"/>
+  <glyph cell="0x052" advance="10" indent="2"/>
+  <glyph cell="0x053" advance="13"/>
+  <glyph cell="0x054" advance="10" indent="2"/>
+  <glyph cell="0x055" advance="10" indent="2"/>
+  <glyph cell="0x056" advance="8" indent="3"/>
+  <glyph cell="0x106" advance="4" indent="2"/>
+</font>

@@ -126,7 +126,7 @@ fn test_font() -> crate::font::Font {
         palettes: (0..256).map(|index| [index as u8, 0, 0, 255]).collect(),
         stp: vec![false; 256],
     };
-    crate::font::Font::new(texture)
+    crate::font::Font::new(texture, crate::font::FontDef::western())
 }
 
 /// The shared test setup: a pack, the text tables, a font and a temp save

@@ -20017,18 +20017,21 @@ mod tests {
         assert!(cache.load(&pack, "ft_wdB").is_some());
     }
 
-    /// A pack carrying `font/font.tim`: the real pack when it has the entry,
-    /// otherwise a one-entry pack built from the installation's raw sheet.
+    /// A pack carrying the Japanese font: the real pack when it has the
+    /// entry, otherwise a pack built from the installation's raw sheet.
     fn font_pack(path: &str, dir: &TempDir) -> Option<std::path::PathBuf> {
         let pack = Pack::open(Path::new(path)).unwrap();
-        if pack.contains("font/font.tim") {
+        if pack.contains(&font::xml::entry(font::JAPANESE_ID)) {
             return Some(std::path::PathBuf::from(path));
         }
         let root = std::env::var("ARKLAY_RE1_ROOT").ok()?;
         let font = std::fs::read(std::path::PathBuf::from(root).join("JPN/DATA/FONT.TIM")).ok()?;
         let mini = dir.0.join("font.akpak");
         let mut writer = PackWriter::new();
-        writer.add("font/font.tim", font).unwrap();
+        writer.add("font/01.tim", font).unwrap();
+        writer
+            .add("font/01.xml", font::xml::JAPANESE.as_bytes().to_vec())
+            .unwrap();
         writer.write(&mini).unwrap();
         Some(mini)
     }
@@ -20045,10 +20048,9 @@ mod tests {
             return;
         };
         let pack = Pack::open(&font_pack).unwrap();
-        let font =
-            font::Font::new(crate::tim::decode_4bpp(&pack.read("font/font.tim").unwrap()).unwrap());
+        let font = font::load(&pack, font::JAPANESE_ID).unwrap();
         assert_eq!((font.texture.width, font.texture.height), (768, 256));
-        assert_eq!(font.metrics, font::FontMetrics::from_sheet_width(768));
+        assert_eq!(font.metrics, font::FontDef::japanese().metrics);
 
         let mut first = Framebuffer::new();
         draw_font_screen(&mut first, &font);
@@ -20993,7 +20995,10 @@ mod tests {
         for path in pack.paths() {
             writer.add(path, pack.read(path).unwrap().to_vec()).unwrap();
         }
-        writer.add("font/font.tim", synthetic_font_tim()).unwrap();
+        writer.add("font/00.tim", synthetic_font_tim()).unwrap();
+        writer
+            .add("font/00.xml", font::xml::WESTERN.as_bytes().to_vec())
+            .unwrap();
         // The base pack names itself, so the mod layer's `base = "re1"`
         // resolves like it does over a converted pack.
         writer

@@ -5,7 +5,7 @@
 //!
 //! Both `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` must be set together; with
 //! neither the tests skip, and with only one they fail. The pack must carry
-//! the converted `item/*.ivm` models, `font/font.tim`, the text tables and the
+//! the converted `item/*.ivm` models, `font/01.bmp`, the text tables and the
 //! slice-5 UI art; a stale pack fails the test rather than silently skipping.
 //!
 //! The tests cover the four slice-7 acceptance paths: every shipped `.ivm`
