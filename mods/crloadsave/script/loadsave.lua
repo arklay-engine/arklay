@@ -1,10 +1,11 @@
 -- Classic REbirth-style save/load screen.
 --
 -- The folder-based typewriter screen: every save file in the save directory
--- is a row (labelled with its base name), the selected row is a highlight
--- band, and a detail line shows the highlighted save's character, save count
--- and location. Save mode puts a `Create New` row above the files; the last
--- row is `Exit`.
+-- is a row (labelled with its base name, CR's `_`/`^` file-name stand-ins
+-- shown as `/`/`:`), the selected row is a highlight band, and a detail line
+-- shows the highlighted save's character, save count and location. Save mode puts a `Create New` row above the files; the last
+-- row is `Exit`. A new save is named the way CR names one
+-- (`Chris_00_2026-10-23 17^50.18.dat`).
 --
 -- The mod's `mod.lua` registers this entry with `api:register_save_screen`;
 -- the engine knows nothing about the screen itself. The API it uses is the
@@ -12,11 +13,10 @@
 -- the `UI_SAVE_CR_*` keys this mod ships under `language/`.
 
 local VISIBLE_ROWS = 10 -- rows drawn at once (CR shows ten)
-local ROW_Y = 49 -- the first row's y
+local ROW_Y = 49 -- the first row's y (CR's ink sits 2 px below it)
 local ROW_PITCH = 15 -- row pitch, CR's 15 px
-local TITLE_Y = 19 -- the centred title's y (CR's ink sits at 21..33)
-local DETAIL_Y = 215 -- the detail line's y (CR's ink sits at 217..229)
-local TEXT_LIFT = -1 -- rows draw one pixel above the band, like CR
+local TITLE_Y = 20 -- the centred title's y (CR's ink sits at 21..33)
+local DETAIL_Y = 216 -- the detail line's y (CR's ink sits at 217..229)
 -- The list panel and the selection band, measured from CR 1.1.3: a grey wash
 -- over the full ten-row list and a dark band across the selected row.
 local PANEL_X = 10
@@ -24,7 +24,10 @@ local PANEL_W = 300
 local PANEL_Y = 45
 local PANEL_H = 156
 local BAND_H = 14
-local BLUE = "#3F7DFA" -- CR's save-row blue, over the sheet's grey ramp
+-- CR's character colours, over the sheet's grey ramp: a save row and the
+-- detail line's name take the saved character's.
+local BLUE = "#3F7DFA" -- Jill
+local GREEN = "#00FF00" -- Chris
 
 local mode = "load"
 local saves = {}
@@ -74,34 +77,96 @@ local function string_or(api, key, fallback)
     return api:string(key) or fallback
 end
 
--- Draw one centred line.
-local function draw_line(api, text, y, colour)
-    local x = (320 - api:text_width(text)) // 2
-    if colour then
-        api:text(x, y, text, { colour = colour })
-    else
-        api:text(x, y, text)
-    end
+-- The pixel width of `text` at CR's metrics. CR draws every line with its
+-- proportional width table (`tight`), on the Japanese sheet too.
+local function text_width(api, text)
+    return api:text_width(text, true)
 end
 
--- The first free `save_NN.dat` name, or nil when every candidate is taken.
--- Save names compare case-insensitively, like the save directory's own listing
--- (Windows filesystems may hand back either case).
-local function new_name()
-    local used = {}
+-- Draw `text` at CR's metrics, white unless `colour` is given.
+local function draw_text(api, x, y, text, colour)
+    api:text(x, y, text, { colour = colour or "white", tight = true })
+end
+
+-- The x that centres `text` the way CR does: by its own measure, which can
+-- differ from the drawn width (see `api:classic_rebirth_width`).
+local function centre_x(api, text)
+    return (320 - api:classic_rebirth_width(text)) // 2
+end
+
+-- Draw one centred line.
+local function draw_line(api, text, y, colour)
+    draw_text(api, centre_x(api, text), y, text, colour)
+end
+
+-- The colour of a loadable save's character.
+local function character_colour(entry)
+    return entry.character == 0 and GREEN or BLUE
+end
+
+-- Whether `name` is taken by a listed save. Save names compare
+-- case-insensitively, like the save directory's own listing (Windows
+-- filesystems may hand back either case).
+local function name_used(name, except)
+    local lower = string.lower(name)
     for _, entry in ipairs(saves) do
-        used[string.lower(entry.name)] = true
+        if entry ~= except and string.lower(entry.name) == lower then
+            return true
+        end
+    end
+    return false
+end
+
+-- CR's name for the pending save: `<character>_<saves>_<local time>.dat`,
+-- e.g. `Chris_00_2026-10-23 17^50.18.dat`. CR names the file with the English
+-- character name in every language, so the name is read from `en-US`. Nil
+-- when the engine cannot supply the parts.
+local function classic_rebirth_name(api)
+    local pending = api:pending()
+    local time = api:local_time()
+    if not pending or not time then
+        return nil
+    end
+    local character = api:string(string.format("UI_SAVE_CHARACTER_%d_NAME", pending.character & 1), "en-US")
+    if not character then
+        return nil
+    end
+    local date = string.format(
+        "%d-%02d-%02d %02d^%02d.%02d",
+        time.year,
+        time.month,
+        time.day,
+        time.hour,
+        time.minute,
+        time.second
+    )
+    return string.format("%s_%02d_%s.dat", character, pending.saves, date)
+end
+
+-- The name a new save takes: CR's, else the first free `save_NN.dat`; nil
+-- when every candidate is taken. `replacing` is the row a save over will
+-- delete, whose name is free to reuse.
+local function new_name(api, replacing)
+    local name = classic_rebirth_name(api)
+    if name and not name_used(name, replacing) then
+        return name
     end
     for index = 1, 9999 do
-        local name = string.format("save_%02d.dat", index)
-        if not used[string.lower(name)] then
+        name = string.format("save_%02d.dat", index)
+        if not name_used(name, replacing) then
             return name
         end
     end
-    if not used["save.dat"] then
+    if not name_used("save.dat", replacing) then
         return "save.dat"
     end
     return nil
+end
+
+-- A save file's row label: its base name with CR's file-name stand-ins
+-- shown as the characters they replace (`_` for `/`, `^` for `:`).
+local function row_label(entry)
+    return (string.gsub(entry.base, "[_^]", { ["_"] = "/", ["^"] = ":" }))
 end
 
 function on_open(api)
@@ -114,6 +179,14 @@ function on_open(api)
             saves[#saves + 1] = entry
         end
     end
+    -- CR lists the most recently written file first, by its sub-second
+    -- modification time.
+    table.sort(saves, function(a, b)
+        if a.timestamp ~= b.timestamp then
+            return a.timestamp > b.timestamp
+        end
+        return a.name < b.name
+    end)
     cursor = 0
     scroll = 0
     message = nil
@@ -140,7 +213,7 @@ end
 
 -- Write the pending block to a fresh name and leave on success.
 local function save_new(api)
-    local name = new_name()
+    local name = new_name(api)
     if not name then
         no_name(api)
         return
@@ -158,14 +231,16 @@ end
 -- Replace the selected row: delete its file (when it is a save), write a new
 -- one and leave on success.
 local function save_over(api, entry)
-    local name = new_name()
+    local name = new_name(api, entry.loadable and entry or nil)
     if not name then
         no_name(api)
         return
     end
     api:sound("save_confirm")
-    -- CR overwrites by deleting the old file and writing a new one.
-    if entry.loadable then
+    -- CR overwrites by deleting the old file and writing a new one. Only an
+    -- exact name match is overwritten in place: a case variant is a second
+    -- file on a case-sensitive file system.
+    if entry.loadable and entry.name ~= name then
         api:remove(entry.name)
     end
     local ok, err = api:save(name)
@@ -268,18 +343,19 @@ function draw(api)
         if row >= rows then
             break
         end
-        local y = ROW_Y + index * ROW_PITCH + TEXT_LIFT
+        local y = ROW_Y + index * ROW_PITCH
         local entry = saves[row + 1 - new_rows()]
         if is_new_row(row) then
             draw_line(api, string_or(api, "UI_SAVE_CR_CREATE_NEW", "Create New"), y)
         elseif entry then
-            -- CR draws a save file's name blue and the exit row white. An
-            -- autosave is labelled as one, with its rotation index.
-            local label = entry.base
+            -- CR draws a save file's name in its character's colour and the
+            -- exit row white. An autosave is labelled as one, with its
+            -- rotation index.
+            local label = row_label(entry)
             if entry.autosave then
                 label = string_or(api, "UI_SAVE_CR_AUTOSAVE", "Autosave") .. " " .. entry.autosave
             end
-            draw_line(api, label, y, entry.loadable and BLUE or "grey")
+            draw_line(api, label, y, entry.loadable and character_colour(entry) or "grey")
         else
             draw_line(api, string_or(api, "UI_SAVE_CR_EXIT", "Exit"), y)
         end
@@ -289,14 +365,13 @@ function draw(api)
     if create_new() then
         -- The `Create New` row has no save to describe.
     elseif entry and entry.loadable then
-        -- CR draws the character name blue and the count/location white, the
-        -- whole line centred.
+        -- CR draws the character name in its colour and the count/location
+        -- white, the whole line centred by CR's own measure.
         local name = entry.character_name or "?"
         local rest = string.format("/%02d/%s", entry.saves or 0, entry.location or "")
-        local name_w = api:text_width(name)
-        local x = (320 - name_w - api:text_width(rest)) // 2
-        api:text(x, DETAIL_Y, name, { colour = BLUE })
-        api:text(x + name_w, DETAIL_Y, rest)
+        local x = centre_x(api, name .. rest)
+        draw_text(api, x, DETAIL_Y, name, character_colour(entry))
+        draw_text(api, x + text_width(api, name), DETAIL_Y, rest)
     else
         local detail
         if entry then

@@ -1494,10 +1494,10 @@ mod tests {
         let mut framebuffer = Framebuffer::new();
         window.draw(&mut framebuffer, &font, &text);
         // The label starts one cursor cell right of the base; the No cursor
-        // sits one 8px space left of the second `No` cell, whose label cells
-        // are full 14px on this sheet.
+        // sits past `Yes ` at Classic REbirth's Japanese-sheet widths: `Y` 12,
+        // `e` and `s` 8 and the space 8.
         let cursor_x = 0xA0;
-        let no_cursor = cursor_x + 14 + (14 + 14 + 14 + 8);
+        let no_cursor = cursor_x + 14 + (12 + 8 + 8 + 8);
         assert_eq!(pixel(&framebuffer, cursor_x, 197), [0, 0, 0, 0]);
         assert_eq!(pixel(&framebuffer, no_cursor, 197), [255, 255, 255, 255]);
     }

@@ -132,8 +132,7 @@ impl FontMetrics {
 /// One glyph cell's tight metrics: its left trim and advance.
 ///
 /// A cell drawn under the tight path blits at `x - indent` and advances the
-/// cursor by `advance`, so ink sits flush against the previous glyph instead
-/// of leaving the Japanese cell's right bearing as a gap.
+/// cursor by `advance`, as Classic REbirth's text renderer does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GlyphMetric {
     /// Pixels the cell is shifted left when drawn.
@@ -157,23 +156,13 @@ const PAGE_COLUMNS: usize = 18;
 /// The x offset of the second (right) glyph page.
 const RIGHT_PAGE_X: i32 = 256;
 
-/// The row a plain glyph byte addresses (the grid starts two rows down).
-fn plain_row(byte: u8) -> usize {
-    2 + usize::from(byte) / PAGE_COLUMNS
-}
-
-/// The column a plain glyph byte addresses.
-fn plain_col(byte: u8) -> usize {
-    usize::from(byte) % PAGE_COLUMNS
-}
-
-/// One font sheet's per-cell metrics, measured from its own ink.
+/// One font sheet's per-cell metrics: Classic REbirth's advance and indent
+/// for each glyph cell.
 ///
 /// The table covers the two glyph pages [`Glyphs`] decodes: the plain/`0xF8`
 /// left page at x 0 and the `0xF9`/`0xFA` right page at x 256. Every cell
-/// defaults to the full-cell [`GlyphMetric`]; [`GlyphTable::measure`] replaces
-/// the entries whose ink is narrower and applies the authored rules (an 8px
-/// space and full-cell digits).
+/// defaults to the full-cell [`GlyphMetric`]; [`GlyphTable::western`] and
+/// [`GlyphTable::japanese`] replace the entries CR's own width tables list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlyphTable {
     glyph_w: i32,
@@ -181,11 +170,14 @@ pub struct GlyphTable {
 }
 
 impl GlyphTable {
-    /// Measure every cell of the decoded `texture`. The sheet is never
-    /// mutated, so this is exactly the ink the pack ships.
-    pub fn measure(texture: &Texture8, glyph_w: i32) -> Self {
-        let glyph_w = glyph_w.max(1);
-        let rows = (texture.height as i32 / GLYPH_HEIGHT).max(0) as usize;
+    /// A table of `rows` full cells per page with CR's `(cell, width, indent)`
+    /// entries applied to the left page. `cell` is the left grid's index: a
+    /// plain byte, or `0xEA + nn` for `0xF8 nn`.
+    fn from_widths(
+        rows: usize,
+        glyph_w: i32,
+        entries: impl IntoIterator<Item = (usize, u8, u8)>,
+    ) -> Self {
         let full = GlyphMetric::full(glyph_w);
         let mut table = Self {
             glyph_w,
@@ -194,23 +186,17 @@ impl GlyphTable {
                 vec![full; rows * PAGE_COLUMNS],
             ],
         };
-        for page in 0..2 {
-            for row in 0..rows {
-                for col in 0..PAGE_COLUMNS {
-                    let left = page as i32 * RIGHT_PAGE_X + col as i32 * glyph_w;
-                    let top = row as i32 * GLYPH_HEIGHT;
-                    if left + glyph_w > texture.width as i32
-                        || top + GLYPH_HEIGHT > texture.height as i32
-                    {
-                        continue;
-                    }
-                    if let Some(metric) = measure_cell(texture, left, top, glyph_w) {
-                        table.pages[page][row * PAGE_COLUMNS + col] = metric;
-                    }
-                }
-            }
+        for (cell, width, indent) in entries {
+            table.set(
+                0,
+                2 + cell / PAGE_COLUMNS,
+                cell % PAGE_COLUMNS,
+                GlyphMetric {
+                    indent: i32::from(indent),
+                    advance: i32::from(width),
+                },
+            );
         }
-        table.apply_authored_rules();
         table
     }
 
@@ -220,23 +206,30 @@ impl GlyphTable {
     /// so counters stay monospaced.
     pub fn western(texture: &Texture8, metrics: FontMetrics) -> Self {
         let rows = (texture.height as i32 / GLYPH_HEIGHT).max(0) as usize;
-        let full = GlyphMetric::full(metrics.glyph_w);
-        let mut table = Self {
-            glyph_w: metrics.glyph_w,
-            pages: [vec![full; rows * PAGE_COLUMNS], Vec::new()],
-        };
-        for &(byte, width, indent) in crate::charset::western_widths() {
-            table.set(
-                0,
-                plain_row(byte),
-                plain_col(byte),
-                GlyphMetric {
-                    indent: i32::from(indent),
-                    advance: i32::from(width),
-                },
-            );
-        }
+        let mut table = Self::from_widths(
+            rows,
+            metrics.glyph_w,
+            crate::charset::western_widths()
+                .iter()
+                .map(|&(byte, width, indent)| (usize::from(byte), width, indent)),
+        );
+        table.pages[1].clear();
         table
+    }
+
+    /// Classic REbirth's metrics for the Japanese sheet, the table its
+    /// Japanese mode draws with ([`crate::charset::japanese_widths`]): an 8px
+    /// space, 11px digits, a proportional advance per Latin glyph and the
+    /// full 14px cell for the kana, kanji and the right page.
+    pub fn japanese(texture: &Texture8, metrics: FontMetrics) -> Self {
+        let rows = (texture.height as i32 / GLYPH_HEIGHT).max(0) as usize;
+        Self::from_widths(
+            rows,
+            metrics.cell_w,
+            crate::charset::japanese_widths()
+                .iter()
+                .map(|&(cell, width, indent)| (usize::from(cell), width, indent)),
+        )
     }
 
     /// The metric of the cell at `(page, row, col)`, falling back to the full
@@ -253,7 +246,9 @@ impl GlyphTable {
     /// [`Glyph`] carries.
     fn at(&self, u: i32, v: i32, glyph_w: i32) -> GlyphMetric {
         let glyph_w = glyph_w.max(1);
-        let page = usize::from(u >= RIGHT_PAGE_X);
+        // The third page (the stage-five kanji rows) has no table entries
+        // and takes the full cell, like the kanji page.
+        let page = (u / RIGHT_PAGE_X).max(0) as usize;
         let col = ((u - page as i32 * RIGHT_PAGE_X) / glyph_w).max(0) as usize;
         let row = (v / GLYPH_HEIGHT).max(0) as usize;
         self.get(page, row, col)
@@ -266,55 +261,6 @@ impl GlyphTable {
             *cell = metric;
         }
     }
-
-    /// The authored overrides the derivation cannot express.
-    fn apply_authored_rules(&mut self) {
-        let full = GlyphMetric::full(self.glyph_w);
-        // The space cell is blank in the sheet; give it an 8px advance so
-        // words do not gap at the Japanese cell width.
-        self.set(
-            0,
-            plain_row(0x00),
-            plain_col(0x00),
-            GlyphMetric {
-                indent: 0,
-                advance: 8.min(self.glyph_w),
-            },
-        );
-        // The digits keep the full cell so counters and save timers stay
-        // monospaced.
-        for byte in 0x0C..=0x15u8 {
-            self.set(0, plain_row(byte), plain_col(byte), full);
-        }
-    }
-}
-
-/// Measure one cell's ink bounding box and derive its metric, or `None` when
-/// the cell is blank or already fills the cell (the full metric is the
-/// default).
-fn measure_cell(texture: &Texture8, left: i32, top: i32, glyph_w: i32) -> Option<GlyphMetric> {
-    let mut min_x = i32::MAX;
-    let mut max_x = -1;
-    for y in 0..GLYPH_HEIGHT {
-        for x in 0..glyph_w {
-            let u = (left + x) as u32;
-            let v = (top + y) as u32;
-            let index = (v * texture.width + u) as usize;
-            if texture.indices.get(index).copied().unwrap_or(0) != 0 {
-                min_x = min_x.min(x);
-                max_x = max_x.max(x);
-            }
-        }
-    }
-    if max_x < 0 {
-        return None;
-    }
-    let ink = max_x - min_x + 1;
-    let advance = (ink + 1).min(glyph_w);
-    (min_x != 0 || advance != glyph_w).then_some(GlyphMetric {
-        indent: min_x,
-        advance,
-    })
 }
 
 /// One decoded step of an encoded text stream.
@@ -525,14 +471,31 @@ impl Iterator for Glyphs<'_> {
                     if [byte, parameter as u8] == crate::charset::MISSING {
                         return Some(self.missing_glyph());
                     }
+                    // `0xFA` operands from `STAGE_FIVE_OPERAND` address the
+                    // stage-five kanji rows on the sheet's third page.
+                    let five = i32::from(crate::charset::STAGE_FIVE_OPERAND);
+                    let (kanji_page, parameter) = if byte == 0xFA && parameter >= five {
+                        (512, parameter - five)
+                    } else {
+                        (256, parameter)
+                    };
                     let col = parameter % 18;
                     let row = parameter / 18;
                     let (page, v) = match byte {
                         0xF8 => (0, (row + 15) * GLYPH_HEIGHT),
                         0xF9 => (256, row * GLYPH_HEIGHT),
-                        _ => (256, (row + 14) * GLYPH_HEIGHT),
+                        _ => (kanji_page, (row + 14) * GLYPH_HEIGHT),
                     };
-                    return Some(self.glyph(page + col * self.metrics.cell_w, v));
+                    let mut glyph = self.glyph(page + col * self.metrics.cell_w, v);
+                    // Classic REbirth's text draw (DLL 0x10069600) skips the
+                    // indent shift for an `0xF8` cell but still advances past
+                    // it, so the cell draws at the cursor and moves it by
+                    // `indent + width`.
+                    if byte == 0xF8 && self.table.is_some() {
+                        glyph.advance += glyph.indent;
+                        glyph.indent = 0;
+                    }
+                    return Some(glyph);
                 }
                 _ => {
                     self.position += 1;
@@ -586,7 +549,7 @@ pub struct Font {
     /// [`crate::charset::MISSING`]. Kept out of `texture` so the decoded sheet
     /// is never mutated.
     missing: Texture8,
-    /// The tight per-glyph metrics measured from the sheet's ink.
+    /// The sheet's tight per-glyph metrics: Classic REbirth's width table.
     pub glyph_table: GlyphTable,
     /// The HD replacement of the sheet's glyph page, when the pack has one.
     pub hd: Option<HdGlyphs>,
@@ -601,7 +564,7 @@ impl Font {
         let metrics = FontMetrics::from_sheet_width(texture.width);
         let missing = missing_box_texture(&texture, metrics.glyph_w);
         let glyph_table = if texture.width >= JPN_SHEET_WIDTH {
-            GlyphTable::measure(&texture, metrics.cell_w)
+            GlyphTable::japanese(&texture, metrics)
         } else {
             GlyphTable::western(&texture, metrics)
         };
@@ -629,9 +592,9 @@ impl Font {
     /// when `tight`.
     fn glyphs<'a>(&'a self, tight: bool, bytes: &'a [u8]) -> Glyphs<'a> {
         let glyphs = Glyphs::new(bytes, self.metrics);
-        // The tight table compensates for the Japanese sheet's full-width
-        // Latin glyphs. The Western sheet always draws at Classic REbirth's
-        // proportional advances, which its table carries.
+        // Both tables are Classic REbirth's. The Japanese sheet draws its
+        // full 14px cells unless asked for them, as the original does; the
+        // Western sheet always draws at CR's proportional advances.
         if tight || self.script() == crate::charset::Script::Latin {
             glyphs.tight(&self.glyph_table)
         } else {
@@ -643,6 +606,47 @@ impl Font {
     /// under `tight` metrics.
     pub fn advance(&self, tight: bool, bytes: &[u8]) -> i32 {
         self.glyphs(tight, bytes).map(|glyph| glyph.advance).sum()
+    }
+
+    /// The width Classic REbirth's own measure (DLL `0x10069440`) gives
+    /// `bytes`: the width CR centres a line by. It reads the same table as
+    /// the tight path but differs from the drawn [`Font::advance`] in two
+    /// ways: an `0xF8` cell counts its width without its indent, and a
+    /// right-page cell (`0xF9`/`0xFA nn`) counts a full cell and then reads
+    /// its operand `nn` again as a code of its own.
+    pub fn classic_rebirth_width(&self, bytes: &[u8]) -> i32 {
+        // CR's table is indexed by the left grid's cell: a plain byte, or
+        // `0xEA + nn` for `0xF8 nn`.
+        let width = |cell: usize| {
+            self.glyph_table
+                .get(0, 2 + cell / PAGE_COLUMNS, cell % PAGE_COLUMNS)
+                .advance
+        };
+        let mut total = 0;
+        let mut position = 0;
+        while let Some(&byte) = bytes.get(position) {
+            match byte {
+                0x01 | 0x07 => break,
+                // A colour code and its operand.
+                0x05 => position += 2,
+                0xF8 => {
+                    if let Some(&operand) = bytes.get(position + 1) {
+                        total += width(0xEA + usize::from(operand));
+                    }
+                    position += 2;
+                }
+                0xF9 | 0xFA => {
+                    total += self.metrics.cell_w;
+                    position += 1;
+                }
+                0xFB => position += 1,
+                _ => {
+                    total += width(usize::from(byte));
+                    position += 1;
+                }
+            }
+        }
+        total
     }
 
     /// The advance of the single encoded step at `bytes[0]` (with its operand
@@ -1172,55 +1176,36 @@ mod tests {
     }
 
     #[test]
-    fn glyph_table_measures_the_ink_bounding_box() {
-        // 'a' 0x3D is row 5, column 7: 9px of ink at columns 2..=10 gives an
-        // indent of 2 and an advance of min(14, 9 + 1) = 10.
-        let font = Font::new(sheet_with_ink(&[(98, 70, 2, 10)]));
-        assert_eq!(
-            metric(&font, 0x3D),
-            GlyphMetric {
-                indent: 2,
-                advance: 10,
-            }
-        );
-        // 'i' 0x45 is row 5, column 15: 5px of ink at columns 4..=8.
-        let font = Font::new(sheet_with_ink(&[(210, 70, 4, 8)]));
-        assert_eq!(
-            metric(&font, 0x45),
-            GlyphMetric {
-                indent: 4,
-                advance: 6,
-            }
-        );
-        // A cell that fills its width starting at 0 keeps the full metric.
-        let font = Font::new(sheet_with_ink(&[(210, 70, 0, 13)]));
-        assert_eq!(metric(&font, 0x45), GlyphMetric::full(14));
-    }
-
-    #[test]
-    fn glyph_table_applies_the_authored_rules() {
-        // Fill a digit cell with narrow ink: the digit rule still forces the
-        // full cell.
-        let font = Font::new(sheet_with_ink(&[(168, 28, 4, 8)]));
-        assert_eq!(metric(&font, 0x0C), GlyphMetric::full(14));
-        // The blank space cell takes the authored 8px advance.
-        assert_eq!(
-            metric(&font, 0x00),
-            GlyphMetric {
-                indent: 0,
-                advance: 8,
-            }
-        );
+    fn the_japanese_sheet_uses_classic_rebirths_widths() {
+        // CR's Japanese-mode table (issue #63), whatever ink the sheet has.
+        let font = Font::new(sheet_with_ink(&[]));
+        let cr = |indent, advance| GlyphMetric { indent, advance };
+        // The space is 8px and the digits a monospaced 11px.
+        assert_eq!(metric(&font, 0x00), cr(0, 8));
+        assert_eq!(metric(&font, 0x0C), cr(1, 11));
+        assert_eq!(metric(&font, 0x15), cr(1, 11));
+        // ':' 'I' 'i' and the long vowel mark 'ー' are proportional.
+        assert_eq!(metric(&font, 0x16), cr(5, 4));
+        assert_eq!(metric(&font, 0x25), cr(4, 6));
+        assert_eq!(metric(&font, 0x45), cr(4, 5));
+        assert_eq!(metric(&font, 0x3B), cr(1, 11));
+        // '/' and the kana keep the full cell.
+        assert_eq!(metric(&font, 0x38), GlyphMetric::full(14));
+        assert_eq!(metric(&font, 0x57), GlyphMetric::full(14));
+        // The right page is all full cells.
+        assert_eq!(font.advance(true, &[0xF9, 0x09]), 14);
+        // Without the tight flag the sheet keeps the original's 14px cells.
+        assert_eq!(font.advance(false, &[0x0C, 0x16, 0x45]), 42);
     }
 
     #[test]
     fn tight_glyphs_use_the_table_advance_and_indent() {
-        let font = Font::new(sheet_with_ink(&[(210, 70, 4, 8)]));
+        let font = Font::new(sheet_with_ink(&[]));
         let tight = Glyphs::new(&[0x45], font.metrics)
             .tight(&font.glyph_table)
             .next()
             .unwrap();
-        assert_eq!((tight.indent, tight.advance), (4, 6));
+        assert_eq!((tight.indent, tight.advance), (4, 5));
         // Without the table the glyph fills its cell.
         let full = Glyphs::new(&[0x45], font.metrics).next().unwrap();
         assert_eq!((full.indent, full.advance), (0, 14));
@@ -1233,22 +1218,53 @@ mod tests {
 
     #[test]
     fn extended_glyphs_take_the_selected_cells_metric() {
-        // `0xF8 0x16` selects left row 16, column 4; 6px of ink at 5..=10.
-        let font = Font::new(sheet_with_ink(&[(56, 224, 5, 10)]));
-        let glyph = Glyphs::new(&[0xF8, 0x16], font.metrics)
+        // `.` is `0xF8 0x1C`, CR's cell 0x106: indent 2, width 4. CR's draw
+        // skips an `0xF8` cell's indent shift but still advances past it, so
+        // the cell draws at the cursor and moves it 6px.
+        let font = Font::new(sheet_with_ink(&[]));
+        let glyph = Glyphs::new(&[0xF8, 0x1C], font.metrics)
             .tight(&font.glyph_table)
             .next()
             .unwrap();
-        assert_eq!((glyph.indent, glyph.advance), (5, 7));
-        assert_eq!(font.advance(true, &[0xF8, 0x16]), 7);
+        assert_eq!((glyph.u, glyph.v), (140, 224));
+        assert_eq!((glyph.indent, glyph.advance), (0, 6));
+        assert_eq!(font.advance(true, &[0xF8, 0x1C]), 6);
+        // Off the tight path it is a full cell.
+        assert_eq!(font.advance(false, &[0xF8, 0x1C]), 14);
+    }
+
+    #[test]
+    fn classic_rebirths_measure_keeps_its_quirks() {
+        let font = Font::new(sheet_with_ink(&[]));
+        // Plain cells measure their table width: "1:" is 11 + 4.
+        assert_eq!(font.classic_rebirth_width(&[0x0D, 0x16]), 15);
+        // An `0xF8` cell counts its width without the indent it draws past.
+        assert_eq!(font.classic_rebirth_width(&[0xF8, 0x1C]), 4);
+        assert_eq!(font.advance(true, &[0xF8, 0x1C]), 6);
+        // A right-page cell counts a full cell and then its operand as a code
+        // of its own: `館` (`0xF9 0x09`) measures 14 + the 8px of cell 0x09.
+        assert_eq!(font.classic_rebirth_width(&[0xF9, 0x09]), 22);
+        assert_eq!(font.advance(true, &[0xF9, 0x09]), 14);
+        // Spacing codes count nothing and the terminators end the line.
+        assert_eq!(font.classic_rebirth_width(&[0x0D, 0xFB, 0x0D]), 22);
+        assert_eq!(font.classic_rebirth_width(&[0x0D, 0x01, 0x0D]), 11);
+        // The Western sheet measures by its own table.
+        let western = Font::new(Texture8 {
+            width: 256,
+            height: 256,
+            indices: vec![0; 256 * 256],
+            palettes: vec![[0u8; 4]; crate::model::PALETTE_ROW_LEN],
+            stp: Vec::new(),
+        });
+        assert_eq!(western.classic_rebirth_width(&[0x25, 0x1D]), 13);
     }
 
     #[test]
     fn wrap_pixels_budgets_by_the_advances() {
-        // 'i' 0x45 has 6px advance and 14px full width on this sheet.
-        let font = Font::new(sheet_with_ink(&[(210, 70, 4, 8)]));
+        // 'i' 0x45 has a 5px advance and a 14px full width on this sheet.
+        let font = Font::new(sheet_with_ink(&[]));
         let text = [0x45, 0x45, 0x45, 0x45];
-        // Four 6px glyphs fit in 40px tight; the full cells fit only two.
+        // Four 5px glyphs fit in 40px tight; the full cells fit only two.
         assert_eq!(wrap_pixels(&text, 40, &font, true), [text.as_slice()]);
         assert_eq!(
             wrap_pixels(&text, 40, &font, false),
@@ -1258,11 +1274,11 @@ mod tests {
 
     #[test]
     fn fit_pixels_clips_at_the_budget() {
-        let font = Font::new(sheet_with_ink(&[(210, 70, 4, 8)]));
+        let font = Font::new(sheet_with_ink(&[]));
         let text = [0x45, 0x45, 0x45];
-        // Two 6px glyphs fit in 17px, but only one 14px glyph does.
-        assert_eq!(fit_pixels(&text, 17, &font, true), &text[..2]);
-        assert_eq!(fit_pixels(&text, 17, &font, false), &text[..1]);
+        // Two 5px glyphs fit in 14px, and so does one 14px glyph.
+        assert_eq!(fit_pixels(&text, 14, &font, true), &text[..2]);
+        assert_eq!(fit_pixels(&text, 14, &font, false), &text[..1]);
         // The terminators end the stream.
         assert_eq!(fit_pixels(&[0x45, 0x01, 0x45], 100, &font, false), &[0x45]);
     }
@@ -1486,22 +1502,21 @@ mod tests {
         assert_eq!((close[0].u, close[0].v), (70, 224));
 
         // The measure path follows the same cells: 0x28 spends the letter
-        // cell's 10px advance here, where the parenthesis cell's is 7.
-        let font = Font::new(sheet_with_ink(&[(56, 56, 2, 10), (56, 224, 5, 10)]));
-        assert_eq!(font.advance(true, &[0x28]), 10, "the letter's advance");
+        // cell's 12px advance, where the parenthesis cell's is the full 14.
+        let font = Font::new(sheet_with_ink(&[]));
+        assert_eq!(font.advance(true, &[0x28]), 12, "the letter's advance");
         assert_eq!(
             font.advance(true, &[0xF8, 0x16]),
-            7,
+            14,
             "the parenthesis' advance"
         );
     }
 
     #[test]
     fn the_western_sheet_uses_classic_rebirths_widths() {
-        // The tight table compensates for the Japanese sheet's full-width
-        // Latin glyphs. The Western sheet's advances come from Classic
-        // REbirth's width table instead, whatever the tight flag says, and
-        // never from the ink (issue #32, #63).
+        // The Western sheet's advances come from Classic REbirth's width
+        // table whatever the tight flag says, and never from the ink
+        // (issue #32, #63).
         let font = Font::new(Texture8 {
             width: 256,
             height: 256,
@@ -1520,10 +1535,10 @@ mod tests {
         // `A` (0x1D) keeps the default 8px advance.
         assert_eq!(font.advance(false, &[0x1D]), 8);
 
-        // The same strip on the Japanese sheet is trimmed to its ink.
-        let jpn = Font::new(sheet_with_ink(&[(14, 56, 2, 4)]));
+        // The Japanese sheet takes CR's Japanese table only when tight.
+        let jpn = Font::new(sheet_with_ink(&[]));
         assert_eq!(jpn.script(), crate::charset::Script::Japanese);
-        assert_eq!(jpn.advance(true, &[0x25]), 4, "the Japanese sheet trims");
+        assert_eq!(jpn.advance(true, &[0x25]), 6, "CR's Japanese width");
         assert_eq!(jpn.advance(false, &[0x25]), 14);
     }
 

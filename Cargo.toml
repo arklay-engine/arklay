@@ -53,6 +53,9 @@ zip = { version = "9.1.0", default-features = false, features = ["deflate"] }
 # The build script compiles the room scripts with the crate's own compiler.
 anyhow = "1"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 sdl3-sys = { version = "0.7", default-features = false, features = ["build-from-source-static"] }
 winreg = "0.55"

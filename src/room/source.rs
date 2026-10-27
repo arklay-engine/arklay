@@ -147,10 +147,17 @@ pub enum Messages {
     Raw(Vec<u8>),
 }
 
+/// The stage digit whose Japanese text the game draws with `PBFONT3N.TIM`
+/// (its stage byte 4).
+const STAGE_FIVE: u8 = 5;
+
 impl Messages {
     /// Split an RDT message block into its streams, or keep it raw when its
     /// offset table is not the shipped ascending form.
-    fn from_block(block: &[u8], script: Script) -> Self {
+    ///
+    /// Japanese stage-5 text is moved onto the stage-five kanji rows the game
+    /// draws it with ([`crate::charset::stage_five_text`]).
+    fn from_block(block: &[u8], script: Script, stage: u8) -> Self {
         let Some(first) = block
             .get(..2)
             .map(|raw| usize::from(u16::from_le_bytes([raw[0], raw[1]])))
@@ -176,7 +183,12 @@ impl Messages {
             .enumerate()
             .map(|(index, &start)| {
                 let end = offsets.get(index + 1).copied().unwrap_or(block.len());
-                block[start..end].to_vec()
+                let stream = &block[start..end];
+                if script == Script::Japanese && stage == STAGE_FIVE {
+                    crate::charset::stage_five_text(stream)
+                } else {
+                    stream.to_vec()
+                }
             })
             .collect();
         Self::Streams { script, streams }
@@ -203,6 +215,18 @@ impl Messages {
             }
         }
     }
+}
+
+/// An RDT message block as the game draws it: a Japanese stage-5 block has
+/// its streams moved onto the stage-five kanji rows, any other is unchanged.
+pub(super) fn drawn_message_block(block: &[u8], script: Script, stage: u8) -> Vec<u8> {
+    if script != Script::Japanese || stage != STAGE_FIVE {
+        return block.to_vec();
+    }
+    // The remap rewrites operands in place, so the block keeps its length.
+    Messages::from_block(block, script, stage)
+        .to_block()
+        .unwrap_or_else(|_| block.to_vec())
 }
 
 /// One declared effect sprite slot.
@@ -530,7 +554,7 @@ impl RoomSource {
             messages: state
                 .messages
                 .as_deref()
-                .map(|block| Messages::from_block(block, script)),
+                .map(|block| Messages::from_block(block, script, id.stage)),
             effects,
             object_models,
             item_models,

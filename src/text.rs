@@ -41,7 +41,7 @@ impl Text {
         Self {
             catalog: Catalog::load(pack, language, script),
             script,
-            pack_script: sheet_script(pack, font::DEFAULT_STEM).unwrap_or_default(),
+            pack_script: pack_script(pack),
         }
     }
 
@@ -87,6 +87,14 @@ impl Text {
     /// knows the key.
     pub fn text(&self, key: &str) -> Option<String> {
         self.get(key).map(|bytes| self.decode(bytes))
+    }
+
+    /// `KEY` in language `tag` alone, decoded to characters; `None` when the
+    /// pack carries no such language or it lacks the key.
+    pub fn text_in(&self, tag: &str, key: &str) -> Option<String> {
+        self.catalog
+            .lookup_in(tag, key)
+            .map(|bytes| self.decode(bytes))
     }
 
     /// The save screen's shorthand location label of the room a block was
@@ -198,6 +206,12 @@ pub fn script_for(pack: &Pack, requested: Option<&str>) -> Script {
         Script::Latin
     };
     sheet_script(pack, font::session_entry(pack, script)).unwrap_or_default()
+}
+
+/// The script of the pack's own text: its default sheet's, which the RDTs'
+/// message bytes are encoded in.
+pub fn pack_script(pack: &Pack) -> Script {
+    sheet_script(pack, font::DEFAULT_STEM).unwrap_or_default()
 }
 
 /// The script a sheet's stem selects, read from its header where it has one.

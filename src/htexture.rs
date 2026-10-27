@@ -858,7 +858,7 @@ fn finish_mask(texel: u32) -> u32 {
 /// game uploads them (`DATA/STATUS.TIM`, `DATA/TITLE.PIX`, `DATA/PBFONT0.TIM`),
 /// as the hash of the Japanese page and of the English one. A pack made under
 /// CR names the English page, so a Japanese install also looks that hash up.
-const TRANSLATED: [(u32, u32); 4] = [
+const TRANSLATED: [(u32, u32); 5] = [
     // The status screen's menu page, CLUT row 0.
     (0x440c_318f, 0x97de_3e43),
     // The title screen.
@@ -867,6 +867,9 @@ const TRANSLATED: [(u32, u32); 4] = [
     // and CR's Western `PBFONT0.TIM`, whose cells hold the same glyphs but
     // for the hiragana block (see `crate::font`).
     (0xb2dc_eba5, 0xcff9_d54d),
+    // The same page as the Japanese sheet now packs it: the PC release's own
+    // `PBFONT0.TIM` over `FONT.TIM`'s left page (`convert::japanese_sheet`).
+    (0x0afe_b58f, 0xcff9_d54d),
     // The same page from the copy of `PBFONT0.TIM` every pack carries as its
     // Western sheet (`crate::font::WESTERN_SHEET`), which doesn't reproduce
     // CR's hash of it either.

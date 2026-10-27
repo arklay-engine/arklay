@@ -39,9 +39,9 @@ fn converted(rdts: &[(RoomId, Vec<u8>)], script: Script) -> Pack {
 }
 
 /// Assert that `pack`'s XML definition of `id` loads the state and scripts
-/// the RDT does.
-fn assert_same_room(pack: &Pack, id: RoomId, rdt: &[u8]) {
-    let expected = crate::rdt::parse(rdt, id).unwrap();
+/// the RDT, with its text in `script`, does.
+fn assert_same_room(pack: &Pack, id: RoomId, rdt: &[u8], script: Script) {
+    let expected = drawn_messages(crate::rdt::parse(rdt, id).unwrap(), script);
     let loaded = load(pack, id).unwrap();
     assert_eq!(
         snapshot(&loaded.state),
@@ -173,7 +173,7 @@ fn a_synthetic_room_loads_the_same_from_xml() {
     let pack = converted(&[(ID, rdt.clone())], Script::Latin);
     assert_eq!(format(&pack, ID), Some(Format::Xml));
     assert!(!pack.contains(&ID.rdt_entry()));
-    assert_same_room(&pack, ID, &rdt);
+    assert_same_room(&pack, ID, &rdt, Script::Latin);
 
     let text = std::str::from_utf8(&pack.read(&ID.xml_entry()).unwrap())
         .unwrap()
@@ -198,7 +198,7 @@ fn a_stub_rdt_is_an_empty_room() {
     let state = load_state(&pack, ID).unwrap();
     assert!(state.cuts.is_empty());
     assert_eq!((state.omodel_slot_count, state.item_count), (2, 1));
-    assert_same_room(&pack, ID, &stub);
+    assert_same_room(&pack, ID, &stub, Script::Latin);
 }
 
 /// A base pack of `base` entries with a mod layer of `layer` entries over
@@ -453,7 +453,7 @@ fn every_shipped_room_loads_the_same_from_xml() {
         );
         let pack = converted(&rdts, script);
         for (id, rdt) in &rdts {
-            assert_same_room(&pack, *id, rdt);
+            assert_same_room(&pack, *id, rdt, script);
         }
         assert!(!pack.paths().any(|path| path.ends_with(".rdt")));
 
@@ -516,4 +516,31 @@ fn verify_fails_a_room_naming_a_missing_sidecar() {
         "{}",
         failure.error
     );
+}
+
+#[test]
+fn a_japanese_stage_five_rdt_draws_its_text_from_the_stage_five_rows() {
+    // `0xFA 0x26` is the cell `PBFONT3N.TIM` draws as 第.
+    let state = |stage| RoomState {
+        stage,
+        messages: Some(vec![0x02, 0x00, 0xFA, 0x26, 0x01]),
+        ..RoomState::default()
+    };
+    let drawn = drawn_messages(state(5), Script::Japanese);
+    assert_eq!(
+        drawn.messages.as_deref(),
+        Some([0x02, 0x00, 0xFA, 0xA6, 0x01].as_slice())
+    );
+    // Already-moved text stays put, so a room built from its XML matches.
+    assert_eq!(
+        drawn_messages(drawn.clone(), Script::Japanese).messages,
+        drawn.messages
+    );
+    // Other stages and the Western script keep the kanji page's cell.
+    for (stage, script) in [(4, Script::Japanese), (5, Script::Latin)] {
+        assert_eq!(
+            drawn_messages(state(stage), script).messages,
+            state(stage).messages
+        );
+    }
 }

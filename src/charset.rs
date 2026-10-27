@@ -46,6 +46,64 @@ pub const MAX_CELL_CHARS: usize = 2;
 /// name with.
 pub const MISSING: [u8; 2] = [0xFA, 0xFF];
 
+/// The first `0xFA` operand of the stage-five kanji rows.
+///
+/// The Japanese PC release swaps `PBFONT3N.TIM` in for its kanji page while
+/// the stage byte is 4, so that stage's `0xFA nn` cells draw other kanji. The
+/// converted sheet carries that page as its third page, and `0xFA` operands
+/// `0x80..0x80 + 72` address its rows 14..=17 the way `0x00..72` address the
+/// kanji page's. [`stage_five_text`] moves a stage-five RDT stream onto them.
+pub const STAGE_FIVE_OPERAND: u8 = 0x80;
+
+/// The `0xFA` operand count of each kanji page's rows 14..=17.
+const FA_CELLS: u8 = 4 * 18;
+
+/// Rewrite a Japanese RDT text stream of the stage the game draws with
+/// `PBFONT3N.TIM` (stage byte 4, stage digit 5) so the cells that page draws
+/// differently — reached by `0xFA nn`, or by `0xF9 0xFC..` in row 14 — address
+/// the stage-five rows ([`STAGE_FIVE_OPERAND`]). Cells both pages draw alike
+/// keep their kanji-page bytes.
+pub fn stage_five_text(bytes: &[u8]) -> Vec<u8> {
+    // The stage-five operand of row-14+ cell `n`, when that page draws it
+    // differently.
+    let swapped = |n: u8| {
+        let five = table::STAGE_FIVE.get(usize::from(n))?;
+        (*five != table::RIGHT[14 * 18 + usize::from(n)]).then_some(n + STAGE_FIVE_OPERAND)
+    };
+    let mut out = bytes.to_vec();
+    let mut index = 0;
+    while index < out.len() {
+        let step = match out[index] {
+            0x01 | 0x07 => break,
+            0x03..=0x06 => 2,
+            0x08 => 4,
+            0xF8 => 2,
+            0xF9 => {
+                // `0xF9 nn` reaches row 14 from `nn = 252`.
+                if let Some(&operand) = out.get(index + 1)
+                    && operand >= 14 * 18
+                    && let Some(five) = swapped(operand - 14 * 18)
+                {
+                    out[index] = 0xFA;
+                    out[index + 1] = five;
+                }
+                2
+            }
+            0xFA => {
+                if let Some(operand) = out.get_mut(index + 1)
+                    && let Some(five) = swapped(*operand)
+                {
+                    *operand = five;
+                }
+                2
+            }
+            _ => 1,
+        };
+        index += step;
+    }
+    out
+}
+
 /// The game-text byte space a font sheet uses.
 ///
 /// The sheet's width selects it ([`crate::font::FontMetrics`]): 768 or wider
@@ -79,6 +137,9 @@ struct Charset {
     /// The right page's cell names (`0xF9`/`0xFA`); empty for a single-page
     /// sheet.
     right: &'static [&'static str],
+    /// The stage-five kanji rows' cell names (`0xFA 0x80..`, see
+    /// [`STAGE_FIVE_OPERAND`]); empty for a single-page sheet.
+    stage_five: &'static [&'static str],
 }
 
 /// Characters with no cell of their own that localized text still uses on the
@@ -115,6 +176,7 @@ static JAPANESE: Charset = Charset {
     substitutions: JAPANESE_SUBSTITUTIONS,
     left: &table::LEFT,
     right: &table::RIGHT,
+    stage_five: &table::STAGE_FIVE,
 };
 
 static LATIN: Charset = Charset {
@@ -123,6 +185,7 @@ static LATIN: Charset = Charset {
     substitutions: &latin::SUBSTITUTIONS,
     left: &latin::LEFT,
     right: &[],
+    stage_five: &[],
 };
 
 impl Script {
@@ -229,6 +292,106 @@ pub fn western_widths() -> &'static [(u8, u8, u8)] {
     &latin::WIDTHS
 }
 
+/// Classic REbirth's `(cell, width, indent)` for the Japanese sheet's
+/// left-grid cells whose advance is not the full 14px cell, with the same
+/// meaning as [`western_widths`]. `cell` is a plain byte, or `0xEA + nn` for
+/// `0xF8 nn`; the right page always takes the full cell.
+pub fn japanese_widths() -> &'static [(u16, u8, u8)] {
+    &JAPANESE_WIDTHS
+}
+
+/// CR 1.1.3 copies this table out of its DLL (VA `0x1028BAE0`, 288
+/// `(indent, width)` byte pairs, one per left-grid cell) whenever its
+/// Japanese mode is on; only the entries other than `(0, 14)` are kept.
+#[rustfmt::skip]
+static JAPANESE_WIDTHS: [(u16, u8, u8); 85] = [
+    (0x000, 8, 0),
+    (0x001, 8, 0),
+    (0x002, 8, 0),
+    (0x003, 8, 0),
+    (0x004, 8, 0),
+    (0x005, 8, 0),
+    (0x006, 8, 0),
+    (0x007, 8, 0),
+    (0x008, 8, 0),
+    (0x009, 8, 0),
+    (0x00A, 8, 0),
+    (0x00B, 8, 0),
+    (0x00C, 11, 1),
+    (0x00D, 11, 1),
+    (0x00E, 11, 1),
+    (0x00F, 11, 1),
+    (0x010, 11, 1),
+    (0x011, 11, 1),
+    (0x012, 11, 1),
+    (0x013, 11, 1),
+    (0x014, 11, 1),
+    (0x015, 11, 1),
+    (0x016, 4, 5),
+    (0x017, 8, 0),
+    (0x018, 8, 0),
+    (0x019, 8, 0),
+    (0x01A, 8, 0),
+    (0x01B, 7, 3),
+    (0x01C, 8, 0),
+    (0x01D, 13, 0),
+    (0x01E, 12, 1),
+    (0x01F, 11, 1),
+    (0x020, 11, 1),
+    (0x021, 11, 1),
+    (0x022, 10, 2),
+    (0x023, 12, 1),
+    (0x024, 13, 0),
+    (0x025, 6, 4),
+    (0x026, 12, 1),
+    (0x027, 12, 1),
+    (0x028, 12, 1),
+    (0x02A, 13, 0),
+    (0x02B, 12, 1),
+    (0x02C, 11, 1),
+    (0x02D, 13, 0),
+    (0x02E, 13, 0),
+    (0x02F, 11, 1),
+    (0x030, 12, 1),
+    (0x031, 12, 1),
+    (0x032, 12, 1),
+    (0x034, 12, 1),
+    (0x035, 12, 1),
+    (0x036, 12, 1),
+    (0x037, 8, 0),
+    (0x039, 8, 0),
+    (0x03A, 8, 0),
+    (0x03B, 11, 1),
+    (0x03C, 4, 5),
+    (0x03D, 9, 2),
+    (0x03E, 9, 2),
+    (0x03F, 8, 3),
+    (0x040, 9, 2),
+    (0x041, 8, 3),
+    (0x042, 7, 3),
+    (0x043, 9, 2),
+    (0x044, 10, 2),
+    (0x045, 5, 4),
+    (0x046, 5, 4),
+    (0x047, 10, 2),
+    (0x048, 5, 4),
+    (0x049, 13, 0),
+    (0x04A, 10, 2),
+    (0x04B, 9, 2),
+    (0x04C, 9, 2),
+    (0x04D, 9, 2),
+    (0x04E, 7, 3),
+    (0x04F, 8, 3),
+    (0x050, 7, 3),
+    (0x051, 10, 2),
+    (0x052, 10, 2),
+    (0x053, 13, 0),
+    (0x054, 10, 2),
+    (0x055, 10, 2),
+    (0x056, 8, 3),
+    (0x106, 4, 2),
+];
+
 /// The cell a plain glyph byte (`0x0C..=0xF7`) selects.
 pub fn plain_cell(byte: u8, script: Script) -> Option<&'static str> {
     if byte >= 0xF8 {
@@ -248,9 +411,18 @@ pub fn plain_cell(byte: u8, script: Script) -> Option<&'static str> {
 /// The cell an extended glyph (`0xF8`/`0xF9`/`0xFA` plus its operand) selects.
 ///
 /// The page byte follows `font.rs`: `0xF8` addresses the LEFT rows 13..15,
-/// `0xF9` the RIGHT rows 0..15 and `0xFA` the RIGHT rows 14..17. The Western
+/// `0xF9` the RIGHT rows 0..15 and `0xFA` the RIGHT rows 14..17, or the
+/// stage-five rows from [`STAGE_FIVE_OPERAND`]. The Western
 /// sheet is a single page, so only its `0xF8` page has names.
 pub fn extended_cell(page: u8, operand: u8, script: Script) -> Option<&'static str> {
+    let charset = script.charset();
+    if page == 0xFA && (STAGE_FIVE_OPERAND..STAGE_FIVE_OPERAND + FA_CELLS).contains(&operand) {
+        return charset
+            .stage_five
+            .get(usize::from(operand - STAGE_FIVE_OPERAND))
+            .copied()
+            .filter(|cell| !cell.is_empty());
+    }
     let index = usize::from(operand);
     let row = match page {
         0xF8 => index / 18 + 13,
@@ -258,7 +430,6 @@ pub fn extended_cell(page: u8, operand: u8, script: Script) -> Option<&'static s
         0xFA => index / 18 + 14,
         _ => return None,
     };
-    let charset = script.charset();
     let grid: &[&str] = if page == 0xF8 {
         charset.left
     } else {
@@ -411,7 +582,9 @@ mod tests {
     #[test]
     fn encodes_extended_cells() {
         assert_eq!(encoded("館"), [0xF9, 0x09]);
-        assert_eq!(encoded("潟"), [0xFA, 0x33]);
+        assert_eq!(encoded("滝"), [0xFA, 0x33]);
+        // A kanji only the stage-five page draws.
+        assert_eq!(encoded("厳"), [0xFA, 0x90]);
         assert_eq!(encoded("「"), [0xF8, 0x10]);
         assert_eq!(encoded("」"), [0xF8, 0x11]);
     }
@@ -509,12 +682,44 @@ mod tests {
         assert_eq!(extended_cell(0xF8, 0x12, Script::Japanese), Some("S."));
         assert_eq!(extended_cell(0xF8, 0x10, Script::Japanese), Some("「"));
         assert_eq!(extended_cell(0xF9, 0x00, Script::Japanese), Some("壊"));
-        assert_eq!(extended_cell(0xFA, 0x33, Script::Japanese), Some("潟"));
+        assert_eq!(extended_cell(0xFA, 0x33, Script::Japanese), Some("滝"));
+        assert_eq!(extended_cell(0xFA, 0xB3, Script::Japanese), Some("非"));
+        // A blank stage-five cell names nothing.
+        assert_eq!(extended_cell(0xFA, 0x9B, Script::Japanese), None);
         assert_eq!(extended_cell(0xFA, 0xFF, Script::Japanese), None);
         assert_eq!(extended_cell(0x00, 0x00, Script::Japanese), None);
         // The Western sheet is a single page: no right-page cells at all.
         assert_eq!(extended_cell(0xF9, 0x00, Script::Latin), None);
         assert_eq!(extended_cell(0xFA, 0x00, Script::Latin), None);
+    }
+
+    #[test]
+    fn stage_five_text_moves_only_the_cells_that_page_redraws() {
+        // Stage 5's `第一級非常事態` reads `枯一充滝点事願` through the kanji
+        // page: `PBFONT3N.TIM` draws its `0xFA` cells as 第級非常態.
+        let stream = [
+            0xFA, 0x26, 0xF8, 0x2B, 0xFA, 0x09, 0xFA, 0x33, 0xFA, 0x1A, 0xF9, 0x60, 0xFA, 0x27,
+            0x01, 0xFA, 0x26,
+        ];
+        let moved = stage_five_text(&stream);
+        let mut text = String::new();
+        decode(&moved, Script::Japanese, &mut text);
+        assert_eq!(text, "第一級非常事態");
+        // A cell both pages draw alike (未) keeps its bytes, and so does
+        // everything past the stream's end.
+        assert_eq!(stage_five_text(&[0xFA, 0x3C]), [0xFA, 0x3C]);
+        assert_eq!(&moved[14..], &stream[14..]);
+        // `0xF9` reaches row 14 too: `0xF9 0xFC` is the cell of `0xFA 0x00`.
+        assert_eq!(stage_five_text(&[0xF9, 0xFC]), [0xFA, 0x80]);
+        let mut five = String::new();
+        decode(&[0xFA, 0x80], Script::Japanese, &mut five);
+        assert_eq!(five, "委");
+        // Control operands are not glyphs, even when they look like one.
+        let controls = [0x05, 0xFA, 0x08, 0xFA, 0x26, 0xFA, 0xFA, 0x26];
+        assert_eq!(
+            stage_five_text(&controls),
+            [0x05, 0xFA, 0x08, 0xFA, 0x26, 0xFA, 0xFA, 0xA6]
+        );
     }
 
     #[test]

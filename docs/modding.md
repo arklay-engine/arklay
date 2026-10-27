@@ -1124,10 +1124,13 @@ the load screen).
 | --- | --- |
 | `api:mode()` | `"save"` or `"load"`. |
 | `api:ticks()` | Fixed ticks since the screen opened (0 during the first `update`). |
-| `api:saves()` | The save directory's files, sorted by name. Each entry is a table: `path`, `name` (`savedat1.dat`), `base` (`savedat1`), `timestamp` (Unix seconds), `loadable`, `autosave` (the autosave rotation index, `1` newest, for `autosave1.dat`/`autosave2.dat`, else `nil`); a loadable file also carries `character` (`0` Chris, `1` Jill), `character_name`, `saves`, `stage` (the block's 0-based stage byte), `room` and `location` (the resolved room label). The list is rescanned after a save or remove. |
-| `api:string(key)` | A `language/<tag>.txt` string, decoded to characters; `nil` when no language carries the key. |
+| `api:saves()` | The save directory's files, sorted by name. Each entry is a table: `path`, `name` (`savedat1.dat`), `base` (`savedat1`), `timestamp` (Unix seconds, with the filesystem's sub-second part), `loadable`, `autosave` (the autosave rotation index, `1` newest, for `autosave1.dat`/`autosave2.dat`, else `nil`); a loadable file also carries `character` (`0` Chris, `1` Jill), `character_name`, `saves`, `stage` (the block's 0-based stage byte), `room` and `location` (the resolved room label). The list is rescanned after a save or remove. |
+| `api:string(key[, tag])` | A `language/<tag>.txt` string, decoded to characters; `nil` when no language carries the key. With `tag` (e.g. `"en-US"`), the string from that language alone, without the fallback chain; `nil` when it lacks the key. |
 | `api:character_name(index)` | The save screen's name for character `0`/`1`, decoded. |
+| `api:pending()` | The block a save would write, as `{character, saves, stage, room}`; `nil` outside save mode. |
+| `api:local_time()` | The local wall-clock time as `{year, month, day, hour, minute, second, millisecond}`, for naming files; `nil` when the platform cannot say. |
 | `api:text_width(text[, tight])` | The pixel width `text` draws at (the session's tight metrics unless `tight` is given). |
+| `api:classic_rebirth_width(text)` | The width Classic REbirth's own text measure gives `text`, which CR centres its lines by. It can differ from the drawn width: CR measures a kanji from the font's right page as wider than it draws it, and `.` on the Japanese sheet as narrower. |
 | `api:sound(name)` | Queue a screen sound: `cursor`, `decide`, `cancel`, `error` (the cancel cue), `title`, `select_cursor`, `select_confirm`, `save_cursor` (the save screen's cursor move), `save_confirm` or `page_turn` (the FILE reader's page turn). Cues queue from `on_open`, `update` and the engine's hooks and play after the call (a cue raised while drawing is dropped); the engine drops them in a capture run, which stays silent. |
 | `api:room_sound(slot)` | Queue a current-room bank sound (the original's `play_sfx(2, slot)`): slot `slot` of the loaded room's sound-table row, played after the call like `api:sound`. It plays only on in-game screens (the session resolves the room); a slot the room leaves empty stays silent. |
 | `api:save(name)` | Write the pending block to `<save_dir>/<name>` and return `ok, err`. `name` is one plain file name (no directory part); the extension is the script's choice. Save mode only. |
@@ -1163,6 +1166,10 @@ cached per screen, up to 64 images and 64 MiB of pixels. The `opts` table
 is `{colour = "white"|3|"#RRGGBB", brightness = 2, tight = true, clut = 0,
 blend = "opaque"|"half"|"half_variant"}` — `brightness` is the font's `0..=30`
 scale, `clut` the indexed palette row and `blend` the sprite blend mode.
+`tight` selects Classic REbirth's proportional widths. The Western sheet
+always uses them; the Japanese sheet uses CR's Japanese-mode table under
+`tight` and the original's full 14px cells without it (the default in a
+Japanese session).
 
 ### The input table
 
