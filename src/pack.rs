@@ -13,10 +13,16 @@
 //! [`PackWriter::compress_entries`] zstd-compresses the entries a caller does
 //! not exempt, on a worker pool; an entry never grows, so a frame smaller than
 //! the raw bytes is required. The payload area then holds the NUL-terminated
-//! UTF-8 paths in entry order, followed by the entry data in entry order with
-//! no padding. Writers sort entries by ASCII-lowercased path so output is
-//! byte-deterministic for a given libzstd build; readers key entries by
-//! ASCII-lowercased path while preserving the original path strings. Both the
+//! UTF-8 paths in entry order, followed by the entry data. Entries whose
+//! stored bytes and compression mode are identical share one blob: the data
+//! is written once, at the first entry in entry order that has it, and every
+//! later entry's table-of-contents range points back at it. Every other entry
+//! is laid out in entry order with no padding. The reader only bounds-checks
+//! each range, so ranges may coincide; a room folder copied between player
+//! variants or stages therefore costs no extra data. Writers sort entries by
+//! ASCII-lowercased path so output is byte-deterministic for a given libzstd
+//! build; readers key entries by ASCII-lowercased path while preserving the
+//! original path strings. Both the
 //! writer and the reader reject unsafe paths (absolute, `..` components,
 //! backslashes, NUL bytes or empty), so a pack can never name a file outside
 //! its pack root.
@@ -26,8 +32,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::{Context, Result, anyhow, bail};
 
@@ -58,7 +64,7 @@ const HEADER_LEN: usize = 10;
 const ENTRY_LEN: usize = 32;
 
 /// How one entry's bytes are stored in the pack.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Compression {
     /// The entry is stored as-is (table-of-contents mode 0).
     None,
@@ -98,6 +104,9 @@ pub struct PackWriter {
     entries: Vec<WriterEntry>,
     /// ASCII-lowercased entry paths, for O(1) duplicate detection.
     seen: HashSet<String>,
+    /// Per entry, the entry whose stored blob it shares, worked out on first
+    /// use and forgotten whenever an entry is added or recompressed.
+    sharing: OnceLock<Vec<Option<usize>>>,
 }
 
 /// One entry being assembled.
@@ -170,6 +179,7 @@ impl PackWriter {
         if !self.seen.insert(path.to_ascii_lowercase()) {
             bail!("duplicate pack entry: {path}");
         }
+        self.sharing.take();
         self.entries.push(WriterEntry {
             path: path.to_owned(),
             plain_len: data.len(),
@@ -273,6 +283,7 @@ impl PackWriter {
         for (index, result) in results {
             frames.push((index, result?));
         }
+        self.sharing.take();
         for (index, frame) in frames {
             if let Some(frame) = frame {
                 self.entries[index].data = frame;
@@ -306,6 +317,46 @@ impl PackWriter {
         })
     }
 
+    /// Per entry, the index of the entry whose stored blob it reuses, or
+    /// `None` when the entry's own bytes are written.
+    ///
+    /// Two entries share when their stored bytes and compression mode are
+    /// identical; the blob belongs to the first of them in pack order, so the
+    /// output stays byte-deterministic.
+    fn sharing(&self) -> &[Option<usize>] {
+        self.sharing.get_or_init(|| {
+            let order = pack_order(self.entries.iter().map(|entry| entry.path.as_str()));
+            let mut first: HashMap<(Compression, &[u8]), usize> = HashMap::new();
+            let mut sharing = vec![None; self.entries.len()];
+            for (_, index) in &order {
+                let entry = &self.entries[*index];
+                match first.entry((entry.compression, entry.data.as_slice())) {
+                    std::collections::hash_map::Entry::Occupied(owner) => {
+                        sharing[*index] = Some(*owner.get());
+                    }
+                    std::collections::hash_map::Entry::Vacant(slot) => {
+                        slot.insert(*index);
+                    }
+                }
+            }
+            sharing
+        })
+    }
+
+    /// Stored bytes saved because entries share an identical blob, and how
+    /// many entries reuse another entry's blob.
+    pub fn shared(&self) -> (usize, usize) {
+        let mut bytes = 0;
+        let mut count = 0;
+        for (entry, owner) in self.entries.iter().zip(self.sharing()) {
+            if owner.is_some() {
+                bytes += entry.data.len();
+                count += 1;
+            }
+        }
+        (count, bytes)
+    }
+
     /// Total size in bytes of the serialized pack.
     pub fn pack_size(&self) -> Result<usize> {
         let count = self.entries.len();
@@ -316,10 +367,11 @@ impl PackWriter {
         let mut total = HEADER_LEN
             .checked_add(toc_len)
             .context("pack table of contents is too large")?;
-        for entry in &self.entries {
+        for (entry, owner) in self.entries.iter().zip(self.sharing()) {
+            let stored = if owner.is_some() { 0 } else { entry.data.len() };
             total = total
                 .checked_add(entry.path.len() + 1)
-                .and_then(|size| size.checked_add(entry.data.len()))
+                .and_then(|size| size.checked_add(stored))
                 .context("pack data exceeds addressable size")?;
         }
         Ok(total)
@@ -345,20 +397,34 @@ impl PackWriter {
                 .context("pack paths exceed addressable size")?;
         }
 
+        let sharing = self.sharing();
         let mut toc = Vec::with_capacity(toc_len);
         let mut path_offset = paths_start;
         let mut data_offset = data_start;
+        // Where each blob owner's data landed; an owner always sorts before
+        // the entries that share its blob, so it is placed first.
+        let mut placed = HashMap::new();
         for (_, index) in &order {
             let entry = &self.entries[*index];
+            let offset = match sharing[*index] {
+                Some(owner) => placed[&owner],
+                None => {
+                    let offset = data_offset;
+                    placed.insert(*index, offset);
+                    data_offset = data_offset
+                        .checked_add(entry.data.len())
+                        .context("pack data exceeds addressable size")?;
+                    offset
+                }
+            };
             push_toc_entry(
                 &mut toc,
                 path_offset,
-                data_offset,
+                offset,
                 entry.data.len(),
                 entry.compression,
             )?;
             path_offset += entry.path.len() + 1;
-            data_offset += entry.data.len();
         }
 
         Ok(SerializeLayout {
@@ -376,8 +442,11 @@ impl PackWriter {
             out.write_all(self.entries[*index].path.as_bytes())?;
             out.write_all(&[0])?;
         }
+        let sharing = self.sharing();
         for (_, index) in &layout.order {
-            out.write_all(&self.entries[*index].data)?;
+            if sharing[*index].is_none() {
+                out.write_all(&self.entries[*index].data)?;
+            }
         }
         Ok(())
     }
@@ -770,6 +839,11 @@ fn compress_streamed(
 
 /// Append the `count` entries arriving on `done` to `out` in position order,
 /// releasing each one from `in_flight` once written.
+///
+/// An entry whose stored bytes and compression mode match an earlier one's is
+/// not written again but pointed at that entry's blob, as
+/// [`PackWriter`] does. The earlier bytes are gone by then, so blobs are
+/// matched by SHA-256 digest rather than compared.
 fn write_in_order(
     count: usize,
     done: std::sync::mpsc::Receiver<Compressed>,
@@ -779,6 +853,7 @@ fn write_in_order(
 ) -> Result<Vec<StoredEntry>> {
     let mut stored = Vec::with_capacity(count);
     let mut waiting = HashMap::new();
+    let mut blobs: HashMap<[u8; 32], usize> = HashMap::new();
     let mut offset = data_start;
     while stored.len() < count {
         let position = stored.len();
@@ -797,14 +872,30 @@ fn write_in_order(
                 (plain_len, data, compression)
             }
         };
-        out.write_all(&data)?;
-        stored.push((offset, data.len(), compression));
-        offset = offset
-            .checked_add(data.len())
-            .context("pack data exceeds addressable size")?;
+        let digest = blob_digest(&data, compression);
+        if let Some(&owner) = blobs.get(&digest) {
+            stored.push(stored[owner]);
+        } else {
+            blobs.insert(digest, position);
+            out.write_all(&data)?;
+            stored.push((offset, data.len(), compression));
+            offset = offset
+                .checked_add(data.len())
+                .context("pack data exceeds addressable size")?;
+        }
         in_flight.written(plain_len);
     }
     Ok(stored)
+}
+
+/// SHA-256 of one stored blob and its compression mode, the identity
+/// [`write_in_order`] shares blobs by.
+fn blob_digest(data: &[u8], compression: Compression) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update([compression.mode()]);
+    hasher.update(data);
+    hasher.finalize().into()
 }
 
 /// One entry of a pack, as reported by [`Pack::entries`].
@@ -3355,5 +3446,206 @@ mod tests {
             .to_string();
         assert!(err.contains("failed to read pack"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn identical_entries_share_one_blob() {
+        let mut writer = PackWriter::new();
+        writer.add("b.txt", vec![0xDE, 0xAD]).unwrap();
+        writer.add("a.bin", vec![0x01, 0x02, 0x03]).unwrap();
+        writer.add("c.txt", vec![0xDE, 0xAD]).unwrap();
+        assert_eq!(writer.shared(), (1, 2));
+
+        let mut expected = Vec::new();
+        expected.extend_from_slice(b"APAK");
+        expected.extend_from_slice(&VERSION.to_le_bytes());
+        expected.extend_from_slice(&3u32.to_le_bytes());
+        // Entry 0 (a.bin): path at 106, data at 124, length 3.
+        expected.extend_from_slice(&106u64.to_le_bytes());
+        expected.extend_from_slice(&124u64.to_le_bytes());
+        expected.extend_from_slice(&3u64.to_le_bytes());
+        expected.extend_from_slice(&[0; 8]);
+        // Entry 1 (b.txt): path at 112, data at 127, length 2.
+        expected.extend_from_slice(&112u64.to_le_bytes());
+        expected.extend_from_slice(&127u64.to_le_bytes());
+        expected.extend_from_slice(&2u64.to_le_bytes());
+        expected.extend_from_slice(&[0; 8]);
+        // Entry 2 (c.txt): path at 118, sharing b.txt's data at 127.
+        expected.extend_from_slice(&118u64.to_le_bytes());
+        expected.extend_from_slice(&127u64.to_le_bytes());
+        expected.extend_from_slice(&2u64.to_le_bytes());
+        expected.extend_from_slice(&[0; 8]);
+        expected.extend_from_slice(b"a.bin\0b.txt\0c.txt\0");
+        expected.extend_from_slice(&[0x01, 0x02, 0x03, 0xDE, 0xAD]);
+
+        let bytes = writer.to_bytes().unwrap();
+        assert_eq!(bytes, expected);
+        assert_eq!(writer.pack_size().unwrap(), bytes.len());
+
+        let pack = Pack::from_bytes(bytes).unwrap();
+        assert_eq!(pack.len(), 3);
+        assert_eq!(&*pack.read("a.bin").unwrap(), &[0x01, 0x02, 0x03]);
+        assert_eq!(&*pack.read("b.txt").unwrap(), &[0xDE, 0xAD]);
+        assert_eq!(&*pack.read("c.txt").unwrap(), &[0xDE, 0xAD]);
+        let sizes: Vec<usize> = pack.entries().map(|entry| entry.size()).collect();
+        assert_eq!(sizes, [3, 2, 2]);
+    }
+
+    #[test]
+    fn shared_blobs_belong_to_the_first_entry_in_pack_order() {
+        // Added in reverse order, the blob still lands at the entry that
+        // sorts first, so insertion order cannot change the bytes.
+        let data = vec![4u8; 100];
+        let mut forward = PackWriter::new();
+        let mut reverse = PackWriter::new();
+        let paths = [
+            "room/1000/cut/00.bmp",
+            "room/1001/cut/00.bmp",
+            "room/6000/cut/00.bmp",
+        ];
+        for path in paths {
+            forward.add(path, data.clone()).unwrap();
+        }
+        for path in paths.iter().rev() {
+            reverse.add(path, data.clone()).unwrap();
+        }
+        let bytes = forward.to_bytes().unwrap();
+        assert_eq!(reverse.to_bytes().unwrap(), bytes);
+        assert_eq!(forward.shared(), (2, 200));
+
+        let data_start =
+            HEADER_LEN + 3 * ENTRY_LEN + paths.iter().map(|path| path.len() + 1).sum::<usize>();
+        assert_eq!(bytes.len(), data_start + data.len());
+        for index in 0..3 {
+            let toc = &bytes[HEADER_LEN + index * ENTRY_LEN..];
+            assert_eq!(read_u64(toc, 8).unwrap(), data_start as u64);
+        }
+    }
+
+    #[test]
+    fn compressed_entries_share_and_raw_copies_stay_apart() {
+        let rdt = vec![7u8; 64 * 1024];
+        let mut writer = PackWriter::new();
+        writer.add("room/1000/room.rdt", rdt.clone()).unwrap();
+        writer.add("room/1001/room.rdt", rdt.clone()).unwrap();
+        // The same plain bytes kept raw store differently, so they do not
+        // share the zstd frame.
+        writer.add("room/1002/room.avi", rdt.clone()).unwrap();
+        writer
+            .compress_entries(2, |path| path.ends_with(".avi"))
+            .unwrap();
+        let frame_len = writer.entries().next().unwrap().stored_len();
+        assert_eq!(writer.shared(), (1, frame_len));
+
+        let bytes = writer.to_bytes().unwrap();
+        assert_eq!(writer.pack_size().unwrap(), bytes.len());
+        let first = &bytes[HEADER_LEN..];
+        let second = &bytes[HEADER_LEN + ENTRY_LEN..];
+        assert_eq!(read_u64(first, 8).unwrap(), read_u64(second, 8).unwrap());
+        assert_eq!(second[24], 1);
+
+        let pack = Pack::from_bytes(bytes).unwrap();
+        for path in [
+            "room/1000/room.rdt",
+            "room/1001/room.rdt",
+            "room/1002/room.avi",
+        ] {
+            assert_eq!(*pack.read(path).unwrap(), *rdt, "{path}");
+        }
+    }
+
+    #[test]
+    fn adding_after_sizing_recomputes_sharing() {
+        let mut writer = PackWriter::new();
+        writer.add("a.bin", vec![1; 10]).unwrap();
+        writer.add("b.bin", vec![2; 10]).unwrap();
+        assert_eq!(writer.shared(), (0, 0));
+        writer.add("c.bin", vec![1; 10]).unwrap();
+        assert_eq!(writer.shared(), (1, 10));
+        let bytes = writer.to_bytes().unwrap();
+        assert_eq!(writer.pack_size().unwrap(), bytes.len());
+        let pack = Pack::from_bytes(bytes).unwrap();
+        assert_eq!(&*pack.read("c.bin").unwrap(), &[1; 10]);
+    }
+
+    #[test]
+    fn a_streamed_pack_shares_blobs_like_the_in_memory_writer() {
+        let dir = TempDir::new("stream-shared");
+        let cut: Vec<u8> = (0..=255u8).cycle().take(4_096).collect();
+        let entries: Vec<(String, Vec<u8>)> = vec![
+            ("room/1001/cut/00.bmp".into(), cut.clone()),
+            ("room/1000/cut/00.bmp".into(), cut.clone()),
+            ("room/1000/movie.avi".into(), cut.clone()),
+            ("room/1001/movie.avi".into(), cut.clone()),
+            ("room/1000/room.rdt".into(), vec![3u8; 1_000]),
+            ("a.bin".into(), Vec::new()),
+            ("b.bin".into(), Vec::new()),
+        ];
+        let expected = in_memory_pack(&entries);
+        let unshared = HEADER_LEN
+            + entries.len() * ENTRY_LEN
+            + entries
+                .iter()
+                .map(|(path, data)| path.len() + 1 + data.len())
+                .sum::<usize>();
+        assert!(expected.len() < unshared - 2 * cut.len());
+        for jobs in [1, 4] {
+            let out = dir.join(&format!("out-{jobs}.akpak"));
+            stream(&out, &entries, jobs).unwrap();
+            assert_eq!(std::fs::read(&out).unwrap(), expected, "jobs {jobs}");
+        }
+        let pack = Pack::open(&dir.join("out-1.akpak")).unwrap();
+        for (path, data) in &entries {
+            assert_eq!(*pack.read(path).unwrap(), **data, "{path}");
+        }
+    }
+
+    #[test]
+    fn layered_packs_read_shared_blobs() {
+        let dir = TempDir::new("shared-layer");
+        let base = dir.join("base.akpak");
+        let mod_a = dir.join("mod.akpak");
+
+        let cut = vec![2u8; 16 * 1024];
+        let mut writer = PackWriter::new();
+        writer.add("room/1000/cut/00.bmp", cut.clone()).unwrap();
+        writer.add("room/1001/cut/00.bmp", cut.clone()).unwrap();
+        writer
+            .add("room/1000/room.rdt", vec![1u8; 32 * 1024])
+            .unwrap();
+        writer.compress_entries(2, |_| false).unwrap();
+        writer.write(&base).unwrap();
+
+        // The mod overrides one sharer and shares a blob of its own.
+        let layer_bytes = vec![9u8; 8 * 1024];
+        let mut writer = PackWriter::new();
+        writer
+            .add(manifest::ENTRY, mod_manifest("mod", "base", 0))
+            .unwrap();
+        writer
+            .add("room/1000/cut/00.bmp", layer_bytes.clone())
+            .unwrap();
+        writer
+            .add("room/1000/room.rdt", layer_bytes.clone())
+            .unwrap();
+        writer
+            .compress_entries(1, |path| path == manifest::ENTRY)
+            .unwrap();
+        assert_eq!(writer.shared().0, 1);
+        writer.write(&mod_a).unwrap();
+
+        let layered = Pack::open_layered(&base, &[mod_a]).unwrap();
+        assert_eq!(
+            &*layered.read("room/1000/cut/00.bmp").unwrap(),
+            layer_bytes.as_slice()
+        );
+        assert_eq!(
+            &*layered.read("room/1000/room.rdt").unwrap(),
+            layer_bytes.as_slice()
+        );
+        assert_eq!(
+            &*layered.read("room/1001/cut/00.bmp").unwrap(),
+            cut.as_slice()
+        );
     }
 }

@@ -826,6 +826,11 @@ pub fn convert_game_observed(
             "compress: {compressed} of {entries} entries stored with zstd (level {})",
             crate::pack::ZSTD_LEVEL
         )?;
+        let (shared_count, shared_bytes) = writer.shared();
+        writeln!(
+            report,
+            "share: {shared_count} entries reuse an identical blob, {shared_bytes} bytes saved"
+        )?;
         write_entry_report(&writer, &mut report)?;
     }
     writeln!(
