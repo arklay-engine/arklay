@@ -18,13 +18,13 @@ entry, exactly the reference's `t`. Scripts should not place input on tick 0
 
 | name | reference raw pad bit | arklay key |
 | --- | --- | --- |
-| `up` `down` `left` `right` | d-pad `0x1000`/`0x4000`/`0x8000`/`0x2000` | arrow keys |
-| `confirm` (`action`, `cross`) | Cross `0x0080` | Space/Return |
-| `cancel` (`circle`) | Circle `0x0040` | X/Backspace/Esc |
+| `up` `down` `left` `right` | d-pad `0x1000`/`0x4000`/`0x8000`/`0x2000` | WASD/arrow keys |
+| `confirm` (`action`, `cross`) | Cross `0x0080` | F/Return |
+| `cancel` (`circle`) | Circle `0x0040` | Esc/Backspace |
 | `run` | Circle `0x0040` | Shift |
-| `aim` (`square`) | Square `0x0008` | C |
-| `fire` | R1 | Z |
-| `start` (`inventory`) | START `0x0800` | Tab |
+| `aim` (`square`) | Square `0x0008` | right mouse button |
+| `fire` | R1 | F/Return |
+| `start` (`inventory`) | START `0x0800` | Tab/I |
 | `page_left` (`l1`) | not a raw pad bit | `[` |
 | `page_right` (`r1`) | not a raw pad bit | `]` |
 
@@ -32,7 +32,10 @@ The port's raw pad layout has no L1/R1 bits (`--test-press`/`--test-input` can
 only inject the bindings in the table above), so `page_left`/`page_right` are
 unknown to the reference and act as plain releases there; a scenario that wants
 the same paging on both engines must use the screen's own keys (the D-pad
-up/down page the item box).
+up/down page the item box). The port-only actions (`quick_turn`, `reload`,
+`map`, `weapon_prev`, `weapon_next`, `target_prev`, `target_next`,
+`equip_1` to `equip_10`) are scriptable in arklay but have no reference
+equivalent either.
 
 Run a scenario against both engines with `scripts/oracle-ui.sh`:
 

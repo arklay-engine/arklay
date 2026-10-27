@@ -4,18 +4,19 @@
 //! The engine never asks about a key, a mouse button or a gamepad button
 //! directly. Each input source is looked up in [`Bindings`], which maps it to
 //! the [`Action`]s it drives; an action may carry any number of bindings from
-//! any device (aim on `C`, the right mouse button and the left trigger at
-//! once). The port-only inputs (F1 or the gamepad's back button for the
-//! debug menu, F9 return to title, the gamepad's start button for the
-//! in-game menu) are fixed and can never be bound: see
-//! [`Source::reserved_bit`].
+//! any device (aim on the right mouse button and the left trigger at once).
+//! The port-only inputs (F1 for the debug menu, F9 return to title, the
+//! gamepad's start button for the in-game menu) are fixed and can never be
+//! bound: see [`Source::reserved_bit`]. Pressing the gamepad's back and start
+//! buttons together also opens the debug menu; back on its own stays
+//! bindable (the map by default).
 //!
 //! Bindings persist in `arklay.toml`'s `[bindings]` table as one array of
 //! source names per action:
 //!
 //! ```toml
 //! [bindings]
-//! aim = ["key:C", "mouse:right", "axis:lefttrigger+"]
+//! aim = ["mouse:right", "axis:lefttrigger+"]
 //! ```
 //!
 //! A source name is `key:<SDL scancode name>`, `mouse:left|middle|right|x1|x2`,
@@ -37,11 +38,12 @@ use sdl3_sys::gamepad::{
 };
 use sdl3_sys::keyboard::{SDL_GetScancodeFromName, SDL_GetScancodeName};
 use sdl3_sys::scancode::{
-    SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_C, SDL_SCANCODE_COUNT, SDL_SCANCODE_DOWN,
-    SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F1, SDL_SCANCODE_F9, SDL_SCANCODE_LEFT,
-    SDL_SCANCODE_LEFTBRACKET, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT,
-    SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_SPACE, SDL_SCANCODE_TAB,
-    SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UP, SDL_SCANCODE_X, SDL_SCANCODE_Z, SDL_Scancode,
+    SDL_SCANCODE_0, SDL_SCANCODE_1, SDL_SCANCODE_A, SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_COUNT,
+    SDL_SCANCODE_D, SDL_SCANCODE_DOWN, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F, SDL_SCANCODE_F1,
+    SDL_SCANCODE_F9, SDL_SCANCODE_I, SDL_SCANCODE_LEFT, SDL_SCANCODE_LEFTBRACKET,
+    SDL_SCANCODE_LSHIFT, SDL_SCANCODE_M, SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN,
+    SDL_SCANCODE_RIGHT, SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S,
+    SDL_SCANCODE_TAB, SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_Scancode,
 };
 
 /// One logical action.
@@ -66,10 +68,36 @@ pub enum Action {
     PageLeft,
     /// R1: page the item box forward.
     PageRight,
+    /// Port-only: the quick turn on its own button (with `[game] quick_turn`).
+    QuickTurn,
+    /// Port-only: the tactical reload on its own button (with `[game]
+    /// tactical_reload`).
+    Reload,
+    /// Port-only: open the map straight from gameplay.
+    Map,
+    /// Port-only: equip the previous weapon in inventory order (or none).
+    WeaponPrev,
+    /// Port-only: equip the next weapon in inventory order (or none).
+    WeaponNext,
+    /// Port-only: lock the auto aim on to the previous target.
+    TargetPrev,
+    /// Port-only: lock the auto aim on to the next target.
+    TargetNext,
+    /// Port-only: equip the weapon in inventory slot 1 (or unequip).
+    EquipSlot1,
+    EquipSlot2,
+    EquipSlot3,
+    EquipSlot4,
+    EquipSlot5,
+    EquipSlot6,
+    EquipSlot7,
+    EquipSlot8,
+    EquipSlot9,
+    EquipSlot10,
 }
 
 /// Every action, in the order the rebind screen and the config file list them.
-pub const ACTIONS: [Action; 12] = [
+pub const ACTIONS: [Action; 29] = [
     Action::Up,
     Action::Down,
     Action::Left,
@@ -82,21 +110,53 @@ pub const ACTIONS: [Action; 12] = [
     Action::Start,
     Action::PageLeft,
     Action::PageRight,
+    Action::QuickTurn,
+    Action::Reload,
+    Action::Map,
+    Action::WeaponPrev,
+    Action::WeaponNext,
+    Action::TargetPrev,
+    Action::TargetNext,
+    Action::EquipSlot1,
+    Action::EquipSlot2,
+    Action::EquipSlot3,
+    Action::EquipSlot4,
+    Action::EquipSlot5,
+    Action::EquipSlot6,
+    Action::EquipSlot7,
+    Action::EquipSlot8,
+    Action::EquipSlot9,
+    Action::EquipSlot10,
 ];
 
-/// The fixed F1 (gamepad back) debug-menu bit, above every action bit.
-pub const DEBUG_MENU_BIT: u32 = 1 << 16;
+/// The slot-equip actions, slot 1 first.
+pub const EQUIP_SLOTS: [Action; 10] = [
+    Action::EquipSlot1,
+    Action::EquipSlot2,
+    Action::EquipSlot3,
+    Action::EquipSlot4,
+    Action::EquipSlot5,
+    Action::EquipSlot6,
+    Action::EquipSlot7,
+    Action::EquipSlot8,
+    Action::EquipSlot9,
+    Action::EquipSlot10,
+];
+
+/// The fixed debug-menu bit (F1, or the gamepad's back and start pressed
+/// together), above every action bit.
+pub const DEBUG_MENU_BIT: u64 = 1 << 32;
 /// The fixed F9 return-to-title bit.
-pub const RETURN_TITLE_BIT: u32 = 1 << 17;
+pub const RETURN_TITLE_BIT: u64 = 1 << 33;
 /// The fixed in-game menu bit: the gamepad's Start button (Escape raises it
 /// too, on top of its bindings).
-pub const SYSTEM_MENU_BIT: u32 = 1 << 18;
+pub const SYSTEM_MENU_BIT: u64 = 1 << 34;
 
 impl Action {
     /// The action's bit in an input word (the `--input` script word and the
     /// engine's latched held/pressed words).
-    pub const fn bit(self) -> u32 {
-        1 << self as u32
+    pub const fn bit(self) -> u64 {
+        1 << self as u64
     }
 
     /// The action's `[bindings]` key.
@@ -114,6 +174,23 @@ impl Action {
             Action::Start => "start",
             Action::PageLeft => "page_left",
             Action::PageRight => "page_right",
+            Action::QuickTurn => "quick_turn",
+            Action::Reload => "reload",
+            Action::Map => "map",
+            Action::WeaponPrev => "weapon_prev",
+            Action::WeaponNext => "weapon_next",
+            Action::TargetPrev => "target_prev",
+            Action::TargetNext => "target_next",
+            Action::EquipSlot1 => "equip_1",
+            Action::EquipSlot2 => "equip_2",
+            Action::EquipSlot3 => "equip_3",
+            Action::EquipSlot4 => "equip_4",
+            Action::EquipSlot5 => "equip_5",
+            Action::EquipSlot6 => "equip_6",
+            Action::EquipSlot7 => "equip_7",
+            Action::EquipSlot8 => "equip_8",
+            Action::EquipSlot9 => "equip_9",
+            Action::EquipSlot10 => "equip_10",
         }
     }
 
@@ -137,6 +214,23 @@ impl Action {
             Action::Start => "UI_CONTROLS_START",
             Action::PageLeft => "UI_CONTROLS_PAGE_LEFT",
             Action::PageRight => "UI_CONTROLS_PAGE_RIGHT",
+            Action::QuickTurn => "UI_CONTROLS_QUICK_TURN",
+            Action::Reload => "UI_CONTROLS_RELOAD",
+            Action::Map => "UI_CONTROLS_MAP",
+            Action::WeaponPrev => "UI_CONTROLS_WEAPON_PREV",
+            Action::WeaponNext => "UI_CONTROLS_WEAPON_NEXT",
+            Action::TargetPrev => "UI_CONTROLS_TARGET_PREV",
+            Action::TargetNext => "UI_CONTROLS_TARGET_NEXT",
+            Action::EquipSlot1 => "UI_CONTROLS_EQUIP_1",
+            Action::EquipSlot2 => "UI_CONTROLS_EQUIP_2",
+            Action::EquipSlot3 => "UI_CONTROLS_EQUIP_3",
+            Action::EquipSlot4 => "UI_CONTROLS_EQUIP_4",
+            Action::EquipSlot5 => "UI_CONTROLS_EQUIP_5",
+            Action::EquipSlot6 => "UI_CONTROLS_EQUIP_6",
+            Action::EquipSlot7 => "UI_CONTROLS_EQUIP_7",
+            Action::EquipSlot8 => "UI_CONTROLS_EQUIP_8",
+            Action::EquipSlot9 => "UI_CONTROLS_EQUIP_9",
+            Action::EquipSlot10 => "UI_CONTROLS_EQUIP_10",
         }
     }
 
@@ -172,13 +266,22 @@ const WHEEL_NAMES: [(Wheel, &str); 4] = [
     (Wheel::Right, "right"),
 ];
 
+/// SDL's left mouse button.
+const MOUSE_LEFT: u8 = 1;
+/// SDL's right mouse button.
+const MOUSE_RIGHT: u8 = 3;
+/// SDL's X1 mouse button: back.
+const MOUSE_BACK: u8 = 4;
+/// SDL's X2 mouse button: forward.
+const MOUSE_FORWARD: u8 = 5;
+
 /// SDL's mouse button numbers and their names.
 const MOUSE_NAMES: [(u8, &str); 5] = [
-    (1, "left"),
+    (MOUSE_LEFT, "left"),
     (2, "middle"),
-    (3, "right"),
-    (4, "x1"),
-    (5, "x2"),
+    (MOUSE_RIGHT, "right"),
+    (MOUSE_BACK, "x1"),
+    (MOUSE_FORWARD, "x2"),
 ];
 
 /// One physical input a binding can name.
@@ -208,16 +311,13 @@ impl Source {
         Source::Key(scancode.0)
     }
 
-    /// The fixed port-only bit a reserved input raises (F1 or the gamepad's
-    /// back button for the debug menu, F9, the gamepad's start button for
-    /// the in-game menu), or `None` for a source that can be bound.
-    pub fn reserved_bit(self) -> Option<u32> {
+    /// The fixed port-only bit a reserved input raises (F1 for the debug
+    /// menu, F9, the gamepad's start button for the in-game menu), or `None`
+    /// for a source that can be bound.
+    pub fn reserved_bit(self) -> Option<u64> {
         match self {
             Source::Key(code) if code == SDL_SCANCODE_F1.0 => Some(DEBUG_MENU_BIT),
             Source::Key(code) if code == SDL_SCANCODE_F9.0 => Some(RETURN_TITLE_BIT),
-            Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_BACK.0 => {
-                Some(DEBUG_MENU_BIT)
-            }
             Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_START.0 => {
                 Some(SYSTEM_MENU_BIT)
             }
@@ -411,11 +511,20 @@ pub struct Bindings {
 }
 
 impl Default for Bindings {
-    /// The shipped layout: the README's keyboard controls plus a gamepad
-    /// layout (d-pad and left stick move, south confirms, east cancels, west
-    /// runs, the triggers aim and fire, the shoulders page, north opens the
-    /// inventory; start is the fixed in-game menu button). No mouse input is
-    /// bound by default.
+    /// The shipped layout.
+    ///
+    /// The keyboard and mouse: WASD or the arrows move, Shift runs, F, Return
+    /// or the left mouse button act (and fire while aiming, like the
+    /// original's action button), the right mouse button aims, R reloads, Q
+    /// turns around, Tab or I opens the inventory, M the map, 1 to 0 equip an
+    /// inventory slot's weapon, the wheel cycles the weapons and the mouse's
+    /// back and forward buttons cycle the auto-aim target.
+    ///
+    /// The gamepad: the d-pad and left stick move, south confirms and fires
+    /// (the original's action button), east cancels, west runs, the triggers
+    /// aim and fire, the shoulders page the item box and cycle the target,
+    /// north opens the inventory and back the map; start is the fixed
+    /// in-game menu button.
     fn default() -> Self {
         use sdl3_sys::gamepad::{
             SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY,
@@ -433,6 +542,7 @@ impl Default for Bindings {
             (
                 Action::Up,
                 vec![
+                    key(SDL_SCANCODE_W),
                     key(SDL_SCANCODE_UP),
                     pad(SDL_GAMEPAD_BUTTON_DPAD_UP),
                     axis(SDL_GAMEPAD_AXIS_LEFTY, false),
@@ -441,6 +551,7 @@ impl Default for Bindings {
             (
                 Action::Down,
                 vec![
+                    key(SDL_SCANCODE_S),
                     key(SDL_SCANCODE_DOWN),
                     pad(SDL_GAMEPAD_BUTTON_DPAD_DOWN),
                     axis(SDL_GAMEPAD_AXIS_LEFTY, true),
@@ -449,6 +560,7 @@ impl Default for Bindings {
             (
                 Action::Left,
                 vec![
+                    key(SDL_SCANCODE_A),
                     key(SDL_SCANCODE_LEFT),
                     pad(SDL_GAMEPAD_BUTTON_DPAD_LEFT),
                     axis(SDL_GAMEPAD_AXIS_LEFTX, false),
@@ -457,6 +569,7 @@ impl Default for Bindings {
             (
                 Action::Right,
                 vec![
+                    key(SDL_SCANCODE_D),
                     key(SDL_SCANCODE_RIGHT),
                     pad(SDL_GAMEPAD_BUTTON_DPAD_RIGHT),
                     axis(SDL_GAMEPAD_AXIS_LEFTX, true),
@@ -465,17 +578,17 @@ impl Default for Bindings {
             (
                 Action::Confirm,
                 vec![
-                    key(SDL_SCANCODE_SPACE),
+                    key(SDL_SCANCODE_F),
                     key(SDL_SCANCODE_RETURN),
+                    Source::Mouse(MOUSE_LEFT),
                     pad(SDL_GAMEPAD_BUTTON_SOUTH),
                 ],
             ),
             (
                 Action::Cancel,
                 vec![
-                    key(SDL_SCANCODE_X),
-                    key(SDL_SCANCODE_BACKSPACE),
                     key(SDL_SCANCODE_ESCAPE),
+                    key(SDL_SCANCODE_BACKSPACE),
                     pad(SDL_GAMEPAD_BUTTON_EAST),
                 ],
             ),
@@ -490,20 +603,27 @@ impl Default for Bindings {
             (
                 Action::Aim,
                 vec![
-                    key(SDL_SCANCODE_C),
+                    Source::Mouse(MOUSE_RIGHT),
                     axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER, true),
                 ],
             ),
             (
                 Action::Fire,
                 vec![
-                    key(SDL_SCANCODE_Z),
+                    key(SDL_SCANCODE_F),
+                    key(SDL_SCANCODE_RETURN),
+                    Source::Mouse(MOUSE_LEFT),
+                    pad(SDL_GAMEPAD_BUTTON_SOUTH),
                     axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, true),
                 ],
             ),
             (
                 Action::Start,
-                vec![key(SDL_SCANCODE_TAB), pad(SDL_GAMEPAD_BUTTON_NORTH)],
+                vec![
+                    key(SDL_SCANCODE_TAB),
+                    key(SDL_SCANCODE_I),
+                    pad(SDL_GAMEPAD_BUTTON_NORTH),
+                ],
             ),
             (
                 Action::PageLeft,
@@ -519,21 +639,63 @@ impl Default for Bindings {
                     pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER),
                 ],
             ),
+            (Action::QuickTurn, vec![key(SDL_SCANCODE_Q)]),
+            (Action::Reload, vec![key(SDL_SCANCODE_R)]),
+            (
+                Action::Map,
+                vec![key(SDL_SCANCODE_M), pad(SDL_GAMEPAD_BUTTON_BACK)],
+            ),
+            (Action::WeaponPrev, vec![Source::Wheel(Wheel::Up)]),
+            (Action::WeaponNext, vec![Source::Wheel(Wheel::Down)]),
+            (
+                Action::TargetPrev,
+                vec![
+                    Source::Mouse(MOUSE_BACK),
+                    pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER),
+                ],
+            ),
+            (
+                Action::TargetNext,
+                vec![
+                    Source::Mouse(MOUSE_FORWARD),
+                    pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER),
+                ],
+            ),
         ] {
             bindings.sources[action as usize] = sources;
+        }
+        // The number row: 1 to 9 equip slots 1 to 9, 0 slot 10.
+        for (index, action) in EQUIP_SLOTS.into_iter().enumerate() {
+            let scancode = if index < 9 {
+                SDL_SCANCODE_1.0 + index as i32
+            } else {
+                SDL_SCANCODE_0.0
+            };
+            bindings.sources[action as usize] = vec![Source::Key(scancode)];
         }
         bindings
     }
 }
 
+/// The action pairs the shipped layout binds a source to on purpose: the
+/// original's action button confirms and fires, and the shoulders page the
+/// item box in its menu and cycle the auto-aim target while aiming.
+#[cfg(test)]
+const SHARED_PAIRS: [(Action, Action); 3] = [
+    (Action::Confirm, Action::Fire),
+    (Action::PageLeft, Action::TargetPrev),
+    (Action::PageRight, Action::TargetNext),
+];
+
 impl Bindings {
     /// These bindings with every gamepad source replaced by the `control_type`
     /// preset's; the keyboard and mouse sources are kept.
     /// - A: the default layout (west runs, the triggers aim and fire, the
-    ///   shoulders page).
+    ///   shoulders page and cycle the target).
     /// - B: the original PlayStation layout (the right shoulder aims, south
-    ///   fires, the triggers page).
-    /// - C: A with confirm and cancel swapped (east confirms, south cancels).
+    ///   fires, the triggers page and cycle the target).
+    /// - C: A with confirm and cancel swapped (east confirms and fires, south
+    ///   cancels).
     pub fn with_control_type(mut self, control_type: crate::config::ControlType) -> Self {
         use crate::config::ControlType;
         use sdl3_sys::gamepad::{
@@ -551,6 +713,8 @@ impl Bindings {
                     (Action::Fire, pad(SDL_GAMEPAD_BUTTON_SOUTH)),
                     (Action::PageLeft, axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)),
                     (Action::PageRight, axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)),
+                    (Action::TargetPrev, axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)),
+                    (Action::TargetNext, axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)),
                 ] {
                     layout.replace_pad(action, vec![source]);
                 }
@@ -558,6 +722,13 @@ impl Bindings {
             ControlType::C => {
                 layout.replace_pad(Action::Confirm, vec![pad(SDL_GAMEPAD_BUTTON_EAST)]);
                 layout.replace_pad(Action::Cancel, vec![pad(SDL_GAMEPAD_BUTTON_SOUTH)]);
+                layout.replace_pad(
+                    Action::Fire,
+                    vec![
+                        pad(SDL_GAMEPAD_BUTTON_EAST),
+                        axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER),
+                    ],
+                );
             }
         }
         // The preset's pad sources fill the old ones' slots in order, so the
@@ -637,7 +808,7 @@ impl Bindings {
 
     /// The action bits `source` drives (plus the fixed bit of a reserved
     /// key).
-    pub fn mask(&self, source: Source) -> u32 {
+    pub fn mask(&self, source: Source) -> u64 {
         let mut mask = source.reserved_bit().unwrap_or(0);
         for action in ACTIONS {
             if self.get(action).contains(&source) {
@@ -679,58 +850,116 @@ mod tests {
     #[test]
     fn a_control_type_swaps_only_the_gamepad_sources() {
         use crate::config::ControlType;
+        use sdl3_sys::gamepad::{
+            SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_GAMEPAD_BUTTON_EAST,
+            SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH,
+        };
         let mut bindings = Bindings::default();
-        bindings.bind(Action::Fire, 2, Source::Mouse(1));
+        assert!(bindings.bind(Action::Aim, usize::MAX, Source::key(SDL_SCANCODE_W)));
         assert_eq!(bindings.clone().with_control_type(ControlType::A), bindings);
         let b = bindings.clone().with_control_type(ControlType::B);
         assert_eq!(
-            b.get(Action::Fire),
+            b.get(Action::Aim),
             [
-                Source::key(sdl3_sys::scancode::SDL_SCANCODE_Z),
-                Source::PadButton(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_SOUTH.0),
-                Source::Mouse(1),
+                Source::Mouse(MOUSE_RIGHT),
+                Source::PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER.0),
+                Source::key(SDL_SCANCODE_W),
             ]
         );
+        assert_eq!(
+            b.get(Action::Fire),
+            [
+                Source::key(SDL_SCANCODE_F),
+                Source::key(SDL_SCANCODE_RETURN),
+                Source::Mouse(MOUSE_LEFT),
+                Source::PadButton(SDL_GAMEPAD_BUTTON_SOUTH.0),
+            ]
+        );
+        assert_eq!(
+            b.get(Action::TargetNext).last(),
+            Some(&Source::PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER.0, true))
+        );
+        assert_eq!(
+            b.get(Action::TargetPrev).last(),
+            Some(&Source::PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER.0, true))
+        );
         assert_eq!(b.with_control_type(ControlType::A), bindings);
-        let c = bindings.with_control_type(ControlType::C);
+        let c = bindings.clone().with_control_type(ControlType::C);
         assert_eq!(
             c.get(Action::Confirm).last(),
-            Some(&Source::PadButton(
-                sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_EAST.0
-            ))
+            Some(&Source::PadButton(SDL_GAMEPAD_BUTTON_EAST.0))
         );
+        assert_eq!(
+            c.get(Action::Fire)[3..],
+            [
+                Source::PadButton(SDL_GAMEPAD_BUTTON_EAST.0),
+                Source::PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER.0, true),
+            ]
+        );
+        assert_eq!(c.with_control_type(ControlType::A), bindings);
     }
 
     #[test]
-    fn default_keyboard_matches_the_readme_controls() {
+    fn default_keyboard_and_mouse_match_the_readme_controls() {
         let bindings = Bindings::default();
-        let keys = |action| -> Vec<String> {
+        let names = |action| -> Vec<String> {
             bindings
                 .get(action)
                 .iter()
-                .filter(|source| matches!(source, Source::Key(_)))
+                .filter(|source| !source.is_pad())
                 .map(|source| source.to_string())
                 .collect()
         };
-        assert_eq!(keys(Action::Up), ["key:Up"]);
-        assert_eq!(keys(Action::Confirm), ["key:Space", "key:Return"]);
+        assert_eq!(names(Action::Up), ["key:W", "key:Up"]);
+        assert_eq!(names(Action::Down), ["key:S", "key:Down"]);
+        assert_eq!(names(Action::Left), ["key:A", "key:Left"]);
+        assert_eq!(names(Action::Right), ["key:D", "key:Right"]);
         assert_eq!(
-            keys(Action::Cancel),
-            ["key:X", "key:Backspace", "key:Escape"]
+            names(Action::Confirm),
+            ["key:F", "key:Return", "mouse:left"]
         );
-        assert_eq!(keys(Action::Run), ["key:Left Shift", "key:Right Shift"]);
-        assert_eq!(keys(Action::Aim), ["key:C"]);
-        assert_eq!(keys(Action::Fire), ["key:Z"]);
-        assert_eq!(keys(Action::Start), ["key:Tab"]);
-        assert_eq!(keys(Action::PageLeft), ["key:["]);
-        assert_eq!(keys(Action::PageRight), ["key:]"]);
-        assert!(
-            ACTIONS.iter().all(|&action| bindings
-                .get(action)
+        assert_eq!(names(Action::Fire), names(Action::Confirm));
+        assert_eq!(names(Action::Cancel), ["key:Escape", "key:Backspace"]);
+        assert_eq!(names(Action::Run), ["key:Left Shift", "key:Right Shift"]);
+        assert_eq!(names(Action::Aim), ["mouse:right"]);
+        assert_eq!(names(Action::Start), ["key:Tab", "key:I"]);
+        assert_eq!(names(Action::PageLeft), ["key:["]);
+        assert_eq!(names(Action::PageRight), ["key:]"]);
+        assert_eq!(names(Action::QuickTurn), ["key:Q"]);
+        assert_eq!(names(Action::Reload), ["key:R"]);
+        assert_eq!(names(Action::Map), ["key:M"]);
+        assert_eq!(names(Action::WeaponPrev), ["wheel:up"]);
+        assert_eq!(names(Action::WeaponNext), ["wheel:down"]);
+        assert_eq!(names(Action::TargetPrev), ["mouse:x1"]);
+        assert_eq!(names(Action::TargetNext), ["mouse:x2"]);
+        let slots: Vec<String> = EQUIP_SLOTS.into_iter().flat_map(names).collect();
+        assert_eq!(
+            slots,
+            [
+                "key:1", "key:2", "key:3", "key:4", "key:5", "key:6", "key:7", "key:8", "key:9",
+                "key:0"
+            ]
+        );
+        assert_eq!(
+            bindings.get(Action::Map).last(),
+            Some(&Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0))
+        );
+        let shared = |a: Action, b: Action| {
+            SHARED_PAIRS
                 .iter()
-                .all(|&source| { bindings.conflicts(action, source).is_empty() })),
-            "the shipped layout has no conflicts"
-        );
+                .any(|&pair| pair == (a, b) || pair == (b, a))
+        };
+        for action in ACTIONS {
+            for &source in bindings.get(action) {
+                for other in bindings.conflicts(action, source) {
+                    assert!(
+                        shared(action, other),
+                        "{source} is bound to both {action:?} and {other:?}"
+                    );
+                }
+            }
+        }
+        assert_eq!(bindings.lockout(), None);
     }
 
     #[test]
@@ -774,7 +1003,7 @@ mod tests {
             "joy:a",
             "key:F1",
             "key:F9",
-            "pad:back",
+            "pad:start",
             "key:#0",
             "key:#99999",
             "mouse:0",
@@ -817,7 +1046,7 @@ mod tests {
         bindings.set(Action::Confirm, vec![Source::key(SDL_SCANCODE_ESCAPE)]);
         assert_eq!(bindings.lockout(), Some(Action::Confirm));
         // Sharing with a non-essential action is fine.
-        bindings.set(Action::Confirm, vec![Source::key(SDL_SCANCODE_Z)]);
+        bindings.set(Action::Confirm, vec![Source::key(SDL_SCANCODE_Q)]);
         assert_eq!(bindings.lockout(), None);
         bindings.set(Action::Start, Vec::new());
         assert_eq!(bindings.lockout(), Some(Action::Start));
@@ -826,7 +1055,7 @@ mod tests {
     #[test]
     fn one_action_takes_bindings_from_every_device() {
         let mut bindings = Bindings::default();
-        let mouse = Source::Mouse(3);
+        let mouse = Source::Mouse(2);
         assert!(bindings.bind(Action::Aim, usize::MAX, mouse));
         assert!(
             !bindings.bind(Action::Aim, usize::MAX, mouse),
@@ -841,8 +1070,8 @@ mod tests {
         assert!(
             !bindings
                 .get(Action::Fire)
-                .contains(&Source::key(SDL_SCANCODE_Z)),
-            "slot 0 replaced Z"
+                .contains(&Source::key(SDL_SCANCODE_F)),
+            "slot 0 replaced F"
         );
         assert!(bindings.unbind(Action::Fire, 0));
         assert!(!bindings.unbind(Action::Fire, 9));
@@ -852,8 +1081,16 @@ mod tests {
             DEBUG_MENU_BIT,
             "F1 stays fixed"
         );
+        let start = Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+        assert!(!bindings.bind(Action::Fire, 0, start));
+        assert_eq!(
+            bindings.mask(start),
+            SYSTEM_MENU_BIT,
+            "pad start stays fixed"
+        );
+        // Back on its own is an ordinary binding (the map by default).
         let back = Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0);
-        assert!(!bindings.bind(Action::Fire, 0, back));
-        assert_eq!(bindings.mask(back), DEBUG_MENU_BIT, "pad back stays fixed");
+        assert_eq!(bindings.mask(back), Action::Map.bit());
+        assert!(bindings.bind(Action::Fire, 0, back));
     }
 }

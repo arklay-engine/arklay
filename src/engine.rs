@@ -1901,6 +1901,10 @@ struct GameSession {
     file: Option<Box<ui::lua_screen::LuaScreen>>,
     /// The map tab (`ui/map.lua`); the room stays frozen while it is up.
     map: Option<Box<ui::lua_screen::LuaScreen>>,
+    /// Port-only: the map was opened straight from free play (the map
+    /// button), so leaving it closes the whole menu instead of returning to
+    /// the inventory.
+    map_direct: bool,
     /// The typewriter save screen; the room stays frozen while it is up.
     save_screen: Option<Box<dyn ui::save_load::SaveScreen>>,
     /// Where save files live for this session.
@@ -2461,6 +2465,7 @@ impl GameSession {
             item_box: None,
             file: None,
             map: None,
+            map_direct: false,
             save_screen: None,
             save_dir: save_dir.to_path_buf(),
             lua,
@@ -3237,6 +3242,17 @@ impl GameSession {
             self.begin_menu_open(pack);
             return Ok(());
         }
+        // The port's map button opens the map straight from free play,
+        // through the same gate and fade as START.
+        if ui.map && !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 {
+            self.game.draw_frame_rand();
+            self.begin_map_open(pack);
+            return Ok(());
+        }
+        // The port's equip buttons and weapon cycle.
+        if !was_active {
+            self.equip_hotkeys(ui);
+        }
 
         // The press that dismissed a message last tick is swallowed until the
         // key is released, exactly like the original's cleared edge-detect
@@ -3848,6 +3864,9 @@ impl GameSession {
         self.menu = None;
         self.examine = None;
         self.item_box = None;
+        if std::mem::take(&mut self.map_direct) {
+            self.map = None;
+        }
         self.game.message_menu = false;
         if let Some(assets) = self.loaded.player_assets.as_ref() {
             self.player
@@ -3866,6 +3885,11 @@ impl GameSession {
         if self.menu.is_none() {
             return;
         }
+        self.arm_menu_open_fade();
+    }
+
+    /// Arm the START menu's opening fade-out over the frozen room.
+    fn arm_menu_open_fade(&mut self) {
         // The original's `set_fading` only sets the counter: the accumulator is
         // left at the room-entry fade's negative leftover, and the first step
         // resets it to 0 before adding. Seed it from the room fade so the
@@ -3874,6 +3898,84 @@ impl GameSession {
         self.menu_fade_pending = true;
         self.menu_fade_started = false;
         self.menu_fade_phase = MenuFadePhase::Out;
+    }
+
+    /// Open the map straight from free play (the port's map button) through
+    /// the START menu's fade; leaving it closes the whole menu.
+    fn begin_map_open(&mut self, pack: &Pack) {
+        if self.menu.is_some() || self.menu_fade_phase != MenuFadePhase::None {
+            return;
+        }
+        let was_frozen = self.freeze_room_frame;
+        self.open_map(pack);
+        if self.menu.is_none() || self.map.is_none() {
+            // Nothing was shown and the player never left pad control, so
+            // undo the open without the menu exit's animation restore.
+            self.menu = None;
+            self.map = None;
+            self.game.message_menu = false;
+            self.freeze_room_frame = was_frozen;
+            return;
+        }
+        self.map_direct = true;
+        // The browser stays blank until its first update; run it now so the
+        // fade-in reveals the whole map rather than its empty frame.
+        if let Some(mut map) = self.map.take() {
+            let cx = self.ui_context(pack);
+            map.update(&cx, UiInput::default());
+            drop(cx);
+            self.map = Some(map);
+        }
+        self.arm_menu_open_fade();
+    }
+
+    /// The port's equip buttons and weapon cycle during free play: an equip
+    /// button equips its inventory slot's weapon (or unequips when the slot
+    /// holds none), and the cycle steps through the carried weapons in slot
+    /// order and nothing. Only while the player is free to act: no weapon
+    /// raised, no locked action and the controls not locked.
+    fn equip_hotkeys(&mut self, ui: UiInput) {
+        if ui.equip_slot.is_none() && ui.weapon_step == 0 {
+            return;
+        }
+        let free = self.attract.is_none()
+            && self.game.entities[0].is_being_attacked == 0
+            && self.game.entities[0].zone_flags & 0x20 == 0
+            && self.game.message_flags & game::MESSAGE_FLAG_CONTROLS != 0
+            && !self.player.weapon.active()
+            && self.player.locked == player::LockedAction::None;
+        if !free {
+            return;
+        }
+        let capacity = self
+            .game
+            .inventory_capacity()
+            .min(self.game.inventory.len());
+        let weapon_at = |game: &game::GameState, slot: usize| {
+            game.inventory[..capacity]
+                .get(slot)
+                .map(|stack| stack.id)
+                .filter(|&id| crate::weapons::is_weapon(id))
+        };
+        if let Some(slot) = ui.equip_slot {
+            let item = weapon_at(&self.game, usize::from(slot));
+            if item != self.game.equipped {
+                self.game.set_equipped(item);
+            }
+            return;
+        }
+        // The cycle: nothing, then each weapon slot in order.
+        let mut choices: Vec<Option<u8>> = vec![None];
+        choices.extend((0..capacity).filter_map(|slot| weapon_at(&self.game, slot).map(Some)));
+        let current = choices
+            .iter()
+            .position(|&choice| choice == self.game.equipped)
+            .unwrap_or(0);
+        let len = choices.len() as isize;
+        let next = (current as isize + isize::from(ui.weapon_step)).rem_euclid(len) as usize;
+        if choices[next] != self.game.equipped {
+            self.game.set_equipped(choices[next]);
+        }
     }
 
     /// Open the item box through the same fade the START menu uses: the
@@ -5023,6 +5125,12 @@ impl GameSession {
             // (the health monitor and its shared `rand()` draws) while the map
             // browser is up, exactly like the item box below.
             self.tick_menu_screen(pack);
+            // A map opened straight from free play closes the whole menu on
+            // the map button, and stays drawn through the closing fade.
+            if self.map_direct && ui.map {
+                self.begin_menu_close(pack);
+                return;
+            }
             // The screen takes the frame's one menu input, like the Rust
             // tabs; the engine plays its cue.
             let event_input = menu_input(ui);
@@ -5038,6 +5146,11 @@ impl GameSession {
             }
             if let ScreenResult::Continue = result {
                 self.map = Some(map);
+            } else if self.map_direct {
+                // Leaving a map opened from free play closes the whole menu;
+                // the map's own cue already played.
+                self.map = Some(map);
+                self.begin_menu_close_silent();
             }
             return;
         }
@@ -5817,6 +5930,12 @@ impl GameSession {
         )
     }
 
+    /// Whether the map screen is drawn this frame. A map opened from free
+    /// play stands in for the menu panel, so the same fades hide it.
+    fn map_visible(&self) -> bool {
+        self.map.is_some() && !(self.map_direct && self.menu_fade_hides())
+    }
+
     /// Whether a document pick-up owns the whole frame: the original's state-8
     /// file screen draws no inventory panel, so the menu under it is
     /// suppressed and the frame stays black around the reader and the filed
@@ -6233,8 +6352,11 @@ impl GameSession {
             // belongs to whatever owns the screen - a message window, the
             // examine viewer or a pick-up prompt draws there - so the menu must
             // not paint its own name under it.
-            let menu_ready =
-                self.menu_fade_phase == MenuFadePhase::None && self.menu_reveal_delay == 0;
+            // A map opened from free play has no inventory selection under
+            // it, so the menu's cursor and name line stay hidden.
+            let menu_ready = self.menu_fade_phase == MenuFadePhase::None
+                && self.menu_reveal_delay == 0
+                && !self.map_direct;
             let show_item_name = menu_ready
                 && !self.game.message.active
                 && self.pickup_view.is_none()
@@ -6364,7 +6486,7 @@ impl GameSession {
                 screen.draw(&cx, framebuffer);
             }
         }
-        if self.map.is_some() {
+        if self.map_visible() {
             let Self {
                 map,
                 save_dir,
@@ -6542,7 +6664,7 @@ impl GameSession {
                 || wants(self.item_box.as_deref()));
         menu_stack
             || wants(self.file.as_deref())
-            || wants(self.map.as_deref())
+            || (self.map_visible() && wants(self.map.as_deref()))
             || wants(pickup.and_then(|pickup| pickup.reader.as_deref()))
             || wants(pickup.and_then(|pickup| pickup.screen.as_deref()))
     }
@@ -9155,6 +9277,7 @@ fn write_trace_capture(app: &App, options: &trace::TraceOptions<'_>, index: u32)
 /// tick rate). With `stats` the presented frames are reported at exit.
 fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()> {
     let mut input = InputState::interactive();
+    input.no_combo = !app.debug_menu;
     app.enable_skips();
     app.enable_autosave();
     app.set_bindings(input.bindings().clone());
@@ -11640,15 +11763,17 @@ fn poll_events(
             input.key_up(unsafe { event.key.scancode });
         } else if kind == SDL_EVENT_MOUSE_MOTION {
             let motion = unsafe { event.motion };
+            let mut height = 0;
+            let mut width = 0;
+            let window = unsafe { SDL_GetWindowFromID(motion.windowID) };
+            if !window.is_null() {
+                unsafe { SDL_GetWindowSize(window, &mut width, &mut height) };
+            }
             if debug_view::mouse_captured() {
-                let mut height = 0;
-                let mut width = 0;
-                let window = unsafe { SDL_GetWindowFromID(motion.windowID) };
-                if !window.is_null() {
-                    unsafe { SDL_GetWindowSize(window, &mut width, &mut height) };
-                }
                 let shift = unsafe { SDL_GetModState() } & SDL_KMOD_SHIFT != SDL_KMOD_NONE;
                 debug_view::mouse_motion([motion.xrel, motion.yrel], height as f32, shift);
+            } else {
+                input.mouse_motion(motion.yrel, height as f32);
             }
             input.push_gui_event(gui::GuiEvent::PointerMove {
                 x: motion.x,
@@ -11666,6 +11791,12 @@ fn poll_events(
                 });
             }
             input.source_down(0, Source::Mouse(button.button), false);
+            // A mouse button that aims keeps the pointer in the window while
+            // it is held, so the aim's mouse tilt never stops at an edge.
+            if !input.relative_mouse && input.mouse_aim_held() {
+                input.relative_mouse = true;
+                set_relative_mouse(button.windowID, true);
+            }
         } else if kind == SDL_EVENT_MOUSE_BUTTON_UP {
             let button = unsafe { event.button };
             if i32::from(button.button) == SDL_BUTTON_MIDDLE && debug_view::middle_button(false) {
@@ -11678,6 +11809,10 @@ fn poll_events(
                 });
             }
             input.source_up(0, Source::Mouse(button.button));
+            if input.relative_mouse && !input.mouse_aim_held() {
+                input.relative_mouse = false;
+                set_relative_mouse(button.windowID, false);
+            }
         } else if kind == SDL_EVENT_MOUSE_WHEEL {
             // The integer deltas are whole notches (SDL accumulates a
             // touchpad's fractional scroll into them), so smooth scrolling
@@ -11710,14 +11845,14 @@ fn poll_events(
             input.device_removed(which.0);
         } else if kind == SDL_EVENT_GAMEPAD_BUTTON_DOWN {
             let button = unsafe { event.gbutton };
-            input.source_down(
+            input.pad_button_down(
                 button.which.0,
                 Source::PadButton(i32::from(button.button)),
-                false,
+                std::time::Instant::now(),
             );
         } else if kind == SDL_EVENT_GAMEPAD_BUTTON_UP {
             let button = unsafe { event.gbutton };
-            input.source_up(button.which.0, Source::PadButton(i32::from(button.button)));
+            input.pad_button_up(button.which.0, Source::PadButton(i32::from(button.button)));
         } else if kind == SDL_EVENT_GAMEPAD_AXIS_MOTION {
             let axis = unsafe { event.gaxis };
             input.axis_motion(axis.which.0, i32::from(axis.axis), axis.value);
@@ -11729,6 +11864,8 @@ fn poll_events(
             // Focusing away never delivers the held inputs' release events;
             // drop them so nothing sticks down.
             input.clear();
+            input.relative_mouse = false;
+            set_relative_mouse(unsafe { event.window.windowID }, false);
         } else if kind == SDL_EVENT_KEYBOARD_REMOVED {
             // Nor does unplugging a keyboard (which some gamepads also
             // expose); the pads' own held inputs are still good.
@@ -11736,6 +11873,15 @@ fn poll_events(
         }
     }
     quit
+}
+
+/// Turn the window's relative mouse mode on or off (the pointer hidden and
+/// held in the window, motion still reported).
+fn set_relative_mouse(window_id: sdl3_sys::video::SDL_WindowID, on: bool) {
+    let window = unsafe { SDL_GetWindowFromID(window_id) };
+    if !window.is_null() {
+        unsafe { sdl3_sys::mouse::SDL_SetWindowRelativeMouseMode(window, on) };
+    }
 }
 
 /// The gamepads open for input, by joystick instance id.
@@ -11938,7 +12084,7 @@ fn movie_buttons(ui: UiInput, input: player::Input) -> u16 {
 /// latched press edges: a tap held across one poll and released before the
 /// next would otherwise be missed. Presses not yet consumed by a tick are
 /// included so a quick tap still reaches the poll.
-fn movie_buttons_held(active: u32) -> u16 {
+fn movie_buttons_held(active: u64) -> u16 {
     let mut word = 0u16;
     if active & KEY_CONFIRM != 0 {
         word |= 0x0001;
@@ -13266,23 +13412,31 @@ fn apply_camera(room: &mut RoomState, game: &mut game::GameState, pos: Option<[i
 
 /// The latched input words carry one bit per logical action
 /// ([`controls::Action::bit`]) plus the fixed port-only F1/F9 bits.
-const KEY_UP: u32 = Action::Up.bit();
-const KEY_DOWN: u32 = Action::Down.bit();
-const KEY_LEFT: u32 = Action::Left.bit();
-const KEY_RIGHT: u32 = Action::Right.bit();
-const KEY_CONFIRM: u32 = Action::Confirm.bit();
-const KEY_CANCEL: u32 = Action::Cancel.bit();
-const KEY_RUN: u32 = Action::Run.bit();
-const KEY_AIM: u32 = Action::Aim.bit();
-const KEY_FIRE: u32 = Action::Fire.bit();
-const KEY_START: u32 = Action::Start.bit();
-const KEY_PAGE_LEFT: u32 = Action::PageLeft.bit();
-const KEY_PAGE_RIGHT: u32 = Action::PageRight.bit();
-const KEY_F1: u32 = controls::DEBUG_MENU_BIT;
-const KEY_F9: u32 = controls::RETURN_TITLE_BIT;
+const KEY_UP: u64 = Action::Up.bit();
+const KEY_DOWN: u64 = Action::Down.bit();
+const KEY_LEFT: u64 = Action::Left.bit();
+const KEY_RIGHT: u64 = Action::Right.bit();
+const KEY_CONFIRM: u64 = Action::Confirm.bit();
+const KEY_CANCEL: u64 = Action::Cancel.bit();
+const KEY_RUN: u64 = Action::Run.bit();
+const KEY_AIM: u64 = Action::Aim.bit();
+const KEY_FIRE: u64 = Action::Fire.bit();
+const KEY_START: u64 = Action::Start.bit();
+const KEY_PAGE_LEFT: u64 = Action::PageLeft.bit();
+const KEY_PAGE_RIGHT: u64 = Action::PageRight.bit();
+const KEY_QUICK_TURN: u64 = Action::QuickTurn.bit();
+const KEY_RELOAD: u64 = Action::Reload.bit();
+const KEY_MAP: u64 = Action::Map.bit();
+const KEY_WEAPON_PREV: u64 = Action::WeaponPrev.bit();
+const KEY_WEAPON_NEXT: u64 = Action::WeaponNext.bit();
+const KEY_TARGET_PREV: u64 = Action::TargetPrev.bit();
+const KEY_TARGET_NEXT: u64 = Action::TargetNext.bit();
+/// F1, or the gamepad's back and start pressed together.
+const KEY_F1: u64 = controls::DEBUG_MENU_BIT;
+const KEY_F9: u64 = controls::RETURN_TITLE_BIT;
 /// Escape (whatever else it is bound to) or the gamepad's Start: the native
 /// in-game menu.
-const KEY_SYSTEM: u32 = controls::SYSTEM_MENU_BIT;
+const KEY_SYSTEM: u64 = controls::SYSTEM_MENU_BIT;
 /// The most GUI events kept between frames; a loop that never drains them
 /// (the font sampler) cannot grow the queue without bound.
 const MAX_GUI_EVENTS: usize = 256;
@@ -13298,16 +13452,17 @@ const MAX_GUI_EVENTS: usize = 256;
 ///
 /// `up down left right confirm cancel run aim fire start page_left page_right`
 /// (with the aliases `action/cross`, `circle`, `square`, `inventory`, `l1`,
-/// `r1`).
+/// `r1`), plus every other action by its `[bindings]` name (`quick_turn`,
+/// `reload`, `map`, `weapon_next`, `target_prev`, `equip_1`, ...).
 #[derive(Debug, Default, Clone)]
 pub struct InputScript {
     /// `(tick, key bit word)` entries, sorted by tick; the last entry at or
     /// before a tick is the held set.
-    entries: Vec<(u32, u32)>,
+    entries: Vec<(u32, u64)>,
 }
 
 /// The key bit a `--input` button name maps to, or `None` for an unknown name.
-fn script_button_bit(name: &str) -> Option<u32> {
+fn script_button_bit(name: &str) -> Option<u64> {
     Some(match name {
         "up" => KEY_UP,
         "down" => KEY_DOWN,
@@ -13322,14 +13477,14 @@ fn script_button_bit(name: &str) -> Option<u32> {
         "page_left" | "l1" => KEY_PAGE_LEFT,
         "page_right" | "r1" => KEY_PAGE_RIGHT,
         "f9" | "return_title" => KEY_F9,
-        _ => return None,
+        _ => return Action::from_name(name).map(Action::bit),
     })
 }
 
 impl InputScript {
     /// Parse an `--input` script body.
     pub fn parse(text: &str) -> Result<Self> {
-        let mut entries: Vec<(u32, u32)> = Vec::new();
+        let mut entries: Vec<(u32, u64)> = Vec::new();
         for (number, line) in text.lines().enumerate() {
             let line = line.split('#').next().unwrap_or("").trim();
             if line.is_empty() {
@@ -13340,7 +13495,7 @@ impl InputScript {
             let tick: u32 = tick.parse().with_context(|| {
                 format!("input line {}: `{tick}` is not a tick number", number + 1)
             })?;
-            let mut word = 0u32;
+            let mut word = 0u64;
             for token in tokens {
                 let bit = script_button_bit(token).ok_or_else(|| {
                     anyhow::anyhow!("input line {}: unknown button `{token}`", number + 1)
@@ -13373,7 +13528,7 @@ impl InputScript {
     }
 
     /// The key word held during traced tick `t`.
-    pub fn word_at(&self, tick: u32) -> u32 {
+    pub fn word_at(&self, tick: u32) -> u64 {
         let mut word = 0;
         for &(at, value) in &self.entries {
             if at > tick {
@@ -13397,8 +13552,12 @@ impl InputScript {
 ///
 /// Held state is kept per physical source, so an action with several
 /// bindings stays held until the last of them is released: letting go of
-/// Space while Return (or the pad's south button) is still down must not
-/// clear confirm.
+/// F while Return (or the pad's south button) is still down must not clear
+/// confirm.
+///
+/// A gamepad's back and start presses are held back for up to
+/// [`COMBO_WINDOW`]: pressing the two together opens the debug menu in place
+/// of either button's own input (see [`Self::pad_button_down`]).
 #[derive(Default)]
 struct InputState {
     /// The action map every source is resolved through.
@@ -13412,10 +13571,10 @@ struct InputState {
     /// analog movement.
     sticks: HashMap<u32, [i16; 2]>,
     /// Action bits currently down, for continuous movement.
-    held: u32,
+    held: u64,
     /// Action bits that went down since the last tick; consumed by
     /// [`Self::tick`].
-    pressed: u32,
+    pressed: u64,
     /// A non-repeat press of any input since the last tick.
     any_pressed: bool,
     /// The first bindable source pressed since the last tick, for the rebind
@@ -13427,6 +13586,52 @@ struct InputState {
     /// (key repeats included) and pointer positions in window coordinates;
     /// drained every presented frame by [`Self::take_gui_events`].
     gui_events: Vec<gui::GuiEvent>,
+    /// Gamepad back/start presses held back for the back + start combo,
+    /// with when they went down.
+    combo_pending: Vec<(u32, controls::Source, std::time::Instant)>,
+    /// Back/start buttons that made a combo: they drive nothing until they
+    /// come up.
+    combo_swallowed: Vec<(u32, controls::Source)>,
+    /// The mouse's vertical travel while aiming, in window heights (negative
+    /// up), clamped to twice [`MOUSE_AIM_DISTANCE`].
+    aim_pitch: f32,
+    /// The aim direction the mouse travel holds: `-1` up, `1` down, `0`
+    /// level.
+    aim_pitch_dir: i8,
+    /// Whether an aim-bound mouse button turned the window's relative mouse
+    /// mode on; any later release with no such button left turns it off,
+    /// even when a rebind moved the button off AIM while it was down.
+    relative_mouse: bool,
+    /// With the debug menu disabled the back + start combo has nothing to
+    /// open, so both buttons act at once instead of waiting for a partner.
+    no_combo: bool,
+}
+
+/// How long a gamepad's back or start press waits for the other to make the
+/// debug-menu combo before it acts on its own.
+const COMBO_WINDOW: std::time::Duration = std::time::Duration::from_millis(150);
+/// The mouse travel, in window heights, that tilts the aim up or down; the
+/// tilt levels out again once the travel back passes half of it.
+const MOUSE_AIM_DISTANCE: f32 = 0.05;
+
+/// Whether `source` is a gamepad's back or start button, the debug-menu
+/// combo's two halves.
+fn combo_button(source: controls::Source) -> bool {
+    matches!(
+        source,
+        controls::Source::PadButton(button)
+            if button == SDL_GAMEPAD_BUTTON_BACK.0 || button == SDL_GAMEPAD_BUTTON_START.0
+    )
+}
+
+/// The other half of the back + start combo.
+fn combo_partner(source: controls::Source) -> controls::Source {
+    match source {
+        controls::Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_BACK.0 => {
+            controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0)
+        }
+        _ => controls::Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0),
+    }
 }
 
 /// One fixed tick of latched input, split into the shapes its consumers want.
@@ -13521,7 +13726,7 @@ impl InputState {
     /// and reset keys are fixed (their hints name them), Escape always backs
     /// out, and everything else navigates through the player's bindings.
     /// Only directions repeat while held.
-    fn gui_keys(&mut self, device: u32, source: controls::Source, mask: u32, repeat: bool) {
+    fn gui_keys(&mut self, device: u32, source: controls::Source, mask: u64, repeat: bool) {
         use controls::Source;
         use gui::GuiKey as Key;
         let kind = if device == 0 {
@@ -13597,6 +13802,7 @@ impl InputState {
 
     /// Drain the GUI events since the last frame.
     fn take_gui_events(&mut self) -> Vec<gui::GuiEvent> {
+        self.expire_combo(std::time::Instant::now());
         std::mem::take(&mut self.gui_events)
     }
 
@@ -13619,6 +13825,103 @@ impl InputState {
     fn source_tap(&mut self, source: controls::Source) {
         self.source_down(0, source, false);
         self.source_up(0, source);
+    }
+
+    /// Latch a gamepad button going down at `now`.
+    ///
+    /// Back and start wait up to [`COMBO_WINDOW`] for each other: the second
+    /// arriving while the first still waits raises the fixed debug-menu bit
+    /// instead, and both then drive nothing until released. A press the other
+    /// half never joins acts on its own once the window passes
+    /// ([`Self::expire_combo`]) or when it is released, so a quick tap still
+    /// lands.
+    fn pad_button_down(&mut self, device: u32, source: controls::Source, now: std::time::Instant) {
+        if self.no_combo || !combo_button(source) {
+            self.source_down(device, source, false);
+            return;
+        }
+        if self.combo_swallowed.contains(&(device, source))
+            || self
+                .combo_pending
+                .iter()
+                .any(|&(held, pending, _)| (held, pending) == (device, source))
+        {
+            return;
+        }
+        let partner = combo_partner(source);
+        if let Some(index) = self
+            .combo_pending
+            .iter()
+            .position(|&(held, pending, _)| (held, pending) == (device, partner))
+        {
+            self.combo_pending.remove(index);
+            self.combo_swallowed.push((device, partner));
+            self.combo_swallowed.push((device, source));
+            self.pressed |= KEY_F1;
+            self.any_pressed = true;
+            return;
+        }
+        self.combo_pending.push((device, source, now));
+    }
+
+    /// Latch a gamepad button going up: a combo half is forgotten, a press
+    /// still waiting for its partner is delivered as a tap.
+    fn pad_button_up(&mut self, device: u32, source: controls::Source) {
+        if let Some(index) = self
+            .combo_swallowed
+            .iter()
+            .position(|&held| held == (device, source))
+        {
+            self.combo_swallowed.remove(index);
+            return;
+        }
+        if let Some(index) = self
+            .combo_pending
+            .iter()
+            .position(|&(held, pending, _)| (held, pending) == (device, source))
+        {
+            self.combo_pending.remove(index);
+            self.source_down(device, source, false);
+        }
+        self.source_up(device, source);
+    }
+
+    /// Deliver the back/start presses whose combo window has passed by `now`.
+    fn expire_combo(&mut self, now: std::time::Instant) {
+        let mut index = 0;
+        while index < self.combo_pending.len() {
+            let (device, source, at) = self.combo_pending[index];
+            if now.saturating_duration_since(at) >= COMBO_WINDOW {
+                self.combo_pending.remove(index);
+                self.source_down(device, source, false);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    /// Latch the mouse moving `dy` pixels down in a window `height` pixels
+    /// tall. While AIM is held the travel tilts the aim: up past
+    /// [`MOUSE_AIM_DISTANCE`] of the height aims up, down past it aims down,
+    /// and travelling back past half of it levels the aim.
+    fn mouse_motion(&mut self, dy: f32, height: f32) {
+        if self.held & KEY_AIM == 0 || height <= 0.0 {
+            return;
+        }
+        let limit = MOUSE_AIM_DISTANCE * 2.0;
+        self.aim_pitch = (self.aim_pitch + dy / height).clamp(-limit, limit);
+        let pitch = self.aim_pitch;
+        self.aim_pitch_dir = if pitch <= -MOUSE_AIM_DISTANCE {
+            -1
+        } else if pitch >= MOUSE_AIM_DISTANCE {
+            1
+        } else if (self.aim_pitch_dir < 0 && pitch < -MOUSE_AIM_DISTANCE / 2.0)
+            || (self.aim_pitch_dir > 0 && pitch > MOUSE_AIM_DISTANCE / 2.0)
+        {
+            self.aim_pitch_dir
+        } else {
+            0
+        };
     }
 
     /// Latch a keyboard key-down.
@@ -13658,9 +13961,19 @@ impl InputState {
         self.axes.insert((device, axis), next);
     }
 
+    /// Whether a mouse button bound to AIM is still down.
+    fn mouse_aim_held(&self) -> bool {
+        self.sources.iter().any(|&(_, source)| {
+            matches!(source, controls::Source::Mouse(_))
+                && self.bindings.mask(source) & KEY_AIM != 0
+        })
+    }
+
     /// Drop every source a removed gamepad still held.
     fn device_removed(&mut self, device: u32) {
         self.sources.retain(|&(held, _)| held != device);
+        self.combo_pending.retain(|&(held, _, _)| held != device);
+        self.combo_swallowed.retain(|&(held, _)| held != device);
         self.axes.retain(|&(held, _), _| held != device);
         self.sticks.remove(&device);
         self.refresh_held();
@@ -13672,6 +13985,10 @@ impl InputState {
         self.sources.clear();
         self.axes.clear();
         self.sticks.clear();
+        self.combo_pending.clear();
+        self.combo_swallowed.clear();
+        self.aim_pitch = 0.0;
+        self.aim_pitch_dir = 0;
         self.held = 0;
         self.pressed = 0;
         self.any_pressed = false;
@@ -13687,7 +14004,7 @@ impl InputState {
     ///
     /// The film skip check runs on the render loop, between fixed ticks, and
     /// must see a tap that a tick has not consumed yet.
-    fn held_word(&self) -> u32 {
+    fn held_word(&self) -> u64 {
         self.held | self.pressed
     }
 
@@ -13697,8 +14014,25 @@ impl InputState {
     /// to the UI exactly once and, through `active`, still counts as one tick
     /// of movement/action even when its key was released before the tick.
     fn tick(&mut self) -> TickInput {
+        self.tick_at(std::time::Instant::now())
+    }
+
+    /// [`Self::tick`] at `now`, the time the back/start combo window is
+    /// measured against.
+    fn tick_at(&mut self, now: std::time::Instant) -> TickInput {
+        self.expire_combo(now);
         let pressed = std::mem::take(&mut self.pressed);
         let active = self.held | pressed;
+        // The mouse's aim tilt only lives while AIM is held; the weapon
+        // machine reads it, never the locomotion.
+        let aiming = active & KEY_AIM != 0;
+        if !aiming {
+            self.aim_pitch = 0.0;
+            self.aim_pitch_dir = 0;
+        }
+        let step = |previous: u64, next: u64| -> i8 {
+            i8::from(pressed & next != 0) - i8::from(pressed & previous != 0)
+        };
         TickInput {
             player: player::Input {
                 up: active & KEY_UP != 0,
@@ -13719,6 +14053,10 @@ impl InputState {
                 slow_motion: false,
                 message_blocked: false,
                 analog: self.stick(),
+                quick_turn_pressed: pressed & KEY_QUICK_TURN != 0,
+                reload_pressed: pressed & KEY_RELOAD != 0,
+                target_step: step(KEY_TARGET_PREV, KEY_TARGET_NEXT),
+                aim_tilt: self.aim_pitch_dir,
             },
             action: active & KEY_CONFIRM != 0,
             ui: UiInput {
@@ -13740,6 +14078,12 @@ impl InputState {
                 debug_menu: pressed & KEY_F1 != 0,
                 return_title: pressed & KEY_F9 != 0,
                 system_menu: pressed & KEY_SYSTEM != 0,
+                map: pressed & KEY_MAP != 0,
+                weapon_step: step(KEY_WEAPON_PREV, KEY_WEAPON_NEXT),
+                equip_slot: controls::EQUIP_SLOTS
+                    .iter()
+                    .position(|action| pressed & action.bit() != 0)
+                    .map(|slot| slot as u8),
                 any: std::mem::take(&mut self.any_pressed),
                 captured: self.captured.take(),
             },
@@ -13761,7 +14105,7 @@ impl InputState {
     /// reference's `--test-input` injects into the pad. The rising edge (keys
     /// down now that were not down last tick) becomes this tick's press, so a
     /// one-tick scripted tap reaches the UI exactly once.
-    fn tick_scripted(&mut self, down: u32) -> TickInput {
+    fn tick_scripted(&mut self, down: u64) -> TickInput {
         let edge = down & !self.held;
         self.held = down;
         self.pressed = edge;
@@ -15710,11 +16054,12 @@ mod tests {
     use crate::model::{ClipFrame, Emw, Keyframe, Skeleton, Texture8, Tmd};
     use crate::pack::PackWriter;
     use sdl3_sys::scancode::{
-        SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_C, SDL_SCANCODE_DOWN, SDL_SCANCODE_ESCAPE,
-        SDL_SCANCODE_F1, SDL_SCANCODE_F9, SDL_SCANCODE_LEFT, SDL_SCANCODE_LEFTBRACKET,
-        SDL_SCANCODE_LSHIFT, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_RIGHTBRACKET,
-        SDL_SCANCODE_RSHIFT, SDL_SCANCODE_SPACE, SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_X,
-        SDL_SCANCODE_Z,
+        SDL_SCANCODE_0, SDL_SCANCODE_1, SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_C, SDL_SCANCODE_DOWN,
+        SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F, SDL_SCANCODE_F1, SDL_SCANCODE_F9, SDL_SCANCODE_I,
+        SDL_SCANCODE_LEFT, SDL_SCANCODE_LEFTBRACKET, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_M,
+        SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT,
+        SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE,
+        SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_SCANCODE_X, SDL_SCANCODE_Z,
     };
 
     #[test]
@@ -20154,8 +20499,8 @@ mod tests {
     #[test]
     fn a_press_released_between_ticks_is_seen_exactly_once() {
         let mut input = InputState::default();
-        input.key_down(SDL_SCANCODE_SPACE, false);
-        input.key_up(SDL_SCANCODE_SPACE);
+        input.key_down(SDL_SCANCODE_RETURN, false);
+        input.key_up(SDL_SCANCODE_RETURN);
 
         let tick = input.tick();
         assert!(tick.ui.confirm, "the quick tap must reach its tick");
@@ -20288,7 +20633,14 @@ mod tests {
                 },
             ),
             (
-                SDL_SCANCODE_SPACE,
+                SDL_SCANCODE_W,
+                UiInput {
+                    up: true,
+                    ..UiInput::default()
+                },
+            ),
+            (
+                SDL_SCANCODE_F,
                 UiInput {
                     confirm: true,
                     ..UiInput::default()
@@ -20302,9 +20654,23 @@ mod tests {
                 },
             ),
             (
-                SDL_SCANCODE_X,
+                SDL_SCANCODE_M,
                 UiInput {
-                    cancel: true,
+                    map: true,
+                    ..UiInput::default()
+                },
+            ),
+            (
+                SDL_SCANCODE_1,
+                UiInput {
+                    equip_slot: Some(0),
+                    ..UiInput::default()
+                },
+            ),
+            (
+                SDL_SCANCODE_0,
+                UiInput {
+                    equip_slot: Some(9),
                     ..UiInput::default()
                 },
             ),
@@ -20339,6 +20705,13 @@ mod tests {
             ),
             (
                 SDL_SCANCODE_TAB,
+                UiInput {
+                    start: true,
+                    ..UiInput::default()
+                },
+            ),
+            (
+                SDL_SCANCODE_I,
                 UiInput {
                     start: true,
                     ..UiInput::default()
@@ -20400,6 +20773,39 @@ mod tests {
                     ..player::Input::default()
                 },
             ),
+            (
+                SDL_SCANCODE_S,
+                player::Input {
+                    down: true,
+                    ..player::Input::default()
+                },
+            ),
+            // The action key also fires while aiming, like the original's
+            // action button.
+            (
+                SDL_SCANCODE_F,
+                player::Input {
+                    action_held: true,
+                    action_pressed: true,
+                    fire: true,
+                    fire_pressed: true,
+                    ..player::Input::default()
+                },
+            ),
+            (
+                SDL_SCANCODE_Q,
+                player::Input {
+                    quick_turn_pressed: true,
+                    ..player::Input::default()
+                },
+            ),
+            (
+                SDL_SCANCODE_R,
+                player::Input {
+                    reload_pressed: true,
+                    ..player::Input::default()
+                },
+            ),
         ];
         for (scancode, expected) in move_cases {
             let mut input = InputState::default();
@@ -20408,7 +20814,7 @@ mod tests {
             assert_eq!(input.tick().player, expected, "scancode {}", scancode.0);
         }
 
-        for scancode in [SDL_SCANCODE_SPACE, SDL_SCANCODE_RETURN] {
+        for scancode in [SDL_SCANCODE_F, SDL_SCANCODE_RETURN] {
             let mut input = InputState::default();
             input.key_down(scancode, false);
             input.key_up(scancode);
@@ -20467,6 +20873,88 @@ mod tests {
             }
         );
         assert_eq!(session.game.entities[0].health, NEW_GAME_HEALTH[0]);
+    }
+
+    #[test]
+    fn the_number_keys_and_the_wheel_equip_the_inventory_weapons() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+        session.game.message_flags |= game::MESSAGE_FLAG_CONTROLS;
+        session.game.inventory.clear();
+        for (id, quantity) in [(2, 15), (0x0B, 15), (4, 6)] {
+            session
+                .game
+                .inventory
+                .push(game::InventoryItem { id, quantity });
+        }
+        session.game.set_equipped(None);
+        let slot = |slot: u8| UiInput {
+            equip_slot: Some(slot),
+            ..UiInput::default()
+        };
+        let wheel = |step: i8| UiInput {
+            weapon_step: step,
+            ..UiInput::default()
+        };
+        session.equip_hotkeys(slot(2));
+        assert_eq!(session.game.equipped, Some(4));
+        session.equip_hotkeys(slot(2));
+        assert_eq!(session.game.equipped, Some(4), "the same key keeps it");
+        session.equip_hotkeys(slot(1));
+        assert_eq!(session.game.equipped, None, "no weapon there unequips");
+        session.equip_hotkeys(slot(0));
+        assert_eq!(session.game.equipped, Some(2));
+        session.equip_hotkeys(slot(9));
+        assert_eq!(session.game.equipped, None, "past the items unequips");
+        // The wheel: nothing, the handgun, the shotgun, wrapping both ways.
+        session.equip_hotkeys(wheel(1));
+        assert_eq!(session.game.equipped, Some(2));
+        session.equip_hotkeys(wheel(1));
+        assert_eq!(session.game.equipped, Some(4));
+        session.equip_hotkeys(wheel(1));
+        assert_eq!(session.game.equipped, None);
+        session.equip_hotkeys(wheel(-1));
+        assert_eq!(session.game.equipped, Some(4));
+        // Refused while the controls are locked, a weapon is raised or an
+        // action owns the player.
+        session.game.message_flags &= !game::MESSAGE_FLAG_CONTROLS;
+        session.equip_hotkeys(slot(0));
+        assert_eq!(session.game.equipped, Some(4));
+        session.game.message_flags |= game::MESSAGE_FLAG_CONTROLS;
+        session.player.weapon.behavior = 0x13;
+        session.equip_hotkeys(slot(0));
+        assert_eq!(session.game.equipped, Some(4));
+        session.player.weapon.behavior = 0;
+        session.player.locked = player::LockedAction::QuickTurn;
+        session.equip_hotkeys(wheel(1));
+        assert_eq!(session.game.equipped, Some(4));
+        session.player.locked = player::LockedAction::None;
+        session.equip_hotkeys(slot(0));
+        assert_eq!(session.game.equipped, Some(2), "free again");
+    }
+
+    #[test]
+    fn the_map_button_opens_the_map_through_the_menu_fade_and_closes_it() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+        session.begin_map_open(&pack);
+        assert!(session.map.is_some() && session.menu.is_some());
+        assert!(session.map_direct);
+        assert_eq!(session.menu_fade_phase, MenuFadePhase::Out);
+        // The fades hide the map with the menu panel and its canvas.
+        assert!(!session.map_visible());
+        session.menu_fade_phase = MenuFadePhase::In;
+        assert!(session.map_visible());
+        session.menu_fade_phase = MenuFadePhase::Closing;
+        assert!(!session.map_visible());
+        // Leaving drops the map with the menu; the MAP tab's map would stay.
+        session.close_menu();
+        assert!(session.map.is_none() && session.menu.is_none());
+        assert!(!session.map_direct);
     }
 
     #[test]
@@ -25249,13 +25737,13 @@ off_0010:
             false,
         );
         input.axis_motion(7, SDL_GAMEPAD_AXIS_LEFTY.0, i16::MAX);
-        input.key_down(SDL_SCANCODE_C, false);
+        input.source_down(0, controls::Source::Mouse(3), false);
         let tick = input.tick();
         assert!(tick.player.run && tick.player.down && tick.player.aim);
         input.device_removed(7);
         let tick = input.tick();
         assert!(!tick.player.run && !tick.player.down, "pad inputs released");
-        assert!(tick.player.aim, "the keyboard's held key stays down");
+        assert!(tick.player.aim, "the mouse's held button stays down");
         // The pad's axis state went with it: a fresh push presses again.
         input.axis_motion(7, SDL_GAMEPAD_AXIS_LEFTY.0, i16::MAX);
         assert!(input.tick().ui.down);
@@ -25290,18 +25778,18 @@ off_0010:
     #[test]
     fn mouse_buttons_and_rebinding_while_held_never_stick() {
         let mut bindings = controls::Bindings::default();
-        let right = controls::Source::Mouse(3);
-        assert!(bindings.bind(controls::Action::Aim, usize::MAX, right));
+        let middle = controls::Source::Mouse(2);
+        assert!(bindings.bind(controls::Action::Aim, usize::MAX, middle));
         let mut input = InputState::new(bindings.clone());
-        input.source_down(0, right, false);
+        input.source_down(0, middle, false);
         let tick = input.tick();
         assert!(tick.player.aim_pressed && tick.player.aim);
-        input.source_up(0, right);
+        input.source_up(0, middle);
         assert!(!input.tick().player.aim);
 
-        // Z held for fire; fire moves to C while Z is down: fire releases at
-        // once, no stray edge appears, and Z's key-up leaves nothing behind.
-        input.key_down(SDL_SCANCODE_Z, false);
+        // F held for fire; fire moves to C while F is down: fire releases at
+        // once, no stray edge appears, and F's key-up leaves nothing behind.
+        input.key_down(SDL_SCANCODE_F, false);
         assert!(input.tick().player.fire);
         bindings.set(
             controls::Action::Fire,
@@ -25310,9 +25798,9 @@ off_0010:
         input.set_bindings(bindings.clone());
         let tick = input.tick();
         assert!(!tick.player.fire && !tick.player.fire_pressed);
-        // C held across a change that binds it to fire drives fire at once,
+        // X held across a change that binds it to fire drives fire at once,
         // without a fresh press.
-        input.key_up(SDL_SCANCODE_Z);
+        input.key_up(SDL_SCANCODE_F);
         input.key_down(SDL_SCANCODE_X, false);
         input.tick();
         let mut moved = bindings.clone();
@@ -25341,10 +25829,13 @@ off_0010:
         // A repeat is not a press, so it captures nothing.
         input.key_down(SDL_SCANCODE_Z, true);
         assert_eq!(input.tick().ui.captured, None);
-        // The pad's back button is the fixed debug-menu input; south is
-        // captured and confirms.
+        // The pad's back and start together are the fixed debug-menu
+        // combo; south is captured and confirms.
+        let now = std::time::Instant::now();
         let back = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0);
-        input.source_down(7, back, false);
+        let start = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+        input.pad_button_down(7, back, now);
+        input.pad_button_down(7, start, now);
         let tick = input.tick();
         assert!(tick.ui.debug_menu && tick.ui.captured.is_none());
         let south = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_SOUTH.0);
@@ -25352,6 +25843,155 @@ off_0010:
         let tick = input.tick();
         assert!(tick.ui.confirm);
         assert_eq!(tick.ui.captured, Some(south));
+    }
+
+    #[test]
+    fn back_and_start_together_open_the_debug_menu_and_nothing_else() {
+        let now = std::time::Instant::now();
+        let back = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0);
+        let start = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+        for (first, second) in [(back, start), (start, back)] {
+            let mut input = InputState::default();
+            input.pad_button_down(7, first, now);
+            // The first half waits for its partner.
+            let tick = input.tick_at(now);
+            assert!(!tick.ui.map && !tick.ui.system_menu && !tick.ui.debug_menu);
+            input.pad_button_down(7, second, now + COMBO_WINDOW / 2);
+            let tick = input.tick_at(now + COMBO_WINDOW);
+            assert!(tick.ui.debug_menu);
+            assert!(!tick.ui.map && !tick.ui.system_menu);
+            // Neither half drives anything until released, and the releases
+            // leave nothing behind.
+            assert!(!input.tick_at(now + COMBO_WINDOW * 4).ui.map);
+            input.pad_button_up(7, first);
+            input.pad_button_up(7, second);
+            let tick = input.tick_at(now + COMBO_WINDOW * 5);
+            assert_eq!(tick.ui, UiInput::default());
+            assert!(input.gui_events.is_empty(), "no GUI keys either");
+        }
+    }
+
+    #[test]
+    fn back_or_start_alone_acts_after_the_combo_window() {
+        let now = std::time::Instant::now();
+        let back = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0);
+        let start = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+        let mut input = InputState::default();
+        input.pad_button_down(7, back, now);
+        assert!(!input.tick_at(now + COMBO_WINDOW / 2).ui.map);
+        let tick = input.tick_at(now + COMBO_WINDOW);
+        assert!(tick.ui.map && !tick.ui.debug_menu, "back opens the map");
+        // Start pressed while back is already acting is no combo.
+        input.pad_button_down(7, start, now + COMBO_WINDOW);
+        let tick = input.tick_at(now + COMBO_WINDOW * 2);
+        assert!(tick.ui.system_menu && !tick.ui.debug_menu);
+        input.pad_button_up(7, back);
+        input.pad_button_up(7, start);
+        // A quick tap released inside the window still lands once.
+        input.pad_button_down(7, start, now);
+        input.pad_button_up(7, start);
+        let tick = input.tick_at(now);
+        assert!(tick.ui.system_menu && !tick.ui.debug_menu);
+        assert!(!input.tick_at(now + COMBO_WINDOW).ui.system_menu);
+        // A rebound back keeps working, just held back.
+        let mut bindings = controls::Bindings::default();
+        bindings.set(controls::Action::Run, vec![back]);
+        let mut input = InputState::new(bindings);
+        input.pad_button_down(7, back, now);
+        assert!(!input.tick_at(now).player.run);
+        assert!(input.tick_at(now + COMBO_WINDOW).player.run);
+        assert!(input.tick_at(now + COMBO_WINDOW * 3).player.run, "held");
+        input.pad_button_up(7, back);
+        assert!(!input.tick_at(now + COMBO_WINDOW * 4).player.run);
+        // A removed pad drops its waiting press.
+        input.pad_button_down(7, back, now);
+        input.device_removed(7);
+        assert!(!input.tick_at(now + COMBO_WINDOW).player.run);
+    }
+
+    #[test]
+    fn without_the_debug_menu_back_and_start_act_at_once() {
+        let now = std::time::Instant::now();
+        let back = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0);
+        let start = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+        let mut input = InputState {
+            no_combo: true,
+            ..InputState::default()
+        };
+        input.pad_button_down(7, back, now);
+        input.pad_button_down(7, start, now);
+        let tick = input.tick_at(now);
+        assert!(tick.ui.map && tick.ui.system_menu && !tick.ui.debug_menu);
+    }
+
+    #[test]
+    fn a_removed_pad_forgets_its_swallowed_combo_halves() {
+        let now = std::time::Instant::now();
+        let back = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0);
+        let start = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+        let mut input = InputState::default();
+        input.pad_button_down(7, back, now);
+        input.pad_button_down(7, start, now);
+        assert!(input.tick_at(now).ui.debug_menu);
+        input.device_removed(7);
+        // Plugged back in, a lone back press acts again after the window.
+        input.pad_button_down(7, back, now);
+        assert!(input.tick_at(now + COMBO_WINDOW).ui.map);
+    }
+
+    #[test]
+    fn the_mouse_tilts_the_aim_only_while_aiming() {
+        let mut input = InputState::default();
+        let right = controls::Source::Mouse(3);
+        // Travel without aiming does nothing.
+        input.mouse_motion(-200.0, 1000.0);
+        assert_eq!(input.tick().player.aim_tilt, 0);
+        input.source_down(0, right, false);
+        input.tick();
+        // Under the distance the aim stays level.
+        input.mouse_motion(-40.0, 1000.0);
+        assert_eq!(input.tick().player.aim_tilt, 0);
+        input.mouse_motion(-15.0, 1000.0);
+        let tick = input.tick();
+        assert_eq!(tick.player.aim_tilt, -1);
+        assert!(tick.player.aim);
+        // The tilt is not a direction: it never walks the player and the
+        // menus never see it.
+        assert!(!tick.player.up && !tick.player.down);
+        assert!(!tick.ui.up && !tick.ui.held_up);
+        assert_eq!(input.tick().player.aim_tilt, -1, "the tilt holds");
+        // The travel clamps at twice the distance, so coming back levels the
+        // aim after a short way, and further down aims down.
+        input.mouse_motion(-500.0, 1000.0);
+        input.mouse_motion(70.0, 1000.0);
+        assert_eq!(
+            input.tick().player.aim_tilt,
+            -1,
+            "not yet past half the distance"
+        );
+        input.mouse_motion(10.0, 1000.0);
+        assert_eq!(input.tick().player.aim_tilt, 0);
+        input.mouse_motion(80.0, 1000.0);
+        assert_eq!(input.tick().player.aim_tilt, 1);
+        // Releasing the aim drops the tilt.
+        input.source_up(0, right);
+        let tick = input.tick();
+        assert_eq!(tick.player.aim_tilt, 0);
+        assert!(!tick.player.aim);
+        input.source_down(0, right, false);
+        assert_eq!(input.tick().player.aim_tilt, 0, "a new aim starts level");
+    }
+
+    #[test]
+    fn script_buttons_name_every_action() {
+        for action in controls::ACTIONS {
+            assert_eq!(script_button_bit(action.name()), Some(action.bit()));
+        }
+        let script = InputScript::parse("3 equip_10 target_next\n").unwrap();
+        assert_eq!(
+            script.word_at(3),
+            controls::Action::EquipSlot10.bit() | controls::Action::TargetNext.bit()
+        );
     }
 
     #[test]

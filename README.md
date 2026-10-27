@@ -367,13 +367,17 @@ issue #187.
 `quick_turn` enables Classic REbirth's quick turn: while walking backward
 (including the back diagonals), pressing RUN turns the player 180 degrees in
 place over eight ticks, plays the no-weapon walk animation and its footsteps,
-and hands control back to normal movement. The player does not move or collide
-during the turn, and the new facing is live for rendering, collision and
-scripts. `--quick-turn` and `--no-quick-turn` override the file for one run.
+and hands control back to normal movement. The QUICK TURN button (`Q`)
+starts the same turn without the backward press, from standing too. The
+player does not move or collide during the turn, and the new facing is live
+for rendering, collision and scripts. `--quick-turn` and `--no-quick-turn`
+override the file for one run.
 
 `tactical_reload` is the Classic REbirth tactical reload: while a gun is
 aimed, holding RUN reloads it instead of firing, provided the clip is not full
-and the matching ammunition item is in the inventory. It plays the normal
+and the matching ammunition item is in the inventory. The RELOAD button (`R`)
+does the same without the aim: it raises the gun, reloads it and lowers it
+again. It plays the normal
 reload animation and its per-weapon cues and loads the matching ammunition
 stack through the original's transfer, so no round is fired and nothing new is
 animated (like the original's reload, a partial magazine is replaced by the
@@ -407,24 +411,30 @@ when they compare with the reference.
 
 | Key | Gamepad | Action |
 | --- | --- | --- |
-| Arrow keys | D-pad, left stick | Move (tank controls; the left stick moves relative to the camera, see `analog_movement`) / menu selection |
-| `Space`, `Return` | South (A / Cross) | Confirm / action / dismiss a message; skips the loading narration and a letterboxed cutscene |
-| `C` | Left trigger | Aim the equipped weapon (hold) |
-| `Z` | Right trigger | Fire / reload with the weapon aimed |
-| `Tab` | North (Y / Triangle) | START: open/close the inventory (pause menu), cycle the top tabs |
+| `W` `A` `S` `D`, arrow keys | D-pad, left stick | Move (tank controls; the left stick moves relative to the camera, see `analog_movement`) / menu selection |
+| `F`, `Return`, left mouse button | South (A / Cross) | Confirm / action / dismiss a message; skips the loading narration and a letterboxed cutscene; fires while aiming |
+| Right mouse button | Left trigger | Aim the equipped weapon (hold); while the mouse button aims, moving the mouse up or down aims up or down |
+| `F`, `Return`, left mouse button | Right trigger | Fire / reload with the weapon aimed |
+| `R` | | Reload the equipped gun (needs `tactical_reload`) |
+| `Q` | | Quick turn (needs `quick_turn`) |
+| `1` … `9`, `0` | | Equip the weapon in inventory slot 1 to 10; a slot without a weapon unequips |
+| Mouse wheel | | Cycle the equipped weapon through nothing and each weapon in the inventory |
+| Mouse back / forward | Left / right shoulder | Previous / next auto-aim target while aiming |
+| `Tab`, `I` | North (Y / Triangle) | START: open/close the inventory (pause menu), cycle the top tabs |
+| `M` | Back (Select) | Open the map; again (or Cancel) closes it |
 | `Esc` | Start | Open/close the in-game menu (restart, load game, options, quit) |
 | `[`, `]` | Left / right shoulder | L1/R1: page the item box |
-| `X`, `Backspace`, `Esc` | East (B / Circle) | Cancel (menus, character select, load screen) |
+| `Esc`, `Backspace` | East (B / Circle) | Cancel (menus, character select, load screen) |
 | `Shift` | West (X / Square) | Run (hold) |
 | `Shift` + `,` | Previous camera cut |
 | `Shift` + `.` | Next camera cut |
-| `F1` (gamepad Back / Select) | Port-only debug tools: freeze the room and open the tool list (room select, inventory, player, flags, cheats, save/load, item box, clear game, controls, display); Esc backs out one level, F1 closes |
+| `F1` (gamepad Back + Start together) | Port-only debug tools: freeze the room and open the tool list (room select, inventory, player, flags, cheats, save/load, item box, clear game, controls, display); Esc backs out one level, F1 closes |
 | `F2`, `F3` | Port-only game speed: F2 steps down and F3 up, 1x to 3x in 0.5x steps; the new speed shows briefly in the bottom-left corner |
 | `F6` | Port-only debug HUD: steps through full information (engine, FPS, resolution, memory, CPU, pack, mods, room, player, boss), a compact player panel (health, condition, ammo) with the boss's health, the FPS alone in the top-right corner, and off |
 | `F9` | Return-to-title prompt: a second F9 returns to the title screen, any other key cancels |
 
-Every action except the fixed inputs (`F1` and the gamepad's Back
-button, `F9`, the gamepad's Start) can be rebound, with any number of keyboard, mouse (buttons and
+Every action except the fixed inputs (`F1`, `F9`, the gamepad's Start
+and its Back + Start combination) can be rebound, with any number of keyboard, mouse (buttons and
 wheel) and gamepad bindings each. The CONTROLS tool in the `F1` menu lists the
 actions: up/down pick one, left/right pick a binding slot (the last slot adds
 a new one), confirm captures the next key, button, wheel notch or
@@ -440,15 +450,16 @@ from the defaults are written, and actions it leaves out keep their defaults:
 ```toml
 [bindings]
 confirm = ["key:Space", "key:Return", "pad:a", "mouse:left"]
-fire = ["key:Z", "axis:righttrigger+", "wheel:down"]
+fire = ["key:Z", "axis:righttrigger+", "mouse:left"]
 ```
 
 Sources are `key:<SDL key name>`, `mouse:left|middle|right|x1|x2`,
 `wheel:up|down|left|right`, `pad:<SDL gamepad button>` and
 `axis:<SDL gamepad axis>+|-`; an input SDL has no name for is written by
 number (`key:#N`, `mouse:N`, `pad:#N`, `axis:#N+`). The actions are `up`, `down`, `left`, `right`,
-`confirm`, `cancel`, `run`, `aim`, `fire`, `start`, `page_left` and
-`page_right`. Saving rewrites the file in canonical form (comments are not
+`confirm`, `cancel`, `run`, `aim`, `fire`, `start`, `page_left`,
+`page_right`, `quick_turn`, `reload`, `map`, `weapon_prev`, `weapon_next`,
+`target_prev`, `target_next` and `equip_1` to `equip_10`. Saving rewrites the file in canonical form (comments are not
 kept). A bad line or value in `arklay.toml` (an unknown key, `msaa = 3`, a
 binding to a key that does not exist) never stops the game: it is reported
 as a warning and that setting keeps its default. The file is not rewritten

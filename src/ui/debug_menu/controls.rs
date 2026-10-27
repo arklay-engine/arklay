@@ -375,13 +375,13 @@ mod tests {
         // A tick with no input keeps waiting.
         assert_eq!(editor.handle_input(press(|_| {})), (Step::Stay, false));
         assert_eq!(
-            editor.handle_input(captured(Source::Mouse(3))),
+            editor.handle_input(captured(Source::Mouse(2))),
             (Step::Stay, true)
         );
         assert!(!editor.capturing());
         assert_eq!(
             editor.bindings().get(Action::Aim).last(),
-            Some(&Source::Mouse(3))
+            Some(&Source::Mouse(2))
         );
         assert!(
             editor
@@ -495,18 +495,21 @@ mod tests {
 
     #[test]
     fn a_capture_that_would_lock_out_or_cannot_be_saved_is_refused() {
-        use sdl3_sys::scancode::{SDL_SCANCODE_ESCAPE, SDL_SCANCODE_X};
+        use sdl3_sys::scancode::{SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_ESCAPE};
         let mut editor = ControlsEditor::new(&Bindings::default());
         go_to(&mut editor, Action::Confirm);
-        // Space -> Escape still leaves Return as confirm's own key.
+        // F -> Escape still leaves Return as confirm's own key.
         editor.handle_input(press(|i| i.confirm = true));
         let escape = Source::key(SDL_SCANCODE_ESCAPE);
         assert_eq!(editor.handle_input(captured(escape)), (Step::Stay, true));
-        // Return -> X would leave confirm only on cancel's keys.
+        // Return -> Backspace would leave confirm only on cancel's keys.
         editor.handle_input(press(|i| i.right = true));
         editor.handle_input(press(|i| i.confirm = true));
-        let x = Source::key(SDL_SCANCODE_X);
-        assert_eq!(editor.handle_input(captured(x)), (Step::Stay, false));
+        let backspace = Source::key(SDL_SCANCODE_BACKSPACE);
+        assert_eq!(
+            editor.handle_input(captured(backspace)),
+            (Step::Stay, false)
+        );
         assert_eq!(editor.note(), Some(Note::KeepOne));
         assert_eq!(editor.bindings().lockout(), None);
         // SDL's second `Return` scancode would reload as the first.
@@ -525,11 +528,9 @@ mod tests {
             editor.handle_input(press(|i| i.down = true));
         }
         assert_eq!(editor.top, 1);
-        editor.handle_input(press(|i| i.down = true));
-        editor.handle_input(press(|i| i.down = true));
-        editor.handle_input(press(|i| i.down = true));
-        editor.handle_input(press(|i| i.down = true));
-        editor.handle_input(press(|i| i.down = true));
+        for _ in VISIBLE_ROWS..ROWS {
+            editor.handle_input(press(|i| i.down = true));
+        }
         assert_eq!(editor.row, 0, "wraps");
         assert_eq!(editor.top, 0);
     }

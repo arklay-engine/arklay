@@ -209,7 +209,9 @@ struct Cli {
     /// Scripted per-tick input playback for a `--ui game` oracle run: one
     /// `<tick> <button>...` entry per line (`up`, `down`, `left`, `right`,
     /// `confirm`, `cancel`, `run`, `aim`, `fire`, `start`, `page_left`,
-    /// `page_right`). Requires `--trace`.
+    /// `page_right`, `quick_turn`, `reload`, `map`, `weapon_prev`,
+    /// `weapon_next`, `target_prev`, `target_next`, `equip_1`..`equip_10`).
+    /// Requires `--trace`.
     #[arg(long, value_name = "FILE", requires = "pack")]
     input: Option<PathBuf>,
 

@@ -85,6 +85,15 @@ pub struct UiInput {
     pub return_title: bool,
     /// Escape: opens the native in-game menu during free play.
     pub system_menu: bool,
+    /// Port-only: the map button's edge (M / the gamepad's back by default):
+    /// opens the map straight from free play and closes it again.
+    pub map: bool,
+    /// Port-only: the weapon cycle's edge during free play (the mouse
+    /// wheel by default): `-1` the previous weapon, `1` the next, `0` none.
+    pub weapon_step: i8,
+    /// Port-only: the zero-based inventory slot whose equip button went down
+    /// this tick (1 to 0 by default).
+    pub equip_slot: Option<u8>,
     /// Any key went down this tick.
     pub any: bool,
     /// The first bindable input pressed this tick, whatever it is bound to:

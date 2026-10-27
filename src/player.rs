@@ -242,6 +242,21 @@ pub struct Input {
     /// free locomotion; the aim, the scripted actions and the menus still
     /// read the direction bits the stick also latches.
     pub analog: Option<[i16; 2]>,
+    /// Port-only: the quick-turn button's press edge. With
+    /// [`Options::quick_turn`] it starts the quick turn from any state the
+    /// BACKWARD + RUN press could, the forward walk and the idle included.
+    pub quick_turn_pressed: bool,
+    /// Port-only: the reload button's press edge. With
+    /// [`Options::tactical_reload`] it raises the gun and runs the tactical
+    /// reload (see [`crate::weapons::update`]).
+    pub reload_pressed: bool,
+    /// Port-only: the auto-aim target cycle's press edge while aiming: `-1`
+    /// the previous target, `1` the next, `0` none.
+    pub target_step: i8,
+    /// Port-only: the mouse's aim tilt while AIM is held: `-1` up, `1` down,
+    /// `0` level. Only the weapon machine reads it, as the up/down direction
+    /// of a raised gun, so it never walks the player.
+    pub aim_tilt: i8,
 }
 
 /// The camera an analog push is steered relative to.
@@ -922,14 +937,14 @@ pub fn update_with_options(
     // stop re-read the pad under the frame-1 dispatch, so a turn never starts
     // while one of those owns the tick. The lock keeps the aim and action
     // probes off the turn, exactly like the reference's replaced control path.
+    // The port's own quick-turn button starts the same turn from any of
+    // those states, the forward walk and the idle included.
     let quick_turn = options.quick_turn
         && player.locked == LockedAction::None
         && player.run_stop_ticks == 0
         && !player.stairs.climbing
         && player.input_step_active()
-        && input.down
-        && !input.up
-        && input.run_pressed;
+        && ((input.down && !input.up && input.run_pressed) || input.quick_turn_pressed);
     if quick_turn {
         player.locked = LockedAction::QuickTurn;
         player.action_state = 0;
