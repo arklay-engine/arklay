@@ -3167,6 +3167,163 @@ fn item_box_page_plays_the_room_bank_slide_sound() {
     assert_eq!(item_box.cues, [UiCue::Cursor]);
 }
 
+/// Hold a paging key for `frames` frames after its press frame; the frames
+/// (counted from the press, 0) that started a page slide, read from the
+/// slide's room-bank sound.
+fn item_box_hold_page(
+    item_box: &mut ItemBoxScreen,
+    press_frame: UiInput,
+    held: UiInput,
+    frames: usize,
+) -> Vec<usize> {
+    let mut starts = Vec::new();
+    for frame in 0..=frames {
+        item_box.step(if frame == 0 { press_frame } else { held });
+        if item_box.cues.contains(&UiCue::RoomSound(0x21)) {
+            starts.push(frame);
+        }
+    }
+    starts
+}
+
+#[test]
+fn item_box_held_down_keeps_paging_and_speeds_up() {
+    // `menu_itembox_interaction` state 2: once the arm has paged
+    // (`DAT_00ae9f28`), a held D-pad (`g_button_pressed_id & 0x5000`) starts
+    // the next slide with no fresh press. `DAT_00ae9f26` counts the frames the
+    // same key stays held from `0x0F`; a page that starts after it reaches 0
+    // slides three steps a frame. The first two pages take 15 frames each,
+    // then every page takes 5.
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    let mut item_box = ItemBoxScreen::new("box-held-down", game, 8);
+    item_box.step(confirm());
+    let pressed = press(|input| {
+        input.down = true;
+        input.held_down = true;
+    });
+    let held = press(|input| input.held_down = true);
+    let starts = item_box_hold_page(&mut item_box, pressed, held, 43);
+    assert_eq!(starts, [0, 15, 30, 35, 40]);
+    assert_eq!(item_box.box_cursor(), 4, "the fifth slide is running");
+    assert_eq!(item_box.int("M.state.slide_dir"), 3);
+    item_box.settle_slide();
+    assert_eq!(item_box.box_cursor(), 5);
+}
+
+#[test]
+fn item_box_fast_page_trace_steps_three_at_a_time() {
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    let mut item_box = ItemBoxScreen::new("box-held-trace", game, 8);
+    item_box.step(confirm());
+    let pressed = press(|input| {
+        input.down = true;
+        input.held_down = true;
+    });
+    let held = press(|input| input.held_down = true);
+    item_box_hold_page(&mut item_box, pressed, held, 29);
+    assert_eq!(item_box.box_cursor(), 2);
+    assert_eq!(item_box.int("M.state.slide_dir"), 0);
+    let mut trace = Vec::new();
+    for _ in 0..5 {
+        item_box.step(held);
+        trace.push(item_box.int("M.state.slide"));
+    }
+    assert_eq!(trace, [3, 6, 9, 12, 0]);
+    assert_eq!(item_box.box_cursor(), 3);
+}
+
+#[test]
+fn item_box_held_l1_pages_back_fast() {
+    // L1 aliases up: backward pages move the box cursor at once and the fast
+    // slide counts down 15, 12, 9, 6, 3, 0.
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    let mut item_box = ItemBoxScreen::new("box-held-l1", game, 8);
+    item_box.step(confirm());
+    let pressed = press(|input| {
+        input.page_left = true;
+        input.held_page_left = true;
+    });
+    let held = press(|input| input.held_page_left = true);
+    let starts = item_box_hold_page(&mut item_box, pressed, held, 29);
+    assert_eq!(starts, [0, 15]);
+    assert_eq!(item_box.box_cursor(), 46);
+    item_box.step(held);
+    assert_eq!(item_box.box_cursor(), 45);
+    assert_eq!(item_box.int("M.state.slide_dir"), -3);
+    assert_eq!(item_box.int("M.state.slide"), 12);
+    item_box.settle_slide();
+    assert_eq!(item_box.box_cursor(), 45);
+}
+
+#[test]
+fn item_box_held_paging_needs_a_first_press_and_stops_on_release() {
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    let mut item_box = ItemBoxScreen::new("box-held-gate", game, 8);
+    item_box.step(confirm());
+    let held = press(|input| input.held_down = true);
+    // A key already held when the arm starts pages nothing until pressed.
+    for _ in 0..20 {
+        item_box.step(held);
+    }
+    assert_eq!(item_box.int("M.state.slide_dir"), 0);
+    assert_eq!(item_box.box_cursor(), 0);
+    // One tap pages once: released, the box stays put.
+    item_box.step(press(|input| input.down = true));
+    item_box.settle_slide();
+    for _ in 0..20 {
+        item_box.step(neutral());
+    }
+    assert_eq!(item_box.box_cursor(), 1);
+    // Once this arm has paged, holding again pages without a press, at the
+    // slow speed (the release restarted the repeat count).
+    item_box.step(held);
+    assert_eq!(item_box.cues, [UiCue::RoomSound(0x21)]);
+    assert_eq!(item_box.int("M.state.slide_dir"), 1);
+    item_box.settle_slide();
+    assert_eq!(item_box.box_cursor(), 2);
+    // A new arm needs a fresh press again.
+    item_box.step(cancel());
+    item_box.step(confirm());
+    assert!(item_box.armed());
+    for _ in 0..20 {
+        item_box.step(held);
+    }
+    assert_eq!(item_box.box_cursor(), 2);
+}
+
+#[test]
+fn item_box_confirm_beats_a_held_page() {
+    // State 2 checks confirm before the page branch, so a confirm pressed
+    // while a paging key is held swaps instead of paging.
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    game.item_box[1] = InventoryItem {
+        id: 0x0B,
+        quantity: 12,
+    };
+    let mut item_box = ItemBoxScreen::new("box-held-confirm", game, 8);
+    item_box.step(confirm());
+    item_box.step(press(|input| {
+        input.down = true;
+        input.held_down = true;
+    }));
+    while item_box.int("M.state.slide_dir") != 0 {
+        item_box.step(press(|input| input.held_down = true));
+    }
+    assert_eq!(item_box.box_cursor(), 1);
+    assert!(item_box.step(press(|input| {
+        input.confirm = true;
+        input.held_down = true;
+    })));
+    assert_eq!(item_box.cues, [UiCue::Decide]);
+    assert_eq!(item_box.box_cursor(), 1);
+    assert_eq!(item_box.game.item_box[1].id, 0x41);
+}
+
 #[test]
 fn item_box_armed_up_and_down_page_and_wrap_the_box_cursor() {
     let mut game = box_game();

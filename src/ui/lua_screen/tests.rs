@@ -653,6 +653,14 @@ fn pad_words_match_the_original_layout() {
         }),
         0x0090
     );
+    assert_eq!(
+        super::held_word(UiInput {
+            held_page_left: true,
+            held_page_right: true,
+            ..UiInput::default()
+        }),
+        0x0C00
+    );
 }
 
 #[test]

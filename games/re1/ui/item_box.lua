@@ -6,7 +6,8 @@
 -- the three-row item name list and the page-position ticks. The player cursor
 -- stays on the inventory grid (it only leaves it for the box's tab row):
 -- confirming an inventory stack arms the swap, up/down (or L1/R1) page the box
--- cursor with a slide, and confirming again performs it. Cancel (or confirming
+-- cursor with a slide (after the first slide, holding the key keeps paging,
+-- faster once it has been held a while), and confirming again performs it. Cancel (or confirming
 -- on a top-tab cursor) closes the screen, and START closes it from any state.
 -- The box only ever reaches the EXIT tab of the pause menu's top row: the
 -- greyed-out Map, File and Radio tabs are unselectable (`itembox_draw_cursor`
@@ -45,6 +46,17 @@ local SLOTS_TOTAL = 48
 local SLIDE_WRAP = 0x0F
 -- The room-bank slot the page slide plays (`play_sfx(2, 0x21)`).
 local PAGE_SOUND = 0x21
+-- The held-page repeat delay (`DAT_00ae9f26` reloads to `0x0F`): once the
+-- same paging key has been held this many frames, the next page slides at
+-- `FAST_SLIDE_STEP` counter steps a frame instead of one.
+local REPEAT_DELAY = 0x0F
+local FAST_SLIDE_STEP = 3
+-- The `held` word's paging bits: up/down (the original's raw D-pad
+-- `0x1000`/`0x4000`) and the L1/R1 alias.
+local HELD_UP = 0x0010
+local HELD_DOWN = 0x0020
+local HELD_PAGE_LEFT = 0x0400
+local HELD_PAGE_RIGHT = 0x0800
 -- The cursor blink counter's dim phase: while bit `0x20` of `DAT_00ae9f18` is
 -- clear the original draws the slot cursor's dim cell (`texU 0xA8`).
 local CURSOR_DIM_BIT = 0x20
@@ -130,8 +142,17 @@ local s = {
     slots = 6,
     -- The page-slide counter: `0` idle, `1..=14` while the slide is drawn.
     slide = 0,
-    -- Page-slide direction (`DAT_00ae9f1c`): `0` idle, `+1` next, `-1` previous.
+    -- Page-slide step (`DAT_00ae9f1c`): `0` idle, `+1`/`+3` next, `-1`/`-3`
+    -- previous (the 3s are a held repeat's fast slide).
     slide_dir = 0,
+    -- The held-page repeat countdown (`DAT_00ae9f26`).
+    repeat_timer = REPEAT_DELAY,
+    -- The paging direction being timed (`DAT_00ae9f27`): `0` none, `-1`
+    -- up/L1, `+1` down/R1.
+    repeat_dir = 0,
+    -- Whether this arm has paged yet (`DAT_00ae9f28`): from then on a held
+    -- paging key keeps paging without a fresh press.
+    paged = false,
     -- The cursor blink counter (`DAT_00ae9f18`), a byte.
     cursor_blink = 0,
     -- Whether the menu has revealed its cursor (set by the engine).
@@ -224,6 +245,9 @@ function M.open(api, args)
     s.slots = api:inventory_capacity()
     s.slide = 0
     s.slide_dir = 0
+    s.repeat_timer = REPEAT_DELAY
+    s.repeat_dir = 0
+    s.paged = false
     s.cursor_blink = 0
     s.cursor_shown = false
     api:set("cursor", drawn_cursor())
@@ -252,13 +276,49 @@ local function advance_slide()
     end
 end
 
+-- Whether the paging key of `direction` is down this frame (the original's
+-- raw held pad, which includes a key pressed this frame).
+local function page_held(input, direction)
+    if direction < 0 then
+        return input.up or input.page_left or (input.held & (HELD_UP | HELD_PAGE_LEFT)) ~= 0
+    end
+    return input.down or input.page_right or (input.held & (HELD_DOWN | HELD_PAGE_RIGHT)) ~= 0
+end
+
+-- The held paging direction: up/L1 wins over down/R1, like the original's
+-- `g_button_pressed_id & 0x1000` test.
+local function held_direction(input)
+    if page_held(input, -1) then
+        return -1
+    elseif page_held(input, 1) then
+        return 1
+    end
+    return 0
+end
+
+-- One frame of the original's state 3: time the held paging key (a new or
+-- released key restarts the countdown on whatever is held now), then step
+-- the slide.
+local function step_slide(input)
+    if s.repeat_dir == 0 or not page_held(input, s.repeat_dir) then
+        s.repeat_timer = REPEAT_DELAY
+        s.repeat_dir = held_direction(input)
+    elseif s.repeat_timer ~= 0 then
+        s.repeat_timer = s.repeat_timer - 1
+    end
+    advance_slide()
+end
+
 -- Start a page slide: the original's state-2 page branch plus the first step
 -- of the state-3 slide it falls into. The backward branch moves the box
 -- cursor immediately; the forward one only advances it when the slide ends,
 -- which keeps the drawn list and the swapped slot in step. The branch plays
--- the room bank's slide sound, not a menu cue.
-local function start_slide(api, direction)
+-- the room bank's slide sound, not a menu cue. A page that starts while the
+-- timed key is still held and its countdown has run out slides three steps a
+-- frame (five frames instead of fifteen).
+local function start_slide(api, input, direction)
     api:room_sound(PAGE_SOUND)
+    s.paged = true
     if direction > 0 then
         s.slide = 0
         s.slide_dir = 1
@@ -267,7 +327,10 @@ local function start_slide(api, direction)
         s.slide_dir = -1
         s.box_cursor = previous_slot(s.box_cursor)
     end
-    advance_slide()
+    if s.repeat_dir ~= 0 and page_held(input, s.repeat_dir) and s.repeat_timer == 0 then
+        s.slide_dir = s.slide_dir * FAST_SLIDE_STEP
+    end
+    step_slide(input)
 end
 
 local function browse_input(api, input)
@@ -284,8 +347,12 @@ local function browse_input(api, input)
         end
         s.mode = "armed"
         -- The arm resets the blink, so the armed cursor draws its dim frame
-        -- from the confirm frame on.
+        -- from the confirm frame on, and the held-page state, so the first
+        -- page of an arm needs a fresh press.
         s.cursor_blink = 0
+        s.repeat_timer = REPEAT_DELAY
+        s.repeat_dir = 0
+        s.paged = false
     elseif input.left or input.right then
         -- The original ignores left/right on the tab row (its
         -- `(cursor & 0xF8) == 0` guard); the blink still resets and the cue
@@ -306,16 +373,28 @@ local function browse_input(api, input)
     end
 end
 
+-- The original's state 2 page branch. The first page of an arm needs a
+-- press of the raw D-pad up/down (L1/R1 alias them here); once the arm has
+-- paged, a held key keeps paging with no fresh press, and a frame with
+-- nothing held restarts the repeat timing. Down/R1 is next, up/L1 previous.
+local function page_input(api, input)
+    local pressed = input.up or input.down or input.page_left or input.page_right
+    if not pressed and not s.paged then
+        return
+    end
+    local direction = held_direction(input)
+    if direction == 0 then
+        s.repeat_timer = REPEAT_DELAY
+        s.repeat_dir = 0
+        return
+    end
+    start_slide(api, input, direction)
+end
+
 local function armed_input(api, input)
     if input.cancel then
         api:sound("cancel")
         s.mode = "browse"
-    elseif input.up or input.page_left then
-        -- The original's state 2 pages the box grid with the raw D-pad
-        -- up/down; L1/R1 alias them here. Down/R1 is next, up/L1 previous.
-        start_slide(api, -1)
-    elseif input.down or input.page_right then
-        start_slide(api, 1)
     elseif input.confirm then
         -- Swapping two empty slots is refused silently: the original plays
         -- the decide cue only inside its swap branch.
@@ -332,6 +411,8 @@ local function armed_input(api, input)
         api:set("swap_box", s.box_cursor)
         api:set("swap_slot", slot)
         s.mode = "browse"
+    else
+        page_input(api, input)
     end
 end
 
@@ -359,7 +440,7 @@ function M.update(api, input)
     -- slide landed on.
     local sliding = s.slide_dir ~= 0
     if sliding then
-        advance_slide()
+        step_slide(input)
     end
 
     if s.mode == "browse" then
