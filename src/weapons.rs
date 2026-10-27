@@ -284,6 +284,13 @@ pub struct WeaponState {
     /// shared frame-3 tail still runs the weapon-joint adjust on this tick,
     /// from the weapon bank's pose; the locomotion hand-off waits for it.
     pub finished: bool,
+    /// Port-only: the reload button asked for a tactical reload. The machine
+    /// runs as if AIM and RUN were held until the hold handler has had its
+    /// chance to start the reload.
+    pub reload_request: bool,
+    /// Port-only: the target cycle picked a new lock while the weapon was
+    /// held; the hold turns the player toward it.
+    pub retarget: bool,
 }
 
 impl WeaponState {
@@ -764,6 +771,24 @@ pub fn update(
     clips: &WeaponClips<'_>,
     input: Input,
 ) {
+    // The port's reload button: a tactical reload without holding AIM and
+    // RUN. The machine raises the gun (when it is not already up) and its
+    // hold handler takes the reload on the first tick it reads the pad,
+    // through the same `TactReload` path; afterwards the gun lowers unless
+    // AIM is really held.
+    if input.reload_pressed && game.player_options.tactical_reload && tactical_reload_ready(game) {
+        player.weapon.reload_request = true;
+    }
+    let raw = input;
+    let input = if player.weapon.reload_request {
+        Input {
+            aim: true,
+            run: true,
+            ..input
+        }
+    } else {
+        input
+    };
     player.input = input;
     // A stick released while the weapon machine owns the tick drops the
     // analog camera hold, exactly like a release during the locomotion.
@@ -772,13 +797,17 @@ pub fn update(
     }
     if player.weapon.behavior == 0 {
         if !try_enter(game, player, clips) {
+            // A refused raise drops the reload request and its forced
+            // AIM + RUN: the locomotion sees only the real pad.
+            player.weapon.reload_request = false;
+            player.input = raw;
             crate::player::update_with_options(
                 player,
                 room,
                 clips.emd,
                 clips.emw,
                 clips.room,
-                input,
+                raw,
                 game.player_options,
             );
             return;
@@ -799,7 +828,24 @@ pub fn update(
     // its reference scratch must not be mirrored after this tick.
     player.idle_trace = None;
     player.last_behavior_id = 0;
+    // The mouse's aim tilt steers the raised gun like the up/down keys.
+    let input = Input {
+        up: input.up || input.aim_tilt < 0,
+        down: input.down || input.aim_tilt > 0,
+        ..input
+    };
+    player.input = input;
+    if input.target_step != 0 {
+        cycle_target(game, player, room, input.target_step);
+    }
+    let holding = player.weapon.behavior == 0x13;
     tick(game, player, room, clips, input);
+    follow_retarget(game, player);
+    // The hold handler read the forced pad (or the machine ended): the
+    // request is spent whether it reloaded or not.
+    if holding || player.weapon.behavior == 0x18 || !player.weapon.active() {
+        player.weapon.reload_request = false;
+    }
     // Mirror the machine's live bytes for the oracle trace: the reference
     // reads `action_behavior`/`action_state`/`attackDirection` straight off
     // the entity, and the release tick clears the behaviour without running
@@ -843,6 +889,7 @@ fn try_enter(game: &mut GameState, player: &mut PlayerState, clips: &WeaponClips
         // live byte is the entity mirror, so the machine starts from whatever
         // the previous behaviour left there.
         cooldown: game.entities[0].action_ticks_counter,
+        reload_request: player.weapon.reload_request,
         ..WeaponState::default()
     };
     player.clip_source = ClipSource::Weapon;
@@ -1400,13 +1447,7 @@ fn gun_hold_input(
     // the reload, exactly like the reference's byte comparison. Like CR's
     // inserted block, it plays no start click: the 0x18 handler's per-weapon
     // motion-frame cues are the only sounds.
-    if game.player_options.tactical_reload
-        && input.run
-        && matches!(weapon, 2..=5)
-        && let Some(index) = equipped_index(game, weapon)
-        && game.inventory[index].quantity < clip_capacity(game, weapon)
-        && game.has_item(weapon_ammo_item_id(weapon))
-    {
+    if game.player_options.tactical_reload && input.run && tactical_reload_ready(game) {
         player.weapon.behavior = 0x18;
         player.weapon.state = 0;
         return;
@@ -2717,23 +2758,112 @@ fn player_find_aim_target(
     let start = player.weapon.target.map_or(1usize, usize::from);
     for step in 0..slots {
         let slot = 1 + (start.saturating_sub(1) + step) % slots;
-        let entity = &game.entities[slot];
-        if !entity.active()
-            || entity.has_enter_switch_zone == 0
-            || entity.health < 0
-            || entity.behavior_flags & 0xC0 != 0
-            || entity.id >= 0x13
-        {
-            continue;
-        }
-        let dx = entity.pos[0] - player.pos[0];
-        let dz = entity.pos[2] - player.pos[2];
-        if !aim_cone_blocked(room, player, [dx, dz]) {
+        if aim_candidate(game, player, room, slot) {
             player.weapon.target = Some(slot as u8);
             return true;
         }
     }
     false
+}
+
+/// Whether entity `slot` is an alive, script-free enemy the aim cone reaches:
+/// `player_find_aim_target`'s lock test.
+fn aim_candidate(game: &GameState, player: &PlayerState, room: &RoomState, slot: usize) -> bool {
+    let entity = &game.entities[slot];
+    if !entity.active()
+        || entity.has_enter_switch_zone == 0
+        || entity.health < 0
+        || entity.behavior_flags & 0xC0 != 0
+        || entity.id >= 0x13
+    {
+        return false;
+    }
+    let dx = entity.pos[0] - player.pos[0];
+    let dz = entity.pos[2] - player.pos[2];
+    !aim_cone_blocked(room, player, [dx, dz])
+}
+
+/// Whether the tactical reload can run: a reloadable gun (ids 2..=5) is
+/// equipped, its clip is not full and its ammunition item is held. The raw
+/// quantity byte is compared, so the 0x80 volley latch also refuses it.
+fn tactical_reload_ready(game: &GameState) -> bool {
+    let Some(weapon) = equipped_weapon(game).filter(|weapon| matches!(weapon, 2..=5)) else {
+        return false;
+    };
+    equipped_index(game, weapon)
+        .is_some_and(|index| game.inventory[index].quantity < clip_capacity(game, weapon))
+        && game.has_item(weapon_ammo_item_id(weapon))
+}
+
+/// Port-only: move the auto-aim lock `step` targets along (`1` next, `-1`
+/// previous) among the entities [`aim_candidate`] accepts, in slot order and
+/// wrapping. Only while the weapon is raising or held with the auto aim on;
+/// the hold then turns the player toward the new lock
+/// ([`follow_retarget`]).
+fn cycle_target(game: &GameState, player: &mut PlayerState, room: &RoomState, step: i8) {
+    // Like `player_find_aim_target`, nothing to pick without enemies; the
+    // knife keeps its own nearest-target pick.
+    if game.player_options.no_auto_aim
+        || game.enemy_count == 0
+        || equipped_weapon(game) == Some(1)
+        || !matches!(player.weapon.behavior, 0x12 | 0x13)
+    {
+        return;
+    }
+    let candidates: Vec<u8> = (1..crate::game::ENTITY_COUNT)
+        .filter(|&slot| aim_candidate(game, player, room, slot))
+        .map(|slot| slot as u8)
+        .collect();
+    let Some(&first) = candidates.first() else {
+        return;
+    };
+    let last = candidates[candidates.len() - 1];
+    let current = player
+        .weapon
+        .target
+        .filter(|_| player.weapon.aim_state & 1 != 0)
+        .and_then(|target| candidates.iter().position(|&slot| slot == target));
+    let target = match current {
+        Some(index) => {
+            let len = candidates.len() as isize;
+            candidates[(index as isize + isize::from(step)).rem_euclid(len) as usize]
+        }
+        None if step > 0 => first,
+        None => last,
+    };
+    player.weapon.target = Some(target);
+    player.weapon.aim_state = 3;
+    player.weapon.retarget = true;
+}
+
+/// Port-only: while the weapon is held after a target cycle, turn the player
+/// toward the new lock at the raise's reticle-follow rate until facing it.
+fn follow_retarget(game: &GameState, player: &mut PlayerState) {
+    if !player.weapon.retarget || player.weapon.behavior != 0x13 {
+        return;
+    }
+    // A lock that died or left mid-turn ends the follow.
+    let Some(position) = player
+        .weapon
+        .target
+        .filter(|&slot| {
+            game.entities
+                .get(usize::from(slot))
+                .is_some_and(|entity| entity.active() && entity.health >= 0)
+        })
+        .and_then(|slot| target_position(game, slot))
+    else {
+        player.weapon.retarget = false;
+        return;
+    };
+    let character = u16::from(game.id.player_flag & 1);
+    rotate_toward_target(player, position, character * 0x20 + 0xF0);
+    let facing =
+        crate::sfx::angle_between_xz(player.pos[0], player.pos[2], position[0], position[1])
+            & 0x0FFF;
+    if player.angle == facing {
+        player.weapon.retarget = false;
+    }
 }
 
 /// `weapon_lockon_effect`: the auto-aim lock-on fan of jittered billboards.
@@ -4483,5 +4613,227 @@ mod tests {
         assert_eq!(AIM_HEIGHT_TABLE.len(), 12);
         assert_eq!(SPECIAL_FRAME_WINDOWS.len(), 24);
         assert_eq!(WEAPON_EMW.len(), 4);
+    }
+
+    #[test]
+    fn the_reload_button_runs_the_tactical_reload_from_idle() {
+        let (mut game, mut player) = armed(2, 10);
+        tactically_reloadable(&mut game, 2, 15);
+        let press = Input {
+            reload_pressed: true,
+            ..Input::default()
+        };
+        drive_reload(&mut game, &mut player, press, 1);
+        assert!(player.weapon.active(), "the press raises the gun");
+        let mut reached_reload = false;
+        for _ in 0..240 {
+            drive_reload(&mut game, &mut player, Input::default(), 1);
+            reached_reload |= player.weapon.behavior == 0x18;
+            if !player.weapon.active() {
+                break;
+            }
+        }
+        assert!(reached_reload, "the request ran the reload");
+        assert!(!player.weapon.active(), "the gun is lowered again");
+        assert!(!player.weapon.reload_request);
+        assert_eq!(game.inventory[0].quantity & 0x7F, 15, "the clip refilled");
+    }
+
+    #[test]
+    fn the_reload_button_needs_the_option_a_partial_clip_and_a_reserve() {
+        let press = Input {
+            reload_pressed: true,
+            ..Input::default()
+        };
+        let refused = |game: &mut GameState, player: &mut PlayerState| {
+            drive_reload(game, player, press, 1);
+            assert!(!player.weapon.active());
+            assert!(!player.weapon.reload_request);
+        };
+        // Off by default.
+        let (mut game, mut player) = armed(2, 10);
+        game.inventory.push(InventoryItem {
+            id: 0x0B,
+            quantity: 9,
+        });
+        refused(&mut game, &mut player);
+        // A full clip.
+        let (mut game, mut player) = armed(2, 15);
+        tactically_reloadable(&mut game, 2, 9);
+        refused(&mut game, &mut player);
+        // No reserve.
+        let (mut game, mut player) = armed(2, 10);
+        game.player_options.tactical_reload = true;
+        refused(&mut game, &mut player);
+    }
+
+    #[test]
+    fn the_target_buttons_cycle_the_lock_and_turn_toward_it() {
+        let (mut game, mut player) = armed(2, 15);
+        for (slot, pos) in [(1, [800, 0, 0]), (2, [0, 0, 800]), (3, [-800, 0, 0])] {
+            place_enemy(&mut game, slot, 0x00, pos);
+            game.entities[slot].has_enter_switch_zone = 1;
+        }
+        drive(&mut game, &mut player, aiming(false), 40);
+        assert_eq!(player.weapon.behavior, 0x13, "the gun is raised");
+        assert_eq!(player.weapon.target, Some(1));
+        let step = |step: i8| Input {
+            aim: true,
+            target_step: step,
+            ..Input::default()
+        };
+        drive(&mut game, &mut player, step(1), 1);
+        assert_eq!(player.weapon.target, Some(2));
+        drive(&mut game, &mut player, aiming(false), 60);
+        assert_eq!(player.weapon.target, Some(2), "the new lock holds");
+        assert!(!player.weapon.retarget, "the turn finished");
+        let facing = crate::sfx::angle_between_xz(player.pos[0], player.pos[2], 0, 800) & 0x0FFF;
+        assert_eq!(player.angle, facing);
+        // Previous wraps from the first candidate to the last.
+        drive(&mut game, &mut player, step(-1), 1);
+        assert_eq!(player.weapon.target, Some(1));
+        drive(&mut game, &mut player, step(-1), 1);
+        assert_eq!(player.weapon.target, Some(3));
+        drive(&mut game, &mut player, step(1), 1);
+        assert_eq!(player.weapon.target, Some(1), "next wraps too");
+    }
+
+    #[test]
+    fn the_target_buttons_do_nothing_unaimed_or_without_the_auto_aim() {
+        let (mut game, mut player) = armed(2, 15);
+        place_enemy(&mut game, 1, 0x00, [800, 0, 0]);
+        game.entities[1].has_enter_switch_zone = 1;
+        let step = Input {
+            target_step: 1,
+            ..Input::default()
+        };
+        drive(&mut game, &mut player, step, 1);
+        assert!(!player.weapon.active());
+        assert_eq!(player.weapon.target, None);
+        game.player_options.no_auto_aim = true;
+        drive(&mut game, &mut player, aiming(false), 40);
+        let before = (player.weapon.target, player.weapon.aim_state);
+        drive(
+            &mut game,
+            &mut player,
+            Input {
+                aim: true,
+                target_step: 1,
+                ..Input::default()
+            },
+            1,
+        );
+        assert_eq!((player.weapon.target, player.weapon.aim_state), before);
+    }
+
+    #[test]
+    fn the_mouse_tilt_never_walks_an_unarmed_player() {
+        let (mut game, mut player) = armed(2, 15);
+        game.set_equipped(None);
+        let start = player.pos;
+        drive(
+            &mut game,
+            &mut player,
+            Input {
+                aim: true,
+                aim_tilt: -1,
+                ..Input::default()
+            },
+            20,
+        );
+        assert!(!player.weapon.active());
+        assert_eq!(player.pos, start, "the tilt is no direction key");
+    }
+
+    #[test]
+    fn the_mouse_tilt_steers_a_raised_gun_like_the_up_down_keys() {
+        let (mut game, mut player) = armed(2, 15);
+        drive(&mut game, &mut player, aiming(false), 40);
+        assert_eq!(player.weapon.behavior, 0x13);
+        for (tilt, up, down) in [(-1, true, false), (1, false, true), (0, false, false)] {
+            drive(
+                &mut game,
+                &mut player,
+                Input {
+                    aim: true,
+                    aim_tilt: tilt,
+                    ..Input::default()
+                },
+                1,
+            );
+            assert_eq!((player.input.up, player.input.down), (up, down), "{tilt}");
+        }
+    }
+
+    #[test]
+    fn a_refused_reload_press_leaves_the_real_pad_to_the_locomotion() {
+        let (mut game, mut player) = armed(2, 10);
+        tactically_reloadable(&mut game, 2, 9);
+        player.locked = player::LockedAction::QuickTurn;
+        drive(
+            &mut game,
+            &mut player,
+            Input {
+                reload_pressed: true,
+                ..Input::default()
+            },
+            1,
+        );
+        assert!(!player.weapon.active());
+        assert!(!player.weapon.reload_request);
+        assert!(
+            !player.input.aim && !player.input.run,
+            "no forced AIM + RUN"
+        );
+    }
+
+    #[test]
+    fn the_target_buttons_skip_the_knife_and_an_empty_room() {
+        let step = Input {
+            aim: true,
+            target_step: 1,
+            ..Input::default()
+        };
+        // The knife keeps its own pick.
+        let (mut game, mut player) = armed(1, 0);
+        for (slot, pos) in [(1, [800, 0, 0]), (2, [0, 0, 800])] {
+            place_enemy(&mut game, slot, 0x00, pos);
+            game.entities[slot].has_enter_switch_zone = 1;
+        }
+        drive(&mut game, &mut player, aiming(false), 40);
+        let before = player.weapon.target;
+        drive(&mut game, &mut player, step, 1);
+        assert_eq!(player.weapon.target, before);
+        // No enemies counted: nothing to cycle to.
+        let (mut game, mut player) = armed(2, 15);
+        drive(&mut game, &mut player, aiming(false), 40);
+        drive(&mut game, &mut player, step, 1);
+        assert_eq!(player.weapon.target, None);
+        assert!(!player.weapon.retarget);
+    }
+
+    #[test]
+    fn a_target_that_dies_mid_turn_ends_the_follow() {
+        let (mut game, mut player) = armed(2, 15);
+        for (slot, pos) in [(1, [800, 0, 0]), (2, [-800, 0, 0])] {
+            place_enemy(&mut game, slot, 0x00, pos);
+            game.entities[slot].has_enter_switch_zone = 1;
+        }
+        drive(&mut game, &mut player, aiming(false), 40);
+        drive(
+            &mut game,
+            &mut player,
+            Input {
+                aim: true,
+                target_step: 1,
+                ..Input::default()
+            },
+            1,
+        );
+        assert_eq!(player.weapon.target, Some(2));
+        assert!(player.weapon.retarget, "a half turn takes several ticks");
+        game.entities[2].set_active(false);
+        drive(&mut game, &mut player, aiming(false), 1);
+        assert!(!player.weapon.retarget);
     }
 }

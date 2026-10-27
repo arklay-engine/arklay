@@ -111,6 +111,23 @@ fn action_keys(action: Action) -> &'static [&'static str] {
         Action::Start => &["keys.inventory"],
         Action::PageLeft => &["keys.page_left"],
         Action::PageRight => &["keys.page_right"],
+        Action::QuickTurn => &["keys.quick_turn"],
+        Action::Reload => &["keys.reload"],
+        Action::Map => &["keys.map"],
+        Action::WeaponPrev => &["keys.weapon_prev"],
+        Action::WeaponNext => &["keys.weapon_next"],
+        Action::TargetPrev => &["keys.target_prev"],
+        Action::TargetNext => &["keys.target_next"],
+        Action::EquipSlot1
+        | Action::EquipSlot2
+        | Action::EquipSlot3
+        | Action::EquipSlot4
+        | Action::EquipSlot5
+        | Action::EquipSlot6
+        | Action::EquipSlot7
+        | Action::EquipSlot8
+        | Action::EquipSlot9
+        | Action::EquipSlot10 => &["keys.group.equip"],
     }
 }
 
@@ -658,7 +675,15 @@ mod tests {
         let text = Locale::new("en-US");
         let a = Bindings::default();
         assert_eq!(callout(Control::RightTrigger, &a, &text), "Fire");
-        assert_eq!(callout(Control::South, &a, &text), "Interact / Confirm");
+        assert_eq!(
+            callout(Control::South, &a, &text),
+            "Interact / Confirm / Fire"
+        );
+        assert_eq!(callout(Control::Back, &a, &text), "Map");
+        assert_eq!(
+            callout(Control::LeftBumper, &a, &text),
+            "Previous Page / Previous Target"
+        );
         assert_eq!(callout(Control::LeftStick, &a, &text), "Move");
         assert_eq!(callout(Control::Start, &a, &text), "Menu");
         assert_eq!(callout(Control::RightStick, &a, &text), "");
@@ -669,7 +694,10 @@ mod tests {
         );
         assert_eq!(callout(Control::RightBumper, &b, &text), "Aim");
         let c = Bindings::default().with_control_type(ControlType::C);
-        assert_eq!(callout(Control::East, &c, &text), "Interact / Confirm");
+        assert_eq!(
+            callout(Control::East, &c, &text),
+            "Interact / Confirm / Fire"
+        );
         assert_eq!(callout(Control::South, &c, &text), "Cancel");
     }
 

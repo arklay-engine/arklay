@@ -46,12 +46,43 @@ const TABS: [Tab; 2] = [
                     ("turn_left", Action::Left),
                     ("turn_right", Action::Right),
                     ("run", Action::Run),
+                    ("quick_turn", Action::QuickTurn),
                 ],
             ),
-            ("weapon", &[("aim", Action::Aim), ("fire", Action::Fire)]),
+            (
+                "weapon",
+                &[
+                    ("aim", Action::Aim),
+                    ("fire", Action::Fire),
+                    ("reload", Action::Reload),
+                    ("weapon_prev", Action::WeaponPrev),
+                    ("weapon_next", Action::WeaponNext),
+                    ("target_prev", Action::TargetPrev),
+                    ("target_next", Action::TargetNext),
+                ],
+            ),
             (
                 "examine",
-                &[("interact", Action::Confirm), ("inventory", Action::Start)],
+                &[
+                    ("interact", Action::Confirm),
+                    ("inventory", Action::Start),
+                    ("map", Action::Map),
+                ],
+            ),
+            (
+                "equip",
+                &[
+                    ("equip_1", Action::EquipSlot1),
+                    ("equip_2", Action::EquipSlot2),
+                    ("equip_3", Action::EquipSlot3),
+                    ("equip_4", Action::EquipSlot4),
+                    ("equip_5", Action::EquipSlot5),
+                    ("equip_6", Action::EquipSlot6),
+                    ("equip_7", Action::EquipSlot7),
+                    ("equip_8", Action::EquipSlot8),
+                    ("equip_9", Action::EquipSlot9),
+                    ("equip_10", Action::EquipSlot10),
+                ],
             ),
         ],
     ),
@@ -1319,22 +1350,16 @@ mod tests {
     #[test]
     fn a_captured_key_replaces_the_cell_and_moves_from_its_old_action() {
         let mut screen = screen();
-        // Move Forward's first key: Z, which was Fire's.
+        // Move Forward's first key: Q, which was Quick Turn's.
         screen.handle(key(GuiKey::Confirm));
         assert!(screen.capturing());
-        let bindings = changed(screen.capture(Source::key(SDL_SCANCODE_Z), None));
+        let bindings = changed(screen.capture(Source::key(SDL_SCANCODE_Q), None));
         assert!(!screen.capturing());
-        assert_eq!(bindings.get(Action::Up)[0], Source::key(SDL_SCANCODE_Z));
-        assert!(
-            !bindings
-                .get(Action::Up)
-                .contains(&Source::key(SDL_SCANCODE_UP))
+        assert_eq!(
+            keys(&bindings, Action::Up),
+            [Source::key(SDL_SCANCODE_Q), Source::key(SDL_SCANCODE_UP)]
         );
-        assert!(
-            !bindings
-                .get(Action::Fire)
-                .contains(&Source::key(SDL_SCANCODE_Z))
-        );
+        assert!(bindings.get(Action::QuickTurn).is_empty());
         // The gamepad sources stay.
         let pads = |b: &Bindings| b.get(Action::Up).iter().filter(|s| s.is_pad()).count();
         assert_eq!(pads(&bindings), pads(&Bindings::default()));
@@ -1342,14 +1367,14 @@ mod tests {
     }
 
     #[test]
-    fn the_second_column_adds_a_mouse_button() {
+    fn the_second_column_takes_a_mouse_button() {
         let mut screen = screen();
         screen.handle(key(GuiKey::Right));
         screen.handle(key(GuiKey::Confirm));
         let bindings = changed(screen.capture(Source::Mouse(3), None));
         assert_eq!(
             keys(&bindings, Action::Up),
-            [Source::key(SDL_SCANCODE_UP), Source::Mouse(3)]
+            [Source::key(SDL_SCANCODE_W), Source::Mouse(3)]
         );
     }
 
@@ -1375,18 +1400,17 @@ mod tests {
     #[test]
     fn an_essential_action_keeps_a_key() {
         let mut screen = screen();
-        // Menu tab, Cancel: clear X and Backspace, then Escape is refused.
+        // Menu tab, Cancel: clear Escape, then Backspace is refused.
         screen.handle(key(GuiKey::TabNext));
         for _ in 0..5 {
             screen.handle(key(GuiKey::Down));
         }
         assert_eq!(screen.selected().1, Action::Cancel);
         changed(screen.handle(key(GuiKey::ResetAll)));
-        changed(screen.handle(key(GuiKey::ResetAll)));
         assert!(screen.handle(key(GuiKey::ResetAll)).is_empty());
         assert_eq!(
             keys(&screen.bindings, Action::Cancel),
-            [Source::key(SDL_SCANCODE_ESCAPE)]
+            [Source::key(SDL_SCANCODE_BACKSPACE)]
         );
         assert!(screen.note.is_some());
     }
@@ -1394,13 +1418,20 @@ mod tests {
     #[test]
     fn reset_restores_the_keys_and_keeps_the_gamepad() {
         let mut bindings = Bindings::default();
-        bindings.set(Action::Fire, vec![Source::Mouse(1), Source::PadButton(0)]);
+        bindings.set(Action::Fire, vec![Source::Mouse(2), Source::PadButton(0)]);
         let mut screen = KeyConfigScreen::new(bindings, Locale::default());
         screen.handle(key(GuiKey::ResetGroup));
         // The dialog defaults to No.
         screen.handle(key(GuiKey::Left));
         let reset = changed(screen.handle(key(GuiKey::Confirm)));
-        assert_eq!(keys(&reset, Action::Fire), [Source::key(SDL_SCANCODE_Z)]);
+        assert_eq!(
+            keys(&reset, Action::Fire),
+            [
+                Source::key(SDL_SCANCODE_F),
+                Source::key(SDL_SCANCODE_RETURN),
+                Source::Mouse(1)
+            ]
+        );
         assert!(reset.get(Action::Fire).contains(&Source::PadButton(0)));
     }
 

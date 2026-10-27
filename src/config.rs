@@ -20,13 +20,16 @@
 //! # Input bindings, one single-line array of sources per action; an action
 //! # left out keeps its default (see `crate::controls`).
 //! [bindings]
-//! aim = ["key:C", "mouse:right", "axis:lefttrigger+"]
+//! aim = ["mouse:right", "key:E", "axis:lefttrigger+"]
+//! map = ["key:M", "pad:back"]
 //!
 //! # Gameplay options, both on by default (`--quick-turn` and
 //! # `--tactical-reload` override them; `--no-...` turns one off for a run).
 //! [game]
-//! quick_turn = true      # BACKWARD + RUN turns the player 180 degrees
-//! tactical_reload = true # AIM + RUN reloads a partially loaded gun
+//! quick_turn = true      # BACKWARD + RUN (or quick_turn) turns the player
+//!                        # 180 degrees
+//! tactical_reload = true # AIM + RUN (or reload) reloads a partially
+//!                        # loaded gun
 //! analog_movement = true # the left stick moves relative to the camera
 //! auto_aim = true        # raising a weapon locks on to the nearest enemy
 //! blood = true           # blood billboards, spurts and pools
@@ -1739,7 +1742,7 @@ menu_text_size = \"huge\"
             "[other]\n",
             "[bindings]\naim = []\naim = []\n",
             "[bindings]\nconfirm = []\n",
-            "[bindings]\ncancel = [\"key:X\", \"key:Space\", \"key:Return\"]\n",
+            "[bindings]\ncancel = [\"key:X\", \"key:F\", \"key:Return\"]\n",
         ] {
             assert!(Config::parse(text).is_err(), "{text:?} must be rejected");
         }
@@ -1768,7 +1771,7 @@ menu_text_size = \"huge\"
         fs::create_dir_all(&dir).unwrap();
         fs::write(&path, "language = \"ja-JP\"\n").unwrap();
         let mut bindings = Bindings::default();
-        assert!(bindings.bind(Action::Aim, usize::MAX, Source::Mouse(3)));
+        assert!(bindings.bind(Action::Aim, usize::MAX, Source::Mouse(2)));
         Config::save_bindings(&path, &bindings).unwrap();
         let (loaded, _) = Config::load(&path);
         assert_eq!(loaded.language.as_deref(), Some("ja-JP"), "other keys kept");
