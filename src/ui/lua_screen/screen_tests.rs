@@ -2923,6 +2923,8 @@ struct ItemBoxScreen {
     harness: Harness,
     game: crate::game::GameState,
     screen: LuaScreen,
+    /// The cues the last frame queued.
+    cues: Vec<UiCue>,
 }
 
 impl ItemBoxScreen {
@@ -2946,6 +2948,7 @@ impl ItemBoxScreen {
             harness,
             game,
             screen,
+            cues: Vec::new(),
         }
     }
 
@@ -2963,6 +2966,7 @@ impl ItemBoxScreen {
             ..self.harness.context()
         };
         let result = self.screen.update(&cx, input);
+        self.cues = cx.cues.borrow().clone();
         if self.screen.value("swap") != 0 {
             self.game.item_box_swap(
                 self.screen.value("swap_box") as usize,
@@ -3062,6 +3066,105 @@ fn item_box_drops_a_confirm_during_the_slide() {
     assert!(item_box.step(confirm()));
     assert_eq!(item_box.game.item_box[1].id, 0x41);
     assert_eq!(item_box.game.inventory[0].id, 0x0B);
+}
+
+#[test]
+fn item_box_drops_a_confirm_on_the_slide_end_frame() {
+    // `menu_itembox_interaction` state 3 hands back to state 2 on the step
+    // that ends the slide and breaks without reading the pad, so a confirm on
+    // exactly that frame is dropped: no swap and no decide cue.
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    game.item_box[1] = InventoryItem {
+        id: 0x0B,
+        quantity: 15,
+    };
+    let mut item_box = ItemBoxScreen::new("box-slide-end", game, 8);
+    item_box.step(confirm());
+    item_box.step(press(|input| input.down = true));
+    // Run until one step remains: the next frame ends the slide.
+    while item_box.int("M.state.slide") != 0x0E {
+        item_box.step(neutral());
+    }
+    assert!(!item_box.step(confirm()));
+    assert_eq!(item_box.int("M.state.slide_dir"), 0, "the slide ended");
+    assert_eq!(item_box.box_cursor(), 1);
+    assert!(item_box.armed());
+    assert!(
+        item_box.cues.is_empty(),
+        "the dropped confirm stayed silent"
+    );
+    assert_eq!(item_box.game.item_box[1].id, 0x0B);
+    // The next frame reads the pad again.
+    assert!(item_box.step(confirm()));
+    assert_eq!(item_box.game.item_box[1].id, 0x41);
+}
+
+#[test]
+fn item_box_start_closes_from_every_state_with_the_cancel_cue() {
+    // The reference checks START (`pad_held_byte1() & 8`) before its state
+    // switch: it plays `play_sfx(3, 5)` and returns 1 in browse, armed and
+    // sliding states alike.
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    let start = || press(|input| input.start = true);
+
+    let mut item_box = ItemBoxScreen::new("box-start-browse", game.clone(), 8);
+    assert!(item_box.closes(start()));
+    assert_eq!(item_box.cues, [UiCue::Cancel]);
+
+    let mut item_box = ItemBoxScreen::new("box-start-armed", game.clone(), 8);
+    item_box.step(confirm());
+    assert!(item_box.closes(start()));
+    assert_eq!(item_box.cues, [UiCue::Cancel]);
+
+    let mut item_box = ItemBoxScreen::new("box-start-slide", game.clone(), 8);
+    item_box.step(confirm());
+    item_box.step(press(|input| input.down = true));
+    let slide = item_box.int("M.state.slide");
+    assert!(item_box.closes(start()));
+    assert_eq!(item_box.cues, [UiCue::Cancel]);
+    assert_eq!(
+        item_box.int("M.state.slide"),
+        slide,
+        "START returns before the slide steps"
+    );
+
+    // START wins over a confirm on the same frame.
+    let mut item_box = ItemBoxScreen::new("box-start-confirm", game, 8);
+    item_box.step(confirm());
+    assert!(item_box.closes(press(|input| {
+        input.start = true;
+        input.confirm = true;
+    })));
+    assert_eq!(item_box.cues, [UiCue::Cancel]);
+    assert!(item_box.screen.value("swap") == 0);
+}
+
+#[test]
+fn item_box_page_plays_the_room_bank_slide_sound() {
+    // State 2's page branch plays `play_sfx(2, 0x21)` once as it enters the
+    // slide; the slide's own steps are silent.
+    let mut game = box_game();
+    game.add_item(0x41, 1);
+    let mut item_box = ItemBoxScreen::new("box-page-sound", game, 8);
+    item_box.step(confirm());
+    for page in [
+        press(|input| input.down = true),
+        press(|input| input.up = true),
+        press(|input| input.page_right = true),
+        press(|input| input.page_left = true),
+    ] {
+        item_box.step(page);
+        assert_eq!(item_box.cues, [UiCue::RoomSound(0x21)]);
+        item_box.step(neutral());
+        assert!(item_box.cues.is_empty(), "a slide step played a sound");
+        item_box.settle_slide();
+    }
+    // Paging needs the armed state: a browse up/down is a cursor move.
+    item_box.step(press(|input| input.cancel = true));
+    item_box.step(press(|input| input.down = true));
+    assert_eq!(item_box.cues, [UiCue::Cursor]);
 }
 
 #[test]

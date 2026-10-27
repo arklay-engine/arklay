@@ -1333,6 +1333,13 @@ impl UserData for Api<'_> {
             Ok(())
         });
 
+        // A current-room bank sound (`play_sfx(2, slot)`); the session
+        // resolves the slot through the loaded room's sound table.
+        methods.add_method("room_sound", |_lua, api, slot: u8| {
+            api.cx.play_cue(UiCue::RoomSound(slot));
+            Ok(())
+        });
+
         methods.add_method_mut("save", |_lua, api, name: String| {
             let Some(path) = save::file_path(&api.host.save_dir, &name) else {
                 return Ok((
