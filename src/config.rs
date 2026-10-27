@@ -30,6 +30,8 @@
 //! analog_movement = true # the left stick moves relative to the camera
 //! auto_aim = true        # raising a weapon locks on to the nearest enemy
 //! blood = true           # blood billboards, spurts and pools
+//! chris_ink_ribbons = true # saving as Chris needs an ink ribbon
+//! jill_ink_ribbons = false # saving as Jill needs an ink ribbon
 //! ui_font = "modern"     # the menus' face: "modern" or "retro"
 //! menu_text_size = "standard" # "small", "standard", "large"
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
@@ -384,6 +386,12 @@ pub struct Game {
     pub auto_aim: bool,
     /// The blood billboards, spurts and pools. On by default.
     pub blood: bool,
+    /// Saving as Chris needs an ink ribbon, as in every release. On by
+    /// default.
+    pub chris_ink_ribbons: bool,
+    /// Saving as Jill needs an ink ribbon, as in the USA release; the
+    /// Japanese release lets her save without one. Off by default.
+    pub jill_ink_ribbons: bool,
     /// The face the native-resolution menus draw with: `"modern"` (the
     /// default) or `"retro"`.
     pub ui_font: crate::gui::FontFamily,
@@ -430,6 +438,8 @@ impl Default for Game {
             analog_movement: true,
             auto_aim: true,
             blood: true,
+            chris_ink_ribbons: true,
+            jill_ink_ribbons: false,
             ui_font: crate::gui::FontFamily::Modern,
             menu_text_size: TextSize::Standard,
             button_style: None,
@@ -1191,6 +1201,8 @@ fn parse_game_line(
         "analog_movement" => game.analog_movement = boolean()?,
         "auto_aim" => game.auto_aim = boolean()?,
         "blood" => game.blood = boolean()?,
+        "chris_ink_ribbons" => game.chris_ink_ribbons = boolean()?,
+        "jill_ink_ribbons" => game.jill_ink_ribbons = boolean()?,
         "ui_font" => {
             game.ui_font = match parse_quoted(value, line)?.as_str() {
                 "modern" => crate::gui::FontFamily::Modern,
@@ -1259,6 +1271,16 @@ fn render_game(game: &Game) -> String {
         ),
         ("auto_aim", game.auto_aim, defaults.auto_aim),
         ("blood", game.blood, defaults.blood),
+        (
+            "chris_ink_ribbons",
+            game.chris_ink_ribbons,
+            defaults.chris_ink_ribbons,
+        ),
+        (
+            "jill_ink_ribbons",
+            game.jill_ink_ribbons,
+            defaults.jill_ink_ribbons,
+        ),
     ] {
         if value != default {
             out.push_str(&format!("{key} = {value}\n"));
@@ -2038,6 +2060,8 @@ menu_text_size = \"huge\"
             analog_movement: false,
             auto_aim: false,
             blood: false,
+            chris_ink_ribbons: false,
+            jill_ink_ribbons: true,
             ui_font: crate::gui::FontFamily::Retro,
             menu_text_size: TextSize::Large,
             button_style: Some(crate::gui::PadStyle::Nintendo),

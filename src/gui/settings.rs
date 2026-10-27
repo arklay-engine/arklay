@@ -114,6 +114,8 @@ fn switch_mut<'a>(game: &'a mut config::Game, id: &str) -> Option<&'a mut bool> 
         "auto_aim" => &mut game.auto_aim,
         "tactical_reload" => &mut game.tactical_reload,
         "blood" => &mut game.blood,
+        "chris_ink_ribbons" => &mut game.chris_ink_ribbons,
+        "jill_ink_ribbons" => &mut game.jill_ink_ribbons,
         "subtitles" => &mut game.subtitles,
         "speaker_names" => &mut game.speaker_names,
         _ => return None,
@@ -302,13 +304,14 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
     let rate_list = frame_rates(settings.graphics.frame_rate);
     let resolution_list = resolutions(&settings.graphics);
     let language_list = languages();
+    const INK_RIBBONS: (&str, &str, &str) = ("gameplay", "general", "ink_ribbons");
     const CHARACTER: (&str, &str, &str) = ("controls", "basic", "character_controls");
     const AIMING: (&str, &str, &str) = ("controls", "basic", "when_aiming");
     const BUTTONS: (&str, &str, &str) = ("controls", "controller", "button_settings");
     const FUNCTIONS: (&str, &str, &str) = ("controls", "controller", "function_settings");
     const KEYBOARD: (&str, &str, &str) = ("controls", "keyboard_mouse", "keyboard_mouse_settings");
-    const HUD: (&str, &str, &str) = ("hud", "hud", "");
     const DISPLAY: (&str, &str, &str) = ("graphics", "display", "");
+    const HUD: (&str, &str, &str) = ("graphics", "display", "hud");
     const IMAGE: (&str, &str, &str) = ("graphics", "image", "");
     const QUALITY: (&str, &str, &str) = ("graphics", "image", "quality_settings");
     const VOLUME: (&str, &str, &str) = ("audio", "general", "volume");
@@ -338,6 +341,16 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         def(text, id, place, kind, default)
     };
     let mut list = vec![
+        row(
+            "chris_ink_ribbons",
+            INK_RIBBONS,
+            on_off(text, "chris_ink_ribbons"),
+        ),
+        row(
+            "jill_ink_ribbons",
+            INK_RIBBONS,
+            on_off(text, "jill_ink_ribbons"),
+        ),
         row("quick_turn", CHARACTER, on_off(text, "quick_turn")),
         row(
             "analog_movement",
@@ -371,19 +384,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         // Opens the key configuration screen; it has no value.
         row("key_config", KEYBOARD, OptionKind::Link),
-        row(
-            "ui_font",
-            HUD,
-            OptionKind::Choice(vec![
-                Choice::described(text.get("ui_font.modern"), text.get("ui_font.modern_note")),
-                Choice::described(text.get("ui_font.retro"), text.get("ui_font.retro_note")),
-            ]),
-        ),
-        row(
-            "menu_text_size",
-            HUD,
-            named::<TextSize>(text, "menu_text_size"),
-        ),
         row(
             "fullscreen",
             DISPLAY,
@@ -447,6 +447,19 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 Choice::described(text.get("hdr.auto"), text.get("hdr.auto_note")),
                 Choice::described(text.get("choice.off"), text.get("hdr.off")),
             ]),
+        ),
+        row(
+            "ui_font",
+            HUD,
+            OptionKind::Choice(vec![
+                Choice::described(text.get("ui_font.modern"), text.get("ui_font.modern_note")),
+                Choice::described(text.get("ui_font.retro"), text.get("ui_font.retro_note")),
+            ]),
+        ),
+        row(
+            "menu_text_size",
+            HUD,
+            named::<TextSize>(text, "menu_text_size"),
         ),
         // Shows the machine's specifications; it has no value.
         row("pc_specs", IMAGE, OptionKind::Info),

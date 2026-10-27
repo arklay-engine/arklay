@@ -451,15 +451,16 @@ pub const SCENARIO_FLAG_SECOND_PLAYTHROUGH: u8 = 0x7B;
 pub const MESSAGE_TYPEWRITER_NO_RIBBON: u8 = 0xDE;
 /// Global prompt shown when a save will consume an ink ribbon.
 pub const MESSAGE_TYPEWRITER_RIBBON_PROMPT: u8 = 0xDF;
-/// Global prompt shown on a first Jill playthrough, when saving is free.
+/// Global prompt shown when saving is free: the character needs no ink
+/// ribbons.
 pub const MESSAGE_TYPEWRITER_SAVE_PROMPT: u8 = 0xE0;
 /// Scenario-2 flag cleared when a `0x10` cure removes the poison bit `0x20`.
 pub const SCENARIO2_FLAG_YAWN_POISONED: u8 = 0x43;
 /// Scenario-2 flag marking Jill's first playthrough (with the main hall's
 /// ink-ribbon room-items bit). `InitializeGame` raises both on a new Jill game.
 pub const SCENARIO2_FLAG_JILL_FIRST_RUN: u8 = 0x0B;
-/// Room-items bit `InitializeGame` raises for Jill's first playthrough to
-/// disable the main hall's ink ribbon.
+/// The main hall's ink-ribbon room-items bit, which `InitializeGame` raises
+/// (marks present) for Jill's first playthrough.
 pub const ROOM_ITEM_FLAG_MAIN_HALL_RIBBON: u8 = 0x34;
 /// Item-use flag bit of the red book.
 pub const ITEM_RED_BOOK_FLAG: u8 = 0x23;
@@ -991,8 +992,7 @@ pub enum TypewriterFlow {
     #[default]
     Idle,
     /// The save prompt is displayed; `ink_ribbon` records whether a confirmed
-    /// save consumes one (a ribbon held by Chris, or by Jill on a second
-    /// playthrough).
+    /// save consumes one (a ribbon held by a character who needs them).
     Prompt { ink_ribbon: bool },
 }
 
@@ -5499,26 +5499,34 @@ impl GameState {
             .sum()
     }
 
+    /// Whether the player's character needs ink ribbons to save, from the
+    /// ink ribbon options. One who does not never sees an ink ribbon either.
+    pub fn needs_ink_ribbons(&self) -> bool {
+        if self.id.player_flag & 3 == 1 {
+            self.player_options.jill_ink_ribbons
+        } else {
+            !self.player_options.no_chris_ink_ribbons
+        }
+    }
+
     /// The room-action typewriter handler (`room_check_actions[0x10]`).
     ///
-    /// An ink ribbon starts the save prompt; without one, a first Jill
-    /// playthrough may still save (and does not consume anything), while every
-    /// other character/playthrough gets the "no ink ribbon" message instead.
-    /// Returns whether the prompt was shown.
+    /// An ink ribbon starts the save prompt. A character whose ink ribbon
+    /// option is off (Jill by default) may save without one, on any
+    /// playthrough, and does not consume one; the other gets the "no ink
+    /// ribbon" message instead. The original also made Jill need one on a
+    /// second playthrough. Returns whether the prompt was shown.
     pub fn check_typewriter(&mut self) -> bool {
         if self.typewriter != TypewriterFlow::Idle {
             return false;
         }
-        let character = self.id.player_flag & 1;
-        let second_playthrough =
-            self.flags[usize::from(BANK_SCENARIO)].bit(SCENARIO_FLAG_SECOND_PLAYTHROUGH);
-        let jill_first_playthrough = character == 1 && !second_playthrough;
+        let free_save = !self.needs_ink_ribbons();
         let ribbon = self.has_item(items::ITEM_INK_RIBBONS);
-        if !ribbon && !jill_first_playthrough {
+        if !ribbon && !free_save {
             self.show_message(MESSAGE_TYPEWRITER_NO_RIBBON, 0xFF);
             return false;
         }
-        let message = if jill_first_playthrough {
+        let message = if free_save {
             MESSAGE_TYPEWRITER_SAVE_PROMPT
         } else {
             MESSAGE_TYPEWRITER_RIBBON_PROMPT
@@ -5527,7 +5535,7 @@ impl GameState {
         if !self.message.active {
             return false;
         }
-        let ink_ribbon = ribbon && (character == 0 || second_playthrough);
+        let ink_ribbon = ribbon && !free_save;
         self.typewriter = TypewriterFlow::Prompt { ink_ribbon };
         true
     }
@@ -6834,7 +6842,7 @@ impl GameState {
         if !self
             .room_actions
             .get(usize::from(request.slot))
-            .is_some_and(Option::is_some)
+            .is_some_and(|action| action.is_some_and(|action| action.handler != 0))
         {
             // The entry vanished while the reach played; still release the
             // lock so the player cannot stay frozen.
@@ -6880,7 +6888,7 @@ impl GameState {
         };
         self.room_actions
             .get(usize::from(request.slot))
-            .is_some_and(Option::is_some)
+            .is_some_and(|action| action.is_some_and(|action| action.handler != 0))
             .then_some(request)
     }
 
@@ -7785,7 +7793,7 @@ impl GameState {
     /// The shared model teardown of a pick-up (`room_event_item_pickup` and
     /// `pickup_key_event`): optionally free the record's sparkle slot, clear
     /// the model's drawn byte, clear the room-items "still here" bit and
-    /// consume the action.
+    /// disarm the action.
     ///
     /// `release_sparkle` distinguishes the two original bodies: the ordinary
     /// award (`room_event_item_pickup`) frees the effect slot, while the map
@@ -7808,7 +7816,14 @@ impl GameState {
         // Remember the pickup in the room-items flag bank so the item does not
         // come back when the room is re-entered.
         self.mark_item_taken(action.room_items_flag);
-        self.room_actions[usize::from(slot)] = None;
+        // The original zeroes only the entry's handler byte: the zone stays,
+        // so a script can re-arm the slot (room 106 turns the ribbon's zone
+        // into its typewriter once the ribbon is taken).
+        if let Some(entry) = self.room_actions[usize::from(slot)].as_mut() {
+            entry.handler = 0;
+            entry.sce = 0;
+            entry.kind = RoomActionKind::from_sce(0);
+        }
         self.doors[usize::from(slot)] = None;
     }
 
@@ -8465,6 +8480,24 @@ impl<'a> ScdGameHost<'a> {
         condition_result(self.state.equipped == Some(item))
     }
 
+    /// Whether `slot` holds an ink ribbon the player's character needs none
+    /// of. A script re-arming it as an item is ignored, so the ribbon stays
+    /// hidden and a typewriter swapped in for it stays.
+    fn hidden_ribbon(&self, slot: u8) -> bool {
+        !self.state.needs_ink_ribbons()
+            && self
+                .state
+                .room_actions
+                .get(usize::from(slot))
+                .copied()
+                .flatten()
+                .is_some_and(|action| {
+                    action
+                        .item_data
+                        .is_some_and(|data| data[0] == items::ITEM_INK_RIBBONS)
+                })
+    }
+
     fn store_action(&mut self, action: RoomAction) {
         if let Some(slot) = self.state.room_actions.get_mut(usize::from(action.slot)) {
             *slot = Some(action);
@@ -8928,11 +8961,16 @@ impl ScdHost for ScdGameHost<'_> {
                 let slot = operand_u8(operands, 0);
                 let handler = operand_u8(operands, 1);
                 let flags = operand_u8(operands, 2);
+                let hidden_ribbon = self.hidden_ribbon(slot);
                 if let Some(action) = self
                     .state
                     .room_actions
                     .get_mut(usize::from(slot))
                     .and_then(Option::as_mut)
+                    .filter(|_| {
+                        !(hidden_ribbon
+                            && RoomActionKind::from_sce(handler) == RoomActionKind::Item)
+                    })
                 {
                     // The original rewrites the entry's bytes 0..7 but keeps the
                     // operand-record pointer at +8, so the retained item
@@ -8950,11 +8988,16 @@ impl ScdHost for ScdGameHost<'_> {
                 let slot = operand_u8(operands, 0);
                 let handler = operand_u8(operands, 1);
                 let flags = operand_u8(operands, 2);
+                let hidden_ribbon = self.hidden_ribbon(slot);
                 if let Some(action) = self
                     .state
                     .room_actions
                     .get_mut(usize::from(slot))
                     .and_then(Option::as_mut)
+                    .filter(|_| {
+                        !(hidden_ribbon
+                            && RoomActionKind::from_sce(handler) == RoomActionKind::Item)
+                    })
                 {
                     action.handler = handler;
                     action.flags = flags;
@@ -9005,10 +9048,12 @@ impl ScdHost for ScdGameHost<'_> {
     fn on_item(&mut self, op: &Op, operands: &[Operand]) -> StepResult {
         match op.op {
             0x18 => {
-                // The build's action handler is derived from the item id: an
-                // ink ribbon on Jill's first playthrough is skipped entirely
-                // (its room-items bit cleared), ordinary items get the pickup
-                // handler, maps the key-pickup event and documents their own.
+                // The build's action handler is derived from the item id:
+                // ordinary items get the pickup handler, maps the key-pickup
+                // event and documents their own. An ink ribbon is skipped (its
+                // room-items bit cleared, its zone kept inert) for a character
+                // who needs none; the original skips it on Jill's first
+                // playthrough.
                 // The crank's hex handle (0x1E) gets an extra texture-dirty
                 // write in the original; it has no analogue in the port
                 // (documented no-op).
@@ -9024,13 +9069,30 @@ impl ScdHost for ScdGameHost<'_> {
                 let z = operand_i16(operands, 11).to_le_bytes();
                 let room_items_flag = operand_u8(operands, 13);
                 let flags_word = operand_u16(operands, 15);
-                if item == items::ITEM_INK_RIBBONS
-                    && self.state.id.player_flag & 3 == 1
-                    && !self
-                        .state
-                        .flag_test(BANK_SCENARIO, SCENARIO_FLAG_SECOND_PLAYTHROUGH, false)
-                {
+                if item == items::ITEM_INK_RIBBONS && !self.state.needs_ink_ribbons() {
                     self.state.mark_item_taken(room_items_flag);
+                    // Port-only: the original leaves the slot unwritten, so a
+                    // room that swaps the ribbon's zone for a typewriter once
+                    // it is taken (room 106) gets no zone. Keep the zone,
+                    // inert, for that `aot_reset`.
+                    let item_data = [item, quantity, model, parent, x[0], x[1], z[0], z[1]];
+                    self.store_action(RoomAction {
+                        slot,
+                        kind: RoomActionKind::from_sce(0),
+                        zone: [
+                            operand_i16(operands, 1),
+                            operand_i16(operands, 2),
+                            operand_i16(operands, 3),
+                            operand_i16(operands, 4),
+                        ],
+                        sce: 0,
+                        handler: 0,
+                        flags: operand_u8(operands, 14),
+                        params: [0; 8],
+                        item_data: Some(item_data),
+                        room_items_flag,
+                        reach_animation: false,
+                    });
                     return StepResult::Continue;
                 }
                 let present = self.state.room_item_present(room_items_flag);
@@ -9076,16 +9138,22 @@ impl ScdHost for ScdGameHost<'_> {
                         record.sparkle = sparkle;
                     }
                 }
-                if present {
+                // A taken item keeps an inert entry (handler 0) like the
+                // original's, so a script can still re-arm its zone.
+                {
                     let action = RoomAction {
                         slot,
-                        kind: RoomActionKind::Item,
                         zone: [
                             operand_i16(operands, 1),
                             operand_i16(operands, 2),
                             operand_i16(operands, 3),
                             operand_i16(operands, 4),
                         ],
+                        kind: if present {
+                            RoomActionKind::Item
+                        } else {
+                            RoomActionKind::from_sce(0)
+                        },
                         sce: handler,
                         handler,
                         flags: operand_u8(operands, 14),
@@ -10314,7 +10382,10 @@ mod tests {
         state.show_message_for_action(3, 0, 0xFF);
         confirm_yes_no(&mut state, &room);
         assert!(state.has_item(0x41));
-        assert!(state.room_actions[3].is_none(), "the action is consumed");
+        assert!(
+            state.room_actions[3].is_none_or(|a| a.handler == 0),
+            "the action is consumed"
+        );
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_PICKED_ITEM)], 0x41);
     }
 
@@ -13313,7 +13384,7 @@ mod tests {
         assert!(state.inventory.is_empty(), "maps are never awarded");
         assert!(state.flags[8].bit(ROOM_FLAG_MAP_BASE + 2));
         assert!(!state.room_item_present(1));
-        assert!(state.room_actions[0].is_none());
+        assert!(state.room_actions[0].is_none_or(|a| a.handler == 0));
     }
 
     #[test]
@@ -13373,7 +13444,7 @@ mod tests {
             let mut host = ScdGameHost::new(&mut state);
             host.on_item(op(0x18), &operands(&item_operands));
         }
-        assert!(state.room_actions[3].is_none());
+        assert!(state.room_actions[3].is_none_or(|a| a.handler == 0));
     }
 
     #[test]
@@ -13586,15 +13657,16 @@ mod tests {
             );
         }
         // The record is built with its drawn bit clear and consumes a build
-        // order tag; the inert action is not registered.
+        // order tag; its action is registered inert.
         assert_eq!(state.items.built, 1);
         assert_eq!(state.items.record(0).unwrap().flag, 0);
         assert!(!state.items.record(0).unwrap().active());
-        assert!(state.room_actions[0].is_none());
+        let action = state.room_actions[0].expect("the zone is kept");
+        assert_eq!((action.handler, action.kind), (0, RoomActionKind::Other));
     }
 
     #[test]
-    fn item_aot_set_skips_jills_first_playthrough_ink_ribbon() {
+    fn item_aot_set_skips_the_ink_ribbons_a_character_needs_none_of() {
         // A flag bit not yet marked taken; the skip must strike it.
         let mut state = item_game("1001", 1);
         assert!(state.room_item_present(1));
@@ -13607,12 +13679,59 @@ mod tests {
         }
         assert_eq!(state.items.built, 0, "the ribbon is not built");
         assert!(state.items.records[0] == crate::objects::ItemRecord::default());
-        assert!(state.room_actions[0].is_none());
         assert!(!state.room_item_present(1), "the ribbon is marked taken");
+        // Its zone is kept inert, so a typewriter can take it over, but it
+        // cannot be re-armed as the ribbon.
+        let kept = state.room_actions[0].expect("the zone is kept");
+        assert_eq!((kept.handler, kept.kind), (0, RoomActionKind::Other));
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x12),
+                &operands(&[0, i64::from(HANDLER_ITEM), 0x81, 0, 3, 0]),
+            );
+        }
+        assert_eq!(
+            state.room_actions[0].unwrap().handler,
+            0,
+            "no ribbon pickup"
+        );
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x12),
+                &operands(&[0, i64::from(HANDLER_TYPEWRITER), 0x81, 0, 0, 0]),
+            );
+        }
+        assert_eq!(
+            state.room_actions[0].unwrap().kind,
+            RoomActionKind::Typewriter
+        );
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_room_action(
+                op(0x12),
+                &operands(&[0, i64::from(HANDLER_ITEM), 0x81, 0, 3, 0]),
+            );
+        }
+        assert_eq!(
+            state.room_actions[0].unwrap().kind,
+            RoomActionKind::Typewriter,
+            "the typewriter stays"
+        );
 
-        // On a second playthrough the ribbon builds normally.
+        // A second playthrough skips it too.
         let mut state = item_game("1001", 1);
         state.apply_flag(0, SCENARIO_FLAG_SECOND_PLAYTHROUGH, 0);
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_item(op(0x18), &operands(&item_values(0x2F, 0, 0xFF, [1, 2, 3])));
+        }
+        assert_eq!(state.items.built, 0);
+
+        // A Jill who needs ink ribbons gets them.
+        let mut state = item_game("1001", 1);
+        state.player_options.jill_ink_ribbons = true;
         {
             let mut host = ScdGameHost::new(&mut state);
             host.on_item(op(0x18), &operands(&item_values(0x2F, 0, 0xFF, [1, 2, 3])));
@@ -13621,13 +13740,21 @@ mod tests {
         assert_eq!(state.items.record(0).unwrap().flag, 1);
         assert!(state.room_actions[0].is_some());
 
-        // Chris never takes the skip.
+        // Chris gets them by default, and not with his option off.
         let mut state = item_game("1000", 1);
         {
             let mut host = ScdGameHost::new(&mut state);
             host.on_item(op(0x18), &operands(&item_values(0x2F, 0, 0xFF, [1, 2, 3])));
         }
         assert_eq!(state.items.built, 1);
+        let mut state = item_game("1000", 1);
+        state.player_options.no_chris_ink_ribbons = true;
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            host.on_item(op(0x18), &operands(&item_values(0x2F, 0, 0xFF, [1, 2, 3])));
+        }
+        assert_eq!(state.items.built, 0);
+        assert!(!state.room_item_present(1));
     }
 
     #[test]
@@ -14067,7 +14194,10 @@ mod tests {
         assert_eq!(state.inventory[0].id, 0x0C);
         assert_eq!(state.inventory[0].quantity, 1);
         assert!(!state.room_item_present(1), "the room-items bit is cleared");
-        assert!(state.room_actions[1].is_none(), "the item edge is consumed");
+        assert!(
+            state.room_actions[1].is_none_or(|a| a.handler == 0),
+            "the item edge is consumed"
+        );
         state.check_desk_state();
         assert_eq!(state.desk.state, 0);
         assert_eq!(state.camera.current_cut, 1, "the room camera returns");
@@ -14339,7 +14469,7 @@ mod tests {
             crate::effects::EFFECT_POOL_SIZE as u8
         );
         assert!(!state.room_item_present(1));
-        assert!(state.room_actions[0].is_none());
+        assert!(state.room_actions[0].is_none_or(|a| a.handler == 0));
     }
 
     #[test]
@@ -14414,7 +14544,7 @@ mod tests {
                 quantity: 2
             }]
         );
-        assert!(state.room_actions[0].is_none());
+        assert!(state.room_actions[0].is_none_or(|a| a.handler == 0));
     }
 
     #[test]
@@ -14508,7 +14638,7 @@ mod tests {
             "the model tears down"
         );
         assert!(!state.room_item_present(1));
-        assert!(state.room_actions[0].is_none());
+        assert!(state.room_actions[0].is_none_or(|a| a.handler == 0));
 
         // The message-driven award path reaches the same branch.
         let mut state = item_game("1000", 1);
@@ -14706,7 +14836,7 @@ mod tests {
             "the picked id is recorded"
         );
         assert_eq!(state.items.record(0).unwrap().flag, 0, "the model clears");
-        assert!(state.room_actions[0].is_none());
+        assert!(state.room_actions[0].is_none_or(|a| a.handler == 0));
         assert_eq!(
             state.last_interaction.map(|interaction| interaction.kind),
             Some(RoomActionKind::Item),
@@ -14734,7 +14864,7 @@ mod tests {
         assert!(!state.room_item_present(1));
         assert_eq!(state.items.record(0).unwrap().flag, 0);
         assert_eq!(state.last_picked_item, Some(0x50));
-        assert!(state.room_actions[0].is_none());
+        assert!(state.room_actions[0].is_none_or(|a| a.handler == 0));
     }
 
     #[test]
@@ -14781,7 +14911,7 @@ mod tests {
             host.on_item(op(0x18), &operands(&item_values(0x33, 0, 0xFF, [1, 2, 3])));
         }
         assert!(
-            state.room_actions[0].is_none(),
+            state.room_actions[0].is_none_or(|a| a.handler == 0),
             "a taken item does not come back"
         );
         assert_eq!(state.items.record(0).unwrap().flag, 0);
@@ -14827,7 +14957,12 @@ mod tests {
             }]
         );
         assert_eq!(state.item_events, vec![0x0B, 0x0B]);
-        assert!(state.room_actions.iter().all(Option::is_none));
+        assert!(
+            state
+                .room_actions
+                .iter()
+                .all(|a| a.is_none_or(|a| a.handler == 0))
+        );
 
         state.interact([-550, 0, 50], 0, true);
         assert_eq!(
@@ -15313,7 +15448,7 @@ mod tests {
             }]
         );
         assert_eq!(state.last_picked_item, Some(0x42));
-        assert!(state.room_actions[2].is_none());
+        assert!(state.room_actions[2].is_none_or(|a| a.handler == 0));
         assert!(!state.flags[5].bit(MSF_MENU_GOT_ITEM));
         assert!(!state.flags[5].bit(MSF_MENU_ITEM_VIEW));
         assert_eq!(state.got_item_slot, None);
@@ -15333,7 +15468,7 @@ mod tests {
         assert!(state.flags[5].bit(MSF_MENU_ITEM_VIEW));
         assert_eq!(state.message_item_slot, Some(3));
         assert!(
-            state.room_actions[3].is_some(),
+            state.room_actions[3].is_some_and(|a| a.handler != 0),
             "the probe does not take it"
         );
         assert!(
@@ -15341,7 +15476,7 @@ mod tests {
             "the award path still consumes it"
         );
         assert_eq!(state.last_picked_item, Some(0x42));
-        assert!(state.room_actions[3].is_none());
+        assert!(state.room_actions[3].is_none_or(|a| a.handler == 0));
     }
 
     #[test]
@@ -16456,12 +16591,12 @@ mod tests {
 
         let mut state = GameState::new(id, &room);
         // The new-game room-items bank ("still here") registers the item
-        // edges; the second-playthrough flag keeps ROOM1001's ink ribbon,
-        // which Jill's first playthrough skips.
+        // edges; Jill's ink ribbons on keep ROOM1001's ink ribbon, which she
+        // otherwise skips.
         state.flags[7]
             .bytes_mut()
             .copy_from_slice(&crate::engine::NEW_GAME_ROOM_ITEMS);
-        state.apply_flag(BANK_SCENARIO, SCENARIO_FLAG_SECOND_PLAYTHROUGH, 0);
+        state.player_options.jill_ink_ribbons = true;
         {
             let mut command_vm = crate::scd::vm::CommandVm::new(&scripts);
             let mut host = ScdGameHost::new(&mut state);
@@ -16597,11 +16732,45 @@ mod tests {
         assert_eq!(jill.take_typewriter_confirm(), None);
         assert_eq!(jill.typewriter, TypewriterFlow::Idle);
 
-        // On a second playthrough Jill needs a ribbon like Chris.
+        // A second playthrough keeps the rule.
         let mut jill = GameState::new(RoomId::parse("1001").unwrap(), &RoomState::default());
         jill.apply_flag(0, SCENARIO_FLAG_SECOND_PLAYTHROUGH, 0);
+        assert!(jill.check_typewriter());
+        assert_eq!(jill.message.id, Some(MESSAGE_TYPEWRITER_SAVE_PROMPT));
+    }
+
+    #[test]
+    fn the_ink_ribbon_options_swap_the_rule() {
+        // Jill with ink ribbons on needs one like Chris, and spends it.
+        let mut jill = GameState::new(RoomId::parse("1001").unwrap(), &RoomState::default());
+        jill.player_options.jill_ink_ribbons = true;
         assert!(!jill.check_typewriter());
         assert_eq!(jill.message.id, Some(MESSAGE_TYPEWRITER_NO_RIBBON));
+        let mut jill = GameState::new(RoomId::parse("1001").unwrap(), &RoomState::default());
+        jill.player_options.jill_ink_ribbons = true;
+        jill.add_item(items::ITEM_INK_RIBBONS, 1);
+        assert!(jill.check_typewriter());
+        assert_eq!(jill.message.id, Some(MESSAGE_TYPEWRITER_RIBBON_PROMPT));
+        assert_eq!(jill.typewriter, TypewriterFlow::Prompt { ink_ribbon: true });
+
+        // Chris with ink ribbons off saves like the Japanese Jill: without
+        // one, and keeping one he holds.
+        let mut chris = GameState::new(RoomId::parse("1000").unwrap(), &RoomState::default());
+        chris.player_options.no_chris_ink_ribbons = true;
+        chris.add_item(items::ITEM_INK_RIBBONS, 1);
+        assert!(chris.check_typewriter());
+        assert_eq!(chris.message.id, Some(MESSAGE_TYPEWRITER_SAVE_PROMPT));
+        assert_eq!(
+            chris.typewriter,
+            TypewriterFlow::Prompt { ink_ribbon: false }
+        );
+
+        // So does a second playthrough.
+        let mut chris = GameState::new(RoomId::parse("1000").unwrap(), &RoomState::default());
+        chris.player_options.no_chris_ink_ribbons = true;
+        chris.apply_flag(0, SCENARIO_FLAG_SECOND_PLAYTHROUGH, 0);
+        assert!(chris.check_typewriter());
+        assert_eq!(chris.message.id, Some(MESSAGE_TYPEWRITER_SAVE_PROMPT));
     }
 
     #[test]
@@ -17328,7 +17497,7 @@ mod tests {
         assert!(state.inventory.is_empty(), "the viewer owns the award now");
         assert!(state.pick_up(1), "the award path still consumes it");
         assert!(state.has_item(0x41));
-        assert!(state.room_actions[1].is_none());
+        assert!(state.room_actions[1].is_none_or(|a| a.handler == 0));
     }
 
     #[test]

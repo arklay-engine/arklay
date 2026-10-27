@@ -737,7 +737,7 @@ mod tests {
     #[test]
     fn options_change_reports_settings() {
         let mut menu = menu();
-        // Options, then the first row (Quick Turn) one step left.
+        // Options, then the first row (Chris's ink ribbons) one step left.
         let requests = actions(
             &mut menu,
             &[
@@ -750,7 +750,7 @@ mod tests {
         let [MenuRequest::Settings(settings)] = requests.as_slice() else {
             panic!("{requests:?}");
         };
-        assert!(!settings.game.quick_turn);
+        assert!(!settings.game.chris_ink_ribbons);
         // Back out of the options, then out of the menu.
         let requests = actions(&mut menu, &[key(GuiKey::Cancel), key(GuiKey::Cancel)]);
         assert_eq!(requests, vec![MenuRequest::Resume]);
@@ -800,7 +800,12 @@ mod tests {
             key(GuiKey::Confirm),
         ]);
         shot(&mut menu, "options", 1920, 1080);
-        menu.handle(&[key(GuiKey::TabNext), key(GuiKey::Down), key(GuiKey::Down)]);
+        menu.handle(&[
+            key(GuiKey::TabNext),
+            key(GuiKey::TabNext),
+            key(GuiKey::Down),
+            key(GuiKey::Down),
+        ]);
         shot(&mut menu, "options_graphics", 1920, 1080);
         menu.handle(&[key(GuiKey::SubNext), key(GuiKey::Down)]);
         shot(&mut menu, "options_rendering", 2560, 1080);

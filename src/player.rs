@@ -171,6 +171,12 @@ pub struct Options {
     /// Port-only: the blood billboards, spurts and pools are not spawned.
     /// Off by default.
     pub no_blood: bool,
+    /// Port-only: saving as Chris needs no ink ribbon. Off by default (every
+    /// release's rule).
+    pub no_chris_ink_ribbons: bool,
+    /// Saving as Jill needs an ink ribbon, as in the USA release. Off by
+    /// default (the Japanese release's rule).
+    pub jill_ink_ribbons: bool,
     /// The `--authentic` run mode: the original's item rules where the port
     /// is more lenient. A healing item that would do nothing is refused: the
     /// first-aid spray and the herbs at full health, and a blue herb while the

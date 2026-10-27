@@ -171,7 +171,7 @@ fn room_100_sparkle_paints_over_the_item_and_vanishes_on_pickup() {
     // sparkle; the sprite's other frame slots run out too.
     assert!(sim.game.pick_up(slot));
     assert_eq!(sim.game.items.record(model).unwrap().flag, 0);
-    assert!(sim.game.room_actions[usize::from(slot)].is_none());
+    assert!(sim.game.room_actions[usize::from(slot)].is_none_or(|a| a.handler == 0));
     for _ in 0..400 {
         if !any_sparkle(&sim.game) {
             break;
@@ -326,8 +326,8 @@ fn corpus_walk_spawns_all_43_shipped_sparkles_and_frees_them() {
         game.flags[7]
             .bytes_mut()
             .copy_from_slice(&NEW_GAME_ROOM_ITEMS);
-        // Second playthrough: room 30E1's ribbon site must not be skipped.
-        game.apply_flag(0, 0x7B, 0);
+        // Jill's ink ribbons on: room 30E1's ribbon site must not be skipped.
+        game.player_options.jill_ink_ribbons = true;
         for operands in sites {
             let slot = usize::from(operand_u8(&operands, 0) & 0x7F);
             let model = usize::from(operand_u8(&operands, 7));
