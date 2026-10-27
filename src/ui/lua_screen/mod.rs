@@ -1026,7 +1026,7 @@ pub(super) fn pad_word(input: UiInput) -> u16 {
     word
 }
 
-/// The pad word of the held direction keys.
+/// The pad word of the held direction keys and L1/R1.
 pub(super) fn held_word(input: UiInput) -> u16 {
     let mut word = 0u16;
     for (flag, bit) in [
@@ -1034,6 +1034,8 @@ pub(super) fn held_word(input: UiInput) -> u16 {
         (input.held_down, 0x0020),
         (input.held_left, 0x0040),
         (input.held_right, 0x0080),
+        (input.held_page_left, 0x0400),
+        (input.held_page_right, 0x0800),
     ] {
         if flag {
             word |= bit;

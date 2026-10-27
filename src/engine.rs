@@ -4966,8 +4966,15 @@ impl GameSession {
             // engine performs a confirmed swap.
             // START reaches it too: `menu_itembox_interaction` checks it
             // before every state and closes the box with the cancel cue.
+            // The held paging keys reach it as well: after the first page
+            // slide the original's state 2 keeps paging off the raw held
+            // D-pad (`g_button_pressed_id & 0x5000`), and L1/R1 alias it.
             let mut event_input = menu_input(ui).map_or_else(UiInput::default, single_input);
             event_input.start = ui.start;
+            event_input.held_up = ui.held_up;
+            event_input.held_down = ui.held_down;
+            event_input.held_page_left = ui.held_page_left;
+            event_input.held_page_right = ui.held_page_right;
             let Some(mut item_box) = self.item_box.take() else {
                 return;
             };
@@ -13654,6 +13661,8 @@ impl InputState {
                 cancel: pressed & KEY_CANCEL != 0,
                 page_left: pressed & KEY_PAGE_LEFT != 0,
                 page_right: pressed & KEY_PAGE_RIGHT != 0,
+                held_page_left: self.held & KEY_PAGE_LEFT != 0,
+                held_page_right: self.held & KEY_PAGE_RIGHT != 0,
                 start: pressed & KEY_START != 0,
                 debug_menu: pressed & KEY_F1 != 0,
                 return_title: pressed & KEY_F9 != 0,

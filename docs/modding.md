@@ -1169,7 +1169,8 @@ scale, `clut` the indexed palette row and `blend` the sprite blend mode.
 `update(api, input)` receives the tick's edges: `up`, `down`, `left`, `right`,
 `confirm`, `cancel`, `page_left`, `page_right`, `start`, `return_title` (F9),
 `any`, plus the
-original pad words `pad` (the edge word) and `held` (the held directions).
+original pad words `pad` (the edge word) and `held` (the held directions and
+L1/R1).
 The bit layout is the original's: confirm `0x0001`, cancel `0x0002`, start
 `0x0008`, up `0x0010`, down `0x0020`, left `0x0040`, right `0x0080`, L1
 `0x0400`, R1 `0x0800`.

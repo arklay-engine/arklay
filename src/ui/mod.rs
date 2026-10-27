@@ -69,6 +69,10 @@ pub struct UiInput {
     pub page_left: bool,
     /// R1 (`]` by default): pages the item box forward.
     pub page_right: bool,
+    /// Held level of L1: the item box keeps paging back while it is held.
+    pub held_page_left: bool,
+    /// Held level of R1: the item box keeps paging forward while it is held.
+    pub held_page_right: bool,
     /// START (Tab by default): opens the gameplay pause menu; the debug
     /// menu's INVENTORY tool uses it to clear a slot.
     pub start: bool,
