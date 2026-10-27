@@ -147,7 +147,7 @@ fn tiny_tim() -> Vec<u8> {
     data
 }
 
-/// A manifest-carrying pack: `room/1000.rdt` plus `entries`.
+/// A manifest-carrying pack: `room/1000/room.rdt` plus `entries`.
 fn write_manifest_pack(path: &Path, manifest: &manifest::Manifest, entries: &[(&str, &[u8])]) {
     let mut writer = PackWriter::new();
     writer
@@ -207,7 +207,7 @@ fn a_truncated_entry_range_is_rejected() {
     let dir = TempDir::new("truncated-entry");
     let path = dir.join("bad.akpak");
     // One entry whose data range starts far past the end of the file.
-    std::fs::write(&path, raw_pack(&[("room/1000.rdt", 1_000_000, 16)])).unwrap();
+    std::fs::write(&path, raw_pack(&[("room/1000/room.rdt", 1_000_000, 16)])).unwrap();
     let output = run(&["list", path.to_str().unwrap()]);
     assert_failure(&output, "out of bounds");
 }
@@ -238,30 +238,30 @@ fn a_malformed_manifest_is_rejected_at_open() {
 fn directory_packs_and_directory_mods_list_and_extract() {
     let dir = TempDir::new("directory-pack");
     let game = dir.join("game");
-    std::fs::create_dir_all(game.join("room")).unwrap();
+    std::fs::create_dir_all(game.join("room/1000")).unwrap();
     std::fs::write(
         game.join(manifest::ENTRY),
         manifest::Manifest::base("re1").render(),
     )
     .unwrap();
-    std::fs::write(game.join("room/1000.rdt"), b"base").unwrap();
+    std::fs::write(game.join("room/1000/room.rdt"), b"base").unwrap();
     std::fs::write(game.join("notes.txt"), b"notes").unwrap();
 
     let output = run(&["list", game.to_str().unwrap()]);
     assert!(output.status.success(), "{}", stderr(&output));
     let listed = stdout(&output);
-    assert!(listed.contains("room/1000.rdt"), "{listed}");
+    assert!(listed.contains("room/1000/room.rdt"), "{listed}");
     assert!(listed.contains("manifest.toml"), "{listed}");
 
     let mod_dir = dir.join("moddir");
-    std::fs::create_dir_all(mod_dir.join("room")).unwrap();
+    std::fs::create_dir_all(mod_dir.join("room/1000")).unwrap();
     let mod_manifest = manifest::Manifest {
         kind: manifest::PackKind::Mod,
         base: Some("re1".to_string()),
         ..manifest::Manifest::base("demo")
     };
     std::fs::write(mod_dir.join(manifest::ENTRY), mod_manifest.render()).unwrap();
-    std::fs::write(mod_dir.join("room/1000.rdt"), b"mod").unwrap();
+    std::fs::write(mod_dir.join("room/1000/room.rdt"), b"mod").unwrap();
 
     let out = dir.join("out");
     let output = run(&[
@@ -274,7 +274,7 @@ fn directory_packs_and_directory_mods_list_and_extract() {
     ]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
-        std::fs::read(out.join("room/1000.rdt")).unwrap(),
+        std::fs::read(out.join("room/1000/room.rdt")).unwrap(),
         b"mod",
         "the directory mod layer did not win"
     );
@@ -310,7 +310,7 @@ fn a_missing_room_fails_before_any_display() {
         "1",
         "--stats",
     ]);
-    assert_failure(&output, "room/11c0.rdt");
+    assert_failure(&output, "room/11c0/room.rdt");
 }
 
 #[test]
@@ -330,14 +330,14 @@ fn a_mismatched_mod_base_is_rejected() {
     write_manifest_pack(
         &base,
         &manifest::Manifest::base("re1"),
-        &[("room/1000.rdt", b"base")],
+        &[("room/1000/room.rdt", b"base")],
     );
     let mod_manifest = manifest::Manifest {
         kind: manifest::PackKind::Mod,
         base: Some("re9".to_string()),
         ..manifest::Manifest::base("demo")
     };
-    write_manifest_pack(&m, &mod_manifest, &[("room/1000.rdt", b"mod")]);
+    write_manifest_pack(&m, &mod_manifest, &[("room/1000/room.rdt", b"mod")]);
 
     let output = run(&["list", base.to_str().unwrap(), "--mod", m.to_str().unwrap()]);
     assert_failure(&output, "declares base");
@@ -352,15 +352,15 @@ fn duplicate_and_repeated_layers_are_rejected() {
     write_manifest_pack(
         &base,
         &manifest::Manifest::base("re1"),
-        &[("room/1000.rdt", b"base")],
+        &[("room/1000/room.rdt", b"base")],
     );
     let same_id = manifest::Manifest {
         kind: manifest::PackKind::Mod,
         base: Some("re1".to_string()),
         ..manifest::Manifest::base("demo")
     };
-    write_manifest_pack(&first, &same_id, &[("room/1000.rdt", b"first")]);
-    write_manifest_pack(&second, &same_id, &[("room/1000.rdt", b"second")]);
+    write_manifest_pack(&first, &same_id, &[("room/1000/room.rdt", b"first")]);
+    write_manifest_pack(&second, &same_id, &[("room/1000/room.rdt", b"second")]);
 
     // Two different layers with the same manifest id.
     let output = run(&[
@@ -510,7 +510,7 @@ fn verify_validates_the_checked_in_hd_mods_png_and_ogg_replacements() {
     let output = run(&["verify", pack.to_str().unwrap()]);
     let out = stdout(&output);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(out.contains("roomcut"), "{out}");
+    assert!(out.contains("cut "), "{out}");
     assert!(out.contains("png"), "{out}");
     assert!(out.contains("webp"), "{out}");
     assert!(out.contains("ogg"), "{out}");
@@ -546,7 +546,7 @@ fn mod_build_does_not_warn_about_a_format_override() {
     let dir = TempDir::new("override-warn");
     let base = dir.join("base.akpak");
     let source = dir.join("mod");
-    fs::create_dir_all(source.join("roomcut")).unwrap();
+    fs::create_dir_all(source.join("room/1000/cut")).unwrap();
     fs::create_dir_all(source.join("ui")).unwrap();
     fs::create_dir_all(source.join("extra")).unwrap();
     fs::create_dir_all(source.join("bgm")).unwrap();
@@ -557,7 +557,7 @@ fn mod_build_does_not_warn_about_a_format_override() {
             manifest::Manifest::base("re1").render().into_bytes(),
         )
         .unwrap();
-    writer.add("roomcut/100_000.bmp", background()).unwrap();
+    writer.add("room/1000/cut/00.bmp", background()).unwrap();
     writer.add("ui/itemboxn.tim", tiny_tim().to_vec()).unwrap();
     writer.add("bgm/013.wav", b"RIFF".to_vec()).unwrap();
     writer.write(&base).unwrap();
@@ -574,7 +574,7 @@ fn mod_build_does_not_warn_about_a_format_override() {
     .unwrap();
     // A PNG over the BMP background, an OGG over the WAV sample and a file the
     // base cannot serve.
-    fs::write(source.join("roomcut/100_000.png"), tiny_png()).unwrap();
+    fs::write(source.join("room/1000/cut/00.png"), tiny_png()).unwrap();
     fs::write(source.join("bgm/013.ogg"), b"not vorbis").unwrap();
     fs::write(source.join("extra/new.bin"), b"new").unwrap();
 
@@ -1083,8 +1083,8 @@ fn extraction_writes_every_entry_and_rejects_a_layered_duplicate() {
         out.to_str().unwrap(),
     ]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(out.join("room/1000.rdt").exists());
-    assert!(out.join("roomcut/100_000.bmp").exists());
+    assert!(out.join("room/1000/room.rdt").exists());
+    assert!(out.join("room/1000/cut/00.bmp").exists());
 
     let leftovers: Vec<_> = std::fs::read_dir(out.join("room"))
         .unwrap()

@@ -1,22 +1,21 @@
-//! The room definition model: everything a `room/<id>.xml` holds, read out of
-//! an RDT by [`RoomSource::from_rdt`] and built into the engine's
-//! [`RoomState`] by [`RoomSource::build`].
+//! The room definition model: everything a `room/<id>/room.xml` holds, read
+//! out of an RDT by [`RoomSource::from_rdt`] and built into the engine's
+//! [`RoomState`] by [`RoomSource::build`] together with the files the room's
+//! folder holds by convention.
 //!
 //! The model keeps the RDT's raw words wherever the engine reads them raw
-//! (flags, shape words, the footstep surface byte), and drops what the PC
-//! game never reads: the VAB sound banks, the per-room item-icon tiles, the
-//! embedded mask TIMs (the mask pages are `roommask/` BMPs) and the dead
-//! header fields. The embedded models, effect sheets and player-animation
-//! pair become shared sidecar files ([`Sidecars`]) the definition names.
-
-use std::collections::{BTreeMap, HashMap};
-use std::fmt::Write as _;
+//! (shape and collision words, mask sprite words, the footstep surface byte);
+//! the XML spells them out as named attributes. It drops what the PC game
+//! never reads: the VAB sound banks, the per-room item-icon tiles, the
+//! embedded mask TIMs (the mask pages are the folder's `mask/` BMPs) and the
+//! dead header fields. The embedded models, effect sprites and
+//! player-animation pair become files in the room's folder, named by slot.
 
 use anyhow::{Context, Result, bail};
 
 use crate::charset::Script;
 use crate::effects::pool::EffectBlock;
-use crate::effects::room::{AnimFrame, FrameEntry, UvRecord};
+use crate::effects::room::{AnimFrame, FrameEntry, TimGeometry, UvRecord};
 use crate::effects::{EffectSprite as StateSprite, RoomEffects, SpriteAnimation, SpriteInfo};
 use crate::mask;
 use crate::model::Texture8;
@@ -25,19 +24,14 @@ use crate::pack::{AssetClass, Pack};
 use crate::state::{Collision, Cut, FootstepZone, Light, RoomId, RoomState, WalkZone, Zone};
 use crate::{assets, bmp, budget, emd, rdt, tim, tmd};
 
-/// Pack directory of the shared room model pairs (`prop/<id>.tmd` + `.bmp`).
-pub const PROP_DIR: &str = "prop/";
-/// Pack entry of the prop manifest: which rooms and slots use each prop.
-pub const PROP_MANIFEST: &str = "prop/props.toml";
-/// Pack directory of the room effect sprite sheets (`effect/<id>.tim`).
-pub const EFFECT_DIR: &str = "effect/";
-/// Pack directory of the room player-animation pairs (`.emr` + `.edd`).
-pub const ANIMATION_DIR: &str = "animation/";
+/// The room definition's file name inside the room's folder.
+pub const XML_FILE: &str = "room.xml";
 
-/// Sidecar ids are eight hex digits: the converter names each file by the
-/// CRC-32 of its content. A mod adding its own props, sheets or animations
-/// may use any id no other file has.
-const ID_DIGITS: usize = 8;
+/// The highest model slot count a table declares (the RDT's count byte).
+const MAX_MODEL_SLOTS: usize = u8::MAX as usize;
+
+/// The index of the room's player-animation pair in `anim/`.
+const PLAYER_ANIMATION: usize = 0;
 
 /// Free entry of the effect sprite index table.
 const FREE_SPRITE: u8 = 0xFF;
@@ -65,19 +59,12 @@ pub struct RoomSource {
     pub footstep_zones: Vec<FootstepZone>,
     /// The room's message block, absent when the RDT has none.
     pub messages: Option<Messages>,
-    /// The effect sprite index table's declared slots, up to the first free
-    /// one.
-    pub effects: Vec<EffectSlot>,
-    /// Object-model slots: the prop stem each holds, `None` for a null slot.
-    /// The table's length is the SCD-visible slot count.
-    pub object_models: Vec<Option<String>>,
-    /// Item-model slots, like [`RoomSource::object_models`].
-    pub item_models: Vec<Option<String>>,
-    /// Stem of the room's player-animation pair (`animation/<id>`).
-    pub player_animation: Option<String>,
-    /// Pack entry of the room's own SCD container (init, per-frame and event
-    /// scripts), e.g. `room/1000.scd`.
-    pub scripts: Option<String>,
+    /// The object-model table's slot count when it is longer than its last
+    /// slot with a model (`object/<slot>.tmd`): trailing null slots the SCD
+    /// still sees. `None` when the files give the count.
+    pub object_slots: Option<usize>,
+    /// The item-model table's slot count, like [`RoomSource::object_slots`].
+    pub item_slots: Option<usize>,
 }
 
 /// One camera cut.
@@ -87,10 +74,6 @@ pub struct Camera {
     pub look_at: [i32; 3],
     pub roll: i32,
     pub fov: i32,
-    /// Background stem; `None` is the room's own `roomcut/<room>_<camera>`.
-    pub background: Option<String>,
-    /// Mask page stem; `None` is the room's own `roommask/<room>_<camera>`.
-    pub mask: Option<String>,
     /// The mask placement table, group by group.
     pub mask_groups: Vec<MaskGroup>,
 }
@@ -238,12 +221,9 @@ pub struct EffectSlot {
     pub sprite: Option<EffectSprite>,
 }
 
-/// One effect sprite's metadata; the art is the named sheet.
+/// One effect sprite's metadata; the art is the slot's `effect/<slot>` sheet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectSprite {
-    /// Stem of the 4bpp sheet TIM (`effect/<id>`); `None` when the RDT's TIM
-    /// is malformed.
-    pub sheet: Option<String>,
     /// The page/CLUT descriptor word.
     pub page_clut_word: u16,
     pub frames: Vec<FrameEntry>,
@@ -256,207 +236,34 @@ pub struct EffectSprite {
 }
 
 /// Which model table a slot belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelTable {
     Object,
     Item,
 }
 
 impl ModelTable {
-    fn name(self) -> &'static str {
+    /// Pack stem of slot `slot`'s files in room `id`.
+    fn stem(self, id: RoomId, slot: usize) -> String {
         match self {
-            Self::Object => "object",
-            Self::Item => "item",
+            Self::Object => id.object_stem(slot),
+            Self::Item => id.item_stem(slot),
         }
     }
 }
 
-/// The shared files the room definitions name, collected while exporting the
-/// RDTs: model pairs (`prop/`), effect sheets (`effect/`), player-animation
-/// pairs (`animation/`) and each room's own scripts.
-///
-/// A file's id is the CRC-32 of its content, so identical content is one
-/// file (a pair used by both an item slot and an object slot, or by many
-/// rooms) and a file keeps its id whichever rooms or region a pack was
-/// converted from.
-#[derive(Debug, Default, Clone)]
-pub struct Sidecars {
-    props: BTreeMap<u32, (Vec<u8>, Option<Vec<u8>>)>,
-    /// Every room slot that names each prop, in conversion order.
-    prop_uses: BTreeMap<u32, Vec<(RoomId, ModelTable, usize)>>,
-    effects: BTreeMap<u32, Vec<u8>>,
-    animations: BTreeMap<u32, (Vec<u8>, Vec<u8>)>,
-    rooms: Vec<(String, Vec<u8>)>,
+/// A room converted out of an RDT: its definition and the other files of its
+/// folder (`room/<id>/...`) as `(pack entry, bytes)`, besides the camera
+/// images.
+#[derive(Debug, Clone)]
+pub struct Converted {
+    pub source: RoomSource,
+    pub files: Vec<(String, Vec<u8>)>,
 }
 
-/// A sidecar id as its stem digits.
-fn sidecar_id(id: u32) -> String {
-    format!("{id:0ID_DIGITS$x}")
-}
-
-/// The CRC-32 of `parts`, each length-prefixed so no two splits of the same
-/// bytes share an id.
-fn content_id(parts: &[&[u8]]) -> u32 {
-    let mut bytes = Vec::new();
-    for part in parts {
-        bytes.extend_from_slice(&(part.len() as u32).to_le_bytes());
-        bytes.extend_from_slice(part);
-    }
-    crate::hash::crc32(&bytes)
-}
-
-/// File `value` under `id` in `files`. Two different contents with one id
-/// is an error rather than a silent overwrite.
-fn intern<T: PartialEq>(files: &mut BTreeMap<u32, T>, id: u32, value: T, what: &str) -> Result<()> {
-    match files.get(&id) {
-        Some(existing) if *existing != value => {
-            bail!("two different {what} files share the id {}", sidecar_id(id))
-        }
-        Some(_) => {}
-        None => {
-            files.insert(id, value);
-        }
-    }
-    Ok(())
-}
-
-/// Whether `value` can be filed under `id` in `files` without a clash.
-fn fits<T: PartialEq>(files: &BTreeMap<u32, T>, id: u32, value: &T) -> bool {
-    files.get(&id).is_none_or(|existing| existing == value)
-}
-
-impl Sidecars {
-    fn prop(
-        &mut self,
-        tmd: &[u8],
-        tim: Option<&[u8]>,
-        user: (RoomId, ModelTable, usize),
-    ) -> Result<String> {
-        let id = match tim {
-            Some(tim) => content_id(&[tmd, tim]),
-            None => content_id(&[tmd]),
-        };
-        intern(
-            &mut self.props,
-            id,
-            (tmd.to_vec(), tim.map(<[u8]>::to_vec)),
-            "prop",
-        )?;
-        self.prop_uses.entry(id).or_default().push(user);
-        Ok(format!("{PROP_DIR}{}", sidecar_id(id)))
-    }
-
-    fn effect(&mut self, tim: &[u8]) -> Result<String> {
-        let id = content_id(&[tim]);
-        intern(&mut self.effects, id, tim.to_vec(), "effect sheet")?;
-        Ok(format!("{EFFECT_DIR}{}", sidecar_id(id)))
-    }
-
-    fn animation(&mut self, emr: &[u8], edd: &[u8]) -> Result<String> {
-        let id = content_id(&[emr, edd]);
-        intern(
-            &mut self.animations,
-            id,
-            (emr.to_vec(), edd.to_vec()),
-            "animation",
-        )?;
-        Ok(format!("{ANIMATION_DIR}{}", sidecar_id(id)))
-    }
-
-    /// Add every file `other` collected. Nothing is added when one of them
-    /// clashes with a file already here.
-    pub fn absorb(&mut self, other: Sidecars) -> Result<()> {
-        let clash = other
-            .props
-            .iter()
-            .any(|(id, prop)| !fits(&self.props, *id, prop))
-            || other
-                .effects
-                .iter()
-                .any(|(id, tim)| !fits(&self.effects, *id, tim))
-            || other
-                .animations
-                .iter()
-                .any(|(id, pair)| !fits(&self.animations, *id, pair));
-        if clash {
-            bail!("a sidecar file shares its id with a different one");
-        }
-        self.props.extend(other.props);
-        for (id, uses) in other.prop_uses {
-            self.prop_uses.entry(id).or_default().extend(uses);
-        }
-        self.effects.extend(other.effects);
-        self.animations.extend(other.animations);
-        self.rooms.extend(other.rooms);
-        Ok(())
-    }
-
-    /// Every collected file as `(pack entry, bytes)`, the prop manifest
-    /// included.
-    ///
-    /// A model texture becomes an 8-bit indexed BMP keeping the TIM's texel
-    /// indices, palette and STP bits ([`bmp::encode_indexed_page`]). A TIM a
-    /// BMP cannot hold exactly (more than one CLUT row, or one that does not
-    /// decode) stays a `.tim`; the loader reads either.
-    pub fn into_entries(self) -> Vec<(String, Vec<u8>)> {
-        let mut entries = Vec::new();
-        let mut manifest = String::from(
-            "# Room model props written by convert-game: each id's first use and every\n\
-             # room/slot that names it. The ids are opaque; this file is for people.\n",
-        );
-        for (index, (tmd, tim)) in &self.props {
-            let id = sidecar_id(*index);
-            entries.push((format!("{PROP_DIR}{id}.tmd"), tmd.clone()));
-            if let Some(tim) = tim {
-                let (extension, data) = prop_texture_file(tim);
-                entries.push((format!("{PROP_DIR}{id}.{extension}"), data));
-            }
-            let uses = &self.prop_uses[index];
-            let (room, table, slot) = uses[0];
-            let _ = writeln!(manifest, "\n[prop.{id}]");
-            let _ = writeln!(
-                manifest,
-                "label = \"room {:04x} {} {slot}\"",
-                room.rdt_number(),
-                table.name()
-            );
-            let _ = writeln!(manifest, "source = \"ROOM{:04X}.RDT\"", room.rdt_number());
-            let mut rooms: Vec<String> = uses
-                .iter()
-                .map(|(room, _, _)| format!("\"{:04x}\"", room.rdt_number()))
-                .collect();
-            rooms.dedup();
-            let _ = writeln!(manifest, "rooms = [{}]", rooms.join(", "));
-            for kind in [ModelTable::Object, ModelTable::Item] {
-                let slots: Vec<String> = uses
-                    .iter()
-                    .filter(|(_, table, _)| *table == kind)
-                    .map(|(room, _, slot)| format!("\"{:04x}:{slot}\"", room.rdt_number()))
-                    .collect();
-                if !slots.is_empty() {
-                    let _ = writeln!(manifest, "{}s = [{}]", kind.name(), slots.join(", "));
-                }
-            }
-        }
-        if !self.props.is_empty() {
-            entries.push((PROP_MANIFEST.to_string(), manifest.into_bytes()));
-        }
-        for (id, tim) in self.effects {
-            entries.push((format!("{EFFECT_DIR}{}.tim", sidecar_id(id)), tim));
-        }
-        for (id, (emr, edd)) in self.animations {
-            let id = sidecar_id(id);
-            entries.push((format!("{ANIMATION_DIR}{id}.emr"), emr));
-            entries.push((format!("{ANIMATION_DIR}{id}.edd"), edd));
-        }
-        entries.extend(self.rooms);
-        entries
-    }
-}
-
-/// The file a prop texture TIM is stored as: an indexed BMP when it holds the
+/// The file a model texture TIM is stored as: an indexed BMP when it holds the
 /// decoded texture exactly, else the TIM itself.
-fn prop_texture_file(tim: &[u8]) -> (&'static str, Vec<u8>) {
+fn model_texture_file(tim: &[u8]) -> (&'static str, Vec<u8>) {
     let exact = tim::decode_8bpp(tim).ok().and_then(|texture| {
         let page = bmp::encode_indexed_page(&texture, 0).ok()?;
         let back = bmp::decode_indexed_page(&page).ok()?;
@@ -466,6 +273,31 @@ fn prop_texture_file(tim: &[u8]) -> (&'static str, Vec<u8>) {
         Some(page) => ("bmp", page),
         None => ("tim", tim.to_vec()),
     }
+}
+
+/// The file an effect sprite's 4bpp TIM is stored as: a CLUT sheet BMP when
+/// it reads back as exactly the TIM's texture and geometry, else the TIM.
+fn effect_sheet_file(tim: &[u8]) -> (&'static str, Vec<u8>) {
+    let expected = crate::effects::room::parse_tim(tim);
+    let exact = expected.1.as_ref().and_then(|texture| {
+        let sheet = bmp::encode_clut_sheet(texture, usize::from(expected.0.clut_rows)).ok()?;
+        (decode_effect_sheet(&sheet).ok()? == expected).then_some(sheet)
+    });
+    match exact {
+        Some(sheet) => ("bmp", sheet),
+        None => ("tim", tim.to_vec()),
+    }
+}
+
+/// An effect sheet BMP's texture and the geometry a TIM of it would have.
+fn decode_effect_sheet(data: &[u8]) -> Result<(TimGeometry, Option<Texture8>)> {
+    let (texture, rows) = bmp::decode_clut_sheet(data)?;
+    let geometry = TimGeometry {
+        width: u16::try_from(texture.width).context("effect sheet is too wide")?,
+        height: u16::try_from(texture.height).context("effect sheet is too tall")?,
+        clut_rows: rows as u8,
+    };
+    Ok((geometry, Some(texture)))
 }
 
 /// Read a little-endian `u32`.
@@ -480,69 +312,85 @@ fn i32_at(data: &[u8], offset: usize) -> Option<i32> {
 }
 
 impl RoomSource {
-    /// Read an RDT into a room definition, adding its models, effect sheets,
-    /// player animation and scripts to `sidecars`.
+    /// Read an RDT into a room definition and the files of its folder: the
+    /// model pairs, effect sprites, player animation and scripts.
     ///
     /// `script` is the text script the room's messages are written in.
-    pub fn from_rdt(
-        data: &[u8],
-        id: RoomId,
-        script: Script,
-        sidecars: &mut Sidecars,
-    ) -> Result<Self> {
+    pub fn from_rdt(data: &[u8], id: RoomId, script: Script) -> Result<Converted> {
         let state = rdt::parse(data, id)?;
         let tables = rdt::mask_tables(data)?;
         let cameras = state
             .cuts
             .iter()
             .zip(&tables)
-            .map(|(cut, table)| camera_source(cut, table, id))
+            .map(|(cut, table)| camera_source(cut, table))
             .collect();
         let pointers = rdt::pointers(data);
+        let mut files = Vec::new();
 
         let mut models = |table: ModelTable, pointer: u32, count: u8| {
-            (0..usize::from(count))
-                .map(|slot| match model_pair(data, pointer, slot) {
-                    Some((tmd, tim)) => sidecars.prop(tmd, tim, (id, table, slot)).map(Some),
-                    None => Ok(None),
-                })
-                .collect::<Result<Vec<_>>>()
+            let mut used = 0;
+            for slot in 0..usize::from(count) {
+                let Some((tmd, tim)) = model_pair(data, pointer, slot) else {
+                    continue;
+                };
+                let stem = table.stem(id, slot);
+                files.push((format!("{stem}.tmd"), tmd.to_vec()));
+                if let Some(tim) = tim {
+                    let (extension, data) = model_texture_file(tim);
+                    files.push((format!("{stem}.{extension}"), data));
+                }
+                used = slot + 1;
+            }
+            (usize::from(count) > used).then_some(usize::from(count))
         };
-        let object_models = models(
+        let object_slots = models(
             ModelTable::Object,
             pointers[OBJECT_MODELS_SLOT],
             state.omodel_slot_count,
-        )?;
-        let item_models = models(
+        );
+        let item_slots = models(
             ModelTable::Item,
             pointers[ITEM_MODELS_SLOT],
             state.item_count,
-        )?;
+        );
 
-        let effects = effect_slots(data, &pointers, &state.effects, sidecars)?;
+        for (slot, (effect, tim)) in effect_slots(data, &pointers, &state.effects)
+            .into_iter()
+            .enumerate()
+        {
+            let stem = id.effect_stem(slot);
+            files.push((
+                format!("{stem}.xml"),
+                super::xml::write_effect(&effect).into_bytes(),
+            ));
+            if let Some(tim) = tim {
+                let (extension, data) = effect_sheet_file(tim);
+                files.push((format!("{stem}.{extension}"), data));
+            }
+        }
         // A pair that does not parse (room 5020 ships one) leaves the RDT on
-        // the no-op stance, so the room names none.
-        let player_animation = rdt::room_anim_bounds(data)
+        // the no-op stance, so the room has none.
+        if let Some((emr, edd)) = rdt::room_anim_bounds(data)
             .and_then(|(header, base, bound)| {
                 Some((data.get(header..base)?, data.get(base..bound)?))
             })
             .filter(|(emr, edd)| emd::parse_room_anim_files(emr, edd).is_ok())
-            .map(|(emr, edd)| sidecars.animation(emr, edd))
-            .transpose()?;
-        let scripts = match crate::scd::reader::extract_container(data) {
-            Ok(Some(container)) => {
-                let entry = scripts_entry(id);
-                sidecars.rooms.push((entry.clone(), container));
-                Some(entry)
-            }
-            Ok(None) => None,
+        {
+            let stem = id.anim_stem(PLAYER_ANIMATION);
+            files.push((format!("{stem}.emr"), emr.to_vec()));
+            files.push((format!("{stem}.edd"), edd.to_vec()));
+        }
+        match crate::scd::reader::extract_container(data) {
+            Ok(Some(container)) => files.push((id.scd_entry(), container)),
+            Ok(None) => {}
             // A stub RDT carries no script pointers at all; a real room whose
             // scripts do not read is not one the XML can carry.
-            Err(_) if state.cuts.is_empty() => None,
+            Err(_) if state.cuts.is_empty() => {}
             Err(error) => return Err(error.context("the room's scripts do not read")),
-        };
+        }
 
-        Ok(Self {
+        let source = Self {
             ambient: state.ambient,
             lights: state.lights,
             cameras,
@@ -555,61 +403,29 @@ impl RoomSource {
                 .messages
                 .as_deref()
                 .map(|block| Messages::from_block(block, script, id.stage)),
-            effects,
-            object_models,
-            item_models,
-            player_animation,
-            scripts,
-        })
+            object_slots,
+            item_slots,
+        };
+        Ok(Converted { source, files })
     }
 
-    /// The pack entries the definition needs besides its camera images: each
-    /// model mesh (a texture is optional), effect sheet, animation half and
-    /// the script container.
-    pub fn references(&self) -> Vec<String> {
-        let mut entries: Vec<String> = self
-            .object_models
-            .iter()
-            .chain(&self.item_models)
-            .flatten()
-            .map(|stem| format!("{stem}.tmd"))
-            .collect();
-        entries.extend(
-            self.effects
-                .iter()
-                .filter_map(|slot| slot.sprite.as_ref()?.sheet.as_deref())
-                .map(|stem| format!("{stem}.tim")),
-        );
-        if let Some(stem) = &self.player_animation {
-            entries.push(format!("{stem}.emr"));
-            entries.push(format!("{stem}.edd"));
-        }
-        entries.extend(self.scripts.clone());
-        entries.sort();
-        entries.dedup();
-        entries
-    }
-
-    /// Build the engine's room state, reading the named sidecars from `pack`.
+    /// Build the engine's room state, reading the room's models, effect
+    /// sprites and player animation from its folder in `pack`.
     ///
     /// Like the RDT parser, a damaged model, effect sheet or animation never
     /// fails the room: a model pair that does not load is skipped with a
     /// warning in [`RoomState::model_warnings`], an effect sheet that does
     /// not load leaves its sprite without art, and an animation pair that
     /// does not load leaves the room on the no-op stance with a model
-    /// warning.
+    /// warning. An effect definition that does not parse fails the room, like
+    /// a broken `room.xml`.
     pub fn build(&self, id: RoomId, pack: &Pack) -> Result<RoomState> {
         let cuts = self
             .cameras
             .iter()
             .enumerate()
-            .map(|(index, camera)| build_cut(camera, index, id))
+            .map(|(index, camera)| build_cut(camera, index))
             .collect::<Result<Vec<_>>>()?;
-        let slot_count = |slots: &[Option<String>], what: &str| {
-            u8::try_from(slots.len()).with_context(|| format!("more than 255 {what} slots"))
-        };
-        let omodel_slot_count = slot_count(&self.object_models, "object model")?;
-        let item_count = slot_count(&self.item_models, "item model")?;
         budget::check_len(
             self.zones.len(),
             budget::MAX_RECORDS,
@@ -622,19 +438,31 @@ impl RoomSource {
         )?;
         let records: usize = self.collision.quadrants.iter().map(Vec::len).sum();
         budget::check_len(records, budget::MAX_RECORDS, "collision record count")?;
-        if self.effects.len() > crate::effects::room::EFFECT_SPRITE_SLOTS {
-            bail!(
-                "{} effect slots declared, the table holds {}",
-                self.effects.len(),
-                crate::effects::room::EFFECT_SPRITE_SLOTS
-            );
-        }
 
         let mut model_warnings = Vec::new();
-        let mut cache = HashMap::new();
-        let object_models =
-            build_models(&self.object_models, pack, &mut cache, &mut model_warnings);
-        let item_models = build_models(&self.item_models, pack, &mut cache, &mut model_warnings);
+        let (omodel_slot_count, object_models) = build_models(
+            ModelTable::Object,
+            self.object_slots,
+            id,
+            pack,
+            &mut model_warnings,
+        )?;
+        let (item_count, item_models) = build_models(
+            ModelTable::Item,
+            self.item_slots,
+            id,
+            pack,
+            &mut model_warnings,
+        )?;
+        let anim = id.anim_stem(PLAYER_ANIMATION);
+        let room_anim = pack
+            .contains(&format!("{anim}.emr"))
+            .then(|| {
+                build_anim(&anim, pack)
+                    .map_err(|error| model_warnings.push(format!("animation {anim}: {error:#}")))
+                    .ok()
+            })
+            .flatten();
 
         Ok(RoomState {
             stage: id.stage,
@@ -652,22 +480,13 @@ impl RoomSource {
             walk_zones: self.walk_zones.clone(),
             footstep_zones: self.footstep_zones.clone(),
             messages: self.messages.as_ref().map(Messages::to_block).transpose()?,
-            effects: build_effects(&self.effects, pack),
+            effects: build_effects(id, pack)?,
             object_models,
             item_models,
-            room_anim: self.player_animation.as_deref().and_then(|stem| {
-                build_anim(stem, pack)
-                    .map_err(|error| model_warnings.push(format!("animation {stem}: {error:#}")))
-                    .ok()
-            }),
+            room_anim,
             model_warnings,
         })
     }
-}
-
-/// Pack entry of a room's own SCD container, e.g. `room/1000.scd`.
-pub fn scripts_entry(id: RoomId) -> String {
-    format!("room/{:04x}.scd", id.rdt_number())
 }
 
 /// RDT pointer slot of the object-model pair table.
@@ -689,7 +508,7 @@ fn footstep_count(data: &[u8], pointer: u32) -> u16 {
 }
 
 /// One camera's definition from its parsed cut and raw mask table.
-fn camera_source(cut: &Cut, table: &mask::MaskTable, id: RoomId) -> Camera {
+fn camera_source(cut: &Cut, table: &mask::MaskTable) -> Camera {
     let mut sprites = table.sprites.iter();
     let mask_groups: Vec<MaskGroup> = table
         .groups
@@ -718,8 +537,6 @@ fn camera_source(cut: &Cut, table: &mask::MaskTable, id: RoomId) -> Camera {
         look_at: cut.look_at,
         roll: cut.roll,
         fov: cut.fov,
-        background: Some(id.cut_stem(cut.index)),
-        mask: (!mask_groups.is_empty()).then(|| id.roommask_stem(cut.index)),
         mask_groups,
     }
 }
@@ -745,16 +562,16 @@ fn model_pair(data: &[u8], pointer: u32, slot: usize) -> Option<(&[u8], Option<&
     Some((tmd_bytes, tim_bytes))
 }
 
-/// The effect slots of an RDT, naming each sprite's sheet.
-fn effect_slots(
-    data: &[u8],
+/// The effect slots of an RDT, each with its sprite's 4bpp sheet TIM (cut to
+/// its own length; `None` when the RDT's TIM is malformed).
+fn effect_slots<'a>(
+    data: &'a [u8],
     pointers: &[u32; 19],
     parsed: &RoomEffects,
-    sidecars: &mut Sidecars,
-) -> Result<Vec<EffectSlot>> {
+) -> Vec<(EffectSlot, Option<&'a [u8]>)> {
     let [index_ptr, _, tim_ptr] = EFFECT_SLOTS.map(|slot| pointers[slot]);
     if EFFECT_SLOTS.iter().any(|&slot| pointers[slot] == 0) {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let mut slots = Vec::new();
     for slot in 0..crate::effects::room::EFFECT_SPRITE_SLOTS {
@@ -764,34 +581,42 @@ fn effect_slots(
         if index == FREE_SPRITE {
             break;
         }
-        let sprite = match parsed.sprite(index) {
-            Some(sprite) => {
-                let sheet = (tim_ptr as usize)
-                    .checked_sub(4 * slot)
-                    .and_then(|at| i32_at(data, at))
-                    .and_then(|offset| usize::try_from(offset).ok())
-                    .and_then(|offset| data.get(offset..))
-                    .and_then(|tim| Some(&tim[..tim::byte_len(tim).ok()?]))
-                    .map(|tim| sidecars.effect(tim))
-                    .transpose()?;
-                Some(EffectSprite {
-                    sheet,
-                    page_clut_word: sprite.info.page_clut_word,
-                    frames: sprite.info.frames.clone(),
-                    uvs: sprite.info.uvs.clone(),
-                    depth_table: sprite.anim.depth_table,
-                    depth_frames: sprite.anim.depth_frames.clone(),
-                })
-            }
-            None => None,
+        let Some(sprite) = parsed.sprite(index) else {
+            slots.push((
+                EffectSlot {
+                    index,
+                    sprite: None,
+                },
+                None,
+            ));
+            continue;
         };
-        slots.push(EffectSlot { index, sprite });
+        let sheet = (tim_ptr as usize)
+            .checked_sub(4 * slot)
+            .and_then(|at| i32_at(data, at))
+            .and_then(|offset| usize::try_from(offset).ok())
+            .and_then(|offset| data.get(offset..))
+            .and_then(|tim| Some(&tim[..tim::byte_len(tim).ok()?]));
+        let effect = EffectSprite {
+            page_clut_word: sprite.info.page_clut_word,
+            frames: sprite.info.frames.clone(),
+            uvs: sprite.info.uvs.clone(),
+            depth_table: sprite.anim.depth_table,
+            depth_frames: sprite.anim.depth_frames.clone(),
+        };
+        slots.push((
+            EffectSlot {
+                index,
+                sprite: Some(effect),
+            },
+            sheet,
+        ));
     }
-    Ok(slots)
+    slots
 }
 
 /// Build one cut, laying the mask sprites out exactly like the RDT parser.
-fn build_cut(camera: &Camera, index: usize, id: RoomId) -> Result<Cut> {
+fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
     if camera.mask_groups.len() > budget::MAX_MASK_GROUPS {
         bail!(
             "camera {index} has {} mask groups, more than the supported {}",
@@ -833,7 +658,6 @@ fn build_cut(camera: &Camera, index: usize, id: RoomId) -> Result<Cut> {
             });
         }
     }
-    let own = |stem: &Option<String>, default: String| stem.clone().filter(|stem| *stem != default);
     Ok(Cut {
         index,
         pos: camera.pos,
@@ -841,53 +665,53 @@ fn build_cut(camera: &Camera, index: usize, id: RoomId) -> Result<Cut> {
         roll: camera.roll,
         fov: camera.fov,
         background: None,
-        background_stem: own(&camera.background, id.cut_stem(index)),
-        mask_stem: own(&camera.mask, id.roommask_stem(index)),
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,
     })
 }
 
-/// A decoded model pair, shared by every slot that names it.
-type ModelCache = HashMap<String, Option<(crate::model::Tmd, Texture8)>>;
-
-/// Load each slot's prop. A slot whose pair has no texture is declared but
+/// A decoded model pair by stem.
+/// Load model table `table`'s slots from the room's folder: its slot count
+/// (the declared `slots`, or one past the last slot with a `.tmd`) and every
+/// slot that builds. A slot whose pair has no texture is declared but
 /// unbuilt, like an RDT pair with a null TIM half.
 fn build_models(
-    slots: &[Option<String>],
+    table: ModelTable,
+    slots: Option<usize>,
+    id: RoomId,
     pack: &Pack,
-    cache: &mut ModelCache,
     warnings: &mut Vec<String>,
-) -> Vec<ObjectAsset> {
+) -> Result<(u8, Vec<ObjectAsset>)> {
+    let present: Vec<usize> = (0..MAX_MODEL_SLOTS)
+        .filter(|&slot| pack.contains(&format!("{}.tmd", table.stem(id, slot))))
+        .collect();
+    let count = present
+        .last()
+        .map_or(0, |last| last + 1)
+        .max(slots.unwrap_or(0));
+    let count = u8::try_from(count).with_context(|| {
+        format!("more than {MAX_MODEL_SLOTS} {table:?} model slots").to_lowercase()
+    })?;
     let mut assets = Vec::new();
-    for (slot, stem) in slots.iter().enumerate() {
-        let Some(stem) = stem else {
-            continue;
-        };
-        let loaded = cache
-            .entry(stem.clone())
-            .or_insert_with(|| match load_prop(stem, pack) {
-                Ok(loaded) => loaded,
-                Err(error) => {
-                    warnings.push(format!("model {stem}: {error:#}"));
-                    None
-                }
-            });
-        if let Some((model, texture)) = loaded {
-            assets.push(ObjectAsset {
+    for slot in present {
+        let stem = table.stem(id, slot);
+        match load_model(&stem, pack) {
+            Ok(Some((model, texture))) => assets.push(ObjectAsset {
                 pair_index: slot,
-                prop: Some(stem.clone()),
-                model: model.clone(),
-                texture: texture.clone(),
-            });
+                hd_name: Some(stem),
+                model,
+                texture,
+            }),
+            Ok(None) => {}
+            Err(error) => warnings.push(format!("model {stem}: {error:#}")),
         }
     }
-    assets
+    Ok((count, assets))
 }
 
-/// Load prop `stem`'s mesh and texture; `Ok(None)` when it has no texture.
-fn load_prop(stem: &str, pack: &Pack) -> Result<Option<(crate::model::Tmd, Texture8)>> {
+/// Load model `stem`'s mesh and texture; `Ok(None)` when it has no texture.
+fn load_model(stem: &str, pack: &Pack) -> Result<Option<(crate::model::Tmd, Texture8)>> {
     let tmd_entry = format!("{stem}.tmd");
     let data = pack
         .read(&tmd_entry)
@@ -912,56 +736,72 @@ fn load_prop(stem: &str, pack: &Pack) -> Result<Option<(crate::model::Tmd, Textu
     Ok(Some((model, texture)))
 }
 
-/// Build the room's effect sprites from their metadata and named sheets.
-fn build_effects(slots: &[EffectSlot], pack: &Pack) -> RoomEffects {
+/// Build the room's effect sprites from its folder: `effect/<slot>.xml` for
+/// each slot from 0 up to the first one missing, each drawn from its
+/// `effect/<slot>` sheet (a CLUT sheet BMP or a 4bpp TIM).
+fn build_effects(id: RoomId, pack: &Pack) -> Result<RoomEffects> {
     let mut effects = RoomEffects::default();
-    let mut sheets: BTreeMap<&str, Option<Vec<u8>>> = BTreeMap::new();
-    for (slot, declared) in slots.iter().enumerate() {
+    for slot in 0..crate::effects::room::EFFECT_SPRITE_SLOTS {
+        let stem = id.effect_stem(slot);
+        let entry = format!("{stem}.xml");
+        if !pack.contains(&entry) {
+            break;
+        }
+        let data = pack.read(&entry)?;
+        let text = std::str::from_utf8(&data).with_context(|| format!("{entry} is not UTF-8"))?;
+        let declared =
+            super::xml::parse_effect(text).with_context(|| format!("invalid {entry}"))?;
         effects.index[slot] = declared.index;
-        let Some(sprite) = &declared.sprite else {
+        let Some(sprite) = declared.sprite else {
             effects.warnings.push(format!(
                 "effect sprite {}: no sprite record",
                 declared.index
             ));
             continue;
         };
-        let tim = sprite.sheet.as_deref().and_then(|stem| {
-            sheets
-                .entry(stem)
-                .or_insert_with(|| {
-                    let entry = format!("{stem}.tim");
-                    match pack.read(&entry) {
-                        Ok(data) => Some(data.into_owned()),
-                        Err(error) => {
-                            effects
-                                .warnings
-                                .push(format!("effect sheet {entry}: {error:#}"));
-                            None
-                        }
-                    }
+        let (geometry, texture) = match pack.read_asset(&stem, AssetClass::Image) {
+            Ok(Some(asset)) => {
+                let sheet = match asset.extension().as_str() {
+                    "tim" => Ok(crate::effects::room::parse_tim(asset.data())),
+                    "bmp" => decode_effect_sheet(asset.data()),
+                    other => Err(anyhow::anyhow!(
+                        "a .{other} sheet is not supported (bmp or tim)"
+                    )),
+                };
+                sheet.unwrap_or_else(|error| {
+                    effects
+                        .warnings
+                        .push(format!("effect sheet {}: {error:#}", asset.path()));
+                    Default::default()
                 })
-                .clone()
-        });
-        let (geometry, texture) = crate::effects::room::parse_tim(tim.as_deref().unwrap_or(&[]));
+            }
+            Ok(None) => Default::default(),
+            Err(error) => {
+                effects
+                    .warnings
+                    .push(format!("effect sheet {stem}: {error:#}"));
+                Default::default()
+            }
+        };
         effects.sprites.push(StateSprite {
             index: declared.index,
             info: SpriteInfo {
                 uv_count: sprite.uvs.len() as u8,
-                frames: sprite.frames.clone(),
-                uvs: sprite.uvs.clone(),
+                frames: sprite.frames,
+                uvs: sprite.uvs,
                 page_clut_word: sprite.page_clut_word,
                 page_id: 0,
                 page_v: 0,
             },
             anim: SpriteAnimation {
                 depth_table: sprite.depth_table,
-                depth_frames: sprite.depth_frames.clone(),
+                depth_frames: sprite.depth_frames,
             },
             tim: texture,
             geometry,
         });
     }
-    effects
+    Ok(effects)
 }
 
 /// Load the room's player-animation pair `stem` (`.emr` + `.edd`).

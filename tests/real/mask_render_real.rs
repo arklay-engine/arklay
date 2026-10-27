@@ -5,7 +5,7 @@
 //!
 //! The pack must have been built after the room-mask converter landed
 //! (`cargo run --release -- convert-game <install> --out target/tmp-test/game.akpak`);
-//! a pack that is missing `roommask/100_000.bmp` fails the test, so a stale
+//! a pack that is missing `room/1000/mask/00.bmp` fails the test, so a stale
 //! pack cannot silently hide a regression. Only an unset `ARKLAY_RE1_PACK`
 //! skips.
 //!
@@ -120,7 +120,7 @@ fn player_occluded_by_a_group_1_pillar_until_the_group_is_disabled() {
     let id = RoomId::parse("1000").unwrap();
     let room = room::load_state(&pack, id).unwrap();
     let cut = &room.cuts[0];
-    let entry = id.roommask_entry(0);
+    let entry = id.mask_entry(0);
     let page_bytes = pack.read(&entry).unwrap_or_else(|err| {
         panic!(
             "pack `{}` has no {entry}: {err} (reconvert the pack)",
@@ -248,7 +248,7 @@ fn room1000_player_frame_is_deterministic_and_mask_aware() {
     let id = RoomId::parse("1000").unwrap();
     let room = room::load_state(&pack, id).unwrap();
     let cut = &room.cuts[0];
-    let mask_entry = id.roommask_entry(0);
+    let mask_entry = id.mask_entry(0);
     let page_bytes = pack.read(&mask_entry).unwrap_or_else(|err| {
         panic!(
             "pack `{}` has no {mask_entry}: {err} (reconvert the pack)",

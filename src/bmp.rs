@@ -352,6 +352,21 @@ pub fn encode_texture8_to_vec(texture: &Texture8) -> Result<Vec<u8>> {
 /// [`encode_texture8_to_vec`], indices are not merged or renumbered: a model
 /// page's UVs and its index-0 holes depend on them.
 pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
+    let palette: Vec<[u8; 4]> = (0..=255u8)
+        .map(|index| {
+            let [mut r, mut g, mut b, _] = texture.palette(row, index);
+            if index == 0 && [r, g, b] == [0, 0, 0] {
+                [r, g, b] = TRANSPARENT;
+            }
+            [b, g, r, u8::from(texture.palette_stp(row, index))]
+        })
+        .collect();
+    write_indexed(texture, &palette)
+}
+
+/// Write `texture`'s indices as an uncompressed bottom-up 8-bit BMP with
+/// `palette` (`[b, g, r, reserved]` entries) as its colour table.
+fn write_indexed(texture: &Texture8, palette: &[[u8; 4]]) -> Result<Vec<u8>> {
     let width = texture.width as usize;
     let height = texture.height as usize;
     let expected = width * height;
@@ -364,7 +379,7 @@ pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
         );
     }
 
-    let palette_len = 256usize;
+    let palette_len = palette.len();
     let row_bytes = width;
     let row_stride = (row_bytes + 3) & !3;
     let image_size = row_stride
@@ -390,13 +405,8 @@ pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
     out.extend_from_slice(&(palette_len as u32).to_le_bytes());
     out.extend_from_slice(&0u32.to_le_bytes());
 
-    for index in 0..=255u8 {
-        let [mut r, mut g, mut b, _] = texture.palette(row, index);
-        if index == 0 && [r, g, b] == [0, 0, 0] {
-            [r, g, b] = TRANSPARENT;
-        }
-        let stp = u8::from(texture.palette_stp(row, index));
-        out.extend_from_slice(&[b, g, r, stp]);
+    for entry in palette {
+        out.extend_from_slice(entry);
     }
 
     for y in (0..height).rev() {
@@ -416,6 +426,122 @@ pub fn encode_indexed_page(texture: &Texture8, row: usize) -> Result<Vec<u8>> {
 /// file is refused: only an indexed page can preserve a model's texel
 /// indices.
 pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
+    let (width, height, palette, indices) = read_indexed(data)?;
+    if palette.len() < 256 {
+        bail!(
+            "model page BMP palette has {} entries (expected 256)",
+            palette.len()
+        );
+    }
+    let mut palettes = Vec::with_capacity(256);
+    let mut stp = Vec::with_capacity(256);
+    for (index, entry) in palette[..256].iter().enumerate() {
+        let rgb = [entry[2], entry[1], entry[0]];
+        let [r, g, b] = if index == 0 && rgb == TRANSPARENT {
+            [0, 0, 0]
+        } else {
+            rgb
+        };
+        palettes.push([r, g, b, 255]);
+        stp.push(entry[3] != 0);
+    }
+    Ok(Texture8 {
+        width,
+        height,
+        indices,
+        palettes,
+        stp,
+    })
+}
+
+/// Entries in one 4bpp CLUT row.
+const CLUT_SHEET_ROW: usize = 16;
+
+/// Encode a 4bpp texture whose CLUT has `rows` 16-entry rows (a room effect
+/// sprite sheet) as an 8-bit BMP that keeps it exactly.
+///
+/// The texel indices (0-15) are kept as they are and the colour table holds
+/// the CLUT rows one after another, `16 * rows` entries, so any viewer shows
+/// the sheet in its first row's colours. Like [`encode_indexed_page`], the
+/// reserved byte carries each entry's STP bit and a black entry 0 is written
+/// as magenta. [`decode_clut_sheet`] reads it back.
+pub fn encode_clut_sheet(texture: &Texture8, rows: usize) -> Result<Vec<u8>> {
+    if rows == 0 || rows * CLUT_SHEET_ROW > 256 {
+        bail!("a CLUT sheet BMP holds 1 to 16 CLUT rows, not {rows}");
+    }
+    if let Some(index) = texture.indices.iter().find(|&&index| index >= 16) {
+        bail!("texel index {index} does not fit a 4bpp sheet");
+    }
+    let palette: Vec<[u8; 4]> = (0..rows)
+        .flat_map(|row| (0..CLUT_SHEET_ROW as u8).map(move |index| (row, index)))
+        .map(|(row, index)| {
+            let [mut r, mut g, mut b, _] = texture.palette(row, index);
+            if row == 0 && index == 0 && [r, g, b] == [0, 0, 0] {
+                [r, g, b] = TRANSPARENT;
+            }
+            [b, g, r, u8::from(texture.palette_stp(row, index))]
+        })
+        .collect();
+    write_indexed(texture, &palette)
+}
+
+/// Decode a sheet written by [`encode_clut_sheet`] (or any 8-bit BMP whose
+/// colour table is a whole number of 16-entry rows and whose texels index
+/// the first row) into the 4bpp texture and its CLUT row count.
+///
+/// The texture has the layout [`crate::tim::decode_4bpp`] gives a TIM: one
+/// 256-entry palette row per CLUT row, the first 16 entries opaque and the
+/// rest unused.
+pub fn decode_clut_sheet(data: &[u8]) -> Result<(Texture8, usize)> {
+    let (width, height, mut palette, indices) = read_indexed(data)?;
+    // The declared colour count, when there is one, ends the table.
+    let declared = u32_at(data, 46) as usize;
+    if declared != 0 {
+        palette.truncate(declared);
+    }
+    if palette.is_empty() || palette.len() % CLUT_SHEET_ROW != 0 {
+        bail!(
+            "sheet BMP colour table has {} entries, not a whole number of 16-entry rows",
+            palette.len()
+        );
+    }
+    if let Some(index) = indices.iter().find(|&&index| index >= 16) {
+        bail!("sheet BMP texel index {index} is outside its 16-entry CLUT row");
+    }
+    let rows = palette.len() / CLUT_SHEET_ROW;
+    let mut palettes = vec![[0u8; 4]; rows * crate::model::PALETTE_ROW_LEN];
+    let mut stp = vec![false; rows * crate::model::PALETTE_ROW_LEN];
+    for (position, entry) in palette.iter().enumerate() {
+        let (row, index) = (position / CLUT_SHEET_ROW, position % CLUT_SHEET_ROW);
+        let rgb = [entry[2], entry[1], entry[0]];
+        let [r, g, b] = if position == 0 && rgb == TRANSPARENT {
+            [0, 0, 0]
+        } else {
+            rgb
+        };
+        let at = row * crate::model::PALETTE_ROW_LEN + index;
+        palettes[at] = [r, g, b, 255];
+        stp[at] = entry[3] != 0;
+    }
+    Ok((
+        Texture8 {
+            width,
+            height,
+            indices,
+            palettes,
+            stp,
+        },
+        rows,
+    ))
+}
+
+/// The parts of an uncompressed bottom-up 8-bit BMP: its width and height,
+/// its colour table as `[b, g, r, reserved]` entries (everything between the
+/// header and the pixels, at most 256) and its indices top row first.
+type IndexedParts = (u32, u32, Vec<[u8; 4]>, Vec<u8>);
+
+/// Split an 8-bit BMP into its [`IndexedParts`].
+fn read_indexed(data: &[u8]) -> Result<IndexedParts> {
     if data.len() < 2 || &data[0..2] != b"BM" {
         bail!("not a BMP file: bad magic");
     }
@@ -447,7 +573,7 @@ pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
         bail!("unsupported BMP compression {compression} (expected 0)");
     }
     if bpp != 8 {
-        bail!("model page BMP is {bpp}-bit (expected an 8-bit indexed page)");
+        bail!("indexed BMP is {bpp}-bit (expected 8-bit)");
     }
 
     let width = width as usize;
@@ -472,23 +598,11 @@ pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
     if pixel_offset < dib_end {
         bail!("BMP pixel data starts inside its header");
     }
-    let entries = (pixel_offset - dib_end) / 4;
-    if entries < 256 {
-        bail!("model page BMP palette has {entries} entries (expected 256)");
-    }
-    let palette = data.get(dib_end..dib_end + 256 * 4).unwrap();
-    let mut palettes = Vec::with_capacity(256);
-    let mut stp = Vec::with_capacity(256);
-    for (index, entry) in palette.as_chunks::<4>().0.iter().enumerate() {
-        let rgb = [entry[2], entry[1], entry[0]];
-        let [r, g, b] = if index == 0 && rgb == TRANSPARENT {
-            [0, 0, 0]
-        } else {
-            rgb
-        };
-        palettes.push([r, g, b, 255]);
-        stp.push(entry[3] != 0);
-    }
+    let entries = ((pixel_offset - dib_end) / 4).min(256);
+    let palette = data[dib_end..dib_end + entries * 4]
+        .as_chunks::<4>()
+        .0
+        .to_vec();
 
     let mut indices = budget::alloc::<u8>(pixel_count, "BMP indexed page")?;
     indices.resize(pixel_count, 0);
@@ -496,14 +610,7 @@ pub fn decode_indexed_page(data: &[u8]) -> Result<Texture8> {
         let src = &data[pixel_offset + (height - 1 - y) * row_stride..][..width];
         indices[y * width..(y + 1) * width].copy_from_slice(src);
     }
-
-    Ok(Texture8 {
-        width: width as u32,
-        height: height as u32,
-        indices,
-        palettes,
-        stp,
-    })
+    Ok((width as u32, height as u32, palette, indices))
 }
 
 /// Whether `data` is an indexed page: an uncompressed 8-bit BMP with a full

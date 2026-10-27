@@ -1,23 +1,26 @@
-//! Room definitions: `room/<id>.xml` and its sidecars, or a raw RDT.
+//! Room definitions: the `room/<id>/` folder, or a raw RDT.
 //!
-//! `convert-game` writes every room as an XML definition ([`xml`], modelled
-//! by [`RoomSource`]) that names shared sidecar files:
+//! Everything a room is made of sits in one folder named by its four-digit
+//! RDT number, under conventional names, so a room can be copied to another
+//! pack or renamed by renaming its folder:
 //!
 //! | entry | content |
 //! |---|---|
-//! | `room/<id>.xml` | the room definition |
-//! | `room/<id>.scd` | the room's own init, per-frame and event scripts |
-//! | `prop/<pid>.tmd` + `.bmp` | one model pair an object or item slot names |
-//! | `prop/props.toml` | which rooms and slots use each prop |
-//! | `effect/<eid>.tim` | one room effect sprite sheet |
-//! | `animation/<aid>.emr` + `.edd` | one room player-animation pair |
+//! | `room.xml` | the room definition ([`xml`], modelled by [`RoomSource`]) |
+//! | `room.scd` | the room's init, per-frame and event scripts |
+//! | `original.scd` | the original scripts, beside a `room.scd` holding the port's fixes |
+//! | `cut/<camera>.bmp` | each camera's background |
+//! | `mask/<camera>.bmp` | each camera's mask page |
+//! | `anim/00.emr` + `.edd` | the room's player-animation pair |
+//! | `object/<slot>.tmd` + `.bmp` | an object-model slot's mesh and texture |
+//! | `item/<slot>.tmd` + `.bmp` | an item-model slot's mesh and texture |
+//! | `effect/<slot>.xml` + `.bmp` | an effect sprite slot's definition and sheet |
 //!
-//! The camera backgrounds and mask pages stay `roomcut/` and `roommask/`
-//! images, which the XML names by stem.
+//! Camera and slot numbers are two lower-case hex digits (`cut/0a.bmp`).
 //!
-//! A raw `room/<id>.rdt` still loads, so a pack converted before the XML
-//! format and a mod that ships an RDT keep working: when a pack holds both,
-//! the one from the higher layer wins, and the XML wins a tie.
+//! A raw `room.rdt` in the folder still loads in place of `room.xml`, so a
+//! mod that ships an RDT keeps working: when a pack holds both, the one from
+//! the higher layer wins, and the XML wins a tie.
 
 pub mod markup;
 pub mod source;
@@ -29,21 +32,21 @@ use crate::pack::Pack;
 use crate::scd;
 use crate::state::{RoomId, RoomState};
 
-pub use source::{RoomSource, Sidecars, scripts_entry};
+pub use source::{Converted, RoomSource};
 
 impl RoomId {
-    /// Pack path of the room definition, e.g. `room/1001.xml`.
+    /// Pack path of the room definition, e.g. `room/1001/room.xml`.
     pub fn xml_entry(self) -> String {
-        format!("room/{:04x}.xml", self.rdt_number())
+        format!("{}/{}", self.dir(), source::XML_FILE)
     }
 }
 
 /// Which file a room's definition comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
-    /// `room/<id>.xml`.
+    /// `room/<id>/room.xml`.
     Xml,
-    /// `room/<id>.rdt`.
+    /// `room/<id>/room.rdt`.
     Rdt,
 }
 
@@ -78,79 +81,113 @@ pub fn depth(pack: &Pack, id: RoomId) -> Option<usize> {
     pack.depth_of(&entry(pack, id))
 }
 
-/// The layer depth of room `id`'s own scripts: the RDT that embeds them,
-/// or the container the XML names (the XML itself when it names none).
+/// Where a room's SCD scripts are loaded from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptSource {
+    /// The scripts embedded in the room's `room.rdt`.
+    Rdt,
+    /// The folder's `room.scd` (none at all when it is missing).
+    Room,
+    /// The folder's `original.scd`: the original bytecode `convert-game`
+    /// keeps beside a `room.scd` that holds the port's fixes.
+    Original,
+}
+
+/// Where room `id` takes its scripts from: of the RDT's own scripts (when
+/// the RDT defines the room), `room.scd` and, with `original_scripts` (the
+/// `room_script_fixes = false` option), `original.scd`, the one from the
+/// highest layer, the later of that list winning a tie.
 ///
-/// A mod that only edits a room's XML keeps naming the base container, so
-/// it does not shadow a `scd/<id>.scd` override of the same layer.
-pub fn scripts_depth(pack: &Pack, id: RoomId) -> Option<usize> {
-    let definition = depth(pack, id);
-    if format(pack, id) != Some(Format::Xml) {
-        return definition;
-    }
-    match read_xml(pack, id).map(|source| source.scripts) {
-        Ok(Some(container)) => pack.depth_of(&container).or(definition),
-        _ => definition,
-    }
+/// So a mod that ships its own `room.rdt` runs that RDT's scripts over the
+/// base pack's `room.scd`, one that ships a `room.scd` runs it whatever the
+/// option says, and one that only edits `room.xml` keeps the base scripts.
+pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptSource {
+    let rdt = (format(pack, id) == Some(Format::Rdt))
+        .then(|| pack.depth_of(&id.rdt_entry()))
+        .flatten();
+    let original = original_scripts
+        .then(|| pack.depth_of(&id.original_scd_entry()))
+        .flatten();
+    [
+        (rdt, ScriptSource::Rdt),
+        (pack.depth_of(&id.scd_entry()), ScriptSource::Room),
+        (original, ScriptSource::Original),
+    ]
+    .into_iter()
+    .filter_map(|(depth, source)| Some((depth?, source)))
+    // `max_by_key` keeps the last of equal keys: the later source.
+    .max_by_key(|(depth, _)| *depth)
+    .map_or(ScriptSource::Room, |(_, source)| source)
 }
 
-/// Read and parse room `id`'s XML definition.
-fn read_xml(pack: &Pack, id: RoomId) -> Result<RoomSource> {
-    let entry = id.xml_entry();
-    let data = pack.read(&entry)?;
-    let text = std::str::from_utf8(&data).with_context(|| format!("{entry} is not UTF-8"))?;
-    xml::parse(text, id).with_context(|| format!("invalid {entry}"))
+/// Read and parse SCD container `entry`; a missing `room.scd` is no scripts.
+fn read_scripts(pack: &Pack, entry: &str) -> Result<scd::ir::Scripts> {
+    if !pack.contains(entry) {
+        return Ok(scd::ir::Scripts::default());
+    }
+    let data = pack.read(entry)?;
+    scd::reader::parse(&data).with_context(|| format!("invalid room scripts {entry}"))
 }
 
-/// A loaded room definition: the room state, plus where its own scripts are.
+/// A loaded room definition: the room state, plus the RDT bytes its scripts
+/// may come from.
 #[derive(Debug)]
 pub struct Loaded {
+    pub id: RoomId,
     pub state: RoomState,
-    scripts: OwnScripts,
-}
-
-/// Where a room's own scripts come from.
-#[derive(Debug)]
-enum OwnScripts {
-    /// Embedded in the RDT (its bytes).
-    Rdt(Vec<u8>),
-    /// The SCD container the XML names, if any.
-    Container(Option<String>),
+    rdt: Option<Vec<u8>>,
 }
 
 impl Loaded {
-    /// A room parsed from RDT bytes `data`, whose scripts are embedded.
-    pub fn from_rdt(state: RoomState, data: Vec<u8>) -> Self {
-        Self {
-            state,
-            scripts: OwnScripts::Rdt(data),
-        }
-    }
-
-    /// Build room `id` from XML definition `text`, reading its sidecars
-    /// from `pack`.
-    pub fn from_xml(pack: &Pack, id: RoomId, text: &str) -> Result<Self> {
-        let source = xml::parse(text, id)?;
-        let state = source.build(id, pack)?;
+    /// Room `id` parsed from RDT bytes `data`, whose scripts are embedded.
+    pub fn from_rdt(pack: &Pack, id: RoomId, data: Vec<u8>) -> Result<Self> {
+        let state = crate::rdt::parse(&data, id)?;
+        let script = crate::text::pack_script(pack);
         Ok(Self {
-            state,
-            scripts: OwnScripts::Container(source.scripts),
+            id,
+            state: drawn_messages(state, script),
+            rdt: Some(data),
         })
     }
 
-    /// The room's own scripts: the RDT's SCD sections or the container the
-    /// XML names. A definition without scripts has none.
+    /// Build room `id` from XML definition `text`, reading the rest of its
+    /// folder from `pack`.
+    pub fn from_xml(pack: &Pack, id: RoomId, text: &str) -> Result<Self> {
+        let source = xml::parse(text)?;
+        let state = source.build(id, pack)?;
+        Ok(Self {
+            id,
+            state,
+            rdt: None,
+        })
+    }
+
+    /// The room's scripts and where they came from ([`script_source`]).
+    pub fn scripts(
+        &self,
+        pack: &Pack,
+        original_scripts: bool,
+    ) -> Result<(scd::ir::Scripts, ScriptSource)> {
+        let source = script_source(pack, self.id, original_scripts);
+        let scripts = match source {
+            ScriptSource::Rdt => match &self.rdt {
+                Some(data) => scd::reader::parse(data).context("invalid room SCD scripts")?,
+                None => {
+                    let data = pack.read(&self.id.rdt_entry())?;
+                    scd::reader::parse(&data).context("invalid room SCD scripts")?
+                }
+            },
+            ScriptSource::Room => read_scripts(pack, &self.id.scd_entry())?,
+            ScriptSource::Original => read_scripts(pack, &self.id.original_scd_entry())?,
+        };
+        Ok((scripts, source))
+    }
+
+    /// The room's own scripts, without the port's fixes: `original.scd`
+    /// when the pack keeps one beside a fixed `room.scd` (unless a later
+    /// layer ships its own `room.scd`), otherwise what the room runs.
     pub fn own_scripts(&self, pack: &Pack) -> Result<scd::ir::Scripts> {
-        match &self.scripts {
-            OwnScripts::Rdt(data) => scd::reader::parse(data).context("invalid room SCD scripts"),
-            OwnScripts::Container(None) => Ok(scd::ir::Scripts::default()),
-            OwnScripts::Container(Some(entry)) => {
-                let data = pack
-                    .read(entry)
-                    .with_context(|| format!("missing {entry}"))?;
-                scd::reader::parse(&data).with_context(|| format!("invalid room scripts {entry}"))
-            }
-        }
+        self.scripts(pack, true).map(|(scripts, _)| scripts)
     }
 }
 
@@ -159,9 +196,7 @@ pub fn load(pack: &Pack, id: RoomId) -> Result<Loaded> {
     match format(pack, id) {
         Some(Format::Rdt) => {
             let data = pack.read(&id.rdt_entry())?.into_owned();
-            let state = crate::rdt::parse(&data, id)?;
-            let script = crate::text::pack_script(pack);
-            Ok(Loaded::from_rdt(drawn_messages(state, script), data))
+            Loaded::from_rdt(pack, id, data)
         }
         Some(Format::Xml) => {
             let entry = id.xml_entry();
@@ -199,17 +234,16 @@ pub fn load_state(pack: &Pack, id: RoomId) -> Result<RoomState> {
     load(pack, id).map(|loaded| loaded.state)
 }
 
-/// Room `id`'s own scripts (not a `scd/<id>.scd` override), without
-/// building the rest of the room.
+/// Room `id`'s own scripts ([`Loaded::own_scripts`]), without building the
+/// rest of the room.
 pub fn own_scripts(pack: &Pack, id: RoomId) -> Result<scd::ir::Scripts> {
-    let scripts = match format(pack, id) {
-        Some(Format::Xml) => OwnScripts::Container(read_xml(pack, id)?.scripts),
-        Some(Format::Rdt) => OwnScripts::Rdt(pack.read(&id.rdt_entry())?.into_owned()),
-        None => anyhow::bail!("{}", missing(id)),
-    };
+    if !exists(pack, id) {
+        anyhow::bail!("{}", missing(id));
+    }
     Loaded {
+        id,
         state: RoomState::default(),
-        scripts,
+        rdt: None,
     }
     .own_scripts(pack)
 }
@@ -219,11 +253,12 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
     let mut ids: Vec<RoomId> = pack
         .paths()
         .filter_map(|path| {
-            let name = path.strip_prefix("room/")?;
-            let stem = name
-                .strip_suffix(".xml")
-                .or_else(|| name.strip_suffix(".rdt"))?;
-            if stem.len() != 4 {
+            let rest = path.strip_prefix("room/")?;
+            let (stem, file) = rest.split_once('/')?;
+            if stem.len() != 4
+                || !(file.eq_ignore_ascii_case(source::XML_FILE)
+                    || file.eq_ignore_ascii_case("room.rdt"))
+            {
                 return None;
             }
             RoomId::parse(stem).ok()
@@ -234,37 +269,35 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
     ids
 }
 
-/// Convert one RDT into its XML definition, adding its sidecars to
-/// `sidecars`.
+/// Convert one RDT into its room folder: `room.xml` and the other files it
+/// is made of, as `(pack entry, bytes)`, besides the camera images.
 ///
-/// The written XML, built against its own sidecars, must give the same room
-/// state and scripts as the RDT parser, so a conversion never ships a room
-/// that loads differently from its RDT. A room that fails adds nothing.
+/// The written folder must give the same room state and scripts as the RDT
+/// parser, so a conversion never ships a room that loads differently from
+/// its RDT.
 pub fn convert_rdt(
     data: &[u8],
     id: RoomId,
     script: crate::charset::Script,
-    sidecars: &mut Sidecars,
-) -> Result<String> {
-    let mut own = Sidecars::default();
-    let source = RoomSource::from_rdt(data, id, script, &mut own)?;
-    let text = xml::write(&source, id);
-    let back = xml::parse(&text, id).context("the written room XML does not parse")?;
+) -> Result<Vec<(String, Vec<u8>)>> {
+    let Converted { source, mut files } = RoomSource::from_rdt(data, id, script)?;
+    let text = xml::write(&source)?;
+    let back = xml::parse(&text).context("the written room XML does not parse")?;
     if back != source {
         bail_difference("does not read back as the same definition", &source, &back)?;
     }
 
     let mut writer = crate::pack::PackWriter::new();
-    for (path, bytes) in own.clone().into_entries() {
-        writer.add(&path, bytes)?;
+    for (path, bytes) in &files {
+        writer.add(path, bytes.clone())?;
     }
     let pack = Pack::from_bytes(writer.to_bytes()?)?;
     let loaded = Loaded::from_xml(&pack, id, &text).context("the written room does not build")?;
     let expected = drawn_messages(crate::rdt::parse(data, id)?, script);
     let mut built = loaded.state.clone();
-    // The prop stems only name HD replacements, which an RDT has none of.
+    // The model stems only name HD replacements, which an RDT has none of.
     for asset in built.object_models.iter_mut().chain(&mut built.item_models) {
-        asset.prop = None;
+        asset.hd_name = None;
     }
     if format!("{built:?}") != format!("{expected:?}") {
         bail_difference("builds a different room from its RDT", &expected, &built)?;
@@ -275,8 +308,8 @@ pub fn convert_rdt(
         anyhow::bail!("the written room's scripts differ from its RDT's");
     }
 
-    sidecars.absorb(own)?;
-    Ok(text)
+    files.push((id.xml_entry(), text.into_bytes()));
+    Ok(files)
 }
 
 /// Fail naming the first line where `expected` and `actual` differ, under the

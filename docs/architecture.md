@@ -48,7 +48,7 @@ responsibility.
 | `player` | Runtime | Player locomotion, input mapping, collision, reach probes, camera cuts |
 | `player_script` | Runtime | The player's scripted-animation states |
 | `rdt` | Format | RDT room parser (header pointers, cameras, zones, collisions, embedded model/TIM pairs) |
-| `room` | Format | `room/<id>.xml` room definitions: the XML reader/writer, message markup, the RDT-to-XML conversion with its `prop/`, `effect/` and `animation/` sidecars, and the loader that picks the XML or a raw RDT |
+| `room` | Format | `room/<id>/` room folders: the `room.xml` reader/writer, message markup, the RDT-to-folder conversion (models, effects, animation and scripts by slot), and the loader that picks the XML or a raw `room.rdt` |
 | `scd` | Runtime/Format | SCD opcode tables, reader, IR, disassembler/decompiler, assembler, command and event VMs |
 | `door` | Format/Runtime | `.dor` container parser and the door-animation VM |
 | `transition` | Runtime | The door-transition timeline (screen space, masks, camera, `.dor` stepper hand-off) |
@@ -378,13 +378,13 @@ claims about the original.
 | Map tables | `ui/map.lua` `parse_tables` (size/magic also checked by `arklay verify`) | fixed blob size/magic | `ui::lua_screen` screen tests |
 | Combat tables | `combat::CombatTables::parse` | fixed blob size/magic/version, `MAX_COMBAT_TABLE_BYTES` (64 KiB) | `combat` unit tests, `tests/real/combat_real.rs`, `tests/torture`, `fuzz/combat` |
 | BioCard prefix | `save::BIOCARD_PREFIX` (hardcoded) | fixed 0x200 constant | `save` unit tests |
-| `roomcut`/`roommask` image | `assets::decode_picture` (`bmp`/`png`/`webp`/`tim`/`pix`) | BMP/TIM/PNG/WebP caps, `MAX_PIXELS` | `arklay verify`, `tests/soak_real.rs`, `tests/real/hd_real.rs` |
+| room `cut`/`mask` image | `assets::decode_picture` (`bmp`/`png`/`webp`/`tim`/`pix`) | BMP/TIM/PNG/WebP caps, `MAX_PIXELS` | `arklay verify`, `tests/soak_real.rs`, `tests/real/hd_real.rs` |
 | PNG replacement | `assets::decode_image_bytes("png", ..)` | `MAX_PIXELS` (4096x4096), decoder allocation cap | `assets` unit tests, `tests/torture`, `fuzz/png` |
 | WebP replacement | `assets::decode_image_bytes("webp", ..)` | `MAX_PIXELS`, decoder memory cap | `assets` unit tests, `tests/torture`, `fuzz/webp` |
 | OGG Vorbis replacement | `assets::decode_audio_bytes("ogg", ..)` | `MAX_WAV_SAMPLES` (134M samples) | `assets` unit tests, `tests/torture`, `fuzz/ogg`, `tests/real/hd_real.rs` |
 
 `arklay verify` maps entry paths to these readers, requires every RDT camera's
-`roomcut/{room}_{camera:03}.bmp` to be present, and counts unknown entries as
+`room/<id>/cut/<camera>.bmp` to be present, and counts unknown entries as
 *opaque*; `--strict` upgrades an unknown extension to a failure. The
 status matrix in `docs/status.md` records the counts a fresh verify reports for
 the shipped packs.

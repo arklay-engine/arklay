@@ -282,7 +282,7 @@ fn installed_rdt(root: &Path, id: arklay::state::RoomId) -> Option<Vec<u8>> {
 }
 
 /// With the room script fixes off (`[game] room_script_fixes = false`), a
-/// room runs the original bytecode instead of the fixed `scd/<id>.scd` the
+/// room runs the original bytecode instead of the fixed `room/<id>/room.scd` the
 /// conversion packed: byte for byte the scripts of the installed RDT, which is
 /// also what the checked-in script builds as `AUTHENTIC`.
 #[test]
@@ -302,9 +302,14 @@ fn original_room_scripts_are_the_installed_rdt_bytecode() {
             continue;
         }
         let (fixed, source) = room_scripts(&pack, id, &loaded, false).unwrap();
-        assert_eq!(source, ScriptSource::Override, "{id:?}");
+        assert_eq!(source, ScriptSource::Room, "{id:?}");
         let (original, source) = room_scripts(&pack, id, &loaded, true).unwrap();
-        assert_eq!(source, ScriptSource::Rdt, "{id:?}");
+        let expected = if pack.contains(&id.original_scd_entry()) {
+            ScriptSource::Original
+        } else {
+            ScriptSource::Room
+        };
+        assert_eq!(source, expected, "{id:?}");
         if fixed.digest() == original.digest() {
             continue;
         }

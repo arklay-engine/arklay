@@ -175,7 +175,7 @@ fn emit_language_files() {
 }
 
 /// Compile the checked-in room scripts under `games/re1/room/` into the SCD
-/// bytecode `convert-game` packs as `scd/<id>.scd`, one container per RDT
+/// bytecode `convert-game` packs as `room/<id>/room.scd`, one container per RDT
 /// variant and region, each beside the digest of its `AUTHENTIC` build: a
 /// container only replaces an RDT's own scripts when that digest proves they
 /// are the ones the script was written from. Where regions build the same

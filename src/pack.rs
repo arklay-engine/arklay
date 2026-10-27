@@ -1523,7 +1523,7 @@ impl Pack {
 
     /// Read the winning copy of the asset stem `stem` in `class`.
     ///
-    /// The stem is the entry path without its extension (`roomcut/100_000`,
+    /// The stem is the entry path without its extension (`room/1000/cut/00`,
     /// `bgm/013`). Layers resolve last to first exactly like [`Pack::read`],
     /// so a mod's copy wins whatever its format; within the winning layer the
     /// class's extension priority decides, so a layer that ships both

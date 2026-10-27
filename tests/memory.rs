@@ -95,7 +95,9 @@ fn pack_bytes() -> Vec<u8> {
                 .into_bytes(),
         )
         .unwrap();
-    writer.add("room/1000.rdt", b"rdt bytes".to_vec()).unwrap();
+    writer
+        .add("room/1000/room.rdt", b"rdt bytes".to_vec())
+        .unwrap();
     writer.add("ui/blue.tim", vec![0u8; 32]).unwrap();
     writer.to_bytes().unwrap()
 }

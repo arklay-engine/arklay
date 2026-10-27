@@ -1,9 +1,16 @@
-//! `room/<id>.xml`: writing a [`RoomSource`] and reading one back.
+//! `room/<id>/room.xml` and `room/<id>/effect/<slot>.xml`: writing a
+//! [`RoomSource`] or an [`EffectSlot`] and reading one back.
+//!
+//! Neither names another file: the room's images, models, effect sheets,
+//! animation and scripts sit in its folder under conventional names, and the
+//! room's id is its folder's name.
 //!
 //! Every integer attribute is read as decimal or `0x` hex; the writer uses
-//! hex for raw flag and shape words and decimal for coordinates and counts.
-//! Unknown elements and attributes are refused, so a typo in a hand-edited
-//! room fails loudly instead of silently zeroing a field.
+//! hex for the few raw words and decimal for everything else. The packed
+//! flag words of the RDT (collision boxes, walk zones, mask sprites) are
+//! spelled out as one attribute per field. Unknown elements and attributes
+//! are refused, so a typo in a hand-edited room fails loudly instead of
+//! silently zeroing a field.
 
 use std::fmt::Write as _;
 
@@ -17,10 +24,10 @@ use super::source::{
 use crate::budget;
 use crate::charset::Script;
 use crate::effects::room::{FrameEntry, UvRecord};
-use crate::state::{Collision, CollisionRect, FootstepZone, Light, RoomId, WalkZone, Zone};
+use crate::state::{Collision, CollisionRect, FootstepZone, Light, WalkZone, Zone};
 
 /// The format version `<room format="...">` declares.
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 
 /// Element writer with two-space indentation.
 struct Writer {
@@ -33,6 +40,7 @@ enum Value {
     Dec(i64),
     Hex(u32),
     Str(String),
+    Bool(bool),
 }
 
 impl Value {
@@ -41,6 +49,7 @@ impl Value {
             Self::Dec(value) => value.to_string(),
             Self::Hex(value) => format!("0x{value:04X}"),
             Self::Str(text) => escape(text, true),
+            Self::Bool(value) => value.to_string(),
         }
     }
 }
@@ -114,19 +123,26 @@ fn hex_bytes(bytes: &[u8]) -> String {
         })
 }
 
-/// Render `room` as `room/<id>.xml`.
-pub fn write(room: &RoomSource, id: RoomId) -> String {
+/// The XML declaration every written file starts with.
+const DECLARATION: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+
+/// Render `room` as `room.xml`.
+///
+/// Fails when a collision box's floor step has no `step` spelling (see
+/// [`CollisionRect`]); no shipped room has one.
+pub fn write(room: &RoomSource) -> Result<String> {
     let mut w = Writer {
-        out: String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"),
+        out: String::from(DECLARATION),
         depth: 0,
     };
-    w.open(
-        "room",
-        &[
-            ("id", text(&format!("{:04X}", id.rdt_number()))),
-            ("format", dec(FORMAT)),
-        ],
-    );
+    let mut attributes = vec![("format", dec(FORMAT))];
+    if let Some(slots) = room.object_slots {
+        attributes.push(("objectSlots", dec(slots as i64)));
+    }
+    if let Some(slots) = room.item_slots {
+        attributes.push(("itemSlots", dec(slots as i64)));
+    }
+    w.open("room", &attributes);
     let [r, g, b] = room.ambient;
     w.empty("ambient", &[("r", dec(r)), ("g", dec(g)), ("b", dec(b))]);
     w.open("lights", &[]);
@@ -166,17 +182,7 @@ pub fn write(room: &RoomSource, id: RoomId) -> String {
     for (index, quadrant) in room.collision.quadrants.iter().enumerate() {
         w.open("quadrant", &[("index", dec(index as i64))]);
         for rect in quadrant {
-            w.empty(
-                "box",
-                &[
-                    ("xMax", dec(rect.x_max)),
-                    ("zMax", dec(rect.z_max)),
-                    ("xMin", dec(rect.x_min)),
-                    ("zMin", dec(rect.z_min)),
-                    ("kind", hex(rect.kind)),
-                    ("flags", hex(rect.flags)),
-                ],
-            );
+            w.empty("box", &box_attributes(rect)?);
         }
         w.close("quadrant");
     }
@@ -192,7 +198,7 @@ pub fn write(room: &RoomSource, id: RoomId) -> String {
                 ("x2", dec(zone.x2)),
                 ("z2", dec(zone.z2)),
                 ("field8", hex(zone.field_08)),
-                ("flags", hex(zone.flags)),
+                ("links", text(&bit_list(zone.flags))),
             ],
         );
     }
@@ -226,39 +232,85 @@ pub fn write(room: &RoomSource, id: RoomId) -> String {
         }
     }
 
-    w.open("effects", &[]);
-    for (slot, effect) in room.effects.iter().enumerate() {
-        write_effect(&mut w, slot, effect);
-    }
-    w.close("effects");
-
-    for (table, element, slots) in [
-        ("objectModels", "objectModel", &room.object_models),
-        ("itemModels", "itemModel", &room.item_models),
-    ] {
-        w.open(table, &[]);
-        for (slot, model) in slots.iter().enumerate() {
-            let mut attributes = vec![("slot", dec(slot as i64))];
-            if let Some(model) = model {
-                attributes.push(("model", text(model)));
-            }
-            w.empty(element, &attributes);
-        }
-        w.close(table);
-    }
-
-    if let Some(stem) = &room.player_animation {
-        w.empty("playerAnimation", &[("src", text(stem))]);
-    }
-    if let Some(entry) = &room.scripts {
-        w.empty("scripts", &[("src", text(entry))]);
-    }
     w.close("room");
+    Ok(w.out)
+}
+
+/// The collision box shape byte (the type word's low byte).
+const SHAPE_MASK: u16 = 0x00FF;
+/// The floor step's tens (the type word's bits 8-14).
+const STEP_TENS_MASK: u16 = 0x7F00;
+/// Set when the floor step goes down (the type word's bit 15).
+const STEP_DOWN_BIT: u16 = 0x8000;
+/// The floor step's units (the collision word's low byte).
+const STEP_UNITS_MASK: u16 = 0x00FF;
+/// The four collision bits `inst_cfg` writes (`CF_1`, `CF_2`, `CF_4`,
+/// `CF_8`): the collision word's bits 8-11.
+const CF_SHIFT: u16 = 8;
+/// The collision word's bits no attribute names.
+const BOX_OTHER_MASK: u16 = 0xF000;
+/// The attribute names of the four `CF_` bits, lowest first.
+const CF_NAMES: [&str; 4] = ["cf1", "cf2", "cf4", "cf8"];
+
+/// A collision box's attributes. The type word is the `shape` and the
+/// floor step's tens and sign, the collision word the step's units, the
+/// `CF_` bits and any bits left over. The step is written as the height the
+/// engine moves by, `(tens * 10 + units) * 100`, signed by the down bit, so
+/// it needs units below ten and no lone down bit.
+fn box_attributes(rect: &CollisionRect) -> Result<Vec<(&'static str, Value)>> {
+    let mut attributes = vec![
+        ("xMax", dec(rect.x_max)),
+        ("zMax", dec(rect.z_max)),
+        ("xMin", dec(rect.x_min)),
+        ("zMin", dec(rect.z_min)),
+        ("shape", dec(rect.kind & SHAPE_MASK)),
+    ];
+    let tens = i64::from((rect.kind & STEP_TENS_MASK) >> 8);
+    let units = i64::from(rect.flags & STEP_UNITS_MASK);
+    let down = rect.kind & STEP_DOWN_BIT != 0;
+    if units >= 10 || (down && tens == 0 && units == 0) {
+        bail!(
+            "collision box type 0x{:04X} and word 0x{:04X} have no `step` spelling",
+            rect.kind,
+            rect.flags
+        );
+    }
+    let step = (tens * 10 + units) * 100;
+    if step != 0 {
+        attributes.push(("step", dec(if down { -step } else { step })));
+    }
+    for (bit, name) in CF_NAMES.iter().enumerate() {
+        if rect.flags >> CF_SHIFT & (1 << bit) != 0 {
+            attributes.push((name, Value::Bool(true)));
+        }
+    }
+    if rect.flags & BOX_OTHER_MASK != 0 {
+        attributes.push(("otherBits", hex(rect.flags & BOX_OTHER_MASK)));
+    }
+    Ok(attributes)
+}
+
+/// The set bits of `word` as space-separated bit numbers, lowest first.
+fn bit_list(word: u16) -> String {
+    (0..16)
+        .filter(|bit| word & (1 << bit) != 0)
+        .map(|bit| bit.to_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Render one effect sprite slot as `effect/<slot>.xml`.
+pub fn write_effect(effect: &EffectSlot) -> String {
+    let mut w = Writer {
+        out: String::from(DECLARATION),
+        depth: 0,
+    };
+    write_effect_element(&mut w, effect);
     w.out
 }
 
 fn write_camera(w: &mut Writer, camera: &Camera) {
-    let mut attributes = vec![
+    let attributes = vec![
         ("x", dec(camera.pos[0])),
         ("y", dec(camera.pos[1])),
         ("z", dec(camera.pos[2])),
@@ -268,12 +320,6 @@ fn write_camera(w: &mut Writer, camera: &Camera) {
         ("roll", dec(camera.roll)),
         ("fov", dec(camera.fov)),
     ];
-    if let Some(stem) = &camera.background {
-        attributes.push(("background", text(stem)));
-    }
-    if let Some(stem) = &camera.mask {
-        attributes.push(("mask", text(stem)));
-    }
     if camera.mask_groups.is_empty() {
         w.empty("camera", &attributes);
         return;
@@ -289,23 +335,53 @@ fn write_camera(w: &mut Writer, camera: &Camera) {
             ],
         );
         for sprite in &group.sprites {
-            let mut attributes = vec![
-                ("u", dec(sprite.uv.0)),
-                ("v", dec(sprite.uv.1)),
-                ("x", dec(sprite.offset.0)),
-                ("y", dec(sprite.offset.1)),
-                ("depthData", dec(sprite.depth)),
-                ("flags", hex(sprite.flags)),
-            ];
-            if let Some((width, height)) = sprite.size {
-                attributes.push(("width", dec(width)));
-                attributes.push(("height", dec(height)));
-            }
-            w.empty("sprite", &attributes);
+            w.empty("sprite", &sprite_attributes(sprite));
         }
         w.close("maskGroup");
     }
     w.close("camera");
+}
+
+/// The mask sprite word's texture page (bits 0-4).
+const SPRITE_PAGE_MASK: u16 = 0x001F;
+/// The mask sprite word's semi-transparency mode (bits 5-6).
+const SPRITE_BLEND_SHIFT: u16 = 5;
+/// The mask sprite word's texture colour mode (bits 7-8).
+const SPRITE_COLOR_SHIFT: u16 = 7;
+/// The mask sprite word's bits no attribute names (bits 9-11).
+const SPRITE_OTHER_MASK: u16 = 0x0E00;
+/// The mask sprite word's packed square size, in units of 8 (bits 12-15).
+const SPRITE_SIZE_SHIFT: u16 = 12;
+
+/// A mask sprite's attributes: the sprite word split into its texture
+/// `page`, `blend` (semi-transparency) and `colorMode` fields, any other
+/// bits, and the size as one square `size` when the word packs it or an
+/// explicit `width` and `height` when it does not.
+fn sprite_attributes(sprite: &MaskSprite) -> Vec<(&'static str, Value)> {
+    let mut attributes = vec![
+        ("u", dec(sprite.uv.0)),
+        ("v", dec(sprite.uv.1)),
+        ("x", dec(sprite.offset.0)),
+        ("y", dec(sprite.offset.1)),
+        ("depthData", dec(sprite.depth)),
+    ];
+    let page = sprite.flags & SPRITE_PAGE_MASK;
+    if page != 0 {
+        attributes.push(("page", dec(page)));
+    }
+    attributes.push(("blend", dec(sprite.flags >> SPRITE_BLEND_SHIFT & 3)));
+    attributes.push(("colorMode", dec(sprite.flags >> SPRITE_COLOR_SHIFT & 3)));
+    if sprite.flags & SPRITE_OTHER_MASK != 0 {
+        attributes.push(("otherBits", hex(sprite.flags & SPRITE_OTHER_MASK)));
+    }
+    match sprite.size {
+        Some((width, height)) => {
+            attributes.push(("width", dec(width)));
+            attributes.push(("height", dec(height)));
+        }
+        None => attributes.push(("size", dec((sprite.flags >> SPRITE_SIZE_SHIFT) * 8))),
+    }
+    attributes
 }
 
 /// The switch zones grouped by source camera: each group's first record is
@@ -368,15 +444,12 @@ fn write_message(w: &mut Writer, index: usize, stream: &[u8], script: Script) {
     w.out.push_str("</message>\n");
 }
 
-fn write_effect(w: &mut Writer, slot: usize, effect: &EffectSlot) {
-    let mut attributes = vec![("slot", dec(slot as i64)), ("index", dec(effect.index))];
+fn write_effect_element(w: &mut Writer, effect: &EffectSlot) {
+    let mut attributes = vec![("index", dec(effect.index))];
     let Some(sprite) = &effect.sprite else {
         w.empty("effect", &attributes);
         return;
     };
-    if let Some(sheet) = &sprite.sheet {
-        attributes.push(("sheet", text(sheet)));
-    }
     attributes.push(("clut", hex(sprite.page_clut_word)));
     let table: Vec<String> = sprite.depth_table.iter().map(u8::to_string).collect();
     attributes.push(("depthTable", text(&table.join(" "))));
@@ -425,8 +498,8 @@ fn write_effect(w: &mut Writer, slot: usize, effect: &EffectSlot) {
 /// The largest room XML read. The shipped rooms are well under 1 MiB.
 const MAX_XML_BYTES: usize = 4 << 20;
 
-/// Parse `room/<id>.xml`, the definition of room `id`.
-pub fn parse(text: &str, id: RoomId) -> Result<RoomSource> {
+/// Parse `room.xml`, a room definition.
+pub fn parse(text: &str) -> Result<RoomSource> {
     budget::check_len(text.len(), MAX_XML_BYTES, "room XML size")?;
     let document = Document::parse(text).context("room XML is not well-formed")?;
     let root = document.root_element();
@@ -436,18 +509,17 @@ pub fn parse(text: &str, id: RoomId) -> Result<RoomSource> {
             root.tag_name().name()
         );
     }
-    check_attributes(root, &["id", "format"])?;
-    if let Some(named) = root.attribute("id")
-        && RoomId::parse(named).ok() != Some(id)
-    {
-        bail!("<room> id `{named}` is not room {:04X}", id.rdt_number());
-    }
+    check_attributes(root, &["format", "objectSlots", "itemSlots"])?;
     let format: u32 = attr_or(root, "format", FORMAT)?;
     if format != FORMAT {
         bail!("room XML format {format} is not supported (expected {FORMAT})");
     }
 
-    let mut room = RoomSource::default();
+    let mut room = RoomSource {
+        object_slots: optional_attr::<u8>(root, "objectSlots")?.map(usize::from),
+        item_slots: optional_attr::<u8>(root, "itemSlots")?.map(usize::from),
+        ..RoomSource::default()
+    };
     let mut seen = Vec::new();
     for node in elements(root) {
         let name = node.tag_name().name();
@@ -481,14 +553,14 @@ pub fn parse(text: &str, id: RoomId) -> Result<RoomSource> {
                 check_attributes(node, &[])?;
                 room.walk_zones = children(node, "walk")?
                     .map(|walk| {
-                        check_attributes(walk, &["x1", "z1", "x2", "z2", "field8", "flags"])?;
+                        check_attributes(walk, &["x1", "z1", "x2", "z2", "field8", "links"])?;
                         Ok(WalkZone {
                             x1: attr(walk, "x1")?,
                             z1: attr(walk, "z1")?,
                             x2: attr(walk, "x2")?,
                             z2: attr(walk, "z2")?,
                             field_08: attr_or(walk, "field8", 0)?,
-                            flags: attr_or(walk, "flags", 0)?,
+                            flags: parse_bit_list(walk, "links")?,
                         })
                     })
                     .collect::<Result<_>>()?;
@@ -510,17 +582,6 @@ pub fn parse(text: &str, id: RoomId) -> Result<RoomSource> {
                 room.footstep_count = attr_or(node, "count", room.footstep_zones.len() as u16)?;
             }
             "messages" => room.messages = Some(parse_messages(node)?),
-            "effects" => room.effects = parse_effects(node)?,
-            "objectModels" => room.object_models = parse_models(node, "objectModel")?,
-            "itemModels" => room.item_models = parse_models(node, "itemModel")?,
-            "playerAnimation" => {
-                check_attributes(node, &["src"])?;
-                room.player_animation = Some(attr_text(node, "src")?.to_string());
-            }
-            "scripts" => {
-                check_attributes(node, &["src"])?;
-                room.scripts = Some(attr_text(node, "src")?.to_string());
-            }
             other => bail!("unknown room element <{other}>"),
         }
     }
@@ -599,11 +660,40 @@ fn attr<T: TryFrom<i64>>(node: Node<'_, '_>, name: &str) -> Result<T> {
 }
 
 fn attr_or<T: TryFrom<i64>>(node: Node<'_, '_>, name: &str, default: T) -> Result<T> {
-    if node.attribute(name).is_some() {
-        attr(node, name)
-    } else {
-        Ok(default)
+    Ok(optional_attr(node, name)?.unwrap_or(default))
+}
+
+fn optional_attr<T: TryFrom<i64>>(node: Node<'_, '_>, name: &str) -> Result<Option<T>> {
+    node.attribute(name).map(|_| attr(node, name)).transpose()
+}
+
+/// A `true`/`false` (or `1`/`0`) attribute, false when absent.
+fn flag(node: Node<'_, '_>, name: &str) -> Result<bool> {
+    match node.attribute(name) {
+        None | Some("false" | "0") => Ok(false),
+        Some("true" | "1") => Ok(true),
+        Some(other) => bail!(
+            "<{}> `{name}` value `{other}` is not true or false",
+            node.tag_name().name()
+        ),
     }
+}
+
+/// A word from a space-separated list of its set bit numbers (0-15).
+fn parse_bit_list(node: Node<'_, '_>, name: &str) -> Result<u16> {
+    let mut word = 0u16;
+    for item in node.attribute(name).unwrap_or("").split_ascii_whitespace() {
+        let bit = integer(item)
+            .filter(|bit| (0..16).contains(bit))
+            .with_context(|| {
+                format!(
+                    "<{}> `{name}` item `{item}` is not a number 0-15",
+                    node.tag_name().name()
+                )
+            })?;
+        word |= 1 << bit;
+    }
+    Ok(word)
 }
 
 fn parse_light(node: Node<'_, '_>) -> Result<Light> {
@@ -623,43 +713,13 @@ fn parse_light(node: Node<'_, '_>) -> Result<Light> {
 fn parse_camera(node: Node<'_, '_>) -> Result<Camera> {
     check_attributes(
         node,
-        &[
-            "x",
-            "y",
-            "z",
-            "lookX",
-            "lookY",
-            "lookZ",
-            "roll",
-            "fov",
-            "background",
-            "mask",
-        ],
+        &["x", "y", "z", "lookX", "lookY", "lookZ", "roll", "fov"],
     )?;
     let mask_groups = children(node, "maskGroup")?
         .map(|group| {
             check_attributes(group, &["originX", "originY", "texBits"])?;
             let sprites = children(group, "sprite")?
-                .map(|sprite| {
-                    check_attributes(
-                        sprite,
-                        &["u", "v", "x", "y", "depthData", "flags", "width", "height"],
-                    )?;
-                    let size = match (sprite.attribute("width"), sprite.attribute("height")) {
-                        (None, None) => None,
-                        (Some(_), Some(_)) => {
-                            Some((attr(sprite, "width")?, attr(sprite, "height")?))
-                        }
-                        _ => bail!("<sprite> needs both `width` and `height` or neither"),
-                    };
-                    Ok(MaskSprite {
-                        uv: (attr(sprite, "u")?, attr(sprite, "v")?),
-                        offset: (attr(sprite, "x")?, attr(sprite, "y")?),
-                        depth: attr(sprite, "depthData")?,
-                        flags: attr(sprite, "flags")?,
-                        size,
-                    })
-                })
+                .map(parse_sprite)
                 .collect::<Result<_>>()?;
             Ok(MaskGroup {
                 tex_bits: attr_or(group, "texBits", 0)?,
@@ -677,9 +737,61 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Camera> {
         ],
         roll: attr_or(node, "roll", 0)?,
         fov: attr(node, "fov")?,
-        background: node.attribute("background").map(str::to_string),
-        mask: node.attribute("mask").map(str::to_string),
         mask_groups,
+    })
+}
+
+fn parse_sprite(sprite: Node<'_, '_>) -> Result<MaskSprite> {
+    check_attributes(
+        sprite,
+        &[
+            "u",
+            "v",
+            "x",
+            "y",
+            "depthData",
+            "page",
+            "blend",
+            "colorMode",
+            "otherBits",
+            "size",
+            "width",
+            "height",
+        ],
+    )?;
+    let page: u16 = attr_or(sprite, "page", 0)?;
+    let blend: u16 = attr_or(sprite, "blend", 0)?;
+    let color: u16 = attr_or(sprite, "colorMode", 0)?;
+    let other: u16 = attr_or(sprite, "otherBits", 0)?;
+    if page > SPRITE_PAGE_MASK || blend > 3 || color > 3 || other & !SPRITE_OTHER_MASK != 0 {
+        bail!(
+            "<sprite> needs `page` 0-31, `blend` and `colorMode` 0-3 and `otherBits` \
+             within 0x{SPRITE_OTHER_MASK:04X}"
+        );
+    }
+    let mut flags = page | blend << SPRITE_BLEND_SHIFT | color << SPRITE_COLOR_SHIFT | other;
+    let size = match (
+        sprite.attribute("size"),
+        sprite.attribute("width"),
+        sprite.attribute("height"),
+    ) {
+        (Some(_), None, None) => {
+            let size: u16 = attr(sprite, "size")?;
+            if size == 0 || !size.is_multiple_of(8) || size > 15 * 8 {
+                bail!("<sprite> size {size} is not a multiple of 8 from 8 to 120");
+            }
+            flags |= (size / 8) << SPRITE_SIZE_SHIFT;
+            None
+        }
+        (None, Some(_), Some(_)) => Some((attr(sprite, "width")?, attr(sprite, "height")?)),
+        _ => bail!("<sprite> needs a `size`, or a `width` and a `height`"),
+    };
+    Ok(MaskSprite {
+        uv: (attr(sprite, "u")?, attr(sprite, "v")?),
+        offset: (attr(sprite, "x")?, attr(sprite, "y")?),
+        depth: attr(sprite, "depthData")?,
+        flags,
+        size,
     })
 }
 
@@ -764,20 +876,48 @@ fn parse_collision(node: Node<'_, '_>) -> Result<Collision> {
             bail!("<quadrant> index {index} is out of range or repeated");
         }
         collision.quadrants[index] = children(quadrant, "box")?
-            .map(|rect| {
-                check_attributes(rect, &["xMax", "zMax", "xMin", "zMin", "kind", "flags"])?;
-                Ok(CollisionRect {
-                    x_max: attr(rect, "xMax")?,
-                    z_max: attr(rect, "zMax")?,
-                    x_min: attr(rect, "xMin")?,
-                    z_min: attr(rect, "zMin")?,
-                    kind: attr_or(rect, "kind", 0)?,
-                    flags: attr_or(rect, "flags", 0)?,
-                })
-            })
+            .map(parse_box)
             .collect::<Result<_>>()?;
     }
     Ok(collision)
+}
+
+fn parse_box(rect: Node<'_, '_>) -> Result<CollisionRect> {
+    let mut known = vec!["xMax", "zMax", "xMin", "zMin", "shape", "step", "otherBits"];
+    known.extend(CF_NAMES);
+    check_attributes(rect, &known)?;
+    let shape: u16 = attr_or(rect, "shape", 0)?;
+    if shape > SHAPE_MASK {
+        bail!("<box> shape {shape} does not fit a byte");
+    }
+    let step: i64 = attr_or(rect, "step", 0)?;
+    let size = step.unsigned_abs();
+    let (tens, units) = (size / 1000, size / 100 % 10);
+    if !size.is_multiple_of(100) || tens > 0x7F {
+        bail!("<box> step {step} is not a multiple of 100 within 127900 either way");
+    }
+    let mut kind = shape | (tens as u16) << 8;
+    if step < 0 {
+        kind |= STEP_DOWN_BIT;
+    }
+    let mut flags = units as u16;
+    for (bit, name) in CF_NAMES.iter().enumerate() {
+        if flag(rect, name)? {
+            flags |= 1 << (CF_SHIFT + bit as u16);
+        }
+    }
+    let other: u16 = attr_or(rect, "otherBits", 0)?;
+    if other & !BOX_OTHER_MASK != 0 {
+        bail!("<box> otherBits 0x{other:04X} is outside 0x{BOX_OTHER_MASK:04X}");
+    }
+    Ok(CollisionRect {
+        x_max: attr(rect, "xMax")?,
+        z_max: attr(rect, "zMax")?,
+        x_min: attr(rect, "xMin")?,
+        z_min: attr(rect, "zMin")?,
+        kind,
+        flags: flags | other,
+    })
 }
 
 /// Decode a lower- or upper-case hex string.
@@ -869,116 +1009,100 @@ fn parse_messages(node: Node<'_, '_>) -> Result<Messages> {
     Ok(Messages::Streams { script, streams })
 }
 
-fn parse_effects(node: Node<'_, '_>) -> Result<Vec<EffectSlot>> {
-    check_attributes(node, &[])?;
-    let mut slots = Vec::new();
-    for (position, effect) in children(node, "effect")?.enumerate() {
-        check_attributes(effect, &["slot", "index", "sheet", "clut", "depthTable"])?;
-        let slot: usize = attr_or(effect, "slot", position)?;
-        if slot != position {
-            bail!("<effect> slot {slot} is out of order (expected {position})");
-        }
-        let index: u8 = attr(effect, "index")?;
-        if index == 0xFF {
-            bail!("<effect> index 255 marks a free slot and cannot be declared");
-        }
-        if effect.attribute("depthTable").is_none() && elements(effect).next().is_none() {
-            slots.push(EffectSlot {
-                index,
-                sprite: None,
-            });
-            continue;
-        }
-        let mut depth_table = [0u8; 8];
-        let values: Vec<&str> = attr_text(effect, "depthTable")?
-            .split_ascii_whitespace()
-            .collect();
-        if values.len() != 8 {
-            bail!(
-                "<effect> depthTable needs eight values, found {}",
-                values.len()
-            );
-        }
-        for (entry, value) in depth_table.iter_mut().zip(values) {
-            *entry = integer(value)
-                .and_then(|value| u8::try_from(value).ok())
-                .with_context(|| format!("<effect> depthTable value `{value}` is not a byte"))?;
-        }
-        let mut sprite = EffectSprite {
-            sheet: effect.attribute("sheet").map(str::to_string),
-            page_clut_word: attr_or(effect, "clut", 0)?,
-            frames: Vec::new(),
-            uvs: Vec::new(),
-            depth_table,
-            depth_frames: Default::default(),
-        };
-        let mut total_blocks = 0usize;
-        for child in elements(effect) {
-            match child.tag_name().name() {
-                "frame" => {
-                    check_attributes(child, &["uv", "delay", "width", "height"])?;
-                    sprite.frames.push(FrameEntry {
-                        uv_index: attr(child, "uv")?,
-                        delay: attr(child, "delay")?,
-                        width: attr(child, "width")?,
-                        height: attr(child, "height")?,
-                    });
-                }
-                "uv" => {
-                    check_attributes(child, &["u", "v", "pivotX", "pivotY"])?;
-                    sprite.uvs.push(UvRecord {
-                        u: attr(child, "u")?,
-                        v: attr(child, "v")?,
-                        pivot_x: attr(child, "pivotX")?,
-                        pivot_y: attr(child, "pivotY")?,
-                    });
-                }
-                "depth" => {
-                    check_attributes(child, &["row"])?;
-                    let row: usize = attr(child, "row")?;
-                    if row >= 8 || !sprite.depth_frames[row].is_empty() {
-                        bail!("<depth> row {row} is out of range or repeated");
-                    }
-                    for frame in children(child, "animFrame")? {
-                        check_attributes(frame, &[])?;
-                        let mut blocks = Vec::new();
-                        for block in children(frame, "block")? {
-                            let bytes = unhex(block.text().unwrap_or(""))?;
-                            let block: [u8; 24] = bytes.try_into().map_err(|bytes: Vec<u8>| {
-                                anyhow::anyhow!("<block> is {} bytes, expected 24", bytes.len())
-                            })?;
-                            blocks.push(block);
-                        }
-                        total_blocks += blocks.len();
-                        budget::check_len(total_blocks, budget::MAX_RECORDS, "effect block total")?;
-                        sprite.depth_frames[row].push(super::source::anim_frame(blocks));
-                    }
-                }
-                other => bail!("unknown <effect> element <{other}>"),
-            }
-        }
-        if sprite.uvs.len() > usize::from(u8::MAX) || sprite.frames.len() > usize::from(u16::MAX) {
-            bail!("<effect> has too many frames or UV records");
-        }
-        slots.push(EffectSlot {
+/// Parse `effect/<slot>.xml`, one effect sprite slot.
+pub fn parse_effect(text: &str) -> Result<EffectSlot> {
+    budget::check_len(text.len(), MAX_XML_BYTES, "effect XML size")?;
+    let document = Document::parse(text).context("effect XML is not well-formed")?;
+    let effect = document.root_element();
+    if effect.tag_name().name() != "effect" {
+        bail!(
+            "effect XML root is <{}>, expected <effect>",
+            effect.tag_name().name()
+        );
+    }
+    check_attributes(effect, &["index", "clut", "depthTable"])?;
+    let index: u8 = attr(effect, "index")?;
+    if index == 0xFF {
+        bail!("<effect> index 255 marks a free slot and cannot be declared");
+    }
+    if effect.attribute("depthTable").is_none() && elements(effect).next().is_none() {
+        return Ok(EffectSlot {
             index,
-            sprite: Some(sprite),
+            sprite: None,
         });
     }
-    Ok(slots)
-}
-
-fn parse_models(node: Node<'_, '_>, element: &'static str) -> Result<Vec<Option<String>>> {
-    check_attributes(node, &[])?;
-    children(node, element)?
-        .enumerate()
-        .map(|(position, model)| {
-            check_attributes(model, &["slot", "model"])?;
-            let slot: usize = attr_or(model, "slot", position)?;
-            if slot != position {
-                bail!("<{element}> slot {slot} is out of order (expected {position})");
+    let mut depth_table = [0u8; 8];
+    let values: Vec<&str> = attr_text(effect, "depthTable")?
+        .split_ascii_whitespace()
+        .collect();
+    if values.len() != 8 {
+        bail!(
+            "<effect> depthTable needs eight values, found {}",
+            values.len()
+        );
+    }
+    for (entry, value) in depth_table.iter_mut().zip(values) {
+        *entry = integer(value)
+            .and_then(|value| u8::try_from(value).ok())
+            .with_context(|| format!("<effect> depthTable value `{value}` is not a byte"))?;
+    }
+    let mut sprite = EffectSprite {
+        page_clut_word: attr_or(effect, "clut", 0)?,
+        frames: Vec::new(),
+        uvs: Vec::new(),
+        depth_table,
+        depth_frames: Default::default(),
+    };
+    let mut total_blocks = 0usize;
+    for child in elements(effect) {
+        match child.tag_name().name() {
+            "frame" => {
+                check_attributes(child, &["uv", "delay", "width", "height"])?;
+                sprite.frames.push(FrameEntry {
+                    uv_index: attr(child, "uv")?,
+                    delay: attr(child, "delay")?,
+                    width: attr(child, "width")?,
+                    height: attr(child, "height")?,
+                });
             }
-            Ok(model.attribute("model").map(str::to_string))
-        })
-        .collect()
+            "uv" => {
+                check_attributes(child, &["u", "v", "pivotX", "pivotY"])?;
+                sprite.uvs.push(UvRecord {
+                    u: attr(child, "u")?,
+                    v: attr(child, "v")?,
+                    pivot_x: attr(child, "pivotX")?,
+                    pivot_y: attr(child, "pivotY")?,
+                });
+            }
+            "depth" => {
+                check_attributes(child, &["row"])?;
+                let row: usize = attr(child, "row")?;
+                if row >= 8 || !sprite.depth_frames[row].is_empty() {
+                    bail!("<depth> row {row} is out of range or repeated");
+                }
+                for frame in children(child, "animFrame")? {
+                    check_attributes(frame, &[])?;
+                    let mut blocks = Vec::new();
+                    for block in children(frame, "block")? {
+                        let bytes = unhex(block.text().unwrap_or(""))?;
+                        let block: [u8; 24] = bytes.try_into().map_err(|bytes: Vec<u8>| {
+                            anyhow::anyhow!("<block> is {} bytes, expected 24", bytes.len())
+                        })?;
+                        blocks.push(block);
+                    }
+                    total_blocks += blocks.len();
+                    budget::check_len(total_blocks, budget::MAX_RECORDS, "effect block total")?;
+                    sprite.depth_frames[row].push(super::source::anim_frame(blocks));
+                }
+            }
+            other => bail!("unknown <effect> element <{other}>"),
+        }
+    }
+    if sprite.uvs.len() > usize::from(u8::MAX) || sprite.frames.len() > usize::from(u16::MAX) {
+        bail!("<effect> has too many frames or UV records");
+    }
+    Ok(EffectSlot {
+        index,
+        sprite: Some(sprite),
+    })
 }

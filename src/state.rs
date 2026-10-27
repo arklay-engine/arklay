@@ -75,42 +75,85 @@ impl RoomId {
         ((self.stage as u16) << 12) | ((self.room as u16) << 4) | self.player_flag as u16
     }
 
-    /// Pack path of the raw RDT, e.g. `room/1001.rdt`.
+    /// Pack directory holding everything room `self` is made of, e.g.
+    /// `room/1001`.
+    pub fn dir(self) -> String {
+        format!("room/{:04x}", self.rdt_number())
+    }
+
+    /// Pack path of the raw RDT, e.g. `room/1001/room.rdt`.
     pub fn rdt_entry(self) -> String {
-        format!("room/{:04x}.rdt", self.rdt_number())
+        format!("{}/room.rdt", self.dir())
     }
 
-    /// Pack path of a standalone SCD override, e.g. `scd/1001.scd`.
+    /// Pack path of the room's scripts, e.g. `room/1001/room.scd`.
     pub fn scd_entry(self) -> String {
-        format!("scd/{:04x}.scd", self.rdt_number())
+        format!("{}/room.scd", self.dir())
     }
 
-    /// Three-digit room id used by cut names, e.g. `100`, `11C`.
+    /// Pack path of the room's original script bytecode, kept beside a
+    /// `room.scd` that holds the port's fixed build, e.g.
+    /// `room/1001/original.scd`.
+    pub fn original_scd_entry(self) -> String {
+        format!("{}/original.scd", self.dir())
+    }
+
+    /// Three-digit room id, e.g. `100`, `11C`.
     pub fn room3(self) -> String {
         format!("{}{:02X}", self.stage, self.room)
     }
 
-    /// Pack path of a camera background, e.g. `roomcut/100_000.bmp`.
+    /// Pack stem of file `index` in the room's `kind` subdirectory, e.g.
+    /// `room/1001/cut/03`.
+    fn file_stem(self, kind: &str, index: usize) -> String {
+        format!("{}/{kind}/{index:02x}", self.dir())
+    }
+
+    /// Pack path of a camera background, e.g. `room/1000/cut/00.bmp`.
     pub fn cut_entry(self, camera: usize) -> String {
         format!("{}.bmp", self.cut_stem(camera))
     }
 
-    /// Pack stem of a camera background, e.g. `roomcut/100_000`.
+    /// Pack stem of a camera background, e.g. `room/1000/cut/00`.
     ///
     /// [`crate::pack::Pack::read_asset`] resolves the stem across replacement
     /// formats; the shipped entry name is [`RoomId::cut_entry`].
     pub fn cut_stem(self, camera: usize) -> String {
-        format!("roomcut/{}_{camera:03}", self.room3())
+        self.file_stem("cut", camera)
     }
 
-    /// Pack path of a camera's mask page, e.g. `roommask/100_000.bmp`.
-    pub fn roommask_entry(self, camera: usize) -> String {
-        format!("{}.bmp", self.roommask_stem(camera))
+    /// Pack path of a camera's mask page, e.g. `room/1000/mask/00.bmp`.
+    pub fn mask_entry(self, camera: usize) -> String {
+        format!("{}.bmp", self.mask_stem(camera))
     }
 
-    /// Pack stem of a camera's mask page, e.g. `roommask/100_000`.
-    pub fn roommask_stem(self, camera: usize) -> String {
-        format!("roommask/{}_{camera:03}", self.room3())
+    /// Pack stem of a camera's mask page, e.g. `room/1000/mask/00`.
+    pub fn mask_stem(self, camera: usize) -> String {
+        self.file_stem("mask", camera)
+    }
+
+    /// Pack stem of an object-model slot's `.tmd` and texture, e.g.
+    /// `room/1000/object/02`.
+    pub fn object_stem(self, slot: usize) -> String {
+        self.file_stem("object", slot)
+    }
+
+    /// Pack stem of an item-model slot's `.tmd` and texture, e.g.
+    /// `room/1000/item/00`.
+    pub fn item_stem(self, slot: usize) -> String {
+        self.file_stem("item", slot)
+    }
+
+    /// Pack stem of an effect sprite slot's `.xml` and sheet, e.g.
+    /// `room/1000/effect/00`.
+    pub fn effect_stem(self, slot: usize) -> String {
+        self.file_stem("effect", slot)
+    }
+
+    /// Pack stem of a player-animation pair (`.emr` + `.edd`), e.g.
+    /// `room/1000/anim/00`.
+    pub fn anim_stem(self, index: usize) -> String {
+        self.file_stem("anim", index)
     }
 
     /// Zero-based stage index for stage-indexed tables.
@@ -296,34 +339,12 @@ pub struct Cut {
     pub roll: i32,
     pub fov: i32,
     pub background: Option<Image>,
-    /// Pack stem of the camera background when the room definition names
-    /// one; `None` is the room's own [`RoomId::cut_stem`].
-    pub background_stem: Option<String>,
-    /// Pack stem of the camera's mask page when the room definition names
-    /// one; `None` is the room's own [`RoomId::roommask_stem`].
-    pub mask_stem: Option<String>,
     /// Number of groups in the camera's mask table.
     pub mask_group_count: u8,
     /// One bit per one-based group id: set while the group is visible.
     pub mask_active: u32,
     /// The camera's parsed mask sprites in group order.
     pub masks: Vec<MaskSprite>,
-}
-
-impl Cut {
-    /// The pack stem of this camera's background in room `id`.
-    pub fn background_stem(&self, id: RoomId) -> String {
-        self.background_stem
-            .clone()
-            .unwrap_or_else(|| id.cut_stem(self.index))
-    }
-
-    /// The pack stem of this camera's mask page in room `id`.
-    pub fn mask_stem(&self, id: RoomId) -> String {
-        self.mask_stem
-            .clone()
-            .unwrap_or_else(|| id.roommask_stem(self.index))
-    }
 }
 
 /// The loaded room: its contents and the currently displayed cut.
@@ -413,10 +434,16 @@ mod tests {
         assert_eq!(id.stage, 1);
         assert_eq!(id.room, 0x00);
         assert_eq!(id.rdt_number(), 0x1000);
-        assert_eq!(id.rdt_entry(), "room/1000.rdt");
-        assert_eq!(id.scd_entry(), "scd/1000.scd");
+        assert_eq!(id.rdt_entry(), "room/1000/room.rdt");
+        assert_eq!(id.scd_entry(), "room/1000/room.scd");
+        assert_eq!(id.original_scd_entry(), "room/1000/original.scd");
         assert_eq!(id.room3(), "100");
-        assert_eq!(id.cut_entry(3), "roomcut/100_003.bmp");
+        assert_eq!(id.cut_entry(3), "room/1000/cut/03.bmp");
+        assert_eq!(id.mask_entry(12), "room/1000/mask/0c.bmp");
+        assert_eq!(id.object_stem(1), "room/1000/object/01");
+        assert_eq!(id.item_stem(0), "room/1000/item/00");
+        assert_eq!(id.effect_stem(2), "room/1000/effect/02");
+        assert_eq!(id.anim_stem(0), "room/1000/anim/00");
         assert_eq!(id.stage_index(), 0);
         assert_eq!(id.fold_stage_digit(), 1);
 
@@ -438,7 +465,7 @@ mod tests {
                 player_flag: 1
             }
         );
-        assert_eq!(id.rdt_entry(), "room/1001.rdt");
+        assert_eq!(id.rdt_entry(), "room/1001/room.rdt");
         assert_eq!(id.room3(), "100");
 
         let id = RoomId::parse("11C0").unwrap();
@@ -461,7 +488,7 @@ mod tests {
                 player_flag: 1
             }
         );
-        assert_eq!(id.rdt_entry(), "room/71a1.rdt");
+        assert_eq!(id.rdt_entry(), "room/71a1/room.rdt");
         assert_eq!(id.room3(), "71A");
     }
 

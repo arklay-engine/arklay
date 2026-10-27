@@ -442,7 +442,7 @@ fn seed_pack() -> Vec<u8> {
             b"format = 1\nid = \"re1\"\nkind = \"base\"\n".to_vec(),
         )
         .unwrap();
-    writer.add("room/1000.rdt", seed_rdt()).unwrap();
+    writer.add("room/1000/room.rdt", seed_rdt()).unwrap();
     writer
         .add("text/readme.txt", b"hello pack".to_vec())
         .unwrap();
@@ -565,7 +565,7 @@ fn seed_ogg() -> Vec<u8> {
 
 /// The checked-in example mod's 2x PNG room background.
 fn seed_png() -> Vec<u8> {
-    include_bytes!("../mods/hd/roomcut/100_000.png").to_vec()
+    include_bytes!("../mods/hd/room/1000/cut/00.png").to_vec()
 }
 
 /// The checked-in example mod's lossless WebP UI page.

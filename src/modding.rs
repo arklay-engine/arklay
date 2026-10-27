@@ -3,9 +3,11 @@
 //! A mod source directory is convention over configuration: it must hold a
 //! `manifest.toml` declaring `kind = "mod"`, and every other file maps to a
 //! pack entry named after its directory-relative path with `/` separators.
-//! `scd/<stem>.s` sources are assembled into `scd/<stem>.scd` entries and the
-//! text source itself is not packed; every other file, including other `.toml`
-//! files, is packed verbatim.
+//! `room/<id>/<stem>.s` and `.akscr` sources are built into
+//! `room/<id>/<stem>.scd` entries, and a merged `room/<room>.akscr` into
+//! `room/<id>/room.scd` for every variant of the room; the text source itself
+//! is not packed. Every other file, including other `.toml` files, is packed
+//! verbatim.
 //!
 //! [`discover_mods`] scans a pack's sibling `mods/` directory and the per-user
 //! `<config dir>/mods` directory for top-level `*.akpak` files and mod source
@@ -35,7 +37,7 @@ pub struct ModSummary {
 /// Whether `path` overrides an entry of `base` in the merged view.
 ///
 /// A mod entry whose stem matches a base entry of the same class (for example
-/// `roomcut/100_000.png` over `roomcut/100_000.bmp`) is an override even
+/// `room/1000/cut/00.png` over `room/1000/cut/00.bmp`) is an override even
 /// though its exact path is new, so the new-file warning only names entries
 /// the base could never serve.
 fn is_override(base: &Pack, path: &str) -> bool {
@@ -112,7 +114,7 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
         {
             continue;
         }
-        if let Some((prefix, base)) = merged_scd_source(relative) {
+        if let Some(base) = merged_scd_source(relative) {
             let text = fs::read_to_string(source)
                 .with_context(|| format!("failed to read {}", source.display()))?;
             let dir = source.parent().unwrap_or(Path::new("."));
@@ -135,7 +137,7 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
                         by_region.push(region);
                     }
                 }
-                let output = format!("{prefix}{id:04x}.scd");
+                let output = format!("room/{id:04x}/room.scd");
                 push_entry(&mut entries, &mut outputs, output, container, relative)?;
             }
             if !by_region.is_empty() {
@@ -325,41 +327,44 @@ pub fn assemble_scd(source: &Path) -> Result<Vec<u8>> {
         .with_context(|| format!("failed to lay out {}", source.display()))
 }
 
-/// The pack entry a `scd/<stem>.s` or `scd/<stem>.akscr` source builds into,
-/// if it is one.
+/// The path below a leading `room/` directory, matched whatever its case.
+fn under_room(relative: &str) -> Option<&str> {
+    let (prefix, rest) = relative.split_once('/')?;
+    prefix.eq_ignore_ascii_case("room").then_some(rest)
+}
+
+/// The pack entry a room script source `room/<id>/<stem>.s` or
+/// `room/<id>/<stem>.akscr` builds into (`room/<id>/<stem>.scd`), if it is one.
 fn scd_source_output(relative: &str) -> Option<String> {
-    if !relative
-        .get(..4)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("scd/"))
-    {
+    let (folder, name) = under_room(relative)?.split_once('/')?;
+    if folder.len() != 4 || !folder.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let stem = [".s", ".akscr"].iter().find_map(|suffix| {
-        relative
-            .get(..relative.len().checked_sub(suffix.len())?)
-            .filter(|stem| relative[stem.len()..].eq_ignore_ascii_case(suffix))
+        name.get(..name.len().checked_sub(suffix.len())?)
+            .filter(|stem| name[stem.len()..].eq_ignore_ascii_case(suffix))
     })?;
-    if stem.len() <= 4 {
+    if stem.is_empty() || stem.contains('/') {
         return None;
     }
-    Some(format!("{stem}.scd"))
+    Some(format!(
+        "{}{stem}.scd",
+        &relative[..relative.len() - name.len()]
+    ))
 }
 
-/// A merged room script `scd/<room>.akscr` (three hex digits, e.g.
-/// `scd/103.akscr`): the `scd/` prefix as written and the room id. It builds
-/// `scd/<id>.scd` for every player and mansion variant of the room, for the
-/// USA region (`#if USA`): a mod's script has no build per region, so the
-/// build warns when another region's would differ.
-fn merged_scd_source(relative: &str) -> Option<(&str, u16)> {
-    let (prefix, name) = relative.split_at_checked(4)?;
-    if !prefix.eq_ignore_ascii_case("scd/") {
-        return None;
-    }
+/// A merged room script `room/<room>.akscr` (three hex digits, e.g.
+/// `room/103.akscr`): the room id. It builds `room/<id>/room.scd` for every
+/// player and mansion variant of the room, for the USA region (`#if USA`): a
+/// mod's script has no build per region, so the build warns when another
+/// region's would differ.
+fn merged_scd_source(relative: &str) -> Option<u16> {
+    let name = under_room(relative)?;
     let (stem, extension) = name.split_at_checked(3)?;
     if !extension.eq_ignore_ascii_case(".akscr") || !stem.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
-    Some((prefix, u16::from_str_radix(stem, 16).ok()?))
+    u16::from_str_radix(stem, 16).ok()
 }
 
 /// Add one built entry, rejecting two sources that map to the same path.
@@ -477,8 +482,8 @@ mod tests {
             mod_manifest_text("demo", "re1").as_bytes(),
         );
         write(&source.join("lua/demo.lua"), b"return 1");
-        write(&source.join("roomcut/100_000.bmp"), b"bmp-bytes");
-        write(&source.join("scd/1000.scd"), b"scd-bytes");
+        write(&source.join("room/1000/cut/00.bmp"), b"bmp-bytes");
+        write(&source.join("room/1000/room.scd"), b"scd-bytes");
         write(&source.join("sub/data.bin"), b"data");
         write(&source.join("notes.toml"), b"other = true");
 
@@ -496,8 +501,8 @@ mod tests {
                 "lua/demo.lua",
                 "manifest.toml",
                 "notes.toml",
-                "roomcut/100_000.bmp",
-                "scd/1000.scd",
+                "room/1000/cut/00.bmp",
+                "room/1000/room.scd",
                 "sub/data.bin",
             ]
         );
@@ -507,7 +512,10 @@ mod tests {
         );
 
         let pack = Pack::open(&out).unwrap();
-        assert_eq!(pack.read("scd/1000.scd").unwrap().as_ref(), b"scd-bytes");
+        assert_eq!(
+            pack.read("room/1000/room.scd").unwrap().as_ref(),
+            b"scd-bytes"
+        );
         assert_eq!(pack.read("notes.toml").unwrap().as_ref(), b"other = true");
         assert_eq!(pack.read("sub/data.bin").unwrap().as_ref(), b"data");
         let manifest = pack.manifest().unwrap();
@@ -526,7 +534,7 @@ mod tests {
             mod_manifest_text("demo", "re1").as_bytes(),
         );
         write(
-            &source.join("scd/1000.s"),
+            &source.join("room/1000/room.s"),
             b".version 1\n\n.main\n.block\n    nop                     0\n",
         );
 
@@ -538,12 +546,12 @@ mod tests {
                 .iter()
                 .map(|(path, _)| path.as_str())
                 .collect::<Vec<_>>(),
-            ["manifest.toml", "scd/1000.scd"]
+            ["manifest.toml", "room/1000/room.scd"]
         );
 
         let pack = Pack::open(&out).unwrap();
-        assert!(!pack.contains("scd/1000.s"));
-        let scripts = crate::scd::reader::parse(&pack.read("scd/1000.scd").unwrap()).unwrap();
+        assert!(!pack.contains("room/1000/room.s"));
+        let scripts = crate::scd::reader::parse(&pack.read("room/1000/room.scd").unwrap()).unwrap();
         assert_eq!(scripts.main.len(), 1);
         assert_eq!(scripts.main[0].insns[0].bytes, [0x0E, 0x00]);
     }
@@ -557,7 +565,7 @@ mod tests {
             mod_manifest_text("demo", "re1").as_bytes(),
         );
         write(
-            &source.join("scd/103.akscr"),
+            &source.join("room/103.akscr"),
             b"#version 1\nproc main noreturn\n{\n#if JILL\n    nop(1);\n#endif\n#if MANSION2\n    nop(2);\n#endif\n}\n",
         );
 
@@ -571,19 +579,19 @@ mod tests {
                 .collect::<Vec<_>>(),
             [
                 "manifest.toml",
-                "scd/1030.scd",
-                "scd/1031.scd",
-                "scd/6030.scd",
-                "scd/6031.scd"
+                "room/1030/room.scd",
+                "room/1031/room.scd",
+                "room/6030/room.scd",
+                "room/6031/room.scd"
             ]
         );
 
         let pack = Pack::open(&out).unwrap();
         for (path, expected) in [
-            ("scd/1030.scd", &[][..]),
-            ("scd/1031.scd", &[0x0E, 0x01][..]),
-            ("scd/6030.scd", &[0x0E, 0x02][..]),
-            ("scd/6031.scd", &[0x0E, 0x01, 0x0E, 0x02][..]),
+            ("room/1030/room.scd", &[][..]),
+            ("room/1031/room.scd", &[0x0E, 0x01][..]),
+            ("room/6030/room.scd", &[0x0E, 0x02][..]),
+            ("room/6031/room.scd", &[0x0E, 0x01, 0x0E, 0x02][..]),
         ] {
             let scripts = crate::scd::reader::parse(&pack.read(path).unwrap()).unwrap();
             let bytes: Vec<u8> = scripts.main[0]
@@ -605,14 +613,14 @@ mod tests {
             mod_manifest_text("demo", "re1").as_bytes(),
         );
         write(
-            &source.join("scd/514.akscr"),
+            &source.join("room/514.akscr"),
             b"#version 1\nproc main noreturn\n{\n#if JPN\n    nop(1);\n#endif\n}\n",
         );
 
         let summary = build_mod(&source, &dir.path.join("demo.akpak"), None).unwrap();
         assert_eq!(summary.warnings.len(), 1, "{:?}", summary.warnings);
         assert!(
-            summary.warnings[0].contains("scd/514.akscr")
+            summary.warnings[0].contains("room/514.akscr")
                 && summary.warnings[0].contains("for JPN;"),
             "{:?}",
             summary.warnings
@@ -628,47 +636,49 @@ mod tests {
             mod_manifest_text("demo", "re1").as_bytes(),
         );
         write(
-            &source.join("scd/1000.s"),
+            &source.join("room/1000/room.s"),
             b".version 1\n\n.init\n    frob 1\n",
         );
 
         let out = dir.path.join("demo.akpak");
         let err = build_mod(&source, &out, None).unwrap_err().to_string();
-        assert!(err.contains("1000.s"), "{err}");
+        assert!(err.contains("room/1000/room.s"), "{err}");
         assert!(!out.exists(), "a failed build must not leave a pack behind");
     }
 
     #[test]
     fn scd_source_outputs_are_recognised_case_insensitively() {
         assert_eq!(
-            scd_source_output("scd/1000.s").as_deref(),
-            Some("scd/1000.scd")
+            scd_source_output("room/1000/room.s").as_deref(),
+            Some("room/1000/room.scd")
         );
         assert_eq!(
-            scd_source_output("SCD/1000.S").as_deref(),
-            Some("SCD/1000.scd")
+            scd_source_output("room/1000/ROOM.S").as_deref(),
+            Some("room/1000/ROOM.scd")
         );
         assert_eq!(
-            scd_source_output("scd/sub/room.s").as_deref(),
-            Some("scd/sub/room.scd")
+            scd_source_output("room/1000/room.AKSCR").as_deref(),
+            Some("room/1000/room.scd")
         );
         assert_eq!(
-            scd_source_output("scd/1000.AKSCR").as_deref(),
-            Some("scd/1000.scd")
+            scd_source_output("Room/1000/room.s").as_deref(),
+            Some("Room/1000/room.scd")
         );
         assert_eq!(scd_source_output("lua/demo.s"), None);
-        assert_eq!(scd_source_output("scd/.akscr"), None);
-        assert_eq!(scd_source_output("scd/.s"), None);
-        assert_eq!(scd_source_output("scd/1000.scd"), None);
+        assert_eq!(scd_source_output("room/1000/sub/room.s"), None);
+        assert_eq!(scd_source_output("room/100/room.s"), None);
+        assert_eq!(scd_source_output("room/1000/.akscr"), None);
+        assert_eq!(scd_source_output("room/1000/.s"), None);
+        assert_eq!(scd_source_output("room/1000/room.scd"), None);
     }
 
     #[test]
     fn merged_room_scripts_are_recognised() {
-        assert_eq!(merged_scd_source("scd/103.akscr"), Some(("scd/", 0x103)));
-        assert_eq!(merged_scd_source("SCD/20A.AKSCR"), Some(("SCD/", 0x20A)));
-        assert_eq!(merged_scd_source("scd/1030.akscr"), None);
-        assert_eq!(merged_scd_source("scd/10x.akscr"), None);
-        assert_eq!(merged_scd_source("scd/103.s"), None);
+        assert_eq!(merged_scd_source("room/103.akscr"), Some(0x103));
+        assert_eq!(merged_scd_source("ROOM/20A.AKSCR"), Some(0x20A));
+        assert_eq!(merged_scd_source("room/1030/room.akscr"), None);
+        assert_eq!(merged_scd_source("room/10x.akscr"), None);
+        assert_eq!(merged_scd_source("room/103.s"), None);
         assert_eq!(merged_scd_source("lua/103.akscr"), None);
     }
 
@@ -1012,8 +1022,8 @@ mod tests {
             [
                 "lua/demo.lua",
                 "manifest.toml",
-                "roomcut/100_000.bmp",
-                "scd/1000.scd",
+                "room/1000/cut/00.bmp",
+                "room/1000/room.scd",
             ]
         );
 
@@ -1025,12 +1035,12 @@ mod tests {
         assert_eq!(manifest.load_order, 10);
         assert_eq!(manifest.lua, ["lua/demo.lua"]);
 
-        let scripts = crate::scd::reader::parse(&pack.read("scd/1000.scd").unwrap()).unwrap();
+        let scripts = crate::scd::reader::parse(&pack.read("room/1000/room.scd").unwrap()).unwrap();
         assert_eq!(scripts.main.len(), 1);
         assert_eq!(scripts.events.len(), 1);
         assert_eq!(scripts.events[0].kind, crate::scd::ir::StreamKind::Event(0));
 
-        let image = crate::bmp::decode(&pack.read("roomcut/100_000.bmp").unwrap()).unwrap();
+        let image = crate::bmp::decode(&pack.read("room/1000/cut/00.bmp").unwrap()).unwrap();
         assert_eq!((image.width, image.height), (320, 240));
         assert!(image.rgba.iter().any(|&byte| byte != 0));
 

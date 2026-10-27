@@ -443,14 +443,14 @@ fn demo_pack_boots_room_1000_with_the_script_lua_and_background() {
 
     // The replacement background is the demo's own art.
     assert_ne!(
-        built.read("roomcut/100_000.bmp").unwrap(),
-        base.read("roomcut/100_000.bmp").unwrap()
+        built.read("room/1000/cut/00.bmp").unwrap(),
+        base.read("room/1000/cut/00.bmp").unwrap()
     );
 
     let layered = Pack::open_layered(&pack_path, std::slice::from_ref(&demo_pack)).unwrap();
     let id = RoomId::parse("1000").unwrap();
     let run = simulate_room(&layered, id, 40, player::Input::default()).unwrap();
-    assert_eq!(run.script_source, ScriptSource::Override);
+    assert_eq!(run.script_source, ScriptSource::Room);
     assert!(run.game.flags[0].bit(1), "the demo init set its flag");
     assert!(run.game.flags[0].bit(2), "on_room_load set its flag");
     assert!(run.game.flags[0].bit(3), "the event ran");

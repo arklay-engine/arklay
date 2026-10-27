@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::charset::Script;
 use crate::pack::PackWriter;
+use crate::room::{ScriptSource, script_source};
 
 /// The room state's every field, for comparing a room loaded two ways.
 ///
@@ -11,7 +12,7 @@ use crate::pack::PackWriter;
 fn snapshot(state: &RoomState) -> String {
     let mut state = state.clone();
     for asset in state.object_models.iter_mut().chain(&mut state.item_models) {
-        asset.prop = None;
+        asset.hd_name = None;
     }
     format!("{state:?}")
 }
@@ -25,16 +26,15 @@ fn pack_of(entries: Vec<(String, Vec<u8>)>) -> Pack {
     Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
 }
 
-/// Convert `rdts` into a pack of XML definitions and sidecars.
+/// Convert `rdts` into a pack of room folders.
 fn converted(rdts: &[(RoomId, Vec<u8>)], script: Script) -> Pack {
-    let mut sidecars = Sidecars::default();
     let mut entries = Vec::new();
     for (id, data) in rdts {
-        let text = convert_rdt(data, *id, script, &mut sidecars)
-            .unwrap_or_else(|error| panic!("{:04X}: {error:#}", id.rdt_number()));
-        entries.push((id.xml_entry(), text.into_bytes()));
+        entries.extend(
+            convert_rdt(data, *id, script)
+                .unwrap_or_else(|error| panic!("{:04X}: {error:#}", id.rdt_number())),
+        );
     }
-    entries.extend(sidecars.into_entries());
     pack_of(entries)
 }
 
@@ -188,7 +188,30 @@ fn a_synthetic_room_loads_the_same_from_xml() {
     );
     assert!(text.contains("<switch zoneIndex=\"1\" to=\"1\""), "{text}");
     assert!(text.contains("radius=\"65535\""), "{text}");
-    assert!(text.contains("<scripts src=\"room/2051.scd\"/>"), "{text}");
+    // Nothing in the definition names a file or its own room.
+    assert!(!text.contains("src=") && !text.contains("room/"), "{text}");
+    assert!(!text.contains(" id=\"2051\""), "{text}");
+    assert!(pack.contains(&ID.scd_entry()));
+}
+
+#[test]
+fn a_room_folder_renamed_is_the_room_of_its_new_id() {
+    let rdt = synthetic_rdt();
+    let other = RoomId::parse("1000").unwrap();
+    let from = format!("{}/", ID.dir());
+    let renamed: Vec<(String, Vec<u8>)> = convert_rdt(&rdt, ID, Script::Latin)
+        .unwrap()
+        .into_iter()
+        .map(|(path, data)| {
+            let file = path.strip_prefix(&from).unwrap();
+            (format!("{}/{file}", other.dir()), data)
+        })
+        .collect();
+    let pack = pack_of(renamed);
+    assert_eq!(ids(&pack), [other]);
+    let state = load_state(&pack, other).unwrap();
+    assert_eq!(state.cuts.len(), 1);
+    assert!(!own_scripts(&pack, other).unwrap().init.is_empty());
 }
 
 #[test]
@@ -244,13 +267,25 @@ fn layered(
     (pack, dir)
 }
 
-/// The synthetic room converted: its XML and every sidecar entry.
+/// The synthetic room converted: its XML and every entry of its folder.
 fn converted_entries() -> (String, Vec<(String, Vec<u8>)>) {
-    let mut sidecars = Sidecars::default();
-    let xml = convert_rdt(&synthetic_rdt(), ID, Script::Latin, &mut sidecars).unwrap();
-    let mut entries = sidecars.into_entries();
-    entries.push((ID.xml_entry(), xml.clone().into_bytes()));
+    let entries = convert_rdt(&synthetic_rdt(), ID, Script::Latin).unwrap();
+    let xml = entries
+        .iter()
+        .find(|(path, _)| *path == ID.xml_entry())
+        .map(|(_, data)| String::from_utf8(data.clone()).unwrap())
+        .unwrap();
     (xml, entries)
+}
+
+/// The bytes of entry `path` among `entries`.
+fn entry_of(entries: &[(String, Vec<u8>)], path: &str) -> Vec<u8> {
+    entries
+        .iter()
+        .find(|(entry, _)| entry == path)
+        .unwrap_or_else(|| panic!("no {path}"))
+        .1
+        .clone()
 }
 
 #[test]
@@ -269,32 +304,26 @@ fn the_higher_layer_definition_wins() {
 }
 
 #[test]
-fn an_xml_only_mod_keeps_the_scripts_override() {
-    use crate::engine::{ScriptSource, script_source};
-    let (xml, mut base) = converted_entries();
-    let container = base
-        .iter()
-        .find(|(path, _)| *path == scripts_entry(ID))
-        .unwrap()
-        .1
-        .clone();
-    base.push((ID.scd_entry(), container.clone()));
+fn an_xml_only_mod_keeps_the_base_scripts() {
+    let (xml, base) = converted_entries();
+    let container = entry_of(&base, &ID.scd_entry());
     let edited = xml.replacen("<ambient", "<!-- edited --><ambient", 1);
 
-    // An edit of the XML alone still names the base container, so the base
-    // layer's override keeps winning.
+    // An edit of the XML alone keeps the base layer's `room.scd`.
     let only_xml = vec![(ID.xml_entry(), edited.clone().into_bytes())];
     let (pack, dir) = layered("xml-mod", base.clone(), only_xml);
-    assert_eq!(script_source(&pack, ID, false), ScriptSource::Override);
+    assert_eq!(script_source(&pack, ID, false), ScriptSource::Room);
+    assert!(!own_scripts(&pack, ID).unwrap().init.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 
-    // A mod that ships the scripts too runs its own.
-    let with_scripts = vec![
-        (ID.xml_entry(), edited.into_bytes()),
-        (scripts_entry(ID), container),
-    ];
-    let (pack, dir) = layered("scripts-mod", base, with_scripts);
+    // An RDT mod over the XML room runs the scripts embedded in it.
+    let rdt = vec![(ID.rdt_entry(), synthetic_rdt())];
+    let (pack, dir) = layered("rdt-mod", base, rdt);
     assert_eq!(script_source(&pack, ID, false), ScriptSource::Rdt);
+    assert_eq!(
+        own_scripts(&pack, ID).unwrap().digest(),
+        crate::scd::reader::parse(&container).unwrap().digest()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -310,29 +339,28 @@ fn flag_container(bit: u8) -> Vec<u8> {
 }
 
 #[test]
-fn original_scripts_skip_the_base_override_but_keep_a_mods() {
-    use crate::engine::{ScriptSource, room_scripts, script_source};
+fn original_scripts_skip_the_base_fixes_but_keep_a_mods() {
+    use crate::engine::room_scripts;
     let parse = |container: &[u8]| crate::scd::reader::parse(container).unwrap().digest();
     let (_, mut base) = converted_entries();
-    let own = base
-        .iter()
-        .find(|(path, _)| *path == scripts_entry(ID))
-        .unwrap()
-        .1
-        .clone();
+    let own = entry_of(&base, &ID.scd_entry());
     let (fixed, modded) = (flag_container(1), flag_container(2));
     assert_ne!(parse(&own), parse(&fixed));
     assert_ne!(parse(&fixed), parse(&modded));
+    // The converter's layout for a fixed room: the fixed build runs, the
+    // original bytecode is kept beside it.
+    base.retain(|(path, _)| *path != ID.scd_entry());
     base.push((ID.scd_entry(), fixed.clone()));
+    base.push((ID.original_scd_entry(), own.clone()));
 
-    // A mod that ships nothing for the room: the base pack's override runs
-    // unless the original scripts are asked for, which run the room's own.
+    // A mod that ships nothing for the room: the fixed build runs unless the
+    // original scripts are asked for.
     let unrelated = vec![("lua/unrelated.lua".to_string(), b"-- nothing".to_vec())];
     let (pack, dir) = layered("original-base", base.clone(), unrelated);
     let loaded = load(&pack, ID).unwrap();
     for (original, source, digest) in [
-        (false, ScriptSource::Override, parse(&fixed)),
-        (true, ScriptSource::Rdt, parse(&own)),
+        (false, ScriptSource::Room, parse(&fixed)),
+        (true, ScriptSource::Original, parse(&own)),
     ] {
         assert_eq!(script_source(&pack, ID, original), source);
         let (scripts, from) = room_scripts(&pack, ID, &loaded, original).unwrap();
@@ -340,12 +368,12 @@ fn original_scripts_skip_the_base_override_but_keep_a_mods() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 
-    // A mod's own `scd/{id}.scd` wins either way.
+    // A mod's own `room.scd` wins either way.
     let with_scripts = vec![(ID.scd_entry(), modded.clone())];
     let (pack, dir) = layered("original-mod", base, with_scripts);
     let loaded = load(&pack, ID).unwrap();
     for original in [false, true] {
-        assert_eq!(script_source(&pack, ID, original), ScriptSource::Override);
+        assert_eq!(script_source(&pack, ID, original), ScriptSource::Room);
         let (scripts, _) = room_scripts(&pack, ID, &loaded, original).unwrap();
         assert_eq!(scripts.digest(), parse(&modded), "{original}");
     }
@@ -359,42 +387,25 @@ fn malformed_hand_edits_fail_without_panicking() {
     let message = "<message id=\"0\">A key door<br/><color n=\"1\"/><end action=\"0\"/></message>";
     assert!(xml.contains(message), "{xml}");
     let raw = xml.replacen(message, "<message id=\"0\" raw=\"a\u{e9}b\"/>", 1);
-    let error = format!("{:#}", xml::parse(&raw, ID).unwrap_err());
+    let error = format!("{:#}", xml::parse(&raw).unwrap_err());
     assert!(error.contains("non-hex digit"), "{error}");
-    // A definition filed under another room.
-    assert!(xml::parse(&xml, RoomId::parse("1000").unwrap()).is_err());
     // Text the font cannot spell.
     let unspellable = xml.replacen("A key door", "A key \u{263A}", 1);
-    let error = format!("{:#}", xml::parse(&unspellable, ID).unwrap_err());
+    let error = format!("{:#}", xml::parse(&unspellable).unwrap_err());
     assert!(error.contains("cannot spell"), "{error}");
 }
 
 #[test]
-fn sidecar_ids_follow_content_not_conversion_order() {
-    // The same room converted after another keeps its file names.
-    let (alone, _) = converted_entries();
-    let mut sidecars = Sidecars::default();
-    convert_rdt(
-        &[0x00, 0x00, 0x02, 0x01],
-        RoomId::parse("1000").unwrap(),
-        Script::Latin,
-        &mut sidecars,
-    )
-    .unwrap();
-    let after = convert_rdt(&synthetic_rdt(), ID, Script::Latin, &mut sidecars).unwrap();
-    assert_eq!(alone, after);
-}
-
-#[test]
 fn hand_edits_with_unknown_names_are_refused() {
-    let rdt = synthetic_rdt();
-    let mut sidecars = Sidecars::default();
-    let text = convert_rdt(&rdt, ID, Script::Latin, &mut sidecars).unwrap();
+    let (text, _) = converted_entries();
     let typo = text.replacen("cellX", "celX", 1);
-    let error = format!("{:#}", xml::parse(&typo, ID).unwrap_err());
+    let error = format!("{:#}", xml::parse(&typo).unwrap_err());
     assert!(error.contains("unknown attribute `celX`"), "{error}");
     let element = text.replacen("<walkZones>", "<walkZones><wlak/>", 1);
-    assert!(xml::parse(&element, ID).is_err());
+    assert!(xml::parse(&element).is_err());
+    // The room id is the folder's, not the definition's.
+    let id = text.replacen("<room ", "<room id=\"2051\" ", 1);
+    assert!(xml::parse(&id).is_err());
 }
 
 /// The shipped RDTs under `ARKLAY_RE1_ROOT` (the JPN tree) and, when
@@ -464,58 +475,43 @@ fn every_shipped_room_loads_the_same_from_xml() {
         // Room 3010: nine object slots.
         assert_eq!(state("3010").omodel_slot_count, 9);
         // Room 1070: the ladder and the shelf are object models, each named
-        // by the prop its HD replacement is keyed on.
+        // by the file its HD replacement is keyed on.
         let models = state("1070").object_models;
         assert!(!models.is_empty());
         assert!(models.iter().all(|asset| {
-            asset
-                .prop
-                .as_deref()
-                .is_some_and(|stem| pack.contains(&format!("{stem}.tmd")))
+            asset.hd_name.as_deref().is_some_and(|stem| {
+                stem.starts_with("room/1070/object/") && pack.contains(&format!("{stem}.tmd"))
+            })
         }));
         // Room 10C1: item models.
         assert!(!state("10C1").item_models.is_empty());
         // A stub room is empty.
         let stub = rdts.iter().find(|(_, data)| data.len() < 0x94).unwrap();
         assert!(load_state(&pack, stub.0).unwrap().cuts.is_empty());
-        // Some room declares effects and has its sheet art.
+        // Some room declares effects and has its sheet art as a BMP.
         assert!(rdts.iter().any(|(id, _)| {
             let effects = load_state(&pack, *id).unwrap().effects;
-            !effects.is_empty() && effects.sprites.iter().all(|sprite| sprite.tim.is_some())
+            !effects.is_empty()
+                && effects.sprites.iter().all(|sprite| sprite.tim.is_some())
+                && pack.contains(&format!("{}.bmp", id.effect_stem(0)))
         }));
-        // A prop shared by an item slot and an object slot is one file.
-        let manifest = std::str::from_utf8(&pack.read(source::PROP_MANIFEST).unwrap())
-            .unwrap()
-            .to_string();
-        assert!(
-            manifest
-                .split("\n[prop.")
-                .any(|prop| prop.contains("objects = [") && prop.contains("items = [")),
-            "no prop is shared by an item and an object slot"
-        );
+        // Every room is a folder: nothing is shared by content.
+        assert!(pack.paths().all(|path| path.starts_with("room/")));
     }
 }
 
 #[test]
-fn verify_fails_a_room_naming_a_missing_sidecar() {
-    let (xml, entries) = converted_entries();
-    let edited = xml.replacen(&scripts_entry(ID), "room/dead.scd", 1);
-    let mut entries: Vec<_> = entries
-        .into_iter()
-        .filter(|(path, _)| *path != ID.xml_entry())
-        .collect();
-    entries.push((ID.xml_entry(), edited.into_bytes()));
+fn verify_fails_a_room_with_a_broken_model() {
+    let (_, mut entries) = converted_entries();
+    let model = ID.object_stem(0);
+    entries.push((format!("{model}.tmd"), b"not a tmd".to_vec()));
     let report = crate::verify::verify_pack(&pack_of(entries), false);
     let failure = report
         .failures
         .iter()
         .find(|failure| failure.path == ID.xml_entry())
         .expect("the room fails");
-    assert!(
-        failure.error.contains("missing room/dead.scd"),
-        "{}",
-        failure.error
-    );
+    assert!(failure.error.contains(&model), "{}", failure.error);
 }
 
 #[test]

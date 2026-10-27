@@ -59,7 +59,7 @@ pub fn parse_sections(data: &[u8]) -> Result<Scripts> {
 }
 
 /// Copy an RDT's three SCD sections, byte for byte, into a standalone SCD
-/// container (the `scd/<id>.scd` layout: a 19-slot pointer table, then the
+/// container (the `room/<id>/room.scd` layout: a 19-slot pointer table, then the
 /// init chain, the main chain and the event table with its scripts).
 ///
 /// The size-word chains are self-delimiting and the event offsets are

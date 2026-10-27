@@ -59,7 +59,7 @@ impl RoomVariants {
     }
 }
 
-/// Enumerate the pack's rooms (`room/%04x.xml` or `.rdt`), sorted by
+/// Enumerate the pack's rooms (`room/<id>/room.xml` or `room.rdt`), sorted by
 /// stage/room with every room's player variants collected.
 pub fn room_variants(pack: &Pack) -> Vec<RoomVariants> {
     let mut rooms: BTreeMap<(u8, u8), Vec<u8>> = BTreeMap::new();
@@ -324,10 +324,10 @@ mod tests {
     #[test]
     fn room_entries_enumerate_sort_and_dedupe() {
         let pack = pack_with(&[
-            "room/11c0.rdt",
-            "room/1061.rdt",
-            "room/1060.rdt",
-            "room/1000.rdt",
+            "room/11c0/room.rdt",
+            "room/1061/room.rdt",
+            "room/1060/room.rdt",
+            "room/1000/room.rdt",
             "room/zzzz.rdt",
             "room/100.rdt",
             "room/1060.txt",
@@ -346,20 +346,24 @@ mod tests {
 
     #[test]
     fn room_entries_fall_back_to_the_lowest_variant() {
-        let pack = pack_with(&["room/2053.rdt", "room/2052.rdt", "room/2050.rdt"]);
+        let pack = pack_with(&[
+            "room/2053/room.rdt",
+            "room/2052/room.rdt",
+            "room/2050/room.rdt",
+        ]);
         assert_eq!(ids(&room_entries(&pack, 1)), [(2, 0x05, 0)]);
     }
 
     fn column_pack() -> Pack {
         let mut paths: Vec<String> = (0..12u8)
-            .map(|room| format!("room/1{room:02x}0.rdt"))
+            .map(|room| format!("room/1{room:02x}0/room.rdt"))
             .collect();
         paths.extend([
-            "room/2000.rdt".into(),
-            "room/2001.rdt".into(),
-            "room/2011.rdt".into(),
+            "room/2000/room.rdt".into(),
+            "room/2001/room.rdt".into(),
+            "room/2011/room.rdt".into(),
         ]);
-        paths.push("room/7000.rdt".into());
+        paths.push("room/7000/room.rdt".into());
         let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
         pack_with(&refs)
     }
