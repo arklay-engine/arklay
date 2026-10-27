@@ -8294,7 +8294,10 @@ impl GameState {
             && self.message.active
             && !self.message.has_source()
         {
-            let bytes = text.message(room, u16::from(id)).unwrap_or(&[]).to_vec();
+            let bytes = text
+                .message(room, u16::from(id))
+                .unwrap_or_default()
+                .into_owned();
             self.message.feed_source(&bytes);
         }
         let selected = self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)];

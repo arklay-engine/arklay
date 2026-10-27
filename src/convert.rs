@@ -2448,12 +2448,15 @@ fn copy_font(
 /// The pages the Japanese PC release draws its text from, in the sheet's
 /// page order: `Bio.exe` uploads `PBFONT0.TIM` (kana, Latin and symbols) and
 /// `PBFONT1.TIM` (kanji) at start-up and never reads `FONT.TIM`, whose two
-/// pages hold the same glyphs in the same cells, drawn differently.
-const JAPANESE_PC_PAGES: [&str; 2] = ["pbfont0.tim", "pbfont1.tim"];
+/// pages hold the same glyphs in the same cells, drawn differently. While the
+/// stage byte is 4 it swaps `PBFONT3N.TIM` in for the kanji page; the sheet
+/// carries that page as its otherwise empty third page
+/// ([`crate::charset::STAGE_FIVE_OPERAND`]).
+const JAPANESE_PC_PAGES: [&str; 3] = ["pbfont0.tim", "pbfont1.tim", "pbfont3n.tim"];
 
 /// The Japanese sheet at `path` (`FONT.TIM`) with the PC release's own glyph
-/// pages ([`JAPANESE_PC_PAGES`]) from the same directory copied over its left
-/// and middle pages, as the game draws them. A page that is missing or not a
+/// pages ([`JAPANESE_PC_PAGES`]) from the same directory copied over its
+/// three pages, as the game draws them. A page that is missing or not a
 /// 256x256 4bpp image leaves `FONT.TIM`'s own.
 fn japanese_sheet(path: &Path) -> Result<Vec<u8>> {
     let read = |path: &Path| -> Result<Vec<u8>> {
@@ -6382,10 +6385,12 @@ mod tests {
         let row = &sheet[start..start + row_bytes];
         assert!(row[..128].iter().all(|&b| b == 0x22), "left page");
         assert!(row[128..256].iter().all(|&b| b == 0x33), "middle page");
-        assert!(
-            row[256..].iter().all(|&b| b == 0x11),
-            "the third page stays"
-        );
+        assert!(row[256..].iter().all(|&b| b == 0x11), "no stage-five page");
+
+        // The stage-five kanji page fills the third page.
+        fs::write(data.join("PBFONT3N.TIM"), filled_tim(64, 0x55)).unwrap();
+        let sheet = japanese_sheet(&data.join("FONT.TIM")).unwrap();
+        assert!(sheet[start + 256..start + 384].iter().all(|&b| b == 0x55));
 
         // A page of the wrong size leaves the sheet's own.
         fs::write(data.join("PBFONT1.TIM"), filled_tim(32, 0x44)).unwrap();

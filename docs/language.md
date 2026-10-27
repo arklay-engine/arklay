@@ -100,8 +100,13 @@ it. That release's `Bio.exe` never reads `FONT.TIM`. It uploads `PBFONT0.TIM`
 (kana, Latin and symbols) and `PBFONT1.TIM` (kanji), which hold the same
 glyphs in the same cells but drawn differently, so the conversion copies those
 two pages over `FONT.TIM`'s left and middle pages when they sit beside it. In
-stage index 4 the game swaps `PBFONT3N.TIM` in for `PBFONT1.TIM`; the
-converted sheet does not.
+stage index 4 (rooms 5xx) the game swaps `PBFONT3N.TIM` in for `PBFONT1.TIM`.
+It redraws most of the `0xFA` rows (14-17) with other kanji, so the same bytes
+read differently in the laboratory. The conversion copies that page into
+`FONT.TIM`'s empty third page, and `0xFA 0x80+n` draws its cell `n`.
+`charset::stage_five_text` moves a stage-5 stream's codes for the redrawn cells
+onto that page. Room messages go through it at conversion and at runtime, so
+the ja-JP language file spells stage-5 text with the kanji the game shows.
 
 A session draws one script, chosen by the language (`ja` keeps the Japanese
 sheet, every other tag prefers the Western one) and resolved against the

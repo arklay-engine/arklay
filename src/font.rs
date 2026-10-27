@@ -246,7 +246,9 @@ impl GlyphTable {
     /// [`Glyph`] carries.
     fn at(&self, u: i32, v: i32, glyph_w: i32) -> GlyphMetric {
         let glyph_w = glyph_w.max(1);
-        let page = usize::from(u >= RIGHT_PAGE_X);
+        // The third page (the stage-five kanji rows) has no table entries
+        // and takes the full cell, like the kanji page.
+        let page = (u / RIGHT_PAGE_X).max(0) as usize;
         let col = ((u - page as i32 * RIGHT_PAGE_X) / glyph_w).max(0) as usize;
         let row = (v / GLYPH_HEIGHT).max(0) as usize;
         self.get(page, row, col)
@@ -469,12 +471,20 @@ impl Iterator for Glyphs<'_> {
                     if [byte, parameter as u8] == crate::charset::MISSING {
                         return Some(self.missing_glyph());
                     }
+                    // `0xFA` operands from `STAGE_FIVE_OPERAND` address the
+                    // stage-five kanji rows on the sheet's third page.
+                    let five = i32::from(crate::charset::STAGE_FIVE_OPERAND);
+                    let (kanji_page, parameter) = if byte == 0xFA && parameter >= five {
+                        (512, parameter - five)
+                    } else {
+                        (256, parameter)
+                    };
                     let col = parameter % 18;
                     let row = parameter / 18;
                     let (page, v) = match byte {
                         0xF8 => (0, (row + 15) * GLYPH_HEIGHT),
                         0xF9 => (256, row * GLYPH_HEIGHT),
-                        _ => (256, (row + 14) * GLYPH_HEIGHT),
+                        _ => (kanji_page, (row + 14) * GLYPH_HEIGHT),
                     };
                     let mut glyph = self.glyph(page + col * self.metrics.cell_w, v);
                     // Classic REbirth's text draw (DLL 0x10069600) skips the

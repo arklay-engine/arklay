@@ -16,6 +16,8 @@
 //! [`crate::font::session_entry`] names for it, so the strings and the font
 //! can never disagree.
 
+use std::borrow::Cow;
+
 use crate::charset::{self, Script};
 use crate::font;
 use crate::language::{self, Catalog};
@@ -126,19 +128,21 @@ impl Text {
     /// the low six bits are the index within either table.
     ///
     /// Room messages resolve the RDT variant's key, then the shared room key,
-    /// then the RDT's own text, then the registry id.
-    pub fn message<'a>(&'a self, room: &'a RoomState, id: u16) -> Option<&'a [u8]> {
+    /// then the RDT's own text, then the registry id. Japanese stage-5 RDT
+    /// text moves onto the stage-five kanji rows the game draws it with
+    /// ([`charset::stage_five_text`]).
+    pub fn message<'a>(&'a self, room: &'a RoomState, id: u16) -> Option<Cow<'a, [u8]>> {
         if id & 0x40 != 0 {
-            return self.global(usize::from(id & 0x3F));
+            return self.global(usize::from(id & 0x3F)).map(Cow::Borrowed);
         }
         let room3 = format!("{:X}{:02X}", room.stage, room.room);
         let variant = format!("ROOM_{room3}{}_TEXT_{id:02X}", room.player_flag);
         if let Some(bytes) = self.catalog.lookup(&variant) {
-            return Some(bytes);
+            return Some(Cow::Borrowed(bytes));
         }
         let shared = format!("ROOM_{room3}_TEXT_{id:02X}");
         if let Some(bytes) = self.catalog.lookup(&shared) {
-            return Some(bytes);
+            return Some(Cow::Borrowed(bytes));
         }
         // The RDT's own text is encoded in the pack's own script; use it only
         // when the session draws that script, or its bytes would render as
@@ -147,11 +151,15 @@ impl Text {
         if self.script == self.pack_script
             && let Some(bytes) = room.message(id)
         {
-            return Some(bytes);
+            if self.script == Script::Japanese && room.stage == 5 {
+                return Some(Cow::Owned(charset::stage_five_text(bytes)));
+            }
+            return Some(Cow::Borrowed(bytes));
         }
         self.catalog
             .key_display(&variant)
             .or_else(|| self.catalog.key_display(&shared))
+            .map(Cow::Borrowed)
     }
 
     /// The room's display name (`ROOM_<room3>_NAME`), shown by the port-only
@@ -327,16 +335,46 @@ mod tests {
             ..RoomState::default()
         };
         // The translated key is encoded in the session's script.
-        assert_eq!(text.message(&room, 0), Some([0x1D, 0x01, 0x00].as_slice()));
+        assert_eq!(
+            text.message(&room, 0).as_deref(),
+            Some([0x1D, 0x01, 0x00].as_slice())
+        );
         // The untranslated one falls back to its key name, not to the RDT.
         let mut key = Vec::new();
         crate::charset::encode("ROOM_FFF_TEXT_01", Script::Latin, &mut key);
-        assert_eq!(text.message(&room, 1), Some(key.as_slice()));
+        assert_eq!(text.message(&room, 1).as_deref(), Some(key.as_slice()));
 
         // The same pack selected as Japanese draws the RDT's own bytes.
         let text = Text::load(&pack, Some("ja-JP"));
         assert_eq!(text.script(), Script::Japanese);
-        assert_eq!(text.message(&room, 1), Some([0xCC, 0x01, 0x00].as_slice()));
+        assert_eq!(
+            text.message(&room, 1).as_deref(),
+            Some([0xCC, 0x01, 0x00].as_slice())
+        );
+    }
+
+    #[test]
+    fn japanese_stage_five_rdt_text_draws_from_the_stage_five_rows() {
+        // A stage-5 room no language knows (room 0xFF), in a Japanese pack:
+        // its RDT `0xFA 0x26` is the cell `PBFONT3N.TIM` draws as 第.
+        let jpn = font_tim(192);
+        let pack = pack_with_bytes(&[("font/font.tim", &jpn)]);
+        let text = Text::load(&pack, Some("ja-JP"));
+        let room = RoomState {
+            stage: 5,
+            room: 0xFF,
+            messages: Some(vec![0x02, 0x00, 0xFA, 0x26, 0x01]),
+            ..RoomState::default()
+        };
+        let bytes = text.message(&room, 0).unwrap();
+        assert_eq!(&*bytes, [0xFA, 0xA6, 0x01]);
+        assert_eq!(text.decode(&bytes), "第");
+        // Another stage keeps the kanji page's cell.
+        let room = RoomState { stage: 4, ..room };
+        assert_eq!(
+            text.message(&room, 0).as_deref(),
+            Some([0xFA, 0x26, 0x01].as_slice())
+        );
     }
 
     #[test]
@@ -357,9 +395,15 @@ mod tests {
             ..RoomState::default()
         };
         // The RDT variant's key wins.
-        assert_eq!(text.message(&room, 0), Some([0x1E, 0x01, 0x00].as_slice()));
+        assert_eq!(
+            text.message(&room, 0).as_deref(),
+            Some([0x1E, 0x01, 0x00].as_slice())
+        );
         // No language key: the RDT stream is used.
-        assert_eq!(text.message(&room, 1), Some([0xCC, 0x01, 0x00].as_slice()));
+        assert_eq!(
+            text.message(&room, 1).as_deref(),
+            Some([0xCC, 0x01, 0x00].as_slice())
+        );
     }
 
     #[test]
