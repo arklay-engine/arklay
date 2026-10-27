@@ -1,0 +1,39 @@
+<item kind="heal" stack="1">
+    <effects>
+        <effect kind="heal" amount="full" />
+    </effects>
+    <strings>
+        <language lang="en-US">
+            <string key="name">First Aid Spray</string>
+            <string key="description">I can heal any wound with\nthis.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">HEILUNGS SPRAY</string>
+            <string key="description">Damit kann ich jede Wunde\nheilen.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">SPRAY PRIMEROS AUXILIOS</string>
+            <string key="description">Con esto puedo\ncurar lo que sea.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">ENSIAPU-SPRAY</string>
+            <string key="description">Tämä parantaa kaikki haavat.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Spray Désinfect.</string>
+            <string key="description">Je peux soigner n'importe quelle \nblessure avec ceci.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">SPRAY CURATIVO</string>
+            <string key="description">Con questo posso guarire\nogni ferita.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">救急用スプレー</string>
+            <string key="description">キズを全てなおす事が出来る</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Лечебный спрей</string>
+            <string key="description">Средство для лечения ран.</string>
+        </language>
+    </strings>
+</item>

@@ -1,0 +1,44 @@
+<item kind="key" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Desk Key</string>
+            <string key="name_unchecked">Small Key</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SCHREIBT.SCHLÜS.</string>
+            <string key="name_unchecked">KLEINERSCHLÜS.</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LLAVE ESCRITORIO</string>
+            <string key="name_unchecked">LLAVE PEQUEÑA</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">PÖYDÄN AVAIN</string>
+            <string key="name_unchecked">PIENI AVAIN</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Clé du Bureau</string>
+            <string key="name_unchecked">Petite Clé</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">CHIAVE CASSETTO</string>
+            <string key="name_unchecked">CHIAVE PICCOLA</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">机のカギ</string>
+            <string key="name_unchecked">小さなカギ</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Ключ от стола</string>
+            <string key="name_unchecked">Маленький ключ</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

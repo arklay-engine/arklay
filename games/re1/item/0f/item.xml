@@ -1,0 +1,36 @@
+<item kind="ammo" stack="240" merge="true">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Fuel</string>
+            <string key="description">Fuel for the flamethrower.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">BENZIN</string>
+            <string key="description">Benzin für den Flammenwerfer.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">COMBUSTIBLE</string>
+            <string key="description">Combustible para lanzallamas.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">POLTTOAINE</string>
+            <string key="description">Polttoainetta liekinheittimeen.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Carburant</string>
+            <string key="description">Carburant pour le\nlance-flammes.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">COMBUSTIBILE</string>
+            <string key="description">Combustibile per il lanciafiamme.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">火炎放射器の燃料</string>
+            <string key="description">火炎放射器に用いる燃剤が入っている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Топливо</string>
+            <string key="description">Топливо для огнемёта.</string>
+        </language>
+    </strings>
+</item>

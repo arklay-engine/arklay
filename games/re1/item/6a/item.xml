@@ -1,0 +1,28 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Barry's Picture</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">BARRYS FOTO</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">FOTO DE BARRY</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">BARRYN VALOKUVA</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Photo de Barry</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">FOTO DI BARRY</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">バリーの写真</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Фотография Барри</string>
+        </language>
+    </strings>
+</item>

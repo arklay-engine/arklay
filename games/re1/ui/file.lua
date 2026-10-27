@@ -6,9 +6,9 @@
 -- A document is listed once its FILE-collected bit is raised by the pickup
 -- (room-flags bank 8, `0x82 + (item - 0x5F)`). Confirming a listed document
 -- opens the reader over the document's scanned book backdrop
--- (`file/<doc>_bg`, the original's FILEI art). Document `doc` is the item
--- `0x5F + doc`, and its pages are `file/<doc>_<page>_fg_<language>`, both
--- numbers two hex digits. The JPN build's pages (`ja-JP`) are 256x128
+-- (`item/<id>/file_bg`, the original's FILEI art). Document `doc` is the item
+-- `<id>` = `0x5F + doc`, and its pages are
+-- `item/<id>/file_fg_<page>_<language>`, both numbers two hex digits. The JPN build's pages (`ja-JP`) are 256x128
 -- half-pages (the converter splits each TEXTM sheet in two); the reader
 -- advances one per press and closes on confirm at the last page.
 --
@@ -214,14 +214,14 @@ M.tables = {
 
 --- The pack stem of page `page` of document `entry` in `language`.
 local function page_stem(entry, page, language)
-    return ("file/%02x_%02x_fg_%s"):format(entry, page, language)
+    return ("item/%02x/file_fg_%02x_%s"):format(FILE_ITEM_BASE + entry, page, language)
 end
 
 M.page_stem = page_stem
 
 --- The pack stem of document `entry`'s book backdrop.
 local function backdrop_stem(entry)
-    return ("file/%02x_bg"):format(entry)
+    return ("item/%02x/file_bg"):format(FILE_ITEM_BASE + entry)
 end
 
 --- The primary subtag of a session language tag (`ja-JP` -> `ja`), or nil.

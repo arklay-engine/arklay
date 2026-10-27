@@ -34,6 +34,7 @@ pub mod hash;
 pub mod hdfilm;
 pub mod htexture;
 pub mod item_art;
+pub mod item_catalog;
 pub mod items;
 pub mod ivm;
 pub mod language;

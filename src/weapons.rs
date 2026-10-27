@@ -429,24 +429,24 @@ pub fn weapon_ammo_item_id(weapon: u8) -> u8 {
     weapon.wrapping_add(9)
 }
 
-/// The capacity of `weapon`'s clip: the item record's stack maximum (the
+/// The capacity of `weapon`'s clip: its definition's `stack` (the
 /// weapon's full magazine in the shipped tables), except the two special
 /// machine guns, whose original empty-clip refill uses a fixed four-round
 /// burst. The rocket launcher's record is four even though its ammunition
 /// stack holds one rocket per slot, so a normal reload loads one while the
 /// cheat fills the weapon's four-round clip.
-pub fn clip_capacity(weapon: u8) -> u8 {
+pub fn clip_capacity(game: &GameState, weapon: u8) -> u8 {
     match weapon {
         ITEM_INGRAM | ITEM_MINIMI => 4,
-        _ => crate::items::max_quantity(weapon),
+        _ => game.item_defs.get(weapon).stack,
     }
 }
 
 /// The quantity a refill writes: the clip capacity, except the flamethrower
 /// keeps a larger fuel count if one is already loaded (its byte can hold 255,
-/// above the item table's 240-round maximum).
-fn refill_quantity(weapon: u8, quantity: u8) -> u8 {
-    let capacity = clip_capacity(weapon);
+/// above its 240-round `stack`).
+fn refill_quantity(game: &GameState, weapon: u8, quantity: u8) -> u8 {
+    let capacity = clip_capacity(game, weapon);
     if weapon == ITEM_FLAMETHROWER {
         quantity.max(capacity)
     } else {
@@ -489,14 +489,14 @@ pub fn refill_clip(game: &mut GameState) -> bool {
     if weapon == ITEM_KNIFE {
         return false;
     }
-    let capacity = clip_capacity(weapon);
+    let capacity = clip_capacity(game, weapon);
     if capacity == 0 {
         return false;
     }
     let Some(index) = equipped_index(game, weapon) else {
         return false;
     };
-    game.inventory[index].quantity = refill_quantity(weapon, game.inventory[index].quantity);
+    game.inventory[index].quantity = refill_quantity(game, weapon, game.inventory[index].quantity);
     true
 }
 
@@ -584,7 +584,7 @@ pub fn weapon_autoaim_check(game: &mut GameState) -> u8 {
     }
     match game.debug.infinite_ammo {
         InfiniteAmmo::Infinite => {
-            let full = refill_quantity(weapon, quantity);
+            let full = refill_quantity(game, weapon, quantity);
             game.inventory[index].quantity = full;
             return full;
         }
@@ -627,9 +627,9 @@ fn fire_ammo_volley_gate(game: &mut GameState) -> bool {
 fn consume_round(game: &mut GameState, slot: usize) {
     let weapon = game.inventory[slot].id;
     let quantity = game.inventory[slot].quantity;
-    let capacity = clip_capacity(weapon);
+    let capacity = clip_capacity(game, weapon);
     game.inventory[slot].quantity = match game.debug.infinite_ammo {
-        InfiniteAmmo::Infinite if capacity != 0 => refill_quantity(weapon, quantity),
+        InfiniteAmmo::Infinite if capacity != 0 => refill_quantity(game, weapon, quantity),
         _ if clip_is_empty(weapon, quantity) => return,
         _ => quantity.wrapping_sub(1),
     };
@@ -649,11 +649,11 @@ pub fn fire_consume_ammo_stack(game: &mut GameState) {
         return;
     };
     let ammo = weapon_ammo_item_id(weapon);
-    let max_quantity = crate::items::max_quantity(ammo);
+    let max_quantity = game.item_defs.get(ammo).stack;
     let Some(equipped) = equipped_index(game, weapon) else {
         return;
     };
-    let capacity = clip_capacity(weapon);
+    let capacity = clip_capacity(game, weapon);
     if capacity == 0 {
         return;
     }
@@ -661,7 +661,7 @@ pub fn fire_consume_ammo_stack(game: &mut GameState) {
     if game.debug.infinite_ammo == InfiniteAmmo::Infinite
         || (game.debug.infinite_ammo == InfiniteAmmo::Reload && clip_is_empty(weapon, quantity))
     {
-        game.inventory[equipped].quantity = refill_quantity(weapon, quantity);
+        game.inventory[equipped].quantity = refill_quantity(game, weapon, quantity);
         return;
     }
     let capacity = game.inventory_capacity().min(game.inventory.len());
@@ -1404,7 +1404,7 @@ fn gun_hold_input(
         && input.run
         && matches!(weapon, 2..=5)
         && let Some(index) = equipped_index(game, weapon)
-        && game.inventory[index].quantity < clip_capacity(weapon)
+        && game.inventory[index].quantity < clip_capacity(game, weapon)
         && game.has_item(weapon_ammo_item_id(weapon))
     {
         player.weapon.behavior = 0x18;
@@ -3110,14 +3110,15 @@ mod tests {
     }
 
     #[test]
-    fn clip_capacity_uses_the_item_record_and_the_special_burst() {
-        assert_eq!(clip_capacity(2), 0x0F, "handgun record");
-        assert_eq!(clip_capacity(3), 0x07, "shotgun record");
-        assert_eq!(clip_capacity(6), 0xF0, "flamethrower fuel");
-        assert_eq!(clip_capacity(10), 0x04, "rocket launcher");
-        assert_eq!(clip_capacity(ITEM_INGRAM), 4, "special burst");
-        assert_eq!(clip_capacity(ITEM_MINIMI), 4, "special burst");
-        assert_eq!(clip_capacity(ITEM_KNIFE), 0, "the knife has no clip");
+    fn clip_capacity_uses_the_item_stack_and_the_special_burst() {
+        let game = GameState::new(RoomId::parse("1000").unwrap(), &Default::default());
+        assert_eq!(clip_capacity(&game, 2), 0x0F, "handgun record");
+        assert_eq!(clip_capacity(&game, 3), 0x07, "shotgun record");
+        assert_eq!(clip_capacity(&game, 6), 0xF0, "flamethrower fuel");
+        assert_eq!(clip_capacity(&game, 10), 0x04, "rocket launcher");
+        assert_eq!(clip_capacity(&game, ITEM_INGRAM), 4, "special burst");
+        assert_eq!(clip_capacity(&game, ITEM_MINIMI), 4, "special burst");
+        assert_eq!(clip_capacity(&game, ITEM_KNIFE), 0, "the knife has no clip");
     }
 
     #[test]

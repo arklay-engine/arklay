@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Star Crest</string>
+            <string key="description">A carving of the star.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">STERNENWAPPEN</string>
+            <string key="description">Ein Stern ist eingraviert.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BLASÓN DE ESTRELLAS</string>
+            <string key="description">Un grabado de una estrella.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TÄHTI-LAATTA</string>
+            <string key="description">Kaiverrus jossa tähti.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Symbole Étoile</string>
+            <string key="description">Une étoile gravée.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">STEMMA STELLA</string>
+            <string key="description">Un intaglio delle stelle.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">スタークレスト</string>
+            <string key="description">星をかたどった絵が刻まれている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Табличка Звезды</string>
+            <string key="description">Табличка со звездой.</string>
+        </language>
+    </strings>
+</item>

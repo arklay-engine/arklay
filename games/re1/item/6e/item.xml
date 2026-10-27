@@ -1,0 +1,36 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Botany Book</string>
+            <string key="name_unchecked">Crank</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">BOTANIK-BUCH</string>
+            <string key="name_unchecked">KURBEL</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LIBRO DE BOTÁNICA</string>
+            <string key="name_unchecked">MANIVELA</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">KASVITIETEIDEN KIRJA</string>
+            <string key="name_unchecked">KAMPI</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Ouvrage de botanique</string>
+            <string key="name_unchecked">Manivelle</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">LIBRO DI BOTANICA</string>
+            <string key="name_unchecked">MANOVELLA</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">植物学</string>
+            <string key="name_unchecked">クランク</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Книга о растениях</string>
+            <string key="name_unchecked">Рукоятка</string>
+        </language>
+    </strings>
+</item>

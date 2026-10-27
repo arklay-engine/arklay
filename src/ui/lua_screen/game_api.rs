@@ -7,7 +7,7 @@
 use mlua::{IntoLuaMulti, UserDataMethods};
 
 use crate::game::{CombineResult, GameState, STATE_BYTE_CHARACTER, UseResult, platform_rand};
-use crate::items::{self, UseCategory};
+use crate::item_catalog::ItemKind;
 
 use super::Api;
 
@@ -92,13 +92,14 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         if item == 0 {
             return Ok(mlua::MultiValue::new());
         }
+        let kind = game.item_defs.get(item).kind;
         let values = match game.use_item(item) {
             UseResult::Used { healed, cured } => {
                 game.record_used_item(item);
                 consume_slot(game, slot);
-                (true, healed, cured, closes_inventory(item)).into_lua_multi(lua)?
+                (true, healed, cured, closes_inventory(kind)).into_lua_multi(lua)?
             }
-            UseResult::Unusable => (false, category_index(item)).into_lua_multi(lua)?,
+            UseResult::Unusable => (false, kind.dispatch_index()).into_lua_multi(lua)?,
         };
         Ok(values)
     });
@@ -160,32 +161,16 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
     });
 }
 
-/// Whether a successful use of `item` closes the inventory afterwards: the
-/// key, special, chemical and book dispatch slots set the original's
-/// `DAT_00ae9f13` bit 0x80, which the main menu's case-1 test turns into a
-/// full menu exit. (Books only reach here as the red book, the only usable
-/// one.)
-fn closes_inventory(item: u8) -> bool {
+/// Whether a successful use of an item of `kind` closes the inventory
+/// afterwards: the key, special, chemical and book dispatch slots set the
+/// original's `DAT_00ae9f13` bit 0x80, which the main menu's case-1 test
+/// turns into a full menu exit. (Books only reach here as the red book, the
+/// only usable one.)
+fn closes_inventory(kind: ItemKind) -> bool {
     matches!(
-        items::use_category(item),
-        UseCategory::Chemicals | UseCategory::Special | UseCategory::Keys | UseCategory::Books
+        kind,
+        ItemKind::Chemical | ItemKind::Special | ItemKind::Key | ItemKind::Book
     )
-}
-
-/// The original use-category dispatch index (weapons through unusable).
-fn category_index(item: u8) -> u8 {
-    match items::use_category(item) {
-        UseCategory::Weapons => 0,
-        UseCategory::Ammo => 1,
-        UseCategory::Bottle => 2,
-        UseCategory::Chemicals => 3,
-        UseCategory::Special => 4,
-        UseCategory::Keys => 5,
-        UseCategory::Books => 6,
-        UseCategory::Heal => 7,
-        UseCategory::Always => 8,
-        UseCategory::Unusable => 9,
-    }
 }
 
 /// Remove one item from `slot`, compacting the inventory.
@@ -211,13 +196,15 @@ mod tests {
     #[test]
     fn closes_inventory_follows_the_use_dispatch() {
         // Key, special, chemical and book slots set the close bit; heal,
-        // ammo, weapons and always-usable items do not.
-        assert!(closes_inventory(0x33)); // sword key
-        assert!(closes_inventory(0x1D)); // crank (special)
-        assert!(closes_inventory(0x15)); // UMB No.2 (chemical)
-        assert!(closes_inventory(0x3E)); // red book
-        assert!(!closes_inventory(0x44)); // green herb
-        assert!(!closes_inventory(0x02)); // beretta
-        assert!(!closes_inventory(0x0B)); // handgun ammo
+        // ammo and weapons do not.
+        let defs = crate::item_catalog::ItemCatalog::embedded();
+        let closes = |item: u8| closes_inventory(defs.get(item).kind);
+        assert!(closes(0x33)); // sword key
+        assert!(closes(0x1D)); // crank (special)
+        assert!(closes(0x15)); // UMB No.2 (chemical)
+        assert!(closes(0x3E)); // red book
+        assert!(!closes(0x44)); // green herb
+        assert!(!closes(0x02)); // beretta
+        assert!(!closes(0x0B)); // handgun ammo
     }
 }

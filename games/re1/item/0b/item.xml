@@ -1,0 +1,36 @@
+<item kind="ammo" stack="15" merge="true">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Hand Gun Bullets</string>
+            <string key="description">Clip for Beretta.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">PATRONEN</string>
+            <string key="description">Pistolen-Clip leer und einfach.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BALAS (PISTOLA)</string>
+            <string key="description">Cargador de pistola, así\nde simple.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">PISTOOLIN LUOT.</string>
+            <string key="description">Lipas Berettaan.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Balles de Pistolet</string>
+            <string key="description">Chargeur de pistolet,\ntout simplement.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">MUNIZ. PISTOLA</string>
+            <string key="description">Caricatore per pistola.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ベレッタのマガジン</string>
+            <string key="description">ベレッタに用いるマガジンケースだ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Патроны пистол.</string>
+            <string key="description">Обойма для Беретты.</string>
+        </language>
+    </strings>
+</item>

@@ -40,6 +40,8 @@ pub enum Format {
     RoomXml,
     /// `room/<id>/effect/*.xml`, one effect slot's sprite table.
     RoomEffect,
+    /// `item/<id>/item.xml`, an item definition.
+    ItemXml,
     /// `room/<id>/anim/*.emr` / `.edd`, one half of a room player-animation pair.
     RoomAnimation,
     /// `room/<id>/*.scd`, a room's script container.
@@ -96,6 +98,7 @@ impl Format {
             Self::RoomXml => "room-xml",
             Self::RoomAnimation => "animation",
             Self::RoomEffect => "room-effect",
+            Self::ItemXml => "item-xml",
             Self::Scd => "scd",
             Self::Cut => "cut",
             Self::Mask => "mask",
@@ -126,25 +129,26 @@ impl Format {
     }
 }
 
-/// The item id of a per-item icon path (`item/0b.bmp`), if `path` is one.
-fn item_icon_id(path: &str) -> Option<u8> {
+/// The item id and file name of a path inside an item folder
+/// (`item/0b/item.bmp`), if `path` is in one.
+fn item_file(path: &str) -> Option<(u8, String)> {
     let lower = path.to_ascii_lowercase();
-    let id = lower.strip_prefix("item/")?.strip_suffix(".bmp")?;
-    (id.len() == 2 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .then(|| u8::from_str_radix(id, 16).ok())
+    let (id, file) = lower.strip_prefix("item/")?.split_once('/')?;
+    (id.len() == 2 && id.bytes().all(|byte| byte.is_ascii_hexdigit()) && !file.contains('/'))
+        .then(|| Some((u8::from_str_radix(id, 16).ok()?, file.to_owned())))
         .flatten()
 }
 
-/// Whether `path` is a per-item model page (`item/0b_model.bmp`).
+/// The item id of a per-item icon path (`item/0b/item.bmp`), if `path` is one.
+fn item_icon_id(path: &str) -> Option<u8> {
+    let (id, file) = item_file(path)?;
+    let (stem, _) = file.rsplit_once('.')?;
+    (stem == "item").then_some(id)
+}
+
+/// Whether `path` is a per-item model page (`item/0b/model.bmp`).
 fn is_item_model_page(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    let Some(name) = lower.strip_prefix("item/") else {
-        return false;
-    };
-    let Some(id) = name.strip_suffix("_model.bmp") else {
-        return false;
-    };
-    id.len() == 2 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    item_file(path).is_some_and(|(_, file)| file == "model.bmp")
 }
 
 /// The lowercased extension of a pack path.
@@ -203,6 +207,9 @@ pub fn classify(path: &str) -> Format {
             _ if file.starts_with("mask/") && is_image_extension(file) => return Format::Mask,
             _ => {}
         }
+    }
+    if crate::item_catalog::entry_item(&lower).is_some() {
+        return Format::ItemXml;
     }
     if lower.starts_with("language/") && lower.ends_with(".txt") {
         return Format::Language;
@@ -472,6 +479,10 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
                 mode => bail!("unsupported TIM color mode {mode}"),
             }
         }
+        Format::ItemXml => {
+            let text = std::str::from_utf8(data).context("item XML is not valid UTF-8")?;
+            crate::item_catalog::ItemDef::parse(text)?;
+        }
         Format::Ivm => {
             crate::ivm::parse(data)?;
         }
@@ -622,6 +633,9 @@ mod tests {
         assert_eq!(classify("bgm/013.ogg"), Format::Ogg);
         assert_eq!(classify("room/1000/cut/00.ogg"), Format::Ogg);
         assert_eq!(classify("item/i00v.ivm"), Format::Ivm);
+        assert_eq!(classify("item/0b/item.xml"), Format::ItemXml);
+        assert_eq!(classify("item/0b/notes.xml"), Format::Opaque);
+        assert_eq!(classify("item/0b/model.tmd"), Format::Tmd);
         assert_eq!(classify("enemy/em20.emd"), Format::Emd);
         assert_eq!(classify("player/00.emw"), Format::Emw);
         assert_eq!(classify("player/ws202.tmd"), Format::Tmd);
@@ -669,15 +683,21 @@ mod tests {
             .unwrap()
         };
         let mut writer = PackWriter::new();
-        writer.add("item/01_model.bmp", page(256, 256)).unwrap();
-        writer.add("item/01.bmp", icon(40, 30)).unwrap();
+        writer.add("item/01/model.bmp", page(256, 256)).unwrap();
+        writer.add("item/01/item.bmp", icon(40, 30)).unwrap();
+        writer
+            .add(
+                "item/01/item.xml",
+                crate::item_catalog::ITEM_FILES[0].1.into(),
+            )
+            .unwrap();
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let report = verify_pack(&pack, true);
         assert!(report.valid(), "{:?}", report.failures);
 
         // A model page must be the indexed 256x256 page the loader reads.
         let mut writer = PackWriter::new();
-        writer.add("item/01_model.bmp", icon(256, 256)).unwrap();
+        writer.add("item/01/model.bmp", icon(256, 256)).unwrap();
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let report = verify_pack(&pack, true);
         assert!(!report.valid());
@@ -685,11 +705,20 @@ mod tests {
 
         // An icon is exactly 40x30.
         let mut writer = PackWriter::new();
-        writer.add("item/01.bmp", icon(80, 60)).unwrap();
+        writer.add("item/01/item.bmp", icon(80, 60)).unwrap();
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let report = verify_pack(&pack, true);
         assert!(!report.valid());
         assert!(report.failures[0].error.contains("40x30"));
+
+        // An item definition must parse.
+        let mut writer = PackWriter::new();
+        writer
+            .add("item/01/item.xml", b"<item kind=\"spoon\" />".to_vec())
+            .unwrap();
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let report = verify_pack(&pack, true);
+        assert!(!report.valid());
     }
 
     #[test]

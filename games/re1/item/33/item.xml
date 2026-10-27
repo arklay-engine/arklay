@@ -1,0 +1,44 @@
+<item kind="key">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Sword Key</string>
+            <string key="name_unchecked">Mansion Key</string>
+            <string key="description">Nothing important.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SCHWERTSCHLÜS.</string>
+            <string key="name_unchecked">HERRENH.SCHLÜS.</string>
+            <string key="description">Nichts Besonderes.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">LLAVE ESPADA</string>
+            <string key="name_unchecked">LLAVE MANSIÓN</string>
+            <string key="description">Nada especial.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">MIEKKA-AVAIN</string>
+            <string key="name_unchecked">KARTANON AVAIN</string>
+            <string key="description">Ei mitään erikoista.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Clé Épée</string>
+            <string key="name_unchecked">Clé du Manoir</string>
+            <string key="description">Rien de spécial.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">CHIAVE SPADA</string>
+            <string key="name_unchecked">CHIAVE VILLA</string>
+            <string key="description">Niente di speciale.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">剣のカギ</string>
+            <string key="name_unchecked">館のカギ</string>
+            <string key="description">特に気になる所はない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Ключ с мечом</string>
+            <string key="name_unchecked">Ключ особняка</string>
+            <string key="description">Ничего важного.</string>
+        </language>
+    </strings>
+</item>

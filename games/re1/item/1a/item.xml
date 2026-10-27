@@ -1,0 +1,36 @@
+<item kind="chemical" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">NP-003</string>
+            <string key="description">This is not the chemical I\nneed.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">NP-003</string>
+            <string key="description">Das ist nicht die Chemikalie,\ndie ich brauche.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">NP-003</string>
+            <string key="description">No es el producto químico que\nnecesito.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">NP-003</string>
+            <string key="description">Tämä ei ole se kemikaali minkä\ntarvitsen.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">NP-003</string>
+            <string key="description">Je n'ai pas besoin de ce \nproduit chimique.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">NP-003</string>
+            <string key="description">Non è la sostanza chimica\nche mi serve.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">NPー003</string>
+            <string key="description">これは必要とする薬ではない</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">НП-003</string>
+            <string key="description">Это не тот химикат,\nкоторый мне нужен.</string>
+        </language>
+    </strings>
+</item>

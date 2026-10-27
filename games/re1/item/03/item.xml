@@ -1,0 +1,36 @@
+<item kind="weapon" stack="7">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Shotgun</string>
+            <string key="description">Remington M870.\nA pump-action shotgun.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SCHROTFLINTE</string>
+            <string key="description">Pump-Action Schrotgewehr\nmit großem Trefferbereich.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">ESCOPETA</string>
+            <string key="description">Escopeta de corredera\nde gran campo de acción.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">REMINGTON 870</string>
+            <string key="description">Pumppuhaulikko joka käyttää\n12 kaliiperin hauleja.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Fusil à Pompe</string>
+            <string key="description">Remington M870. Fusil à pompe à\nlarge dispersion.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">FUCILE A POMPA</string>
+            <string key="description">Remington M870. Un fucile a pompa.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ショットガン</string>
+            <string key="description">レミントンM870\nひろいレンジを攻撃できる銃だ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Дробовик</string>
+            <string key="description">Ремингтон М870.\nПомповое ружье.</string>
+        </language>
+    </strings>
+</item>

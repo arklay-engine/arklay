@@ -2,26 +2,25 @@
 //!
 //! The original keys inventory art by *image type*: one row of
 //! `DATA/ITEM_ALL.PIX` and one `ITEM_M2/I<imageType>V.IVM` serve every item
-//! that shares a class. A pack built by `convert-game` also stores the art per
-//! item id, so an item's icon and model can diverge from its class:
+//! that shares a class. A pack built by `convert-game` stores the art in each
+//! item's own folder instead, so an item's icon and model can diverge from
+//! its class and the folder can be copied to another id or pack whole:
 //!
 //! ```text
-//! item/<id>.bmp          the 40x30 inventory icon
-//! item/<id>_model.tmd    the inventory 3D model
-//! item/<id>_model.bmp    its 256x256 indexed texture page
+//! item/<id>/item.bmp     the 40x30 inventory icon
+//! item/<id>/model.tmd    the inventory 3D model
+//! item/<id>/model.bmp    its 256x256 indexed texture page
 //! ```
 //!
 //! `<id>` is the two-digit lower-case hex item id (`0b`, `6f`). The files are
-//! optional: a missing `.bmp` falls back to the shared `item/item_all.bmp`
-//! row (`ui/staitem.tim` for the two PC-only machineguns), a missing
-//! `_model.tmd` falls back to `item/<name>.ivm`, a `_model.tmd` without its
-//! `_model.bmp` is an untextured model, and an item with neither file simply
+//! optional: an item without `item.bmp` draws no icon, a `model.tmd` without
+//! its `model.bmp` is an untextured model, and an item without `model.tmd`
 //! has no model.
 //!
 //! HD replacements keep working through [`crate::htexture`]:
 //!
-//! - `htexture/item/<id>` and `htexture/item/<id>_model` are the named
-//!   per-item keys (the port's `HD/<TREE>/Item/<ITEMID>.webp` convention).
+//! - `htexture/item/<id>/item` and `htexture/item/<id>/model` are the named
+//!   per-item keys.
 //! - `htexture/data/item_all/<imageType - 1:02>` and
 //!   `htexture/data/item_m2/<model name>` are the legacy CR file names, so an
 //!   existing HD pack keeps replacing the shared art.
@@ -38,40 +37,40 @@ use crate::ivm::{self, Ivm};
 use crate::model::Texture8;
 use crate::pack::Pack;
 
-/// Pack directory of the per-item art.
+/// Pack directory of the per-item folders.
 pub const PREFIX: &str = "item/";
 /// Number of bytes in one 40x30 8bpp icon.
 pub const ICON_BYTES: usize = (items::ICON_WIDTH * items::ICON_HEIGHT) as usize;
 
+/// The pack folder of `item`, with its trailing slash: `item/0b/`.
+pub fn folder(item: u8) -> String {
+    format!("{PREFIX}{item:02x}/")
+}
+
 /// The pack entry of `item`'s own icon, when it has one.
 pub fn icon_entry(item: u8) -> Option<String> {
     (items::icon_row(item).is_some() || matches!(item, items::ITEM_INGRAM | items::ITEM_MINIMI))
-        .then(|| format!("{PREFIX}{item:02x}.bmp"))
+        .then(|| format!("{}item.bmp", folder(item)))
 }
 
 /// The pack entry of `item`'s own 3D model, when its class has a model.
 pub fn model_tmd_entry(item: u8) -> Option<String> {
-    items::model_name(item).map(|_| format!("{PREFIX}{item:02x}_model.tmd"))
+    items::model_name(item).map(|_| format!("{}model.tmd", folder(item)))
 }
 
 /// The pack entry of `item`'s own model texture.
 pub fn model_texture_entry(item: u8) -> Option<String> {
-    items::model_name(item).map(|_| format!("{PREFIX}{item:02x}_model.bmp"))
-}
-
-/// The shared `item/<name>.ivm` an older pack stores the model under.
-pub fn legacy_model_entry(item: u8) -> Option<String> {
-    items::model_name(item).map(|name| format!("{PREFIX}{}.ivm", name.to_ascii_lowercase()))
+    items::model_name(item).map(|_| format!("{}model.bmp", folder(item)))
 }
 
 /// The named HD keys that replace `item`'s icon, most specific first.
 ///
-/// The legacy key is the CR inventory path for the item's image type, so a
-/// pack made before the per-item split still overlays the right icon.
+/// The legacy key is the CR inventory path for the item's image type, so an
+/// HD pack made for the shared atlas still overlays the right icon.
 pub fn icon_hd_names(item: u8) -> Vec<String> {
     let mut names = Vec::with_capacity(2);
     if icon_entry(item).is_some() {
-        names.push(format!("{PREFIX}{item:02x}"));
+        names.push(format!("{}item", folder(item)));
     }
     if let Some(row) = items::icon_row(item) {
         names.push(format!("data/item_all/{row:02x}"));
@@ -86,27 +85,9 @@ pub fn model_hd_names(item: u8) -> Vec<String> {
         return Vec::new();
     };
     vec![
-        format!("{PREFIX}{item:02x}_model"),
+        format!("{}model", folder(item)),
         format!("data/item_m2/{}", name.to_ascii_lowercase()),
     ]
-}
-
-/// [`model_hd_names`] for a shared `.ivm` name: the legacy TIM key, and the
-/// per-item key only when exactly one item uses the model. A shared model is
-/// loaded generically (the ending's `i73v.ivm`), so naming one item's page
-/// there could apply a different item's art.
-pub fn model_hd_names_for_name(name: &str) -> Vec<String> {
-    let items: Vec<u8> = items::art_items()
-        .filter(|&item| {
-            items::model_name(item).is_some_and(|model| model.eq_ignore_ascii_case(name))
-        })
-        .collect();
-    let mut names = Vec::with_capacity(2);
-    if let [item] = items[..] {
-        names.push(format!("{PREFIX}{item:02x}_model"));
-    }
-    names.push(format!("data/item_m2/{}", name.to_ascii_lowercase()));
-    names
 }
 
 /// An item-view model loaded from a pack and where its bytes came from.
@@ -116,67 +97,44 @@ pub struct LoadedModel {
     pub ivm: Arc<Ivm>,
     /// Bytes the pack entries held.
     pub bytes: usize,
-    /// Whether the model used the per-item split files.
-    pub per_item: bool,
     /// Whether the TMD had no per-item texture and got the blank page.
     pub untextured: bool,
 }
 
-/// Load `item`'s viewer model: the per-item TMD and texture when the pack has
-/// them, otherwise the shared `.ivm`.
+/// Load `item`'s viewer model from its folder's `model.tmd` and `model.bmp`.
 ///
-/// `Ok(None)` means the item has no model (or the pack has neither file), not
-/// that a file is corrupt.
+/// `Ok(None)` means the item has no model (or the pack has no `model.tmd`),
+/// not that a file is corrupt.
 pub fn load_model(pack: &Pack, item: u8) -> Result<Option<LoadedModel>> {
-    let entries = match (model_tmd_entry(item), model_texture_entry(item)) {
-        (Some(tmd), Some(texture)) => Some((tmd, texture)),
-        _ => None,
-    };
-    if let Some((tmd_entry, texture_entry)) = entries
-        && pack.contains(&tmd_entry)
-    {
-        let tmd = pack
-            .read(&tmd_entry)
-            .with_context(|| format!("failed to read {tmd_entry}"))?;
-        let (texture, untextured, mut bytes) = if pack.contains(&texture_entry) {
-            let data = pack
-                .read(&texture_entry)
-                .with_context(|| format!("failed to read {texture_entry}"))?;
-            (
-                bmp::decode_indexed_page(&data)
-                    .with_context(|| format!("invalid {texture_entry}"))?,
-                false,
-                data.len(),
-            )
-        } else {
-            (ivm::blank_texture(), true, 0)
-        };
-        bytes += tmd.len();
-        let ivm = ivm::from_parts(texture, &tmd)
-            .with_context(|| format!("invalid model for item {item:#04x}"))?;
-        return Ok(Some(LoadedModel {
-            ivm: Arc::new(ivm),
-            bytes,
-            per_item: true,
-            untextured,
-        }));
-    }
-
-    let Some(entry) = legacy_model_entry(item) else {
+    let (Some(tmd_entry), Some(texture_entry)) = (model_tmd_entry(item), model_texture_entry(item))
+    else {
         return Ok(None);
     };
-    if !pack.contains(&entry) {
+    if !pack.contains(&tmd_entry) {
         return Ok(None);
     }
-    let data = pack
-        .read(&entry)
-        .with_context(|| format!("failed to read {entry}"))?;
-    let ivm = ivm::parse(&data).with_context(|| format!("invalid {entry}"))?;
+    let tmd = pack
+        .read(&tmd_entry)
+        .with_context(|| format!("failed to read {tmd_entry}"))?;
+    let (texture, untextured, mut bytes) = if pack.contains(&texture_entry) {
+        let data = pack
+            .read(&texture_entry)
+            .with_context(|| format!("failed to read {texture_entry}"))?;
+        (
+            bmp::decode_indexed_page(&data).with_context(|| format!("invalid {texture_entry}"))?,
+            false,
+            data.len(),
+        )
+    } else {
+        (ivm::blank_texture(), true, 0)
+    };
+    bytes += tmd.len();
+    let ivm = ivm::from_parts(texture, &tmd)
+        .with_context(|| format!("invalid model for item {item:#04x}"))?;
     Ok(Some(LoadedModel {
         ivm: Arc::new(ivm),
-        bytes: data.len(),
-        per_item: false,
-        untextured: false,
+        bytes,
+        untextured,
     }))
 }
 
@@ -286,77 +244,55 @@ mod tests {
 
     #[test]
     fn entry_names_cover_shared_types_missing_art_and_the_pc_only_ids() {
-        // Beretta and the shared cluster ids all use image class 2.
+        // Beretta and the shared cluster ids all use image class 2, but each
+        // gets its own folder.
         assert_eq!(items::image_class(0x02), 2);
         assert_eq!(items::image_class(0x5F), 2);
-        assert_eq!(icon_entry(0x02).as_deref(), Some("item/02.bmp"));
-        assert_eq!(icon_entry(0x5F).as_deref(), Some("item/5f.bmp"));
-        assert_eq!(model_tmd_entry(0x02).as_deref(), Some("item/02_model.tmd"));
+        assert_eq!(folder(0x0b), "item/0b/");
+        assert_eq!(icon_entry(0x02).as_deref(), Some("item/02/item.bmp"));
+        assert_eq!(icon_entry(0x5F).as_deref(), Some("item/5f/item.bmp"));
+        assert_eq!(model_tmd_entry(0x02).as_deref(), Some("item/02/model.tmd"));
         assert_eq!(
             model_texture_entry(0x02).as_deref(),
-            Some("item/02_model.bmp")
+            Some("item/02/model.bmp")
         );
-        assert_eq!(legacy_model_entry(0x02).as_deref(), Some("item/i00v.ivm"));
         assert_eq!(
             icon_hd_names(0x02),
-            vec!["item/02".to_string(), "data/item_all/01".to_string()]
+            vec!["item/02/item".to_string(), "data/item_all/01".to_string()]
         );
         assert_eq!(
             model_hd_names(0x02),
-            vec!["item/02_model".to_string(), "data/item_m2/i00v".to_string()]
+            vec!["item/02/model".to_string(), "data/item_m2/i00v".to_string()]
         );
 
         // A model-only item has no atlas row but keeps its model.
         assert_eq!(items::icon_row(0x4C), None);
         assert_eq!(icon_entry(0x4C), None);
-        assert_eq!(model_tmd_entry(0x4C).as_deref(), Some("item/4c_model.tmd"));
+        assert_eq!(model_tmd_entry(0x4C).as_deref(), Some("item/4c/model.tmd"));
 
         // Class 0 has no icon and no model.
         assert_eq!(icon_entry(0x6E), None);
         assert_eq!(model_tmd_entry(0x6E), None);
-        assert_eq!(legacy_model_entry(0x6E), None);
         assert!(icon_hd_names(0x6E).is_empty());
         assert!(model_hd_names(0x6E).is_empty());
 
         // The PC-only machineguns have both.
         assert_eq!(
             icon_entry(items::ITEM_INGRAM).as_deref(),
-            Some("item/6f.bmp")
+            Some("item/6f/item.bmp")
         );
         assert_eq!(
             model_tmd_entry(items::ITEM_MINIMI).as_deref(),
-            Some("item/70_model.tmd")
+            Some("item/70/model.tmd")
         );
         assert_eq!(items::model_name(items::ITEM_MINIMI), Some("MINI"));
     }
 
     #[test]
-    fn a_shared_ivm_name_only_gets_the_legacy_hd_key() {
-        // i73v is the ending's model and only item 0x38 uses it.
-        assert_eq!(
-            model_hd_names_for_name("i73v"),
-            vec!["item/38_model".to_string(), "data/item_m2/i73v".to_string()]
-        );
-        // i00v is shared by five item ids; applying any one item's named page
-        // to the shared model would be wrong.
-        assert_eq!(
-            model_hd_names_for_name("i00v"),
-            vec!["data/item_m2/i00v".to_string()]
-        );
-        // `items::model_name` returns the machinegun names in upper case; the
-        // pack entry is lower case.
-        assert_eq!(
-            model_hd_names_for_name("ing"),
-            vec!["item/6f_model".to_string(), "data/item_m2/ing".to_string()]
-        );
-    }
-
-    #[test]
     fn loads_a_split_model_and_preserves_the_texture() {
         let (tmd, page) = sample_model();
-        let pack = pack(&[("item/02_model.tmd", tmd), ("item/02_model.bmp", page)]);
+        let pack = pack(&[("item/02/model.tmd", tmd), ("item/02/model.bmp", page)]);
         let loaded = load_model(&pack, 0x02).unwrap().unwrap();
-        assert!(loaded.per_item);
         assert!(!loaded.untextured);
         let expected = crate::ivm::parse(&crate::ivm::sample_ivm()).unwrap();
         assert_eq!(loaded.ivm.texture, expected.texture);
@@ -366,9 +302,8 @@ mod tests {
     #[test]
     fn a_tmd_only_model_gets_the_blank_page() {
         let (tmd, _) = sample_model();
-        let pack = pack(&[("item/01_model.tmd", tmd)]);
+        let pack = pack(&[("item/01/model.tmd", tmd)]);
         let loaded = load_model(&pack, 0x01).unwrap().unwrap();
-        assert!(loaded.per_item);
         assert!(loaded.untextured);
         assert_eq!(
             (loaded.ivm.texture.width, loaded.ivm.texture.height),
@@ -382,45 +317,22 @@ mod tests {
     fn a_present_but_invalid_page_is_an_error_not_an_untextured_model() {
         let (tmd, _) = sample_model();
         let invalid = pack(&[
-            ("item/02_model.tmd", tmd),
-            ("item/02_model.bmp", b"not a bmp".to_vec()),
+            ("item/02/model.tmd", tmd),
+            ("item/02/model.bmp", b"not a bmp".to_vec()),
         ]);
         assert!(load_model(&invalid, 0x02).is_err());
         // A missing page, by contrast, is the untextured path.
-        let missing = pack(&[("item/02_model.tmd", sample_model().0)]);
+        let missing = pack(&[("item/02/model.tmd", sample_model().0)]);
         assert!(load_model(&missing, 0x02).unwrap().unwrap().untextured);
     }
 
     #[test]
-    fn falls_back_to_the_shared_ivm_and_reports_no_model() {
-        let model_pack = pack(&[("item/i00v.ivm", crate::ivm::sample_ivm())]);
-        let loaded = load_model(&model_pack, 0x02).unwrap().unwrap();
-        assert!(!loaded.per_item);
-        assert_eq!(loaded.ivm.objects.len(), 1);
-
-        // Item 1's model name is i05v, which this pack lacks.
-        assert!(load_model(&model_pack, 0x01).unwrap().is_none());
-        // A present but corrupt shared model is an error, not a missing one.
-        let corrupt_pack = pack(&[("item/i00v.ivm", b"not an ivm".to_vec())]);
-        assert!(load_model(&corrupt_pack, 0x02).is_err());
+    fn an_item_without_a_model_file_has_no_model() {
+        // A raw shared `.ivm` is not read: only the item's own folder counts.
+        let pack = pack(&[("item/i00v.ivm", crate::ivm::sample_ivm())]);
+        assert!(load_model(&pack, 0x02).unwrap().is_none());
         // A class-0 item never resolves the placeholder "m".
-        assert!(load_model(&model_pack, 0x6E).unwrap().is_none());
-    }
-
-    #[test]
-    fn the_per_item_files_win_over_the_shared_ivm() {
-        let (tmd, page) = sample_model();
-        let mut shared = crate::ivm::sample_ivm();
-        // Break the shared copy so a fallback would fail to parse.
-        shared.truncate(8);
-        let pack = pack(&[
-            ("item/02_model.tmd", tmd),
-            ("item/02_model.bmp", page),
-            ("item/i00v.ivm", shared),
-        ]);
-        let loaded = load_model(&pack, 0x02).unwrap().unwrap();
-        assert!(loaded.per_item);
-        assert_eq!(loaded.ivm.objects.len(), 1);
+        assert!(load_model(&pack, 0x6E).unwrap().is_none());
     }
 
     #[test]

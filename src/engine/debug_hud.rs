@@ -450,7 +450,7 @@ fn equipped_weapon(state: &GameState) -> Option<u8> {
 /// for a weapon that takes ammunition.
 fn ammo(state: &GameState) -> Option<(String, Tone)> {
     let weapon = equipped_weapon(state)?;
-    let capacity = crate::weapons::clip_capacity(weapon);
+    let capacity = crate::weapons::clip_capacity(state, weapon);
     if capacity <= 1 {
         return None;
     }

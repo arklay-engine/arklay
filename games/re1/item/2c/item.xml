@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Moon Crest</string>
+            <string key="description">A carving of the moon.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">MONDWAPPEN</string>
+            <string key="description">Ein Mond ist eingraviert.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">BLASÓN DE LUNA</string>
+            <string key="description">Un grabado de la luna.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">KUU-LAATTA</string>
+            <string key="description">Kaiverrus jossa kuu.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Symbole Lune</string>
+            <string key="description">Une lune gravée.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">STEMMA LUNA</string>
+            <string key="description">Un intaglio della luna.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ムーンクレスト</string>
+            <string key="description">月をかたどった絵が刻まれている</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Табличка Луны</string>
+            <string key="description">Табличка с Луной.</string>
+        </language>
+    </strings>
+</item>

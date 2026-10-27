@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Gold Emblem</string>
+            <string key="description">There's a scratch.\nSomeone may have used it.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">GOLD-EMBLEM</string>
+            <string key="description">Da ist ein Kratzer dran.\nJemand könnte es benutzt haben.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">EMBLEMA DORADO</string>
+            <string key="description">Tiene un arañazo.\nPuede que lo hayan usado.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">KULTA EMBLEEMI</string>
+            <string key="description">Tässä on naarmuja.\nJoku on käyttänyt sitä.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Blason Doré</string>
+            <string key="description">Il y a une rayure. Quelqu'un \nd'autre l'a utilisé.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">EMBLEMA DORATO</string>
+            <string key="description">È graffiato.\nSembra qualcuno lo abbia usato.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">ゴールドエンブレム</string>
+            <string key="description">すり合わせたようなキズ跡がついている\n何かにはめこんだりするのだろうか</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Золотая эмблема</string>
+            <string key="description">Здесь есть царапина. Возможно,\nкто-то уже использовал её.</string>
+        </language>
+    </strings>
+</item>

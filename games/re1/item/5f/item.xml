@@ -1,0 +1,36 @@
+<item kind="file">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Researcher's Will</string>
+            <string key="name_unchecked">Crank</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">VERMÄCHTNIS DES FORSCHERS</string>
+            <string key="name_unchecked">KURBEL</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">ÚLTIMA VOLUNTAD INV.</string>
+            <string key="name_unchecked">MANIVELA</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">TUTKIJAN VIIMEINEN TAHTO</string>
+            <string key="name_unchecked">KAMPI</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Testament du chercheur?</string>
+            <string key="name_unchecked">Manivelle</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">TESTAMENTO DEL RICERCATORE</string>
+            <string key="name_unchecked">MANOVELLA</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">研究員の遺書</string>
+            <string key="name_unchecked">クランク</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Завещание учёного</string>
+            <string key="name_unchecked">Рукоятка</string>
+        </language>
+    </strings>
+</item>

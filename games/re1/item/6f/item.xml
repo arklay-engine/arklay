@@ -1,0 +1,34 @@
+<item kind="weapon">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Ingram</string>
+            <string key="description">A sub machine gun loaded\nwith 9mm bullets.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">ERICS BRIEF</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">CARTA DE ERIC</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">INGRAM MAC-10</string>
+            <string key="description">Konepistooli,\nladattu 9mm luodeilla.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Ingram</string>
+            <string key="description">Une mitraillette chargée\nde balles 9mm.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">INGRAM</string>
+            <string key="description">Una mitragliatrice caricata\ncon proiettili 9mm.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">イングラム</string>
+            <string key="description">イングラム Mー11\nベレッタとおなじ9mm弾を使用する</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Инграм</string>
+            <string key="description">Пулемёт заряжается\n9мм патронами.</string>
+        </language>
+    </strings>
+</item>

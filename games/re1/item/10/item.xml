@@ -1,0 +1,36 @@
+<item kind="ammo" stack="6" merge="true">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Explosive Rounds</string>
+            <string key="description">Powerful rounds for the\nGrenade Gun.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">SPRENGMUNITION</string>
+            <string key="description">Power-Geschosse für die Bazooka.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">MUNICIÓN EXPLOSIVA</string>
+            <string key="description">Munición potente para\nbazuca.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">RÄJÄHTÄVÄT KRAN.</string>
+            <string key="description">Räjähtäviä ammuksia\nkranaattikivääriin.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Grenades</string>
+            <string key="description">Puissantes cartouches pour le \nLance-Grenade.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">COLPI ESPLOS.</string>
+            <string key="description">Munizioni potenti per\nil Bazooka.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">グレネード弾</string>
+            <string key="description">グレネードガン用の強力な弾薬</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Разрывн. снаряды</string>
+            <string key="description">Мощные снаряды для\nгранатомёта.</string>
+        </language>
+    </strings>
+</item>

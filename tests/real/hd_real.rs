@@ -259,10 +259,10 @@ fn real_item_art_takes_named_and_legacy_hd_paths() {
         .unwrap();
     // The new per-item names, plus one legacy `ITEM_ALL` name.
     writer
-        .add("htexture/item/02.bmp", image(80, 60, [0, 0, 255]))
+        .add("htexture/item/02/item.bmp", image(80, 60, [0, 0, 255]))
         .unwrap();
     writer
-        .add("htexture/item/02_model.bmp", image(512, 512, [0, 0, 255]))
+        .add("htexture/item/02/model.bmp", image(512, 512, [0, 0, 255]))
         .unwrap();
     writer
         .add("htexture/data/item_all/01.bmp", image(80, 60, [0, 255, 0]))
@@ -270,11 +270,11 @@ fn real_item_art_takes_named_and_legacy_hd_paths() {
     writer.write(&mod_path).unwrap();
 
     let layered = Pack::open_layered(&pack_path, std::slice::from_ref(&mod_path)).unwrap();
-    let icon = arklay::htexture::named_replacement(&layered, "item/02", [40, 30])
+    let icon = arklay::htexture::named_replacement(&layered, "item/02/item", [40, 30])
         .expect("the named per-item icon");
     assert_eq!((icon.image.width, icon.image.height), (80, 60));
     assert_eq!(icon.frame, [40, 30]);
-    let page = arklay::htexture::named_replacement(&layered, "item/02_model", [256, 256])
+    let page = arklay::htexture::named_replacement(&layered, "item/02/model", [256, 256])
         .expect("the named per-item model page");
     assert_eq!((page.image.width, page.image.height), (512, 512));
     assert_eq!(page.frame, [256, 256]);
@@ -282,11 +282,9 @@ fn real_item_art_takes_named_and_legacy_hd_paths() {
         .expect("the legacy ITEM_ALL name");
     assert_eq!((legacy.image.width, legacy.image.height), (80, 60));
 
-    // The real per-item model still loads through the layered pack, and its
-    // split files match the shared IVM's page.
+    // The real per-item model still loads through the layered pack.
     let model = arklay::item_art::load_model(&layered, 0x02)
         .unwrap()
         .unwrap();
-    assert!(model.per_item);
     assert!(!model.untextured);
 }

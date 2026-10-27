@@ -16,7 +16,7 @@
 //!
 //! Art that is composited per frame (the inventory icons) has no stable hash.
 //! A pack may name such a replacement by its own stem under [`ROOT`] instead,
-//! e.g. `htexture/item/0b.webp` for item `0x0B`'s icon; the caller supplies
+//! e.g. `htexture/item/0b/item.webp` for item `0x0B`'s icon; the caller supplies
 //! the source extent the image covers ([`named_replacement`]). The named
 //! route is preferred when it exists and the content hashes remain the
 //! fallback, so a pack made before the name existed keeps working.
@@ -545,7 +545,7 @@ pub fn replacement(
     decoded_replacement(pack, table, found.path, frame)
 }
 
-/// The HD image a pack names under [`ROOT`] (`stem` is `item/0b`), decoded at
+/// The HD image a pack names under [`ROOT`] (`stem` is `item/0b/item`), decoded at
 /// any size.
 ///
 /// This is the per-item name route: the file has a stable path instead of a
@@ -1260,7 +1260,9 @@ mod tests {
             .unwrap()
         };
         let mut writer = crate::pack::PackWriter::new();
-        writer.add("htexture/item/0b.bmp", image(80, 60)).unwrap();
+        writer
+            .add("htexture/item/0b/item.bmp", image(80, 60))
+            .unwrap();
         writer
             .add("htexture/data/item_all/01.bmp", image(160, 120))
             .unwrap();
@@ -1271,15 +1273,15 @@ mod tests {
             .unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
-        let icon = named_replacement(&pack, "item/0b", [40, 30]).unwrap();
+        let icon = named_replacement(&pack, "item/0b/item", [40, 30]).unwrap();
         assert_eq!((icon.image.width, icon.image.height), (80, 60));
         assert_eq!(icon.frame, [40, 30]);
         let legacy = named_replacement(&pack, "data/item_all/01", [40, 30]).unwrap();
         assert_eq!((legacy.image.width, legacy.image.height), (160, 120));
-        assert!(named_replacement(&pack, "item/0c", [40, 30]).is_none());
+        assert!(named_replacement(&pack, "item/0c/item", [40, 30]).is_none());
 
         // The decoded replacement is cached across lookups.
-        let again = named_replacement(&pack, "item/0b", [40, 30]).unwrap();
+        let again = named_replacement(&pack, "item/0b/item", [40, 30]).unwrap();
         assert!(Arc::ptr_eq(&icon, &again));
     }
 

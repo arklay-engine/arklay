@@ -1,14 +1,15 @@
 //! Item tables from the shipped game data.
 //!
-//! The inventory, the item box and the menus all read the same tables the
-//! original stores in its data segment:
+//! Each item's kind, stack, merge rule, heal effects and strings live in its
+//! `item/<id>/item.xml` ([`crate::item_catalog`]). These are the tables the
+//! original stores in its data segment that are still read directly:
 //!
 //! - a 4-byte lookup record per item holding the stack maximum, the icon
-//!   class, the combine-table index and the alternate-name class;
+//!   class, the combine-table index and the alternate-name class (the
+//!   converter cuts the shipped art per item by its icon class);
 //! - the combine index -> `ITEM_MIX.PIX` sprite row table;
 //! - the combine recipes (a count byte and then 4-byte records);
-//! - the heal-effect nibbles (amount low, status cure high);
-//! - the ten use-category thresholds;
+//! - the examine tables after the records;
 //! - the item-view (`ITEM_M2`) model file names, plus the two PC-only names.
 //!
 //! Item ids are 1-based. `record(0)` is the padding record before item 1, so
@@ -23,7 +24,10 @@ pub const ITEM_LOOKUP_BYTES: usize = 459;
 ///
 /// The bytes after the item records also hold the use-category thresholds
 /// (`0x13B`) and the heal table (`0x10A`), exactly as the original overlays
-/// them; [`USE_THRESHOLDS`] and [`HEAL_TABLE`] expose those views.
+/// them; [`HEAL_TABLE`] exposes the latter, whose tail the examine messages
+/// read. Item behaviour itself comes from each item's `item.xml`
+/// ([`crate::item_catalog`]); `convert-game` reads these tables only to cut
+/// the shipped art per item.
 pub const ITEM_LOOKUP: [u8; ITEM_LOOKUP_BYTES] = [
     0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x80, 0x0F, 0x02, 0x00, 0x80, 0x07, 0x03, 0x01, 0x80, 0x06,
     0x04, 0x02, 0x80, 0x06, 0x04, 0x03, 0x80, 0xF0, 0x05, 0x04, 0x80, 0x06, 0x06, 0x05, 0x80, 0x06,
@@ -58,15 +62,11 @@ pub const ITEM_LOOKUP: [u8; ITEM_LOOKUP_BYTES] = [
 
 /// Offset of the heal table inside [`ITEM_LOOKUP`].
 pub const HEAL_OFFSET: usize = 0x10A;
-/// Offset of the use-category thresholds inside [`ITEM_LOOKUP`].
-pub const USE_OFFSET: usize = 0x13B;
-
 /// Heal-effect table, indexed by item id.
 ///
-/// Only entries `0x40..=0x4B` (first-aid spray, serum, herbs and mixed herbs)
-/// are meaningful; the low nibble is the amount (1 third, 2 two-thirds, 3
-/// full) and the high nibble the status cure (`0x10` clears status `0x20`,
-/// `0x20` clears status `0x02`).
+/// Entries `0x41..=0x4B` were the heal nibbles the item definitions' heal
+/// effects now carry; the examine check still reads the class messages
+/// stored past them ([`crate::examine::class_message`]).
 pub const HEAL_TABLE: [u8; 0x61] = [
     0x80, 0x01, 0x40, 0x1A, 0x80, 0x01, 0x41, 0x1B, 0x80, 0x01, 0x42, 0x1C, 0x80, 0x01, 0x43, 0x1D,
     0x80, 0x01, 0x44, 0x1E, 0x80, 0x01, 0x45, 0x1F, 0x80, 0x01, 0x46, 0x20, 0x80, 0x01, 0x47, 0x21,
@@ -76,12 +76,6 @@ pub const HEAL_TABLE: [u8; 0x61] = [
     0x00, 0xEB, 0xEC, 0xEF, 0xE1, 0xE2, 0xE3, 0xE4, 0xE9, 0xEA, 0xE5, 0xE6, 0xE8, 0xE7, 0xED, 0xEE,
     0xEE,
 ];
-
-/// Use-category thresholds: the first item id of each successive category.
-///
-/// The last two entries are equal, so no item falls in the "always usable"
-/// slot; ids at or past `0x4C` are unusable.
-pub const USE_THRESHOLDS: [u8; 10] = [0x0B, 0x13, 0x14, 0x1B, 0x33, 0x3D, 0x3E, 0x41, 0x4C, 0x4C];
 
 /// Combine index -> one-based `ITEM_MIX.PIX` sprite row, or 0 for none.
 pub const ITEM_IMAGE_ROW: [u8; 35] = [
@@ -221,13 +215,9 @@ pub const ITEM_INGRAM: u8 = 0x6F;
 /// Item id of the Minimi.
 pub const ITEM_MINIMI: u8 = 0x70;
 
-/// First item id that stacks when picked up (ammunition range).
-pub const STACKABLE_MIN: u8 = 0x0B;
-/// Last ammunition item id.
-pub const STACKABLE_MAX: u8 = 0x12;
-/// Ink-ribbon item id, the other stackable item.
+/// Ink-ribbon item id; a pickup always takes three.
 pub const ITEM_INK_RIBBONS: u8 = 0x2F;
-/// Merge cap: a stack of stackable items never exceeds this while merging.
+/// Merge cap: a merging stack never exceeds this.
 pub const ITEM_QUANTITY_CAP: u8 = 0xFA;
 
 /// Icon dimensions of the `ITEM_ALL`/`ITEM_MIX`/`MEDAL` rows.
@@ -319,22 +309,6 @@ pub const ITEM_GREEN_GREEN_GREEN_HERB: u8 = 0x4A;
 /// The item id of the two green herbs and blue herb mix (`GGB`).
 pub const ITEM_GREEN_GREEN_BLUE_HERB: u8 = 0x4B;
 
-/// The heal items the menu takes at full health outside authentic mode. At
-/// full health they heal nothing, so a use only applies the item's cure, if
-/// it has one, and is otherwise used up. That is the first-aid spray and the
-/// `G`, `GR`, `GG`, `GB`, `GRB`, `GGG` and `GGB` herbs. Authentic mode refuses
-/// a use that does nothing, as the original does.
-pub const FULL_HEALTH_ITEMS: [u8; 8] = [
-    ITEM_FIRST_AID_SPRAY,
-    ITEM_GREEN_HERB,
-    ITEM_GREEN_RED_HERB,
-    ITEM_GREEN_GREEN_HERB,
-    ITEM_GREEN_BLUE_HERB,
-    ITEM_GREEN_RED_BLUE_HERB,
-    ITEM_GREEN_GREEN_GREEN_HERB,
-    ITEM_GREEN_GREEN_BLUE_HERB,
-];
-
 /// Offset of the item-examine combo table inside [`ITEM_LOOKUP`].
 pub const EXAMINE_COMBOS_OFFSET: usize = 0x16B;
 /// Offset of the item-examine type table inside [`ITEM_LOOKUP`].
@@ -364,11 +338,6 @@ pub fn examine_combo(index: usize) -> Option<[(u16, u16); 3]> {
     Some([(word(0), word(1)), (word(2), word(3)), (word(4), word(5))])
 }
 
-/// The stack maximum for `item` (0 when unknown).
-pub fn max_quantity(item: u8) -> u8 {
-    record(item).map_or(0, |record| record.max_quantity)
-}
-
 /// The icon class of `item` (0 when unknown).
 pub fn image_class(item: u8) -> u8 {
     record(item).map_or(0, |record| record.image_class)
@@ -377,11 +346,6 @@ pub fn image_class(item: u8) -> u8 {
 /// The combine-table index of `item`, or `0x80` when unknown/not combinable.
 pub fn combine_index(item: u8) -> u8 {
     record(item).map_or(0x80, |record| record.combine_index)
-}
-
-/// Whether `item` merges into an existing stack on pickup.
-pub fn is_stackable(item: u8) -> bool {
-    (STACKABLE_MIN..=STACKABLE_MAX).contains(&item) || item == ITEM_INK_RIBBONS
 }
 
 /// The `ITEM_MIX.PIX` row for a combine index (`1`-based), or `None`.
@@ -470,139 +434,6 @@ pub fn combine(item: u8, other: u8) -> Option<CombineRecord> {
     combine_table(index).find(other)
 }
 
-/// Heal amount of a heal-table nibble.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HealAmount {
-    /// No health restored.
-    None,
-    /// One third of the maximum.
-    Third,
-    /// Two thirds of the maximum.
-    TwoThirds,
-    /// Full health.
-    Full,
-}
-
-/// Status cure of a heal-table nibble.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StatusCure {
-    /// No status change.
-    None,
-    /// Clears the poisoned status bit `0x20`.
-    Poison20,
-    /// Clears the poisoned status bit `0x02`.
-    Poison02,
-}
-
-/// The parsed heal-table entry for an item.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct HealEffect {
-    /// Health restored.
-    pub amount: HealAmount,
-    /// Status cured.
-    pub cure: StatusCure,
-}
-
-/// The heal effect registered for `item`.
-pub fn heal_effect(item: u8) -> HealEffect {
-    let value = HEAL_TABLE.get(usize::from(item)).copied().unwrap_or(0);
-    let amount = match value & 0x0F {
-        1 => HealAmount::Third,
-        2 => HealAmount::TwoThirds,
-        3 => HealAmount::Full,
-        _ => HealAmount::None,
-    };
-    let cure = match value & 0xF0 {
-        0x10 => StatusCure::Poison20,
-        0x20 => StatusCure::Poison02,
-        _ => StatusCure::None,
-    };
-    HealEffect { amount, cure }
-}
-
-/// Apply a heal amount: `health` is raised by the third/two-thirds/full step
-/// and clamped to `max_health`, and a full-health item does nothing below the
-/// cap only when already at it.
-pub fn healed_health(amount: HealAmount, health: i16, max_health: i16) -> i16 {
-    if health >= max_health {
-        return health;
-    }
-    let max = i32::from(max_health);
-    let raised = match amount {
-        HealAmount::None => return health,
-        HealAmount::Third => i32::from(health) + max / 3,
-        HealAmount::TwoThirds => i32::from(health) + (max * 2) / 3,
-        HealAmount::Full => max,
-    };
-    raised.min(max) as i16
-}
-
-/// Apply a status cure nibble to a health-status byte.
-pub fn cured_status(cure: StatusCure, status: u8) -> u8 {
-    if status & 0x22 == 0 {
-        return status;
-    }
-    match cure {
-        StatusCure::None => status,
-        StatusCure::Poison20 => status & !0x20,
-        StatusCure::Poison02 => status & !0x02,
-    }
-}
-
-/// Item use category, in the original's dispatch-table order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UseCategory {
-    /// Weapons (ids below the first threshold): cannot be used.
-    Weapons,
-    /// Ammunition (`0x0B..=0x12`): cannot be used.
-    Ammo,
-    /// The empty bottle (`0x13`): cannot be used.
-    Bottle,
-    /// Chemicals and fluids (`0x14..=0x1A`): cannot be used.
-    Chemicals,
-    /// Quest items (`0x1B..=0x32`): usable when their per-item flag is set.
-    Special,
-    /// Keys (`0x33..=0x3D`): usable when their per-item flag is set.
-    Keys,
-    /// Books (`0x3E..=0x40`): only the red book is usable.
-    Books,
-    /// Healing items (`0x41..=0x4B`).
-    Heal,
-    /// Always-usable slot; no shipped item id falls in it.
-    Always,
-    /// Ids at or past `0x4C`, and any unknown id: cannot be used.
-    Unusable,
-}
-
-/// Classify `item` with the use-category threshold table.
-///
-/// The thresholds mark where each category starts; the two last entries are
-/// the same, so `Always` is never returned. The desk key (`0x3D`) has its own
-/// dispatch slot between keys and books but shares their use handler, so it
-/// classifies as [`UseCategory::Keys`].
-pub fn use_category(item: u8) -> UseCategory {
-    let thresholds = USE_THRESHOLDS;
-    if item < thresholds[0] {
-        UseCategory::Weapons
-    } else if item < thresholds[1] {
-        UseCategory::Ammo
-    } else if item < thresholds[2] {
-        UseCategory::Bottle
-    } else if item < thresholds[3] {
-        UseCategory::Chemicals
-    } else if item < thresholds[4] {
-        UseCategory::Special
-    } else if item < thresholds[6] {
-        UseCategory::Keys
-    } else if item < thresholds[7] {
-        UseCategory::Books
-    } else if item < thresholds[8] {
-        UseCategory::Heal
-    } else {
-        UseCategory::Unusable
-    }
-}
-
 /// The item-view file name for an icon class (`0..=0x4A`).
 pub fn model_name_for_class(image_class: u8) -> Option<&'static str> {
     let name = MODEL_NAMES.get(usize::from(image_class))?;
@@ -656,12 +487,6 @@ mod tests {
             HEAL_TABLE.as_slice(),
             &ITEM_LOOKUP[HEAL_OFFSET..HEAL_OFFSET + HEAL_TABLE.len()]
         );
-        assert_eq!(
-            USE_THRESHOLDS.as_slice(),
-            &ITEM_LOOKUP[USE_OFFSET..USE_OFFSET + USE_THRESHOLDS.len()]
-        );
-        let usage = ITEM_LOOKUP[0x144];
-        assert_eq!(usage, USE_THRESHOLDS[9]);
     }
 
     #[test]
@@ -725,20 +550,8 @@ mod tests {
                 name_class: 0x80,
             })
         );
-        assert_eq!(max_quantity(0x0B), 0x0F);
         assert_eq!(image_class(0x41), 0x3E);
         assert!(record(1).unwrap().name_valid());
-    }
-
-    #[test]
-    fn stackable_range_and_quantity_cap_are_the_original_ones() {
-        assert!(!is_stackable(0x0A));
-        assert!(is_stackable(0x0B));
-        assert!(is_stackable(0x12));
-        assert!(!is_stackable(0x13));
-        assert!(is_stackable(0x2F));
-        assert!(!is_stackable(0x30));
-        assert_eq!(ITEM_QUANTITY_CAP, 0xFA);
     }
 
     #[test]
@@ -798,78 +611,6 @@ mod tests {
         assert_eq!(mix_row(0x21), Some(0x11));
         assert_eq!(mix_row(0x22), Some(0x12));
         assert_eq!(record(0x49).unwrap().mix_row(), Some(0x10));
-    }
-
-    #[test]
-    fn heal_table_nibbles_match_the_known_items() {
-        assert_eq!(
-            heal_effect(0x41),
-            HealEffect {
-                amount: HealAmount::Full,
-                cure: StatusCure::None,
-            }
-        );
-        // The serum only cures the Yawn poison; it does not restore health.
-        assert_eq!(
-            heal_effect(0x42),
-            HealEffect {
-                amount: HealAmount::None,
-                cure: StatusCure::Poison20,
-            }
-        );
-        assert_eq!(heal_effect(0x43).amount, HealAmount::None);
-        assert_eq!(heal_effect(0x44).amount, HealAmount::Third);
-        assert_eq!(heal_effect(0x45).cure, StatusCure::Poison02);
-        assert_eq!(heal_effect(0x46).amount, HealAmount::Full);
-        assert_eq!(heal_effect(0x47).amount, HealAmount::TwoThirds);
-        assert_eq!(
-            heal_effect(0x49),
-            HealEffect {
-                amount: HealAmount::Full,
-                cure: StatusCure::Poison02,
-            }
-        );
-        assert_eq!(heal_effect(0x4C).amount, HealAmount::None);
-    }
-
-    #[test]
-    fn heal_math_follows_the_thirds_and_clamps() {
-        assert_eq!(healed_health(HealAmount::Third, 10, 96), 42);
-        assert_eq!(healed_health(HealAmount::TwoThirds, 10, 96), 74);
-        assert_eq!(healed_health(HealAmount::Full, 10, 96), 96);
-        assert_eq!(healed_health(HealAmount::Third, 95, 96), 96);
-        assert_eq!(healed_health(HealAmount::Third, 96, 96), 96);
-        assert_eq!(healed_health(HealAmount::None, 50, 96), 50);
-        assert_eq!(healed_health(HealAmount::Full, 200, 96), 200);
-    }
-
-    #[test]
-    fn cures_clear_only_the_matching_poison_bits() {
-        assert_eq!(cured_status(StatusCure::Poison20, 0x22), 0x02);
-        assert_eq!(cured_status(StatusCure::Poison20, 0x20), 0x00);
-        assert_eq!(cured_status(StatusCure::Poison02, 0x22), 0x20);
-        assert_eq!(cured_status(StatusCure::Poison02, 0x02), 0x00);
-        assert_eq!(cured_status(StatusCure::None, 0x22), 0x22);
-        assert_eq!(cured_status(StatusCure::Poison20, 0x10), 0x10);
-    }
-
-    #[test]
-    fn use_categories_cover_the_id_ranges() {
-        assert_eq!(use_category(1), UseCategory::Weapons);
-        assert_eq!(use_category(0x0A), UseCategory::Weapons);
-        assert_eq!(use_category(0x0B), UseCategory::Ammo);
-        assert_eq!(use_category(0x12), UseCategory::Ammo);
-        assert_eq!(use_category(0x13), UseCategory::Bottle);
-        assert_eq!(use_category(0x14), UseCategory::Chemicals);
-        assert_eq!(use_category(0x1B), UseCategory::Special);
-        assert_eq!(use_category(0x33), UseCategory::Keys);
-        assert_eq!(use_category(0x3D), UseCategory::Keys);
-        assert_eq!(use_category(0x3E), UseCategory::Books);
-        assert_eq!(use_category(0x40), UseCategory::Books);
-        assert_eq!(use_category(0x41), UseCategory::Heal);
-        assert_eq!(use_category(0x4B), UseCategory::Heal);
-        assert_eq!(use_category(0x4C), UseCategory::Unusable);
-        assert_eq!(use_category(0xFF), UseCategory::Unusable);
     }
 
     #[test]

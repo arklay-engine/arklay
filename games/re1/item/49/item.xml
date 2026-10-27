@@ -1,0 +1,40 @@
+<item kind="heal" stack="1">
+    <effects>
+        <effect kind="heal" amount="full" />
+        <effect kind="cure_poison" />
+    </effects>
+    <strings>
+        <language lang="en-US">
+            <string key="name">Mixed Herbs</string>
+            <string key="description">It's a mixture of green,\nblue and red herbs.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">GEMIXTE KRÄUTER</string>
+            <string key="description">Eine Mischung aus grünen,\nblauen und roten Kräutern.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">HIERBAS MEZCLADAS</string>
+            <string key="description">Es una mezcla de hierbas\nverdes, azules y rojas.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">YRTTISEK. (V+S+P)</string>
+            <string key="description">Sekoitus yrttejä jossa vihreä-,\nsininen- ja punainen yrtti.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Mélange d'herbes</string>
+            <string key="description">C'est la combinaison d'herbes \nverte, bleue et rouge.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">MISCELA D'ERBE</string>
+            <string key="description">Una miscela di erba verde,\n blu e rossa.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">調合したハーブ</string>
+            <string key="description">グリーン、ブルー、レッドの3つを\n調合した物だ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Смешанная трава</string>
+            <string key="description">Это смесь зеленой\nи синей и красной трав.</string>
+        </language>
+    </strings>
+</item>

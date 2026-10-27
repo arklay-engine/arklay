@@ -1,0 +1,36 @@
+<item kind="special" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">MO-Disk</string>
+            <string key="description">It seems to be a start-up \ndisk.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">MO-DISKETTE</string>
+            <string key="description">Das scheint eine Start-Diskette\nzu sein.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">DISCO MO</string>
+            <string key="description">Parece ser un disco\nde inicio.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">MO-LEVYKE</string>
+            <string key="description">Käynnistyslevyke. Takana lukee\n\"ovilukitusjärjestelmä\".</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Disque M.O.</string>
+            <string key="description">On dirait un disque de \ndémarrage.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">DISCO MO</string>
+            <string key="description">Sembra un disco\ndi avvio</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">MOディスク</string>
+            <string key="description">何かの起動用ディスクのようだ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">МО-Диск</string>
+            <string key="description">Кажется, это\nзагрузочный диск.</string>
+        </language>
+    </strings>
+</item>

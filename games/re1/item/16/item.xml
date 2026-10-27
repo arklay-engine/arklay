@@ -1,0 +1,36 @@
+<item kind="chemical" stack="1">
+    <strings>
+        <language lang="en-US">
+            <string key="name">UMB No.4</string>
+            <string key="description">This is needed to generate\nV-JOLT.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">UMB Nr. 4</string>
+            <string key="description">Damit erzeugt man V-JOLT.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">UMB Nº4</string>
+            <string key="description">Es necesario para\ngenerar el V-JOLT.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">UMB NRO. 4</string>
+            <string key="description">Tätä tarvitaan V-Joltin luomiseen.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">UMB No.4</string>
+            <string key="description">Ceci est nécessaire pour \nfaire du CHOC-V.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">UMB N°4</string>
+            <string key="description">È necessario per\ncreare il V-JOLT.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">UMB No.4</string>
+            <string key="description">この薬からVーJOLTを成生できる</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">УМБ 4</string>
+            <string key="description">Это нужно для генерации\nV-JOLT.</string>
+        </language>
+    </strings>
+</item>

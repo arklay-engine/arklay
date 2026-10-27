@@ -76,6 +76,10 @@ formatted-text renderers index the sheet. Only the original's ASCII-buffer
 | `UI_LAB_*` | lab terminal labels and the expected `UI_LAB_PASSWORD_*` credentials |
 | `UI_PROMPT_RETURN_TITLE_*`, `UI_DEBUG_*` | the F9 prompt and the F1 debug tools (tool labels, hints, stage columns, ending names, flag group names; individual flag names are port-only code tables) |
 
+The item keys for an item with a definition come from the `<strings>` of its
+`item/<nn>/item.xml` (see [Item definitions](modding.md#item-definitions)); a
+language file may still set them, and its value wins over the item file's.
+
 ## Mods
 
 A mod pack may ship `language/<tag>.txt` with any subset of keys. Every layer's

@@ -1,0 +1,36 @@
+<item kind="special" stack="3" merge="true">
+    <strings>
+        <language lang="en-US">
+            <string key="name">Ink Ribbon</string>
+            <string key="description">It's used with a\ntypewriter.</string>
+        </language>
+        <language lang="de-DE">
+            <string key="name">FARBBAND</string>
+            <string key="description">Das braucht man für eine\nSchreibmaschine.</string>
+        </language>
+        <language lang="es-ES">
+            <string key="name">CINTA DE TINTA</string>
+            <string key="description">Se usa con una\nmáquina de escribir.</string>
+        </language>
+        <language lang="fi-FI">
+            <string key="name">VÄRINAUHAA</string>
+            <string key="description">Käytetään kirjoituskoneissa.</string>
+        </language>
+        <language lang="fr-FR">
+            <string key="name">Ruban Encreur</string>
+            <string key="description">Cela fonctionne avec une \nmachine à écrire.</string>
+        </language>
+        <language lang="it-IT">
+            <string key="name">NASTRO INCHIOST.</string>
+            <string key="description">Si usa con una\nmacchina da scrivere.</string>
+        </language>
+        <language lang="ja-JP">
+            <string key="name">インクリボン</string>
+            <string key="description">タイプライターなどで使用する物だ</string>
+        </language>
+        <language lang="ru-RU">
+            <string key="name">Печатная лента</string>
+            <string key="description">Используется\nс пишущей машинкой.</string>
+        </language>
+    </strings>
+</item>

@@ -2,7 +2,7 @@
 --
 -- A port of ending_epilogue_* (EndingScreen.cpp:687-836): the rc1121
 -- backdrop, the two caption plates from the en07 page and the spinning
--- i73v.ivm rocket launcher, lit by the sequence's own light record (full
+-- rocket launcher (item 0x38's `item/38/model`, the original's i73v.ivm), lit by the sequence's own light record (full
 -- ambient plus one white light), held for 0x10D frames and faded out.
 
 local E = require("lib/ending")
@@ -19,6 +19,8 @@ local BACKDROP_FADE = 0x6000
 local FADE_STEP = 16
 -- The model spin step per frame.
 local SPIN_STEP = 0x20
+-- The item whose viewer model is the epilogue's rocket launcher.
+local ENDING_ITEM = 0x38
 
 -- The model's light record (ending_epilogue_build, EndingScreen.cpp:742-750):
 -- setBackColor(0xFFF, 0xFFF, 0xFFF) plus one white light at (100, 100, 100),
@@ -51,7 +53,7 @@ function M.open(api)
     if not plate then
         api:log("warning: no epilogue plate: " .. err)
     end
-    model, err = api:ivm("item/i73v.ivm")
+    model, err = api:item_model(ENDING_ITEM)
     if not model then
         api:log("warning: no epilogue model: " .. err)
     end
