@@ -293,9 +293,18 @@ fn indexed_tim(raw: &[u8]) -> Result<Texture8> {
 ///
 /// Entries stored as-is are marked `stored raw`: that is every format that
 /// carries its own compression plus the entries whose zstd frame did not pay
-/// for itself.
-fn entry_report_line(path: &str, plain_len: usize, stored_len: usize, compressed: bool) -> String {
-    if compressed {
+/// for itself. An entry that reuses another entry's identical blob stores no
+/// bytes of its own and names that entry instead.
+fn entry_report_line(
+    path: &str,
+    plain_len: usize,
+    stored_len: usize,
+    compressed: bool,
+    shared_with: Option<&str>,
+) -> String {
+    if let Some(owner) = shared_with {
+        format!("{path}: {plain_len} -> 0 bytes (shares {owner}'s {stored_len} bytes)")
+    } else if compressed {
         let saved = 100.0 - stored_len as f64 * 100.0 / plain_len.max(1) as f64;
         format!("{path}: {plain_len} -> {stored_len} bytes ({saved:.1}% smaller, zstd)")
     } else {
@@ -315,6 +324,7 @@ fn write_entry_report(writer: &PackWriter, out: &mut impl Write) -> std::io::Res
                 entry.plain_len(),
                 entry.stored_len(),
                 entry.compressed(),
+                entry.shared_with(),
             )
         )?;
     }
@@ -5003,12 +5013,22 @@ mod tests {
     #[test]
     fn entry_report_lines_name_both_sizes() {
         assert_eq!(
-            entry_report_line("room/1000/room.rdt", 1000, 250, true),
+            entry_report_line("room/1000/room.rdt", 1000, 250, true, None),
             "room/1000/room.rdt: 1000 -> 250 bytes (75.0% smaller, zstd)"
         );
         assert_eq!(
-            entry_report_line("movie/oj.avi", 1000, 1000, false),
+            entry_report_line("movie/oj.avi", 1000, 1000, false, None),
             "movie/oj.avi: 1000 -> 1000 bytes (stored raw)"
+        );
+        assert_eq!(
+            entry_report_line(
+                "room/1001/cut/00.bmp",
+                1000,
+                250,
+                true,
+                Some("room/1000/cut/00.bmp")
+            ),
+            "room/1001/cut/00.bmp: 1000 -> 0 bytes (shares room/1000/cut/00.bmp's 250 bytes)"
         );
     }
 

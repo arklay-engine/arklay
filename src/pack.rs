@@ -22,18 +22,17 @@
 //! variants or stages therefore costs no extra data. Writers sort entries by
 //! ASCII-lowercased path so output is byte-deterministic for a given libzstd
 //! build; readers key entries by ASCII-lowercased path while preserving the
-//! original path strings. Both the
-//! writer and the reader reject unsafe paths (absolute, `..` components,
-//! backslashes, NUL bytes or empty), so a pack can never name a file outside
-//! its pack root.
+//! original path strings. Both the writer and the reader reject unsafe paths
+//! (absolute, `..` components, backslashes, NUL bytes or empty), so a pack can
+//! never name a file outside its pack root.
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, OnceLock};
 
 use anyhow::{Context, Result, anyhow, bail};
 
@@ -104,9 +103,6 @@ pub struct PackWriter {
     entries: Vec<WriterEntry>,
     /// ASCII-lowercased entry paths, for O(1) duplicate detection.
     seen: HashSet<String>,
-    /// Per entry, the entry whose stored blob it shares, worked out on first
-    /// use and forgotten whenever an entry is added or recompressed.
-    sharing: OnceLock<Vec<Option<usize>>>,
 }
 
 /// One entry being assembled.
@@ -127,6 +123,8 @@ struct SerializeLayout {
     entry_count: u32,
     /// Lowercased path and entry index per output position.
     order: Vec<(String, usize)>,
+    /// Per entry, the entry whose blob it shares, from [`PackWriter::sharing`].
+    sharing: Vec<Option<usize>>,
     /// The fixed-size table of contents.
     toc: Vec<u8>,
 }
@@ -139,6 +137,7 @@ pub struct WrittenEntry<'a> {
     plain_len: usize,
     stored_len: usize,
     compressed: bool,
+    shared_with: Option<&'a str>,
 }
 
 impl<'a> WrittenEntry<'a> {
@@ -162,6 +161,12 @@ impl<'a> WrittenEntry<'a> {
     pub fn compressed(self) -> bool {
         self.compressed
     }
+
+    /// The path of the earlier entry whose identical blob this entry reuses,
+    /// when its own bytes are not written.
+    pub fn shared_with(self) -> Option<&'a str> {
+        self.shared_with
+    }
 }
 
 impl PackWriter {
@@ -179,7 +184,6 @@ impl PackWriter {
         if !self.seen.insert(path.to_ascii_lowercase()) {
             bail!("duplicate pack entry: {path}");
         }
-        self.sharing.take();
         self.entries.push(WriterEntry {
             path: path.to_owned(),
             plain_len: data.len(),
@@ -283,7 +287,6 @@ impl PackWriter {
         for (index, result) in results {
             frames.push((index, result?));
         }
-        self.sharing.take();
         for (index, frame) in frames {
             if let Some(frame) = frame {
                 self.entries[index].data = frame;
@@ -309,12 +312,17 @@ impl PackWriter {
     /// independent of worker scheduling — with its plain and stored sizes for
     /// reporting after compression.
     pub fn entries(&self) -> impl Iterator<Item = WrittenEntry<'_>> {
-        self.entries.iter().map(|entry| WrittenEntry {
-            path: &entry.path,
-            plain_len: entry.plain_len,
-            stored_len: entry.data.len(),
-            compressed: entry.compression != Compression::None,
-        })
+        let sharing = self.sharing();
+        self.entries
+            .iter()
+            .zip(sharing)
+            .map(|(entry, owner)| WrittenEntry {
+                path: &entry.path,
+                plain_len: entry.plain_len,
+                stored_len: entry.data.len(),
+                compressed: entry.compression != Compression::None,
+                shared_with: owner.map(|owner| self.entries[owner].path.as_str()),
+            })
     }
 
     /// Per entry, the index of the entry whose stored blob it reuses, or
@@ -322,25 +330,34 @@ impl PackWriter {
     ///
     /// Two entries share when their stored bytes and compression mode are
     /// identical; the blob belongs to the first of them in pack order, so the
-    /// output stays byte-deterministic.
-    fn sharing(&self) -> &[Option<usize>] {
-        self.sharing.get_or_init(|| {
-            let order = pack_order(self.entries.iter().map(|entry| entry.path.as_str()));
-            let mut first: HashMap<(Compression, &[u8]), usize> = HashMap::new();
-            let mut sharing = vec![None; self.entries.len()];
-            for (_, index) in &order {
-                let entry = &self.entries[*index];
-                match first.entry((entry.compression, entry.data.as_slice())) {
-                    std::collections::hash_map::Entry::Occupied(owner) => {
-                        sharing[*index] = Some(*owner.get());
-                    }
-                    std::collections::hash_map::Entry::Vacant(slot) => {
-                        slot.insert(*index);
-                    }
+    /// output stays byte-deterministic. Entries are first grouped by mode and
+    /// stored length, so only the rare same-length groups have their bytes
+    /// hashed and compared.
+    fn sharing(&self) -> Vec<Option<usize>> {
+        let order = pack_order(self.entries.iter().map(|entry| entry.path.as_str()));
+        let mut groups: HashMap<(Compression, usize), Vec<usize>> = HashMap::new();
+        for (_, index) in &order {
+            let entry = &self.entries[*index];
+            groups
+                .entry((entry.compression, entry.data.len()))
+                .or_default()
+                .push(*index);
+        }
+        let mut sharing = vec![None; self.entries.len()];
+        for group in groups.values().filter(|group| group.len() > 1) {
+            // Each group keeps pack order, so the first index seen with given
+            // bytes is the one that sorts first.
+            let mut first: HashMap<&[u8], usize> = HashMap::with_capacity(group.len());
+            for &index in group {
+                let owner = *first
+                    .entry(self.entries[index].data.as_slice())
+                    .or_insert(index);
+                if owner != index {
+                    sharing[index] = Some(owner);
                 }
             }
-            sharing
-        })
+        }
+        sharing
     }
 
     /// Stored bytes saved because entries share an identical blob, and how
@@ -348,7 +365,7 @@ impl PackWriter {
     pub fn shared(&self) -> (usize, usize) {
         let mut bytes = 0;
         let mut count = 0;
-        for (entry, owner) in self.entries.iter().zip(self.sharing()) {
+        for (entry, owner) in self.entries.iter().zip(&self.sharing()) {
             if owner.is_some() {
                 bytes += entry.data.len();
                 count += 1;
@@ -367,7 +384,7 @@ impl PackWriter {
         let mut total = HEADER_LEN
             .checked_add(toc_len)
             .context("pack table of contents is too large")?;
-        for (entry, owner) in self.entries.iter().zip(self.sharing()) {
+        for (entry, owner) in self.entries.iter().zip(&self.sharing()) {
             let stored = if owner.is_some() { 0 } else { entry.data.len() };
             total = total
                 .checked_add(entry.path.len() + 1)
@@ -401,16 +418,16 @@ impl PackWriter {
         let mut toc = Vec::with_capacity(toc_len);
         let mut path_offset = paths_start;
         let mut data_offset = data_start;
-        // Where each blob owner's data landed; an owner always sorts before
-        // the entries that share its blob, so it is placed first.
-        let mut placed = HashMap::new();
+        // Where each entry's data landed, by entry index; an owner always
+        // sorts before the entries that share its blob, so it is placed first.
+        let mut placed = vec![None; count];
         for (_, index) in &order {
             let entry = &self.entries[*index];
             let offset = match sharing[*index] {
-                Some(owner) => placed[&owner],
+                Some(owner) => placed[owner].expect("a blob owner sorts before its sharers"),
                 None => {
                     let offset = data_offset;
-                    placed.insert(*index, offset);
+                    placed[*index] = Some(offset);
                     data_offset = data_offset
                         .checked_add(entry.data.len())
                         .context("pack data exceeds addressable size")?;
@@ -430,6 +447,7 @@ impl PackWriter {
         Ok(SerializeLayout {
             entry_count,
             order,
+            sharing,
             toc,
         })
     }
@@ -442,9 +460,8 @@ impl PackWriter {
             out.write_all(self.entries[*index].path.as_bytes())?;
             out.write_all(&[0])?;
         }
-        let sharing = self.sharing();
         for (_, index) in &layout.order {
-            if sharing[*index].is_none() {
+            if layout.sharing[*index].is_none() {
                 out.write_all(&self.entries[*index].data)?;
             }
         }
@@ -652,8 +669,8 @@ const STREAM_IN_FLIGHT_BYTES: usize = 64 << 20;
 type StoredEntry = (usize, usize, Compression);
 
 /// A compressed entry on its way to the writer: its position, plain size and
-/// stored bytes.
-type Compressed = (usize, usize, Result<(Vec<u8>, Compression)>);
+/// stored bytes with their [`blob_digest`].
+type Compressed = (usize, usize, Result<(Vec<u8>, Compression, [u8; 32])>);
 
 /// The entries and plain bytes between being produced and being written.
 #[derive(Default)]
@@ -772,8 +789,13 @@ fn stream_entries(
                     // A panic becomes this entry's error: the writer waits
                     // for every position in order, so a worker that died
                     // holding one would stall the whole pack.
+                    // The digest is taken here too, keeping the hashing off
+                    // the single writer thread.
                     let stored = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        compress_streamed(entry, data, keep_raw)
+                        compress_streamed(entry, data, keep_raw).map(|(data, compression)| {
+                            let digest = blob_digest(&data, compression);
+                            (data, compression, digest)
+                        })
                     }))
                     .unwrap_or_else(|_| Err(anyhow!("compression panicked")))
                     .with_context(|| format!("failed to zstd-compress {entry}"));
@@ -843,7 +865,7 @@ fn compress_streamed(
 /// An entry whose stored bytes and compression mode match an earlier one's is
 /// not written again but pointed at that entry's blob, as
 /// [`PackWriter`] does. The earlier bytes are gone by then, so blobs are
-/// matched by SHA-256 digest rather than compared.
+/// matched by the SHA-256 digest the workers took rather than compared.
 fn write_in_order(
     count: usize,
     done: std::sync::mpsc::Receiver<Compressed>,
@@ -857,22 +879,21 @@ fn write_in_order(
     let mut offset = data_start;
     while stored.len() < count {
         let position = stored.len();
-        let (plain_len, data, compression) = match waiting.remove(&position) {
+        let (plain_len, data, compression, digest) = match waiting.remove(&position) {
             Some(entry) => entry,
             None => {
                 let Ok((arrived, plain_len, entry)) = done.recv() else {
                     // Production stopped early; its error is reported instead.
                     bail!("pack entries stopped arriving");
                 };
-                let (data, compression) = entry?;
+                let (data, compression, digest) = entry?;
                 if arrived != position {
-                    waiting.insert(arrived, (plain_len, data, compression));
+                    waiting.insert(arrived, (plain_len, data, compression, digest));
                     continue;
                 }
-                (plain_len, data, compression)
+                (plain_len, data, compression, digest)
             }
         };
-        let digest = blob_digest(&data, compression);
         if let Some(&owner) = blobs.get(&digest) {
             stored.push(stored[owner]);
         } else {
@@ -3647,5 +3668,74 @@ mod tests {
             &*layered.read("room/1001/cut/00.bmp").unwrap(),
             cut.as_slice()
         );
+    }
+
+    #[test]
+    fn compressing_recomputes_sharing() {
+        let rdt = vec![7u8; 64 * 1024];
+        let mut writer = PackWriter::new();
+        writer.add("room/1000/room.rdt", rdt.clone()).unwrap();
+        writer.add("room/1001/room.rdt", rdt.clone()).unwrap();
+        assert_eq!(writer.shared(), (1, rdt.len()));
+        // Compressing only one copy leaves the two stored blobs different.
+        writer
+            .compress_entries(1, |path| path.starts_with("room/1001/"))
+            .unwrap();
+        assert_eq!(writer.shared(), (0, 0));
+        assert!(writer.entries().all(|entry| entry.shared_with().is_none()));
+        let bytes = writer.to_bytes().unwrap();
+        assert_eq!(writer.pack_size().unwrap(), bytes.len());
+        let pack = Pack::from_bytes(bytes).unwrap();
+        assert_eq!(*pack.read("room/1000/room.rdt").unwrap(), *rdt);
+        assert_eq!(*pack.read("room/1001/room.rdt").unwrap(), *rdt);
+    }
+
+    #[test]
+    fn written_entries_name_the_blob_they_share() {
+        let mut writer = PackWriter::new();
+        writer.add("room/1001/cut/00.bmp", vec![4; 10]).unwrap();
+        writer.add("room/1000/cut/00.bmp", vec![4; 10]).unwrap();
+        let shared: Vec<Option<&str>> = writer.entries().map(|entry| entry.shared_with()).collect();
+        assert_eq!(shared, [Some("room/1000/cut/00.bmp"), None]);
+    }
+
+    #[test]
+    fn reader_accepts_coinciding_and_overlapping_ranges() {
+        let mut bytes = multi_entry_pack(&[("a.bin", b"head"), ("b.bin", b"tail")]);
+        let data_start = HEADER_LEN + 2 * ENTRY_LEN + "a.bin\0b.bin\0".len();
+        // a.bin points forward at b.bin's blob; b.bin straddles both blobs.
+        write_u64(&mut bytes, HEADER_LEN + 8, data_start as u64 + 4);
+        write_u64(
+            &mut bytes,
+            HEADER_LEN + ENTRY_LEN + 8,
+            data_start as u64 + 2,
+        );
+        let pack = Pack::from_bytes(bytes).unwrap();
+        assert_eq!(&*pack.read("a.bin").unwrap(), b"tail");
+        assert_eq!(&*pack.read("b.bin").unwrap(), b"adta");
+    }
+
+    #[test]
+    fn a_streamed_sharer_arriving_early_still_shares() {
+        // The owner is slow to compress and tiny entries sit between it and
+        // its sharer, so with several workers later positions usually reach
+        // the writer first and wait their turn.
+        let dir = TempDir::new("stream-shared-early");
+        let big: Vec<u8> = (0..4u32 << 20)
+            .map(|byte| (byte.wrapping_mul(2_654_435_761) >> 29) as u8)
+            .collect();
+        let mut entries: Vec<(String, Vec<u8>)> = vec![("a/big.bin".into(), big.clone())];
+        for index in 0..16 {
+            entries.push((format!("b/{index:02}.bin"), vec![index as u8; 64]));
+        }
+        entries.push(("c/big.bin".into(), big));
+        let expected = in_memory_pack(&entries);
+        let out = dir.join("out.akpak");
+        stream(&out, &entries, 8).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), expected);
+        let pack = Pack::open(&out).unwrap();
+        for (path, data) in &entries {
+            assert_eq!(*pack.read(path).unwrap(), **data, "{path}");
+        }
     }
 }
