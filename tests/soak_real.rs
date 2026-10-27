@@ -1,4 +1,4 @@
-//! Full-game soak: walk every `room/*.rdt`, follow scripted transitions and
+//! Full-game soak: walk every room the pack defines, follow scripted transitions and
 //! round-trip a save per room, three times, under a counting allocator.
 //!
 //! Release-only and opt-in: a full pass takes tens of minutes, so the test
@@ -30,6 +30,7 @@ use arklay::engine;
 use arklay::game::{GameState, RoomActionKind};
 use arklay::pack::Pack;
 use arklay::player;
+use arklay::room;
 use arklay::save::SaveFile;
 use arklay::state::RoomId;
 
@@ -386,18 +387,6 @@ fn soak_room(
     }
 }
 
-/// Inventory the pack's room entries.
-fn room_ids(pack: &Pack) -> Vec<RoomId> {
-    let mut ids: Vec<RoomId> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .filter_map(|path| RoomId::parse(&path[5..9]).ok())
-        .collect();
-    ids.sort_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids.dedup_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids
-}
-
 #[test]
 #[ignore = "the full-game soak; opt in with ARKLAY_SOAK=1 (release only)"]
 fn real_soak_walks_the_corpus_transitions_and_saves() {
@@ -412,7 +401,7 @@ fn real_soak_walks_the_corpus_transitions_and_saves() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let ids = room_ids(&pack);
+    let ids = room::ids(&pack);
     assert!(
         ids.len() >= 348,
         "expected the shipped room corpus, found {}",

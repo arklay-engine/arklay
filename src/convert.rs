@@ -2,7 +2,9 @@
 //!
 //! Discovers `STAGE1`..`STAGE7`, `ENEMY`, `PLAYERS`, `sound`, `objspr`,
 //! `ITEM_M1`, `effspr`, `voice`, `movie` and `DATA` (case-insensitively, up to
-//! two levels below the root), stores every `ROOM####.RDT`, converts the camera
+//! two levels below the root), writes every `ROOM####.RDT` as a
+//! `room/<id>.xml` definition and its shared sidecars ([`crate::room`]),
+//! converts the camera
 //! backgrounds of every distinct room once, converts the room mask pages of
 //! every camera that has sprite groups, copies the door animations named by the
 //! door type table, copies the numbered music tracks, the named sound
@@ -474,29 +476,56 @@ pub fn convert_game_observed(
 
     let rdt_total = rooms.iter().map(|room| room.rdts.len() as u64).sum();
     progress.begin("room", rdt_total);
-    for room in rooms {
-        for rdt in room.rdts {
-            let entry = rdt.id.rdt_entry();
-            rdt_bytes += rdt.bytes.len();
-            rdt_count += 1;
-            stage_counts[rdt.id.stage_index() as usize].0 += 1;
-            match room_script(rdt.id, &rdt.bytes) {
-                Ok(Some(container)) => {
-                    scd_count += 1;
-                    scd_bytes += container.len();
-                    let scd = rdt.id.scd_entry();
-                    writer
-                        .add(&scd, container.to_vec())
-                        .with_context(|| format!("failed to add {scd}"))?;
-                }
-                Ok(None) => {}
-                Err(warning) => warnings.push(warning),
+    // The room messages are written in the text script of the pack's own
+    // font sheet, as the engine reads them.
+    let text_script = fonts
+        .primary
+        .as_deref()
+        .map_or(crate::charset::Script::Japanese, sheet_script_of);
+    // Sidecar ids number in first use over the sorted rooms, so a conversion
+    // of the same tree always names the same files.
+    let mut rdts: Vec<Rdt> = rooms.into_iter().flat_map(|room| room.rdts).collect();
+    rdts.sort_by_key(|rdt| rdt.id.rdt_number());
+    let mut sidecars = crate::room::Sidecars::default();
+    for rdt in rdts {
+        stage_counts[rdt.id.stage_index() as usize].0 += 1;
+        match room_script(rdt.id, &rdt.bytes) {
+            Ok(Some(container)) => {
+                scd_count += 1;
+                scd_bytes += container.len();
+                let scd = rdt.id.scd_entry();
+                writer
+                    .add(&scd, container.to_vec())
+                    .with_context(|| format!("failed to add {scd}"))?;
             }
-            writer
-                .add(&entry, rdt.bytes)
-                .with_context(|| format!("failed to add {entry}"))?;
-            progress.advance(&entry);
+            Ok(None) => {}
+            Err(warning) => warnings.push(warning),
         }
+        // A room the XML cannot carry exactly stays a raw RDT, which the
+        // engine still loads.
+        let (entry, data) =
+            match crate::room::convert_rdt(&rdt.bytes, rdt.id, text_script, &mut sidecars) {
+                Ok(text) => (rdt.id.xml_entry(), text.into_bytes()),
+                Err(err) => {
+                    warnings.push(format!("{}: kept as an RDT: {err:#}", rdt.id.rdt_entry()));
+                    (rdt.id.rdt_entry(), rdt.bytes)
+                }
+            };
+        rdt_bytes += data.len();
+        rdt_count += 1;
+        writer
+            .add(&entry, data)
+            .with_context(|| format!("failed to add {entry}"))?;
+        progress.advance(&entry);
+    }
+    let mut sidecar_count = 0usize;
+    let mut sidecar_bytes = 0usize;
+    for (entry, data) in sidecars.into_entries() {
+        sidecar_count += 1;
+        sidecar_bytes += data.len();
+        writer
+            .add(&entry, data)
+            .with_context(|| format!("failed to add {entry}"))?;
     }
     progress.end_phase();
 
@@ -703,6 +732,10 @@ pub fn convert_game_observed(
             writeln!(report, "STAGE{}: {rdts} RDT(s), {cuts} cut(s)", index + 1)?;
         }
         writeln!(report, "room: {rdt_count} entries, {rdt_bytes} bytes")?;
+        writeln!(
+            report,
+            "room sidecars: {sidecar_count} entries, {sidecar_bytes} bytes"
+        )?;
         writeln!(report, "scd: {scd_count} entries, {scd_bytes} bytes")?;
         writeln!(report, "roomcut: {cut_count} entries, {cut_bytes} bytes")?;
         writeln!(report, "roommask: {mask_count} entries, {mask_bytes} bytes")?;
@@ -4288,9 +4321,9 @@ mod tests {
         convert_game(&root.path, &out).unwrap();
         let pack = crate::pack::Pack::open(&out).unwrap();
 
-        assert!(pack.contains("room/1000.rdt"));
-        assert!(pack.contains("room/1001.rdt"));
-        assert!(pack.contains("room/6000.rdt"));
+        assert!(pack.contains("room/1000.xml"));
+        assert!(pack.contains("room/1001.xml"));
+        assert!(pack.contains("room/6000.xml"));
         assert!(pack.contains("roomcut/100_000.bmp"));
         assert!(pack.contains("roomcut/600_000.bmp"));
         assert!(pack.contains("bgm/013.wav"));
@@ -4774,13 +4807,13 @@ mod tests {
         assert_eq!(main.read("movie/00.avi").unwrap().as_ref(), b"movie-oj");
         assert_eq!(main.read("movie/17.avi").unwrap().as_ref(), b"movie-capcom");
         // The issue's policy end to end: an already-compressed film stays
-        // borrowed (raw), a compressible RDT is owned (zstd).
+        // borrowed (raw), a compressible room is owned (zstd).
         assert!(matches!(
             main.read("movie/00.avi").unwrap(),
             std::borrow::Cow::Borrowed(_)
         ));
         assert!(matches!(
-            main.read("room/1000.rdt").unwrap(),
+            main.read("room/1000.xml").unwrap(),
             std::borrow::Cow::Owned(_)
         ));
         // No companion pack is written beside the main one.

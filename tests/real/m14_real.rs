@@ -27,6 +27,7 @@ use arklay::engine::{simulate_room_with_input, simulate_room_with_movie};
 use arklay::movie::{self, MovieSession, MovieTick};
 use arklay::pack::Pack;
 use arklay::player;
+use arklay::room;
 use arklay::scd::ir::Decoded;
 use arklay::scd::reader;
 use arklay::state::RoomId;
@@ -598,18 +599,6 @@ fn standalone_fmv_capture_is_deterministic_and_not_blank() {
     );
 }
 
-/// Inventory the pack's room entries.
-fn room_ids(pack: &Pack) -> Vec<RoomId> {
-    let mut ids: Vec<RoomId> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .filter_map(|path| RoomId::parse(&path[5..9]).ok())
-        .collect();
-    ids.sort_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids.dedup_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids
-}
-
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
 fn real_m14_corpus_audit_drains_every_film_request() {
@@ -617,7 +606,7 @@ fn real_m14_corpus_audit_drains_every_film_request() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let ids = room_ids(&pack);
+    let ids = room::ids(&pack);
     assert!(ids.len() > 300, "expected the shipped room corpus");
 
     let mut simulated = 0usize;

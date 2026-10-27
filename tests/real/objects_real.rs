@@ -7,6 +7,7 @@ use crate::common;
 use std::path::{Path, PathBuf};
 
 use arklay::pack::Pack;
+use arklay::room;
 use arklay::state::RoomId;
 use arklay::{game, objects, rdt, scd};
 
@@ -277,6 +278,7 @@ fn room_107_objects_render() {
                 aliased_light: false,
                 light_rotation: None,
                 joint_colours: arklay::render::NO_JOINT_COLOURS,
+                hd_name: None,
             })
             .collect();
         let mut framebuffer = Framebuffer::new();
@@ -827,9 +829,9 @@ fn room_3031_obj_xfm_relights_the_room_and_the_capture() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("3031").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let mut room = rdt::parse(data, id).unwrap();
-    let scripts = scd::reader::parse(data).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let mut room = loaded.state;
     let mut game = game::GameState::new(id, &room);
     let mut command_vm = scd::vm::CommandVm::new(&scripts);
     let mut event_vm = scd::vm::EventVm::from_scripts(Rc::new(scripts));
@@ -890,9 +892,9 @@ fn parented_objects_compose_their_sca_chain() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("3100").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(data, id).unwrap();
-    let scripts = scd::reader::parse(data).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut game = game::GameState::new(id, &room);
     {
         let mut vm = scd::vm::CommandVm::new(&scripts);
@@ -937,8 +939,7 @@ fn room_305_inst_cfg_rewrites_the_collision() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("3050").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let before = rdt::parse(data, id).unwrap();
+    let before = room::load_state(&pack, id).unwrap();
     let sim = arklay::engine::simulate_room(&pack, id, 120, arklay::player::Input::default())
         .expect("ROOM305 loads");
 
@@ -980,9 +981,9 @@ fn pushed_object_capture_is_deterministic() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("1070").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(data, id).unwrap();
-    let scripts = scd::reader::parse(data).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
 
     let build = |_pack: &Pack| {
         let mut game = game::GameState::new(id, &room);
@@ -1101,6 +1102,7 @@ fn room_112_mirror_renders_reflection_pixels() {
         aliased_light: false,
         light_rotation: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
+        hd_name: None,
     }];
     // A stand-in room-object mesh with a flat blue page: it sits before the
     // entity meshes, so the mirror pass must never reflect it.
@@ -1125,6 +1127,7 @@ fn room_112_mirror_renders_reflection_pixels() {
             aliased_light: false,
             light_rotation: None,
             joint_colours: arklay::render::NO_JOINT_COLOURS,
+            hd_name: None,
         },
         EntityMesh {
             mesh: &emd.mesh,
@@ -1139,6 +1142,7 @@ fn room_112_mirror_renders_reflection_pixels() {
             aliased_light: false,
             light_rotation: None,
             joint_colours: arklay::render::NO_JOINT_COLOURS,
+            hd_name: None,
         },
     ];
 
@@ -1250,9 +1254,9 @@ fn room_30b_objs_hide_changes_the_rendered_tint() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("30B0").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(data, id).unwrap();
-    let scripts = scd::reader::parse(data).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut game = game::GameState::new(id, &room);
     let mut command_vm = scd::vm::CommandVm::new(&scripts);
     let mut event_vm = scd::vm::EventVm::from_scripts(Rc::new(scripts));
@@ -1334,9 +1338,9 @@ fn room_20a0_water_tank_blend_weight_rebaselines_its_capture() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("20A0").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(data, id).unwrap();
-    let scripts = scd::reader::parse(data).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut game = game::GameState::new(id, &room);
     {
         let mut vm = scd::vm::CommandVm::new(&scripts);
@@ -1414,9 +1418,9 @@ fn room_20a0_water_tank_blend_weight_rebaselines_its_capture() {
 
 /// Load a room from the pack and run its init script.
 fn pack_room(pack: &Pack, id: RoomId) -> (arklay::state::RoomState, game::GameState) {
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(data, id).unwrap();
-    let scripts = scd::reader::parse(data).unwrap();
+    let loaded = room::load(pack, id).unwrap();
+    let scripts = loaded.own_scripts(pack).unwrap();
+    let room = loaded.state;
     let mut game = game::GameState::new(id, &room);
     {
         let mut vm = scd::vm::CommandVm::new(&scripts);

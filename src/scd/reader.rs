@@ -58,6 +58,64 @@ pub fn parse_sections(data: &[u8]) -> Result<Scripts> {
     })
 }
 
+/// Copy an RDT's three SCD sections, byte for byte, into a standalone SCD
+/// container (the `scd/<id>.scd` layout: a 19-slot pointer table, then the
+/// init chain, the main chain and the event table with its scripts).
+///
+/// The size-word chains are self-delimiting and the event offsets are
+/// relative to their table, so the sections move without being re-encoded:
+/// [`parse`] reads the same instruction and trailing bytes from the result as
+/// from the RDT. The last event keeps its RDT bound (the next section after
+/// it) by ending the container there. `None` when the RDT has no scripts.
+pub fn extract_container(data: &[u8]) -> Result<Option<Vec<u8>>> {
+    let scripts = parse(data)?;
+    if scripts.init.is_empty() && scripts.main.is_empty() && scripts.events.is_empty() {
+        return Ok(None);
+    }
+    let header = POINTERS_OFFSET + POINTER_COUNT * 4;
+    let mut out = vec![0u8; header];
+    for (slot, blocks) in [(INIT_SLOT, &scripts.init), (MAIN_SLOT, &scripts.main)] {
+        if blocks.is_empty() {
+            continue;
+        }
+        let base = read_pointer(data, slot)?;
+        let mut pos = base;
+        loop {
+            let size = usize::from(u16::from_le_bytes([data[pos], data[pos + 1]]));
+            if size == 0 {
+                break;
+            }
+            pos += size;
+        }
+        align_to_4(&mut out);
+        let at = out.len();
+        set_pointer(&mut out, slot, at)?;
+        out.extend_from_slice(&data[base..pos + 2]);
+    }
+    if let Some(last) = scripts.events.last() {
+        let base = read_pointer(data, EVENTS_SLOT)?;
+        let end = next_section_after(data, last.offset).unwrap_or(data.len());
+        align_to_4(&mut out);
+        let at = out.len();
+        set_pointer(&mut out, EVENTS_SLOT, at)?;
+        out.extend_from_slice(&data[base..end]);
+    }
+    Ok(Some(out))
+}
+
+/// Zero-pad `out` to a multiple of four bytes.
+fn align_to_4(out: &mut Vec<u8>) {
+    out.resize(out.len().next_multiple_of(4), 0);
+}
+
+/// Write section pointer `slot` of a container header.
+fn set_pointer(out: &mut [u8], slot: usize, value: usize) -> Result<()> {
+    let value = u32::try_from(value).context("SCD container is larger than 4 GiB")?;
+    let at = POINTERS_OFFSET + slot * 4;
+    out[at..at + 4].copy_from_slice(&value.to_le_bytes());
+    Ok(())
+}
+
 /// Decode one command-VM block stream starting at `start` (the first opcode,
 /// after the size word) and ending at `end`.
 pub fn decode_command_block(data: &[u8], start: usize, end: usize) -> (Vec<Insn>, Vec<u8>) {

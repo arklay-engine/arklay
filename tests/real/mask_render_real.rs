@@ -21,8 +21,8 @@ use arklay::bmp;
 use arklay::mask;
 use arklay::model::{Texture8, Tmd, TmdObject, TmdPrim};
 use arklay::pack::Pack;
-use arklay::rdt;
 use arklay::render::{Camera, EntityMesh, Framebuffer, Lighting, MaskLayer, draw_gameplay_scene};
+use arklay::room;
 use arklay::state::{Light, RoomId};
 
 /// The player stand-in's flat texture colour.
@@ -118,7 +118,7 @@ fn player_occluded_by_a_group_1_pillar_until_the_group_is_disabled() {
     };
     let pack = Pack::open(&path).unwrap();
     let id = RoomId::parse("1000").unwrap();
-    let room = rdt::parse(&pack.read(&id.rdt_entry()).unwrap(), id).unwrap();
+    let room = room::load_state(&pack, id).unwrap();
     let cut = &room.cuts[0];
     let entry = id.roommask_entry(0);
     let page_bytes = pack.read(&entry).unwrap_or_else(|err| {
@@ -173,6 +173,7 @@ fn player_occluded_by_a_group_1_pillar_until_the_group_is_disabled() {
         aliased_light: false,
         light_rotation: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
+        hd_name: None,
     }];
 
     // Only group 1 is active, so no other overlay interferes.
@@ -245,7 +246,7 @@ fn room1000_player_frame_is_deterministic_and_mask_aware() {
     };
     let pack = Pack::open(&path).unwrap();
     let id = RoomId::parse("1000").unwrap();
-    let room = rdt::parse(&pack.read(&id.rdt_entry()).unwrap(), id).unwrap();
+    let room = room::load_state(&pack, id).unwrap();
     let cut = &room.cuts[0];
     let mask_entry = id.roommask_entry(0);
     let page_bytes = pack.read(&mask_entry).unwrap_or_else(|err| {
@@ -277,6 +278,7 @@ fn room1000_player_frame_is_deterministic_and_mask_aware() {
         aliased_light: false,
         light_rotation: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
+        hd_name: None,
     }];
 
     let camera = Camera::from_cut(cut);

@@ -20,8 +20,8 @@ use arklay::engine::simulate_door;
 use arklay::game::{GameState, RoomActionKind, ScdGameHost};
 use arklay::pack::Pack;
 use arklay::player::{self, ClipSource, Input, PlayerState};
-use arklay::rdt;
 use arklay::render::{self, Camera, EntityMesh, Framebuffer, Lighting};
+use arklay::room;
 use arklay::scd::vm::CommandVm;
 use arklay::state::{Image, RoomId, RoomState};
 
@@ -31,9 +31,9 @@ fn pack_path() -> Option<PathBuf> {
 
 /// Load `id`, run its init script and return the room and game state.
 fn load(pack: &Pack, id: RoomId) -> (RoomState, GameState) {
-    let bytes = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(bytes, id).unwrap();
-    let scripts = arklay::scd::reader::parse(bytes).unwrap();
+    let loaded = room::load(pack, id).unwrap();
+    let scripts = loaded.own_scripts(pack).unwrap();
+    let room = loaded.state;
     let mut game = GameState::new(id, &room);
     let mut vm = CommandVm::new(&scripts);
     let mut host = ScdGameHost::new(&mut game);
@@ -246,9 +246,9 @@ fn lab_ladder_zone_latches_flags_and_base() {
     let id = RoomId::parse("3010").unwrap();
     // The lab ladders only exist while scenario flag 47 (the powered lab) is
     // set; with it clear the init rewrites both slots into messages.
-    let bytes = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(bytes, id).unwrap();
-    let scripts = arklay::scd::reader::parse(bytes).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut game = GameState::new(id, &room);
     assert!(game.apply_flag(0, 47, 0), "scenario flag 47");
     // Enter as the room 300 door does: a same-stage transition carries the
@@ -371,9 +371,9 @@ fn room_301_ladder_climbs_the_shaft_both_ways() {
     };
     let pack = Pack::open(&path).unwrap();
     let id = RoomId::parse("3010").unwrap();
-    let bytes = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(bytes, id).unwrap();
-    let scripts = arklay::scd::reader::parse(bytes).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut game = GameState::new(id, &room);
     assert!(game.apply_flag(0, 47, 0), "scenario flag 47");
     // The room 300 door's entry: the same-stage transition carries the
@@ -759,9 +759,9 @@ fn room2031_jill_stair_door_fires_with_real_input() {
         room: 3,
         player_flag: 1,
     };
-    let bytes = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = rdt::parse(bytes, id).unwrap();
-    let scripts = arklay::scd::reader::parse(bytes).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut game = GameState::new(id, &room);
     let mut vm = CommandVm::new(&scripts);
     let mut host = ScdGameHost::new(&mut game);
@@ -881,6 +881,7 @@ fn capture_player_partway_up_the_lab_stairway() {
         aliased_light: false,
         light_rotation: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
+        hd_name: None,
     }];
     let mut framebuffer = Framebuffer::new();
     render::draw_gameplay_scene(

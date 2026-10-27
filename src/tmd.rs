@@ -89,6 +89,56 @@ pub fn parse(data: &[u8]) -> Result<Tmd> {
     Ok(Tmd { objects })
 }
 
+/// The byte length of the TMD at the start of `data`: the furthest end of its
+/// descriptor table and every object's vertex, normal and primitive lists.
+///
+/// An embedded TMD has no size field, so this is how the RDT exporter cuts a
+/// model out of its room file. A packet's length comes from its command word
+/// exactly as in [`parse`].
+pub fn byte_len(data: &[u8]) -> Result<usize> {
+    let object_count = read_u32(data, 8)? as usize;
+    budget::check_len(object_count, budget::MAX_TMD_OBJECTS, "TMD object count")?;
+    let table_end = object_count
+        .checked_mul(DESCRIPTOR_LEN)
+        .and_then(|len| HEADER_LEN.checked_add(len))
+        .context("TMD descriptor table overflows")?;
+    let table = data.get(HEADER_LEN..table_end).with_context(|| {
+        format!("TMD descriptor table for {object_count} object(s) is truncated")
+    })?;
+    let mut end = table_end;
+    for (index, descriptor) in table.as_chunks::<DESCRIPTOR_LEN>().0.iter().enumerate() {
+        let field = |slot: usize| {
+            i32::from_le_bytes(descriptor[slot * 4..slot * 4 + 4].try_into().unwrap())
+        };
+        for (offset, count, stride, what) in [
+            (field(0), field(1), VERTEX_LEN, "vertex"),
+            (field(2), field(3), NORMAL_LEN, "normal"),
+        ] {
+            let start = relative(offset, &format!("object {index} {what} offset"))?;
+            let count = checked_count(count, &format!("object {index} {what}"))?;
+            let list_end = count
+                .checked_mul(stride)
+                .and_then(|len| start.checked_add(len))
+                .context("TMD list overflows")?;
+            end = end.max(list_end);
+        }
+        let mut cursor = relative(field(4), &format!("object {index} primitive offset"))?;
+        let count = checked_count(field(5), &format!("object {index} primitive"))?;
+        budget::check_len(count, budget::MAX_TMD_PRIMS, "TMD primitive count")?;
+        for _ in 0..count {
+            let command = read_u32(data, cursor)?;
+            cursor = cursor
+                .checked_add((((command & 0xFF00) >> 6) + 4) as usize)
+                .context("TMD primitive cursor overflows")?;
+        }
+        end = end.max(cursor);
+    }
+    if end > data.len() {
+        bail!("TMD of {end} bytes is truncated to {}", data.len());
+    }
+    Ok(end)
+}
+
 fn parse_vertices(data: &[u8], offset: i32, count: i32, object: usize) -> Result<Vec<[i16; 3]>> {
     let count = checked_count(count, &format!("object {object} vertex"))?;
     budget::check_len(count, budget::MAX_TMD_VERTICES, "TMD vertex count")?;

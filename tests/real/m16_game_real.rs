@@ -19,6 +19,7 @@ use std::collections::BTreeSet;
 use arklay::engine::{simulate_room, simulate_room_prepared, simulate_room_with_input};
 use arklay::pack::Pack;
 use arklay::player;
+use arklay::room;
 use arklay::scd;
 use arklay::state::RoomId;
 
@@ -48,10 +49,7 @@ const SLICE_OPCODES: [u8; 12] = [
 const KNOWN_PLACEHOLDERS: [u8; 1] = [0x05];
 
 /// Every opcode byte that appears in one RDT's init, main or event scripts.
-fn script_opcodes(bytes: &[u8]) -> BTreeSet<u8> {
-    let Ok(scripts) = scd::reader::parse(bytes) else {
-        return Default::default();
-    };
+fn script_opcodes(scripts: &scd::ir::Scripts) -> BTreeSet<u8> {
     scripts
         .init
         .iter()
@@ -60,18 +58,6 @@ fn script_opcodes(bytes: &[u8]) -> BTreeSet<u8> {
         .chain(scripts.events.iter().flat_map(|stream| stream.insns.iter()))
         .map(|insn| insn.op)
         .collect()
-}
-
-/// Inventory the pack's room entries.
-fn room_ids(pack: &Pack) -> Vec<RoomId> {
-    let mut ids: Vec<RoomId> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .filter_map(|path| RoomId::parse(&path[5..9]).ok())
-        .collect();
-    ids.sort_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids.dedup_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids
 }
 
 fn slice_placeholder_hits(placeholders: &std::collections::BTreeMap<u8, u64>) -> Vec<(u8, u64)> {
@@ -94,7 +80,7 @@ fn real_m16_game_corpus_has_no_slice_placeholders_and_lists_transitions() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let ids = room_ids(&pack);
+    let ids = room::ids(&pack);
     assert!(ids.len() > 300, "expected the shipped room corpus");
 
     let mut simulated = 0usize;
@@ -110,8 +96,8 @@ fn real_m16_game_corpus_has_no_slice_placeholders_and_lists_transitions() {
         if let Some(destination) = sim.transitions.last() {
             transitions.push((*id, *destination));
         }
-        if let Ok(bytes) = pack.read(&id.rdt_entry()) {
-            corpus_ops.extend(script_opcodes(&bytes));
+        if let Ok(scripts) = room::own_scripts(&pack, *id) {
+            corpus_ops.extend(script_opcodes(&scripts));
         }
         for (&op, &count) in &sim.game.placeholders {
             *corpus_placeholders.entry(op).or_default() += count;
@@ -198,7 +184,7 @@ fn real_door_transition_reboots_the_destination_room() {
         "the destination's first gameplay frame is blank"
     );
     // The destination is a loadable shipped room, not a placeholder.
-    assert!(pack.read(&sim.target.rdt_entry()).is_ok());
+    assert!(room::load_state(&pack, sim.target).is_ok());
 }
 
 /// The room 506 console interaction raises the two flags the engine's

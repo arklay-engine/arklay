@@ -715,7 +715,8 @@ The `bmp`/`tim` rows grew with the DIED screen's and the RESULT plates' art
 since the previous measurement. The CR save-screen script is not in the base
 pack: it ships in `mods/crloadsave` and is layered like any other mod.
 
-The 28 failing `room/*.rdt` entries are the converter's four-byte stub rooms
+The 28 failing room entries (`room/*.xml`; `room/*.rdt` in a pack converted
+before the XML room format) are the converter's four-byte stub rooms
 whose header declares no camera cuts: the engine refuses them on load and the
 soak skips them, so `verify` reports them instead of green-lighting rooms the
 engine cannot load. Every other entry parses. The six opaque entries are the

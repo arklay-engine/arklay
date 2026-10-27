@@ -19,6 +19,7 @@ use arklay::game::{FlagBank, GameState, RoomAction, RoomActionKind};
 use arklay::message::MessageWindow;
 use arklay::pack::Pack;
 use arklay::player;
+use arklay::room;
 use arklay::state::{RoomId, RoomState};
 
 /// Open the converted pack, or skip when the asset environment is absent.
@@ -188,18 +189,6 @@ fn collision_bounds(room: &RoomState) -> Option<([i32; 2], [i32; 2])> {
     Some(([min_x, min_z], [max_x, max_z]))
 }
 
-/// Inventory the pack's room entries.
-fn room_ids(pack: &Pack) -> Vec<RoomId> {
-    let mut ids: Vec<RoomId> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .filter_map(|path| RoomId::parse(&path[5..9]).ok())
-        .collect();
-    ids.sort_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids.dedup_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids
-}
-
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
 fn room_401_desk_locked_refuses_then_opens_after_the_key_turns() {
@@ -322,7 +311,7 @@ fn corpus_desks_run_the_full_flow_and_items_stay_in_bounds() {
     let Some(pack) = assets() else {
         return;
     };
-    let ids = room_ids(&pack);
+    let ids = room::ids(&pack);
     assert!(ids.len() > 300, "expected the shipped room corpus");
 
     // The M12 opcode set: a placeholder hit for any of these in a shipped

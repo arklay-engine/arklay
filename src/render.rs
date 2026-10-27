@@ -2371,6 +2371,7 @@ impl DoorScene {
             aliased_light: false,
             light_rotation: None,
             joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
         }]
     }
 
@@ -2463,6 +2464,10 @@ pub struct EntityMesh<'a> {
     /// Per-joint `JointSetColorTint` colours (1/128 multipliers); a non-zero
     /// entry draws the joint unlit in that colour.
     pub joint_colours: [[u8; 3]; 32],
+    /// The stem under `htexture/` that names the texture page's HD
+    /// replacement (a room prop's `prop/<id>`); the content hashes remain
+    /// the fallback. `None` for a page with no stable name.
+    pub hd_name: Option<&'a str>,
 }
 
 /// No joint carries a `JointSetColorTint` colour.
@@ -5294,6 +5299,7 @@ mod tests {
                 aliased_light: false,
                 light_rotation: None,
                 joint_colours: NO_JOINT_COLOURS,
+                hd_name: None,
             },
             EntityMesh {
                 mesh: &mesh1,
@@ -5308,6 +5314,7 @@ mod tests {
                 aliased_light: false,
                 light_rotation: None,
                 joint_colours: NO_JOINT_COLOURS,
+                hd_name: None,
             },
         ];
         let lighting = Lighting {
@@ -5385,6 +5392,7 @@ mod tests {
                 aliased_light: false,
                 light_rotation: None,
                 joint_colours: NO_JOINT_COLOURS,
+                hd_name: None,
             }
         }
         let lighting = Lighting {
@@ -5603,6 +5611,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
         }];
         let lighting = Lighting {
             ambient: [4095; 3],
@@ -6402,6 +6411,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
         }];
         let camera = straight_camera();
         let lighting = Lighting {
@@ -6514,6 +6524,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(
@@ -6549,6 +6560,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(
@@ -6613,6 +6625,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
         }];
 
         let render = |mirror_from: usize, mirror: Option<&MirrorPass>| {
@@ -6664,6 +6677,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours: NO_JOINT_COLOURS,
+            hd_name: None,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(
@@ -6706,6 +6720,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours,
+            hd_name: None,
         }];
         let mut framebuffer = Framebuffer::new();
         draw_gameplay_scene(

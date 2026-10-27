@@ -14,6 +14,7 @@ use arklay::game::{GameState, ScdGameHost};
 use arklay::message::MessageInput;
 use arklay::pack::Pack;
 use arklay::render::Framebuffer;
+use arklay::room;
 use arklay::state::{Image, RoomId};
 use arklay::text::Text;
 use arklay::tim;
@@ -154,9 +155,9 @@ fn real_locked_door_message_renders_over_a_frozen_frame() {
 
     // Probe the sword-key door with no key: the door handler requests its
     // locked message through the same window path the engine drives.
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = arklay::rdt::parse(data, id).unwrap();
-    let scripts = arklay::scd::reader::parse(data).unwrap();
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut state = GameState::new(id, &room);
     {
         let mut host = ScdGameHost::new(&mut state);

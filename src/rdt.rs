@@ -143,13 +143,7 @@ fn parse_room_anim(data: &[u8], pointers: &[u32; POINTER_COUNT]) -> Option<crate
     if header == 0 || base == 0 {
         return None;
     }
-    let bound = pointers
-        .iter()
-        .skip(PLAYER_ANIM_BASE_SLOT + 1)
-        .copied()
-        .filter(|pointer| *pointer > base)
-        .min()
-        .unwrap_or(data.len() as u32);
+    let bound = anim_bound(data, pointers, base);
     match crate::emd::parse_room_anim(data, header, base, bound) {
         Ok(anim) => Some(anim),
         Err(error) => {
@@ -509,9 +503,7 @@ fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
         *field = i32::from_le_bytes(*bytes);
     }
 
-    let mask_pointer = u32::try_from(fields[0]).unwrap_or(0);
-    let tim_mask_pointer = u32::try_from(fields[1]).unwrap_or(0);
-    let table = mask::MaskTable::parse(data, mask_pointer)
+    let table = mask_table(data, &fields)
         .with_context(|| format!("failed to parse the mask table of camera {index}"))?;
 
     Ok(Cut {
@@ -521,12 +513,68 @@ fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
         roll: fields[8],
         fov: fields[10],
         background: None,
-        mask_pointer,
-        tim_mask_pointer,
+        background_stem: None,
+        mask_stem: None,
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,
     })
+}
+
+/// Parse the mask table a camera record's field 0 points at. A negative
+/// offset reads as none, like 0.
+fn mask_table(data: &[u8], fields: &[i32; CAMERA_FIELDS]) -> Result<mask::MaskTable> {
+    mask::MaskTable::parse(data, u32::try_from(fields[0]).unwrap_or(0))
+}
+
+/// The mask table of every camera, in camera order, exactly as [`parse`]
+/// reads them; the room exporter writes the raw group headers these keep.
+pub(crate) fn mask_tables(data: &[u8]) -> Result<Vec<mask::MaskTable>> {
+    let count = usize::from(data.get(0x01).copied().unwrap_or(0));
+    (0..count)
+        .map(|index| {
+            let start = CAMERAS_OFFSET + index * CAMERA_SIZE;
+            let record = data
+                .get(start..start + CAMERA_SIZE)
+                .context("RDT camera record is truncated")?;
+            let mut fields = [0i32; CAMERA_FIELDS];
+            for (field, bytes) in fields.iter_mut().zip(record.as_chunks::<4>().0) {
+                *field = i32::from_le_bytes(*bytes);
+            }
+            mask_table(data, &fields)
+        })
+        .collect()
+}
+
+/// The RDT's header data pointers, all null when the table is truncated.
+pub(crate) fn pointers(data: &[u8]) -> [u32; POINTER_COUNT] {
+    read_pointers(data)
+}
+
+/// The room player-animation pair's `(header, base, bound)` offsets, as
+/// [`parse`] cuts the pair out of the file; `None` when either pointer is
+/// null.
+pub(crate) fn room_anim_bounds(data: &[u8]) -> Option<(usize, usize, usize)> {
+    let pointers = read_pointers(data);
+    let header = pointers[PLAYER_ANIM_HEADER_SLOT];
+    let base = pointers[PLAYER_ANIM_BASE_SLOT];
+    if header == 0 || base == 0 {
+        return None;
+    }
+    let bound = anim_bound(data, &pointers, base);
+    Some((header as usize, base as usize, bound as usize))
+}
+
+/// The end of the room animation's clip table: the first declared section
+/// pointer after the animation base, or the end of the file.
+fn anim_bound(data: &[u8], pointers: &[u32; POINTER_COUNT], base: u32) -> u32 {
+    pointers
+        .iter()
+        .skip(PLAYER_ANIM_BASE_SLOT + 1)
+        .copied()
+        .filter(|pointer| *pointer > base)
+        .min()
+        .unwrap_or(data.len() as u32)
 }
 
 /// Read a bounds-checked byte range.
@@ -720,8 +768,6 @@ mod tests {
         assert_eq!(cut.roll, 19);
         assert_eq!(cut.fov, 21);
         assert!(cut.background.is_none());
-        assert_eq!(cut.mask_pointer, 0);
-        assert_eq!(cut.tim_mask_pointer, 0);
         assert_eq!(cut.mask_group_count, 0);
         assert_eq!(cut.mask_active, 0);
         assert!(cut.masks.is_empty());
@@ -765,8 +811,6 @@ mod tests {
         let state = parse(&data, ROOM_ID).unwrap();
 
         let cut = &state.cuts[0];
-        assert_eq!(cut.mask_pointer as usize, offset);
-        assert_eq!(cut.tim_mask_pointer, 1234);
         assert_eq!(cut.mask_group_count, 1);
         assert_eq!(cut.mask_active, 1);
         assert_eq!(cut.masks.len(), 1);
@@ -798,7 +842,7 @@ mod tests {
 
         let state = parse(&data, ROOM_ID).unwrap();
         let cut = &state.cuts[0];
-        assert_eq!((cut.mask_pointer, cut.tim_mask_pointer), (0, 0));
+        assert_eq!(cut.mask_group_count, 0);
         assert!(cut.masks.is_empty());
     }
 
@@ -1377,8 +1421,6 @@ mod tests {
         assert_eq!(cut.mask_group_count, 7);
         assert_eq!(cut.masks.len(), 53);
         assert_eq!(cut.mask_active, 0b111_1111);
-        assert_ne!(cut.mask_pointer, 0);
-        assert_ne!(cut.tim_mask_pointer, 0);
 
         let first = cut.masks[0];
         assert_eq!(first.uv, (0, 0));

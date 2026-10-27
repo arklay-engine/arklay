@@ -7918,7 +7918,7 @@ impl GameState {
 
     /// Run the door in `slot`, with the original's full interaction flow:
     /// character restriction, lock flag, required key (with the lockpick
-    /// substituting for the sword key, see [`Self::has_lockpick`]) and the
+    /// substituting for the sword key, see `has_lockpick`) and the
     /// special `0xFE`/`0xFF` keys.
     ///
     /// A key turn only raises the lock flag and plays the message; the door
@@ -13774,11 +13774,13 @@ mod tests {
             item_models: vec![
                 ObjectAsset {
                     pair_index: 0,
+                    prop: None,
                     model: Tmd::default(),
                     texture: texture(),
                 },
                 ObjectAsset {
                     pair_index: 1,
+                    prop: None,
                     model: Tmd::default(),
                     texture: texture(),
                 },

@@ -36,6 +36,12 @@ pub enum Format {
     Manifest,
     /// `room/*.rdt`, a room plus its embedded SCD streams.
     Rdt,
+    /// `room/*.xml`, a room definition naming its sidecars.
+    RoomXml,
+    /// `animation/*.emr` / `.edd`, one half of a room player-animation pair.
+    RoomAnimation,
+    /// `prop/props.toml`, the room prop index written for people.
+    PropManifest,
     /// `scd/*.scd`, a standalone script override.
     Scd,
     /// `roomcut/*`, a camera background.
@@ -87,6 +93,9 @@ impl Format {
         match self {
             Self::Manifest => "manifest",
             Self::Rdt => "rdt",
+            Self::RoomXml => "room-xml",
+            Self::RoomAnimation => "animation",
+            Self::PropManifest => "prop-manifest",
             Self::Scd => "scd",
             Self::Cut => "roomcut",
             Self::Mask => "roommask",
@@ -174,7 +183,24 @@ pub fn classify(path: &str) -> Format {
             _ => Format::Opaque,
         };
     }
-    if lower.starts_with("scd/") && lower.ends_with(".scd") {
+    if lower.starts_with("room/") && lower.ends_with(".xml") {
+        return match lower
+            .strip_prefix("room/")
+            .and_then(|rest| rest.strip_suffix(".xml"))
+        {
+            Some(stem) if stem.len() == 4 && RoomId::parse(stem).is_ok() => Format::RoomXml,
+            _ => Format::Opaque,
+        };
+    }
+    if lower == crate::room::source::PROP_MANIFEST {
+        return Format::PropManifest;
+    }
+    if lower.starts_with(crate::room::source::ANIMATION_DIR)
+        && (lower.ends_with(".emr") || lower.ends_with(".edd"))
+    {
+        return Format::RoomAnimation;
+    }
+    if (lower.starts_with("scd/") || lower.starts_with("room/")) && lower.ends_with(".scd") {
         return Format::Scd;
     }
     if lower.starts_with("language/") && lower.ends_with(".txt") {
@@ -266,13 +292,13 @@ impl VerifyReport {
         writeln!(out, "{} entries, {} bytes", self.entries, self.bytes)?;
         writeln!(
             out,
-            "{:<10} {:>9} {:>9} {:>9} {:>14}",
+            "{:<13} {:>9} {:>9} {:>9} {:>14}",
             "format", "entries", "ok", "failed", "bytes"
         )?;
         for (format, stats) in &self.formats {
             writeln!(
                 out,
-                "{:<10} {:>9} {:>9} {:>9} {:>14}",
+                "{:<13} {:>9} {:>9} {:>9} {:>14}",
                 format.name(),
                 stats.entries,
                 stats.ok,
@@ -350,27 +376,40 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
         }
         Format::Rdt => {
             let id = room_id_from_path(path)?;
-            let room = crate::rdt::parse(data, id)?;
-            // The engine refuses a room with no camera cuts, so verification
-            // must reject it too.
-            if room.cuts.is_empty() {
-                bail!("room has no camera cuts");
-            }
-            for cut in &room.cuts {
-                let stem = id.cut_stem(cut.index);
-                if !pack.has_asset(&stem, crate::pack::AssetClass::Image) {
-                    bail!(
-                        "RDT references missing background {}",
-                        id.cut_entry(cut.index)
-                    );
+            let state = crate::rdt::parse(data, id)?;
+            let loaded = crate::room::Loaded::from_rdt(state, data.to_vec());
+            verify_room(pack, id, &loaded)?;
+        }
+        Format::RoomXml => {
+            let id = room_id_from_path(path)?;
+            let text = std::str::from_utf8(data).context("room XML is not valid UTF-8")?;
+            // The engine skips a model, sheet or animation that does not load
+            // with a warning; a pack that names a missing one is still broken.
+            let source = crate::room::xml::parse(text, id)?;
+            for entry in source.references() {
+                if !pack.contains(&entry) {
+                    bail!("room references missing {entry}");
                 }
             }
-            // The scripts the engine runs: a corrupt embedded table is not a
-            // failure when the merged pack carries an override it prefers.
-            crate::engine::room_scripts(pack, id, data)?;
+            let loaded = crate::room::Loaded::from_xml(pack, id, text)?;
+            verify_room(pack, id, &loaded)?;
         }
         Format::Scd => {
             crate::scd::reader::parse(data)?;
+        }
+        Format::RoomAnimation => {
+            // Each half is checked as the pair it belongs to.
+            let stem = path.rsplit_once('.').map_or(path, |(stem, _)| stem);
+            let half = |extension: &str| -> Result<std::borrow::Cow<'_, [u8]>> {
+                let entry = format!("{stem}.{extension}");
+                pack.read(&entry)
+                    .with_context(|| format!("the pair's {entry} is missing"))
+            };
+            crate::emd::parse_room_anim_files(&half("emr")?, &half("edd")?)?;
+        }
+        Format::PropManifest => {
+            let text = std::str::from_utf8(data).context("prop/props.toml is not valid UTF-8")?;
+            crate::manifest::parse_items(text)?;
         }
         Format::Cut => {
             crate::assets::decode_image_bytes(path_extension(path), data)?;
@@ -485,7 +524,27 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
     Ok(())
 }
 
-/// The [`RoomId`] named by a `room/{id}.rdt` path.
+/// Check a parsed room the way the engine loads it: it needs a camera cut,
+/// every cut's background, and scripts that parse.
+fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<()> {
+    // The engine refuses a room with no camera cuts, so verification must
+    // reject it too.
+    if loaded.state.cuts.is_empty() {
+        bail!("room has no camera cuts");
+    }
+    for cut in &loaded.state.cuts {
+        let stem = cut.background_stem(id);
+        if !pack.has_asset(&stem, crate::pack::AssetClass::Image) {
+            bail!("room references missing background {stem}.bmp");
+        }
+    }
+    // The scripts the engine runs: a corrupt embedded table is not a failure
+    // when the merged pack carries an override it prefers.
+    crate::engine::room_scripts(pack, id, loaded)?;
+    Ok(())
+}
+
+/// The [`RoomId`] named by a `room/{id}.rdt` or `room/{id}.xml` path.
 fn room_id_from_path(path: &str) -> Result<RoomId> {
     let name = path
         .rsplit('/')
@@ -540,6 +599,13 @@ mod tests {
         assert_eq!(classify("manifest.toml"), Format::Manifest);
         assert_eq!(classify("room/1000.rdt"), Format::Rdt);
         assert_eq!(classify("ROOM/1000.RDT"), Format::Rdt);
+        assert_eq!(classify("room/1000.xml"), Format::RoomXml);
+        assert_eq!(classify("room/1000.scd"), Format::Scd);
+        assert_eq!(classify("room/notes.xml"), Format::Opaque);
+        assert_eq!(classify("animation/0000.emr"), Format::RoomAnimation);
+        assert_eq!(classify("animation/0000.edd"), Format::RoomAnimation);
+        assert_eq!(classify("prop/props.toml"), Format::PropManifest);
+        assert_eq!(classify("prop/0000.tmd"), Format::Tmd);
         assert_eq!(classify("roomcut/100_000.bmp"), Format::Cut);
         assert_eq!(classify("roomcut/100_000.png"), Format::Cut);
         assert_eq!(classify("roommask/100_000.webp"), Format::Mask);

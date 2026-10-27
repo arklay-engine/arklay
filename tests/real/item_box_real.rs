@@ -20,7 +20,7 @@ use arklay::bmp;
 use arklay::engine;
 use arklay::game::{GameState, InventoryItem};
 use arklay::pack::Pack;
-use arklay::rdt;
+use arklay::room;
 use arklay::save::SaveFile;
 use arklay::state::RoomId;
 
@@ -33,7 +33,7 @@ fn pack() -> Option<Pack> {
 }
 
 fn room_game(pack: &Pack, id: RoomId) -> GameState {
-    let room = rdt::parse(&pack.read(&id.rdt_entry()).unwrap(), id).unwrap();
+    let room = room::load_state(pack, id).unwrap();
     GameState::new(id, &room)
 }
 
@@ -81,7 +81,7 @@ fn real_item_box_deposit_survives_room_changes_and_a_save_round_trip() {
         player_flag: id.player_flag,
         ..destination
     };
-    let other_room = rdt::parse(&pack.read(&other.rdt_entry()).unwrap(), other).unwrap();
+    let other_room = room::load_state(&pack, other).unwrap();
     game.enter_room(other, &other_room);
     assert_eq!(game.item_box[10].id, SPRAY);
 

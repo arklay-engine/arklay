@@ -24,7 +24,7 @@ use arklay::game::{BANK_SYSTEM, GameState, ScdGameHost};
 use arklay::pack::Pack;
 use arklay::player;
 use arklay::render::Camera;
-use arklay::scd::reader;
+use arklay::room;
 use arklay::scd::vm::{CommandVm, EventVm};
 use arklay::state::{Image, RoomId, RoomState};
 use arklay::{effects, engine};
@@ -47,10 +47,7 @@ impl FireScene {
     /// Boot `id` and start `event` in the fresh event VM.
     fn boot(pack: &Pack, id: RoomId, event: u8) -> Self {
         let loaded = engine::simulate_room(pack, id, 0, player::Input::default()).unwrap();
-        let data = pack
-            .read(&format!("room/{:04x}.rdt", id.rdt_number()))
-            .unwrap();
-        let scripts = reader::parse(&data).unwrap();
+        let scripts = room::own_scripts(pack, id).unwrap();
         let command_vm = CommandVm::new(&scripts);
         let mut event_vm = EventVm::new(&scripts);
         event_vm.start(0, event);

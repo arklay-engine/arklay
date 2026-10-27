@@ -59,23 +59,11 @@ impl RoomVariants {
     }
 }
 
-/// Enumerate the pack's `room/%04x.rdt` entries, sorted by stage/room with
-/// every room's player variants collected.
+/// Enumerate the pack's rooms (`room/%04x.xml` or `.rdt`), sorted by
+/// stage/room with every room's player variants collected.
 pub fn room_variants(pack: &Pack) -> Vec<RoomVariants> {
     let mut rooms: BTreeMap<(u8, u8), Vec<u8>> = BTreeMap::new();
-    for path in pack.paths() {
-        let Some(hex) = path
-            .strip_prefix("room/")
-            .and_then(|name| name.strip_suffix(".rdt"))
-        else {
-            continue;
-        };
-        if hex.len() != 4 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            continue;
-        }
-        let Ok(id) = RoomId::parse(hex) else {
-            continue;
-        };
+    for id in crate::room::ids(pack) {
         let players = rooms.entry((id.stage, id.room)).or_default();
         if !players.contains(&id.player_flag) {
             players.push(id.player_flag);

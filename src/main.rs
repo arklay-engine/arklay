@@ -693,27 +693,25 @@ fn export_rooms(packs: &[(arklay::scd::akscr::Region, PathBuf)], out: &Path) -> 
     Ok(())
 }
 
-/// Decompile every room RDT with scripts in `pack`, by RDT id.
+/// Decompile every room with scripts in `pack`, by RDT id.
 fn decompile_rooms(
     pack: &Path,
     names: &arklay::scd::akscr::Names,
 ) -> Result<std::collections::BTreeMap<u16, String>> {
     let pack = Pack::open(pack).with_context(|| format!("failed to open {}", pack.display()))?;
     let mut rooms = std::collections::BTreeMap::new();
-    for entry in pack.entries() {
-        let path = entry.path();
-        let Some(id) = path
-            .strip_prefix("room/")
-            .and_then(|name| name.strip_suffix(".rdt"))
-            .and_then(|stem| parse_room_id(stem).ok())
-        else {
+    for room in arklay::room::ids(&pack) {
+        // The stub rooms of unused slots carry no scripts.
+        let Ok(loaded) = arklay::room::load(&pack, room) else {
             continue;
         };
-        let data = pack.read(path)?;
-        // The stub RDTs of unused room slots carry no scripts.
-        let Ok(scripts) = arklay::scd::reader::parse(&data) else {
+        if loaded.state.cuts.is_empty() {
+            continue;
+        }
+        let Ok(scripts) = loaded.own_scripts(&pack) else {
             continue;
         };
+        let id = room.rdt_number();
         rooms.insert(id, arklay::scd::akscr::decompile_with(&scripts, names, id));
     }
     Ok(rooms)
@@ -1479,7 +1477,7 @@ mod tests {
         let out = dir.path.join("out");
         extract_pack(&pack_path, &out, &[]).unwrap();
 
-        for sample in ["room/1001.rdt", "roomcut/100_000.bmp", "bgm/013.wav"] {
+        for sample in ["room/1001.xml", "roomcut/100_000.bmp", "bgm/013.wav"] {
             let extracted = fs::read(out.join(sample)).unwrap();
             assert_eq!(extracted, pack.read(sample).unwrap().as_ref(), "{sample}");
         }

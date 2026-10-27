@@ -15,8 +15,8 @@ use arklay::game::{FlagBank, GameState, RoomAction, RoomActionKind};
 use arklay::objects;
 use arklay::pack::Pack;
 use arklay::player;
-use arklay::rdt;
 use arklay::render::Lighting;
+use arklay::room;
 use arklay::state::RoomId;
 
 /// Open the converted pack, or skip when the asset environment is absent.
@@ -271,9 +271,9 @@ fn room_300_courtyard_map_raises_the_room_flag_without_inventory() {
         return;
     };
     let id = RoomId::parse("3000").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = arklay::rdt::parse(data, id).unwrap();
-    let scripts = Rc::new(arklay::scd::reader::parse(data).unwrap());
+    let loaded = room::load(&pack, id).unwrap();
+    let scripts = Rc::new(loaded.own_scripts(&pack).unwrap());
+    let room = loaded.state;
     let mut game = GameState::new(id, &room);
     game.set_weapon_effects(arklay::effects::WeaponEffects::load(&pack));
     game.resolve_room_effects(&room);
@@ -533,9 +533,8 @@ fn room_406_map_palette_is_darkened_in_the_render() {
     let pair = usize::from(map.item_model());
     assert!(item_record(&sim.game, map).unwrap().active());
 
-    // Decode the shipped, undarkened pair straight from the RDT.
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let stock = rdt::parse(data, id).unwrap();
+    // Decode the shipped, undarkened pair straight from the room data.
+    let stock = room::load_state(&pack, id).unwrap();
     let stock_texture = stock
         .item_models
         .iter()
@@ -606,9 +605,9 @@ fn room_11a_crest_wall_probes_arm_the_item_use_flags() {
         return;
     };
     let id = RoomId::parse("11a1").unwrap();
-    let data = &*pack.read(&id.rdt_entry()).expect("room/11a1.rdt");
-    let room = rdt::parse(data, id).unwrap();
-    let scripts = arklay::scd::reader::parse(data).unwrap();
+    let loaded = room::load(&pack, id).expect("room 11A1");
+    let scripts = loaded.own_scripts(&pack).unwrap();
+    let room = loaded.state;
     let mut state = GameState::new(id, &room);
     let mut command_vm = arklay::scd::vm::CommandVm::new(&scripts);
     let mut event_vm = arklay::scd::vm::EventVm::new(&scripts);

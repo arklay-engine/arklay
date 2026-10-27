@@ -18,6 +18,7 @@ use arklay::game::FlagBank;
 use arklay::manifest;
 use arklay::pack::{Pack, PackWriter};
 use arklay::player;
+use arklay::room;
 use arklay::scd;
 use arklay::state::RoomId;
 
@@ -74,18 +75,6 @@ fn collect_rdts(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
 
 /// One stream's body: `(kind, block sizes, instruction bytes, trailing)`.
 type StreamBody = (String, Vec<u16>, Vec<u8>, Vec<u8>);
-
-/// Every room identity the pack ships, sorted and deduplicated.
-fn room_ids(pack: &Pack) -> Vec<RoomId> {
-    let mut ids: Vec<RoomId> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .filter_map(|path| RoomId::parse(&path[5..9]).ok())
-        .collect();
-    ids.sort_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids.dedup_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids
-}
 
 /// The stream bodies of `scripts`, ignoring the absolute offsets a container
 /// lays the streams out at.
@@ -225,7 +214,7 @@ fn assembled_containers_load_in_the_engine() {
         let Ok(id) = RoomId::parse(digits) else {
             continue;
         };
-        if !base.contains(&id.rdt_entry()) {
+        if !room::exists(&base, id) {
             continue;
         }
         let scripts = scd::reader::parse(&data).unwrap();
@@ -258,7 +247,10 @@ fn layer_shadows_real_entries_and_no_mod_is_identical() {
     };
     let base = Pack::open(&pack_path).unwrap();
 
-    let shadow = "room/1001.rdt";
+    // The room definition the pack ships; a mod entry at the same path must
+    // replace it rather than add one.
+    let shadow = room::entry(&base, RoomId::parse("1001").unwrap());
+    let shadow = shadow.as_str();
     assert!(base.contains(shadow));
     let replacement = vec![0x5A; base.read(shadow).unwrap().len()];
 
@@ -381,7 +373,7 @@ fn rider_opcodes_execute_without_placeholders() {
     flags.push((0, 0x7B));
 
     let mut simulated = 0usize;
-    for id in room_ids(&pack) {
+    for id in room::ids(&pack) {
         let Ok(sim) = simulate_room_seeded(&pack, id, &flags, 120, player::Input::default()) else {
             continue;
         };
@@ -514,7 +506,7 @@ fn corpus_audit_runs_with_and_without_the_demo_layer() {
 
     let mut plain_runs = 0usize;
     let mut layered_runs = 0usize;
-    for id in room_ids(&pack) {
+    for id in room::ids(&pack) {
         if simulate_room(&pack, id, 5, player::Input::default()).is_ok() {
             plain_runs += 1;
         }

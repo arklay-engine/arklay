@@ -11,7 +11,7 @@ use arklay::engine::{SimulatedRoom, simulate_room_prepared, simulate_room_seeded
 use arklay::game::GameState;
 use arklay::pack::Pack;
 use arklay::player::{self, Input};
-use arklay::rdt;
+use arklay::room;
 use arklay::sfx;
 use arklay::state::RoomId;
 
@@ -156,18 +156,8 @@ fn real_corpus_zone_paths_never_panic() {
     // The original's zone-path scratch is one shared block; reuse it across
     // the whole sweep so the stale-cursor paths are exercised too.
     let mut walk = ZoneWalk::default();
-    for entry in pack.entries() {
-        let path = entry.path();
-        if !path.starts_with("room/") || !path.ends_with(".rdt") {
-            continue;
-        }
-        let Ok(id) = RoomId::parse(&path[5..9]) else {
-            continue;
-        };
-        let Ok(data) = pack.read(path) else {
-            continue;
-        };
-        let Ok(room) = rdt::parse(&data, id) else {
+    for id in room::ids(&pack) {
+        let Ok(room) = room::load_state(&pack, id) else {
             continue;
         };
         if room.walk_zones.is_empty() {

@@ -503,6 +503,7 @@ fn a_real_actor_room_draws_player_and_npc_shadows_in_one_frame() {
             aliased_light: false,
             light_rotation: None,
             joint_colours: arklay::render::NO_JOINT_COLOURS,
+            hd_name: None,
         })
         .collect();
     let cut = &sim.room.cuts[camera_cut];

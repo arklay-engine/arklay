@@ -9,6 +9,7 @@ use crate::common;
 use arklay::effects;
 use arklay::game::GameState;
 use arklay::pack::Pack;
+use arklay::room;
 use arklay::state::RoomId;
 
 #[test]
@@ -234,18 +235,14 @@ fn real_effect_corpus_600_ticks_has_no_placeholders() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let mut rooms: Vec<String> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .map(|path| path[5..path.len() - 4].to_string())
-        .collect();
-    rooms.sort();
+    let rooms = room::ids(&pack);
     assert!(rooms.len() > 300, "expected the shipped room corpus");
 
     let mut simulated = 0usize;
     let mut animating = 0usize;
-    for name in &rooms {
-        let id = RoomId::parse(name).unwrap();
+    for id in &rooms {
+        let id = *id;
+        let name = format!("{:04x}", id.rdt_number());
         let Ok(sim) = engine::simulate_room(&pack, id, 600, player::Input::default()) else {
             // Rooms without camera cuts are unreferenced editor leftovers.
             continue;

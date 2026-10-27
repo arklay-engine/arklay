@@ -977,6 +977,7 @@ mod tests {
             per_joint_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
             complex_object: None,
             aliased_light: false,
         };
@@ -1062,6 +1063,7 @@ mod tests {
             per_joint_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
             complex_object: None,
             aliased_light: false,
         };
@@ -1127,6 +1129,7 @@ mod tests {
             per_joint_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
             complex_object: None,
             aliased_light: false,
         };

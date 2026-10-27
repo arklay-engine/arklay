@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use arklay::pack::Pack;
+use arklay::room;
 use arklay::scd::akscr;
 use arklay::scd::ir::{Block, Scripts, Stream};
 use arklay::scd::reader;
@@ -83,28 +84,21 @@ fn assert_identical(entry: &str, original: &Scripts, compiled: &Scripts) {
     }
 }
 
-/// Every room RDT with scripts, by id, read from the pack.
+/// Every room with scripts, by id, read from the pack.
 fn original_rooms(pack: &Pack) -> BTreeMap<u16, Scripts> {
     let mut rooms = BTreeMap::new();
-    for entry in pack.entries() {
-        let path = entry.path();
-        let Some(id) = path
-            .strip_prefix("room/")
-            .and_then(|name| name.strip_suffix(".rdt"))
-            .and_then(|stem| u16::from_str_radix(stem, 16).ok())
-        else {
+    for id in room::ids(pack) {
+        // Stub rooms of unused slots have no camera cuts and no scripts.
+        let Ok(loaded) = room::load(pack, id) else {
             continue;
         };
-        let data = pack.read(path).unwrap();
-        // The stub RDTs of unused room slots carry no script pointers.
-        let Ok(original) = reader::parse(&data) else {
-            assert!(
-                data.len() < 0x94,
-                "{path} has a header but no readable scripts"
-            );
+        if loaded.state.cuts.is_empty() {
             continue;
-        };
-        rooms.insert(id, original);
+        }
+        let original = loaded
+            .own_scripts(pack)
+            .unwrap_or_else(|err| panic!("{id:?} has no readable scripts: {err:#}"));
+        rooms.insert(id.rdt_number(), original);
     }
     assert!(rooms.len() > 300, "only {} rooms with scripts", rooms.len());
     rooms

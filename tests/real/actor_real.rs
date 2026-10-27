@@ -12,14 +12,14 @@ use arklay::engine::simulate_room;
 use arklay::game::{BANK_SYSTEM, ScdGameHost};
 use arklay::pack::Pack;
 use arklay::player;
+use arklay::room;
 use arklay::scd::ir::Scripts;
 use arklay::scd::vm::EventVm;
 use arklay::state::{RoomId, RoomState};
 
-/// Parse the SCD streams of the room's pack entry.
+/// Parse the SCD streams of the room's own scripts.
 fn room_scripts(pack: &Pack, id: RoomId) -> Scripts {
-    let data = &*pack.read(&id.rdt_entry()).expect("room entry");
-    arklay::scd::reader::parse(data).expect("parse SCD")
+    room::own_scripts(pack, id).expect("parse SCD")
 }
 
 /// The union of every collision record's extents, when the room has any.
@@ -188,14 +188,7 @@ fn real_corpus_rooms_tick_and_keep_moved_characters_in_bounds() {
 
     let mut rooms = 0usize;
     let mut moved = 0usize;
-    for entry in pack.entries() {
-        let path = entry.path();
-        if !path.starts_with("room/") || !path.ends_with(".rdt") {
-            continue;
-        }
-        let Ok(id) = RoomId::parse(&path[5..9]) else {
-            continue;
-        };
+    for id in room::ids(&pack) {
         // Stub rooms (no camera cuts) cannot load; everything else must run
         // its init and 60 fixed ticks without panicking.
         let Ok(spawn) = simulate_room(&pack, id, 1, player::Input::default()) else {

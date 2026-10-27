@@ -455,7 +455,7 @@ fn parse_animation(data: &[u8], base: usize) -> Result<SpriteAnimation> {
 ///
 /// A malformed TIM yields a zero geometry and no decoded art; the sprite still
 /// parses so the rest of the table stays usable.
-fn parse_tim(data: &[u8]) -> (TimGeometry, Option<Texture8>) {
+pub(crate) fn parse_tim(data: &[u8]) -> (TimGeometry, Option<Texture8>) {
     let geometry = tim_geometry(data).unwrap_or_default();
     (geometry, tim::decode_4bpp(data).ok())
 }

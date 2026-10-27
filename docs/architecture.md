@@ -48,6 +48,7 @@ responsibility.
 | `player` | Runtime | Player locomotion, input mapping, collision, reach probes, camera cuts |
 | `player_script` | Runtime | The player's scripted-animation states |
 | `rdt` | Format | RDT room parser (header pointers, cameras, zones, collisions, embedded model/TIM pairs) |
+| `room` | Format | `room/<id>.xml` room definitions: the XML reader/writer, message markup, the RDT-to-XML conversion with its `prop/`, `effect/` and `animation/` sidecars, and the loader that picks the XML or a raw RDT |
 | `scd` | Runtime/Format | SCD opcode tables, reader, IR, disassembler/decompiler, assembler, command and event VMs |
 | `door` | Format/Runtime | `.dor` container parser and the door-animation VM |
 | `transition` | Runtime | The door-transition timeline (screen space, masks, camera, `.dor` stepper hand-off) |

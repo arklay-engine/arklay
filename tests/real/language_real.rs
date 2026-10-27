@@ -3,7 +3,7 @@
 //! Needs `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK`; without them the test skips.
 //! The ja-JP seed is the install's own text decoded into the language-file
 //! grammar, so every room message the seed carries must re-encode with the
-//! Rust encoder to exactly the bytes the RDT holds. When the pack still
+//! Rust encoder to exactly the bytes the room's message table holds. When the pack still
 //! carries the retired `text/*.bin` tables, every table entry with a language
 //! key is checked the same way.
 
@@ -11,8 +11,7 @@ use crate::common;
 
 use arklay::language::Language;
 use arklay::pack::Pack;
-use arklay::rdt;
-use arklay::state::RoomId;
+use arklay::room;
 use arklay::text::Text;
 
 /// The embedded ja-JP source.
@@ -116,21 +115,8 @@ fn the_japanese_seed_matches_every_room_message() {
     assert_eq!(text.selected_language(), "ja-JP");
 
     let mut checked = 0;
-    for path in pack.paths() {
-        let Some(hex) = path
-            .strip_prefix("room/")
-            .and_then(|name| name.strip_suffix(".rdt"))
-        else {
-            continue;
-        };
-        if hex.len() != 4 {
-            continue;
-        }
-        let Ok(id) = RoomId::parse(hex) else {
-            continue;
-        };
-        let data = pack.read(path).expect("read the room");
-        let Ok(room) = rdt::parse(&data, id) else {
+    for id in room::ids(&pack) {
+        let Ok(room) = room::load_state(&pack, id) else {
             continue; // stubs and third-party rooms are not part of the corpus
         };
         // The message table occupies `block[0]` bytes: entry 0's stream starts

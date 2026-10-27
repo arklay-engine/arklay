@@ -12,9 +12,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use arklay::enemy::{CHARACTER_ID_MIN, LuaEnemyHost};
 use arklay::game::{ENTITY_COUNT, GameState, ScdGameHost};
 use arklay::pack::Pack;
-use arklay::scd;
+use arklay::room;
 use arklay::scd::vm::CommandVm;
-use arklay::state::RoomId;
 
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
@@ -30,27 +29,15 @@ fn corpus_monster_records_run_or_park_without_script_errors() {
     let mut rooms = 0usize;
     let mut records = 0usize;
 
-    for entry in pack.entries() {
-        let path = entry.path();
-        let Some(name) = path
-            .strip_prefix("room/")
-            .and_then(|p| p.strip_suffix(".rdt"))
-        else {
-            continue;
-        };
-        let Ok(id) = RoomId::parse(name) else {
-            continue;
-        };
-        let Ok(data) = pack.read(path) else {
-            continue;
-        };
+    for id in room::ids(&pack) {
         // The stub rooms without camera cuts are skipped, like the soak.
-        let Ok(room) = arklay::rdt::parse(&data, id) else {
+        let Ok(loaded) = room::load(&pack, id) else {
             continue;
         };
-        let Ok(scripts) = scd::reader::parse(&data) else {
+        let Ok(scripts) = loaded.own_scripts(&pack) else {
             continue;
         };
+        let room = loaded.state;
         // Every `eml_state` (0x28) sub-command every corpus stream uses. The
         // reader only decodes a known sub-command's width, so this is also
         // the gate that keeps a new sub-command from silently truncating a

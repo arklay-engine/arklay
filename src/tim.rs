@@ -329,6 +329,31 @@ pub fn decode_4bpp(data: &[u8]) -> Result<Texture8> {
     })
 }
 
+/// The byte length of the TIM at the start of `data`: its header plus the
+/// CLUT block (when the flags declare one) plus the image block, each block
+/// sized by its own length word. An embedded TIM has no other bound.
+pub fn byte_len(data: &[u8]) -> Result<usize> {
+    let header = data.get(..HEADER_LEN).context("TIM header is truncated")?;
+    if u32::from_le_bytes(header[0..4].try_into().unwrap()) != TIM_MAGIC {
+        bail!("not a TIM file: bad magic");
+    }
+    let flags = u32::from_le_bytes(header[4..8].try_into().unwrap());
+    let mut end = HEADER_LEN;
+    let blocks = if flags & CLUT_FLAG != 0 { 2 } else { 1 };
+    for _ in 0..blocks {
+        let block = block_header(data, end, "TIM")?;
+        let length = u32::from_le_bytes(block[0..4].try_into().unwrap()) as usize;
+        if length < BLOCK_HEADER_LEN {
+            bail!("TIM block length {length} is smaller than its header");
+        }
+        end = end.checked_add(length).context("TIM length overflows")?;
+    }
+    if end > data.len() {
+        bail!("TIM of {end} bytes is truncated to {}", data.len());
+    }
+    Ok(end)
+}
+
 fn block_header(data: &[u8], offset: usize, what: &str) -> Result<[u8; BLOCK_HEADER_LEN]> {
     data.get(offset..offset + BLOCK_HEADER_LEN)
         .with_context(|| format!("TIM {what} block header at offset 0x{offset:X} is truncated"))?

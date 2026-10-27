@@ -129,7 +129,6 @@ use crate::pacer::{FramePacer, Pace};
 use crate::pack::{AssetClass, LayerOptions, ModLayer, Pack};
 use crate::player;
 use crate::player_script;
-use crate::rdt;
 use crate::render::{
     self, Camera, EffectLayer, EffectQuad, EntityMesh, Framebuffer, Lighting, MaskLayer,
 };
@@ -138,7 +137,7 @@ use crate::scd;
 use crate::sfx;
 use crate::shadow;
 use crate::speed::Speed;
-use crate::state::{Image, RoomId, RoomState};
+use crate::state::{Cut, Image, RoomId, RoomState};
 use crate::stats;
 use crate::text::Text;
 use crate::trace;
@@ -4147,7 +4146,7 @@ impl GameSession {
             player_flag: choice.character & 1,
             ..target
         };
-        if wanted == target || pack.contains(&wanted.rdt_entry()) {
+        if wanted == target || crate::room::exists(pack, wanted) {
             wanted
         } else {
             eprintln!(
@@ -5661,6 +5660,7 @@ impl GameSession {
                 aliased_light: false,
                 light_rotation: None,
                 joint_colours: crate::render::NO_JOINT_COLOURS,
+                hd_name: None,
             }];
             let scene = render::GameplayScene {
                 background: None,
@@ -6782,10 +6782,9 @@ fn entry_door(doors: &[Option<game::Door>; game::ROOM_ACTION_SLOTS]) -> Option<g
 /// the init script, without loading backgrounds or player assets, and return
 /// the state the `door_aot_set` records landed in.
 fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
-    let rdt_bytes = &*pack.read(&id.rdt_entry())?;
-    let room = rdt::parse(rdt_bytes, id)?;
-    let (scripts, _) = room_scripts(pack, id, rdt_bytes)?;
-    let mut game = game::GameState::new(id, &room);
+    let loaded = crate::room::load(pack, id)?;
+    let (scripts, _) = room_scripts(pack, id, &loaded)?;
+    let mut game = game::GameState::new(id, &loaded.state);
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
     vm.run_init(&mut host);
@@ -11982,17 +11981,17 @@ struct MaskCache {
 }
 
 impl MaskCache {
-    /// The mask page of `camera`, loading the `roommask/{room3}_{camera:03}`
-    /// stem from the pack on first use. Missing pages are remembered as
-    /// absent.
-    fn page_for(&mut self, pack: &Pack, id: RoomId, camera: usize) -> Option<&Image> {
+    /// The mask page of `cut` (camera `camera`), loading its mask stem
+    /// (`roommask/{room3}_{camera:03}` unless the room names another) from
+    /// the pack on first use. Missing pages are remembered as absent.
+    fn page_for(&mut self, pack: &Pack, id: RoomId, camera: usize, cut: &Cut) -> Option<&Image> {
         if self.room != Some(id) {
             self.room = Some(id);
             self.pages.clear();
             self.missing.clear();
         }
         if !self.pages.contains_key(&camera) && !self.missing.contains(&camera) {
-            let stem = id.roommask_stem(camera);
+            let stem = cut.mask_stem(id);
             // A mask page is addressed by the cut's sprite UVs, so a
             // replacement keeps the shipped page's dimensions.
             match pack.read_asset(&stem, AssetClass::Image) {
@@ -12414,7 +12413,8 @@ fn select_effect_page(
 /// Where a room's SCD scripts were loaded from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScriptSource {
-    /// The scripts embedded in the room's RDT.
+    /// The room's own scripts: embedded in its RDT, or the `room/{id}.scd`
+    /// container its XML definition names.
     Rdt,
     /// A standalone `scd/{id}.scd` container.
     Override,
@@ -12422,29 +12422,31 @@ pub enum ScriptSource {
 
 /// Where room `id` takes its scripts from: a `scd/{id}.scd` container
 /// (`convert-game` packs the checked-in room scripts as these, and a mod can
-/// ship its own) unless the RDT comes from a later layer than it, so a mod
-/// that replaces an RDT keeps that RDT's scripts.
+/// ship its own) unless the room's own scripts (an RDT, or the container an
+/// XML definition names) come from a later layer than it, so a mod that
+/// replaces a room's scripts keeps them.
 pub fn script_source(pack: &Pack, id: RoomId) -> ScriptSource {
     match (
         pack.depth_of(&id.scd_entry()),
-        pack.depth_of(&id.rdt_entry()),
+        crate::room::scripts_depth(pack, id),
     ) {
         (Some(scd), rdt) if rdt.is_none_or(|rdt| scd >= rdt) => ScriptSource::Override,
         _ => ScriptSource::Rdt,
     }
 }
 
-/// Room `id`'s scripts, from where [`script_source`] says, given its RDT.
+/// Room `id`'s scripts, from where [`script_source`] says, given its loaded
+/// definition.
 pub fn room_scripts(
     pack: &Pack,
     id: RoomId,
-    rdt_bytes: &[u8],
+    loaded: &crate::room::Loaded,
 ) -> Result<(scd::ir::Scripts, ScriptSource)> {
     let source = script_source(pack, id);
     let scripts = match source {
         ScriptSource::Override => scd::reader::parse(&pack.read(&id.scd_entry())?)
             .with_context(|| format!("invalid SCD override {}", id.scd_entry()))?,
-        ScriptSource::Rdt => scd::reader::parse(rdt_bytes).context("invalid room SCD scripts")?,
+        ScriptSource::Rdt => loaded.own_scripts(pack)?,
     };
     Ok((scripts, source))
 }
@@ -12464,16 +12466,17 @@ struct LoadedRoom {
 ///
 /// The scripts come from [`room_scripts`].
 fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
-    let rdt_bytes = &*pack.read(&id.rdt_entry())?;
-    let mut room = rdt::parse(rdt_bytes, id)?;
+    let loaded = crate::room::load(pack, id)?;
+    let (scripts, script_source) = room_scripts(pack, id, &loaded)?;
+    let mut room = loaded.state;
     for warning in &room.model_warnings {
-        eprintln!("warning: {}: {warning}", id.rdt_entry());
+        eprintln!("warning: {}: {warning}", crate::room::entry(pack, id));
     }
     if room.cuts.is_empty() {
         bail!("room {} has no camera cuts", id.room3());
     }
     for cut in &mut room.cuts {
-        let stem = id.cut_stem(cut.index);
+        let stem = cut.background_stem(id);
         let asset = pack
             .read_asset(&stem, AssetClass::Image)?
             .with_context(|| format!("missing background for cut {}", cut.index))?;
@@ -12482,7 +12485,6 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
                 .with_context(|| format!("invalid {}", asset.path()))?,
         );
     }
-    let (scripts, script_source) = room_scripts(pack, id, rdt_bytes)?;
     let player_assets = load_player_assets(pack, id);
     Ok(LoadedRoom {
         id,
@@ -14196,7 +14198,7 @@ fn render_frame_on(
     let page = if cut.masks.is_empty() || cut.mask_active == 0 {
         None
     } else {
-        masks.page_for(pack, id, room.current_cut)
+        masks.page_for(pack, id, room.current_cut, cut)
     };
     let layer = page.map(|page| MaskLayer {
         room: id,
@@ -14500,6 +14502,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: asset.prop.as_deref(),
         });
     }
     for ((asset, _, _, _), joints) in visible_item_models.iter().zip(&item_joints) {
@@ -14516,6 +14519,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: asset.prop.as_deref(),
         });
     }
     // The NPC joint gates pair with `models`/`npc_joints`/`npc_hidden`, all
@@ -14554,6 +14558,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: *joint_colours,
+            hd_name: None,
         });
     }
     // The held-weapon meshes of the scripted characters draw with the
@@ -14595,6 +14600,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         });
     }
     // The beretta's ejected magazine draws as the player EMD's own 16th mesh
@@ -14632,6 +14638,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: Some(player_state.detached_clip.world.r),
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         });
     }
     if let (Some(assets), Some(joints)) = (assets, &player_joints) {
@@ -14659,6 +14666,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         });
     }
 
@@ -14693,6 +14701,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         });
     }
 
@@ -14777,6 +14786,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         });
     }
 
@@ -14901,6 +14911,7 @@ fn render_frame_on(
             aliased_light: complex.is_none() && aliased,
             light_rotation,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         });
     }
 
@@ -14976,6 +14987,7 @@ fn render_frame_on(
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         });
     }
 
@@ -15686,6 +15698,7 @@ mod tests {
             room: 0x07,
             object_models: vec![ObjectAsset {
                 pair_index: 0,
+                prop: None,
                 model: crate::model::Tmd::default(),
                 texture: crate::model::Texture8 {
                     width: 0,
@@ -15737,6 +15750,7 @@ mod tests {
 
         let asset = |pair: usize| ObjectAsset {
             pair_index: pair,
+            prop: None,
             model: crate::model::Tmd::default(),
             texture: crate::model::Texture8 {
                 width: 0,
@@ -15797,6 +15811,7 @@ mod tests {
 
         let asset = |pair: usize| ObjectAsset {
             pair_index: pair,
+            prop: None,
             model: crate::model::Tmd::default(),
             texture: crate::model::Texture8 {
                 width: 0,
@@ -15931,6 +15946,7 @@ mod tests {
 
         let asset = ObjectAsset {
             pair_index: 0,
+            prop: None,
             model: crate::model::Tmd::default(),
             texture: crate::model::Texture8 {
                 width: 0,
@@ -16243,7 +16259,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("1010").unwrap();
-        let mut room = rdt::parse(&pack.read(&id.rdt_entry()).unwrap(), id).unwrap();
+        let mut room = crate::room::load_state(&pack, id).unwrap();
         let assets = load_player_assets(&pack, id).expect("player assets");
         let idle_player = player::spawn(id, &room);
         let mut walking_player = idle_player.clone();
@@ -16346,9 +16362,9 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("1001").unwrap();
-        let rdt_bytes = &*pack.read(&id.rdt_entry()).unwrap();
-        let room = rdt::parse(rdt_bytes, id).unwrap();
-        let scripts = scd::reader::parse(rdt_bytes).unwrap();
+        let loaded = crate::room::load(&pack, id).unwrap();
+        let scripts = loaded.own_scripts(&pack).unwrap();
+        let room = loaded.state;
 
         let mut game = game::GameState::new(id, &room);
         // The new-game room-items bank registers the item edges; Jill's ink
@@ -19323,6 +19339,7 @@ mod tests {
             aliased_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
         }];
         let camera = Camera::from_cut(cut);
         let lighting = Lighting::from_room(&loaded.room);
@@ -19771,7 +19788,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("1001").unwrap();
-        let room = rdt::parse(&pack.read(&id.rdt_entry()).unwrap(), id).unwrap();
+        let room = crate::room::load_state(&pack, id).unwrap();
         let assets = load_player_assets(&pack, id).expect("player assets");
         let mut player_state = player::spawn(id, &room);
         let input = player::Input {
@@ -19814,7 +19831,7 @@ mod tests {
         };
         let pack = Pack::open(Path::new(&path)).unwrap();
         let id = RoomId::parse("1001").unwrap();
-        let room = rdt::parse(&pack.read(&id.rdt_entry()).unwrap(), id).unwrap();
+        let room = crate::room::load_state(&pack, id).unwrap();
         let assets = load_player_assets(&pack, id).expect("player assets");
 
         type Footfall = (usize, u8, u8, [i32; 3], Option<&'static str>);

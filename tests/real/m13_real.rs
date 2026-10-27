@@ -21,6 +21,7 @@ use arklay::game::{BgmState, GameState, ScdGameHost, Snd3dPos};
 use arklay::message::MessageWindow;
 use arklay::pack::Pack;
 use arklay::player;
+use arklay::room;
 use arklay::save::SaveFile;
 use arklay::scd::host::ScdHost;
 use arklay::scd::ir::{Decoded, Scripts};
@@ -996,10 +997,7 @@ const IMPLEMENTED_OPCODES: [u8; 12] = [
 ];
 
 /// Every opcode byte that appears in one RDT's init, main or event scripts.
-fn script_opcodes(bytes: &[u8]) -> std::collections::BTreeSet<u8> {
-    let Ok(scripts) = reader::parse(bytes) else {
-        return Default::default();
-    };
+fn script_opcodes(scripts: &Scripts) -> std::collections::BTreeSet<u8> {
     scripts
         .init
         .iter()
@@ -1010,18 +1008,6 @@ fn script_opcodes(bytes: &[u8]) -> std::collections::BTreeSet<u8> {
         .collect()
 }
 
-/// Inventory the pack's room entries.
-fn room_ids(pack: &Pack) -> Vec<RoomId> {
-    let mut ids: Vec<RoomId> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .filter_map(|path| RoomId::parse(&path[5..9]).ok())
-        .collect();
-    ids.sort_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids.dedup_by_key(|id| (id.stage, id.room, id.player_flag));
-    ids
-}
-
 #[test]
 #[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
 fn real_m13_corpus_audit_has_no_implemented_placeholders() {
@@ -1029,7 +1015,7 @@ fn real_m13_corpus_audit_has_no_implemented_placeholders() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let ids = room_ids(&pack);
+    let ids = room::ids(&pack);
     assert!(ids.len() > 300, "expected the shipped room corpus");
 
     let mut simulated = 0usize;
@@ -1044,8 +1030,8 @@ fn real_m13_corpus_audit_has_no_implemented_placeholders() {
             continue;
         };
         simulated += 1;
-        if let Ok(bytes) = pack.read(&id.rdt_entry()) {
-            corpus_ops.extend(script_opcodes(&bytes));
+        if let Ok(scripts) = room::own_scripts(&pack, *id) {
+            corpus_ops.extend(script_opcodes(&scripts));
         }
         noops += sim.game.snd3d_noops.values().sum::<u64>();
         enemy_drops += sim.game.snd3d_enemy_drops;

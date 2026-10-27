@@ -179,6 +179,11 @@ is exact.
 | map pages | `map/00` … `map/0e`, `map/bg` (the full floor-plan view's backdrop) | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
 | FILE pages | `file/<doc>_bg` (the book backdrop), `file/<doc>_<page>_fg_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `file/0f_03_fg_en-US`; `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
 | room effect sheets | `effect/00` … `effect/20` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
+| room definition | `room/1000.xml` | xml (see [Room definitions](#room-definitions)); a raw `rdt` still loads | — |
+| room prop model | `prop/1a2b3c4d.tmd` | tmd | the shipped mesh |
+| room prop texture | `prop/1a2b3c4d.bmp`; HD replacements use `htexture/prop/1a2b3c4d` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
+| room effect sprite | `effect/5e6f7a8b.tim` | tim | the shipped sprite's |
+| room player animation | `animation/9c0d1e2f.emr` + `.edd` | emr, edd | — |
 | player shadow | `shadow/kage` | webp, png, bmp, tim | the shipped page's; an RGBA page's alpha is the coverage |
 | BGM | `bgm/013`, `bgm/100` | ogg, wav | any |
 | sound effect | `se/a_mcn03`, `se/ft_wda` | ogg, wav | any |
@@ -204,6 +209,55 @@ entry's reserved byte is its PSX semi-transparency (STP) bit. `convert-game`
 writes the map, FILE, effect and item model pages this way, so screens that
 recolour by palette index and the HD texture hashes keep working. Any other
 BMP is read as true colour.
+
+### Room definitions
+
+`convert-game` writes each room as `room/<id>.xml` (`<id>` is the four-digit
+lower-case RDT number, e.g. `room/1000.xml` for `ROOM1000.RDT`) and the files
+it names:
+
+```text
+room/1000.xml            the room: lights, cameras and masks, zones, collision, messages, effects, model slots
+room/1000.scd            the room's own init, per-frame and event scripts
+prop/1a2b3c4d.tmd        a model an object or item slot names
+prop/1a2b3c4d.bmp        its texture page (a .tim when the page has more than one CLUT row)
+prop/props.toml          which rooms and slots use each prop, for people
+effect/5e6f7a8b.tim      a room effect sprite sheet
+animation/9c0d1e2f.emr   a room player-animation pair, with animation/9c0d1e2f.edd
+```
+
+A sidecar id is eight hex digits, the CRC-32 of the file's content, so
+identical content is stored once (one prop can serve many rooms and both an
+object and an item slot) and a file has the same id in every pack converted
+from any release that ships it. A mod adding its own files may use any id no
+other file has. The
+XML is the format the loader reads, so a hand edit (a moved light, a retimed
+message, a slot pointed at another prop) needs no tool. An unknown element or
+attribute is refused rather than ignored. Integers are decimal or `0x` hex.
+The camera switch zones are grouped by their source camera, but each carries a
+flat `zoneIndex`: the index scripts and the SCD `zone` opcodes use, which must
+stay contiguous from 0.
+
+Messages are text plus elements for the control bytes (`<br/>`, `<page n>`,
+`<speed n>`, `<color n>`, `<item n>`, `<itemEnd/>`, `<yesno a b c>`,
+`<end action>`, `<s/>`); a glyph the room's script cannot spell is a
+`<glyph page="0xF8" n>` or `<byte v="0x..">`. A message whose bytes no
+markup reproduces exactly is kept as a `raw` hex attribute. Text the room's
+font cannot spell exactly is refused rather than drawn as another glyph.
+
+A room's scripts are the `<scripts src>` container unless the pack carries a
+`scd/<id>.scd` override from the same or a later layer than that container.
+A mod that only edits a room's XML keeps naming the base container, so the
+base override still runs; a mod that ships its own container (or an RDT)
+from a later layer runs that. A pack
+converted before the XML format, and a mod that ships `room/<id>.rdt`, still
+load: when both a `.xml` and a `.rdt` define a room, the one from the later
+layer wins, and the XML wins a tie.
+
+An HD pack can name a prop's page `htexture/prop/<id>` (covering the whole
+page) instead of by content hash. A page with more than one CLUT row is only
+replaced by its per-row content hashes. The hash names still
+work, so an HD pack made for RDT rooms keeps replacing the same textures.
 
 ### Item art
 
@@ -551,7 +605,7 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | --- | --- |
 | `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `htexture/**` |
 | `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
-| `STAGEn/ROOM####.RDT` | `room/####.rdt` |
+| `STAGEn/ROOM####.RDT` | `room/####.rdt` (the engine loads a raw RDT as well as the converted XML) |
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `roomcut/*.bmp`, `roommask/*.bmp` (copied to stages 6/7 where the room exists) |
 | `ENEMY/*.EMD`, `PLAYERS/*.EMW`, `PLAYERS/*.TMD` | `enemy/*`, `player/*` |
 | `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `voice/*` record playing the file |

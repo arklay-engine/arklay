@@ -321,7 +321,7 @@ enum Value {
 
 /// One parsed `key = value` statement.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Item {
+pub(crate) struct Item {
     /// Enclosing section, if any.
     section: Option<String>,
     /// The key.
@@ -333,7 +333,7 @@ struct Item {
 }
 
 /// Parse the subset grammar into a flat list of statements.
-fn parse_items(text: &str) -> Result<Vec<Item>> {
+pub(crate) fn parse_items(text: &str) -> Result<Vec<Item>> {
     let mut items = Vec::new();
     let mut seen = HashSet::new();
     let mut section: Option<String> = None;

@@ -9,6 +9,7 @@ use crate::common;
 use arklay::game::Entity;
 use arklay::pack::Pack;
 use arklay::player;
+use arklay::room;
 use arklay::state::RoomId;
 
 /// The first entity slot holding `id`, with its index.
@@ -701,12 +702,11 @@ fn real_room5060_computer_arms_initialise_through_the_script() {
 /// census's boot path plus a few ticks of every active monster slot.
 fn boot_and_tick(pack: &Pack, id: RoomId, ticks: usize) -> arklay::game::GameState {
     use arklay::game::{ENTITY_COUNT, GameState, ScdGameHost};
-    use arklay::scd;
     use arklay::scd::vm::CommandVm;
 
-    let data = &*pack.read(&id.rdt_entry()).unwrap();
-    let room = arklay::rdt::parse(data, id).unwrap();
-    let scripts = scd::reader::parse(data).unwrap();
+    let loaded = room::load(pack, id).unwrap();
+    let scripts = loaded.own_scripts(pack).unwrap();
+    let room = loaded.state;
     let mut game = GameState::new(id, &room);
     {
         let mut vm = CommandVm::new(&scripts);

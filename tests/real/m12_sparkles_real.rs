@@ -13,9 +13,8 @@ use arklay::game::{FlagBank, GameState, RoomActionKind, ScdGameHost};
 use arklay::objects;
 use arklay::pack::Pack;
 use arklay::player;
-use arklay::rdt;
 use arklay::render::Camera;
-use arklay::scd;
+use arklay::room;
 use arklay::scd::host::ScdHost;
 use arklay::scd::ir::Operand;
 use arklay::scd::opcode::command_op;
@@ -281,28 +280,21 @@ fn corpus_walk_spawns_all_43_shipped_sparkles_and_frees_them() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let mut rooms: Vec<String> = pack
-        .paths()
-        .filter(|path| path.starts_with("room/") && path.ends_with(".rdt"))
-        .map(|path| path[5..path.len() - 4].to_string())
-        .collect();
-    rooms.sort();
+    let rooms = room::ids(&pack);
     assert!(rooms.len() > 300, "expected the shipped room corpus");
 
     let mut spawned = 0usize;
     let mut rooms_with_sparkles = 0usize;
-    for name in &rooms {
-        let id = RoomId::parse(name).unwrap();
-        let Ok(data) = pack.read(&id.rdt_entry()) else {
+    for &id in &rooms {
+        let name = format!("{:04x}", id.rdt_number());
+        let Ok(loaded) = room::load(&pack, id) else {
             continue;
         };
-        let Ok(room) = rdt::parse(&data, id) else {
-            continue;
-        };
+        let room = &loaded.state;
         if room.item_models.is_empty() {
             continue;
         }
-        let Ok(scripts) = scd::reader::parse(&data) else {
+        let Ok(scripts) = loaded.own_scripts(&pack) else {
             continue;
         };
         // Every `item_aot_set` site whose flags word carries the sparkle bit,
@@ -320,9 +312,9 @@ fn corpus_walk_spawns_all_43_shipped_sparkles_and_frees_them() {
         }
         rooms_with_sparkles += 1;
 
-        let mut game = GameState::new(id, &room);
+        let mut game = GameState::new(id, room);
         game.set_weapon_effects(effects::WeaponEffects::load(&pack));
-        game.resolve_room_effects(&room);
+        game.resolve_room_effects(room);
         game.flags[7]
             .bytes_mut()
             .copy_from_slice(&NEW_GAME_ROOM_ITEMS);
@@ -391,7 +383,7 @@ fn corpus_walk_spawns_all_43_shipped_sparkles_and_frees_them() {
                 }) {
                     break;
                 }
-                game.tick_effects(&room);
+                game.tick_effects(room);
             }
             for index in &claimed {
                 let effect = game.effects.slot(*index).unwrap();

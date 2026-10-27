@@ -464,6 +464,10 @@ pub struct GpuRenderer {
     /// cannot be reused for a different replacement while the entry is
     /// cached (the key stores that address).
     page_keeps: HashMap<PageKey, Arc<htexture::Replacement>>,
+    /// The named HD replacement each mesh page stem resolved to in the pack
+    /// at `named_pack` (its address), so the lookup runs once per stem.
+    named_pages: HashMap<String, Option<Arc<htexture::Replacement>>>,
+    named_pack: usize,
     images: HashMap<usize, Resident<ImageTexture>>,
     /// Bound in place of a page's replacements when it has none.
     no_hd: *mut SDL_GPUTexture,
@@ -657,6 +661,8 @@ impl GpuRenderer {
             meshes: HashMap::new(),
             pages: HashMap::new(),
             page_keeps: HashMap::new(),
+            named_pages: HashMap::new(),
+            named_pack: 0,
             images: HashMap::new(),
             no_hd: std::ptr::null_mut(),
             no_hd_rows: std::ptr::null_mut(),
@@ -1450,6 +1456,28 @@ impl GpuRenderer {
         Ok(value)
     }
 
+    /// The HD replacement `pack` names for the mesh page `stem`
+    /// (`htexture/<stem>`, covering the whole page), looked up once per stem.
+    /// `None` leaves the page to its content hashes.
+    fn named_page(
+        &mut self,
+        pack: &Pack,
+        stem: &str,
+        texture: &Texture8,
+    ) -> Option<Arc<htexture::Replacement>> {
+        let address = pack as *const Pack as usize;
+        if self.named_pack != address {
+            self.named_pack = address;
+            self.named_pages.clear();
+        }
+        if let Some(found) = self.named_pages.get(stem) {
+            return found.clone();
+        }
+        let found = htexture::named_replacement(pack, stem, [texture.width, texture.height]);
+        self.named_pages.insert(stem.to_string(), found.clone());
+        found
+    }
+
     /// Make an indexed page and its palette resident, with the HD
     /// replacements `pack` carries for its CLUT rows. A missing replacement
     /// is reported only for the rows in `used`.
@@ -1864,6 +1892,7 @@ impl GpuRenderer {
             self.release_mesh(entry.value);
         }
         self.page_keeps.clear();
+        self.named_pages.clear();
         for (_, entry) in std::mem::take(&mut self.pages) {
             self.release_page(entry.value);
         }
@@ -1947,7 +1976,16 @@ impl GpuRenderer {
             let mut meshes = Vec::with_capacity(scene.meshes.len());
             for mesh in scene.meshes {
                 let buffer = self.ensure_mesh(copy, mesh.mesh)?;
-                let page = self.ensure_page(copy, mesh.texture, buffer.rows, pack, None)?;
+                // A named image covers one palette row, so a page with more
+                // rows keeps its per-row content hashes.
+                let named = match (mesh.hd_name, pack) {
+                    (Some(stem), Some(pack)) if page_row_count(mesh.texture) == 1 => {
+                        self.named_page(pack, stem, mesh.texture)
+                    }
+                    _ => None,
+                };
+                let page =
+                    self.ensure_page(copy, mesh.texture, buffer.rows, pack, named.as_ref())?;
                 meshes.push(page.map(|page| (buffer, page)));
             }
             let sprites = scene::scene_sprites(scene);
@@ -3651,6 +3689,7 @@ mod tests {
             per_joint_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
             complex_object: None,
             aliased_light: false,
         }];
@@ -3849,6 +3888,7 @@ mod tests {
             per_joint_light: false,
             light_rotation: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
             complex_object: None,
             aliased_light: false,
         }];

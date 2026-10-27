@@ -135,12 +135,29 @@ pub fn parse_room_anim(
     base: u32,
     bound: u32,
 ) -> Result<crate::model::RoomAnim> {
-    let header = header as usize;
-    let base = base as usize;
-    let bound = bound as usize;
     if header == 0 || base == 0 {
         bail!("room animation pair has a null pointer");
     }
+    parse_room_anim_at(data, header as usize, base as usize, bound as usize)
+}
+
+/// Parse a room player-animation pair stored as two files, the EMR armature
+/// and keyframe header and the EDD clip table ([`parse_room_anim`] reads the
+/// same pair out of an RDT). Both halves address their own data relative to
+/// their start, so the pair parses from the two files laid end to end.
+pub fn parse_room_anim_files(emr: &[u8], edd: &[u8]) -> Result<crate::model::RoomAnim> {
+    let mut data = Vec::with_capacity(emr.len() + edd.len());
+    data.extend_from_slice(emr);
+    data.extend_from_slice(edd);
+    parse_room_anim_at(&data, 0, emr.len(), data.len())
+}
+
+fn parse_room_anim_at(
+    data: &[u8],
+    header: usize,
+    base: usize,
+    bound: usize,
+) -> Result<crate::model::RoomAnim> {
     if header > base || base > bound || bound > data.len() {
         bail!(
             "room animation offsets are out of order: header 0x{header:X}, base 0x{base:X}, bound 0x{bound:X}"

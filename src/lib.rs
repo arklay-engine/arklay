@@ -61,6 +61,7 @@ pub mod progress;
 pub mod raster;
 pub mod rdt;
 pub mod render;
+pub mod room;
 pub mod save;
 pub mod scd;
 pub mod sfx;

@@ -18,8 +18,8 @@ use arklay::bmp;
 use arklay::emd;
 use arklay::pack::Pack;
 use arklay::player;
-use arklay::rdt;
 use arklay::render::{self, Camera, EntityMesh, Framebuffer, Lighting, MaskLayer};
+use arklay::room;
 use arklay::shadow;
 use arklay::state::{Image, RoomId};
 
@@ -67,7 +67,7 @@ fn player_shadow_capture_is_deterministic_and_present_at_spawn() {
     };
     let pack = Pack::open(&path).unwrap();
     let id = RoomId::parse("1001").unwrap();
-    let room = rdt::parse(&pack.read(&id.rdt_entry()).unwrap(), id).unwrap();
+    let room = room::load_state(&pack, id).unwrap();
     let player_state = player::spawn(id, &room);
     let camera_index = player::camera_for_position(&room, 0, player_state.pos);
     let cut = &room.cuts[camera_index];
@@ -111,6 +111,7 @@ fn player_shadow_capture_is_deterministic_and_present_at_spawn() {
         aliased_light: false,
         light_rotation: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
+        hd_name: None,
     }];
 
     let background = bmp::decode(&pack.read(&id.cut_entry(camera_index)).unwrap()).unwrap();

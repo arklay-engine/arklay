@@ -181,7 +181,7 @@ pub struct CollisionRect {
 }
 
 /// Room collision boundaries, split into quadrants around `(cell_x, cell_z)`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Collision {
     pub cell_x: i16,
     pub cell_z: i16,
@@ -296,16 +296,34 @@ pub struct Cut {
     pub roll: i32,
     pub fov: i32,
     pub background: Option<Image>,
-    /// Direct file offset of the camera's mask sprite table; zero when absent.
-    pub mask_pointer: u32,
-    /// Direct file offset of the camera's embedded mask TIM; zero when absent.
-    pub tim_mask_pointer: u32,
+    /// Pack stem of the camera background when the room definition names
+    /// one; `None` is the room's own [`RoomId::cut_stem`].
+    pub background_stem: Option<String>,
+    /// Pack stem of the camera's mask page when the room definition names
+    /// one; `None` is the room's own [`RoomId::roommask_stem`].
+    pub mask_stem: Option<String>,
     /// Number of groups in the camera's mask table.
     pub mask_group_count: u8,
     /// One bit per one-based group id: set while the group is visible.
     pub mask_active: u32,
     /// The camera's parsed mask sprites in group order.
     pub masks: Vec<MaskSprite>,
+}
+
+impl Cut {
+    /// The pack stem of this camera's background in room `id`.
+    pub fn background_stem(&self, id: RoomId) -> String {
+        self.background_stem
+            .clone()
+            .unwrap_or_else(|| id.cut_stem(self.index))
+    }
+
+    /// The pack stem of this camera's mask page in room `id`.
+    pub fn mask_stem(&self, id: RoomId) -> String {
+        self.mask_stem
+            .clone()
+            .unwrap_or_else(|| id.roommask_stem(self.index))
+    }
 }
 
 /// The loaded room: its contents and the currently displayed cut.
