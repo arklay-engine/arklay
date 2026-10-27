@@ -1335,6 +1335,16 @@ impl UserData for Api<'_> {
             },
         );
 
+        methods.add_method_mut("classic_rebirth_width", |_lua, api, text: String| {
+            let Some(font) = api.cx.font else {
+                api.host.note_missing_font();
+                return Ok(0);
+            };
+            let mut bytes = Vec::new();
+            charset::encode(&text, api.host.script, &mut bytes);
+            Ok(font.classic_rebirth_width(&bytes))
+        });
+
         // ---- actions -------------------------------------------------
         methods.add_method("sound", |_lua, api, name: String| {
             let Some(cue) = cue_of(&name) else {

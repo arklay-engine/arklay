@@ -12,11 +12,10 @@
 -- the `UI_SAVE_CR_*` keys this mod ships under `language/`.
 
 local VISIBLE_ROWS = 10 -- rows drawn at once (CR shows ten)
-local ROW_Y = 49 -- the first row's y
+local ROW_Y = 49 -- the first row's y (CR's ink sits 2 px below it)
 local ROW_PITCH = 15 -- row pitch, CR's 15 px
-local TITLE_Y = 19 -- the centred title's y (CR's ink sits at 21..33)
-local DETAIL_Y = 215 -- the detail line's y (CR's ink sits at 217..229)
-local TEXT_LIFT = -1 -- rows draw one pixel above the band, like CR
+local TITLE_Y = 20 -- the centred title's y (CR's ink sits at 21..33)
+local DETAIL_Y = 216 -- the detail line's y (CR's ink sits at 217..229)
 -- The list panel and the selection band, measured from CR 1.1.3: a grey wash
 -- over the full ten-row list and a dark band across the selected row.
 local PANEL_X = 10
@@ -24,7 +23,10 @@ local PANEL_W = 300
 local PANEL_Y = 45
 local PANEL_H = 156
 local BAND_H = 14
-local BLUE = "#3F7DFA" -- CR's save-row blue, over the sheet's grey ramp
+-- CR's character colours, over the sheet's grey ramp: a save row and the
+-- detail line's name take the saved character's.
+local BLUE = "#3F7DFA" -- Jill
+local GREEN = "#00FF00" -- Chris
 
 local mode = "load"
 local saves = {}
@@ -74,14 +76,31 @@ local function string_or(api, key, fallback)
     return api:string(key) or fallback
 end
 
+-- The pixel width of `text` at CR's metrics. CR draws every line with its
+-- proportional width table (`tight`), on the Japanese sheet too.
+local function text_width(api, text)
+    return api:text_width(text, true)
+end
+
+-- Draw `text` at CR's metrics, white unless `colour` is given.
+local function draw_text(api, x, y, text, colour)
+    api:text(x, y, text, { colour = colour or "white", tight = true })
+end
+
+-- The x that centres `text` the way CR does: by its own measure, which can
+-- differ from the drawn width (see `api:classic_rebirth_width`).
+local function centre_x(api, text)
+    return (320 - api:classic_rebirth_width(text)) // 2
+end
+
 -- Draw one centred line.
 local function draw_line(api, text, y, colour)
-    local x = (320 - api:text_width(text)) // 2
-    if colour then
-        api:text(x, y, text, { colour = colour })
-    else
-        api:text(x, y, text)
-    end
+    draw_text(api, centre_x(api, text), y, text, colour)
+end
+
+-- The colour of a loadable save's character.
+local function character_colour(entry)
+    return entry.character == 0 and GREEN or BLUE
 end
 
 -- The first free `save_NN.dat` name, or nil when every candidate is taken.
@@ -114,6 +133,13 @@ function on_open(api)
             saves[#saves + 1] = entry
         end
     end
+    -- CR lists the most recently written file first.
+    table.sort(saves, function(a, b)
+        if a.timestamp ~= b.timestamp then
+            return a.timestamp > b.timestamp
+        end
+        return a.name < b.name
+    end)
     cursor = 0
     scroll = 0
     message = nil
@@ -268,18 +294,19 @@ function draw(api)
         if row >= rows then
             break
         end
-        local y = ROW_Y + index * ROW_PITCH + TEXT_LIFT
+        local y = ROW_Y + index * ROW_PITCH
         local entry = saves[row + 1 - new_rows()]
         if is_new_row(row) then
             draw_line(api, string_or(api, "UI_SAVE_CR_CREATE_NEW", "Create New"), y)
         elseif entry then
-            -- CR draws a save file's name blue and the exit row white. An
-            -- autosave is labelled as one, with its rotation index.
+            -- CR draws a save file's name in its character's colour and the
+            -- exit row white. An autosave is labelled as one, with its
+            -- rotation index.
             local label = entry.base
             if entry.autosave then
                 label = string_or(api, "UI_SAVE_CR_AUTOSAVE", "Autosave") .. " " .. entry.autosave
             end
-            draw_line(api, label, y, entry.loadable and BLUE or "grey")
+            draw_line(api, label, y, entry.loadable and character_colour(entry) or "grey")
         else
             draw_line(api, string_or(api, "UI_SAVE_CR_EXIT", "Exit"), y)
         end
@@ -289,14 +316,13 @@ function draw(api)
     if create_new() then
         -- The `Create New` row has no save to describe.
     elseif entry and entry.loadable then
-        -- CR draws the character name blue and the count/location white, the
-        -- whole line centred.
+        -- CR draws the character name in its colour and the count/location
+        -- white, the whole line centred by CR's own measure.
         local name = entry.character_name or "?"
         local rest = string.format("/%02d/%s", entry.saves or 0, entry.location or "")
-        local name_w = api:text_width(name)
-        local x = (320 - name_w - api:text_width(rest)) // 2
-        api:text(x, DETAIL_Y, name, { colour = BLUE })
-        api:text(x + name_w, DETAIL_Y, rest)
+        local x = centre_x(api, name .. rest)
+        draw_text(api, x, DETAIL_Y, name, character_colour(entry))
+        draw_text(api, x + text_width(api, name), DETAIL_Y, rest)
     else
         local detail
         if entry then
