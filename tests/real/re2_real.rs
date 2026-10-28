@@ -191,3 +191,60 @@ fn detection_separates_the_dialects() {
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
+
+/// Every converted RE2 room reads into a room with cameras and collision,
+/// and every camera but the retail data's known gaps has a background.
+#[test]
+#[ignore]
+fn every_room_loads_with_its_backgrounds() {
+    let Some(pack) = pack() else {
+        return;
+    };
+    let ids = arklay::room::ids(pack);
+    assert_eq!(ids.len(), 501, "every converted RDT");
+    let (mut cameras, mut missing) = (0, Vec::new());
+    for id in ids {
+        let loaded = arklay::room::load(pack, id)
+            .unwrap_or_else(|error| panic!("room {}: {error:#}", id.code()));
+        assert_eq!(loaded.dialect, Dialect::Re2, "room {}", id.code());
+        let room = &loaded.state;
+        assert!(!room.cuts.is_empty(), "room {} has cameras", id.code());
+        assert!(room.sca.is_some(), "room {} has collision", id.code());
+        assert!(
+            !room.zones.is_empty(),
+            "room {} has switch zones",
+            id.code()
+        );
+        // Not every zone names one of the room's cameras: 11C0 keeps groups
+        // for cameras 13 and 14 it does not have.
+        assert!(
+            room.zones.iter().any(|zone| zone.cam_from == 0),
+            "room {} has camera 0's switch zones",
+            id.code()
+        );
+        assert!(
+            loaded.own_scripts(pack).unwrap().init.is_empty(),
+            "an RE2 room runs no scripts yet"
+        );
+        for cut in &room.cuts {
+            cameras += 1;
+            if pack
+                .read_asset(&id.cut_stem(cut.index), arklay::pack::AssetClass::Image)
+                .unwrap()
+                .is_none()
+            {
+                missing.push(format!("{}/{:02x}", id.code(), cut.index));
+            }
+        }
+    }
+    eprintln!("{cameras} cameras, no background for {missing:?}");
+    // Room 7071's first eight cameras point past the end of `roomcut.bin`,
+    // and the 17-camera rooms' 17th has no pointer slot.
+    let mut expected: Vec<String> = ["30c0/10", "30c1/10", "c0c0/10", "c0c1/10"]
+        .map(String::from)
+        .into();
+    expected.extend((0..8).map(|cut| format!("7071/{cut:02x}")));
+    expected.sort();
+    missing.sort();
+    assert_eq!(missing, expected);
+}

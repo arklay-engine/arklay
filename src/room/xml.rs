@@ -24,7 +24,7 @@ use super::source::{
 use crate::budget;
 use crate::charset::Script;
 use crate::effects::room::{FrameEntry, UvRecord};
-use crate::state::{Collision, CollisionRect, FootstepZone, Light, WalkZone, Zone};
+use crate::state::{Collision, CollisionRect, FootstepZone, Light, Sca, ScaRect, WalkZone, Zone};
 
 /// The format version `<room format="...">` declares.
 pub const FORMAT: u32 = 2;
@@ -187,6 +187,9 @@ pub fn write(room: &RoomSource) -> Result<String> {
         w.close("quadrant");
     }
     w.close("collision");
+    if let Some(sca) = &room.sca {
+        write_sca(&mut w, sca);
+    }
 
     w.open("walkZones", &[]);
     for zone in &room.walk_zones {
@@ -384,6 +387,34 @@ fn sprite_attributes(sprite: &MaskSprite) -> Vec<(&'static str, Value)> {
     attributes
 }
 
+/// RE2's collision records, raw words in hex.
+fn write_sca(w: &mut Writer, sca: &Sca) {
+    w.open(
+        "sca",
+        &[
+            ("cellX", dec(sca.cell_x)),
+            ("cellZ", dec(sca.cell_z)),
+            ("ceiling", dec(sca.ceiling)),
+            ("tail", hex(sca.tail)),
+        ],
+    );
+    for rect in &sca.records {
+        w.empty(
+            "record",
+            &[
+                ("x", dec(rect.x)),
+                ("z", dec(rect.z)),
+                ("width", dec(rect.width)),
+                ("depth", dec(rect.depth)),
+                ("id", hex(rect.id)),
+                ("kind", hex(rect.kind)),
+                ("floor", hex(rect.floor)),
+            ],
+        );
+    }
+    w.close("sca");
+}
+
 /// The switch zones grouped by source camera: each group's first record is
 /// its `<view>` header (the culling quad), the rest are `<switch>` records.
 /// Every record keeps its flat index, the one SCD `cut_zone_set` addresses.
@@ -549,6 +580,7 @@ pub fn parse(text: &str) -> Result<RoomSource> {
             }
             "cameraSwitches" => room.zones = parse_zones(node)?,
             "collision" => room.collision = parse_collision(node)?,
+            "sca" => room.sca = Some(parse_sca(node)?),
             "walkZones" => {
                 check_attributes(node, &[])?;
                 room.walk_zones = children(node, "walk")?
@@ -880,6 +912,30 @@ fn parse_collision(node: Node<'_, '_>) -> Result<Collision> {
             .collect::<Result<_>>()?;
     }
     Ok(collision)
+}
+
+fn parse_sca(node: Node<'_, '_>) -> Result<Sca> {
+    check_attributes(node, &["cellX", "cellZ", "ceiling", "tail"])?;
+    Ok(Sca {
+        cell_x: attr(node, "cellX")?,
+        cell_z: attr(node, "cellZ")?,
+        ceiling: attr_or(node, "ceiling", 0)?,
+        tail: attr_or(node, "tail", 0)?,
+        records: children(node, "record")?
+            .map(|rect| {
+                check_attributes(rect, &["x", "z", "width", "depth", "id", "kind", "floor"])?;
+                Ok(ScaRect {
+                    x: attr(rect, "x")?,
+                    z: attr(rect, "z")?,
+                    width: attr(rect, "width")?,
+                    depth: attr(rect, "depth")?,
+                    id: attr_or(rect, "id", 0)?,
+                    kind: attr_or(rect, "kind", 0)?,
+                    floor: attr_or(rect, "floor", 0)?,
+                })
+            })
+            .collect::<Result<_>>()?,
+    })
 }
 
 fn parse_box(rect: Node<'_, '_>) -> Result<CollisionRect> {

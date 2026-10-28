@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use crate::game::{RoomAction, RoomActionKind};
 use crate::render::{Camera, DebugVertex, Framebuffer};
-use crate::state::{Collision, CollisionRect, Image, RoomId};
+use crate::state::{Collision, CollisionRect, Image, RoomId, Sca, ScaRect};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RenderMode {
@@ -22,10 +22,11 @@ pub(super) enum RenderMode {
     AotOverlay,
     CollisionWire,
     CollisionSolid,
+    CollisionOverlay,
 }
 
 impl RenderMode {
-    const ALL: [RenderMode; 7] = [
+    const ALL: [RenderMode; 8] = [
         RenderMode::Normal,
         RenderMode::BackgroundOnly,
         RenderMode::MasksOnly,
@@ -33,6 +34,19 @@ impl RenderMode {
         RenderMode::AotOverlay,
         RenderMode::CollisionWire,
         RenderMode::CollisionSolid,
+        RenderMode::CollisionOverlay,
+    ];
+
+    /// The `--render-mode` names, in [`RenderMode::ALL`] order.
+    pub(super) const NAMES: [&'static str; 8] = [
+        "normal",
+        "background",
+        "masks",
+        "models",
+        "aot",
+        "collision-wire",
+        "collision-solid",
+        "collision-overlay",
     ];
 
     pub(super) fn label(self) -> &'static str {
@@ -44,27 +58,34 @@ impl RenderMode {
             RenderMode::AotOverlay => "AOTs over the scene",
             RenderMode::CollisionWire => "collision (wireframe)",
             RenderMode::CollisionSolid => "collision (solid)",
+            RenderMode::CollisionOverlay => "collision over the scene",
         }
     }
 
     pub(super) fn background(self) -> bool {
         matches!(
             self,
-            RenderMode::Normal | RenderMode::BackgroundOnly | RenderMode::AotOverlay
+            RenderMode::Normal
+                | RenderMode::BackgroundOnly
+                | RenderMode::AotOverlay
+                | RenderMode::CollisionOverlay
         )
     }
 
     pub(super) fn masks(self) -> bool {
         matches!(
             self,
-            RenderMode::Normal | RenderMode::MasksOnly | RenderMode::AotOverlay
+            RenderMode::Normal
+                | RenderMode::MasksOnly
+                | RenderMode::AotOverlay
+                | RenderMode::CollisionOverlay
         )
     }
 
     /// `Some(solid)` for the collision views.
     pub(super) fn collision(self) -> Option<bool> {
         match self {
-            RenderMode::CollisionWire => Some(false),
+            RenderMode::CollisionWire | RenderMode::CollisionOverlay => Some(false),
             RenderMode::CollisionSolid => Some(true),
             _ => None,
         }
@@ -75,6 +96,21 @@ static MODE: AtomicU8 = AtomicU8::new(0);
 
 pub(super) fn mode() -> RenderMode {
     RenderMode::ALL[usize::from(MODE.load(Ordering::Relaxed)) % RenderMode::ALL.len()]
+}
+
+/// Select the mode named `name` (one of [`RenderMode::NAMES`]).
+pub(super) fn set(name: &str) -> anyhow::Result<()> {
+    let index = RenderMode::NAMES
+        .iter()
+        .position(|known| *known == name)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "unknown render mode `{name}`; expected one of {}",
+                RenderMode::NAMES.join(", ")
+            )
+        })?;
+    MODE.store(index as u8, Ordering::Relaxed);
+    Ok(())
 }
 
 /// Step to the next mode and return it.
@@ -175,10 +211,11 @@ pub(super) fn unculled() -> bool {
     UNCULLED.load(Ordering::Relaxed)
 }
 
-/// The frame's camera: `cut_camera` outside the collision views, otherwise
-/// the free camera with the queued mouse input applied.
+/// The frame's camera: `cut_camera` outside the collision views (and over
+/// the scene, where the collision must line up with the background),
+/// otherwise the free camera with the queued mouse input applied.
 pub(super) fn camera(cut_camera: Camera, room: RoomId) -> Camera {
-    let collision = mode().collision().is_some();
+    let collision = mode().collision().is_some() && !mode().background();
     *LAST_FRAME
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) =
@@ -372,6 +409,7 @@ pub(super) fn collision_backdrop() -> &'static Image {
 fn draw_grid(
     out: &mut Triangles,
     collision: &Collision,
+    sca: Option<&Sca>,
     actions: &[Option<RoomAction>],
     camera: &Camera,
     floor_y: i32,
@@ -393,6 +431,9 @@ fn draw_grid(
             i32::from(rect.z_max),
         ]);
     }
+    for rect in sca.iter().flat_map(|sca| &sca.records) {
+        extend(sca_bounds(rect));
+    }
     for action in actions.iter().flatten() {
         extend(aot_bounds(action));
     }
@@ -413,8 +454,10 @@ fn draw_grid(
     for z in (z0..=z1).step_by(GRID as usize) {
         out.line3(camera, [x0, floor_y, z], [x1, floor_y, z], grid, false);
     }
-    let cx = i32::from(collision.cell_x);
-    let cz = i32::from(collision.cell_z);
+    let (cx, cz) = match sca {
+        Some(sca) => (i32::from(sca.cell_x), i32::from(sca.cell_z)),
+        None => (i32::from(collision.cell_x), i32::from(collision.cell_z)),
+    };
     let split = [120, 50, 120, 255];
     out.line3(camera, [cx, floor_y, z0], [cx, floor_y, z1], split, false);
     out.line3(camera, [x0, floor_y, cz], [x1, floor_y, cz], split, false);
@@ -425,8 +468,10 @@ fn draw_grid(
 /// coloured by type, then the AOT markers and the player's floor point over
 /// all of it. `solid` fills the walls' and zones' shaded faces back to front
 /// together; otherwise they draw as wireframes.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn collision_triangles(
     collision: &Collision,
+    sca: Option<&Sca>,
     actions: &[Option<RoomAction>],
     camera: &Camera,
     floor_y: i32,
@@ -435,8 +480,11 @@ pub(super) fn collision_triangles(
     line: f32,
 ) -> Vec<DebugVertex> {
     let mut out = Triangles::new(line);
-    draw_grid(&mut out, collision, actions, camera, floor_y);
+    draw_grid(&mut out, collision, sca, actions, camera, floor_y);
     let mut prisms = Vec::new();
+    if let Some(sca) = sca {
+        prisms.extend(sca.records.iter().map(|rect| sca_prism(rect, floor_y)));
+    }
     let mut seen: Vec<CollisionRect> = Vec::new();
     for rect in collision.quadrants.iter().flatten() {
         if seen.contains(rect) {
@@ -662,6 +710,58 @@ fn record_prism(rect: &CollisionRect, floor_y: i32) -> Prism {
         colour: shape_colour(rect),
         dashed: false,
         uprights: if circle { 6 } else { 1 },
+    }
+}
+
+/// An RE2 record's `[x0, z0, x1, z1]` box.
+fn sca_bounds(rect: &ScaRect) -> [i32; 4] {
+    let (x, z) = (i32::from(rect.x), i32::from(rect.z));
+    [x, z, x + i32::from(rect.width), z + i32::from(rect.depth)]
+}
+
+/// An RE2 collision record as a wall over its shape inside its box: a box,
+/// one of the four right triangles that drop a corner, a diamond, or an
+/// ellipse for the circles and rounded boxes.
+fn sca_prism(rect: &ScaRect, floor_y: i32) -> Prism {
+    let [x0, z0, x1, z1] = sca_bounds(rect);
+    let (mx, mz) = ((x0 + x1) / 2, (z0 + z1) / 2);
+    let corners = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+    let shape = rect.shape();
+    let outline: Vec<[i32; 2]> = match shape {
+        1..=4 => {
+            // The corner each triangle drops, in `corners` order.
+            let dropped = [2, 3, 0, 1][usize::from(shape - 1)];
+            (0..4)
+                .filter(|&corner| corner != dropped)
+                .map(|corner| corners[corner])
+                .collect()
+        }
+        5 => vec![[mx, z0], [x1, mz], [mx, z1], [x0, mz]],
+        6.. => {
+            let (rx, rz) = ((x1 - x0) as f32 / 2.0, (z1 - z0) as f32 / 2.0);
+            (0..24)
+                .map(|i| {
+                    let a = i as f32 / 24.0 * std::f32::consts::TAU;
+                    [mx + (a.cos() * rx) as i32, mz + (a.sin() * rz) as i32]
+                })
+                .collect()
+        }
+        0 => corners.to_vec(),
+    };
+    let colour = match shape {
+        0 => [255, 70, 60],
+        1..=4 => [255, 170, 60],
+        5 => [255, 230, 60],
+        6 => [60, 200, 255],
+        _ => [80, 255, 120],
+    };
+    Prism {
+        base: vec![floor_y; outline.len()],
+        uprights: if outline.len() > 4 { 6 } else { 1 },
+        outline,
+        height: WALL_HEIGHT,
+        colour: [colour[0], colour[1], colour[2], 255],
+        dashed: false,
     }
 }
 

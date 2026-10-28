@@ -120,6 +120,7 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
         ambient,
         lights,
         collision,
+        sca: None,
         zones,
         walk_zones,
         footstep_zones,

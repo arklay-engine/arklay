@@ -28,6 +28,7 @@ pub mod xml;
 
 use anyhow::{Context, Result};
 
+use crate::format::Dialect;
 use crate::pack::Pack;
 use crate::scd;
 use crate::state::{RoomId, RoomState};
@@ -120,6 +121,15 @@ pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptS
     .map_or(ScriptSource::Room, |(_, source)| source)
 }
 
+/// The scripts embedded in RDT `data`: none for an RE2 RDT, whose script
+/// dialect the engine does not run yet.
+fn rdt_scripts(data: &[u8]) -> Result<scd::ir::Scripts> {
+    if crate::format::rdt(data).dialect() == Some(Dialect::Re2) {
+        return Ok(scd::ir::Scripts::default());
+    }
+    scd::reader::parse(data).context("invalid room SCD scripts")
+}
+
 /// Read and parse SCD container `entry`; a missing `room.scd` is no scripts.
 fn read_scripts(pack: &Pack, entry: &str) -> Result<scd::ir::Scripts> {
     if !pack.contains(entry) {
@@ -135,17 +145,34 @@ fn read_scripts(pack: &Pack, entry: &str) -> Result<scd::ir::Scripts> {
 pub struct Loaded {
     pub id: RoomId,
     pub state: RoomState,
+    /// The game the room's files are in. An RE2 room has no scripts the
+    /// engine can run yet, so it runs none.
+    pub dialect: Dialect,
     rdt: Option<Vec<u8>>,
 }
 
 impl Loaded {
     /// Room `id` parsed from RDT bytes `data`, whose scripts are embedded.
+    ///
+    /// The RDT's dialect is detected from the file ([`crate::format::rdt`]):
+    /// an RE2 RDT goes through [`crate::rdt2`]'s room definition, anything
+    /// else (including the undetectable stub RDTs) through the RE1 parser.
     pub fn from_rdt(pack: &Pack, id: RoomId, data: Vec<u8>) -> Result<Self> {
+        if crate::format::rdt(&data).dialect() == Some(Dialect::Re2) {
+            let state = crate::rdt2::read(&data)?.build(id, pack)?;
+            return Ok(Self {
+                id,
+                state,
+                dialect: Dialect::Re2,
+                rdt: Some(data),
+            });
+        }
         let state = crate::rdt::parse(&data, id)?;
         let script = crate::text::pack_script(pack);
         Ok(Self {
             id,
             state: drawn_messages(state, script),
+            dialect: Dialect::Re1,
             rdt: Some(data),
         })
     }
@@ -155,9 +182,16 @@ impl Loaded {
     pub fn from_xml(pack: &Pack, id: RoomId, text: &str) -> Result<Self> {
         let source = xml::parse(text)?;
         let state = source.build(id, pack)?;
+        // A room definition built from an RE2 RDT carries its collision.
+        let dialect = if source.sca.is_some() {
+            Dialect::Re2
+        } else {
+            Dialect::Re1
+        };
         Ok(Self {
             id,
             state,
+            dialect,
             rdt: None,
         })
     }
@@ -169,13 +203,13 @@ impl Loaded {
         original_scripts: bool,
     ) -> Result<(scd::ir::Scripts, ScriptSource)> {
         let source = script_source(pack, self.id, original_scripts);
+        if self.dialect == Dialect::Re2 {
+            return Ok((scd::ir::Scripts::default(), source));
+        }
         let scripts = match source {
             ScriptSource::Rdt => match &self.rdt {
-                Some(data) => scd::reader::parse(data).context("invalid room SCD scripts")?,
-                None => {
-                    let data = pack.read(&self.id.rdt_entry())?;
-                    scd::reader::parse(&data).context("invalid room SCD scripts")?
-                }
+                Some(data) => rdt_scripts(data)?,
+                None => rdt_scripts(&pack.read(&self.id.rdt_entry())?)?,
             },
             ScriptSource::Room => read_scripts(pack, &self.id.scd_entry())?,
             ScriptSource::Original => read_scripts(pack, &self.id.original_scd_entry())?,
@@ -222,8 +256,8 @@ fn drawn_messages(mut state: RoomState, script: crate::charset::Script) -> RoomS
 /// The error of a room the pack does not define.
 fn missing(id: RoomId) -> String {
     format!(
-        "room {:04X} is missing: no {} or {}",
-        id.rdt_number(),
+        "room {} is missing: no {} or {}",
+        id.code().to_ascii_uppercase(),
         id.xml_entry(),
         id.rdt_entry()
     )
@@ -243,6 +277,7 @@ pub fn own_scripts(pack: &Pack, id: RoomId) -> Result<scd::ir::Scripts> {
     Loaded {
         id,
         state: RoomState::default(),
+        dialect: Dialect::Re1,
         rdt: None,
     }
     .own_scripts(pack)

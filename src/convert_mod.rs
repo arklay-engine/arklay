@@ -43,7 +43,8 @@ use crate::manifest;
 use crate::pack::Pack;
 use crate::state::RoomId;
 
-/// The base pack id every converted CR mod layers over.
+/// The base pack id a converted CR mod layers over when no base pack names
+/// its own.
 const BASE_ID: &str = convert::BASE_PACK_ID;
 
 /// The language file CR room text is written to.
@@ -129,9 +130,15 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     let base = open_base(options.base.as_deref(), &mut warnings)?;
     let info = read_mod_info(&input, &files, &mut warnings)?;
 
+    // The mod layers over the base pack it was converted against (`re2` for
+    // an RE2 mod converted with `--base re2.akpak`).
+    let base_id = base
+        .as_ref()
+        .and_then(|base| base.manifest())
+        .map_or_else(|| BASE_ID.to_string(), |manifest| manifest.id.clone());
     let mut manifest = manifest::Manifest {
         kind: manifest::PackKind::Mod,
-        base: Some(BASE_ID.to_string()),
+        base: Some(base_id),
         ..manifest::Manifest::base("mod")
     };
     let fallback_name = input_stem(&options.input);

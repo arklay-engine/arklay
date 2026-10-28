@@ -65,6 +65,7 @@ pub mod process_stats;
 pub mod progress;
 pub mod raster;
 pub mod rdt;
+pub mod rdt2;
 pub mod render;
 pub mod room;
 pub mod sap;

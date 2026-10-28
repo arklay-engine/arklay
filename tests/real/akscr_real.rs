@@ -98,7 +98,7 @@ fn original_rooms(pack: &Pack) -> BTreeMap<u16, Scripts> {
         let original = loaded
             .own_scripts(pack)
             .unwrap_or_else(|err| panic!("{id:?} has no readable scripts: {err:#}"));
-        rooms.insert(id.rdt_number(), original);
+        rooms.insert(id.rdt_number() as u16, original);
     }
     assert!(rooms.len() > 300, "only {} rooms with scripts", rooms.len());
     rooms
@@ -317,9 +317,10 @@ fn original_room_scripts_are_the_installed_rdt_bytecode() {
         if let Some(rdt) = installed_rdt(&root, id) {
             assert_identical(&entry, &reader::parse(&rdt).unwrap(), &original);
         }
-        let text = std::fs::read_to_string(
-            room_dir().join(format!("{:03x}.akscr", akscr::merged_id(id.rdt_number()))),
-        )
+        let text = std::fs::read_to_string(room_dir().join(format!(
+            "{:03x}.akscr",
+            akscr::merged_id(id.rdt_number() as u16)
+        )))
         .unwrap();
         let authentic = akscr::Region::ALL
             .iter()
@@ -327,7 +328,7 @@ fn original_room_scripts_are_the_installed_rdt_bytecode() {
                 compile(
                     &text,
                     Some(
-                        akscr::Variant::for_room(id.rdt_number())
+                        akscr::Variant::for_room(id.rdt_number() as u16)
                             .in_region(region)
                             .authentic(),
                     ),

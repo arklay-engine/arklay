@@ -1,5 +1,6 @@
 //! ROOM SELECT: the pack's rooms as a scrollable grid of pictures, one
-//! stage per tab.
+//! stage per tab: RE1's seven stage digits always, then every further stage
+//! the pack carries (RE2's letter stages `A`-`G`).
 //!
 //! Each cell shows the room's first camera cut, its `room3` id and its name;
 //! the grid takes as many columns as the window's width allows. The arrows
@@ -19,20 +20,25 @@ use crate::pack::Pack;
 use crate::state::RoomId;
 use crate::ui::UiInput;
 
-/// One tab per stage digit (1-7).
-pub const STAGE_COLUMNS: usize = RoomId::MAX_STAGE as usize;
 /// Thumbnails loaded per painted frame, so the grid stays responsive.
 const LOADS_PER_FRAME: usize = 4;
-/// The column labels' language keys, by stage digit.
-pub const STAGE_LABELS: [&str; STAGE_COLUMNS] = [
-    "UI_DEBUG_STAGE_1",
-    "UI_DEBUG_STAGE_2",
-    "UI_DEBUG_STAGE_3",
-    "UI_DEBUG_STAGE_4",
-    "UI_DEBUG_STAGE_5",
-    "UI_DEBUG_STAGE_6",
-    "UI_DEBUG_STAGE_7",
-];
+
+/// A stage tab's label: the language's `UI_DEBUG_STAGE_<digit>`, else the
+/// stage's digit (`STAGE A`).
+fn stage_label(cx: &Cx<'_>, stage: u8) -> String {
+    let digit = RoomId {
+        stage,
+        ..RoomId::default()
+    }
+    .stage_char()
+    .to_ascii_uppercase();
+    let label = cx.label(&format!("UI_DEBUG_STAGE_{digit}"));
+    if label.is_empty() {
+        format!("Stage {digit}")
+    } else {
+        label
+    }
+}
 
 /// One stage/room the pack carries and the RDT player variants it has.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,14 +103,16 @@ pub fn room_entries(pack: &Pack, preferred_player: u8) -> Vec<RoomId> {
 
 /// The ROOM SELECT tool's state.
 pub struct RoomSelect {
-    /// The rooms of stage `index + 1`.
+    /// Each tab's stage number.
+    stage_ids: Vec<u8>,
+    /// Each tab's rooms.
     stages: Vec<Vec<RoomVariants>>,
     /// The session's room as the menu last saw it.
     current: (u8, u8),
     stage: usize,
-    cells: [usize; STAGE_COLUMNS],
+    cells: Vec<usize>,
     /// Each stage's grid scroll, in rows.
-    scroll: [Scroll; STAGE_COLUMNS],
+    scroll: Vec<Scroll>,
     /// The grid's columns as last laid out.
     columns: usize,
 }
@@ -112,25 +120,34 @@ pub struct RoomSelect {
 impl RoomSelect {
     /// Split the pack's rooms into stages and put the cursor on `current`.
     pub fn new(pack: &Pack, current: RoomId) -> Self {
-        let mut stages = vec![Vec::new(); STAGE_COLUMNS];
-        for room in room_variants(pack) {
-            if let Some(stage) = stages.get_mut(usize::from(room.stage).wrapping_sub(1)) {
-                stage.push(room);
+        let rooms = room_variants(pack);
+        let mut stage_ids: Vec<u8> = (1..=RoomId::MAX_STAGE).collect();
+        for room in &rooms {
+            if !stage_ids.contains(&room.stage) {
+                stage_ids.push(room.stage);
             }
         }
+        let mut stages = vec![Vec::new(); stage_ids.len()];
+        for room in rooms {
+            if let Some(tab) = stage_ids.iter().position(|&stage| stage == room.stage) {
+                stages[tab].push(room);
+            }
+        }
+        let tabs = stage_ids.len();
         let mut select = Self {
+            stage_ids,
             stages,
             current: (0, 0),
             stage: 0,
-            cells: [0; STAGE_COLUMNS],
-            scroll: [Scroll::default(); STAGE_COLUMNS],
+            cells: vec![0; tabs],
+            scroll: vec![Scroll::default(); tabs],
             columns: 4,
         };
         select.refresh(current);
         select
     }
 
-    /// The cursor's stage (stage digit minus one).
+    /// The cursor's stage tab.
     pub fn column(&self) -> usize {
         self.stage
     }
@@ -154,11 +171,12 @@ impl RoomSelect {
             return;
         }
         self.current = room;
-        let stage = usize::from(room.0).wrapping_sub(1);
-        if let Some(cell) = self
-            .stages
-            .get(stage)
-            .and_then(|rooms| rooms.iter().position(|entry| entry.room == room.1))
+        let Some(stage) = self.stage_ids.iter().position(|&stage| stage == room.0) else {
+            return;
+        };
+        if let Some(cell) = self.stages[stage]
+            .iter()
+            .position(|entry| entry.room == room.1)
         {
             self.stage = stage;
             self.cells[stage] = cell;
@@ -175,7 +193,7 @@ impl RoomSelect {
 
     /// Show stage tab `stage`.
     pub(super) fn set_stage(&mut self, stage: usize) {
-        self.stage = stage.min(STAGE_COLUMNS - 1);
+        self.stage = stage.min(self.stages.len() - 1);
     }
 
     /// Scroll the grid by `rows` without moving the cursor.
@@ -189,11 +207,12 @@ impl RoomSelect {
             return Step::Back;
         }
         if input.page_left {
-            self.stage = (self.stage + STAGE_COLUMNS - 1) % STAGE_COLUMNS;
+            let tabs = self.stages.len();
+            self.stage = (self.stage + tabs - 1) % tabs;
             return Step::Stay;
         }
         if input.page_right {
-            self.stage = (self.stage + 1) % STAGE_COLUMNS;
+            self.stage = (self.stage + 1) % self.stages.len();
             return Step::Stay;
         }
         if input.confirm {
@@ -215,7 +234,11 @@ impl RoomSelect {
     pub(super) fn draw(&mut self, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
         let theme = p.theme;
         let u = |v: f32| theme.u(v);
-        let labels: Vec<String> = STAGE_LABELS.iter().map(|key| cx.label(key)).collect();
+        let labels: Vec<String> = self
+            .stage_ids
+            .iter()
+            .map(|&stage| stage_label(cx, stage))
+            .collect();
         let empty: Vec<bool> = self.stages.iter().map(Vec::is_empty).collect();
         let tab_h = widgets::tabs(p, cx, area, &labels, self.stage, &empty);
         let body = Rect::new(area.x, area.y + tab_h, area.w, area.h - tab_h);

@@ -2580,6 +2580,7 @@ fn base_manifest(language: &str) -> manifest::Manifest {
         convert_version: Some(CONVERT_VERSION),
         source_hash: Some(packed_source_hash()),
         lua: Vec::new(),
+        start_room: None,
     }
 }
 
@@ -3668,7 +3669,10 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
 /// without scripts. A room whose scripts are no region's (a modified RDT) is
 /// an error naming the room: it keeps its own scripts.
 fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static [u8]>, String> {
-    let number = id.rdt_number();
+    // The port's script builds are all RE1's, whose RDT numbers fit 16 bits.
+    let Ok(number) = u16::try_from(id.rdt_number()) else {
+        return Ok(None);
+    };
     let mut builds = crate::scd::ROOM_SCRIPTS
         .iter()
         .filter(|script| script.id == number)
