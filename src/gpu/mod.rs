@@ -4090,6 +4090,7 @@ mod tests {
                 SpriteBlend::Half,
                 SpriteBlend::HalfVariant,
                 SpriteBlend::BlackAlpha(128),
+                SpriteBlend::Add,
             ];
             for (index, blend) in blends.into_iter().enumerate() {
                 let x = 60 + 30 * index as i32;

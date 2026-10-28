@@ -2361,6 +2361,10 @@ impl GameSession {
         let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         file.apply_to(&mut game);
+        // The original's room init runs over the loaded flags, so the room
+        // the save resumes in is visited (`room_set_visited_flag`) even when
+        // the block predates its visit; the map tab highlights it.
+        game.mark_room_visited(id);
         // `InitializeGame`'s continue branch: a zero save counter also zeroes
         // the play timer, then every load advances the counter.
         if game.state_bytes[usize::from(game::STATE_BYTE_SAVES)] == 0 {
@@ -12682,6 +12686,10 @@ fn new_game_state(
     // from the freshly parsed room data here leaves the UV V bias applied
     // exactly once.
     game.resolve_room_effects(room);
+    // The original's room init (`room_set_visited_flag`) marks the room a
+    // session starts in visited, as it does every room it enters; the map
+    // tab highlights it.
+    game.mark_room_visited(id);
     game
 }
 
@@ -19157,6 +19165,93 @@ mod tests {
         let total = (WIDTH * HEIGHT) as usize;
         eprintln!("DIED screen at {aspect:?}: {different} of {total} pixels differ");
         assert!(different * 10 < total, "{different} pixels differ");
+    }
+
+    /// Dump the map tab's floor-plan display as the GPU 2D pass draws it
+    /// (with `ARKLAY_GPU_TEST_MODS`' HD art) next to the software frame, to
+    /// `ARKLAY_GPU_TEST_DUMP`: the browser, then frames through the zoom-in
+    /// and the scanline sweep.
+    #[test]
+    #[ignore = "requires a converted pack via ARKLAY_RE1_PACK"]
+    fn gpu_map_display_dump() {
+        let _lock = crate::audio::test_lock::sdl();
+        let (Ok(path), Ok(dir)) = (
+            std::env::var("ARKLAY_RE1_PACK"),
+            std::env::var("ARKLAY_GPU_TEST_DUMP"),
+        ) else {
+            return;
+        };
+        let Ok(_sdl) = SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let scale = std::env::var("ARKLAY_GPU_TEST_SCALE")
+            .ok()
+            .and_then(|scale| scale.parse().ok())
+            .unwrap_or(4);
+        let mut gpu = match GpuRenderer::offscreen(scale) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let (gpu_width, gpu_height) = gpu.scene_size();
+        let mods: Vec<std::path::PathBuf> = std::env::var("ARKLAY_GPU_TEST_MODS")
+            .map(|mods| std::env::split_paths(&mods).collect())
+            .unwrap_or_default();
+        let pack = Pack::open_layered(Path::new(&path), &mods).unwrap();
+        let save_dir = TempDir::new();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("101").unwrap(), &save_dir.0).unwrap();
+        // The oracle's map save: the first eight maps owned.
+        for area in 0..8 {
+            session.game.flags[usize::from(crate::game::BANK_ROOM_FLAGS)]
+                .apply(crate::game::ROOM_FLAG_MAP_BASE + area, 0);
+        }
+        session.open_map(&pack);
+        let dump = |session: &mut GameSession, gpu: &mut GpuRenderer, name: &str| {
+            session.render_layers(&pack, gpu).unwrap();
+            gpu.draw_frame(session.framebuffer.list().expect("a recorded frame"))
+                .unwrap();
+            let (rgba, _) = gpu.read_frame().unwrap();
+            let image = Image {
+                width: gpu_width,
+                height: gpu_height,
+                rgba,
+            };
+            capture_bmp(&image, &Path::new(&dir).join(format!("map-{name}-gpu.bmp"))).unwrap();
+            session.use_software();
+            session.render(&pack);
+            let image = Image {
+                width: WIDTH as u32,
+                height: HEIGHT as u32,
+                rgba: session.framebuffer.rgba.clone(),
+            };
+            capture_bmp(&image, &Path::new(&dir).join(format!("map-{name}-sw.bmp"))).unwrap();
+        };
+        let tick = |session: &mut GameSession, ui: UiInput| {
+            session
+                .tick(&pack, ui, player::Input::default(), false)
+                .unwrap();
+        };
+        for _ in 0..10 {
+            tick(&mut session, UiInput::default());
+        }
+        dump(&mut session, &mut gpu, "browser");
+        tick(
+            &mut session,
+            UiInput {
+                confirm: true,
+                ..UiInput::default()
+            },
+        );
+        for frame in 1..=160 {
+            tick(&mut session, UiInput::default());
+            if matches!(frame, 6 | 8 | 12 | 19 | 40 | 160) {
+                dump(&mut session, &mut gpu, &format!("zoom{frame:03}"));
+            }
+        }
     }
 
     #[test]
@@ -28175,6 +28270,10 @@ off_0010:
                 NEW_GAME_HEALTH[usize::from(character)]
             );
             assert_eq!(session.game.flags[7].bytes(), &NEW_GAME_ROOM_ITEMS);
+            assert!(
+                session.game.room_visited(session.game.id),
+                "the start room is visited"
+            );
             // The card's counter rides the new game; its first save shows 1.
             assert_eq!(
                 session.game.state_bytes[usize::from(game::STATE_BYTE_SAVES)],
@@ -28717,15 +28816,23 @@ off_0010:
         session.game.add_item(0x0F, 30);
         session.player.pos = [12000, 0, 3300];
         session.player.angle = 512;
+        // A block without the room's visited bit (one authored before the
+        // visit) still resumes in a visited room.
+        let mut unvisited = session.game.clone();
+        let group = usize::from((unvisited.id.stage - 1) % 5);
+        let bit = game::STAGE_ROOM_FLAG_OFFSETS[group].wrapping_add(unvisited.id.room);
+        unvisited.flags[usize::from(game::BANK_ROOM_FLAGS)].apply(bit, 1);
+        assert!(!unvisited.room_visited(unvisited.id));
 
         let dir = TempDir::new();
         let saves = dir.0.join("saves");
-        let file = save::SaveFile::from_state(&session.game);
+        let file = save::SaveFile::from_state(&unvisited);
         save::save(&saves, 3, &file).unwrap();
 
         let parsed = save::load(&saves, 3).unwrap();
         let continued = GameSession::from_save(&pack, &parsed, Path::new("saves")).unwrap();
         assert_eq!(continued.game.id, session.game.id);
+        assert!(continued.game.room_visited(continued.game.id));
         assert_eq!(continued.game.entities[0].health, 88);
         // The maximum is re-derived from the saved character, not left at 0.
         assert_eq!(continued.game.max_health, 140, "Chris's continue maximum");

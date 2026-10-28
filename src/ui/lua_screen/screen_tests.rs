@@ -1962,6 +1962,12 @@ fn cancel_leaves_the_lab_terminal_from_the_menu() {
 
 /// An 8bpp TIM of one row: `palette` maps index to a BGR555 colour.
 fn map_tim(pixels: &[u8], palette: impl Fn(u16) -> u16) -> Vec<u8> {
+    map_tim_rows(pixels.len(), pixels, palette)
+}
+
+/// An 8bpp TIM of `width`-texel rows.
+fn map_tim_rows(width: usize, pixels: &[u8], palette: impl Fn(u16) -> u16) -> Vec<u8> {
+    let height = (pixels.len() / width) as u16;
     let mut data = Vec::new();
     data.extend_from_slice(&0x10u32.to_le_bytes());
     data.extend_from_slice(&9u32.to_le_bytes());
@@ -1974,8 +1980,8 @@ fn map_tim(pixels: &[u8], palette: impl Fn(u16) -> u16) -> Vec<u8> {
     }
     data.extend_from_slice(&(12u32 + pixels.len() as u32).to_le_bytes());
     data.extend_from_slice(&[0, 0, 0, 0]);
-    data.extend_from_slice(&(pixels.len() as u16 / 2).to_le_bytes());
-    data.extend_from_slice(&1u16.to_le_bytes());
+    data.extend_from_slice(&(width as u16 / 2).to_le_bytes());
+    data.extend_from_slice(&height.to_le_bytes());
     data.extend_from_slice(pixels);
     data
 }
@@ -2121,13 +2127,30 @@ fn map_navigation_steps_rooms_and_zooms() {
     );
     tab.step(press(|i| i.down = true));
     assert_eq!(tab.state("M.state.room[0]"), 1);
-    // Confirm enters the full display; cancel leaves it, then closes.
+    // Confirm enters the full display; cancel shrinks it back to the
+    // browser over several frames, then cancel closes.
     tab.step(press(|i| i.confirm = true));
     assert_eq!(tab.screen.value("zoomed"), 1);
     tab.step(press(|i| i.up = true));
     assert_eq!(tab.state("M.state.room[0]"), 1, "the display ignores steps");
     tab.step(press(|i| i.cancel = true));
-    assert_eq!(tab.screen.value("zoomed"), 0);
+    let mut frames = 0;
+    while tab.screen.value("zoomed") == 1 {
+        assert_eq!(tab.step(neutral()), ScreenResult::Continue);
+        frames += 1;
+        assert!(frames < 40, "the display never closed");
+    }
+    assert!(frames > 10, "the close is animated: {frames} frames");
+    assert_eq!(
+        tab.step(press(|i| i.cancel = true)),
+        ScreenResult::Done(ScreenAction::Quit)
+    );
+    // A cancel while the display shrinks leaves the tab outright.
+    let mut tab = MapTab::new("map-nav-close", no_map_pack(), (1, 1, 0), &[1, 32]);
+    tab.step(neutral());
+    tab.step(press(|i| i.confirm = true));
+    tab.step(neutral());
+    tab.step(press(|i| i.cancel = true));
     assert_eq!(
         tab.step(press(|i| i.cancel = true)),
         ScreenResult::Done(ScreenAction::Quit)
@@ -2163,29 +2186,57 @@ fn map_display_reddens_the_current_room_over_the_grid() {
     const WHITE: u16 = 0x7FFF;
     const GREEN: u16 = 0x03E0;
     const BLUE: u16 = 0x7C00;
+    // Room 1110's first camera opens on area 2 (layout 0's room slot 0),
+    // map group 1; the player's room is visited.
+    let probe = MapTab::new("map-display-probe", no_map_pack(), (1, 0x10, 0), &[]);
+    assert_eq!(probe.state("M.state.area"), 2);
+    let room = probe.state("M.state.map_room");
+    let visited =
+        probe.state("M.state.tables.stage_room_offsets[M.state.map_group] + M.state.map_room");
+    // The player's room's fill (its six entries' second); another room's
+    // door marker - unvisited on an unknown map, so cleared.
+    let fill = u8::try_from(13 + room * 6 + 1).unwrap();
+    let other = if room == 0 { 19 } else { 13 };
     let mut writer = crate::pack::PackWriter::new();
-    // The grid's index 0 is a solid colour; index 1 is the grid line.
+    // The grid's index 0 is a solid colour; index 1 is the grid line, under
+    // the plan's fourth texel (the grid's left half rests at (32, 24)).
+    let mut grid = [0u8; 80 * 5];
+    grid[4 * 80 + 16 + 3] = 1;
     writer
         .add(
             "map/bg.tim",
-            map_tim(&[0, 1, 0, 1], |index| match index {
+            map_tim_rows(80, &grid, |index| match index {
                 0 => BLUE,
                 1 => GREEN,
                 _ => 0,
             }),
         )
         .unwrap();
-    // The 2F plan: the keyed index 0, room 0's marker (13), an ordinary
-    // index (200) and room 1's marker (19).
+    // The 2F plan: the keyed index 0 (a black CLUT word), the player's
+    // fill, an index past the room table (200) and the other room's marker.
     writer
-        .add("map/03.tim", map_tim(&[0, 13, 200, 19], |_| WHITE))
+        .add(
+            "map/03.tim",
+            map_tim(
+                &[0, fill, 200, other],
+                |index| if index == 0 { 0 } else { WHITE },
+            ),
+        )
         .unwrap();
     let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
-    // Room 1110's first camera opens on area 2 (layout 0's room slot 0).
-    let mut tab = MapTab::new("map-display", pack, (1, 0x10, 0), &[]);
-    assert_eq!(tab.state("M.state.area"), 2);
+    let mut tab = MapTab::new(
+        "map-display",
+        pack,
+        (1, 0x10, 0),
+        &[u8::try_from(visited).unwrap()],
+    );
     tab.step(neutral());
     tab.step(press(|i| i.confirm = true));
+    // Let the zoom settle at rest (state 6).
+    for _ in 0..40 {
+        tab.step(neutral());
+    }
+    assert_eq!(tab.state("M.state.zoom"), 6);
     let framebuffer = tab.draw();
     let pixel = |x: u32| {
         let offset = ((28 * framebuffer.width + 48 + x) * 4) as usize;
@@ -2198,12 +2249,18 @@ fn map_display_reddens_the_current_room_over_the_grid() {
     let blue = pixel(0);
     assert!(
         blue[2] > 0 && blue[0] == 0 && blue[1] == 0,
-        "the keyed texel shows the dimmed grid: {blue:?}"
+        "the keyed texel shows the half-blended grid: {blue:?}"
     );
-    let red = (0xF8u16 * 0x80 / 0xFF) as u8;
-    assert_eq!(pixel(1), [red, 0, 0], "the current room's marker");
-    let grey = pixel(2);
-    assert!(grey[0] > 0 && grey[0] < 0xC0 && grey[0] == grey[1] && grey[1] == grey[2]);
+    let red = pixel(1);
+    assert!(
+        red[0] > 0 && red[1] == 0,
+        "the current room's fill glows red over the grid: {red:?}"
+    );
+    let white = pixel(2);
+    assert!(
+        white.iter().all(|&c| c > 0xC0),
+        "a plain entry draws: {white:?}"
+    );
     let green = pixel(3);
     assert!(
         green[1] > 0 && green[0] == 0 && green[2] == 0,

@@ -20,7 +20,7 @@ use crate::font::{GLYPH_HEIGHT, Tint};
 use crate::htexture::{self, Replacement};
 use crate::ivm::Ivm;
 use crate::pack::{AssetClass, Pack};
-use crate::render::{Camera, EntityLight, EntityLightSource, Framebuffer};
+use crate::render::{Camera, EntityLight, EntityLightSource, Framebuffer, SpriteBlend};
 use crate::state::Image;
 
 use super::{Api, Decoded, colour_rgb, colour_tint, coord, no_draw};
@@ -429,6 +429,18 @@ fn loaded(result: anyhow::Result<usize>) -> (Option<usize>, Option<String>) {
 }
 
 /// A clamped `[x, y, w, h]`.
+/// The `page_lut` `blend` option.
+fn lut_blend(name: Option<&str>) -> mlua::Result<SpriteBlend> {
+    match name {
+        None | Some("opaque") => Ok(SpriteBlend::Opaque),
+        Some("half") => Ok(SpriteBlend::Half),
+        Some("add") => Ok(SpriteBlend::Add),
+        Some(other) => Err(mlua::Error::RuntimeError(format!(
+            "unknown page_lut blend {other:?}"
+        ))),
+    }
+}
+
 fn rect(x: i32, y: i32, w: i32, h: i32) -> [i32; 4] {
     [coord(x), coord(y), coord(w), coord(h)]
 }
@@ -701,6 +713,26 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
                     index,
                     (i64::from(r) << 16) | (i64::from(g) << 8) | i64::from(b),
                 )?;
+            }
+            Ok(Some(table))
+        },
+    );
+
+    // `page_stp(page, row)`: the indices of an indexed page's CLUT row whose
+    // colour carries the PSX semi-transparency (STP) bit, as a set
+    // (`stp[index] == true`); nil for an RGBA page.
+    methods.add_method(
+        "page_stp",
+        |lua, api, (handle, row): (usize, Option<usize>)| {
+            let Artwork::Indexed(texture) = api.host.assets.page(handle)? else {
+                return Ok(None);
+            };
+            let row = row.unwrap_or(0);
+            let table = lua.create_table()?;
+            for index in 0..=255u8 {
+                if texture.palette_stp(row, index) {
+                    table.set(index, true)?;
+                }
             }
             Ok(Some(table))
         },
@@ -983,19 +1015,22 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         },
     );
 
-    // `page_lut(page, sx, sy, w, h, dx, dy, lut[, whole])`: an unscaled
-    // indexed-page rect drawn through `lut`, a table of opaque `0xRRGGBB`
-    // colours keyed by texel index; an index without an entry is transparent,
-    // index 0 included. The screens composite remapped palettes with it (the
-    // map's tinted and room-highlighted plans). With `whole`, a lookup that
-    // tints every index alike lets an HD replacement cover the whole rect,
-    // as `page_sprite_mirrored`'s does, for art the HD page redraws.
+    // `page_lut(page, sx, sy, w, h, dx, dy, lut[, whole[, options]])`: an
+    // indexed-page rect drawn through `lut`, a table of `0xRRGGBB` colours
+    // keyed by texel index; an index without an entry is transparent, index
+    // 0 included. The screens composite remapped palettes with it (the map's
+    // tinted and room-highlighted plans). With `whole`, a lookup that tints
+    // every index alike lets an HD replacement cover the whole rect, as
+    // `page_sprite_mirrored`'s does, for art the HD page redraws.
+    // `options.dw`/`options.dh` stretch the rect over a destination of that
+    // size (nearest sampling), and `options.blend` mixes it in: `"half"`
+    // averages it with the frame, `"add"` adds it; opaque by default.
     #[allow(clippy::type_complexity)]
     methods.add_method_mut(
         "page_lut",
         |_lua,
          api,
-         (handle, sx, sy, w, h, dx, dy, lut, whole): (
+         (handle, sx, sy, w, h, dx, dy, lut, whole, options): (
             usize,
             i32,
             i32,
@@ -1005,7 +1040,18 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
             i32,
             Table,
             Option<bool>,
+            Option<Table>,
         )| {
+            let (size, blend) = match &options {
+                Some(options) => (
+                    [
+                        options.get::<Option<i32>>("dw")?,
+                        options.get::<Option<i32>>("dh")?,
+                    ],
+                    lut_blend(options.get::<Option<String>>("blend")?.as_deref())?,
+                ),
+                None => ([None; 2], SpriteBlend::Opaque),
+            };
             let Api {
                 host, framebuffer, ..
             } = api;
@@ -1021,9 +1067,10 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
                 }
             }
             let framebuffer = framebuffer.as_deref_mut().ok_or_else(no_draw)?;
-            let (src, dst) = (rect(sx, sy, w, h), rect(dx, dy, w, h));
+            let [dw, dh] = [size[0].unwrap_or(w), size[1].unwrap_or(h)];
+            let (src, dst) = (rect(sx, sy, w, h), rect(dx, dy, dw, dh));
             let draw = |framebuffer: &mut Framebuffer| {
-                framebuffer.draw_indexed_sprite_lut(texture, src, dst, &colours);
+                framebuffer.draw_indexed_sprite_lut(texture, src, dst, &colours, blend);
             };
             // The HD page through CLUT row 0, recoloured on the GPU by the
             // original's indices, so the lookup applies at its resolution.

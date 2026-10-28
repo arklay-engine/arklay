@@ -18,6 +18,9 @@
 // 3: as 2, through the original page's indices and the recolouring rows of
 //    `lut` from `in_mode.y` (see `htexture::Recoloured`).
 // 4: a premultiplied image: the scene, a model's target.
+//
+// An `ADDITIVE` item writes zero alpha, so the blend adds its colour to the
+// target (`draw2d::ADDITIVE`, the PSX additive semi-transparency).
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) flat in vec4 in_colour;
@@ -48,6 +51,7 @@ const uint MIRROR_X = 1u;
 const uint MIRROR_Y = 2u;
 const uint CENTRED = 4u;
 const uint MASKED = 8u;
+const uint ADDITIVE = 32u;
 
 int source_texel(int pixel, int start, int extent, int source, bool centred, bool mirror) {
     // As `draw2d::Map::texel` computes it.
@@ -107,6 +111,10 @@ void main() {
             texel.rgb = clamp(texel.rgb * scale.rgb + brightness * luma + flat_colour, 0.0, 1.0);
         }
         colour = vec4(min(texel.rgb * in_colour.rgb, vec3(1.0)), texel.a * in_colour.a);
+    }
+    if ((flags & ADDITIVE) != 0u) {
+        out_colour = vec4(colour.rgb * colour.a, 0.0);
+        return;
     }
     out_colour = vec4(colour.rgb * colour.a, colour.a);
 }
