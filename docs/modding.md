@@ -174,7 +174,7 @@ is exact.
 | item icon | `item/0b/item`, `item/44/item`, `item/6f/item` | webp, png, bmp, tim | the shipped 40x30 icon's; black is a hole |
 | item viewer model | `item/0b/model.tmd` | tmd | the shipped mesh |
 | item viewer texture | `item/0b/model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b/model` |
-| enemy / player art | (inside `enemy/em*.emd`, `player/*.emd`) | — | override the whole model entry |
+| enemy / player art | (inside `enemy/<id>/enemy*.emd`, `player/*.emd`) | — | override the whole model entry |
 | doors | (inside `door/<type>.dor`, the RDT door-type byte `00`-`21`) | — | override the whole entry |
 | font sheets | `font/00` (Western), `font/01` (Japanese), or a new two-digit hex id | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
 | font metrics | `font/00.xml`, `font/01.xml`, or a new font's `font/<id>.xml` | xml: `<font format="1" script advance cellWidth margin textY menuY>` with a `<glyph cell advance indent>` per non-default cell (see `games/re1/font/`) | — |
@@ -681,8 +681,8 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
 | `STAGEn/ROOM####.RDT` | `room/####/room.rdt` (the engine loads a raw RDT as well as the converted XML) |
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/####/cut/*.bmp`, `room/####/mask/*.bmp` (copied to every player and stage 6/7 variant of the room) |
-| `ENEMY/*.EMD`, `PLAYERS/*.EMW`, `PLAYERS/*.TMD` | `enemy/*`, `player/*` |
-| `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `voice/*` record playing the file |
+| `ENEMY/*.EMD`, `PLAYERS/*.EMW`, `PLAYERS/*.TMD` | `enemy/<id>/enemy*.emd`, `player/*` |
+| `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `enemy/<id>/sound/*` slot and `voice/*` record playing the file |
 | `DATA/*` (UI art, item icons, demos, effects) | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
 | `ITEM_M1/*.DOR`, `effspr/*.TIM` | `door/<type>.dor`, `effect/<id>.tim` |
 | `TEXT/ROOM_###.xml` | `ROOM_###_TEXT_##` keys in `language/en-US.txt` |
@@ -1377,11 +1377,51 @@ session's state for `open`, `update` and its hooks, so the methods marked
 
 ## Enemy scripts
 
-Entity behaviour is pack data. The engine looks up `enemy/em{id:02x}.lua` for
+Entity behaviour is pack data. The engine looks up `enemy/{id:02x}/enemy.lua` for
 every active monster slot (`0x00..=0x16`) and runs its
-`function update(e)` once per fixed tick. Shared library files under
-`enemy/lib/**.lua` are ordinary pack modules: a script imports one with the
+`function update(e)` once per fixed tick. Shared library files under the
+top-level `lib/**.lua` are ordinary pack modules: a script imports one with the
 sandboxed, pack-scoped `require(name)`.
+
+### Enemy folders
+
+Everything about one entity id lives in its own folder, named by the id in
+two lowercase hex digits:
+
+```
+enemy/
+    0a/
+        enemy.lua       the update script
+        enemy.emd       the model, or for a monster (0x00..=0x15) one per
+        enemy_0.emd     scenario: enemy_0 for Chris and enemy_1 for Jill,
+        enemy_1.emd     falling back to enemy.emd
+        sound/
+            00_00.wav   style 00 (the default), slot 00
+            01_00.wav   style 01, slot 00
+lib/
+    npc.lua             the scripted-character driver
+    zombie.lua          the zombie machine shared by 0x00, 0x01 and 0x11
+```
+
+`e:play_enemy_sound(slot)` plays `sound/<style>_<slot>.wav` (both two
+lowercase hex digits) from the enemy's folder. A style only ships the slots it
+changes; any other slot falls back to style `00`. A script picks its style and
+borrows another set with a global `sounds` declaration:
+
+| Declaration | Meaning |
+| --- | --- |
+| `sounds = "03"` | After its own folder, fall back to `enemy/03/sound/`. |
+| `sounds = { base = "00", styles = { [0x103] = 0x02 } }` | The same, and play style `02` in room `0x103` (`stage << 8 \| room`). |
+
+A base naming another id (two lowercase hex digits) follows that id's own
+declaration in turn. A base
+starting with `/` is a folder from the pack root (`/shared/beast` reads
+`shared/beast/sound/`); any other base is a folder under `enemy/`. The first
+existing file plays, and none means silence.
+
+Enemy sounds are not also packed under `se/`. The exception is a sound a room
+script plays through the room table (`se_play_3d(SND_BANK_ROOM, ..)`), which
+keeps its `se/` copy: today room 309's `He_Nout` and room 706's `HU_att`.
 
 ### require
 
@@ -1390,9 +1430,9 @@ return value once per session:
 
 | Name form | Resolves to |
 | --- | --- |
-| `/enemy/lib/npc` | Absolute from the pack root. |
-| `./npc`, `../lib/npc` | Relative to the directory of the requiring module. |
-| `enemy/lib/npc` | The exact pack entry if it exists, otherwise relative to the requiring module. |
+| `/lib/npc` | Absolute from the pack root. |
+| `./npc`, `../0c/enemy`, `../../lib/npc` | Relative to the directory of the requiring module. |
+| `lib/npc` | The exact pack entry if it exists, otherwise relative to the requiring module. |
 
 The `.lua` suffix is optional, paths are case-insensitive, and `..` may not
 escape the pack root. A module that returns nothing caches `true` (Lua
@@ -1401,7 +1441,7 @@ requiring id like any other error. There is no filesystem access: only pack
 entries can be reached.
 
 ```lua
--- enemy/em13.lua
+-- enemy/13/enemy.lua
 function update(e)
     if e.state == 0 then
         e.state = 1
@@ -1658,8 +1698,8 @@ mutable state lives on the Rust entity: **scripts must keep no state of their
 own**, so the engine may drop and recreate the whole script VM between any two
 updates and behaviour stays identical. Scripts that fail to load, or that
 error, are logged once and park that entity id; the other ids keep running.
-Models pair with the scripts: `enemy/em{id:02x}{player}.emd` (player 0 Chris,
-1 Jill) with the fallback `enemy/em{id:02x}.emd`.
+Models pair with the scripts: `enemy/{id:02x}/enemy_{player}.emd` (player 0
+Chris, 1 Jill) with the fallback `enemy/{id:02x}/enemy.emd`.
 
 ### Boss scratch views
 
@@ -1868,7 +1908,7 @@ victim.
 
 ### The Tyrant's ribbon, ghosts, heart and root motion
 
-The Tyrant (ids `0x0c`/`0x10`, `enemy/em0c.lua`) is the only monster whose
+The Tyrant (ids `0x0c`/`0x10`, `enemy/0c/enemy.lua`) is the only monster whose
 pose feeds back into its movement. `e:tyrant_root_motion(set, apply)` composes
 the entity yaw with the walk (`set = 0`) or run (`set = 1`) claw chain from
 the pose the clock just applied, subtracts the chain end's previous-frame
@@ -1937,22 +1977,23 @@ script never applies its own damage; it reacts to state 2/3 on its next
 update, exactly like the web and the roots already do.
 
 The base game's scripts live in the engine repository under
-`games/re1/enemy/` and are packed by `convert-game`. A mod overrides any one of
-them simply by carrying an `enemy/em{id:02x}.lua` (or model) entry: pack
-layering is the override mechanism, exactly like any other entry. The scripts
+`games/re1/enemy/` and `games/re1/lib/` and are packed by `convert-game`. A mod
+overrides any one of them simply by carrying an `enemy/{id:02x}/enemy.lua` (or
+model) entry: pack layering is the override mechanism, exactly like any other
+entry. The scripts
 run in the same sandbox as the hooks (base/`string`/`table` only, 16 MiB,
 instruction budget) in their own per-session VM.
 
 The scripted characters show the intended per-id pattern: every id has a thin
-`em{id:02x}.lua` carrying that character's data (collision radius, SCA record,
+`enemy/{id:02x}/enemy.lua` carrying that character's data (collision radius, SCA record,
 corpse flag, story-pose membership) and calling the shared driver in
-`enemy/lib/npc.lua`, where the state machine lives once — the state-0 spawn
+`lib/npc.lua`, where the state machine lives once — the state-0 spawn
 init, state-1 idle behaviours, state-8 scripted-action handlers and the
 state-9 follow/pathfind driver:
 
 ```lua
--- enemy/em23.lua
-local npc = require("lib/npc")
+-- enemy/23/enemy.lua
+local npc = require("/lib/npc")
 local data = {
     radius = 372,
     corpse = false,
@@ -1968,7 +2009,7 @@ end
 ```
 
 A pack can override one character's data without touching the shared driver,
-or shadow `enemy/lib/npc.lua` wholesale to replace the behaviour for all of
+or shadow `lib/npc.lua` wholesale to replace the behaviour for all of
 them.
 
 ## Determinism

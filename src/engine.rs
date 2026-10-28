@@ -1817,7 +1817,7 @@ struct GameSession {
     movie: Option<MovieSession>,
     /// Parsed entity models, loaded lazily from the pack by the entity driver.
     npc_models: enemy::EntityModelCache,
-    /// The enemy-script VM hosting the pack's `enemy/em{id:02x}.lua` update
+    /// The enemy-script VM hosting the pack's `enemy/{id:02x}/enemy.lua` update
     /// functions; one VM per session, reset only by tests.
     enemy_lua: enemy::LuaEnemyHost,
     music: Option<Mixer>,
@@ -19386,7 +19386,7 @@ mod tests {
     fn entity_model_cache_remembers_missing_and_invalid_models() {
         let mut writer = PackWriter::new();
         writer
-            .add("enemy/em23.emd", b"not-an-emd".to_vec())
+            .add("enemy/23/enemy.emd", b"not-an-emd".to_vec())
             .unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
@@ -19419,13 +19419,16 @@ mod tests {
         for id in crate::enemy::FIRST_ID..=crate::enemy::LAST_ID {
             let model = cache
                 .get(&pack, id, 0)
-                .unwrap_or_else(|| panic!("enemy/em{id:02x}.emd missing from the pack"));
+                .unwrap_or_else(|| panic!("enemy/{id:02x}/enemy.emd missing from the pack"));
             assert_eq!(
                 model.skeleton.relative.len(),
                 15,
-                "enemy/em{id:02x}.emd joints"
+                "enemy/{id:02x}/enemy.emd joints"
             );
-            assert!(!model.mesh.objects.is_empty(), "enemy/em{id:02x}.emd mesh");
+            assert!(
+                !model.mesh.objects.is_empty(),
+                "enemy/{id:02x}/enemy.emd mesh"
+            );
         }
 
         // A second request returns the same parsed model, not a re-parse.

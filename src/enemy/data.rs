@@ -2,7 +2,7 @@
 //! behaviour dispatch.
 //!
 //! Entity ids `0x20..=0x2E` are the game's human characters. Their EMD models
-//! are packed raw under `enemy/em{id:02x}.emd`, each carries the collision
+//! are packed raw under `enemy/{id:02x}/enemy.emd`, each carries the collision
 //! radius the room collision pass reads while the character walks, and each
 //! falls into one of three shadow-tint classes. The idle behaviour byte selects
 //! one of the state-1 handlers from [`IdleBehavior`].
@@ -16,21 +16,21 @@ pub const LAST_ID: u8 = 0x2E;
 
 /// Character-model pack paths, indexed by `id - FIRST_ID`.
 const MODEL_PATHS: [&str; 15] = [
-    "enemy/em20.emd",
-    "enemy/em21.emd",
-    "enemy/em22.emd",
-    "enemy/em23.emd",
-    "enemy/em24.emd",
-    "enemy/em25.emd",
-    "enemy/em26.emd",
-    "enemy/em27.emd",
-    "enemy/em28.emd",
-    "enemy/em29.emd",
-    "enemy/em2a.emd",
-    "enemy/em2b.emd",
-    "enemy/em2c.emd",
-    "enemy/em2d.emd",
-    "enemy/em2e.emd",
+    "enemy/20/enemy.emd",
+    "enemy/21/enemy.emd",
+    "enemy/22/enemy.emd",
+    "enemy/23/enemy.emd",
+    "enemy/24/enemy.emd",
+    "enemy/25/enemy.emd",
+    "enemy/26/enemy.emd",
+    "enemy/27/enemy.emd",
+    "enemy/28/enemy.emd",
+    "enemy/29/enemy.emd",
+    "enemy/2a/enemy.emd",
+    "enemy/2b/enemy.emd",
+    "enemy/2c/enemy.emd",
+    "enemy/2d/enemy.emd",
+    "enemy/2e/enemy.emd",
 ];
 
 /// Character names, indexed by `id - FIRST_ID`; diagnostics only.
@@ -63,6 +63,23 @@ pub const RADIUS_SPRAWLED: i32 = 500;
 fn index(id: u8) -> Option<usize> {
     let index = id.checked_sub(FIRST_ID)?;
     (usize::from(index) < MODEL_PATHS.len()).then_some(usize::from(index))
+}
+
+/// The pack entry of entity `id`'s script: `enemy/{id:02x}/enemy.lua`.
+pub fn script_path(id: u8) -> String {
+    format!("{}/enemy.lua", crate::sfx::enemy_dir(id))
+}
+
+/// The pack entry of entity `id`'s model for one scenario (`0` Chris, `1`
+/// Jill): `enemy/{id:02x}/enemy_{player}.emd`.
+pub fn scenario_model_path(id: u8, player: u8) -> String {
+    format!("{}/enemy_{:x}.emd", crate::sfx::enemy_dir(id), player & 1)
+}
+
+/// The pack entry of entity `id`'s scenario-independent model:
+/// `enemy/{id:02x}/enemy.emd`.
+pub fn generic_model_path(id: u8) -> String {
+    format!("{}/enemy.emd", crate::sfx::enemy_dir(id))
 }
 
 /// The pack path of character `id`'s EMD model, or `None` for non-characters.
@@ -405,12 +422,20 @@ mod tests {
     fn model_paths_cover_the_character_id_range() {
         for id in FIRST_ID..=LAST_ID {
             let path = model_path(id).unwrap_or_else(|| panic!("id {id:#04x} has no path"));
-            assert_eq!(path, format!("enemy/em{id:02x}.emd"));
+            assert_eq!(path, generic_model_path(id));
         }
         assert_eq!(model_path(FIRST_ID - 1), None);
         assert_eq!(model_path(LAST_ID + 1), None);
         assert_eq!(model_path(0x00), None);
         assert_eq!(model_path(0xFF), None);
+    }
+
+    #[test]
+    fn entity_paths_live_in_the_hex_id_folder() {
+        assert_eq!(script_path(0x0a), "enemy/0a/enemy.lua");
+        assert_eq!(scenario_model_path(0x0a, 0), "enemy/0a/enemy_0.emd");
+        assert_eq!(scenario_model_path(0x0a, 1), "enemy/0a/enemy_1.emd");
+        assert_eq!(generic_model_path(0x2e), "enemy/2e/enemy.emd");
     }
 
     #[test]

@@ -875,7 +875,7 @@ fn join_path(base: &str, name: &str) -> String {
     }
 }
 
-/// The directory part of a pack entry (`enemy/em20.lua` -> `enemy`).
+/// The directory part of a pack entry (`enemy/20/enemy.lua` -> `enemy/20`).
 pub(crate) fn dir_of(path: &str) -> String {
     path.rsplit_once('/')
         .map_or(String::new(), |(dir, _)| dir.to_string())

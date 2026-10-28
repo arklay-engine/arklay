@@ -7,9 +7,9 @@
 //!
 //! Enemy cues are named per enemy instead: each script declares its sound set
 //! (and the sets it inherits through `sounds`), and [`enemy_sound_stems`]
-//! resolves a slot to `enemy/<set>_<slot>.wav`, with an optional style
-//! variant. The room table's enemy-AI columns are only what the converter
-//! reads to choose each enemy's default set.
+//! resolves a slot to `enemy/<id>/sound/<style>_<slot>.wav`, with style
+//! `00` the default set. The room table's enemy-AI columns are only what the
+//! converter reads to choose each enemy's default set.
 //!
 //! A footstep zone (parsed from the RDT's `.flr` table) packs a surface type
 //! in the high byte of its lookup result and a sound offset in the low byte.
@@ -2694,117 +2694,165 @@ pub fn enemy_sound(entity: u8, id: u8, group: u8) -> Option<(SoundName, u8)> {
 /// The pack directory enemy scripts, models and sounds live in.
 pub const ENEMY_DIR: &str = "enemy";
 
-/// The pack stem an enemy sound set name resolves to: `em00` is
-/// `enemy/em00`, `lib/zombie` is `enemy/lib/zombie` and `/x/y` is `x/y`
-/// from the pack root.
-pub fn enemy_sound_set_stem(set: &str) -> String {
+/// The sound style every enemy sound set falls back to.
+pub const DEFAULT_SOUND_STYLE: u8 = 0x00;
+
+/// The pack directory of entity `id`: `enemy/{id:02x}`.
+pub fn enemy_dir(id: u8) -> String {
+    format!("{ENEMY_DIR}/{id:02x}")
+}
+
+/// The pack directory an enemy sound set name resolves to: `00` is
+/// `enemy/00`, `shared/zombie` is `enemy/shared/zombie` and `/x/y` is `x/y`
+/// from the pack root. The set's sounds live in its `sound/` subdirectory.
+pub fn enemy_sound_set_dir(set: &str) -> String {
     match set.strip_prefix('/') {
         Some(absolute) => absolute.to_string(),
         None => format!("{ENEMY_DIR}/{set}"),
     }
 }
 
+/// The pack stem of slot `slot` under sound `style` of the sound set in
+/// pack directory `dir`: `{dir}/sound/{style:02x}_{slot:02x}`.
+pub fn enemy_sound_stem(dir: &str, style: u8, slot: u8) -> String {
+    format!("{dir}/sound/{style:02x}_{slot:02x}")
+}
+
 /// The pack stems tried, in order, for slot `slot` of the enemy sound sets
 /// `sets` (the enemy's own set first, then each `sounds` base it inherits)
 /// under the optional sound `style`.
 ///
-/// Each set contributes `{set}_{style:02x}_{slot:02x}` (when a style is
-/// active) and then `{set}_{slot:02x}`, so a style only needs to ship the
-/// slots it changes. The first stem the pack carries plays; none means
-/// silence.
+/// Each set contributes its `{style:02x}_{slot:02x}` stem (when a style other
+/// than the default is active) and then its default `00_{slot:02x}` stem, so
+/// a style only needs to ship the slots it changes. The first stem the pack
+/// carries plays; none means silence.
 pub fn enemy_sound_stems(sets: &[String], style: Option<u8>, slot: u8) -> Vec<String> {
+    let style = style.filter(|&style| style != DEFAULT_SOUND_STYLE);
     let mut stems = Vec::with_capacity(sets.len() * 2);
     for set in sets {
-        let stem = enemy_sound_set_stem(set);
+        let dir = enemy_sound_set_dir(set);
         if let Some(style) = style {
-            stems.push(format!("{stem}_{style:02x}_{slot:02x}"));
+            stems.push(enemy_sound_stem(&dir, style, slot));
         }
-        stems.push(format!("{stem}_{slot:02x}"));
+        stems.push(enemy_sound_stem(&dir, DEFAULT_SOUND_STYLE, slot));
     }
     stems
 }
 
+/// One enemy sound style's `(slot, wav name)` pairs.
+pub type EnemySoundSlots = &'static [(u8, &'static str)];
+
 /// The enemy sound files the converter extracts from the original install:
-/// `(set, [(slot, wav name)])`, packed as `enemy/{set}_{slot:02x}.wav`.
+/// `(id, style, [(slot, wav name)])`, packed as
+/// `enemy/{id:02x}/sound/{style:02x}_{slot:02x}.wav`.
 ///
-/// Each enemy's default set is the one most of its rooms load in the shipped
-/// per-room table. A `{id}_{style:02x}` set carries only the slots a style
-/// changes (the comment names the original takes it holds); the enemy scripts pick the style (the zombies key it by room, as
-/// the original's tables did). Enemies that share a set reference it from
-/// their script's `sounds` declaration instead of repeating it here.
+/// Each enemy's default style `00` is the set most of its rooms load in the
+/// shipped per-room table. Any other style carries only the slots it changes
+/// (the comment names the original takes it holds); the enemy scripts pick
+/// the style (the zombies key it by room, as the original's tables did).
+/// Enemies that share a set reference it from their script's `sounds`
+/// declaration instead of repeating it here.
 #[rustfmt::skip]
-pub static ENEMY_SOUNDS: &[(&str, &[(u8, &str)])] = &[
-    // Standard zombie; the green zombie (em11) inherits it.
-    ("em00", &[(0, "z_taore"), (1, "z_ftL"), (2, "z_ftR"), (3, "z_kamu"), (4, "z_osou"),
-               (5, "z_unaruA"), (6, "z_head"), (7, "z_Hkick"), (8, "z_Ugoron"), (9, "z_unaruB")]),
+pub static ENEMY_SOUNDS: &[(u8, u8, EnemySoundSlots)] = &[
+    // Standard zombie; the green zombie (11) inherits it.
+    (0x00, 0x00, &[(0, "z_taore"), (1, "z_ftL"), (2, "z_ftR"), (3, "z_kamu"), (4, "z_osou"),
+                   (5, "z_unaruA"), (6, "z_head"), (7, "z_Hkick"), (8, "z_Ugoron"), (9, "z_unaruB")]),
     // Its groan styles (`lib/zombie.lua` picks them per room), named after
     // the original takes: 01 aoya, 02 isi, 03 isi2, 04 isi3, 05 isi3 with 01
     // and 02 swapped, 06 k (with haki/sanj), 07 k, 08 mika, 09 simo, 0a suzu
     // (with haki/sanj), 0b suzu, 0c tomo.
-    ("em00_01", &[(4, "z_aoya02"), (5, "z_aoya01"), (9, "z_aoya03")]),
-    ("em00_02", &[(4, "z_isi02"), (5, "z_isi01"), (9, "z_isi03")]),
-    ("em00_03", &[(4, "z_isi202"), (5, "z_isi201"), (9, "z_isi203")]),
-    ("em00_04", &[(4, "z_isi302"), (5, "z_isi301"), (9, "z_isi303")]),
-    ("em00_05", &[(4, "z_isi301"), (5, "z_isi302"), (9, "z_isi303")]),
-    ("em00_06", &[(4, "z_k02"), (5, "z_k01"), (7, "z_haki"), (8, "z_sanj"), (9, "z_k03")]),
-    ("em00_07", &[(4, "z_k02"), (5, "z_k01"), (9, "z_k03")]),
-    ("em00_08", &[(4, "z_mika02"), (5, "z_mika01"), (9, "z_mika03")]),
-    ("em00_09", &[(4, "z_simo02"), (5, "z_simo01"), (9, "z_simo03")]),
-    ("em00_0a", &[(4, "z_suzu02"), (5, "z_suzu01"), (7, "z_haki"), (8, "z_sanj"),
-                  (9, "z_suzu03")]),
-    ("em00_0b", &[(4, "z_suzu02"), (5, "z_suzu01"), (9, "z_suzu03")]),
-    ("em00_0c", &[(1, "ze_ftL"), (3, "ze_kamu"), (4, "ze_tomo2"), (5, "ze_tomo1"),
-                  (6, "ze_head"), (7, "ze_haki"), (8, "ze_sanj"), (9, "ze_tomo3")]),
+    (0x00, 0x01, &[(4, "z_aoya02"), (5, "z_aoya01"), (9, "z_aoya03")]),
+    (0x00, 0x02, &[(4, "z_isi02"), (5, "z_isi01"), (9, "z_isi03")]),
+    (0x00, 0x03, &[(4, "z_isi202"), (5, "z_isi201"), (9, "z_isi203")]),
+    (0x00, 0x04, &[(4, "z_isi302"), (5, "z_isi301"), (9, "z_isi303")]),
+    (0x00, 0x05, &[(4, "z_isi301"), (5, "z_isi302"), (9, "z_isi303")]),
+    (0x00, 0x06, &[(4, "z_k02"), (5, "z_k01"), (7, "z_haki"), (8, "z_sanj"), (9, "z_k03")]),
+    (0x00, 0x07, &[(4, "z_k02"), (5, "z_k01"), (9, "z_k03")]),
+    (0x00, 0x08, &[(4, "z_mika02"), (5, "z_mika01"), (9, "z_mika03")]),
+    (0x00, 0x09, &[(4, "z_simo02"), (5, "z_simo01"), (9, "z_simo03")]),
+    (0x00, 0x0a, &[(4, "z_suzu02"), (5, "z_suzu01"), (7, "z_haki"), (8, "z_sanj"),
+                   (9, "z_suzu03")]),
+    (0x00, 0x0b, &[(4, "z_suzu02"), (5, "z_suzu01"), (9, "z_suzu03")]),
+    (0x00, 0x0c, &[(1, "ze_ftL"), (3, "ze_kamu"), (4, "ze_tomo2"), (5, "ze_tomo1"),
+                   (6, "ze_head"), (7, "ze_haki"), (8, "ze_sanj"), (9, "ze_tomo3")]),
     // Naked zombie.
-    ("em01", &[(0, "z_taore"), (1, "zep_ftL"), (2, "z_ftR"), (3, "ze_kamu"), (4, "z_nisi2"),
-               (5, "z_nisi1"), (6, "ze_head"), (7, "ze_haki"), (8, "ze_sanj"), (9, "z_nisi3")]),
+    (0x01, 0x00, &[(0, "z_taore"), (1, "zep_ftL"), (2, "z_ftR"), (3, "ze_kamu"), (4, "z_nisi2"),
+                   (5, "z_nisi1"), (6, "ze_head"), (7, "ze_haki"), (8, "ze_sanj"), (9, "z_nisi3")]),
     // Cerberus.
-    ("em02", &[(0, "cer_foot"), (1, "cer_taoA"), (2, "cer_unar"), (3, "cer_bite"),
-               (4, "cer_cryA"), (5, "cer_taoB"), (6, "cer_jkMX"), (7, "cer_kamu"),
-               (8, "cer_cryB"), (9, "cer_runMX")]),
-    // WebSpinner; the Black Tiger (em04) inherits it.
-    ("em03", &[(0, "kuasi_A"), (1, "kuasi_B"), (2, "kuasi_C"), (3, "sp_rakk"), (4, "sp_atck"),
-               (5, "sp_bomb"), (6, "sp_fumu"), (7, "sp_Doku"), (8, "sp_sanj2")]),
-    ("em04", &[(8, "poison")]),
+    (0x02, 0x00, &[(0, "cer_foot"), (1, "cer_taoA"), (2, "cer_unar"), (3, "cer_bite"),
+                   (4, "cer_cryA"), (5, "cer_taoB"), (6, "cer_jkMX"), (7, "cer_kamu"),
+                   (8, "cer_cryB"), (9, "cer_runMX")]),
+    // WebSpinner; the Black Tiger (04) inherits it.
+    (0x03, 0x00, &[(0, "kuasi_A"), (1, "kuasi_B"), (2, "kuasi_C"), (3, "sp_rakk"), (4, "sp_atck"),
+                   (5, "sp_bomb"), (6, "sp_fumu"), (7, "sp_Doku"), (8, "sp_sanj2")]),
+    (0x04, 0x00, &[(8, "poison")]),
     // Crow.
-    ("em05", &[(0, "RVcar1"), (1, "RVpat"), (2, "RVcar2"), (3, "RVwing1"), (4, "RVwing2"),
-               (5, "RVfryed")]),
+    (0x05, 0x00, &[(0, "RVcar1"), (1, "RVpat"), (2, "RVcar2"), (3, "RVwing1"), (4, "RVwing2"),
+                   (5, "RVfryed")]),
     // Hunter.
-    ("em06", &[(0, "HU_walkA"), (1, "HU_walkB"), (2, "HU_jump"), (3, "HU_att"), (4, "HU_land"),
-               (5, "HU_smash"), (6, "HU_dam"), (7, "HU_Nout")]),
+    (0x06, 0x00, &[(0, "HU_walkA"), (1, "HU_walkB"), (2, "HU_jump"), (3, "HU_att"), (4, "HU_land"),
+                   (5, "HU_smash"), (6, "HU_dam"), (7, "HU_Nout")]),
     // Style 01: the `He_*` takes.
-    ("em06_01", &[(0, "He_walkA"), (1, "He_walkB"), (2, "He_jump"), (3, "He_att"),
-                  (4, "He_land"), (5, "He_smash"), (6, "He_dam"), (7, "He_Nout")]),
+    (0x06, 0x01, &[(0, "He_walkA"), (1, "He_walkB"), (2, "He_jump"), (3, "He_att"),
+                   (4, "He_land"), (5, "He_smash"), (6, "He_dam"), (7, "He_Nout")]),
     // Wasp.
-    ("em07", &[(0, "bee4_ed"), (1, "hatinage"), (2, "bee_fumu")]),
+    (0x07, 0x00, &[(0, "bee4_ed"), (1, "hatinage"), (2, "bee_fumu")]),
     // Plant 42.
-    ("em08", &[(0, "VN_air"), (1, "VN_kazeA"), (2, "VN_hitA"), (3, "VN_kazeB"), (4, "VN_hitL"),
-               (5, "VN_hitB"), (6, "VN_sime"), (7, "VN_OUT"), (8, "VN_fall"), (9, "VN_OUT2")]),
+    (0x08, 0x00, &[(0, "VN_air"), (1, "VN_kazeA"), (2, "VN_hitA"), (3, "VN_kazeB"), (4, "VN_hitL"),
+                   (5, "VN_hitB"), (6, "VN_sime"), (7, "VN_OUT"), (8, "VN_fall"), (9, "VN_OUT2")]),
     // Chimera.
-    ("em09", &[(0, "FL_walk"), (1, "FL_jump"), (2, "steam_b"), (3, "FL_ceil"), (4, "FL_fall"),
-               (5, "FL_slash"), (6, "FL_att"), (7, "FL_dam"), (8, "FL_out")]),
+    (0x09, 0x00, &[(0, "FL_walk"), (1, "FL_jump"), (2, "steam_b"), (3, "FL_ceil"), (4, "FL_fall"),
+                   (5, "FL_slash"), (6, "FL_att"), (7, "FL_dam"), (8, "FL_out")]),
     // Adder.
-    ("em0a", &[(0, "PY_mena"), (1, "PY_hit2"), (2, "PY_fall")]),
+    (0x0a, 0x00, &[(0, "PY_mena"), (1, "PY_hit2"), (2, "PY_fall")]),
     // Style 01: the `PYe_*` takes.
-    ("em0a_01", &[(0, "PYe_mena"), (1, "PYe_hit"), (2, "PYe_fall")]),
+    (0x0a, 0x01, &[(0, "PYe_mena"), (1, "PYe_hit"), (2, "PYe_fall")]),
     // Neptune.
-    ("em0b", &[(0, "nep_attB"), (1, "nep_attA"), (2, "nep_nomu"), (3, "nep_tura"),
-               (4, "nep_twis"), (5, "nep_jump")]),
+    (0x0b, 0x00, &[(0, "nep_attB"), (1, "nep_attA"), (2, "nep_nomu"), (3, "nep_tura"),
+                   (4, "nep_twis"), (5, "nep_jump")]),
     // Tyrant (the lab encounter).
-    ("em0c", &[(0, "TY_foot"), (1, "TY_kaze"), (2, "TY_slice"), (3, "TY_HIT"), (4, "TY_trust"),
-               (6, "TY_taore"), (7, "TY_nage")]),
-    // Yawn; the rematch (em12) inherits it.
-    ("em0d", &[(0, "GV_move"), (1, "GV_dino"), (2, "GV_p_at"), (3, "GV_swing"), (4, "GV_bite"),
-               (5, "GV_blood"), (6, "GV_gulpA"), (7, "GV_gulpB")]),
+    (0x0c, 0x00, &[(0, "TY_foot"), (1, "TY_kaze"), (2, "TY_slice"), (3, "TY_HIT"), (4, "TY_trust"),
+                   (6, "TY_taore"), (7, "TY_nage")]),
+    // Yawn; the rematch (12) inherits it.
+    (0x0d, 0x00, &[(0, "GV_move"), (1, "GV_dino"), (2, "GV_p_at"), (3, "GV_swing"), (4, "GV_bite"),
+                   (5, "GV_blood"), (6, "GV_gulpA"), (7, "GV_gulpB")]),
     // Monster plant.
-    ("em0f", &[(0, "VN_whip"), (1, "VN_hitA"), (2, "VN_hitB"), (3, "VN_sime"), (4, "VN_OUT")]),
+    (0x0f, 0x00, &[(0, "VN_whip"), (1, "VN_hitA"), (2, "VN_hitB"), (3, "VN_sime"), (4, "VN_OUT")]),
     // Style 01: the `VN_kazea` whip.
-    ("em0f_01", &[(0, "VN_kazea")]),
+    (0x0f, 0x01, &[(0, "VN_kazea")]),
     // Tyrant (the heliport encounter): its own full set, since its slots 5
     // and 6 differ from the lab Tyrant's in which one is empty.
-    ("em10", &[(0, "TY_foot"), (1, "TY_kaze"), (2, "TY_slice"), (3, "TY_HIT"), (4, "TY_trust"),
-               (5, "TY_slef"), (7, "TY_nage")]),
+    (0x10, 0x00, &[(0, "TY_foot"), (1, "TY_kaze"), (2, "TY_slice"), (3, "TY_HIT"), (4, "TY_trust"),
+                   (5, "TY_slef"), (7, "TY_nage")]),
 ];
+
+/// The enemy sounds a room script still plays through the room bank
+/// (`se_play_3d(SND_BANK_ROOM, ..)`), so they keep their `se/` copy beside the
+/// enemy's own: room 309's `SE_07_HE_NOUT` and the Hunter swipe room 706
+/// (room 206's stage 7 copy) plays as `SE_03`.
+pub static ROOM_BANK_ENEMY_SOUNDS: &[&str] = &["He_Nout", "HU_att"];
+
+/// Whether `name` (any case) is packed as `se/{name}.wav`.
+///
+/// Every name of [`SE_NAMES`] is, except the enemy sounds: an enemy plays
+/// them from its own `enemy/<id>/sound/` folder, so only the few a room
+/// script also reaches through the room table ([`ROOM_BANK_ENEMY_SOUNDS`])
+/// keep a copy.
+pub fn packs_se_entry(name: &str) -> bool {
+    let enemy = ENEMY_SOUNDS
+        .iter()
+        .flat_map(|(_, _, slots)| slots.iter())
+        .any(|(_, sound)| sound.eq_ignore_ascii_case(name));
+    !enemy
+        || ROOM_BANK_ENEMY_SOUNDS
+            .iter()
+            .any(|sound| sound.eq_ignore_ascii_case(name))
+}
+
+/// The names of [`SE_NAMES`] the pack carries under `se/` ([`packs_se_entry`]).
+pub fn se_entry_names() -> impl Iterator<Item = &'static str> {
+    SE_NAMES.iter().copied().filter(|name| packs_se_entry(name))
+}
 
 /// The weapon bank's per-weapon sound sub-tables, one row per shipped bank id.
 ///
@@ -3231,6 +3279,75 @@ mod tests {
     }
 
     #[test]
+    fn only_room_bank_enemy_sounds_keep_an_se_copy() {
+        assert!(packs_se_entry("ft_wdA"));
+        assert!(packs_se_entry("he_nout"));
+        assert!(!packs_se_entry("z_osou"));
+        assert!(!packs_se_entry("HU_walkA"));
+        let enemy = SE_NAMES.len() - se_entry_names().count();
+        assert_eq!(
+            enemy, 139,
+            "every enemy sound but He_Nout and HU_att leaves se/"
+        );
+    }
+
+    /// The room-bank columns the engine and the Lua scripts address directly
+    /// (the locked-door and lab-door cues from 0x14, the scripted cues from
+    /// 0x19 and the footstep window) name only sounds packed under `se/`, in
+    /// every room.
+    #[test]
+    fn fixed_room_bank_columns_resolve_to_packed_se_entries() {
+        let unpacked: Vec<_> = ROOM_SOUNDS
+            .iter()
+            .filter(|(_, column, name)| *column >= 0x14 && !packs_se_entry(name))
+            .collect();
+        assert!(unpacked.is_empty(), "{unpacked:?}");
+    }
+
+    /// Every room-bank cue a checked-in room script plays resolves, in each
+    /// room the script compiles to (stages 1 and 2 also build their stage 6
+    /// and 7 copies), to a sound the pack carries under `se/`: an enemy sound
+    /// the room table names there must be listed in [`ROOM_BANK_ENEMY_SOUNDS`].
+    #[test]
+    fn room_script_room_bank_cues_resolve_to_packed_se_entries() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room");
+        let mut cues = 0;
+        let mut unpacked = Vec::new();
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+            let base = u16::from_str_radix(&stem, 16).unwrap();
+            let stages: std::collections::BTreeSet<u8> = crate::scd::akscr::room_variants(base)
+                .into_iter()
+                .map(|id| (id >> 12) as u8)
+                .collect();
+            let room = base as u8;
+            let text = std::fs::read_to_string(&path).unwrap();
+            for call in text.split("se_play_3d(").skip(1) {
+                let mut args = call.split(',').map(str::trim);
+                if args.next() != Some("SND_BANK_ROOM") {
+                    continue;
+                }
+                let id = args.next().unwrap();
+                let column = id
+                    .strip_prefix("SE_")
+                    .and_then(|hex| u8::from_str_radix(hex.get(..2)?, 16).ok())
+                    .unwrap_or_else(|| panic!("{stem}: room-bank id {id}"));
+                cues += 1;
+                for &stage in &stages {
+                    if let Some(name) = room_sound(room_row(stage, room), usize::from(column))
+                        && !packs_se_entry(name)
+                    {
+                        unpacked.push(format!("{stem} stage {stage} {id}: {name}"));
+                    }
+                }
+            }
+        }
+        assert!(cues > 300, "found {cues} room-bank cues");
+        assert!(unpacked.is_empty(), "{unpacked:?}");
+    }
+
+    #[test]
     fn global_banks_expose_only_the_named_slots() {
         // The title/select/ending/bio/misc rows the non-combat screens use.
         assert_eq!(global_sfx(11, 0), Some("Bio01"));
@@ -3352,19 +3469,24 @@ mod tests {
 
     #[test]
     fn enemy_sound_stems_try_the_style_then_each_inherited_set() {
-        let sets = ["em11".to_string(), "em00".to_string()];
+        let sets = ["11".to_string(), "00".to_string()];
         assert_eq!(
             enemy_sound_stems(&sets, Some(0x0a), 4),
             [
-                "enemy/em11_0a_04",
-                "enemy/em11_04",
-                "enemy/em00_0a_04",
-                "enemy/em00_04"
+                "enemy/11/sound/0a_04",
+                "enemy/11/sound/00_04",
+                "enemy/00/sound/0a_04",
+                "enemy/00/sound/00_04"
             ]
         );
         assert_eq!(
-            enemy_sound_stems(&["lib/zombie".to_string(), "/x/y".to_string()], None, 12),
-            ["enemy/lib/zombie_0c", "x/y_0c"]
+            enemy_sound_stems(&["shared/zombie".to_string(), "/x/y".to_string()], None, 12),
+            ["enemy/shared/zombie/sound/00_0c", "x/y/sound/00_0c"]
+        );
+        // Naming the default style is the same as naming none.
+        assert_eq!(
+            enemy_sound_stems(&sets[1..], Some(DEFAULT_SOUND_STYLE), 0x0b),
+            ["enemy/00/sound/00_0b"]
         );
     }
 
@@ -3375,8 +3497,9 @@ mod tests {
             .map(|name| name.to_ascii_lowercase())
             .collect();
         let mut seen = std::collections::HashSet::new();
-        for (set, slots) in ENEMY_SOUNDS {
-            assert!(seen.insert(*set), "{set} is listed twice");
+        for (id, style, slots) in ENEMY_SOUNDS {
+            let set = format!("{id:02x}/{style:02x}");
+            assert!(seen.insert(set.clone()), "{set} is listed twice");
             assert!(slots.windows(2).all(|pair| pair[0].0 < pair[1].0), "{set}");
             for (slot, name) in *slots {
                 assert!(*slot < 10, "{set} slot {slot}");

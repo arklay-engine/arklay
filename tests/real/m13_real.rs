@@ -884,8 +884,9 @@ fn the_room_and_character_names_are_packed() {
     let names = character_sfx_names();
     assert_eq!(names.len(), 31, "the character tables name 31 sounds");
     let mut missing = Vec::new();
-    // Every named sound the room tables and the shared tables reference.
-    for name in sfx::SE_NAMES.iter().copied().chain(names.iter().copied()) {
+    // Every named sound the room tables and the shared tables reference,
+    // bar the enemy sounds that only play from their enemy's folder.
+    for name in sfx::se_entry_names().chain(names.iter().copied()) {
         let path = format!("se/{}.wav", name.to_ascii_lowercase());
         if !pack.contains(&path) {
             missing.push(path);
@@ -897,7 +898,7 @@ fn the_room_and_character_names_are_packed() {
     );
     assert_eq!(
         pack.paths().filter(|path| path.starts_with("se/")).count(),
-        sfx::SE_NAMES.len(),
+        sfx::se_entry_names().count(),
         "the pack carries every named effect"
     );
     for &(id, _) in arklay::music::MUSIC_TRACKS {
@@ -959,11 +960,11 @@ fn conversion_packs_the_referenced_voice_lines_in_the_single_pack() {
     // numeric BGM group track.
     assert_eq!(
         pack.paths().filter(|path| path.starts_with("se/")).count(),
-        sfx::SE_NAMES.len(),
+        sfx::se_entry_names().count(),
         "every named effect is packed"
     );
     let mut se_missing = Vec::new();
-    for name in sfx::SE_NAMES.iter().copied().chain(character_sfx_names()) {
+    for name in sfx::se_entry_names().chain(character_sfx_names()) {
         let path = format!("se/{}.wav", name.to_ascii_lowercase());
         if !pack.contains(&path) {
             se_missing.push(path);

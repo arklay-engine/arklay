@@ -947,8 +947,9 @@ fn copy_music(
 /// own sound set ([`sfx::ENEMY_SOUNDS`]).
 ///
 /// The pack stores the canonical names lowercased (`se/ft_wda.wav`) and the
-/// enemy sets by slot (`enemy/em00_04.wav`); the install's file names are
-/// matched case-insensitively and copied raw.
+/// enemy sets by style and slot (`enemy/00/sound/00_04.wav`), with an enemy
+/// sound under `se/` only when a room script plays it there; the install's
+/// file names are matched case-insensitively and copied raw.
 fn copy_se(
     sound: &Option<PathBuf>,
     writer: &mut PackWriter,
@@ -962,23 +963,29 @@ fn copy_se(
     let index = index_dir(sound)?;
     let mut files = Vec::new();
     let mut missing = Vec::new();
-    // The named one-shot sound effects.
+    // The named one-shot sound effects. Every name must be installed, but an
+    // enemy's sounds only go under `se/` when a room script still plays them
+    // through the room table (`sfx::packs_se_entry`).
     for name in sfx::SE_NAMES.iter() {
         let file = format!("{}.wav", name.to_ascii_lowercase());
         match index.get(&file) {
-            Some(path) => files.push((format!("se/{file}"), path.clone())),
+            Some(path) if sfx::packs_se_entry(name) => {
+                files.push((format!("se/{file}"), path.clone()))
+            }
+            Some(_) => {}
             None => missing.push(format!("{}.WAV", name.to_ascii_uppercase())),
         }
     }
     // Each enemy's own sounds, packed next to its script and model
-    // (`enemy/em00_04.wav`); the enemy scripts resolve them, not the room
-    // tables.
-    for (set, slots) in sfx::ENEMY_SOUNDS {
+    // (`enemy/00/sound/00_04.wav`); the enemy scripts resolve them, not the
+    // room tables.
+    for (id, style, slots) in sfx::ENEMY_SOUNDS {
+        let dir = sfx::enemy_dir(*id);
         for (slot, name) in *slots {
             let file = format!("{}.wav", name.to_ascii_lowercase());
             if let Some(path) = index.get(&file) {
                 files.push((
-                    format!("{}/{set}_{slot:02x}.wav", sfx::ENEMY_DIR),
+                    format!("{}.wav", sfx::enemy_sound_stem(&dir, *style, *slot)),
                     path.clone(),
                 ));
             }
@@ -2386,7 +2393,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 6;
+pub const CONVERT_VERSION: u32 = 7;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, and the language sheets.
@@ -2862,7 +2869,7 @@ struct WeaponAsset {
 struct NpcAsset {
     /// Entity id (`0x20..=0x2E`).
     id: u8,
-    /// Pack entry, e.g. `enemy/em23.emd`.
+    /// Pack entry, e.g. `enemy/23/enemy.emd`.
     entry: String,
     /// Source file in the installation.
     source: PathBuf,
@@ -2875,7 +2882,7 @@ struct EnemyAsset {
     id: u8,
     /// Scenario block: 0 Chris, 1 Jill.
     player: u8,
-    /// Pack entry, e.g. `enemy/em130.emd`.
+    /// Pack entry, e.g. `enemy/13/enemy_0.emd`.
     entry: String,
     /// Source file in the installation.
     source: PathBuf,
@@ -3359,8 +3366,9 @@ fn resolve_npc_assets(layout: &Layout) -> Result<(Vec<NpcAsset>, Vec<String>)> {
 }
 
 /// Resolve the monster models of both scenario blocks by entity id:
-/// `ENEMY/EM10xx.EMD` (Chris) to `enemy/em{id:02x}0.emd` and
-/// `ENEMY/EM11xx.EMD` (Jill) to `enemy/em{id:02x}1.emd`, for ids `0x00..=0x15`.
+/// `ENEMY/EM10xx.EMD` (Chris) to `enemy/{id:02x}/enemy_0.emd` and
+/// `ENEMY/EM11xx.EMD` (Jill) to `enemy/{id:02x}/enemy_1.emd`, for ids
+/// `0x00..=0x15`.
 ///
 /// Missing files are an optional-category warning, like the character models:
 /// an id without a model renders nothing while its script still runs.
@@ -3377,7 +3385,7 @@ fn resolve_enemy_assets(layout: &Layout) -> Result<(Vec<EnemyAsset>, Vec<String>
                 Some(source) => assets.push(EnemyAsset {
                     id,
                     player,
-                    entry: format!("enemy/em{id:02x}{player}.emd"),
+                    entry: enemy::scenario_model_path(id, player),
                     source: source.clone(),
                 }),
                 None => missing.push(format!("ENEMY/EM{block}{id:02X}.EMD")),
@@ -4064,7 +4072,7 @@ mod tests {
         for (offset, asset) in plan.npc.iter().enumerate() {
             let id = enemy::FIRST_ID + offset as u8;
             assert_eq!(asset.id, id);
-            assert_eq!(asset.entry, format!("enemy/em{id:02x}.emd"));
+            assert_eq!(asset.entry, enemy::generic_model_path(id));
         }
 
         let out = root.path.join("out.akpak");
@@ -4078,11 +4086,11 @@ mod tests {
             15
         );
         assert_eq!(
-            count("enemy/em13.lua"),
+            count("enemy/13/enemy.lua"),
             1,
             "the checked-in script is packed"
         );
-        assert_eq!(pack.read("enemy/em23.emd").unwrap().as_ref(), b"npc-23");
+        assert_eq!(pack.read("enemy/23/enemy.emd").unwrap().as_ref(), b"npc-23");
     }
 
     /// Write all 33 effect-sheet files under `EFFSPR` with mixed-case names,
@@ -4265,7 +4273,8 @@ mod tests {
         );
         assert_eq!(
             pack.paths()
-                .filter(|path| path.starts_with("enemy/") && path.ends_with(".lua"))
+                .filter(|path| path.ends_with(".lua"))
+                .filter(|path| path.starts_with("enemy/") || path.starts_with("lib/"))
                 .count(),
             crate::enemy::ENEMY_SCRIPTS.len(),
             "the checked-in enemy scripts are independent of the install"
@@ -4455,15 +4464,24 @@ mod tests {
         assert!(!pack.contains("bgm/000.wav"));
         assert!(pack.contains("se/ft_wda.wav"));
         assert_eq!(pack.read("se/ft_wda.wav").unwrap().as_ref(), b"ft_wdA");
-        // Each enemy's own sounds sit next to its script, by slot.
-        assert_eq!(pack.read("enemy/em00_04.wav").unwrap().as_ref(), b"z_osou");
+        assert!(!pack.contains("se/z_osou.wav"), "enemy sounds leave se/");
+        assert!(pack.contains("se/he_nout.wav"), "room 309 plays it there");
+        assert!(pack.contains("se/hu_att.wav"), "room 706 plays it there");
+        // Each enemy's own sounds sit next to its script, by style and slot.
         assert_eq!(
-            pack.read("enemy/em00_02_04.wav").unwrap().as_ref(),
+            pack.read("enemy/00/sound/00_04.wav").unwrap().as_ref(),
+            b"z_osou"
+        );
+        assert_eq!(
+            pack.read("enemy/00/sound/02_04.wav").unwrap().as_ref(),
             b"z_isi02"
         );
-        assert_eq!(pack.read("enemy/em04_08.wav").unwrap().as_ref(), b"poison");
+        assert_eq!(
+            pack.read("enemy/04/sound/00_08.wav").unwrap().as_ref(),
+            b"poison"
+        );
         assert!(
-            !pack.contains("enemy/em04_00.wav"),
+            !pack.contains("enemy/04/sound/00_00.wav"),
             "the tiger inherits slot 0"
         );
         assert_eq!(
@@ -4472,7 +4490,7 @@ mod tests {
                 .count(),
             sfx::ENEMY_SOUNDS
                 .iter()
-                .map(|(_, slots)| slots.len())
+                .map(|(_, _, slots)| slots.len())
                 .sum::<usize>()
         );
 
@@ -4495,8 +4513,8 @@ mod tests {
             "missing outfits are skipped"
         );
         // The NPC phase copies the fifteen character models raw, lower-cased.
-        assert_eq!(pack.read("enemy/em20.emd").unwrap().as_ref(), b"npc-20");
-        assert_eq!(pack.read("enemy/em2e.emd").unwrap().as_ref(), b"npc-2e");
+        assert_eq!(pack.read("enemy/20/enemy.emd").unwrap().as_ref(), b"npc-20");
+        assert_eq!(pack.read("enemy/2e/enemy.emd").unwrap().as_ref(), b"npc-2e");
 
         let manifest = manifest::Manifest::parse(
             std::str::from_utf8(pack.read(manifest::ENTRY).unwrap().as_ref()).unwrap(),
@@ -4514,7 +4532,7 @@ mod tests {
         assert_eq!(rooms("/cut/"), 3);
         assert_eq!(rooms("/mask/"), 0);
         assert_eq!(count("bgm/"), 3);
-        assert_eq!(count("se/"), sfx::SE_NAMES.len());
+        assert_eq!(count("se/"), sfx::se_entry_names().count());
         assert_eq!(count("door/"), 34);
         assert_eq!(
             count("player/"),
@@ -4528,7 +4546,7 @@ mod tests {
             15
         );
         assert_eq!(
-            count("enemy/em13.lua"),
+            count("enemy/13/enemy.lua"),
             1,
             "the checked-in script is packed"
         );
@@ -6142,14 +6160,21 @@ mod tests {
         // variant's folder.
         assert_eq!(within("/mask/"), 1202);
         assert_eq!(count("bgm/"), crate::music::MUSIC_TRACKS.len());
-        assert_eq!(count("se/"), sfx::SE_NAMES.len());
+        assert_eq!(count("se/"), sfx::se_entry_names().count());
         assert_eq!(count("door/"), 34);
         // Enemy sounds are packed beside their scripts and models
-        // (`enemy/em00_04.wav`), so they count here too.
-        let enemy_sounds: usize = sfx::ENEMY_SOUNDS.iter().map(|(_, slots)| slots.len()).sum();
+        // (`enemy/00/sound/00_04.wav`), so they count here too.
+        let enemy_sounds: usize = sfx::ENEMY_SOUNDS
+            .iter()
+            .map(|(_, _, slots)| slots.len())
+            .sum();
+        let enemy_scripts = crate::enemy::ENEMY_SCRIPTS
+            .iter()
+            .filter(|(entry, _)| entry.starts_with("enemy/"))
+            .count();
         assert_eq!(
             count("enemy/"),
-            15 + 44 + crate::enemy::ENEMY_SCRIPTS.len() + enemy_sounds,
+            15 + 44 + enemy_scripts + enemy_sounds,
             "15 character models, 44 monster models, their sounds and the checked-in scripts"
         );
         assert_eq!(count("effect/"), 33);
@@ -6159,11 +6184,11 @@ mod tests {
             !pack.contains(crate::combat::COMBAT_ENTRY),
             "no combat tables are packed"
         );
-        assert!(pack.contains("enemy/em20.emd"));
-        assert!(pack.contains("enemy/em2e.emd"));
-        assert!(pack.contains("enemy/em000.emd"));
-        assert!(pack.contains("enemy/em151.emd"));
-        assert!(pack.contains("enemy/em13.lua"));
+        assert!(pack.contains("enemy/20/enemy.emd"));
+        assert!(pack.contains("enemy/2e/enemy.emd"));
+        assert!(pack.contains("enemy/00/enemy_0.emd"));
+        assert!(pack.contains("enemy/15/enemy_1.emd"));
+        assert!(pack.contains("enemy/13/enemy.lua"));
         assert!(pack.contains("effect/00.bmp"));
         assert!(pack.contains("effect/20.bmp"));
         assert!(pack.contains(crate::effects::room::CORE_ESP_ENTRY));

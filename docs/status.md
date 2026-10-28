@@ -27,35 +27,35 @@ workspace install (`/path/to/re1`) and its converted pack.
 | M16 Fidelity sweep | Exact fixed-point presentation, scripting/UI parity, harness leftovers | done |
 | M17 Hardening | Budgets, torture, fuzz, `verify`, atomic CLI, `--stats`, soak, CI, docs | done |
 | E1 Enemy scripting | `enemy` namespace, sandboxed enemy-script VM from the pack, monster spawn/model dispatch, SpiderWeb (0x13) | done |
-| E2 NPC port | Character states 0/1/8/9 in `enemy/lib/npc.lua` + per-id data scripts; native driver kept as the differential oracle | done |
+| E2 NPC port | Character states 0/1/8/9 in `lib/npc.lua` + per-id data scripts; native driver kept as the differential oracle | done |
 | E3 Roots + shared helpers | Plant 42's roots (0x0e) spawn-kind/phase machine; named scratch words, joint-scale render, per-entity SCA record, enemy sound bank, additive model tint, direct RNG draw | done |
 | E4 Shared damage layer | The shared weapon-damage pipeline with hit detectors, hit records and reactions over the built-in combat tables; player-hurt helpers; saved-enemy door snapshots | done |
 | E5 Adder + Wasp | The adder (0x0a): four-state machine over the four spawn-kind decisions and seven behaviours, the ballistic drop, the joint-1 bite reach, the tail-hiding flinch and both death paths with the retreat's self-respawn. The wasp (0x07): the nest/ignore/behaviour three-level machine, hover drift, contact sting and cutscene grab, the per-character player poses, the big-wasp variant and the nest respawn cycle. Per-frame joint world matrices and joint-anchored billboards, the range/LOS and path-keep helpers they need | done |
 | E6 Crow + spiders | The crow (0x05): the 14-behaviour flight machine, perching/take-off scatter, the altitude envelope and off-map death, obstacle swerve/latch steering, the floor-step channel, the stored-speed vector and the player animation/mash accessors. The WebSpinner (0x03) and BlackTiger (0x04): the three spawn-kind pickers and twelve behaviours, the three web shooters, the shared Rust web-clone arena with its own seven-state machine, room teardown and render pass, the two-volume SCA profile, 32-bit joint flags, the leg-reach probe and the per-type web-joint registries | done |
 | E7 Cerberus + Chimera | The hound (0x02): the 16-slot state/behaviour block read through two bases, the five sub-tables and the wall-follow switch, all ten behaviours, the forward/turn collision probes with the `position`-word save/restore, the head-track steering and the bite→tumble/maul forks. The chimera (0x09): the four-state table with the hit/death layers, the seventeen behaviours (three doubling as the variant brains), the dive-arc drop/swoop/knockdown/death drivers, the ceiling attachment and the grab with its mash meter | done |
-| E8 Zombies | The zombies (ids `0x00` standard, `0x01` naked, `0x11` green): the five overlapping dispatch tables with their exact alias bases, the wander/chase/eating behaviours, the pushback and get-up machines, the eleven-sub-state grab/bite/vomit attack, the four death variants with the corpse hold and the 1-in-4 revival, the severed-limb and head-explosion gore state contract, and the shared `enemy/lib/zombie.lua` driver behind three thin per-id scripts carrying the collision records | done |
+| E8 Zombies | The zombies (ids `0x00` standard, `0x01` naked, `0x11` green): the five overlapping dispatch tables with their exact alias bases, the wander/chase/eating behaviours, the pushback and get-up machines, the eleven-sub-state grab/bite/vomit attack, the four death variants with the corpse hold and the 1-in-4 revival, the severed-limb and head-explosion gore state contract, and the shared `lib/zombie.lua` driver behind three thin per-id scripts carrying the collision records | done |
 | E9 Hunter | The hunter (id `0x06`): the nine-slot state table, the eight-variant AI layer (the plain/pack-follower/pouncer/coward/scripted-walk-in decisions), the twelve AI behaviours, the nine-slot action layer, the seven death paths, the 39-slot script-controlled table with its four self-re-entrant sub-range wrappers, the pack partner slot, the leap/dodge/scream/grab chains and the exact direct-RNG order | done |
 | E10a Set-piece smalls | The monster plant (id `0x0f`): the five overlapping tables (state/behaviour/variant/sub/step) with the three step-chain entry bases, the head-joint SCA retarget, the full grab→drain→release chain over the shared player-held window, the bite and strike chains with both vine stop tables, the exact draw order of the die thrash and poison pulse, and the room-shared lunge-side register. The computer arms (ids `0x14`/`0x15`): the terminal command protocol, the 16.16 fixed-point integration, the per-arm reach/step/command chains, the voice handshake and the documented command-8 fall-off. The Forest zombie (`0x16`, absent from this install) stays a documented inert stub. The player-held reaction framework, `e:srand`/`e:lfsr_step`, `e:play_voice`/`e:play_sfx`, `e:set_sca_hit_point`, `e:raise_flag` and the boss scratch views land with it; Neptune, Yawn and the Tyrant stay pending | done |
 | E10b Plant 42 | Plant 42 (id `0x08`): the state/action machine (init, state check, damaged, die, the SCD table), the sixteen action handlers with the sweep/spit/grab-hold-release-kill/wither chains, the range-gate selector, the ambient room effects and the shared vine pool with the last-vine award. The custom skeleton animator (`e:plant42_advance`: sub-frame blend, blend-before-use, hold-gated frame advance), the companion arena (the flower body and root ball clones with their own machines, render objects and scale, the room-shared body every split-vine record reads) and the room-40C0 set-ups (fallen core, poison arena, Chris hold, boss fight, poison body) land with it. The state-6 attacked-flag window (knockdown / grabbed / thrown, the capture-matrix slide) and the state-2 generic hit reaction join the player-held framework; `e:plant42_capture_setup`/`e:plant42_hold_player`, `e:apply_matrix_lv`, `e:vector_normal`, `e:set_player_pos`/`e:set_player_speed`/`e:add_player_speed` and the `p42_*` scratch views are the new surface. Neptune, Yawn and the two Tyrants remain for the later E10 groups | done |
-| E10c Yawn | Yawn (ids `0x0d` first fight, `0x12` rematch): the five-state head machine (init, state check, damaged, die, wait), the nine actions (idle, move, bite with the per-form damage window and the first-fight poison, rear/form toggle, the swallow grab with its capture matrix and player window, the scripted entry crawl, the emerge/hiss ceiling burst, the flee path with its three segment batches, the wall-stuck reposition), the two decision trees and the exact direct-RNG order. The head's own fixed-point chain animator (pose init, `<<9` chain accumulation, the joint-13 anchor, the `reverse` swallow playback, chain follow/align and the post-move collision drag), the thirteen-slot segment machinery (`e:yawn_spawn_segments`/`e:yawn_segment_tick` with cross-slot damage routing and cleanup), the cross-slot scalar accessors, the swallow capture/player-held state-7 window and the segment render pass (mesh skip, body shadows, `& 0x7f` gate) land with it; `em12.lua` is the thin alias. Neptune and the two Tyrants remain for the later E10 groups | done |
-| E10d Tyrant | The Tyrant (ids `0x0c` lab, `0x10` heliport; one shared `enemy/em0c.lua` machine plus the thin `em10.lua` alias): the ten-slot state table (init, think+act, the hit reaction's `+0x174` state restore, the forced state and the SCD state), the two behaviour dispatch bases (state 1 adds the +2 bias, state 3 runs it unbent with no pathfinding), the sixteen behaviours (restrained slab, SCD yield, 60-frame pause, waypoint walk with the walk/run root-motion sets, swipe/slash/thrust/backhand with their reach windows, damage frames and kill latches, the impale grab, charge and rush with their save/restore collision probes, the eruption entrance, rise, and the two per-id decision layers) and the eighteen-slot SCD table (pod → glass break with its 53-entry shard draw order → the scripted Wesker impale → idle, the walk/strike/face/animation handlers, and the heliport rocket death that launches five joints as free bodies and stops at `health = -1` / `SysFlags 0x1F`). The root-motion extractor (`e:tyrant_root_motion`) turns the claw chains into the frame's speed and slides the entity; the ribbon history (`e:tyrant_trail_alloc`/`e:tyrant_trail_arm`/`e:tyrant_trail_update`, the nine matrix/midpoint/near-far slots with the `0x8000` arm bit), the two claw ghosts (`e:tyrant_ghosts_tick`, the signed-byte 3000..6000 scale pair) and the limb physics (`e:tyrant_limb_launch`/`e:tyrant_limb_update`) keep the original's exact state; the exposed heart rides joint 1 through the companion arena with its own beat ramp and rocket-death drop. The player-side Tyrant stagger table (backhand/swipe stagger and the knock-back with the wall slam and reverse get-up) runs in the shared state-6 window; `e:latch_player_attacker`, `e:snap_grab_slot`, `e:add_entity_anim_offset`, the `ty_*` scratch views, `e:angle_quadrant`, `e:store_camera_speed` and the travelled-distance third return of `e:resolve_collision` are the new surface. The corpus census now finds twenty-one scripted monster ids (adding `0x0c` and `0x10`) with no script errors, and the real-asset tests boot ROOM5130's pod Tyrant with its heart and ROOM3030's suspended heliport Tyrant | done |
+| E10c Yawn | Yawn (ids `0x0d` first fight, `0x12` rematch): the five-state head machine (init, state check, damaged, die, wait), the nine actions (idle, move, bite with the per-form damage window and the first-fight poison, rear/form toggle, the swallow grab with its capture matrix and player window, the scripted entry crawl, the emerge/hiss ceiling burst, the flee path with its three segment batches, the wall-stuck reposition), the two decision trees and the exact direct-RNG order. The head's own fixed-point chain animator (pose init, `<<9` chain accumulation, the joint-13 anchor, the `reverse` swallow playback, chain follow/align and the post-move collision drag), the thirteen-slot segment machinery (`e:yawn_spawn_segments`/`e:yawn_segment_tick` with cross-slot damage routing and cleanup), the cross-slot scalar accessors, the swallow capture/player-held state-7 window and the segment render pass (mesh skip, body shadows, `& 0x7f` gate) land with it; `enemy/12/enemy.lua` is the thin alias. Neptune and the two Tyrants remain for the later E10 groups | done |
+| E10d Tyrant | The Tyrant (ids `0x0c` lab, `0x10` heliport; one shared `enemy/0c/enemy.lua` machine plus the thin `enemy/10/enemy.lua` alias): the ten-slot state table (init, think+act, the hit reaction's `+0x174` state restore, the forced state and the SCD state), the two behaviour dispatch bases (state 1 adds the +2 bias, state 3 runs it unbent with no pathfinding), the sixteen behaviours (restrained slab, SCD yield, 60-frame pause, waypoint walk with the walk/run root-motion sets, swipe/slash/thrust/backhand with their reach windows, damage frames and kill latches, the impale grab, charge and rush with their save/restore collision probes, the eruption entrance, rise, and the two per-id decision layers) and the eighteen-slot SCD table (pod → glass break with its 53-entry shard draw order → the scripted Wesker impale → idle, the walk/strike/face/animation handlers, and the heliport rocket death that launches five joints as free bodies and stops at `health = -1` / `SysFlags 0x1F`). The root-motion extractor (`e:tyrant_root_motion`) turns the claw chains into the frame's speed and slides the entity; the ribbon history (`e:tyrant_trail_alloc`/`e:tyrant_trail_arm`/`e:tyrant_trail_update`, the nine matrix/midpoint/near-far slots with the `0x8000` arm bit), the two claw ghosts (`e:tyrant_ghosts_tick`, the signed-byte 3000..6000 scale pair) and the limb physics (`e:tyrant_limb_launch`/`e:tyrant_limb_update`) keep the original's exact state; the exposed heart rides joint 1 through the companion arena with its own beat ramp and rocket-death drop. The player-side Tyrant stagger table (backhand/swipe stagger and the knock-back with the wall slam and reverse get-up) runs in the shared state-6 window; `e:latch_player_attacker`, `e:snap_grab_slot`, `e:add_entity_anim_offset`, the `ty_*` scratch views, `e:angle_quadrant`, `e:store_camera_speed` and the travelled-distance third return of `e:resolve_collision` are the new surface. The corpus census now finds twenty-one scripted monster ids (adding `0x0c` and `0x10`) with no script errors, and the real-asset tests boot ROOM5130's pod Tyrant with its heart and ROOM3030's suspended heliport Tyrant | done |
 | E11a Player weapons | The player weapon runtime: the aim/fire/reload state machine (0x12–0x1a guns, the knife's own aim/hold/swing/holster/turn) driven by the new aim/fire pad keys, the per-weapon `W*.EMW` clip selection and the knife/gun/projectile fire paths through `apply_weapon_damage_with`, the clip/reserve ammo model (`weapon_autoaim_check`, the reload transfer and the volley latch), the fire data tables (fire frames, sounds, muzzle and secondary flash offsets, end frames, special frame windows, aim heights), the held weapon drawn at joint 14 with the player/character texture page, the muzzle/secondary flashes and shells attached to the weapon joints, the state-8 held-weapon joint refresh, and the flamethrower enemy-bank cues | done |
 | E11b Player death | The player damage/death state machine: the state-1 entry checks (the HP<0 death trigger with the back-shot facing flip and the cannot-die guard, the hit pre-emption into the generic reaction, the poison status drain), the death fall (state 3: the scream, the body clip, the slide, the blood pool that reuses the ground quad and grows 16 a frame for 148 frames, and the blocked state), the game-over machine (the 90-frame delay, the room-variant immediate fades for the two Yawn rooms and the water tank, the scripted-death rooms that skip the pool, the white-out and the black fade-out), and the DIED screen (`src/ui/death.rs`: the `died.tim` mirrored static backdrop, the fixed camera over the corpse with the 8-unit-per-frame spin, the 256-column sine-wavy strip with its exact phase/amplitude ramps, the black overlay ramp and the confirm skip), returning to the title; `ui/died.tim` is packed and `--ui death` joins the debug boot list | done |
 | E12 Enemy verification | The closing gate over the whole arc: the corpus spawn census re-measured across all 348 rooms with twenty-one scripted monster ids and zero script errors, the per-id real-asset boots (`enemy_real`), the real weapon/damage kills (`weapons_real`/`combat_real`), the shipped DIED-screen run (`death_real`), the NPC/actor/walk/entities/fire regression suites, `verify` on the reconverted pack (the new `emw`/`tmd` rows green, `tim` 124/124), and the status/deviations close-out | done |
 | M19 Config and Lua screens | The `arklay.toml` user config and the `<config dir>/save` default location; the general Lua screen surface (`on_init` + `api:register_save_screen`, the save list, save/load/remove, the pad edges, the screen sounds and immediate-mode drawing) and the Classic REbirth-style save/load screen as the `mods/crloadsave` mod | done |
 
-Enemy behaviour now lives in the pack as `enemy/em{id:02x}.lua` scripts (with
-shared `enemy/lib/**.lua` modules) behind the same sandbox as the mod hooks;
+Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
+shared `lib/**.lua` modules) behind the same sandbox as the mod hooks;
 the scripts are stateless and all their mutable state sits on the Rust entity.
 The first ported monster is the spider web (id `0x13`), which validates spawn,
 model, script load/reset, damage reaction and the death flag end to end. The
 scripted characters (`0x20..=0x2E`) now run their whole driver from
-`enemy/lib/npc.lua` with per-id data scripts: the state-0 init, state-1 idle
+`lib/npc.lua` with per-id data scripts: the state-0 init, state-1 idle
 behaviours, state-8 scripted-action handlers (weapon fire, scripted turns and
 walks) and the state-9 follow/pathfind driver, each checked against the native
 oracle field for field, tick for tick. The native driver stays as the fallback
 and differential oracle. The second monster is Plant 42's root mass (id
-`0x0e`), whose `enemy/em0e.lua` transcribes the dormant, retracted and full
+`0x0e`), whose `enemy/0e/enemy.lua` transcribes the dormant, retracted and full
 writhe spawn kinds, the four phase handlers that double as state-table slots,
 the exact groan-cue timer draw order and the shrink/tint/shadow cadence; E3
 also paid the shared helper backlog it needed: named Rust accessors for the
@@ -99,7 +99,7 @@ door and death events stay permanent. The declared joint-attached gore/tints
 and the knife-hand joint origin are documented approximations until the
 joint-matrix layer lands (see the module docs in `src/combat.rs`).
 
-E5 ports the adder (id `0x0a`) as `enemy/em0a.lua`. The script transcribes the
+E5 ports the adder (id `0x0a`) as `enemy/0a/enemy.lua`. The script transcribes the
 four-entry state table, the four spawn-kind decisions (floor, ceiling-near,
 ceiling ambush with its pose/fuse trigger and 100-unit teleport, hidden) and
 the seven behaviours (chase with its per-frame wobble draws, the quadratic
@@ -117,7 +117,7 @@ facing test; the path-result keep byte; the room-collision result code behind
 `e:resolve_collision`; the player-pair touch flag from `e:separate`; and the
 cross-enemy special-weapon check.
 
-E5 also ports the wasp (id `0x07`) as `enemy/em07.lua`, the last of the four
+E5 also ports the wasp (id `0x07`) as `enemy/07/enemy.lua`, the last of the four
 simplest monsters. The script transcribes the four-entry state table and the
 three-level control (the `ignore` drift gate, the nest state machine encoded in
 `behavior_flags`, and the seven-entry behaviour table with `action_state`
@@ -140,7 +140,7 @@ corpus census now finds four scripted monster ids (`0x07`, `0x0a`, `0x0e`,
 `0x13`) and no script errors, and the real-asset tests boot the seven ceiling
 adders of ROOM3010 and the seven dormant wasp nests of ROOM4080 through init.
 
-E6 ports the crow (id `0x05`) as `enemy/em05.lua`. The script transcribes the
+E6 ports the crow (id `0x05`) as `enemy/05/enemy.lua`. The script transcribes the
 nine-entry state table (init, driver, recoil, death and the five SCD-flight
 slots), the four anim helpers (hold, step, banking turn, grab) and all
 fourteen flight behaviours: the perched countdown and its three idle clips,
@@ -163,8 +163,8 @@ id/frame reads plus `e:player_mashing()` for the grab shake. The corpus
 census now finds five scripted monster ids (`0x05`, `0x07`, `0x0a`, `0x0e`,
 `0x13`) and no script errors.
 
-E6 also ports the WebSpinner (id `0x03`) as `enemy/em03.lua` and the Black
-Tiger (id `0x04`) as `enemy/em04.lua`, closing the milestone. The WebSpinner
+E6 also ports the WebSpinner (id `0x03`) as `enemy/03/enemy.lua` and the Black
+Tiger (id `0x04`) as `enemy/04/enemy.lua`, closing the milestone. The WebSpinner
 transcribes the ten-slot state table (six states, the last four aliasing the
 three spawn-kind behaviour pickers), the twelve behaviours (the two idle
 speeds, three walks, the strafe, two approaches, the lunge with its direct
@@ -194,8 +194,8 @@ monster ids (`0x03`, `0x04`, `0x05`, `0x07`, `0x0a`, `0x0e`, `0x13`) and no
 script errors, and the real-asset tests boot ROOM30C0's Black Tiger and
 ROOM4040's two WebSpinners through their scripts.
 
-E8 ports the zombies (ids `0x00`, `0x01`, `0x11`) as `enemy/lib/zombie.lua`
-with three thin per-id scripts (`em00.lua`, `em01.lua`, `em11.lua`) that carry
+E8 ports the zombies (ids `0x00`, `0x01`, `0x11`) as `lib/zombie.lua`
+with three thin per-id scripts (`enemy/00/enemy.lua`, `enemy/01/enemy.lua`, `enemy/11/enemy.lua`) that carry
 only the variant's collision record. The shared driver transcribes the five
 overlapping dispatch tables with their exact alias bases — the 22-slot states
 block read through the behaviour base `states + 10`, the 28-slot
@@ -234,7 +234,7 @@ monster ids (`0x00`, `0x01`, `0x03`, `0x04`, `0x05`, `0x07`, `0x0a`, `0x0e`,
 `0x11`, `0x13`) and no script errors, and the real-asset tests boot the 1F
 dining room's zombies through their scripts.
 
-E9 ports the hunter (id `0x06`) as `enemy/em06.lua`, the last of the common
+E9 ports the hunter (id `0x06`) as `enemy/06/enemy.lua`, the last of the common
 roster monsters. The script transcribes the three stacked dispatch layers: the
 nine-slot state table (spawn, AI driver, action layer, death, a bare return and
 the script-controlled state the spawn's control bit forces), the twelve-entry
@@ -281,7 +281,7 @@ finds thirteen scripted monster ids (`0x00`..`0x07`, `0x09`, `0x0a`, `0x0e`,
 scripted hunter pair through their scripts.
 
 E10a opens the boss roster with the two smallest set pieces. The monster plant
-(id `0x0f`) is `enemy/em0f.lua`: the five overlapping tables are spelled once
+(id `0x0f`) is `enemy/0f/enemy.lua`: the five overlapping tables are spelled once
 (the five-entry state table, the seven-entry behaviour table indexed by the
 `ignore` byte, the ten-entry variant table, the four-entry per-variant
 approach table with its genuine NULL slot guarded, and the twelve-case step
@@ -292,7 +292,7 @@ that spins a back grab and returns control), the vine reveal/hide tables walk
 the fifteen segment bits exactly (including the spent cursor wrapping the
 timer), and the die thrash's discard-first four-draw burst and the poison
 pulse's two-timer tint ramp keep the original's draw order. The computer arms
-(ids `0x14`/`0x15`) are `enemy/em14.lua`/`em15.lua`: the terminal's
+(ids `0x14`/`0x15`) are `enemy/14/enemy.lua`/`enemy/15/enemy.lua`: the terminal's
 `behavior_flags` command protocol (parked, new-command and done bits), the
 16.16 fixed-point integration with truncating division and arithmetic shifts,
 the per-arm reach offsets and step chains, the right arm's voice handshake
@@ -313,7 +313,7 @@ real-asset tests boot ROOM10C0's six-vine bed and ROOM5060's parked arm pair
 through their scripts. Plant 42, Neptune, Yawn and the two Tyrants remain for
 the later E10 groups.
 
-E10b is Plant 42 (id `0x08`), `enemy/em08.lua` over three new Rust pieces. The
+E10b is Plant 42 (id `0x08`), `enemy/08/enemy.lua` over three new Rust pieces. The
 script spells the state dispatch (init / state check / damaged / die / the
 separate SCD table), the sixteen action handlers, the two range-gate selectors
 and the ambient effects exactly as the original, and drives the companion
@@ -343,7 +343,7 @@ new Lua surface. The corpus census now finds seventeen scripted monster ids
 boss, split vines and companions through their scripts. Neptune, Yawn and the
 two Tyrants remain for the later E10 groups.
 
-E10c is Yawn (ids `0x0d`/`0x12`), `enemy/em0d.lua` plus the thin `em12.lua`
+E10c is Yawn (ids `0x0d`/`0x12`), `enemy/0d/enemy.lua` plus the thin `enemy/12/enemy.lua`
 alias over two new Rust pieces. The script spells the five-state head machine
 (init, state check, damaged, die, the `0x80` park), the nine actions — idle,
 move, the bite with its per-form damage window and the first fight's poison,
@@ -380,7 +380,7 @@ ROOM70C's rematch through their scripts. Neptune and the two Tyrants remain for
 the later E10 groups.
 
 E10d closes the boss roster with the Tyrant (ids `0x0c` lab and `0x10`
-heliport), `enemy/em0c.lua` plus the thin `em10.lua` alias over four Rust
+heliport), `enemy/0c/enemy.lua` plus the thin `enemy/10/enemy.lua` alias over four Rust
 additions. The script spells the ten-slot state table (init, think+act, the
 hit reaction that restores the `+0x174` state backup, the no-pathfind forced
 state and the SCD state), the two dispatch bases that make one behaviour byte
@@ -508,8 +508,8 @@ helper to reach the screen and return to the title. Documented deviations: the
 Plant 42 DIED-screen joint-hide variant and the countdown-timer death branch
 stay deferred (see `docs/m18-deviations.md`).
 
-E7 ports the hound (id `0x02`) as `enemy/em02.lua` and the chimera (id `0x09`)
-as `enemy/em09.lua`. The hound script spells out the single 16-slot dispatch
+E7 ports the hound (id `0x02`) as `enemy/02/enemy.lua` and the chimera (id `0x09`)
+as `enemy/09/enemy.lua`. The hound script spells out the single 16-slot dispatch
 block once and reads it through both bases — the state view indexed by `state`
 and the behaviour view biased by five and indexed by `ignore` — then runs the
 five sub-machines (patrol's begin/pick-turn/turn, chase's run/wall-follow/skid,

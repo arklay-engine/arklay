@@ -99,7 +99,7 @@ fn real_room20d0_state8_walk_crosses_shipped_collision() {
         .position(|entity| entity.id == 0x27 && entity.active())
         .expect("ROOM20D0 spawns Richard");
 
-    let model = emd::parse(&pack.read("enemy/em27.emd").unwrap()).unwrap();
+    let model = emd::parse(&pack.read("enemy/27/enemy.emd").unwrap()).unwrap();
     let mut game = arklay::game::GameState::default();
     let mut richard = sim.game.entities[slot];
     // Richard starts at (8300, 3600). Walk him straight east through the

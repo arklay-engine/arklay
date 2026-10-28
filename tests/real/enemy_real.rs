@@ -31,7 +31,7 @@ fn real_room4080_wasp_nests_initialise_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("4080").unwrap();
     let model = pack
-        .read(&format!("enemy/em07{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/07/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert!(
@@ -98,7 +98,7 @@ fn real_room30c0_spider_web_initialises_through_the_script() {
     let (slot, web) =
         entity_with_id(&first.game, 0x13).expect("ROOM30C0 spawns the door-blocking web");
     let model = pack
-        .read(&format!("enemy/em13{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/13/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     assert!(arklay::emd::parse(&model).is_ok(), "the web model parses");
 
@@ -124,7 +124,7 @@ fn real_room3010_adders_initialise_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("3010").unwrap();
     let model = pack
-        .read(&format!("enemy/em0a{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/0a/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(
@@ -184,7 +184,7 @@ fn real_room40f0_plant42_roots_initialises_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("40F0").unwrap();
     let model = pack
-        .read(&format!("enemy/em0e{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/0e/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     assert!(arklay::emd::parse(&model).is_ok(), "the roots model parses");
 
@@ -258,7 +258,7 @@ fn real_room30c0_black_tiger_initialises_through_the_script() {
     let pack = common::enemy_scripts_pack(&pack_path);
     let id = RoomId::parse("30C0").unwrap();
     let model = pack
-        .read(&format!("enemy/em04{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/04/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(
@@ -301,7 +301,7 @@ fn real_room4040_webspinners_initialise_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("4040").unwrap();
     let model = pack
-        .read(&format!("enemy/em03{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/03/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(
@@ -416,7 +416,7 @@ fn real_room1140_hounds_initialise_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("1140").unwrap();
     let model = pack
-        .read(&format!("enemy/em02{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/02/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert!(
@@ -466,7 +466,7 @@ fn real_room50f0_chimeras_initialise_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("50F0").unwrap();
     let model = pack
-        .read(&format!("enemy/em09{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/09/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert!(
@@ -520,7 +520,7 @@ fn real_room30a0_hunters_initialise_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("30A0").unwrap();
     let model = pack
-        .read(&format!("enemy/em06{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/06/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert!(
@@ -592,7 +592,7 @@ fn real_room10c0_monster_plants_initialise_through_the_script() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("10C0").unwrap();
     let model = pack
-        .read(&format!("enemy/em0f{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/0f/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(
@@ -651,7 +651,10 @@ fn real_room5060_computer_arms_initialise_through_the_script() {
     let id = RoomId::parse("5060").unwrap();
     for arm_id in [0x14u8, 0x15] {
         let model = pack
-            .read(&format!("enemy/em{arm_id:02x}{}.emd", id.player_flag & 1))
+            .read(&format!(
+                "enemy/{arm_id:02x}/enemy_{}.emd",
+                id.player_flag & 1
+            ))
             .unwrap();
         assert!(arklay::emd::parse(&model).is_ok(), "the arm model parses");
     }
@@ -750,7 +753,7 @@ fn real_room210_yawn_initialises_with_its_twelve_segments() {
     let pack = common::enemy_scripts_pack(&pack_path);
     let id = RoomId::parse("210").unwrap();
     let model = pack
-        .read(&format!("enemy/em0d{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/0d/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(
@@ -912,7 +915,7 @@ fn real_room70c_rematch_yawn_initialises() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("70c").unwrap();
     let model = pack
-        .read(&format!("enemy/em12{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/12/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(model.skeleton.relative.len(), 15);
@@ -955,7 +958,7 @@ fn real_room40c0_plant42_initialises_with_its_companions() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("40c0").unwrap();
     let model = pack
-        .read(&format!("enemy/em08{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/08/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert!(
@@ -1026,7 +1029,7 @@ fn real_room5130_lab_tyrant_floats_in_the_pod() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("5130").unwrap();
     let model = pack
-        .read(&format!("enemy/em0c{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/0c/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(
@@ -1098,7 +1101,7 @@ fn real_room3030_heliport_tyrant_waits_suspended() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("3030").unwrap();
     let model = pack
-        .read(&format!("enemy/em10{}.emd", id.player_flag & 1))
+        .read(&format!("enemy/10/enemy_{}.emd", id.player_flag & 1))
         .unwrap();
     let model = arklay::emd::parse(&model).unwrap();
     assert_eq!(model.skeleton.relative.len(), 15);
