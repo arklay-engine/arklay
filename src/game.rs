@@ -17867,6 +17867,41 @@ mod tests {
     }
 
     #[test]
+    fn a_cut_s_own_light_overrides_the_room_s() {
+        use crate::state::{CameraLight, Cut};
+
+        let own = CameraLight {
+            ambient: [0x100, 0x200, 0x300],
+            lights: [crate::state::Light {
+                pos: [1, 2, 3],
+                ..Default::default()
+            }; 3],
+        };
+        let mut room = RoomState {
+            cuts: vec![
+                Cut::default(),
+                Cut {
+                    light: Some(own),
+                    ..Cut::default()
+                },
+            ],
+            ambient: [7, 8, 9],
+            ..RoomState::default()
+        };
+        let lighting = crate::render::Lighting::from_room(&room);
+        assert_eq!(
+            (lighting.ambient, lighting.lights),
+            (room.ambient, room.lights)
+        );
+        room.current_cut = 1;
+        let lighting = crate::render::Lighting::from_room(&room);
+        assert_eq!(
+            (lighting.ambient, lighting.lights),
+            (own.ambient, own.lights)
+        );
+    }
+
+    #[test]
     fn cut_zone_set_rewrites_the_camera_zone() {
         use crate::state::{Cut, Zone};
 

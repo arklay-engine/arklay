@@ -155,7 +155,7 @@ impl Viewer {
     /// Stand the model in front of `cut`, turned to face it.
     ///
     /// It stands along the view, as far out as fits its first pose's
-    /// extent into the middle of the frame ([`FIT_HALF_HEIGHT`] pixels of
+    /// extent into the middle of the frame (`FIT_HALF_HEIGHT` pixels of
     /// the camera's focal length). There it stands on the floor (`y = 0`)
     /// when its feet and head are both in view, else it is lifted or
     /// lowered onto the line of sight: a crow or a cockroach seen from a

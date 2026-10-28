@@ -540,13 +540,22 @@ impl std::fmt::Debug for Replacement {
 /// The decoded replacement of the first of `candidates` `pack` names; a
 /// miss is reported like [`HdTable::find`], a file that fails to decode on
 /// stderr.
+///
+/// A [`Replacement`] covers the texture from its corner, so candidates for a
+/// window elsewhere (an RE2 model page, see [`Candidate::origin`]) are left
+/// to the scene path, which places them.
 pub fn replacement(
     pack: &Pack,
     candidates: &[Candidate],
     what: impl FnOnce() -> String,
 ) -> Option<Arc<Replacement>> {
     let table = pack.htexture();
-    let found = table.find(candidates, what)?;
+    let candidates: Vec<Candidate> = candidates
+        .iter()
+        .filter(|candidate| candidate.origin == [0, 0])
+        .copied()
+        .collect();
+    let found = table.find(&candidates, what)?;
     let frame = [found.frame[0].max(1), found.frame[1].max(1)];
     decoded_replacement(pack, table, found.path, frame)
 }
@@ -1320,6 +1329,30 @@ mod tests {
         let decoded = replacement(&pack, &candidates, String::new).unwrap();
         assert_eq!(decoded.frame, [4, 4]);
         assert_eq!(decoded.image.width, 2);
+    }
+
+    #[test]
+    fn a_whole_texture_replacement_skips_a_window_placed_elsewhere() {
+        let bmp = crate::bmp::encode_to_vec(&Image {
+            width: 2,
+            height: 2,
+            rgba: vec![255; 16],
+        })
+        .unwrap();
+        let mut writer = crate::pack::PackWriter::new();
+        writer.add("htexture/misc/00000007.bmp", bmp).unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let page = Candidate {
+            hash: 7,
+            frame: [128, 256],
+            origin: [128, 0],
+        };
+        assert!(replacement(&pack, &[page], String::new).is_none());
+        let whole = Candidate {
+            origin: [0, 0],
+            ..page
+        };
+        assert!(replacement(&pack, &[page, whole], String::new).is_some());
     }
 
     #[test]

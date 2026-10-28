@@ -346,7 +346,7 @@ pub struct Authoring<'a> {
 }
 
 /// The `--model` viewer's model: a pack entry, an animation bank and a clip
-/// of it (see [`crate::viewer`]).
+/// of it (see [`crate::model_viewer`]).
 #[derive(Debug, Clone, Copy)]
 pub struct ModelView<'a> {
     pub entry: &'a str,

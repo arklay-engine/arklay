@@ -210,8 +210,8 @@ pub fn with_weapon(pld: &Emd, plw: &Plw) -> Emd {
     }
 }
 
-/// The player texture with the weapon's texels pasted at [`WEAPON_AT`] of
-/// page [`WEAPON_PAGE`], read through that page's palette row.
+/// The player texture with the weapon's texels pasted at `WEAPON_AT` of
+/// page `WEAPON_PAGE`, read through that page's palette row.
 ///
 /// The PC game blits both textures to 16-bit surfaces, so a pasted texel
 /// keeps its exact colour. An indexed texture has to find each weapon colour
@@ -230,7 +230,9 @@ pub fn weapon_texture(player: &Texture8, weapon: &Texture8) -> Texture8 {
     {
         return texture;
     }
-    let paste_w = (weapon.width as usize).min(PAGE_WIDTH - WEAPON_AT[0]);
+    let paste_w = (weapon.width as usize)
+        .min(PAGE_WIDTH - WEAPON_AT[0])
+        .min(width - page_x - WEAPON_AT[0]);
     let paste_h = (weapon.height as usize).min(height - WEAPON_AT[1]);
     let inside = |x: usize, y: usize| {
         (page_x + WEAPON_AT[0]..page_x + WEAPON_AT[0] + paste_w).contains(&x)
@@ -296,7 +298,9 @@ fn palette_slot(
             .map(|channel| (i32::from(other[channel]) - i32::from(colour[channel])).pow(2))
             .sum::<i32>()
     };
-    (0..PALETTE_ROW_LEN)
+    // An equal colour may share slot 0, but a nearest one would turn the
+    // texel transparent.
+    (1..PALETTE_ROW_LEN)
         .min_by_key(|&index| distance(texture.palettes[row_start + index]))
         .unwrap_or(0) as u8
 }

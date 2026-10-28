@@ -310,3 +310,44 @@ fn a_weapon_replaces_the_hand_and_pastes_its_texels_with_their_colours() {
     // Row 1's own entry 5 is still what the rest of the page uses.
     assert_eq!(texture.palette(1, 5), player.texture.palette(1, 5));
 }
+
+fn flat(width: u32, height: u32, index: u8, palettes: Vec<[u8; 4]>) -> Texture8 {
+    Texture8 {
+        width,
+        height,
+        indices: vec![index; (width * height) as usize],
+        stp: vec![false; palettes.len()],
+        palettes,
+    }
+}
+
+#[test]
+fn a_weapon_pastes_only_inside_a_narrow_player_texture() {
+    let palettes = (0..512u32).map(|i| [i as u8, 0, 0, 255]).collect();
+    let player = flat(220, 256, 3, palettes);
+    let weapon = flat(56, 32, 1, vec![[7, 7, 7, 255]; 256]);
+    let texture = weapon_texture(&player, &weapon);
+    assert_eq!(texture.indices.len(), player.indices.len());
+    for y in 0..256 {
+        // Column 0 of each row is outside the box, so no paste wrapped into it.
+        assert_eq!(texture.indices[y * 220], 3, "row {y}");
+    }
+    assert_ne!(texture.indices[224 * 220 + 128 + 72], 3);
+}
+
+#[test]
+fn a_full_palette_row_never_maps_a_weapon_colour_to_the_transparent_slot() {
+    // Every slot of row 1 is used and none holds the weapon's colour; slot 0
+    // is the nearest one.
+    let mut palettes: Vec<[u8; 4]> = (0..512u32)
+        .map(|i| [255, (i % 256) as u8, 255, 255])
+        .collect();
+    palettes[256] = [0, 0, 0, 0];
+    let mut player = flat(256, 256, 0, palettes);
+    for (i, index) in player.indices.iter_mut().enumerate() {
+        *index = ((i % 256 + i / 256) % 256) as u8;
+    }
+    let weapon = flat(56, 32, 1, vec![[1, 1, 1, 255]; 256]);
+    let texture = weapon_texture(&player, &weapon);
+    assert_ne!(texture.indices[224 * 256 + 128 + 72], 0);
+}

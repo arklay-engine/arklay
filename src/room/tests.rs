@@ -540,3 +540,82 @@ fn a_japanese_stage_five_rdt_draws_its_text_from_the_stage_five_rows() {
         );
     }
 }
+
+#[test]
+fn a_camera_s_own_lighting_round_trips_beside_its_mask_groups() {
+    use crate::state::{CameraLight, Light};
+
+    let (xml, _) = converted_entries();
+    let mut room = xml::parse(&xml).unwrap();
+    let light = CameraLight {
+        ambient: [0x1000, 0x405, 0x11],
+        lights: [
+            Light {
+                pos: [-100, 200, 300],
+                color: [0x80, 0x41, 0],
+                kind: 0,
+                radius: 0x2000,
+            },
+            Light::default(),
+            Light {
+                pos: [1, 2, 3],
+                color: [6, 11, 16],
+                kind: 0,
+                radius: 7,
+            },
+        ],
+    };
+    room.cameras.push(room.cameras[0].clone());
+    room.cameras[0].mask_groups = Vec::new();
+    room.cameras[0].light = Some(light);
+    // The pushed copy keeps the synthetic camera's mask groups, if any.
+    let last = room.cameras.len() - 1;
+    room.cameras[last].light = Some(light);
+    let text = xml::write(&room).unwrap();
+    assert!(text.contains("<lighting "), "{text}");
+    let back = xml::parse(&text).unwrap();
+    assert_eq!(back, room);
+    // A camera without lighting reads back without it.
+    assert!(
+        back.cameras[1..last]
+            .iter()
+            .all(|camera| camera.light.is_none())
+    );
+}
+
+#[test]
+fn a_camera_s_lighting_must_come_once_before_its_masks_with_three_lights() {
+    let (xml, _) = converted_entries();
+    let camera = xml.find("<camera ").unwrap();
+    let end = camera + xml[camera..].find('>').unwrap();
+    let open = xml[camera..end].trim_end_matches('/').to_string() + ">";
+    let light = "<light x=\"0\" y=\"0\" z=\"0\" r=\"0\" g=\"0\" b=\"0\" kind=\"0\" radius=\"0\"/>";
+    let lighting = |count: usize| {
+        format!(
+            "<lighting r=\"0\" g=\"0\" b=\"0\">{}</lighting>",
+            light.repeat(count)
+        )
+    };
+    let mask = "<maskGroup originX=\"0\" originY=\"0\"/>";
+    let with = |body: String| {
+        let close = if xml[..=end].ends_with("/>") {
+            end + 1
+        } else {
+            camera + xml[camera..].find("</camera>").unwrap() + "</camera>".len()
+        };
+        format!("{}{open}{body}</camera>{}", &xml[..camera], &xml[close..])
+    };
+    let good = xml::parse(&with(lighting(3) + mask)).unwrap();
+    assert!(good.cameras[0].light.is_some());
+    for (bad, why) in [
+        (
+            mask.to_string() + &lighting(3),
+            "lighting after a mask group",
+        ),
+        (lighting(3) + &lighting(3), "two lightings"),
+        (lighting(2), "two lights"),
+        (lighting(4), "four lights"),
+    ] {
+        assert!(xml::parse(&with(bad)).is_err(), "{why}");
+    }
+}
