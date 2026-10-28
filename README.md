@@ -38,15 +38,15 @@ enable/disable state and order, and checks the release and nightly update
 tracks. Once both games are known (a pack or an install of each), LEFT/RIGHT
 on the main, INSTALL and MODS screens switches the selected game: INSTALL,
 REBUILD GAME PACK and MODS act on it, and MODS lists only the mods whose
-`base` is that game's pack. Highlighting a pack on PLAY selects its game too.
-Picking an RE2 folder with the INSTALL folder picker sets up RE2. The OPTIONS screen edits the
-renderer, widescreen, resolution, fullscreen, V-Sync, language, GPU render
-scale and MSAA, frame rate, quick turn and tactical reload, writing every
-change back to `arklay.toml`; booting the game and opening the in-game menu
-reaches the rest (see "Gameplay options" and the `[graphics]` table). MODS
-shows the application order: the top row is applied first (lowest priority)
-and the bottom row last (highest); Ctrl+Down moves a mod toward higher
-priority.
+`base` is that game's pack. Clicking the switch hint, or highlighting a pack
+on PLAY, selects a game too, and picking an RE2 folder with the INSTALL folder
+picker sets up RE2. The OPTIONS screen edits the renderer, widescreen,
+resolution, fullscreen, V-Sync, language, GPU render scale and MSAA, frame
+rate, quick turn and tactical reload, writing every change back to
+`arklay.toml`; booting the game and opening the in-game menu reaches the rest
+(see "Gameplay options" and the `[graphics]` table). MODS shows the
+application order: the top row is applied first (lowest priority) and the
+bottom row last (highest); Ctrl+Down moves a mod toward higher priority.
 
 The launcher also takes a gamepad. The D-pad or left stick moves and changes
 OPTIONS/UPDATE values left and right; A/Start confirms; B/Back backs out,

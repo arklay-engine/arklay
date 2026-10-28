@@ -10,8 +10,8 @@
 //! ends the process. Every base pack is listed; the selected game (RE1 or
 //! RE2, switched with LEFT/RIGHT once more than one is known) scopes the
 //! install, rebuild and mods screens. Mods are discovered from every data
-//! root, filtered by that game's base id, and toggled or reordered through `[mods]` in
-//! `arklay.toml`. Installs and rebuilds run on a worker thread with a live
+//! root, filtered by that game's base id, and toggled or reordered through
+//! `[mods]` in `arklay.toml`. Installs and rebuilds run on a worker thread with a live
 //! progress screen and cancellation.
 
 mod text;
@@ -342,6 +342,9 @@ const UPDATE_ITEMS: [&str; 6] = [
     "AUTO-CHECK",
 ];
 
+/// The title row, which carries the game switch on screens scoped to a game.
+const GAME_HINT_ROW: usize = 3;
+
 /// The launcher's `OPTIONS` rows, in display order.
 const OPTIONS_ITEMS: [&str; 11] = [
     "RENDERER",
@@ -662,11 +665,15 @@ impl Launcher {
     }
 
     /// Draw the selected game's switch hint on the title row, when there is
-    /// more than one game to switch between.
+    /// more than one game to switch between. Clicking the row also switches.
     fn draw_game_hint(&mut self) {
         if self.multi_game() {
-            self.grid
-                .draw_right(&mut self.frame, 3, "LEFT/RIGHT CHANGE GAME", Color::DIM);
+            self.grid.draw_right(
+                &mut self.frame,
+                GAME_HINT_ROW,
+                "LEFT/RIGHT CHANGE GAME",
+                Color::DIM,
+            );
         }
     }
 
@@ -763,8 +770,19 @@ impl Launcher {
             self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
             self.draw_game_hint();
         }
+        // A stale pack of a game that is not selected is still flagged, named
+        // so the player knows which game to switch to before rebuilding.
+        let stale_games: Vec<Game> = self
+            .games()
+            .into_iter()
+            .filter(|&game| pack_for(&self.packs, game).is_some_and(|pack| pack.stale))
+            .collect();
+        let rebuild = match stale_games.first() {
+            None => None,
+            Some(_) if stale_games.contains(&self.game) => Some(String::new()),
+            Some(game) => Some(format!(" ({})", game.id().to_ascii_uppercase())),
+        };
         for (index, label) in MAIN_ITEMS.iter().enumerate() {
-            let stale = self.pack().is_some_and(|pack| pack.stale);
             let update = self.config.updates.available_version.is_some();
             let (status, color) = match index {
                 0 => (
@@ -786,11 +804,11 @@ impl Launcher {
                     Color::AMBER,
                 ),
                 2 => (
-                    match (update, stale) {
-                        (true, true) => "UPDATE + REBUILD".to_string(),
-                        (true, false) => "UPDATE AVAILABLE".to_string(),
-                        (false, true) => "PAK REBUILD".to_string(),
-                        (false, false) => String::new(),
+                    match (update, &rebuild) {
+                        (true, Some(game)) => format!("UPDATE + REBUILD{game}"),
+                        (true, None) => "UPDATE AVAILABLE".to_string(),
+                        (false, Some(game)) => format!("PAK REBUILD{game}"),
+                        (false, None) => String::new(),
                     },
                     Color::AMBER,
                 ),
@@ -1956,7 +1974,8 @@ impl Launcher {
         let target = (self.mods_index as isize + delta).rem_euclid(len as isize) as usize;
         self.mods.swap(self.mods_index, target);
         self.mods_index = target;
-        self.config.mods.order = self.mods.iter().map(|row| row.id.clone()).collect();
+        let shown: Vec<String> = self.mods.iter().map(|row| row.id.clone()).collect();
+        self.config.mods.order = merge_order(&self.config.mods.order, &shown);
         self.save_mods();
     }
 
@@ -2298,6 +2317,16 @@ impl Launcher {
         let x0 = self.grid.col_left(0);
         let x1 = x0 + self.grid.grid_width();
         if x < x0 || x >= x1 {
+            return;
+        }
+        let top = self.grid.row_top(GAME_HINT_ROW);
+        if y >= top
+            && y < top + self.grid.cell_h
+            && matches!(self.screen, Screen::Main | Screen::Install | Screen::Mods)
+            && self.dialog.is_none()
+            && self.multi_game()
+        {
+            self.cycle_game(1);
             return;
         }
         let hit = self.hits.iter().find(|(row, _)| {
@@ -2846,6 +2875,26 @@ fn scan_mods(pack: Option<&PackRow>, config: &Config, dirs: &[PathBuf]) -> Vec<M
             .then_with(|| a.id.cmp(&b.id))
     });
     rows
+}
+
+/// The `[mods]` order after reordering the `shown` mods (one game's), with
+/// every other game's entries kept where they were. The shown mods fill the
+/// slots they already held, in their new order; any not listed before are
+/// appended.
+fn merge_order(order: &[String], shown: &[String]) -> Vec<String> {
+    let mut shown_iter = shown.iter();
+    let mut merged: Vec<String> = order
+        .iter()
+        .filter_map(|id| {
+            if shown.contains(id) {
+                shown_iter.next().cloned()
+            } else {
+                Some(id.clone())
+            }
+        })
+        .collect();
+    merged.extend(shown_iter.cloned());
+    merged
 }
 
 /// Read a mod image's manifest, or a source directory's `manifest.toml`.
@@ -3434,6 +3483,21 @@ mod tests {
         let re2_only = vec![pack_row("re2")];
         assert_eq!(initial_game(&re2_only, &no_sources), Game::Re2);
         assert_eq!(initial_game(&[], &re2_source), Game::Re2);
+    }
+
+    #[test]
+    fn reordering_one_games_mods_keeps_the_others_order() {
+        let ids = |list: &[&str]| list.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+        let order = ids(&["re1a", "re2a", "re1b", "re2b"]);
+        assert_eq!(
+            merge_order(&order, &ids(&["re2b", "re2a"])),
+            ids(&["re1a", "re2b", "re1b", "re2a"])
+        );
+        assert_eq!(
+            merge_order(&order, &ids(&["re2c", "re2a", "re2b"])),
+            ids(&["re1a", "re2c", "re1b", "re2a", "re2b"])
+        );
+        assert_eq!(merge_order(&[], &ids(&["b", "a"])), ids(&["b", "a"]));
     }
 
     #[test]

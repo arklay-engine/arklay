@@ -427,10 +427,8 @@ pub fn detect_game(root: &Path) -> Result<Game> {
 }
 
 /// Check that `root` looks like an RE1 installation, without converting
-/// anything. The launcher and the Steam scan use this before starting a
-/// multi-hundred-megabyte conversion into the RE1 pack, so a wrong folder
-/// fails immediately. An RE2 install is refused by name, since converting
-/// one as RE1 cannot work; [`validate_install_as`] checks for either game.
+/// anything. An RE2 install is refused by name, since converting one as RE1
+/// cannot work.
 pub fn validate_install(root: &Path) -> Result<()> {
     match discover_layout(root) {
         Ok(_) => Ok(()),
@@ -445,7 +443,9 @@ pub fn validate_install(root: &Path) -> Result<()> {
 }
 
 /// Check that `root` looks like an installation of `game`, without
-/// converting anything. RE2 needs a data directory holding `Pl0/Rdt` at or
+/// converting anything. The launcher and the Steam scan use this before
+/// starting a multi-hundred-megabyte conversion, so a wrong folder fails
+/// immediately. RE2 needs a data directory holding `Pl0/Rdt` at or
 /// under `root`; an RE1 install is refused by name.
 pub fn validate_install_as(root: &Path, game: Game) -> Result<()> {
     match game {

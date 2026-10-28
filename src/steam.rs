@@ -42,7 +42,7 @@ pub fn install_dir(game: Game) -> &'static str {
     }
 }
 
-/// A detected, layout-checked Resident Evil installation.
+/// A detected, layout-checked installation of one game.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Install {
     /// The folder to pass to the converter.
