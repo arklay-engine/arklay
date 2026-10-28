@@ -48,6 +48,10 @@ pub const MASKED: u32 = 8;
 /// itself.
 pub const PUNCH: u32 = 16;
 
+/// [`Map::flags`]: the item adds its colour to the target instead of
+/// covering it ([`crate::render::SpriteBlend::Add`]).
+pub const ADDITIVE: u32 = 32;
+
 /// What an [`Item`] draws.
 #[derive(Clone, Debug)]
 pub enum Kind {

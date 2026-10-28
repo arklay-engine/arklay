@@ -1334,6 +1334,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:page(stem)` | Load an indexed UI sheet and return a handle. |
 | `api:indexed_page(stem)` | Like `api:page`, but always indexed: a true-colour replacement is re-indexed colour for colour, for screens that composite by texel index (`api:page_lut`). |
 | `api:page_palette(page[, row])` | An indexed page's CLUT row (default 0) as a table of `0xRRGGBB` colours keyed by texel index `0..=255`; `nil` for a full-colour page. |
+| `api:page_stp(page[, row])` | The texel indices of an indexed page's CLUT row (default 0) whose colour carries the PSX semi-transparency (STP) bit, as a set (`stp[index] == true`); `nil` for a full-colour page. |
 | `api:art_size(handle)` | A handle's width and height. |
 | `api:release(handle)` | Drop loaded art the screen no longer draws, returning it to the cache's budget (64 handles); the handle is invalid afterwards. |
 | `api:clear()` | Clear the frame to black. |
@@ -1345,7 +1346,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:item_icon(item)` | The item's 40x30 inventory icon as a picture handle, or `nil`: its own `item/<id>/item.bmp`. HD names `htexture/item/<id>/item` and `htexture/data/item_all/<row>` are preferred over the content hash. |
 | `api:page_sprite_scaled(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, scale[, tint])` | A sheet region through CLUT row `clut`, scaled and tinted. |
 | `api:page_sprite_mirrored(page, sx, sy, sw, sh, dx, dy, dw, dh, clut, brightness, mirror_u, mirror_v[, whole])` | A sheet region flipped per axis. With `whole`, an HD replacement covers the region's transparent texels too and its own alpha decides what shows, for art the HD page redraws rather than upscales (the ECG condition label). |
-| `api:page_lut(page, sx, sy, w, h, dx, dy, lut)` | An unscaled rect of an indexed page drawn through `lut`, a table of opaque `0xRRGGBB` colours keyed by texel index; an index without an entry (index 0 included) is transparent. |
+| `api:page_lut(page, sx, sy, w, h, dx, dy, lut[, whole[, options]])` | A rect of an indexed page drawn through `lut`, a table of `0xRRGGBB` colours keyed by texel index; an index without an entry (index 0 included) is transparent. `whole` lets a uniformly tinting lookup's HD replacement cover the whole rect. `options.dw`/`options.dh` stretch the rect over a destination of that size; `options.blend` is `"opaque"` (default), `"half"` (averaged with the frame) or `"add"` (added to it). |
 | `api:draw_ivm(model, {joints, objects, camera = {from, to, fov, screen}, light})` | Draw a model: object `i` takes joint chain `objects[i]`, the rest the one `joints` chain; `screen = {x, y}` offsets the projection centre. |
 | `api:item_model(item)` | Load the item viewer's model for `item` and return a handle, or `nil, err`. |
 | `api:model_objects(model)` | The number of objects in a model. |

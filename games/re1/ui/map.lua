@@ -15,12 +15,20 @@
 -- the owned maps unlock. Confirm switches to the full floor-plan view of the
 -- current area; cancel returns to the browser and then closes the tab.
 --
+-- The full display is `map_display_update`'s: the browser stays up behind it
+-- dimmed, the blue grid (`Map_blue`, two 80x104 halves side by side) is
+-- half-blended over it and the floor plan over that. Both open as a thin
+-- line that stretches across, overshoots in height and settles (the zoom
+-- state machine, scaled about the menu's origin like `AddSprite_Ex`), and
+-- close the same way in reverse. Once open, the plan's semi-transparent
+-- texels add to the frame, the current room's marker pulses red, and a
+-- scanline sweeps down the screen every 256 frames: one row of the grid and
+-- the plan drawn again a pixel to the right (`g_MapFloorAnim`).
+--
 -- The area/layout/room tables are the built-in values below; a pack that
 -- carries `map/tables.bin` (an older conversion or a mod) overrides them.
--- The full-display zoom animation and the objective highlight are deliberate
--- approximations: the zoom is a single swap and the objective rule is
--- transcribed from the scenario flags rather than extracted. A pack without
--- the map art leaves the tab blank with a warning.
+-- The objective highlight (`MAP_MODE`'s blinking label) is not drawn. A pack
+-- without the map art leaves the tab blank with a warning.
 --
 -- The screen publishes `zoomed` (0/1) for the engine's tests. The room-flags/SCD
 -- bit that records a map pick-up is raised by the engine's pick-up rule.
@@ -29,11 +37,14 @@ local Panel = require("lib/status_panel")
 
 local M = {}
 
--- The screen rects the browser's composite covers (the base window's 160x72
--- plus the name and glyph rows below it) and the full display's plan: the
--- status panel's decorations that overlap them are re-drawn on top.
+-- The screen rect the browser's composite covers (the base window's 160x72
+-- plus the name and glyph rows below it): the status panel's decorations
+-- that overlap it, or the full display's quads, are re-drawn on top.
 local BROWSER_RECT = { 33, 32, 160, 96 }
-local DISPLAY_RECT = { 48, 28, 128, 100 }
+
+--- The viewer's rows: the zoom's vertical overshoot (`scaleY` 0x15DC) is cut
+--- off here, as the reference shows it, rather than running over the frame.
+local VIEWER_TOP, VIEWER_BOTTOM = 24, 128
 
 local TABLES_ENTRY = "map/tables.bin"
 -- The full display's blue grid backdrop (`Map_blue`).
@@ -73,10 +84,34 @@ local SPRITES = {
 local MUL_FULL = 0x80
 local MUL_HALF = 0x40
 
--- The full display's plan origin and size.
-local DISPLAY_X, DISPLAY_Y, DISPLAY_W, DISPLAY_H = 48, 28, 128, 100
--- The current room's red highlight (`0x001f` BGR555).
-local HIGHLIGHT = 0xF80000
+-- The browser's `colorMul` while the full display is up
+-- (`map_display_update`): the base window, then every sprite.
+local MUL_DIM_BASE = 0x40
+local MUL_DIM_SPRITE = 0x30
+
+-- The full display's scaled sprites (`g_MapZoomDesc`), positioned relative
+-- to the menu's scaled-sprite origin (`g_SubpixelOffsetX/Y`): the plan's
+-- 128x100 top rows, and the grid's 80x104 top-left window twice, either side
+-- of x = 112. A grid half is 81 wide while the display opens or closes.
+local ZOOM_X, ZOOM_Y = 112, 76
+local PLAN_QUAD = { x = 0x10, y = 2, w = 128, h = 100, px = 80, py = 50 }
+local GRID_QUADS = {
+    { x = 0, y = 0, h = 104, px = 80, py = 52 },
+    { x = 0, y = 0, h = 104, px = 0, py = 52 },
+}
+local GRID_W_OPEN, GRID_W_ZOOM = 80, 81
+-- fix16.12 unity.
+local FIX_ONE = 0x1000
+-- The current room's red on the highlight page (`0x001f` BGR555).
+local HIGHLIGHT_RED = 0xF8
+-- The palette indices of the plan's outline and door/ladder symbols, and the
+-- first of six per room (`load + 0x22`, `load + 0x2e`).
+local SYMBOL_FIRST, SYMBOL_LAST = 7, 12
+local ROOM_FIRST = 13
+-- The scanline sweep (`g_MapFloorAnim`): drawn while its counter is below
+-- 0xD0, one row per two frames from y = 24, each row a pixel right of the
+-- layer it copies.
+local SWEEP_END = 0xD0
 
 local BACKDROP_WARNING = "warning: no map backdrop %s: %s; the map tab stays blank"
 local PAGE_WARNING = "warning: no map page %s: %s; the map tab stays blank"
@@ -232,39 +267,51 @@ local function layout_mask(api)
     return layouts
 end
 
---- The initial area for a room, transcribed from the original's
---- special-camera cases.
-local function initial_area(group, room, cut)
+--- The area, map group and map room the display opens on for a room
+--- (`menu_init_map_screen`): the room itself, but for the cameras that look
+--- into a neighbouring area.
+local function initial_position(group, room, cut)
     if group == 0 then
-        if room == 0x10 and cut == 0 then
-            return 2
+        if room == 0x07 and cut > 2 and cut < 7 then
+            return 0, group, 0x1D
+        elseif room == 0x0F and (cut == 3 or cut == 4) then
+            return 0, group, 0x1E
+        elseif room == 0x10 and cut == 0 then
+            return 2, 1, 0x1E
         end
-        return 0
+        return 0, group, room
     elseif group == 1 then
         if room == 0x0F and (cut == 2 or cut == 5) then
-            return 1
-        elseif room == 0x0C and cut >= 3 and cut < 8 then
-            return 0
+            return 1, group, 0x1D
+        elseif room == 0x0C and cut > 3 and cut < 8 then
+            return 0, 0, 0x1F
         end
-        return room < 0x1A and 1 or 2
+        return room < 0x1A and 1 or 2, group, room
     elseif group == 2 then
-        if (room == 0x0B and cut >= 4 and cut < 7) or (room == 0x0F and cut == 6) then
-            return 4
+        if room == 0x0B and cut > 4 and cut < 7 then
+            return 4, group, 0x11
+        elseif room == 0x0F and cut == 6 then
+            return 4, group, 0x12
         end
-        return room < 0x06 and 3 or 4
+        return room < 0x06 and 3 or 4, group, room
     elseif group == 3 then
-        return room < 0x0D and 5 or 6
+        return room < 0x0D and 5 or 6, group, room
     end
     if room == 0x07 and cut < 4 then
-        return 9
+        return 9, group, 0x16
     elseif room < 0x02 then
-        return 7
+        return 7, group, room
     elseif room < 0x05 then
-        return 8
+        return 8, group, room
     elseif room > 0x12 then
-        return 10
+        return 10, group, room
     end
-    return 9
+    return 9, group, room
+end
+
+--- The initial area for a room.
+local function initial_area(group, room, cut)
+    return (initial_position(group, room, cut))
 end
 
 --- The area of the room *after* `room`, exactly as the original's
@@ -348,8 +395,34 @@ function M.open(api)
         layout = 0,
         room = { [0] = 1, 1, 1, 3 },
         area = 0,
-        -- Whether the full floor plan is shown (the original's display zoom).
+        -- The player's map group and room (`MAP_GROUP`, `MAP_ROOM`): the
+        -- display's highlighted room.
+        map_group = 0,
+        map_room = 0,
+        -- Whether the full floor plan is up (`MAP_STATE` 1), and its zoom
+        -- state (`MAP_ZOOM_STATE`, 0 until its first frame).
         zoomed = false,
+        zoom = 0,
+        -- The zoom's fix16.12 scale, whether the quads sit at rest (the
+        -- unscaled layout), whether the plan adds to the frame (the 0x51
+        -- descriptor variant) and the countdown of the rest states.
+        scale_x = 1,
+        scale_y = 200,
+        at_rest = false,
+        additive = false,
+        hold = 0,
+        -- The "you are here" pulse (`MAP_BLINK_STATE`, its ramp, and
+        -- `g_MapDotBlink`).
+        pulse_state = 0,
+        pulse_ramp = 0x50,
+        pulse = 0,
+        -- The scanline sweep's counter (`MAP_ARROW_ANIM`), and the value the
+        -- frame draws (nil when the sweep is not running).
+        sweep = 0,
+        sweep_row = nil,
+        -- The frame after the close: the display's last frame still dims the
+        -- browser.
+        closing = false,
         -- Blink phase for the cursor arrows (`MAP_HL_COUNT`).
         ticks = 0,
         -- The original's tab action runs one frame after its confirm, so the
@@ -362,7 +435,7 @@ function M.open(api)
     page(api, BACKDROP_STEM, BACKDROP_WARNING)
     local stage, room, cut = api:room()
     local group = (((stage or 1) - 1) & 0xFF) % 5
-    s.area = initial_area(group, room or 0, cut or 0)
+    s.area, s.map_group, s.map_room = initial_position(group, room or 0, cut or 0)
     s.layout = s.tables.layouts[s.area] or 0
     -- The original overwrites each layout's index with the last room slot
     -- whose area matches the current one.
@@ -398,19 +471,140 @@ local function step_layout(mask, current, left)
     return current
 end
 
+--- One frame of the full display's zoom (`map_display_animate`): the
+--- pulse, then the zoom state machine. Returns true when the close finished
+--- and the browser is back.
+local function animate()
+    -- The pulse runs while the plan is the player's map group's.
+    if s.tables.groups[s.area] == s.map_group then
+        if s.pulse_state == 0 then
+            s.pulse_ramp = 0x50
+            s.pulse_state = 1
+        elseif s.pulse_state == 1 then
+            s.pulse_ramp = s.pulse_ramp + 2
+            if s.pulse_ramp > 0xA0 then
+                s.pulse_state = 2
+            end
+        else
+            s.pulse_ramp = s.pulse_ramp - 2
+            if s.pulse_ramp < 0x50 then
+                s.pulse_state = 1
+            end
+        end
+        s.pulse = (s.pulse_ramp >> 3) & 0x1F
+    end
+    local zoom = s.zoom
+    if zoom == 0 then
+        -- A one-pixel-wide sliver, 200/4096 tall.
+        s.scale_x, s.scale_y = 1, 200
+        s.additive = false
+        zoom = 1
+    end
+    if zoom == 1 then
+        s.at_rest = false
+        s.zoom = 2
+    elseif zoom == 2 then
+        -- Stretch across, three times wider a frame.
+        s.scale_x = s.scale_x * 3
+        if s.scale_x >= 0xFFF then
+            s.scale_x = 0xFFF
+            s.zoom = 3
+        end
+    elseif zoom == 3 then
+        -- Open up past full height ...
+        s.scale_y = s.scale_y + 900
+        if s.scale_y >= 0x15DC then
+            s.scale_y = 0x15DC
+            s.zoom = 4
+        end
+    elseif zoom == 4 then
+        -- ... and settle back to it.
+        s.scale_y = s.scale_y - 300
+        if s.scale_y <= FIX_ONE then
+            s.scale_x, s.scale_y = FIX_ONE, FIX_ONE
+            s.at_rest = true
+            s.hold = 8
+            s.zoom = 5
+        end
+    elseif zoom == 5 then
+        s.hold = s.hold - 1
+        if s.hold == 0 then
+            s.additive = true
+            s.hold = 10
+            s.zoom = 6
+        end
+    elseif zoom == 7 or zoom == 8 then
+        if zoom == 7 then
+            -- The close: back to the sliver layout at full width ...
+            s.additive = false
+            s.at_rest = false
+            s.scale_x = 0xFFF
+            s.sweep = 0
+            s.zoom = 8
+        end
+        -- ... collapse to a line ...
+        s.scale_y = s.scale_y - 0x28A
+        if s.scale_y <= 1 then
+            s.scale_y = 200
+            s.zoom = 9
+        end
+    elseif zoom == 9 then
+        -- ... and shrink it to a dot.
+        s.scale_x = s.scale_x // 2
+        if s.scale_x <= 1 then
+            s.scale_x = 1
+            return true
+        end
+    end
+    return false
+end
+
+--- One frame of the full display (`map_display_update` and its share of
+--- `menu_map_state_machine`).
+local function update_display(api, input)
+    -- Cancel while it closes leaves the tab outright: the browser's own
+    -- cancel test sees the same press.
+    if input.cancel and s.zoom >= 7 then
+        api:exit()
+        return
+    end
+    if animate() then
+        s.zoomed = false
+        s.zoom = 0
+        s.closing = true
+        s.sweep_row = nil
+        return
+    end
+    -- The sweep draws while the display rests at state 6, a counter step a
+    -- frame; the byte wraps every 256 frames.
+    if s.zoom == 6 then
+        s.sweep_row = s.sweep
+        s.sweep = (s.sweep + 1) & 0xFF
+    else
+        s.sweep_row = nil
+    end
+    if input.confirm and (s.zoom == 0 or s.zoom > 6) then
+        -- Re-open from the close.
+        if s.zoom == 8 then
+            s.zoom = 3
+        elseif s.zoom == 9 then
+            s.zoom = 2
+        end
+    end
+    if input.cancel then
+        s.zoom = 7
+    end
+end
+
 local function handle_input(api, input)
     if input.cancel then
-        if s.zoomed then
-            s.zoomed = false
-        else
-            api:exit()
-        end
+        api:exit()
     elseif input.confirm then
-        s.zoomed = not s.zoomed
+        -- The display's first frame is the next one.
+        s.zoomed = true
+        s.zoom = 0
+        s.pulse_state = 0
     elseif input.up or input.down then
-        if s.zoomed then
-            return
-        end
         local room = room_index()
         local flags = move_flags(api, s.layout, room)
         if input.up and flags & 1 ~= 0 then
@@ -423,9 +617,6 @@ local function handle_input(api, input)
         s.room[s.layout] = room
         refresh_area()
     elseif input.left or input.right then
-        if s.zoomed then
-            return
-        end
         local next = step_layout(layout_mask(api), s.layout, input.left)
         if next ~= s.layout then
             s.layout = next
@@ -443,7 +634,12 @@ function M.update(api, input)
     else
         s.ticks = s.ticks + 1
     end
-    handle_input(api, input)
+    s.closing = false
+    if s.zoomed then
+        update_display(api, input)
+    else
+        handle_input(api, input)
+    end
     api:set("zoomed", s.zoomed and 1 or 0)
 end
 
@@ -503,7 +699,8 @@ end
 --- The map browser: the loaded layout art's base window, the marker of every
 --- available layout (the current one at full brightness, the rest at half),
 --- the current area's name row, the floor's number glyph and the arrows.
-local function draw_browser(api, ox, oy)
+--- `dim` is the full display's dimmed copy behind the plan.
+local function draw_browser(api, ox, oy, dim)
     -- The original loads one page for the whole browser: the file of the
     -- availability mask's highest set layout bit.
     local mask = layout_mask(api)
@@ -518,91 +715,254 @@ local function draw_browser(api, ox, oy)
     if not art then
         return
     end
-    blit(api, art, BASE_RECT, MUL_FULL, ox, oy)
+    local base_mul = dim and MUL_DIM_BASE or MUL_FULL
+    local label_mul = dim and MUL_DIM_SPRITE or MUL_FULL
+    blit(api, art, BASE_RECT, base_mul, ox, oy)
     for layout = 0, 3 do
         if mask & (1 << layout) ~= 0 then
-            blit(api, art, SPRITES[layout], layout == s.layout and MUL_FULL or MUL_HALF, ox, oy)
+            local mul = layout == s.layout and MUL_FULL or MUL_HALF
+            blit(api, art, SPRITES[layout], dim and MUL_DIM_SPRITE or mul, ox, oy)
         end
     end
-    blit(api, art, with(SPRITES[4], "v", (s.layout * 0x10 + 0x48) & 0xFF), MUL_FULL, ox, oy, true)
+    blit(api, art, with(SPRITES[4], "v", (s.layout * 0x10 + 0x48) & 0xFF), label_mul, ox, oy, true)
     local offset = s.tables.layout_offset[s.layout] or 0
     local glyph_v = (((6 - room_index() - offset) & 0xFF) * 0x10) & 0xFF
-    blit(api, art, with(SPRITES[5], "v", glyph_v), MUL_FULL, ox, oy, true)
+    blit(api, art, with(SPRITES[5], "v", glyph_v), label_mul, ox, oy, true)
     -- `MAP_HL_COUNT`: bit 4 set for the dim half of its 64-frame cycle.
     local blink = ((s.ticks + 1) & 0x30) ~= 0
     local flags = move_flags(api, s.layout, room_index())
     for index, bit in ipairs({ 1, 2 }) do
         local sprite = SPRITES[5 + index]
         if flags & bit ~= 0 then
-            blit(api, art, with(sprite, "u", (sprite.u + (blink and 8 or 0)) & 0xFF), MUL_FULL, ox, oy)
+            blit(api, art, with(sprite, "u", (sprite.u + (blink and 8 or 0)) & 0xFF), label_mul, ox, oy)
         end
     end
 end
 
---- Half brightness (`colorMul` 0x80 over the full-display layers).
-local function dim(channel)
-    return channel * 0x80 // 0xFF
-end
-
-local function dimmed(colour)
-    local r, g, b = rgb(colour)
-    return (dim(r) << 16) | (dim(g) << 8) | dim(b)
-end
-
---- The full display: the blue grid backdrop (a solid layer; its index 0 is
---- the dark blue square colour) with the area's floor plan over it. The
---- plan's unvisited room markers stay transparent, the current room's marker
---- is the red highlight and everything else keeps its palette colour.
-local function draw_display(api, ox, oy)
-    local area = s.area < 10 and s.area or 10
-    local plan = page(api, AREA_STEMS[area], PLAN_WARNING)
-    if not plan then
-        return
+--- A fix16.12 product rounded toward zero, as the original's
+--- `(x + ((x >> 31) & 0xfff)) >> 12`.
+local function fix(value)
+    if value < 0 then
+        return -((-value) >> 12)
     end
-    local width, height = api:art_size(plan)
-    width = width < DISPLAY_W and width or DISPLAY_W
-    height = height < DISPLAY_H and height or DISPLAY_H
-    local backdrop = page(api, BACKDROP_STEM, BACKDROP_WARNING)
-    if backdrop then
-        local palette = api:page_palette(backdrop)
+    return value >> 12
+end
+
+--- A zoom quad's screen rect (`AddSprite_Ex`): `quad` scaled about its
+--- pivot at the zoom origin; nil once it has no pixels.
+local function zoom_rect(quad, width, ox, oy)
+    local x, y = ox + ZOOM_X + quad.x, oy + ZOOM_Y + quad.y
+    local x0 = x - fix(quad.px * s.scale_x)
+    local y0 = y - fix(quad.py * s.scale_y)
+    local x1 = fix((width - quad.px) * s.scale_x) + x - 1
+    local y1 = fix((quad.h - quad.py) * s.scale_y) + y - 1
+    if x1 < x0 or y1 < y0 then
+        return nil
+    end
+    return { x0, y0, x1 - x0 + 1, y1 - y0 + 1 }
+end
+
+--- A page's palette and STP set, loaded once.
+local function colours(api, page)
+    s.colours = s.colours or {}
+    local entry = s.colours[page]
+    if not entry then
+        entry = { api:page_palette(page), api:page_stp(page) or {} }
+        s.colours[page] = entry
+    end
+    return entry[1], entry[2]
+end
+
+--- Whether a palette entry is drawn: the PSX keys only a CLUT word of 0, so
+--- a black entry with the STP bit still draws (adding nothing).
+local function drawn(palette, stp, index)
+    return palette[index] ~= 0 or stp[index] == true
+end
+
+--- The grid page's lookup: every drawn entry as it is.
+local function grid_lut(api, page)
+    if not s.grid_lut then
+        local palette, stp = colours(api, page)
         local lut = {}
         for index = 0, 255 do
-            lut[index] = dimmed(palette[index])
-        end
-        api:page_lut(backdrop, 0, 0, width, height, ox + DISPLAY_X, oy + DISPLAY_Y, lut)
-    end
-    local group = s.tables.groups[s.area] or 0
-    local room_count = s.tables.room_counts[group]
-    local highlight = area_at(s.layout, room_index()) == s.area and room_index() or nil
-    local palette = api:page_palette(plan)
-    local lut = {}
-    for index = 1, 255 do
-        local room = index >= 13 and (index - 13) // 6 or nil
-        if room ~= nil and room < room_count then
-            if highlight == room then
-                lut[index] = dimmed(HIGHLIGHT)
-            elseif room_visited(api, group, room) then
-                lut[index] = dimmed(palette[index])
+            if drawn(palette, stp, index) then
+                lut[index] = palette[index]
             end
-        else
-            lut[index] = dimmed(palette[index])
+        end
+        s.grid_lut = lut
+    end
+    return s.grid_lut
+end
+
+--- The plan page's lookups (`map_display_load_textures`), each keyed by
+--- palette index: the plan's opaque entries, its semi-transparent (STP)
+--- entries, and the highlight page, which blends whole and is drawn with
+--- the red `colorMul` of `pulse`. Without the area's map the outline and
+--- symbols and every unvisited room are cleared; with it an unvisited room
+--- keeps only its door marker and border (its six entries' first and fifth).
+--- The player's room loses its fill to the highlight page, which holds only
+--- that room (fill in red) and the entries past the room table.
+local function plan_luts(api, page)
+    local palette, stp = colours(api, page)
+    local group = s.tables.groups[s.area] or 0
+    local count = s.tables.room_counts[group] or 0
+    local known = area_known(api, s.area)
+    local cleared, highlight = {}, {}
+    if not known then
+        for index = SYMBOL_FIRST, SYMBOL_LAST do
+            cleared[index] = true
         end
     end
-    api:page_lut(plan, 0, 0, width, height, ox + DISPLAY_X, oy + DISPLAY_Y, lut)
+    for index = 1, SYMBOL_LAST do
+        highlight[index] = false
+    end
+    for room = 0, count - 1 do
+        local base = ROOM_FIRST + room * 6
+        local visited = room_visited(api, group, room)
+        local player = visited and group == s.map_group and room == s.map_room
+        for entry = 0, 5 do
+            local fill = entry >= 1 and entry <= 3
+            if not visited then
+                cleared[base + entry] = cleared[base + entry] or not known or fill
+            elseif player and fill then
+                cleared[base + entry] = true
+            end
+            if not player then
+                highlight[base + entry] = false
+            elseif fill then
+                highlight[base + entry] = HIGHLIGHT_RED << 16
+            end
+        end
+    end
+    local red = s.pulse << 2
+    local opaque, blended, glow = {}, {}, {}
+    for index = 0, 255 do
+        local colour = palette[index]
+        if not cleared[index] and drawn(palette, stp, index) then
+            if stp[index] then
+                blended[index] = colour
+            else
+                opaque[index] = colour
+            end
+        end
+        local lit = highlight[index]
+        if lit == nil and drawn(palette, stp, index) then
+            lit = colour
+        end
+        if lit then
+            local r, g, b = rgb(lit)
+            glow[index] = (tint(r, red) << 16) | (g << 8) | b
+        end
+    end
+    return opaque, blended, glow
+end
+
+--- One quad of a page through `lut`.
+local function quad_lut(api, page, sx, sy, w, h, rect, lut, blend)
+    api:page_lut(page, sx, sy, w, h, rect[1], rect[2], lut, false, {
+        dw = rect[3],
+        dh = rect[4],
+        blend = blend,
+    })
+end
+
+--- The full display: the dimmed browser, the grid's two halves half-blended
+--- over it, the plan (its opaque entries over, its STP entries blended),
+--- the highlight page, and while the display rests the sweep's row. Returns
+--- the screen rect the quads cover (nil when nothing showed).
+local function draw_display(api, ox, oy)
+    draw_browser(api, ox, oy, true)
+    local area = s.area < 10 and s.area or 10
+    local plan = page(api, AREA_STEMS[area], PLAN_WARNING)
+    local grid = page(api, BACKDROP_STEM, BACKDROP_WARNING)
+    local blend = s.additive and "add" or "half"
+    local bounds
+    local function cover(rect)
+        if rect == nil then
+            return
+        end
+        local edges = { rect[1], rect[2], rect[1] + rect[3], rect[2] + rect[4] }
+        if bounds == nil then
+            bounds = edges
+            return
+        end
+        for side = 1, 2 do
+            if edges[side] < bounds[side] then
+                bounds[side] = edges[side]
+            end
+            if edges[side + 2] > bounds[side + 2] then
+                bounds[side + 2] = edges[side + 2]
+            end
+        end
+    end
+    api:clip(0, oy + VIEWER_TOP, api:width(), VIEWER_BOTTOM - VIEWER_TOP)
+    local grid_w = s.at_rest and GRID_W_OPEN or GRID_W_ZOOM
+    if grid then
+        local lut = grid_lut(api, grid)
+        for _, quad in ipairs(GRID_QUADS) do
+            local rect = zoom_rect(quad, grid_w, ox, oy)
+            if rect then
+                quad_lut(api, grid, 0, 0, grid_w, quad.h, rect, lut, "half")
+                cover(rect)
+            end
+        end
+    end
+    local opaque, blended, glow
+    if plan then
+        opaque, blended, glow = plan_luts(api, plan)
+        local rect = zoom_rect(PLAN_QUAD, PLAN_QUAD.w, ox, oy)
+        if rect then
+            -- Only the additive blend keeps the PS1's per-texel STP split;
+            -- the half blend covers every drawn texel.
+            local solid = not s.additive and blend or nil
+            quad_lut(api, plan, 0, 0, PLAN_QUAD.w, PLAN_QUAD.h, rect, opaque, solid)
+            quad_lut(api, plan, 0, 0, PLAN_QUAD.w, PLAN_QUAD.h, rect, blended, blend)
+            quad_lut(api, plan, 0, 0, PLAN_QUAD.w, PLAN_QUAD.h, rect, glow, blend)
+            cover(rect)
+        end
+    end
+    -- The sweep's rows: a texV past 0x8D is inside the 0x88-based page.
+    local counter = s.sweep_row
+    if counter ~= nil and counter < SWEEP_END then
+        local row = counter >> 1
+        local y = oy + row + 24
+        if grid and (row - 0x78) & 0xFF > 0x8D then
+            local lut = grid_lut(api, grid)
+            for _, x in ipairs({ 113, 33 }) do
+                quad_lut(api, grid, 0, row, GRID_W_OPEN, 1, { ox + x, y, GRID_W_OPEN, 1 }, lut)
+            end
+        end
+        if plan and (row - 0x7C) & 0xFF > 0x8D then
+            local rect = { ox + 49, y, PLAN_QUAD.w, 1 }
+            quad_lut(api, plan, 0, row - 4, PLAN_QUAD.w, 1, rect, opaque)
+            quad_lut(api, plan, 0, row - 4, PLAN_QUAD.w, 1, rect, blended, "add")
+            quad_lut(api, plan, 0, row - 4, PLAN_QUAD.w, 1, rect, glow, "add")
+        end
+    end
+    api:clip()
+    if bounds == nil then
+        return nil
+    end
+    local top, bottom = bounds[2] - oy, bounds[4] - oy
+    top = top > VIEWER_TOP and top or VIEWER_TOP
+    bottom = bottom < VIEWER_BOTTOM and bottom or VIEWER_BOTTOM
+    return { bounds[1] - ox, top, bounds[3] - bounds[1], bottom - top }
 end
 
 --- Draw the tab over the frozen menu frame the engine already drew.
 function M.draw(api)
     local ox, oy = api:width() // 2 - 160, api:height() // 2 - 120
-    if s.zoomed then
-        draw_display(api, ox, oy)
+    local rect = BROWSER_RECT
+    if s.zoomed and s.zoom ~= 0 then
+        rect = draw_display(api, ox, oy) or BROWSER_RECT
+    elseif s.closing then
+        draw_browser(api, ox, oy, true)
     elseif s.started then
         draw_browser(api, ox, oy)
     end
     -- The original's depth puts the status screen's frame decorations in
     -- front of the map's sprites, so the panel's dithered right-hand edge
     -- shows over the composite.
-    local rect = s.zoomed and DISPLAY_RECT or BROWSER_RECT
     Panel.draw_frames_over(api, ox, oy, api:inventory_capacity(), rect)
 end
 

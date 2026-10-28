@@ -152,6 +152,8 @@ pub enum SpriteBlend {
     /// Mix the destination towards black by `alpha`/255 wherever a texel is
     /// opaque; the text shadow's pass. The source colour is ignored.
     BlackAlpha(u8),
+    /// `source + destination`, saturating: the PSX additive blend (ABR 1).
+    Add,
 }
 
 /// One pending 2D sprite, submitted to [`Framebuffer::draw_sprites`].
@@ -851,19 +853,20 @@ impl Framebuffer {
     }
 
     /// Draw one indexed sprite through a per-index colour table: texel index
-    /// `i` writes the opaque `lut[i]`, or nothing when it is `None`. Unlike
-    /// the CLUT paths index 0 is not implicitly transparent.
+    /// `i` mixes `lut[i]` in by `blend`, or draws nothing when it is `None`.
+    /// Unlike the CLUT paths index 0 is not implicitly transparent.
     pub fn draw_indexed_sprite_lut(
         &mut self,
         texture: &Texture8,
         src: [i32; 4],
         dst: [i32; 4],
         lut: &[Option<[u8; 3]>; 256],
+        blend: SpriteBlend,
     ) {
         if texture.width == 0 || texture.height == 0 {
             return;
         }
-        self.draw_sprite(src, dst, [false; 2], SpriteBlend::Opaque, |u, v| {
+        self.draw_sprite(src, dst, [false; 2], blend, |u, v| {
             if u < 0 || v < 0 || u >= texture.width as i32 || v >= texture.height as i32 {
                 return None;
             }
@@ -1628,6 +1631,11 @@ impl Framebuffer {
                 SpriteBlend::Half => [1.0, 1.0, 1.0, 0.5],
                 SpriteBlend::HalfVariant => [1.0, 1.0, 1.0, 127.0 / 256.0],
                 SpriteBlend::BlackAlpha(alpha) => [0.0, 0.0, 0.0, f32::from(alpha) / 255.0],
+                SpriteBlend::Add => [1.0; 4],
+            };
+            let map = crate::draw2d::Map {
+                flags: map.flags | (u32::from(blend == SpriteBlend::Add) * crate::draw2d::ADDITIVE),
+                ..map
             };
             list.sprite(map, visible, colour, |u, v| sample(src_x + u, src_y + v));
             return;
@@ -1680,6 +1688,11 @@ impl Framebuffer {
                         let keep = u32::from(255 - alpha);
                         for (channel, &destination) in pixel[..3].iter_mut().zip(slot.iter()) {
                             *channel = (u32::from(destination) * keep / 255) as u8;
+                        }
+                    }
+                    SpriteBlend::Add => {
+                        for (channel, &destination) in pixel[..3].iter_mut().zip(slot.iter()) {
+                            *channel = channel.saturating_add(destination);
                         }
                     }
                 }
