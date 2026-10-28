@@ -690,13 +690,11 @@ local function update_display(api, input)
         s.zoom = 0
         s.closing = true
         s.sweep_row = nil
-        -- The frame's own confirm and cancel tests still see the zoom state
-        -- the close left (0), so their cues play without effect.
+        -- The frame's own confirm test still sees the zoom state the close
+        -- left (0), so its cue plays without effect. (A cancel never gets
+        -- here: the close's cancel leaves the tab above.)
         if input.confirm then
             api:sound("map_zoom")
-        end
-        if input.cancel then
-            api:sound("cancel")
         end
         return
     end
@@ -1003,7 +1001,7 @@ local function label_lut(api, page)
     if not s.label_luts[page] then
         local palette, stp = colours(api, page)
         local lut = {}
-        for index = 1, 255 do
+        for index = 0, 255 do
             if drawn(palette, stp, index) then
                 lut[index] = palette[index]
             end
