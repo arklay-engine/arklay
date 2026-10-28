@@ -31,8 +31,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result, anyhow, bail};
 
@@ -110,7 +110,9 @@ pub struct PackWriter {
 struct WriterEntry {
     path: String,
     /// The bytes as added; replaced by the zstd frame once compressed.
-    data: Vec<u8>,
+    /// Entries added through [`PackWriter::add_shared`] with one allocation
+    /// share it, and are compressed once.
+    data: Arc<Vec<u8>>,
     /// Plain (uncompressed) byte count, kept after compression replaces
     /// `data` so the conversion report can still name both sizes.
     plain_len: usize,
@@ -180,6 +182,15 @@ impl PackWriter {
     /// Paths must be non-empty and relative, must not contain backslashes,
     /// NUL bytes or `..` components, and must be unique ignoring ASCII case.
     pub fn add(&mut self, path: &str, data: Vec<u8>) -> Result<()> {
+        self.add_shared(path, Arc::new(data))
+    }
+
+    /// Add one entry whose bytes may be shared with other entries: every
+    /// entry added with a clone of the same `Arc` holds one copy in memory and
+    /// is compressed once. The written pack is the same as adding each copy
+    /// with [`PackWriter::add`], since identical blobs are shared on write
+    /// either way.
+    pub fn add_shared(&mut self, path: &str, data: Arc<Vec<u8>>) -> Result<()> {
         validate_path(path)?;
         if !self.seen.insert(path.to_ascii_lowercase()) {
             bail!("duplicate pack entry: {path}");
@@ -246,6 +257,18 @@ impl PackWriter {
             return Ok(0);
         }
         let jobs = jobs.clamp(1, self.entries.len());
+        // An entry sharing an earlier entry's allocation takes that entry's
+        // frame instead of compressing the same bytes again.
+        let mut first: HashMap<*const Vec<u8>, usize> = HashMap::new();
+        let alias: Vec<Option<usize>> = self
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let owner = *first.entry(Arc::as_ptr(&entry.data)).or_insert(index);
+                (owner != index).then_some(owner)
+            })
+            .collect();
         let next = AtomicUsize::new(0);
         let results: Mutex<Vec<CompressResult>> = Mutex::new(Vec::new());
         std::thread::scope(|scope| {
@@ -260,6 +283,7 @@ impl PackWriter {
                         // an over-cap entry stays raw and keeps reading back;
                         // an exempt or already-compressed entry is left as-is.
                         if entry.compression == Compression::None
+                            && alias[index].is_none()
                             && !keep_raw(&entry.path)
                             && entry.data.len() <= cap
                         {
@@ -289,7 +313,17 @@ impl PackWriter {
         }
         for (index, frame) in frames {
             if let Some(frame) = frame {
-                self.entries[index].data = frame;
+                self.entries[index].data = Arc::new(frame);
+                self.entries[index].compression = Compression::Zstd;
+                count += 1;
+            }
+        }
+        // Owners precede their aliases, so each owner is final by now.
+        for (index, owner) in alias.into_iter().enumerate() {
+            if let Some(owner) = owner
+                && self.entries[owner].compression == Compression::Zstd
+            {
+                self.entries[index].data = Arc::clone(&self.entries[owner].data);
                 self.entries[index].compression = Compression::Zstd;
                 count += 1;
             }
@@ -2301,6 +2335,38 @@ mod tests {
     }
 
     #[test]
+    fn shared_entries_compress_once_and_match_separate_copies() {
+        let data = vec![5u8; 32 * 1024];
+        let paths = [
+            "room/1000/cut/00.bmp",
+            "room/1000/cut/01.bmp",
+            "room/a000/cut/00.bmp",
+        ];
+        let mut shared = PackWriter::new();
+        let mut copies = PackWriter::new();
+        let blob = Arc::new(data.clone());
+        for path in paths {
+            shared.add_shared(path, Arc::clone(&blob)).unwrap();
+            copies.add(path, data.clone()).unwrap();
+        }
+        drop(blob);
+        assert_eq!(shared.compress_entries(2, |_| false).unwrap(), 3);
+        assert_eq!(copies.compress_entries(2, |_| false).unwrap(), 3);
+        // Every alias holds the owner's frame, not a copy of it.
+        let frames: Vec<_> = shared
+            .entries
+            .iter()
+            .map(|entry| Arc::as_ptr(&entry.data))
+            .collect();
+        assert!(frames.iter().all(|frame| *frame == frames[0]));
+        assert_eq!(shared.to_bytes().unwrap(), copies.to_bytes().unwrap());
+        let pack = Pack::from_bytes(shared.to_bytes().unwrap()).unwrap();
+        for path in paths {
+            assert_eq!(&*pack.read(path).unwrap(), data.as_slice());
+        }
+    }
+
+    #[test]
     fn reader_rejects_a_corrupt_zstd_entry() {
         let mut bytes = single_entry_pack("a.txt", b"not a zstd frame");
         bytes[HEADER_LEN + 24] = 1;
@@ -2960,8 +3026,6 @@ mod tests {
             kind: manifest::PackKind::Mod,
             base: Some(base.to_string()),
             load_order,
-            rdt_version: manifest::DEFAULT_RDT_VERSION.to_string(),
-            scd_version: manifest::DEFAULT_SCD_VERSION.to_string(),
             language: None,
             engine: None,
             convert_version: None,
@@ -3231,8 +3295,6 @@ mod tests {
         let manifest = layered.manifest().unwrap();
         assert_eq!(manifest.id, "re1");
         assert_eq!(manifest.kind, manifest::PackKind::Base);
-        assert_eq!(manifest.rdt_version, manifest::DEFAULT_RDT_VERSION);
-        assert_eq!(manifest.scd_version, manifest::DEFAULT_SCD_VERSION);
         assert!(!layered.is_layered());
         assert_eq!(layered.warnings().len(), 1);
         assert!(

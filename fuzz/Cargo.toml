@@ -181,5 +181,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "re2"
+path = "fuzz_targets/re2.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 members = ["."]

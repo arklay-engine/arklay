@@ -3,7 +3,8 @@
 # artifact packaging. Run from anywhere; `--full` also runs every ignored test
 # (the real-asset suite and the asset-gated unit tests) when ARKLAY_RE1_ROOT
 # and ARKLAY_RE1_PACK are set, and `--soak` adds the full-game soak on top of
-# that.
+# that. The RE2 tests run too when ARKLAY_RE2_ROOT is set, alone if the RE1
+# variables are not.
 #
 #   ./scripts/check.sh          fmt, clippy, debug + release tests, docs
 #   ./scripts/check.sh --full   the above plus the ignored real-asset suite
@@ -59,8 +60,12 @@ if [[ "$full" == "1" ]]; then
             cargo test --profile test-release -- --ignored
             echo "    (the full-game soak was skipped; pass --soak to include it)"
         fi
+    elif [[ -n "${ARKLAY_RE2_ROOT:-}" ]]; then
+        echo "==> cargo test --profile test-release --test real re2_real:: -- --ignored (RE2 only)"
+        cargo test --profile test-release --test real re2_real:: -- --ignored
+        echo "    (the RE1 suite was skipped: set ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK)"
     else
-        echo "==> skipped the ignored suite: set ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"
+        echo "==> skipped the ignored suite: set ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK (and ARKLAY_RE2_ROOT for RE2)"
     fi
 fi
 

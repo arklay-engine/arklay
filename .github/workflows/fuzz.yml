@@ -40,6 +40,7 @@ jobs:
           - png
           - webp
           - dor
+          - re2
           - lua
     steps:
       - uses: actions/checkout@v4

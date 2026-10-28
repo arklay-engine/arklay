@@ -348,6 +348,22 @@ enum RendererArg {
     Gpu,
 }
 
+/// The `convert-game --game` choices.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum GameArg {
+    Re1,
+    Re2,
+}
+
+impl GameArg {
+    fn game(self) -> arklay::convert::Game {
+        match self {
+            Self::Re1 => arklay::convert::Game::Re1,
+            Self::Re2 => arklay::convert::Game::Re2,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Convert a game installation into an .akpak game pack
@@ -355,9 +371,13 @@ enum Command {
         /// Root of the game installation or data directory
         root: PathBuf,
 
-        /// Output pack path
-        #[arg(long, default_value = "re1.akpak")]
-        out: PathBuf,
+        /// Output pack path (default: re1.akpak or re2.akpak, by game)
+        #[arg(long)]
+        out: Option<PathBuf>,
+
+        /// The game to convert (default: detected from the install)
+        #[arg(long, value_enum)]
+        game: Option<GameArg>,
 
         /// Number of worker threads (default: one per available CPU)
         #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..))]
@@ -992,8 +1012,6 @@ fn write_pack_info(pack_path: &Path, pack: &Pack, out: &mut impl Write) -> Resul
             if let Some(hash) = &manifest.source_hash {
                 writeln!(out, "  source_hash: {hash}")?;
             }
-            writeln!(out, "  rdt: {}", manifest.rdt_version)?;
-            writeln!(out, "  scd: {}", manifest.scd_version)?;
             if !manifest.lua.is_empty() {
                 writeln!(out, "  lua: {}", manifest.lua.join(", "))?;
             }
@@ -1076,14 +1094,23 @@ fn main() -> Result<()> {
         Some(Command::ConvertGame {
             root,
             out,
+            game,
             jobs,
             verbose,
-        }) => arklay::convert::convert_game_with_options(
-            &root,
-            &out,
-            jobs.map_or(0, usize::from),
-            verbose,
-        ),
+        }) => {
+            let game = match game {
+                Some(game) => game.game(),
+                None => arklay::convert::detect_game(&root)?,
+            };
+            let out = out.unwrap_or_else(|| PathBuf::from(game.default_pack_name()));
+            arklay::convert::convert_game_as(
+                &root,
+                &out,
+                Some(game),
+                jobs.map_or(0, usize::from),
+                verbose,
+            )
+        }
         Some(Command::ConvertMod {
             input,
             out,
@@ -1715,8 +1742,6 @@ manifest: re1 (base)
   name: Base
   version: 1.0
   engine: arklay test
-  rdt: re1
-  scd: re1
 layers: 1
   0: {mod_path} (id demo, load_order 7, base re1)
 entries:

@@ -2,9 +2,14 @@
 //!
 //! The manifest is an ordinary pack entry that describes its pack: the format
 //! version, a stable id, a human name, version and description, whether the pack is a base
-//! or a mod, the base id a mod shadows, the layer order mods sort by, the RDT
-//! and SCD dialects it carries, the language of its own room text, a free-form
-//! engine note and the explicit Lua hook list.
+//! or a mod, the base id a mod shadows, the layer order mods sort by, the
+//! language of its own room text, a free-form engine note and the explicit Lua
+//! hook list.
+//!
+//! A manifest names no file-format dialect: a pack may mix RE1- and
+//! RE2-format files, and each loader detects a file's format from the file
+//! itself ([`crate::format`]). The `rdt` and `scd` keys older packs carry are
+//! accepted and ignored.
 //!
 //! The parser is a deliberately small, dependency-free TOML subset: comments,
 //! blank lines, `key = value` with strings, integers, booleans and string
@@ -24,12 +29,6 @@ pub const ENTRY: &str = "manifest.toml";
 
 /// The manifest format version this module writes and accepts.
 pub const FORMAT: u32 = 1;
-
-/// The default RDT dialect when a manifest does not name one.
-pub const DEFAULT_RDT_VERSION: &str = "re1";
-
-/// The default SCD dialect when a manifest does not name one.
-pub const DEFAULT_SCD_VERSION: &str = "re1";
 
 /// Whether a pack is a base game pack or a mod layered over one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,10 +74,6 @@ pub struct Manifest {
     pub base: Option<String>,
     /// Mods: layer order; lower layers are applied first.
     pub load_order: i32,
-    /// RDT dialect, e.g. `re1`.
-    pub rdt_version: String,
-    /// SCD dialect, e.g. `re1`.
-    pub scd_version: String,
     /// Language of the pack's own room text, e.g. `ja-JP`.
     ///
     /// The converted install's RDT messages are in this language; the
@@ -98,7 +93,7 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// A base manifest for `id` with the default RE1 dialects.
+    /// A base manifest for `id`.
     pub fn base(id: impl Into<String>) -> Self {
         Self {
             format: FORMAT,
@@ -109,8 +104,6 @@ impl Manifest {
             kind: PackKind::Base,
             base: None,
             load_order: 0,
-            rdt_version: DEFAULT_RDT_VERSION.to_string(),
-            scd_version: DEFAULT_SCD_VERSION.to_string(),
             language: None,
             engine: None,
             convert_version: None,
@@ -139,8 +132,6 @@ impl Manifest {
         let mut kind = None;
         let mut base = None;
         let mut load_order = None;
-        let mut rdt_version = None;
-        let mut scd_version = None;
         let mut language = None;
         let mut engine = None;
         let mut convert_version = None;
@@ -201,8 +192,12 @@ impl Manifest {
                         anyhow!("manifest.toml line {line}: `load_order` does not fit an i32")
                     })?);
                 }
-                "rdt" => rdt_version = Some(non_empty_string(item, "rdt")?),
-                "scd" => scd_version = Some(non_empty_string(item, "scd")?),
+                // Older packs name a pack-wide dialect; formats are now
+                // detected per file, so the keys are read and ignored.
+                "rdt" | "scd" => {
+                    let key = item.key.clone();
+                    string_value(item, &key)?;
+                }
                 "language" => language = Some(non_empty_string(item, "language")?),
                 "engine" => engine = Some(string_value(item, "engine")?),
                 "convert_version" => {
@@ -248,8 +243,6 @@ impl Manifest {
             kind,
             base,
             load_order: load_order.unwrap_or(0),
-            rdt_version: rdt_version.unwrap_or_else(|| DEFAULT_RDT_VERSION.to_string()),
-            scd_version: scd_version.unwrap_or_else(|| DEFAULT_SCD_VERSION.to_string()),
             language,
             engine,
             convert_version,
@@ -284,8 +277,6 @@ impl Manifest {
         if self.kind == PackKind::Mod || self.load_order != 0 {
             write_pair(&mut out, "load_order", &self.load_order.to_string());
         }
-        write_pair(&mut out, "rdt", &quote(&self.rdt_version));
-        write_pair(&mut out, "scd", &quote(&self.scd_version));
         if let Some(language) = &self.language {
             write_pair(&mut out, "language", &quote(language));
         }
@@ -603,8 +594,6 @@ mod tests {
             kind: PackKind::Base,
             base: None,
             load_order: 0,
-            rdt_version: DEFAULT_RDT_VERSION.to_string(),
-            scd_version: DEFAULT_SCD_VERSION.to_string(),
             language: None,
             engine: Some("arklay 0.1.0".to_string()),
             convert_version: None,
@@ -623,8 +612,6 @@ mod tests {
             kind: PackKind::Mod,
             base: Some("re1".to_string()),
             load_order: 40,
-            rdt_version: DEFAULT_RDT_VERSION.to_string(),
-            scd_version: DEFAULT_SCD_VERSION.to_string(),
             language: None,
             engine: None,
             convert_version: None,
@@ -726,8 +713,6 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             kind: PackKind::Mod,
             base: Some("re1".to_string()),
             load_order: -7,
-            rdt_version: "re1-jpn".to_string(),
-            scd_version: "re1".to_string(),
             language: Some("ja-JP".to_string()),
             engine: Some("arklay 0.1.0".to_string()),
             convert_version: None,
@@ -737,10 +722,8 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
     }
 
     #[test]
-    fn parse_defaults_the_dialects_and_load_order() {
+    fn parse_defaults_the_load_order() {
         let manifest = Manifest::parse("format = 1\nid = \"re1\"\nkind = \"base\"\n").unwrap();
-        assert_eq!(manifest.rdt_version, "re1");
-        assert_eq!(manifest.scd_version, "re1");
         assert_eq!(manifest.language, None);
         assert_eq!(manifest.load_order, 0);
         assert_eq!(manifest.lua, Vec::<String>::new());
@@ -832,8 +815,6 @@ id = \"re1\"
 name = \"Arklay base\"
 version = \"0.1.0\"
 kind = \"base\"
-rdt = \"re1\"
-scd = \"re1\"
 engine = \"arklay 0.1.0\"
 "
         );
@@ -847,8 +828,6 @@ name = \"Demo mod\"
 kind = \"mod\"
 base = \"re1\"
 load_order = 40
-rdt = \"re1\"
-scd = \"re1\"
 lua = [\"lua/demo.lua\", \"lua/extra.lua\"]
 "
         );

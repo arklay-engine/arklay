@@ -12,6 +12,9 @@
 //!   cargo test --profile test-release --test real -- --ignored
 //! ```
 //!
+//! The RE2 tests (`re2_real`) read `ARKLAY_RE2_ROOT` instead and skip
+//! without it.
+//!
 //! `--profile test-release` is the release profile without thin LTO: the
 //! tests run at release speed, but the link skips an optimisation pass only a
 //! shipped binary needs. `scripts/check.sh --full` runs it as part of its
@@ -68,6 +71,7 @@ mod m6_wiring_real;
 mod mask_render_real;
 mod npc_real;
 mod objects_real;
+mod re2_real;
 mod save_real;
 mod shadow_real;
 mod stairs_real;

@@ -135,6 +135,15 @@ fn run_mask(data: &[u8]) {
     let _ = mask::MaskTable::parse(data, 4);
 }
 
+fn run_re2(data: &[u8]) {
+    let _ = arklay::adt::decode(data);
+    let _ = arklay::adt::background(data);
+    let _ = arklay::sap::wavs(data);
+    let _ = arklay::format::rdt_scores(data);
+    let _ = arklay::format::emd_scores(data);
+    let _ = arklay::format::wav_codec(data);
+}
+
 fn run_wav(data: &[u8]) {
     let _ = audio::parse_wav(data);
 }
@@ -534,6 +543,13 @@ fn seed_dor() -> Vec<u8> {
     data
 }
 
+/// The `adt` unit tests' literal-and-copy stream: it decodes to `AAAAA`.
+fn seed_re2() -> Vec<u8> {
+    vec![
+        0, 0, 0, 0, 3, 0, 108, 0, 0, 65, 64, 11, 212, 0, 254, 240, 0, 8, 0, 0,
+    ]
+}
+
 fn seed_wav() -> Vec<u8> {
     let data = [0u8, 64, 128, 192, 255, 128, 64, 0];
     let mut fmt = Vec::new();
@@ -812,6 +828,11 @@ fn targets() -> Vec<Target> {
             seed: seed_dor,
             run: run_dor,
         },
+        Target {
+            name: "re2",
+            seed: seed_re2,
+            run: run_re2,
+        },
     ]
 }
 
@@ -1005,7 +1026,7 @@ fn torture_matrix_never_panics() {
         total >= 10_000,
         "torture matrix ran {total} cases, below the 10,000 floor"
     );
-    assert_eq!(per_format.len(), 22, "every target must run");
+    assert_eq!(per_format.len(), 23, "every target must run");
 }
 
 /// Regenerate the committed cargo-fuzz seed corpus from these builders.

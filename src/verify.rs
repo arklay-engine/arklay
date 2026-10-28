@@ -2,7 +2,14 @@
 //! per-format table.
 //!
 //! The classifier is path-driven: a pack path prefix or extension selects the
-//! parser the engine would use for that entry. An entry whose format is not in
+//! parser family the engine would use for that entry. Where a family spans
+//! more than one game's format (an RDT, an EMD, a WAV), the entry's own bytes
+//! decide which ([`crate::format`]): a detected RE2 file gets its RE2 row
+//! instead of an RE1 parse. An entry detection cannot place (ambiguous or
+//! unknown, e.g. a truncated file) keeps its path's family and is parsed as
+//! RE1, which then reports it. A format the engine cannot load yet is *recognised*: it gets its
+//! own row and never fails a normal run, but `--strict` fails it like an
+//! opaque entry. An entry whose format is not in
 //! the table is *opaque*: it is counted and never fails, so a pack carrying a
 //! future or third-party asset cannot break the command. That includes a
 //! `text/*.bin` name with no table parser and a `room/` folder not named by a
@@ -85,6 +92,20 @@ pub enum Format {
     Mp4,
     /// `*.lua`, a sandboxed script source.
     Lua,
+    /// An RE2 room (`*.rdt` with an RE2 header). TODO(re2): parse it.
+    Re2Rdt,
+    /// An RE2 enemy model (`*.emd` with an RE2 directory). TODO(re2): parse it.
+    Re2Emd,
+    /// An RE2 player model (`*.pld`). TODO(re2): parse it.
+    Pld,
+    /// An RE2 player weapon model (`*.plw`). TODO(re2): parse it.
+    Plw,
+    /// An RE2 door archive (`*.do2`). TODO(re2): parse it.
+    Do2,
+    /// A Microsoft ADPCM WAV (RE2 voice and music). TODO(re2): decode it.
+    AdpcmWav,
+    /// An MPEG program stream film (`movie/*.mpg`). TODO(re2): decode it.
+    Mpeg,
     /// Any entry outside the known table.
     Opaque,
 }
@@ -119,13 +140,35 @@ impl Format {
             Self::Avi => "avi",
             Self::Mp4 => "mp4",
             Self::Lua => "lua",
+            Self::Re2Rdt => "re2-rdt",
+            Self::Re2Emd => "re2-emd",
+            Self::Pld => "pld",
+            Self::Plw => "plw",
+            Self::Do2 => "do2",
+            Self::AdpcmWav => "adpcm-wav",
+            Self::Mpeg => "mpeg",
             Self::Opaque => "opaque",
         }
     }
 
     /// Whether the format has a parser and a failure is a verification error.
     pub fn known(self) -> bool {
-        self != Self::Opaque
+        self != Self::Opaque && !self.unsupported()
+    }
+
+    /// Whether the format is recognised but has no parser yet: it never
+    /// fails a normal run and fails `--strict` like an opaque entry.
+    pub fn unsupported(self) -> bool {
+        matches!(
+            self,
+            Self::Re2Rdt
+                | Self::Re2Emd
+                | Self::Pld
+                | Self::Plw
+                | Self::Do2
+                | Self::AdpcmWav
+                | Self::Mpeg
+        )
     }
 }
 
@@ -234,8 +277,38 @@ pub fn classify(path: &str) -> Format {
         Some((_, "wav")) => Format::Wav,
         Some((_, "avi")) => Format::Avi,
         Some((_, "lua")) => Format::Lua,
+        Some((_, "pld")) => Format::Pld,
+        Some((_, "plw")) => Format::Plw,
+        Some((_, "do2")) => Format::Do2,
+        Some((_, "mpg")) => Format::Mpeg,
         _ => Format::Opaque,
     }
+}
+
+/// Refine a path's [`classify`] with the entry's bytes where the path alone
+/// cannot tell one game's format from another's: an RDT or EMD with an RE2
+/// layout, a WAV holding MS-ADPCM. An `*.rdt` outside a numbered room folder
+/// (an RE2 letter-stage room, `room/g010/room.rdt`) is recognised when its
+/// bytes are an RE2 RDT and stays opaque otherwise.
+pub fn classify_entry(path: &str, data: &[u8]) -> Format {
+    use crate::format::{self, Dialect};
+    let format = classify(path);
+    let is_rdt = path.to_ascii_lowercase().ends_with(".rdt");
+    match format {
+        Format::Rdt if format::rdt(data).dialect() == Some(Dialect::Re2) => Format::Re2Rdt,
+        Format::Opaque if is_rdt && format::rdt(data).dialect() == Some(Dialect::Re2) => {
+            Format::Re2Rdt
+        }
+        Format::Emd if format::emd(data).dialect() == Some(Dialect::Re2) => Format::Re2Emd,
+        Format::Wav if format::wav_codec(data) == Some(format::WAV_MS_ADPCM) => Format::AdpcmWav,
+        format => format,
+    }
+}
+
+/// Whether a path's family needs its bytes to pick a format.
+fn needs_bytes(path: &str, format: Format) -> bool {
+    matches!(format, Format::Rdt | Format::Emd | Format::Wav)
+        || (format == Format::Opaque && path.to_ascii_lowercase().ends_with(".rdt"))
 }
 
 /// Per-format counters in the report.
@@ -330,7 +403,14 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
     let mut report = VerifyReport::default();
     for entry in pack.entries() {
         let path = entry.path();
-        let format = classify(path);
+        // An entry classified by content is read once, for both the
+        // classification and the parse.
+        let path_format = classify(path);
+        let read = needs_bytes(path, path_format).then(|| pack.read(path));
+        let format = match &read {
+            Some(Ok(data)) => classify_entry(path, data),
+            _ => path_format,
+        };
         let stats = report.formats.entry(format).or_default();
         stats.entries += 1;
         stats.bytes += entry.size() as u64;
@@ -346,8 +426,19 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
                 Err(anyhow::anyhow!("unknown entry format (--strict): {}", path))
             }
             Format::Opaque => Ok(()),
-            _ => verify_entry(pack, path, format)
-                .with_context(|| format!("{} ({})", path, format.name())),
+            _ if format.unsupported() && strict => Err(anyhow::anyhow!(
+                "{} is recognised but not supported yet (--strict): {}",
+                format.name(),
+                path
+            )),
+            _ if format.unsupported() => Ok(()),
+            _ => match read {
+                Some(Ok(data)) => verify_entry(pack, path, format, &data),
+                _ => pack
+                    .read(path)
+                    .and_then(|data| verify_entry(pack, path, format, &data)),
+            }
+            .with_context(|| format!("{} ({})", path, format.name())),
         };
         match result {
             Ok(()) => {
@@ -369,8 +460,7 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
 }
 
 /// Parse one entry with the parser for `format`.
-fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
-    let data = &*pack.read(path)?;
+fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<()> {
     match format {
         Format::Manifest => {
             let text = std::str::from_utf8(data).context("manifest.toml is not valid UTF-8")?;
@@ -531,7 +621,16 @@ fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
         Format::Lua => {
             crate::lua::verify_source(data)?;
         }
-        Format::Opaque => unreachable!("opaque entries are handled by the caller"),
+        Format::Opaque
+        | Format::Re2Rdt
+        | Format::Re2Emd
+        | Format::Pld
+        | Format::Plw
+        | Format::Do2
+        | Format::AdpcmWav
+        | Format::Mpeg => {
+            unreachable!("opaque and unsupported entries are handled by the caller")
+        }
     }
     Ok(())
 }
@@ -838,6 +937,75 @@ mod tests {
         assert_eq!(report.formats[&Format::Tim].entries, 1);
         assert_eq!(report.formats[&Format::Cut].entries, 1);
         assert_eq!(report.formats[&Format::Mask].entries, 1);
+    }
+
+    /// A minimal RE2 RDT header: a cut count and one section past the
+    /// header.
+    fn re2_rdt() -> Vec<u8> {
+        let mut data = vec![0u8; 0x100];
+        data[1] = 1;
+        data[8..12].copy_from_slice(&0x64u32.to_le_bytes());
+        data
+    }
+
+    fn adpcm_wav() -> Vec<u8> {
+        let mut data = b"RIFF\x1c\0\0\0WAVEfmt \x10\0\0\0".to_vec();
+        data.extend(crate::format::WAV_MS_ADPCM.to_le_bytes());
+        data.extend([0u8; 14]);
+        data
+    }
+
+    #[test]
+    fn re2_entries_are_classified_by_content_and_pass_unless_strict() {
+        assert!(needs_bytes("room/1000/room.rdt", Format::Rdt));
+        assert!(needs_bytes("room/g010/room.rdt", Format::Opaque));
+        assert!(!needs_bytes("room/1000/cut/00.bmp", Format::Cut));
+        assert_eq!(
+            classify_entry("room/1000/room.rdt", &re2_rdt()),
+            Format::Re2Rdt
+        );
+        assert_eq!(
+            classify_entry("room/g010/room.rdt", &re2_rdt()),
+            Format::Re2Rdt
+        );
+        assert_eq!(
+            classify_entry("room/g010/room.rdt", b"junk"),
+            Format::Opaque
+        );
+        assert_eq!(
+            classify_entry("voice/0/01_00.wav", &adpcm_wav()),
+            Format::AdpcmWav
+        );
+        assert_eq!(classify("player/00/model_0.pld"), Format::Pld);
+
+        let mut writer = PackWriter::new();
+        writer.add("room/1000/room.rdt", re2_rdt()).unwrap();
+        writer.add("room/g010/room.rdt", re2_rdt()).unwrap();
+        writer.add("voice/0/01_00.wav", adpcm_wav()).unwrap();
+        writer
+            .add("player/00/model_0.pld", b"pld".to_vec())
+            .unwrap();
+        writer.add("room/1000/cut/00.bmp", tiny_bmp()).unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+
+        let report = verify_pack(&pack, false);
+        assert!(report.valid(), "failures: {:?}", report.failures);
+        assert_eq!(report.formats[&Format::Re2Rdt].ok, 2);
+        assert_eq!(report.formats[&Format::AdpcmWav].ok, 1);
+        assert_eq!(report.formats[&Format::Pld].ok, 1);
+
+        let strict = verify_pack(&pack, true);
+        let mut failed: Vec<&str> = strict.failures.iter().map(|f| f.path.as_str()).collect();
+        failed.sort_unstable();
+        assert_eq!(
+            failed,
+            [
+                "player/00/model_0.pld",
+                "room/1000/room.rdt",
+                "room/g010/room.rdt",
+                "voice/0/01_00.wav"
+            ]
+        );
     }
 
     #[test]

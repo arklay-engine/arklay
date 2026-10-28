@@ -847,11 +847,26 @@ Still open, by design:
   damage. Each is catalogued in the module docs and
   `docs/m18-deviations.md`.
 
-No RE2/RE3 runtime work is planned until those RE1 gaps close. The RE2
-conversion tooling is specified separately in issue #15 (the pack inventory,
-the ADT roomcut decoder and the converter's game detection); it produces a
-base pack only and adds no runtime dialect. There is no RE2 corpus in the
-workspace yet, and the canonical re-base cannot be validated without the full
-roster. The M17 harnesses
-already key off the manifest's `rdt_version`/`scd_version` and per-entry path
-prefixes, so a second dialect adds parser rows rather than rewriting them.
+RE2 work is tracked by the milestone issue #244 and its sub-issues. R0
+(#15) adds conversion only: `convert-game` detects an RE2 PC install (or takes
+`--game re2`) and writes an `re2.akpak` base pack with no runtime dialect yet.
+Against the retail install it packs 501 rooms, 5028 camera backgrounds (1242
+distinct `roomcut.bin` streams decoding to 1205 distinct images), 234 enemy
+files, 221 player files, 599 voice lines, 118 BGM tracks, 55 doors, 26 films
+and 6 demo reels in about 13 s. `arklay verify` classifies the RE2 formats by
+content and passes them unparsed (they fail under `--strict` until the
+runtime milestones parse them). Retail-data quirks the converter handles:
+
+- `ROOM7051.RDT` is a broken stub and is skipped with a warning.
+- Room 7071 has 8 camera pointers past the end of `roomcut.bin`; those
+  cameras get no background.
+- Rooms 30C0, 30C1, C0C0 and C0C1 declare 17 cameras, one more than the 16
+  pointers per room the table holds; the 17th is dropped with a warning.
+- `Pl0/emd0/EM13A.TIM` is a stray, differing copy of the disc-1 texture; the
+  file in its own disc's folder wins.
+- The `Pdemo**p.dat` alternate demo takes are not packed.
+- Each decoded ADT stream carries 66,080 bytes after the background,
+  probably a 256x256 8bpp mask TIM; R4 (#248) takes it up.
+
+The manifest no longer carries `rdt_version`/`scd_version`: formats are
+detected per file (`src/format.rs`), so one pack may hold both dialects.

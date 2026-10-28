@@ -65,7 +65,7 @@ const WRITE_CHUNK: usize = 1 << 20;
 /// (68.5%). Expanding the 8-bit files to 16-bit PCM first was strictly worse
 /// (18.2 MB vs 15.5 MB for those 60 files) and recovers no quality, so the
 /// pack stores the shipped samples as they are.
-const PRECOMPRESSED_EXTENSIONS: &[&str] = &["avi", "mp4", "ogg", "png", "webp"];
+const PRECOMPRESSED_EXTENSIONS: &[&str] = &["avi", "mp4", "mpg", "ogg", "png", "webp"];
 
 /// Whether an entry's format already carries its own compression, in which
 /// case `convert-game` stores it raw instead of zstd-compressing it.
@@ -87,7 +87,7 @@ fn worker_count(jobs: usize) -> usize {
 
 /// One parallel job's result: the progress label, the phase units it completes
 /// and the value it produces.
-type JobResult<T> = Result<(String, u64, T)>;
+pub(crate) type JobResult<T> = Result<(String, u64, T)>;
 
 /// Run `job(0..count)` on up to `jobs` scoped workers, returning the results in
 /// job order and advancing `progress` as each job completes.
@@ -95,7 +95,7 @@ type JobResult<T> = Result<(String, u64, T)>;
 /// The first error returned by a job is reported, so failures do not depend on
 /// thread scheduling; once a job fails no further jobs are claimed, though work
 /// already in flight still finishes. A panicking job unwinds through the scope.
-fn parallel_map<T: Send>(
+pub(crate) fn parallel_map<T: Send>(
     count: usize,
     jobs: usize,
     progress: &mut Progress,
@@ -361,11 +361,72 @@ pub fn convert_game(root: &Path, out: &Path) -> Result<()> {
     convert_game_with_options(root, out, 0, false)
 }
 
-/// Check that `root` looks like a supported Resident Evil installation,
-/// without converting anything. The launcher uses this before starting a
-/// multi-hundred-megabyte conversion, so a wrong folder fails immediately.
+/// A game `convert-game` can convert.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Game {
+    /// Resident Evil (the PC, Classic REbirth and Steam releases).
+    Re1,
+    /// Resident Evil 2 (the PC release, `bio2 1.10`).
+    Re2,
+}
+
+impl Game {
+    /// The game's default pack file name.
+    pub fn default_pack_name(self) -> &'static str {
+        match self {
+            Self::Re1 => "re1.akpak",
+            Self::Re2 => "re2.akpak",
+        }
+    }
+}
+
+/// Which game the install at or under `root` is: RE2 when a data directory
+/// holding `Pl0/Rdt` is found, otherwise RE1 (whose own discovery reports a
+/// tree that is neither). A root holding both installs (a folder of games)
+/// is an error naming `--game`, so the choice is never made silently.
+pub fn detect_game(root: &Path) -> Result<Game> {
+    let Some(re2) = crate::convert_re2::find_data_dir(root) else {
+        return Ok(Game::Re1);
+    };
+    if discover_layout(root).is_ok() {
+        bail!(
+            "{} holds both an RE1 install and an RE2 install ({}); pass --game re1 or \
+             --game re2, or point at one install",
+            root.display(),
+            re2.display()
+        );
+    }
+    Ok(Game::Re2)
+}
+
+/// Check that `root` looks like an RE1 installation, without converting
+/// anything. The launcher and the Steam scan use this before starting a
+/// multi-hundred-megabyte conversion into the RE1 pack, so a wrong folder
+/// fails immediately. An RE2 install is refused by name: neither of them
+/// handles RE2 yet, and converting one would replace the RE1 pack.
 pub fn validate_install(root: &Path) -> Result<()> {
-    discover_layout(root).map(|_| ())
+    match discover_layout(root) {
+        Ok(_) => Ok(()),
+        Err(error) => match crate::convert_re2::find_data_dir(root) {
+            Some(_) => bail!(
+                "{} is a Resident Evil 2 install; only RE1 can be set up here so far \
+                 (`arklay convert-game` converts RE2 into re2.akpak)",
+                root.display()
+            ),
+            None => Err(error),
+        },
+    }
+}
+
+/// Convert `root` as `game`, or as the detected game when `None`.
+pub fn convert_game_as(
+    root: &Path,
+    out: &Path,
+    game: Option<Game>,
+    jobs: usize,
+    verbose: bool,
+) -> Result<()> {
+    convert_observed_as(root, out, game, jobs, verbose, None, None)
 }
 
 /// Like [`convert_game`], but with an explicit worker count and whether the
@@ -392,16 +453,31 @@ pub fn convert_game_with_options(
     jobs: usize,
     verbose: bool,
 ) -> Result<()> {
-    convert_game_observed(root, out, jobs, verbose, None, None)
+    convert_observed_as(root, out, None, jobs, verbose, None, None)
 }
 
 /// Convert with a graphical progress observer and an optional cancellation
 /// flag. The launcher uses this to keep its window responsive while a pack is
 /// built; the flag is checked between files, at phase boundaries and during
 /// the final write, and an aborted run leaves no partial pack behind.
+///
+/// This is always an RE1 conversion: the launcher builds only the RE1 pack,
+/// and [`validate_install`] has already refused an RE2 folder.
 pub fn convert_game_observed(
     root: &Path,
     out: &Path,
+    jobs: usize,
+    verbose: bool,
+    observer: Option<ProgressObserver>,
+    cancel: Option<Arc<AtomicBool>>,
+) -> Result<()> {
+    convert_observed_as(root, out, Some(Game::Re1), jobs, verbose, observer, cancel)
+}
+
+fn convert_observed_as(
+    root: &Path,
+    out: &Path,
+    game: Option<Game>,
     jobs: usize,
     verbose: bool,
     observer: Option<ProgressObserver>,
@@ -420,6 +496,13 @@ pub fn convert_game_observed(
             progress
         }
     };
+    let game = match game {
+        Some(game) => game,
+        None => detect_game(root)?,
+    };
+    if game == Game::Re2 {
+        return crate::convert_re2::convert(root, out, jobs, verbose, &mut progress);
+    }
     let Plan {
         rooms,
         sound,
@@ -691,6 +774,112 @@ pub fn convert_game_observed(
     let (voice_count, voice_bytes) = copy_voice(&voice, &mut writer, &mut progress, jobs)?;
     let (movie_count, movie_bytes) = copy_movies(&movie, &mut writer, &mut progress, jobs)?;
 
+    // The category lines are rendered now; the shared tail compresses,
+    // writes and reports the pack.
+    let mut summary = Vec::new();
+    if verbose {
+        for (index, (rdts, cuts)) in stage_counts.iter().enumerate() {
+            writeln!(summary, "STAGE{}: {rdts} RDT(s), {cuts} cut(s)", index + 1)?;
+        }
+        writeln!(summary, "room: {rdt_count} entries, {rdt_bytes} bytes")?;
+        writeln!(
+            summary,
+            "room sidecars: {sidecar_count} entries, {sidecar_bytes} bytes"
+        )?;
+        writeln!(summary, "scd: {scd_count} entries, {scd_bytes} bytes")?;
+        writeln!(summary, "cut: {cut_count} entries, {cut_bytes} bytes")?;
+        writeln!(summary, "mask: {mask_count} entries, {mask_bytes} bytes")?;
+        writeln!(summary, "bgm: {bgm_count} entries, {bgm_bytes} bytes")?;
+        writeln!(summary, "se: {se_count} entries, {se_bytes} bytes")?;
+        writeln!(summary, "door: {door_count} entries, {door_bytes} bytes")?;
+        writeln!(
+            summary,
+            "player: {player_count} entries, {player_bytes} bytes"
+        )?;
+        writeln!(
+            summary,
+            "weapon: {weapon_count} entries, {weapon_bytes} bytes"
+        )?;
+        writeln!(summary, "enemy: {npc_count} entries, {npc_bytes} bytes")?;
+        writeln!(
+            summary,
+            "monster: {enemy_count} entries, {enemy_bytes} bytes"
+        )?;
+        writeln!(
+            summary,
+            "enemylua: {enemylua_count} entries, {enemylua_bytes} bytes"
+        )?;
+        writeln!(summary, "uilua: {uilua_count} entries, {uilua_bytes} bytes")?;
+        writeln!(
+            summary,
+            "gamelua: {gamelua_count} entries, {gamelua_bytes} bytes"
+        )?;
+        writeln!(
+            summary,
+            "effect: {effect_count} entries, {effect_bytes} bytes"
+        )?;
+        writeln!(summary, "font: {font_count} entries, {font_bytes} bytes")?;
+        writeln!(summary, "ui: {ui_count} entries, {ui_bytes} bytes")?;
+        writeln!(summary, "item: {item_count} entries, {item_bytes} bytes")?;
+        writeln!(summary, "demo: {demo_count} entries, {demo_bytes} bytes")?;
+        writeln!(summary, "core00: {core_count} entries, {core_bytes} bytes")?;
+        writeln!(
+            summary,
+            "shadow: {shadow_count} entries, {shadow_bytes} bytes"
+        )?;
+        writeln!(
+            summary,
+            "language: {language_count} entries, {language_bytes} bytes"
+        )?;
+        writeln!(
+            summary,
+            "item definition: {item_def_count} entries, {item_def_bytes} bytes"
+        )?;
+        writeln!(
+            summary,
+            "item model: {item_model_count} entries, {item_model_bytes} bytes"
+        )?;
+        writeln!(summary, "file: {file_count} entries, {file_bytes} bytes")?;
+        writeln!(summary, "map: {map_count} entries, {map_bytes} bytes")?;
+        writeln!(
+            summary,
+            "manifest: {manifest_count} entry, {manifest_bytes} bytes (base \"{}\")",
+            base_manifest("ja-JP").id
+        )?;
+        writeln!(summary, "voice: {voice_count} entries, {voice_bytes} bytes")?;
+        if !voice_unreferenced.is_empty() {
+            writeln!(
+                summary,
+                "voice: {} unreferenced file(s) not packed: {}",
+                voice_unreferenced.len(),
+                voice_unreferenced.join(", ")
+            )?;
+        }
+        writeln!(summary, "movie: {movie_count} entries, {movie_bytes} bytes")?;
+    }
+    finish_pack(
+        writer,
+        out,
+        jobs,
+        &mut progress,
+        &warnings,
+        &summary,
+        verbose,
+    )
+}
+
+/// Compress, write and report a converted pack: the tail every game's
+/// conversion shares. `summary` holds the verbose category lines, printed
+/// before the compression and per-entry lines.
+pub(crate) fn finish_pack(
+    mut writer: PackWriter,
+    out: &Path,
+    jobs: usize,
+    progress: &mut Progress,
+    warnings: &[String],
+    summary: &[u8],
+    verbose: bool,
+) -> Result<()> {
     // Zstd-compress every entry except the formats that already carry their
     // own compression, spread over the worker pool. Entries that would not
     // shrink stay raw, so this can only help.
@@ -699,7 +888,7 @@ pub fn convert_game_observed(
     let compressed = {
         // The pass runs on its own worker pool, so the reporter is shared;
         // only the bar sees the completion order, which does not matter.
-        let progress = Mutex::new(&mut progress);
+        let progress = Mutex::new(&mut *progress);
         writer.compress_entries_reporting(jobs, is_precompressed, |entry| {
             progress
                 .lock()
@@ -721,7 +910,7 @@ pub fn convert_game_observed(
         fs::File::create(&temp).with_context(|| format!("failed to create {}", temp.display()))?;
     let mut file = ProgressWriter {
         inner: BufWriter::with_capacity(WRITE_CHUNK, file),
-        progress: &mut progress,
+        progress,
     };
     let result = writer
         .stream_to(&mut file)
@@ -743,7 +932,7 @@ pub fn convert_game_observed(
     progress.finish();
 
     // The bar is gone now, so the warnings and the final status read cleanly.
-    for warning in &warnings {
+    for warning in warnings {
         eprintln!("warning: {warning}");
     }
 
@@ -754,84 +943,7 @@ pub fn convert_game_observed(
     // order, which is deterministic whatever the worker count.
     let mut report = Vec::new();
     if verbose {
-        for (index, (rdts, cuts)) in stage_counts.iter().enumerate() {
-            writeln!(report, "STAGE{}: {rdts} RDT(s), {cuts} cut(s)", index + 1)?;
-        }
-        writeln!(report, "room: {rdt_count} entries, {rdt_bytes} bytes")?;
-        writeln!(
-            report,
-            "room sidecars: {sidecar_count} entries, {sidecar_bytes} bytes"
-        )?;
-        writeln!(report, "scd: {scd_count} entries, {scd_bytes} bytes")?;
-        writeln!(report, "cut: {cut_count} entries, {cut_bytes} bytes")?;
-        writeln!(report, "mask: {mask_count} entries, {mask_bytes} bytes")?;
-        writeln!(report, "bgm: {bgm_count} entries, {bgm_bytes} bytes")?;
-        writeln!(report, "se: {se_count} entries, {se_bytes} bytes")?;
-        writeln!(report, "door: {door_count} entries, {door_bytes} bytes")?;
-        writeln!(
-            report,
-            "player: {player_count} entries, {player_bytes} bytes"
-        )?;
-        writeln!(
-            report,
-            "weapon: {weapon_count} entries, {weapon_bytes} bytes"
-        )?;
-        writeln!(report, "enemy: {npc_count} entries, {npc_bytes} bytes")?;
-        writeln!(
-            report,
-            "monster: {enemy_count} entries, {enemy_bytes} bytes"
-        )?;
-        writeln!(
-            report,
-            "enemylua: {enemylua_count} entries, {enemylua_bytes} bytes"
-        )?;
-        writeln!(report, "uilua: {uilua_count} entries, {uilua_bytes} bytes")?;
-        writeln!(
-            report,
-            "gamelua: {gamelua_count} entries, {gamelua_bytes} bytes"
-        )?;
-        writeln!(
-            report,
-            "effect: {effect_count} entries, {effect_bytes} bytes"
-        )?;
-        writeln!(report, "font: {font_count} entries, {font_bytes} bytes")?;
-        writeln!(report, "ui: {ui_count} entries, {ui_bytes} bytes")?;
-        writeln!(report, "item: {item_count} entries, {item_bytes} bytes")?;
-        writeln!(report, "demo: {demo_count} entries, {demo_bytes} bytes")?;
-        writeln!(report, "core00: {core_count} entries, {core_bytes} bytes")?;
-        writeln!(
-            report,
-            "shadow: {shadow_count} entries, {shadow_bytes} bytes"
-        )?;
-        writeln!(
-            report,
-            "language: {language_count} entries, {language_bytes} bytes"
-        )?;
-        writeln!(
-            report,
-            "item definition: {item_def_count} entries, {item_def_bytes} bytes"
-        )?;
-        writeln!(
-            report,
-            "item model: {item_model_count} entries, {item_model_bytes} bytes"
-        )?;
-        writeln!(report, "file: {file_count} entries, {file_bytes} bytes")?;
-        writeln!(report, "map: {map_count} entries, {map_bytes} bytes")?;
-        writeln!(
-            report,
-            "manifest: {manifest_count} entry, {manifest_bytes} bytes (base \"{}\")",
-            base_manifest("ja-JP").id
-        )?;
-        writeln!(report, "voice: {voice_count} entries, {voice_bytes} bytes")?;
-        if !voice_unreferenced.is_empty() {
-            writeln!(
-                report,
-                "voice: {} unreferenced file(s) not packed: {}",
-                voice_unreferenced.len(),
-                voice_unreferenced.join(", ")
-            )?;
-        }
-        writeln!(report, "movie: {movie_count} entries, {movie_bytes} bytes")?;
+        report.extend_from_slice(summary);
         writeln!(
             report,
             "compress: {compressed} of {entries} entries stored with zstd (level {})",
@@ -2406,7 +2518,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 7;
+pub const CONVERT_VERSION: u32 = 8;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, and the language sheets.
@@ -2461,8 +2573,6 @@ fn base_manifest(language: &str) -> manifest::Manifest {
         kind: manifest::PackKind::Base,
         base: None,
         load_order: 0,
-        rdt_version: manifest::DEFAULT_RDT_VERSION.to_string(),
-        scd_version: manifest::DEFAULT_SCD_VERSION.to_string(),
         // The converted tree's own room text language (Japanese for the
         // Japanese releases, the Steam tree's language for the Western ones).
         language: Some(language.to_string()),
@@ -3667,7 +3777,7 @@ fn searched_dirs(dirs: &[PathBuf]) -> String {
 }
 
 /// Read a directory and sort its entries by file name.
-fn read_dir_sorted(dir: &Path) -> Result<Vec<fs::DirEntry>> {
+pub(crate) fn read_dir_sorted(dir: &Path) -> Result<Vec<fs::DirEntry>> {
     let mut entries = fs::read_dir(dir)
         .with_context(|| format!("failed to open directory {}", dir.display()))?
         .collect::<std::io::Result<Vec<_>>>()
