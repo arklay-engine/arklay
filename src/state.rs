@@ -10,9 +10,12 @@ use crate::mask::MaskSprite;
 /// The identity is packed hex: the first digit is the stage, the middle two are
 /// the room in hex, and the last is the player/flag digit. This matches the
 /// shipped `ROOM####.RDT` names and the `RC` background names.
+///
+/// RE2 also ships letter stages `A`-`G` (`ROOMG010.RDT`), which are stages
+/// 10-16 here: `A`-`F` are their own hex digits and `G` continues the run.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RoomId {
-    /// 1-based stage number (1-7).
+    /// 1-based stage number: 1-7, or 10-16 for the letter stages `A`-`G`.
     pub stage: u8,
     /// Room number within the stage (0x00-0x1F).
     pub room: u8,
@@ -21,17 +24,17 @@ pub struct RoomId {
 }
 
 impl RoomId {
-    /// Highest valid stage digit.
+    /// Highest RE1 stage digit, the stage count of RE1's per-stage tables.
     pub const MAX_STAGE: u8 = 7;
+    /// Highest stage an identity can name: the letter stage `G`.
+    pub const MAX_STAGE_ID: u8 = 16;
     /// Highest valid room number.
     pub const MAX_ROOM: u8 = 0x1F;
 
-    /// Parse a three- or four-digit RDT identity, e.g. `100`, `1001`, `11C1`.
+    /// Parse a three- or four-digit RDT identity, e.g. `100`, `1001`, `11C1`,
+    /// `G010`.
     pub fn parse(text: &str) -> anyhow::Result<Self> {
-        let digits: Vec<u8> = text
-            .chars()
-            .map(|c| c.to_digit(16).map(|d| d as u8))
-            .collect::<Option<_>>()
+        let digits = Self::digits(text)
             .ok_or_else(|| anyhow::anyhow!("`{text}` is not a hex RDT identity"))?;
         match digits.as_slice() {
             [stage, hi, lo] => Self::from_digits(*stage, (*hi << 4) | *lo, 0, text),
@@ -42,20 +45,28 @@ impl RoomId {
 
     /// Parse a three-digit room id (`100`, `11C`) plus a player digit.
     pub fn from_room_and_player(room: &str, player: u8) -> anyhow::Result<Self> {
-        let digits: Vec<u8> = room
-            .chars()
-            .map(|c| c.to_digit(16).map(|d| d as u8))
-            .collect::<Option<_>>()
-            .ok_or_else(|| anyhow::anyhow!("`{room}` is not a hex room id"))?;
+        let digits =
+            Self::digits(room).ok_or_else(|| anyhow::anyhow!("`{room}` is not a hex room id"))?;
         match digits.as_slice() {
             [stage, hi, lo] => Self::from_digits(*stage, (*hi << 4) | *lo, player, room),
             _ => anyhow::bail!("`{room}` must be exactly three hex digits, e.g. 100 or 11C"),
         }
     }
 
+    /// The digit values of `text`: hex, plus `G` (16) as the first one.
+    fn digits(text: &str) -> Option<Vec<u8>> {
+        text.chars()
+            .enumerate()
+            .map(|(index, c)| match c {
+                'g' | 'G' if index == 0 => Some(Self::MAX_STAGE_ID),
+                _ => c.to_digit(16).map(|d| d as u8),
+            })
+            .collect()
+    }
+
     fn from_digits(stage: u8, room: u8, player_flag: u8, text: &str) -> anyhow::Result<Self> {
-        if !(1..=Self::MAX_STAGE).contains(&stage) {
-            anyhow::bail!("stage digit in `{text}` must be 1-7");
+        if !(1..=Self::MAX_STAGE).contains(&stage) && !(10..=Self::MAX_STAGE_ID).contains(&stage) {
+            anyhow::bail!("stage digit in `{text}` must be 1-7 or A-G");
         }
         if room > Self::MAX_ROOM {
             anyhow::bail!("room in `{text}` must be 00-1F");
@@ -70,15 +81,35 @@ impl RoomId {
         })
     }
 
-    /// Four-digit packed hex RDT number, e.g. 0x1001.
-    pub fn rdt_number(self) -> u16 {
-        ((self.stage as u16) << 12) | ((self.room as u16) << 4) | self.player_flag as u16
+    /// Packed RDT number, e.g. 0x1001; the letter stage `G` is 0x10000 up.
+    pub fn rdt_number(self) -> u32 {
+        (u32::from(self.stage) << 12) | (u32::from(self.room) << 4) | u32::from(self.player_flag)
+    }
+
+    /// The stage's digit: `1`-`7`, or the letter `a`-`g`.
+    pub fn stage_char(self) -> char {
+        debug_assert!(self.stage <= Self::MAX_STAGE_ID, "stage {}", self.stage);
+        match self.stage {
+            0..=9 => char::from(b'0' + self.stage),
+            stage => char::from(b'a' + (stage - 10).min(25)),
+        }
+    }
+
+    /// Four-character RDT identity as the pack folders spell it, e.g. `1001`
+    /// or `g010`.
+    pub fn code(self) -> String {
+        format!(
+            "{}{:02x}{:x}",
+            self.stage_char(),
+            self.room,
+            self.player_flag
+        )
     }
 
     /// Pack directory holding everything room `self` is made of, e.g.
     /// `room/1001`.
     pub fn dir(self) -> String {
-        format!("room/{:04x}", self.rdt_number())
+        format!("room/{}", self.code())
     }
 
     /// Pack path of the raw RDT, e.g. `room/1001/room.rdt`.
@@ -100,7 +131,11 @@ impl RoomId {
 
     /// Three-digit room id, e.g. `100`, `11C`.
     pub fn room3(self) -> String {
-        format!("{}{:02X}", self.stage, self.room)
+        format!(
+            "{}{:02X}",
+            self.stage_char().to_ascii_uppercase(),
+            self.room
+        )
     }
 
     /// Pack stem of file `index` in the room's `kind` subdirectory, e.g.
@@ -162,9 +197,10 @@ impl RoomId {
     }
 
     /// Stage digit used by the background files. Stages 6 and 7 reuse the
-    /// STAGE1/STAGE2 backgrounds with the digit reduced by 5.
+    /// STAGE1/STAGE2 backgrounds with the digit reduced by 5; RE2's letter
+    /// stages are their own.
     pub fn fold_stage_digit(self) -> u8 {
-        if self.stage >= 6 {
+        if (6..=Self::MAX_STAGE).contains(&self.stage) {
             self.stage - 5
         } else {
             self.stage
@@ -247,6 +283,43 @@ impl Collision {
         let quadrant = (usize::from(z < i32::from(self.cell_z)) << 1)
             | usize::from(x < i32::from(self.cell_x));
         &self.quadrants[quadrant]
+    }
+}
+
+/// RE2's room collision: the RDT's SCA section. RE2 records are signed
+/// boxes with a shape, unlike RE1's quadrant-split rectangles, so they stay
+/// in their own form; only the collision view reads them so far.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Sca {
+    /// The header's centre point.
+    pub cell_x: i16,
+    pub cell_z: i16,
+    /// The header's ceiling height.
+    pub ceiling: i32,
+    /// The header's last word (`0xC5C5C5C5` in every shipped room).
+    pub tail: u32,
+    pub records: Vec<ScaRect>,
+}
+
+/// One RE2 collision record: a box at `(x, z)` of `width` by `depth`, with
+/// the raw shape/attribute words and the bit set of floors it applies on.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ScaRect {
+    pub x: i16,
+    pub z: i16,
+    pub width: u16,
+    pub depth: u16,
+    /// Bits 0-3 are the shape ([`ScaRect::shape`]); the rest are raw.
+    pub id: u16,
+    pub kind: u16,
+    pub floor: u32,
+}
+
+impl ScaRect {
+    /// The record's shape: 0 a box, 1-4 the four right triangles, 5 a
+    /// diamond, 6 a circle, 7 and up rounded boxes.
+    pub fn shape(&self) -> u8 {
+        (self.id & 0xF) as u8
     }
 }
 
@@ -370,6 +443,8 @@ pub struct RoomState {
     pub lights: [Light; 3],
     /// Collision boundary records.
     pub collision: Collision,
+    /// RE2 collision records, present exactly for an RE2 room.
+    pub sca: Option<Sca>,
     /// Camera switch zones in file order, group headers included.
     pub zones: Vec<Zone>,
     /// Walkable zones for NPC navigation.
@@ -493,8 +568,40 @@ mod tests {
     }
 
     #[test]
-    fn every_shipped_room_id_roundtrips() {
+    fn parses_letter_stages() {
+        let id = RoomId::parse("G010").unwrap();
+        assert_eq!((id.stage, id.room, id.player_flag), (16, 0x01, 0));
+        assert_eq!(id.dir(), "room/g010");
+        assert_eq!(id.room3(), "G01");
+        assert_eq!(id.code(), "g010");
+        let id = RoomId::from_room_and_player("a1d", 1).unwrap();
+        assert_eq!((id.stage, id.room, id.player_flag), (10, 0x1D, 1));
+        assert_eq!(id.rdt_entry(), "room/a1d1/room.rdt");
+        assert_eq!(RoomId::parse("G010").unwrap().rdt_number(), 0x1_0010);
+        assert_eq!(
+            id.fold_stage_digit(),
+            10,
+            "a letter stage folds to no RE1 stage"
+        );
+        // RE1's folders keep their packed-number names.
         for stage in 1..=RoomId::MAX_STAGE {
+            let id = RoomId {
+                stage,
+                room: 0x1C,
+                player_flag: 1,
+            };
+            assert_eq!(id.dir(), format!("room/{:04x}", id.rdt_number()));
+            assert_eq!(id.code(), format!("{:04x}", id.rdt_number()));
+        }
+        // `G` is only a stage digit, and no stage lies past it.
+        assert!(RoomId::parse("1G00").is_err());
+        assert!(RoomId::parse("H000").is_err());
+        assert!(RoomId::parse("0000").is_err());
+    }
+
+    #[test]
+    fn every_shipped_room_id_roundtrips() {
+        for stage in (1..=RoomId::MAX_STAGE).chain(10..=RoomId::MAX_STAGE_ID) {
             for room in 0..=RoomId::MAX_ROOM {
                 for player in 0..=1u8 {
                     let id = RoomId {
@@ -502,7 +609,7 @@ mod tests {
                         room,
                         player_flag: player,
                     };
-                    let text = format!("{:04X}", id.rdt_number());
+                    let text = id.code().to_ascii_uppercase();
                     assert_eq!(RoomId::parse(&text).unwrap(), id);
                     assert_eq!(
                         RoomId::from_room_and_player(&id.room3(), player).unwrap(),
@@ -532,6 +639,8 @@ mod tests {
         assert!(RoomId::parse("10012").is_err());
         assert!(RoomId::parse("0A0").is_err());
         assert!(RoomId::parse("800").is_err());
+        assert!(RoomId::parse("900").is_err());
+        assert!(RoomId::parse("H00").is_err());
         assert!(RoomId::parse("1FF").is_err());
         assert!(RoomId::parse("1X0").is_err());
         assert!(RoomId::from_room_and_player("1001", 0).is_err());

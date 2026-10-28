@@ -17,11 +17,12 @@ use crate::charset::Script;
 use crate::effects::pool::EffectBlock;
 use crate::effects::room::{AnimFrame, FrameEntry, TimGeometry, UvRecord};
 use crate::effects::{EffectSprite as StateSprite, RoomEffects, SpriteAnimation, SpriteInfo};
+use crate::format::Dialect;
 use crate::mask;
 use crate::model::Texture8;
 use crate::objects::ObjectAsset;
 use crate::pack::{AssetClass, Pack};
-use crate::state::{Collision, Cut, FootstepZone, Light, RoomId, RoomState, WalkZone, Zone};
+use crate::state::{Collision, Cut, FootstepZone, Light, RoomId, RoomState, Sca, WalkZone, Zone};
 use crate::{assets, bmp, budget, emd, rdt, tim, tmd};
 
 /// The room definition's file name inside the room's folder.
@@ -50,6 +51,11 @@ pub struct RoomSource {
     pub zones: Vec<Zone>,
     /// Collision boundaries by quadrant.
     pub collision: Collision,
+    /// RE2 collision records, from an RE2 room's SCA section.
+    pub sca: Option<Sca>,
+    /// The game the room comes from, which picks how the rest of its folder
+    /// (scripts, masks) is read.
+    pub dialect: Dialect,
     /// Walkable zones.
     pub walk_zones: Vec<WalkZone>,
     /// The footstep table's header word: its record count in every shipped
@@ -396,6 +402,8 @@ impl RoomSource {
             cameras,
             zones: state.zones,
             collision: state.collision,
+            sca: None,
+            dialect: Dialect::Re1,
             walk_zones: state.walk_zones,
             footstep_count: footstep_count(data, pointers[FOOTSTEP_SLOT]),
             footstep_zones: state.footstep_zones,
@@ -476,6 +484,7 @@ impl RoomSource {
             ambient: self.ambient,
             lights: self.lights,
             collision: self.collision.clone(),
+            sca: self.sca.clone(),
             zones: self.zones.clone(),
             walk_zones: self.walk_zones.clone(),
             footstep_zones: self.footstep_zones.clone(),

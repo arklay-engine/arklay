@@ -21,7 +21,8 @@ struct Cli {
     #[arg(value_name = "PACK")]
     pack: Option<PathBuf>,
 
-    /// Room id, three hex digits: stage digit plus room, e.g. 100 or 11C
+    /// Room id, three hex digits: stage digit plus room, e.g. 100 or 11C; RE2's
+    /// letter stages are A-G, e.g. G01
     #[arg(long, value_name = "ROOM", requires = "pack")]
     room: Option<String>,
 
@@ -194,6 +195,17 @@ struct Cli {
     /// Render one frame to a file and exit (headless testing)
     #[arg(long, value_name = "FILE", requires = "pack")]
     capture: Option<PathBuf>,
+
+    /// Start in a debug render mode (F4 cycles them): `normal`, `background`,
+    /// `masks`, `models`, `aot`, `collision-wire`, `collision-solid` or
+    /// `collision-overlay` (the collision drawn over the scene)
+    #[arg(
+        long,
+        value_name = "MODE",
+        requires = "pack",
+        value_parser = clap::builder::PossibleValuesParser::new(arklay::engine::render_mode_names())
+    )]
+    render_mode: Option<String>,
 
     /// Run N fixed 30 Hz ticks before a capture frame is drawn, so scripted
     /// NPC scenes and `--fmv` frames can be captured deterministically and
@@ -769,7 +781,10 @@ fn decompile_rooms(
         let Ok(scripts) = loaded.own_scripts(&pack) else {
             continue;
         };
-        let id = room.rdt_number();
+        // The decompiler's room names are RE1's, whose RDT numbers fit 16 bits.
+        let Ok(id) = u16::try_from(room.rdt_number()) else {
+            continue;
+        };
         rooms.insert(id, arklay::scd::akscr::decompile_with(&scripts, names, id));
     }
     Ok(rooms)
@@ -1244,6 +1259,9 @@ fn main() -> Result<()> {
                     "--ticks with --ui is only supported for `--ui game` with --trace, or an \
                      app screen with --input and --capture-dir"
                 );
+            }
+            if let Some(mode) = &cli.render_mode {
+                arklay::engine::set_render_mode(mode)?;
             }
             if cli.ticks > 0 && cli.capture.is_none() && !cli.stats && !tracing && !app_script {
                 bail!("--ticks requires --capture (or --stats)");

@@ -943,6 +943,17 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
                 frame: size,
             });
         }
+        // RE2's loader (`bio2hd.asi`) hashes the background's whole 256 x 256
+        // main page: the 240 picture rows, black as transparent, then 16 rows
+        // the game never writes. The 128 x 128 side page reuses that hash.
+        // Framed to the whole camera picture instead of the page, so only a
+        // camera-sized image takes it.
+        if (width, height) == (320, 240) {
+            candidates.push(Candidate {
+                hash: surface(Expand::Replicate, true).window_crc(256, 256, finish_mask),
+                frame: size,
+            });
+        }
     }
     candidates.push(Candidate {
         hash: replicated.window_crc(256, 256, finish_mask),
@@ -1425,6 +1436,56 @@ mod tests {
                 hash: crc32(&expected),
                 frame: [316, 236],
             }
+        );
+    }
+
+    #[test]
+    fn an_re2_background_hashes_its_whole_main_page() {
+        // `bio2hd.asi`'s recipe: the left 256 columns of the 240 picture rows
+        // with black clear, then 16 zero rows; the HD image covers the frame.
+        let pixel = |x: u32, y: u32| {
+            if (x + y).is_multiple_of(7) {
+                [0, 0, 0, 255]
+            } else {
+                [(x * 8) as u8, (y * 8) as u8, 0x80, 255]
+            }
+        };
+        let image = image_of(320, 240, pixel);
+        let mut expected = Vec::new();
+        for y in 0..256 {
+            for x in 0..256 {
+                let texel = match pixel(x, y) {
+                    _ if y >= 240 => 0,
+                    // Black is the transparent texel, not the black one.
+                    [0, 0, 0, _] => 0,
+                    [r, g, b, _] => texel(colour_of([r, g, b]), Expand::Replicate) | 0xff00_0000,
+                };
+                expected.extend_from_slice(&texel.to_le_bytes());
+            }
+        }
+        assert_eq!(
+            image_candidates(&image)[2],
+            Candidate {
+                hash: crc32(&expected),
+                frame: [320, 240],
+            }
+        );
+    }
+
+    #[test]
+    fn a_page_strip_keeps_the_page_frame() {
+        // A 256 x 24 effect strip hashes like the RE2 background's main page
+        // but stays framed as a 256 x 256 page.
+        let image = image_of(256, 24, |x, y| [(x * 8) as u8, (y * 8) as u8, 0x80, 255]);
+        let candidates = image_candidates(&image);
+        let page = candidates
+            .iter()
+            .find(|candidate| candidate.frame == [256, 256])
+            .unwrap();
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| candidate.hash != page.hash || candidate.frame == [256, 256])
         );
     }
 

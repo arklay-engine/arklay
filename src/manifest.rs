@@ -90,6 +90,10 @@ pub struct Manifest {
     pub source_hash: Option<String>,
     /// Explicit Lua hook paths, in load order.
     pub lua: Vec<String>,
+    /// Base packs: the three-digit room a new game starts in (`100`), the
+    /// character picking its player variant. Absent, a new game starts in
+    /// RE1's main hall.
+    pub start_room: Option<String>,
 }
 
 impl Manifest {
@@ -109,6 +113,7 @@ impl Manifest {
             convert_version: None,
             source_hash: None,
             lua: Vec::new(),
+            start_room: None,
         }
     }
 
@@ -137,6 +142,7 @@ impl Manifest {
         let mut convert_version = None;
         let mut source_hash = None;
         let mut lua = None;
+        let mut start_room = None;
         let mut seen: HashSet<String> = HashSet::new();
 
         for item in parse_items(text)? {
@@ -223,6 +229,13 @@ impl Manifest {
                     }
                     lua = Some(values);
                 }
+                "start_room" => {
+                    let room = non_empty_string(item, "start_room")?;
+                    crate::state::RoomId::from_room_and_player(&room, 0).map_err(|error| {
+                        anyhow!("manifest.toml line {line}: bad `start_room`: {error}")
+                    })?;
+                    start_room = Some(room);
+                }
                 unknown => bail!("manifest.toml line {line}: unknown key `{unknown}`"),
             }
         }
@@ -232,6 +245,9 @@ impl Manifest {
         let kind = kind.context("manifest.toml: missing `kind`")?;
         if kind == PackKind::Mod && base.is_none() {
             bail!("manifest.toml: a mod manifest must name a `base`");
+        }
+        if kind == PackKind::Mod && start_room.is_some() {
+            bail!("manifest.toml: `start_room` belongs to a base pack, not a mod");
         }
 
         Ok(Self {
@@ -248,6 +264,7 @@ impl Manifest {
             convert_version,
             source_hash,
             lua: lua.unwrap_or_default(),
+            start_room,
         })
     }
 
@@ -292,6 +309,9 @@ impl Manifest {
         if !self.lua.is_empty() {
             let entries: Vec<String> = self.lua.iter().map(|path| quote(path)).collect();
             write_pair(&mut out, "lua", &format!("[{}]", entries.join(", ")));
+        }
+        if let Some(room) = &self.start_room {
+            write_pair(&mut out, "start_room", &quote(room));
         }
         out
     }
@@ -599,6 +619,7 @@ mod tests {
             convert_version: None,
             source_hash: None,
             lua: Vec::new(),
+            start_room: None,
         }
     }
 
@@ -617,7 +638,27 @@ mod tests {
             convert_version: None,
             source_hash: None,
             lua: vec!["lua/demo.lua".to_string(), "lua/extra.lua".to_string()],
+            start_room: None,
         }
+    }
+
+    #[test]
+    fn start_room_round_trips_and_is_checked() {
+        let mut manifest = Manifest::base("re2");
+        manifest.start_room = Some("100".to_string());
+        let text = manifest.render();
+        assert!(text.contains("start_room = \"100\""));
+        assert_eq!(Manifest::parse(&text).unwrap(), manifest);
+        let bad = text.replace("\"100\"", "\"1000\"");
+        let error = Manifest::parse(&bad).unwrap_err().to_string();
+        assert!(error.contains("start_room"), "{error}");
+        let on_mod = Manifest {
+            kind: PackKind::Mod,
+            base: Some("re2".to_string()),
+            ..manifest
+        };
+        let error = Manifest::parse(&on_mod.render()).unwrap_err().to_string();
+        assert!(error.contains("base pack"), "{error}");
     }
 
     #[test]
@@ -718,6 +759,7 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             convert_version: None,
             source_hash: None,
             lua: vec!["lua/a.lua".to_string(), "lua/b.lua".to_string()],
+            start_room: None,
         }
     }
 

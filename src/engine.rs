@@ -2050,7 +2050,7 @@ struct GameSession {
     death_screen: Option<Box<ui::lua_screen::LuaScreen>>,
     /// Debug jump destinations that failed to load, so the warning is logged
     /// once per session instead of on every confirm.
-    debug_failed: HashSet<u16>,
+    debug_failed: HashSet<u32>,
     /// The lab computer terminal (`ui/computer_lab.lua`, room 5060) while it
     /// owns the screen. The
     /// room stays frozen; the terminal's camera, lights and parked player are
@@ -2172,15 +2172,24 @@ impl GameSession {
         options: player::Options,
     ) -> Result<Box<Self>> {
         let character = character & 1;
-        let id = new_game_id(character);
+        let id = new_game_id(pack, character);
         let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
-        player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
-        player_state.angle = NEW_GAME_ANGLE;
+        let own_start = pack_start_room(pack, character).is_some();
+        if !own_start {
+            player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
+            player_state.angle = NEW_GAME_ANGLE;
+        }
         game.sync_entity_from_player(&player_state);
-        Self::from_loaded(pack, loaded, game, player_state, save_dir, options)
+        let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
+        // A pack's own start room has no shipped start position: the player
+        // enters like a `--room` boot.
+        if own_start {
+            session.place_room_entry(pack, id);
+        }
+        Ok(session)
     }
 
     /// A new game as `id.player_flag` that boots straight into `id` instead
@@ -6872,13 +6881,31 @@ fn entry_spot_free(room: &RoomState, pos: [i32; 3]) -> bool {
         })
 }
 
-/// The new-game identity: the shipped card's start room is the main hall.
-fn new_game_id(character: u8) -> RoomId {
-    RoomId {
+/// Select the debug render mode named `name` (`--render-mode`).
+pub fn set_render_mode(name: &str) -> Result<()> {
+    debug_view::set(name)
+}
+
+/// The debug render modes' `--render-mode` names, in F4 cycle order.
+pub fn render_mode_names() -> impl Iterator<Item = &'static str> {
+    debug_view::names()
+}
+
+/// The new-game identity: the base pack's `start_room` ([`pack_start_room`]),
+/// else the shipped card's start room, the main hall.
+fn new_game_id(pack: &Pack, character: u8) -> RoomId {
+    pack_start_room(pack, character).unwrap_or(RoomId {
         stage: 1,
         room: NEW_GAME_ROOM,
         player_flag: character & 1,
-    }
+    })
+}
+
+/// The new-game room a base pack's manifest names (an RE2 pack's room 100),
+/// in `character`'s player variant.
+fn pack_start_room(pack: &Pack, character: u8) -> Option<RoomId> {
+    let room = pack.manifest()?.start_room.as_deref()?;
+    RoomId::from_room_and_player(room, character & 1).ok()
 }
 
 /// Apply the character-specific new-game seed over the fresh state:
@@ -6942,7 +6969,7 @@ fn build_next_cycle_save(
 ) -> Result<save::SaveFile> {
     let stats = flow.stats;
     let character = stats.character & 1;
-    let id = new_game_id(character);
+    let id = new_game_id(pack, character);
     let loaded = load_room(pack, id, options.no_room_script_fixes)?;
     let mut game = new_game_state(pack, id, &loaded.room, options);
     seed_new_game(pack, &mut game, character);
@@ -10834,13 +10861,21 @@ pub fn simulate_new_game(
     input: player::Input,
 ) -> Result<SimulatedRoom> {
     let character = character & 1;
-    let id = new_game_id(character);
+    let id = new_game_id(pack, character);
     let loaded = load_room(pack, id, false)?;
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_new_game(pack, &mut game, character);
     let mut player_state = player::spawn(id, &loaded.room);
-    player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
-    player_state.angle = NEW_GAME_ANGLE;
+    // A pack's own start room enters like `GameSession::new_with` places it.
+    let placement = if pack_start_room(pack, character).is_some() {
+        room_entry_placement(pack, &loaded.room, &game, id)
+    } else {
+        Some(([NEW_GAME_POS_X, 0, NEW_GAME_POS_Z], NEW_GAME_ANGLE))
+    };
+    if let Some((pos, angle)) = placement {
+        player_state.pos = pos;
+        player_state.angle = angle;
+    }
     game.sync_entity_from_player(&player_state);
     simulate_loaded(pack, loaded, game, player_state, ticks, move |_| input)
 }
@@ -12630,6 +12665,7 @@ struct LoadedRoom {
 fn load_room(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<LoadedRoom> {
     let loaded = crate::room::load(pack, id)?;
     let (scripts, script_source) = room_scripts(pack, id, &loaded, original_scripts)?;
+    let dialect = loaded.dialect;
     let mut room = loaded.state;
     for warning in &room.model_warnings {
         eprintln!("warning: {}: {warning}", crate::room::entry(pack, id));
@@ -12639,9 +12675,16 @@ fn load_room(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<LoadedRo
     }
     for cut in &mut room.cuts {
         let stem = id.cut_stem(cut.index);
-        let asset = pack
-            .read_asset(&stem, AssetClass::Image)?
-            .with_context(|| format!("missing background for cut {}", cut.index))?;
+        let Some(asset) = pack.read_asset(&stem, AssetClass::Image)? else {
+            // The retail RE2 data leaves a few cameras without a background
+            // (room 7071, the 17th camera of the 17-camera rooms); the room
+            // still loads and those cameras draw black.
+            if dialect == crate::format::Dialect::Re2 {
+                eprintln!("warning: no background for cut {} ({stem})", cut.index);
+                continue;
+            }
+            bail!("missing background for cut {}", cut.index);
+        };
         cut.background = Some(
             assets::decode_picture(&asset, assets::Geometry::Free, None)
                 .with_context(|| format!("invalid {}", asset.path()))?,
@@ -15368,6 +15411,7 @@ fn render_frame_on(
     let debug_triangles = match render_mode.collision() {
         Some(solid) => debug_view::collision_triangles(
             &room.collision,
+            room.sca.as_ref(),
             &game.room_actions,
             &camera,
             DEBUG_FLOOR_Y,
@@ -15968,6 +16012,50 @@ mod tests {
         SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_RSHIFT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE,
         SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_SCANCODE_X, SDL_SCANCODE_Z,
     };
+
+    #[test]
+    fn a_pack_names_its_own_new_game_room() {
+        let with = |start_room: Option<&str>| {
+            let mut manifest = crate::manifest::Manifest::base("re2");
+            manifest.start_room = start_room.map(str::to_string);
+            let mut writer = PackWriter::new();
+            writer
+                .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+                .unwrap();
+            Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+        };
+        assert_eq!(
+            new_game_id(&with(Some("100")), 1),
+            RoomId::parse("1001").unwrap()
+        );
+        let main_hall = RoomId {
+            stage: 1,
+            room: NEW_GAME_ROOM,
+            player_flag: 0,
+        };
+        assert_eq!(new_game_id(&with(None), 0), main_hall);
+    }
+
+    #[test]
+    fn a_new_game_in_a_packs_own_start_room_skips_the_main_hall_position() {
+        let mut manifest = crate::manifest::Manifest::base("re2");
+        manifest.start_room = Some("100".to_string());
+        let mut writer = PackWriter::new();
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        writer
+            .add("room/1000/room.rdt", crate::rdt2::tests::sample())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let dir = TempDir::new();
+        let session = GameSession::new(&pack, 0, &dir.0).unwrap();
+        assert_eq!(session.game.id, RoomId::parse("1000").unwrap());
+        assert_ne!(session.player.pos, [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z]);
+        let simulated = simulate_new_game(&pack, 0, 0, player::Input::default()).unwrap();
+        assert_eq!(simulated.id, session.game.id);
+        assert_eq!(simulated.player.pos, session.player.pos);
+    }
 
     #[test]
     fn menu_saves_only_what_it_changed_over_the_file() {
@@ -26553,7 +26641,7 @@ off_0010:
         assert!(has(items::ITEM_MINIMI), "Chris's sub-four-hour gun");
 
         // The flags round-trip through the scenario bank.
-        let id = new_game_id(0);
+        let id = new_game_id(&pack, 0);
         let loaded = load_room(&pack, id, false).unwrap();
         let mut state = new_game_state(&pack, id, &loaded.room, player::Options::default());
         file.apply_to(&mut state);

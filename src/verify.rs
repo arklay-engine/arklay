@@ -161,13 +161,7 @@ impl Format {
     pub fn unsupported(self) -> bool {
         matches!(
             self,
-            Self::Re2Rdt
-                | Self::Re2Emd
-                | Self::Pld
-                | Self::Plw
-                | Self::Do2
-                | Self::AdpcmWav
-                | Self::Mpeg
+            Self::Re2Emd | Self::Pld | Self::Plw | Self::Do2 | Self::AdpcmWav | Self::Mpeg
         )
     }
 }
@@ -287,9 +281,8 @@ pub fn classify(path: &str) -> Format {
 
 /// Refine a path's [`classify`] with the entry's bytes where the path alone
 /// cannot tell one game's format from another's: an RDT or EMD with an RE2
-/// layout, a WAV holding MS-ADPCM. An `*.rdt` outside a numbered room folder
-/// (an RE2 letter-stage room, `room/g010/room.rdt`) is recognised when its
-/// bytes are an RE2 RDT and stays opaque otherwise.
+/// layout, a WAV holding MS-ADPCM. An `*.rdt` outside a room folder is
+/// recognised when its bytes are an RE2 RDT and stays opaque otherwise.
 pub fn classify_entry(path: &str, data: &[u8]) -> Format {
     use crate::format::{self, Dialect};
     let format = classify(path);
@@ -621,8 +614,10 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
         Format::Lua => {
             crate::lua::verify_source(data)?;
         }
+        Format::Re2Rdt => {
+            crate::rdt2::read(data)?;
+        }
         Format::Opaque
-        | Format::Re2Rdt
         | Format::Re2Emd
         | Format::Pld
         | Format::Plw
@@ -942,10 +937,7 @@ mod tests {
     /// A minimal RE2 RDT header: a cut count and one section past the
     /// header.
     fn re2_rdt() -> Vec<u8> {
-        let mut data = vec![0u8; 0x100];
-        data[1] = 1;
-        data[8..12].copy_from_slice(&0x64u32.to_le_bytes());
-        data
+        crate::rdt2::tests::sample()
     }
 
     fn adpcm_wav() -> Vec<u8> {
@@ -968,10 +960,9 @@ mod tests {
             classify_entry("room/g010/room.rdt", &re2_rdt()),
             Format::Re2Rdt
         );
-        assert_eq!(
-            classify_entry("room/g010/room.rdt", b"junk"),
-            Format::Opaque
-        );
+        // `g010` is a room id since the letter stages, so junk there is an
+        // RE1 RDT that fails to parse, like junk in any other room.
+        assert_eq!(classify_entry("room/g010/room.rdt", b"junk"), Format::Rdt);
         assert_eq!(
             classify_entry("voice/0/01_00.wav", &adpcm_wav()),
             Format::AdpcmWav
@@ -981,6 +972,11 @@ mod tests {
         let mut writer = PackWriter::new();
         writer.add("room/1000/room.rdt", re2_rdt()).unwrap();
         writer.add("room/g010/room.rdt", re2_rdt()).unwrap();
+        // An RE2 RDT parses through `rdt2`; one whose camera section is
+        // missing fails even outside `--strict`.
+        let mut broken = re2_rdt();
+        broken[crate::rdt2::OFFSETS + crate::rdt2::RID_SLOT * 4..][..4].fill(0);
+        writer.add("room/1002/room.rdt", broken).unwrap();
         writer.add("voice/0/01_00.wav", adpcm_wav()).unwrap();
         writer
             .add("player/00/model_0.pld", b"pld".to_vec())
@@ -989,7 +985,8 @@ mod tests {
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let report = verify_pack(&pack, false);
-        assert!(report.valid(), "failures: {:?}", report.failures);
+        let failed: Vec<&str> = report.failures.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(failed, ["room/1002/room.rdt"]);
         assert_eq!(report.formats[&Format::Re2Rdt].ok, 2);
         assert_eq!(report.formats[&Format::AdpcmWav].ok, 1);
         assert_eq!(report.formats[&Format::Pld].ok, 1);
@@ -1001,8 +998,7 @@ mod tests {
             failed,
             [
                 "player/00/model_0.pld",
-                "room/1000/room.rdt",
-                "room/g010/room.rdt",
+                "room/1002/room.rdt",
                 "voice/0/01_00.wav"
             ]
         );

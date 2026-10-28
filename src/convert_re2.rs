@@ -372,8 +372,14 @@ fn base_manifest() -> manifest::Manifest {
     manifest.name = Some("Resident Evil 2".to_string());
     manifest.version = Some(env!("CARGO_PKG_VERSION").to_string());
     manifest.convert_version = Some(crate::convert::CONVERT_VERSION);
+    // A new game starts on the street, room 100 (Leon's disc is variant 0,
+    // Claire's 1).
+    manifest.start_room = Some(START_ROOM.to_string());
     manifest
 }
+
+/// The room a new RE2 game starts in.
+const START_ROOM: &str = "100";
 
 /// Every `ROOM####.RDT` of both discs, in id order. A file that is not an
 /// RE2 RDT (the retail `ROOM7051.RDT` is a broken stub) is skipped with a

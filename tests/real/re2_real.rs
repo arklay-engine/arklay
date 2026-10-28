@@ -191,3 +191,98 @@ fn detection_separates_the_dialects() {
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
+
+/// Every converted RE2 room reads into a room with cameras and collision,
+/// and every camera but the retail data's known gaps has a background.
+#[test]
+#[ignore]
+fn every_room_loads_with_its_backgrounds() {
+    let Some(pack) = pack() else {
+        return;
+    };
+    let ids = arklay::room::ids(pack);
+    assert_eq!(ids.len(), 501, "every converted RDT");
+    let (mut cameras, mut missing) = (0, Vec::new());
+    for id in ids {
+        let loaded = arklay::room::load(pack, id)
+            .unwrap_or_else(|error| panic!("room {}: {error:#}", id.code()));
+        assert_eq!(loaded.dialect, Dialect::Re2, "room {}", id.code());
+        let room = &loaded.state;
+        assert!(!room.cuts.is_empty(), "room {} has cameras", id.code());
+        assert!(room.sca.is_some(), "room {} has collision", id.code());
+        assert!(
+            !room.zones.is_empty(),
+            "room {} has switch zones",
+            id.code()
+        );
+        // Not every zone names one of the room's cameras: 11C0 keeps groups
+        // for cameras 13 and 14 it does not have.
+        assert!(
+            room.zones.iter().any(|zone| zone.cam_from == 0),
+            "room {} has camera 0's switch zones",
+            id.code()
+        );
+        assert!(
+            loaded.own_scripts(pack).unwrap().init.is_empty(),
+            "an RE2 room runs no scripts yet"
+        );
+        for cut in &room.cuts {
+            cameras += 1;
+            if pack
+                .read_asset(&id.cut_stem(cut.index), arklay::pack::AssetClass::Image)
+                .unwrap()
+                .is_none()
+            {
+                missing.push(format!("{}/{:02x}", id.code(), cut.index));
+            }
+        }
+    }
+    eprintln!("{cameras} cameras, no background for {missing:?}");
+    // Room 7071's first eight cameras point past the end of `roomcut.bin`,
+    // and the 17-camera rooms' 17th has no pointer slot.
+    let mut expected: Vec<String> = ["30c0/10", "30c1/10", "c0c0/10", "c0c1/10"]
+        .map(String::from)
+        .into();
+    expected.extend((0..8).map(|cut| format!("7071/{cut:02x}")));
+    expected.sort();
+    missing.sort();
+    assert_eq!(missing, expected);
+}
+
+/// The TeamX RE2 HD pack's backgrounds are named by `bio2hd.asi`'s hash of
+/// each camera's main page; `ARKLAY_RE2_HD` names the extracted pack (the
+/// directory holding `hires/`). The pack has no file for the rooms and
+/// camera states it skipped, so a few cameras stay unmatched.
+#[test]
+#[ignore]
+fn the_hd_pack_names_most_backgrounds() {
+    let (Some(pack), Some(hd)) = (pack(), std::env::var_os("ARKLAY_RE2_HD").map(PathBuf::from))
+    else {
+        return;
+    };
+    let names: HashSet<u32> = with_extension(&hd.join("hires/bgd"), "webp")
+        .iter()
+        .filter_map(|path| u32::from_str_radix(path.file_stem()?.to_str()?.get(..8)?, 16).ok())
+        .collect();
+    let (mut matched, mut unmatched) = (0, Vec::new());
+    for path in pack.paths().filter(|path| path.contains("/cut/")) {
+        let image = arklay::bmp::decode(&pack.read(path).unwrap()).unwrap();
+        let candidates = arklay::htexture::image_candidates(&image);
+        if candidates
+            .iter()
+            .any(|candidate| names.contains(&candidate.hash))
+        {
+            matched += 1;
+        } else {
+            unmatched.push(path.to_string());
+        }
+    }
+    eprintln!(
+        "{matched} of {} backgrounds have an HD file; unmatched: {unmatched:#?}",
+        matched + unmatched.len()
+    );
+    assert!(
+        matched * 10 >= (matched + unmatched.len()) * 9,
+        "{matched} matched"
+    );
+}

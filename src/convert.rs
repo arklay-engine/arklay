@@ -2580,6 +2580,7 @@ fn base_manifest(language: &str) -> manifest::Manifest {
         convert_version: Some(CONVERT_VERSION),
         source_hash: Some(packed_source_hash()),
         lua: Vec::new(),
+        start_room: None,
     }
 }
 
@@ -3668,7 +3669,10 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
 /// without scripts. A room whose scripts are no region's (a modified RDT) is
 /// an error naming the room: it keeps its own scripts.
 fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static [u8]>, String> {
-    let number = id.rdt_number();
+    // The port's script builds are all RE1's, whose RDT numbers fit 16 bits.
+    let Ok(number) = u16::try_from(id.rdt_number()) else {
+        return Ok(None);
+    };
     let mut builds = crate::scd::ROOM_SCRIPTS
         .iter()
         .filter(|script| script.id == number)
@@ -3704,7 +3708,17 @@ pub(crate) fn rdt_id_from_file_name(name: &str) -> Option<Result<RoomId>> {
             "RDT file name `{name}` must be `ROOM` plus four hex digits plus `.RDT`"
         )));
     }
-    Some(RoomId::parse(digits).map_err(|err| anyhow!("RDT file name `{name}`: {err}")))
+    // RE1 ships stages 1-7 only; a letter stage is RE2's.
+    Some(
+        RoomId::parse(digits)
+            .and_then(|id| {
+                if id.stage > RoomId::MAX_STAGE {
+                    bail!("stage digit must be 1-{}", RoomId::MAX_STAGE);
+                }
+                Ok(id)
+            })
+            .map_err(|err| anyhow!("RDT file name `{name}`: {err}")),
+    )
 }
 
 /// Camera background file name for room `id`, e.g. `RC100A.pak`.
@@ -4449,6 +4463,7 @@ mod tests {
         assert!(rdt_id_from_file_name("room.rdt").unwrap().is_err());
         assert!(rdt_id_from_file_name("ROOM10001.RDT").unwrap().is_err());
         assert!(rdt_id_from_file_name("ROOM100Z.RDT").unwrap().is_err());
+        assert!(rdt_id_from_file_name("ROOMA000.RDT").unwrap().is_err());
     }
 
     #[test]

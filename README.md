@@ -97,8 +97,8 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 
 # Convert the RE2 PC release (the directory holding data/Pl0, data/Pl1 and
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
-# The engine cannot play RE2 rooms yet (see issue #244); --game re2 skips
-# detection
+# The engine shows RE2 rooms (backgrounds, cameras and collision) but has no
+# RE2 player or scripts yet (see issue #244); --game re2 skips detection
 cargo run -- convert-game /path/to/re2
 
 # Convert a Classic REbirth mod (.zip or directory: HD texture packs, BioRand
@@ -156,6 +156,9 @@ cargo run -- re1.akpak --ui game --room 101 \
 
 # Headless capture (no display)
 cargo run -- re1.akpak --room 100 --player 0 --capture cut0.bmp
+# An RE2 room (letter stages A-G name rooms too, e.g. --room G01), in a debug
+# render mode: the collision drawn over the background (F4 cycles the modes)
+cargo run -- re2.akpak --room 100 --render-mode collision-overlay --capture col.bmp
 # Run N fixed 30 Hz ticks before a room capture (deterministic, audio-free),
 # so scripted NPC scenes are captured in motion
 cargo run -- re1.akpak --room 20D --player 0 --ticks 30 --capture npc.bmp
@@ -434,6 +437,7 @@ when they compare with the reference.
 | `Shift` | West (X / Square) | Run (hold) |
 | `Shift` + `,` | Previous camera cut |
 | `Shift` + `.` | Next camera cut |
+| `F4` | Port-only debug render modes: normal, background only, masks only, models only, the AOT overlay, collision wireframe, solid collision, and collision drawn over the scene from the cut camera (`--render-mode` picks one at launch) |
 | `F1` (gamepad Back + Start together) | Port-only debug tools: freeze the room and open the tool list (room select, inventory, player, flags, cheats, save/load, item box, clear game, controls, display); Esc backs out one level, F1 closes |
 | `F2`, `F3` | Port-only game speed: F2 steps down and F3 up, 1x to 3x in 0.5x steps; the new speed shows briefly in the bottom-left corner |
 | `F6` | Port-only debug HUD: steps through full information (engine, FPS, resolution, memory, CPU, pack, mods, room, player, boss), a compact player panel (health, condition, ammo) with the boss's health, the FPS alone in the top-right corner, and off |

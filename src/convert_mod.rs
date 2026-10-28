@@ -43,7 +43,8 @@ use crate::manifest;
 use crate::pack::Pack;
 use crate::state::RoomId;
 
-/// The base pack id every converted CR mod layers over.
+/// The base pack id a converted CR mod layers over when no base pack names
+/// its own.
 const BASE_ID: &str = convert::BASE_PACK_ID;
 
 /// The language file CR room text is written to.
@@ -126,12 +127,32 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     }
 
     let mut warnings = Vec::new();
+    if options.base.is_none() && looks_like_re2(&files) {
+        bail!(
+            "{} looks like an RE2 mod (`data/Common/bin`, `data/Pl0`); pass --base with the RE2 pack",
+            options.input.display()
+        );
+    }
     let base = open_base(options.base.as_deref(), &mut warnings)?;
     let info = read_mod_info(&input, &files, &mut warnings)?;
 
+    // The mod layers over the base pack it was converted against (`re2` for
+    // an RE2 mod converted with `--base re2.akpak`).
+    let base_id = base
+        .as_ref()
+        .and_then(|base| base.manifest())
+        .filter(|manifest| manifest.kind == manifest::PackKind::Base)
+        .map_or_else(|| BASE_ID.to_string(), |manifest| manifest.id.clone());
+    // Only RE1 folds stages 6 and 7 onto the stage 1 and 2 backgrounds; the
+    // base's rooms say which game it is.
+    let folds_stages = base.as_ref().is_none_or(|base| {
+        crate::room::ids(base)
+            .first()
+            .is_none_or(|&id| crate::room::dialect(base, id) == crate::format::Dialect::Re1)
+    });
     let mut manifest = manifest::Manifest {
         kind: manifest::PackKind::Mod,
-        base: Some(BASE_ID.to_string()),
+        base: Some(base_id),
         ..manifest::Manifest::base("mod")
     };
     let fallback_name = input_stem(&options.input);
@@ -186,7 +207,7 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         }
     }
     plan.drop_shadowed_films();
-    plan.add_variant_copies(base.as_ref());
+    plan.add_variant_copies(base.as_ref(), folds_stages);
 
     // Settle every entry before writing any: the pack's table of contents and
     // path list come first, so the entry set must be final. Only an override
@@ -442,6 +463,15 @@ fn open_base(path: Option<&Path>, warnings: &mut Vec<String>) -> Result<Option<P
             Ok(None)
         }
     }
+}
+
+/// Whether the mod's files sit in RE2's PC layout (`data/Common/bin`,
+/// `data/Pl0`), which no RE1 install has.
+fn looks_like_re2(files: &[InputFile]) -> bool {
+    files.iter().any(|file| {
+        let lower = file.path.to_ascii_lowercase();
+        lower.starts_with("data/common/bin/") || lower.starts_with("data/pl0/")
+    })
 }
 
 /// The input file name without its extension.
@@ -1124,7 +1154,7 @@ fn classify_text(stem: &str, extension: &str) -> Class {
 }
 
 /// The planned entries, keyed by entry path.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Plan {
     /// Room text files are keyed `text/<room>`: they merge into one
     /// language file instead of owning an entry each.
@@ -1204,8 +1234,9 @@ impl Plan {
     /// both player variants, and stages 6 and 7 reuse the stage 1 and 2
     /// files. Copy each cut or mask override (planned for the player 0
     /// variant) into every other variant's folder the base pack (or the mod
-    /// itself) defines.
-    fn add_variant_copies(&mut self, base: Option<&Pack>) {
+    /// itself) defines. Over another game's base (`folds_stages` false) only
+    /// the player variants share a file.
+    fn add_variant_copies(&mut self, base: Option<&Pack>, folds_stages: bool) {
         let defined = |id: RoomId| {
             [id.xml_entry(), id.rdt_entry()].iter().any(|entry| {
                 self.targets.contains_key(entry) || base.is_some_and(|base| base.contains(entry))
@@ -1224,7 +1255,7 @@ impl Plan {
                 continue;
             };
             let stages = match id.stage {
-                1 | 2 => vec![id.stage, id.stage + 5],
+                1 | 2 if folds_stages => vec![id.stage, id.stage + 5],
                 stage => vec![stage],
             };
             for stage in stages {
@@ -1865,6 +1896,28 @@ mod tests {
     }
 
     #[test]
+    fn an_re2_layout_is_told_apart() {
+        let files = |paths: &[&str]| -> Vec<InputFile> {
+            paths
+                .iter()
+                .map(|path| InputFile {
+                    path: path.to_string(),
+                    handle: Handle::Zip(0),
+                })
+                .collect()
+        };
+        assert!(looks_like_re2(&files(&[
+            "hires/bgd/91F681B3.webp",
+            "data/Common/bin/osp.bin"
+        ])));
+        assert!(looks_like_re2(&files(&["DATA/PL0/EMD0/EM010.EMD"])));
+        assert!(!looks_like_re2(&files(&[
+            "hires/bgd/0259741A.webp",
+            "STAGE1/RC1000.PAK"
+        ])));
+    }
+
+    #[test]
     fn shared_backgrounds_copy_to_every_variant_that_exists() {
         let mut plan = Plan::default();
         for (entry, convert) in [
@@ -1882,20 +1935,32 @@ mod tests {
                 },
             );
         }
-        plan.add_variant_copies(None);
-        let planned: Vec<&str> = plan
-            .targets
-            .keys()
-            .map(String::as_str)
-            .filter(|entry| !entry.ends_with(".rdt"))
-            .collect();
+        let mut re2 = plan.clone();
+        let planned = |plan: &Plan| -> Vec<String> {
+            plan.targets
+                .keys()
+                .filter(|entry| !entry.ends_with(".rdt"))
+                .cloned()
+                .collect()
+        };
+        plan.add_variant_copies(None, true);
         assert_eq!(
-            planned,
+            planned(&plan),
             [
                 "room/1060/cut/00.bmp",
                 "room/1061/cut/00.bmp",
                 "room/2030/mask/01.bmp",
                 "room/6060/cut/00.bmp"
+            ]
+        );
+        // RE2's stage 6 is its own: only the player variant shares the file.
+        re2.add_variant_copies(None, false);
+        assert_eq!(
+            planned(&re2),
+            [
+                "room/1060/cut/00.bmp",
+                "room/1061/cut/00.bmp",
+                "room/2030/mask/01.bmp"
             ]
         );
     }
