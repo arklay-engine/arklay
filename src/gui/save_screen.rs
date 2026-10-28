@@ -45,7 +45,8 @@ pub struct SaveRow {
     pub date: String,
     /// The save counter.
     pub saves: u32,
-    /// The slot tag ("01"), or the file's name for one outside the slots.
+    /// The slot tag ("01"), the autosave's rotation tag ("A1"), or the
+    /// file's name for one outside the slots.
     pub tag: String,
     /// The room's camera in colour and in grey.
     pub thumbnail: Option<(Arc<Picture>, Arc<Picture>)>,
@@ -53,6 +54,8 @@ pub struct SaveRow {
     pub portrait: Option<(Arc<Picture>, Arc<Picture>)>,
     /// The most recent save.
     pub latest: bool,
+    /// One of the engine's door autosaves.
+    pub autosave: bool,
 }
 
 /// What the screen asks its owner to do.
@@ -717,8 +720,22 @@ impl Layout<'_> {
         self.frame(p, rect, selected, row.latest);
         let (fg, dim) = colours(selected);
 
-        // The slot tag, large and faint.
-        let tag_style = sized(&p.theme, Face::Regular, 40.0, false);
+        // The slot tag, large and faint, shrunk to fit its column when it is
+        // a longer name than a slot number.
+        let mut tag_style = sized(&p.theme, Face::Regular, 40.0, false);
+        let tag_w = p.fonts.measure(tag_style, &row.tag);
+        let tag_max = u(88.0);
+        if tag_w > tag_max {
+            let px = (tag_style.px as f32 * tag_max / tag_w).floor().max(6.0) as u32;
+            // The retro bitmap face only draws at multiples of its 11px cell.
+            let px = match p.theme.family {
+                FontFamily::Modern => px,
+                FontFamily::Retro => (px / 11).max(1) * 11,
+            };
+            tag_style = Style::new(tag_style.face, px);
+        }
+        p.canvas
+            .push_clip(Rect::new(rect.x + u(8.0), rect.y, u(92.0), rect.h));
         p.fonts.draw_centered(
             p.canvas,
             tag_style,
@@ -728,6 +745,7 @@ impl Layout<'_> {
             dim.fade(fade),
             &row.tag,
         );
+        p.canvas.pop_clip();
 
         // The portrait and the room's camera.
         let pic_h = rect.h - u(28.0);
@@ -858,12 +876,19 @@ impl Layout<'_> {
             dim.fade(fade),
             &self.text.format("save.saves", row.saves),
         );
-        if row.latest {
-            let label = self.text.get("save.latest");
+        // The badges along the top right: the newest save, then an autosave.
+        let mut badge_right = rect.right() - u(12.0);
+        let badges = [
+            (row.latest, "save.latest", LATEST),
+            (row.autosave, "save.autosave", palette::RULE),
+        ];
+        for (_, key, colour) in badges.into_iter().filter(|(on, _, _)| *on) {
+            let label = self.text.get(key);
             let small = sized(&p.theme, Face::Bold, 20.0, true);
             let w = p.fonts.measure(small, label) + u(20.0);
-            let tag = Rect::new(rect.right() - w - u(12.0), rect.y + u(12.0), w, u(30.0));
-            p.canvas.fill_rect(tag, LATEST.fade(fade));
+            let tag = Rect::new(badge_right - w, rect.y + u(12.0), w, u(30.0));
+            badge_right = tag.x - u(8.0);
+            p.canvas.fill_rect(tag, colour.fade(fade));
             p.fonts.draw_centered(
                 p.canvas,
                 small,
@@ -967,10 +992,16 @@ mod tests {
                 play_time: format!("{i}:12:34"),
                 date: "2026/10/27  02:18".to_string(),
                 saves: i + 1,
-                tag: format!("{:02}", i + 1),
+                // The first two rows are the door autosaves.
+                tag: if i < 2 {
+                    format!("A{}", i + 1)
+                } else {
+                    format!("{:02}", i - 1)
+                },
                 thumbnail: picture(320, 240),
                 portrait: picture(32, 32),
                 latest: i == 0,
+                autosave: i < 2,
             })
             .collect()
     }
