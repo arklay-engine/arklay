@@ -24,7 +24,7 @@ use crate::ui::UiInput;
 const LOADS_PER_FRAME: usize = 4;
 
 /// A stage tab's label: the language's `UI_DEBUG_STAGE_<digit>`, else the
-/// stage's digit (`STAGE A`).
+/// stage's digit (`Stage A`).
 fn stage_label(cx: &Cx<'_>, stage: u8) -> String {
     let digit = RoomId {
         stage,

@@ -13,17 +13,18 @@
 use anyhow::{Context, Result, bail};
 
 use crate::budget;
+use crate::format::Dialect;
 use crate::room::source::{Camera, RoomSource};
 use crate::state::{Sca, ScaRect, Zone};
 
 /// Offset of the section offset table.
-const OFFSETS: usize = 0x08;
+pub(crate) const OFFSETS: usize = 0x08;
 /// Number of section offsets.
 const OFFSET_COUNT: usize = 23;
 /// Section slot of the collision records (SCA).
 const SCA_SLOT: usize = 6;
 /// Section slot of the camera records (RID).
-const RID_SLOT: usize = 7;
+pub(crate) const RID_SLOT: usize = 7;
 /// Section slot of the camera switch zones (RVD).
 const RVD_SLOT: usize = 8;
 /// Size of one camera record: flags, perspective, position, target and the
@@ -66,19 +67,18 @@ fn i32_at(data: &[u8], offset: usize) -> Result<i32> {
     u32_at(data, offset).map(|value| value as i32)
 }
 
-/// The section offset table; a null offset is an absent section.
-fn offsets(data: &[u8]) -> Result<[u32; OFFSET_COUNT]> {
-    let mut offsets = [0; OFFSET_COUNT];
-    for (slot, offset) in offsets.iter_mut().enumerate() {
-        *offset = u32_at(data, OFFSETS + slot * 4)?;
-        if *offset as usize > data.len() {
-            bail!(
-                "section {slot} offset 0x{offset:x} is past the end of the {}-byte RDT",
-                data.len()
-            );
-        }
+/// Section `slot`'s offset; a null offset is an absent section. Only the
+/// sections read are checked, so a bad offset elsewhere leaves the room
+/// loadable.
+fn offset(data: &[u8], slot: usize) -> Result<u32> {
+    let offset = u32_at(data, OFFSETS + slot * 4)?;
+    if offset as usize > data.len() {
+        bail!(
+            "section {slot} offset 0x{offset:x} is past the end of the {}-byte RDT",
+            data.len()
+        );
     }
-    Ok(offsets)
+    Ok(offset)
 }
 
 /// Read an RE2 RDT into a room definition.
@@ -86,14 +86,17 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
     let Some(&camera_count) = data.get(1) else {
         bail!("RDT is too short for a camera count");
     };
-    let offsets = offsets(data)?;
-    let cameras = parse_cameras(data, offsets[RID_SLOT], camera_count)?;
-    let zones = parse_zones(data, offsets[RVD_SLOT])?;
-    let sca = parse_sca(data, offsets[SCA_SLOT])?;
+    // The whole offset table must be there even though only a few slots
+    // are read.
+    bytes(data, OFFSETS, OFFSET_COUNT * 4).context("section offset table")?;
+    let cameras = parse_cameras(data, offset(data, RID_SLOT)?, camera_count)?;
+    let zones = parse_zones(data, offset(data, RVD_SLOT)?)?;
+    let sca = parse_sca(data, offset(data, SCA_SLOT)?)?;
     Ok(RoomSource {
         cameras,
         zones,
         sca,
+        dialect: Dialect::Re2,
         ..RoomSource::default()
     })
 }
@@ -134,10 +137,11 @@ fn parse_zones(data: &[u8], offset: u32) -> Result<Vec<Zone>> {
     }
     let mut zones = Vec::new();
     let mut at = offset as usize;
-    while let Ok(record) = bytes(data, at, ZONE_SIZE) {
-        if record[..4] == [0xFF; 4] {
+    loop {
+        if bytes(data, at, 4)? == [0xFF; 4] {
             break;
         }
+        let record = bytes(data, at, ZONE_SIZE).context("camera switch zone table")?;
         budget::check_len(
             zones.len() + 1,
             budget::MAX_RECORDS,
@@ -197,4 +201,4 @@ fn parse_sca(data: &[u8], offset: u32) -> Result<Option<Sca>> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

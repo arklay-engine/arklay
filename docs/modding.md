@@ -39,7 +39,7 @@ lua = ["lua/demo.lua"]
 | `language` | The language of the pack's own room text (`ja-JP` for the Japanese install). Optional. |
 | `engine` | Optional note about the target engine build. |
 | `lua` | Ordered hook paths; empty means discover `lua/**.lua`. |
-| `start_room` | A base pack's new-game room as three digits (`"100"`), in the selected character's player variant; the player enters like a `--room` boot. Without it a new game starts in RE1's main hall. Optional. |
+| `start_room` | A base pack's new-game room as three digits (`"100"`), in the selected character's player variant; the player enters like a `--room` boot. Without it a new game starts in RE1's main hall. Optional; a mod manifest may not set it. |
 
 A pack carries no game-format tag: each RDT, EMD and WAV entry is identified
 by its own content (`src/format.rs`), so one pack may mix RE1 and RE2

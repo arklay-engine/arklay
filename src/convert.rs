@@ -3708,7 +3708,17 @@ pub(crate) fn rdt_id_from_file_name(name: &str) -> Option<Result<RoomId>> {
             "RDT file name `{name}` must be `ROOM` plus four hex digits plus `.RDT`"
         )));
     }
-    Some(RoomId::parse(digits).map_err(|err| anyhow!("RDT file name `{name}`: {err}")))
+    // RE1 ships stages 1-7 only; a letter stage is RE2's.
+    Some(
+        RoomId::parse(digits)
+            .and_then(|id| {
+                if id.stage > RoomId::MAX_STAGE {
+                    bail!("stage digit must be 1-{}", RoomId::MAX_STAGE);
+                }
+                Ok(id)
+            })
+            .map_err(|err| anyhow!("RDT file name `{name}`: {err}")),
+    )
 }
 
 /// Camera background file name for room `id`, e.g. `RC100A.pak`.
@@ -4453,6 +4463,7 @@ mod tests {
         assert!(rdt_id_from_file_name("room.rdt").unwrap().is_err());
         assert!(rdt_id_from_file_name("ROOM10001.RDT").unwrap().is_err());
         assert!(rdt_id_from_file_name("ROOM100Z.RDT").unwrap().is_err());
+        assert!(rdt_id_from_file_name("ROOMA000.RDT").unwrap().is_err());
     }
 
     #[test]

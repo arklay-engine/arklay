@@ -6886,6 +6886,11 @@ pub fn set_render_mode(name: &str) -> Result<()> {
     debug_view::set(name)
 }
 
+/// The debug render modes' `--render-mode` names, in F4 cycle order.
+pub fn render_mode_names() -> impl Iterator<Item = &'static str> {
+    debug_view::names()
+}
+
 /// The new-game identity: the base pack's `start_room` ([`pack_start_room`]),
 /// else the shipped card's start room, the main hall.
 fn new_game_id(pack: &Pack, character: u8) -> RoomId {
@@ -10861,8 +10866,16 @@ pub fn simulate_new_game(
     let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
     seed_new_game(pack, &mut game, character);
     let mut player_state = player::spawn(id, &loaded.room);
-    player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
-    player_state.angle = NEW_GAME_ANGLE;
+    // A pack's own start room enters like `GameSession::new_with` places it.
+    let placement = if pack_start_room(pack, character).is_some() {
+        room_entry_placement(pack, &loaded.room, &game, id)
+    } else {
+        Some(([NEW_GAME_POS_X, 0, NEW_GAME_POS_Z], NEW_GAME_ANGLE))
+    };
+    if let Some((pos, angle)) = placement {
+        player_state.pos = pos;
+        player_state.angle = angle;
+    }
     game.sync_entity_from_player(&player_state);
     simulate_loaded(pack, loaded, game, player_state, ticks, move |_| input)
 }

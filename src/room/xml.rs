@@ -24,6 +24,7 @@ use super::source::{
 use crate::budget;
 use crate::charset::Script;
 use crate::effects::room::{FrameEntry, UvRecord};
+use crate::format::Dialect;
 use crate::state::{Collision, CollisionRect, FootstepZone, Light, Sca, ScaRect, WalkZone, Zone};
 
 /// The format version `<room format="...">` declares.
@@ -136,6 +137,9 @@ pub fn write(room: &RoomSource) -> Result<String> {
         depth: 0,
     };
     let mut attributes = vec![("format", dec(FORMAT))];
+    if room.dialect != Dialect::Re1 {
+        attributes.push(("game", Value::Str(room.dialect.name().to_string())));
+    }
     if let Some(slots) = room.object_slots {
         attributes.push(("objectSlots", dec(slots as i64)));
     }
@@ -540,7 +544,7 @@ pub fn parse(text: &str) -> Result<RoomSource> {
             root.tag_name().name()
         );
     }
-    check_attributes(root, &["format", "objectSlots", "itemSlots"])?;
+    check_attributes(root, &["format", "game", "objectSlots", "itemSlots"])?;
     let format: u32 = attr_or(root, "format", FORMAT)?;
     if format != FORMAT {
         bail!("room XML format {format} is not supported (expected {FORMAT})");
@@ -549,6 +553,11 @@ pub fn parse(text: &str) -> Result<RoomSource> {
     let mut room = RoomSource {
         object_slots: optional_attr::<u8>(root, "objectSlots")?.map(usize::from),
         item_slots: optional_attr::<u8>(root, "itemSlots")?.map(usize::from),
+        dialect: match root.attribute("game") {
+            None | Some("re1") => Dialect::Re1,
+            Some("re2") => Dialect::Re2,
+            Some(other) => bail!("<room game=\"{other}\"> is not `re1` or `re2`"),
+        },
         ..RoomSource::default()
     };
     let mut seen = Vec::new();

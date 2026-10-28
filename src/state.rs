@@ -15,7 +15,7 @@ use crate::mask::MaskSprite;
 /// 10-16 here: `A`-`F` are their own hex digits and `G` continues the run.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RoomId {
-    /// 1-based stage number: 1-9, or 10-16 for the letter stages `A`-`G`.
+    /// 1-based stage number: 1-7, or 10-16 for the letter stages `A`-`G`.
     pub stage: u8,
     /// Room number within the stage (0x00-0x1F).
     pub room: u8,
@@ -196,9 +196,10 @@ impl RoomId {
     }
 
     /// Stage digit used by the background files. Stages 6 and 7 reuse the
-    /// STAGE1/STAGE2 backgrounds with the digit reduced by 5.
+    /// STAGE1/STAGE2 backgrounds with the digit reduced by 5; RE2's letter
+    /// stages are their own.
     pub fn fold_stage_digit(self) -> u8 {
-        if self.stage >= 6 {
+        if (6..=Self::MAX_STAGE).contains(&self.stage) {
             self.stage - 5
         } else {
             self.stage
@@ -575,10 +576,22 @@ mod tests {
         let id = RoomId::from_room_and_player("a1d", 1).unwrap();
         assert_eq!((id.stage, id.room, id.player_flag), (10, 0x1D, 1));
         assert_eq!(id.rdt_entry(), "room/a1d1/room.rdt");
-        assert_ne!(
-            RoomId::parse("G010").unwrap().rdt_number(),
-            RoomId::parse("0010").map_or(0, RoomId::rdt_number)
+        assert_eq!(RoomId::parse("G010").unwrap().rdt_number(), 0x1_0010);
+        assert_eq!(
+            id.fold_stage_digit(),
+            10,
+            "a letter stage folds to no RE1 stage"
         );
+        // RE1's folders keep their packed-number names.
+        for stage in 1..=RoomId::MAX_STAGE {
+            let id = RoomId {
+                stage,
+                room: 0x1C,
+                player_flag: 1,
+            };
+            assert_eq!(id.dir(), format!("room/{:04x}", id.rdt_number()));
+            assert_eq!(id.code(), format!("{:04x}", id.rdt_number()));
+        }
         // `G` is only a stage digit, and no stage lies past it.
         assert!(RoomId::parse("1G00").is_err());
         assert!(RoomId::parse("H000").is_err());

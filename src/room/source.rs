@@ -17,6 +17,7 @@ use crate::charset::Script;
 use crate::effects::pool::EffectBlock;
 use crate::effects::room::{AnimFrame, FrameEntry, TimGeometry, UvRecord};
 use crate::effects::{EffectSprite as StateSprite, RoomEffects, SpriteAnimation, SpriteInfo};
+use crate::format::Dialect;
 use crate::mask;
 use crate::model::Texture8;
 use crate::objects::ObjectAsset;
@@ -50,8 +51,11 @@ pub struct RoomSource {
     pub zones: Vec<Zone>,
     /// Collision boundaries by quadrant.
     pub collision: Collision,
-    /// RE2 collision records, present exactly for an RE2 room.
+    /// RE2 collision records, from an RE2 room's SCA section.
     pub sca: Option<Sca>,
+    /// The game the room comes from, which picks how the rest of its folder
+    /// (scripts, masks) is read.
+    pub dialect: Dialect,
     /// Walkable zones.
     pub walk_zones: Vec<WalkZone>,
     /// The footstep table's header word: its record count in every shipped
@@ -399,6 +403,7 @@ impl RoomSource {
             zones: state.zones,
             collision: state.collision,
             sca: None,
+            dialect: Dialect::Re1,
             walk_zones: state.walk_zones,
             footstep_count: footstep_count(data, pointers[FOOTSTEP_SLOT]),
             footstep_zones: state.footstep_zones,

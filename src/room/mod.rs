@@ -182,16 +182,10 @@ impl Loaded {
     pub fn from_xml(pack: &Pack, id: RoomId, text: &str) -> Result<Self> {
         let source = xml::parse(text)?;
         let state = source.build(id, pack)?;
-        // A room definition built from an RE2 RDT carries its collision.
-        let dialect = if source.sca.is_some() {
-            Dialect::Re2
-        } else {
-            Dialect::Re1
-        };
         Ok(Self {
             id,
             state,
-            dialect,
+            dialect: source.dialect,
             rdt: None,
         })
     }

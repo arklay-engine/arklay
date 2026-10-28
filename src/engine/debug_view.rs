@@ -37,17 +37,19 @@ impl RenderMode {
         RenderMode::CollisionOverlay,
     ];
 
-    /// The `--render-mode` names, in [`RenderMode::ALL`] order.
-    pub(super) const NAMES: [&'static str; 8] = [
-        "normal",
-        "background",
-        "masks",
-        "models",
-        "aot",
-        "collision-wire",
-        "collision-solid",
-        "collision-overlay",
-    ];
+    /// The mode's `--render-mode` name.
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            RenderMode::Normal => "normal",
+            RenderMode::BackgroundOnly => "background",
+            RenderMode::MasksOnly => "masks",
+            RenderMode::ModelsOnly => "models",
+            RenderMode::AotOverlay => "aot",
+            RenderMode::CollisionWire => "collision-wire",
+            RenderMode::CollisionSolid => "collision-solid",
+            RenderMode::CollisionOverlay => "collision-overlay",
+        }
+    }
 
     pub(super) fn label(self) -> &'static str {
         match self {
@@ -98,15 +100,20 @@ pub(super) fn mode() -> RenderMode {
     RenderMode::ALL[usize::from(MODE.load(Ordering::Relaxed)) % RenderMode::ALL.len()]
 }
 
-/// Select the mode named `name` (one of [`RenderMode::NAMES`]).
+/// The `--render-mode` names, in cycle order.
+pub(super) fn names() -> impl Iterator<Item = &'static str> {
+    RenderMode::ALL.into_iter().map(RenderMode::name)
+}
+
+/// Select the mode named `name` (one of [`names`]).
 pub(super) fn set(name: &str) -> anyhow::Result<()> {
-    let index = RenderMode::NAMES
+    let index = RenderMode::ALL
         .iter()
-        .position(|known| *known == name)
+        .position(|mode| mode.name() == name)
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "unknown render mode `{name}`; expected one of {}",
-                RenderMode::NAMES.join(", ")
+                names().collect::<Vec<_>>().join(", ")
             )
         })?;
     MODE.store(index as u8, Ordering::Relaxed);

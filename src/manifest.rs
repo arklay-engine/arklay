@@ -246,6 +246,9 @@ impl Manifest {
         if kind == PackKind::Mod && base.is_none() {
             bail!("manifest.toml: a mod manifest must name a `base`");
         }
+        if kind == PackKind::Mod && start_room.is_some() {
+            bail!("manifest.toml: `start_room` belongs to a base pack, not a mod");
+        }
 
         Ok(Self {
             format,
@@ -649,6 +652,13 @@ mod tests {
         let bad = text.replace("\"100\"", "\"1000\"");
         let error = Manifest::parse(&bad).unwrap_err().to_string();
         assert!(error.contains("start_room"), "{error}");
+        let on_mod = Manifest {
+            kind: PackKind::Mod,
+            base: Some("re2".to_string()),
+            ..manifest
+        };
+        let error = Manifest::parse(&on_mod.render()).unwrap_err().to_string();
+        assert!(error.contains("base pack"), "{error}");
     }
 
     #[test]

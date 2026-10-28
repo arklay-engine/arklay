@@ -2,7 +2,7 @@ use super::*;
 
 /// A minimal RE2 RDT: the header, one camera, a two-record zone table and a
 /// one-record collision table.
-fn sample() -> Vec<u8> {
+pub(crate) fn sample() -> Vec<u8> {
     let rid = 0x64;
     let rvd = rid + CAMERA_SIZE;
     let sca = rvd + 2 * ZONE_SIZE + 4;
@@ -76,8 +76,18 @@ fn the_sample_detects_as_re2() {
 fn truncated_tables_fail_cleanly() {
     let data = sample();
     for len in [0, 1, 0x20, 0x70, data.len() - 1] {
-        let _ = read(&data[..len]);
+        assert!(read(&data[..len]).is_err(), "{len} bytes");
     }
+    // A zone table that runs off the end without its terminator.
+    let rvd = 0x64 + CAMERA_SIZE;
+    let mut unterminated = data.clone();
+    unterminated.truncate(rvd + 2 * ZONE_SIZE);
+    unterminated[OFFSETS + SCA_SLOT * 4..][..4].fill(0);
+    assert!(read(&unterminated).is_err());
+    // A bad offset in a section that is not read leaves the room loadable.
+    let mut stray = data.clone();
+    stray[OFFSETS..][..4].copy_from_slice(&u32::MAX.to_le_bytes());
+    assert!(read(&stray).is_ok());
     let mut overlong = sample();
     let sca = u32::from_le_bytes(overlong[OFFSETS + SCA_SLOT * 4..][..4].try_into().unwrap());
     overlong[sca as usize + 4..][..4].copy_from_slice(&1000u32.to_le_bytes());

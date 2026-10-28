@@ -135,7 +135,10 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     let base_id = base
         .as_ref()
         .and_then(|base| base.manifest())
+        .filter(|manifest| manifest.kind == manifest::PackKind::Base)
         .map_or_else(|| BASE_ID.to_string(), |manifest| manifest.id.clone());
+    // Only RE1 folds stages 6 and 7 onto the stage 1 and 2 backgrounds.
+    let folds_stages = base_id == BASE_ID;
     let mut manifest = manifest::Manifest {
         kind: manifest::PackKind::Mod,
         base: Some(base_id),
@@ -193,7 +196,7 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         }
     }
     plan.drop_shadowed_films();
-    plan.add_variant_copies(base.as_ref());
+    plan.add_variant_copies(base.as_ref(), folds_stages);
 
     // Settle every entry before writing any: the pack's table of contents and
     // path list come first, so the entry set must be final. Only an override
@@ -1131,7 +1134,7 @@ fn classify_text(stem: &str, extension: &str) -> Class {
 }
 
 /// The planned entries, keyed by entry path.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Plan {
     /// Room text files are keyed `text/<room>`: they merge into one
     /// language file instead of owning an entry each.
@@ -1211,8 +1214,9 @@ impl Plan {
     /// both player variants, and stages 6 and 7 reuse the stage 1 and 2
     /// files. Copy each cut or mask override (planned for the player 0
     /// variant) into every other variant's folder the base pack (or the mod
-    /// itself) defines.
-    fn add_variant_copies(&mut self, base: Option<&Pack>) {
+    /// itself) defines. Over another game's base (`folds_stages` false) only
+    /// the player variants share a file.
+    fn add_variant_copies(&mut self, base: Option<&Pack>, folds_stages: bool) {
         let defined = |id: RoomId| {
             [id.xml_entry(), id.rdt_entry()].iter().any(|entry| {
                 self.targets.contains_key(entry) || base.is_some_and(|base| base.contains(entry))
@@ -1231,7 +1235,7 @@ impl Plan {
                 continue;
             };
             let stages = match id.stage {
-                1 | 2 => vec![id.stage, id.stage + 5],
+                1 | 2 if folds_stages => vec![id.stage, id.stage + 5],
                 stage => vec![stage],
             };
             for stage in stages {
@@ -1889,20 +1893,32 @@ mod tests {
                 },
             );
         }
-        plan.add_variant_copies(None);
-        let planned: Vec<&str> = plan
-            .targets
-            .keys()
-            .map(String::as_str)
-            .filter(|entry| !entry.ends_with(".rdt"))
-            .collect();
+        let mut re2 = plan.clone();
+        let planned = |plan: &Plan| -> Vec<String> {
+            plan.targets
+                .keys()
+                .filter(|entry| !entry.ends_with(".rdt"))
+                .cloned()
+                .collect()
+        };
+        plan.add_variant_copies(None, true);
         assert_eq!(
-            planned,
+            planned(&plan),
             [
                 "room/1060/cut/00.bmp",
                 "room/1061/cut/00.bmp",
                 "room/2030/mask/01.bmp",
                 "room/6060/cut/00.bmp"
+            ]
+        );
+        // RE2's stage 6 is its own: only the player variant shares the file.
+        re2.add_variant_copies(None, false);
+        assert_eq!(
+            planned(&re2),
+            [
+                "room/1060/cut/00.bmp",
+                "room/1061/cut/00.bmp",
+                "room/2030/mask/01.bmp"
             ]
         );
     }

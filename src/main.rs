@@ -199,7 +199,12 @@ struct Cli {
     /// Start in a debug render mode (F4 cycles them): `normal`, `background`,
     /// `masks`, `models`, `aot`, `collision-wire`, `collision-solid` or
     /// `collision-overlay` (the collision drawn over the scene)
-    #[arg(long, value_name = "MODE", requires = "pack")]
+    #[arg(
+        long,
+        value_name = "MODE",
+        requires = "pack",
+        value_parser = clap::builder::PossibleValuesParser::new(arklay::engine::render_mode_names())
+    )]
     render_mode: Option<String>,
 
     /// Run N fixed 30 Hz ticks before a capture frame is drawn, so scripted
