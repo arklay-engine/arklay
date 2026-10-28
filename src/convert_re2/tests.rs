@@ -356,7 +356,7 @@ fn a_folder_holding_both_games_needs_an_explicit_game() {
 }
 
 #[test]
-fn the_launcher_check_refuses_an_re2_install() {
+fn the_launcher_checks_an_install_for_the_game_it_builds() {
     let root = TempDir::new("launcher");
     write(&root.path.join("data/Pl0/Rdt/ROOM1000.RDT"), &rdt(1));
     let error = crate::convert::validate_install(&root.path).unwrap_err();
@@ -364,13 +364,33 @@ fn the_launcher_check_refuses_an_re2_install() {
         format!("{error:#}").contains("Resident Evil 2"),
         "{error:#}"
     );
-    // The launcher's conversion entry point is RE1-only whatever it is given.
+    crate::convert::validate_install_as(&root.path, Game::Re2).unwrap();
+    // The launcher's conversion entry point builds the game it is given.
     let out = root.path.join("re1.akpak");
-    assert!(crate::convert::convert_game_observed(&root.path, &out, 1, false, None, None).is_err());
+    assert!(
+        crate::convert::convert_game_observed(&root.path, &out, Game::Re1, 1, false, None, None)
+            .is_err()
+    );
     assert!(!out.exists());
-    // A folder with both keeps working for RE1.
+    let out = root.path.join("re2.akpak");
+    crate::convert::convert_game_observed(&root.path, &out, Game::Re2, 1, false, None, None)
+        .unwrap();
+    assert!(Pack::open(&out).unwrap().contains("room/1000/room.rdt"));
+    // A folder with both keeps working for either game.
     make_re1_install(&root.path);
     crate::convert::validate_install(&root.path).unwrap();
+    crate::convert::validate_install_as(&root.path, Game::Re2).unwrap();
+}
+
+#[test]
+fn an_re1_install_is_not_an_re2_install() {
+    let root = TempDir::new("launcher-re1");
+    make_re1_install(&root.path);
+    let error = crate::convert::validate_install_as(&root.path, Game::Re2).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("not Resident Evil 2"),
+        "{error:#}"
+    );
 }
 
 #[cfg(unix)]

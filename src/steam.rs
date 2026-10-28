@@ -1,4 +1,4 @@
-//! Locating a Steam installation of Resident Evil (1996).
+//! Locating a Steam installation of Resident Evil (1996) or Resident Evil 2.
 //!
 //! Steam keeps the game in a library folder, which is not necessarily the
 //! Steam installation itself. The search reads the registry's `SteamPath`
@@ -11,14 +11,38 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::convert::Game;
+
 /// The Steam application id of the 1996 Resident Evil release.
 pub const APP_ID: u32 = 4_249_100;
 /// The app manifest Steam writes for [`APP_ID`].
 pub const APP_MANIFEST: &str = "appmanifest_4249100.acf";
 /// The `installdir` Steam's manifest names.
 pub const INSTALL_DIR: &str = "4249100_Biohazard";
+/// The Steam application id of the Resident Evil 2 release.
+pub const RE2_APP_ID: u32 = 4_249_110;
+/// The app manifest Steam writes for [`RE2_APP_ID`].
+pub const RE2_APP_MANIFEST: &str = "appmanifest_4249110.acf";
+/// The `installdir` Steam's RE2 manifest names.
+pub const RE2_INSTALL_DIR: &str = "4249110_Biohazard2";
 
-/// A detected, layout-checked Resident Evil installation.
+/// The app manifest Steam writes for `game`.
+pub fn app_manifest(game: Game) -> &'static str {
+    match game {
+        Game::Re1 => APP_MANIFEST,
+        Game::Re2 => RE2_APP_MANIFEST,
+    }
+}
+
+/// The folder Steam installs `game` into under `steamapps/common`.
+pub fn install_dir(game: Game) -> &'static str {
+    match game {
+        Game::Re1 => INSTALL_DIR,
+        Game::Re2 => RE2_INSTALL_DIR,
+    }
+}
+
+/// A detected, layout-checked installation of one game.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Install {
     /// The folder to pass to the converter.
@@ -31,29 +55,35 @@ pub struct Install {
     pub build_id: Option<String>,
 }
 
-/// Find the first usable Steam copy of the game.
+/// Find the first usable Steam copy of Resident Evil.
 pub fn find_re1() -> Option<Install> {
+    find(Game::Re1)
+}
+
+/// Find the first usable Steam copy of `game`.
+pub fn find(game: Game) -> Option<Install> {
     for steam in steam_roots() {
-        if let Some(install) = find_in_steam(&steam) {
+        if let Some(install) = find_in_steam(&steam, game) {
             return Some(install);
         }
     }
     None
 }
 
-/// Find the game in one Steam installation and its libraries.
-pub fn find_in_steam(steam: &Path) -> Option<Install> {
+/// Find `game` in one Steam installation and its libraries.
+pub fn find_in_steam(steam: &Path, game: Game) -> Option<Install> {
     let mut libraries = vec![steam.to_path_buf()];
     libraries.extend(read_library_folders(steam));
     dedupe(&mut libraries);
     for library in libraries {
-        let manifest = library.join("steamapps").join(APP_MANIFEST);
+        let manifest = library.join("steamapps").join(app_manifest(game));
         let Ok(text) = fs::read_to_string(&manifest) else {
             continue;
         };
-        let installdir = value(&text, "installdir").unwrap_or_else(|| INSTALL_DIR.to_string());
+        let installdir =
+            value(&text, "installdir").unwrap_or_else(|| install_dir(game).to_string());
         let root = library.join("steamapps").join("common").join(installdir);
-        if !root.is_dir() || crate::convert::validate_install(&root).is_err() {
+        if !root.is_dir() || crate::convert::validate_install_as(&root, game).is_err() {
             continue;
         }
         return Some(Install {
@@ -310,10 +340,29 @@ mod tests {
         )
         .unwrap();
 
-        let found = find_in_steam(&steam).expect("the synthetic install");
+        let found = find_in_steam(&steam, Game::Re1).expect("the synthetic install");
+        assert_eq!(find_in_steam(&steam, Game::Re2), None);
         assert_eq!(found.root, game);
         assert_eq!(found.library, library);
         assert_eq!(found.build_id.as_deref(), Some("21744136"));
+
+        let re2 = library
+            .join("steamapps")
+            .join("common")
+            .join(RE2_INSTALL_DIR);
+        fs::create_dir_all(re2.join("english").join("Pl0").join("Rdt")).unwrap();
+        fs::write(
+            library.join("steamapps").join(RE2_APP_MANIFEST),
+            "\"AppState\"\n{\n\"installdir\" \"4249110_Biohazard2\"\n}\n",
+        )
+        .unwrap();
+        let found = find_in_steam(&steam, Game::Re2).expect("the synthetic RE2 install");
+        assert_eq!(found.root, re2);
+        assert_eq!(found.build_id, None);
+        assert_eq!(
+            find_in_steam(&steam, Game::Re1).map(|found| found.root),
+            Some(game)
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 

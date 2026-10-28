@@ -362,7 +362,7 @@ pub fn convert_game(root: &Path, out: &Path) -> Result<()> {
 }
 
 /// A game `convert-game` can convert.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Game {
     /// Resident Evil (the PC, Classic REbirth and Steam releases).
     Re1,
@@ -371,6 +371,33 @@ pub enum Game {
 }
 
 impl Game {
+    /// Every game, in the order the launcher offers them.
+    pub const ALL: [Self; 2] = [Self::Re1, Self::Re2];
+
+    /// The id of the game's base pack (its manifest `id`, and the `base` its
+    /// mods name).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Re1 => "re1",
+            Self::Re2 => "re2",
+        }
+    }
+
+    /// The game for a base-pack id, matched case-insensitively.
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|game| game.id().eq_ignore_ascii_case(id))
+    }
+
+    /// The game's title.
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Re1 => "Resident Evil",
+            Self::Re2 => "Resident Evil 2",
+        }
+    }
+
     /// The game's default pack file name.
     pub fn default_pack_name(self) -> &'static str {
         match self {
@@ -400,21 +427,44 @@ pub fn detect_game(root: &Path) -> Result<Game> {
 }
 
 /// Check that `root` looks like an RE1 installation, without converting
-/// anything. The launcher and the Steam scan use this before starting a
-/// multi-hundred-megabyte conversion into the RE1 pack, so a wrong folder
-/// fails immediately. An RE2 install is refused by name: neither of them
-/// handles RE2 yet, and converting one would replace the RE1 pack.
+/// anything. An RE2 install is refused by name, since converting one as RE1
+/// cannot work.
 pub fn validate_install(root: &Path) -> Result<()> {
     match discover_layout(root) {
         Ok(_) => Ok(()),
         Err(error) => match crate::convert_re2::find_data_dir(root) {
             Some(_) => bail!(
-                "{} is a Resident Evil 2 install; only RE1 can be set up here so far \
-                 (`arklay convert-game` converts RE2 into re2.akpak)",
+                "{} is a Resident Evil 2 install, not Resident Evil",
                 root.display()
             ),
             None => Err(error),
         },
+    }
+}
+
+/// Check that `root` looks like an installation of `game`, without
+/// converting anything. The launcher and the Steam scan use this before
+/// starting a multi-hundred-megabyte conversion, so a wrong folder fails
+/// immediately. RE2 needs a data directory holding `Pl0/Rdt` at or
+/// under `root`; an RE1 install is refused by name.
+pub fn validate_install_as(root: &Path, game: Game) -> Result<()> {
+    match game {
+        Game::Re1 => validate_install(root),
+        Game::Re2 => {
+            if crate::convert_re2::find_data_dir(root).is_some() {
+                Ok(())
+            } else if discover_layout(root).is_ok() {
+                bail!(
+                    "{} is a Resident Evil install, not Resident Evil 2",
+                    root.display()
+                )
+            } else {
+                bail!(
+                    "{} is not a Resident Evil 2 installation (no Pl0/Rdt data folder)",
+                    root.display()
+                )
+            }
+        }
     }
 }
 
@@ -461,17 +511,18 @@ pub fn convert_game_with_options(
 /// built; the flag is checked between files, at phase boundaries and during
 /// the final write, and an aborted run leaves no partial pack behind.
 ///
-/// This is always an RE1 conversion: the launcher builds only the RE1 pack,
-/// and [`validate_install`] has already refused an RE2 folder.
+/// The game is explicit: the launcher has already checked the folder with
+/// [`validate_install_as`] for the game it is building.
 pub fn convert_game_observed(
     root: &Path,
     out: &Path,
+    game: Game,
     jobs: usize,
     verbose: bool,
     observer: Option<ProgressObserver>,
     cancel: Option<Arc<AtomicBool>>,
 ) -> Result<()> {
-    convert_observed_as(root, out, Some(Game::Re1), jobs, verbose, observer, cancel)
+    convert_observed_as(root, out, Some(game), jobs, verbose, observer, cancel)
 }
 
 fn convert_observed_as(
@@ -4169,6 +4220,7 @@ mod tests {
         convert_game_observed(
             &root.path,
             &out,
+            Game::Re1,
             1,
             false,
             Some(Box::new(move |snapshot| {
@@ -4194,6 +4246,7 @@ mod tests {
         let result = convert_game_observed(
             &root.path,
             &cancelled,
+            Game::Re1,
             1,
             false,
             None,

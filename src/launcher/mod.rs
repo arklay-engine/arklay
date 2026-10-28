@@ -7,14 +7,16 @@
 //! table column.
 //!
 //! Play hands this window to the game in-process; closing the game window
-//! ends the process. Mods are discovered from every data root, filtered by
-//! the pack's base id, and toggled or reordered through `[mods]` in
-//! `arklay.toml`. Installs and rebuilds run on a worker thread with a live
+//! ends the process. Every base pack is listed; the selected game (RE1 or
+//! RE2, switched with LEFT/RIGHT once more than one is known) scopes the
+//! install, rebuild and mods screens. Mods are discovered from every data
+//! root, filtered by that game's base id, and toggled or reordered through
+//! `[mods]` in `arklay.toml`. Installs and rebuilds run on a worker thread with a live
 //! progress screen and cancellation.
 
 mod text;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::fs;
@@ -51,7 +53,7 @@ use sdl3_sys::scancode::{
 
 use crate::build_info;
 use crate::config::{Config, Mods};
-use crate::convert::{self, CONVERT_VERSION};
+use crate::convert::{self, CONVERT_VERSION, Game};
 use crate::engine::{self, Display, Gamepads, ModOptions};
 use crate::logging;
 use crate::manifest;
@@ -340,6 +342,9 @@ const UPDATE_ITEMS: [&str; 6] = [
     "AUTO-CHECK",
 ];
 
+/// The title row, which carries the game switch on screens scoped to a game.
+const GAME_HINT_ROW: usize = 3;
+
 /// The launcher's `OPTIONS` rows, in display order.
 const OPTIONS_ITEMS: [&str; 11] = [
     "RENDERER",
@@ -451,6 +456,7 @@ struct Job {
     receiver: mpsc::Receiver<Result<(), String>>,
     cancel: Arc<AtomicBool>,
     state: Arc<Mutex<ProgressState>>,
+    game: Game,
     source: PathBuf,
     build: Option<String>,
     target: PathBuf,
@@ -513,8 +519,10 @@ struct Launcher {
     config: Config,
     packs: Vec<PackRow>,
     mods: Vec<ModRow>,
-    source: Option<Source>,
-    target: PathBuf,
+    /// The game the install, update and mods screens act on.
+    game: Game,
+    /// Each game's remembered or detected installation.
+    sources: HashMap<Game, Source>,
     message: Option<Message>,
     job: Option<Job>,
     update_job: Option<UpdateJob>,
@@ -538,28 +546,27 @@ impl Launcher {
         let width = width.max(1);
         let height = height.max(1);
         let packs = scan_packs();
-        let source = config
-            .games
-            .re1_source
-            .as_ref()
-            .map(|path| Source {
-                path: path.clone(),
-                build: config.games.re1_build.clone(),
+        let sources: HashMap<Game, Source> = Game::ALL
+            .into_iter()
+            .filter_map(|game| {
+                let source = config
+                    .games
+                    .source(game)
+                    .map(|path| Source {
+                        path: path.to_path_buf(),
+                        build: config.games.build(game).map(str::to_string),
+                    })
+                    .or_else(|| {
+                        steam::find(game).map(|install| Source {
+                            path: install.root,
+                            build: install.build_id,
+                        })
+                    })?;
+                Some((game, source))
             })
-            .or_else(|| {
-                steam::find_re1().map(|install| Source {
-                    path: install.root,
-                    build: install.build_id,
-                })
-            });
-        let target = target_for(&packs);
-        let mods = scan_mods(
-            packs
-                .iter()
-                .find(|pack| pack.id.eq_ignore_ascii_case("re1")),
-            config,
-            &Config::mod_dirs(),
-        );
+            .collect();
+        let game = initial_game(&packs, &sources);
+        let mods = scan_mods(pack_for(&packs, game), config, &Config::mod_dirs());
         Ok(Self {
             screen: if packs.is_empty() {
                 Screen::Install
@@ -574,8 +581,8 @@ impl Launcher {
             config: config.clone(),
             packs,
             mods,
-            source,
-            target,
+            game,
+            sources,
             message: None,
             job: None,
             update_job: None,
@@ -602,10 +609,72 @@ impl Launcher {
         Ok(())
     }
 
-    fn re1_pack(&self) -> Option<&PackRow> {
-        self.packs
+    /// The selected game's pack, when it is installed.
+    fn pack(&self) -> Option<&PackRow> {
+        pack_for(&self.packs, self.game)
+    }
+
+    /// The selected game's installation.
+    fn source(&self) -> Option<&Source> {
+        self.sources.get(&self.game)
+    }
+
+    /// The pack file an install or rebuild of the selected game writes.
+    fn target(&self) -> PathBuf {
+        target_for(&self.packs, self.game)
+    }
+
+    /// The games offered: RE1 always, and any other game with a pack or an
+    /// installation. An RE1-only setup has exactly one, and then nothing on
+    /// screen names or switches the game.
+    fn games(&self) -> Vec<Game> {
+        known_games(&self.packs, &self.sources)
+    }
+
+    fn multi_game(&self) -> bool {
+        self.games().len() > 1
+    }
+
+    /// The selected game's title for a screen heading.
+    fn game_title(&self) -> String {
+        self.game.title().to_ascii_uppercase()
+    }
+
+    /// Select `game` and rescan its mods.
+    fn select_game(&mut self, game: Game) {
+        if self.game == game {
+            return;
+        }
+        self.game = game;
+        self.mods_index = 0;
+        self.refresh_mods();
+    }
+
+    /// Step the selected game through [`Launcher::games`].
+    fn cycle_game(&mut self, delta: isize) {
+        let games = self.games();
+        if games.len() < 2 {
+            return;
+        }
+        let mut index = games
             .iter()
-            .find(|pack| pack.id.eq_ignore_ascii_case("re1"))
+            .position(|&game| game == self.game)
+            .unwrap_or(0);
+        step(&mut index, games.len(), delta);
+        self.select_game(games[index]);
+    }
+
+    /// Draw the selected game's switch hint on the title row, when there is
+    /// more than one game to switch between. Clicking the row also switches.
+    fn draw_game_hint(&mut self) {
+        if self.multi_game() {
+            self.grid.draw_right(
+                &mut self.frame,
+                GAME_HINT_ROW,
+                "LEFT/RIGHT CHANGE GAME",
+                Color::DIM,
+            );
+        }
     }
 
     /// Draw the current screen from scratch.
@@ -638,7 +707,7 @@ impl Launcher {
             Screen::Main => "UP/DOWN SELECT   ENTER OPEN   ESC QUIT",
             Screen::Play => "ENTER PLAY   ESC BACK",
             Screen::Install => {
-                if self.re1_pack().is_some() {
+                if self.pack().is_some() {
                     "ENTER REBUILD   B CHANGE SOURCE   ESC BACK"
                 } else {
                     "ENTER INSTALL   B CHANGE SOURCE   ESC BACK"
@@ -670,9 +739,9 @@ impl Launcher {
             Screen::Main => "PAD  D-PAD/STICK MOVE   A SELECT   B QUIT",
             Screen::Play => "PAD  A SELECT   B BACK",
             Screen::Install => {
-                if self.source.is_none() {
+                if self.source().is_none() {
                     "PAD  X SOURCE   B BACK"
-                } else if self.re1_pack().is_some() {
+                } else if self.pack().is_some() {
                     "PAD  A REBUILD   X SOURCE   B BACK"
                 } else {
                     "PAD  A INSTALL   X SOURCE   B BACK"
@@ -696,8 +765,24 @@ impl Launcher {
     }
 
     fn draw_main(&mut self) {
+        if self.multi_game() {
+            let title = self.game_title();
+            self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
+            self.draw_game_hint();
+        }
+        // A stale pack of a game that is not selected is still flagged, named
+        // so the player knows which game to switch to before rebuilding.
+        let stale_games: Vec<Game> = self
+            .games()
+            .into_iter()
+            .filter(|&game| pack_for(&self.packs, game).is_some_and(|pack| pack.stale))
+            .collect();
+        let rebuild = match stale_games.first() {
+            None => None,
+            Some(_) if stale_games.contains(&self.game) => Some(String::new()),
+            Some(game) => Some(format!(" ({})", game.id().to_ascii_uppercase())),
+        };
         for (index, label) in MAIN_ITEMS.iter().enumerate() {
-            let stale = self.re1_pack().is_some_and(|pack| pack.stale);
             let update = self.config.updates.available_version.is_some();
             let (status, color) = match index {
                 0 => (
@@ -709,9 +794,9 @@ impl Launcher {
                     Color::DIM,
                 ),
                 1 => (
-                    if self.source.is_none() {
+                    if self.source().is_none() {
                         "SOURCE NEEDED".to_string()
-                    } else if self.re1_pack().is_none() {
+                    } else if self.pack().is_none() {
                         "REQUIRED".to_string()
                     } else {
                         String::new()
@@ -719,11 +804,11 @@ impl Launcher {
                     Color::AMBER,
                 ),
                 2 => (
-                    match (update, stale) {
-                        (true, true) => "UPDATE + REBUILD".to_string(),
-                        (true, false) => "UPDATE AVAILABLE".to_string(),
-                        (false, true) => "PAK REBUILD".to_string(),
-                        (false, false) => String::new(),
+                    match (update, &rebuild) {
+                        (true, Some(game)) => format!("UPDATE + REBUILD{game}"),
+                        (true, None) => "UPDATE AVAILABLE".to_string(),
+                        (false, Some(game)) => format!("PAK REBUILD{game}"),
+                        (false, None) => String::new(),
                     },
                     Color::AMBER,
                 ),
@@ -830,19 +915,26 @@ impl Launcher {
     }
 
     fn draw_install(&mut self) {
-        let pack = self.re1_pack().cloned();
+        let pack = self.pack().cloned();
         let title = if pack.is_none() {
             "FIRST-TIME SETUP"
         } else {
             "INSTALL / REBUILD"
         };
-        self.grid.draw(&mut self.frame, 3, 4, title, Color::BODY);
+        let title = if self.multi_game() {
+            format!("{title} - {}", self.game_title())
+        } else {
+            title.to_string()
+        };
+        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
+        self.draw_game_hint();
         let source = self
-            .source
-            .as_ref()
+            .source()
             .map(|source| source.path.display().to_string())
             .unwrap_or_else(|| "NOT FOUND".to_string());
-        let target = self.target.display().to_string();
+        let target = self.target().display().to_string();
+        let not_found = format!("{} NOT FOUND - B/X", self.game_title());
+        let ready = format!("READY - {}", install_size(self.game));
         let pack_value = match &pack {
             Some(pack) => format!(
                 "{}  ({})",
@@ -857,16 +949,12 @@ impl Launcher {
         };
         let (status, status_color) = if self.dialog.is_some() {
             ("WAITING FOR FOLDER PICKER...", Color::DIM)
-        } else if self.source.is_none() {
-            ("RESIDENT EVIL NOT FOUND - B/X", Color::AMBER)
-        } else if !self
-            .source
-            .as_ref()
-            .is_some_and(|source| source.path.is_dir())
-        {
+        } else if self.source().is_none() {
+            (not_found.as_str(), Color::AMBER)
+        } else if !self.source().is_some_and(|source| source.path.is_dir()) {
             ("SOURCE FOLDER MISSING - B/X", Color::AMBER)
         } else if pack.is_none() {
-            ("READY - ABOUT 486 MB", Color::BODY)
+            (ready.as_str(), Color::BODY)
         } else if pack.as_ref().is_some_and(|pack| pack.stale) {
             ("REBUILD REQUIRED", Color::AMBER)
         } else {
@@ -885,8 +973,13 @@ impl Launcher {
     }
 
     fn draw_update(&mut self) {
-        self.grid.draw(&mut self.frame, 3, 4, "UPDATE", Color::BODY);
-        let pack_stale = self.re1_pack().map(|pack| pack.stale);
+        let title = if self.multi_game() {
+            format!("UPDATE - {}", self.game_title())
+        } else {
+            "UPDATE".to_string()
+        };
+        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
+        let pack_stale = self.pack().map(|pack| pack.stale);
         let published = build_info::is_published();
         let available = self.config.updates.available_version.clone();
         for (index, label) in UPDATE_ITEMS.iter().enumerate() {
@@ -950,8 +1043,9 @@ impl Launcher {
     }
 
     fn draw_mods(&mut self) {
-        self.grid
-            .draw(&mut self.frame, 3, 4, "MODS - RESIDENT EVIL", Color::BODY);
+        let title = format!("MODS - {}", self.game_title());
+        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
+        self.draw_game_hint();
         self.table_header(5, &[(4, "ON"), (9, "MOD"), (46, "ID"), (68, "VERSION")]);
         if self.mods.is_empty() {
             self.grid
@@ -1059,14 +1153,18 @@ impl Launcher {
             self.capture_progress.clone().unwrap_or_default()
         };
         let rebuild = self.job.as_ref().is_some_and(|job| job.rebuild);
+        let game = self.job.as_ref().map_or(self.game, |job| job.game);
+        let game_title = game.title().to_ascii_uppercase();
         let title = if self.update_job.is_some() {
-            "UPDATING ENGINE"
+            "UPDATING ENGINE".to_string()
+        } else if rebuild && self.multi_game() {
+            format!("REBUILDING GAME PACK - {game_title}")
         } else if rebuild {
-            "REBUILDING GAME PACK"
+            "REBUILDING GAME PACK".to_string()
         } else {
-            "INSTALLING RESIDENT EVIL"
+            format!("INSTALLING {game_title}")
         };
-        self.grid.draw(&mut self.frame, 3, 4, title, Color::BODY);
+        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
         let label = if state.label.is_empty() {
             "STARTING".to_string()
         } else {
@@ -1390,6 +1488,10 @@ impl Launcher {
                     self.toggle_update();
                 } else if self.screen == Screen::Options {
                     self.change_option(-1, display);
+                } else if matches!(self.screen, Screen::Main | Screen::Install | Screen::Mods)
+                    && self.dialog.is_none()
+                {
+                    self.cycle_game(-1);
                 }
             }
             SDL_SCANCODE_RIGHT | SDL_SCANCODE_D => {
@@ -1397,6 +1499,10 @@ impl Launcher {
                     self.toggle_update();
                 } else if self.screen == Screen::Options {
                     self.change_option(1, display);
+                } else if matches!(self.screen, Screen::Main | Screen::Install | Screen::Mods)
+                    && self.dialog.is_none()
+                {
+                    self.cycle_game(1);
                 }
             }
             SDL_SCANCODE_EQUALS => {
@@ -1430,7 +1536,10 @@ impl Launcher {
     fn step_selection(&mut self, delta: isize) {
         match self.screen {
             Screen::Main => step(&mut self.main_index, MAIN_ITEMS.len(), delta),
-            Screen::Play => step(&mut self.play_index, self.packs.len(), delta),
+            Screen::Play => {
+                step(&mut self.play_index, self.packs.len(), delta);
+                self.follow_play_selection();
+            }
             Screen::Update => step(&mut self.update_index, UPDATE_ITEMS.len(), delta),
             Screen::Mods => step(&mut self.mods_index, self.mods.len(), delta),
             Screen::Options => step(&mut self.options_index, OPTIONS_ITEMS.len(), delta),
@@ -1457,7 +1566,11 @@ impl Launcher {
         match self.main_index {
             0 => {
                 self.screen = Screen::Play;
-                self.play_index = 0;
+                self.play_index = self
+                    .packs
+                    .iter()
+                    .position(|pack| Game::from_id(&pack.id) == Some(self.game))
+                    .unwrap_or(0);
             }
             1 => self.screen = Screen::Install,
             2 => {
@@ -1818,8 +1931,20 @@ impl Launcher {
         }
     }
 
+    /// Make the highlighted pack's game the selected one, so the mods it
+    /// would load are the ones the MODS screen shows.
+    fn follow_play_selection(&mut self) {
+        if let Some(game) = self
+            .packs
+            .get(self.play_index)
+            .and_then(|pack| Game::from_id(&pack.id))
+        {
+            self.select_game(game);
+        }
+    }
+
     fn refresh_mods(&mut self) {
-        let pack = self.re1_pack().cloned();
+        let pack = self.pack().cloned();
         self.mods = scan_mods(pack.as_ref(), &self.config, &Config::mod_dirs());
         if self.mods_index >= self.mods.len() {
             self.mods_index = self.mods.len().saturating_sub(1);
@@ -1849,7 +1974,8 @@ impl Launcher {
         let target = (self.mods_index as isize + delta).rem_euclid(len as isize) as usize;
         self.mods.swap(self.mods_index, target);
         self.mods_index = target;
-        self.config.mods.order = self.mods.iter().map(|row| row.id.clone()).collect();
+        let shown: Vec<String> = self.mods.iter().map(|row| row.id.clone()).collect();
+        self.config.mods.order = merge_order(&self.config.mods.order, &shown);
         self.save_mods();
     }
 
@@ -1881,19 +2007,21 @@ impl Launcher {
         if self.job.is_some() {
             return;
         }
-        let Some(source) = self.source.clone() else {
+        let game = self.game;
+        let title = self.game_title();
+        let Some(source) = self.source().cloned() else {
             self.show_message(
-                "RESIDENT EVIL NOT FOUND",
+                &format!("{title} NOT FOUND"),
                 &["Dismiss, then press B (or X on a pad) to choose the game folder."],
                 self.screen,
             );
             return;
         };
-        let path = match resolve_source(&source.path) {
+        let path = match resolve_source(&source.path, game) {
             Ok(path) => path,
             Err(err) => {
                 self.show_message(
-                    "NOT RESIDENT EVIL",
+                    &format!("NOT {title}"),
                     &[&format!("{err:#}")],
                     if self.screen == Screen::Update {
                         Screen::Update
@@ -1904,11 +2032,8 @@ impl Launcher {
                 return;
             }
         };
-        let pack = self.re1_pack().cloned();
-        let target = pack
-            .as_ref()
-            .map(|pack| pack.path.clone())
-            .unwrap_or_else(default_target);
+        let pack = self.pack().cloned();
+        let target = self.target();
         if let Some(parent) = target.parent() {
             let _ = fs::create_dir_all(parent);
         }
@@ -1928,6 +2053,7 @@ impl Launcher {
             let result = convert::convert_game_observed(
                 &thread_source,
                 &thread_target,
+                game,
                 0,
                 false,
                 Some(observer),
@@ -1936,25 +2062,25 @@ impl Launcher {
             let _ = sender.send(result.map_err(|err| format!("{err:#}")));
         });
         logging::write(&format!(
-            "install: {} -> {}",
+            "install {}: {} -> {}",
+            game.id(),
             path.display(),
             target.display()
         ));
-        self.source = Some(Source {
-            path,
-            build: source.build,
-        });
-        self.target = target.clone();
+        self.sources.insert(
+            game,
+            Source {
+                path: path.clone(),
+                build: source.build.clone(),
+            },
+        );
         self.job = Some(Job {
             receiver,
             cancel,
             state,
-            source: self
-                .source
-                .as_ref()
-                .map(|source| source.path.clone())
-                .unwrap_or_default(),
-            build: self.source.as_ref().and_then(|source| source.build.clone()),
+            game,
+            source: path,
+            build: source.build,
             target,
             rebuild: pack.is_some(),
         });
@@ -2050,8 +2176,7 @@ impl Launcher {
             return;
         }
         let default = self
-            .source
-            .as_ref()
+            .source()
             .and_then(|source| CString::new(source.path.to_string_lossy().as_bytes()).ok());
         let state = Arc::new(DialogState {
             done: AtomicBool::new(false),
@@ -2088,14 +2213,25 @@ impl Launcher {
         let Some(path) = path else {
             return true;
         };
-        match resolve_source(&path) {
-            Ok(path) => {
-                logging::write(&format!("source: {}", path.display()));
-                self.source = Some(Source { path, build: None });
+        // A folder holding the other game is adopted for that game and
+        // selects it, so RE2 can be set up by picking its folder.
+        let others = Game::ALL.into_iter().filter(|&game| game != self.game);
+        let found = std::iter::once(self.game)
+            .chain(others)
+            .find_map(|game| resolve_source(&path, game).ok().map(|path| (game, path)));
+        match found {
+            Some((game, path)) => {
+                logging::write(&format!("source {}: {}", game.id(), path.display()));
+                self.sources.insert(game, Source { path, build: None });
+                self.select_game(game);
             }
-            Err(err) => {
+            None => {
+                let err = resolve_source(&path, self.game)
+                    .err()
+                    .unwrap_or_else(|| anyhow!("not a game installation"));
                 logging::write(&format!("source rejected: {err:#}"));
-                self.show_message("NOT RESIDENT EVIL", &[&format!("{err:#}")], Screen::Install);
+                let title = format!("NOT {}", self.game_title());
+                self.show_message(&title, &[&format!("{err:#}")], Screen::Install);
             }
         }
         true
@@ -2127,17 +2263,21 @@ impl Launcher {
             Ok(()) => {
                 if let Err(err) = Config::save_games(
                     &Config::default_path(),
+                    job.game,
                     Some(&job.source),
                     job.build.as_deref(),
                 ) {
                     logging::write(&format!("warning: game source not saved: {err:#}"));
                 }
-                self.source = Some(Source {
-                    path: job.source.clone(),
-                    build: job.build.clone(),
-                });
+                self.sources.insert(
+                    job.game,
+                    Source {
+                        path: job.source.clone(),
+                        build: job.build.clone(),
+                    },
+                );
                 self.packs = scan_packs();
-                self.target = target_for(&self.packs);
+                self.game = job.game;
                 self.refresh_mods();
                 self.screen = Screen::Main;
                 self.main_index = 0;
@@ -2179,6 +2319,16 @@ impl Launcher {
         if x < x0 || x >= x1 {
             return;
         }
+        let top = self.grid.row_top(GAME_HINT_ROW);
+        if y >= top
+            && y < top + self.grid.cell_h
+            && matches!(self.screen, Screen::Main | Screen::Install | Screen::Mods)
+            && self.dialog.is_none()
+            && self.multi_game()
+        {
+            self.cycle_game(1);
+            return;
+        }
         let hit = self.hits.iter().find(|(row, _)| {
             let top = self.grid.row_top(*row);
             y >= top && y < top + self.grid.cell_h
@@ -2188,7 +2338,10 @@ impl Launcher {
         };
         match self.screen {
             Screen::Main => self.main_index = index,
-            Screen::Play => self.play_index = index,
+            Screen::Play => {
+                self.play_index = index;
+                self.follow_play_selection();
+            }
             Screen::Update => self.update_index = index,
             Screen::Mods => self.mods_index = index,
             Screen::Options => self.options_index = index,
@@ -2633,10 +2786,9 @@ fn scan_packs() -> Vec<PackRow> {
                 .as_ref()
                 .and_then(|manifest| manifest.version.clone())
                 .unwrap_or_default();
-            let stale = manifest.as_ref().is_none_or(|manifest| {
-                manifest.convert_version != Some(CONVERT_VERSION)
-                    || manifest.source_hash.as_deref() != Some(source_hash.as_str())
-            });
+            let stale = manifest
+                .as_ref()
+                .is_none_or(|manifest| is_stale(manifest, &source_hash));
             packs.push(PackRow {
                 id,
                 name,
@@ -2659,6 +2811,18 @@ fn scan_packs() -> Vec<PackRow> {
             .then_with(|| a.file.cmp(&b.file))
     });
     packs
+}
+
+/// Whether a pack needs a rebuild to match this engine. RE1 packs carry
+/// the engine's own scripts and language sheets, fingerprinted by
+/// `source_hash`; an RE2 pack packs none of them, so only its conversion
+/// revision is compared.
+fn is_stale(manifest: &manifest::Manifest, source_hash: &str) -> bool {
+    if manifest.convert_version != Some(CONVERT_VERSION) {
+        return true;
+    }
+    Game::from_id(&manifest.id) != Some(Game::Re2)
+        && manifest.source_hash.as_deref() != Some(source_hash)
 }
 
 /// Discover the mods for `pack`, filtered to its base id and ordered by the
@@ -2711,6 +2875,26 @@ fn scan_mods(pack: Option<&PackRow>, config: &Config, dirs: &[PathBuf]) -> Vec<M
             .then_with(|| a.id.cmp(&b.id))
     });
     rows
+}
+
+/// The `[mods]` order after reordering the `shown` mods (one game's), with
+/// every other game's entries kept where they were. The shown mods fill the
+/// slots they already held, in their new order; any not listed before are
+/// appended.
+fn merge_order(order: &[String], shown: &[String]) -> Vec<String> {
+    let mut shown_iter = shown.iter();
+    let mut merged: Vec<String> = order
+        .iter()
+        .filter_map(|id| {
+            if shown.contains(id) {
+                shown_iter.next().cloned()
+            } else {
+                Some(id.clone())
+            }
+        })
+        .collect();
+    merged.extend(shown_iter.cloned());
+    merged
 }
 
 /// Read a mod image's manifest, or a source directory's `manifest.toml`.
@@ -2780,40 +2964,88 @@ fn root_label(index: usize, custom: bool) -> String {
     }
 }
 
-/// The pack file a first install writes.
-fn default_target() -> PathBuf {
-    paths::games_dir(&paths::primary_data_dir()).join("re1.akpak")
+/// The pack file a first install of `game` writes.
+fn default_target(game: Game) -> PathBuf {
+    paths::games_dir(&paths::primary_data_dir()).join(game.default_pack_name())
 }
 
-/// The resolved Resident Evil pack: the first `re1`-id pack in precedence
-/// order, else the default target.
-fn target_for(packs: &[PackRow]) -> PathBuf {
+/// The installed pack of `game`: the first pack with its id, which
+/// [`scan_packs`] keeps in precedence order.
+fn pack_for(packs: &[PackRow], game: Game) -> Option<&PackRow> {
     packs
         .iter()
-        .find(|pack| pack.id.eq_ignore_ascii_case("re1"))
-        .map(|pack| pack.path.clone())
-        .unwrap_or_else(default_target)
+        .find(|pack| pack.id.eq_ignore_ascii_case(game.id()))
 }
 
-/// Validate a chosen folder, accepting a Steam library or `common` folder as
-/// well as the game root itself.
-fn resolve_source(path: &Path) -> Result<PathBuf> {
-    let candidates = [
+/// The pack an install or rebuild of `game` writes: its resolved pack, else
+/// the default target.
+fn target_for(packs: &[PackRow], game: Game) -> PathBuf {
+    pack_for(packs, game)
+        .map(|pack| pack.path.clone())
+        .unwrap_or_else(|| default_target(game))
+}
+
+/// The games the launcher offers: RE1 always, then every other game with a
+/// pack or an installation.
+fn known_games(packs: &[PackRow], sources: &HashMap<Game, Source>) -> Vec<Game> {
+    Game::ALL
+        .into_iter()
+        .filter(|&game| {
+            game == Game::Re1 || pack_for(packs, game).is_some() || sources.contains_key(&game)
+        })
+        .collect()
+}
+
+/// The game selected at startup: the first with a pack, else the first with
+/// an installation, else RE1.
+fn initial_game(packs: &[PackRow], sources: &HashMap<Game, Source>) -> Game {
+    Game::ALL
+        .into_iter()
+        .find(|&game| pack_for(packs, game).is_some())
+        .or_else(|| {
+            Game::ALL
+                .into_iter()
+                .find(|game| sources.contains_key(game))
+        })
+        .unwrap_or(Game::Re1)
+}
+
+/// The rough size of `game`'s converted pack, for the install screen. RE2's
+/// depends on the release: the Steam copy's films pack to about 215 MB in
+/// all, the original PC release's to about 1.5 GB.
+fn install_size(game: Game) -> &'static str {
+    match game {
+        Game::Re1 => "ABOUT 486 MB",
+        Game::Re2 => "UP TO 1.5 GB",
+    }
+}
+
+/// Validate a chosen folder as an installation of `game`, accepting a Steam
+/// library or `common` folder as well as the game root itself.
+fn resolve_source(path: &Path, game: Game) -> Result<PathBuf> {
+    let dir = steam::install_dir(game);
+    let mut candidates = vec![
         path.to_path_buf(),
-        path.join(steam::INSTALL_DIR),
-        path.join("common").join(steam::INSTALL_DIR),
-        path.join("steamapps")
-            .join("common")
-            .join(steam::INSTALL_DIR),
+        path.join(dir),
+        path.join("common").join(dir),
+        path.join("steamapps").join("common").join(dir),
     ];
-    let mut last = None;
+    // RE2's data folder is found a few levels down, so the bare folder
+    // would also accept a library holding the game; the Steam install root
+    // is the better source when there is one.
+    if game == Game::Re2 {
+        candidates.rotate_left(1);
+    }
+    let mut first = None;
     for candidate in candidates {
-        match convert::validate_install(&candidate) {
+        match convert::validate_install_as(&candidate, game) {
             Ok(()) => return Ok(candidate),
-            Err(err) => last = Some(err),
+            // The bare folder's error is the one that names what was picked.
+            Err(err) if candidate == path => first = Some(err),
+            Err(_) => {}
         }
     }
-    Err(last.unwrap_or_else(|| anyhow!("not a Resident Evil installation")))
+    Err(first.unwrap_or_else(|| anyhow!("not a {} installation", game.title())))
 }
 
 /// A preview size from `ARKLAY_LAUNCHER_CAPTURE_SIZE=WxH`.
@@ -2886,6 +3118,12 @@ pub fn run() -> Result<()> {
         launcher.rollback();
     }
     if let Some(path) = capture {
+        if let Some(game) = env::var("ARKLAY_LAUNCHER_GAME")
+            .ok()
+            .and_then(|id| Game::from_id(&id))
+        {
+            launcher.select_game(game);
+        }
         if let Ok(name) = env::var("ARKLAY_LAUNCHER_SCREEN") {
             launcher.set_capture_screen(&name);
         }
@@ -3154,6 +3392,21 @@ mod tests {
             ["hd", "early", "demo"]
         );
 
+        let re2 = games.join("re2.akpak");
+        write_pack(&re2, Manifest::base("re2"));
+        let re2_pack = PackRow {
+            id: "re2".to_string(),
+            name: "Resident Evil 2".to_string(),
+            file: "re2.akpak".to_string(),
+            path: re2,
+            ..pack.clone()
+        };
+        let rows = scan_mods(Some(&re2_pack), &config, std::slice::from_ref(&mods_dir));
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            ["other"]
+        );
+
         let mut mods = Mods::default();
         assert!(mod_enabled(&mods, "hd"));
         set_mod_enabled(&mut mods, "hd", false);
@@ -3175,6 +3428,117 @@ mod tests {
         assert_eq!(mods.disabled, vec!["early".to_string()]);
         assert_eq!(mods.enabled.as_deref(), Some(["hd".to_string()].as_slice()));
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn pack_row(id: &str) -> PackRow {
+        PackRow {
+            id: id.to_string(),
+            name: id.to_string(),
+            file: format!("{id}.akpak"),
+            version: String::new(),
+            source: "LOCAL".to_string(),
+            path: PathBuf::from(format!("/packs/{id}.akpak")),
+            stale: false,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn games_are_offered_by_pack_and_installation() {
+        let source = Source {
+            path: PathBuf::from("/games/re2"),
+            build: None,
+        };
+        let no_sources = HashMap::new();
+        let re2_source = HashMap::from([(Game::Re2, source)]);
+
+        // An RE1-only setup offers one game, so nothing switches.
+        let packs = vec![pack_row("re1"), pack_row("custom")];
+        assert_eq!(known_games(&packs, &no_sources), [Game::Re1]);
+        assert_eq!(initial_game(&packs, &no_sources), Game::Re1);
+        assert_eq!(known_games(&[], &no_sources), [Game::Re1]);
+        assert_eq!(initial_game(&[], &no_sources), Game::Re1);
+        assert_eq!(
+            target_for(&packs, Game::Re1),
+            PathBuf::from("/packs/re1.akpak")
+        );
+        assert_eq!(
+            target_for(&packs, Game::Re2).file_name().unwrap(),
+            "re2.akpak"
+        );
+
+        // An RE2 install or pack adds RE2; RE1 stays first.
+        assert_eq!(known_games(&packs, &re2_source), [Game::Re1, Game::Re2]);
+        assert_eq!(initial_game(&packs, &re2_source), Game::Re1);
+        let both = vec![pack_row("re2"), pack_row("re1")];
+        assert_eq!(known_games(&both, &no_sources), [Game::Re1, Game::Re2]);
+        assert_eq!(initial_game(&both, &no_sources), Game::Re1);
+        assert_eq!(
+            pack_for(&both, Game::Re2).map(|pack| pack.file.as_str()),
+            Some("re2.akpak")
+        );
+
+        // With only RE2 present it is the one selected.
+        let re2_only = vec![pack_row("re2")];
+        assert_eq!(initial_game(&re2_only, &no_sources), Game::Re2);
+        assert_eq!(initial_game(&[], &re2_source), Game::Re2);
+    }
+
+    #[test]
+    fn reordering_one_games_mods_keeps_the_others_order() {
+        let ids = |list: &[&str]| list.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+        let order = ids(&["re1a", "re2a", "re1b", "re2b"]);
+        assert_eq!(
+            merge_order(&order, &ids(&["re2b", "re2a"])),
+            ids(&["re1a", "re2b", "re1b", "re2a"])
+        );
+        assert_eq!(
+            merge_order(&order, &ids(&["re2c", "re2a", "re2b"])),
+            ids(&["re1a", "re2c", "re1b", "re2a", "re2b"])
+        );
+        assert_eq!(merge_order(&[], &ids(&["b", "a"])), ids(&["b", "a"]));
+    }
+
+    #[test]
+    fn an_re2_pack_is_current_without_a_source_hash() {
+        use crate::manifest::Manifest;
+        let current = |id: &str| Manifest {
+            convert_version: Some(CONVERT_VERSION),
+            ..Manifest::base(id)
+        };
+        assert!(!is_stale(&current("re2"), "hash"));
+        assert!(is_stale(&current("re1"), "hash"));
+        assert!(is_stale(&Manifest::base("re2"), "hash"));
+        assert!(!is_stale(
+            &Manifest {
+                source_hash: Some("hash".to_string()),
+                ..current("re1")
+            },
+            "hash"
+        ));
+    }
+
+    #[test]
+    fn an_re2_folder_resolves_from_a_steam_library() {
+        let dir = std::env::temp_dir().join(format!("arklay-launcher-re2-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let game = dir
+            .join("steamapps")
+            .join("common")
+            .join(steam::RE2_INSTALL_DIR);
+        fs::create_dir_all(game.join("english").join("Pl0").join("Rdt")).unwrap();
+        assert_eq!(resolve_source(&dir, Game::Re2).unwrap(), game);
+        assert_eq!(
+            resolve_source(&dir.join("steamapps"), Game::Re2).unwrap(),
+            game
+        );
+        assert_eq!(resolve_source(&game, Game::Re2).unwrap(), game);
+        let error = resolve_source(&game, Game::Re1).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("Resident Evil 2"),
+            "{error:#}"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 

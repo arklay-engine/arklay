@@ -88,11 +88,12 @@
 //! disabled = ["balance"]
 //! order = ["demo", "hd"]
 //!
-//! # The launcher's remembered installation (written after a successful
+//! # The launcher's remembered installations (written after a successful
 //! # install or rebuild, not usually edited by hand).
 //! [games]
 //! re1_source = 'C:\Games\Resident Evil'
 //! re1_build = "21744136"
+//! re2_source = 'C:\Games\Resident Evil 2'
 //!
 //! # Update track and the last build found by a check.
 //! [updates]
@@ -114,6 +115,7 @@ use anyhow::{Context, Result, anyhow, bail};
 
 use crate::budget;
 use crate::controls::{ACTIONS, Action, Bindings, Source};
+use crate::convert;
 use crate::video::{self, Graphics, RendererKind};
 
 /// The configuration file's name inside the configuration directory.
@@ -224,6 +226,38 @@ pub struct Games {
     /// The Steam build id recorded next to that source, when it came from
     /// Steam.
     pub re1_build: Option<String>,
+    /// The last accepted Resident Evil 2 installation.
+    pub re2_source: Option<PathBuf>,
+    /// The Steam build id recorded next to the RE2 source.
+    pub re2_build: Option<String>,
+}
+
+impl Games {
+    /// The remembered installation of `game`.
+    pub fn source(&self, game: convert::Game) -> Option<&Path> {
+        match game {
+            convert::Game::Re1 => self.re1_source.as_deref(),
+            convert::Game::Re2 => self.re2_source.as_deref(),
+        }
+    }
+
+    /// The Steam build id recorded next to `game`'s source.
+    pub fn build(&self, game: convert::Game) -> Option<&str> {
+        match game {
+            convert::Game::Re1 => self.re1_build.as_deref(),
+            convert::Game::Re2 => self.re2_build.as_deref(),
+        }
+    }
+
+    /// Remember `game`'s installation; a `None` source forgets it.
+    pub fn set(&mut self, game: convert::Game, source: Option<&Path>, build: Option<&str>) {
+        let (slot, build_slot) = match game {
+            convert::Game::Re1 => (&mut self.re1_source, &mut self.re1_build),
+            convert::Game::Re2 => (&mut self.re2_source, &mut self.re2_build),
+        };
+        *slot = source.map(Path::to_path_buf);
+        *build_slot = build.map(str::to_string);
+    }
 }
 
 /// A `[game]` option stored as one of a few quoted names.
@@ -569,6 +603,7 @@ impl Config {
         let (mut config, warnings) = Self::parse_lenient(&text);
         config.save_dir = config.save_dir.map(|dir| expand_tilde(&dir));
         config.games.re1_source = config.games.re1_source.map(|dir| expand_tilde(&dir));
+        config.games.re2_source = config.games.re2_source.map(|dir| expand_tilde(&dir));
         let warnings = warnings
             .into_iter()
             .map(|warning| format!("{}: {warning}", path.display()))
@@ -796,13 +831,16 @@ impl Config {
         Self::update(path, |config| config.updates = updates.clone())
     }
 
-    /// Persist the launcher's remembered Resident Evil source and Steam build
-    /// id, keeping the file's other keys. A `None` source removes the entry.
-    pub fn save_games(path: &Path, source: Option<&Path>, build: Option<&str>) -> Result<()> {
-        Self::update(path, |config| {
-            config.games.re1_source = source.map(Path::to_path_buf);
-            config.games.re1_build = build.map(str::to_string);
-        })
+    /// Persist the launcher's remembered source and Steam build id for
+    /// `game`, keeping the file's other keys (the other game's entries
+    /// included). A `None` source removes the entry.
+    pub fn save_games(
+        path: &Path,
+        game: convert::Game,
+        source: Option<&Path>,
+        build: Option<&str>,
+    ) -> Result<()> {
+        Self::update(path, |config| config.games.set(game, source, build))
     }
 
     /// Persist the window keys of `graphics` (`fullscreen`, `window_width`,
@@ -1074,19 +1112,14 @@ fn parse_games_line(
         bail!("line {line}: `{key}` expects a quoted string");
     }
     let value = parse_quoted(value, line)?;
+    if value.is_empty() && matches!(key, "re1_source" | "re1_build" | "re2_source" | "re2_build") {
+        bail!("line {line}: {key} is empty");
+    }
     match key {
-        "re1_source" => {
-            if value.is_empty() {
-                bail!("line {line}: re1_source is empty");
-            }
-            games.re1_source = Some(PathBuf::from(value));
-        }
-        "re1_build" => {
-            if value.is_empty() {
-                bail!("line {line}: re1_build is empty");
-            }
-            games.re1_build = Some(value);
-        }
+        "re1_source" => games.re1_source = Some(PathBuf::from(value)),
+        "re1_build" => games.re1_build = Some(value),
+        "re2_source" => games.re2_source = Some(PathBuf::from(value)),
+        "re2_build" => games.re2_build = Some(value),
         other => bail!("line {line}: unknown key `{other}`"),
     }
     Ok(())
@@ -1095,14 +1128,17 @@ fn parse_games_line(
 /// The `[games]` keys that are set.
 fn render_games(games: &Games) -> String {
     let mut out = String::new();
-    if let Some(source) = &games.re1_source {
-        out.push_str(&format!(
-            "re1_source = {}\n",
-            quote(&source.to_string_lossy())
-        ));
-    }
-    if let Some(build) = &games.re1_build {
-        out.push_str(&format!("re1_build = {}\n", quote(build)));
+    for game in convert::Game::ALL {
+        let id = game.id();
+        if let Some(source) = games.source(game) {
+            out.push_str(&format!(
+                "{id}_source = {}\n",
+                quote(&source.to_string_lossy())
+            ));
+        }
+        if let Some(build) = games.build(game) {
+            out.push_str(&format!("{id}_build = {}\n", quote(build)));
+        }
     }
     out
 }
@@ -2294,7 +2330,20 @@ menu_text_size = \"huge\"
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         fs::write(&path, "language = \"en-US\"\n").unwrap();
-        Config::save_games(&path, Some(Path::new(r"D:\Steam\RE1")), Some("42")).unwrap();
+        Config::save_games(
+            &path,
+            convert::Game::Re1,
+            Some(Path::new(r"D:\Steam\RE1")),
+            Some("42"),
+        )
+        .unwrap();
+        Config::save_games(
+            &path,
+            convert::Game::Re2,
+            Some(Path::new(r"D:\Steam\RE2")),
+            None,
+        )
+        .unwrap();
         let (loaded, warnings) = Config::load(&path);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
@@ -2302,9 +2351,21 @@ menu_text_size = \"huge\"
             Some(Path::new(r"D:\Steam\RE1"))
         );
         assert_eq!(loaded.games.re1_build.as_deref(), Some("42"));
+        assert_eq!(
+            loaded.games.re2_source.as_deref(),
+            Some(Path::new(r"D:\Steam\RE2"))
+        );
+        assert_eq!(loaded.games.re2_build, None);
         assert_eq!(loaded.language.as_deref(), Some("en-US"));
+        assert_eq!(Config::parse(&loaded.render()).unwrap(), loaded);
 
-        Config::save_games(&path, None, None).unwrap();
+        Config::save_games(&path, convert::Game::Re2, None, None).unwrap();
+        assert_eq!(Config::load(&path).0.games.re2_source, None);
+        assert_eq!(
+            Config::load(&path).0.games.re1_source.as_deref(),
+            Some(Path::new(r"D:\Steam\RE1"))
+        );
+        Config::save_games(&path, convert::Game::Re1, None, None).unwrap();
         assert_eq!(Config::load(&path).0.games, Games::default());
         let _ = fs::remove_dir_all(&dir);
     }
