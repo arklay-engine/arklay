@@ -932,7 +932,7 @@ fn classify_enemy(name: &str) -> Class {
         return raw(path);
     }
     if player <= 1 && id <= 0x15 {
-        return raw(format!("enemy/em{id:02x}{player}.emd"));
+        return raw(crate::enemy::scenario_model_path(id, player));
     }
     Class::Unmapped
 }
@@ -978,15 +978,23 @@ fn classify_sound(file: &str) -> Class {
     if !known {
         return Class::Unmapped;
     }
-    // The room tables' copy, plus every enemy sound slot that plays it.
-    let enemy = crate::sfx::ENEMY_SOUNDS.iter().flat_map(|(set, slots)| {
-        slots
-            .iter()
-            .filter(|(_, name)| name.eq_ignore_ascii_case(stem))
-            .map(move |(slot, _)| format!("{}/{set}_{slot:02x}.wav", crate::sfx::ENEMY_DIR))
-    });
+    // The room tables' copy (an enemy sound only when a room script plays
+    // it there), plus every enemy sound slot that plays it.
+    let enemy = crate::sfx::ENEMY_SOUNDS
+        .iter()
+        .flat_map(|(id, style, slots)| {
+            let dir = crate::sfx::enemy_dir(*id);
+            slots
+                .iter()
+                .filter(|(_, name)| name.eq_ignore_ascii_case(stem))
+                .map(move |(slot, _)| {
+                    format!("{}.wav", crate::sfx::enemy_sound_stem(&dir, *style, *slot))
+                })
+        });
     Class::Map(
-        std::iter::once(format!("se/{stem}.wav"))
+        crate::sfx::packs_se_entry(stem)
+            .then(|| format!("se/{stem}.wav"))
+            .into_iter()
             .chain(enemy)
             .map(|entry| Target {
                 entry,
@@ -1639,8 +1647,14 @@ mod tests {
             one(&map, "mod_biorand/objspr/OSP00061.pak"),
             "room/1060/mask/01.bmp"
         );
-        assert_eq!(one(&map, "mod_biorand/enemy/EM1000.EMD"), "enemy/em000.emd");
-        assert_eq!(one(&map, "mod_biorand/enemy/EM1115.EMD"), "enemy/em151.emd");
+        assert_eq!(
+            one(&map, "mod_biorand/enemy/EM1000.EMD"),
+            "enemy/00/enemy_0.emd"
+        );
+        assert_eq!(
+            one(&map, "mod_biorand/enemy/EM1115.EMD"),
+            "enemy/15/enemy_1.emd"
+        );
         assert_eq!(
             one(&map, "mod_biorand/enemy/em1021.emd"),
             crate::enemy::model_path(0x21).unwrap()
@@ -1680,11 +1694,14 @@ mod tests {
 
     #[test]
     fn enemy_sound_files_also_replace_every_enemy_slot_that_plays_them() {
-        let paths = ["sound/Z_ISI02.WAV", "sound/ft_wdA.wav"];
+        let paths = ["sound/Z_ISI02.WAV", "sound/HE_NOUT.WAV", "sound/ft_wdA.wav"];
         let map = mapped_entries(&paths, &[]);
+        // An enemy sound lives in the enemy's folder only, unless a room
+        // script also plays it through the room table.
+        assert_eq!(map["sound/Z_ISI02.WAV"], ["enemy/00/sound/02_04.wav"]);
         assert_eq!(
-            map["sound/Z_ISI02.WAV"],
-            ["se/z_isi02.wav", "enemy/em00_02_04.wav"]
+            map["sound/HE_NOUT.WAV"],
+            ["se/he_nout.wav", "enemy/06/sound/01_07.wav"]
         );
         assert_eq!(map["sound/ft_wdA.wav"], ["se/ft_wda.wav"]);
     }

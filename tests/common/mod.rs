@@ -28,8 +28,8 @@ pub fn asset_env() -> Option<(PathBuf, PathBuf)> {
 /// Open the shipped pack with the checked-in enemy scripts layered over it.
 ///
 /// The shared pack may have been converted from an older tree, so a test that
-/// must exercise the repository's Lua shadows the pack's `enemy/*.lua` copies
-/// with the `ENEMY_SCRIPTS` the build embeds. Rooms and models still come from
+/// must exercise the repository's Lua shadows the pack's `enemy/**.lua` and
+/// `lib/**.lua` copies with the `ENEMY_SCRIPTS` the build embeds. Rooms and models still come from
 /// the real pack.
 // The soak binary includes this module without calling it.
 #[allow(dead_code)]

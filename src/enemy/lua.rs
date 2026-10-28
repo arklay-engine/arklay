@@ -1,9 +1,9 @@
 //! The enemy-script runtime: one sandboxed Lua VM per session hosting the
-//! per-id `enemy/em{id:02x}.lua` update functions.
+//! per-id `enemy/{id:02x}/enemy.lua` update functions.
 //!
-//! A pack opts into enemy scripting by carrying `enemy/em{id:02x}.lua` entries;
-//! each defines `function update(e)`, called once per fixed tick for every
-//! active entity slot whose id it names. Scripts import other pack entries
+//! A pack opts into enemy scripting by carrying `enemy/{id:02x}/enemy.lua`
+//! entries; each defines `function update(e)`, called once per fixed tick for
+//! every active entity slot whose id it names. Scripts import other pack entries
 //! with a sandboxed, pack-scoped `require(name)`: `/path` is absolute from the
 //! pack root, `./path` and `../path` are relative to the requiring module, and
 //! a bare `path` is tried as an exact entry and then relative to the requiring
@@ -34,7 +34,7 @@ mod imp {
 
     use crate::budget;
     use crate::effects::Attach;
-    use crate::enemy::{EntityAnim, in_camera_zone, live_look_at_target};
+    use crate::enemy::{EntityAnim, in_camera_zone, live_look_at_target, script_path};
     use crate::game::{BANK_ENEMIES, BANK_SCENARIO, BANK_SYSTEM, EntitySound, GameState};
     use crate::lua::new_sandboxed_state;
     use crate::model::Clip;
@@ -173,7 +173,7 @@ mod imp {
             match result {
                 Ok(()) => true,
                 Err(err) => {
-                    eprintln!("[enemy] em{id:02x} update disabled: {err}");
+                    eprintln!("[enemy] {id:02x} update disabled: {err}");
                     self.failed.insert(id);
                     self.scripts.remove(&id);
                     false
@@ -259,9 +259,9 @@ mod imp {
         /// The pack stems tried, in order, for enemy sound slot `slot` of
         /// entity id `id` in room `room` (`stage << 8 | room`).
         ///
-        /// The enemy's own set `em{id:02x}` comes first, then every set its
+        /// The enemy's own set `{id:02x}` comes first, then every set its
         /// script's `sounds.base` chain inherits; a base naming another enemy
-        /// id (`em00`) follows that enemy's own declaration in turn. The style
+        /// id (`00`) follows that enemy's own declaration in turn. The style
         /// is the `sounds.styles[room]` of the first set in the chain that
         /// declares a `styles` table. Loads the scripts on first use; an id
         /// with no script plays its own set only.
@@ -273,7 +273,7 @@ mod imp {
             slot: u8,
         ) -> Vec<String> {
             self.pack.set(pack as *const Pack);
-            let mut sets = vec![format!("em{id:02x}")];
+            let mut sets = vec![format!("{id:02x}")];
             let mut style: Option<Option<u8>> = None;
             let mut next = Some(id);
             while let Some(id) = next.take() {
@@ -323,8 +323,8 @@ mod imp {
     /// A script's `sounds` declaration: the sound set it inherits and the
     /// per-room styles it selects.
     ///
-    /// `sounds = "em00"` inherits `em00`'s sounds; the table form
-    /// `sounds = { base = "em00", styles = { [0x103] = 0x02 } }` also picks
+    /// `sounds = "00"` inherits entity 0x00's sounds; the table form
+    /// `sounds = { base = "00", styles = { [0x103] = 0x02 } }` also picks
     /// the style id each room (`stage << 8 | room`) plays.
     #[derive(Debug, Clone, Default, PartialEq)]
     struct EnemySounds {
@@ -361,18 +361,13 @@ mod imp {
     }
 
     /// The entity id a sound set names when it is another enemy's own set
-    /// (`em0d` is id 0x0D); `None` for any other set.
+    /// (`0d` is id 0x0D, the folder `enemy/0d`); `None` for any other set.
     fn enemy_set_id(set: &str) -> Option<u8> {
-        let hex = set.strip_prefix("em")?;
-        if hex.len() != 2 {
+        let lower_hex = |byte: &u8| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte);
+        if set.len() != 2 || !set.as_bytes().iter().all(lower_hex) {
             return None;
         }
-        u8::from_str_radix(hex, 16).ok()
-    }
-
-    /// The pack entry of id `id`'s script.
-    fn script_path(id: u8) -> String {
-        format!("enemy/em{id:02x}.lua")
+        u8::from_str_radix(set, 16).ok()
     }
 
     /// Create a module environment: a fresh table falling back to the VM's
@@ -411,9 +406,9 @@ mod imp {
     ///
     /// `name` is a pack path, with the `.lua` suffix optional:
     ///
-    /// - `/enemy/lib/npc` is absolute, from the pack root;
-    /// - `./npc` and `../lib/npc` are relative to the requiring module;
-    /// - `enemy/lib/npc` is tried as an exact entry first and relative to the
+    /// - `/lib/npc` is absolute, from the pack root;
+    /// - `./npc` and `../0c/enemy` are relative to the requiring module;
+    /// - `lib/npc` is tried as an exact entry first and relative to the
     ///   requiring module second, so shared modules read naturally.
     ///
     /// The first module found is executed once per VM and its return value
@@ -5086,13 +5081,14 @@ mod tests {
     /// table: the per-room styles stand in for the original's tables.
     #[test]
     fn enemy_sounds_reproduce_the_shipped_room_tables() {
-        use crate::sfx::{ENEMY_DIR, ENEMY_SOUNDS, room_row, room_sound};
+        use crate::sfx::{ENEMY_SOUNDS, enemy_dir, enemy_sound_stem, room_row, room_sound};
         let files: std::collections::HashMap<String, &str> = ENEMY_SOUNDS
             .iter()
-            .flat_map(|(set, slots)| {
+            .flat_map(|(id, style, slots)| {
+                let dir = enemy_dir(*id);
                 slots
                     .iter()
-                    .map(move |(slot, name)| (format!("{ENEMY_DIR}/{set}_{slot:02x}"), *name))
+                    .map(move |(slot, name)| (enemy_sound_stem(&dir, *style, *slot), *name))
             })
             .collect();
         let pack = pack(crate::enemy::ENEMY_SCRIPTS);
@@ -5105,10 +5101,7 @@ mod tests {
                     .enemy_sound_stems(&pack, id, room, slot)
                     .iter()
                     .find_map(|stem| files.get(stem).copied());
-                assert_eq!(
-                    resolved, shipped,
-                    "em{id:02x} in room {room:03X} slot {slot}"
-                );
+                assert_eq!(resolved, shipped, "{id:02x} in room {room:03X} slot {slot}");
             }
         }
         assert_eq!(host.failed_scripts(), 0);
@@ -5118,40 +5111,44 @@ mod tests {
     fn enemy_sound_stems_follow_the_sounds_declaration() {
         let pack = pack(&[
             (
-                "enemy/em40.lua",
-                "sounds = { base = 'em41', styles = { [0x105] = 0x2b } }\nfunction update(e) end",
+                "enemy/40/enemy.lua",
+                "sounds = { base = '41', styles = { [0x105] = 0x2b } }\nfunction update(e) end",
             ),
             (
-                "enemy/em41.lua",
+                "enemy/41/enemy.lua",
                 "sounds = '/shared/beast'\nfunction update(e) end",
             ),
-            ("enemy/em42.lua", "sounds = 7\nfunction update(e) end"),
+            ("enemy/42/enemy.lua", "sounds = 7\nfunction update(e) end"),
         ]);
         let mut host = LuaEnemyHost::new();
         assert_eq!(
             host.enemy_sound_stems(&pack, 0x40, 0x105, 3),
             [
-                "enemy/em40_2b_03",
-                "enemy/em40_03",
-                "enemy/em41_2b_03",
-                "enemy/em41_03",
-                "shared/beast_2b_03",
-                "shared/beast_03"
+                "enemy/40/sound/2b_03",
+                "enemy/40/sound/00_03",
+                "enemy/41/sound/2b_03",
+                "enemy/41/sound/00_03",
+                "shared/beast/sound/2b_03",
+                "shared/beast/sound/00_03"
             ]
         );
         // A room the styles table does not list plays the default sets.
         assert_eq!(
             host.enemy_sound_stems(&pack, 0x40, 0x106, 3),
-            ["enemy/em40_03", "enemy/em41_03", "shared/beast_03"]
+            [
+                "enemy/40/sound/00_03",
+                "enemy/41/sound/00_03",
+                "shared/beast/sound/00_03"
+            ]
         );
         // An invalid declaration and an id with no script play their own set.
         assert_eq!(
             host.enemy_sound_stems(&pack, 0x42, 0x105, 0),
-            ["enemy/em42_00"]
+            ["enemy/42/sound/00_00"]
         );
         assert_eq!(
             host.enemy_sound_stems(&pack, 0x43, 0x105, 0),
-            ["enemy/em43_00"]
+            ["enemy/43/sound/00_00"]
         );
     }
 
@@ -5159,7 +5156,7 @@ mod tests {
     fn spiderweb_source() -> &'static str {
         crate::enemy::ENEMY_SCRIPTS
             .iter()
-            .find(|(path, _)| *path == "enemy/em13.lua")
+            .find(|(path, _)| *path == "enemy/13/enemy.lua")
             .expect("the checked-in spider web script")
             .1
     }
@@ -5189,7 +5186,7 @@ mod tests {
 
     #[test]
     fn spiderweb_script_initialises_and_idles() {
-        let pack = pack(&[("enemy/em13.lua", spiderweb_source())]);
+        let pack = pack(&[("enemy/13/enemy.lua", spiderweb_source())]);
         let mut game = spiderweb_game();
         let mut host = LuaEnemyHost::new();
 
@@ -5211,7 +5208,7 @@ mod tests {
 
     #[test]
     fn spiderweb_script_burns_and_destroys() {
-        let pack = pack(&[("enemy/em13.lua", spiderweb_source())]);
+        let pack = pack(&[("enemy/13/enemy.lua", spiderweb_source())]);
         let mut game = spiderweb_game();
         let mut host = LuaEnemyHost::new();
         let _ = update(&mut host, &mut game, &pack);
@@ -5252,7 +5249,7 @@ mod tests {
     /// damage -> state 2/3 -> script reaction -> death-flag contract.
     #[test]
     fn a_scripted_web_kill_runs_through_the_shared_damage_pipeline() {
-        let pack = pack(&[("enemy/em13.lua", spiderweb_source())]);
+        let pack = pack(&[("enemy/13/enemy.lua", spiderweb_source())]);
         let room = RoomState::default();
         let mut game = spiderweb_game();
         let mut host = LuaEnemyHost::new();
@@ -5288,7 +5285,7 @@ mod tests {
     /// flag is raised.
     #[test]
     fn the_roots_hit_state_gate_rejects_every_weapon() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let room = RoomState::default();
         let mut game = roots_game(0x80);
         game.entities[1].death_event_id = 0xFF;
@@ -5324,7 +5321,7 @@ mod tests {
     #[test]
     fn the_player_hurt_helpers_write_the_player_state() {
         let pack = pack(&[(
-            "enemy/em13.lua",
+            "enemy/13/enemy.lua",
             r#"
 function update(e)
   e:hurt_player(6, 1)
@@ -5776,8 +5773,8 @@ end
                 .1
         };
         let pack = pack(&[
-            ("enemy/em24.lua", source("enemy/em24.lua")),
-            ("enemy/lib/npc.lua", source("enemy/lib/npc.lua")),
+            ("enemy/24/enemy.lua", source("enemy/24/enemy.lua")),
+            ("lib/npc.lua", source("lib/npc.lua")),
         ]);
 
         let mut game = GameState::default();
@@ -5838,8 +5835,8 @@ end
                 .1
         };
         let pack = pack(&[
-            ("enemy/em22.lua", source("enemy/em22.lua")),
-            ("enemy/lib/npc.lua", source("enemy/lib/npc.lua")),
+            ("enemy/22/enemy.lua", source("enemy/22/enemy.lua")),
+            ("lib/npc.lua", source("lib/npc.lua")),
         ]);
         let clips = vec![Clip {
             frames: vec![ClipFrame {
@@ -6742,7 +6739,7 @@ end
     fn adder_source() -> &'static str {
         crate::enemy::ENEMY_SCRIPTS
             .iter()
-            .find(|(path, _)| *path == "enemy/em0a.lua")
+            .find(|(path, _)| *path == "enemy/0a/enemy.lua")
             .expect("the checked-in adder script")
             .1
     }
@@ -6819,7 +6816,7 @@ end
     fn wasp_source() -> &'static str {
         crate::enemy::ENEMY_SCRIPTS
             .iter()
-            .find(|(path, _)| *path == "enemy/em07.lua")
+            .find(|(path, _)| *path == "enemy/07/enemy.lua")
             .expect("the checked-in wasp script")
             .1
     }
@@ -6900,7 +6897,7 @@ end
 
     #[test]
     fn adder_initialises_for_every_spawn_kind() {
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, _, _) = adder_model();
         for kind in [0u8, 1, 2, 3] {
             let mut game = adder_game(kind);
@@ -6975,7 +6972,7 @@ end
 
     #[test]
     fn adder_decide_tables_select_the_behaviour_in_order() {
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, keyframes, skeleton) = adder_model();
         let mut host = LuaEnemyHost::new();
 
@@ -7077,7 +7074,7 @@ end
 
     #[test]
     fn adder_chase_draws_its_setup_and_wobble_in_order() {
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, _, _) = adder_model();
         let mut game = adder_game(0);
         game.id = crate::state::RoomId {
@@ -7129,7 +7126,7 @@ end
     #[test]
     fn adder_bite_hits_the_player_through_the_hit_frame() {
         use crate::effects::fixtures::{block, sprite};
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, keyframes, skeleton) = adder_model();
         let mut game = adder_game(0);
         game.weapon_effects.sprites.push(sprite(
@@ -7227,7 +7224,7 @@ end
 
     #[test]
     fn adder_flinch_hides_the_tail_and_special_weapons_clear_the_latch() {
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, _, _) = adder_model();
         let mut game = adder_game(0);
         let mut host = LuaEnemyHost::new();
@@ -7280,7 +7277,7 @@ end
     /// behaviour 4 with the spawn record's death flag raised.
     #[test]
     fn adder_knife_death_writhes_and_raises_the_event() {
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, keyframes, skeleton) = adder_model();
         let mut game = adder_game(0);
         game.entity_anims[1].keyframes = Some(keyframes);
@@ -7343,7 +7340,7 @@ end
     #[test]
     fn adder_firearm_death_retreats_and_respawns_by_room() {
         use crate::effects::fixtures::{block, sprite};
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, keyframes, skeleton) = adder_model();
         for (room_number, expected_kind) in [(0u8, 2u8), (1, 1)] {
             let mut game = adder_game(1);
@@ -7438,7 +7435,7 @@ end
     #[test]
     fn adder_retreat_setup_sprays_blood_at_the_two_joints() {
         use crate::effects::fixtures::{block, sprite};
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, keyframes, skeleton) = adder_model();
         let mut game = adder_game(1);
         game.weapon_effects.sprites.push(sprite(
@@ -7494,7 +7491,7 @@ end
     /// between every tick.
     #[test]
     fn adder_reset_between_frames_preserves_the_scene() {
-        let pack = pack(&[("enemy/em0a.lua", adder_source())]);
+        let pack = pack(&[("enemy/0a/enemy.lua", adder_source())]);
         let (clips, keyframes, skeleton) = adder_model();
         let room = adder_room();
         let mut cached_game = adder_game(2);
@@ -7576,7 +7573,7 @@ end
     /// roll and the four-draw health roll, in exact draw order.
     #[test]
     fn wasp_initialises_for_every_nest_kind() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
         for kind in [0x00u8, 0x02, 0x10, 0x11, 0x12, 0x20, 0x22] {
             let mut game = wasp_game(kind);
@@ -7635,7 +7632,7 @@ end
     /// the roused short-circuit and both loose-wasp wake paths.
     #[test]
     fn wasp_nest_state_machine_arms_emerges_and_wakes() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
 
         // A dormant nest counts its dwell down and arms at the pre-decrement
@@ -7714,7 +7711,7 @@ end
     /// and the un-touched return before the attack gate.
     #[test]
     fn wasp_hover_blinks_the_wings_and_flips_altitude_in_draw_order() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
         let mut game = wasp_game(0);
         let mut host = LuaEnemyHost::new();
@@ -7762,7 +7759,7 @@ end
     /// with the bob reset, and the takeoff spiral's speed/offset arithmetic.
     #[test]
     fn wasp_victory_and_takeoff_steer_and_draw_in_order() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
         let mut game = wasp_game(0);
         let mut host = LuaEnemyHost::new();
@@ -7836,7 +7833,7 @@ end
     /// pin-and-sting pick when the player is not facing the wasp.
     #[test]
     fn wasp_hover_commits_to_the_sting_or_the_grab() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
 
         // Touch, close, aimed, in the band, path clear, not attacked: the
@@ -7889,7 +7886,7 @@ end
     /// attacked latch and behavior 100, and the big wasp's scripted kill.
     #[test]
     fn wasp_sting_damages_by_playthrough_and_big_kills_scriptedly() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
 
         let mut game = wasp_game(0);
@@ -7952,7 +7949,7 @@ end
     /// hit frame, the sting cue and the payout.
     #[test]
     fn wasp_grab_latches_the_pose_and_pays_out() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, keyframes, skeleton) = wasp_model();
         let mut game = wasp_game(0);
         game.entity_anims[1].keyframes = Some(keyframes);
@@ -8055,7 +8052,7 @@ end
     /// crush that drops a limp wasp into the death state.
     #[test]
     fn wasp_knockdown_falls_lands_and_is_crushed() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
         let mut game = wasp_game(0);
         let mut host = LuaEnemyHost::new();
@@ -8120,7 +8117,7 @@ end
     /// the tenth respawn's big variant, and the heavy/big removal.
     #[test]
     fn wasp_death_corpse_respawns_and_big_is_removed() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, _, _) = wasp_model();
 
         // The light kill frame leaves the corpse and its two blood puffs.
@@ -8243,7 +8240,7 @@ end
     /// a VM reset between every tick.
     #[test]
     fn wasp_reset_between_frames_preserves_the_scene() {
-        let pack = pack(&[("enemy/em07.lua", wasp_source())]);
+        let pack = pack(&[("enemy/07/enemy.lua", wasp_source())]);
         let (clips, keyframes, skeleton) = wasp_model();
         let mut cached_game = wasp_game(0x10);
         let mut reset_game = wasp_game(0x10);
@@ -8329,7 +8326,7 @@ end
     #[test]
     fn wasp_script_sees_typed_scratch_properties() {
         let pack = pack(&[(
-            "enemy/em07.lua",
+            "enemy/07/enemy.lua",
             r#"
 function update(e)
     e.wasp_drift = -0x1234
@@ -8387,7 +8384,7 @@ end
     fn crow_source() -> &'static str {
         crate::enemy::ENEMY_SCRIPTS
             .iter()
-            .find(|(path, _)| *path == "enemy/em05.lua")
+            .find(|(path, _)| *path == "enemy/05/enemy.lua")
             .expect("the checked-in crow script")
             .1
     }
@@ -8477,7 +8474,7 @@ end
 
     #[test]
     fn crow_initialises_for_every_spawn_kind() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         for kind in [0u8, 0x10, 0x02, 0x11] {
             let mut game = crow_game(kind);
@@ -8556,7 +8553,7 @@ end
 
     #[test]
     fn crow_perch_counts_down_and_rolls_the_idle_clip() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -8645,7 +8642,7 @@ end
 
     #[test]
     fn crow_scatter_takeoff_reads_the_player_state_word() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
 
         for player_state in [0u8, 3] {
@@ -8735,7 +8732,7 @@ end
 
     #[test]
     fn crow_wingbeat_arcs_and_hands_over() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -8804,7 +8801,7 @@ end
 
     #[test]
     fn crow_dive_and_glide_bounds() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -8933,7 +8930,7 @@ end
 
     #[test]
     fn crow_strike_run_and_dive_attack_vy_recipes() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -9034,7 +9031,7 @@ end
     #[test]
     fn crow_peck_bites_and_latches_on() {
         for (second, damage) in [(false, 6u16), (true, 16)] {
-            let pack = pack(&[("enemy/em05.lua", crow_source())]);
+            let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
             let (clips, _, _) = crow_model();
             let mut game = crow_game(0);
             let mut host = LuaEnemyHost::new();
@@ -9149,7 +9146,7 @@ end
 
         // A crow that reaches the landing while the player is already in a
         // reaction parks on 9 and does not double-bite.
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -9175,7 +9172,7 @@ end
 
     #[test]
     fn crow_grab_struggle_mashes_and_releases() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
 
         let branch = |mash: bool, struggle: i8| {
@@ -9259,7 +9256,7 @@ end
 
     #[test]
     fn crow_recoil_beats_up_and_recovers() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -9314,7 +9311,7 @@ end
 
     #[test]
     fn crow_death_lands_or_bursts_on_the_floor_step() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
 
         // A real floor: land, fade the shadow yellow and play the landing.
@@ -9387,7 +9384,7 @@ end
 
     #[test]
     fn crow_tail_clamps_and_shadow_gate() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -9454,7 +9451,7 @@ end
 
     #[test]
     fn crow_swerve_steers_when_stuck() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -9523,7 +9520,7 @@ end
 
     #[test]
     fn crow_pause_gate_holds_the_machine_but_still_clamps() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, _, _) = crow_model();
         let mut game = crow_game(0);
         let mut host = LuaEnemyHost::new();
@@ -9546,7 +9543,7 @@ end
     #[test]
     fn crow_script_sees_typed_scratch_properties() {
         let pack = pack(&[(
-            "enemy/em05.lua",
+            "enemy/05/enemy.lua",
             r#"
 function update(e)
     e.crow_turn_rate = -0x1234
@@ -9609,7 +9606,7 @@ end
 
     #[test]
     fn crow_reset_between_frames_preserves_the_scene() {
-        let pack = pack(&[("enemy/em05.lua", crow_source())]);
+        let pack = pack(&[("enemy/05/enemy.lua", crow_source())]);
         let (clips, keyframes, skeleton) = crow_model();
         let mut cached_game = crow_game(0);
         let mut reset_game = crow_game(0);
@@ -9669,7 +9666,7 @@ end
     #[test]
     fn scalar_properties_read_write_and_truncate() {
         let pack = pack(&[(
-            "enemy/em13.lua",
+            "enemy/13/enemy.lua",
             r#"
 function update(e)
     e.health = -1
@@ -9696,7 +9693,7 @@ end
 
     #[test]
     fn reset_between_frames_preserves_behaviour() {
-        let pack = pack(&[("enemy/em13.lua", spiderweb_source())]);
+        let pack = pack(&[("enemy/13/enemy.lua", spiderweb_source())]);
         let mut cached_game = spiderweb_game();
         let mut reset_game = spiderweb_game();
         let mut cached = LuaEnemyHost::new();
@@ -9734,15 +9731,15 @@ end
         let util = "local m = {} function m.set_health(e, v) e.health = v end return m";
         let cases: &[(&str, i16)] = &[
             ("require(\"lib/util\")", 11),
-            ("require(\"./lib/util\")", 12),
-            ("require(\"/enemy/lib/util\")", 13),
-            ("require(\"enemy/lib/util.lua\")", 14),
+            ("require(\"../../lib/util\")", 12),
+            ("require(\"/lib/util\")", 13),
+            ("require(\"lib/util.lua\")", 14),
         ];
         for &(call, expected) in cases {
             let script = format!(
                 "local util = {call}\nfunction update(e) util.set_health(e, {expected}) end"
             );
-            let pack = pack(&[("enemy/lib/util.lua", util), ("enemy/em13.lua", &script)]);
+            let pack = pack(&[("lib/util.lua", util), ("enemy/13/enemy.lua", &script)]);
             let mut game = spiderweb_game();
             let mut host = LuaEnemyHost::new();
             assert!(update(&mut host, &mut game, &pack), "{call}");
@@ -9758,18 +9755,18 @@ end
 
     #[test]
     fn require_caches_modules_and_supports_nested_and_runtime_imports() {
-        // helper is required relatively from inside util; em13 requires util
+        // helper is required relatively from inside util; the spider web requires util
         // lazily from inside update and checks the two spellings share one
         // cached module.
         let pack = pack(&[
-            ("enemy/lib/helper.lua", "return { count = 0 }"),
+            ("lib/helper.lua", "return { count = 0 }"),
             (
-                "enemy/lib/util.lua",
+                "lib/util.lua",
                 "local h = require(\"./helper\")\nlocal m = { helper = h }\nh.count = h.count + 1\nreturn m",
             ),
             (
-                "enemy/em13.lua",
-                "function update(e)\n local a = require(\"lib/util\")\n local b = require(\"enemy/lib/util\")\n e.health = (a == b and a.helper.count or 0)\nend",
+                "enemy/13/enemy.lua",
+                "function update(e)\n local a = require(\"lib/util\")\n local b = require(\"/lib/util\")\n e.health = (a == b and a.helper.count or 0)\nend",
             ),
         ]);
         let mut game = spiderweb_game();
@@ -9787,7 +9784,7 @@ end
         for name in ["nope", "../outside", "/../outside", ""] {
             let script =
                 format!("local m = require(\"{name}\")\nfunction update(e) e.health = 1 end");
-            let pack = pack(&[("enemy/em13.lua", script.as_str())]);
+            let pack = pack(&[("enemy/13/enemy.lua", script.as_str())]);
             let mut game = spiderweb_game();
             let mut host = LuaEnemyHost::new();
             assert!(!update(&mut host, &mut game, &pack), "module {name:?}");
@@ -9798,8 +9795,8 @@ end
     #[test]
     fn a_failing_script_parks_only_its_own_id() {
         let pack = pack(&[
-            ("enemy/em0a.lua", "function update(e) error('boom') end"),
-            ("enemy/em13.lua", spiderweb_source()),
+            ("enemy/0a/enemy.lua", "function update(e) error('boom') end"),
+            ("enemy/13/enemy.lua", spiderweb_source()),
         ]);
         let mut game = spiderweb_game();
         game.entities[2].id = 0x0A;
@@ -9819,7 +9816,7 @@ end
     fn roots_source() -> &'static str {
         crate::enemy::ENEMY_SCRIPTS
             .iter()
-            .find(|(path, _)| *path == "enemy/em0e.lua")
+            .find(|(path, _)| *path == "enemy/0e/enemy.lua")
             .expect("the checked-in roots script")
             .1
     }
@@ -9862,7 +9859,7 @@ end
 
     #[test]
     fn roots_script_initialises_for_every_spawn_kind() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         for behavior in [0x80u8, 0x01, 0x00] {
             let mut game = roots_game(behavior);
             let mut host = LuaEnemyHost::new();
@@ -9900,7 +9897,7 @@ end
 
     #[test]
     fn roots_dormant_kind_never_moves() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x80);
         let mut host = LuaEnemyHost::new();
         let before = game.rand_state;
@@ -9923,7 +9920,7 @@ end
 
     #[test]
     fn roots_retract_kind_collapses_once_and_pins_the_spawn_point() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x01);
         let mut host = LuaEnemyHost::new();
         let room = RoomState::default();
@@ -9965,7 +9962,7 @@ end
 
     #[test]
     fn roots_writhe_cycle_runs_its_phase_table_and_flashes() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x00);
         let mut host = LuaEnemyHost::new();
         let room = RoomState::default();
@@ -10040,7 +10037,7 @@ end
 
     #[test]
     fn roots_damage_reset_rewinds_the_cycle() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x00);
         let mut host = LuaEnemyHost::new();
         let room = RoomState::default();
@@ -10059,7 +10056,7 @@ end
 
     #[test]
     fn roots_raw_phase_states_dispatch_the_phase_table() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x80);
         let mut host = LuaEnemyHost::new();
         let room = RoomState::default();
@@ -10082,7 +10079,7 @@ end
 
     #[test]
     fn roots_groan_timer_draws_in_order_and_queues_the_enemy_bank() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let room = roots_room();
         let mut game = roots_game(0x00);
         let mut host = LuaEnemyHost::new();
@@ -10138,7 +10135,7 @@ end
 
     #[test]
     fn roots_cycle_start_cue_is_out_of_the_enemy_helper_range() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let room = roots_room();
         // The script's phase-0 call requests id 0x18; the shared helper only
         // accepts the group-relative ids 0..=9, so it queues nothing.
@@ -10154,7 +10151,7 @@ end
 
     #[test]
     fn roots_pause_gate_holds_the_machine_but_still_pins() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let mut game = roots_game(0x01);
         let mut host = LuaEnemyHost::new();
         let room = RoomState::default();
@@ -10180,7 +10177,7 @@ end
 
     #[test]
     fn roots_reset_between_frames_preserves_the_cycle() {
-        let pack = pack(&[("enemy/em0e.lua", roots_source())]);
+        let pack = pack(&[("enemy/0e/enemy.lua", roots_source())]);
         let room = roots_room();
         let mut cached_game = roots_game(0x00);
         let mut reset_game = roots_game(0x00);
@@ -10204,7 +10201,7 @@ end
     #[test]
     fn roots_script_sees_typed_scratch_properties() {
         let pack = pack(&[(
-            "enemy/em0e.lua",
+            "enemy/0e/enemy.lua",
             r#"
 function update(e)
     -- Signed words round-trip through the entity scratch bytes.
@@ -10257,7 +10254,7 @@ mod pause_tests {
         let mut writer = PackWriter::new();
         writer
             .add(
-                "enemy/em13.lua",
+                "enemy/13/enemy.lua",
                 b"function update(e) if e.monster_paused then return end e.health = 9 end".to_vec(),
             )
             .unwrap();
@@ -10371,7 +10368,7 @@ mod spider_tests {
 
     #[test]
     fn webspinner_script_initialises_and_health_rolls() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let mut game = spider_game(0x03, 0);
         game.rand_state = 7;
         let mut expected = 7u32;
@@ -10397,7 +10394,7 @@ mod spider_tests {
 
     #[test]
     fn webspinner_ceiling_spawn_hangs_and_suppresses_its_shadow() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let mut game = spider_game(0x03, 2);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10410,7 +10407,7 @@ mod spider_tests {
 
     #[test]
     fn blacktiger_script_initialises() {
-        let pack = pack(&[("enemy/em04.lua", source("enemy/em04.lua"))]);
+        let pack = pack(&[("enemy/04/enemy.lua", source("enemy/04/enemy.lua"))]);
         let mut game = spider_game(0x04, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10430,7 +10427,7 @@ mod spider_tests {
 
     #[test]
     fn webspinner_picker_commits_to_the_approach() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let mut game = spider_game(0x03, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10469,7 +10466,7 @@ mod spider_tests {
 
     #[test]
     fn webspinner_walk_turn_steps_the_speed_and_counts_down() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let mut game = spider_game(0x03, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10502,7 +10499,7 @@ mod spider_tests {
 
     #[test]
     fn webspinner_lunge_bites_and_writes_the_player_reaction() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let mut game = spider_game(0x03, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10544,7 +10541,7 @@ mod spider_tests {
 
     #[test]
     fn webspinner_shoot_a_spawns_and_updates_the_threads() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let mut game = spider_game(0x03, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10610,7 +10607,7 @@ mod spider_tests {
 
     #[test]
     fn webspinner_threads_stick_to_the_moving_player() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let mut game = spider_game(0x03, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10651,7 +10648,7 @@ mod spider_tests {
 
     #[test]
     fn blacktiger_walk_installs_the_two_volume_profile() {
-        let pack = pack(&[("enemy/em04.lua", source("enemy/em04.lua"))]);
+        let pack = pack(&[("enemy/04/enemy.lua", source("enemy/04/enemy.lua"))]);
         let mut game = spider_game(0x04, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10683,7 +10680,7 @@ mod spider_tests {
 
     #[test]
     fn blacktiger_bite_reach_damages_the_player() {
-        let pack = pack(&[("enemy/em04.lua", source("enemy/em04.lua"))]);
+        let pack = pack(&[("enemy/04/enemy.lua", source("enemy/04/enemy.lua"))]);
         let mut game = spider_game(0x04, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10713,7 +10710,7 @@ mod spider_tests {
 
     #[test]
     fn blacktiger_shoot_c_spawns_the_variable_thread_count() {
-        let pack = pack(&[("enemy/em04.lua", source("enemy/em04.lua"))]);
+        let pack = pack(&[("enemy/04/enemy.lua", source("enemy/04/enemy.lua"))]);
         let mut game = spider_game(0x04, 0);
         let mut host = LuaEnemyHost::new();
         assert!(step(&mut host, &mut game, &pack, &[]));
@@ -10757,7 +10754,7 @@ mod spider_tests {
     #[test]
     fn spider_script_sees_typed_scratch_properties() {
         let pack = pack(&[(
-            "enemy/em03.lua",
+            "enemy/03/enemy.lua",
             r#"
 function update(e)
     e.ws_turn = -0x1234
@@ -10803,7 +10800,7 @@ end
     #[test]
     fn blacktiger_script_sees_typed_scratch_properties() {
         let pack = pack(&[(
-            "enemy/em04.lua",
+            "enemy/04/enemy.lua",
             r#"
 function update(e)
     e.bt_turn = -0x4321
@@ -10843,7 +10840,7 @@ end
 
     #[test]
     fn webspinner_reset_between_frames_preserves_the_scene() {
-        let pack = pack(&[("enemy/em03.lua", source("enemy/em03.lua"))]);
+        let pack = pack(&[("enemy/03/enemy.lua", source("enemy/03/enemy.lua"))]);
         let (clips, keyframes, skeleton) = spider_model();
         let mut cached_game = spider_game(0x03, 0);
         let mut reset_game = spider_game(0x03, 0);
@@ -10907,7 +10904,7 @@ end
 
     #[test]
     fn blacktiger_reset_between_frames_preserves_the_scene() {
-        let pack = pack(&[("enemy/em04.lua", source("enemy/em04.lua"))]);
+        let pack = pack(&[("enemy/04/enemy.lua", source("enemy/04/enemy.lua"))]);
         let (clips, keyframes, skeleton) = spider_model();
         let mut cached_game = spider_game(0x04, 0);
         let mut reset_game = spider_game(0x04, 0);
@@ -10979,10 +10976,10 @@ mod zombie_tests {
     fn pack() -> Pack {
         let mut writer = PackWriter::new();
         for name in [
-            "enemy/em00.lua",
-            "enemy/em01.lua",
-            "enemy/em11.lua",
-            "enemy/lib/zombie.lua",
+            "enemy/00/enemy.lua",
+            "enemy/01/enemy.lua",
+            "enemy/11/enemy.lua",
+            "lib/zombie.lua",
         ] {
             writer.add(name, source(name).as_bytes().to_vec()).unwrap();
         }
@@ -12010,7 +12007,7 @@ mod zombie_tests {
         let mut writer = PackWriter::new();
         writer
             .add(
-                "enemy/em00.lua",
+                "enemy/00/enemy.lua",
                 br#"
 function update(e)
     e.state_word = 0x03020101
@@ -12242,8 +12239,8 @@ mod cerberus_tests {
         let mut writer = PackWriter::new();
         writer
             .add(
-                "enemy/em02.lua",
-                source("enemy/em02.lua").as_bytes().to_vec(),
+                "enemy/02/enemy.lua",
+                source("enemy/02/enemy.lua").as_bytes().to_vec(),
             )
             .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -12796,7 +12793,7 @@ mod cerberus_tests {
     #[test]
     fn cerberus_script_sees_typed_scratch_properties() {
         let pack = pack_with(&[(
-            "enemy/em02.lua",
+            "enemy/02/enemy.lua",
             r#"
 function update(e)
     e.cb_dist = -0x12345678
@@ -12867,8 +12864,8 @@ mod chimera_tests {
         let mut writer = PackWriter::new();
         writer
             .add(
-                "enemy/em09.lua",
-                source("enemy/em09.lua").as_bytes().to_vec(),
+                "enemy/09/enemy.lua",
+                source("enemy/09/enemy.lua").as_bytes().to_vec(),
             )
             .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -13384,7 +13381,7 @@ mod chimera_tests {
     #[test]
     fn chimera_script_sees_typed_scratch_properties() {
         let pack = pack_with(&[(
-            "enemy/em09.lua",
+            "enemy/09/enemy.lua",
             r#"
 function update(e)
     e.c_repause = -0x1234
@@ -13438,8 +13435,8 @@ mod hunter_tests {
         let mut writer = PackWriter::new();
         writer
             .add(
-                "enemy/em06.lua",
-                source("enemy/em06.lua").as_bytes().to_vec(),
+                "enemy/06/enemy.lua",
+                source("enemy/06/enemy.lua").as_bytes().to_vec(),
             )
             .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -14386,7 +14383,7 @@ mod hunter_tests {
     #[test]
     fn ghost_hides_the_player_from_the_sight_bindings() {
         let pack = pack_with(&[(
-            "enemy/em06.lua",
+            "enemy/06/enemy.lua",
             r#"
 function update(e)
     e.status_flags = 0xA1
@@ -14413,7 +14410,7 @@ end
     #[test]
     fn ghost_leaves_npcs_tracking_the_player() {
         let pack = pack_with(&[(
-            "enemy/em20.lua",
+            "enemy/20/enemy.lua",
             r#"
 function update(e)
     assert(not e:player_hidden())
@@ -14432,7 +14429,7 @@ end
     #[test]
     fn hunter_script_sees_typed_scratch_properties() {
         let pack = pack_with(&[(
-            "enemy/em06.lua",
+            "enemy/06/enemy.lua",
             r#"
 function update(e)
     e.hunter_speed = -0x1234
@@ -14533,7 +14530,7 @@ mod monster_plant_tests {
     fn source() -> &'static str {
         crate::enemy::ENEMY_SCRIPTS
             .iter()
-            .find(|(path, _)| *path == "enemy/em0f.lua")
+            .find(|(path, _)| *path == "enemy/0f/enemy.lua")
             .expect("the checked-in monster plant script")
             .1
     }
@@ -14541,7 +14538,7 @@ mod monster_plant_tests {
     fn pack() -> Pack {
         let mut writer = PackWriter::new();
         writer
-            .add("enemy/em0f.lua", source().as_bytes().to_vec())
+            .add("enemy/0f/enemy.lua", source().as_bytes().to_vec())
             .unwrap();
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     }
@@ -15186,7 +15183,7 @@ mod computer_arms_tests {
 
     fn pack() -> Pack {
         let mut writer = PackWriter::new();
-        for path in ["enemy/em14.lua", "enemy/em15.lua"] {
+        for path in ["enemy/14/enemy.lua", "enemy/15/enemy.lua"] {
             writer.add(path, source(path).as_bytes().to_vec()).unwrap();
         }
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -15645,7 +15642,7 @@ mod computer_arms_tests {
         fn source() -> &'static str {
             crate::enemy::ENEMY_SCRIPTS
                 .iter()
-                .find(|(path, _)| *path == "enemy/em08.lua")
+                .find(|(path, _)| *path == "enemy/08/enemy.lua")
                 .expect("the checked-in Plant 42 script")
                 .1
         }
@@ -15653,7 +15650,7 @@ mod computer_arms_tests {
         fn pack() -> Pack {
             let mut writer = PackWriter::new();
             writer
-                .add("enemy/em08.lua", source().as_bytes().to_vec())
+                .add("enemy/08/enemy.lua", source().as_bytes().to_vec())
                 .unwrap();
             Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
         }
@@ -16336,7 +16333,7 @@ mod computer_arms_tests {
         use std::sync::Arc;
 
         fn source(id: u8) -> &'static str {
-            let path = format!("enemy/em{id:02x}.lua");
+            let path = format!("enemy/{id:02x}/enemy.lua");
             crate::enemy::ENEMY_SCRIPTS
                 .iter()
                 .find(|(entry, _)| *entry == path)
@@ -16347,7 +16344,7 @@ mod computer_arms_tests {
         fn pack() -> Pack {
             let mut writer = PackWriter::new();
             for id in [0x0Du8, 0x12] {
-                let path = format!("enemy/em{id:02x}.lua");
+                let path = format!("enemy/{id:02x}/enemy.lua");
                 writer.add(&path, source(id).as_bytes().to_vec()).unwrap();
             }
             Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -16792,7 +16789,7 @@ mod computer_arms_tests {
         use std::sync::Arc;
 
         fn source(id: u8) -> &'static str {
-            let path = format!("enemy/em{id:02x}.lua");
+            let path = format!("enemy/{id:02x}/enemy.lua");
             crate::enemy::ENEMY_SCRIPTS
                 .iter()
                 .find(|(entry, _)| *entry == path)
@@ -16803,7 +16800,7 @@ mod computer_arms_tests {
         fn pack() -> Pack {
             let mut writer = PackWriter::new();
             for id in [0x0Cu8, 0x10] {
-                let path = format!("enemy/em{id:02x}.lua");
+                let path = format!("enemy/{id:02x}/enemy.lua");
                 writer.add(&path, source(id).as_bytes().to_vec()).unwrap();
             }
             Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
@@ -17347,7 +17344,7 @@ mod computer_arms_tests {
         fn source() -> &'static str {
             crate::enemy::ENEMY_SCRIPTS
                 .iter()
-                .find(|(path, _)| *path == "enemy/em0b.lua")
+                .find(|(path, _)| *path == "enemy/0b/enemy.lua")
                 .expect("the checked-in Neptune script")
                 .1
         }
@@ -17355,7 +17352,7 @@ mod computer_arms_tests {
         fn pack() -> Pack {
             let mut writer = PackWriter::new();
             writer
-                .add("enemy/em0b.lua", source().as_bytes().to_vec())
+                .add("enemy/0b/enemy.lua", source().as_bytes().to_vec())
                 .unwrap();
             Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
         }

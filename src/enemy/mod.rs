@@ -11,7 +11,7 @@
 //! # Documented deviations from the original
 //!
 //! - **Monsters run pack scripts.** Entity ids `0x00..=0x1F` allocate and
-//!   dispatch to the pack's `enemy/em{id:02x}.lua` script; an id whose script
+//!   dispatch to the pack's `enemy/{id:02x}/enemy.lua` script; an id whose script
 //!   (or model) the pack does not carry parks inert. Monster behaviour that
 //!   has not been ported yet therefore stays empty until its script lands.
 //! - **Weapon-joint spawns use the entity matrix.** Handler 08's muzzle and
@@ -73,7 +73,8 @@ pub mod yawn;
 pub use anim::EntityAnim;
 pub use data::{
     CharacterInit, FIRST_ID, LAST_ID, RADIUS_LARGE, RADIUS_MEDIUM, RADIUS_SPRAWLED, character_init,
-    character_name, character_shadow, collision_radius, model_path, shadow_tint,
+    character_name, character_shadow, collision_radius, generic_model_path, model_path,
+    scenario_model_path, script_path, shadow_tint,
 };
 pub use lua::LuaEnemyHost;
 
@@ -103,8 +104,8 @@ const IDLE_BLEND_STEP: u16 = 0x400;
 /// model for the rest of the session, so every entity with the same id and
 /// scenario shares one copy. Scripted characters (`0x20..=0x2E`) have a single
 /// model; monsters (`0x00..=0x15`) prefer the scenario block
-/// `enemy/em{id:02x}{player}.emd` and fall back to the generic
-/// `enemy/em{id:02x}.emd` when the pack carries no scenario-specific entry.
+/// `enemy/{id:02x}/enemy_{player}.emd` and fall back to the generic
+/// `enemy/{id:02x}/enemy.emd` when the pack carries no scenario-specific entry.
 /// A missing or invalid entry is logged once and remembered as absent: the
 /// entity still exists and its script still runs, it just has no clips to
 /// animate with and no mesh to draw.
@@ -136,8 +137,8 @@ fn model_candidates(id: u8, player: u8) -> Vec<String> {
     }
     if id < CHARACTER_ID_MIN {
         return vec![
-            format!("enemy/em{id:02x}{player}.emd"),
-            format!("enemy/em{id:02x}.emd"),
+            data::scenario_model_path(id, player),
+            data::generic_model_path(id),
         ];
     }
     Vec::new()
@@ -261,7 +262,7 @@ pub(crate) fn note_player_damage_bank(game: &mut GameState, model: Option<&Emd>)
 /// before the player's physics mirror. Returns the number of slots updated.
 ///
 /// Ids below `CHARACTER_ID_MIN` are monsters: their per-frame logic is the
-/// pack's `enemy/em{id:02x}.lua` script, run through `lua`, and the script
+/// pack's `enemy/{id:02x}/enemy.lua` script, run through `lua`, and the script
 /// owns its own message gate (the original gates most monsters on
 /// `g_message_flags & 4`, the spider web on nothing) and its own tail. Ids at
 /// or above `CHARACTER_ID_MIN` keep the native character driver; a displayed

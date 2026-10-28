@@ -636,7 +636,7 @@ mod tests {
         assert_eq!(classify("item/0b/item.xml"), Format::ItemXml);
         assert_eq!(classify("item/0b/notes.xml"), Format::Opaque);
         assert_eq!(classify("item/0b/model.tmd"), Format::Tmd);
-        assert_eq!(classify("enemy/em20.emd"), Format::Emd);
+        assert_eq!(classify("enemy/20/enemy.emd"), Format::Emd);
         assert_eq!(classify("player/00.emw"), Format::Emw);
         assert_eq!(classify("player/ws202.tmd"), Format::Tmd);
         assert_eq!(classify("door/00.dor"), Format::Dor);
@@ -647,7 +647,7 @@ mod tests {
         assert_eq!(classify("data/combat.bin"), Format::Combat);
         assert_eq!(classify("movie/00.avi"), Format::Avi);
         assert_eq!(classify("movie/OJ.mp4"), Format::Mp4);
-        assert_eq!(classify("enemy/em13.lua"), Format::Lua);
+        assert_eq!(classify("enemy/13/enemy.lua"), Format::Lua);
         assert_eq!(classify("lua/demo.lua"), Format::Lua);
         assert_eq!(classify("data/core00.esp"), Format::Opaque);
         // A retired text table stays opaque instead of breaking the command.
