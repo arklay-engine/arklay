@@ -387,8 +387,8 @@ fn room_301_ladder_climbs_the_shaft_both_ways() {
         vm.run_init(&mut host);
     }
     assert!(room.room_anim.is_some(), "ROOM301 room animation pair");
-    let emd = emd::parse(&pack.read("player/00.emd").unwrap()).unwrap();
-    let emw = emd::parse_emw(&pack.read("player/00.emw").unwrap()).unwrap();
+    let emd = emd::parse(&pack.read("player/00/skin/00.emd").unwrap()).unwrap();
+    let emw = emd::parse_emw(&pack.read("player/00/weapon/00.emw").unwrap()).unwrap();
     let mut player = player::spawn(id, &room);
 
     // Bottom leg: slot 2's variant zone starts the 0x35 clip, which moves the
@@ -825,8 +825,8 @@ fn capture_player_partway_up_the_lab_stairway() {
         cut.background = Some(bmp::decode(&pack.read(&entry).unwrap()).unwrap());
     }
 
-    let emd = emd::parse(&pack.read("player/00.emd").unwrap()).unwrap();
-    let emw = emd::parse_emw(&pack.read("player/00.emw").unwrap()).unwrap();
+    let emd = emd::parse(&pack.read("player/00/skin/00.emd").unwrap()).unwrap();
+    let emw = emd::parse_emw(&pack.read("player/00/weapon/00.emw").unwrap()).unwrap();
     let mut player = player::spawn(id, &room);
     // Inside the camera-switch zone that selects the stairway cut (7) and on
     // the ramp's lane.

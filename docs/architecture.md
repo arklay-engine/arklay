@@ -273,9 +273,11 @@ own texture page, exactly like the original's weapon-slot TMD; the scripted
 characters' `WS*.TMD` held meshes draw the same way off their character
 texture page. The fire data (fire frames, sound ids, FX offsets, end frames,
 special frame windows, aim heights), the weapon-file table and the held-weapon
-table live in `src/weapons.rs`; the pack entries are `player/w{id:02x}.emw`
-(the no-weapon pair stays `player/{character}.emw`) and
-`player/ws{id:03x}.tmd`.
+table live in `src/weapons.rs`. The converter applies both tables once, so the
+runtime only formats entries: `player/<id>/weapon/<item>.emw` (item `00` is the
+no-weapon locomotion set) and `enemy/<id>/weapon/<behavior>.tmd`, a missing
+entry meaning nothing is held. Shared files are packed under every user and
+share one blob.
 
 The shared damage layer rides this order without adding a tick step. A fired
 weapon calls `GameState::apply_weapon_damage_with` from the weapon machine's

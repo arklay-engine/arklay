@@ -41,7 +41,7 @@ is a bounded no-op or a documented approximation rather than a silent failure.
 7. **Costume model swap.** Resolved: `costume_set`/`costume_ck` (0x4F/0x50)
    store and branch on the original's one-byte variant in the wardrobe rooms
    (11C in stages 1 and 6), and the converter packs `em1030`..`em1033` as
-   `player/{character}_alt{variant}.emd`. When `MSF2_COSTUME_VARIANT` is set,
+   `player/<id>/skin/01.emd`/`02.emd` (variant 0/1). When `MSF2_COSTUME_VARIANT` is set,
    room entry swaps the player model for
    `em1030 + character + 2 * variant`, as the original's `LoadEntityEMD`
    does. EM1032 carries junk in its damage-bank directory slot, which the

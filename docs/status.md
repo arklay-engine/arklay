@@ -437,7 +437,8 @@ E11a lands the player weapon runtime. The converter now packs every shipped
 weapon asset — the 30 `W*.EMW` animations the locomotion pair did not already
 carry, as `player/w{id:02x}.emw`, and the seven `WS*.TMD` held-weapon meshes
 as `player/ws{id:03x}.tmd` — and `arklay verify` reports the new `emw`/`tmd`
-rows green. `src/weapons.rs` transcribes the original's aim/fire machine: the
+rows green (since reorganised into `player/<id>/weapon/<item>.emw` and
+`enemy/<id>/weapon/<behavior>.tmd`). `src/weapons.rs` transcribes the original's aim/fire machine: the
 entry from the aim input, the raise/hold poses, the reticle scan and lock-on
 turn, the auto-aim fire with its ammo frame, damage frame, big muzzle flash,
 second flash and shotgun double-fire, the quick-fire and reversed recover, the

@@ -7208,9 +7208,9 @@ end
 
         // Snd_em(1) plus Play3DSnd(3, 0) at the player's position.
         assert!(
-            game.entity_sounds
-                .iter()
-                .any(|sound| sound.name == "Chris01" && sound.pos == game.entities[0].pos),
+            game.entity_sounds.iter().any(
+                |sound| sound.name == "player/00/sound/00" && sound.pos == game.entities[0].pos
+            ),
             "the bite cue plays at the player"
         );
         // The bite billboard is attached to the player at (0, -520, 0).

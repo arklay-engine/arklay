@@ -257,7 +257,7 @@ fn room1000_player_frame_is_deterministic_and_mask_aware() {
     });
     let background = bmp::decode(&pack.read(&id.cut_entry(0)).unwrap()).unwrap();
     let page = bmp::decode_mask(&page_bytes).unwrap();
-    let emd = arklay::emd::parse(&pack.read("player/00.emd").unwrap()).unwrap();
+    let emd = arklay::emd::parse(&pack.read("player/00/skin/00.emd").unwrap()).unwrap();
 
     // The same pose the engine's gameplay render would use at spawn.
     let player_state = arklay::player::spawn(id, &room);

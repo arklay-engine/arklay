@@ -24,10 +24,10 @@ fn every_packed_weapon_asset_parses_and_resolves() {
     };
     let pack = Pack::open(&pack_path).unwrap();
 
-    // Both characters' full weapon rows resolve to packed EMWs.
-    for character in 0..=1u8 {
-        for weapon in 0..=0x0Du8 {
-            let entry = weapons::weapon_emw_entry(character, weapon).unwrap();
+    // Every character's weapon sets resolve to packed EMWs.
+    for character in 0..=3u8 {
+        for weapon in weapons::PLAYER_WEAPON_ITEMS {
+            let entry = weapons::weapon_emw_entry(character, weapon);
             let bytes = pack
                 .read(&entry)
                 .unwrap_or_else(|_| panic!("missing {entry}"));
@@ -35,24 +35,19 @@ fn every_packed_weapon_asset_parses_and_resolves() {
                 panic!("{entry} does not parse: {err:#}");
             });
             assert!(!emw.clips.is_empty(), "{entry} carries no clips");
-            assert_eq!(emw.mesh.objects.len(), 1, "{entry} is the held mesh");
+            if weapon != 0 {
+                assert_eq!(emw.mesh.objects.len(), 1, "{entry} is the held mesh");
+            }
             assert_eq!(emw.skeleton.relative.len(), 15, "{entry} joints");
         }
-        // The two special weapons' rows.
-        for weapon in [weapons::ITEM_INGRAM, weapons::ITEM_MINIMI] {
-            let entry = weapons::weapon_emw_entry(character, weapon).unwrap();
-            assert!(pack.contains(&entry), "missing special {entry}");
-        }
     }
-    assert!(pack.contains("player/00.emw"), "the locomotion pair");
-    assert!(pack.contains("player/01.emw"));
 
     // Every armed character id's held-weapon mesh resolves and parses. The
     // ids in between (0x25..=0x29) are the unarmed characters and carry no
-    // held-weapon TMD; `character_weapon_id` returns None for them.
+    // held-weapon TMD.
     for id in (0x20..=0x24).chain(0x2A..=0x2E) {
         for behavior in 1..=6u8 {
-            let entry = weapons::character_weapon_entry(id, behavior).unwrap();
+            let entry = weapons::character_weapon_entry(id, behavior);
             let bytes = pack
                 .read(&entry)
                 .unwrap_or_else(|_| panic!("missing {entry}"));
@@ -63,15 +58,15 @@ fn every_packed_weapon_asset_parses_and_resolves() {
         }
     }
     for id in 0x25..=0x29 {
-        for behavior in 1..=6u8 {
-            assert_eq!(
-                weapons::character_weapon_entry(id, behavior),
-                None,
-                "unarmed character {id:#04x} behavior {behavior}"
-            );
+        for behavior in 0..=0xFFu8 {
+            let entry = weapons::character_weapon_entry(id, behavior);
+            assert!(!pack.contains(&entry), "unarmed {entry}");
         }
     }
-    assert_eq!(weapons::character_weapon_entry(0x20, 0), None, "unarmed");
+    assert!(
+        !pack.contains(&weapons::character_weapon_entry(0x20, 0)),
+        "unarmed"
+    );
 }
 
 /// Boot the web room, equip the knife and swing through [`weapons::update`]
@@ -108,10 +103,10 @@ fn real_room_web_dies_through_the_weapon_input_path() {
     run.player.collision_mirror = [run.player.pos[0], run.player.pos[2]];
     run.game.entities[0].pos = run.player.pos;
 
-    let emd_bytes = pack.read("player/00.emd").unwrap();
+    let emd_bytes = pack.read("player/00/skin/00.emd").unwrap();
     let emd = arklay::emd::parse(&emd_bytes).unwrap();
-    let emw = arklay::emd::parse_emw(&pack.read("player/00.emw").unwrap()).unwrap();
-    let weapon = arklay::emd::parse_emw(&pack.read("player/w01.emw").unwrap()).unwrap();
+    let emw = arklay::emd::parse_emw(&pack.read("player/00/weapon/00.emw").unwrap()).unwrap();
+    let weapon = arklay::emd::parse_emw(&pack.read("player/00/weapon/01.emw").unwrap()).unwrap();
     let clips = WeaponClips {
         emd: &emd.clips,
         emw: &emw.clips,
@@ -215,7 +210,7 @@ fn a_real_beretta_reload_ejects_the_clip_mesh() {
 
     // The player EMD is 15 animated joints plus the clip's own 16th object;
     // the renderer only draws the latter while the physics is live.
-    let emd = arklay::emd::parse(&pack.read("player/00.emd").unwrap()).unwrap();
+    let emd = arklay::emd::parse(&pack.read("player/00/skin/00.emd").unwrap()).unwrap();
     assert_eq!(emd.skeleton.relative.len(), 15, "the animated joints");
     assert_eq!(emd.mesh.objects.len(), 16, "15 body objects plus the clip");
     assert!(
@@ -294,11 +289,15 @@ fn handgun_fire_queues_weapon_bank_sounds_that_are_packed() {
     run.game.set_equipped(Some(2));
 
     let character = run.game.id.player_flag & 3;
-    let emd =
-        arklay::emd::parse(&pack.read(&format!("player/{character:02}.emd")).unwrap()).unwrap();
-    let emw =
-        arklay::emd::parse_emw(&pack.read(&format!("player/{character:02}.emw")).unwrap()).unwrap();
-    let weapon_entry = weapons::weapon_emw_entry(character, 2).unwrap();
+    let emd = arklay::emd::parse(
+        &pack
+            .read(&arklay::convert::skin_entry(character, 0))
+            .unwrap(),
+    )
+    .unwrap();
+    let emw = arklay::emd::parse_emw(&pack.read(&weapons::weapon_emw_entry(character, 0)).unwrap())
+        .unwrap();
+    let weapon_entry = weapons::weapon_emw_entry(character, 2);
     let weapon = arklay::emd::parse_emw(&pack.read(&weapon_entry).unwrap()).unwrap();
     let clips = WeaponClips {
         emd: &emd.clips,
@@ -413,11 +412,15 @@ fn real_tactical_reload_refills_the_beretta_from_its_ammo_stack() {
     run.game.player_options.tactical_reload = true;
 
     let character = run.game.id.player_flag & 3;
-    let emd =
-        arklay::emd::parse(&pack.read(&format!("player/{character:02}.emd")).unwrap()).unwrap();
-    let emw =
-        arklay::emd::parse_emw(&pack.read(&format!("player/{character:02}.emw")).unwrap()).unwrap();
-    let weapon_entry = weapons::weapon_emw_entry(character, 2).unwrap();
+    let emd = arklay::emd::parse(
+        &pack
+            .read(&arklay::convert::skin_entry(character, 0))
+            .unwrap(),
+    )
+    .unwrap();
+    let emw = arklay::emd::parse_emw(&pack.read(&weapons::weapon_emw_entry(character, 0)).unwrap())
+        .unwrap();
+    let weapon_entry = weapons::weapon_emw_entry(character, 2);
     let weapon = arklay::emd::parse_emw(&pack.read(&weapon_entry).unwrap()).unwrap();
     let clips = WeaponClips {
         emd: &emd.clips,

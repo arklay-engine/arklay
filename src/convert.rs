@@ -34,6 +34,7 @@ use crate::sfx;
 use crate::state::{Image, RoomId};
 use crate::voice;
 use crate::voice_table;
+use crate::weapons;
 use crate::{bmp, door, ivm, lzw, rdt, tim};
 
 /// How many directory levels below the root are searched for the stage and
@@ -974,6 +975,18 @@ fn copy_se(
             }
             Some(_) => {}
             None => missing.push(format!("{}.WAV", name.to_ascii_uppercase())),
+        }
+    }
+    // Each player character's own hurt sounds, dry then echoing.
+    for (character, names) in (0u8..).zip(sfx::CHARACTER_SOUNDS) {
+        for (sound, name) in (0u8..).zip(names) {
+            let file = format!("{}.wav", name.to_ascii_lowercase());
+            match index.get(&file) {
+                Some(path) => {
+                    files.push((sfx::character_sound_entry(character, sound), path.clone()))
+                }
+                None => missing.push(format!("{}.WAV", name.to_ascii_uppercase())),
+            }
         }
     }
     // Each enemy's own sounds, packed next to its script and model
@@ -2849,7 +2862,7 @@ struct Rdt {
 /// One player asset resolved to its pack entry.
 #[derive(Debug)]
 struct PlayerAsset {
-    /// Pack entry, e.g. `player/01.emd`.
+    /// Pack entry, e.g. `player/01/skin/00.emd`.
     entry: String,
     /// Source file in the installation.
     source: PathBuf,
@@ -2858,7 +2871,7 @@ struct PlayerAsset {
 /// One weapon asset (`W*.EMW` / `WS*.TMD`) resolved to its pack entry.
 #[derive(Debug)]
 struct WeaponAsset {
-    /// Pack entry, e.g. `player/w02.emw`.
+    /// Pack entry, e.g. `player/00/weapon/02.emw`.
     entry: String,
     /// Source file in the installation.
     source: PathBuf,
@@ -3424,7 +3437,7 @@ fn resolve_players(enemy: Option<&Path>, players: Option<&Path>) -> Result<Vec<P
         let file = format!("char1{id}.emd");
         match enemy_index.as_ref().and_then(|index| index.get(&file)) {
             Some(path) => assets.push(PlayerAsset {
-                entry: format!("player/{id:02}.emd"),
+                entry: skin_entry(id as u8, 0),
                 source: path.clone(),
             }),
             None => missing.push(format!("ENEMY/Char1{id}.EMD")),
@@ -3433,8 +3446,8 @@ fn resolve_players(enemy: Option<&Path>, players: Option<&Path>) -> Result<Vec<P
     // The four alternate-outfit models (`ENEMY/EM1030..EM1033.EMD`): the
     // ref's `LoadEntityEMD` picks `em1030`/`em1032` for Chris and
     // `em1031`/`em1033` for Jill by the costume variant byte. They are packed
-    // as `player/{character:02}_alt{variant}.emd`; a missing file is skipped
-    // and the player keeps the base model.
+    // as skins 01/02 ([`costume_entry`]); a missing file is skipped and the
+    // player keeps the base model.
     for (file, character, variant) in [
         ("em1030.emd", 0, 0),
         ("em1031.emd", 1, 0),
@@ -3448,13 +3461,14 @@ fn resolve_players(enemy: Option<&Path>, players: Option<&Path>) -> Result<Vec<P
             });
         }
     }
-    for (id, file) in [(0usize, "w00.emw"), (1, "w10.emw")] {
-        match players_index.as_ref().and_then(|index| index.get(file)) {
-            Some(path) => assets.push(PlayerAsset {
-                entry: format!("player/{id:02}.emw"),
-                source: path.clone(),
-            }),
-            None => missing.push(format!("PLAYERS/{}", file.to_ascii_uppercase())),
+    // The no-weapon locomotion clips are required; [`resolve_weapon_assets`]
+    // packs them with the weapon sets.
+    for file in ["w00.emw", "w10.emw"] {
+        if !players_index
+            .as_ref()
+            .is_some_and(|index| index.contains_key(file))
+        {
+            missing.push(format!("PLAYERS/{}", file.to_ascii_uppercase()));
         }
     }
 
@@ -3468,20 +3482,28 @@ fn resolve_players(enemy: Option<&Path>, players: Option<&Path>) -> Result<Vec<P
     Ok(assets)
 }
 
+/// The pack entry of `character`'s model `skin`: `00` is the character's
+/// own model and `01`/`02` its alternate outfits.
+pub fn skin_entry(character: u8, skin: u8) -> String {
+    format!("player/{character:02x}/skin/{skin:02x}.emd")
+}
+
 /// The pack entry of `character`'s alternate-outfit model `variant` (the
 /// costume variant byte's low bit).
 pub fn costume_entry(character: u8, variant: u8) -> String {
-    format!("player/{:02}_alt{}.emd", character & 1, variant & 1)
+    skin_entry(character & 1, 1 + (variant & 1))
 }
 
 /// Resolve the shipped weapon files under `PLAYERS/`: every `W*.EMW` weapon
 /// animation and every `WS*.TMD` held-weapon model.
 ///
-/// The two no-weapon locomotion clips (`W00.EMW` for Chris, `W10.EMW` for
-/// Jill) stay under their existing `player/00.emw`/`player/01.emw` entries;
-/// every other `W` file is packed as `player/w{file:02x}.emw`, and the TMDs as
-/// `player/ws{file:03x}.tmd`. A missing directory or file is a warning, not a
-/// failure: the weapon runtime falls back to the no-weapon pose.
+/// Each file is packed once per user, so the runtime needs no tables: a `W`
+/// file under every [`weapons::weapon_emw_entry`] the per-character table
+/// selects it for (the no-weapon locomotion pair as weapon `00`), and a TMD
+/// under every [`weapons::character_weapon_entry`] that holds it. Identical
+/// copies share one blob. A file nothing selects is left out. A missing
+/// directory or file is a warning, not a failure: the weapon runtime falls
+/// back to the no-weapon pose.
 fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
     let Some(dir) = players else {
         return Ok(Vec::new());
@@ -3490,34 +3512,37 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
     let mut assets = Vec::new();
     for name in index.keys() {
         let lower = name.to_ascii_lowercase();
-        if let Some(stem) = lower.strip_prefix('w').and_then(|s| s.strip_suffix(".emw")) {
-            if stem.len() != 2 || !stem.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        let entries: Vec<String> =
+            if let Some(stem) = lower.strip_prefix('w').and_then(|s| s.strip_suffix(".emw")) {
+                if stem.len() != 2 || !stem.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    continue;
+                }
+                let id = u8::from_str_radix(stem, 16)
+                    .with_context(|| format!("invalid weapon animation name {name}"))?;
+                weapons::weapon_emw_targets(id)
+                    .into_iter()
+                    .map(|(character, item)| weapons::weapon_emw_entry(character, item))
+                    .collect()
+            } else if let Some(stem) = lower
+                .strip_prefix("ws")
+                .and_then(|s| s.strip_suffix(".tmd"))
+            {
+                if stem.len() != 3 || !stem.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    continue;
+                }
+                let id = u16::from_str_radix(stem, 16)
+                    .with_context(|| format!("invalid held-weapon name {name}"))?;
+                weapons::character_weapon_targets(id)
+                    .into_iter()
+                    .map(|(id, behavior)| weapons::character_weapon_entry(id, behavior))
+                    .collect()
+            } else {
                 continue;
-            }
-            let id = u8::from_str_radix(stem, 16)
-                .with_context(|| format!("invalid weapon animation name {name}"))?;
-            // The no-weapon locomotion pair is packed by `resolve_players`.
-            if id == 0x00 || id == 0x10 {
-                continue;
-            }
-            let source = index[name].clone();
+            };
+        for entry in entries {
             assets.push(WeaponAsset {
-                entry: format!("player/w{id:02x}.emw"),
-                source,
-            });
-        } else if let Some(stem) = lower
-            .strip_prefix("ws")
-            .and_then(|s| s.strip_suffix(".tmd"))
-        {
-            if stem.len() != 3 || !stem.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                continue;
-            }
-            let id = u16::from_str_radix(stem, 16)
-                .with_context(|| format!("invalid held-weapon name {name}"))?;
-            let source = index[name].clone();
-            assets.push(WeaponAsset {
-                entry: format!("player/ws{id:03x}.tmd"),
-                source,
+                entry,
+                source: index[name].clone(),
             });
         }
     }
@@ -3827,7 +3852,10 @@ mod tests {
     fn write_se_files(root: &Path) {
         let sound = root.join("sound");
         fs::create_dir_all(&sound).unwrap();
-        for name in sfx::SE_NAMES.iter() {
+        for name in sfx::SE_NAMES
+            .iter()
+            .chain(sfx::CHARACTER_SOUNDS.as_flattened())
+        {
             fs::write(
                 sound.join(format!("{}.WAV", name.to_ascii_uppercase())),
                 name.as_bytes(),
@@ -4411,19 +4439,32 @@ mod tests {
         fs::write(players.join("w11.emw"), b"emw11").unwrap();
         fs::write(players.join("WS202.TMD"), b"tmd202").unwrap();
         fs::write(players.join("ws236.tmd"), b"tmd236").unwrap();
-        // The locomotion pair stays out of the weapon set.
+        fs::write(players.join("W20.EMW"), b"emw20").unwrap();
+        // Every user of a file gets its own entry, the stage fixture's
+        // locomotion pair included; Barry's unused W20 is left out.
         let assets = resolve_weapon_assets(Some(&players)).unwrap();
         let entries: Vec<&str> = assets.iter().map(|asset| asset.entry.as_str()).collect();
         assert_eq!(
             entries,
             vec![
-                "player/w02.emw",
-                "player/w11.emw",
-                "player/ws202.tmd",
-                "player/ws236.tmd"
+                "enemy/20/weapon/01.tmd",
+                "enemy/20/weapon/02.tmd",
+                "enemy/20/weapon/03.tmd",
+                "enemy/20/weapon/04.tmd",
+                "enemy/20/weapon/05.tmd",
+                "enemy/20/weapon/06.tmd",
+                "enemy/23/weapon/06.tmd",
+                "player/00/weapon/00.emw",
+                "player/00/weapon/02.emw",
+                "player/01/weapon/00.emw",
+                "player/01/weapon/01.emw",
+                "player/02/weapon/00.emw",
+                "player/02/weapon/02.emw",
+                "player/03/weapon/01.emw",
             ]
         );
-        assert_eq!(assets[0].source, players.join("W02.EMW"));
+        assert_eq!(assets[0].source, players.join("WS202.TMD"));
+        assert_eq!(assets[8].source, players.join("W02.EMW"));
 
         // No PLAYERS directory is an empty weapon set, not an error.
         assert!(resolve_weapon_assets(None).unwrap().is_empty());
@@ -4498,19 +4539,34 @@ mod tests {
         assert_eq!(pack.read("door/17.dor").unwrap().as_ref(), b"dor-kai03");
         assert_eq!(pack.read("door/1b.dor").unwrap().as_ref(), b"dor-lad01");
 
-        assert_eq!(pack.read("player/01.emd").unwrap().as_ref(), b"emd1");
-        assert_eq!(pack.read("player/01.emw").unwrap().as_ref(), b"emw1");
         assert_eq!(
-            pack.read("player/00_alt0.emd").unwrap().as_ref(),
+            pack.read("player/01/skin/00.emd").unwrap().as_ref(),
+            b"emd1"
+        );
+        assert_eq!(
+            pack.read("player/01/weapon/00.emw").unwrap().as_ref(),
+            b"emw1"
+        );
+        assert_eq!(
+            pack.read("player/02/weapon/00.emw").unwrap().as_ref(),
+            b"emw0",
+            "Barry moves like Chris"
+        );
+        assert_eq!(
+            pack.read("player/00/skin/01.emd").unwrap().as_ref(),
             b"alt-chris"
         );
         assert_eq!(
-            pack.read("player/01_alt0.emd").unwrap().as_ref(),
+            pack.read("player/01/skin/01.emd").unwrap().as_ref(),
             b"alt-jill"
         );
         assert!(
-            !pack.contains("player/00_alt1.emd"),
+            !pack.contains("player/00/skin/02.emd"),
             "missing outfits are skipped"
+        );
+        assert_eq!(
+            pack.read("player/01/sound/07.wav").unwrap().as_ref(),
+            b"Jill_ef04"
         );
         // The NPC phase copies the fifteen character models raw, lower-cased.
         assert_eq!(pack.read("enemy/20/enemy.emd").unwrap().as_ref(), b"npc-20");
@@ -4536,8 +4592,9 @@ mod tests {
         assert_eq!(count("door/"), 34);
         assert_eq!(
             count("player/"),
-            8,
-            "four models and clips plus two outfit models"
+            6 + 3 + 32,
+            "four models, two outfit models, the locomotion clips of all four \
+             characters but Rebecca and eight sounds each"
         );
         assert_eq!(
             pack.paths()
@@ -4561,7 +4618,7 @@ mod tests {
             pack.paths()
                 .filter(|path| path.starts_with("player/") && path.ends_with(".emw"))
                 .count(),
-            2
+            3
         );
 
         let image = bmp::decode(&pack.read("room/1000/cut/00.bmp").unwrap()).unwrap();
@@ -6174,8 +6231,9 @@ mod tests {
             .count();
         assert_eq!(
             count("enemy/"),
-            15 + 44 + enemy_scripts + enemy_sounds,
-            "15 character models, 44 monster models, their sounds and the checked-in scripts"
+            15 + 44 + enemy_scripts + enemy_sounds + 10 * 6,
+            "15 character models, 44 monster models, their sounds, the checked-in scripts and \
+             the held weapons (ten armed scripted characters, behavior bytes 1-6)"
         );
         assert_eq!(count("effect/"), 33);
         assert_eq!(count("map/"), 16, "15 plans and the backdrop");
@@ -6271,21 +6329,28 @@ mod tests {
         assert_eq!(pack.read("room/1000/mask/00.bmp").unwrap(), expected);
 
         // Four character models (Char10..Char13), the four alternate outfits
-        // (EM1030..EM1033), the two no-weapon locomotion clips (W00, W10) and
-        // the shipped weapon animations/models under `PLAYERS/` (every other
-        // `W*.EMW` and `WS*.TMD`). player/01 is Jill, the character that owns
-        // ROOM1001.
-        assert_eq!(count("player/"), 4 + 4 + 2 + 37);
+        // (EM1030..EM1033), all thirteen weapon animation sets of each of the
+        // four characters and their eight sounds. player/01 is Jill, the
+        // character that owns ROOM1001.
+        assert_eq!(count("player/"), 4 + 4 + 4 * 13 + 4 * 8);
         for entry in [
-            "player/00_alt0.emd",
-            "player/01_alt0.emd",
-            "player/00_alt1.emd",
-            "player/01_alt1.emd",
+            "player/00/skin/01.emd",
+            "player/01/skin/01.emd",
+            "player/00/skin/02.emd",
+            "player/01/skin/02.emd",
         ] {
             assert!(pack.contains(entry), "{entry}");
         }
-        assert!(pack.contains("player/01.emd"));
-        assert!(pack.contains("player/01.emw"));
+        assert!(pack.contains("player/01/skin/00.emd"));
+        assert!(pack.contains("player/01/weapon/00.emw"));
+        assert!(pack.contains("player/03/weapon/00.emw"));
+        // The ten armed scripted characters' held weapons, six behaviors each.
+        assert_eq!(
+            pack.paths()
+                .filter(|path| path.starts_with("enemy/") && path.ends_with(".tmd"))
+                .count(),
+            10 * 6
+        );
 
         let image = bmp::decode(&pack.read("room/1000/cut/00.bmp").unwrap()).unwrap();
         assert_eq!((image.width, image.height), (CUT_WIDTH, CUT_HEIGHT));
