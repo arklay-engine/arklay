@@ -165,49 +165,49 @@ pub const ROWS: [EndingRow; 8] = [
         epilogue: false,
         background: false,
     },
-    // 1 - Chris, both survivors.
+    // 1 - Chris alone (ed1).
     EndingRow {
         staff_roll: true,
         plate: true,
         epilogue: false,
         background: false,
     },
-    // 2 - Jill, both survivors.
+    // 2 - Jill alone (ed2).
     EndingRow {
         staff_roll: true,
         plate: true,
         epilogue: false,
         background: false,
     },
-    // 3 - one survivor plus the partner.
+    // 3 - Chris and Jill (ed3).
     EndingRow {
         staff_roll: true,
         plate: true,
         epilogue: false,
         background: false,
     },
-    // 4 - Chris alone.
+    // 4 - Chris and Rebecca (eu4).
     EndingRow {
         staff_roll: false,
         plate: false,
         epilogue: false,
         background: true,
     },
-    // 5 - Jill alone.
+    // 5 - Jill and Barry (eu5).
     EndingRow {
         staff_roll: false,
         plate: false,
         epilogue: false,
         background: true,
     },
-    // 6 - Chris, no survivors.
+    // 6 - Chris, Jill and Rebecca (ed6).
     EndingRow {
         staff_roll: false,
         plate: false,
         epilogue: true,
         background: true,
     },
-    // 7 - Jill, no survivors.
+    // 7 - Jill, Chris and Barry (ed7).
     EndingRow {
         staff_roll: false,
         plate: false,
@@ -221,25 +221,27 @@ pub fn row(id: u8) -> Option<EndingRow> {
     ROWS.get(usize::from(id)).copied().filter(|_| id != 0)
 }
 
-/// Bank 1 (`g_ScenarioFlags2`) bit the original names
-/// `SCENARIO2_FLAG_PARTNER_ALIVE`: the partner survived.
+/// Bank 1 (`g_ScenarioFlags2`) bit the reference names
+/// `SCENARIO2_FLAG_PARTNER_ALIVE`; set, the partner did not escape (see
+/// [`select_id`]).
 pub const SCENARIO2_FLAG_PARTNER_ALIVE: u8 = 0xC0;
 /// Bank 1 bit the original names `SCENARIO2_FLAG_SECOND_SURVIVOR`.
 pub const SCENARIO2_FLAG_SECOND_SURVIVOR: u8 = 0x4B;
 
 /// Select the ending row (1-7) from the two scenario flags and the player.
 ///
-/// The player always survives. `partner_alive` is the original's
-/// `SCENARIO2_FLAG_PARTNER_ALIVE` bit (the partner: Rebecca on a Chris run,
-/// Barry on a Jill run) and `second_survivor` its `SCENARIO2_FLAG_SECOND_SURVIVOR`
-/// bit. The seven rows are:
+/// `partner_alive` and `second_survivor` are the bits the reference names
+/// `SCENARIO2_FLAG_PARTNER_ALIVE` and `SCENARIO2_FLAG_SECOND_SURVIVOR`; the
+/// names are the reference's guesses, and the films show the first one set
+/// means the partner (Rebecca for Chris, Barry for Jill) did not escape. The
+/// seven rows, with who is aboard the helicopter in each ending film:
 ///
-/// | partner_alive | second_survivor | Chris | Jill |
-/// |---------------|-----------------|-------|------|
-/// | yes           | no              | 1     | 2    |
-/// | yes           | yes             | 3     | 3    |
-/// | no            | no              | 4     | 5    |
-/// | no            | yes             | 6     | 7    |
+/// | partner_alive | second_survivor | Chris                  | Jill                |
+/// |---------------|-----------------|------------------------|---------------------|
+/// | yes           | no              | 1 alone                | 2 alone             |
+/// | yes           | yes             | 3 Chris, Jill          | 3 Chris, Jill       |
+/// | no            | no              | 4 Chris, Rebecca       | 5 Jill, Barry       |
+/// | no            | yes             | 6 Chris, Jill, Rebecca | 7 Jill, Chris, Barry |
 pub fn select_id(partner_alive: bool, second_survivor: bool, character: u8) -> u8 {
     let chris = character & 1 == 0;
     match (partner_alive, second_survivor) {
@@ -306,16 +308,16 @@ mod tests {
 
     #[test]
     fn select_id_covers_the_seven_rows() {
-        // Partner alive and the second survivor flag clear: both survive.
+        // Partner bit set, second survivor clear: alone.
         assert_eq!(select_id(true, false, 0), 1);
         assert_eq!(select_id(true, false, 1), 2);
-        // Partner alive plus the second survivor: one survivor and the partner.
+        // Both bits: Chris and Jill.
         assert_eq!(select_id(true, true, 0), 3);
         assert_eq!(select_id(true, true, 1), 3);
-        // Partner gone, second survivor flag clear: alone.
+        // Neither bit: the player and the partner.
         assert_eq!(select_id(false, false, 0), 4);
         assert_eq!(select_id(false, false, 1), 5);
-        // Partner gone plus the second survivor: no survivors.
+        // Second survivor only: all three.
         assert_eq!(select_id(false, true, 0), 6);
         assert_eq!(select_id(false, true, 1), 7);
         // The character is masked to its low bit.

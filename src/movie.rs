@@ -85,6 +85,9 @@ static NAMES: [Option<&str>; 29] = [
 /// accepts any button.
 static UNSKIPPABLE: [u8; 14] = [2, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27];
 
+/// The skip mask of a skippable film: any button.
+const SKIPPABLE_MASK: u16 = 0x0FFF;
+
 /// The prologue cut window in milliseconds (the JPN/US PC intro, id 1).
 const PROLOGUE_CUT_START_MS: u32 = 177_800;
 /// The prologue cut resume point in milliseconds.
@@ -179,7 +182,7 @@ pub fn exists(pack: &Pack, id: u8) -> bool {
 /// unskippable, like the original's bounds check.
 pub fn skip_mask(id: u8) -> u16 {
     if id <= 28 && !UNSKIPPABLE.contains(&id) {
-        0x0FFF
+        SKIPPABLE_MASK
     } else {
         0x0000
     }
@@ -507,6 +510,13 @@ impl MovieSession {
                 film.audio(start, end, &mut self.pending_audio);
             }
         }
+    }
+
+    /// Let any button skip the film, whatever its own mask: the interactive
+    /// window's port-only skips extend to the films the original made
+    /// unskippable (the ending chain and the staff rolls).
+    pub fn allow_skip(&mut self) {
+        self.skip_mask = SKIPPABLE_MASK;
     }
 
     /// Poll the skip state with the currently held pad word. Returns `true`
@@ -1110,6 +1120,17 @@ mod tests {
         }
         assert_eq!(session.tick(BUTTON, None), MovieTick::Skipped);
         assert!(session.skipped());
+    }
+
+    #[test]
+    fn allow_skip_unlocks_an_unskippable_film() {
+        let mut session = session(400, (10, 1), 400);
+        session.skip_mask = 0;
+        assert_eq!(session.tick(0, None), MovieTick::Waiting);
+        assert_ne!(session.tick(1, None), MovieTick::Skipped, "masked");
+        session.allow_skip();
+        session.tick(0, None);
+        assert_eq!(session.tick(1, None), MovieTick::Skipped);
     }
 
     #[test]
