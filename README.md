@@ -31,10 +31,15 @@ engine still resolves replacements by stem but refuses to decode those formats.
 
 Running `arklay` with no arguments opens the startup launcher. Naming a pack
 on the command line skips it and boots the game directly. The launcher finds
-Steam's RE1 install, creates or refreshes `games/re1.akpak`, plays a pack in
-the same window (closing the game window ends the process), discovers mods
-across the data roots and remembers their enable/disable state and order, and
-checks the release and nightly update tracks. The OPTIONS screen edits the
+Steam's RE1 and RE2 installs, creates or refreshes `games/re1.akpak` and
+`games/re2.akpak`, plays a pack in the same window (closing the game window
+ends the process), discovers mods across the data roots and remembers their
+enable/disable state and order, and checks the release and nightly update
+tracks. Once both games are known (a pack or an install of each), LEFT/RIGHT
+on the main, INSTALL and MODS screens switches the selected game: INSTALL,
+REBUILD GAME PACK and MODS act on it, and MODS lists only the mods whose
+`base` is that game's pack. Highlighting a pack on PLAY selects its game too.
+Picking an RE2 folder with the INSTALL folder picker sets up RE2. The OPTIONS screen edits the
 renderer, widescreen, resolution, fullscreen, V-Sync, language, GPU render
 scale and MSAA, frame rate, quick turn and tactical reload, writing every
 change back to `arklay.toml`; booting the game and opening the in-game menu
