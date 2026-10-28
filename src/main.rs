@@ -1098,15 +1098,15 @@ fn main() -> Result<()> {
             jobs,
             verbose,
         }) => {
-            let game = game.map(GameArg::game);
-            let out = out.unwrap_or_else(|| {
-                let game = game.unwrap_or_else(|| arklay::convert::detect_game(&root));
-                PathBuf::from(game.default_pack_name())
-            });
+            let game = match game {
+                Some(game) => game.game(),
+                None => arklay::convert::detect_game(&root)?,
+            };
+            let out = out.unwrap_or_else(|| PathBuf::from(game.default_pack_name()));
             arklay::convert::convert_game_as(
                 &root,
                 &out,
-                game,
+                Some(game),
                 jobs.map_or(0, usize::from),
                 verbose,
             )

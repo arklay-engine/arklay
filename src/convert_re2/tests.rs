@@ -171,12 +171,12 @@ fn player_and_enemy_names_map_to_entries() {
 #[test]
 fn game_detection_finds_the_data_directory_at_any_level() {
     let root = TempDir::new("detect");
-    assert_eq!(detect_game(&root.path), Game::Re1);
+    assert_eq!(detect_game(&root.path).unwrap(), Game::Re1);
     let install = root.path.join("a/b");
     write(&install.join("DATA/pl0/rdt/ROOM1000.RDT"), &rdt(1));
-    assert_eq!(detect_game(&root.path), Game::Re2);
-    assert_eq!(detect_game(&install), Game::Re2);
-    assert_eq!(detect_game(&install.join("DATA")), Game::Re2);
+    assert_eq!(detect_game(&root.path).unwrap(), Game::Re2);
+    assert_eq!(detect_game(&install).unwrap(), Game::Re2);
+    assert_eq!(detect_game(&install.join("DATA")).unwrap(), Game::Re2);
     assert_eq!(
         find_data_dir(&root.path).unwrap(),
         install.join("DATA"),
@@ -185,7 +185,7 @@ fn game_detection_finds_the_data_directory_at_any_level() {
     // Deeper than the search reaches.
     let deep = TempDir::new("detect-deep");
     write(&deep.path.join("a/b/c/d/Pl0/Rdt/ROOM1000.RDT"), &rdt(1));
-    assert_eq!(detect_game(&deep.path), Game::Re1);
+    assert_eq!(detect_game(&deep.path).unwrap(), Game::Re1);
 }
 
 #[test]
@@ -316,4 +316,89 @@ fn over_long_cut_counts_stop_at_the_pointer_group() {
     let pack = Pack::open(&out).unwrap();
     assert!(pack.contains("room/30c0/cut/0f.bmp"));
     assert!(!pack.contains("room/30c0/cut/10.bmp"));
+}
+
+#[test]
+fn file_names_must_be_ascii_hex_where_the_game_reads_hex() {
+    // Multi-byte characters must not split a slice, and `+` is not a digit.
+    assert!(Re2Room::parse("1€").is_none());
+    assert!(Re2Room::parse("1+F0").is_none());
+    assert_eq!(enemy_entry("EMé1", "EMD"), None);
+    assert_eq!(enemy_entry("EM0+1", "EMD"), None);
+    assert_eq!(enemy_entry("EM2+1", "EMD"), None);
+    assert_eq!(player_entry("PLé", "PLD", 0), None);
+    assert_eq!(player_entry("PL+1", "PLD", 0), None);
+    assert_eq!(player_entry("PL00W+1", "PLW", 0), None);
+    // Rooms past the 32 pointer slots a stage has.
+    assert!(Re2Room::parse("11D0").unwrap().has_pointer_slot());
+    assert!(!Re2Room::parse("1200").unwrap().has_pointer_slot());
+}
+
+/// The seven `STAGEn` folders RE1 discovery requires.
+fn make_re1_install(root: &Path) {
+    for stage in 1..=7 {
+        fs::create_dir_all(root.join(format!("STAGE{stage}"))).unwrap();
+    }
+}
+
+#[test]
+fn a_folder_holding_both_games_needs_an_explicit_game() {
+    let root = TempDir::new("both");
+    make_re1_install(&root.path.join("re1"));
+    write(&root.path.join("re2/data/Pl0/Rdt/ROOM1000.RDT"), &rdt(1));
+    let error = detect_game(&root.path).unwrap_err();
+    assert!(format!("{error:#}").contains("--game"), "{error:#}");
+    let out = root.path.join("out.akpak");
+    let error = convert_game(&root.path, &out).unwrap_err();
+    assert!(format!("{error:#}").contains("--game"), "{error:#}");
+    convert_game_as(&root.path, &out, Some(Game::Re2), 1, false).unwrap();
+    assert!(Pack::open(&out).unwrap().contains("room/1000/room.rdt"));
+}
+
+#[test]
+fn the_launcher_check_refuses_an_re2_install() {
+    let root = TempDir::new("launcher");
+    write(&root.path.join("data/Pl0/Rdt/ROOM1000.RDT"), &rdt(1));
+    let error = crate::convert::validate_install(&root.path).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("Resident Evil 2"),
+        "{error:#}"
+    );
+    // The launcher's conversion entry point is RE1-only whatever it is given.
+    let out = root.path.join("re1.akpak");
+    assert!(crate::convert::convert_game_observed(&root.path, &out, 1, false, None, None).is_err());
+    assert!(!out.exists());
+    // A folder with both keeps working for RE1.
+    make_re1_install(&root.path);
+    crate::convert::validate_install(&root.path).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unreadable_folder_does_not_end_the_search() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = TempDir::new("unreadable");
+    let locked = root.path.join("aaa");
+    fs::create_dir_all(&locked).unwrap();
+    write(&root.path.join("re2/data/Pl0/Rdt/ROOM1000.RDT"), &rdt(1));
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    let found = find_data_dir(&root.path);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(found.unwrap(), root.path.join("re2/data"));
+}
+
+#[test]
+fn a_corrupt_stream_costs_only_its_own_cameras() {
+    let root = TempDir::new("corrupt");
+    let data = root.path.join("data");
+    write(&data.join("Pl0/Rdt/ROOM1000.RDT"), &rdt(2));
+    let (mut bin, _) = roomcut(&[(0, 0, 1)]);
+    // Cut 1 points inside the table, where the bytes are no ADT stream.
+    bin[4..8].copy_from_slice(&64u32.to_le_bytes());
+    write(&data.join("Common/bin/roomcut.bin"), &bin);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    let pack = Pack::open(&out).unwrap();
+    assert!(pack.contains("room/1000/cut/00.bmp"));
+    assert!(!pack.contains("room/1000/cut/01.bmp"));
 }

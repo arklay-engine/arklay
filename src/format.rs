@@ -1,9 +1,11 @@
 //! Per-file format detection.
 //!
 //! A pack holds one game, but its files are not tied to one game's formats: a
-//! pack may carry RE1-format and RE2-format files side by side, so a loader
-//! decides each file's format from the file itself, never from a pack-wide
-//! setting. Detection checks, in order:
+//! pack may carry RE1-format and RE2-format files side by side, so each
+//! file's format is decided from the file itself, never from a pack-wide
+//! setting. `verify` and the RE2 converter use this today; the runtime
+//! loaders still read RE1 formats only and will consult it as RE2 loading
+//! lands (#245). Detection checks, in order:
 //!
 //! 1. the extension, where the formats already differ (`.dor` / `.do2`,
 //!    `.emd` / `.pld`), which the caller has already used to pick a family;

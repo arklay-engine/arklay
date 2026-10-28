@@ -177,11 +177,12 @@ impl Huffman {
         let mut free = len + 1;
         for symbol in 0..len {
             let length = self.lengths[symbol];
-            // An unassigned length (only possible above 17) has no code; the
-            // original would walk garbage, so refuse it.
+            // A zero-length symbol never occurs in the stream.
             if length == 0 {
                 continue;
             }
+            // A length above 17 has no canonical start code (the original
+            // would walk garbage), so refuse it.
             ensure!(length <= 17, "ADT Huffman code length {length} is too long");
             let start = self.starts[symbol];
             let mut node = len;
@@ -546,6 +547,78 @@ mod tests {
     fn a_truncated_stream_fails() {
         let stream = literal_and_copy_stream();
         assert!(decode(&stream[..6]).is_err());
+    }
+
+    /// A stream of `bits`, preceded by the 4-byte header and a block count
+    /// of one.
+    fn one_block(bits: Bits) -> Vec<u8> {
+        let mut stream = vec![0u8; 4];
+        stream.extend([1, 0]);
+        stream.extend(bits.out);
+        stream
+    }
+
+    #[test]
+    fn a_code_length_over_17_fails() {
+        let mut bits = Bits::default();
+        bits.push(1, 1);
+        bits.code(20);
+        for _ in 1..16 {
+            bits.push(0, 1);
+        }
+        let error = decode(&one_block(bits)).unwrap_err();
+        assert!(error.to_string().contains("too long"), "{error}");
+    }
+
+    #[test]
+    fn an_unassigned_code_fails() {
+        // Only symbol 0 has a code (`0`) in the small table; the symbol
+        // table then reads `1` through it.
+        let mut bits = Bits::default();
+        bits.push(1, 1);
+        bits.code(1);
+        bits.push(1, 1);
+        bits.code(1);
+        for _ in 2..16 {
+            bits.push(0, 1);
+        }
+        bits.push(1, 1);
+        bits.code(1);
+        bits.push(1, 1);
+        let error = decode(&one_block(bits)).unwrap_err();
+        assert!(error.to_string().contains("unassigned"), "{error}");
+    }
+
+    #[test]
+    fn reading_far_past_the_end_fails() {
+        // A gamma code of zeros runs off the end: the reader stops after
+        // `MAX_OVERRUN` phantom bytes instead of spinning.
+        let error = decode(&[0, 0, 0, 0, 1, 0, 0x80]).unwrap_err();
+        assert!(format!("{error:#}").contains("ADT"), "{error:#}");
+    }
+
+    #[test]
+    fn arbitrary_bytes_never_panic() {
+        // A fixed xorshift sequence of streams, some built on a valid prefix,
+        // stands in for a fuzz run.
+        let valid = super::fixture::uniform_background(0x21);
+        let mut state = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for round in 0..500 {
+            let len = (next() % 600) as usize;
+            let mut data: Vec<u8> = (0..len).map(|_| next() as u8).collect();
+            if round % 2 == 0 {
+                let keep = (next() as usize) % valid.len();
+                data.splice(0..0, valid[..keep].iter().copied());
+            }
+            let _ = decode(&data);
+            let _ = background(&data);
+        }
     }
 
     #[test]

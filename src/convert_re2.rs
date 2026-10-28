@@ -35,6 +35,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
 
@@ -53,6 +54,9 @@ const MAX_DEPTH: usize = 3;
 
 /// Camera cuts a room's `roomcut.bin` pointer group holds.
 const CUTS_PER_ROOM: usize = 16;
+
+/// Room slots per stage in the `roomcut.bin` pointer table.
+const ROOMS_PER_STAGE: usize = 32;
 
 /// Phases [`convert`] reports: scan, room, cut, enemy, player, voice, bgm,
 /// door, movie, demo, manifest, compress, write.
@@ -86,7 +90,7 @@ fn is_data_dir(dir: &Path) -> bool {
 }
 
 /// The RE2 data directory at or under `root` (breadth-first, at most
-/// [`MAX_DEPTH`] levels down), if there is one.
+/// three levels down), if there is one.
 pub fn find_data_dir(root: &Path) -> Option<PathBuf> {
     let mut queue = std::collections::VecDeque::from([(root.to_path_buf(), 0usize)]);
     while let Some((dir, depth)) = queue.pop_front() {
@@ -96,7 +100,11 @@ pub fn find_data_dir(root: &Path) -> Option<PathBuf> {
         if depth >= MAX_DEPTH {
             continue;
         }
-        for entry in read_dir_sorted(&dir).ok()? {
+        // An unreadable directory is skipped rather than ending the search.
+        let Ok(entries) = read_dir_sorted(&dir) else {
+            continue;
+        };
+        for entry in entries {
             if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
                 queue.push_back((entry.path(), depth + 1));
             }
@@ -125,6 +133,14 @@ fn upper_parts(path: &Path) -> Option<(String, String)> {
     Some((stem.to_owned(), extension.to_owned()))
 }
 
+/// Two ASCII hex digits as a byte. Stricter than `u8::from_str_radix`,
+/// which also takes a leading `+`.
+fn hex_byte(digits: &str) -> Option<u8> {
+    (digits.len() == 2 && digits.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .then(|| u8::from_str_radix(digits, 16).ok())
+        .flatten()
+}
+
 fn read(path: &Path) -> Result<Vec<u8>> {
     fs::read(path).with_context(|| format!("failed to read {}", path.display()))
 }
@@ -146,14 +162,14 @@ impl Re2Room {
     pub fn parse(id: &str) -> Option<Self> {
         let id = id.to_ascii_uppercase();
         let bytes = id.as_bytes();
-        if bytes.len() != 4 {
+        if bytes.len() != 4 || !id.is_ascii() {
             return None;
         }
         let stage = bytes[0] as char;
         if !matches!(stage, '1'..='7' | 'A'..='G') {
             return None;
         }
-        let room = u8::from_str_radix(&id[1..3], 16).ok()?;
+        let room = hex_byte(&id[1..3])?;
         let disc = (bytes[3] as char).to_digit(10)? as u8;
         Some(Self { stage, room, disc })
     }
@@ -178,9 +194,17 @@ impl Re2Room {
     }
 
     /// The byte offset of the room's 16 cut pointers in `roomcut.bin`, as
-    /// the executable's `bg_load` computes it.
+    /// the executable's `bg_load` computes it. Each stage has 32 room slots;
+    /// a room number of `0x20` or more would read the next stage's pointers
+    /// (see [`Re2Room::has_pointer_slot`]).
     pub fn pointer_offset(self) -> usize {
-        (self.room as usize + 32 * self.stage_group()) << 6
+        (self.room as usize + ROOMS_PER_STAGE * self.stage_group()) << 6
+    }
+
+    /// Whether the room number fits its stage's 32 pointer slots (retail
+    /// rooms stop at `0x1D`).
+    pub fn has_pointer_slot(self) -> bool {
+        usize::from(self.room) < ROOMS_PER_STAGE
     }
 }
 
@@ -241,11 +265,23 @@ impl Tally {
         entry: &str,
         data: Vec<u8>,
     ) -> Result<()> {
+        self.add_shared(writer, category, entry, Arc::new(data))
+    }
+
+    /// Add an entry whose bytes other entries share (see
+    /// [`PackWriter::add_shared`]).
+    fn add_shared(
+        &mut self,
+        writer: &mut PackWriter,
+        category: &'static str,
+        entry: &str,
+        data: Arc<Vec<u8>>,
+    ) -> Result<()> {
         let counter = self.entries.entry(category).or_default();
         counter.0 += 1;
         counter.1 += data.len();
         writer
-            .add(entry, data)
+            .add_shared(entry, data)
             .with_context(|| format!("failed to add {entry}"))
     }
 
@@ -374,15 +410,25 @@ fn scan_rooms(layout: &Layout, warnings: &mut Vec<String>) -> Result<Vec<Room>> 
         }
     }
     rooms.sort_by_key(|room| room.id);
+    // Two names for one room (`ROOM1000.RDT` and `room1000.rdt` in one
+    // folder on a case-sensitive file system): keep the first.
+    let before = rooms.len();
     rooms.dedup_by_key(|room| room.id);
+    if rooms.len() < before {
+        warnings.push(format!(
+            "{} duplicate room file(s) differing only in name case; the first of each kept",
+            before - rooms.len()
+        ));
+    }
     Ok(rooms)
 }
 
 /// Decode each room's camera backgrounds from `roomcut.bin`.
 ///
 /// The cut count is byte 1 of the RDT. Each unique stream is decoded once and
-/// written under every room folder that points at it. A zero pointer or one
-/// past the end of the file warns and produces no entry.
+/// written under every room folder that points at it, sharing one buffer. A
+/// zero pointer, one past the end of the file, or a stream that fails to
+/// decode warns and produces no entry.
 fn copy_backgrounds(
     layout: &Layout,
     rooms: &[Room],
@@ -403,14 +449,26 @@ fn copy_backgrounds(
     let mut zero = 0usize;
     let mut outside = 0usize;
     for room in rooms {
+        if !room.id.has_pointer_slot() {
+            warnings.push(format!(
+                "room {}: room number past roomcut.bin's {ROOMS_PER_STAGE} slots per stage; \
+                 no background packed",
+                room.id.folder()
+            ));
+            continue;
+        }
         let cuts = usize::from(room.bytes[1]);
         if cuts > CUTS_PER_ROOM {
             // The executable would read the next room's first pointer.
+            let dropped = if cuts - 1 == CUTS_PER_ROOM {
+                format!("cut {CUTS_PER_ROOM:02x} has")
+            } else {
+                format!("cuts {CUTS_PER_ROOM:02x}-{:02x} have", cuts - 1)
+            };
             warnings.push(format!(
                 "room {}: {cuts} camera cuts but roomcut.bin holds {CUTS_PER_ROOM} per room; \
-                 cuts {CUTS_PER_ROOM}-{} have no background",
-                room.id.folder(),
-                cuts - 1
+                 {dropped} no background",
+                room.id.folder()
             ));
         }
         let cuts = cuts.min(CUTS_PER_ROOM);
@@ -453,15 +511,26 @@ fn copy_backgrounds(
     progress.begin("cut", total);
     let decoded = parallel_map(streams.len(), jobs, progress, |index| {
         let (pointer, entries) = &streams[index];
-        let image = adt::background(&bin[*pointer..])
-            .with_context(|| format!("roomcut.bin stream at {pointer:#x} ({})", entries[0]))?;
-        let bmp = bmp::encode_to_vec(&image)?;
+        // A corrupt stream costs only its own cameras.
+        let bmp = adt::background(&bin[*pointer..])
+            .and_then(|image| bmp::encode_to_vec(&image))
+            .map_err(|error| format!("{error:#}"));
         Ok((entries[0].clone(), entries.len() as u64, bmp))
     })?;
     progress.end_phase();
-    for ((_, entries), (_, bmp)) in streams.iter().zip(decoded) {
-        for entry in entries {
-            tally.add(writer, "cut", entry, bmp.clone())?;
+    for ((pointer, entries), (_, bmp)) in streams.iter().zip(decoded) {
+        match bmp {
+            Ok(bmp) => {
+                let bmp = Arc::new(bmp);
+                for entry in entries {
+                    tally.add_shared(writer, "cut", entry, Arc::clone(&bmp))?;
+                }
+            }
+            Err(error) => warnings.push(format!(
+                "roomcut.bin stream at {pointer:#x} does not decode ({error}); \
+                 no background for {}",
+                entries.join(", ")
+            )),
         }
     }
     Ok(())
@@ -470,9 +539,15 @@ fn copy_backgrounds(
 /// The pack entry for an enemy file name, e.g. `EM13A.TIM` is
 /// `enemy/3a/enemy_1.tim`, and the disc its name says it belongs to.
 fn enemy_entry(stem: &str, extension: &str) -> Option<(String, usize)> {
-    let name = stem.strip_prefix("EM").filter(|name| name.len() == 3)?;
-    let disc = name[..1].parse::<usize>().ok().filter(|disc| *disc < 2)?;
-    let id = u8::from_str_radix(&name[1..], 16).ok()?;
+    let name = stem
+        .strip_prefix("EM")
+        .filter(|name| name.len() == 3 && name.is_ascii())?;
+    let disc = match &name[..1] {
+        "0" => 0,
+        "1" => 1,
+        _ => return None,
+    };
+    let id = hex_byte(&name[1..])?;
     let extension = extension.to_ascii_lowercase();
     matches!(extension.as_str(), "emd" | "tim")
         .then(|| (format!("enemy/{id:02x}/enemy_{disc}.{extension}"), disc))
@@ -544,14 +619,14 @@ fn copy_enemies(
 /// The pack entry for a player file name, e.g. `PL0BW0A.PLW` on disc 1 is
 /// `player/0b/weapon/0a_1.plw`.
 fn player_entry(stem: &str, extension: &str, disc: usize) -> Option<String> {
-    let rest = stem.strip_prefix("PL")?;
-    let id = u8::from_str_radix(rest.get(..2)?, 16).ok()?;
+    let rest = stem.strip_prefix("PL").filter(|rest| rest.is_ascii())?;
+    let id = hex_byte(rest.get(..2)?)?;
     let tail = &rest[2..];
     match (extension, tail) {
         ("PLD", "") => Some(format!("player/{id:02x}/model_{disc}.pld")),
         ("PLD", "CH") => Some(format!("player/{id:02x}/model_ch_{disc}.pld")),
         ("PLW", weapon) if weapon.len() == 3 && weapon.starts_with('W') => {
-            let weapon = u8::from_str_radix(&weapon[1..], 16).ok()?;
+            let weapon = hex_byte(&weapon[1..])?;
             Some(format!("player/{id:02x}/weapon/{weapon:02x}_{disc}.plw"))
         }
         _ => None,
@@ -576,13 +651,15 @@ fn copy_players(
             None => {}
         }
     }
+    let files: Vec<(String, PathBuf)> = files
+        .into_iter()
+        .filter_map(|(disc, path)| {
+            let (stem, extension) = upper_parts(&path)?;
+            Some((player_entry(&stem, &extension, disc)?, path))
+        })
+        .collect();
     progress.begin("player", files.len() as u64);
-    for (disc, path) in files {
-        let Some(entry) =
-            upper_parts(&path).and_then(|(stem, extension)| player_entry(&stem, &extension, disc))
-        else {
-            continue;
-        };
+    for (entry, path) in files {
         tally.add(writer, "player", &entry, read(&path)?)?;
         progress.advance(&entry);
     }
@@ -737,9 +814,18 @@ fn copy_movies(
             if let Some((stem, extension)) = upper_parts(&path)
                 && extension == "BIN"
             {
-                films
-                    .entry(format!("movie/{}.mpg", stem.to_ascii_lowercase()))
-                    .or_insert(path);
+                match films.entry(format!("movie/{}.mpg", stem.to_ascii_lowercase())) {
+                    std::collections::btree_map::Entry::Vacant(slot) => {
+                        slot.insert(path);
+                    }
+                    std::collections::btree_map::Entry::Occupied(kept) => {
+                        warnings.push(format!(
+                            "{}: same film name as {}; the first kept",
+                            path.display(),
+                            kept.get().display()
+                        ));
+                    }
+                }
             }
         }
     }

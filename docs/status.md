@@ -853,7 +853,7 @@ RE2 work is tracked by the milestone issue #244 and its sub-issues. R0
 Against the retail install it packs 501 rooms, 5028 camera backgrounds (1242
 distinct `roomcut.bin` streams decoding to 1205 distinct images), 234 enemy
 files, 221 player files, 599 voice lines, 118 BGM tracks, 55 doors, 26 films
-and 6 demo reels in about 18 s. `arklay verify` classifies the RE2 formats by
+and 6 demo reels in about 13 s. `arklay verify` classifies the RE2 formats by
 content and passes them unparsed (they fail under `--strict` until the
 runtime milestones parse them). Retail-data quirks the converter handles:
 

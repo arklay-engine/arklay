@@ -106,6 +106,17 @@ pub fn mask(data: &[u8]) {
     let _ = mask::MaskTable::parse(data, 4);
 }
 
+/// The RE2 container formats and per-file detection: the ADT background
+/// decoder, `.sap` sound containers and the RDT/EMD dialect heuristics.
+pub fn re2(data: &[u8]) {
+    let _ = arklay::adt::decode(data);
+    let _ = arklay::adt::background(data);
+    let _ = arklay::sap::wavs(data);
+    let _ = arklay::format::rdt_scores(data);
+    let _ = arklay::format::emd_scores(data);
+    let _ = arklay::format::wav_codec(data);
+}
+
 pub fn wav(data: &[u8]) {
     let _ = audio::parse_wav(data);
 }

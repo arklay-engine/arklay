@@ -382,22 +382,39 @@ impl Game {
 
 /// Which game the install at or under `root` is: RE2 when a data directory
 /// holding `Pl0/Rdt` is found, otherwise RE1 (whose own discovery reports a
-/// tree that is neither).
-pub fn detect_game(root: &Path) -> Game {
-    if crate::convert_re2::find_data_dir(root).is_some() {
-        Game::Re2
-    } else {
-        Game::Re1
+/// tree that is neither). A root holding both installs (a folder of games)
+/// is an error naming `--game`, so the choice is never made silently.
+pub fn detect_game(root: &Path) -> Result<Game> {
+    let Some(re2) = crate::convert_re2::find_data_dir(root) else {
+        return Ok(Game::Re1);
+    };
+    if discover_layout(root).is_ok() {
+        bail!(
+            "{} holds both an RE1 install and an RE2 install ({}); pass --game re1 or \
+             --game re2, or point at one install",
+            root.display(),
+            re2.display()
+        );
     }
+    Ok(Game::Re2)
 }
 
-/// Check that `root` looks like a supported Resident Evil installation,
-/// without converting anything. The launcher uses this before starting a
-/// multi-hundred-megabyte conversion, so a wrong folder fails immediately.
+/// Check that `root` looks like an RE1 installation, without converting
+/// anything. The launcher and the Steam scan use this before starting a
+/// multi-hundred-megabyte conversion into the RE1 pack, so a wrong folder
+/// fails immediately. An RE2 install is refused by name: neither of them
+/// handles RE2 yet, and converting one would replace the RE1 pack.
 pub fn validate_install(root: &Path) -> Result<()> {
-    match detect_game(root) {
-        Game::Re1 => discover_layout(root).map(|_| ()),
-        Game::Re2 => Ok(()),
+    match discover_layout(root) {
+        Ok(_) => Ok(()),
+        Err(error) => match crate::convert_re2::find_data_dir(root) {
+            Some(_) => bail!(
+                "{} is a Resident Evil 2 install; only RE1 can be set up here so far \
+                 (`arklay convert-game` converts RE2 into re2.akpak)",
+                root.display()
+            ),
+            None => Err(error),
+        },
     }
 }
 
@@ -436,13 +453,16 @@ pub fn convert_game_with_options(
     jobs: usize,
     verbose: bool,
 ) -> Result<()> {
-    convert_game_observed(root, out, jobs, verbose, None, None)
+    convert_observed_as(root, out, None, jobs, verbose, None, None)
 }
 
 /// Convert with a graphical progress observer and an optional cancellation
 /// flag. The launcher uses this to keep its window responsive while a pack is
 /// built; the flag is checked between files, at phase boundaries and during
 /// the final write, and an aborted run leaves no partial pack behind.
+///
+/// This is always an RE1 conversion: the launcher builds only the RE1 pack,
+/// and [`validate_install`] has already refused an RE2 folder.
 pub fn convert_game_observed(
     root: &Path,
     out: &Path,
@@ -451,7 +471,7 @@ pub fn convert_game_observed(
     observer: Option<ProgressObserver>,
     cancel: Option<Arc<AtomicBool>>,
 ) -> Result<()> {
-    convert_observed_as(root, out, None, jobs, verbose, observer, cancel)
+    convert_observed_as(root, out, Some(Game::Re1), jobs, verbose, observer, cancel)
 }
 
 fn convert_observed_as(
@@ -476,7 +496,11 @@ fn convert_observed_as(
             progress
         }
     };
-    if game.unwrap_or_else(|| detect_game(root)) == Game::Re2 {
+    let game = match game {
+        Some(game) => game,
+        None => detect_game(root)?,
+    };
+    if game == Game::Re2 {
         return crate::convert_re2::convert(root, out, jobs, verbose, &mut progress);
     }
     let Plan {

@@ -4,8 +4,10 @@
 //! The classifier is path-driven: a pack path prefix or extension selects the
 //! parser family the engine would use for that entry. Where a family spans
 //! more than one game's format (an RDT, an EMD, a WAV), the entry's own bytes
-//! decide which ([`crate::format`]), so RE2 data is never fed to an RE1
-//! parser. A format the engine cannot load yet is *recognised*: it gets its
+//! decide which ([`crate::format`]): a detected RE2 file gets its RE2 row
+//! instead of an RE1 parse. An entry detection cannot place (ambiguous or
+//! unknown, e.g. a truncated file) keeps its path's family and is parsed as
+//! RE1, which then reports it. A format the engine cannot load yet is *recognised*: it gets its
 //! own row and never fails a normal run, but `--strict` fails it like an
 //! opaque entry. An entry whose format is not in
 //! the table is *opaque*: it is counted and never fails, so a pack carrying a
@@ -401,12 +403,13 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
     let mut report = VerifyReport::default();
     for entry in pack.entries() {
         let path = entry.path();
-        let format = match classify(path) {
-            format if needs_bytes(path, format) => match pack.read(path) {
-                Ok(data) => classify_entry(path, &data),
-                Err(_) => format,
-            },
-            format => format,
+        // An entry classified by content is read once, for both the
+        // classification and the parse.
+        let path_format = classify(path);
+        let read = needs_bytes(path, path_format).then(|| pack.read(path));
+        let format = match &read {
+            Some(Ok(data)) => classify_entry(path, data),
+            _ => path_format,
         };
         let stats = report.formats.entry(format).or_default();
         stats.entries += 1;
@@ -429,8 +432,13 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
                 path
             )),
             _ if format.unsupported() => Ok(()),
-            _ => verify_entry(pack, path, format)
-                .with_context(|| format!("{} ({})", path, format.name())),
+            _ => match read {
+                Some(Ok(data)) => verify_entry(pack, path, format, &data),
+                _ => pack
+                    .read(path)
+                    .and_then(|data| verify_entry(pack, path, format, &data)),
+            }
+            .with_context(|| format!("{} ({})", path, format.name())),
         };
         match result {
             Ok(()) => {
@@ -452,8 +460,7 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
 }
 
 /// Parse one entry with the parser for `format`.
-fn verify_entry(pack: &Pack, path: &str, format: Format) -> Result<()> {
-    let data = &*pack.read(path)?;
+fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<()> {
     match format {
         Format::Manifest => {
             let text = std::str::from_utf8(data).context("manifest.toml is not valid UTF-8")?;
@@ -930,6 +937,75 @@ mod tests {
         assert_eq!(report.formats[&Format::Tim].entries, 1);
         assert_eq!(report.formats[&Format::Cut].entries, 1);
         assert_eq!(report.formats[&Format::Mask].entries, 1);
+    }
+
+    /// A minimal RE2 RDT header: a cut count and one section past the
+    /// header.
+    fn re2_rdt() -> Vec<u8> {
+        let mut data = vec![0u8; 0x100];
+        data[1] = 1;
+        data[8..12].copy_from_slice(&0x64u32.to_le_bytes());
+        data
+    }
+
+    fn adpcm_wav() -> Vec<u8> {
+        let mut data = b"RIFF\x1c\0\0\0WAVEfmt \x10\0\0\0".to_vec();
+        data.extend(crate::format::WAV_MS_ADPCM.to_le_bytes());
+        data.extend([0u8; 14]);
+        data
+    }
+
+    #[test]
+    fn re2_entries_are_classified_by_content_and_pass_unless_strict() {
+        assert!(needs_bytes("room/1000/room.rdt", Format::Rdt));
+        assert!(needs_bytes("room/g010/room.rdt", Format::Opaque));
+        assert!(!needs_bytes("room/1000/cut/00.bmp", Format::Cut));
+        assert_eq!(
+            classify_entry("room/1000/room.rdt", &re2_rdt()),
+            Format::Re2Rdt
+        );
+        assert_eq!(
+            classify_entry("room/g010/room.rdt", &re2_rdt()),
+            Format::Re2Rdt
+        );
+        assert_eq!(
+            classify_entry("room/g010/room.rdt", b"junk"),
+            Format::Opaque
+        );
+        assert_eq!(
+            classify_entry("voice/0/01_00.wav", &adpcm_wav()),
+            Format::AdpcmWav
+        );
+        assert_eq!(classify("player/00/model_0.pld"), Format::Pld);
+
+        let mut writer = PackWriter::new();
+        writer.add("room/1000/room.rdt", re2_rdt()).unwrap();
+        writer.add("room/g010/room.rdt", re2_rdt()).unwrap();
+        writer.add("voice/0/01_00.wav", adpcm_wav()).unwrap();
+        writer
+            .add("player/00/model_0.pld", b"pld".to_vec())
+            .unwrap();
+        writer.add("room/1000/cut/00.bmp", tiny_bmp()).unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+
+        let report = verify_pack(&pack, false);
+        assert!(report.valid(), "failures: {:?}", report.failures);
+        assert_eq!(report.formats[&Format::Re2Rdt].ok, 2);
+        assert_eq!(report.formats[&Format::AdpcmWav].ok, 1);
+        assert_eq!(report.formats[&Format::Pld].ok, 1);
+
+        let strict = verify_pack(&pack, true);
+        let mut failed: Vec<&str> = strict.failures.iter().map(|f| f.path.as_str()).collect();
+        failed.sort_unstable();
+        assert_eq!(
+            failed,
+            [
+                "player/00/model_0.pld",
+                "room/1000/room.rdt",
+                "room/g010/room.rdt",
+                "voice/0/01_00.wav"
+            ]
+        );
     }
 
     #[test]
