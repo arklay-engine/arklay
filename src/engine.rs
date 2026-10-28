@@ -3650,7 +3650,15 @@ impl GameSession {
         self.game.apply_flag(5, 0, 1);
         self.game.apply_flag(5, 1, 0);
         self.game.apply_flag(5, 15, 1);
-        self.return_title_requested = true;
+        // The scripted death variant is how the escape scene completes the
+        // game: the reference's `game_loop` returns 0 for it and `game_start`
+        // chains `ending_state` instead of the title.
+        let attract = self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO);
+        if self.game.flags[5].bit(game::MSF2_DEATH_VARIANT) && !attract {
+            self.clear_game_requested = Some(ui::debug_menu::default_ending(&self.game));
+        } else {
+            self.return_title_requested = true;
+        }
     }
 
     /// Whether a pause-menu screen owns the tick, so the room is frozen and
@@ -7280,7 +7288,8 @@ struct App {
     /// A film waiting to start on the next tick.
     pending_movie: Option<PendingMovie>,
     /// Whether sessions let the action button skip the loading narration and
-    /// cutscenes: on for the interactive window, off for scripted runs.
+    /// cutscenes, and any button skip the app's films (the ending chain
+    /// included): on for the interactive window, off for scripted runs.
     skips_enabled: bool,
     /// Whether a door's room load writes an autosave (when the player's
     /// autosave option is on): only the interactive window does, so traces,
@@ -7418,7 +7427,11 @@ impl App {
 
     /// Open film `id` from the app's pack.
     fn open_movie(&mut self, id: u8, character: u8) -> Result<MovieSession> {
-        MovieSession::open(&self.pack, id, character)
+        let mut session = MovieSession::open(&self.pack, id, character)?;
+        if self.skips_enabled {
+            session.allow_skip();
+        }
+        Ok(session)
     }
 
     /// Play `films` back to back, then apply `action` (`None` quits the app).
@@ -7789,6 +7802,14 @@ impl App {
     /// running session and every later one.
     fn enable_skips(&mut self) {
         self.skips_enabled = true;
+        // A film queued before the window took over (the `--ending` chain's
+        // first film) unlocks too.
+        if let Some(pending) = &mut self.pending_movie {
+            pending.session.allow_skip();
+        }
+        if let Mode::Movie(session) = &mut self.mode {
+            session.allow_skip();
+        }
         if let Mode::Play(session) = &mut self.mode {
             session.set_skips_enabled(true);
         }
@@ -21371,6 +21392,58 @@ mod tests {
         assert_eq!(
             session.game.entities[0].health, 55,
             "the screen's chosen file loaded"
+        );
+    }
+
+    #[test]
+    fn a_finished_scripted_death_variant_completes_the_game() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+        session.game.apply_flag(5, game::MSF2_DEATH_VARIANT, 0);
+        session.finish_death();
+        assert!(!session.return_title_requested, "no title hand-off");
+        assert_eq!(
+            session.take_clear_game_request(),
+            Some(ui::debug_menu::default_ending(&session.game)),
+            "the live state's ending is requested"
+        );
+
+        let mut died = GameSession::new(&pack, 0, &dir.0.join("saves")).unwrap();
+        died.finish_death();
+        assert!(
+            died.return_title_requested,
+            "a plain death returns to the title"
+        );
+        assert_eq!(died.take_clear_game_request(), None);
+    }
+
+    #[test]
+    fn app_escape_death_variant_hands_over_to_the_ending() {
+        let dir = TempDir::new();
+        let pack_path = new_game_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut app = App::new(pack, dir.0.join("saves"), false);
+        let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
+        app.start_session(session);
+        let Mode::Play(session) = &mut app.mode else {
+            panic!("expected a play mode");
+        };
+        // The escape scene's closing ops: the dead flag and the death variant.
+        session.game.apply_flag(5, game::MSF_PLAYER_DEAD, 0);
+        session.game.apply_flag(5, game::MSF2_DEATH_VARIANT, 0);
+        for _ in 0..600 {
+            app.update(UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            if !matches!(app.mode, Mode::Play(_)) {
+                break;
+            }
+        }
+        assert!(app.ending.is_some(), "the ending flow is recorded");
+        assert!(
+            !matches!(app.mode, Mode::Play(_) | Mode::Title(_)),
+            "the fade completes into the ending, not the title"
         );
     }
 

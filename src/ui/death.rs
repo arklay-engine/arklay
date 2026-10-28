@@ -115,7 +115,8 @@ impl DeathSequence {
 
     /// Trigger the sequence: an immediate-fade room arms the white fade at
     /// once, every other room starts the 90-frame delay. `variant` is the
-    /// scripted-death flag, which skips the screen; `attract` is the
+    /// scripted-death flag (the escape's game completion), which arms a black
+    /// fade at once and skips the screen; `attract` is the
     /// attract-reel end, whose `TimeoutDeathFadeOut` branch arms a black fade
     /// with the `0x800` counter.
     ///
@@ -129,7 +130,12 @@ impl DeathSequence {
             self.arm_fade(2, ATTRACT_FADE_OUT_COUNTER);
             self.fade.tick();
             self.state = 3;
-        } else if immediate || variant {
+        } else if variant {
+            // `TimeoutDeathFadeOut`'s scripted-variant branch: the black fade.
+            self.arm_fade(2, DEATH_FADE_OUT_COUNTER);
+            self.fade.tick();
+            self.state = 3;
+        } else if immediate {
             self.arm_fade(1, DEATH_FADE_OUT_COUNTER);
             self.fade.tick();
             self.state = 3;
@@ -307,6 +313,11 @@ mod tests {
     fn the_variant_path_skips_the_screen() {
         let mut sequence = DeathSequence::idle();
         sequence.start(false, true, false);
+        assert_eq!(
+            sequence.overlay().unwrap().color,
+            crate::transition::FadeColor::Black,
+            "the variant fades to black"
+        );
         for _ in 0..300 {
             if sequence.tick() == DeathTick::Finished {
                 break;
