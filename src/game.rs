@@ -3780,6 +3780,9 @@ pub struct GameState {
     /// The pack's item definitions (`item/<id>/item.xml`): kinds, stacks and
     /// heal effects. Static pack data, not part of a save block.
     pub item_defs: std::sync::Arc<crate::item_catalog::ItemCatalog>,
+    /// The `--model` viewer's model, standing in the room with no AI. A
+    /// runtime option, not part of a save block.
+    pub model_viewer: Option<Box<crate::model_viewer::Viewer>>,
 }
 
 /// A gamepad rumble a game event asks for, at full strength: the low- and
@@ -3978,6 +3981,7 @@ impl Default for GameState {
             player_options: crate::player::Options::default(),
             rumble: None,
             item_defs: crate::item_catalog::ItemCatalog::embedded(),
+            model_viewer: None,
         }
     }
 }
@@ -17860,6 +17864,41 @@ mod tests {
         assert_eq!(lighting.lights[0].radius, 0x400);
         assert_eq!(lighting.lights[2].pos, [102, 202, 302]);
         assert_eq!(lighting.lights[2].color, [0x12, 0x20, 0x30]);
+    }
+
+    #[test]
+    fn a_cut_s_own_light_overrides_the_room_s() {
+        use crate::state::{CameraLight, Cut};
+
+        let own = CameraLight {
+            ambient: [0x100, 0x200, 0x300],
+            lights: [crate::state::Light {
+                pos: [1, 2, 3],
+                ..Default::default()
+            }; 3],
+        };
+        let mut room = RoomState {
+            cuts: vec![
+                Cut::default(),
+                Cut {
+                    light: Some(own),
+                    ..Cut::default()
+                },
+            ],
+            ambient: [7, 8, 9],
+            ..RoomState::default()
+        };
+        let lighting = crate::render::Lighting::from_room(&room);
+        assert_eq!(
+            (lighting.ambient, lighting.lights),
+            (room.ambient, room.lights)
+        );
+        room.current_cut = 1;
+        let lighting = crate::render::Lighting::from_room(&room);
+        assert_eq!(
+            (lighting.ambient, lighting.lights),
+            (own.ambient, own.lights)
+        );
     }
 
     #[test]

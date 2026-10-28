@@ -1,17 +1,19 @@
 use super::*;
 
-/// A minimal RE2 RDT: the header, one camera, a two-record zone table and a
-/// one-record collision table.
+/// A minimal RE2 RDT: the header, one camera, a two-record zone table, a
+/// one-record collision table and the camera's lights.
 pub(crate) fn sample() -> Vec<u8> {
     let rid = 0x64;
     let rvd = rid + CAMERA_SIZE;
     let sca = rvd + 2 * ZONE_SIZE + 4;
-    let mut data = vec![0u8; sca + 2 * SCA_RECORD_SIZE];
+    let lit = sca + 2 * SCA_RECORD_SIZE;
+    let mut data = vec![0u8; lit + LIGHT_SIZE];
     data[1] = 1;
     let mut put = |at: usize, bytes: &[u8]| data[at..at + bytes.len()].copy_from_slice(bytes);
     put(OFFSETS + SCA_SLOT * 4, &(sca as u32).to_le_bytes());
     put(OFFSETS + RID_SLOT * 4, &(rid as u32).to_le_bytes());
     put(OFFSETS + RVD_SLOT * 4, &(rvd as u32).to_le_bytes());
+    put(OFFSETS + LIT_SLOT * 4, &(lit as u32).to_le_bytes());
 
     put(rid + 2, &0x683Cu16.to_le_bytes());
     for (n, value) in [100i32, -2000, -3000, 400, 500, -600].iter().enumerate() {
@@ -36,6 +38,14 @@ pub(crate) fn sample() -> Vec<u8> {
     put(record + 8, &0xFE86u16.to_le_bytes());
     put(record + 10, &0x914Au16.to_le_bytes());
     put(record + 12, &63u32.to_le_bytes());
+
+    put(lit, &[0, 0, 1, 0]);
+    put(lit + 4, &[255, 128, 0, 10, 20, 30, 0, 0, 0]);
+    put(lit + 13, &[255, 64, 1]);
+    for (n, value) in [-100i16, 200, -300, 1, 2, 3, 0, 0, 0].iter().enumerate() {
+        put(lit + 16 + n * 2, &value.to_le_bytes());
+    }
+    put(lit + 34, &[0x00, 0x30, 0x00, 0x10, 0, 0]);
     data
 }
 
@@ -62,6 +72,25 @@ fn reads_cameras_zones_and_collision() {
     );
     assert_eq!(rect.shape(), 6);
     assert_eq!(rect.floor, 63);
+}
+
+#[test]
+fn a_camera_s_lights_are_read_on_the_re1_scales() {
+    let room = read(&sample()).unwrap();
+    let light = room.cameras[0].light.unwrap();
+    // A 12-bit ambient: 255 is full, and anything lit stays lit.
+    assert_eq!(light.ambient, [0x1000, 0x405, 0x11]);
+    let [first, second, third] = light.lights;
+    assert_eq!(first.color, [0x80, 0x41, 0]);
+    assert_eq!(first.pos, [-100, 200, -300]);
+    assert_eq!((first.kind, first.radius), (0, 0x3000));
+    assert_eq!(second.color, [6, 11, 16]);
+    assert_eq!((second.pos, second.radius), ([1, 2, 3], 0x1000));
+    assert_eq!((third.color, third.radius), ([0; 3], 0));
+    // No LIT section: the camera falls back to the room's lights.
+    let mut data = sample();
+    data[OFFSETS + LIT_SLOT * 4..][..4].fill(0);
+    assert_eq!(read(&data).unwrap().cameras[0].light, None);
 }
 
 #[test]

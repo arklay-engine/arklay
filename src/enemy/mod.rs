@@ -477,6 +477,7 @@ mod tests {
                 offset: [1, 2, 3],
                 rotations: Vec::new(),
             }],
+            banks: Vec::new(),
             mesh: crate::model::Tmd::default(),
             texture: crate::model::Texture8 {
                 width: 0,

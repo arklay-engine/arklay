@@ -164,6 +164,8 @@ cargo run -- re1.akpak --room 100 --player 0 --capture cut0.bmp
 # An RE2 room (letter stages A-G name rooms too, e.g. --room G01), in a debug
 # render mode: the collision drawn over the background (F4 cycles the modes)
 cargo run -- re2.akpak --room 100 --render-mode collision-overlay --capture col.bmp
+# An RE2 model posed and animated in a room (no AI): any EMD, PLD or PLW
+cargo run -- re2.akpak --room 100 --model enemy/10/enemy_0.emd --clip 0 --ticks 30 --capture zombie.bmp
 # Run N fixed 30 Hz ticks before a room capture (deterministic, audio-free),
 # so scripted NPC scenes are captured in motion
 cargo run -- re1.akpak --room 20D --player 0 --ticks 30 --capture npc.bmp

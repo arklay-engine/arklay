@@ -341,6 +341,27 @@ pub struct Authoring<'a> {
     /// present. Never taken from the config, so the report does not depend
     /// on the machine's settings.
     pub stats_frame_rate: Option<u32>,
+    /// `--model`: the model viewer's model, bank and clip.
+    pub model: Option<ModelView<'a>>,
+}
+
+/// The `--model` viewer's model: a pack entry, an animation bank and a clip
+/// of it (see [`crate::model_viewer`]).
+#[derive(Debug, Clone, Copy)]
+pub struct ModelView<'a> {
+    pub entry: &'a str,
+    pub bank: usize,
+    pub clip: usize,
+}
+
+impl ModelView<'_> {
+    /// The viewer the options name, loaded from `pack`.
+    fn viewer(&self, pack: &Pack) -> Result<Box<crate::model_viewer::Viewer>> {
+        let model = crate::model_viewer::load(pack, self.entry)?;
+        let viewer = crate::model_viewer::Viewer::new(model, self.bank, self.clip)
+            .with_context(|| format!("--model {}", self.entry))?;
+        Ok(Box::new(viewer))
+    }
 }
 
 /// Load `id` from `pack`, simulate it and optionally capture one frame.
@@ -418,6 +439,9 @@ pub fn run_with_options(
         call_lua_room_load(lua.as_ref(), &mut game, id);
         run_setup_chunk(lua.as_ref(), &mut game, authoring.setup_script)?;
         game.sync_player(&mut player_state);
+        if let Some(view) = &authoring.model {
+            game.model_viewer = Some(view.viewer(&pack)?);
+        }
         if let Some(path) = authoring.save_out {
             write_save_file(&game, path)?;
             return Ok(());
@@ -644,6 +668,9 @@ pub fn run_with_options(
 
     let mut session = GameSession::from_room_with(&pack, id, &save_dir, player_options)?;
     session.run_setup_script(authoring.setup_script)?;
+    if let Some(view) = &authoring.model {
+        session.game.model_viewer = Some(view.viewer(&pack)?);
+    }
     let title = window_title(pack.manifest());
     let mut display = Display::new(&title, false, authoring.renderer)?;
     // The room boot runs on the app's Play mode, not a bare session loop: a
@@ -10731,6 +10758,69 @@ pub fn simulate_room_with_input(
     simulate_loaded(pack, loaded, game, player_state, ticks, input)
 }
 
+/// The `--model` viewer's frames: `view` standing in room `id` (or the room
+/// alone, for `None`), drawn after each tick count of `ticks` (ascending).
+/// Only the viewer's clip advances; the room's scripts do not run. With `gpu` the frames are the GPU
+/// renderer's scene (HD textures where the pack layers them), else the
+/// software renderer's.
+pub fn model_view_frames(
+    pack: &Pack,
+    id: RoomId,
+    view: Option<ModelView<'_>>,
+    ticks: &[u32],
+    mut gpu: Option<&mut GpuRenderer>,
+) -> Result<Vec<Image>> {
+    let mut loaded = load_room(pack, id, false)?;
+    let mut game = new_game_state(pack, id, &loaded.room, player::Options::default());
+    seed_fresh_state(pack, &mut game);
+    let player_state = player::spawn(id, &loaded.room);
+    game.sync_entity_from_player(&player_state);
+    apply_camera(&mut loaded.room, &mut game, Some(player_state.pos));
+    game.model_viewer = view.map(|view| view.viewer(pack)).transpose()?;
+    let mut npc_models = enemy::EntityModelCache::default();
+    let mut masks = MaskCache::default();
+    let mut shadows = ShadowCache::default();
+    let mut effect_pages = EffectPageCache::default();
+    let mut framebuffer = Framebuffer::new();
+    let mut frames = Vec::with_capacity(ticks.len());
+    let mut ticked = 0;
+    for &tick in ticks {
+        while ticked < tick {
+            if let Some(viewer) = game.model_viewer.as_deref_mut() {
+                viewer.tick();
+            }
+            ticked += 1;
+        }
+        let drawn_on_gpu = render_frame_on(
+            &mut framebuffer,
+            gpu.as_deref_mut(),
+            pack,
+            loaded.id,
+            &loaded.room,
+            &player_state,
+            &mut game,
+            loaded.player_assets.as_ref(),
+            &mut npc_models,
+            &mut masks,
+            &mut shadows,
+            &mut effect_pages,
+            &mut Tween::default(),
+        )?;
+        frames.push(match gpu.as_deref() {
+            Some(gpu) if drawn_on_gpu => {
+                let (width, height) = gpu.scene_size();
+                Image {
+                    width,
+                    height,
+                    rgba: gpu.read_scene()?,
+                }
+            }
+            _ => presented_image(&framebuffer),
+        });
+    }
+    Ok(frames)
+}
+
 /// [`simulate_room`] with flag bits set before the init script runs, for rooms
 /// whose characters and follow states are gated on story flags. Each entry is
 /// `(bank, bit)` and is OR-ed into the fresh state.
@@ -12907,6 +12997,9 @@ fn tick_room_timed(
     // the three shake draws ahead of this tick's `g_RandSeed` draw and on the
     // frame the shake bit takes effect, matching the reference stream.
     context.game.roll_screen_shake();
+    if let Some(viewer) = context.game.model_viewer.as_deref_mut() {
+        viewer.tick();
+    }
     // The original publishes the remapped D-pad held/pressed words before the
     // scripts run, so a `ck_bits` (0x38) condition sees this frame's pad. The
     // press edge is the current word minus the previous frame's *raw* word
@@ -14849,6 +14942,11 @@ fn render_frame_on(
         npc_lights.push((entity.pos, matches!(entity.id, 0x0D | 0x12)));
     }
 
+    // The `--model` viewer's model, stood in front of the current camera.
+    let viewer_pose = game.model_viewer.as_deref_mut().and_then(|viewer| {
+        viewer.follow(&room.cuts, room.current_cut);
+        Some((Arc::clone(&viewer.model), viewer.joints()?, viewer.pos))
+    });
     // The room's object and item models are submitted before the NPC and
     // player meshes (the original's room pass then the character pass): the
     // shared far-to-near sort is stable, so equal-depth triangles keep the
@@ -14997,6 +15095,23 @@ fn render_frame_on(
             // The weapon slot is one of the character's joints: it shares
             // the character's latch.
             light_pos: Some(npc_lights[*index].0),
+            per_joint_light: false,
+            complex_object: None,
+            aliased_light: false,
+            light_rotation: None,
+            joint_colours: crate::render::NO_JOINT_COLOURS,
+            hd_name: None,
+        });
+    }
+    if let Some((model, joints, pos)) = &viewer_pose {
+        meshes.push(EntityMesh {
+            mesh: &model.mesh,
+            texture: &model.texture,
+            joints,
+            tint: [255; 3],
+            blend_weight: None,
+            hidden_joints: 0,
+            light_pos: Some(*pos),
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
@@ -18826,6 +18941,83 @@ mod tests {
         assert!(display.gpu().is_none());
         display.present_layers(&software, None).unwrap();
         display.show().unwrap();
+    }
+
+    /// The model viewer's RE2 models draw on the GPU, and with an HD pack
+    /// layered (`ARKLAY_GPU_TEST_MODS`, `:`-separated) a model whose pages
+    /// have HD skins draws them. Needs `ARKLAY_RE2_PACK` and a SPIR-V
+    /// capable GPU; skips without a GPU. `ARKLAY_GPU_TEST_MODELS` lists the
+    /// entries (`,`-separated; default a zombie, and Leon bare-handed and
+    /// with a weapon), `ARKLAY_GPU_TEST_SCALE` the scene scale and
+    /// `ARKLAY_GPU_TEST_DUMP=<dir>` writes each standard and HD frame.
+    #[test]
+    #[ignore = "requires a converted RE2 pack via ARKLAY_RE2_PACK"]
+    fn gpu_model_viewer_draws_re2_models_with_their_hd_skins() {
+        let _lock = crate::audio::test_lock::sdl();
+        let Ok(path) = std::env::var("ARKLAY_RE2_PACK") else {
+            return;
+        };
+        let Ok(_sdl) = SdlHandle::acquire() else {
+            eprintln!("skipping: SDL video unavailable");
+            return;
+        };
+        let scale = std::env::var("ARKLAY_GPU_TEST_SCALE")
+            .ok()
+            .and_then(|scale| scale.parse().ok())
+            .unwrap_or(2);
+        let mut gpu = match GpuRenderer::offscreen(scale) {
+            Ok(gpu) => gpu,
+            Err(err) => {
+                eprintln!("skipping: {err:#}");
+                return;
+            }
+        };
+        let mods: Vec<std::path::PathBuf> = std::env::var("ARKLAY_GPU_TEST_MODS")
+            .map(|mods| std::env::split_paths(&mods).collect())
+            .unwrap_or_default();
+        let base = Pack::open(Path::new(&path)).unwrap();
+        let hd = Pack::open_layered(Path::new(&path), &mods).unwrap();
+        let entries: Vec<String> = std::env::var("ARKLAY_GPU_TEST_MODELS")
+            .map(|models| models.split(',').map(str::to_owned).collect())
+            .unwrap_or_else(|_| {
+                [
+                    "enemy/10/enemy_0.emd",
+                    "player/00/model_0.pld",
+                    "player/00/weapon/02_0.plw",
+                ]
+                .map(str::to_owned)
+                .to_vec()
+            });
+        let room = RoomId::parse("100").unwrap();
+        for entry in &entries {
+            let view = ModelView {
+                entry,
+                bank: 0,
+                clip: 0,
+            };
+            let mut frame = |pack: &Pack| {
+                model_view_frames(pack, room, Some(view), &[0], Some(&mut gpu))
+                    .unwrap()
+                    .remove(0)
+            };
+            let standard = frame(&base);
+            let replaced = frame(&hd);
+            let empty = model_view_frames(&base, room, None, &[0], Some(&mut gpu))
+                .unwrap()
+                .remove(0);
+            assert_eq!(standard.width, WIDTH as u32 * scale);
+            assert!(standard.rgba != empty.rgba, "{entry} draws on the GPU");
+            if !mods.is_empty() {
+                assert!(standard.rgba != replaced.rgba, "{entry} draws its HD skin");
+            }
+            if let Ok(dir) = std::env::var("ARKLAY_GPU_TEST_DUMP") {
+                let name = entry.replace('/', "_");
+                for (kind, image) in [("standard", &standard), ("hd", &replaced)] {
+                    let path = Path::new(&dir).join(format!("{name}-{kind}.bmp"));
+                    std::fs::write(path, bmp::encode_to_vec(image).unwrap()).unwrap();
+                }
+            }
+        }
     }
 
     /// The GPU renderer draws real rooms (backgrounds, masks, models,
@@ -24011,6 +24203,7 @@ return M
                 clips: clip_bank(0x24),
                 damage_clips: Vec::new(),
                 damage_keyframes: Vec::new(),
+                banks: Vec::new(),
                 mesh: Tmd::default(),
                 texture: Texture8 {
                     width: 0,
@@ -30052,6 +30245,7 @@ end
             }],
             damage_clips: Vec::new(),
             damage_keyframes: Vec::new(),
+            banks: Vec::new(),
             mesh: Tmd {
                 objects: vec![crate::model::TmdObject {
                     vertices: vec![[0, 0, 0], [1000, 0, 0], [0, 1000, 0]],

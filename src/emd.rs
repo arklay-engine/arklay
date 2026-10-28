@@ -83,6 +83,7 @@ pub fn parse(data: &[u8]) -> Result<Emd> {
         clips,
         damage_clips,
         damage_keyframes,
+        banks: Vec::new(),
         mesh,
         texture,
     })
@@ -185,7 +186,7 @@ fn check_order(directory: &[usize], directory_start: usize, kind: &str) -> Resul
     Ok(())
 }
 
-fn parse_skeleton(data: &[u8], emr_offset: usize, emr_end: usize) -> Result<Skeleton> {
+pub(crate) fn parse_skeleton(data: &[u8], emr_offset: usize, emr_end: usize) -> Result<Skeleton> {
     let armature_offset = read_u16(data, emr_offset)? as usize;
     let joint_count = read_u16(data, emr_offset + 4)? as usize;
     budget::check_len(joint_count, budget::MAX_EMD_JOINTS, "EMR joint count")?;
@@ -296,7 +297,7 @@ fn parse_keyframes(data: &[u8], emr_offset: usize, emr_end: usize) -> Result<Vec
     Ok(keyframes)
 }
 
-fn parse_clips(data: &[u8], edd_offset: usize, chunk_end: usize) -> Result<Vec<Clip>> {
+pub(crate) fn parse_clips(data: &[u8], edd_offset: usize, chunk_end: usize) -> Result<Vec<Clip>> {
     let chunk = chunk_slice(
         data,
         edd_offset,
@@ -362,7 +363,7 @@ fn parse_clips(data: &[u8], edd_offset: usize, chunk_end: usize) -> Result<Vec<C
     Ok(clips)
 }
 
-fn chunk_slice<'a>(
+pub(crate) fn chunk_slice<'a>(
     data: &'a [u8],
     start: usize,
     len: usize,
@@ -378,7 +379,7 @@ fn chunk_slice<'a>(
     Ok(&data[start..end])
 }
 
-fn vec3(bytes: &[u8]) -> [i16; 3] {
+pub(crate) fn vec3(bytes: &[u8]) -> [i16; 3] {
     [
         i16::from_le_bytes([bytes[0], bytes[1]]),
         i16::from_le_bytes([bytes[2], bytes[3]]),
@@ -386,14 +387,14 @@ fn vec3(bytes: &[u8]) -> [i16; 3] {
     ]
 }
 
-fn read_u16(data: &[u8], offset: usize) -> Result<u16> {
+pub(crate) fn read_u16(data: &[u8], offset: usize) -> Result<u16> {
     let bytes = data
         .get(offset..offset + 2)
         .with_context(|| format!("truncated u16 at offset 0x{offset:X}"))?;
     Ok(u16::from_le_bytes(bytes.try_into().unwrap()))
 }
 
-fn read_u32(data: &[u8], offset: usize) -> Result<u32> {
+pub(crate) fn read_u32(data: &[u8], offset: usize) -> Result<u32> {
     let bytes = data
         .get(offset..offset + 4)
         .with_context(|| format!("truncated u32 at offset 0x{offset:X}"))?;

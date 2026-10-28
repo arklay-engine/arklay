@@ -207,6 +207,22 @@ struct Cli {
     )]
     render_mode: Option<String>,
 
+    /// Model viewer: stand a model of the pack in the `--room`, posed and
+    /// animated with no AI, in front of the current camera. ENTRY is an RE1
+    /// or RE2 `.emd`, an RE2 `.pld`, or an RE2 `.plw` (drawn in its
+    /// character's hands), e.g. `enemy/10/enemy_0.emd`
+    #[arg(long, value_name = "ENTRY", requires = "room", conflicts_with_all = ["ui", "load"])]
+    model: Option<String>,
+
+    /// The `--model` animation bank: 0 is the model's own clips, 1 and 2 an
+    /// RE2 enemy's further banks
+    #[arg(long, value_name = "N", default_value_t = 0, requires = "model")]
+    bank: usize,
+
+    /// The `--model` clip of the bank, looped
+    #[arg(long, value_name = "N", default_value_t = 0, requires = "model")]
+    clip: usize,
+
     /// Run N fixed 30 Hz ticks before a capture frame is drawn, so scripted
     /// NPC scenes and `--fmv` frames can be captured deterministically and
     /// audio-free; with `--ui game` and `--trace` it runs the oracle ticks
@@ -1328,6 +1344,11 @@ fn main() -> Result<()> {
                 save_out: cli.save_out.as_deref(),
                 renderer,
                 stats_frame_rate: cli.frame_rate,
+                model: cli.model.as_deref().map(|entry| arklay::engine::ModelView {
+                    entry,
+                    bank: cli.bank,
+                    clip: cli.clip,
+                }),
             };
             let save_dir = cli
                 .save_dir

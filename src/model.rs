@@ -169,8 +169,19 @@ pub struct Emd {
     /// begins. This is NOT the model's main [`Emd::keyframes`] table: the
     /// damage clips' frame indices only resolve against this one.
     pub damage_keyframes: Vec<Keyframe>,
+    /// An RE2 EMD's further animation banks (directory chunks 3/4 and 5/6),
+    /// in file order; RE1 models have none. Their keyframes pose
+    /// [`Emd::skeleton`].
+    pub banks: Vec<AnimBank>,
     pub mesh: Tmd,
     pub texture: Texture8,
+}
+
+/// One animation bank: a keyframe table and the clips that index it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AnimBank {
+    pub keyframes: Vec<Keyframe>,
+    pub clips: Vec<Clip>,
 }
 
 /// The RDT-embedded player animation pair (pointer slots 9 and 10): an EMR
@@ -182,6 +193,17 @@ pub struct RoomAnim {
     pub skeleton: Skeleton,
     pub keyframes: Vec<Keyframe>,
     pub clips: Vec<Clip>,
+}
+
+/// An RE2 weapon PLW: the clips the character plays holding the weapon
+/// (posing the PLD's skeleton), the hand-and-weapon mesh whose first part
+/// stands in for the character's right hand, and the weapon's texels.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plw {
+    pub keyframes: Vec<Keyframe>,
+    pub clips: Vec<Clip>,
+    pub mesh: Tmd,
+    pub texture: Texture8,
 }
 
 /// A no-weapon EMW animation + mesh file. The EMW carries its own armature and

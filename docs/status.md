@@ -879,13 +879,23 @@ room (`100` for RE2). `F4`/`--render-mode collision-overlay` draws the
 collision over the background from the cut camera. All 501 rooms and 5040
 cameras load against the retail install (`tests/real/re2_real.rs`); the 12
 cameras without a background (above) log a warning instead of failing the
-room. RE2 rooms run no scripts and have no player yet; masks, lights and the
-RVD floor/flag bytes are not read. The TeamX RE2 HD pack converts with
+room. RE2 rooms run no scripts and have no player yet; masks and the RVD
+floor/flag bytes are not read. The TeamX RE2 HD pack converts with
 `convert-mod --base re2.akpak`; its backgrounds are named by the CRC of the
 camera's whole 256 x 256 main page (`bio2hd.asi`: the 240 picture rows with
 black clear, then 16 zero rows), which names 4740 of the 5028 cameras'
 backgrounds. The rest are rooms and camera states the pack has no file for
 (`ARKLAY_RE2_HD` runs the count in `tests/real/re2_real.rs`).
+
+RE2 R2 (#246): every EMD (116), PLD (40) and PLW (181) parses through
+`src/emd2.rs` and draws textured and animated with `--model <entry>` in
+any room (`src/model_viewer.rs`, no AI; `tests/real/re2_real.rs` checks
+each one). A PLW is composited onto its disc's player model; knife PLWs
+have no animation and keep the player's clips. Each camera's LIT record
+is read as three point lights (radius = brightness) plus ambient on the
+RE1 scales. RE2 HD model skins are hashed per 128-texel page through
+that page's CLUT row (359 of 383 pages named); weapon-composited pages
+no longer match their skin.
 
 The manifest no longer carries `rdt_version`/`scd_version`: formats are
 detected per file (`src/format.rs`), so one pack may hold both dialects.

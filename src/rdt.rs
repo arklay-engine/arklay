@@ -517,6 +517,7 @@ fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,
+        light: None,
     })
 }
 

@@ -52,7 +52,7 @@ responsibility.
 | `player` | Runtime | Player locomotion, input mapping, collision, reach probes, camera cuts |
 | `player_script` | Runtime | The player's scripted-animation states |
 | `rdt` | Format | RDT room parser (header pointers, cameras, zones, collisions, embedded model/TIM pairs) |
-| `rdt2` | Format | RE2 RDT room reader into a `RoomSource`: cameras (RID), camera switch zones (RVD) and collision (SCA) |
+| `rdt2` | Format | RE2 RDT room reader into a `RoomSource`: cameras (RID), camera switch zones (RVD), collision (SCA) and per-camera lights (LIT) |
 | `room` | Format | `room/<id>/` room folders: the `room.xml` reader/writer, message markup, the RDT-to-folder conversion (models, effects, animation and scripts by slot), and the loader that picks the XML or a raw `room.rdt` |
 | `scd` | Runtime/Format | SCD opcode tables, reader, IR, disassembler/decompiler, assembler, command and event VMs |
 | `door` | Format/Runtime | `.dor` container parser and the door-animation VM |
@@ -86,7 +86,7 @@ responsibility.
 | `render` | Presentation | Deterministic software rasterizer: framebuffer, models, masks, shadows, effect billboards, lighting |
 | `raster` | Presentation | The reference's 3D triangle pipeline reproduced step for step, for llvmpipe-exact pixels |
 | `gpu` | Presentation | Interactive SDL_GPU renderer for the gameplay scene (the default; software fallback); never used by captures, traces or tests of record |
-| `htexture` | Presentation | HD texture replacement by content hash (`htexture/`), including the loader cache-list mask pairing |
+| `htexture` | Presentation | HD texture replacement by content hash (`htexture/`), including the loader cache-list mask pairing and RE2 per-page model skins |
 | `video` | Presentation | The `[graphics]` options, the 4:3 viewport fit and the F8 window steps |
 | `tween` | Presentation | Presentation tweening for render rates above the 30 Hz simulation |
 | `pacer` | Presentation | When the interactive loop presents a frame |
@@ -95,6 +95,8 @@ responsibility.
 | `tmd` | Format | PSX TMD mesh parser |
 | `tim` | Format | PSX TIM decoder: 16bpp direct, 8bpp/4bpp indexed with CLUT |
 | `emd` | Format | EMD character/room model containers and EMW weapon animations |
+| `emd2` | Format | RE2 EMD/PLD/PLW model containers (MD1 meshes, packed-angle EDD/EMR banks, weapon composites onto the player) |
+| `model_viewer` | Runtime | Posed, animated model in a room with no AI (`--model`), placed in front of each camera |
 | `ivm` | Format | Item-view model (texture page + TMD) parser |
 | `avi` | Format | RIFF/AVI demuxer for the shipped Cinepak films |
 | `mp4` | Format | Minimal ISO-BMFF demuxer for HD (H.264/AAC) film replacements |
@@ -374,6 +376,7 @@ claims about the original.
 | TIM | `tim::decode`, `decode_8bpp`, `decode_4bpp` | `MAX_PIXELS` (4096x4096), CLUT entry cap, `budget::alloc` | `tim` unit tests, `tests/torture`, `fuzz/tim` |
 | TMD | `tmd::parse` | objects/vertices/normals/primitives, `try_reserve_exact` | `tmd` unit tests, `fuzz/tmd` |
 | EMD/EMW | `emd::parse`, `parse_emw`, `parse_room_anim` | skeletons/keyframes/clips | `emd` unit tests, `fuzz/emd` |
+| RE2 EMD/PLD/PLW | `emd2::parse_emd`, `parse_pld`, `parse_plw` | chunk offsets, objects/vertices/keyframes bounded by input | `emd2` unit tests, `tests/real/re2_real.rs` |
 | IVM | `ivm::parse` | objects/vertices/texture caps | `ivm` unit tests, `fuzz/ivm` |
 | AVI | `avi::Avi::parse` | streams/chunks/frames bounded by the file size | `avi` unit tests, `fuzz/avi`, `tests/real/m14_real.rs` |
 | Cinepak | `cinepak::Decoder::decode` | canvas `MAX_PIXELS`, 32 strips | `cinepak` unit tests, `fuzz/cinepak`, `tests/real/m14_real.rs` |

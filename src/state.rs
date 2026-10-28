@@ -248,6 +248,16 @@ pub struct Light {
     pub radius: u16,
 }
 
+/// One camera's own lighting: an RE2 room lights each camera from its LIT
+/// record instead of from the room-wide set. The values are on the RE1
+/// room's scales (see [`crate::rdt2`]).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CameraLight {
+    /// Ambient light colour, 12-bit per channel.
+    pub ambient: [i16; 3],
+    pub lights: [Light; 3],
+}
+
 /// One collision boundary rectangle, corners stored max-first.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct CollisionRect {
@@ -418,6 +428,9 @@ pub struct Cut {
     pub mask_active: u32,
     /// The camera's parsed mask sprites in group order.
     pub masks: Vec<MaskSprite>,
+    /// The camera's own lighting, which replaces the room's while it is the
+    /// current cut; `None` lights it with the room's (every RE1 room).
+    pub light: Option<CameraLight>,
 }
 
 /// The loaded room: its contents and the currently displayed cut.

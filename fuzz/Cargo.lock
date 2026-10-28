@@ -85,6 +85,7 @@ dependencies = [
  "fontdue",
  "image-webp",
  "lewton",
+ "libc",
  "mlua",
  "openh264",
  "png",

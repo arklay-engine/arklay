@@ -128,6 +128,8 @@ fn the_converted_pack_verifies() {
     };
     assert_eq!(count(verify::Format::Re2Rdt), 501);
     assert_eq!(count(verify::Format::Re2Emd), 116);
+    assert_eq!(count(verify::Format::Pld), 40);
+    assert_eq!(count(verify::Format::Plw), 181);
     assert_eq!(count(verify::Format::AdpcmWav), 717);
     assert_eq!(count(verify::Format::Mpeg), 26);
     // Strict mode fails exactly the formats nothing parses yet, plus the
@@ -192,8 +194,8 @@ fn detection_separates_the_dialects() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-/// Every converted RE2 room reads into a room with cameras and collision,
-/// and every camera but the retail data's known gaps has a background.
+/// Every converted RE2 room reads into a room with cameras, collision and
+/// each camera's lights, and every camera but the retail data's known gaps has a background.
 #[test]
 #[ignore]
 fn every_room_loads_with_its_backgrounds() {
@@ -228,6 +230,12 @@ fn every_room_loads_with_its_backgrounds() {
         );
         for cut in &room.cuts {
             cameras += 1;
+            assert!(
+                cut.light.is_some(),
+                "room {} camera {} has its LIT lights",
+                id.code(),
+                cut.index
+            );
             if pack
                 .read_asset(&id.cut_stem(cut.index), arklay::pack::AssetClass::Image)
                 .unwrap()
@@ -279,6 +287,177 @@ fn the_hd_pack_names_most_backgrounds() {
     }
     eprintln!(
         "{matched} of {} backgrounds have an HD file; unmatched: {unmatched:#?}",
+        matched + unmatched.len()
+    );
+    assert!(
+        matched * 10 >= (matched + unmatched.len()) * 9,
+        "{matched} matched"
+    );
+}
+
+/// Every RE2 model of the pack: the enemy EMDs, the player PLDs (body and
+/// `ch` variants) and the weapon PLWs.
+fn models(pack: &Pack) -> Vec<String> {
+    let mut models: Vec<String> = pack
+        .paths()
+        .filter(|path| {
+            (path.starts_with("enemy/") && path.ends_with(".emd"))
+                || (path.starts_with("player/")
+                    && (path.ends_with(".pld") || path.ends_with(".plw")))
+        })
+        .map(str::to_owned)
+        .collect();
+    models.sort();
+    models
+}
+
+/// Each model parses through the viewer, every clip frame names one of its
+/// bank's keyframes and every primitive its object's vertices, and it draws
+/// textured and animates when stood in room 100: the frame differs from the
+/// empty room in many colours, and a clip with more than one keyframe draws
+/// differently eight ticks on. `ARKLAY_RE2_MODEL_SHOTS` names a directory
+/// to write each model's frame to as a BMP (the contact sheet's tiles), with
+/// the empty room as `room.bmp`.
+#[test]
+#[ignore]
+fn every_model_parses_draws_textured_and_animates() {
+    use arklay::engine::{ModelView, model_view_frames};
+    use arklay::model_viewer;
+
+    let Some(pack) = pack() else {
+        return;
+    };
+    let shots = std::env::var_os("ARKLAY_RE2_MODEL_SHOTS").map(PathBuf::from);
+    if let Some(dir) = &shots {
+        fs::create_dir_all(dir).unwrap();
+    }
+    let room = arklay::state::RoomId::from_room_and_player("100", 0).unwrap();
+    let empty = model_view_frames(pack, room, None, &[0], None)
+        .unwrap()
+        .remove(0);
+    if let Some(dir) = &shots {
+        let data = arklay::bmp::encode_to_vec(&empty).unwrap();
+        fs::write(dir.join("room.bmp"), data).unwrap();
+    }
+    let models = models(pack);
+    assert_eq!(models.len(), 116 + 40 + 181, "{models:?}");
+    let mut failures = Vec::new();
+    for entry in &models {
+        let model = match model_viewer::load(pack, entry) {
+            Ok(model) => model,
+            Err(error) => {
+                failures.push(format!("{entry}: {error:#}"));
+                continue;
+            }
+        };
+        let banks = std::iter::once((&model.keyframes, &model.clips)).chain(
+            model
+                .banks
+                .iter()
+                .map(|bank| (&bank.keyframes, &bank.clips)),
+        );
+        for (index, (keyframes, clips)) in banks.enumerate() {
+            let bad = clips
+                .iter()
+                .flat_map(|clip| &clip.frames)
+                .find(|frame| usize::from(frame.keyframe) >= keyframes.len());
+            if let Some(frame) = bad {
+                failures.push(format!(
+                    "{entry}: bank {index} names keyframe {} of {}",
+                    frame.keyframe,
+                    keyframes.len()
+                ));
+            }
+        }
+        for (index, object) in model.mesh.objects.iter().enumerate() {
+            let bad = object.prims.iter().any(|prim| {
+                prim.vertices
+                    .iter()
+                    .any(|&vertex| usize::from(vertex) >= object.vertices.len())
+            });
+            if bad {
+                failures.push(format!("{entry}: object {index} names a missing vertex"));
+            }
+        }
+        let view = ModelView {
+            entry,
+            bank: 0,
+            clip: 0,
+        };
+        let frames = model_view_frames(pack, room, Some(view), &[0, 8], None).unwrap();
+        let changed: HashSet<[u8; 4]> = frames[0]
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(empty.rgba.as_chunks::<4>().0)
+            .filter(|(drawn, room)| drawn != room)
+            .map(|(drawn, _)| *drawn)
+            .collect();
+        if changed.len() < 8 {
+            failures.push(format!(
+                "{entry}: draws {} distinct colours over the room",
+                changed.len()
+            ));
+        }
+        let moving = model.clips.first().is_some_and(|clip| {
+            clip.frames.iter().any(|frame| {
+                model.keyframes.get(usize::from(frame.keyframe)) != model.keyframes.first()
+            })
+        });
+        if moving && frames[0].rgba == frames[1].rgba {
+            failures.push(format!("{entry}: clip 0 does not animate"));
+        }
+        if let Some(dir) = &shots {
+            let name = entry.replace('/', "_");
+            let data = arklay::bmp::encode_to_vec(&frames[0]).unwrap();
+            fs::write(dir.join(format!("{name}.bmp")), data).unwrap();
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The TeamX RE2 HD pack's model skins are named by `bio2hd.asi`'s hash of
+/// each 128-texel page through its own CLUT row; `ARKLAY_RE2_HD` names the
+/// extracted pack. Every enemy and player page has a skin but a few the
+/// pack skipped (the weapon composites are hashed as the character's own
+/// texture, so only the bodies are counted).
+#[test]
+#[ignore]
+fn the_hd_pack_names_most_model_pages() {
+    let (Some(pack), Some(hd)) = (pack(), std::env::var_os("ARKLAY_RE2_HD").map(PathBuf::from))
+    else {
+        return;
+    };
+    let mut names = HashSet::new();
+    for class in ["skin", "skin2"] {
+        for entry in fs::read_dir(hd.join("hires").join(class)).unwrap() {
+            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+            if let Some(hash) = name
+                .get(..8)
+                .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+            {
+                names.insert(hash);
+            }
+        }
+    }
+    let (mut matched, mut unmatched) = (0, Vec::new());
+    for entry in models(pack).iter().filter(|entry| !entry.ends_with(".plw")) {
+        let model = arklay::model_viewer::load(pack, entry).unwrap();
+        let texture = &model.texture;
+        for page in 0..(texture.width as usize / 128).min(texture.palettes.len() / 256) {
+            let candidates = arklay::htexture::page_candidates(texture, page);
+            if candidates.iter().any(|candidate| {
+                candidate.origin == [page as u32 * 128, 0] && names.contains(&candidate.hash)
+            }) {
+                matched += 1;
+            } else {
+                unmatched.push(format!("{entry} page {page}"));
+            }
+        }
+    }
+    eprintln!(
+        "{matched} of {} model pages have an HD skin; unmatched: {unmatched:#?}",
         matched + unmatched.len()
     );
     assert!(
