@@ -456,6 +456,11 @@ The game's conversion, which the hash depends on:
   the left 256 x 256 texels, with opaque texels at alpha `0xFF`. `misc`, `skin` and
   `skin2` hash the whole texture, with every texel but `0` and `1` at alpha `0xFF`. A
   window larger than the texture is padded with zero texels.
+- A screen-border background (the caves, 316 x 236) is the exception. The game leaves
+  the four spare rows of the 256 x 240 window black, so the renderer also tries that
+  window with the spare rows hashed as the black texel (`1`), alpha `0xFF`. That
+  candidate lets an unmodified pack replace the cave cameras. `arklay hash` does not
+  print it yet; it reports only the zero-padded hash.
 
 The class comes from how the game uses the texture, so `arklay hash` infers it from
 the file: a `.pak` is `bgd` or `mask`, models (`EMD`, `EMW`, `IVM`, ...) are `skin`,
