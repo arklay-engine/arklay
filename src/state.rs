@@ -65,8 +65,8 @@ impl RoomId {
     }
 
     fn from_digits(stage: u8, room: u8, player_flag: u8, text: &str) -> anyhow::Result<Self> {
-        if !(1..=Self::MAX_STAGE_ID).contains(&stage) {
-            anyhow::bail!("stage digit in `{text}` must be 1-9 or A-G");
+        if !(1..=Self::MAX_STAGE).contains(&stage) && !(10..=Self::MAX_STAGE_ID).contains(&stage) {
+            anyhow::bail!("stage digit in `{text}` must be 1-7 or A-G");
         }
         if room > Self::MAX_ROOM {
             anyhow::bail!("room in `{text}` must be 00-1F");
@@ -566,8 +566,28 @@ mod tests {
     }
 
     #[test]
+    fn parses_letter_stages() {
+        let id = RoomId::parse("G010").unwrap();
+        assert_eq!((id.stage, id.room, id.player_flag), (16, 0x01, 0));
+        assert_eq!(id.dir(), "room/g010");
+        assert_eq!(id.room3(), "G01");
+        assert_eq!(id.code(), "g010");
+        let id = RoomId::from_room_and_player("a1d", 1).unwrap();
+        assert_eq!((id.stage, id.room, id.player_flag), (10, 0x1D, 1));
+        assert_eq!(id.rdt_entry(), "room/a1d1/room.rdt");
+        assert_ne!(
+            RoomId::parse("G010").unwrap().rdt_number(),
+            RoomId::parse("0010").map_or(0, RoomId::rdt_number)
+        );
+        // `G` is only a stage digit, and no stage lies past it.
+        assert!(RoomId::parse("1G00").is_err());
+        assert!(RoomId::parse("H000").is_err());
+        assert!(RoomId::parse("0000").is_err());
+    }
+
+    #[test]
     fn every_shipped_room_id_roundtrips() {
-        for stage in 1..=RoomId::MAX_STAGE_ID {
+        for stage in (1..=RoomId::MAX_STAGE).chain(10..=RoomId::MAX_STAGE_ID) {
             for room in 0..=RoomId::MAX_ROOM {
                 for player in 0..=1u8 {
                     let id = RoomId {
@@ -605,6 +625,8 @@ mod tests {
         assert!(RoomId::parse("10012").is_err());
         assert!(RoomId::parse("0A0").is_err());
         assert!(RoomId::parse("800").is_err());
+        assert!(RoomId::parse("900").is_err());
+        assert!(RoomId::parse("H00").is_err());
         assert!(RoomId::parse("1FF").is_err());
         assert!(RoomId::parse("1X0").is_err());
         assert!(RoomId::from_room_and_player("1001", 0).is_err());

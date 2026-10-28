@@ -21,7 +21,8 @@ struct Cli {
     #[arg(value_name = "PACK")]
     pack: Option<PathBuf>,
 
-    /// Room id, three hex digits: stage digit plus room, e.g. 100 or 11C
+    /// Room id, three hex digits: stage digit plus room, e.g. 100 or 11C; RE2's
+    /// letter stages are A-G, e.g. G01
     #[arg(long, value_name = "ROOM", requires = "pack")]
     room: Option<String>,
 

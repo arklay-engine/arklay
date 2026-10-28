@@ -968,10 +968,9 @@ mod tests {
             classify_entry("room/g010/room.rdt", &re2_rdt()),
             Format::Re2Rdt
         );
-        assert_eq!(
-            classify_entry("room/g010/room.rdt", b"junk"),
-            Format::Opaque
-        );
+        // `g010` is a room id since the letter stages, so junk there is an
+        // RE1 RDT that fails to parse, like junk in any other room.
+        assert_eq!(classify_entry("room/g010/room.rdt", b"junk"), Format::Rdt);
         assert_eq!(
             classify_entry("voice/0/01_00.wav", &adpcm_wav()),
             Format::AdpcmWav

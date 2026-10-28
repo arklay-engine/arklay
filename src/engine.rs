@@ -16001,6 +16001,29 @@ mod tests {
     };
 
     #[test]
+    fn a_pack_names_its_own_new_game_room() {
+        let with = |start_room: Option<&str>| {
+            let mut manifest = crate::manifest::Manifest::base("re2");
+            manifest.start_room = start_room.map(str::to_string);
+            let mut writer = PackWriter::new();
+            writer
+                .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+                .unwrap();
+            Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+        };
+        assert_eq!(
+            new_game_id(&with(Some("100")), 1),
+            RoomId::parse("1001").unwrap()
+        );
+        let main_hall = RoomId {
+            stage: 1,
+            room: NEW_GAME_ROOM,
+            player_flag: 0,
+        };
+        assert_eq!(new_game_id(&with(None), 0), main_hall);
+    }
+
+    #[test]
     fn menu_saves_only_what_it_changed_over_the_file() {
         let mut file = crate::config::Config {
             language: Some("en".to_string()),

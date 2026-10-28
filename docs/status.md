@@ -868,5 +868,24 @@ runtime milestones parse them). Retail-data quirks the converter handles:
 - Each decoded ADT stream carries 66,080 bytes after the background,
   probably a 256x256 8bpp mask TIM; R4 (#248) takes it up.
 
+R1 (#245) loads RE2 rooms. Room loading detects the RDT dialect and reads an
+RE2 RDT through `rdt2` into the same `RoomSource` RE1 rooms build from:
+cameras (RID, focal length `perspective >> 7` as the executable sets it),
+camera switch zones (RVD) and the SCA collision records, which keep their own
+`Sca` type and are drawn by the collision debug views. `RoomId` takes the
+letter stages A-G (stages 10-16, `room/g010`), the debug room select grows a
+tab per extra stage, and the pack manifest's `start_room` names the new-game
+room (`100` for RE2). `F4`/`--render-mode collision-overlay` draws the
+collision over the background from the cut camera. All 501 rooms and 5040
+cameras load against the retail install (`tests/real/re2_real.rs`); the 12
+cameras without a background (above) log a warning instead of failing the
+room. RE2 rooms run no scripts and have no player yet; masks, lights and the
+RVD floor/flag bytes are not read. The TeamX RE2 HD pack converts with
+`convert-mod --base re2.akpak`; its backgrounds are named by the CRC of the
+camera's whole 256 x 256 main page (`bio2hd.asi`: the 240 picture rows with
+black clear, then 16 zero rows), which names 4740 of the 5028 cameras'
+backgrounds. The rest are rooms and camera states the pack has no file for
+(`ARKLAY_RE2_HD` runs the count in `tests/real/re2_real.rs`).
+
 The manifest no longer carries `rdt_version`/`scd_version`: formats are
 detected per file (`src/format.rs`), so one pack may hold both dialects.

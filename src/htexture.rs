@@ -943,6 +943,15 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
                 frame: size,
             });
         }
+        // RE2's loader (`bio2hd.asi`) hashes the background's whole 256 x 256
+        // main page: the 240 picture rows, black as transparent, then 16 rows
+        // the game never writes. The 128 x 128 side page reuses that hash.
+        if height <= 240 {
+            candidates.push(Candidate {
+                hash: replicated.window_crc(256, 256, finish_mask),
+                frame: size,
+            });
+        }
     }
     candidates.push(Candidate {
         hash: replicated.window_crc(256, 256, finish_mask),
@@ -1424,6 +1433,39 @@ mod tests {
             Candidate {
                 hash: crc32(&expected),
                 frame: [316, 236],
+            }
+        );
+    }
+
+    #[test]
+    fn an_re2_background_hashes_its_whole_main_page() {
+        // `bio2hd.asi`'s recipe: the left 256 columns of the 240 picture rows
+        // with black clear, then 16 zero rows; the HD image covers the frame.
+        let pixel = |x: u32, y: u32| {
+            if (x + y).is_multiple_of(7) {
+                [0, 0, 0, 255]
+            } else {
+                [(x * 8) as u8, (y * 8) as u8, 0x80, 255]
+            }
+        };
+        let image = image_of(320, 240, pixel);
+        let mut expected = Vec::new();
+        for y in 0..256 {
+            for x in 0..256 {
+                let texel = if y < 240 {
+                    let [r, g, b, _] = pixel(x, y);
+                    finish_mask(texel(colour_of([r, g, b]), Expand::Replicate))
+                } else {
+                    0
+                };
+                expected.extend_from_slice(&texel.to_le_bytes());
+            }
+        }
+        assert_eq!(
+            image_candidates(&image)[2],
+            Candidate {
+                hash: crc32(&expected),
+                frame: [320, 240],
             }
         );
     }

@@ -318,3 +318,40 @@ impl RoomSelect {
         grid.scrollbar(p, top, rows);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pack(rooms: &[&str]) -> Pack {
+        let mut writer = crate::pack::PackWriter::new();
+        for room in rooms {
+            writer
+                .add(&format!("room/{room}/room.rdt"), vec![0])
+                .unwrap();
+        }
+        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn letter_stages_get_their_own_tabs() {
+        let pack = pack(&["1000", "1001", "a000", "g010"]);
+        let mut select = RoomSelect::new(&pack, RoomId::parse("G010").unwrap());
+        assert_eq!(select.stage_ids, [1, 2, 3, 4, 5, 6, 7, 10, 16]);
+        assert_eq!(select.column(), 8, "the cursor follows the current room");
+        assert_eq!(select.selected().map(|room| room.room), Some(0x01));
+        let right = UiInput {
+            page_right: true,
+            ..UiInput::default()
+        };
+        select.handle_input(right, 0);
+        assert_eq!(select.column(), 0, "the tabs wrap");
+    }
+
+    #[test]
+    fn an_re1_pack_keeps_seven_tabs() {
+        let pack = pack(&["1000", "7001"]);
+        let select = RoomSelect::new(&pack, RoomId::parse("1000").unwrap());
+        assert_eq!(select.stage_ids, [1, 2, 3, 4, 5, 6, 7]);
+    }
+}

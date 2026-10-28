@@ -248,3 +248,41 @@ fn every_room_loads_with_its_backgrounds() {
     missing.sort();
     assert_eq!(missing, expected);
 }
+
+/// The TeamX RE2 HD pack's backgrounds are named by `bio2hd.asi`'s hash of
+/// each camera's main page; `ARKLAY_RE2_HD` names the extracted pack (the
+/// directory holding `hires/`). The pack has no file for the rooms and
+/// camera states it skipped, so a few cameras stay unmatched.
+#[test]
+#[ignore]
+fn the_hd_pack_names_most_backgrounds() {
+    let (Some(pack), Some(hd)) = (pack(), std::env::var_os("ARKLAY_RE2_HD").map(PathBuf::from))
+    else {
+        return;
+    };
+    let names: HashSet<u32> = with_extension(&hd.join("hires/bgd"), "webp")
+        .iter()
+        .filter_map(|path| u32::from_str_radix(path.file_stem()?.to_str()?.get(..8)?, 16).ok())
+        .collect();
+    let (mut matched, mut unmatched) = (0, Vec::new());
+    for path in pack.paths().filter(|path| path.contains("/cut/")) {
+        let image = arklay::bmp::decode(&pack.read(path).unwrap()).unwrap();
+        let candidates = arklay::htexture::image_candidates(&image);
+        if candidates
+            .iter()
+            .any(|candidate| names.contains(&candidate.hash))
+        {
+            matched += 1;
+        } else {
+            unmatched.push(path.to_string());
+        }
+    }
+    eprintln!(
+        "{matched} of {} backgrounds have an HD file; unmatched: {unmatched:#?}",
+        matched + unmatched.len()
+    );
+    assert!(
+        matched * 10 >= (matched + unmatched.len()) * 9,
+        "{matched} matched"
+    );
+}

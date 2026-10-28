@@ -640,6 +640,18 @@ mod tests {
     }
 
     #[test]
+    fn start_room_round_trips_and_is_checked() {
+        let mut manifest = Manifest::base("re2");
+        manifest.start_room = Some("100".to_string());
+        let text = manifest.render();
+        assert!(text.contains("start_room = \"100\""));
+        assert_eq!(Manifest::parse(&text).unwrap(), manifest);
+        let bad = text.replace("\"100\"", "\"1000\"");
+        let error = Manifest::parse(&bad).unwrap_err().to_string();
+        assert!(error.contains("start_room"), "{error}");
+    }
+
+    #[test]
     fn parses_every_value_kind() {
         let items = parse_items(
             r#"
