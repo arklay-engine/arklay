@@ -921,7 +921,7 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
             .collect(),
     };
     let size = [image.width, image.height];
-    let mut candidates = Vec::with_capacity(7);
+    let mut candidates = Vec::with_capacity(8);
     let replicated = surface(Expand::Replicate, false);
     // A camera background hashes its left 256 x 240 but is drawn whole; a
     // `DATA/*.PIX` screen the same way, but widened like a menu texture.
@@ -934,6 +934,15 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
             hash: surface(Expand::Shift, false).window_crc(256, 240, |t| t | 0xff00_0000),
             frame: size,
         });
+        // A screen-border background (316 x 236, the caves) sits in the
+        // top-left of a texture whose spare rows the game leaves black, so
+        // the rows below the picture hash as the black texel, not as zero.
+        if height < 240 {
+            candidates.push(Candidate {
+                hash: replicated.window_crc(256, 240, |t| t.max(1) | 0xff00_0000),
+                frame: size,
+            });
+        }
     }
     candidates.push(Candidate {
         hash: replicated.window_crc(256, 256, finish_mask),
@@ -1385,6 +1394,36 @@ mod tests {
             Candidate {
                 hash: retail,
                 frame: [320, 240]
+            }
+        );
+    }
+
+    #[test]
+    fn a_screen_border_background_hashes_over_black_spare_rows() {
+        // A 316x236 cave picture: the rows under it hash as the black
+        // texel, opaque, and the replacement covers the picture alone.
+        let image = image_of(316, 236, |x, y| [(x * 8) as u8, (y * 8) as u8, 0x80, 255]);
+        let mut expected = Vec::new();
+        for y in 0..240 {
+            for x in 0..256 {
+                let texel = if y < 236 {
+                    texel(
+                        colour_of([(x * 8) as u8, (y * 8) as u8, 0x80]),
+                        Expand::Replicate,
+                    )
+                } else {
+                    1
+                };
+                expected.extend_from_slice(&(texel | 0xff00_0000).to_le_bytes());
+            }
+        }
+        // After the two zero-padded background hashes, so it is only tried
+        // once they miss.
+        assert_eq!(
+            image_candidates(&image)[2],
+            Candidate {
+                hash: crc32(&expected),
+                frame: [316, 236],
             }
         );
     }
