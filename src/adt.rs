@@ -16,7 +16,7 @@
 //! Copies read a 16 KiB ring of the most recent output. The decoded buffer of
 //! a background holds a 256 x 256 page followed by a 128 x 128 page whose two
 //! 64-wide halves are the right-hand 64 columns of the 320 x 240 frame (rows
-//! 0-127, then 128-239), all as 16-bit RGB555; [`reorganize`] lays them out as
+//! 0-127, then 128-239), all as 15-bit `0BBBBBGGGGGRRRRR` texels (the PSX order, red lowest); [`reorganize`] lays them out as
 //! one 320 x 240 frame.
 
 use anyhow::{Context, Result, ensure};
@@ -338,14 +338,14 @@ pub fn reorganize(decoded: &[u8]) -> Result<Vec<u16>> {
     Ok(frame)
 }
 
-/// Widen a 15-bit `0RRRRRGGGGGBBBBB` texel to 8-bit channels by bit
+/// Widen a 15-bit `0BBBBBGGGGGRRRRR` texel to 8-bit channels by bit
 /// replication.
 fn widen(texel: u16) -> [u8; 3] {
     let channel = |value: u16| {
         let value = (value & 0x1F) as u8;
         (value << 3) | (value >> 2)
     };
-    [channel(texel >> 10), channel(texel >> 5), channel(texel)]
+    [channel(texel), channel(texel >> 5), channel(texel >> 10)]
 }
 
 /// Decode a background stream into a 320 x 240 opaque image.
@@ -468,9 +468,9 @@ mod tests {
     fn widen_replicates_the_top_bits() {
         assert_eq!(widen(0x7FFF), [0xFF, 0xFF, 0xFF]);
         assert_eq!(widen(0x0000), [0, 0, 0]);
-        assert_eq!(widen(0x7C00), [0xFF, 0, 0]);
-        assert_eq!(widen(0x001F), [0, 0, 0xFF]);
-        assert_eq!(widen(0x0010), [0, 0, 0x84]);
+        assert_eq!(widen(0x001F), [0xFF, 0, 0]);
+        assert_eq!(widen(0x7C00), [0, 0, 0xFF]);
+        assert_eq!(widen(0x0010), [0x84, 0, 0]);
     }
 
     #[test]
@@ -552,7 +552,7 @@ mod tests {
     fn a_uniform_background_fixture_decodes() {
         let image = background(&super::fixture::uniform_background(0x21)).unwrap();
         assert_eq!((image.width, image.height), (320, 240));
-        // 0x2121 is red 8, green 9, blue 1.
+        // 0x2121 is red 1, green 9, blue 8.
         let [red, green, blue] = widen(0x2121);
         assert!(
             image
