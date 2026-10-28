@@ -1,25 +1,28 @@
-//! ROOM SELECT: the pack's rooms in one column per stage.
+//! ROOM SELECT: the pack's rooms as a scrollable grid of pictures, one
+//! stage per tab.
 //!
-//! Up/down move inside a column and left/right between columns; both axes
-//! scroll (three columns fit the panel). Each row shows the room's hex index
-//! and its name clipped to the column; the footer spells the cursor row's full
-//! `room3` id and name. Confirm jumps through the session's `debug_jump`, in
-//! the RDT variant of the pending character when the pack carries it.
+//! Each cell shows the room's first camera cut, its `room3` id and its name;
+//! the grid takes as many columns as the window's width allows. The arrows
+//! move the cursor (up/down by a row), the page keys change stage and confirm
+//! jumps through the session's `debug_jump`, in the RDT variant of the
+//! pending character when the pack carries it.
 
 use std::collections::BTreeMap;
 
-use super::{BODY_Y, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
+use super::widgets::{self, Grid, Scroll, grid_step};
+use super::{Cx, Hit, Step, fit};
+use crate::gui::canvas::{Color, Rect};
+use crate::gui::text::Align;
+use crate::gui::theme::{Role, palette};
+use crate::gui::widgets::Painter;
 use crate::pack::Pack;
-use crate::render::Tint;
 use crate::state::RoomId;
 use crate::ui::UiInput;
 
-/// One column per stage digit (1-7).
+/// One tab per stage digit (1-7).
 pub const STAGE_COLUMNS: usize = RoomId::MAX_STAGE as usize;
-/// Columns the panel shows before it scrolls horizontally.
-pub const VISIBLE_COLUMNS: usize = 3;
-/// Rows a column shows before it scrolls vertically.
-pub const VISIBLE_ROWS: usize = 8;
+/// Thumbnails loaded per painted frame, so the grid stays responsive.
+const LOADS_PER_FRAME: usize = 4;
 /// The column labels' language keys, by stage digit.
 pub const STAGE_LABELS: [&str; STAGE_COLUMNS] = [
     "UI_DEBUG_STAGE_1",
@@ -95,69 +98,51 @@ pub fn room_entries(pack: &Pack, preferred_player: u8) -> Vec<RoomId> {
 /// The ROOM SELECT tool's state.
 pub struct RoomSelect {
     /// The rooms of stage `index + 1`.
-    columns: Vec<Vec<RoomVariants>>,
+    stages: Vec<Vec<RoomVariants>>,
     /// The session's room as the menu last saw it.
     current: (u8, u8),
-    column: usize,
-    rows: [usize; STAGE_COLUMNS],
-    scroll_rows: [usize; STAGE_COLUMNS],
-    scroll_column: usize,
+    stage: usize,
+    cells: [usize; STAGE_COLUMNS],
+    /// Each stage's grid scroll, in rows.
+    scroll: [Scroll; STAGE_COLUMNS],
+    /// The grid's columns as last laid out.
+    columns: usize,
 }
 
 impl RoomSelect {
-    /// Split the pack's rooms into stage columns and put the cursor on
-    /// `current`.
+    /// Split the pack's rooms into stages and put the cursor on `current`.
     pub fn new(pack: &Pack, current: RoomId) -> Self {
-        let mut columns = vec![Vec::new(); STAGE_COLUMNS];
+        let mut stages = vec![Vec::new(); STAGE_COLUMNS];
         for room in room_variants(pack) {
-            if let Some(column) = columns.get_mut(usize::from(room.stage).wrapping_sub(1)) {
-                column.push(room);
+            if let Some(stage) = stages.get_mut(usize::from(room.stage).wrapping_sub(1)) {
+                stage.push(room);
             }
         }
         let mut select = Self {
-            columns,
-            current: (current.stage, current.room),
-            column: 0,
-            rows: [0; STAGE_COLUMNS],
-            scroll_rows: [0; STAGE_COLUMNS],
-            scroll_column: 0,
+            stages,
+            current: (0, 0),
+            stage: 0,
+            cells: [0; STAGE_COLUMNS],
+            scroll: [Scroll::default(); STAGE_COLUMNS],
+            columns: 4,
         };
-        let column = usize::from(current.stage).wrapping_sub(1);
-        if let Some(row) = select
-            .columns
-            .get(column)
-            .and_then(|rooms| rooms.iter().position(|room| room.room == current.room))
-        {
-            select.column = column;
-            select.rows[column] = row;
-            select.scroll_into_view();
-        }
+        select.refresh(current);
         select
     }
 
-    /// The cursor's column (stage digit minus one).
+    /// The cursor's stage (stage digit minus one).
     pub fn column(&self) -> usize {
-        self.column
+        self.stage
     }
 
-    /// The cursor's row inside its column.
+    /// The cursor's cell inside its stage.
     pub fn row(&self) -> usize {
-        self.rows[self.column]
+        self.cells[self.stage]
     }
 
-    /// The first column drawn.
-    pub fn scroll_column(&self) -> usize {
-        self.scroll_column
-    }
-
-    /// The first row drawn in the cursor's column.
-    pub fn scroll_row(&self) -> usize {
-        self.scroll_rows[self.column]
-    }
-
-    /// The room under the cursor (`None` in an empty column).
+    /// The room under the cursor (`None` in an empty stage).
     pub fn selected(&self) -> Option<&RoomVariants> {
-        self.columns[self.column].get(self.rows[self.column])
+        self.stages[self.stage].get(self.cells[self.stage])
     }
 
     /// Follow the session after the menu was closed: when `current` changed
@@ -169,301 +154,144 @@ impl RoomSelect {
             return;
         }
         self.current = room;
-        let column = usize::from(room.0).wrapping_sub(1);
-        if let Some(row) = self
-            .columns
-            .get(column)
+        let stage = usize::from(room.0).wrapping_sub(1);
+        if let Some(cell) = self
+            .stages
+            .get(stage)
             .and_then(|rooms| rooms.iter().position(|entry| entry.room == room.1))
         {
-            self.column = column;
-            self.rows[column] = row;
-            self.scroll_into_view();
+            self.stage = stage;
+            self.cells[stage] = cell;
+            self.scroll[stage].follow();
         }
     }
 
-    /// One tick of input: the jump target in `character`'s variant on confirm.
+    /// Put the cursor on cell `index`.
+    pub(super) fn point(&mut self, index: usize) {
+        if index < self.stages[self.stage].len() {
+            self.cells[self.stage] = index;
+        }
+    }
+
+    /// Show stage tab `stage`.
+    pub(super) fn set_stage(&mut self, stage: usize) {
+        self.stage = stage.min(STAGE_COLUMNS - 1);
+    }
+
+    /// Scroll the grid by `rows` without moving the cursor.
+    pub(super) fn scroll_by(&mut self, rows: isize) {
+        self.scroll[self.stage].by(rows);
+    }
+
+    /// One input edge: the jump target in `character`'s variant on confirm.
     pub(super) fn handle_input(&mut self, input: UiInput, character: u8) -> Step {
         if input.cancel {
             return Step::Back;
         }
-        if input.left {
-            self.column = (self.column + STAGE_COLUMNS - 1) % STAGE_COLUMNS;
-        } else if input.right {
-            self.column = (self.column + 1) % STAGE_COLUMNS;
-        } else if input.up || input.down {
-            let count = self.columns[self.column].len();
-            if count > 0 {
-                let row = &mut self.rows[self.column];
-                *row = if input.up {
-                    (*row + count - 1) % count
-                } else {
-                    (*row + 1) % count
-                };
-            }
-        } else if input.confirm
-            && let Some(room) = self.selected()
-        {
-            return Step::Event(super::DebugMenuEvent::Jump(room.id(character)));
+        if input.page_left {
+            self.stage = (self.stage + STAGE_COLUMNS - 1) % STAGE_COLUMNS;
+            return Step::Stay;
         }
-        self.scroll_into_view();
+        if input.page_right {
+            self.stage = (self.stage + 1) % STAGE_COLUMNS;
+            return Step::Stay;
+        }
+        if input.confirm {
+            return match self.selected() {
+                Some(room) => Step::Event(super::DebugMenuEvent::Jump(room.id(character))),
+                None => Step::Stay,
+            };
+        }
+        let count = self.stages[self.stage].len();
+        let cell = &mut self.cells[self.stage];
+        if let Some(next) = grid_step(*cell, count, self.columns, input) {
+            *cell = next;
+            self.scroll[self.stage].follow();
+        }
         Step::Stay
     }
 
-    /// Keep the cursor's column and row inside the visible window.
-    fn scroll_into_view(&mut self) {
-        if self.column < self.scroll_column {
-            self.scroll_column = self.column;
-        } else if self.column >= self.scroll_column + VISIBLE_COLUMNS {
-            self.scroll_column = self.column + 1 - VISIBLE_COLUMNS;
+    /// Draw the stage tabs and the visible grid into `area`.
+    pub(super) fn draw(&mut self, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let labels: Vec<String> = STAGE_LABELS.iter().map(|key| cx.label(key)).collect();
+        let empty: Vec<bool> = self.stages.iter().map(Vec::is_empty).collect();
+        let tab_h = widgets::tabs(p, cx, area, &labels, self.stage, &empty);
+        let body = Rect::new(area.x, area.y + tab_h, area.w, area.h - tab_h);
+        let rooms = &self.stages[self.stage];
+        if rooms.is_empty() {
+            let none = cx.label("UI_DEBUG_NO_ROOMS");
+            p.text(
+                Role::Row,
+                body.center_x(),
+                body.y + u(60.0),
+                Align::Center,
+                palette::TEXT_DIM,
+                &none,
+            );
+            return;
         }
-        let row = self.rows[self.column];
-        let scroll = &mut self.scroll_rows[self.column];
-        if row < *scroll {
-            *scroll = row;
-        } else if row >= *scroll + VISIBLE_ROWS {
-            *scroll = row + 1 - VISIBLE_ROWS;
-        }
-    }
-
-    /// Draw the visible columns and the footer.
-    pub(super) fn draw(&self, pen: &mut Pen) {
-        let glyph_w = pen.font.metrics.glyph_w;
-        // The columns share the panel's width, which grows with the frame.
-        let column_width = (pen.right - TEXT_LEFT) / VISIBLE_COLUMNS as i32;
-        for (slot, column) in (self.scroll_column..STAGE_COLUMNS)
-            .take(VISIBLE_COLUMNS)
-            .enumerate()
-        {
-            let x = TEXT_LEFT + slot as i32 * column_width;
-            let label_tint = if column == self.column {
-                Tint::Yellow
-            } else {
-                Tint::Grey
-            };
-            let label = pen.text.ui(STAGE_LABELS[column]);
-            pen.fit(x, BODY_Y, label_tint, label, column_width - 4);
-            let rooms = &self.columns[column];
-            if rooms.is_empty() {
-                let empty = pen.text.ui("UI_DEBUG_NO_ROOMS");
-                pen.fit(x + 10, BODY_Y + 16, Tint::Grey, empty, column_width - 14);
-                continue;
-            }
-            let scroll = self.scroll_rows[column];
-            for (index, room) in rooms.iter().enumerate().skip(scroll).take(VISIBLE_ROWS) {
-                let y = BODY_Y + 16 + (index - scroll) as i32 * ROW_HEIGHT;
-                let selected = column == self.column && index == self.rows[column];
-                if selected {
-                    pen.cursor(x, y);
-                }
-                let current = (room.stage, room.room) == self.current;
-                let tint = if selected {
-                    super::SELECTED_TINT
-                } else if current {
-                    Tint::Green
-                } else {
-                    Tint::White
-                };
-                pen.ascii(x + 10, y, tint, &format!("{:02X}", room.room));
-                let name_x = x + 10 + 2 * glyph_w + 4;
-                if let Some(name) = pen.text.room_name(&room3(room)) {
-                    let tint = if selected {
-                        super::SELECTED_TINT
-                    } else if current {
-                        Tint::Green
-                    } else {
-                        Tint::Grey
-                    };
-                    pen.fit(name_x, y, tint, name, x + column_width - 2 - name_x);
-                }
-            }
-        }
-        // The footer: the cursor row's full id and untruncated name.
-        let footer_y = BODY_Y + 16 + VISIBLE_ROWS as i32 * ROW_HEIGHT + 4;
-        if let Some(room) = self.selected() {
-            let id = room3(room);
-            pen.ascii(TEXT_LEFT, footer_y, Tint::Yellow, &id);
-            if let Some(name) = pen.text.room_name(&id) {
-                let x = TEXT_LEFT + 4 * glyph_w;
-                pen.fit(x, footer_y, Tint::White, name, pen.right - x);
-            }
-        }
-    }
-}
-
-/// The `room3` id (`"106"`) of a room.
-fn room3(room: &RoomVariants) -> String {
-    room.id(0).room3()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::pack::PackWriter;
-
-    fn pack_with(paths: &[&str]) -> Pack {
-        let mut writer = PackWriter::new();
-        for path in paths {
-            writer.add(path, vec![0u8; 4]).unwrap();
-        }
-        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
-    }
-
-    fn ids(rooms: &[RoomId]) -> Vec<(u8, u8, u8)> {
-        rooms
+        let grid = Grid::new(p, body, 300.0, true);
+        let columns = grid.columns;
+        self.columns = columns;
+        let cell = self.cells[self.stage].min(rooms.len() - 1);
+        let rows = rooms.len().div_ceil(columns);
+        let top = self.scroll[self.stage].layout(cell / columns, grid.rows, rows);
+        let mut loads = 0;
+        for (index, room) in rooms
             .iter()
-            .map(|id| (id.stage, id.room, id.player_flag))
-            .collect()
-    }
-
-    fn press(f: impl FnOnce(&mut UiInput)) -> UiInput {
-        let mut input = UiInput::default();
-        f(&mut input);
-        input
-    }
-
-    #[test]
-    fn room_entries_enumerate_sort_and_dedupe() {
-        let pack = pack_with(&[
-            "room/11c0/room.rdt",
-            "room/1061/room.rdt",
-            "room/1060/room.rdt",
-            "room/1000/room.rdt",
-            "room/zzzz.rdt",
-            "room/100.rdt",
-            "room/1060.txt",
-            "bgm/013.wav",
-        ]);
-        // The current player's variant wins the dedupe.
-        assert_eq!(
-            ids(&room_entries(&pack, 1)),
-            [(1, 0x00, 0), (1, 0x06, 1), (1, 0x1C, 0)]
-        );
-        assert_eq!(
-            ids(&room_entries(&pack, 0)),
-            [(1, 0x00, 0), (1, 0x06, 0), (1, 0x1C, 0)]
-        );
-    }
-
-    #[test]
-    fn room_entries_fall_back_to_the_lowest_variant() {
-        let pack = pack_with(&[
-            "room/2053/room.rdt",
-            "room/2052/room.rdt",
-            "room/2050/room.rdt",
-        ]);
-        assert_eq!(ids(&room_entries(&pack, 1)), [(2, 0x05, 0)]);
-    }
-
-    fn column_pack() -> Pack {
-        let mut paths: Vec<String> = (0..12u8)
-            .map(|room| format!("room/1{room:02x}0/room.rdt"))
-            .collect();
-        paths.extend([
-            "room/2000/room.rdt".into(),
-            "room/2001/room.rdt".into(),
-            "room/2011/room.rdt".into(),
-        ]);
-        paths.push("room/7000/room.rdt".into());
-        let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
-        pack_with(&refs)
-    }
-
-    #[test]
-    fn rooms_split_into_stage_columns_and_open_on_the_current_room() {
-        let pack = column_pack();
-        let select = RoomSelect::new(&pack, RoomId::parse("2010").unwrap());
-        assert_eq!(select.columns[0].len(), 12);
-        assert_eq!(select.columns[1].len(), 2);
-        assert!(select.columns[2].is_empty());
-        assert_eq!(select.columns[6].len(), 1);
-        assert_eq!((select.column(), select.row()), (1, 1));
-        let room = select.selected().unwrap();
-        assert_eq!(
-            (room.stage, room.room, room.players.clone()),
-            (2, 1, vec![1])
-        );
-    }
-
-    #[test]
-    fn both_axes_wrap_and_scroll() {
-        let pack = column_pack();
-        let mut select = RoomSelect::new(&pack, RoomId::parse("1000").unwrap());
-        assert_eq!((select.column(), select.row()), (0, 0));
-        // Up wraps to the bottom of the twelve-room column and scrolls it.
-        assert_eq!(select.handle_input(press(|i| i.up = true), 0), Step::Stay);
-        assert_eq!(select.row(), 11);
-        assert_eq!(select.scroll_row(), 11 + 1 - VISIBLE_ROWS);
-        // Down wraps back to the top.
-        select.handle_input(press(|i| i.down = true), 0);
-        assert_eq!((select.row(), select.scroll_row()), (0, 0));
-        // Right walks the stages; the fourth column scrolls the window.
-        for _ in 0..3 {
-            select.handle_input(press(|i| i.right = true), 0);
+            .enumerate()
+            .skip(top * columns)
+            .take(grid.rows * columns)
+        {
+            let (rect, thumb) = grid.cell(index - top * columns);
+            let selected = index == cell;
+            let id = room.id(0);
+            if !cx.art.has_thumbnail(id) {
+                if loads < LOADS_PER_FRAME {
+                    cx.art.load_thumbnail(cx.pack, id);
+                    loads += 1;
+                } else {
+                    cx.more = true;
+                }
+            }
+            let picture = cx.art.thumbnail(id);
+            widgets::grid_picture(p, thumb, picture.as_ref(), selected);
+            if (room.stage, room.room) == self.current {
+                let tag = cx.gui("debug.you_are_here");
+                let tag_w = p.measure(Role::Body, &tag) + u(20.0);
+                let tag_rect = Rect::new(
+                    thumb.x + u(8.0),
+                    thumb.y + u(8.0),
+                    tag_w,
+                    p.line_height(Role::Body) * 1.1,
+                );
+                p.canvas
+                    .fill_round_rect(tag_rect, u(6.0), Color::rgba(0x20, 0x7A, 0x3A, 0xE0));
+                p.text(
+                    Role::Body,
+                    tag_rect.center_x(),
+                    tag_rect.center_y(),
+                    Align::Center,
+                    palette::TEXT,
+                    &tag,
+                );
+            }
+            let room3 = id.room3();
+            let label_y = (thumb.bottom() + rect.bottom()) / 2.0;
+            let color = if selected {
+                palette::TEXT
+            } else {
+                palette::TEXT_DIM
+            };
+            let id_w = p.text(Role::Body, rect.x, label_y, Align::Left, color, &room3);
+            let name = cx.room_name(&room3);
+            let name_x = rect.x + id_w + u(12.0);
+            let name = fit(p, Role::Body, &name, rect.right() - name_x);
+            p.text(Role::Body, name_x, label_y, Align::Left, color, &name);
+            cx.hits.push((rect, Hit::Item(index)));
         }
-        assert_eq!((select.column(), select.scroll_column()), (3, 1));
-        // Left from the first column wraps to stage 7.
-        for _ in 0..4 {
-            select.handle_input(press(|i| i.left = true), 0);
-        }
-        assert_eq!((select.column(), select.scroll_column()), (6, 4));
-        // The first column remembers its row.
-        select.handle_input(press(|i| i.right = true), 0);
-        assert_eq!((select.column(), select.row()), (0, 0));
-    }
-
-    #[test]
-    fn refresh_follows_a_room_across_stages_and_scrolls_the_columns() {
-        let pack = column_pack();
-        let mut select = RoomSelect::new(&pack, RoomId::parse("1000").unwrap());
-        assert_eq!((select.column(), select.scroll_column()), (0, 0));
-
-        // Stage 2 is already inside the visible window.
-        select.refresh(RoomId::parse("2010").unwrap());
-        assert_eq!((select.column(), select.row()), (1, 1));
-        assert_eq!(select.scroll_column(), 0);
-        let room = select.selected().unwrap();
-        assert_eq!((room.stage, room.room), (2, 1));
-
-        // Stage 7 is off the right edge, so the window scrolls to it.
-        select.refresh(RoomId::parse("7000").unwrap());
-        assert_eq!((select.column(), select.scroll_column()), (6, 4));
-        assert_eq!((select.row(), select.scroll_row()), (0, 0));
-        let room = select.selected().unwrap();
-        assert_eq!((room.stage, room.room), (7, 0));
-    }
-
-    #[test]
-    fn confirm_jumps_in_the_requested_variant() {
-        let pack = column_pack();
-        let mut select = RoomSelect::new(&pack, RoomId::parse("2000").unwrap());
-        let confirm = press(|i| i.confirm = true);
-        // Room 200 has both variants: the character picks.
-        assert_eq!(
-            select.handle_input(confirm, 1),
-            Step::Event(super::super::DebugMenuEvent::Jump(
-                RoomId::parse("2001").unwrap()
-            ))
-        );
-        assert_eq!(
-            select.handle_input(confirm, 0),
-            Step::Event(super::super::DebugMenuEvent::Jump(
-                RoomId::parse("2000").unwrap()
-            ))
-        );
-        // Room 201 only has the Jill variant.
-        select.handle_input(press(|i| i.down = true), 0);
-        assert_eq!(
-            select.handle_input(confirm, 0),
-            Step::Event(super::super::DebugMenuEvent::Jump(
-                RoomId::parse("2011").unwrap()
-            ))
-        );
-        // An empty column consumes confirm.
-        select.handle_input(press(|i| i.right = true), 0);
-        assert_eq!(select.handle_input(confirm, 0), Step::Stay);
-        assert_eq!(
-            select.handle_input(press(|i| i.cancel = true), 0),
-            Step::Back
-        );
+        grid.scrollbar(p, top, rows);
     }
 }

@@ -17,8 +17,8 @@ use super::key_config::{KeyConfigEvent, KeyConfigScreen};
 use super::locale::Locale;
 use super::options_screen::{OptionsEvent, OptionsScreen, PadDiagram};
 use super::settings::{self, Settings};
-use super::text::{Align, Fonts};
-use super::theme::{Role, Theme, palette};
+use super::text::Fonts;
+use super::theme::{Theme, palette};
 use super::widgets::{Painter, SELECTION_GLOW};
 
 /// What the menu asks its owner to do.
@@ -538,7 +538,6 @@ fn draw_menu(
     device: Device,
     appear: f32,
 ) {
-    let pulse = SELECTION_GLOW;
     let bounds = p.canvas.bounds();
     let scale = p.theme.scale;
     let u = |v: f32| v * scale;
@@ -564,31 +563,7 @@ fn draw_menu(
             width,
             row_h - u(10.0),
         );
-        let active = index == selected;
-        if active {
-            // A sheen fading out to the right.
-            p.canvas.fill_gradient(
-                rect,
-                Axis::Horizontal,
-                Color::rgba(0xC8, 0xC8, 0xC8, (90.0 + 40.0 * pulse) as u8),
-                Color::rgba(0xC8, 0xC8, 0xC8, 0),
-            );
-            p.canvas
-                .fill_rect(Rect::new(rect.x, rect.y, u(5.0), rect.h), palette::ACCENT);
-        }
-        let color = if active {
-            palette::TEXT
-        } else {
-            palette::TEXT_DIM
-        };
-        p.text(
-            Role::Menu,
-            left + slide,
-            rect.center_y(),
-            Align::Left,
-            color.fade(appear),
-            text.get(key),
-        );
+        p.menu_item(rect, left + slide, text.get(key), index == selected, appear);
         hits.push(rect);
     }
 

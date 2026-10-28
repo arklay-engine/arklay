@@ -421,40 +421,18 @@ impl OptionsScreen {
 
         // Category tabs between the Q and E key caps.
         let tab_y = u(153.0);
-        let cap = p.glyph(left + u(35.0), tab_y, self.device, GuiKey::TabPrev);
-        self.hits.push((cap, Hit::TabPrev));
-        let tabs_left = cap.right() + u(40.0);
+        let tabs_x = left + u(35.0);
+        let tabs_left = tabs_x + p.glyph_width(self.device, GuiKey::TabPrev) + u(35.0);
         let tabs_right = right - u(90.0);
         let count = self.tree.len().max(1);
         let tab_w = ((tabs_right - tabs_left) / count as f32).min(u(260.0));
-        for (index, category) in self.tree.iter().enumerate() {
-            let x = tabs_left + tab_w * index as f32;
-            let rect = Rect::new(x, tab_y - u(26.0), tab_w, u(52.0));
-            let selected = index == self.category;
-            let color = if selected {
-                palette::TEXT
-            } else {
-                palette::TEXT_DIM
-            };
-            p.vrule(x, tab_y - u(20.0), u(40.0), 2.0, palette::RULE_BRIGHT);
-            p.text(
-                Role::Tab,
-                rect.center_x(),
-                tab_y,
-                Align::Center,
-                color,
-                &category.name,
-            );
-            if selected {
-                let text_w = p.measure(Role::Tab, &category.name);
-                p.underline_glow(rect.center_x(), u(181.0), text_w + u(40.0));
-            }
+        let names: Vec<String> = self.tree.iter().map(|c| c.name.clone()).collect();
+        let strip = p.tabs(tabs_x, tab_y, tab_w, self.device, &names, self.category);
+        self.hits.push((strip.prev, Hit::TabPrev));
+        for (index, rect) in strip.tabs.into_iter().enumerate() {
             self.hits.push((rect, Hit::Tab(index)));
         }
-        let last = tabs_left + tab_w * count as f32;
-        p.vrule(last, tab_y - u(20.0), u(40.0), 2.0, palette::RULE_BRIGHT);
-        let cap = p.glyph(last + u(35.0), tab_y, self.device, GuiKey::TabNext);
-        self.hits.push((cap, Hit::TabNext));
+        self.hits.push((strip.next, Hit::TabNext));
         p.rule(left, u(181.0), right - left, 2.0, palette::RULE_BRIGHT);
 
         // Subcategory tabs, unless there is only the one; the list stays
@@ -466,34 +444,21 @@ impl OptionsScreen {
             .unwrap_or_default();
         if subs.len() > 1 {
             let sub_y = u(260.0);
-            let cap = p.glyph(left + u(35.0), sub_y, self.device, GuiKey::SubPrev);
-            self.hits.push((cap, Hit::SubPrev));
-            let mut x = cap.right() + u(30.0);
-            for (index, name) in subs.iter().enumerate() {
-                let text_w = p.measure(Role::SubTab, name);
-                let rect = Rect::new(x, sub_y - u(24.0), text_w + u(60.0), u(48.0));
-                let selected = index == self.sub;
-                let color = if selected {
-                    palette::TEXT
-                } else {
-                    palette::TEXT_DIM
-                };
-                p.text(
-                    Role::SubTab,
-                    rect.center_x(),
-                    sub_y,
-                    Align::Center,
-                    color,
-                    name,
-                );
-                if selected {
-                    p.underline_glow(rect.center_x(), u(285.0), text_w + u(20.0));
-                }
+            let strip = p.sub_tabs(
+                left + u(35.0),
+                sub_y,
+                pane_right,
+                self.device,
+                (GuiKey::SubPrev, GuiKey::SubNext),
+                &subs,
+                self.sub,
+                &[],
+            );
+            self.hits.push((strip.prev, Hit::SubPrev));
+            for (index, rect) in strip.tabs.into_iter().enumerate() {
                 self.hits.push((rect, Hit::Sub(index)));
-                x = rect.right() + u(20.0);
             }
-            let cap = p.glyph(x, sub_y, self.device, GuiKey::SubNext);
-            self.hits.push((cap, Hit::SubNext));
+            self.hits.push((strip.next, Hit::SubNext));
             p.rule(left, u(285.0), pane_right - left, 2.0, palette::RULE_BRIGHT);
         }
 
@@ -550,7 +515,7 @@ impl OptionsScreen {
                 Entry::Option(index) => {
                     let selected = row_number == self.row;
                     if rect.bottom() > list.y && rect.y < list.bottom() {
-                        self.draw_row(p, rect, index, row_number, selected, pulse);
+                        self.draw_row(p, rect, index, row_number, selected);
                     }
                     row_number += 1;
                 }
@@ -680,7 +645,6 @@ impl OptionsScreen {
         index: usize,
         row: usize,
         selected: bool,
-        pulse: f32,
     ) {
         let w = p.theme.width;
         let scale = p.theme.scale;
@@ -688,10 +652,7 @@ impl OptionsScreen {
         let def = &self.defs[index];
         let value = self.values[index];
         let cy = rect.center_y();
-        if selected {
-            p.selection(rect.inset(0.0, u(1.0)), pulse);
-        }
-        p.rule(rect.x, rect.bottom() - u(1.0), rect.w, 1.0, palette::RULE);
+        p.list_row(rect, selected);
         let (text, value_color) = if def.disabled {
             (palette::TEXT_DISABLED, palette::TEXT_DISABLED)
         } else {
@@ -716,28 +677,18 @@ impl OptionsScreen {
         };
         match &def.kind {
             OptionKind::Choice(choices) => {
-                let center = (left_arrow + right_arrow) / 2.0;
-                p.chevron(left_arrow, cy, 22.0, Chevron::Left, arrows);
-                p.chevron(right_arrow, cy, 22.0, Chevron::Right, arrows);
                 let label = def.value_label(value);
-                p.text(
-                    Role::Row,
-                    center,
-                    cy - u(4.0),
-                    Align::Center,
-                    value_color,
+                let (decrease, increase) = p.stepper(
+                    rect,
+                    left_arrow,
+                    right_arrow,
                     &label,
+                    Some((choices.len(), value.max(0) as usize)),
+                    value_color,
+                    arrows,
                 );
-                p.pips(center, cy + u(18.0), choices.len(), value.max(0) as usize);
-                let half = (right_arrow - left_arrow) / 2.0;
-                self.hits.push((
-                    Rect::new(left_arrow - u(30.0), rect.y, half + u(30.0), rect.h),
-                    Hit::Decrease(row),
-                ));
-                self.hits.push((
-                    Rect::new(left_arrow + half, rect.y, half + u(30.0), rect.h),
-                    Hit::Increase(row),
-                ));
+                self.hits.push((decrease, Hit::Decrease(row)));
+                self.hits.push((increase, Hit::Increase(row)));
             }
             OptionKind::Slider { min, max, .. } => {
                 // The value sits right-aligned inside the row, sized for

@@ -469,38 +469,16 @@ impl KeyConfigScreen {
         let gap = u(35.0);
         let total = prev_w + gap + tab_w * TABS.len() as f32 + gap + next_w;
         let start = w / 2.0 - total / 2.0;
-        let cap = p.glyph(start, tab_y, self.device, GuiKey::TabPrev);
-        self.hits.push((cap, Hit::TabPrev));
-        let tabs_left = cap.right() + gap;
-        for (index, (key, _)) in TABS.iter().enumerate() {
-            let x = tabs_left + tab_w * index as f32;
-            let rect = Rect::new(x, tab_y - u(26.0), tab_w, u(52.0));
-            let name = self.text.get(&format!("keys.tab.{key}")).to_string();
-            let selected = index == self.tab;
-            let color = if selected {
-                palette::TEXT
-            } else {
-                palette::TEXT_DIM
-            };
-            p.vrule(x, tab_y - u(20.0), u(40.0), 2.0, palette::RULE_BRIGHT);
-            p.text(
-                Role::SubTab,
-                rect.center_x(),
-                tab_y,
-                Align::Center,
-                color,
-                &name,
-            );
-            if selected {
-                let text_w = p.measure(Role::SubTab, &name);
-                p.underline_glow(rect.center_x(), u(181.0), text_w + u(40.0));
-            }
+        let names: Vec<String> = TABS
+            .iter()
+            .map(|(key, _)| self.text.get(&format!("keys.tab.{key}")).to_string())
+            .collect();
+        let strip = p.tabs(start, tab_y, tab_w, self.device, &names, self.tab);
+        self.hits.push((strip.prev, Hit::TabPrev));
+        for (index, rect) in strip.tabs.into_iter().enumerate() {
             self.hits.push((rect, Hit::Tab(index)));
         }
-        let last = tabs_left + tab_w * TABS.len() as f32;
-        p.vrule(last, tab_y - u(20.0), u(40.0), 2.0, palette::RULE_BRIGHT);
-        let cap = p.glyph(last + gap, tab_y, self.device, GuiKey::TabNext);
-        self.hits.push((cap, Hit::TabNext));
+        self.hits.push((strip.next, Hit::TabNext));
         p.rule(
             start - u(20.0),
             u(181.0),

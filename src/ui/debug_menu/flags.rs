@@ -12,13 +12,13 @@
 //! audited bits of `ref/docs/SCENARIO_FLAGS.md`; they are debug identifiers,
 //! not translated text.
 
-use super::{BODY_Y, Pen, ROW_HEIGHT, Step, TEXT_LEFT};
+use super::widgets::{self, Label, ROW_H, Scroll, Value, step_choice};
+use super::{Cx, Step};
 use crate::game::{GameState, ROOM_FLAG_FILE_BASE, ROOM_FLAG_MAP_BASE, STAGE_ROOM_FLAG_OFFSETS};
-use crate::render::Tint;
+use crate::gui::canvas::Rect;
+use crate::gui::widgets::Painter;
 use crate::ui::UiInput;
 
-/// Rows the panel shows before it scrolls.
-pub const VISIBLE_ROWS: usize = 8;
 /// The documents' first item id: file bit `i` is item `0x5F + i`.
 const FILE_FIRST_ITEM: u8 = 0x5F;
 /// The number of document bits.
@@ -306,11 +306,21 @@ pub fn flag_name(group: &FlagGroup, sel: u8) -> FlagName {
 }
 
 /// The FLAGS tool's state.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct FlagEditor {
     group: usize,
     rows: [usize; GROUPS.len()],
-    scroll: [usize; GROUPS.len()],
+    scroll: [Scroll; GROUPS.len()],
+}
+
+impl Default for FlagEditor {
+    fn default() -> Self {
+        Self {
+            group: 0,
+            rows: [0; GROUPS.len()],
+            scroll: [Scroll::default(); GROUPS.len()],
+        }
+    }
 }
 
 impl FlagEditor {
@@ -330,7 +340,9 @@ impl FlagEditor {
         (group, group.selector(self.row()))
     }
 
-    /// One tick of input: rows, groups and the set/clear/toggle edits.
+    /// One tick of input: the page keys change group, up/down the row and
+    /// left/right/confirm step the bit like a two-way option (left clears,
+    /// right sets, confirm toggles).
     pub(super) fn handle_input(&mut self, input: UiInput, game: &mut GameState) -> Step {
         if input.cancel {
             return Step::Back;
@@ -338,82 +350,110 @@ impl FlagEditor {
         let count = GROUPS.len();
         let (group, sel) = self.selected();
         let rows = usize::from(group.count);
-        if input.left {
+        if input.page_left {
             self.group = (self.group + count - 1) % count;
-        } else if input.right {
+        } else if input.page_right {
             self.group = (self.group + 1) % count;
         } else if input.up {
             self.rows[self.group] = (self.row() + rows - 1) % rows;
+            self.scroll[self.group].follow();
         } else if input.down {
             self.rows[self.group] = (self.row() + 1) % rows;
-        } else if input.page_left {
-            game.apply_flag(group.bank, sel, 0);
-        } else if input.page_right {
-            game.apply_flag(group.bank, sel, 1);
-        } else if input.confirm {
-            game.apply_flag(group.bank, sel, 2);
-        }
-        let row = self.rows[self.group];
-        let scroll = &mut self.scroll[self.group];
-        if row < *scroll {
-            *scroll = row;
-        } else if row >= *scroll + VISIBLE_ROWS {
-            *scroll = row + 1 - VISIBLE_ROWS;
+            self.scroll[self.group].follow();
+        } else {
+            let set = usize::from(game.flag_test(group.bank, sel, false));
+            if let Some(next) = step_choice(set, 2, input) {
+                // Mode 0 sets the bit, 1 clears it.
+                game.apply_flag(group.bank, sel, if next == 1 { 0 } else { 1 });
+            }
         }
         Step::Stay
     }
 
-    /// Draw the group header and the visible bit rows.
-    pub(super) fn draw(&self, pen: &mut Pen, game: &GameState) {
+    /// Put the cursor on pointer target `index`, a row of the shown group.
+    pub(super) fn point(&mut self, index: usize) {
+        let count = usize::from(GROUPS[self.group].count);
+        self.rows[self.group] = index.min(count.saturating_sub(1));
+    }
+
+    /// Show group tab `group`.
+    pub(super) fn set_group(&mut self, group: usize) {
+        self.group = group.min(GROUPS.len() - 1);
+    }
+
+    /// Scroll the rows by `rows` without moving the cursor.
+    pub(super) fn scroll_by(&mut self, rows: isize) {
+        self.scroll[self.group].by(rows);
+    }
+
+    /// Draw the group tabs and the visible bit rows.
+    pub(super) fn draw(&mut self, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let game = cx.game;
         let group = GROUPS[self.group];
-        let header = pen.text.ui(group.label);
-        pen.bytes(TEXT_LEFT, BODY_Y, Tint::Yellow, header);
-        let position = format!("{}/{}", self.group + 1, GROUPS.len());
-        let glyph_w = pen.font.metrics.glyph_w;
-        pen.ascii(pen.right - 5 * glyph_w, BODY_Y, Tint::Grey, &position);
-        let scroll = self.scroll[self.group];
-        for row in (scroll..usize::from(group.count)).take(VISIBLE_ROWS) {
-            let y = BODY_Y + 18 + (row - scroll) as i32 * ROW_HEIGHT;
-            let sel = group.selector(row);
-            let mut name_tint = Tint::White;
-            if row == self.row() {
-                pen.cursor(TEXT_LEFT - 16, y);
-                name_tint = super::SELECTED_TINT;
-            }
-            let set = game.flag_test(group.bank, sel, false);
-            pen.ascii(TEXT_LEFT, y, Tint::Grey, &format!("{sel:02X}"));
-            pen.ascii(
-                TEXT_LEFT + 3 * glyph_w,
-                y,
-                if set { Tint::Green } else { Tint::White },
-                if set { "1" } else { "0" },
-            );
-            let name_x = TEXT_LEFT + 5 * glyph_w;
-            let width = pen.right - name_x;
-            match flag_name(&group, sel) {
-                FlagName::None => {}
-                FlagName::Static(name) => pen.ascii_fit(name_x, y, name_tint, name, width),
+        let labels: Vec<String> = GROUPS.iter().map(|group| cx.label(group.label)).collect();
+        let tab_h = widgets::tabs(p, cx, area, &labels, self.group, &[]);
+        let top_y = area.y + tab_h;
+        let width = area.w.min(u(1200.0));
+        let row_h = u(ROW_H);
+        let visible = (((area.bottom() - top_y) / row_h).floor() as usize).max(1);
+        let count = usize::from(group.count);
+        let row = self.rows[self.group];
+        let top = self.scroll[self.group].layout(row, visible, count);
+        let states = match state_names(&group) {
+            Some((clear, set)) => [cx.gui(clear), cx.gui(set)],
+            None => [cx.label("UI_DEBUG_OFF"), cx.label("UI_DEBUG_ON")],
+        };
+        for index in (top..count).take(visible) {
+            let rect = Rect::new(area.x, top_y + row_h * (index - top) as f32, width, row_h);
+            let sel = group.selector(index);
+            let set = usize::from(game.flag_test(group.bank, sel, false));
+            let name = match flag_name(&group, sel) {
+                FlagName::None => String::new(),
+                FlagName::Static(name) => name.to_string(),
                 FlagName::Room(label, room3) => {
-                    let name = pen.text.room_name(&room3);
-                    match name {
-                        Some(name) => {
-                            let mut line = Vec::new();
-                            crate::charset::encode(
-                                &format!("{room3} "),
-                                pen.text.script(),
-                                &mut line,
-                            );
-                            line.extend_from_slice(name);
-                            pen.fit(name_x, y, name_tint, &line, width);
-                        }
-                        None => {
-                            pen.ascii_fit(name_x, y, name_tint, &format!("{label} {room3}"), width)
-                        }
+                    let name = cx.room_name(&room3);
+                    if name.is_empty() {
+                        format!("{label} {room3}")
+                    } else {
+                        format!("{room3}  {name}")
                     }
                 }
-                FlagName::Item(item) => pen.item_name_fit(name_x, y, name_tint, item, width),
-            }
+                FlagName::Item(item) => cx.item_name(item),
+            };
+            let lead = format!("{sel:02X}");
+            widgets::row(
+                p,
+                cx,
+                rect,
+                index,
+                index == row,
+                Label::lead(&lead, &name),
+                Value::Step(&states[set], Some((2, set))),
+            );
         }
+        widgets::scrollbar(
+            p,
+            area.x + width + u(20.0),
+            top_y,
+            row_h * visible as f32,
+            top,
+            visible,
+            count,
+        );
+    }
+}
+
+/// The GUI strings naming a group's clear and set states, when they mean
+/// more than off and on: a set lock bit is an unlocked door, a set enemy
+/// bit a dead enemy and a set room-item bit a collected item.
+fn state_names(group: &FlagGroup) -> Option<(&'static str, &'static str)> {
+    match group.label {
+        "UI_DEBUG_FLAGS_LOCKS" => Some(("debug.locked", "debug.unlocked")),
+        "UI_DEBUG_FLAGS_ENEMIES" => Some(("debug.alive", "debug.dead")),
+        "UI_DEBUG_FLAGS_ROOM_ITEMS" => Some(("debug.present", "debug.collected")),
+        _ => None,
     }
 }
 
@@ -467,20 +507,20 @@ mod tests {
         let mut game = GameState::default();
         let mut editor = FlagEditor::default();
         // SCENARIO2 row 0xC0, the ending's partner bit.
-        editor.handle_input(press(|i| i.right = true), &mut game);
+        editor.handle_input(press(|i| i.page_right = true), &mut game);
         assert_eq!(editor.group(), 1);
         for _ in 0..0x40 {
             editor.handle_input(press(|i| i.up = true), &mut game);
         }
         assert_eq!(editor.selected().1, 0xC0);
-        editor.handle_input(press(|i| i.page_left = true), &mut game);
+        editor.handle_input(press(|i| i.right = true), &mut game);
         assert!(game.flag_test(BANK_SCENARIO2, 0xC0, false));
         let (byte, mask) = ref_byte_mask(0xC0);
         let raw = game.flags[1].bytes();
         assert_eq!(raw[byte], mask, "the reference's byte and mask");
         assert_eq!(raw.iter().filter(|byte| **byte != 0).count(), 1);
-        // `]` clears, confirm toggles twice.
-        editor.handle_input(press(|i| i.page_right = true), &mut game);
+        // Left clears, confirm toggles twice.
+        editor.handle_input(press(|i| i.left = true), &mut game);
         assert!(!game.flag_test(BANK_SCENARIO2, 0xC0, false));
         editor.handle_input(press(|i| i.confirm = true), &mut game);
         assert!(game.flag_test(BANK_SCENARIO2, 0xC0, false));
@@ -505,7 +545,7 @@ mod tests {
         editor.handle_input(press(|i| i.confirm = true), &mut game);
         assert!(game.flag_test(5, MSF_CHAR_VARIANT, false));
         // The msf2 group starts at selector 32.
-        editor.handle_input(press(|i| i.right = true), &mut game);
+        editor.handle_input(press(|i| i.page_right = true), &mut game);
         for _ in 0..5 {
             editor.handle_input(press(|i| i.down = true), &mut game);
         }
@@ -523,13 +563,13 @@ mod tests {
             ..FlagEditor::default()
         };
         let before = game.message_flags;
-        editor.handle_input(press(|i| i.page_left = true), &mut game);
+        editor.handle_input(press(|i| i.right = true), &mut game);
         assert!(game.flag_test(6, 0, false));
         assert_eq!(game.message_flags, before, "selector 0 is the short word's");
         for _ in 0..16 {
             editor.handle_input(press(|i| i.down = true), &mut game);
         }
-        editor.handle_input(press(|i| i.page_left = true), &mut game);
+        editor.handle_input(press(|i| i.right = true), &mut game);
         assert_eq!(
             game.message_flags,
             before | 0x8000,
@@ -572,12 +612,12 @@ mod tests {
     fn rows_and_groups_wrap() {
         let mut game = GameState::default();
         let mut editor = FlagEditor::default();
-        editor.handle_input(press(|i| i.left = true), &mut game);
+        editor.handle_input(press(|i| i.page_left = true), &mut game);
         assert_eq!(editor.group(), GROUPS.len() - 1);
         editor.handle_input(press(|i| i.up = true), &mut game);
         assert_eq!(editor.row(), 63, "ITEM USE has 64 bits");
-        assert_eq!(editor.scroll[editor.group], 64 - VISIBLE_ROWS);
-        editor.handle_input(press(|i| i.right = true), &mut game);
+        assert_eq!(editor.scroll[editor.group].layout(63, 8, 64), 56);
+        editor.handle_input(press(|i| i.page_right = true), &mut game);
         assert_eq!((editor.group(), editor.row()), (0, 0));
         assert_eq!(
             editor.handle_input(press(|i| i.cancel = true), &mut game),

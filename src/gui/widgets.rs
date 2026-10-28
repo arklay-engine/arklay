@@ -97,6 +97,16 @@ fn pad_glyph(style: PadStyle, key: GuiKey) -> PadGlyph {
     }
 }
 
+/// Where [`Painter::sub_tabs`] put its pieces, for pointer hit tests.
+pub struct SubTabs {
+    /// The previous-tab glyph.
+    pub prev: Rect,
+    /// The next-tab glyph.
+    pub next: Rect,
+    /// Each tab's visible part (empty when slid out of view).
+    pub tabs: Vec<Rect>,
+}
+
 /// A chevron's direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chevron {
@@ -578,6 +588,219 @@ impl Painter<'_> {
             Rect::new(rect.x, rect.bottom() - edge, rect.w, edge),
             Color::rgba(0xE0, 0xE0, 0xE0, 0xC0),
         );
+    }
+
+    /// A menu entry as the in-game menu draws it: `label` in the menu face
+    /// at `text_x`, with a sheen fading out to the right and the accent bar
+    /// when `active`.
+    pub fn menu_item(&mut self, rect: Rect, text_x: f32, label: &str, active: bool, opacity: f32) {
+        if active {
+            self.canvas.fill_gradient(
+                rect,
+                Axis::Horizontal,
+                Color::rgba(0xC8, 0xC8, 0xC8, (90.0 + 40.0 * SELECTION_GLOW) as u8),
+                Color::rgba(0xC8, 0xC8, 0xC8, 0),
+            );
+            let bar = self.u(5.0);
+            self.canvas
+                .fill_rect(Rect::new(rect.x, rect.y, bar, rect.h), palette::ACCENT);
+        }
+        let color = if active {
+            palette::TEXT
+        } else {
+            palette::TEXT_DIM
+        };
+        self.text(
+            Role::Menu,
+            text_x,
+            rect.center_y(),
+            Align::Left,
+            color.fade(opacity),
+            label,
+        );
+    }
+
+    /// A list row's chrome as the options screen draws it: the selection
+    /// sheen when `selected` and the rule along its foot.
+    pub fn list_row(&mut self, rect: Rect, selected: bool) {
+        if selected {
+            self.selection(rect.inset(0.0, self.u(1.0)), SELECTION_GLOW);
+        }
+        self.rule(
+            rect.x,
+            rect.bottom() - self.u(1.0),
+            rect.w,
+            1.0,
+            palette::RULE,
+        );
+    }
+
+    /// A value stepped between arrows inside `row`: the chevrons at `left`
+    /// and `right`, `label` centred between them and, with `pips` (count,
+    /// current), the pips under it. Returns the halves that step the value
+    /// down and up.
+    #[allow(clippy::too_many_arguments)]
+    pub fn stepper(
+        &mut self,
+        row: Rect,
+        left: f32,
+        right: f32,
+        label: &str,
+        pips: Option<(usize, usize)>,
+        color: Color,
+        arrows: Color,
+    ) -> (Rect, Rect) {
+        let cy = row.center_y();
+        let center = (left + right) / 2.0;
+        self.chevron(left, cy, 22.0, Chevron::Left, arrows);
+        self.chevron(right, cy, 22.0, Chevron::Right, arrows);
+        let label_y = if pips.is_some() { cy - self.u(4.0) } else { cy };
+        self.text(Role::Row, center, label_y, Align::Center, color, label);
+        if let Some((count, current)) = pips {
+            self.pips(center, cy + self.u(18.0), count, current);
+        }
+        let half = (right - left) / 2.0;
+        let reach = self.u(30.0);
+        (
+            Rect::new(left - reach, row.y, half + reach, row.h),
+            Rect::new(left + half, row.y, half + reach, row.h),
+        )
+    }
+
+    /// A screen's top tab strip centred on `center_y`: the previous-tab
+    /// glyph at `x`, then `labels.len()` tabs `tab_w` wide between rules,
+    /// then the next-tab glyph. The underline sits `28` units below the
+    /// centre.
+    pub fn tabs(
+        &mut self,
+        x: f32,
+        center_y: f32,
+        tab_w: f32,
+        device: Device,
+        labels: &[String],
+        selected: usize,
+    ) -> SubTabs {
+        let theme = self.theme;
+        let u = |v: f32| theme.u(v);
+        let gap = u(35.0);
+        let prev = self.glyph(x, center_y, device, GuiKey::TabPrev);
+        let left = prev.right() + gap;
+        let mut tabs = Vec::with_capacity(labels.len());
+        for (index, label) in labels.iter().enumerate() {
+            let rect = Rect::new(
+                left + tab_w * index as f32,
+                center_y - u(26.0),
+                tab_w,
+                u(52.0),
+            );
+            let color = if index == selected {
+                palette::TEXT
+            } else {
+                palette::TEXT_DIM
+            };
+            self.vrule(
+                rect.x,
+                center_y - u(20.0),
+                u(40.0),
+                2.0,
+                palette::RULE_BRIGHT,
+            );
+            self.text(
+                Role::Tab,
+                rect.center_x(),
+                center_y,
+                Align::Center,
+                color,
+                label,
+            );
+            if index == selected {
+                let text_w = self.measure(Role::Tab, label);
+                self.underline_glow(rect.center_x(), center_y + u(28.0), text_w + u(40.0));
+            }
+            tabs.push(rect);
+        }
+        let last = left + tab_w * labels.len() as f32;
+        self.vrule(last, center_y - u(20.0), u(40.0), 2.0, palette::RULE_BRIGHT);
+        let next = self.glyph(last + gap, center_y, device, GuiKey::TabNext);
+        SubTabs { prev, next, tabs }
+    }
+
+    /// A sub-tab strip centred on `center_y`: the `keys.0` glyph at `x`, the
+    /// tabs, then the `keys.1` glyph. Tabs that do not all fit before
+    /// `max_right` slide sideways to keep `selected` in view; `dim` marks
+    /// empty tabs. The underline sits `25` units below the centre.
+    #[allow(clippy::too_many_arguments)]
+    pub fn sub_tabs(
+        &mut self,
+        x: f32,
+        center_y: f32,
+        max_right: f32,
+        device: Device,
+        keys: (GuiKey, GuiKey),
+        labels: &[String],
+        selected: usize,
+        dim: &[bool],
+    ) -> SubTabs {
+        let theme = self.theme;
+        let u = |v: f32| theme.u(v);
+        let (pad, gap, half_h) = (u(60.0), u(20.0), u(24.0));
+        let next_w = self.glyph_width(device, keys.1);
+        let prev = self.glyph(x, center_y, device, keys.0);
+        let left = prev.right() + self.u(30.0);
+        let widths: Vec<f32> = labels
+            .iter()
+            .map(|label| self.measure(Role::SubTab, label) + pad)
+            .collect();
+        let total = widths.iter().sum::<f32>() + gap * labels.len().saturating_sub(1) as f32;
+        let room = (max_right - next_w - gap - left).max(1.0);
+        let mut shift = 0.0;
+        if total > room && selected < widths.len() {
+            let start = widths[..selected].iter().sum::<f32>() + gap * selected as f32;
+            shift = (start + widths[selected] / 2.0 - room / 2.0).clamp(0.0, total - room);
+        }
+        let strip_right = left + total.min(room);
+        let clip = Rect::new(
+            left,
+            center_y - half_h - u(4.0),
+            strip_right - left,
+            half_h * 2.0 + u(12.0),
+        );
+        let clipped = total > room;
+        if clipped {
+            self.canvas.push_clip(clip);
+        }
+        let mut tabs = Vec::with_capacity(labels.len());
+        let mut at = left - shift;
+        for (index, label) in labels.iter().enumerate() {
+            let rect = Rect::new(at, center_y - half_h, widths[index], half_h * 2.0);
+            let color = if index == selected {
+                palette::TEXT
+            } else if dim.get(index).copied().unwrap_or(false) {
+                palette::TEXT_DISABLED
+            } else {
+                palette::TEXT_DIM
+            };
+            self.text(
+                Role::SubTab,
+                rect.center_x(),
+                center_y,
+                Align::Center,
+                color,
+                label,
+            );
+            if index == selected {
+                self.underline_glow(rect.center_x(), center_y + u(25.0), rect.w - u(40.0));
+            }
+            let x0 = rect.x.max(clip.x);
+            let x1 = rect.right().min(clip.right());
+            tabs.push(Rect::new(x0, rect.y, (x1 - x0).max(0.0), rect.h));
+            at = rect.right() + gap;
+        }
+        if clipped {
+            self.canvas.pop_clip();
+        }
+        let next = self.glyph(strip_right + gap, center_y, device, keys.1);
+        SubTabs { prev, next, tabs }
     }
 
     /// A tab's underline glow: bright in the middle, fading to the sides.

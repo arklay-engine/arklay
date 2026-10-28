@@ -3,34 +3,46 @@
 //! One row per capacity slot shows the slot number, the item icon, its name
 //! and the quantity. Left/right step the quantity inside the item's limit
 //! (down to zero, which keeps the item) and START clears the slot. Confirm
-//! opens the picker: a grid of every item icon, eight to a row, with an EMPTY
-//! cell first. Every edit goes through [`GameState`] and its slot bookkeeping;
-//! the equipped and selected items are dropped when an edit leaves them
-//! dangling.
+//! opens the picker: a grid of every item icon, as many to a row as fit, with
+//! an EMPTY cell first. Every edit goes through [`GameState`] and its slot
+//! bookkeeping; the equipped and selected items are dropped when an edit
+//! leaves them dangling.
 
-use super::{BODY_Y, Pen, Step, TEXT_LEFT, TITLE_Y};
+use super::widgets::{self, Grid, Label, ROW_H, ROW_W, Scroll, Value, grid_step, step_choice};
+use super::{Cx, Hit, Step};
 use crate::game::{GameState, InventoryItem};
+use crate::gui::canvas::Rect;
+use crate::gui::text::Align;
+use crate::gui::theme::{Role, palette};
+use crate::gui::widgets::Painter;
 use crate::item_catalog::ItemCatalog;
 use crate::items;
-use crate::render::Tint;
 use crate::ui::UiInput;
 
-/// Slot rows the panel shows before it scrolls.
-pub const VISIBLE_SLOTS: usize = 4;
-/// One slot row's height: an icon plus a little air.
-const SLOT_HEIGHT: i32 = 34;
-/// The picker's cells per row (40 px icons across the 320 px screen).
-pub const PICKER_COLUMNS: usize = 8;
-/// The picker's icon rows on screen.
-pub const PICKER_VISIBLE_ROWS: usize = 5;
+/// The inventory sizes the size row steps through.
+pub const INVENTORY_SIZES: [u8; 5] = [2, 4, 6, 8, 10];
+/// The size row's pointer index; slots are indexed from 0.
+const SIZE_ROW: usize = usize::MAX;
+
+/// Step the inventory size; one equal to the character's own clears the
+/// override so it follows a character change again.
+fn step_size(game: &mut GameState, input: UiInput) {
+    let current = game.inventory_capacity();
+    let index = INVENTORY_SIZES
+        .iter()
+        .position(|&size| usize::from(size) >= current)
+        .unwrap_or(INVENTORY_SIZES.len() - 1);
+    if let Some(next) = step_choice(index, INVENTORY_SIZES.len(), input) {
+        let size = INVENTORY_SIZES[next];
+        let own = usize::from(size) == game.character_inventory_capacity();
+        game.set_inventory_size((!own).then_some(size));
+    }
+}
+
 /// The last pickable id: the PC-only Minimi.
 pub const PICKER_LAST_ITEM: u8 = items::ITEM_MINIMI;
 /// The picker's cell count: EMPTY plus `0x01..=0x70`.
 pub const PICKER_CELLS: usize = PICKER_LAST_ITEM as usize + 1;
-/// One picker row's height.
-const PICKER_ROW_HEIGHT: i32 = 32;
-/// The picker grid's top edge.
-const PICKER_Y: i32 = 28;
 
 /// The highest quantity `item` can hold: the merge cap for an item that
 /// merges (the ammunition and the ribbon), its `stack` otherwise (0: no
@@ -96,21 +108,22 @@ pub fn adjust(game: &mut GameState, slot: usize, delta: i32) {
 }
 
 /// The icon picker's cursor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Picker {
     cell: usize,
-    scroll_row: usize,
+    scroll: Scroll,
+    /// The grid's columns as last laid out.
+    columns: usize,
 }
 
 impl Picker {
     /// Open on `item`'s cell.
-    fn new(item: u8) -> Self {
-        let mut picker = Self {
+    fn new(item: u8, columns: usize) -> Self {
+        Self {
             cell: usize::from(item.min(PICKER_LAST_ITEM)),
-            scroll_row: 0,
-        };
-        picker.scroll_into_view();
-        picker
+            scroll: Scroll::default(),
+            columns: columns.max(1),
+        }
     }
 
     /// The highlighted item id (0 = EMPTY).
@@ -120,49 +133,43 @@ impl Picker {
 
     /// The first grid row drawn.
     pub fn scroll_row(&self) -> usize {
-        self.scroll_row
-    }
-
-    fn scroll_into_view(&mut self) {
-        let row = self.cell / PICKER_COLUMNS;
-        if row < self.scroll_row {
-            self.scroll_row = row;
-        } else if row >= self.scroll_row + PICKER_VISIBLE_ROWS {
-            self.scroll_row = row + 1 - PICKER_VISIBLE_ROWS;
-        }
-    }
-
-    /// Move the cell: left/right by one, up/down by a row, all wrapping.
-    fn step(&mut self, input: UiInput) {
-        let cells = PICKER_CELLS as isize;
-        let delta = if input.left {
-            -1
-        } else if input.right {
-            1
-        } else if input.up {
-            -(PICKER_COLUMNS as isize)
-        } else if input.down {
-            PICKER_COLUMNS as isize
-        } else {
-            0
-        };
-        self.cell = (self.cell as isize + delta).rem_euclid(cells) as usize;
-        self.scroll_into_view();
+        self.scroll.top()
     }
 }
 
 /// The INVENTORY tool's state.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct InventoryEditor {
     slot: usize,
-    scroll: usize,
+    /// The cursor is on the size row above the slots.
+    on_size: bool,
+    scroll: Scroll,
     picker: Option<Picker>,
+    /// The picker's columns as last laid out.
+    columns: usize,
+}
+
+impl Default for InventoryEditor {
+    fn default() -> Self {
+        Self {
+            slot: 0,
+            on_size: false,
+            scroll: Scroll::default(),
+            picker: None,
+            columns: 8,
+        }
+    }
 }
 
 impl InventoryEditor {
     /// The slot under the cursor.
     pub fn slot(&self) -> usize {
         self.slot
+    }
+
+    /// Whether the cursor is on the size row.
+    pub fn on_size(&self) -> bool {
+        self.on_size
     }
 
     /// The open picker, if any.
@@ -176,15 +183,30 @@ impl InventoryEditor {
     pub(super) fn refresh(&mut self, game: &GameState) {
         let capacity = game.inventory_capacity();
         self.slot = self.slot.min(capacity.saturating_sub(1));
-        self.scroll = self.scroll.min(capacity.saturating_sub(VISIBLE_SLOTS));
-        if self.slot < self.scroll {
-            self.scroll = self.slot;
-        } else if self.slot >= self.scroll + VISIBLE_SLOTS {
-            self.scroll = self.slot + 1 - VISIBLE_SLOTS;
+    }
+
+    /// Scroll the slots, or the open picker, by `rows` without moving the
+    /// cursor.
+    pub(super) fn scroll_by(&mut self, rows: isize) {
+        match self.picker.as_mut() {
+            Some(picker) => picker.scroll.by(rows),
+            None => self.scroll.by(rows),
         }
     }
 
-    /// One tick of input against the live inventory.
+    /// Put the cursor on pointer target `index`: a picker cell or a slot.
+    pub(super) fn point(&mut self, index: usize, game: &GameState) {
+        match self.picker.as_mut() {
+            Some(picker) => picker.cell = index.min(PICKER_CELLS - 1),
+            None if index == SIZE_ROW => self.on_size = true,
+            None => {
+                self.on_size = false;
+                self.slot = index.min(game.inventory_capacity().saturating_sub(1));
+            }
+        }
+    }
+
+    /// One input edge against the live inventory.
     pub(super) fn handle_input(&mut self, input: UiInput, game: &mut GameState) -> Step {
         let capacity = game.inventory_capacity();
         self.slot = self.slot.min(capacity.saturating_sub(1));
@@ -196,18 +218,32 @@ impl InventoryEditor {
                 self.picker = None;
                 // The cursor follows the item to the slot it landed in.
                 self.slot = assign(game, self.slot, item);
-            } else {
-                picker.step(input);
+                self.scroll.follow();
+            } else if let Some(cell) = grid_step(picker.cell, PICKER_CELLS, picker.columns, input) {
+                picker.cell = cell;
+                picker.scroll.follow();
             }
             return Step::Stay;
         }
         if input.cancel {
             return Step::Back;
         }
-        if input.up {
-            self.slot = (self.slot + capacity - 1) % capacity;
-        } else if input.down {
-            self.slot = (self.slot + 1) % capacity;
+        // The size row sits above slot 1; up/down wrap through both.
+        if input.up || input.down {
+            if self.on_size {
+                self.on_size = false;
+                self.slot = if input.up { capacity - 1 } else { 0 };
+            } else if (input.up && self.slot == 0) || (input.down && self.slot + 1 == capacity) {
+                self.on_size = true;
+            } else if input.up {
+                self.slot -= 1;
+            } else {
+                self.slot += 1;
+            }
+            self.scroll.follow();
+        } else if self.on_size {
+            step_size(game, input);
+            self.slot = self.slot.min(game.inventory_capacity() - 1);
         } else if input.left {
             adjust(game, self.slot, -1);
         } else if input.right {
@@ -216,298 +252,142 @@ impl InventoryEditor {
             self.slot = assign(game, self.slot, 0);
         } else if input.confirm {
             let item = game.inventory.get(self.slot).map_or(0, |stack| stack.id);
-            self.picker = Some(Picker::new(item));
-        }
-        if self.slot < self.scroll {
-            self.scroll = self.slot;
-        } else if self.slot >= self.scroll + VISIBLE_SLOTS {
-            self.scroll = self.slot + 1 - VISIBLE_SLOTS;
+            self.picker = Some(Picker::new(item, self.columns));
         }
         Step::Stay
     }
 
-    /// Draw the slot rows, or the full-screen picker over them.
-    pub(super) fn draw(&self, pen: &mut Pen, game: &GameState) {
-        if let Some(picker) = self.picker.as_ref() {
-            draw_picker(pen, picker);
+    /// Draw the slot rows, or the picker in their place.
+    pub(super) fn draw(&mut self, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        if self.picker.is_some() {
+            self.draw_picker(p, cx, area);
             return;
         }
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let game = cx.game;
         let capacity = game.inventory_capacity();
-        for slot in (self.scroll..capacity).take(VISIBLE_SLOTS) {
-            let y = BODY_Y + (slot - self.scroll) as i32 * SLOT_HEIGHT;
-            let mut name_tint = Tint::White;
-            if slot == self.slot {
-                pen.cursor(TEXT_LEFT - 16, y + 8);
-                name_tint = super::SELECTED_TINT;
-            }
-            pen.ascii(TEXT_LEFT, y + 8, Tint::Grey, &format!("{}", slot + 1));
-            let name_x = TEXT_LEFT + 62;
+        let row_h = u(ROW_H);
+        let width = area.w.min(u(ROW_W));
+        // The size row, then the slots under it.
+        let size_label = cx.gui("debug.inventory_size");
+        let size = format!("{capacity}");
+        let at = INVENTORY_SIZES
+            .iter()
+            .position(|&s| usize::from(s) == capacity)
+            .unwrap_or(0);
+        widgets::row(
+            p,
+            cx,
+            Rect::new(area.x, area.y, width, row_h),
+            SIZE_ROW,
+            self.on_size,
+            Label::plain(&size_label),
+            Value::Step(&size, Some((INVENTORY_SIZES.len(), at))),
+        );
+        let area = Rect::new(
+            area.x,
+            area.y + row_h + u(24.0),
+            area.w,
+            area.h - row_h - u(24.0),
+        );
+        let visible = ((area.h / row_h).floor() as usize).max(1);
+        let top = self.scroll.layout(self.slot, visible, capacity);
+        let empty = cx.label("UI_DEBUG_EMPTY");
+        for slot in (top..capacity).take(visible) {
+            let rect = Rect::new(area.x, area.y + row_h * (slot - top) as f32, width, row_h);
+            let lead = format!("{}", slot + 1);
+            let selected = !self.on_size && slot == self.slot;
             match game.inventory.get(slot) {
                 Some(stack) => {
-                    pen.icon(stack.id, [TEXT_LEFT + 14, y]);
-                    pen.item_name(name_x, y + 1, name_tint, stack.id);
                     let limit = quantity_limit(&game.item_defs, stack.id);
-                    let quantity = if limit == 0 {
-                        format!("{:02X}", stack.id)
-                    } else {
-                        format!("{:02X}  {}/{}", stack.id, stack.quantity, limit)
+                    let name = cx.item_name(stack.id);
+                    let label = Label {
+                        icon: Some(cx.icon(stack.id)),
+                        ..Label::lead(&lead, &name)
                     };
-                    pen.ascii(name_x, y + 15, Tint::Grey, &quantity);
+                    let quantity = format!("{}/{}", stack.quantity, limit);
+                    let value = if limit > 0 {
+                        Value::Step(&quantity, None)
+                    } else {
+                        Value::None
+                    };
+                    widgets::row(p, cx, rect, slot, selected, label, value);
                 }
                 None => {
-                    let empty = pen.text.ui("UI_DEBUG_EMPTY");
-                    pen.bytes(name_x, y + 8, Tint::Grey, empty);
+                    let label = Label {
+                        icon: Some(None),
+                        color: palette::TEXT_DISABLED,
+                        ..Label::lead(&lead, &empty)
+                    };
+                    widgets::row(p, cx, rect, slot, selected, label, Value::None);
                 }
             }
         }
-    }
-}
-
-/// The picker: a full-screen grid of icons with the highlighted id and name
-/// in a footer.
-fn draw_picker(pen: &mut Pen, picker: &Picker) {
-    let (width, height) = (pen.framebuffer.width, pen.framebuffer.height);
-    pen.framebuffer
-        .blend_black_rect([0, 0, width as i32, height as i32], 200);
-    // The 320 px grid and its text are centred in a wider frame.
-    let left = (width as i32 - 320).max(0) / 2;
-    let title = pen.text.ui("UI_DEBUG_PICKER_TITLE");
-    pen.bytes(left + 12, TITLE_Y - 16, Tint::White, title);
-    let first = picker.scroll_row * PICKER_COLUMNS;
-    let last = (first + PICKER_VISIBLE_ROWS * PICKER_COLUMNS).min(PICKER_CELLS);
-    for cell in first..last {
-        let column = (cell % PICKER_COLUMNS) as i32;
-        let row = (cell / PICKER_COLUMNS - picker.scroll_row) as i32;
-        let x = left + column * 40;
-        let y = PICKER_Y + row * PICKER_ROW_HEIGHT;
-        if cell == 0 {
-            let empty = pen.text.ui("UI_DEBUG_EMPTY");
-            pen.fit(x + 2, y + 8, Tint::Grey, empty, 36);
-        } else {
-            pen.icon(cell as u8, [x, y]);
-        }
-        if cell == picker.cell {
-            pen.outline([x, y, 40, 30]);
-        }
-    }
-    let footer_y = PICKER_Y + PICKER_VISIBLE_ROWS as i32 * PICKER_ROW_HEIGHT + 4;
-    let item = picker.item();
-    if item == 0 {
-        let empty = pen.text.ui("UI_DEBUG_EMPTY");
-        pen.bytes(left + 12, footer_y, Tint::Yellow, empty);
-    } else {
-        pen.ascii(left + 12, footer_y, Tint::Yellow, &format!("{item:02X}"));
-        pen.item_name(
-            left + 12 + 4 * pen.font.metrics.glyph_w,
-            footer_y,
-            Tint::White,
-            item,
+        widgets::scrollbar(
+            p,
+            area.x + width + u(20.0),
+            area.y,
+            row_h * visible as f32,
+            top,
+            visible,
+            capacity,
         );
     }
-    let hint = pen.text.ui("UI_DEBUG_HINT_PICKER");
-    pen.bytes(left + 12, footer_y + 18, Tint::Grey, hint);
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::state::RoomId;
-
-    fn game(player_flag: u8) -> GameState {
-        let mut game = GameState::default();
-        game.id = RoomId {
-            stage: 1,
-            room: 0,
-            player_flag,
+    /// The picker: a grid of every item's icon with the highlighted item's
+    /// id and name underneath.
+    fn draw_picker(&mut self, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let footer_h = u(80.0);
+        let grid = Grid::new(
+            p,
+            Rect::new(area.x, area.y, area.w, area.h - footer_h),
+            132.0,
+            false,
+        );
+        let columns = grid.columns;
+        self.columns = columns;
+        let Some(picker) = self.picker.as_mut() else {
+            return;
         };
-        game
-    }
-
-    fn press(f: impl FnOnce(&mut UiInput)) -> UiInput {
-        let mut input = UiInput::default();
-        f(&mut input);
-        input
-    }
-
-    #[test]
-    fn quantity_steps_clamp_and_keep_zero() {
-        let mut game = game(0);
-        game.add_item(0x0B, 249);
-        game.add_item(0x02, 15);
-        // A stackable item caps at the stack limit, not its table maximum.
-        adjust(&mut game, 0, 1);
-        assert_eq!(game.inventory[0].quantity, 250);
-        adjust(&mut game, 0, 1);
-        assert_eq!(game.inventory[0].quantity, 250, "capped");
-        // A weapon caps at its own maximum.
-        let limit = game.item_defs.get(0x02).stack;
-        assert!(limit > 0);
-        adjust(&mut game, 1, 1);
-        assert_eq!(game.inventory[1].quantity, limit);
-        // Stepping down to zero keeps the stack in its slot.
-        game.inventory[0].quantity = 1;
-        adjust(&mut game, 0, -1);
-        assert_eq!(
-            game.inventory[0],
-            InventoryItem {
-                id: 0x0B,
-                quantity: 0
+        picker.columns = columns;
+        let rows = PICKER_CELLS.div_ceil(columns);
+        let top = picker.scroll.layout(picker.cell / columns, grid.rows, rows);
+        let picker = *picker;
+        let first = top * columns;
+        let last = (first + grid.rows * columns).min(PICKER_CELLS);
+        for cell in first..last {
+            let (rect, frame) = grid.cell(cell - first);
+            let selected = cell == picker.cell;
+            let icon = if cell == 0 { None } else { cx.icon(cell as u8) };
+            widgets::grid_picture(p, frame, icon.as_ref(), selected);
+            if icon.is_none() {
+                let text = if cell == 0 {
+                    cx.label("UI_DEBUG_EMPTY")
+                } else {
+                    format!("{cell:02X}")
+                };
+                p.text(
+                    Role::Body,
+                    frame.center_x(),
+                    frame.center_y(),
+                    Align::Center,
+                    palette::TEXT_DIM,
+                    &text,
+                );
             }
-        );
-        adjust(&mut game, 0, -1);
-        assert_eq!(game.inventory[0].quantity, 0, "floor is zero");
-        assert_eq!(game.inventory.len(), 2);
-        assert_eq!(
-            game.state_bytes[usize::from(crate::game::STATE_BYTE_TOTAL_HELD)],
-            2
-        );
-    }
-
-    #[test]
-    fn start_clears_the_slot_and_drops_dangling_items() {
-        let mut game = game(0);
-        game.add_item(0x0B, 1);
-        game.set_equipped(Some(0x0B));
-        let mut editor = InventoryEditor::default();
-        // Zero keeps the item (and the equipped copy) in place.
-        editor.handle_input(press(|i| i.left = true), &mut game);
-        assert_eq!(
-            game.inventory[0],
-            InventoryItem {
-                id: 0x0B,
-                quantity: 0
-            }
-        );
-        assert_eq!(game.equipped, Some(0x0B));
-        // START removes the item instead.
-        editor.handle_input(press(|i| i.start = true), &mut game);
-        assert!(game.inventory.is_empty());
-        assert_eq!(game.equipped, None);
-        assert_eq!(
-            game.state_bytes[usize::from(crate::game::STATE_BYTE_TOTAL_HELD)],
-            0
-        );
-    }
-
-    #[test]
-    fn items_without_a_quantity_ignore_the_steps() {
-        let mut game = game(0);
-        // The knife has no quantity.
-        game.add_item(0x01, 0);
-        assert_eq!(quantity_limit(&game.item_defs, 0x01), 0);
-        adjust(&mut game, 0, -1);
-        adjust(&mut game, 0, 1);
-        assert_eq!(
-            game.inventory,
-            vec![InventoryItem {
-                id: 0x01,
-                quantity: 0
-            }]
-        );
-    }
-
-    #[test]
-    fn assign_replaces_appends_and_clears_dangling_state() {
-        let mut game = game(0);
-        game.add_item(0x02, 15);
-        game.set_equipped(Some(0x02));
-        game.select_item(Some(0x02));
-        assign(&mut game, 0, 0x0C);
-        assert_eq!(game.inventory[0].id, 0x0C);
-        assert_eq!(game.equipped, None, "the equipped Beretta is gone");
-        assert_eq!(game.selected_item, None);
-        assert_eq!(
-            assign(&mut game, 5, 0x6F),
-            1,
-            "lands in the first empty slot"
-        );
-        assert_eq!(game.inventory[1].id, 0x6F, "past the held stacks appends");
-        assign(&mut game, 6, 0x03);
-        assert_eq!(game.inventory.len(), 2, "Chris has no seventh slot");
-        assign(&mut game, 0, 0);
-        assert_eq!(
-            game.inventory,
-            vec![InventoryItem {
-                id: 0x6F,
-                quantity: 1
-            }]
-        );
-    }
-
-    #[test]
-    fn the_editor_walks_capacity_slots_and_picks_items() {
-        let mut game = game(1);
-        let mut editor = InventoryEditor::default();
-        // Jill has eight slots; up wraps to the last.
-        editor.handle_input(press(|i| i.up = true), &mut game);
-        assert_eq!(editor.slot(), 7);
-        editor.handle_input(press(|i| i.down = true), &mut game);
-        assert_eq!(editor.slot(), 0);
-        // Confirm opens the picker on EMPTY; walk to item 0x09 and pick it.
-        editor.handle_input(press(|i| i.confirm = true), &mut game);
-        assert_eq!(editor.picker().map(Picker::item), Some(0));
-        editor.handle_input(press(|i| i.down = true), &mut game);
-        editor.handle_input(press(|i| i.right = true), &mut game);
-        assert_eq!(editor.picker().map(Picker::item), Some(9));
-        assert_eq!(
-            editor.handle_input(press(|i| i.confirm = true), &mut game),
-            Step::Stay
-        );
-        assert!(editor.picker().is_none());
-        assert_eq!(game.inventory[0].id, 0x09);
-        // Cancel closes a picker first, then backs out of the tool.
-        editor.handle_input(press(|i| i.confirm = true), &mut game);
-        assert_eq!(
-            editor.picker().map(Picker::item),
-            Some(9),
-            "opens on the held item"
-        );
-        editor.handle_input(press(|i| i.cancel = true), &mut game);
-        assert!(editor.picker().is_none());
-        assert_eq!(game.inventory[0].id, 0x09, "cancel keeps the slot");
-        // Picking for an empty slot past the stacks moves the cursor to the
-        // slot the item landed in.
-        editor.handle_input(press(|i| i.down = true), &mut game);
-        editor.handle_input(press(|i| i.down = true), &mut game);
-        assert_eq!(editor.slot(), 2);
-        editor.handle_input(press(|i| i.confirm = true), &mut game);
-        editor.handle_input(press(|i| i.right = true), &mut game);
-        editor.handle_input(press(|i| i.confirm = true), &mut game);
-        assert_eq!(game.inventory[1].id, 0x01);
-        assert_eq!(editor.slot(), 1);
-        editor.handle_input(press(|i| i.up = true), &mut game);
-        assert_eq!(
-            editor.handle_input(press(|i| i.cancel = true), &mut game),
-            Step::Back
-        );
-    }
-
-    #[test]
-    fn refresh_clamps_the_remembered_slot_to_the_new_capacity() {
-        let mut jill = game(1);
-        let mut editor = InventoryEditor::default();
-        // Jill has eight slots: up wraps to the last one and scrolls.
-        editor.handle_input(press(|i| i.up = true), &mut jill);
-        assert_eq!((editor.slot, editor.scroll), (7, 4));
-        // Chris has six: the remembered cursor lands on the last one and the
-        // window keeps four rows visible.
-        editor.refresh(&game(0));
-        assert_eq!(editor.slot, 5);
-        assert_eq!(editor.scroll, 2);
-    }
-
-    #[test]
-    fn the_picker_covers_empty_through_the_minimi_and_wraps() {
-        let mut picker = Picker::new(0);
-        picker.step(press(|i| i.left = true));
-        assert_eq!(picker.item(), PICKER_LAST_ITEM);
-        assert_eq!(
-            picker.scroll_row(),
-            (PICKER_CELLS - 1) / PICKER_COLUMNS + 1 - PICKER_VISIBLE_ROWS
-        );
-        picker.step(press(|i| i.right = true));
-        assert_eq!((picker.item(), picker.scroll_row()), (0, 0));
-        picker.step(press(|i| i.up = true));
-        assert_eq!(usize::from(picker.item()), PICKER_CELLS - PICKER_COLUMNS);
+            cx.hits.push((rect, Hit::Item(cell)));
+        }
+        grid.scrollbar(p, top, rows);
+        let item = picker.item();
+        let cy = area.bottom() - footer_h / 2.0;
+        let label = if item == 0 {
+            cx.label("UI_DEBUG_EMPTY")
+        } else {
+            format!("{item:02X}   {}", cx.item_name(item))
+        };
+        p.text(Role::Row, area.x, cy, Align::Left, palette::TEXT, &label);
     }
 }

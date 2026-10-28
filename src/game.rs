@@ -3296,7 +3296,8 @@ pub struct DoorYield {
 /// A player character and outfit: the debug menu's PLAYER selection.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PlayerChoice {
-    /// 0 Chris, 1 Jill.
+    /// 0 Chris, 1 Jill, 2 Barry, 3 Rebecca. Barry plays Jill's scenario and
+    /// Rebecca Chris's; only their body and clips change.
     pub character: u8,
     /// 0 the normal outfit, 1 and 2 the alternate outfits (costume variant
     /// byte 0 and 1).
@@ -3350,6 +3351,20 @@ pub struct DebugTools {
     pub infinite_ammo: InfiniteAmmo,
     /// The character/outfit the next room load switches to.
     pub pending_player: Option<PlayerChoice>,
+    /// Barry (2) or Rebecca (3) standing in for the scenario's character:
+    /// the player's model and clips load from that character block.
+    pub body: Option<u8>,
+    /// The inventory's slot count in place of the character's own.
+    pub inventory_size: Option<u8>,
+}
+
+/// The scenario (RDT variant) a [`PlayerChoice::character`] plays: Rebecca
+/// Chris's, Barry Jill's.
+pub fn scenario_of(character: u8) -> u8 {
+    match character & 3 {
+        0 | 3 => 0,
+        _ => 1,
+    }
 }
 
 /// The game state the SCD scripts read and write.
@@ -5342,7 +5357,10 @@ impl GameState {
             0
         };
         PlayerChoice {
-            character: self.state_bytes[usize::from(STATE_BYTE_CHARACTER)] & 1,
+            character: self
+                .debug
+                .body
+                .unwrap_or(self.state_bytes[usize::from(STATE_BYTE_CHARACTER)] & 1),
             costume,
         }
     }
@@ -5354,7 +5372,10 @@ impl GameState {
     /// current health is only clamped to the new maximum, never raised: a
     /// character switch is not a heal (INVINCIBLE is).
     pub fn apply_player_choice(&mut self, choice: PlayerChoice) {
-        let character = choice.character & 1;
+        let character = scenario_of(choice.character);
+        let body = (choice.character & 3 >= 2).then_some(choice.character & 3);
+        let body_changed = self.debug.body != body;
+        self.debug.body = body;
         if self.state_bytes[usize::from(STATE_BYTE_CHARACTER)] != character {
             self.state_bytes[usize::from(STATE_BYTE_CHARACTER)] = character;
             self.state_bytes[usize::from(STATE_BYTE_CHARACTER_MODEL)] = character;
@@ -5371,6 +5392,18 @@ impl GameState {
         } else {
             self.apply_flag(5, MSF2_COSTUME_VARIANT, 0);
             self.costume_variant = (choice.costume - 1) & 1;
+        }
+        if body_changed {
+            // `room_set`'s Rebecca swap: her own 88 health.
+            self.max_health = if body == Some(3) {
+                88
+            } else {
+                character_max_health(character)
+            };
+            if self.entities[0].health > self.max_health {
+                self.entities[0].health = self.max_health;
+                self.set_health_copy(self.max_health);
+            }
         }
         let capacity = self.inventory_capacity();
         if self.inventory.len() > capacity {
@@ -5389,11 +5422,16 @@ impl GameState {
             return;
         };
         let character = id.player_flag & 1;
-        self.apply_player_choice(PlayerChoice {
-            character,
-            costume: choice.costume,
-        });
-        self.debug.pending_player = (character != choice.character & 1).then_some(choice);
+        if scenario_of(choice.character) == character {
+            self.apply_player_choice(choice);
+            self.debug.pending_player = None;
+        } else {
+            self.apply_player_choice(PlayerChoice {
+                character,
+                costume: choice.costume,
+            });
+            self.debug.pending_player = Some(choice);
+        }
     }
 
     /// Clear the equipped and selected items when the inventory no longer
@@ -5413,11 +5451,32 @@ impl GameState {
 
     /// The number of inventory slots the current character uses.
     pub fn inventory_capacity(&self) -> usize {
+        if let Some(size) = self.debug.inventory_size {
+            return usize::from(size);
+        }
+        self.character_inventory_capacity()
+    }
+
+    /// The number of inventory slots the current character has of its own.
+    pub fn character_inventory_capacity(&self) -> usize {
         if self.id.player_flag & 1 == 1 {
             INVENTORY_SLOTS_JILL
         } else {
             INVENTORY_SLOTS_CHRIS
         }
+    }
+
+    /// Set the debug inventory size (`None`: the character's own). Items
+    /// past the new size are dropped, and the equipped and selected items
+    /// with them.
+    pub fn set_inventory_size(&mut self, size: Option<u8>) {
+        self.debug.inventory_size = size;
+        let capacity = self.inventory_capacity();
+        if self.inventory.len() > capacity {
+            self.inventory.truncate(capacity);
+        }
+        self.clear_dangling_items();
+        self.rebuild_slots();
     }
 
     /// Add `quantity` of `item` with the original's merge rules.

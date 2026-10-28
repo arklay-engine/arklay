@@ -2,68 +2,55 @@
 //!
 //! This is a development aid the retail game never shipped. F1 while playing
 //! freezes the room and opens a tool list: ROOM SELECT, INVENTORY, PLAYER,
-//! FLAGS, CHEATS, SAVE, ITEM BOX, CLEAR GAME, CONTROLS (the input rebind
-//! screen) and DISPLAY (the presented frame rate). Up/down move the cursor,
+//! FLAGS, CHEATS, SAVE, ITEM BOX and CLEAR GAME. Up/down move the cursor,
 //! confirm enters a tool, cancel backs out one level (tool, main list, closed)
 //! and F1 closes the menu from anywhere. The menu is always available
 //! (`--debug-menu` is accepted for compatibility only).
 //!
-//! The engine drives the menu like the pause menu: one state machine owning
-//! the current tool and every tool's state, ticked over the frozen room and
-//! drawn last. F1 closes it from anywhere and reopening returns to the tool
-//! and cursors it was left on; the room browser also follows a room change
-//! made while the menu was closed. Edits that only touch [`GameState`]
+//! The menu draws at the window's resolution with the in-game menu's faces,
+//! theme and input hints, and takes its input per presented frame as
+//! [`GuiEvent`]s (key repeat and the pointer included); each key is mapped
+//! onto one [`UiInput`] edge for the tools' state machines. Hovering a row
+//! or cell picks it, clicking activates it and the wheel scrolls the view.
+//! F1 closes it from anywhere and reopening returns to
+//! the tool and cursors it was left on; the room browser also follows a room
+//! change made while the menu was closed. Edits that only touch [`GameState`]
 //! (inventory, flags, cheats, the pending player selection) happen inside
 //! [`DebugMenu::handle_input`]; everything that needs the room-load path, the
 //! save directory or the app is returned as a [`DebugMenuEvent`].
 //!
-//! The reference has an F1 menu of its own (`ref/src/game/DebugMenu.cpp`);
-//! its flag editor's views and names are mirrored, while the room columns, the
-//! icon picker and the cheats are port-designed.
+//! The reference has an F1 menu of its own; its flag editor's views and names
+//! are mirrored, while the room grid, the icon picker and the cheats are
+//! port-designed.
 
-mod controls;
+mod art;
 mod flags;
 mod inventory;
 mod rooms;
-
-pub use controls::{CAPTURE_TICKS, ControlsEditor, Note};
+mod widgets;
 
 pub use flags::{FlagEditor, FlagGroup, FlagName, GROUPS, flag_name};
 pub use inventory::{InventoryEditor, Picker};
 pub use rooms::{RoomSelect, RoomVariants, room_entries, room_variants};
 
-use crate::charset;
-use crate::controls::Bindings;
+use std::sync::Arc;
+
 use crate::ending;
-use crate::font::{self, Font};
 use crate::game::{self, GameState, InfiniteAmmo};
+use crate::gui::canvas::{Axis, Canvas, Color, Picture, Rect};
+use crate::gui::input::{Device, GuiEvent, GuiKey, Sound};
+use crate::gui::locale::Locale;
+use crate::gui::text::{Align, Fonts};
+use crate::gui::theme::{Role, Theme, palette};
+use crate::gui::widgets::{Chevron, Painter};
+use crate::gui::{self, FontFamily};
 use crate::pack::Pack;
-use crate::render::{Framebuffer, Tint};
 use crate::state::RoomId;
 use crate::text::Text;
 use crate::ui::UiInput;
-use crate::ui::item_icons::ItemIcons;
-use crate::video;
 
-/// One text row's height in pixels (the font's glyph height).
-const ROW_HEIGHT: i32 = font::GLYPH_HEIGHT;
-/// The dark panel's left edge and top; it keeps the same margin from the
-/// right of a frame of any width, so a wider aspect's canvas widens it.
-const PANEL_ORIGIN: [i32; 2] = [24, 16];
-/// The dark panel's height.
-const PANEL_HEIGHT: i32 = 208;
-/// The title's baseline.
-const TITLE_Y: i32 = PANEL_ORIGIN[1] + 8;
-/// The first body row.
-const BODY_Y: i32 = 44;
-/// Left edge of a row's text; the cursor sits 16 px to its left.
-const TEXT_LEFT: i32 = 52;
-/// The first of the two key-hint lines.
-const HINT_Y: i32 = 196;
-/// Cursor colour (orange).
-const CURSOR_COLOR: [u8; 4] = [255, 160, 0, 255];
-/// Tint of the selected row's text (orange, matching the cursor).
-const SELECTED_TINT: Tint = Tint::Rgb(255, 160, 0);
+use art::Art;
+use widgets::{Label, ROW_H, ROW_W, Value, step_choice};
 
 /// What one tick of the menu decided.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,19 +63,10 @@ pub enum DebugMenuEvent {
     Jump(RoomId),
     /// Open the save screen in save mode (no ink ribbon needed).
     SaveGame,
-    /// Open the save screen in load mode.
-    LoadGame,
     /// Open the item box.
     ItemBox,
     /// Start ending `id`'s film chain.
     ClearGame(u8),
-    /// The CONTROLS tool changed the bindings; the menu stays open.
-    BindingsChanged,
-    /// The DISPLAY tool picked this presented frame rate; the menu stays
-    /// open.
-    FrameRateChanged(u32),
-    /// The DISPLAY tool picked this aspect ratio; the menu stays open.
-    AspectChanged(video::Aspect),
 }
 
 /// The main list's tools, in order.
@@ -104,20 +82,16 @@ pub enum Tool {
     Flags,
     /// The cheat toggles.
     Cheats,
-    /// The save/load chooser.
+    /// Open the save screen.
     Save,
     /// Open the item box.
     ItemBox,
     /// The ending chooser.
     ClearGame,
-    /// The input rebind screen.
-    Controls,
-    /// The display options (the presented frame rate and aspect ratio).
-    Display,
 }
 
 /// The main list, in order.
-pub const TOOLS: [Tool; 10] = [
+pub const TOOLS: [Tool; 8] = [
     Tool::Rooms,
     Tool::Inventory,
     Tool::Player,
@@ -126,8 +100,6 @@ pub const TOOLS: [Tool; 10] = [
     Tool::Save,
     Tool::ItemBox,
     Tool::ClearGame,
-    Tool::Controls,
-    Tool::Display,
 ];
 
 impl Tool {
@@ -139,33 +111,15 @@ impl Tool {
             Tool::Player => "UI_DEBUG_TOOL_PLAYER",
             Tool::Flags => "UI_DEBUG_TOOL_FLAGS",
             Tool::Cheats => "UI_DEBUG_TOOL_CHEATS",
-            Tool::Save => "UI_DEBUG_TOOL_SAVE",
+            Tool::Save => "UI_DEBUG_SAVE_GAME",
             Tool::ItemBox => "UI_DEBUG_TOOL_ITEM_BOX",
             Tool::ClearGame => "UI_DEBUG_TOOL_CLEAR_GAME",
-            Tool::Controls => "UI_DEBUG_TOOL_CONTROLS",
-            Tool::Display => "UI_DEBUG_TOOL_DISPLAY",
-        }
-    }
-
-    /// The two key-hint keys shown while the tool is open.
-    fn hints(self) -> [&'static str; 2] {
-        match self {
-            Tool::Rooms => ["UI_DEBUG_HINT_ROOMS_1", "UI_DEBUG_HINT_ROOMS_2"],
-            Tool::Inventory => ["UI_DEBUG_HINT_INVENTORY_1", "UI_DEBUG_HINT_INVENTORY_2"],
-            Tool::Player => ["UI_DEBUG_HINT_PLAYER_1", "UI_DEBUG_HINT_PLAYER_2"],
-            Tool::Flags => ["UI_DEBUG_HINT_FLAGS_1", "UI_DEBUG_HINT_FLAGS_2"],
-            Tool::Cheats => ["UI_DEBUG_HINT_CHEATS_1", "UI_DEBUG_HINT_CHEATS_2"],
-            Tool::Controls => ["UI_DEBUG_HINT_CONTROLS_1", "UI_DEBUG_HINT_CONTROLS_2"],
-            Tool::Display => ["UI_DEBUG_HINT_DISPLAY_1", "UI_DEBUG_HINT_DISPLAY_2"],
-            Tool::Save | Tool::ItemBox | Tool::ClearGame => {
-                ["UI_DEBUG_HINT_SELECT_1", "UI_DEBUG_HINT_SELECT_2"]
-            }
         }
     }
 }
 
 /// The PLAYER tool's character names, by character.
-const CHARACTER_NAMES: [&str; 2] = ["UI_DEBUG_CHRIS", "UI_DEBUG_JILL"];
+const CHARACTER_NAMES: [&str; 4] = ["Chris", "Jill", "Barry", "Rebecca"];
 /// The PLAYER tool's outfit names, by [`PlayerChoice::costume`].
 const COSTUME_NAMES: [&str; 3] = [
     "UI_DEBUG_COSTUME_NORMAL",
@@ -178,8 +132,6 @@ const CHEAT_NAMES: [&str; 3] = [
     "UI_DEBUG_CHEAT_GHOST",
     "UI_DEBUG_CHEAT_AMMO",
 ];
-/// The SAVE rows.
-const SAVE_ROWS: [&str; 2] = ["UI_DEBUG_SAVE_GAME", "UI_DEBUG_LOAD_GAME"];
 /// The CLEAR GAME route hints, by ending id minus one.
 const ENDING_HINTS: [&str; 7] = [
     "UI_DEBUG_ENDING_1",
@@ -216,17 +168,32 @@ pub fn default_ending(game: &GameState) -> u8 {
             ending::SCENARIO2_FLAG_SECOND_SURVIVOR,
             false,
         ),
-        game.player_choice().character,
+        game::scenario_of(game.player_choice().character),
     )
 }
 
-/// The character the room select jumps as: the pending selection, else the
-/// current one.
+/// The RDT variant the room select jumps in: the pending selection's
+/// scenario, else the current one.
 pub fn jump_character(game: &GameState) -> u8 {
-    game.debug
-        .pending_player
-        .unwrap_or_else(|| game.player_choice())
-        .character
+    game::scenario_of(
+        game.debug
+            .pending_player
+            .unwrap_or_else(|| game.player_choice())
+            .character,
+    )
+}
+
+/// The native view: its canvas, faces, settings and pointer targets.
+struct View {
+    fonts: Option<Fonts>,
+    canvas: Canvas,
+    settings: Option<gui::Settings>,
+    locale: Locale,
+    device: Device,
+    /// What the pointer can click; later rectangles sit on top.
+    hits: Vec<(Rect, Hit)>,
+    art: Art,
+    dirty: bool,
 }
 
 /// The menu's live state: the open tool and every tool's own state.
@@ -238,21 +205,13 @@ pub struct DebugMenu {
     player_row: usize,
     flags: FlagEditor,
     cheat_row: usize,
-    save_row: usize,
     ending_row: usize,
-    controls: ControlsEditor,
-    /// The presented frame rate the DISPLAY tool shows and steps.
-    frame_rate: u32,
-    /// The aspect ratio the DISPLAY tool shows and steps.
-    aspect: video::Aspect,
-    /// The DISPLAY tool's row: 0 frame rate, 1 aspect ratio.
-    display_row: usize,
+    view: View,
 }
 
 impl DebugMenu {
-    /// Open the main list with every tool seeded from the live state and the
-    /// window's `bindings`.
-    pub fn open(pack: &Pack, current: RoomId, game: &GameState, bindings: &Bindings) -> Self {
+    /// Open the main list with every tool seeded from the live state.
+    pub fn open(pack: &Pack, current: RoomId, game: &GameState) -> Self {
         Self {
             tool: None,
             main_cursor: 0,
@@ -261,44 +220,32 @@ impl DebugMenu {
             player_row: 0,
             flags: FlagEditor::default(),
             cheat_row: 0,
-            save_row: 0,
             ending_row: usize::from(default_ending(game).clamp(1, 7) - 1),
-            controls: ControlsEditor::new(bindings),
-            frame_rate: video::TICK_RATE,
-            aspect: video::aspect(),
-            display_row: 0,
+            view: View {
+                fonts: Fonts::new()
+                    .map_err(|err| eprintln!("warning: debug menu fonts: {err:#}"))
+                    .ok(),
+                canvas: Canvas::new(1, 1),
+                settings: None,
+                locale: Locale::default(),
+                device: Device::Keyboard,
+                hits: Vec::new(),
+                art: Art::default(),
+                dirty: true,
+            },
         }
-    }
-
-    /// Show the window's current presented frame rate in the DISPLAY tool.
-    pub fn set_frame_rate(&mut self, frame_rate: u32) {
-        self.frame_rate = frame_rate;
-    }
-
-    /// The DISPLAY tool's frame rate.
-    pub fn frame_rate(&self) -> u32 {
-        self.frame_rate
-    }
-
-    /// The DISPLAY tool's aspect ratio.
-    pub fn aspect(&self) -> video::Aspect {
-        self.aspect
     }
 
     /// Reattach the menu to the live session after it was closed: the open
     /// tool and every cursor are kept, while the room browser follows
-    /// `current` if the room changed, the inventory cursor is clamped to the
-    /// live capacity and the CONTROLS editor picks up the window's
-    /// `bindings`.
-    pub fn reopen(&mut self, current: RoomId, game: &GameState, bindings: &Bindings) {
+    /// `current` if the room changed and the inventory cursor is clamped to
+    /// the live capacity.
+    pub fn reopen(&mut self, current: RoomId, game: &GameState) {
+        // Settings may have changed while closed; take them again.
+        self.view.settings = None;
         self.rooms.refresh(current);
         self.inventory.refresh(game);
-        self.controls.refresh(bindings);
-    }
-
-    /// The CONTROLS tool's state (its bindings are the edited map).
-    pub fn controls(&self) -> &ControlsEditor {
-        &self.controls
+        self.view.dirty = true;
     }
 
     /// The open tool (`None` on the main list).
@@ -331,6 +278,198 @@ impl DebugMenu {
         self.ending_row as u8 + 1
     }
 
+    /// Whether [`Self::configure`] has yet to run.
+    pub fn needs_settings(&self) -> bool {
+        self.view.settings.is_none()
+    }
+
+    /// Take the menus' settings (face, text size, language, button style).
+    pub fn configure(&mut self, settings: gui::Settings) {
+        let tag = crate::language::resolve_tag(settings.language.as_deref());
+        if self.view.locale.tag() != tag {
+            self.view.locale = Locale::new(&tag);
+        }
+        self.view.settings = Some(settings);
+        self.view.dirty = true;
+    }
+
+    /// The canvas the last [`Self::draw`] painted.
+    pub fn canvas(&self) -> &Canvas {
+        &self.view.canvas
+    }
+
+    /// Everything a key can change: the cursors and the state the tools
+    /// edit, to tell a key that did something from one that did not.
+    fn snapshot(&self, game: &GameState) -> Snapshot {
+        let (group, sel) = self.flags.selected();
+        Snapshot {
+            cursors: [
+                self.main_cursor,
+                self.rooms.column(),
+                self.rooms.row(),
+                self.inventory.slot(),
+                usize::from(self.inventory.on_size()),
+                self.inventory
+                    .picker()
+                    .map_or(usize::MAX, |p| usize::from(p.item())),
+                self.player_row,
+                self.flags.group(),
+                self.flags.row(),
+                self.cheat_row,
+                self.ending_row,
+            ],
+            tool: self.tool,
+            debug: game.debug,
+            inventory: game.inventory.clone(),
+            flag: game.flag_test(group.bank, sel, false),
+        }
+    }
+
+    /// How deep the menu is: 0 the main list, 1 a tool, 2 the item picker.
+    fn depth(&self) -> u8 {
+        match self.tool {
+            None => 0,
+            Some(Tool::Inventory) if self.inventory.picker().is_some() => 2,
+            Some(_) => 1,
+        }
+    }
+
+    /// Feed one presented frame's GUI events against the live state; returns
+    /// the events that leave the menu (the first one ends the frame's input)
+    /// and the feedback sounds.
+    pub fn handle_events(
+        &mut self,
+        events: &[GuiEvent],
+        game: &mut GameState,
+    ) -> (Vec<DebugMenuEvent>, Vec<Sound>) {
+        let mut out = Vec::new();
+        let mut sounds = Vec::new();
+        for &event in events {
+            if !matches!(event, GuiEvent::PointerMove { .. }) {
+                self.view.dirty = true;
+            }
+            let depth = self.depth();
+            let before = self.snapshot(game);
+            let result = match event {
+                GuiEvent::Key(key, device) => {
+                    self.view.device = device;
+                    Some(self.handle_input(key_input(key), game))
+                }
+                GuiEvent::PointerDown { x, y } => match self.hit(x, y) {
+                    Some(Hit::Item(index)) => {
+                        self.point(index, game);
+                        Some(self.handle_input(key_input(GuiKey::Confirm), game))
+                    }
+                    Some(Hit::Decrease(index)) => {
+                        self.point(index, game);
+                        Some(self.handle_input(key_input(GuiKey::Left), game))
+                    }
+                    Some(Hit::Increase(index)) => {
+                        self.point(index, game);
+                        Some(self.handle_input(key_input(GuiKey::Right), game))
+                    }
+                    Some(Hit::Tab(index)) => {
+                        self.set_tab(index);
+                        Some(DebugMenuEvent::None)
+                    }
+                    Some(Hit::Key(key)) => Some(self.handle_input(key_input(key), game)),
+                    None => None,
+                },
+                GuiEvent::Wheel(notches) => {
+                    // The wheel scrolls the view; the cursor stays put.
+                    if notches != 0.0 {
+                        self.scroll_by(if notches > 0.0 { -1 } else { 1 });
+                    }
+                    None
+                }
+                GuiEvent::PointerMove { x, y } => {
+                    // Hovering a row or cell picks it, as in the options.
+                    if let Some(Hit::Item(index) | Hit::Decrease(index) | Hit::Increase(index)) =
+                        self.hit(x, y)
+                    {
+                        self.point(index, game);
+                        self.view.dirty = true;
+                    }
+                    None
+                }
+                GuiEvent::PointerUp { .. } => None,
+            };
+            let Some(result) = result else {
+                continue;
+            };
+            let after = self.depth();
+            let sound = match result {
+                DebugMenuEvent::Close => Sound::Cancel,
+                DebugMenuEvent::None if after < depth => Sound::Cancel,
+                DebugMenuEvent::None if after == depth => {
+                    // A key that changed nothing (an end stop) stays quiet.
+                    if self.snapshot(game) == before {
+                        continue;
+                    }
+                    Sound::Cursor
+                }
+                _ => Sound::Decide,
+            };
+            sounds.push(sound);
+            if result != DebugMenuEvent::None {
+                out.push(result);
+                break;
+            }
+        }
+        let volume = self
+            .view
+            .settings
+            .as_ref()
+            .map_or(1, |settings| settings.game.menu_volume);
+        if volume == 0 {
+            sounds.clear();
+        }
+        (out, sounds)
+    }
+
+    /// The pointer target under `(x, y)`.
+    fn hit(&self, x: f32, y: f32) -> Option<Hit> {
+        self.view
+            .hits
+            .iter()
+            .rev()
+            .find(|(rect, _)| rect.contains(x, y))
+            .map(|&(_, hit)| hit)
+    }
+
+    /// Switch the open tool's tab strip to tab `index`.
+    fn set_tab(&mut self, index: usize) {
+        match self.tool {
+            Some(Tool::Rooms) => self.rooms.set_stage(index),
+            Some(Tool::Flags) => self.flags.set_group(index),
+            _ => {}
+        }
+    }
+
+    /// Scroll the open list by `rows` without moving its cursor.
+    fn scroll_by(&mut self, rows: isize) {
+        match self.tool {
+            Some(Tool::Rooms) => self.rooms.scroll_by(rows),
+            Some(Tool::Inventory) => self.inventory.scroll_by(rows),
+            Some(Tool::Flags) => self.flags.scroll_by(rows * 3),
+            _ => {}
+        }
+    }
+
+    /// Put the open list's cursor on `index`.
+    fn point(&mut self, index: usize, game: &GameState) {
+        match self.tool {
+            None => self.main_cursor = index.min(TOOLS.len() - 1),
+            Some(Tool::Rooms) => self.rooms.point(index),
+            Some(Tool::Inventory) => self.inventory.point(index, game),
+            Some(Tool::Player) => self.player_row = index.min(1),
+            Some(Tool::Flags) => self.flags.point(index),
+            Some(Tool::Cheats) => self.cheat_row = index.min(CHEAT_NAMES.len() - 1),
+            Some(Tool::ClearGame) => self.ending_row = index.min(ENDING_HINTS.len() - 1),
+            Some(Tool::Save | Tool::ItemBox) => {}
+        }
+    }
+
     /// One tick of edge-triggered menu input against the live state.
     pub fn handle_input(&mut self, input: UiInput, game: &mut GameState) -> DebugMenuEvent {
         if input.debug_menu {
@@ -345,14 +484,8 @@ impl DebugMenu {
             Tool::Player => self.handle_player(input, game),
             Tool::Flags => self.flags.handle_input(input, game),
             Tool::Cheats => self.handle_cheats(input, game),
-            Tool::Save => self.handle_save(input),
             Tool::ClearGame => self.handle_clear(input),
-            Tool::ItemBox => Step::Back,
-            Tool::Controls => match self.controls.handle_input(input) {
-                (step, false) => step,
-                (_, true) => Step::Event(DebugMenuEvent::BindingsChanged),
-            },
-            Tool::Display => self.handle_display(input),
+            Tool::Save | Tool::ItemBox => Step::Back,
         };
         match step {
             Step::Stay => DebugMenuEvent::None,
@@ -377,6 +510,7 @@ impl DebugMenu {
         } else if input.confirm {
             match TOOLS[self.main_cursor] {
                 Tool::ItemBox => return DebugMenuEvent::ItemBox,
+                Tool::Save => return DebugMenuEvent::SaveGame,
                 tool => self.tool = Some(tool),
             }
         }
@@ -390,58 +524,32 @@ impl DebugMenu {
         if input.cancel {
             return Step::Back;
         }
-        if input.up || input.down {
-            self.player_row ^= 1;
-            return Step::Stay;
-        }
-        let delta: i32 = if input.left {
-            -1
-        } else if input.right || input.confirm {
-            1
-        } else {
-            return Step::Stay;
-        };
         let current = game.player_choice();
         let mut choice = game.debug.pending_player.unwrap_or(current);
+        // Barry and Rebecca wear their one outfit: no OUTFIT row.
+        if input.up || input.down {
+            if choice.character & 3 < 2 {
+                self.player_row ^= 1;
+            }
+            return Step::Stay;
+        }
         if self.player_row == 0 {
-            choice.character ^= 1;
-        } else {
-            choice.costume = (i32::from(choice.costume) + delta).rem_euclid(3) as u8;
+            if let Some(next) = step_choice(usize::from(choice.character & 3), 4, input) {
+                choice.character = next as u8;
+            }
+        } else if let Some(next) = step_choice(usize::from(choice.costume.min(2)), 3, input) {
+            choice.costume = next as u8;
         }
         game.debug.pending_player = (choice != current).then_some(choice);
+        if choice.character & 3 >= 2 {
+            self.player_row = 0;
+        }
         Step::Stay
     }
 
-    /// DISPLAY: up/down pick the row; left/right step the frame rate
-    /// through [`video::FRAME_RATE_PRESETS`] or the aspect ratio through
-    /// [`video::Aspect::PRESETS`] (confirm steps up). Each change applies at
-    /// once and is saved to `arklay.toml` by the engine.
-    fn handle_display(&mut self, input: UiInput) -> Step {
-        if input.cancel {
-            return Step::Back;
-        }
-        if input.up || input.down {
-            self.display_row ^= 1;
-            return Step::Stay;
-        }
-        let delta = if input.left {
-            -1
-        } else if input.right || input.confirm {
-            1
-        } else {
-            return Step::Stay;
-        };
-        if self.display_row == 1 {
-            self.aspect = self.aspect.step(delta);
-            return Step::Event(DebugMenuEvent::AspectChanged(self.aspect));
-        }
-        self.frame_rate = video::step_frame_rate(self.frame_rate, delta);
-        Step::Event(DebugMenuEvent::FrameRateChanged(self.frame_rate))
-    }
-
-    /// CHEATS: up/down pick the row, left/right/confirm toggle a boolean row
-    /// or step INFINITE AMMO through off/reload/infinite. Turning INFINITE on
-    /// fills the equipped clip at once.
+    /// CHEATS: up/down pick the row, left/right/confirm step it (INFINITE
+    /// AMMO through off/reload/infinite). Turning INFINITE on fills the
+    /// equipped clip at once.
     fn handle_cheats(&mut self, input: UiInput, game: &mut GameState) -> Step {
         if input.cancel {
             return Step::Back;
@@ -451,36 +559,29 @@ impl DebugMenu {
             self.cheat_row = (self.cheat_row + count - 1) % count;
         } else if input.down {
             self.cheat_row = (self.cheat_row + 1) % count;
-        } else if input.left || input.right || input.confirm {
-            let delta = if input.left { -1 } else { 1 };
+        } else {
+            let debug = &mut game.debug;
             match self.cheat_row {
-                0 => game.debug.invincible = !game.debug.invincible,
-                1 => game.debug.ghost = !game.debug.ghost,
+                0 => {
+                    if let Some(on) = step_choice(usize::from(debug.invincible), 2, input) {
+                        debug.invincible = on == 1;
+                    }
+                }
+                1 => {
+                    if let Some(on) = step_choice(usize::from(debug.ghost), 2, input) {
+                        debug.ghost = on == 1;
+                    }
+                }
                 2 => {
-                    game.debug.infinite_ammo = game.debug.infinite_ammo.step(delta);
-                    if game.debug.infinite_ammo == InfiniteAmmo::Infinite {
-                        crate::weapons::refill_clip(game);
+                    if let Some(mode) = step_choice(ammo_index(debug.infinite_ammo), 3, input) {
+                        debug.infinite_ammo = AMMO_MODES[mode];
+                        if debug.infinite_ammo == InfiniteAmmo::Infinite {
+                            crate::weapons::refill_clip(game);
+                        }
                     }
                 }
                 _ => {}
             }
-        }
-        Step::Stay
-    }
-
-    /// SAVE: pick SAVE GAME or LOAD GAME.
-    fn handle_save(&mut self, input: UiInput) -> Step {
-        if input.cancel {
-            return Step::Back;
-        }
-        if input.up || input.down {
-            self.save_row ^= 1;
-        } else if input.confirm {
-            return Step::Event(if self.save_row == 0 {
-                DebugMenuEvent::SaveGame
-            } else {
-                DebugMenuEvent::LoadGame
-            });
         }
         Step::Stay
     }
@@ -501,709 +602,559 @@ impl DebugMenu {
         Step::Stay
     }
 
-    /// Draw the dark panel, the open tool (or the main list) and its key
-    /// hints. Without a font the panel still dims the frozen frame.
+    /// Paint the menu at `width` x `height` pixels into [`Self::canvas`],
+    /// returning whether anything was repainted. With `gpu` the canvas
+    /// records its frame for the GPU backend.
     pub fn draw(
         &mut self,
-        framebuffer: &mut Framebuffer,
-        font: Option<&Font>,
+        width: u32,
+        height: u32,
+        gpu: bool,
+        pack: &Pack,
         text: &Text,
-        icons: Option<&ItemIcons>,
         game: &GameState,
-    ) {
-        let panel = panel(framebuffer.width);
-        framebuffer.blend_black_rect(panel, 200);
-        let Some(font) = font else {
-            return;
+    ) -> bool {
+        let (width, height) = (width.max(1), height.max(1));
+        let view = &mut self.view;
+        view.dirty |= view.canvas.set_recording(gpu);
+        let resized = (view.canvas.width, view.canvas.height) != (width, height);
+        let Some(fonts) = view.fonts.as_mut() else {
+            return false;
         };
-        let mut pen = Pen {
-            right: panel[0] + panel[2] - 8,
-            framebuffer,
-            font,
+        if resized {
+            fonts.clear_cache();
+        }
+        if !view.dirty && !resized {
+            return false;
+        }
+        view.dirty = false;
+        view.canvas
+            .reset_to(width, height, Color::rgba(0x00, 0x00, 0x00, 0xB8));
+        let (family, text_scale) = view
+            .settings
+            .as_ref()
+            .map_or((FontFamily::Modern, 1.0), |s| {
+                (s.game.ui_font, s.game.menu_text_size.scale())
+            });
+        let theme = Theme::new(width, height, family).with_text_scale(text_scale);
+        let device = match (
+            view.device,
+            view.settings.as_ref().and_then(|s| s.game.button_style),
+        ) {
+            (Device::Gamepad(_), Some(style)) => Device::Gamepad(style),
+            (device, _) => device,
+        };
+        let mut p = Painter {
+            canvas: &mut view.canvas,
+            fonts,
+            theme,
+        };
+        let mut cx = Cx {
+            pack,
             text,
-            icons,
-            tight: text.uses_tight_metrics(),
+            game,
+            locale: &view.locale,
+            art: &mut view.art,
+            hits: &mut view.hits,
+            device,
+            more: false,
         };
-        let (title, hints) = match self.tool {
-            None => (
-                "UI_DEBUG_TITLE",
-                ["UI_DEBUG_HINT_MAIN_1", "UI_DEBUG_HINT_MAIN_2"],
-            ),
-            Some(tool) => (tool.label(), tool.hints()),
+        cx.hits.clear();
+        let bounds = p.canvas.bounds();
+        let u = |v: f32| theme.u(v);
+        // A darker band down the left, where the lists sit.
+        p.canvas.fill_gradient(
+            Rect::new(0.0, 0.0, bounds.w * 0.6, bounds.h),
+            Axis::Horizontal,
+            Color::rgba(0, 0, 0, 120),
+            Color::rgba(0, 0, 0, 0),
+        );
+        let left = (bounds.w * 0.06).max(u(48.0));
+        let right = bounds.w - left;
+        // The heading: the menu, then the open tool.
+        let title = cx.label("UI_DEBUG_TITLE");
+        let title_y = u(96.0);
+        let mut x = left;
+        match self.tool {
+            None => {
+                p.text(Role::Title, x, title_y, Align::Left, palette::TEXT, &title);
+            }
+            Some(tool) => {
+                x += p.text(
+                    Role::Title,
+                    x,
+                    title_y,
+                    Align::Left,
+                    palette::TEXT_DIM,
+                    &title,
+                );
+                x += u(18.0);
+                p.chevron(x + u(6.0), title_y, 26.0, Chevron::Right, palette::TEXT_DIM);
+                x += u(30.0);
+                let name = if tool == Tool::Inventory && self.inventory.picker().is_some() {
+                    cx.label("UI_DEBUG_PICKER_TITLE")
+                } else {
+                    cx.label(tool.label())
+                };
+                p.text(Role::Title, x, title_y, Align::Left, palette::TEXT, &name);
+            }
+        }
+        let rule_y = u(140.0);
+        p.canvas.fill_gradient(
+            Rect::new(left, rule_y, right - left, u(1.5).max(1.0)),
+            Axis::Horizontal,
+            palette::RULE_BRIGHT.fade(0.8),
+            palette::RULE.fade(0.0),
+        );
+        let hint_y = u(1040.0).min(bounds.h - u(40.0));
+        let area = Rect::new(
+            left,
+            rule_y + u(30.0),
+            right - left,
+            hint_y - u(60.0) - (rule_y + u(30.0)),
+        );
+        let hints: Vec<(GuiKey, String)> = match self.tool {
+            None => {
+                Self::draw_main(self.main_cursor, &mut p, &mut cx, area);
+                vec![
+                    (GuiKey::Confirm, cx.gui("hint.select")),
+                    (GuiKey::Cancel, cx.gui("debug.close")),
+                ]
+            }
+            Some(Tool::Rooms) => {
+                self.rooms.draw(&mut p, &mut cx, area);
+                vec![
+                    (GuiKey::Confirm, cx.gui("debug.jump")),
+                    (GuiKey::Cancel, cx.gui("hint.back")),
+                ]
+            }
+            Some(Tool::Inventory) => {
+                self.inventory.draw(&mut p, &mut cx, area);
+                if self.inventory.picker().is_some() {
+                    vec![
+                        (GuiKey::Confirm, cx.gui("debug.pick")),
+                        (GuiKey::Cancel, cx.gui("hint.back")),
+                    ]
+                } else if self.inventory.on_size() {
+                    vec![
+                        (GuiKey::Left, cx.gui("debug.change")),
+                        (GuiKey::Cancel, cx.gui("hint.back")),
+                    ]
+                } else {
+                    vec![
+                        (GuiKey::Confirm, cx.gui("debug.choose_item")),
+                        (GuiKey::Left, cx.gui("debug.quantity")),
+                        (GuiKey::ResetAll, cx.gui("hint.clear")),
+                        (GuiKey::Cancel, cx.gui("hint.back")),
+                    ]
+                }
+            }
+            Some(Tool::Player) => {
+                Self::draw_player(self.player_row, &mut p, &mut cx, area);
+                vec![
+                    (GuiKey::Left, cx.gui("debug.change")),
+                    (GuiKey::Cancel, cx.gui("hint.back")),
+                ]
+            }
+            Some(Tool::Flags) => {
+                self.flags.draw(&mut p, &mut cx, area);
+                vec![
+                    (GuiKey::Confirm, cx.gui("debug.toggle")),
+                    (GuiKey::Left, cx.gui("debug.change")),
+                    (GuiKey::Cancel, cx.gui("hint.back")),
+                ]
+            }
+            Some(Tool::Cheats) => {
+                Self::draw_cheats(self.cheat_row, &mut p, &mut cx, area);
+                vec![
+                    (GuiKey::Left, cx.gui("debug.change")),
+                    (GuiKey::Cancel, cx.gui("hint.back")),
+                ]
+            }
+            Some(Tool::ClearGame) => {
+                Self::draw_clear(self.ending_row, &mut p, &mut cx, area);
+                vec![
+                    (GuiKey::Confirm, cx.gui("debug.play_ending")),
+                    (GuiKey::Cancel, cx.gui("hint.back")),
+                ]
+            }
+            Some(Tool::Save | Tool::ItemBox) => Vec::new(),
         };
-        // The item picker draws full screen with its own title and hint.
-        if self.tool == Some(Tool::Inventory) && self.inventory.picker().is_some() {
-            self.inventory.draw(&mut pen, game);
+        let pairs: Vec<(GuiKey, &str)> = hints.iter().map(|(k, s)| (*k, s.as_str())).collect();
+        let rects = p.hint_bar(bounds.w / 2.0, hint_y, device, &pairs);
+        cx.hits.extend(
+            rects
+                .into_iter()
+                .zip(hints.iter().map(|(k, _)| Hit::Key(*k))),
+        );
+        // Art still loading: paint again next frame.
+        view.dirty |= cx.more;
+        true
+    }
+
+    fn draw_main(cursor: usize, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let row_h = u(78.0);
+        let width = (area.w * 0.45).min(u(560.0));
+        for (index, tool) in TOOLS.iter().enumerate() {
+            let rect = Rect::new(
+                area.x - u(40.0),
+                area.y + row_h * index as f32,
+                width,
+                row_h - u(10.0),
+            );
+            let label = cx.label(tool.label());
+            p.menu_item(rect, area.x, &label, index == cursor, 1.0);
+            cx.hits.push((rect, Hit::Item(index)));
+        }
+        // The live state, down the right.
+        let panel = Rect::new(
+            area.x + width + u(80.0),
+            area.y,
+            area.right() - (area.x + width + u(80.0)),
+            area.h,
+        );
+        if panel.w < u(300.0) {
             return;
         }
-        pen.bytes(PANEL_ORIGIN[0] + 12, TITLE_Y, Tint::White, text.ui(title));
-        match self.tool {
-            None => self.draw_main(&mut pen),
-            Some(Tool::Rooms) => self.rooms.draw(&mut pen),
-            Some(Tool::Inventory) => self.inventory.draw(&mut pen, game),
-            Some(Tool::Player) => self.draw_player(&mut pen, game),
-            Some(Tool::Flags) => self.flags.draw(&mut pen, game),
-            Some(Tool::Cheats) => self.draw_cheats(&mut pen, game),
-            Some(Tool::Save) => draw_list(&mut pen, &SAVE_ROWS, self.save_row),
-            Some(Tool::ClearGame) => self.draw_clear(&mut pen, game),
-            Some(Tool::Controls) => self.controls.draw(&mut pen),
-            Some(Tool::Display) => self.draw_display(&mut pen),
-            Some(Tool::ItemBox) => {}
+        let game = cx.game;
+        let room = game.id;
+        let room3 = room.room3();
+        let room_name = cx.room_name(&room3);
+        let choice = game.player_choice();
+        let pending = game.debug.pending_player;
+        let mut lines: Vec<(String, String)> = vec![
+            (cx.gui("debug.room"), format!("{room3}  {room_name}")),
+            (
+                cx.gui("debug.player"),
+                format!(
+                    "{}  ·  {}",
+                    CHARACTER_NAMES[usize::from(choice.character & 3)],
+                    cx.label(COSTUME_NAMES[usize::from(choice.costume.min(2))])
+                ),
+            ),
+            (
+                cx.gui("debug.health"),
+                format!("{} / {}", game.entities[0].health, game.max_health),
+            ),
+        ];
+        if let Some(pending) = pending {
+            lines.push((
+                cx.gui("debug.next_load"),
+                format!(
+                    "{}  ·  {}",
+                    CHARACTER_NAMES[usize::from(pending.character & 3)],
+                    cx.label(COSTUME_NAMES[usize::from(pending.costume.min(2))])
+                ),
+            ));
         }
-        for (line, key) in hints.iter().enumerate() {
-            let hint = pen.text.ui(key);
-            let x = PANEL_ORIGIN[0] + 12;
-            pen.fit(
+        let cheats: Vec<String> = [
+            (game.debug.invincible, "UI_DEBUG_CHEAT_INVINCIBLE"),
+            (game.debug.ghost, "UI_DEBUG_CHEAT_GHOST"),
+            (
+                game.debug.infinite_ammo != InfiniteAmmo::Off,
+                "UI_DEBUG_CHEAT_AMMO",
+            ),
+        ]
+        .into_iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, key)| cx.label(key))
+        .collect();
+        if !cheats.is_empty() {
+            lines.push((cx.gui("debug.cheats"), cheats.join(", ")));
+        }
+        let line_h = p.line_height(Role::Row) * 1.35;
+        let label_w = lines
+            .iter()
+            .map(|(label, _)| p.measure(Role::Body, label))
+            .fold(0.0, f32::max);
+        let mut y = panel.y + line_h / 2.0;
+        for (label, value) in &lines {
+            p.text(
+                Role::Body,
+                panel.x,
+                y,
+                Align::Left,
+                palette::TEXT_DIM,
+                label,
+            );
+            let x = panel.x + label_w + u(28.0);
+            let value = fit(p, Role::Row, value, panel.right() - x);
+            p.text(Role::Row, x, y, Align::Left, palette::TEXT, &value);
+            y += line_h;
+        }
+    }
+
+    fn draw_player(cursor: usize, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let game = cx.game;
+        let current = game.player_choice();
+        let choice = game.debug.pending_player.unwrap_or(current);
+        let character = usize::from(choice.character & 3);
+        let costume = usize::from(choice.costume.min(2));
+        // The chosen character's face.
+        let face_side = u(220.0);
+        if let Some(face) = cx.art.portrait(cx.pack, choice.character & 3) {
+            let rect = Rect::new(area.x, area.y, face_side, face_side);
+            p.canvas
+                .fill_rect(rect.inset(-u(4.0), -u(4.0)), palette::RULE);
+            p.canvas.draw_image(&face, rect, 1.0);
+        }
+        let x = area.x + face_side + u(60.0);
+        let width = (area.right() - x).min(u(ROW_W));
+        let row_h = u(ROW_H);
+        let rows = [
+            (
+                cx.label("UI_DEBUG_PLAYER_CHARACTER"),
+                CHARACTER_NAMES[character].to_string(),
+                (4, character),
+            ),
+            (
+                cx.label("UI_DEBUG_PLAYER_COSTUME"),
+                cx.label(COSTUME_NAMES[costume]),
+                (3, costume),
+            ),
+        ];
+        let shown = if character >= 2 { 1 } else { rows.len() };
+        for (index, (label, value, pips)) in rows.iter().take(shown).enumerate() {
+            let rect = Rect::new(x, area.y + row_h * index as f32, width, row_h);
+            widgets::row(
+                p,
+                cx,
+                rect,
+                index,
+                index == cursor,
+                Label::plain(label),
+                Value::Step(value, Some(*pips)),
+            );
+        }
+        let note = if game.debug.pending_player.is_some() {
+            cx.label("UI_DEBUG_PLAYER_PENDING")
+        } else {
+            cx.label("UI_DEBUG_PLAYER_CURRENT")
+        };
+        let y = area.y + row_h * shown as f32 + u(30.0);
+        p.paragraph(Role::Body, x, y, width, palette::TEXT_DIM, &note);
+        if choice.character & 3 >= 2 {
+            let note = cx.gui("debug.stand_in_note");
+            p.paragraph(
+                Role::Body,
                 x,
-                HINT_Y + line as i32 * ROW_HEIGHT,
-                Tint::Grey,
-                hint,
-                pen.right - x,
+                y + p.line_height(Role::Body) * 1.5,
+                width,
+                palette::TEXT_DIM,
+                &note,
             );
         }
     }
 
-    fn draw_main(&self, pen: &mut Pen) {
-        let keys: Vec<&str> = TOOLS.iter().map(|tool| tool.label()).collect();
-        draw_list(pen, &keys, self.main_cursor);
-    }
-
-    fn draw_player(&self, pen: &mut Pen, game: &GameState) {
-        let current = game.player_choice();
-        let choice = game.debug.pending_player.unwrap_or(current);
-        let rows = [
-            (
-                "UI_DEBUG_PLAYER_CHARACTER",
-                CHARACTER_NAMES[usize::from(choice.character & 1)],
-            ),
-            (
-                "UI_DEBUG_PLAYER_COSTUME",
-                COSTUME_NAMES[usize::from(choice.costume.min(2))],
-            ),
-        ];
-        let value_x = TEXT_LEFT + 12 * pen.font.metrics.glyph_w;
-        for (index, (label, value)) in rows.iter().enumerate() {
-            let y = BODY_Y + index as i32 * ROW_HEIGHT;
-            let mut tint = Tint::White;
-            if index == self.player_row {
-                pen.cursor(TEXT_LEFT - 16, y);
-                tint = SELECTED_TINT;
-            }
-            pen.bytes(TEXT_LEFT, y, tint, pen.text.ui(label));
-            pen.bytes(value_x, y, Tint::Yellow, pen.text.ui(value));
-        }
-        let note = if game.debug.pending_player.is_some() {
-            "UI_DEBUG_PLAYER_PENDING"
-        } else {
-            "UI_DEBUG_PLAYER_CURRENT"
-        };
-        let note = pen.text.ui(note);
-        pen.fit(
-            TEXT_LEFT,
-            BODY_Y + 3 * ROW_HEIGHT,
-            Tint::Grey,
-            note,
-            pen.right - TEXT_LEFT,
-        );
-    }
-
-    fn draw_display(&self, pen: &mut Pen) {
-        let value_x = TEXT_LEFT + 12 * pen.font.metrics.glyph_w;
-        let rows = [
-            (
-                "UI_DEBUG_DISPLAY_FRAME_RATE",
-                format!("{}", self.frame_rate),
-            ),
-            ("UI_DEBUG_DISPLAY_ASPECT", self.aspect.name()),
-        ];
-        for (index, (label, value)) in rows.iter().enumerate() {
-            let y = BODY_Y + index as i32 * ROW_HEIGHT;
-            let tint = if index == self.display_row {
-                pen.cursor(TEXT_LEFT - 16, y);
-                SELECTED_TINT
-            } else {
-                Tint::White
-            };
-            pen.bytes(TEXT_LEFT, y, tint, pen.text.ui(label));
-            pen.ascii(value_x, y, Tint::Yellow, value);
-        }
-        let note = if self.display_row == 1 {
-            "UI_DEBUG_DISPLAY_ASPECT_NOTE"
-        } else if self.frame_rate > video::TICK_RATE {
-            "UI_DEBUG_DISPLAY_TWEENED"
-        } else {
-            "UI_DEBUG_DISPLAY_NATIVE"
-        };
-        let note = pen.text.ui(note);
-        pen.fit(
-            TEXT_LEFT,
-            BODY_Y + 3 * ROW_HEIGHT,
-            Tint::Grey,
-            note,
-            pen.right - TEXT_LEFT,
-        );
-    }
-
-    fn draw_cheats(&self, pen: &mut Pen, game: &GameState) {
+    fn draw_cheats(cursor: usize, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let debug = cx.game.debug;
         let on_off = |on: bool| {
-            if on {
-                ("UI_DEBUG_ON", Tint::Green)
-            } else {
-                ("UI_DEBUG_OFF", Tint::Grey)
-            }
+            (
+                if on { "UI_DEBUG_ON" } else { "UI_DEBUG_OFF" },
+                (2, usize::from(on)),
+            )
         };
-        let ammo = match game.debug.infinite_ammo {
-            InfiniteAmmo::Off => ("UI_DEBUG_OFF", Tint::Grey),
-            InfiniteAmmo::Reload => ("UI_DEBUG_AMMO_RELOAD", Tint::Yellow),
-            InfiniteAmmo::Infinite => ("UI_DEBUG_AMMO_INFINITE", Tint::Green),
-        };
+        let ammo = ammo_index(debug.infinite_ammo);
         let states = [
-            on_off(game.debug.invincible),
-            on_off(game.debug.ghost),
-            ammo,
+            on_off(debug.invincible),
+            on_off(debug.ghost),
+            (AMMO_LABELS[ammo], (3, ammo)),
         ];
-        for (index, (label, (value, tint))) in CHEAT_NAMES.iter().zip(states).enumerate() {
-            let y = BODY_Y + index as i32 * ROW_HEIGHT;
-            let mut label_tint = Tint::White;
-            if index == self.cheat_row {
-                pen.cursor(TEXT_LEFT - 16, y);
-                label_tint = SELECTED_TINT;
-            }
-            pen.bytes(TEXT_LEFT, y, label_tint, pen.text.ui(label));
-            // Place each value after its own label: the tri-state values are
-            // much wider than ON/OFF, and a fixed column overflows the panel
-            // with the wide Japanese glyphs.
-            let value_x = TEXT_LEFT + (label.len() as i32 + 1) * pen.font.metrics.glyph_w;
-            pen.fit(value_x, y, tint, pen.text.ui(value), pen.right - value_x);
+        let width = area.w.min(u(ROW_W));
+        let row_h = u(ROW_H);
+        for (index, (key, (value, pips))) in CHEAT_NAMES.iter().zip(states).enumerate() {
+            let rect = Rect::new(area.x, area.y + row_h * index as f32, width, row_h);
+            let label = cx.label(key);
+            let value = cx.label(value);
+            widgets::row(
+                p,
+                cx,
+                rect,
+                index,
+                index == cursor,
+                Label::plain(&label),
+                Value::Step(&value, Some(pips)),
+            );
         }
     }
 
-    fn draw_clear(&self, pen: &mut Pen, game: &GameState) {
-        let default = default_ending(game);
+    fn draw_clear(cursor: usize, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
+        let theme = p.theme;
+        let u = |v: f32| theme.u(v);
+        let default = default_ending(cx.game);
+        let width = area.w.min(u(ROW_W));
+        let row_h = u(ROW_H).min(area.h / ENDING_HINTS.len() as f32);
+        let expected = cx.gui("debug.expected");
         for (index, key) in ENDING_HINTS.iter().enumerate() {
-            let y = BODY_Y + index as i32 * ROW_HEIGHT;
-            let selected = index == self.ending_row;
-            if selected {
-                pen.cursor(TEXT_LEFT - 16, y);
-            }
+            let rect = Rect::new(area.x, area.y + row_h * index as f32, width, row_h);
             let id = index as u8 + 1;
-            let tint = if selected {
-                SELECTED_TINT
-            } else if id == default {
-                Tint::Green
-            } else {
-                Tint::White
-            };
-            pen.ascii(TEXT_LEFT, y, tint, &format!("{id}"));
-            let x = TEXT_LEFT + 2 * pen.font.metrics.glyph_w;
-            pen.fit(x, y, tint, pen.text.ui(key), pen.right - x);
+            let lead = format!("{id}");
+            let label = cx.label(key);
+            let note = (id == default).then_some(expected.as_str());
+            widgets::row(
+                p,
+                cx,
+                rect,
+                index,
+                index == cursor,
+                Label::lead(&lead, &label),
+                Value::Link(note),
+            );
         }
     }
 }
 
-/// The dark panel's `[x, y, w, h]` in a frame `width` pixels wide: 24 px
-/// in from both sides (`[24, 16, 272, 208]` at 320).
-fn panel(width: u32) -> [i32; 4] {
-    let [x, y] = PANEL_ORIGIN;
-    [x, y, width as i32 - 2 * x, PANEL_HEIGHT]
+/// The INFINITE AMMO modes in step order, and their labels.
+const AMMO_MODES: [InfiniteAmmo; 3] = [
+    InfiniteAmmo::Off,
+    InfiniteAmmo::Reload,
+    InfiniteAmmo::Infinite,
+];
+const AMMO_LABELS: [&str; 3] = [
+    "UI_DEBUG_OFF",
+    "UI_DEBUG_AMMO_RELOAD",
+    "UI_DEBUG_AMMO_INFINITE",
+];
+
+fn ammo_index(mode: InfiniteAmmo) -> usize {
+    AMMO_MODES.iter().position(|&m| m == mode).unwrap_or(0)
 }
 
-/// Draw a plain list of language keys with the cursor on `cursor`.
-fn draw_list(pen: &mut Pen, keys: &[&str], cursor: usize) {
-    for (index, key) in keys.iter().enumerate() {
-        let y = BODY_Y + index as i32 * ROW_HEIGHT;
-        let mut tint = Tint::White;
-        if index == cursor {
-            pen.cursor(TEXT_LEFT - 16, y);
-            tint = SELECTED_TINT;
-        }
-        pen.bytes(TEXT_LEFT, y, tint, pen.text.ui(key));
-    }
+/// See [`DebugMenu::snapshot`].
+#[derive(PartialEq)]
+struct Snapshot {
+    cursors: [usize; 11],
+    tool: Option<Tool>,
+    debug: game::DebugTools,
+    inventory: Vec<game::InventoryItem>,
+    flag: bool,
 }
 
-/// The drawing context the tools share.
-struct Pen<'a> {
-    framebuffer: &'a mut Framebuffer,
-    font: &'a Font,
+/// What a pointer target does when clicked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Hit {
+    /// Pick list entry `index` and confirm it.
+    Item(usize),
+    /// Step entry `index`'s value down.
+    Decrease(usize),
+    /// Step entry `index`'s value up.
+    Increase(usize),
+    /// Switch to tab `index`.
+    Tab(usize),
+    /// Press a key, from its glyph.
+    Key(GuiKey),
+}
+
+/// One frame's drawing context: the game data and the art cache.
+struct Cx<'a> {
+    pack: &'a Pack,
     text: &'a Text,
-    icons: Option<&'a ItemIcons>,
-    tight: bool,
-    /// The panel's inner right edge, where clipped text stops.
-    right: i32,
+    game: &'a GameState,
+    locale: &'a Locale,
+    art: &'a mut Art,
+    hits: &'a mut Vec<(Rect, Hit)>,
+    /// The device whose glyphs the hints show.
+    device: Device,
+    /// Some art is still to load; paint again next frame.
+    more: bool,
 }
 
-impl Pen<'_> {
-    /// Draw an encoded stream.
-    fn bytes(&mut self, x: i32, y: i32, tint: Tint, bytes: &[u8]) {
-        self.font
-            .draw_text(self.framebuffer, x, y, tint, 2, bytes, self.tight);
+impl Cx<'_> {
+    /// A pack UI string in title case.
+    fn label(&self, key: &str) -> String {
+        title_case(self.text.decode(self.text.ui(key)).trim())
     }
 
-    /// Draw an encoded stream clipped to `max_width` pixels.
-    fn fit(&mut self, x: i32, y: i32, tint: Tint, bytes: &[u8], max_width: i32) {
-        let clipped = font::fit_pixels(bytes, max_width, self.font, self.tight);
-        self.bytes(x, y, tint, clipped);
+    /// A GUI string.
+    fn gui(&self, key: &str) -> String {
+        self.locale.get(key).to_string()
     }
 
-    /// Draw an ASCII identifier or number.
-    fn ascii(&mut self, x: i32, y: i32, tint: Tint, text: &str) {
-        let mut bytes = Vec::new();
-        charset::encode(text, self.text.script(), &mut bytes);
-        self.bytes(x, y, tint, &bytes);
+    /// A room's display name in title case, or empty.
+    fn room_name(&self, room3: &str) -> String {
+        self.text
+            .room_name(room3)
+            .map(|bytes| title_case(self.text.decode(bytes).trim()))
+            .unwrap_or_default()
     }
 
-    /// [`Pen::ascii`] clipped to `max_width` pixels.
-    fn ascii_fit(&mut self, x: i32, y: i32, tint: Tint, text: &str, max_width: i32) {
-        let mut bytes = Vec::new();
-        charset::encode(text, self.text.script(), &mut bytes);
-        self.fit(x, y, tint, &bytes, max_width);
-    }
-
-    /// Draw the list cursor: an orange right-pointing arrow (the font sheet
-    /// only has a down-pointing one).
-    fn cursor(&mut self, x: i32, y: i32) {
-        for column in 0..6 {
-            let height = 11 - column * 2;
-            self.framebuffer
-                .fill_rect([x + 4 + column, y + 1 + column, 1, height], CURSOR_COLOR);
-        }
-    }
-
-    /// Draw `item`'s 40x30 icon at `[x, y]` (nothing without the menu art).
-    fn icon(&mut self, item: u8, [x, y]: [i32; 2]) {
-        if let Some(icons) = self.icons {
-            icons.draw(self.framebuffer, item, [x, y]);
-        }
-    }
-
-    /// Draw `item`'s real name, or its hex id when it has none.
-    fn item_name(&mut self, x: i32, y: i32, tint: Tint, item: u8) {
-        self.item_name_fit(x, y, tint, item, self.right - x);
-    }
-
-    /// [`Pen::item_name`] clipped to `max_width` pixels.
-    fn item_name_fit(&mut self, x: i32, y: i32, tint: Tint, item: u8, max_width: i32) {
+    /// An item's name in title case, or its hex id.
+    fn item_name(&self, item: u8) -> String {
         match self.text.item_name(u16::from(item)) {
-            Some(name) => self.fit(x, y, tint, name, max_width),
-            None => self.ascii_fit(x, y, tint, &format!("ITEM {item:02X}"), max_width),
+            Some(bytes) => title_case(self.text.decode(bytes).trim()),
+            None => format!("Item {item:02X}"),
         }
     }
 
-    /// A one-pixel yellow frame around `rect`.
-    fn outline(&mut self, [x, y, width, height]: [i32; 4]) {
-        let color = [255, 224, 64, 255];
-        self.framebuffer.fill_rect([x, y, width, 1], color);
-        self.framebuffer
-            .fill_rect([x, y + height - 1, width, 1], color);
-        self.framebuffer.fill_rect([x, y, 1, height], color);
-        self.framebuffer
-            .fill_rect([x + width - 1, y, 1, height], color);
+    /// `item`'s icon, HD when the pack has one.
+    fn icon(&mut self, item: u8) -> Option<Arc<Picture>> {
+        self.art.icon(self.pack, item)
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::game::PlayerChoice;
-    use crate::game::{MSF2_COSTUME_VARIANT, STATE_BYTE_CHARACTER};
-    use crate::pack::PackWriter;
+/// The GUI key's [`UiInput`] edge.
+fn key_input(key: GuiKey) -> UiInput {
+    let mut input = UiInput::default();
+    match key {
+        GuiKey::Up => input.up = true,
+        GuiKey::Down => input.down = true,
+        GuiKey::Left => input.left = true,
+        GuiKey::Right => input.right = true,
+        GuiKey::Confirm => input.confirm = true,
+        GuiKey::Cancel => input.cancel = true,
+        GuiKey::TabPrev | GuiKey::SubPrev => input.page_left = true,
+        GuiKey::TabNext | GuiKey::SubNext => input.page_right = true,
+        GuiKey::ResetAll | GuiKey::ResetGroup => input.start = true,
+    }
+    input
+}
 
-    fn pack_with(paths: &[&str]) -> Pack {
-        let mut writer = PackWriter::new();
-        for path in paths {
-            writer.add(path, vec![0u8; 4]).unwrap();
-        }
-        Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+/// `text` with each word's first letter capitalised and the rest lowered;
+/// text without ASCII capitals (a Japanese name) is left alone.
+pub(crate) fn title_case(text: &str) -> String {
+    if !text.chars().any(|c| c.is_ascii_uppercase()) || text.chars().any(|c| c.is_ascii_lowercase())
+    {
+        return text.to_string();
     }
-
-    fn press(f: impl FnOnce(&mut UiInput)) -> UiInput {
-        let mut input = UiInput::default();
-        f(&mut input);
-        input
-    }
-
-    fn up() -> UiInput {
-        press(|i| i.up = true)
-    }
-    fn down() -> UiInput {
-        press(|i| i.down = true)
-    }
-    fn left() -> UiInput {
-        press(|i| i.left = true)
-    }
-    fn right() -> UiInput {
-        press(|i| i.right = true)
-    }
-    fn confirm() -> UiInput {
-        press(|i| i.confirm = true)
-    }
-    fn cancel() -> UiInput {
-        press(|i| i.cancel = true)
-    }
-    fn f1() -> UiInput {
-        press(|i| i.debug_menu = true)
-    }
-
-    fn menu(game: &GameState) -> DebugMenu {
-        let pack = pack_with(&[
-            "room/1000/room.rdt",
-            "room/1001/room.rdt",
-            "room/1010/room.rdt",
-        ]);
-        DebugMenu::open(
-            &pack,
-            RoomId::parse("1000").unwrap(),
-            game,
-            &Bindings::default(),
-        )
-    }
-
-    /// Walk the main list to `tool` and enter it.
-    fn enter(menu: &mut DebugMenu, game: &mut GameState, tool: Tool) -> DebugMenuEvent {
-        while TOOLS[menu.main_cursor()] != tool {
-            menu.handle_input(down(), game);
-        }
-        menu.handle_input(confirm(), game)
-    }
-
-    #[test]
-    fn the_main_list_wraps_enters_and_backs_out() {
-        let mut game = GameState::default();
-        let mut menu = menu(&game);
-        assert_eq!(menu.tool(), None);
-        menu.handle_input(up(), &mut game);
-        assert_eq!(TOOLS[menu.main_cursor()], Tool::Display, "up wraps");
-        menu.handle_input(down(), &mut game);
-        assert_eq!(menu.main_cursor(), 0);
-        for tool in TOOLS {
-            if tool == Tool::ItemBox {
-                assert_eq!(enter(&mut menu, &mut game, tool), DebugMenuEvent::ItemBox);
-                assert_eq!(menu.tool(), None, "ITEM BOX has no sub-screen");
-                continue;
+    let mut out = String::with_capacity(text.len());
+    let mut start = true;
+    for c in text.chars() {
+        if c.is_alphanumeric() || c == '\'' {
+            if start {
+                out.extend(c.to_uppercase());
+            } else {
+                out.extend(c.to_lowercase());
             }
-            assert_eq!(enter(&mut menu, &mut game, tool), DebugMenuEvent::None);
-            assert_eq!(menu.tool(), Some(tool));
-            // Cancel backs out one level, to the main list on the same entry.
-            assert_eq!(menu.handle_input(cancel(), &mut game), DebugMenuEvent::None);
-            assert_eq!(menu.tool(), None);
-            assert_eq!(TOOLS[menu.main_cursor()], tool);
+            start = false;
+        } else {
+            out.push(c);
+            start = true;
         }
-        assert_eq!(
-            menu.handle_input(cancel(), &mut game),
-            DebugMenuEvent::Close
-        );
     }
+    out
+}
 
-    #[test]
-    fn display_steps_the_frame_rate_and_stays_open() {
-        let mut game = GameState::default();
-        let mut menu = menu(&game);
-        menu.set_frame_rate(60);
-        assert_eq!(
-            enter(&mut menu, &mut game, Tool::Display),
-            DebugMenuEvent::None
-        );
-        assert_eq!(
-            menu.handle_input(right(), &mut game),
-            DebugMenuEvent::FrameRateChanged(120)
-        );
-        assert_eq!(
-            menu.handle_input(confirm(), &mut game),
-            DebugMenuEvent::FrameRateChanged(144)
-        );
-        assert_eq!(
-            menu.handle_input(left(), &mut game),
-            DebugMenuEvent::FrameRateChanged(120)
-        );
-        assert_eq!(menu.handle_input(up(), &mut game), DebugMenuEvent::None);
-        assert_eq!(menu.frame_rate(), 120);
-        assert_eq!(menu.tool(), Some(Tool::Display));
-        assert_eq!(menu.handle_input(cancel(), &mut game), DebugMenuEvent::None);
-        assert_eq!(menu.tool(), None);
+/// `text` cut with an ellipsis to fit `max_width` pixels in `role`.
+fn fit(p: &mut Painter<'_>, role: Role, text: &str, max_width: f32) -> String {
+    if max_width <= 0.0 {
+        return String::new();
     }
-
-    #[test]
-    fn debug_edits_survive_a_save_round_trip_and_cheats_do_not() {
-        let mut game = GameState::default();
-        game.id = RoomId::parse("1000").unwrap();
-        let mut menu = menu(&game);
-        // INVENTORY: pick item 0x01 into the first slot.
-        enter(&mut menu, &mut game, Tool::Inventory);
-        menu.handle_input(confirm(), &mut game);
-        menu.handle_input(right(), &mut game);
-        menu.handle_input(confirm(), &mut game);
-        menu.handle_input(cancel(), &mut game);
-        // FLAGS: flip the first scenario flag.
-        enter(&mut menu, &mut game, Tool::Flags);
-        let (group, sel) = menu.flags().selected();
-        menu.handle_input(confirm(), &mut game);
-        menu.handle_input(cancel(), &mut game);
-        // CHEATS: INVINCIBLE on.
-        enter(&mut menu, &mut game, Tool::Cheats);
-        menu.handle_input(confirm(), &mut game);
-        assert!(game.debug.invincible);
-
-        let bytes = crate::save::SaveFile::from_state(&game).to_bytes();
-        let mut loaded = GameState::default();
-        crate::save::SaveFile::from_bytes(&bytes)
-            .unwrap()
-            .apply_to(&mut loaded);
-        assert_eq!(loaded.inventory[0].id, 0x01);
-        assert!(loaded.flag_test(group.bank, sel, false));
-        assert!(!loaded.debug.invincible, "cheats are never saved");
-        assert_eq!(
-            loaded.debug.infinite_ammo,
-            InfiniteAmmo::Off,
-            "the ammo cheat is never saved"
-        );
+    if p.measure(role, text) <= max_width {
+        return text.to_string();
     }
-
-    #[test]
-    fn f1_closes_from_anywhere() {
-        let mut game = GameState::default();
-        let mut menu = menu(&game);
-        assert_eq!(menu.handle_input(f1(), &mut game), DebugMenuEvent::Close);
-        enter(&mut menu, &mut game, Tool::Inventory);
-        menu.handle_input(confirm(), &mut game);
-        assert!(menu.inventory().picker().is_some());
-        assert_eq!(menu.handle_input(f1(), &mut game), DebugMenuEvent::Close);
-    }
-
-    #[test]
-    fn reopening_keeps_the_tool_and_moves_the_room_cursor_with_the_session() {
-        let mut game = GameState::default();
-        let mut menu = menu(&game);
-        enter(&mut menu, &mut game, Tool::Rooms);
-        assert_eq!(
-            menu.rooms().selected().map(|room| (room.stage, room.room)),
-            Some((1, 0))
-        );
-        menu.handle_input(down(), &mut game);
-        assert_eq!(
-            menu.rooms().selected().map(|room| (room.stage, room.room)),
-            Some((1, 1))
-        );
-
-        // Staying in the same room keeps the cursor where the player left it.
-        menu.reopen(RoomId::parse("1000").unwrap(), &game, &Bindings::default());
-        assert_eq!(menu.tool(), Some(Tool::Rooms), "the tool is remembered");
-        assert_eq!(
-            menu.rooms().selected().map(|room| (room.stage, room.room)),
-            Some((1, 1))
-        );
-
-        // A room change while the menu was closed moves the cursor onto it.
-        menu.handle_input(up(), &mut game);
-        menu.reopen(RoomId::parse("1010").unwrap(), &game, &Bindings::default());
-        assert_eq!(menu.tool(), Some(Tool::Rooms));
-        assert_eq!(
-            menu.rooms().selected().map(|room| (room.stage, room.room)),
-            Some((1, 1))
-        );
-    }
-
-    #[test]
-    fn room_select_jumps_in_the_pending_characters_variant() {
-        let mut game = GameState::default();
-        let mut menu = menu(&game);
-        enter(&mut menu, &mut game, Tool::Rooms);
-        assert_eq!(
-            menu.handle_input(confirm(), &mut game),
-            DebugMenuEvent::Jump(RoomId::parse("1000").unwrap())
-        );
-        game.debug.pending_player = Some(PlayerChoice {
-            character: 1,
-            costume: 0,
-        });
-        assert_eq!(
-            menu.handle_input(confirm(), &mut game),
-            DebugMenuEvent::Jump(RoomId::parse("1001").unwrap())
-        );
-    }
-
-    #[test]
-    fn player_choices_stay_pending_and_drop_when_reverted() {
-        let mut game = GameState::default();
-        let mut menu = menu(&game);
-        enter(&mut menu, &mut game, Tool::Player);
-        menu.handle_input(right(), &mut game);
-        assert_eq!(
-            game.debug.pending_player,
-            Some(PlayerChoice {
-                character: 1,
-                costume: 0
-            })
-        );
-        assert_eq!(
-            game.state_bytes[usize::from(STATE_BYTE_CHARACTER)],
-            0,
-            "not applied yet"
-        );
-        menu.handle_input(down(), &mut game);
-        menu.handle_input(left(), &mut game);
-        assert_eq!(
-            game.debug.pending_player.map(|c| c.costume),
-            Some(2),
-            "wraps to ALT 2"
-        );
-        menu.handle_input(confirm(), &mut game);
-        assert_eq!(game.debug.pending_player.map(|c| c.costume), Some(0));
-        menu.handle_input(up(), &mut game);
-        menu.handle_input(confirm(), &mut game);
-        assert_eq!(
-            game.debug.pending_player, None,
-            "back to the current player"
-        );
-    }
-
-    #[test]
-    fn an_outfit_only_choice_leaves_the_character_bytes_alone() {
-        let mut game = GameState::default();
-        game.id = RoomId::parse("1000").unwrap();
-        game.max_health = 120;
-        game.entities[0].id = 0x40;
-        game.apply_player_choice(PlayerChoice {
-            character: 0,
-            costume: 1,
-        });
-        assert!(game.flag_test(5, MSF2_COSTUME_VARIANT, false));
-        assert_eq!(game.costume_variant, 0);
-        assert_eq!(game.max_health, 120, "the same character keeps its maximum");
-        assert_eq!(game.entities[0].id, 0x40, "and its entity id");
-    }
-
-    #[test]
-    fn applying_a_player_choice_switches_character_and_outfit() {
-        let mut game = GameState::default();
-        game.id = RoomId::parse("1001").unwrap();
-        game.apply_player_choice(PlayerChoice {
-            character: 1,
-            costume: 2,
-        });
-        for item in 1..=8 {
-            game.inventory.push(game::InventoryItem {
-                id: item,
-                quantity: 1,
-            });
+    let mut chars: Vec<char> = text.chars().collect();
+    while !chars.is_empty() {
+        chars.pop();
+        let candidate: String = chars.iter().collect::<String>() + "…";
+        if p.measure(role, &candidate) <= max_width {
+            return candidate;
         }
-        game.set_equipped(Some(8));
-        game.entities[0].health = 96;
-        assert!(game.flag_test(5, game::MSF_CHAR_VARIANT, false));
-        assert!(game.flag_test(5, MSF2_COSTUME_VARIANT, false));
-        assert_eq!(game.costume_variant, 1);
-        assert_eq!(game.max_health, 96);
-        assert_eq!(
-            game.player_choice(),
-            PlayerChoice {
-                character: 1,
-                costume: 2
-            }
-        );
-        // Jill to Chris in the normal outfit: six slots, more health, no
-        // outfit bit; the dropped slot's equipped weapon goes with it.
-        game.id = RoomId::parse("1000").unwrap();
-        game.apply_player_choice(PlayerChoice::default());
-        assert!(!game.flag_test(5, game::MSF_CHAR_VARIANT, false));
-        assert!(!game.flag_test(5, MSF2_COSTUME_VARIANT, false));
-        assert_eq!(game.max_health, 140);
-        assert_eq!(
-            game.entities[0].health, 96,
-            "health is clamped, not refilled"
-        );
-        assert_eq!(game.inventory.len(), 6);
-        assert_eq!(game.equipped, None);
-        assert_eq!(game.player_choice(), PlayerChoice::default());
     }
-
-    #[test]
-    fn cheats_toggle() {
-        let mut game = GameState::default();
-        assert!(
-            !game.debug.invincible && !game.debug.ghost,
-            "off in a fresh session"
-        );
-        let mut menu = menu(&game);
-        enter(&mut menu, &mut game, Tool::Cheats);
-        menu.handle_input(confirm(), &mut game);
-        assert!(game.debug.invincible);
-        menu.handle_input(down(), &mut game);
-        menu.handle_input(right(), &mut game);
-        assert!(game.debug.ghost);
-        menu.handle_input(left(), &mut game);
-        assert!(!game.debug.ghost);
-        assert!(game.debug.invincible);
-    }
-
-    #[test]
-    fn infinite_ammo_cycles_and_fills_the_clip() {
-        let mut game = GameState::default();
-        game.inventory
-            .push(game::InventoryItem { id: 2, quantity: 4 });
-        game.set_equipped(Some(2));
-        let mut menu = menu(&game);
-        enter(&mut menu, &mut game, Tool::Cheats);
-        menu.handle_input(down(), &mut game);
-        menu.handle_input(down(), &mut game);
-        assert_eq!(game.debug.infinite_ammo, InfiniteAmmo::Off);
-        menu.handle_input(confirm(), &mut game);
-        assert_eq!(game.debug.infinite_ammo, InfiniteAmmo::Reload);
-        assert_eq!(game.inventory[0].quantity, 4, "reload does not prefill");
-        menu.handle_input(confirm(), &mut game);
-        assert_eq!(game.debug.infinite_ammo, InfiniteAmmo::Infinite);
-        assert_eq!(game.inventory[0].quantity, 15, "infinite fills at once");
-        menu.handle_input(right(), &mut game);
-        assert_eq!(game.debug.infinite_ammo, InfiniteAmmo::Off, "wraps around");
-        game.inventory[0].quantity = 2;
-        menu.handle_input(left(), &mut game);
-        assert_eq!(
-            game.debug.infinite_ammo,
-            InfiniteAmmo::Infinite,
-            "left steps back"
-        );
-        assert_eq!(game.inventory[0].quantity, 15, "entering infinite refills");
-    }
-
-    #[test]
-    fn save_rows_raise_save_and_load() {
-        let mut game = GameState::default();
-        let mut menu = menu(&game);
-        enter(&mut menu, &mut game, Tool::Save);
-        assert_eq!(
-            menu.handle_input(confirm(), &mut game),
-            DebugMenuEvent::SaveGame
-        );
-        menu.handle_input(down(), &mut game);
-        assert_eq!(
-            menu.handle_input(confirm(), &mut game),
-            DebugMenuEvent::LoadGame
-        );
-    }
-
-    #[test]
-    fn clear_game_defaults_to_the_live_ending() {
-        let mut game = GameState::default();
-        // Chris with the partner alive: ending 1.
-        game.apply_flag(
-            game::BANK_SCENARIO2,
-            ending::SCENARIO2_FLAG_PARTNER_ALIVE,
-            0,
-        );
-        let mut menu = menu(&game);
-        assert_eq!(menu.ending(), 1);
-        // Jill with neither survivor: ending 5.
-        let mut jill = GameState::default();
-        jill.state_bytes[usize::from(STATE_BYTE_CHARACTER)] = 1;
-        assert_eq!(default_ending(&jill), 5);
-        enter(&mut menu, &mut game, Tool::ClearGame);
-        menu.handle_input(up(), &mut game);
-        assert_eq!(
-            menu.handle_input(confirm(), &mut game),
-            DebugMenuEvent::ClearGame(7)
-        );
-        menu.handle_input(down(), &mut game);
-        assert_eq!(
-            menu.handle_input(confirm(), &mut game),
-            DebugMenuEvent::ClearGame(1)
-        );
-    }
+    String::new()
 }

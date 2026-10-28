@@ -144,7 +144,6 @@ use crate::trace;
 use crate::transition::{self, DoorStepper};
 use crate::tween::{self, Tween};
 use crate::ui::debug_menu::{DebugMenu, DebugMenuEvent};
-use crate::ui::item_icons::ItemIcons;
 use crate::ui::lua_screen::LuaScreen;
 use crate::ui::lua_screen::ScreenArg;
 use crate::ui::{self, Screen, ScreenAction, ScreenResult, UiContext, UiInput};
@@ -1787,7 +1786,7 @@ enum ScenePass<'g> {
     Record(&'g mut GpuRenderer),
 }
 
-/// The save the debug menu's LOAD GAME picked: a numbered slot, or an
+/// The save a load screen picked: a numbered slot, or an
 /// explicit file a replacing screen (`api:load`) named.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum LoadRequest {
@@ -1826,10 +1825,6 @@ struct GameSession {
     /// Decoded glyph sheet for the message window; absent packs cannot draw
     /// messages but still run their state machine.
     font: Option<font::Font>,
-    /// The debug overlay's item icons, loaded once when it first opens.
-    item_icons: Option<ItemIcons>,
-    /// Whether the one-time item-icon load has been attempted.
-    item_icons_loaded: bool,
     /// The paused inventory/status menu (`ui/main_menu.lua`); the room tick
     /// is frozen while it is up and the last gameplay frame stays under it.
     menu: Option<Box<LuaScreen>>,
@@ -1914,13 +1909,6 @@ struct GameSession {
     /// called on room entry and after every fixed tick.
     lua: Option<lua::LuaVm>,
     framebuffer: Framebuffer,
-    /// The F1 debug menu at a wider aspect: a premultiplied RGBA canvas of
-    /// the aspect's full width and height, presented over the room's band
-    /// (see [`GameSession::draw_ui_layer`]). `None` at 4:3, where the menu
-    /// draws into `framebuffer` as before.
-    ui_layer: Option<Framebuffer>,
-    /// The software debug menu drawn over white, kept for the next frame.
-    ui_white: Framebuffer,
     /// The band a wider aspect presents (see [`GameSession::follow_view`]);
     /// the whole frame at 4:3.
     view: video::View,
@@ -2022,18 +2010,6 @@ struct GameSession {
     /// The debug overlay's state while it is closed, so F1 reopens the tool,
     /// cursor and room selection it was left on.
     debug_menu_memory: Option<DebugMenu>,
-    /// The action map the window reads, which the debug menu's CONTROLS
-    /// tool edits.
-    bindings: controls::Bindings,
-    /// The CONTROLS tool changed [`Self::bindings`]; taken once by the loop,
-    /// which applies and persists them.
-    bindings_changed: bool,
-    /// The window's presented frame rate, shown by the F1 DISPLAY tool.
-    frame_rate: u32,
-    /// The DISPLAY tool changed [`GameSession::frame_rate`].
-    frame_rate_changed: bool,
-    /// The aspect ratio the DISPLAY tool picked, until the window takes it.
-    aspect_changed: Option<video::Aspect>,
     /// The open F9 return-to-title prompt; the room stays frozen and the game
     /// sounds are paused while it is up.
     return_title: Option<Box<ui::lua_screen::LuaScreen>>,
@@ -2060,7 +2036,7 @@ struct GameSession {
     autosave_settle: u32,
     /// The active event slots when the settle count started.
     autosave_events: u32,
-    /// A save the debug menu's LOAD GAME picked, taken once by the app.
+    /// A save the in-game menu's LOAD GAME picked, taken once by the app.
     load_requested: Option<LoadRequest>,
     /// An ending id the debug menu's CLEAR GAME picked, taken once by the app.
     clear_game_requested: Option<u8>,
@@ -2461,8 +2437,6 @@ impl GameSession {
             music: None,
             text,
             font,
-            item_icons: None,
-            item_icons_loaded: false,
             menu: None,
             item_box: None,
             file: None,
@@ -2472,8 +2446,6 @@ impl GameSession {
             save_dir: save_dir.to_path_buf(),
             lua,
             framebuffer: Framebuffer::new(),
-            ui_layer: None,
-            ui_white: Framebuffer::default(),
             view: video::aspect().centred(),
             view_cut: None,
             view_prev: video::View::default(),
@@ -2518,11 +2490,6 @@ impl GameSession {
             debug_menu_enabled: true,
             debug_menu: None,
             debug_menu_memory: None,
-            bindings: controls::Bindings::default(),
-            bindings_changed: false,
-            frame_rate: video::TICK_RATE,
-            frame_rate_changed: false,
-            aspect_changed: None,
             return_title: None,
             return_title_requested: false,
             system_menu_open: false,
@@ -2613,6 +2580,13 @@ impl GameSession {
     /// instead of the character's own; the clips stay the character's. A
     /// pack without the costume entry keeps the base model.
     fn apply_costume_model(&mut self, pack: &Pack) {
+        // A debug stand-in (Barry, Rebecca) brings their own body and clips.
+        if let Some(body) = self.game.debug.body {
+            if let Some(assets) = load_character_assets(pack, body) {
+                self.loaded.player_assets = Some(assets);
+            }
+            return;
+        }
         if !self.game.flag_test(5, game::MSF2_COSTUME_VARIANT, false) {
             return;
         }
@@ -3738,19 +3712,6 @@ impl GameSession {
         Ok(())
     }
 
-    /// The debug overlay's lazily loaded item icons; a missing or invalid
-    /// sheet is logged once and leaves the overlay without icons.
-    fn ensure_item_icons(&mut self, pack: &Pack) {
-        if self.item_icons_loaded {
-            return;
-        }
-        self.item_icons_loaded = true;
-        match ItemIcons::load(pack) {
-            Ok(icons) => self.item_icons = Some(icons),
-            Err(err) => eprintln!("warning: item icons unavailable: {err:#}"),
-        }
-    }
-
     /// Add the known inventory `--ui menu` captures draw: the room boot's
     /// items plus a green herb, a handgun clip and the sword key.
     fn seed_menu_capture(&mut self) {
@@ -4184,31 +4145,6 @@ impl GameSession {
         self.debug_menu_enabled = enabled;
     }
 
-    /// The action map the window reads, for the CONTROLS tool to start from.
-    fn set_bindings(&mut self, bindings: controls::Bindings) {
-        self.bindings = bindings;
-    }
-
-    /// The window's presented frame rate, for the F1 DISPLAY tool.
-    fn set_frame_rate(&mut self, frame_rate: u32) {
-        self.frame_rate = frame_rate;
-    }
-
-    /// Take the frame rate the DISPLAY tool picked, once.
-    fn take_frame_rate_change(&mut self) -> Option<u32> {
-        std::mem::take(&mut self.frame_rate_changed).then_some(self.frame_rate)
-    }
-
-    /// Take the aspect ratio the DISPLAY tool picked, once.
-    fn take_aspect_change(&mut self) -> Option<video::Aspect> {
-        self.aspect_changed.take()
-    }
-
-    /// Take the bindings the CONTROLS tool changed, once.
-    fn take_bindings_change(&mut self) -> Option<controls::Bindings> {
-        std::mem::take(&mut self.bindings_changed).then(|| self.bindings.clone())
-    }
-
     /// Open the F9 return-to-title prompt: pause the game sounds and freeze
     /// the room until a second F9 confirms or any other key cancels.
     fn open_return_title(&mut self, pack: &Pack) {
@@ -4267,7 +4203,7 @@ impl GameSession {
             return target;
         };
         let wanted = RoomId {
-            player_flag: choice.character & 1,
+            player_flag: game::scenario_of(choice.character),
             ..target
         };
         if wanted == target || crate::room::exists(pack, wanted) {
@@ -4291,15 +4227,13 @@ impl GameSession {
     /// state from the last time it was open is reused, so F1 returns to the
     /// tool and cursors it was left on.
     fn open_debug_menu(&mut self, pack: &Pack) {
-        self.ensure_item_icons(pack);
-        let mut menu = match self.debug_menu_memory.take() {
+        let menu = match self.debug_menu_memory.take() {
             Some(mut menu) => {
-                menu.reopen(self.loaded.id, &self.game, &self.bindings);
+                menu.reopen(self.loaded.id, &self.game);
                 menu
             }
-            None => DebugMenu::open(pack, self.loaded.id, &self.game, &self.bindings),
+            None => DebugMenu::open(pack, self.loaded.id, &self.game),
         };
-        menu.set_frame_rate(self.frame_rate);
         self.debug_menu = Some(menu);
     }
 
@@ -4345,7 +4279,7 @@ impl GameSession {
         self.play_ui_cue_names(pack, cues);
     }
 
-    /// Take the debug menu's pending LOAD GAME choice.
+    /// Take the in-game menu's pending LOAD GAME choice.
     fn take_load_request(&mut self) -> Option<LoadRequest> {
         self.load_requested.take()
     }
@@ -4355,7 +4289,7 @@ impl GameSession {
     /// second-playthrough bit and a held special key carry over. The run's
     /// infinite-launcher ownership is not tracked, so it is never set.
     fn ending_flow(&self, id: u8) -> (EndingFlow, u8) {
-        let character = self.game.player_choice().character;
+        let character = game::scenario_of(self.game.player_choice().character);
         let flow = EndingFlow {
             stats: ending::EndStats::from_state(&self.game, id, character),
             second_playthrough: self.game.flag_test(
@@ -4374,38 +4308,50 @@ impl GameSession {
         self.clear_game_requested.take()
     }
 
-    /// One frozen tick of the F1 debug menu. In-menu edits apply to the game
-    /// state directly; the events that leave the menu close it first.
+    /// The game tick while the F1 debug menu is open: the menu takes its
+    /// input from the GUI events ([`Self::debug_menu_input`]); the tick only
+    /// sees F1, which closes it.
     fn tick_debug_menu(&mut self, pack: &Pack, ui: UiInput) {
-        let event = match self.debug_menu.as_mut() {
-            Some(menu) => menu.handle_input(ui, &mut self.game),
-            None => DebugMenuEvent::None,
+        if ui.debug_menu {
+            self.apply_debug_event(pack, DebugMenuEvent::Close);
+        }
+    }
+
+    /// One presented frame of the F1 debug menu's GUI input; returns the
+    /// feedback sounds.
+    fn debug_menu_input(&mut self, pack: &Pack, events: &[gui::GuiEvent]) -> Vec<gui::Sound> {
+        let Some(menu) = self.debug_menu.as_mut() else {
+            return Vec::new();
         };
-        if event == DebugMenuEvent::BindingsChanged {
-            if let Some(menu) = &self.debug_menu {
-                self.bindings = menu.controls().bindings().clone();
-                self.bindings_changed = true;
-            }
-            return;
+        let (decided, sounds) = menu.handle_events(events, &mut self.game);
+        for event in decided {
+            self.apply_debug_event(pack, event);
         }
-        if let DebugMenuEvent::FrameRateChanged(rate) = event {
-            self.frame_rate = rate;
-            self.frame_rate_changed = true;
-            return;
-        }
-        if let DebugMenuEvent::AspectChanged(aspect) = event {
-            self.aspect_changed = Some(aspect);
-            return;
-        }
+        sounds
+    }
+
+    /// Paint the F1 debug menu at the window's size; returns whether it
+    /// repainted.
+    fn draw_debug_menu(&mut self, pack: &Pack, width: u32, height: u32, gpu: bool) -> bool {
+        let Self {
+            debug_menu,
+            text,
+            game,
+            ..
+        } = self;
+        debug_menu
+            .as_mut()
+            .is_some_and(|menu| menu.draw(width, height, gpu, pack, text, game))
+    }
+
+    /// Carry out what the debug menu decided; the events that leave the
+    /// menu close it first.
+    fn apply_debug_event(&mut self, pack: &Pack, event: DebugMenuEvent) {
         if event != DebugMenuEvent::None {
             self.debug_menu_memory = self.debug_menu.take();
         }
         match event {
-            DebugMenuEvent::None
-            | DebugMenuEvent::Close
-            | DebugMenuEvent::BindingsChanged
-            | DebugMenuEvent::FrameRateChanged(_)
-            | DebugMenuEvent::AspectChanged(_) => {}
+            DebugMenuEvent::None | DebugMenuEvent::Close => {}
             DebugMenuEvent::Jump(target) => {
                 if let Err(err) = self.debug_jump(pack, target)
                     && self.debug_failed.insert(target.rdt_number())
@@ -4417,17 +4363,6 @@ impl GameSession {
                 }
             }
             DebugMenuEvent::SaveGame => self.open_typewriter_save(pack, false),
-            DebugMenuEvent::LoadGame => {
-                let mut cx = self.ui_context(pack);
-                let screen =
-                    ui::save_load::open_load_screen(self.game.save_screen.as_deref(), &mut cx);
-                let cues = cx.cues.into_inner();
-                match screen {
-                    Ok(screen) => self.save_screen = Some(screen),
-                    Err(err) => eprintln!("warning: load screen unavailable: {err:#}"),
-                }
-                self.play_ui_cue_names(pack, cues);
-            }
             DebugMenuEvent::ItemBox => self.begin_item_box_open(pack),
             DebugMenuEvent::ClearGame(id) => self.clear_game_requested = Some(id),
         }
@@ -4971,7 +4906,7 @@ impl GameSession {
         if result == ScreenResult::Continue {
             return;
         }
-        // The debug menu's LOAD GAME: the chosen save boots a new session,
+        // The in-game menu's LOAD GAME: the chosen save boots a new session,
         // which the app owns. A replacing screen names a file with
         // `api:load`, the vanilla screen reports a numbered slot.
         let request = match result {
@@ -6047,7 +5982,6 @@ impl GameSession {
         self.framebuffer.stop_recording();
         self.render_pass(pack, ScenePass::Software)
             .expect("the software pass cannot fail");
-        self.draw_ui_layer();
         self.freeze_room_frame = false;
     }
 
@@ -6062,64 +5996,6 @@ impl GameSession {
         self.gpu_backend = false;
         self.gpu_scene_visible = false;
         self.framebuffer.stop_recording();
-        if let Some(ui) = self.ui_layer.as_mut() {
-            ui.stop_recording();
-        }
-    }
-
-    /// Draw the F1 debug menu into [`GameSession::ui_layer`] at a wider
-    /// aspect, so it fills the aspect's whole width and height over the
-    /// room's band instead of fitting inside the band. On the GPU the layer
-    /// is a 2D pass drawn into a clear target; in software it is drawn over
-    /// black and over white for its coverage. Either way the menu's dark
-    /// panel lets the room show through.
-    fn draw_ui_layer(&mut self) {
-        let Some(debug_menu) = self
-            .debug_menu
-            .as_mut()
-            .filter(|_| !video::aspect().is_standard())
-        else {
-            self.ui_layer = None;
-            return;
-        };
-        let width = video::aspect().canvas_width();
-        let mut layer = self.ui_layer.take().unwrap_or_default();
-        layer.resize(width, HEIGHT as u32);
-        if self.gpu_backend {
-            layer.record();
-            if let Some(list) = layer.list_mut() {
-                list.reset();
-            }
-            debug_menu.draw(
-                &mut layer,
-                self.font.as_ref(),
-                &self.text,
-                self.item_icons.as_ref(),
-                &self.game,
-            );
-            self.ui_layer = Some(layer);
-            return;
-        }
-        // In software the menu is drawn over black and over white, and the
-        // difference is its coverage.
-        for (layer, backdrop) in [(&mut layer, 0), (&mut self.ui_white, 255)] {
-            layer.resize(width, HEIGHT as u32);
-            layer.rgba.fill(backdrop);
-            debug_menu.draw(
-                layer,
-                self.font.as_ref(),
-                &self.text,
-                self.item_icons.as_ref(),
-                &self.game,
-            );
-        }
-        layer.take_coverage(&self.ui_white);
-        self.ui_layer = Some(layer);
-    }
-
-    /// The debug menu's layer, while it is drawn over a wider aspect's band.
-    fn ui_layer(&self) -> Option<&Framebuffer> {
-        self.ui_layer.as_ref()
     }
 
     /// Render the frame for the GPU backend: the scene is recorded on `gpu`
@@ -6149,7 +6025,6 @@ impl GameSession {
             self.gpu_scene_visible = false;
             return Err(err);
         }
-        self.draw_ui_layer();
         self.freeze_room_frame = false;
         Ok(())
     }
@@ -6176,8 +6051,8 @@ impl GameSession {
                 || self.view.height != video::aspect().height()
             {
                 // A band of another aspect's height is the frozen room's
-                // after the debug menu's DISPLAY tool changed the aspect: it
-                // is followed again once the room resumes.
+                // after the options changed the aspect: it is followed again
+                // once the room resumes.
                 video::aspect().centred()
             } else {
                 // A frame drawn between ticks blends the band's pan too.
@@ -6603,26 +6478,6 @@ impl GameSession {
         // The cutscene skip's fade covers the scene and its message window.
         if let Some(alpha) = self.cutscene_skip_alpha() {
             self.framebuffer.fade_to_black(alpha);
-        }
-        // The debug overlay is drawn last so it stays legible over the frozen
-        // frame and any message the room raised before it opened. A wider
-        // aspect draws it into its own layer instead (`draw_ui_layer`).
-        if let Some(debug_menu) = self
-            .debug_menu
-            .as_mut()
-            .filter(|_| video::aspect().is_standard())
-        {
-            let Self {
-                framebuffer,
-                font,
-                text,
-                item_icons,
-                game,
-                ..
-            } = self;
-            framebuffer.with_screen(|screen| {
-                debug_menu.draw(screen, font.as_ref(), text, item_icons.as_ref(), game)
-            });
         }
         // The return-to-title prompt draws over everything, including the
         // debug overlay, with its own full-screen dim.
@@ -7824,7 +7679,6 @@ impl App {
     fn start_session(&mut self, mut session: Box<GameSession>) {
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
-        session.set_bindings(self.bindings.clone());
         session.game.player_options = self.player_options;
         if self.audio {
             session.start_audio(&self.pack);
@@ -7880,7 +7734,7 @@ impl App {
     /// else start the run's new game over.
     fn restart(&mut self) -> Result<()> {
         let character = match &self.mode {
-            Mode::Play(session) => session.game.player_choice().character,
+            Mode::Play(session) => game::scenario_of(session.game.player_choice().character),
             _ => 0,
         };
         let result = match self.restart_point.clone() {
@@ -8132,7 +7986,24 @@ impl App {
         self.system_menu
             .as_deref()
             .map(gui::SystemMenu::canvas)
+            .or_else(|| match &self.mode {
+                Mode::Play(session) => session.debug_menu.as_ref().map(DebugMenu::canvas),
+                _ => None,
+            })
             .or_else(|| self.save_screen()?.native_canvas())
+    }
+
+    /// Paint the open F1 debug menu at the window's size; returns whether
+    /// one is open.
+    fn draw_debug_menu(&mut self, width: u32, height: u32, gpu: bool) -> bool {
+        let App { pack, mode, .. } = self;
+        match mode {
+            Mode::Play(session) if session.debug_menu.is_some() => {
+                session.draw_debug_menu(pack, width, height, gpu);
+                true
+            }
+            _ => false,
+        }
     }
 
     /// The open save/load screen: the title's, the next-cycle save's or the
@@ -8388,11 +8259,6 @@ impl App {
                         eprintln!("warning: save file {} unavailable: {err:#}", path.display())
                     }
                 }
-                // Back to the debug tools rather than silently resuming.
-                let App { pack, mode, .. } = self;
-                if let Mode::Play(session) = mode {
-                    session.open_debug_menu(pack);
-                }
             }
             return Ok(AppFlow::Continue);
         }
@@ -8569,15 +8435,6 @@ impl App {
         }
     }
 
-    /// The layer presented over the frame: the F1 debug menu at a wider
-    /// aspect.
-    fn ui_layer(&self) -> Option<&Framebuffer> {
-        match &self.mode {
-            Mode::Play(session) => session.ui_layer(),
-            _ => None,
-        }
-    }
-
     /// The HD film frame on screen, if a film playing now is an HD
     /// replacement: the GPU backend presents it at its own resolution.
     #[cfg(feature = "hd")]
@@ -8589,25 +8446,12 @@ impl App {
         }
     }
 
-    /// Step the camera cut when playing.
-    /// The action map the window reads, for every session to start from.
+    /// The action map the window reads, for the in-game menu's settings.
     fn set_bindings(&mut self, bindings: controls::Bindings) {
-        if let Mode::Play(session) = &mut self.mode {
-            session.set_bindings(bindings.clone());
-        }
         self.bindings = bindings;
     }
 
-    /// Take the bindings the playing session's CONTROLS tool changed, once.
-    fn take_bindings_change(&mut self) -> Option<controls::Bindings> {
-        let Mode::Play(session) = &mut self.mode else {
-            return None;
-        };
-        let bindings = session.take_bindings_change()?;
-        self.bindings = bindings.clone();
-        Some(bindings)
-    }
-
+    /// Step the camera cut when playing.
     fn step_camera_cut(&mut self, delta: i32) {
         if let Mode::Play(session) = &mut self.mode {
             session.step_camera_cut(delta);
@@ -8638,29 +8482,6 @@ impl App {
         }
     }
 
-    /// Tell the playing session the window's presented frame rate.
-    fn set_frame_rate(&mut self, frame_rate: u32) {
-        if let Mode::Play(session) = &mut self.mode {
-            session.set_frame_rate(frame_rate);
-        }
-    }
-
-    /// A frame-rate change from the playing session's options screen.
-    fn take_frame_rate_change(&mut self) -> Option<u32> {
-        match &mut self.mode {
-            Mode::Play(session) => session.take_frame_rate_change(),
-            _ => None,
-        }
-    }
-
-    /// An aspect-ratio change from the playing session's options screen.
-    fn take_aspect_change(&mut self) -> Option<video::Aspect> {
-        match &mut self.mode {
-            Mode::Play(session) => session.take_aspect_change(),
-            _ => None,
-        }
-    }
-
     /// Feed the mixers.
     fn update_audio(&mut self) {
         if let Mode::Play(session) = &mut self.mode {
@@ -8684,9 +8505,45 @@ impl App {
         Ok(())
     }
 
-    /// Write the current app frame as a BMP.
-    fn capture(&self, path: &Path) -> Result<()> {
-        capture_bmp(&presented_image(self.frame()), path)
+    /// Write the current app frame as a BMP, with the F1 debug menu, which
+    /// draws at the window's resolution, over it at three times the frame's
+    /// size.
+    fn capture(&mut self, path: &Path) -> Result<()> {
+        let image = presented_image(self.frame());
+        let open = matches!(&self.mode, Mode::Play(session) if session.debug_menu.is_some());
+        if !open {
+            return capture_bmp(&image, path);
+        }
+        const SCALE: u32 = 3;
+        let (width, height) = (image.width * SCALE, image.height * SCALE);
+        self.draw_debug_menu(width, height, false);
+        let Mode::Play(session) = &self.mode else {
+            unreachable!("the debug menu is open");
+        };
+        let menu = session.debug_menu.as_ref().expect("the debug menu is open");
+        let layer = menu.canvas().pixels();
+        let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+        for y in 0..height {
+            for x in 0..width {
+                let at = (((y / SCALE) * image.width + x / SCALE) * 4) as usize;
+                let over = ((y * width + x) * 4) as usize;
+                let alpha = 255 - u32::from(layer.get(over + 3).copied().unwrap_or(0));
+                for channel in 0..3 {
+                    let under = u32::from(image.rgba[at + channel]) * alpha / 255;
+                    let top = u32::from(layer.get(over + channel).copied().unwrap_or(0));
+                    rgba.push((under + top).min(255) as u8);
+                }
+                rgba.push(255);
+            }
+        }
+        capture_bmp(
+            &Image {
+                width,
+                height,
+                rgba,
+            },
+            path,
+        )
     }
 }
 
@@ -9329,18 +9186,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             let mode = debug_view::cycle();
             hud.notify("render", format!("Render mode: {}", mode.label()));
         }
-        if let Some(bindings) = app.take_bindings_change() {
-            input.apply_bindings_change(bindings);
-        }
-        if let Some(rate) = app.take_frame_rate_change() {
-            display.set_frame_rate(rate);
-            clock.set_rate(rate);
-        }
-        if let Some(aspect) = app.take_aspect_change() {
-            display.set_aspect(aspect);
-        }
         drive_system_menu(app, display, &mut input, &mut clock)?;
-        app.set_frame_rate(display.frame_rate());
 
         clock.advance();
         // The film skip state advances on every loop pass, not the fixed
@@ -9367,12 +9213,13 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         };
         app.set_tween_alpha(alpha);
         let draw = Instant::now();
+        let (width, height) = display.drawable_size();
         if let Some(menu) = app.system_menu.as_mut() {
-            let (width, height) = display.drawable_size();
             menu.set_recording(display.gpu_active());
             menu.draw(width, height);
-        } else if let Some(screen) = app.native_screen() {
-            let (width, height) = display.drawable_size();
+        } else if !app.draw_debug_menu(width, height, display.gpu_active())
+            && let Some(screen) = app.native_screen()
+        {
             screen.draw(width, height, display.gpu_active());
         }
         hud.draw(app, display, &clock, &input);
@@ -9393,15 +9240,15 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             if let Some(film) = app.hd_frame() {
                 display.present_film(app.frame(), film)?;
             } else {
-                display.present_frame(app.frame(), app.ui_layer(), native)?;
+                display.present_frame(app.frame(), None, native)?;
             }
             #[cfg(not(feature = "hd"))]
-            display.present_frame(app.frame(), app.ui_layer(), native)?;
+            display.present_frame(app.frame(), None, native)?;
         } else {
             app.draw();
             clock.frame_drawn(draw);
             let native = hud.layer().or(app.native_layer());
-            display.present_frame(app.frame(), app.ui_layer(), native)?;
+            display.present_frame(app.frame(), None, native)?;
         }
         display.show()?;
         hud.frame_presented();
@@ -9430,7 +9277,9 @@ fn drive_system_menu(
         return Ok(());
     }
     if app.system_menu.is_none() {
-        drive_native_screen(app, display, input, events);
+        if !drive_debug_menu(app, display, input, &mut events) {
+            drive_native_screen(app, display, input, events);
+        }
         return Ok(());
     }
     let Some(menu) = app.system_menu.as_mut() else {
@@ -9492,6 +9341,53 @@ fn drive_system_menu(
         }
     }
     Ok(())
+}
+
+/// One presented frame of the F1 debug menu, when it is open: hand it the
+/// menus' settings once, then this frame's GUI input. Input it sees never
+/// reaches the game, except F1, which the tick takes to close it.
+fn drive_debug_menu(
+    app: &mut App,
+    display: &Display,
+    input: &mut InputState,
+    events: &mut [gui::GuiEvent],
+) -> bool {
+    let open = matches!(&app.mode, Mode::Play(session) if session.debug_menu.is_some());
+    if !open {
+        return false;
+    }
+    let needs = matches!(&app.mode, Mode::Play(session)
+        if session.debug_menu.as_ref().is_some_and(DebugMenu::needs_settings));
+    if needs {
+        let settings = menu_settings(app, display);
+        if let Mode::Play(session) = &mut app.mode
+            && let Some(menu) = session.debug_menu.as_mut()
+        {
+            menu.configure(settings);
+        }
+    }
+    scale_pointer(display, events);
+    let sounds = {
+        let App { pack, mode, .. } = app;
+        match mode {
+            Mode::Play(session) => session.debug_menu_input(pack, events),
+            _ => Vec::new(),
+        }
+    };
+    let f1 = input.pressed & KEY_F1;
+    input.discard_presses();
+    input.pressed |= f1;
+    app.play_ui_cues(
+        sounds
+            .into_iter()
+            .map(|sound| match sound {
+                gui::Sound::Cursor => ui::UiCue::Cursor,
+                gui::Sound::Decide => ui::UiCue::Decide,
+                gui::Sound::Cancel => ui::UiCue::Cancel,
+            })
+            .collect(),
+    );
+    true
 }
 
 /// SDL reports the pointer in window coordinates; the GUI canvases are in
@@ -13680,7 +13576,7 @@ impl InputState {
         &self.bindings
     }
 
-    /// Apply the CONTROLS tool's change and persist it to `arklay.toml`. A
+    /// Apply the options' controls change and persist it to `arklay.toml`. A
     /// write failure is reported and the change still applies for this run.
     fn apply_bindings_change(&mut self, bindings: controls::Bindings) {
         let path = crate::config::Config::default_path();
@@ -15878,7 +15774,11 @@ fn display_number(display: SDL_DisplayID) -> Option<u32> {
 
 /// Load the player's character model and no-weapon clips for the RDT flag.
 fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
-    let character = id.player_flag & 3;
+    load_character_assets(pack, id.player_flag & 3)
+}
+
+/// Load character block `character`'s model, locomotion and weapon clips.
+fn load_character_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
     let emd_path = crate::convert::skin_entry(character, 0);
     let emw_path = crate::weapons::weapon_emw_entry(character, 0);
     let emd_bytes = pack.read(&emd_path).map_err(|err| {
@@ -17230,13 +17130,14 @@ mod tests {
 
         let pos = session.player.pos;
         let frame = session.game.frame;
+        session.debug_menu_input(
+            &pack,
+            &[gui::GuiEvent::Key(gui::GuiKey::Down, gui::Device::Keyboard)],
+        );
         session
             .tick(
                 &pack,
-                UiInput {
-                    down: true,
-                    ..UiInput::default()
-                },
+                UiInput::default(),
                 player::Input {
                     up: true,
                     ..player::Input::default()
@@ -17295,9 +17196,9 @@ mod tests {
                 false,
             )
             .unwrap();
-        // ROOM SELECT opens on the current room; the next row is B.
+        // ROOM SELECT opens on the current room; the next cell is B.
         debug_press(&mut session, &pack, |ui| ui.confirm = true);
-        debug_press(&mut session, &pack, |ui| ui.down = true);
+        debug_press(&mut session, &pack, |ui| ui.right = true);
         debug_press(&mut session, &pack, |ui| ui.confirm = true);
 
         assert!(session.debug_menu.is_none(), "confirm closes the overlay");
@@ -17326,7 +17227,7 @@ mod tests {
         let (pack, a, _) = debug_menu_pack(&dir);
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
         debug_enter(&mut session, &pack, Tool::Flags);
-        debug_press(&mut session, &pack, |ui| ui.right = true);
+        debug_press(&mut session, &pack, |ui| ui.page_right = true);
         let (group, row) = {
             let menu = session.debug_menu.as_ref().unwrap();
             (menu.flags().group(), menu.flags().row())
@@ -17351,7 +17252,7 @@ mod tests {
         let (pack, a, b) = debug_menu_pack(&dir);
         let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
         debug_enter(&mut session, &pack, Tool::Rooms);
-        debug_press(&mut session, &pack, |ui| ui.down = true);
+        debug_press(&mut session, &pack, |ui| ui.right = true);
         debug_press(&mut session, &pack, |ui| ui.confirm = true);
         assert_eq!(session.loaded.id, b, "the jump landed in B");
         assert!(session.debug_menu.is_none(), "the jump closes the overlay");
@@ -17538,10 +17439,30 @@ mod tests {
         assert_eq!(session.game.camera.current_cut, 0);
     }
 
-    /// One session tick with a single UI edge.
+    /// One session tick with a single UI edge. While the debug menu is
+    /// open, the edge reaches it as a GUI key instead, as the window sends
+    /// it.
     fn debug_press(session: &mut GameSession, pack: &Pack, set: impl FnOnce(&mut UiInput)) {
         let mut ui = UiInput::default();
         set(&mut ui);
+        if session.debug_menu.is_some() && !ui.debug_menu {
+            let key = [
+                (ui.up, gui::GuiKey::Up),
+                (ui.down, gui::GuiKey::Down),
+                (ui.left, gui::GuiKey::Left),
+                (ui.right, gui::GuiKey::Right),
+                (ui.confirm, gui::GuiKey::Confirm),
+                (ui.cancel, gui::GuiKey::Cancel),
+                (ui.page_left, gui::GuiKey::TabPrev),
+                (ui.page_right, gui::GuiKey::TabNext),
+            ]
+            .into_iter()
+            .find_map(|(held, key)| held.then_some(key));
+            if let Some(key) = key {
+                session.debug_menu_input(pack, &[gui::GuiEvent::Key(key, gui::Device::Keyboard)]);
+                return;
+            }
+        }
         session
             .tick(pack, ui, player::Input::default(), false)
             .unwrap();
@@ -17627,7 +17548,6 @@ mod tests {
         let (pack, a, _) = debug_menu_pack(&dir);
         let mut session = GameSession::from_room(&pack, a, &dir.0.join("saves")).unwrap();
         debug_enter(&mut session, &pack, Tool::Save);
-        debug_press(&mut session, &pack, |ui| ui.confirm = true);
         assert!(
             session.debug_menu.is_none(),
             "the menu hands over to the screen"
@@ -17636,22 +17556,6 @@ mod tests {
             session.save_screen.is_some(),
             "SAVE GAME opens the save screen"
         );
-    }
-
-    #[test]
-    fn debug_load_opens_the_load_screen_and_raises_the_slot_request() {
-        use crate::ui::debug_menu::Tool;
-        let dir = TempDir::new();
-        let (pack, a, _) = debug_menu_pack(&dir);
-        let mut session = GameSession::from_room(&pack, a, &dir.0.join("saves")).unwrap();
-        debug_enter(&mut session, &pack, Tool::Save);
-        debug_press(&mut session, &pack, |ui| ui.down = true);
-        debug_press(&mut session, &pack, |ui| ui.confirm = true);
-        assert!(
-            session.save_screen.is_some(),
-            "LOAD GAME opens the load screen"
-        );
-        assert_eq!(session.take_load_request(), None, "nothing picked yet");
     }
 
     #[test]
@@ -21223,8 +21127,19 @@ mod tests {
         );
     }
 
+    /// Open the in-game menu's load screen over the playing session,
+    /// closing any debug menu first.
+    fn app_open_load(app: &mut App) {
+        let App { pack, mode, .. } = app;
+        let Mode::Play(session) = mode else {
+            panic!("expected a play mode");
+        };
+        session.debug_menu = None;
+        session.open_system_load(pack);
+    }
+
     #[test]
-    fn app_debug_load_continues_from_the_slot_or_reopens_the_menu() {
+    fn app_load_request_continues_from_the_slot() {
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
         let saves = dir.0.join("saves");
@@ -21241,18 +21156,18 @@ mod tests {
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
 
-        // A missing slot reopens the debug tools.
+        // A missing slot keeps playing.
         let Mode::Play(session) = &mut app.mode else {
             panic!("expected a play mode");
         };
         session.load_requested = Some(LoadRequest::Slot(3));
+        session.game.entities[0].health = 5;
         app.update(UiInput::default(), player::Input::default(), false)
             .unwrap();
         let Mode::Play(session) = &mut app.mode else {
             panic!("expected a play mode");
         };
-        assert!(session.debug_menu.is_some(), "the failure is visible");
-        session.debug_menu = None;
+        assert_eq!(session.game.entities[0].health, 5, "nothing loaded");
 
         session.load_requested = Some(LoadRequest::Slot(0));
         session.game.entities[0].health = 5;
@@ -21266,8 +21181,7 @@ mod tests {
     }
 
     #[test]
-    fn app_debug_load_screen_selection_loads_the_slot() {
-        use crate::ui::debug_menu::{TOOLS, Tool};
+    fn app_load_screen_selection_loads_the_slot() {
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
         let saves = dir.0.join("saves");
@@ -21284,13 +21198,7 @@ mod tests {
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
 
-        app_press(&mut app, |ui| ui.debug_menu = true);
-        for _ in 0..TOOLS.iter().position(|tool| *tool == Tool::Save).unwrap() {
-            app_press(&mut app, |ui| ui.down = true);
-        }
-        app_press(&mut app, |ui| ui.confirm = true);
-        app_press(&mut app, |ui| ui.down = true);
-        app_press(&mut app, |ui| ui.confirm = true);
+        app_open_load(&mut app);
         let Mode::Play(session) = &app.mode else {
             panic!("expected a play mode");
         };
@@ -21308,7 +21216,6 @@ mod tests {
 
     #[test]
     fn the_ported_load_screen_lists_and_loads_the_autosaves() {
-        use crate::ui::debug_menu::{TOOLS, Tool};
         let dir = TempDir::new();
         let pack_path = new_game_pack(&dir);
         let saves = dir.0.join("saves");
@@ -21325,13 +21232,7 @@ mod tests {
         let session = GameSession::new(&app.pack, 0, &app.save_dir).unwrap();
         app.start_session(session);
 
-        app_press(&mut app, |ui| ui.debug_menu = true);
-        for _ in 0..TOOLS.iter().position(|tool| *tool == Tool::Save).unwrap() {
-            app_press(&mut app, |ui| ui.down = true);
-        }
-        app_press(&mut app, |ui| ui.confirm = true);
-        app_press(&mut app, |ui| ui.down = true);
-        app_press(&mut app, |ui| ui.confirm = true);
+        app_open_load(&mut app);
         // The rows draw like filled slots.
         app.draw();
         // Past the eight empty slots, the newest autosave is the first extra
@@ -21354,8 +21255,7 @@ mod tests {
     }
 
     #[test]
-    fn app_debug_load_accepts_a_replacing_screens_chosen_file() {
-        use crate::ui::debug_menu::{TOOLS, Tool};
+    fn app_load_accepts_a_replacing_screens_chosen_file() {
         let dir = TempDir::new();
         let base = new_game_pack(&dir);
         let (pack_path, mod_path) = pack_with_lua_screen(&dir, &base);
@@ -21374,12 +21274,7 @@ mod tests {
         let mut app = App::new(pack, saves, false);
         app.boot(AppBoot::Debug).unwrap();
 
-        for _ in 0..TOOLS.iter().position(|tool| *tool == Tool::Save).unwrap() {
-            app_press(&mut app, |ui| ui.down = true);
-        }
-        app_press(&mut app, |ui| ui.confirm = true);
-        app_press(&mut app, |ui| ui.down = true);
-        app_press(&mut app, |ui| ui.confirm = true);
+        app_open_load(&mut app);
         let Mode::Play(session) = &app.mode else {
             panic!("expected a play mode");
         };
@@ -27128,11 +27023,9 @@ off_0010:
         video::set_aspect(video::Aspect::default());
     }
 
-    /// At a wider aspect the F1 debug menu keeps the gameplay band under it
-    /// and draws into its own layer of the aspect's full width and height:
-    /// clear beyond its panel and see-through dark inside it. After its
-    /// DISPLAY tool changes the aspect the frozen room presents the new
-    /// aspect's band at once, and at 4:3 the menu draws into the frame.
+    /// At a wider aspect the F1 debug menu, a window-resolution overlay,
+    /// leaves the gameplay band and its frame alone; after an aspect change
+    /// the frozen room presents the new aspect's band at once.
     #[test]
     fn a_wide_debug_menu_keeps_the_band() {
         let dir = TempDir::new();
@@ -27150,21 +27043,10 @@ off_0010:
         assert_eq!((frame.width, frame.height), (320, 240));
         assert_eq!(frame.view, band);
         assert_eq!(frame.rgba, room, "the menu leaves the room's frame alone");
-        let ui = session.ui_layer().expect("the debug menu's layer");
-        assert_eq!((ui.width, ui.height), (427, 240));
-        let pixel = |x: usize, y: usize| &ui.rgba[(y * 427 + x) * 4..][..4];
-        assert_eq!(pixel(4, 120), [0, 0, 0, 0], "clear beside the panel");
-        assert_eq!(pixel(400, 20), [0, 0, 0, 200], "the panel spans the width");
 
         video::set_aspect(video::Aspect::default());
         session.render(&pack);
         assert_eq!(session.frame().view, video::View::default());
-        assert!(session.ui_layer().is_none());
-        assert_ne!(
-            session.frame().rgba,
-            room,
-            "4:3 draws the menu in the frame"
-        );
         video::set_aspect(video::Aspect::parse("16:10").unwrap());
         session.render(&pack);
         assert_eq!(
