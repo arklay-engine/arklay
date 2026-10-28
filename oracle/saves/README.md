@@ -33,6 +33,7 @@ All saves were generated from the Japanese MediaKite assets at
 | `pause_chris_101.dat` | room 101, Chris | new-game inventory (Combat Knife + First Aid Spray), player at the room's walk-zone spawn. The pause-menu scenario suite. |
 | `file_chris_101.dat` | room 101, Chris | pause anchor + three FILE documents collected (`0x5F..0x61`). |
 | `map_chris_101.dat` | room 101, Chris | pause anchor + the first eight map areas owned (room-flags bits `0x7C..`). |
+| `map_objective_chris_101.dat` | room 101, Chris | the map save + Chris's first serum objective outstanding (scenario-2 bit `0x2D`), so the floor plan blinks its objective label. |
 | `radio_chris_101.dat` | room 101, Chris | pause anchor + `HAS_RADIO` (scenario bit `0x7F`) + the communication radio (`0x4D`). |
 | `combine_chris_101.dat` | room 101, Chris | green herb (`0x44`), red herb (`0x43`) and a second green herb, for the mix and the refusal. |
 | `use_chris_101.dat` | room 101, Chris | health 30/140 + green herb + first-aid spray. |

@@ -34,6 +34,7 @@ SAVES=(
     "pause_chris_101|101|0|0"
     "file_chris_101|101|0|0"
     "map_chris_101|101|0|0"
+    "map_objective_chris_101|101|0|0"
     "radio_chris_101|101|0|0"
     "combine_chris_101|101|0|0"
     "use_chris_101|101|0|0"

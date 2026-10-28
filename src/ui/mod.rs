@@ -168,6 +168,10 @@ pub enum UiCue {
     SaveConfirm,
     /// A FILE reader page turn (`Chris10`, character-table slot 8).
     PageTurn,
+    /// The MAP tab's floor-plan zoom (`Chris09`, character-table slot 9).
+    MapZoom,
+    /// The MAP tab's objective-label blink (`Mapled`, character-table slot 10).
+    MapLabel,
     /// A current-room bank sound (`play_sfx(2, slot)`): the slot of the
     /// loaded room's sound-table row, which only the session can resolve.
     RoomSound(u8),
@@ -187,6 +191,8 @@ impl UiCue {
             UiCue::SaveCursor => crate::sfx::global_sfx(12, 14),
             UiCue::SaveConfirm => crate::sfx::global_sfx(12, 15),
             UiCue::PageTurn => Some(crate::sfx::UI_PAGE_TURN),
+            UiCue::MapZoom => Some(crate::sfx::UI_MAP_ZOOM),
+            UiCue::MapLabel => Some(crate::sfx::UI_MAP_LABEL),
             UiCue::RoomSound(_) => None,
         }
     }
@@ -307,6 +313,8 @@ mod tests {
         assert_eq!(UiCue::SelectConfirm.name(), Some("Select05"));
         assert_eq!(UiCue::SaveCursor.name(), Some("type01"));
         assert_eq!(UiCue::SaveConfirm.name(), Some("type02"));
+        assert_eq!(UiCue::MapZoom.name(), Some("Chris09"));
+        assert_eq!(UiCue::MapLabel.name(), Some("Mapled"));
         assert_eq!(UiCue::PageTurn.name(), Some("Chris10"));
         assert_eq!(
             UiCue::RoomSound(0x21).name(),

@@ -5079,19 +5079,20 @@ impl GameSession {
                 self.begin_menu_close(pack);
                 return;
             }
-            // The screen takes the frame's one menu input, like the Rust
-            // tabs; the engine plays its cue.
+            // The screen takes the frame's one menu input and owns its own
+            // cues: the reference's map handlers play the cursor blip only
+            // on a real move, and the zoom and label cues instead of decide.
             let event_input = menu_input(ui);
             let Some(mut map) = self.map.take() else {
                 return;
             };
-            let result = {
+            let (result, cues) = {
                 let cx = self.ui_context(pack);
-                map.update(&cx, event_input.map_or_else(UiInput::default, single_input))
+                let result =
+                    map.update(&cx, event_input.map_or_else(UiInput::default, single_input));
+                (result, cx.cues.into_inner())
             };
-            if let Some(cue) = event_input.and_then(menu_cue) {
-                self.play_ui_cue_names(pack, vec![cue]);
-            }
+            self.play_ui_cue_names(pack, cues);
             if let ScreenResult::Continue = result {
                 self.map = Some(map);
             } else if self.map_direct {
@@ -14109,23 +14110,6 @@ fn single_input(input: MenuInput) -> UiInput {
     ui
 }
 
-/// The cue a menu pad input plays.
-///
-/// The original's menu handlers call `play_sfx(3, ...)`: slot 4 is the cursor
-/// blip on a D-pad move, slot 6 the decide chime on confirm and slot 5 the
-/// cancel cue. Those slots are the `cursor`/`decide`/`cancel` samples the
-/// character tables share, so the port's UI cues resolve to the same wavs.
-fn menu_cue(input: MenuInput) -> Option<ui::UiCue> {
-    match input {
-        MenuInput::Up | MenuInput::Down | MenuInput::Left | MenuInput::Right => {
-            Some(ui::UiCue::Cursor)
-        }
-        MenuInput::Confirm => Some(ui::UiCue::Decide),
-        MenuInput::Cancel => Some(ui::UiCue::Cancel),
-        MenuInput::PageLeft | MenuInput::PageRight => None,
-    }
-}
-
 /// The player's character model plus its no-weapon locomotion clips.
 struct PlayerAssets {
     emd: Emd,
@@ -20730,21 +20714,6 @@ mod tests {
         assert!(input.tick().ui.start);
         assert!(!input.tick().ui.start);
         assert_eq!(menu_input(input.tick().ui), None);
-    }
-
-    #[test]
-    fn menu_cues_match_the_original_play_sfx_slots() {
-        // The original's inventory handlers play `play_sfx(3, 4)` on a D-pad
-        // move, `(3, 6)` on confirm and `(3, 5)` on cancel; those character
-        // slots are the shared cursor/decide/cancel samples.
-        assert_eq!(menu_cue(MenuInput::Up), Some(ui::UiCue::Cursor));
-        assert_eq!(menu_cue(MenuInput::Down), Some(ui::UiCue::Cursor));
-        assert_eq!(menu_cue(MenuInput::Left), Some(ui::UiCue::Cursor));
-        assert_eq!(menu_cue(MenuInput::Right), Some(ui::UiCue::Cursor));
-        assert_eq!(menu_cue(MenuInput::Confirm), Some(ui::UiCue::Decide));
-        assert_eq!(menu_cue(MenuInput::Cancel), Some(ui::UiCue::Cancel));
-        assert_eq!(menu_cue(MenuInput::PageLeft), None);
-        assert_eq!(menu_cue(MenuInput::PageRight), None);
     }
 
     #[test]

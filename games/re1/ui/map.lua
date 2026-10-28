@@ -23,12 +23,18 @@
 -- close the same way in reverse. Once open, the plan's semi-transparent
 -- texels add to the frame, the current room's marker pulses red, and a
 -- scanline sweeps down the screen every 256 frames: one row of the grid and
--- the plan drawn again a pixel to the right (`g_MapFloorAnim`).
+-- the plan drawn again a pixel to the right (`g_MapFloorAnim`). While a
+-- story objective points at an area (`MAP_MODE`: Mansion 1F for the serum,
+-- Guardhouse B1 for Plant 42), that area's plan blinks a growing square
+-- over it (`g_MapLabelDesc`, the plan art's 8x8 frames at row 104).
+--
+-- The screen plays the reference's own cues: the cursor blip only for a
+-- move that happens, `map_zoom` as the plan opens or re-opens, `map_label`
+-- as the objective square starts each blink, and the cancel cue.
 --
 -- The area/layout/room tables are the built-in values below; a pack that
 -- carries `map/tables.bin` (an older conversion or a mod) overrides them.
--- The objective highlight (`MAP_MODE`'s blinking label) is not drawn. A pack
--- without the map art leaves the tab blank with a warning.
+-- A pack without the map art leaves the tab blank with a warning.
 --
 -- The screen publishes `zoomed` (0/1) for the engine's tests. The room-flags/SCD
 -- bit that records a map pick-up is raised by the engine's pick-up rule.
@@ -51,16 +57,26 @@ local TABLES_ENTRY = "map/tables.bin"
 local BACKDROP_STEM = "map/bg"
 -- The four browser floor-plan stems, indexed by layout.
 local TAB_STEMS = { [0] = "map/0d", "map/0c", "map/00", "map/0e" }
--- The eleven full-display floor-plan stems, indexed by area.
+-- The eleven full-display floor-plan stems, indexed by area. The file
+-- numbers are not in area order: the guardhouse's are `0a`/`0b` and the
+-- laboratory's `06`..`09` (`g_MapFileNames`).
 local AREA_STEMS = {
-    [0] = "map/01", "map/02", "map/03", "map/04", "map/05", "map/06",
-    "map/07", "map/08", "map/09", "map/0a", "map/0b",
+    [0] = "map/01", "map/02", "map/03", "map/04", "map/05", "map/0a",
+    "map/0b", "map/06", "map/07", "map/08", "map/09",
 }
 
 -- The flag bank the visited rooms and owned maps live in, and the owned-map
 -- bit base (`ROOM_FLAG_MAP_BASE`).
 local BANK_ROOM_FLAGS = 8
 local ROOM_FLAG_MAP_BASE = 0x7C
+
+-- The objective flags (`map_update_objective_highlight`): an "outstanding"
+-- bit in the second scenario bank and its "acknowledged" bit in the first.
+local BANK_SCENARIO, BANK_SCENARIO2 = 0, 1
+local OBJ_JILL_SERUM = 0x23
+local OBJ_CHRIS_SERUM1, OBJ_CHRIS_SERUM2 = 0x2D, 0x2E
+local OBJ_PLANT42 = 0x38
+local ACK_PLANT42, ACK_SERUM1, ACK_SERUM2 = 0x48, 0x49, 0x4A
 
 -- The browser's base map window (`g_MapBaseDesc`): the 160x72 top-left window
 -- of the loaded layout art at (33,32).
@@ -112,6 +128,14 @@ local ROOM_FIRST = 13
 -- 0xD0, one row per two frames from y = 24, each row a pixel right of the
 -- layer it copies.
 local SWEEP_END = 0xD0
+-- The objective label (`g_MapLabelDesc`): an 8x8 frame of the plan art's
+-- row 104 (`texV` 0xF0 on the 0x88-based page), eight frames across, drawn
+-- at the first position for the Mansion 1F objective (`MAP_MODE` 2) and the
+-- second for the guardhouse's (4). It starts ten frames after the plan
+-- comes to rest (`DAT_00ac3694`).
+local LABEL_V, LABEL_SIZE = 104, 8
+local LABEL_POS = { [0] = { 0x38, 0x34 }, { 0x86, 0x43 } }
+local LABEL_DELAY = 10
 
 local BACKDROP_WARNING = "warning: no map backdrop %s: %s; the map tab stays blank"
 local PAGE_WARNING = "warning: no map page %s: %s; the map tab stays blank"
@@ -309,6 +333,36 @@ local function initial_position(group, room, cut)
     return 9, group, room
 end
 
+--- The objective `MAP_MODE` (`map_update_objective_highlight`): 1 points
+--- at Mansion 1F (the serum), 3 at Guardhouse B1 (Plant 42), 0 at nothing.
+local function objective_mode(api)
+    local function on(bank, bit)
+        return api:flag(bank, bit)
+    end
+    local stage, _, _, player = api:room()
+    if player == 1 then
+        if on(BANK_SCENARIO2, OBJ_JILL_SERUM) and not on(BANK_SCENARIO, ACK_SERUM1) then
+            return 1
+        end
+        return 0
+    end
+    if on(BANK_SCENARIO2, OBJ_CHRIS_SERUM1) and not on(BANK_SCENARIO, ACK_SERUM1) then
+        return 1
+    end
+    if on(BANK_SCENARIO2, OBJ_CHRIS_SERUM2) and not on(BANK_SCENARIO, ACK_SERUM2) then
+        -- Outside the mansion (stages 1 and 2) it shows only while the
+        -- Plant 42 objective is outstanding too.
+        if stage ~= 1 and stage ~= 2 then
+            return on(BANK_SCENARIO2, OBJ_PLANT42) and 1 or 0
+        end
+        return 1
+    end
+    if on(BANK_SCENARIO2, OBJ_PLANT42) and not on(BANK_SCENARIO, ACK_PLANT42) then
+        return 3
+    end
+    return 0
+end
+
 --- The initial area for a room.
 local function initial_area(group, room, cut)
     return (initial_position(group, room, cut))
@@ -351,6 +405,9 @@ local function move_flags(api, layout, room)
 end
 
 M.initial_area = initial_area
+M.area_stem = function(area)
+    return AREA_STEMS[area]
+end
 M.area_at = function(layout, room)
     return area_at(layout, room)
 end
@@ -425,6 +482,14 @@ function M.open(api)
         closing = false,
         -- Blink phase for the cursor arrows (`MAP_HL_COUNT`).
         ticks = 0,
+        -- The objective (`MAP_MODE`, raised by one as the tab opens: 0, 2
+        -- or 4), the label's state (`MAP_HL_STATE`: 0 off, 1 waiting, 2..5
+        -- the blink), its counter (`MAP_HL_FRAME`) and the frame to draw
+        -- (nil when hidden).
+        objective = 0,
+        label_state = 0,
+        label_count = 0,
+        label_frame = nil,
         -- The original's tab action runs one frame after its confirm, so the
         -- browser stays blank until its first update.
         started = false,
@@ -437,6 +502,8 @@ function M.open(api)
     local group = (((stage or 1) - 1) & 0xFF) % 5
     s.area, s.map_group, s.map_room = initial_position(group, room or 0, cut or 0)
     s.layout = s.tables.layouts[s.area] or 0
+    local mode = objective_mode(api)
+    s.objective = mode ~= 0 and mode + 1 or 0
     -- The original overwrites each layout's index with the last room slot
     -- whose area matches the current one.
     for layout = 0, 3 do
@@ -471,10 +538,45 @@ local function step_layout(mask, current, left)
     return current
 end
 
+--- One frame of the objective label (`map_display_draw`'s tail): grow the
+--- square two counts a frame, shrink it one a frame, then hold it hidden
+--- for twenty frames before the next blink.
+local function step_label(api)
+    s.label_frame = nil
+    if s.label_state <= 1 or s.objective == 0 then
+        return
+    end
+    local frame = (s.label_count // 3) & 7
+    if s.label_state == 2 then
+        api:sound("map_label")
+        s.label_state = 3
+    end
+    if s.label_state == 3 then
+        s.label_count = s.label_count + 2
+        if s.label_count >= 0x17 then
+            s.label_state = 4
+            s.label_count = 0x17
+        end
+    elseif s.label_state == 4 then
+        s.label_count = s.label_count - 1
+        if s.label_count == 0 then
+            s.label_state = 5
+            s.label_count = 0x14
+        end
+    elseif s.label_state == 5 then
+        frame = 0
+        s.label_count = s.label_count - 1
+        if s.label_count == 0 then
+            s.label_state = 2
+        end
+    end
+    s.label_frame = frame
+end
+
 --- One frame of the full display's zoom (`map_display_animate`): the
---- pulse, then the zoom state machine. Returns true when the close finished
---- and the browser is back.
-local function animate()
+--- pulse, then the zoom state machine, then the label. Returns true when
+--- the close finished and the browser is back.
+local function animate(api)
     -- The pulse runs while the plan is the player's map group's.
     if s.tables.groups[s.area] == s.map_group then
         if s.pulse_state == 0 then
@@ -498,6 +600,7 @@ local function animate()
         -- A one-pixel-wide sliver, 200/4096 tall.
         s.scale_x, s.scale_y = 1, 200
         s.additive = false
+        api:sound("map_zoom")
         zoom = 1
     end
     if zoom == 1 then
@@ -530,8 +633,16 @@ local function animate()
         s.hold = s.hold - 1
         if s.hold == 0 then
             s.additive = true
-            s.hold = 10
+            s.hold = LABEL_DELAY
             s.zoom = 6
+        end
+    elseif zoom == 6 then
+        -- Wait to start the objective label.
+        if s.label_state == 1 then
+            s.hold = s.hold - 1
+            if s.hold == 0 then
+                s.label_state = 2
+            end
         end
     elseif zoom == 7 or zoom == 8 then
         if zoom == 7 then
@@ -540,6 +651,9 @@ local function animate()
             s.at_rest = false
             s.scale_x = 0xFFF
             s.sweep = 0
+            if s.label_state ~= 0 then
+                s.label_state = 1
+            end
             s.zoom = 8
         end
         -- ... collapse to a line ...
@@ -553,9 +667,11 @@ local function animate()
         s.scale_x = s.scale_x // 2
         if s.scale_x <= 1 then
             s.scale_x = 1
+            s.label_frame = nil
             return true
         end
     end
+    step_label(api)
     return false
 end
 
@@ -565,14 +681,23 @@ local function update_display(api, input)
     -- Cancel while it closes leaves the tab outright: the browser's own
     -- cancel test sees the same press.
     if input.cancel and s.zoom >= 7 then
+        api:sound("cancel")
         api:exit()
         return
     end
-    if animate() then
+    if animate(api) then
         s.zoomed = false
         s.zoom = 0
         s.closing = true
         s.sweep_row = nil
+        -- The frame's own confirm and cancel tests still see the zoom state
+        -- the close left (0), so their cues play without effect.
+        if input.confirm then
+            api:sound("map_zoom")
+        end
+        if input.cancel then
+            api:sound("cancel")
+        end
         return
     end
     -- The sweep draws while the display rests at state 6, a counter step a
@@ -590,20 +715,29 @@ local function update_display(api, input)
         elseif s.zoom == 9 then
             s.zoom = 2
         end
+        api:sound("map_zoom")
     end
     if input.cancel then
         s.zoom = 7
+        api:sound("cancel")
     end
 end
 
 local function handle_input(api, input)
     if input.cancel then
+        api:sound("cancel")
         api:exit()
     elseif input.confirm then
-        -- The display's first frame is the next one.
+        -- The display's first frame is the next one; its texture load arms
+        -- the objective label when the plan is the objective's area.
         s.zoomed = true
         s.zoom = 0
         s.pulse_state = 0
+        if (s.objective == 2 and s.area == 0) or (s.objective == 4 and s.area == 6) then
+            s.label_state = 1
+        else
+            s.label_state = 0
+        end
     elseif input.up or input.down then
         local room = room_index()
         local flags = move_flags(api, s.layout, room)
@@ -615,9 +749,15 @@ local function handle_input(api, input)
             return
         end
         s.room[s.layout] = room
+        api:sound("cursor")
         refresh_area()
     elseif input.left or input.right then
-        local next = step_layout(layout_mask(api), s.layout, input.left)
+        local mask = layout_mask(api)
+        local next = step_layout(mask, s.layout, input.left)
+        -- With all four layouts every press blips, even one that stays put.
+        if next ~= s.layout or mask & 8 ~= 0 then
+            api:sound("cursor")
+        end
         if next ~= s.layout then
             s.layout = next
             refresh_area()
@@ -857,6 +997,22 @@ local function plan_luts(api, page)
     return opaque, blended, glow
 end
 
+--- The label's lookup: every drawn entry of the plan page as it is.
+local function label_lut(api, page)
+    s.label_luts = s.label_luts or {}
+    if not s.label_luts[page] then
+        local palette, stp = colours(api, page)
+        local lut = {}
+        for index = 1, 255 do
+            if drawn(palette, stp, index) then
+                lut[index] = palette[index]
+            end
+        end
+        s.label_luts[page] = lut
+    end
+    return s.label_luts[page]
+end
+
 --- One quad of a page through `lut`.
 local function quad_lut(api, page, sx, sy, w, h, rect, lut, blend)
     api:page_lut(page, sx, sy, w, h, rect[1], rect[2], lut, false, {
@@ -940,6 +1096,11 @@ local function draw_display(api, ox, oy)
         end
     end
     api:clip()
+    if plan and s.label_frame ~= nil then
+        local pos = LABEL_POS[s.objective // 3] or LABEL_POS[0]
+        local rect = { ox + pos[1], oy + pos[2], LABEL_SIZE, LABEL_SIZE }
+        quad_lut(api, plan, s.label_frame * LABEL_SIZE, LABEL_V, LABEL_SIZE, LABEL_SIZE, rect, label_lut(api, plan))
+    end
     if bounds == nil then
         return nil
     end
