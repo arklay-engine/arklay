@@ -14149,9 +14149,11 @@ fn single_input(input: MenuInput) -> UiInput {
     ui
 }
 
-/// The player's character model plus its no-weapon locomotion clips.
+/// The player's character model, its no-weapon clips and its weapon banks.
 struct PlayerAssets {
     emd: Emd,
+    /// The no-weapon EMW (`W00`/`W10`): the locomotion bank while no weapon
+    /// is equipped. See [`PlayerAssets::locomotion`].
     emw: crate::model::Emw,
     /// The character's weapon animations by weapon id. A missing file is
     /// absent.
@@ -14179,13 +14181,16 @@ impl PlayerAssets {
 }
 
 /// The weapon id the player's EMW bank is loaded for: the weapon machine's
-/// file while it runs, otherwise the equipped item's, so the frame the aim
-/// starts reads the right clips.
+/// file while it runs, otherwise `equippedWeaponId`'s, the id the original's
+/// `LoadEquippedWeaponAnimation` loads, so the frame the aim starts reads the
+/// right clips. Weapon id 0 is the no-weapon set and keeps the body's own
+/// hand (`None`).
 fn player_weapon_item(game: &game::GameState, player: &player::PlayerState) -> Option<u8> {
-    player
-        .weapon
-        .weapon_item
-        .or_else(|| game.equipped.and_then(crate::weapons::weapon_clip_item))
+    player.weapon.weapon_item.or_else(|| {
+        (game.equipped_weapon_id != 0)
+            .then_some(game.equipped_weapon_id)
+            .and_then(crate::weapons::weapon_clip_item)
+    })
 }
 
 /// The player's `EntityComputeJointWorldMatrices` pass: compose the displayed
@@ -15073,10 +15078,7 @@ fn render_frame_on(
     let mut weapon_joints: Vec<Vec<anim::Mat4x3>> = Vec::new();
     // The weapon slot's TMD is the hand joint's mesh whenever a weapon is
     // equipped, so it draws in every bank (idle, walk, turn), not just aiming.
-    let weapon_item = player_state
-        .weapon
-        .weapon_item
-        .or_else(|| game.equipped.and_then(crate::weapons::weapon_clip_item));
+    let weapon_item = player_weapon_item(game, player_state);
     if let (Some(assets), Some(joints)) = (assets, &player_joints)
         && let Some(weapon) = assets.weapon(weapon_item)
         && !weapon.mesh.objects.is_empty()
@@ -24035,31 +24037,84 @@ return M
     /// without a full locomotion bank keeps the no-weapon clips.
     #[test]
     fn locomotion_follows_the_equipped_weapon_emw() {
-        let mut assets = synthetic_player_assets();
-        let mut launcher = assets.emw.clone();
-        launcher.clips.extend((0..10).map(|_| Clip::default()));
-        launcher.keyframes = vec![Keyframe {
-            rotations: vec![[0x400, 0, 0]],
+        let (pack, _id, mut room, mut game, mut player_state, mut assets) = scripted_room_fixture();
+        assets.emd.skeleton = Skeleton {
+            relative: vec![[0, 0, 0]],
+            children: vec![vec![]],
+        };
+        let still = |keyframe: u16| Clip {
+            frames: vec![ClipFrame {
+                keyframe,
+                timing: 1,
+            }],
+        };
+        let pose = |x: i16| Keyframe {
+            rotations: vec![[x, 0, 0]],
             ..Keyframe::default()
-        }];
+        };
+        assets.emw.keyframes = vec![pose(0)];
+        assets.emw.clips = vec![still(0); 5];
+        // The launcher's bank: the same layout, every pose turned, plus the
+        // aim/fire clips that follow the locomotion.
+        let mut launcher = assets.emw.clone();
+        launcher.keyframes = vec![pose(0x400)];
+        launcher.clips.extend((0..10).map(|_| still(0)));
         let short = crate::model::Emw {
-            clips: vec![Clip::default()],
-            ..assets.emw.clone()
+            clips: vec![still(0)],
+            ..launcher.clone()
         };
         assets.weapons.insert(0x07, launcher.clone());
         assets.weapons.insert(0x02, short);
 
         assert_eq!(assets.locomotion(Some(0x07)), &launcher);
         assert_eq!(assets.locomotion(None), &assets.emw);
-        assert_eq!(assets.locomotion(Some(0x02)), &assets.emw);
-        assert_eq!(assets.locomotion(Some(0x05)), &assets.emw);
+        assert_eq!(assets.locomotion(Some(0x02)), &assets.emw, "short bank");
+        assert_eq!(assets.locomotion(Some(0x05)), &assets.emw, "missing file");
 
-        let (_pack, _id, _room, mut game, mut player, _assets) = scripted_room_fixture();
-        game.equipped = Some(0x07);
-        player.weapon.weapon_item = None;
-        assert_eq!(player_weapon_item(&game, &player), Some(0x07));
-        player.weapon.weapon_item = Some(0x02);
-        assert_eq!(player_weapon_item(&game, &player), Some(0x02));
+        // The bank is keyed by `equippedWeaponId`, not the equipped item, and
+        // the running weapon machine's file wins.
+        game.equipped = None;
+        game.equipped_weapon_id = 0x07;
+        player_state.weapon.weapon_item = None;
+        assert_eq!(player_weapon_item(&game, &player_state), Some(0x07));
+        game.equipped_weapon_id = 0;
+        assert_eq!(player_weapon_item(&game, &player_state), None);
+        player_state.weapon.weapon_item = Some(0x02);
+        assert_eq!(player_weapon_item(&game, &player_state), Some(0x02));
+        player_state.weapon.weapon_item = None;
+
+        // End to end: a walk with the launcher equipped stores the launcher's
+        // pose, not the no-weapon one.
+        let scripts = scd::ir::Scripts::default();
+        let mut command_vm = scd::vm::CommandVm::new(&scripts);
+        let mut event_vm = scd::vm::EventVm::new(&scripts);
+        let walking = player::Input {
+            up: true,
+            ..player::Input::default()
+        };
+        let mut walk = |game: &mut game::GameState, player_state: &mut player::PlayerState| {
+            for _ in 0..4 {
+                tick_scripted_room(
+                    &pack,
+                    &mut room,
+                    game,
+                    player_state,
+                    &assets,
+                    &mut command_vm,
+                    &mut event_vm,
+                    walking,
+                );
+            }
+            assert_eq!(player_state.behavior, 1, "the pad selected the walk");
+            game.joint_worlds[0][0].r
+        };
+        let mut bare_game = game.clone();
+        let mut bare_player = player_state.clone();
+        bare_game.set_equipped(None);
+        let bare = walk(&mut bare_game, &mut bare_player);
+        game.set_equipped(Some(0x07));
+        let armed = walk(&mut game, &mut player_state);
+        assert_ne!(armed, bare, "the launcher walk played the no-weapon pose");
     }
 
     /// The end-of-tick joint store poses from the live clock: a pad-driven

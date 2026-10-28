@@ -306,7 +306,8 @@ impl WeaponState {
 pub struct WeaponClips<'a> {
     /// The body EMD clips.
     pub emd: &'a [Clip],
-    /// The no-weapon locomotion EMW clips.
+    /// The locomotion EMW clips: the equipped weapon's file, which carries
+    /// its own breathe, walk and run (the no-weapon set when none is).
     pub emw: &'a [Clip],
     /// The room's player-animation clips.
     pub room: &'a [Clip],
