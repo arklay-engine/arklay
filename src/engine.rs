@@ -12833,16 +12833,9 @@ fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad:
         .as_ref()
         .map(|anim| anim.clips.as_slice())
         .unwrap_or(&[]);
-    // The active weapon's bank: the machine's loaded file while it runs,
-    // otherwise the equipped item's, so the frame the aim starts reads the
-    // right clips.
-    let weapon_item = context.player.weapon.weapon_item.or_else(|| {
-        context
-            .game
-            .equipped
-            .and_then(crate::weapons::weapon_clip_item)
-    });
+    let weapon_item = player_weapon_item(context.game, context.player);
     let weapon = assets.weapon(weapon_item);
+    let locomotion = assets.locomotion(weapon_item);
     let no_weapon = crate::model::Emw {
         skeleton: Default::default(),
         keyframes: Vec::new(),
@@ -12852,7 +12845,7 @@ fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad:
     let weapon = weapon.unwrap_or(&no_weapon);
     let clips = crate::weapons::WeaponClips {
         emd: &assets.emd.clips,
-        emw: &assets.emw.clips,
+        emw: &locomotion.clips,
         room: room_clips,
         weapon: &weapon.clips,
         emd_keyframes: &assets.emd.keyframes,
@@ -13072,9 +13065,14 @@ fn tick_room_timed(
                 context.player.weapon = crate::weapons::WeaponState::default();
                 context.player.scripted_hold = true;
             }
+            let weapon_item = player_weapon_item(context.game, context.player);
+            let locomotion = context
+                .player_assets
+                .map(|assets| assets.locomotion(weapon_item));
             let (emd_clips, emw_clips): (&[Clip], &[Clip]) = context
                 .player_assets
-                .map(|assets| (assets.emd.clips.as_slice(), assets.emw.clips.as_slice()))
+                .zip(locomotion)
+                .map(|(assets, emw)| (assets.emd.clips.as_slice(), emw.clips.as_slice()))
                 .unwrap_or((&[], &[]));
             let room_clips: &[Clip] = context
                 .room
@@ -13090,9 +13088,7 @@ fn tick_room_timed(
                 emd_keyframes: context
                     .player_assets
                     .map_or(empty_keyframes, |assets| assets.emd.keyframes.as_slice()),
-                emw_keyframes: context
-                    .player_assets
-                    .map_or(empty_keyframes, |assets| assets.emw.keyframes.as_slice()),
+                emw_keyframes: locomotion.map_or(empty_keyframes, |emw| emw.keyframes.as_slice()),
                 room_keyframes: context
                     .room
                     .room_anim
@@ -14167,6 +14163,29 @@ impl PlayerAssets {
     fn weapon(&self, item: Option<u8>) -> Option<&crate::model::Emw> {
         self.weapons.get(&item?)
     }
+
+    /// The locomotion bank (breathe, walk, run, reach) for a weapon id. The
+    /// original has one player EMW buffer: `LoadEquippedWeaponAnimation`
+    /// loads the equipped weapon's `Wxx.EMW` into `jointMoveData0/1` and the
+    /// idle, walk and run all `Joint_move` from it, so a weapon that ships
+    /// its own locomotion (Jill's grenade launcher, Chris's shotgun) is
+    /// carried in that weapon's pose. A missing or short file falls back to
+    /// the no-weapon set.
+    fn locomotion(&self, item: Option<u8>) -> &crate::model::Emw {
+        self.weapon(item)
+            .filter(|weapon| weapon.clips.len() >= self.emw.clips.len())
+            .unwrap_or(&self.emw)
+    }
+}
+
+/// The weapon id the player's EMW bank is loaded for: the weapon machine's
+/// file while it runs, otherwise the equipped item's, so the frame the aim
+/// starts reads the right clips.
+fn player_weapon_item(game: &game::GameState, player: &player::PlayerState) -> Option<u8> {
+    player
+        .weapon
+        .weapon_item
+        .or_else(|| game.equipped.and_then(crate::weapons::weapon_clip_item))
 }
 
 /// The player's `EntityComputeJointWorldMatrices` pass: compose the displayed
@@ -14183,6 +14202,7 @@ fn store_player_joint_worlds(
     let Some(assets) = assets else {
         return;
     };
+    let locomotion = assets.locomotion(player_weapon_item(game, player));
     let (skeleton, keyframes, clips) = match player.clip_source {
         player::ClipSource::Emd => (
             &assets.emd.skeleton,
@@ -14191,8 +14211,8 @@ fn store_player_joint_worlds(
         ),
         player::ClipSource::Emw => (
             &assets.emd.skeleton,
-            &assets.emw.keyframes,
-            &assets.emw.clips,
+            &locomotion.keyframes,
+            &locomotion.clips,
         ),
         player::ClipSource::Room => match &room.room_anim {
             Some(anim) if !anim.clips.is_empty() => (&anim.skeleton, &anim.keyframes, &anim.clips),
@@ -14628,6 +14648,7 @@ fn render_frame_on(
     let player_joints = assets.and_then(|assets| {
         // The room's own animation pair drives the push/vault/ladder poses; a
         // room without it falls back to the EMD settle stance (documented).
+        let locomotion = assets.locomotion(player_weapon_item(game, player_state));
         let (skeleton, keyframes, clips) = match player_state.clip_source {
             player::ClipSource::Emd => (
                 &assets.emd.skeleton,
@@ -14636,8 +14657,8 @@ fn render_frame_on(
             ),
             player::ClipSource::Emw => (
                 &assets.emd.skeleton,
-                &assets.emw.keyframes,
-                &assets.emw.clips,
+                &locomotion.keyframes,
+                &locomotion.clips,
             ),
             player::ClipSource::Room => match &room.room_anim {
                 Some(anim) if !anim.clips.is_empty() => {
@@ -24005,6 +24026,40 @@ return M
             },
             weapons: std::collections::HashMap::new(),
         }
+    }
+
+    /// The locomotion clips follow the equipped weapon's EMW, as the
+    /// original's single `jointMoveData0/1` buffer does: Jill's grenade
+    /// launcher (`W16.EMW`) carries its own walk and run, which the port
+    /// dropped by always playing the no-weapon set (issue #264). A weapon
+    /// without a full locomotion bank keeps the no-weapon clips.
+    #[test]
+    fn locomotion_follows_the_equipped_weapon_emw() {
+        let mut assets = synthetic_player_assets();
+        let mut launcher = assets.emw.clone();
+        launcher.clips.extend((0..10).map(|_| Clip::default()));
+        launcher.keyframes = vec![Keyframe {
+            rotations: vec![[0x400, 0, 0]],
+            ..Keyframe::default()
+        }];
+        let short = crate::model::Emw {
+            clips: vec![Clip::default()],
+            ..assets.emw.clone()
+        };
+        assets.weapons.insert(0x07, launcher.clone());
+        assets.weapons.insert(0x02, short);
+
+        assert_eq!(assets.locomotion(Some(0x07)), &launcher);
+        assert_eq!(assets.locomotion(None), &assets.emw);
+        assert_eq!(assets.locomotion(Some(0x02)), &assets.emw);
+        assert_eq!(assets.locomotion(Some(0x05)), &assets.emw);
+
+        let (_pack, _id, _room, mut game, mut player, _assets) = scripted_room_fixture();
+        game.equipped = Some(0x07);
+        player.weapon.weapon_item = None;
+        assert_eq!(player_weapon_item(&game, &player), Some(0x07));
+        player.weapon.weapon_item = Some(0x02);
+        assert_eq!(player_weapon_item(&game, &player), Some(0x02));
     }
 
     /// The end-of-tick joint store poses from the live clock: a pad-driven
