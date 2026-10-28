@@ -23,8 +23,6 @@ description = "One line or several.\nShown by `arklay pack info`."
 kind = "mod"
 base = "re1"
 load_order = 10
-rdt = "re1"
-scd = "re1"
 language = "ja-JP"
 lua = ["lua/demo.lua"]
 ```
@@ -38,10 +36,13 @@ lua = ["lua/demo.lua"]
 | `kind` | `"base"` or `"mod"`. Required. |
 | `base` | A mod's base pack id. Required for mods. |
 | `load_order` | Layer order; lower applies first. Default 0. |
-| `rdt`, `scd` | Dialect tags; default `"re1"`. |
 | `language` | The language of the pack's own room text (`ja-JP` for the Japanese install). Optional. |
 | `engine` | Optional note about the target engine build. |
 | `lua` | Ordered hook paths; empty means discover `lua/**.lua`. |
+
+A pack carries no game-format tag: each RDT, EMD and WAV entry is identified
+by its own content (`src/format.rs`), so one pack may mix RE1 and RE2
+files. Older manifests' `rdt` and `scd` keys are accepted and ignored.
 
 A base pack without a manifest is tolerated as `id = <file stem>`,
 `kind = "base"` with a warning; a mod without one is rejected by name.

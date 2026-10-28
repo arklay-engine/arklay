@@ -2960,8 +2960,6 @@ mod tests {
             kind: manifest::PackKind::Mod,
             base: Some(base.to_string()),
             load_order,
-            rdt_version: manifest::DEFAULT_RDT_VERSION.to_string(),
-            scd_version: manifest::DEFAULT_SCD_VERSION.to_string(),
             language: None,
             engine: None,
             convert_version: None,
@@ -3231,8 +3229,6 @@ mod tests {
         let manifest = layered.manifest().unwrap();
         assert_eq!(manifest.id, "re1");
         assert_eq!(manifest.kind, manifest::PackKind::Base);
-        assert_eq!(manifest.rdt_version, manifest::DEFAULT_RDT_VERSION);
-        assert_eq!(manifest.scd_version, manifest::DEFAULT_SCD_VERSION);
         assert!(!layered.is_layered());
         assert_eq!(layered.warnings().len(), 1);
         assert!(

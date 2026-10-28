@@ -1,5 +1,6 @@
 //! Arklay engine library: game pack, asset formats and the SDL3 player.
 
+pub mod adt;
 pub mod anim;
 pub mod assets;
 pub mod atomic;
@@ -16,6 +17,7 @@ pub mod config;
 pub mod controls;
 pub mod convert;
 pub mod convert_mod;
+pub mod convert_re2;
 pub mod demo;
 pub mod door;
 pub mod draw2d;
@@ -26,6 +28,7 @@ pub mod enemy;
 pub mod engine;
 pub mod examine;
 pub mod font;
+pub mod format;
 pub mod game;
 pub mod gpu;
 pub mod gui;
@@ -64,6 +67,7 @@ pub mod raster;
 pub mod rdt;
 pub mod render;
 pub mod room;
+pub mod sap;
 pub mod save;
 pub mod scd;
 pub mod sfx;

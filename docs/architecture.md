@@ -22,10 +22,14 @@ responsibility.
 | Module | Owner | Responsibility |
 |---|---|---|
 | `pack` | Container | `.akpak` v1 reader/writer with raw and zstd-compressed entries, layered mod packs, exact-path and `AssetClass` stem lookup, atomic `PackWriter::write` |
+| `format` | Container | Per-file RE1/RE2 dialect detection (RDT, EMD) by scored header heuristics, plus WAV codec and MPEG sniffs |
 | `budget` | Container | Fixed per-format decode caps and checked allocation shared by every parser |
-| `manifest` | Container | `manifest.toml` grammar (`format`, `kind`, `base`, `load_order`, `rdt_version`, `scd_version`, Lua hooks) |
+| `manifest` | Container | `manifest.toml` grammar (`format`, `kind`, `base`, `load_order`, Lua hooks) |
 | `modding` | Tooling | Sibling `mods/` discovery and the `mod build` source-directory builder |
 | `convert` | Tooling | `convert-game`: discover an install and migrate every asset category — rooms, audio, voice and films — into one pack; progress on stderr, per-file sizes with `--verbose` |
+| `convert_re2` | Tooling | `convert-game` for the RE2 PC install: rooms of both discs, `roomcut.bin` backgrounds, enemies, players, voice, BGM, doors, films and demos |
+| `adt` | Format | RE2 ADT background decompression (three-table Huffman with a 16 KiB history) and the 320x240 page reorganisation |
+| `sap` | Format | RE2 `.sap` sound containers: the bit-mask header and the RIFF WAVs it fronts |
 | `progress` | Tooling | One terminal-aware overall progress bar per command, spanning its internal phases (and periodic plain lines when redirected) |
 | `atomic` | Tooling | Sibling-temp-then-rename single-file output used by every artifact writer |
 | `verify` | Tooling | `arklay verify`: path-classified parse of every pack entry with a per-format report |
