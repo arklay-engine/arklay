@@ -1056,6 +1056,8 @@ fn cue_of(name: &str) -> Option<UiCue> {
         "save_cursor" => UiCue::SaveCursor,
         "save_confirm" => UiCue::SaveConfirm,
         "page_turn" => UiCue::PageTurn,
+        "map_zoom" => UiCue::MapZoom,
+        "map_label" => UiCue::MapLabel,
         _ => return None,
     })
 }

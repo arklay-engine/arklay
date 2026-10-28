@@ -1992,18 +1992,28 @@ struct MapTab {
     pack: Pack,
     game: crate::game::GameState,
     screen: LuaScreen,
+    /// The cues the last [`MapTab::step`] queued.
+    cues: Vec<UiCue>,
 }
 
 impl MapTab {
-    fn new(label: &str, pack: Pack, (stage, room, cut): (u8, u8, usize), bits: &[u8]) -> Self {
+    fn new(label: &str, pack: Pack, at: (u8, u8, usize), bits: &[u8]) -> Self {
+        Self::with_flags(label, pack, at, bits, &[])
+    }
+
+    /// Like [`MapTab::new`], plus `(bank, bit)` scenario flags.
+    fn with_flags(
+        label: &str,
+        pack: Pack,
+        at: (u8, u8, usize),
+        bits: &[u8],
+        flags: &[(u8, u8)],
+    ) -> Self {
+        Self::with_game(label, pack, map_game(at, bits, flags))
+    }
+
+    fn with_game(label: &str, pack: Pack, game: crate::game::GameState) -> Self {
         let harness = Harness::new(label);
-        let mut game = crate::game::GameState::default();
-        game.id.stage = stage;
-        game.id.room = room;
-        game.camera.current_cut = cut;
-        for &bit in bits {
-            game.flags[usize::from(crate::game::BANK_ROOM_FLAGS)].apply(bit, 0);
-        }
         let screen = {
             let mut cx = UiContext {
                 authentic: false,
@@ -2018,6 +2028,7 @@ impl MapTab {
             pack,
             game,
             screen,
+            cues: Vec::new(),
         }
     }
 
@@ -2028,7 +2039,9 @@ impl MapTab {
             game: Some(&self.game),
             ..self.harness.context()
         };
-        self.screen.update(&cx, input)
+        let result = self.screen.update(&cx, input);
+        self.cues = cx.cues.borrow().clone();
+        result
     }
 
     fn draw(&mut self) -> crate::render::Framebuffer {
@@ -2046,6 +2059,26 @@ impl MapTab {
     fn state(&self, expr: &str) -> i64 {
         self.screen.test_eval(&format!("return {expr}"))
     }
+}
+
+/// A game in `(stage, room, cut)` with room-flags `bits` and `(bank, bit)`
+/// flags set.
+fn map_game(
+    (stage, room, cut): (u8, u8, usize),
+    bits: &[u8],
+    flags: &[(u8, u8)],
+) -> crate::game::GameState {
+    let mut game = crate::game::GameState::default();
+    game.id.stage = stage;
+    game.id.room = room;
+    game.camera.current_cut = cut;
+    for &bit in bits {
+        game.flags[usize::from(crate::game::BANK_ROOM_FLAGS)].apply(bit, 0);
+    }
+    for &(bank, bit) in flags {
+        game.flags[usize::from(bank)].apply(bit, 0);
+    }
+    game
 }
 
 fn no_map_pack() -> Pack {
@@ -2266,6 +2299,155 @@ fn map_display_reddens_the_current_room_over_the_grid() {
         green[1] > 0 && green[0] == 0 && green[2] == 0,
         "unvisited markers show the grid: {green:?}"
     );
+}
+
+#[test]
+fn map_cues_follow_the_reference_play_sfx_calls() {
+    // Room 1001 with only Mansion 1F's rooms visited: the down step is
+    // refused, the up step is not.
+    let mut tab = MapTab::new("map-cues", no_map_pack(), (1, 1, 0), &[1, 32]);
+    tab.step(neutral());
+    tab.step(press(|i| i.down = true));
+    assert!(tab.cues.is_empty(), "a refused step is silent");
+    tab.step(press(|i| i.up = true));
+    assert_eq!(tab.cues, [UiCue::Cursor]);
+    tab.step(press(|i| i.left = true));
+    assert!(tab.cues.is_empty(), "no other layout to step to");
+    // Confirm is silent; the display's first frame plays the zoom.
+    tab.step(press(|i| i.confirm = true));
+    assert!(tab.cues.is_empty());
+    tab.step(neutral());
+    assert_eq!(tab.cues, [UiCue::MapZoom]);
+    for _ in 0..40 {
+        tab.step(neutral());
+    }
+    assert!(tab.cues.is_empty(), "no objective, no label cue");
+    tab.step(press(|i| i.cancel = true));
+    assert_eq!(tab.cues, [UiCue::Cancel]);
+    // A confirm during the shrink re-opens with the zoom cue.
+    tab.step(press(|i| i.confirm = true));
+    assert_eq!(tab.cues, [UiCue::MapZoom]);
+    assert_eq!(tab.state("M.state.zoom"), 3);
+    tab.step(press(|i| i.cancel = true));
+    assert_eq!(
+        tab.step(press(|i| i.cancel = true)),
+        ScreenResult::Done(ScreenAction::Quit)
+    );
+    assert_eq!(tab.cues, [UiCue::Cancel]);
+}
+
+#[test]
+fn map_objective_label_blinks_over_its_area() {
+    const RED: u16 = 0x001F;
+    // Mansion 1F's plan with the label's 8x8 frames at row 104: frame `n`
+    // fills its first `n` rows.
+    let mut plan = vec![0u8; 128 * 112];
+    for frame in 0..8 {
+        for row in 0..frame {
+            for col in 0..8 {
+                plan[(104 + row) * 128 + frame * 8 + col] = 214;
+            }
+        }
+    }
+    let mut writer = crate::pack::PackWriter::new();
+    writer
+        .add(
+            "map/01.tim",
+            map_tim_rows(128, &plan, |index| if index == 214 { RED } else { 0 }),
+        )
+        .unwrap();
+    let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+    // Chris's first serum objective is outstanding (second scenario bank).
+    let flags = [(crate::game::BANK_SCENARIO2, 0x2D)];
+    let mut tab = MapTab::with_flags("map-label", pack, (1, 1, 0), &[1], &flags);
+    assert_eq!(tab.state("M.state.objective"), 2);
+    tab.step(neutral());
+    tab.step(press(|i| i.confirm = true));
+    let mut label_frame = None;
+    for frame in 0..60 {
+        tab.step(neutral());
+        if tab.cues.contains(&UiCue::MapLabel) {
+            label_frame = Some(frame);
+            break;
+        }
+    }
+    let first = label_frame.expect("the label cue played");
+    assert_eq!(tab.state("M.state.zoom"), 6);
+    // The label starts on frame 0 (empty) and grows two counts a frame.
+    for _ in 0..8 {
+        tab.step(neutral());
+    }
+    assert_eq!(tab.state("M.state.label_state"), 3);
+    let frame = tab.state("M.state.label_frame");
+    assert!(frame > 0, "the square has grown: frame {frame}");
+    let framebuffer = tab.draw();
+    // The menu origin sits at the 320x240 frame's (0, 0); the label's
+    // first row is at (0x38, 0x34).
+    let offset = ((0x34 * framebuffer.width + 0x38) * 4) as usize;
+    assert!(
+        framebuffer.rgba[offset] > 0xC0 && framebuffer.rgba[offset + 1] == 0,
+        "the label draws red: {:?}",
+        &framebuffer.rgba[offset..offset + 3]
+    );
+    // The blink repeats with its cue: grow, shrink, then 20 hidden frames.
+    let mut again = None;
+    for frame in 0..80 {
+        tab.step(neutral());
+        if tab.cues.contains(&UiCue::MapLabel) {
+            again = Some(frame);
+            break;
+        }
+    }
+    assert!(
+        again.is_some(),
+        "the label blinks again after {first} frames"
+    );
+    // The close parks the label until the plan is back at rest.
+    tab.step(press(|i| i.cancel = true));
+    tab.step(neutral());
+    assert_eq!(tab.state("M.state.label_state"), 1);
+    assert_eq!(tab.state("M.state.label_frame == nil and 1 or 0"), 1);
+}
+
+#[test]
+fn map_objective_follows_the_scenario_flags() {
+    use crate::game::{BANK_SCENARIO, BANK_SCENARIO2};
+    for (label, (stage, player), flags, objective) in [
+        ("none", (1, 0), &[][..], 0),
+        ("serum1", (1, 0), &[(BANK_SCENARIO2, 0x2D)][..], 2),
+        (
+            "serum1-acked",
+            (1, 0),
+            &[(BANK_SCENARIO2, 0x2D), (BANK_SCENARIO, 0x49)][..],
+            0,
+        ),
+        ("serum2", (2, 0), &[(BANK_SCENARIO2, 0x2E)][..], 2),
+        ("serum2-outside", (3, 0), &[(BANK_SCENARIO2, 0x2E)][..], 0),
+        ("plant42", (3, 0), &[(BANK_SCENARIO2, 0x38)][..], 4),
+        ("jill-serum", (1, 1), &[(BANK_SCENARIO2, 0x23)][..], 2),
+        ("jill-plant42", (3, 1), &[(BANK_SCENARIO2, 0x38)][..], 0),
+    ] {
+        let mut game = map_game((stage, 1, 0), &[], flags);
+        game.id.player_flag = player;
+        let tab = MapTab::with_game(label, no_map_pack(), game);
+        assert_eq!(tab.state("M.state.objective"), objective, "{label}");
+    }
+}
+
+#[test]
+fn map_area_plans_use_the_reference_file_numbers() {
+    let tab = MapTab::new("map-stems", no_map_pack(), (1, 1, 0), &[]);
+    for (area, stem) in [
+        (0, "01"),
+        (4, "05"),
+        (5, "0a"),
+        (6, "0b"),
+        (7, "06"),
+        (10, "09"),
+    ] {
+        let found: String = tab.screen.test_eval(&format!("return M.area_stem({area})"));
+        assert_eq!(found, format!("map/{stem}"), "area {area}");
+    }
 }
 
 #[test]

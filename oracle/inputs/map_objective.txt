@@ -1,0 +1,17 @@
+# MAP tab objective label: open the pause menu, walk to the MAP tab, open the
+# Mansion 1F floor plan and hold it long enough for two label blinks and a
+# sweep, then close.
+60 start
+61
+90 up
+91
+100 up
+101
+110 confirm
+111
+120 confirm
+121
+400 cancel
+401
+430 cancel
+431

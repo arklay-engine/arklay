@@ -1906,6 +1906,12 @@ pub const UI_RADIO: &str = "Chris08";
 /// Page-turn cue name: slot 8 of every character table, played by the FILE
 /// reader's page turns (`play_sfx(3, 8)`).
 pub const UI_PAGE_TURN: &str = "Chris10";
+/// Map-zoom cue name: slot 9 of every character table, played when the MAP
+/// tab's floor plan opens or re-opens (`play_sfx(3, 9)`).
+pub const UI_MAP_ZOOM: &str = "Chris09";
+/// Map-label cue name: slot 10 of every character table, played as the MAP
+/// tab's objective label starts each blink (`play_sfx(3, 10)`).
+pub const UI_MAP_LABEL: &str = "Mapled";
 
 /// The non-combat global sound banks (`g_st11`..=`g_st15`), one 16-slot row
 /// each. Only the entries the title, character-select, ending and misc screens
@@ -2471,9 +2477,9 @@ static CHARACTER_SHARED: [Option<&'static str>; 7] = [
     Some(UI_CANCEL),
     Some(UI_DECIDE),
     Some(UI_RADIO),
-    Some("Chris10"),
-    Some("Chris09"),
-    Some("Mapled"),
+    Some(UI_PAGE_TURN),
+    Some(UI_MAP_ZOOM),
+    Some(UI_MAP_LABEL),
 ];
 
 /// Name in character table `table` (`0..=7`), slot `id` (`0..=15`). Slots
