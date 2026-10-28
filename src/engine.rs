@@ -16037,6 +16037,27 @@ mod tests {
     }
 
     #[test]
+    fn a_new_game_in_a_packs_own_start_room_skips_the_main_hall_position() {
+        let mut manifest = crate::manifest::Manifest::base("re2");
+        manifest.start_room = Some("100".to_string());
+        let mut writer = PackWriter::new();
+        writer
+            .add(crate::manifest::ENTRY, manifest.render().into_bytes())
+            .unwrap();
+        writer
+            .add("room/1000/room.rdt", crate::rdt2::tests::sample())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let dir = TempDir::new();
+        let session = GameSession::new(&pack, 0, &dir.0).unwrap();
+        assert_eq!(session.game.id, RoomId::parse("1000").unwrap());
+        assert_ne!(session.player.pos, [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z]);
+        let simulated = simulate_new_game(&pack, 0, 0, player::Input::default()).unwrap();
+        assert_eq!(simulated.id, session.game.id);
+        assert_eq!(simulated.player.pos, session.player.pos);
+    }
+
+    #[test]
     fn menu_saves_only_what_it_changed_over_the_file() {
         let mut file = crate::config::Config {
             language: Some("en".to_string()),

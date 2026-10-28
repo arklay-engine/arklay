@@ -127,6 +127,12 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
     }
 
     let mut warnings = Vec::new();
+    if options.base.is_none() && looks_like_re2(&files) {
+        bail!(
+            "{} looks like an RE2 mod (`data/Common/bin`, `data/Pl0`); pass --base with the RE2 pack",
+            options.input.display()
+        );
+    }
     let base = open_base(options.base.as_deref(), &mut warnings)?;
     let info = read_mod_info(&input, &files, &mut warnings)?;
 
@@ -137,8 +143,13 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         .and_then(|base| base.manifest())
         .filter(|manifest| manifest.kind == manifest::PackKind::Base)
         .map_or_else(|| BASE_ID.to_string(), |manifest| manifest.id.clone());
-    // Only RE1 folds stages 6 and 7 onto the stage 1 and 2 backgrounds.
-    let folds_stages = base_id == BASE_ID;
+    // Only RE1 folds stages 6 and 7 onto the stage 1 and 2 backgrounds; the
+    // base's rooms say which game it is.
+    let folds_stages = base.as_ref().is_none_or(|base| {
+        crate::room::ids(base)
+            .first()
+            .is_none_or(|&id| crate::room::dialect(base, id) == crate::format::Dialect::Re1)
+    });
     let mut manifest = manifest::Manifest {
         kind: manifest::PackKind::Mod,
         base: Some(base_id),
@@ -452,6 +463,15 @@ fn open_base(path: Option<&Path>, warnings: &mut Vec<String>) -> Result<Option<P
             Ok(None)
         }
     }
+}
+
+/// Whether the mod's files sit in RE2's PC layout (`data/Common/bin`,
+/// `data/Pl0`), which no RE1 install has.
+fn looks_like_re2(files: &[InputFile]) -> bool {
+    files.iter().any(|file| {
+        let lower = file.path.to_ascii_lowercase();
+        lower.starts_with("data/common/bin/") || lower.starts_with("data/pl0/")
+    })
 }
 
 /// The input file name without its extension.
@@ -1873,6 +1893,28 @@ mod tests {
             Some("3.3.2")
         );
         assert_eq!(version_in("RE1 HD"), None);
+    }
+
+    #[test]
+    fn an_re2_layout_is_told_apart() {
+        let files = |paths: &[&str]| -> Vec<InputFile> {
+            paths
+                .iter()
+                .map(|path| InputFile {
+                    path: path.to_string(),
+                    handle: Handle::Zip(0),
+                })
+                .collect()
+        };
+        assert!(looks_like_re2(&files(&[
+            "hires/bgd/91F681B3.webp",
+            "data/Common/bin/osp.bin"
+        ])));
+        assert!(looks_like_re2(&files(&["DATA/PL0/EMD0/EM010.EMD"])));
+        assert!(!looks_like_re2(&files(&[
+            "hires/bgd/0259741A.webp",
+            "STAGE1/RC1000.PAK"
+        ])));
     }
 
     #[test]

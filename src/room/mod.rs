@@ -64,6 +64,25 @@ pub fn format(pack: &Pack, id: RoomId) -> Option<Format> {
     }
 }
 
+/// The game room `id`'s definition comes from: an RDT's detected dialect,
+/// or a `room.xml`'s `game`. A missing or unreadable room is RE1's.
+pub fn dialect(pack: &Pack, id: RoomId) -> Dialect {
+    match format(pack, id) {
+        Some(Format::Rdt) => pack
+            .read(&id.rdt_entry())
+            .ok()
+            .and_then(|data| crate::format::rdt(&data).dialect())
+            .unwrap_or_default(),
+        Some(Format::Xml) => pack
+            .read(&id.xml_entry())
+            .ok()
+            .and_then(|data| xml::parse(std::str::from_utf8(&data).ok()?).ok())
+            .map(|source| source.dialect)
+            .unwrap_or_default(),
+        None => Dialect::Re1,
+    }
+}
+
 /// Whether `pack` defines room `id` at all.
 pub fn exists(pack: &Pack, id: RoomId) -> bool {
     format(pack, id).is_some()
@@ -271,7 +290,7 @@ pub fn own_scripts(pack: &Pack, id: RoomId) -> Result<scd::ir::Scripts> {
     Loaded {
         id,
         state: RoomState::default(),
-        dialect: Dialect::Re1,
+        dialect: dialect(pack, id),
         rdt: None,
     }
     .own_scripts(pack)

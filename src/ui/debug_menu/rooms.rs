@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 
 use super::widgets::{self, Grid, Scroll, grid_step};
 use super::{Cx, Hit, Step, fit};
+use crate::format::Dialect;
 use crate::gui::canvas::{Color, Rect};
 use crate::gui::text::Align;
 use crate::gui::theme::{Role, palette};
@@ -23,16 +24,20 @@ use crate::ui::UiInput;
 /// Thumbnails loaded per painted frame, so the grid stays responsive.
 const LOADS_PER_FRAME: usize = 4;
 
-/// A stage tab's label: the language's `UI_DEBUG_STAGE_<digit>`, else the
-/// stage's digit (`Stage A`).
-fn stage_label(cx: &Cx<'_>, stage: u8) -> String {
+/// A stage tab's label: the language's `UI_DEBUG_STAGE_<digit>` in an RE1
+/// pack (the names are RE1's), else the stage's digit (`Stage A`).
+fn stage_label(cx: &Cx<'_>, stage: u8, named: bool) -> String {
     let digit = RoomId {
         stage,
         ..RoomId::default()
     }
     .stage_char()
     .to_ascii_uppercase();
-    let label = cx.label(&format!("UI_DEBUG_STAGE_{digit}"));
+    let label = if named {
+        cx.label(&format!("UI_DEBUG_STAGE_{digit}"))
+    } else {
+        String::new()
+    };
     if label.is_empty() {
         format!("Stage {digit}")
     } else {
@@ -105,6 +110,9 @@ pub fn room_entries(pack: &Pack, preferred_player: u8) -> Vec<RoomId> {
 pub struct RoomSelect {
     /// Each tab's stage number.
     stage_ids: Vec<u8>,
+    /// Whether the tabs take the language's RE1 stage names: the pack's
+    /// rooms are RE1's.
+    named: bool,
     /// Each tab's rooms.
     stages: Vec<Vec<RoomVariants>>,
     /// The session's room as the menu last saw it.
@@ -121,6 +129,9 @@ impl RoomSelect {
     /// Split the pack's rooms into stages and put the cursor on `current`.
     pub fn new(pack: &Pack, current: RoomId) -> Self {
         let rooms = room_variants(pack);
+        let named = rooms
+            .first()
+            .is_none_or(|room| crate::room::dialect(pack, room.id(0)) == Dialect::Re1);
         let mut stage_ids: Vec<u8> = (1..=RoomId::MAX_STAGE).collect();
         for room in &rooms {
             if !stage_ids.contains(&room.stage) {
@@ -136,6 +147,7 @@ impl RoomSelect {
         let tabs = stage_ids.len();
         let mut select = Self {
             stage_ids,
+            named,
             stages,
             current: (0, 0),
             stage: 0,
@@ -237,7 +249,7 @@ impl RoomSelect {
         let labels: Vec<String> = self
             .stage_ids
             .iter()
-            .map(|&stage| stage_label(cx, stage))
+            .map(|&stage| stage_label(cx, stage, self.named))
             .collect();
         let empty: Vec<bool> = self.stages.iter().map(Vec::is_empty).collect();
         let tab_h = widgets::tabs(p, cx, area, &labels, self.stage, &empty);
@@ -353,5 +365,16 @@ mod tests {
         let pack = pack(&["1000", "7001"]);
         let select = RoomSelect::new(&pack, RoomId::parse("1000").unwrap());
         assert_eq!(select.stage_ids, [1, 2, 3, 4, 5, 6, 7]);
+        assert!(select.named, "an RE1 pack's tabs take the RE1 stage names");
+    }
+
+    #[test]
+    fn an_re2_pack_does_not_take_the_re1_stage_names() {
+        let mut writer = crate::pack::PackWriter::new();
+        writer
+            .add("room/1000/room.rdt", crate::rdt2::tests::sample())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        assert!(!RoomSelect::new(&pack, RoomId::parse("1000").unwrap()).named);
     }
 }

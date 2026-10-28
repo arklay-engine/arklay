@@ -86,8 +86,9 @@ impl RoomId {
         (u32::from(self.stage) << 12) | (u32::from(self.room) << 4) | u32::from(self.player_flag)
     }
 
-    /// The stage's digit: `1`-`9`, or the letter `a`-`g`.
+    /// The stage's digit: `1`-`7`, or the letter `a`-`g`.
     pub fn stage_char(self) -> char {
+        debug_assert!(self.stage <= Self::MAX_STAGE_ID, "stage {}", self.stage);
         match self.stage {
             0..=9 => char::from(b'0' + self.stage),
             stage => char::from(b'a' + (stage - 10).min(25)),

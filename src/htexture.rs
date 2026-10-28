@@ -946,11 +946,11 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
         // RE2's loader (`bio2hd.asi`) hashes the background's whole 256 x 256
         // main page: the 240 picture rows, black as transparent, then 16 rows
         // the game never writes. The 128 x 128 side page reuses that hash.
-        // That is the page hash below, framed to the whole camera picture
-        // instead of the page, so only a camera-sized image takes it.
+        // Framed to the whole camera picture instead of the page, so only a
+        // camera-sized image takes it.
         if (width, height) == (320, 240) {
             candidates.push(Candidate {
-                hash: replicated.window_crc(256, 256, finish_mask),
+                hash: surface(Expand::Replicate, true).window_crc(256, 256, finish_mask),
                 frame: size,
             });
         }
@@ -1454,11 +1454,11 @@ mod tests {
         let mut expected = Vec::new();
         for y in 0..256 {
             for x in 0..256 {
-                let texel = if y < 240 {
-                    let [r, g, b, _] = pixel(x, y);
-                    finish_mask(texel(colour_of([r, g, b]), Expand::Replicate))
-                } else {
-                    0
+                let texel = match pixel(x, y) {
+                    _ if y >= 240 => 0,
+                    // Black is the transparent texel, not the black one.
+                    [0, 0, 0, _] => 0,
+                    [r, g, b, _] => texel(colour_of([r, g, b]), Expand::Replicate) | 0xff00_0000,
                 };
                 expected.extend_from_slice(&texel.to_le_bytes());
             }
