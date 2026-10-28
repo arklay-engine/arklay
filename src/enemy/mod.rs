@@ -119,10 +119,11 @@ pub struct EntityModelCache {
     /// Skeleton-only views of the loaded models, shared with the animation
     /// clocks that compose joint world matrices.
     pub(crate) skeleton_sets: HashMap<(u8, u8), Arc<crate::model::Skeleton>>,
-    /// The character held-weapon meshes (`player/ws*.tmd`), keyed by file id.
-    pub(crate) weapon_tmds: HashMap<u16, Arc<crate::model::Tmd>>,
-    /// Held-weapon file ids the pack does not carry.
-    pub(crate) weapon_missing: HashSet<u16>,
+    /// The character held-weapon meshes (`enemy/<id>/weapon/<behavior>.tmd`),
+    /// keyed by entity id and behavior byte.
+    pub(crate) weapon_tmds: HashMap<(u8, u8), Arc<crate::model::Tmd>>,
+    /// Held-weapon keys the pack carries no usable mesh for.
+    pub(crate) weapon_missing: HashSet<(u8, u8)>,
 }
 
 /// The pack entry candidates for entity `id` in the given scenario, in
@@ -213,25 +214,37 @@ impl EntityModelCache {
         None
     }
 
-    /// The parsed character held-weapon mesh for a `WS*.TMD` file id, loading
-    /// `player/ws{id:03x}.tmd` from the pack on first use.
-    pub fn weapon_tmd(&mut self, pack: &Pack, id: u16) -> Option<Arc<crate::model::Tmd>> {
-        if let Some(tmd) = self.weapon_tmds.get(&id) {
+    /// The parsed held-weapon mesh of character `id` with behavior byte
+    /// `behavior`, loading `enemy/{id:02x}/weapon/{behavior:02x}.tmd` from the
+    /// pack on first use. An absent entry means the character holds nothing
+    /// and is not reported.
+    pub fn weapon_tmd(
+        &mut self,
+        pack: &Pack,
+        id: u8,
+        behavior: u8,
+    ) -> Option<Arc<crate::model::Tmd>> {
+        let key = (id, behavior);
+        if let Some(tmd) = self.weapon_tmds.get(&key) {
             return Some(Arc::clone(tmd));
         }
-        if self.weapon_missing.contains(&id) {
+        if self.weapon_missing.contains(&key) {
             return None;
         }
-        let path = format!("player/ws{id:03x}.tmd");
+        let path = crate::weapons::character_weapon_entry(id, behavior);
+        if !pack.contains(&path) {
+            self.weapon_missing.insert(key);
+            return None;
+        }
         match pack.read(&path).and_then(|bytes| crate::tmd::parse(&bytes)) {
             Ok(tmd) => {
                 let tmd = Arc::new(tmd);
-                self.weapon_tmds.insert(id, Arc::clone(&tmd));
+                self.weapon_tmds.insert(key, Arc::clone(&tmd));
                 Some(tmd)
             }
             Err(err) => {
                 eprintln!("warning: missing held-weapon mesh {path}: {err:#}");
-                self.weapon_missing.insert(id);
+                self.weapon_missing.insert(key);
                 None
             }
         }

@@ -1212,7 +1212,8 @@ fn special_light_suppressed(id: RoomId, camera: usize) -> bool {
 /// The sound an [`EntitySound`] plays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SoundName {
-    /// A named room/global sound, played from `se/{name}.wav`.
+    /// A named room/global sound, played from `se/{name}.wav`, or a pack stem
+    /// when it holds a `/` (the player characters' own sounds).
     Room(&'static str),
     /// Enemy sound slot `slot` of entity id `id`. The engine resolves it
     /// through the enemy's own sound files (see

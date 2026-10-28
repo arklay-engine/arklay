@@ -525,7 +525,8 @@ fn snd3d_sites(root: &Path) -> Vec<Snd3dSite> {
     sites
 }
 
-/// The 31 character-SFX names the character tables reference.
+/// The 39 character-SFX names the character tables reference: eight per
+/// character and the seven shared slots.
 fn character_sfx_names() -> Vec<&'static str> {
     let mut names = HashSet::new();
     for table in 0..8u8 {
@@ -538,6 +539,16 @@ fn character_sfx_names() -> Vec<&'static str> {
     let mut names: Vec<&'static str> = names.into_iter().collect();
     names.sort_unstable();
     names
+}
+
+/// The pack entry a sound name plays from: `se/` for a named effect, the
+/// name itself for a pack stem such as a player character's sound.
+fn sound_entry(name: &str) -> String {
+    if name.contains('/') {
+        format!("{name}.wav")
+    } else {
+        format!("se/{}.wav", name.to_ascii_lowercase())
+    }
 }
 
 #[test]
@@ -748,9 +759,9 @@ fn room_105s_3d_se_sites_resolve_through_the_room_and_character_banks() {
 
     // The character bank selects the player's table with the same 3D pan.
     let chris = sfx::play_sfx_3d(&room, 0, 3, 2, [0, 0, 0], [1000, 0, 0], [1000, 0, 0]);
-    assert_eq!(chris.name, Some("Chris03"));
+    assert_eq!(chris.name, Some("player/00/sound/02"));
     let jill = sfx::play_sfx_3d(&room, 1, 3, 2, [0, 0, 0], [1000, 0, 0], [1000, 0, 0]);
-    assert_eq!(jill.name, Some("Jill03"));
+    assert_eq!(jill.name, Some("player/01/sound/02"));
     assert!(chris.pan.is_finite() && (-1.0..=1.0).contains(&chris.pan));
 }
 
@@ -882,12 +893,16 @@ fn the_room_and_character_names_are_packed() {
     };
     let pack = Pack::open(&pack_path).unwrap();
     let names = character_sfx_names();
-    assert_eq!(names.len(), 31, "the character tables name 31 sounds");
+    assert_eq!(
+        names.len(),
+        4 * 8 + 7,
+        "the character tables name eight sounds per character and seven shared ones"
+    );
     let mut missing = Vec::new();
     // Every named sound the room tables and the shared tables reference,
     // bar the enemy sounds that only play from their enemy's folder.
     for name in sfx::se_entry_names().chain(names.iter().copied()) {
-        let path = format!("se/{}.wav", name.to_ascii_lowercase());
+        let path = sound_entry(name);
         if !pack.contains(&path) {
             missing.push(path);
         }
@@ -965,7 +980,7 @@ fn conversion_packs_the_referenced_voice_lines_in_the_single_pack() {
     );
     let mut se_missing = Vec::new();
     for name in sfx::se_entry_names().chain(character_sfx_names()) {
-        let path = format!("se/{}.wav", name.to_ascii_lowercase());
+        let path = sound_entry(name);
         if !pack.contains(&path) {
             se_missing.push(path);
         }

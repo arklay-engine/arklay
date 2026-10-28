@@ -91,7 +91,7 @@ fn player_shadow_capture_is_deterministic_and_present_at_spawn() {
 
     let emd = emd::parse(
         &pack
-            .read(&format!("player/{:02}.emd", id.player_flag & 3))
+            .read(&arklay::convert::skin_entry(id.player_flag & 3, 0))
             .unwrap(),
     )
     .unwrap();

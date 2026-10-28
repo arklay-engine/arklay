@@ -2018,23 +2018,15 @@ pub fn global_sfx(bank: u8, id: u8) -> Option<&'static str> {
 /// Every sound effect name shipped in the pack, sorted.
 ///
 /// The room-table names (every named slot of the 203x48 per-room table),
-/// the shared character/menu tables, the door pairs and the UI cues. Names
+/// the shared menu slots of the character tables, the door pairs and the UI cues. Names
 /// that differ only by case share one lowercased pack entry and appear once.
 #[rustfmt::skip]
-pub static SE_NAMES: [&str; 420] = [
+pub static SE_NAMES: [&str; 400] = [
     "40S&W",
     "A_mcn03",
     "BEEP",
     "BRK_stn",
     "Bio01",
-    "Ch_ef01",
-    "Ch_ef02",
-    "Ch_ef03",
-    "Ch_ef04",
-    "Chris01",
-    "Chris02",
-    "Chris03",
-    "Chris04",
     "Chris08",
     "Chris09",
     "Chris10",
@@ -2125,14 +2117,6 @@ pub static SE_NAMES: [&str; 420] = [
     "He_smash",
     "He_walkA",
     "He_walkB",
-    "Jill01",
-    "Jill02",
-    "Jill03",
-    "Jill04",
-    "Jill_ef01",
-    "Jill_ef02",
-    "Jill_ef03",
-    "Jill_ef04",
     "Knife01",
     "Knife02",
     "Knife03",
@@ -2161,10 +2145,6 @@ pub static SE_NAMES: [&str; 420] = [
     "Reb02",
     "Reb03",
     "Reb04",
-    "Reb_ef01",
-    "Reb_ef02",
-    "Reb_ef03",
-    "Reb_ef04",
     "Rocket01",
     "Rocket02",
     "Rocket03",
@@ -2444,46 +2424,44 @@ pub static SE_NAMES: [&str; 420] = [
     "zuruzuru",
 ];
 
-/// The eight 16-slot character SFX tables (`g_charactersSfxTable`), selected
-/// by the player/character model id. Tables 2/3 and 6/7 share their rows.
-static CHARACTER_HEADS: [[Option<&'static str>; 4]; 8] = [
+/// The shipped hurt/voice sounds of each player character, by character
+/// (`0` Chris, `1` Jill, `2`/`3` Rebecca as in `g_charactersSfxTable`) and
+/// sound id: `00..=03` dry, `04..=07` the echoing copies. The converter
+/// packs them as [`character_sound_entry`].
+#[rustfmt::skip]
+pub const CHARACTER_SOUNDS: [[&str; 8]; 4] = [
+    ["Chris01", "Chris02", "Chris03", "Chris04", "Ch_ef01", "Ch_ef02", "Ch_ef03", "Ch_ef04"],
+    ["Jill01", "Jill02", "Jill03", "Jill04", "Jill_ef01", "Jill_ef02", "Jill_ef03", "Jill_ef04"],
+    ["Reb01", "Reb02", "Reb03", "Reb04", "Reb_ef01", "Reb_ef02", "Reb_ef03", "Reb_ef04"],
+    ["Reb01", "Reb02", "Reb03", "Reb04", "Reb_ef01", "Reb_ef02", "Reb_ef03", "Reb_ef04"],
+];
+
+/// The pack entry of `character`'s sound `sound`.
+pub fn character_sound_entry(character: u8, sound: u8) -> String {
+    format!(
+        "{}.wav",
+        CHARACTER_HEADS[usize::from(character & 3)][usize::from(sound & 7)]
+    )
+}
+
+/// The pack stems of [`CHARACTER_SOUNDS`], played like any `se/` name.
+#[rustfmt::skip]
+static CHARACTER_HEADS: [[&str; 8]; 4] = [
     [
-        Some("Chris01"),
-        Some("Chris02"),
-        Some("Chris03"),
-        Some("Chris04"),
+        "player/00/sound/00", "player/00/sound/01", "player/00/sound/02", "player/00/sound/03",
+        "player/00/sound/04", "player/00/sound/05", "player/00/sound/06", "player/00/sound/07",
     ],
     [
-        Some("Jill01"),
-        Some("Jill02"),
-        Some("Jill03"),
-        Some("Jill04"),
-    ],
-    [Some("Reb01"), Some("Reb02"), Some("Reb03"), Some("Reb04")],
-    [Some("Reb01"), Some("Reb02"), Some("Reb03"), Some("Reb04")],
-    [
-        Some("Ch_ef01"),
-        Some("Ch_ef02"),
-        Some("Ch_ef03"),
-        Some("Ch_ef04"),
+        "player/01/sound/00", "player/01/sound/01", "player/01/sound/02", "player/01/sound/03",
+        "player/01/sound/04", "player/01/sound/05", "player/01/sound/06", "player/01/sound/07",
     ],
     [
-        Some("Jill_ef01"),
-        Some("Jill_ef02"),
-        Some("Jill_ef03"),
-        Some("Jill_ef04"),
+        "player/02/sound/00", "player/02/sound/01", "player/02/sound/02", "player/02/sound/03",
+        "player/02/sound/04", "player/02/sound/05", "player/02/sound/06", "player/02/sound/07",
     ],
     [
-        Some("Reb_ef01"),
-        Some("Reb_ef02"),
-        Some("Reb_ef03"),
-        Some("Reb_ef04"),
-    ],
-    [
-        Some("Reb_ef01"),
-        Some("Reb_ef02"),
-        Some("Reb_ef03"),
-        Some("Reb_ef04"),
+        "player/03/sound/00", "player/03/sound/01", "player/03/sound/02", "player/03/sound/03",
+        "player/03/sound/04", "player/03/sound/05", "player/03/sound/06", "player/03/sound/07",
     ],
 ];
 
@@ -2498,11 +2476,15 @@ static CHARACTER_SHARED: [Option<&'static str>; 7] = [
     Some("Mapled"),
 ];
 
-/// Name in character table `table` (`0..=7`), slot `id` (`0..=15`).
+/// Name in character table `table` (`0..=7`), slot `id` (`0..=15`). Slots
+/// `0..=3` are the character's own sounds: tables `4..=7` are the echoing
+/// copies of `0..=3`.
 pub fn character_sfx(table: u8, id: u8) -> Option<&'static str> {
-    let head = CHARACTER_HEADS.get(usize::from(table))?;
+    if table > 7 {
+        return None;
+    }
     if id < 4 {
-        return head[usize::from(id)];
+        return Some(CHARACTER_HEADS[usize::from(table & 3)][usize::from(id + (table & 4))]);
     }
     CHARACTER_SHARED.get(usize::from(id) - 4).copied().flatten()
 }
@@ -3265,7 +3247,7 @@ mod tests {
 
     #[test]
     fn se_names_are_sorted_and_unique() {
-        assert_eq!(SE_NAMES.len(), 420);
+        assert_eq!(SE_NAMES.len(), 400);
         assert!(SE_NAMES.windows(2).all(|pair| pair[0] < pair[1]));
         let lowered: std::collections::HashSet<String> = SE_NAMES
             .iter()
@@ -3407,15 +3389,18 @@ mod tests {
 
     #[test]
     fn character_tables_select_by_id_and_share_the_tail() {
-        assert_eq!(character_sfx(0, 0), Some("Chris01"));
-        assert_eq!(character_sfx(0, 3), Some("Chris04"));
-        assert_eq!(character_sfx(1, 0), Some("Jill01"));
-        assert_eq!(character_sfx(2, 1), Some("Reb02"));
-        assert_eq!(character_sfx(3, 1), Some("Reb02"));
-        assert_eq!(character_sfx(4, 0), Some("Ch_ef01"));
-        assert_eq!(character_sfx(5, 3), Some("Jill_ef04"));
-        assert_eq!(character_sfx(6, 0), Some("Reb_ef01"));
-        assert_eq!(character_sfx(7, 0), Some("Reb_ef01"));
+        assert_eq!(character_sfx(0, 0), Some("player/00/sound/00"));
+        assert_eq!(character_sfx(0, 3), Some("player/00/sound/03"));
+        assert_eq!(character_sfx(1, 0), Some("player/01/sound/00"));
+        assert_eq!(character_sfx(2, 1), Some("player/02/sound/01"));
+        assert_eq!(character_sfx(3, 1), Some("player/03/sound/01"));
+        assert_eq!(character_sfx(4, 0), Some("player/00/sound/04"));
+        assert_eq!(character_sfx(5, 3), Some("player/01/sound/07"));
+        assert_eq!(character_sfx(6, 0), Some("player/02/sound/04"));
+        assert_eq!(character_sfx(7, 0), Some("player/03/sound/04"));
+        assert_eq!(character_sfx(8, 0), None);
+        assert_eq!(character_sound_entry(1, 7), "player/01/sound/07.wav");
+        assert_eq!(CHARACTER_SOUNDS[1][7], "Jill_ef04");
         for table in 0..8 {
             assert_eq!(character_sfx(table, 4), Some("cursor"));
             assert_eq!(character_sfx(table, 7), Some(UI_RADIO));
@@ -3604,9 +3589,9 @@ mod tests {
 
         // Bank 3: the selected character table.
         let chris = play_sfx_3d(&room, 0, 3, 2, camera, target, sound);
-        assert_eq!(chris.name, Some("Chris03"));
+        assert_eq!(chris.name, Some("player/00/sound/02"));
         let jill = play_sfx_3d(&room, 1, 3, 2, camera, target, sound);
-        assert_eq!(jill.name, Some("Jill03"));
+        assert_eq!(jill.name, Some("player/01/sound/02"));
         assert_eq!(
             play_sfx_3d(&room, 0, 3, 16, camera, target, sound).name,
             None

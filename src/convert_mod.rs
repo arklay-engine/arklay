@@ -14,8 +14,9 @@
 //! | `movie/*.mp4`, `movie/*.avi` | `movie/<film>.{mp4,avi}` |
 //! | `STAGEn/ROOM####.RDT` | `room/####/room.rdt` |
 //! | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/####/cut/*.bmp`, `room/####/mask/*.bmp` (every variant of the room) |
-//! | `ENEMY/*.EMD`, `PLAYERS/*` | `enemy/*`, `player/*` |
-//! | `sound/*.wav`, `voice/*.wav` | `bgm/*`, `se/*`, `voice/*` |
+//! | `ENEMY/*.EMD`, `PLAYERS/*.EMW` | `enemy/*`, `player/<id>/skin/*`, `player/<id>/weapon/*` |
+//! | `PLAYERS/WS*.TMD` | `enemy/<id>/weapon/*` |
+//! | `sound/*.wav`, `voice/*.wav` | `bgm/*`, `se/*`, `player/<id>/sound/*`, `voice/*` |
 //! | `DATA/*` | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
 //! | `TEXT/ROOM_###.xml` | `language/en-US.txt` room keys |
 //! | `init.xml` (BioRand start inventory) | `game/new_game.lua` |
@@ -902,7 +903,7 @@ fn classify_enemy(name: &str) -> Class {
         && let Ok(id) = digit.parse::<u8>()
         && id < 4
     {
-        return raw(format!("player/{id:02}.emd"));
+        return raw(convert::skin_entry(id, 0));
     }
     let costume = match stem {
         "em1030" => Some((0, 0)),
@@ -937,26 +938,41 @@ fn classify_enemy(name: &str) -> Class {
     Class::Unmapped
 }
 
-/// `PLAYERS/`: the locomotion clips, weapon animations and held models.
+/// `PLAYERS/`: the weapon animations (the no-weapon locomotion pair is
+/// weapon `00`) and the held models, under every entry that uses them.
 fn classify_players(name: &str) -> Class {
-    match name {
-        "w00.emw" => return raw("player/00.emw"),
-        "w10.emw" => return raw("player/01.emw"),
-        _ => {}
-    }
-    if let Some(stem) = name.strip_prefix('w').and_then(|s| s.strip_suffix(".emw"))
+    let entries: Vec<String> = if let Some(stem) =
+        name.strip_prefix('w').and_then(|s| s.strip_suffix(".emw"))
         && stem.len() == 2
         && let Ok(id) = u8::from_str_radix(stem, 16)
     {
-        return raw(format!("player/w{id:02x}.emw"));
-    }
-    if let Some(stem) = name.strip_prefix("ws").and_then(|s| s.strip_suffix(".tmd"))
+        crate::weapons::weapon_emw_targets(id)
+            .into_iter()
+            .map(|(character, item)| crate::weapons::weapon_emw_entry(character, item))
+            .collect()
+    } else if let Some(stem) = name.strip_prefix("ws").and_then(|s| s.strip_suffix(".tmd"))
         && stem.len() == 3
         && let Ok(id) = u16::from_str_radix(stem, 16)
     {
-        return raw(format!("player/ws{id:03x}.tmd"));
+        crate::weapons::character_weapon_targets(id)
+            .into_iter()
+            .map(|(id, behavior)| crate::weapons::character_weapon_entry(id, behavior))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if entries.is_empty() {
+        return Class::Unmapped;
     }
-    Class::Unmapped
+    Class::Map(
+        entries
+            .into_iter()
+            .map(|entry| Target {
+                entry,
+                convert: Convert::Raw,
+            })
+            .collect(),
+    )
 }
 
 /// `sound/`: BGM tracks and the named effects.
@@ -971,15 +987,22 @@ fn classify_sound(file: &str) -> Class {
     {
         return raw(crate::music::bgm_entry(id));
     }
-    let known = crate::sfx::SE_NAMES
+    // The room tables' copy, every player character sound and every enemy
+    // sound slot that plays it.
+    let se = (crate::sfx::SE_NAMES
         .iter()
-        .copied()
-        .any(|name| name.eq_ignore_ascii_case(stem));
-    if !known {
-        return Class::Unmapped;
-    }
-    // The room tables' copy (an enemy sound only when a room script plays
-    // it there), plus every enemy sound slot that plays it.
+        .any(|name| name.eq_ignore_ascii_case(stem))
+        && crate::sfx::packs_se_entry(stem))
+    .then(|| format!("se/{stem}.wav"));
+    let player = (0u8..)
+        .zip(crate::sfx::CHARACTER_SOUNDS)
+        .flat_map(|(character, names)| {
+            (0u8..)
+                .zip(names)
+                .filter(|(_, name)| name.eq_ignore_ascii_case(stem))
+                .map(move |(sound, _)| crate::sfx::character_sound_entry(character, sound))
+        });
+    // An enemy sound only lands in `se/` when a room script plays it there.
     let enemy = crate::sfx::ENEMY_SOUNDS
         .iter()
         .flat_map(|(id, style, slots)| {
@@ -991,11 +1014,13 @@ fn classify_sound(file: &str) -> Class {
                     format!("{}.wav", crate::sfx::enemy_sound_stem(&dir, *style, *slot))
                 })
         });
+    let entries: Vec<String> = se.into_iter().chain(player).chain(enemy).collect();
+    if entries.is_empty() {
+        return Class::Unmapped;
+    }
     Class::Map(
-        crate::sfx::packs_se_entry(stem)
-            .then(|| format!("se/{stem}.wav"))
+        entries
             .into_iter()
-            .chain(enemy)
             .map(|entry| Target {
                 entry,
                 convert: Convert::Raw,
@@ -1582,7 +1607,10 @@ mod tests {
         assert_eq!(one(&map, "movie/Capcom.mp4"), "movie/17.mp4");
         assert_eq!(one(&map, "movie/Dme_PSX.mp4"), "<unmapped>");
         assert_eq!(one(&map, "jpn/movie/oj.avi"), "movie/00.avi");
-        assert_eq!(one(&map, "jpn/PLAYERS/w03.EMW"), "player/w03.emw");
+        assert_eq!(
+            map["jpn/PLAYERS/w03.EMW"],
+            ["player/00/weapon/03.emw", "player/02/weapon/03.emw"]
+        );
         for skipped in [
             "_bio1dc/hires/bgd/0a1b2c3d.webp",
             "savedata/save00.dat",
@@ -1612,7 +1640,7 @@ mod tests {
             "mod_biorand/enemy/CHAR11.EMD",
             "mod_biorand/players/w03.emw",
             "mod_biorand/players/w10.emw",
-            "mod_biorand/players/ws210.tmd",
+            "mod_biorand/players/ws236.tmd",
             "mod_biorand/sound/BGM_13.wav",
             "mod_biorand/sound/BGM_24A.wav",
             "mod_biorand/sound/SE_01.wav",
@@ -1659,12 +1687,21 @@ mod tests {
             one(&map, "mod_biorand/enemy/em1021.emd"),
             crate::enemy::model_path(0x21).unwrap()
         );
-        assert_eq!(one(&map, "mod_biorand/enemy/CHAR11.EMD"), "player/01.emd");
-        assert_eq!(one(&map, "mod_biorand/players/w03.emw"), "player/w03.emw");
-        assert_eq!(one(&map, "mod_biorand/players/w10.emw"), "player/01.emw");
         assert_eq!(
-            one(&map, "mod_biorand/players/ws210.tmd"),
-            "player/ws210.tmd"
+            one(&map, "mod_biorand/enemy/CHAR11.EMD"),
+            "player/01/skin/00.emd"
+        );
+        assert_eq!(
+            map["mod_biorand/players/w03.emw"],
+            ["player/00/weapon/03.emw", "player/02/weapon/03.emw"]
+        );
+        assert_eq!(
+            one(&map, "mod_biorand/players/w10.emw"),
+            "player/01/weapon/00.emw"
+        );
+        assert_eq!(
+            one(&map, "mod_biorand/players/ws236.tmd"),
+            "enemy/23/weapon/06.tmd"
         );
         assert_eq!(one(&map, "mod_biorand/sound/BGM_13.wav"), "bgm/013.wav");
         assert_eq!(one(&map, "mod_biorand/sound/BGM_24A.wav"), "bgm/200.wav");
@@ -1694,7 +1731,13 @@ mod tests {
 
     #[test]
     fn enemy_sound_files_also_replace_every_enemy_slot_that_plays_them() {
-        let paths = ["sound/Z_ISI02.WAV", "sound/HE_NOUT.WAV", "sound/ft_wdA.wav"];
+        let paths = [
+            "sound/Z_ISI02.WAV",
+            "sound/HE_NOUT.WAV",
+            "sound/ft_wdA.wav",
+            "sound/jill_ef04.wav",
+            "sound/REB01.WAV",
+        ];
         let map = mapped_entries(&paths, &[]);
         // An enemy sound lives in the enemy's folder only, unless a room
         // script also plays it through the room table.
@@ -1704,6 +1747,16 @@ mod tests {
             ["se/he_nout.wav", "enemy/06/sound/01_07.wav"]
         );
         assert_eq!(map["sound/ft_wdA.wav"], ["se/ft_wda.wav"]);
+        assert_eq!(map["sound/jill_ef04.wav"], ["player/01/sound/07.wav"]);
+        assert_eq!(
+            map["sound/REB01.WAV"],
+            [
+                "se/reb01.wav",
+                "player/02/sound/00.wav",
+                "player/03/sound/00.wav"
+            ],
+            "a room table plays it too"
+        );
     }
 
     #[test]

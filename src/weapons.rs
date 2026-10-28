@@ -10,9 +10,10 @@
 //! - The fire data tables: each weapon's fire frame, sound ids and
 //!   muzzle/secondary billboard offsets, the fire end frames, the special
 //!   weapons' per-character frame windows and the aim height table. The
-//!   converter packs the weapon animation files (`player/w*.emw`) and the
-//!   character held-weapon meshes (`player/ws*.tmd`); these tables select the
-//!   file for the equipped item and time the FX against the packed clips.
+//!   converter unpacks the weapon animation files into
+//!   `player/<id>/weapon/<item>.emw` and the character held-weapon meshes into
+//!   `enemy/<id>/weapon/<behavior>.tmd`; these tables time the FX against the
+//!   packed clips.
 //! - The ammo helpers: the clip (`weapon_autoaim_check`), the reload transfer
 //!   from the matching ammunition stack (`fire_consume_ammo_stack`) and the
 //!   once-per-trigger volley latch. The equipped weapon's own quantity byte is
@@ -89,8 +90,8 @@ pub const WEAPON_ROWS: usize = 14;
 
 /// The player's weapon animation files by character block and weapon id. The
 /// entry is the shipped file number (`Wxx.EMW`); 0x00/0x10 are the no-weapon
-/// locomotion pair. Block 2 mirrors Chris and block 3 is Rebecca; only 0/1
-/// are used by the player.
+/// locomotion pair. Block 2 mirrors Chris and block 3 is Rebecca. The
+/// converter unpacks it into [`weapon_emw_entry`] per character and weapon.
 #[rustfmt::skip]
 pub const WEAPON_EMW: [[u8; 14]; 4] = [
     [0x00, 0x01, 0x02, 0x03, 0x04, 0x04, 0x05, 0x06, 0x06, 0x06, 0x07, 0x0B, 0x18, 0x08],
@@ -276,8 +277,8 @@ pub struct WeaponState {
     pub cooldown: u16,
     /// `g_weaponSpecialFireCountdown`.
     pub special_countdown: i16,
-    /// The weapon EMW file id the machine loaded when it started.
-    pub weapon_file: Option<u8>,
+    /// The weapon id whose animation set the machine loaded when it started.
+    pub weapon_item: Option<u8>,
     /// The equipped item is the knife.
     pub knife: bool,
     /// The handler ended the machine this tick (the holster's final loop). The
@@ -518,17 +519,45 @@ pub fn weapon_emw_id(character: u8, weapon: u8) -> Option<u8> {
     }
 }
 
-/// The pack entry of the weapon EMW a character block and weapon id select.
-///
-/// The no-weapon locomotion pair stays under its `player/{character}.emw`
-/// entry; every other file is packed as `player/w{file:02x}.emw`.
-pub fn weapon_emw_entry(character: u8, weapon: u8) -> Option<String> {
-    let file = weapon_emw_id(character, weapon)?;
-    if (character & 1 == 0 && file == 0x00) || (character & 1 == 1 && file == 0x10) {
-        Some(format!("player/{:02}.emw", character & 1))
-    } else {
-        Some(format!("player/w{file:02x}.emw"))
-    }
+/// The weapon ids a character's animation set is packed for: no weapon,
+/// the ten normal weapons and the two specials.
+pub const PLAYER_WEAPON_ITEMS: [u8; 13] = [
+    0x00,
+    0x01,
+    0x02,
+    0x03,
+    0x04,
+    0x05,
+    0x06,
+    0x07,
+    0x08,
+    0x09,
+    0x0A,
+    ITEM_INGRAM,
+    ITEM_MINIMI,
+];
+
+/// The weapon id the player's animation set is keyed by, or `None` for an
+/// item no character has clips for.
+pub fn weapon_clip_item(item: u8) -> Option<u8> {
+    PLAYER_WEAPON_ITEMS.contains(&item).then_some(item)
+}
+
+/// The pack entry of `character`'s animation set for weapon id `item`
+/// (`0x00` is the no-weapon locomotion set). The converter applies
+/// [`WEAPON_EMW`] once, so every character carries its own copy of each
+/// weapon and identical files share one blob.
+pub fn weapon_emw_entry(character: u8, item: u8) -> String {
+    format!("player/{character:02x}/weapon/{item:02x}.emw")
+}
+
+/// Every `(character, item)` pair whose animation set is shipped `Wxx.EMW`
+/// file `file`.
+pub fn weapon_emw_targets(file: u8) -> Vec<(u8, u8)> {
+    (0..4u8)
+        .flat_map(|character| PLAYER_WEAPON_ITEMS.map(|item| (character, item)))
+        .filter(|&(character, item)| weapon_emw_id(character, item) == Some(file))
+        .collect()
 }
 
 /// The held-weapon mesh file id for a scripted character and its behavior
@@ -551,10 +580,20 @@ pub fn character_weapon_id(id: u8, behavior_flags: u8) -> Option<u16> {
     Some(CHARACTER_WEAPON_TMD[usize::from(block)][usize::from(behavior_flags)])
 }
 
-/// The held-weapon mesh entry for a scripted character and its behavior byte.
-pub fn character_weapon_entry(id: u8, behavior_flags: u8) -> Option<String> {
-    let file = character_weapon_id(id, behavior_flags)?;
-    Some(format!("player/ws{file:03x}.tmd"))
+/// The held-weapon mesh entry for scripted character `id` and its behavior
+/// byte. The converter applies [`CHARACTER_WEAPON_TMD`] once, so a missing
+/// entry means the character holds nothing.
+pub fn character_weapon_entry(id: u8, behavior_flags: u8) -> String {
+    format!("enemy/{id:02x}/weapon/{behavior_flags:02x}.tmd")
+}
+
+/// Every `(id, behavior_flags)` pair that holds shipped `WSxxx.TMD` file
+/// `file`.
+pub fn character_weapon_targets(file: u16) -> Vec<(u8, u8)> {
+    (0x20..=0x2Eu8)
+        .flat_map(|id| (1..=6u8).map(move |behavior| (id, behavior)))
+        .filter(|&(id, behavior)| character_weapon_id(id, behavior) == Some(file))
+        .collect()
 }
 
 /// Whether an item id is a weapon the aim machine accepts.
@@ -880,11 +919,10 @@ fn try_enter(game: &mut GameState, player: &mut PlayerState, clips: &WeaponClips
     if clips.weapon.is_empty() {
         return false;
     }
-    let character = game.id.player_flag & 3;
     player.weapon = WeaponState {
         behavior: 0x12,
         knife: weapon == ITEM_KNIFE,
-        weapon_file: weapon_emw_id(character, weapon),
+        weapon_item: weapon_clip_item(weapon),
         // The reference reuses `attackDirection` for the aim/fire timers; the
         // live byte is the entity mirror, so the machine starts from whatever
         // the previous behaviour left there.
@@ -3134,38 +3172,63 @@ mod tests {
     }
 
     #[test]
-    fn weapon_emw_entries_follow_the_per_character_table() {
+    fn weapon_emw_entries_are_keyed_by_character_and_weapon() {
+        assert_eq!(weapon_emw_entry(0, 0), "player/00/weapon/00.emw");
+        assert_eq!(weapon_emw_entry(1, ITEM_INGRAM), "player/01/weapon/6f.emw");
+        assert_eq!(weapon_clip_item(ITEM_MINIMI), Some(ITEM_MINIMI));
+        assert_eq!(weapon_clip_item(0x0B), None, "a clip is not a weapon");
         assert_eq!(
-            weapon_emw_entry(0, 0).unwrap(),
-            "player/00.emw",
-            "Chris' no-weapon pair stays"
+            weapon_emw_targets(0x00),
+            vec![(0, 0), (2, 0)],
+            "Chris and Barry"
         );
-        assert_eq!(weapon_emw_entry(0, 1).unwrap(), "player/w01.emw");
-        assert_eq!(weapon_emw_entry(0, 2).unwrap(), "player/w02.emw");
-        assert_eq!(weapon_emw_entry(0, 5).unwrap(), "player/w04.emw");
-        assert_eq!(weapon_emw_entry(0, 10).unwrap(), "player/w07.emw");
-        assert_eq!(weapon_emw_entry(0, ITEM_INGRAM).unwrap(), "player/w18.emw");
-        assert_eq!(weapon_emw_entry(1, 0).unwrap(), "player/01.emw");
-        assert_eq!(weapon_emw_entry(1, 2).unwrap(), "player/w12.emw");
-        assert_eq!(weapon_emw_id(3, 1), Some(0x11), "Rebecca's knife");
+        assert_eq!(
+            weapon_emw_targets(0x04),
+            vec![(0, 4), (0, 5), (2, 4), (2, 5)]
+        );
+        assert_eq!(
+            weapon_emw_targets(0x11),
+            vec![(1, 1), (3, 1)],
+            "Rebecca shares Jill's knife"
+        );
+        assert_eq!(
+            weapon_emw_targets(0x08),
+            (0..4)
+                .map(|character| (character, ITEM_MINIMI))
+                .collect::<Vec<_>>()
+        );
+        assert!(weapon_emw_targets(0x0B).is_empty(), "never selected");
+        assert!(
+            weapon_emw_targets(0x20).is_empty(),
+            "Barry's own set is unused"
+        );
     }
 
     #[test]
     fn character_weapon_entries_clamp_the_block() {
-        assert_eq!(character_weapon_entry(0x20, 0), None, "unarmed");
-        assert_eq!(character_weapon_entry(0x20, 1).unwrap(), "player/ws202.tmd");
-        assert_eq!(character_weapon_entry(0x21, 1).unwrap(), "player/ws212.tmd");
-        assert_eq!(character_weapon_entry(0x22, 5).unwrap(), "player/ws225.tmd");
-        assert_eq!(character_weapon_entry(0x23, 6).unwrap(), "player/ws236.tmd");
-        assert_eq!(character_weapon_entry(0x24, 1).unwrap(), "player/ws242.tmd");
+        assert_eq!(character_weapon_id(0x20, 0), None, "unarmed");
+        assert_eq!(character_weapon_id(0x22, 5), Some(0x225));
         assert_eq!(
-            character_weapon_entry(0x2E, 1).unwrap(),
-            "player/ws224.tmd",
+            character_weapon_id(0x2E, 1),
+            Some(0x224),
             "ids above Wesker fold onto block 2"
         );
-        assert_eq!(character_weapon_entry(0x20, 7), None, "out of range");
-        assert_eq!(character_weapon_entry(0x00, 4), None, "a player model");
-        assert_eq!(character_weapon_entry(0x27, 1), None, "Richard loads none");
+        assert_eq!(character_weapon_id(0x20, 7), None, "out of range");
+        assert_eq!(character_weapon_id(0x27, 1), None, "Richard loads none");
+        assert_eq!(character_weapon_entry(0x2e, 6), "enemy/2e/weapon/06.tmd");
+        assert_eq!(
+            character_weapon_targets(0x202),
+            (1..=6).map(|behavior| (0x20, behavior)).collect::<Vec<_>>()
+        );
+        assert_eq!(character_weapon_targets(0x236), vec![(0x23, 6)]);
+        assert_eq!(
+            character_weapon_targets(0x225),
+            [0x22, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E]
+                .into_iter()
+                .flat_map(|id| [(id, 5), (id, 6)])
+                .collect::<Vec<_>>()
+        );
+        assert!(character_weapon_targets(0x210).is_empty());
     }
 
     #[test]

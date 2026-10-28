@@ -174,7 +174,9 @@ is exact.
 | item icon | `item/0b/item`, `item/44/item`, `item/6f/item` | webp, png, bmp, tim | the shipped 40x30 icon's; black is a hole |
 | item viewer model | `item/0b/model.tmd` | tmd | the shipped mesh |
 | item viewer texture | `item/0b/model.bmp` | bmp (8-bit indexed, full 256-entry palette) | the shipped 256x256 page; HD replacements use `htexture/item/0b/model` |
-| enemy / player art | (inside `enemy/<id>/enemy*.emd`, `player/*.emd`) | — | override the whole model entry |
+| enemy / player art | (inside `enemy/<id>/enemy*.emd`, `player/<id>/skin/<skin>.emd`) | — | override the whole model entry |
+| player character | `player/<id>/skin/<skin>.emd` (`00` own model, `01`/`02` alternate outfits), `player/<id>/weapon/<item>.emw` (weapon id `00` no weapon … `0a`, `6f` Ingram, `70` Minimi), `player/<id>/sound/<sound>.wav` (`00`-`03` hurt sounds, `04`-`07` their echoing copies); `<id>` is `00` Chris, `01` Jill, `02` Barry, `03` Rebecca | emd, emw; sounds as for `se/` | — |
+| scripted-character held weapon | `enemy/<id>/weapon/<behavior>.tmd` (entity id `20`-`2e`, the behavior byte `01`-`06`); a missing entry holds nothing | tmd | textured from the character's own page |
 | doors | (inside `door/<type>.dor`, the RDT door-type byte `00`-`21`) | — | override the whole entry |
 | font sheets | `font/00` (Western), `font/01` (Japanese), or a new two-digit hex id | webp, png, bmp, tim | the shipped sheet's; at most 255 opaque colours |
 | font metrics | `font/00.xml`, `font/01.xml`, or a new font's `font/<id>.xml` | xml: `<font format="1" script advance cellWidth margin textY menuY>` with a `<glyph cell advance indent>` per non-default cell (see `games/re1/font/`) | — |
@@ -681,8 +683,9 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
 | `STAGEn/ROOM####.RDT` | `room/####/room.rdt` (the engine loads a raw RDT as well as the converted XML) |
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/####/cut/*.bmp`, `room/####/mask/*.bmp` (copied to every player and stage 6/7 variant of the room) |
-| `ENEMY/*.EMD`, `PLAYERS/*.EMW`, `PLAYERS/*.TMD` | `enemy/<id>/enemy*.emd`, `player/*` |
-| `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `enemy/<id>/sound/*` slot and `voice/*` record playing the file |
+| `ENEMY/*.EMD`, `PLAYERS/*.EMW` | `enemy/<id>/enemy*.emd`, `player/<id>/skin/*`, every `player/<id>/weapon/*` the original's weapon table plays the file for |
+| `PLAYERS/WS*.TMD` | every `enemy/<id>/weapon/<behavior>.tmd` holding the mesh |
+| `sound/*.WAV`, `voice/*.WAV` | `bgm/*`, `se/*`, every `player/<id>/sound/*`, `enemy/<id>/sound/*` slot and `voice/*` record playing the file |
 | `DATA/*` (UI art, item icons, demos, effects) | `ui/*`, `item/*`, `demo/*`, `shadow/*` |
 | `ITEM_M1/*.DOR`, `effspr/*.TIM` | `door/<type>.dor`, `effect/<id>.tim` |
 | `TEXT/ROOM_###.xml` | `ROOM_###_TEXT_##` keys in `language/en-US.txt` |
@@ -1969,7 +1972,7 @@ entity speed words.
 The shared weapon-damage pipeline itself is Rust-side, driven by the weapon
 runtime in `src/weapons.rs`: the aim/fire/reload machine takes the player's
 tick while a weapon is raised (the aim input, with fire mapped to the new
-port-only keys), selects the packed `player/w{id:02x}.emw` motion and fires
+port-only keys), selects the packed `player/<id>/weapon/<item>.emw` motion and fires
 through `apply_weapon_damage_with`. That entry writes the target monster's
 `health`, `hit_state` and `state` (`3` for a killing blow, `2` when it
 survives, with `ignore`/`action_behavior`/`action_state` zeroed). A monster

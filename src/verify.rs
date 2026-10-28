@@ -637,8 +637,8 @@ mod tests {
         assert_eq!(classify("item/0b/notes.xml"), Format::Opaque);
         assert_eq!(classify("item/0b/model.tmd"), Format::Tmd);
         assert_eq!(classify("enemy/20/enemy.emd"), Format::Emd);
-        assert_eq!(classify("player/00.emw"), Format::Emw);
-        assert_eq!(classify("player/ws202.tmd"), Format::Tmd);
+        assert_eq!(classify("player/00/weapon/00.emw"), Format::Emw);
+        assert_eq!(classify("enemy/20/weapon/01.tmd"), Format::Tmd);
         assert_eq!(classify("door/00.dor"), Format::Dor);
         assert_eq!(classify("se/a_mcn03.wav"), Format::Wav);
         assert_eq!(classify("language/en-US.txt"), Format::Language);
@@ -796,7 +796,7 @@ mod tests {
         tmd.extend_from_slice(&0u32.to_le_bytes());
         tmd.extend_from_slice(&0u32.to_le_bytes());
         let mut writer = PackWriter::new();
-        writer.add("player/ws202.tmd", tmd).unwrap();
+        writer.add("enemy/20/weapon/01.tmd", tmd).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let report = verify_pack(&pack, false);
         assert!(report.valid(), "failures: {:?}", report.failures);
@@ -804,7 +804,9 @@ mod tests {
 
         // A truncated TMD fails.
         let mut writer = PackWriter::new();
-        writer.add("player/ws202.tmd", vec![0x41, 0, 0]).unwrap();
+        writer
+            .add("enemy/20/weapon/01.tmd", vec![0x41, 0, 0])
+            .unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         let report = verify_pack(&pack, false);
         assert!(!report.valid());

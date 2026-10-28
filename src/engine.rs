@@ -2301,7 +2301,7 @@ impl GameSession {
         // recorded inventory already in place, so a reel whose equipped slot
         // holds the M92FS aims the M92FS, not whatever weapon the default state
         // carried - demo 3's Jill carries the Ingram (item 0x6F ->
-        // `player/w18.emw`), not the shipped card's Beretta.
+        // `player/01/weapon/6f.emw`), not the shipped card's Beretta.
         let equipped_item = usize::from(reel.equipped_item)
             .checked_sub(1)
             .and_then(|slot| reel.items.get(slot * 2))
@@ -11998,8 +11998,12 @@ struct SfxCache {
 
 impl SfxCache {
     /// Load and parse `se/{name}.wav` (lower-case) from the pack, caching both
-    /// hits and misses.
+    /// hits and misses. A name holding a `/` is already a pack stem (the
+    /// player characters' `player/<id>/sound/<id>`).
     fn load(&mut self, pack: &Pack, name: &str) -> Option<audio::Wav> {
+        if name.contains('/') {
+            return self.load_stem(pack, name.to_string());
+        }
         self.load_stem(pack, format!("se/{}", name.to_ascii_lowercase()))
     }
 
@@ -12863,13 +12867,13 @@ fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad:
     // The active weapon's bank: the machine's loaded file while it runs,
     // otherwise the equipped item's, so the frame the aim starts reads the
     // right clips.
-    let weapon_file = context.player.weapon.weapon_file.or_else(|| {
+    let weapon_item = context.player.weapon.weapon_item.or_else(|| {
         context
             .game
             .equipped
-            .and_then(|item| crate::weapons::weapon_emw_id(context.game.id.player_flag & 3, item))
+            .and_then(crate::weapons::weapon_clip_item)
     });
-    let weapon = assets.weapon(weapon_file);
+    let weapon = assets.weapon(weapon_item);
     let no_weapon = crate::model::Emw {
         skeleton: Default::default(),
         keyframes: Vec::new(),
@@ -14201,15 +14205,15 @@ fn menu_cue(input: MenuInput) -> Option<ui::UiCue> {
 struct PlayerAssets {
     emd: Emd,
     emw: crate::model::Emw,
-    /// The character block's weapon animations by EMW file id, loaded from the
-    /// row of [`crate::weapons::WEAPON_EMW`]. A missing file is absent.
+    /// The character's weapon animations by weapon id. A missing file is
+    /// absent.
     weapons: std::collections::HashMap<u8, crate::model::Emw>,
 }
 
 impl PlayerAssets {
-    /// The active weapon's clips and mesh for an EMW file id.
-    fn weapon(&self, file: Option<u8>) -> Option<&crate::model::Emw> {
-        self.weapons.get(&file?)
+    /// The active weapon's clips and mesh for a weapon id.
+    fn weapon(&self, item: Option<u8>) -> Option<&crate::model::Emw> {
+        self.weapons.get(&item?)
     }
 }
 
@@ -14246,7 +14250,7 @@ fn store_player_joint_worlds(
                 &assets.emd.clips,
             ),
         },
-        player::ClipSource::Weapon => match assets.weapon(player.weapon.weapon_file) {
+        player::ClipSource::Weapon => match assets.weapon(player.weapon.weapon_item) {
             Some(weapon) => (&weapon.skeleton, &weapon.keyframes, &weapon.clips),
             None => (
                 &assets.emd.skeleton,
@@ -14693,7 +14697,7 @@ fn render_frame_on(
                     &assets.emd.clips,
                 ),
             },
-            player::ClipSource::Weapon => match assets.weapon(player_state.weapon.weapon_file) {
+            player::ClipSource::Weapon => match assets.weapon(player_state.weapon.weapon_item) {
                 Some(weapon) => (&weapon.skeleton, &weapon.keyframes, &weapon.clips),
                 None => (
                     &assets.emd.skeleton,
@@ -14742,7 +14746,7 @@ fn render_frame_on(
     let mut npc_hidden: Vec<u32> = Vec::new();
     let mut npc_tints: Vec<[u8; 3]> = Vec::new();
     let mut npc_joint_colours: Vec<[[u8; 3]; 32]> = Vec::new();
-    let mut npc_weapon_ids: Vec<Option<u16>> = Vec::new();
+    let mut npc_weapons: Vec<Option<Arc<crate::model::Tmd>>> = Vec::new();
     let mut npc_zone_gate: Vec<bool> = Vec::new();
     // Each character's light latch point (its own matrix translation) and
     // whether it re-latches per joint (Yawn, ids 0x0D/0x12).
@@ -14856,10 +14860,13 @@ fn render_frame_on(
         npc_hidden.push(hidden);
         npc_tints.push(entity.model_tint_rgb());
         npc_joint_colours.push(entity.joint_colours);
-        npc_weapon_ids.push(crate::weapons::character_weapon_id(
-            entity.id,
-            entity.behavior_flags,
-        ));
+        // A character holds a weapon when the pack carries a mesh for its
+        // id and behavior byte; behavior 0 always holds nothing.
+        npc_weapons.push(if entity.behavior_flags != 0 {
+            npc_models.weapon_tmd(pack, entity.id, entity.behavior_flags)
+        } else {
+            None
+        });
         npc_zone_gate.push(entity.has_enter_switch_zone & 0x7F != 0 || debug_view::unculled());
         npc_lights.push((entity.pos, matches!(entity.id, 0x0D | 0x12)));
     }
@@ -14946,7 +14953,7 @@ fn render_frame_on(
     // because a model whose keyframe lookup failed is absent from all three.
     for (
         (((((model, joints), hidden), tint), &(light_pos, per_joint_light)), joint_colours),
-        weapon_id,
+        weapon,
     ) in models
         .iter()
         .zip(&npc_joints)
@@ -14954,12 +14961,12 @@ fn render_frame_on(
         .zip(&npc_tints)
         .zip(&npc_lights)
         .zip(&npc_joint_colours)
-        .zip(&npc_weapon_ids)
+        .zip(&npc_weapons)
     {
         // The original loads the held weapon's TMD into the weapon joint's
         // own slot, so it replaces the character's object there rather than
         // drawing beside it.
-        let weapon_slot = if weapon_id.is_some() {
+        let weapon_slot = if weapon.is_some() {
             1 << crate::weapons::WEAPON_JOINT
         } else {
             0
@@ -14985,8 +14992,8 @@ fn render_frame_on(
     // and reuses the character model's texture page, exactly like the
     // original's weapon-slot TMD.
     let mut held_weapons: Vec<(usize, Arc<crate::model::Tmd>, Vec<anim::Mat4x3>)> = Vec::new();
-    for (index, weapon_id) in npc_weapon_ids.iter().enumerate() {
-        let Some(file) = *weapon_id else {
+    for (index, weapon) in npc_weapons.iter().enumerate() {
+        let Some(tmd) = weapon else {
             continue;
         };
         // The held weapon is hidden with its character outside the switch
@@ -14994,9 +15001,7 @@ fn render_frame_on(
         if !npc_zone_gate[index] {
             continue;
         }
-        let Some(tmd) = npc_models.weapon_tmd(pack, file) else {
-            continue;
-        };
+        let tmd = Arc::clone(tmd);
         let Some(hand) = npc_joints[index].get(crate::weapons::WEAPON_JOINT) else {
             continue;
         };
@@ -15095,12 +15100,12 @@ fn render_frame_on(
     let mut weapon_joints: Vec<Vec<anim::Mat4x3>> = Vec::new();
     // The weapon slot's TMD is the hand joint's mesh whenever a weapon is
     // equipped, so it draws in every bank (idle, walk, turn), not just aiming.
-    let weapon_file = player_state.weapon.weapon_file.or_else(|| {
-        game.equipped
-            .and_then(|item| crate::weapons::weapon_emw_id(id.player_flag & 3, item))
-    });
+    let weapon_item = player_state
+        .weapon
+        .weapon_item
+        .or_else(|| game.equipped.and_then(crate::weapons::weapon_clip_item));
     if let (Some(assets), Some(joints)) = (assets, &player_joints)
-        && let Some(weapon) = assets.weapon(weapon_file)
+        && let Some(weapon) = assets.weapon(weapon_item)
         && !weapon.mesh.objects.is_empty()
         && let Some(hand) = joints.get(crate::weapons::WEAPON_JOINT)
     {
@@ -15853,8 +15858,8 @@ fn display_number(display: SDL_DisplayID) -> Option<u32> {
 /// Load the player's character model and no-weapon clips for the RDT flag.
 fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
     let character = id.player_flag & 3;
-    let emd_path = format!("player/{character:02}.emd");
-    let emw_path = format!("player/{character:02}.emw");
+    let emd_path = crate::convert::skin_entry(character, 0);
+    let emw_path = crate::weapons::weapon_emw_entry(character, 0);
     let emd_bytes = pack.read(&emd_path).map_err(|err| {
         eprintln!("warning: missing player model {emd_path}: {err:#}");
     });
@@ -15877,27 +15882,32 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
             return None;
         }
     };
-    // Load the character block's weapon animations: every distinct EMW file
-    // id the weapon table names. A missing file is logged and skipped, and the
-    // weapon machine falls back to the locomotion pose.
+    // Load the character's weapon animations. A missing file is logged and
+    // skipped, and the weapon machine falls back to the locomotion pose.
+    // Weapons sharing a file (the shipped table maps several items to one)
+    // reuse the first parse.
     let mut weapons = std::collections::HashMap::new();
-    for weapon in 0..=0x0Du8 {
-        let Some(file) = crate::weapons::weapon_emw_id(character, weapon) else {
-            continue;
-        };
-        if weapons.contains_key(&file) {
-            continue;
-        }
-        let Some(entry) = crate::weapons::weapon_emw_entry(character, weapon) else {
-            continue;
-        };
+    let mut parsed: Vec<(Vec<u8>, u8)> = Vec::new();
+    for item in crate::weapons::PLAYER_WEAPON_ITEMS {
+        let entry = crate::weapons::weapon_emw_entry(character, item);
         match pack.read(&entry) {
-            Ok(bytes) => match emd::parse_emw(&bytes) {
-                Ok(model) => {
-                    weapons.insert(file, model);
+            Ok(bytes) => {
+                if let Some(model) = parsed
+                    .iter()
+                    .find(|(seen, _)| seen.as_slice() == bytes.as_ref())
+                    .and_then(|(_, seen)| weapons.get(seen).cloned())
+                {
+                    weapons.insert(item, model);
+                    continue;
                 }
-                Err(err) => eprintln!("warning: invalid weapon clips {entry}: {err:#}"),
-            },
+                match emd::parse_emw(&bytes) {
+                    Ok(model) => {
+                        parsed.push((bytes.as_ref().to_vec(), item));
+                        weapons.insert(item, model);
+                    }
+                    Err(err) => eprintln!("warning: invalid weapon clips {entry}: {err:#}"),
+                }
+            }
             Err(err) => eprintln!("warning: missing weapon clips {entry}: {err:#}"),
         }
     }
@@ -17909,7 +17919,7 @@ mod tests {
                 .texture
                 .width,
             2,
-            "player/00_alt0.emd replaced it"
+            "player/00/skin/01.emd replaced it"
         );
         // A missing variant keeps the current model.
         session.game.costume_variant = 1;
