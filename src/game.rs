@@ -3780,6 +3780,9 @@ pub struct GameState {
     /// The pack's item definitions (`item/<id>/item.xml`): kinds, stacks and
     /// heal effects. Static pack data, not part of a save block.
     pub item_defs: std::sync::Arc<crate::item_catalog::ItemCatalog>,
+    /// The `--model` viewer's model, standing in the room with no AI. A
+    /// runtime option, not part of a save block.
+    pub model_viewer: Option<Box<crate::model_viewer::Viewer>>,
 }
 
 /// A gamepad rumble a game event asks for, at full strength: the low- and
@@ -3978,6 +3981,7 @@ impl Default for GameState {
             player_options: crate::player::Options::default(),
             rumble: None,
             item_defs: crate::item_catalog::ItemCatalog::embedded(),
+            model_viewer: None,
         }
     }
 }

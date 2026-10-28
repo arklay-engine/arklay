@@ -49,11 +49,13 @@ use crate::state::Image;
 pub const ROOT: &str = "htexture/";
 
 /// One hash a texture may be known by, and the source-texel extent an HD
-/// replacement found by it covers.
+/// replacement found by it covers, from `origin` (the top-left texel; zero
+/// but for an RE2 model page, [`page_candidates`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Candidate {
     pub hash: u32,
     pub frame: [u32; 2],
+    pub origin: [u32; 2],
 }
 
 /// A replacement found for a texture.
@@ -63,6 +65,8 @@ pub struct Found {
     pub path: String,
     /// The source-texel extent the HD image covers.
     pub frame: [u32; 2],
+    /// The source texel the HD image's top-left corner covers.
+    pub origin: [u32; 2],
 }
 
 /// A decoded replacement's file and frame.
@@ -219,6 +223,7 @@ impl HdTable {
             .map(|&hash| Candidate {
                 hash,
                 frame: [256, 256],
+                origin: [0, 0],
             })
             .collect()
     }
@@ -229,6 +234,7 @@ impl HdTable {
             self.files.get(&candidate.hash).map(|path| Found {
                 path: path.clone(),
                 frame: candidate.frame,
+                origin: candidate.origin,
             })
         })
     }
@@ -887,10 +893,7 @@ fn add_translations(candidates: &mut Vec<Candidate>) {
             TRANSLATED
                 .iter()
                 .find(|&&(japanese, _)| japanese == candidate.hash)
-                .map(|&(_, hash)| Candidate {
-                    hash,
-                    frame: candidate.frame,
-                })
+                .map(|&(_, hash)| Candidate { hash, ..*candidate })
         })
         .collect();
     candidates.extend(english);
@@ -929,10 +932,12 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
         candidates.push(Candidate {
             hash: replicated.window_crc(256, 240, |t| t | 0xff00_0000),
             frame: size,
+            origin: [0, 0],
         });
         candidates.push(Candidate {
             hash: surface(Expand::Shift, false).window_crc(256, 240, |t| t | 0xff00_0000),
             frame: size,
+            origin: [0, 0],
         });
         // A screen-border background (316 x 236, the caves) sits in the
         // top-left of a texture whose spare rows the game leaves black, so
@@ -941,6 +946,7 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
             candidates.push(Candidate {
                 hash: replicated.window_crc(256, 240, |t| t.max(1) | 0xff00_0000),
                 frame: size,
+                origin: [0, 0],
             });
         }
         // RE2's loader (`bio2hd.asi`) hashes the background's whole 256 x 256
@@ -952,23 +958,27 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
             candidates.push(Candidate {
                 hash: surface(Expand::Replicate, true).window_crc(256, 256, finish_mask),
                 frame: size,
+                origin: [0, 0],
             });
         }
     }
     candidates.push(Candidate {
         hash: replicated.window_crc(256, 256, finish_mask),
         frame: [256, 256],
+        origin: [0, 0],
     });
     for black_clear in [false, true] {
         let shifted = surface(Expand::Shift, black_clear);
         candidates.push(Candidate {
             hash: shifted.window_crc(256, 256, finish_model),
             frame: [256, 256],
+            origin: [0, 0],
         });
         if (width, height) != (256, 256) {
             candidates.push(Candidate {
                 hash: shifted.window_crc(width, height, finish_model),
                 frame: size,
+                origin: [0, 0],
             });
         }
         // An item icon (one 40 x 30 cell of `ITEM_ALL.PIX`) is uploaded alone
@@ -978,6 +988,7 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
             candidates.push(Candidate {
                 hash: shifted.window_crc(square, square, finish_model),
                 frame: [square as u32; 2],
+                origin: [0, 0],
             });
         }
     }
@@ -1003,7 +1014,8 @@ enum Key {
 /// stretched to twice its width and hashed in a 256 x 256 window, so its
 /// replacement covers 128 x 256 source texels. A menu page (the status
 /// screen, the files, the item box) is uploaded unstretched with its black
-/// clear, in a 256 x 256 window or, below that, at its own size.
+/// clear, in a 256 x 256 window or, below that, at its own size. An RE2
+/// model page is hashed alone (see the last candidate).
 pub fn page_candidates(texture: &Texture8, row: usize) -> Vec<Candidate> {
     let (width, height) = (texture.width as usize, texture.height as usize);
     if width == 0 || height == 0 {
@@ -1051,28 +1063,63 @@ pub fn page_candidates(texture: &Texture8, row: usize) -> Vec<Candidate> {
         candidates.push(Candidate {
             hash: surface(key, stretch).window_crc(256, 256, finish_model),
             frame: window,
+            origin: [0, 0],
         });
     }
     // The original whole-texture hash some item and enemy pages carry.
     candidates.push(Candidate {
         hash: surface(Key::None, 1).window_crc(width, height, finish_model),
         frame: [texture.width, texture.height],
+        origin: [0, 0],
     });
     if stretch > 1 {
         candidates.push(Candidate {
             hash: surface(Key::Black, 1).window_crc(256, 256, finish_model),
             frame: [256, 256],
+            origin: [0, 0],
         });
     }
     if width < 256 && height < 256 {
         candidates.push(Candidate {
             hash: surface(Key::Black, 1).window_crc(width, height, finish_model),
             frame: [texture.width, texture.height],
+            origin: [0, 0],
+        });
+    }
+    // RE2's loader (`bio2hd.asi`) hashes each 128-texel page of a model
+    // texture on its own, through the CLUT row of the same number (an RE2
+    // mesh draws page `n` with row `n`): unstretched, bit-replicated, colour
+    // 0 transparent. Its replacement covers just that page.
+    let page = row * MODEL_PAGE_WIDTH;
+    if width >= page + MODEL_PAGE_WIDTH {
+        let mut texels = Vec::with_capacity(MODEL_PAGE_WIDTH * height);
+        for y in 0..height {
+            for x in page..page + MODEL_PAGE_WIDTH {
+                let colour = colours[usize::from(index_at(x, y))];
+                texels.push(if colour == 0 {
+                    0
+                } else {
+                    texel(colour, Expand::Replicate)
+                });
+            }
+        }
+        let surface = Surface {
+            width: MODEL_PAGE_WIDTH,
+            height,
+            texels,
+        };
+        candidates.push(Candidate {
+            hash: surface.window_crc(MODEL_PAGE_WIDTH, height, finish_mask),
+            frame: [MODEL_PAGE_WIDTH as u32, texture.height],
+            origin: [page as u32, 0],
         });
     }
     add_translations(&mut candidates);
     candidates
 }
+
+/// The width of an 8bpp texture page, in texels.
+const MODEL_PAGE_WIDTH: usize = 128;
 
 /// The hashes the font sheet's glyph page may carry: the sheet's left
 /// 256 x 256 page through CLUT row 0, the page the glyphs Classic REbirth
@@ -1135,6 +1182,7 @@ mod tests {
                     &[Candidate {
                         hash,
                         frame: [1, 1],
+                        origin: [0, 0],
                     }],
                     String::new,
                 )
@@ -1198,6 +1246,7 @@ mod tests {
                 .paired_masks(&[Candidate {
                     hash,
                     frame: [320, 240],
+                    origin: [0, 0],
                 }])
                 .iter()
                 .map(|candidate| (candidate.hash, candidate.frame))
@@ -1218,14 +1267,17 @@ mod tests {
             Candidate {
                 hash: 1,
                 frame: [1, 1],
+                origin: [0, 0],
             },
             Candidate {
                 hash: 3,
                 frame: [3, 3],
+                origin: [0, 0],
             },
             Candidate {
                 hash: 2,
                 frame: [2, 2],
+                origin: [0, 0],
             },
         ];
         let found = table.find(&candidates, String::new).unwrap();
@@ -1258,6 +1310,7 @@ mod tests {
         let candidates = [Candidate {
             hash: 7,
             frame: [4, 4],
+            origin: [0, 0],
         }];
         let first = replacement(&pack, &candidates, String::new).unwrap();
         let again = replacement(&pack, &candidates, String::new).unwrap();
@@ -1404,7 +1457,8 @@ mod tests {
             candidates[0],
             Candidate {
                 hash: retail,
-                frame: [320, 240]
+                frame: [320, 240],
+                origin: [0, 0],
             }
         );
     }
@@ -1435,6 +1489,7 @@ mod tests {
             Candidate {
                 hash: crc32(&expected),
                 frame: [316, 236],
+                origin: [0, 0],
             }
         );
     }
@@ -1468,6 +1523,7 @@ mod tests {
             Candidate {
                 hash: crc32(&expected),
                 frame: [320, 240],
+                origin: [0, 0],
             }
         );
     }
@@ -1520,7 +1576,50 @@ mod tests {
         assert!(image_candidates(&image).contains(&Candidate {
             hash: crc32(&expected),
             frame: [64, 64],
+            origin: [0, 0],
         }));
+    }
+
+    #[test]
+    fn an_re2_model_page_hashes_alone_through_its_own_row() {
+        // Two pages, one texel tall: page 0 all index 1, page 1 index 1 then
+        // index 0 (colour 0x0000, transparent). Row 1's entry 1 is a red that
+        // bit-replicates (31 << 3 | 31 >> 2 = 0xff, 16 << 3 | 16 >> 2 = 0x84).
+        let mut palettes = vec![[0, 0, 0, 255]; 2 * PALETTE_ROW_LEN];
+        palettes[1] = [8, 8, 8, 255];
+        palettes[PALETTE_ROW_LEN + 1] = [255, 128, 0, 255];
+        let texture = Texture8 {
+            width: 256,
+            height: 1,
+            indices: (0..256).map(|x| u8::from(x < 128 || x % 2 == 0)).collect(),
+            palettes,
+            stp: vec![false; 2 * PALETTE_ROW_LEN],
+        };
+        let mut expected = Vec::new();
+        for x in 0..128 {
+            let texel: u32 = if x % 2 == 0 { 0xffff_8400 } else { 0 };
+            expected.extend_from_slice(&texel.to_le_bytes());
+        }
+        let candidates = page_candidates(&texture, 1);
+        assert_eq!(
+            candidates.last(),
+            Some(&Candidate {
+                hash: crc32(&expected),
+                frame: [128, 1],
+                origin: [128, 0],
+            })
+        );
+        // A texture with no page for the row has no such candidate.
+        let narrow = Texture8 {
+            width: 128,
+            indices: texture.indices[..128].to_vec(),
+            ..texture.clone()
+        };
+        assert!(
+            page_candidates(&narrow, 1)
+                .iter()
+                .all(|c| c.origin == [0, 0])
+        );
     }
 
     #[test]
@@ -1546,7 +1645,8 @@ mod tests {
             candidates[0],
             Candidate {
                 hash: crc32(&expected),
-                frame: [128, 256]
+                frame: [128, 256],
+                origin: [0, 0],
             }
         );
     }
@@ -1604,7 +1704,8 @@ mod tests {
             image_candidates(&image)[1],
             Candidate {
                 hash: shifted,
-                frame: [320, 240]
+                frame: [320, 240],
+                origin: [0, 0],
             }
         );
     }
@@ -1615,10 +1716,12 @@ mod tests {
             Candidate {
                 hash: 0x440c_318f,
                 frame: [256, 256],
+                origin: [0, 0],
             },
             Candidate {
                 hash: 5,
                 frame: [1, 1],
+                origin: [0, 0],
             },
         ];
         add_translations(&mut candidates);
@@ -1627,15 +1730,18 @@ mod tests {
             [
                 Candidate {
                     hash: 0x440c_318f,
-                    frame: [256, 256]
+                    frame: [256, 256],
+                    origin: [0, 0],
                 },
                 Candidate {
                     hash: 5,
-                    frame: [1, 1]
+                    frame: [1, 1],
+                    origin: [0, 0],
                 },
                 Candidate {
                     hash: 0x97de_3e43,
-                    frame: [256, 256]
+                    frame: [256, 256],
+                    origin: [0, 0],
                 },
             ]
         );
@@ -1666,16 +1772,15 @@ mod tests {
         let candidates = page_candidates(&texture, 0);
         assert!(candidates.contains(&Candidate {
             hash: crc32(&window),
-            frame: [256, 256]
+            frame: [256, 256],
+            origin: [0, 0],
         }));
         // Below 256 x 256 the page also hashes at its own size.
-        assert_eq!(
-            candidates.last(),
-            Some(&Candidate {
-                hash: crc32(&row),
-                frame: [128, 1]
-            })
-        );
+        assert!(candidates.contains(&Candidate {
+            hash: crc32(&row),
+            frame: [128, 1],
+            origin: [0, 0],
+        }));
     }
 
     #[test]

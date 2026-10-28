@@ -1612,7 +1612,7 @@ impl GpuRenderer {
         // Rows sharing a replacement share its layer.
         let mut layers: Vec<Image> = Vec::new();
         let mut layer_by_path: Vec<(String, usize)> = Vec::new();
-        let mut rows: Vec<(usize, usize, [u32; 2])> = Vec::new();
+        let mut rows: Vec<(usize, usize, [u32; 2], [u32; 2])> = Vec::new();
         for row in 0..page_row_count(texture) {
             let candidates = htexture::page_candidates(texture, row);
             let found = if used & 1u32.checked_shl(row as u32).unwrap_or(0) != 0 {
@@ -1644,7 +1644,7 @@ impl GpuRenderer {
                     }
                 },
             };
-            rows.push((row, layer, [found.frame[0], found.frame[1]]));
+            rows.push((row, layer, found.frame, found.origin));
         }
         self.upload_page_layers(copy, page, texture, &layers, &rows)
     }
@@ -1663,6 +1663,7 @@ impl GpuRenderer {
             0,
             0,
             [replacement.frame[0].max(1), replacement.frame[1].max(1)],
+            [0, 0],
         )];
         self.upload_page_layers(copy, page, texture, &layers, &rows)
     }
@@ -1675,14 +1676,14 @@ impl GpuRenderer {
         page: &mut PageTextures,
         texture: &Texture8,
         layers: &[Image],
-        rows: &[(usize, usize, [u32; 2])],
+        rows: &[(usize, usize, [u32; 2], [u32; 2])],
     ) -> Result<()> {
         if layers.is_empty() || rows.is_empty() {
             return Ok(());
         }
         let row_count = page_row_count(texture);
         let mut placed = vec![[0u16; 8]; row_count];
-        for &(row, layer, frame) in rows {
+        for &(row, layer, frame, origin) in rows {
             let image = &layers[layer];
             if row >= row_count || image.width == 0 || image.height == 0 {
                 continue;
@@ -1691,10 +1692,10 @@ impl GpuRenderer {
                 layer as u16 + 1,
                 frame[0].min(0xFFFF) as u16,
                 frame[1].min(0xFFFF) as u16,
-                0,
+                origin[0].min(0xFFFF) as u16,
                 image.width.min(0xFFFF) as u16,
                 image.height.min(0xFFFF) as u16,
-                0,
+                origin[1].min(0xFFFF) as u16,
                 0,
             ];
         }

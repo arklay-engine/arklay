@@ -25,7 +25,9 @@ use crate::budget;
 use crate::charset::Script;
 use crate::effects::room::{FrameEntry, UvRecord};
 use crate::format::Dialect;
-use crate::state::{Collision, CollisionRect, FootstepZone, Light, Sca, ScaRect, WalkZone, Zone};
+use crate::state::{
+    CameraLight, Collision, CollisionRect, FootstepZone, Light, Sca, ScaRect, WalkZone, Zone,
+};
 
 /// The format version `<room format="...">` declares.
 pub const FORMAT: u32 = 2;
@@ -151,20 +153,7 @@ pub fn write(room: &RoomSource) -> Result<String> {
     w.empty("ambient", &[("r", dec(r)), ("g", dec(g)), ("b", dec(b))]);
     w.open("lights", &[]);
     for light in &room.lights {
-        w.empty(
-            "light",
-            &[
-                ("x", dec(light.pos[0])),
-                ("y", dec(light.pos[1])),
-                ("z", dec(light.pos[2])),
-                ("r", dec(light.color[0])),
-                ("g", dec(light.color[1])),
-                ("b", dec(light.color[2])),
-                ("kind", dec(light.kind)),
-                // Read unsigned: 65535 is the widest radius.
-                ("radius", dec(light.radius)),
-            ],
-        );
+        w.empty("light", &light_attributes(light));
     }
     w.close("lights");
 
@@ -316,6 +305,20 @@ pub fn write_effect(effect: &EffectSlot) -> String {
     w.out
 }
 
+fn light_attributes(light: &Light) -> Vec<(&'static str, Value)> {
+    vec![
+        ("x", dec(light.pos[0])),
+        ("y", dec(light.pos[1])),
+        ("z", dec(light.pos[2])),
+        ("r", dec(light.color[0])),
+        ("g", dec(light.color[1])),
+        ("b", dec(light.color[2])),
+        ("kind", dec(light.kind)),
+        // Read unsigned: 65535 is the widest radius.
+        ("radius", dec(light.radius)),
+    ]
+}
+
 fn write_camera(w: &mut Writer, camera: &Camera) {
     let attributes = vec![
         ("x", dec(camera.pos[0])),
@@ -327,11 +330,20 @@ fn write_camera(w: &mut Writer, camera: &Camera) {
         ("roll", dec(camera.roll)),
         ("fov", dec(camera.fov)),
     ];
-    if camera.mask_groups.is_empty() {
+    if camera.mask_groups.is_empty() && camera.light.is_none() {
         w.empty("camera", &attributes);
         return;
     }
     w.open("camera", &attributes);
+    // An RE2 camera lights the room itself, in place of the room's lights.
+    if let Some(light) = &camera.light {
+        let [r, g, b] = light.ambient;
+        w.open("lighting", &[("r", dec(r)), ("g", dec(g)), ("b", dec(b))]);
+        for light in &light.lights {
+            w.empty("light", &light_attributes(light));
+        }
+        w.close("lighting");
+    }
     for group in &camera.mask_groups {
         w.open(
             "maskGroup",
@@ -756,7 +768,22 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Camera> {
         node,
         &["x", "y", "z", "lookX", "lookY", "lookZ", "roll", "fov"],
     )?;
-    let mask_groups = children(node, "maskGroup")?
+    let mut light = None;
+    let mut groups = Vec::new();
+    for child in elements(node) {
+        match child.tag_name().name() {
+            "lighting" if light.is_none() && groups.is_empty() => {
+                light = Some(parse_camera_light(child)?)
+            }
+            "maskGroup" => groups.push(child),
+            other => {
+                bail!("<camera> may only contain one <lighting> then <maskGroup>, found <{other}>")
+            }
+        }
+    }
+    budget::check_len(groups.len(), budget::MAX_RECORDS, "room XML element count")?;
+    let mask_groups = groups
+        .into_iter()
         .map(|group| {
             check_attributes(group, &["originX", "originY", "texBits"])?;
             let sprites = children(group, "sprite")?
@@ -779,6 +806,21 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Camera> {
         roll: attr_or(node, "roll", 0)?,
         fov: attr(node, "fov")?,
         mask_groups,
+        light,
+    })
+}
+
+/// A camera's `<lighting>`: its ambient and three lights.
+fn parse_camera_light(node: Node<'_, '_>) -> Result<CameraLight> {
+    check_attributes(node, &["r", "g", "b"])?;
+    let lights = children(node, "light")?
+        .map(parse_light)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(CameraLight {
+        ambient: [attr(node, "r")?, attr(node, "g")?, attr(node, "b")?],
+        lights: lights.try_into().map_err(|lights: Vec<Light>| {
+            anyhow::anyhow!("<lighting> has {} <light>, expected 3", lights.len())
+        })?,
     })
 }
 

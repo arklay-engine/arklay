@@ -22,7 +22,9 @@ use crate::mask;
 use crate::model::Texture8;
 use crate::objects::ObjectAsset;
 use crate::pack::{AssetClass, Pack};
-use crate::state::{Collision, Cut, FootstepZone, Light, RoomId, RoomState, Sca, WalkZone, Zone};
+use crate::state::{
+    CameraLight, Collision, Cut, FootstepZone, Light, RoomId, RoomState, Sca, WalkZone, Zone,
+};
 use crate::{assets, bmp, budget, emd, rdt, tim, tmd};
 
 /// The room definition's file name inside the room's folder.
@@ -82,6 +84,8 @@ pub struct Camera {
     pub fov: i32,
     /// The mask placement table, group by group.
     pub mask_groups: Vec<MaskGroup>,
+    /// The camera's own lighting (an RE2 room's LIT record).
+    pub light: Option<CameraLight>,
 }
 
 /// One mask group: its header words and its sprites.
@@ -547,6 +551,7 @@ fn camera_source(cut: &Cut, table: &mask::MaskTable) -> Camera {
         roll: cut.roll,
         fov: cut.fov,
         mask_groups,
+        light: cut.light,
     }
 }
 
@@ -677,6 +682,7 @@ fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,
+        light: camera.light,
     })
 }
 

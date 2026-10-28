@@ -94,11 +94,11 @@ pub enum Format {
     Lua,
     /// An RE2 room (`*.rdt` with an RE2 header). TODO(re2): parse it.
     Re2Rdt,
-    /// An RE2 enemy model (`*.emd` with an RE2 directory). TODO(re2): parse it.
+    /// An RE2 enemy model (`*.emd` with an RE2 directory), with its `.tim`.
     Re2Emd,
-    /// An RE2 player model (`*.pld`). TODO(re2): parse it.
+    /// An RE2 player model (`*.pld`).
     Pld,
-    /// An RE2 player weapon model (`*.plw`). TODO(re2): parse it.
+    /// An RE2 player weapon model (`*.plw`), with the character holding it.
     Plw,
     /// An RE2 door archive (`*.do2`). TODO(re2): parse it.
     Do2,
@@ -159,10 +159,7 @@ impl Format {
     /// Whether the format is recognised but has no parser yet: it never
     /// fails a normal run and fails `--strict` like an opaque entry.
     pub fn unsupported(self) -> bool {
-        matches!(
-            self,
-            Self::Re2Emd | Self::Pld | Self::Plw | Self::Do2 | Self::AdpcmWav | Self::Mpeg
-        )
+        matches!(self, Self::Do2 | Self::AdpcmWav | Self::Mpeg)
     }
 }
 
@@ -617,13 +614,12 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
         Format::Re2Rdt => {
             crate::rdt2::read(data)?;
         }
-        Format::Opaque
-        | Format::Re2Emd
-        | Format::Pld
-        | Format::Plw
-        | Format::Do2
-        | Format::AdpcmWav
-        | Format::Mpeg => {
+        Format::Re2Emd | Format::Pld | Format::Plw => {
+            // The model viewer's load: an enemy needs the texture beside it
+            // and a weapon the character model it belongs to.
+            crate::model_viewer::load_with(pack, path, data)?;
+        }
+        Format::Opaque | Format::Do2 | Format::AdpcmWav | Format::Mpeg => {
             unreachable!("opaque and unsupported entries are handled by the caller")
         }
     }
@@ -979,14 +975,17 @@ mod tests {
         writer.add("room/1002/room.rdt", broken).unwrap();
         writer.add("voice/0/01_00.wav", adpcm_wav()).unwrap();
         writer
-            .add("player/00/model_0.pld", b"pld".to_vec())
+            .add("player/00/model_0.pld", crate::emd2::tests::pld())
+            .unwrap();
+        writer
+            .add("player/00/model_1.pld", b"pld".to_vec())
             .unwrap();
         writer.add("room/1000/cut/00.bmp", tiny_bmp()).unwrap();
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
 
         let report = verify_pack(&pack, false);
         let failed: Vec<&str> = report.failures.iter().map(|f| f.path.as_str()).collect();
-        assert_eq!(failed, ["room/1002/room.rdt"]);
+        assert_eq!(failed, ["player/00/model_1.pld", "room/1002/room.rdt"]);
         assert_eq!(report.formats[&Format::Re2Rdt].ok, 2);
         assert_eq!(report.formats[&Format::AdpcmWav].ok, 1);
         assert_eq!(report.formats[&Format::Pld].ok, 1);
@@ -997,7 +996,7 @@ mod tests {
         assert_eq!(
             failed,
             [
-                "player/00/model_0.pld",
+                "player/00/model_1.pld",
                 "room/1002/room.rdt",
                 "voice/0/01_00.wav"
             ]

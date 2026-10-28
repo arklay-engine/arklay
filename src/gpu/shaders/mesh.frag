@@ -18,8 +18,9 @@ layout(set = 2, binding = 0) uniform usampler2D indices;
 layout(set = 2, binding = 1) uniform sampler2D palette;
 // One layer per replaced CLUT row, each in its top-left corner.
 layout(set = 2, binding = 2) uniform sampler2DArray hd;
-// Per CLUT row: (layer + 1 or 0, original texels covered x, y, 0) at x = 0
-// and (replacement width, height, 0, 0) at x = 1.
+// Per CLUT row: (layer + 1 or 0, original texels covered x, y, origin x) at
+// x = 0 and (replacement width, height, origin y, 0) at x = 1. The origin is
+// the original texel the replacement's top-left covers (an RE2 model page).
 layout(set = 2, binding = 3) uniform usampler2D hd_rows;
 // The nearest mask's painter's key per pixel over 65535 (1 = none), see
 // `scene::Sprites`.
@@ -62,8 +63,10 @@ void main() {
         if (params.z > 0.5 && row < textureSize(hd_rows, 0).y) {
             uvec4 place = texelFetch(hd_rows, ivec2(0, row), 0);
             if (place.x != 0u) {
-                ivec2 extent = ivec2(texelFetch(hd_rows, ivec2(1, row), 0).xy);
-                vec2 at = floor(source * vec2(extent) / vec2(place.yz));
+                uvec4 size = texelFetch(hd_rows, ivec2(1, row), 0);
+                ivec2 extent = ivec2(size.xy);
+                vec2 origin = vec2(float(place.w), float(size.z));
+                vec2 at = floor((source - origin) * vec2(extent) / vec2(place.yz));
                 ivec2 hd_coord = clamp(ivec2(at), ivec2(0), extent - 1);
                 texel = texelFetch(hd, ivec3(hd_coord, int(place.x) - 1), 0).rgb * 255.0;
             }

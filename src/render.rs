@@ -3346,11 +3346,18 @@ pub struct Lighting {
 }
 
 impl Lighting {
-    /// Take the ambient colour and lights straight from the loaded room.
+    /// The room's lighting for its current cut: the cut's own when it has
+    /// one (an RE2 camera's LIT record), else the room's.
     pub fn from_room(room: &RoomState) -> Self {
-        Self {
-            ambient: room.ambient,
-            lights: room.lights,
+        match room.cuts.get(room.current_cut).and_then(|cut| cut.light) {
+            Some(light) => Self {
+                ambient: light.ambient,
+                lights: light.lights,
+            },
+            None => Self {
+                ambient: room.ambient,
+                lights: room.lights,
+            },
         }
     }
 

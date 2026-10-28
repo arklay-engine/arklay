@@ -3,8 +3,20 @@
 //! Reads an RE2 RDT into the engine's [`RoomSource`], so the rest of the
 //! engine builds and draws the room without caring which game it came from.
 //! This covers what a room needs to be shown: the camera cuts (RID), the
-//! camera switch zones (RVD) and the collision records (SCA). The scripts,
-//! lights, masks (PRI), models and everything else stay unread for now.
+//! camera switch zones (RVD), the collision records (SCA) and each camera's
+//! lights (LIT). The scripts, masks (PRI), models and everything else stay
+//! unread for now.
+//!
+//! An RE2 room lights each camera on its own: the LIT section holds one
+//! 40-byte record per camera (Patrice Mandin's `rdt2_light_t`): two `u16`
+//! light type words, three `r, g, b` light colours, the `r, g, b` ambient,
+//! three `i16` light positions and three `u16` brightnesses. The record is
+//! mapped onto the RE1 room's light model, whose lighting the renderer
+//! already does. The mapping is an approximation until the executable's
+//! lighting is read: the brightness is the point-light falloff radius (the
+//! RE1 room's light record has the same field) and every light is a point
+//! light, whatever the type words say; the 8-bit colours are rescaled to
+//! RE1's (a 12-bit ambient, and light colours where `0x80` is full).
 //!
 //! The header is eight `u8` counts (byte 1 is the camera count) followed by
 //! 23 `u32` section offsets; the section order follows biohazard-utils'
@@ -15,7 +27,7 @@ use anyhow::{Context, Result, bail};
 use crate::budget;
 use crate::format::Dialect;
 use crate::room::source::{Camera, RoomSource};
-use crate::state::{Sca, ScaRect, Zone};
+use crate::state::{CameraLight, Light, Sca, ScaRect, Zone};
 
 /// Offset of the section offset table.
 pub(crate) const OFFSETS: usize = 0x08;
@@ -27,6 +39,10 @@ const SCA_SLOT: usize = 6;
 pub(crate) const RID_SLOT: usize = 7;
 /// Section slot of the camera switch zones (RVD).
 const RVD_SLOT: usize = 8;
+/// Section slot of the per-camera lights (LIT).
+const LIT_SLOT: usize = 9;
+/// Size of one camera's light record.
+const LIGHT_SIZE: usize = 0x28;
 /// Size of one camera record: flags, perspective, position, target and the
 /// mask table offset.
 const CAMERA_SIZE: usize = 0x20;
@@ -89,7 +105,16 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
     // The whole offset table must be there even though only a few slots
     // are read.
     bytes(data, OFFSETS, OFFSET_COUNT * 4).context("section offset table")?;
-    let cameras = parse_cameras(data, offset(data, RID_SLOT)?, camera_count)?;
+    let mut cameras = parse_cameras(data, offset(data, RID_SLOT)?, camera_count)?;
+    let lit = offset(data, LIT_SLOT)?;
+    if lit != 0 {
+        for (index, camera) in cameras.iter_mut().enumerate() {
+            camera.light = Some(
+                parse_light(data, lit as usize + index * LIGHT_SIZE)
+                    .with_context(|| format!("camera {index}'s lights"))?,
+            );
+        }
+    }
     let zones = parse_zones(data, offset(data, RVD_SLOT)?)?;
     let sca = parse_sca(data, offset(data, SCA_SLOT)?)?;
     Ok(RoomSource {
@@ -122,9 +147,37 @@ fn parse_cameras(data: &[u8], offset: u32, count: u8) -> Result<Vec<Camera>> {
                 roll: 0,
                 fov: i32::from(perspective >> PERSPECTIVE_SHIFT),
                 mask_groups: Vec::new(),
+                light: None,
             })
         })
         .collect()
+}
+
+/// One camera's LIT record (see the module docs), on the RE1 scales.
+fn parse_light(data: &[u8], at: usize) -> Result<CameraLight> {
+    let record = bytes(data, at, LIGHT_SIZE)?;
+    let colour = |index: usize| -> [u8; 3] {
+        std::array::from_fn(|channel| {
+            let value = u32::from(record[4 + index * 3 + channel]);
+            (value * 0x80).div_ceil(255) as u8
+        })
+    };
+    let ambient = std::array::from_fn(|channel| {
+        let value = u32::from(record[13 + channel]);
+        (value * 0x1000).div_ceil(255) as i16
+    });
+    let lights = std::array::from_fn(|index| Light {
+        pos: std::array::from_fn(|axis| {
+            i32::from(i16::from_le_bytes([
+                record[16 + index * 6 + axis * 2],
+                record[17 + index * 6 + axis * 2],
+            ]))
+        }),
+        color: colour(index),
+        kind: 0,
+        radius: u16::from_le_bytes([record[34 + index * 2], record[35 + index * 2]]),
+    });
+    Ok(CameraLight { ambient, lights })
 }
 
 /// The camera switch zones: `u8` enabled flag, `u8` floor (`0xFF` any),
