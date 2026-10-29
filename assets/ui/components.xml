@@ -8,7 +8,7 @@
     <screen title="{title}">
       <command key="cancel" label="@hint.back" action="back"/>
       <stack orientation="horizontal">
-        <text variant="title" text="{title}" width="fill" wrap="none"/>
+        <text variant="title" text="{title}" width="fill" wrap="none" visible="{title}"/>
         <slot name="header"/>
       </stack>
       <text variant="caption" text="{caption}"/>
@@ -23,7 +23,7 @@
   <component name="option-category">
     <tab label="{label}">
       <split>
-        <tabs>
+        <tabs scrollbar="always">
           <command key="reset_group" label="@hint.reset_page" action="reset" confirm="@options.reset_page_question"/>
           <slot/>
         </tabs>

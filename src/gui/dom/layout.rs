@@ -134,25 +134,20 @@ fn flow(tree: &Tree, id: NodeId) -> Vec<NodeId> {
         .collect()
 }
 
-/// The tab strip's height in pixels (zero when hidden).
+/// The tab strip's height and the space under it, in pixels.
 pub fn strip_height(tree: &Tree, id: NodeId, cx: &LayoutCx<'_>) -> (f32, f32) {
-    let node = &tree[id];
-    let (h, below, hide_single) = style::tab_strip(node.depth);
-    let hide_single = match node.text("hide-single").as_str() {
-        "true" => true,
-        "false" => false,
-        _ => hide_single,
-    };
-    let tabs = node
-        .children
-        .iter()
-        .filter(|&&c| tree[c].kind == Kind::Tab && present(tree, c))
-        .count();
-    if hide_single && tabs <= 1 {
-        (0.0, 0.0)
-    } else {
-        (cx.u(h), cx.u(below))
-    }
+    // A hidden single-tab strip keeps its space, so pages line up whether
+    // or not they show one.
+    let (h, below) = style::tab_strip(tree[id].depth);
+    (cx.u(h), cx.u(below))
+}
+
+/// Whether a list shows its scrollbar even when everything fits:
+/// `scrollbar="always"` on it or an ancestor.
+pub fn scrollbar_always(tree: &Tree, id: NodeId) -> bool {
+    tree.ancestry(id)
+        .into_iter()
+        .any(|a| tree[a].text("scrollbar") == "always")
 }
 
 /// The shown tabs of a strip.
@@ -341,11 +336,20 @@ fn arrange(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, rect: Rect) {
             }
             if let Some(&second) = children.get(1) {
                 let x = rect.x + first_w + gap;
+                // Beside a tab strip, the second pane starts level with the
+                // tab's content.
+                let top = match children.first() {
+                    Some(&first) if tree[first].kind == Kind::Tabs => {
+                        let (strip, below) = strip_height(tree, first, cx);
+                        strip + below
+                    }
+                    _ => 0.0,
+                };
                 arrange(
                     tree,
                     second,
                     cx,
-                    Rect::new(x, rect.y, rect.right() - x, rect.h),
+                    Rect::new(x, rect.y + top, rect.right() - x, (rect.h - top).max(0.0)),
                 );
             }
         }
@@ -492,7 +496,7 @@ fn arrange_list(tree: &mut Tree, id: NodeId, cx: &mut LayoutCx<'_>, rect: Rect) 
         total += h + if i > 0 { gap } else { 0.0 };
     }
     // Keep room for the scrollbar when it shows.
-    let width = if total > rect.h + 0.5 {
+    let width = if total > rect.h + 0.5 || scrollbar_always(tree, id) {
         rect.w - cx.u(style::SCROLLBAR_ROOM)
     } else {
         rect.w

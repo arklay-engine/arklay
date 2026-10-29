@@ -106,7 +106,7 @@ pub fn paint(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>,
                 }
             }
             p.canvas.pop_clip();
-            if content > rect.h + 0.5 {
+            if content > rect.h + 0.5 || layout::scrollbar_always(tree, id) {
                 let bar = Rect::new(rect.right() - p.u(8.0), rect.y, p.u(8.0), rect.h);
                 p.scrollbar(bar, scroll, rect.h, content);
             }
@@ -282,7 +282,7 @@ fn tabs(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>, ink:
         .collect();
     let selected = tree[id].index;
     let depth = tree[id].depth;
-    let (strip_units, _, _) = style::tab_strip(depth);
+    let (strip_units, _) = style::tab_strip(depth);
     let strip_h = p.u(strip_units);
     let hidden = depth > 0 && tab_ids.len() <= 1 && tree[id].text("hide-single") != "false";
     let mut parts = Vec::new();
@@ -317,11 +317,7 @@ fn tabs(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>, ink:
                 &dim,
             )
         };
-        let rule_w = if depth == 0 {
-            rect.w
-        } else {
-            (strip.next.right() - rect.x + p.u(35.0)).min(rect.w)
-        };
+        let rule_w = rect.w;
         p.rule(rect.x, rect.y + strip_h, rule_w, 2.0, palette::RULE_BRIGHT);
         parts.push((strip.prev, Part::TabPrev));
         parts.extend(

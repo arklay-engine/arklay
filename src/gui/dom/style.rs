@@ -76,12 +76,11 @@ pub fn item_padding(variant: &str) -> [f32; 4] {
 pub const GROUP_H: f32 = 40.0;
 pub const GROUP_GAP: f32 = 24.0;
 
-/// A tab strip's height by depth, the space under its rule, and whether
-/// a strip of one tab hides.
-pub fn tab_strip(depth: u8) -> (f32, f32, bool) {
+/// A tab strip's height by depth and the space under its rule.
+pub fn tab_strip(depth: u8) -> (f32, f32) {
     match depth {
-        0 => (64.0, 26.0, false),
-        _ => (66.0, 30.0, true),
+        0 => (64.0, 26.0),
+        _ => (66.0, 30.0),
     }
 }
 

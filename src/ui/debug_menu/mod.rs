@@ -1275,6 +1275,11 @@ mod tests {
         let room = RoomId::parse("1060").unwrap();
         let mut game = GameState::default();
         game.id = room;
+        // A few held items for the inventory editor.
+        game.inventory = [(0x02, 15), (0x0A, 0), (0x2F, 3), (0x40, 1)]
+            .into_iter()
+            .map(|(id, quantity)| game::InventoryItem { id, quantity })
+            .collect();
         let mut menu = DebugMenu::open(&pack, room, &game);
         menu.configure(gui::Settings::default());
         let shot = |menu: &mut DebugMenu, game: &mut GameState, name: &str, keys: &[GuiKey]| {
@@ -1340,5 +1345,12 @@ mod tests {
         );
         shot(&mut menu, &mut game, "debug_state", &[Cancel]);
         shot(&mut menu, &mut game, "debug_rooms", &[Down, Confirm]);
+        shot(
+            &mut menu,
+            &mut game,
+            "debug_inventory",
+            &[Cancel, Down, Confirm],
+        );
+        shot(&mut menu, &mut game, "debug_picker", &[Confirm]);
     }
 }
