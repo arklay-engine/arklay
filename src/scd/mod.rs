@@ -15,11 +15,17 @@ pub mod opcode;
 pub mod reader;
 pub mod vm;
 
+use akscr::Region;
+
 /// One checked-in room script (`games/re1/room/<room>.akscr`) compiled for
 /// one RDT of one region.
+#[derive(Debug)]
 pub struct RoomScript {
     /// The RDT, e.g. `0x1030` for stage 1, room 03, player 0.
     pub id: u16,
+    /// The regions whose RDT this build is for: every region whose
+    /// `AUTHENTIC` build has the same digest.
+    pub regions: &'static [Region],
     /// The [`ir::Scripts::digest`] of the script's `AUTHENTIC` build: the
     /// RDT's own scripts have it when the script was written from them.
     pub original: u64,

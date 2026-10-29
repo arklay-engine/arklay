@@ -5,8 +5,9 @@
 //! pack entry named after its directory-relative path with `/` separators.
 //! `room/<id>/<stem>.s` and `.akscr` sources are built into
 //! `room/<id>/<stem>.scd` entries, and a merged `room/<room>.akscr` into
-//! `room/<id>/room.scd` for every variant of the room; the text source itself
-//! is not packed. Every other file, including other `.toml` files, is packed
+//! `room/<id>/room.scd` for every variant of the room, plus a
+//! `room/<id>/room-jpn.scd` or `room-eur.scd` wherever that region builds
+//! differently; the text source itself is not packed. Every other file, including other `.toml` files, is packed
 //! verbatim.
 //!
 //! [`discover_mods`] scans a pack's sibling `mods/` directory and the per-user
@@ -94,6 +95,8 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
         .map(|(relative, _)| relative.to_ascii_lowercase())
         .collect();
     let out_canonical = fs::canonicalize(out).ok();
+    // The per-region builds of merged room scripts: no base holds them.
+    let mut region_outputs: HashSet<String> = HashSet::new();
 
     for (relative, source) in &files {
         // The manifest lookup above is case-resolved by the filesystem; skip
@@ -119,7 +122,6 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
                 .with_context(|| format!("failed to read {}", source.display()))?;
             let dir = source.parent().unwrap_or(Path::new("."));
             let load = crate::scd::akscr::includes_from(dir);
-            let mut by_region = Vec::new();
             for id in crate::scd::akscr::room_variants(base) {
                 let variant = crate::scd::akscr::Variant::for_room(id);
                 let compile = |variant| {
@@ -127,26 +129,22 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
                         .and_then(|assembled| assembled.to_container())
                         .with_context(|| format!("failed to compile {relative} for room {id:04X}"))
                 };
+                // `variant` is the USA build, packed as `room.scd`; another
+                // region's build goes beside it only where it differs.
                 let container = compile(variant)?;
-                // `variant` is the USA build; check every other region.
                 for region in crate::scd::akscr::Region::ALL {
-                    if region != crate::scd::akscr::Region::Usa
-                        && !by_region.contains(&region)
-                        && compile(variant.in_region(region))? != container
-                    {
-                        by_region.push(region);
+                    if region == crate::scd::akscr::Region::Usa {
+                        continue;
+                    }
+                    let regional = compile(variant.in_region(region))?;
+                    if regional != container {
+                        let output = region_scd_output(id, region);
+                        region_outputs.insert(output.clone());
+                        push_entry(&mut entries, &mut outputs, output, regional, relative)?;
                     }
                 }
                 let output = format!("room/{id:04x}/room.scd");
                 push_entry(&mut entries, &mut outputs, output, container, relative)?;
-            }
-            if !by_region.is_empty() {
-                let regions: Vec<&str> = by_region.iter().map(|region| region.symbol()).collect();
-                warnings.push(format!(
-                    "{relative} builds differently for {}; the mod packs the USA build, which \
-                     runs on every region",
-                    regions.join(" and ")
-                ));
             }
             continue;
         }
@@ -189,6 +187,7 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
             // HD textures replace by pixel hash, not by path.
             .filter(|path| {
                 *path != manifest::ENTRY
+                    && !region_outputs.contains(*path)
                     && !path.starts_with(crate::htexture::ROOT)
                     && !is_override(&base_pack, path)
             })
@@ -244,6 +243,15 @@ pub fn build_mod(dir: &Path, out: &Path, base: Option<&Path>) -> Result<ModSumma
         bytes,
         warnings,
     })
+}
+
+/// The pack entry of a merged room script's build for `region` on RDT `id`,
+/// beside its USA `room.scd`; see [`crate::state::RoomId::region_scd_entry`].
+fn region_scd_output(id: u16, region: crate::scd::akscr::Region) -> String {
+    format!(
+        "room/{id:04x}/room-{}.scd",
+        region.symbol().to_ascii_lowercase()
+    )
 }
 
 /// Scan the sibling `mods/` directory of `pack` and the per-user `global`
@@ -605,7 +613,7 @@ mod tests {
     }
 
     #[test]
-    fn a_merged_room_script_by_region_warns() {
+    fn a_merged_room_script_packs_each_regions_build() {
         let dir = TempDir::new("scd-region");
         let source = dir.path.join("source");
         write(
@@ -616,14 +624,55 @@ mod tests {
             &source.join("room/514.akscr"),
             b"#version 1\nproc main noreturn\n{\n#if JPN\n    nop(1);\n#endif\n}\n",
         );
+        let base = dir.path.join("re1.akpak");
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                manifest::ENTRY,
+                manifest::Manifest::base("re1").render().into_bytes(),
+            )
+            .unwrap();
+        for id in ["5140", "5141"] {
+            writer.add(&format!("room/{id}/room.scd"), vec![0]).unwrap();
+        }
+        writer.write(&base).unwrap();
 
-        let summary = build_mod(&source, &dir.path.join("demo.akpak"), None).unwrap();
-        assert_eq!(summary.warnings.len(), 1, "{:?}", summary.warnings);
-        assert!(
-            summary.warnings[0].contains("room/514.akscr")
-                && summary.warnings[0].contains("for JPN;"),
-            "{:?}",
-            summary.warnings
+        // The JPN build differs, so it goes beside the USA `room.scd`; the
+        // EUR build is the USA one. The base never holds a region build, so
+        // it is no new file.
+        let out = dir.path.join("demo.akpak");
+        let summary = build_mod(&source, &out, Some(&base)).unwrap();
+        assert_eq!(summary.warnings, Vec::<String>::new());
+        assert_eq!(
+            summary
+                .entries
+                .iter()
+                .map(|(path, _)| path.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "manifest.toml",
+                "room/5140/room-jpn.scd",
+                "room/5140/room.scd",
+                "room/5141/room-jpn.scd",
+                "room/5141/room.scd"
+            ]
+        );
+        let pack = Pack::open(&out).unwrap();
+        let main = |path: &str| {
+            let scripts = crate::scd::reader::parse(&pack.read(path).unwrap()).unwrap();
+            scripts.main[0]
+                .insns
+                .iter()
+                .flat_map(|insn| insn.bytes.iter().copied())
+                .collect::<Vec<u8>>()
+        };
+        assert_eq!(main("room/5140/room.scd"), Vec::<u8>::new());
+        assert_eq!(main("room/5140/room-jpn.scd"), [0x0E, 0x01]);
+        assert_eq!(
+            region_scd_output(0x5140, crate::scd::akscr::Region::Jpn),
+            crate::state::RoomId::parse("5140")
+                .unwrap()
+                .region_scd_entry(crate::scd::akscr::Region::Jpn)
         );
     }
 

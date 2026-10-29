@@ -306,31 +306,59 @@ fn emit_room_scripts() {
                     .digest();
                 (original, compile(&text, variant, path))
             };
-            // One build per distinct `AUTHENTIC` digest, the first region's.
-            let mut builds: Vec<(Region, (u64, Vec<u8>))> = Vec::new();
+            // One build per distinct `AUTHENTIC` digest, named after the first
+            // of the regions it stands for.
+            struct Build {
+                regions: Vec<Region>,
+                original: u64,
+                container: Vec<u8>,
+            }
+            let mut builds: Vec<Build> = Vec::new();
             for region in Region::ALL {
                 let (original, container) = build(Variant::for_room(id).in_region(region));
-                if let Some((first, (_, first_container))) =
-                    builds.iter().find(|(_, (other, _))| *other == original)
+                if let Some(Build {
+                    regions,
+                    container: first_container,
+                    ..
+                }) = builds.iter_mut().find(|build| build.original == original)
                 {
                     assert!(
                         *first_container == container,
-                        "{} as {id:04X}: regions {first} and {region} build the same \
+                        "{} as {id:04X}: regions {} and {region} build the same \
                          `AUTHENTIC` bytecode but different fixed bytecode; a region's \
                          `#if` may only hold lines where the regions' own scripts differ",
-                        path.display()
+                        path.display(),
+                        regions[0]
                     );
+                    regions.push(region);
                     continue;
                 }
-                builds.push((region, (original, container)));
+                builds.push(Build {
+                    regions: vec![region],
+                    original,
+                    container,
+                });
             }
-            for (region, (original, container)) in builds {
-                let file = scd_dir.join(format!("{id:04x}-{}.scd", region.symbol().to_lowercase()));
+            for Build {
+                regions,
+                original,
+                container,
+            } in builds
+            {
+                let file = scd_dir.join(format!(
+                    "{id:04x}-{}.scd",
+                    regions[0].symbol().to_lowercase()
+                ));
                 std::fs::write(&file, container).expect("failed to write room bytecode");
+                let regions: Vec<String> = regions
+                    .iter()
+                    .map(|region| format!("Region::{region:?}"))
+                    .collect();
                 writeln!(
                     out,
-                    "    RoomScript {{ id: 0x{id:04X}, original: 0x{original:016X}, \
-                     container: include_bytes!({:?}) }},",
+                    "    RoomScript {{ id: 0x{id:04X}, regions: &[{}], \
+                     original: 0x{original:016X}, container: include_bytes!({:?}) }},",
+                    regions.join(", "),
                     file.to_string_lossy()
                 )
                 .expect("writing to a String cannot fail");

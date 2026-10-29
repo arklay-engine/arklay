@@ -40,6 +40,7 @@ lua = ["lua/demo.lua"]
 | `engine` | Optional note about the target engine build. |
 | `lua` | Ordered hook paths; empty means discover `lua/**.lua`. |
 | `start_room` | A base pack's new-game room as a three-character room id (`"100"`, or a letter stage such as `"G01"`), in the selected character's player variant; the player enters like a `--room` boot. Without it a new game starts in RE1's main hall. Optional; a mod manifest may not set it. |
+| `region` | A base pack's script region, `"USA"`, `"JPN"` or `"EUR"`: `convert-game` records the region whose room scripts the install ships, and a mod's merged room scripts run their build for it. Without it a mod's scripts run their USA build. Optional; a mod manifest may not set it. |
 
 A pack carries no game-format tag: each RDT, EMD and WAV entry is identified
 by its own content (`src/format.rs`), so one pack may mix RE1 and RE2
@@ -626,10 +627,16 @@ assembled into `room/<id>/<stem>.scd` (the `.s` itself is not packed); a
 script named by three hex digits (`room/103.akscr`) is compiled once per
 variant, into `room/1030/room.scd`, `room/1031/room.scd`, `room/6030/room.scd`
 and `room/6031/room.scd`, each built for the
-USA region (`#if USA` is defined). A mod has no build per region and its
-scripts run on every region, so a script that builds differently for JPN or
-EUR gets a warning: lines that follow one region's RDT data (a camera
-number, an AOT position) may not fit another's.
+USA region (`#if USA` is defined). Where a variant builds differently for
+JPN or EUR, that build goes beside it as `room/1030/room-jpn.scd` or
+`room/1030/room-eur.scd`, so a mod copied from the checked-in scripts keeps
+the lines that follow each region's RDT data (a camera number, an AOT
+position). The engine runs the build for the region the base pack's
+manifest records (`region`, written by `convert-game`), and `room.scd`
+when the mod has no build for that region or the base pack records none
+(a pack converted before the key existed; convert it again). A region
+build only stands for the `room.scd` of its own layer: a higher layer that
+ships only `room.scd` replaces it on every region.
 `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
@@ -839,7 +846,8 @@ the executable; `convert-game` packs it as `room/{id}/room.scd`, moving the
 room's own scripts to `original.scd`,
 picking the region whose `AUTHENTIC` build has the same digest as the RDT's
 own scripts. An RDT whose scripts are no region's keeps its own scripts,
-with a warning. A script may use a region symbol only where the regions'
+with a warning. The region every matched RDT agrees on is recorded as the
+base manifest's `region`, which picks a mod's per-region script builds. A script may use a region symbol only where the regions'
 own scripts differ: the build stops if two regions' `AUTHENTIC` builds of
 an RDT match but their fixed builds do not. A mod's `room/{id}/room.scd`
 overrides the packed one, and a mod that replaces an RDT without shipping a script keeps

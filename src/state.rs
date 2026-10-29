@@ -122,6 +122,17 @@ impl RoomId {
         format!("{}/room.scd", self.dir())
     }
 
+    /// Pack path of a mod's build of the room's scripts for `region`, kept
+    /// beside its `room.scd` (the USA build) where the region's build
+    /// differs, e.g. `room/1001/room-jpn.scd`.
+    pub fn region_scd_entry(self, region: crate::scd::akscr::Region) -> String {
+        format!(
+            "{}/room-{}.scd",
+            self.dir(),
+            region.symbol().to_ascii_lowercase()
+        )
+    }
+
     /// Pack path of the room's original script bytecode, kept beside a
     /// `room.scd` that holds the port's fixed build, e.g.
     /// `room/1001/original.scd`.
@@ -525,6 +536,10 @@ mod tests {
         assert_eq!(id.rdt_entry(), "room/1000/room.rdt");
         assert_eq!(id.scd_entry(), "room/1000/room.scd");
         assert_eq!(id.original_scd_entry(), "room/1000/original.scd");
+        assert_eq!(
+            id.region_scd_entry(crate::scd::akscr::Region::Eur),
+            "room/1000/room-eur.scd"
+        );
         assert_eq!(id.room3(), "100");
         assert_eq!(id.cut_entry(3), "room/1000/cut/03.bmp");
         assert_eq!(id.mask_entry(12), "room/1000/mask/0c.bmp");

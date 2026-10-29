@@ -144,6 +144,26 @@ pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptS
     .map_or(ScriptSource::Room, |(_, source)| source)
 }
 
+/// The entry room `id`'s `room.scd` scripts are read from: the build for
+/// the base pack's region (`room-jpn.scd`, [`RoomId::region_scd_entry`])
+/// when the layer whose `room.scd` wins carries one, otherwise `room.scd`.
+///
+/// A mod packs a region's build only where its script builds differently
+/// for that region, and a base pack whose manifest names no region runs the
+/// USA build.
+pub fn room_scd_entry(pack: &Pack, id: RoomId) -> String {
+    let entry = id.scd_entry();
+    let region = pack.manifest().and_then(|manifest| manifest.region);
+    if let Some(region) = region.filter(|region| *region != scd::akscr::Region::Usa) {
+        let regional = id.region_scd_entry(region);
+        let depth = pack.depth_of(&regional);
+        if depth.is_some() && depth == pack.depth_of(&entry) {
+            return regional;
+        }
+    }
+    entry
+}
+
 /// The scripts embedded in RDT `data`: none for an RE2 RDT, whose script
 /// dialect the engine does not run yet.
 fn rdt_scripts(data: &[u8]) -> Result<scd::ir::Scripts> {
@@ -228,7 +248,7 @@ impl Loaded {
                 Some(data) => rdt_scripts(data)?,
                 None => rdt_scripts(&pack.read(&self.id.rdt_entry())?)?,
             },
-            ScriptSource::Room => read_scripts(pack, &self.id.scd_entry())?,
+            ScriptSource::Room => read_scripts(pack, &room_scd_entry(pack, self.id))?,
             ScriptSource::Original => read_scripts(pack, &self.id.original_scd_entry())?,
         };
         Ok((scripts, source))
