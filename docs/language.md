@@ -78,10 +78,10 @@ formatted-text renderers index the sheet. Only the original's ASCII-buffer
 
 The item keys for an item with a definition come from the `<strings>` of its
 `item/<nn>/item.xml` (see [Item definitions](modding.md#item-definitions)), and
-the room name keys from the `<strings>` of each `room/<id>/room.xml` (see
-[Room definitions](modding.md#room-definitions)); the checked-in language
-files carry neither. A language file may still set them, and its value wins
-over the definition's.
+the room name and message keys from the `<strings>` of each
+`room/<id>/room.xml` (see [Room definitions](modding.md#room-definitions));
+the checked-in language files carry none of them. A language file may still
+set them, and its value wins over the definition's.
 
 The language files built into the engine are RE1's text. A pack whose base
 game is not RE1 (its manifest `id` is not `re1`) takes only their `UI_` keys,

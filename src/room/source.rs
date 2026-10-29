@@ -65,8 +65,6 @@ pub struct RoomSource {
     pub footstep_count: u16,
     /// Footstep zones in table order; the last is the catch-all.
     pub footstep_zones: Vec<FootstepZone>,
-    /// The room's message block, absent when the RDT has none.
-    pub messages: Option<Messages>,
     /// The object-model table's slot count when it is longer than its last
     /// slot with a model (`object/<slot>.tmd`): trailing null slots the SCD
     /// still sees. `None` when the files give the count.
@@ -131,100 +129,45 @@ impl MaskSprite {
     }
 }
 
-/// The room message block.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Messages {
-    /// One encoded stream per offset-table entry, each running to the next
-    /// message's start (a message without its own `0x01` runs on into the
-    /// next, exactly like the RDT), in the script the text was decoded with.
-    Streams {
-        script: Script,
-        streams: Vec<Vec<u8>>,
-    },
-    /// A block whose offset table is not a plain ascending list, kept whole.
-    Raw(Vec<u8>),
-}
-
 /// The stage digit whose Japanese text the game draws with `PBFONT3N.TIM`
 /// (its stage byte 4).
 const STAGE_FIVE: u8 = 5;
 
-impl Messages {
-    /// Split an RDT message block into its streams, or keep it raw when its
-    /// offset table is not the shipped ascending form.
-    ///
-    /// Japanese stage-5 text is moved onto the stage-five kanji rows the game
-    /// draws it with ([`crate::charset::stage_five_text`]).
-    fn from_block(block: &[u8], script: Script, stage: u8) -> Self {
-        let Some(first) = block
-            .get(..2)
-            .map(|raw| usize::from(u16::from_le_bytes([raw[0], raw[1]])))
-        else {
-            return Self::Raw(block.to_vec());
-        };
-        if first == 0 || first % 2 != 0 || first > block.len() {
-            return Self::Raw(block.to_vec());
-        }
-        let offsets: Vec<usize> = block[..first]
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|raw| usize::from(u16::from_le_bytes(*raw)))
-            .collect();
-        if offsets.windows(2).any(|pair| pair[0] >= pair[1])
-            || offsets.last().is_some_and(|&last| last > block.len())
-        {
-            return Self::Raw(block.to_vec());
-        }
-        let streams = offsets
-            .iter()
-            .enumerate()
-            .map(|(index, &start)| {
-                let end = offsets.get(index + 1).copied().unwrap_or(block.len());
-                let stream = &block[start..end];
-                if script == Script::Japanese && stage == STAGE_FIVE {
-                    crate::charset::stage_five_text(stream)
-                } else {
-                    stream.to_vec()
-                }
-            })
-            .collect();
-        Self::Streams { script, streams }
-    }
-
-    /// The RDT-form block: the `u16` offset table, then the streams.
-    pub fn to_block(&self) -> Result<Vec<u8>> {
-        match self {
-            Self::Raw(block) => Ok(block.clone()),
-            Self::Streams { streams, .. } => {
-                let mut block = Vec::new();
-                let mut offset = streams.len() * 2;
-                for stream in streams {
-                    let value =
-                        u16::try_from(offset).context("room message block exceeds 64 KiB")?;
-                    block.extend_from_slice(&value.to_le_bytes());
-                    offset += stream.len();
-                }
-                u16::try_from(offset).context("room message block exceeds 64 KiB")?;
-                for stream in streams {
-                    block.extend_from_slice(stream);
-                }
-                Ok(block)
-            }
-        }
-    }
-}
-
 /// An RDT message block as the game draws it: a Japanese stage-5 block has
-/// its streams moved onto the stage-five kanji rows, any other is unchanged.
+/// each stream moved onto the stage-five kanji rows
+/// ([`crate::charset::stage_five_text`]), any other is unchanged. A block
+/// whose offset table is not the shipped ascending form is kept as it is.
 pub(super) fn drawn_message_block(block: &[u8], script: Script, stage: u8) -> Vec<u8> {
     if script != Script::Japanese || stage != STAGE_FIVE {
         return block.to_vec();
     }
-    // The remap rewrites operands in place, so the block keeps its length.
-    Messages::from_block(block, script, stage)
-        .to_block()
-        .unwrap_or_else(|_| block.to_vec())
+    let Some(first) = block
+        .get(..2)
+        .map(|raw| usize::from(u16::from_le_bytes([raw[0], raw[1]])))
+    else {
+        return block.to_vec();
+    };
+    if first == 0 || first % 2 != 0 || first > block.len() {
+        return block.to_vec();
+    }
+    let offsets: Vec<usize> = block[..first]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|raw| usize::from(u16::from_le_bytes(*raw)))
+        .collect();
+    if offsets.windows(2).any(|pair| pair[0] >= pair[1])
+        || offsets.last().is_some_and(|&last| last > block.len())
+    {
+        return block.to_vec();
+    }
+    // The remap rewrites operands in place, so each stream keeps its length.
+    let mut drawn = block.to_vec();
+    for (index, &start) in offsets.iter().enumerate() {
+        let end = offsets.get(index + 1).copied().unwrap_or(block.len());
+        drawn[start..end].copy_from_slice(&crate::charset::stage_five_text(&block[start..end]));
+    }
+    drawn
 }
 
 /// One declared effect sprite slot.
@@ -326,22 +269,25 @@ fn i32_at(data: &[u8], offset: usize) -> Option<i32> {
     u32_at(data, offset).map(|value| value as i32)
 }
 
-impl RoomSource {
-    /// Read an RDT into a room definition and the files of its folder: the
-    /// model pairs, effect sprites, player animation and scripts.
-    ///
-    /// `script` is the text script the room's messages are written in.
-    pub fn from_rdt(data: &[u8], id: RoomId, script: Script) -> Result<Converted> {
-        let state = rdt::parse(data, id)?;
-        let tables = rdt::mask_tables(data)?;
-        let cameras = state
-            .cuts
-            .iter()
-            .zip(&tables)
-            .map(|(cut, table)| camera_source(cut, table))
-            .collect();
+/// What an RE1 RDT embeds besides the room definition: the files of the
+/// room's folder (model pairs, effect sheets, the player animation) and the
+/// effect definitions and model table lengths that go with them.
+struct Embedded {
+    /// The models, effect sheets and player animation, as `(pack entry,
+    /// bytes)`.
+    files: Vec<(String, Vec<u8>)>,
+    /// Each effect slot's definition, `effect/<slot>.xml`.
+    effects: Vec<(String, Vec<u8>)>,
+    object_slots: Option<usize>,
+    item_slots: Option<usize>,
+}
+
+impl Embedded {
+    /// Read what RDT `data` of room `id`, parsed as `state`, embeds.
+    fn read(data: &[u8], id: RoomId, state: &RoomState) -> Self {
         let pointers = rdt::pointers(data);
         let mut files = Vec::new();
+        let mut effects = Vec::new();
 
         let mut models = |table: ModelTable, pointer: u32, count: u8| {
             let mut used = 0;
@@ -375,7 +321,7 @@ impl RoomSource {
             .enumerate()
         {
             let stem = id.effect_stem(slot);
-            files.push((
+            effects.push((
                 format!("{stem}.xml"),
                 super::xml::write_effect(&effect).into_bytes(),
             ));
@@ -396,6 +342,45 @@ impl RoomSource {
             files.push((format!("{stem}.emr"), emr.to_vec()));
             files.push((format!("{stem}.edd"), edd.to_vec()));
         }
+        Self {
+            files,
+            effects,
+            object_slots,
+            item_slots,
+        }
+    }
+}
+
+/// The game art RE1 RDT `data` of room `id` holds for the room's folder, as
+/// `(pack entry, bytes)`: the object and item model pairs, the effect sprite
+/// sheets and the player-animation pair. The room's definition (`room.xml`,
+/// the effect definitions, the scripts) is not read.
+pub fn rdt_assets(data: &[u8], id: RoomId) -> Result<Vec<(String, Vec<u8>)>> {
+    let state = rdt::parse(data, id)?;
+    Ok(Embedded::read(data, id, &state).files)
+}
+
+impl RoomSource {
+    /// Read an RDT into a room definition and the files of its folder: the
+    /// model pairs, effect sprites, player animation and scripts. The RDT's
+    /// message block is not kept: a room's text is its `<strings>`.
+    pub fn from_rdt(data: &[u8], id: RoomId) -> Result<Converted> {
+        let state = rdt::parse(data, id)?;
+        let tables = rdt::mask_tables(data)?;
+        let cameras = state
+            .cuts
+            .iter()
+            .zip(&tables)
+            .map(|(cut, table)| camera_source(cut, table))
+            .collect();
+        let pointers = rdt::pointers(data);
+        let Embedded {
+            mut files,
+            effects,
+            object_slots,
+            item_slots,
+        } = Embedded::read(data, id, &state);
+        files.extend(effects);
         match crate::scd::reader::extract_container(data) {
             Ok(Some(container)) => files.push((id.scd_entry(), container)),
             Ok(None) => {}
@@ -416,10 +401,6 @@ impl RoomSource {
             walk_zones: state.walk_zones,
             footstep_count: footstep_count(data, pointers[FOOTSTEP_SLOT]),
             footstep_zones: state.footstep_zones,
-            messages: state
-                .messages
-                .as_deref()
-                .map(|block| Messages::from_block(block, script, id.stage)),
             object_slots,
             item_slots,
             strings: Vec::new(),
@@ -498,7 +479,7 @@ impl RoomSource {
             zones: self.zones.clone(),
             walk_zones: self.walk_zones.clone(),
             footstep_zones: self.footstep_zones.clone(),
-            messages: self.messages.as_ref().map(Messages::to_block).transpose()?,
+            messages: None,
             effects: build_effects(id, pack)?,
             object_models,
             item_models,

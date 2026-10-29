@@ -283,8 +283,8 @@ cargo run -- scd build 1000.akscr --out room/1000/room.scd
 # compile one variant of it
 cargo run -- scd export-rooms re1.akpak --out games/re1/room
 cargo run -- scd export-rooms usa=en.akpak jpn=ja.akpak eur=fr.akpak --out games/re1/room
-cargo run -- scd build games/re1/room/103.akscr --room 6031 --out room/6031/room.scd
-cargo run -- scd build games/re1/room/103.akscr --room 6031 --region jpn --out room/6031/room.scd
+cargo run -- scd build games/re1/room/1030/room.akscr --room 6031 --out room/6031/room.scd
+cargo run -- scd build games/re1/room/1030/room.akscr --room 6031 --region jpn --out room/6031/room.scd
 ```
 
 `docs/modding.md` documents the manifest grammar, the replacement formats and
@@ -296,7 +296,7 @@ limits (whole-room script replacement, sandbox, error/budget policy). A run
 without any layer stays byte-identical to a pre-M15 run, Lua or not.
 
 `convert-game` and `extract` report progress on stderr as a single bar for the
-whole command. `convert-game` runs its asset categories (RDTs, camera cuts,
+whole command. `convert-game` runs its asset categories (rooms, camera cuts,
 BGM, player files, compression, bytes written) as internal phases under that
 one bar, which names the phase in progress, so a conversion never scrolls a bar
 per category. On a terminal it hides the cursor and redraws the bar in place
@@ -368,9 +368,11 @@ back ribbons from rooms already visited.
 
 `room_script_fixes` (Gameplay › Room Scripts in the menu) chooses which room
 scripts run. `convert-game` packs the checked-in room scripts
-(`games/re1/room/*.akscr`) as `room/{id}/room.scd`, built with the port's
-fixes (the `#else` of each `#if AUTHENTIC` block), and keeps the room's original
-bytecode beside it as `room/{id}/original.scd`. Turned off, the engine runs
+(`games/re1/room/*/room.akscr`, which are not packed themselves) as
+`room/{id}/room.scd`, built with the port's fixes (the `#else` of each
+`#if AUTHENTIC` block), and keeps the original
+scripts (the `AUTHENTIC` build) beside it as `room/{id}/original.scd` where the
+fixes change them. Turned off, the engine runs
 `original.scd` (or the scripts in a raw `room/{id}/room.rdt`) instead. A mod
 layer's `room/{id}/room.scd` still applies either way. A
 change takes effect from the next room load. `--room-script-fixes` and

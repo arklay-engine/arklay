@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1023" g="1327" b="1344"/>
+  <lights>
+    <light x="5518" y="-3000" z="7277" r="100" g="100" b="100" kind="0" radius="7000"/>
+    <light x="5518" y="-3000" z="7277" r="100" g="100" b="100" kind="0" radius="7000"/>
+    <light x="5508" y="-300" z="7137" r="100" g="100" b="100" kind="0" radius="7000"/>
+  </lights>
+  <cameras>
+    <camera x="7938" y="-2340" z="2340" lookX="5004" lookY="-1584" lookZ="9918" roll="0" fov="207">
+      <maskGroup originX="20" originY="19" texBits="0x7800">
+        <sprite u="32" v="96" x="160" y="128" depthData="191" blend="3" colorMode="1" size="8"/>
+        <sprite u="40" v="96" x="168" y="128" depthData="187" blend="3" colorMode="1" size="8"/>
+        <sprite u="32" v="104" x="160" y="136" depthData="187" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="112" x="160" y="144" depthData="191" blend="3" colorMode="1" size="16"/>
+        <sprite u="32" v="128" x="160" y="160" depthData="191" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="136" x="152" y="168" depthData="191" blend="3" colorMode="1" width="24" height="8"/>
+        <sprite u="24" v="144" x="152" y="176" depthData="195" blend="3" colorMode="1" size="8"/>
+        <sprite u="32" v="144" x="160" y="176" depthData="191" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="152" x="144" y="184" depthData="199" blend="3" colorMode="1" size="8"/>
+        <sprite u="24" v="152" x="152" y="184" depthData="195" blend="3" colorMode="1" size="8"/>
+        <sprite u="32" v="152" x="160" y="184" depthData="189" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="8" v="160" x="136" y="192" depthData="160" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="8" v="168" x="136" y="200" depthData="160" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="160" x="152" y="192" depthData="153" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="0" v="176" x="128" y="208" depthData="160" blend="3" colorMode="1" size="16"/>
+        <sprite u="16" v="176" x="144" y="208" depthData="156" blend="3" colorMode="1" width="32" height="16"/>
+        <sprite u="0" v="0" x="176" y="128" depthData="183" blend="3" colorMode="1" size="16"/>
+        <sprite u="8" v="16" x="184" y="144" depthData="182" blend="3" colorMode="1" size="16"/>
+        <sprite u="8" v="32" x="184" y="160" depthData="183" blend="3" colorMode="1" size="16"/>
+        <sprite u="0" v="40" x="176" y="168" depthData="187" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="64" x="176" y="192" depthData="149" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="8" v="48" x="184" y="176" depthData="183" blend="3" colorMode="1" size="16"/>
+        <sprite u="8" v="64" x="184" y="192" depthData="144" blend="3" colorMode="1" width="16" height="32"/>
+        <sprite u="16" v="0" x="192" y="128" depthData="175" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="24" v="16" x="200" y="144" depthData="175" blend="3" colorMode="1" size="16"/>
+        <sprite u="24" v="32" x="200" y="160" depthData="179" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="40" x="200" y="168" depthData="179" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="24" v="64" x="200" y="192" depthData="144" blend="3" colorMode="1" width="16" height="32"/>
+        <sprite u="40" v="0" x="216" y="128" depthData="171" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="40" v="16" x="216" y="144" depthData="171" blend="3" colorMode="1" size="16"/>
+        <sprite u="40" v="32" x="216" y="160" depthData="174" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="40" v="40" x="216" y="168" depthData="175" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="40" v="64" x="216" y="192" depthData="140" blend="3" colorMode="1" width="16" height="32"/>
+      </maskGroup>
+      <maskGroup originX="124" originY="19" texBits="0x7800">
+        <sprite u="64" v="0" x="136" y="128" depthData="163" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="56" v="16" x="128" y="144" depthData="167" blend="3" colorMode="1" size="16"/>
+        <sprite u="64" v="32" x="136" y="160" depthData="171" blend="3" colorMode="1" size="8"/>
+        <sprite u="56" v="40" x="128" y="168" depthData="167" blend="3" colorMode="1" width="24" height="8"/>
+        <sprite u="56" v="48" x="128" y="176" depthData="167" blend="3" colorMode="1" size="24"/>
+        <sprite u="56" v="72" x="128" y="200" depthData="136" blend="3" colorMode="1" size="24"/>
+        <sprite u="72" v="16" x="144" y="144" depthData="163" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="24" x="152" y="152" depthData="163" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="80" v="48" x="152" y="176" depthData="163" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="80" v="72" x="152" y="200" depthData="133" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="88" v="0" x="160" y="128" depthData="159" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="88" v="16" x="160" y="144" depthData="159" blend="3" colorMode="1" width="24" height="8"/>
+        <sprite u="96" v="56" x="168" y="184" depthData="159" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="96" v="80" x="168" y="208" depthData="128" blend="3" colorMode="1" size="16"/>
+        <sprite u="112" v="8" x="184" y="136" depthData="155" blend="3" colorMode="1" size="16"/>
+        <sprite u="112" v="24" x="184" y="152" depthData="155" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="112" v="48" x="184" y="176" depthData="159" blend="3" colorMode="1" size="16"/>
+        <sprite u="112" v="64" x="184" y="192" depthData="159" blend="3" colorMode="1" width="16" height="32"/>
+      </maskGroup>
+    </camera>
+    <camera x="8154" y="-2340" z="10170" lookX="4626" lookY="-1584" lookZ="2268" roll="0" fov="207">
+      <maskGroup originX="-81" originY="5" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="298" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="24" x="128" y="152" depthData="298" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="303" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="24" x="136" y="152" depthData="307" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="307" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="24" x="144" y="152" depthData="307" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="24" v="0" x="152" y="128" depthData="311" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="24" v="24" x="152" y="152" depthData="315" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="315" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="32" v="24" x="160" y="152" depthData="318" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="0" x="168" y="128" depthData="318" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="24" x="168" y="152" depthData="319" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="48" v="0" x="176" y="128" depthData="323" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="48" v="24" x="176" y="152" depthData="327" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="56" v="0" x="184" y="128" depthData="327" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="56" v="24" x="184" y="152" depthData="331" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="0" x="192" y="128" depthData="331" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="24" x="192" y="152" depthData="335" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="72" v="0" x="192" y="176" depthData="338" blend="1" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+      <maskGroup originX="-79" originY="14" texBits="0x7800">
+        <sprite u="80" v="0" x="128" y="128" depthData="300" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="8" x="128" y="136" depthData="302" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="16" x="128" y="144" depthData="302" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="24" x="128" y="152" depthData="303" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="0" x="144" y="128" depthData="306" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="8" x="144" y="136" depthData="307" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="16" x="144" y="144" depthData="311" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="24" x="144" y="152" depthData="311" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="112" v="0" x="160" y="128" depthData="318" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="112" v="8" x="160" y="136" depthData="314" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="112" v="16" x="160" y="144" depthData="319" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="112" v="24" x="160" y="152" depthData="319" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="32" x="176" y="128" depthData="327" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="40" x="176" y="136" depthData="327" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="32" x="176" y="144" depthData="327" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="40" x="176" y="152" depthData="329" blend="1" colorMode="1" width="16" height="8"/>
+      </maskGroup>
+      <maskGroup originX="63" originY="6" texBits="0x7800">
+        <sprite u="0" v="48" x="128" y="128" depthData="595" blend="1" colorMode="1" size="8"/>
+        <sprite u="0" v="56" x="128" y="136" depthData="598" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="48" x="136" y="128" depthData="603" blend="1" colorMode="1" size="8"/>
+        <sprite u="8" v="56" x="136" y="136" depthData="607" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="16" v="48" x="144" y="128" depthData="615" blend="1" colorMode="1" size="8"/>
+        <sprite u="16" v="56" x="144" y="136" depthData="618" blend="1" colorMode="1" width="8" height="16"/>
+      </maskGroup>
+      <maskGroup originX="77" originY="-12" texBits="0x7800">
+        <sprite u="24" v="48" x="128" y="128" depthData="559" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="32" v="48" x="136" y="128" depthData="567" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="48" x="144" y="128" depthData="555" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="48" x="152" y="128" depthData="547" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="56" v="48" x="160" y="128" depthData="539" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="48" x="168" y="128" depthData="550" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="48" x="144" y="144" depthData="543" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="80" v="48" x="152" y="152" depthData="555" blend="1" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+    </camera>
+    <camera x="9090" y="-1404" z="7650" lookX="4806" lookY="-1764" lookZ="9090" roll="0" fov="207"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="1000" x1="0" z1="11807" x2="10658" z2="11684" x3="10173" z3="1000"/>
+      <switch zoneIndex="1" to="1" x0="1300" z0="2900" x1="1300" z1="5900" x2="10100" z2="7400" x3="10000" z3="4900"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="2" to="9" x0="0" z0="11697" x1="10501" z1="11701" x2="10506" z2="1300" x3="0" z3="1300"/>
+      <switch zoneIndex="3" to="0" x0="1400" z0="8200" x1="9900" z1="11300" x2="9800" z2="7600" x3="1400" z3="6300"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="4" to="9" x0="10406" z0="800" x1="400" z1="800" x2="400" z2="12200" x3="10600" z3="12100"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="4914" cellZ="6858">
+    <quadrant index="0">
+      <box xMax="11610" zMax="12960" xMin="0" zMin="10836" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11592" zMax="14112" xMin="8892" zMin="1206" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="1944" zMax="14958" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11610" zMax="12960" xMin="0" zMin="10836" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="11664" zMax="1962" xMin="0" zMin="54" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11592" zMax="14112" xMin="8892" zMin="1206" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10098" zMax="5652" xMin="6912" zMin="90" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="1944" zMax="14958" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11664" zMax="1962" xMin="0" zMin="54" shape="1" cf1="true" cf2="true"/>
+      <box xMax="3852" zMax="2862" xMin="882" zMin="1062" shape="1" cf2="true"/>
+      <box xMax="2808" zMax="4590" xMin="0" zMin="1026" shape="1" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="13100" height="0x3908" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">CELL</string>
+      <string key="save_name">Laboratory B3</string>
+      <string key="0">{scroll 0}\n {scroll 1}{clear 85}{scroll 0}\n {scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}\n {scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}\n {scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}\n {scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}\n {scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 60}{scroll 0}\n {scroll 1}{clear 65}{scroll 0}\n {scroll 1}{timed 90}</string>
+      <string key="9">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 130}{scroll 0}\n {scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}Nothing important around \nhere.{scroll 1}</string>
+      <string key="11">{scroll 2}Nothing important around \nhere.{scroll 1}</string>
+      <string key="12">{scroll 2}Nothing important around \nhere.{scroll 1}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      <string key="0">{scroll 0}\n     ジル 待たせたな{scroll 1}{clear 85}{scroll 0}\n       クリス{scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}\n      信じてたわ{scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}\n  行こう もうここに用はない{scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}\n       ジルか{scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}\n     無事だったとは{scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}\n   ウェスカーなのよ…{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\n  ああ とにかくここを出よう{scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}\n       クリス{scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}\n        ジル{scroll 1}{clear 40}{scroll 0}\n      待たせたわね{scroll 1}{clear 60}{scroll 0}\n     ケリはついたのか{scroll 1}{clear 65}{scroll 0}\n   ほとんどね 行きましょう{scroll 1}{timed 90}</string>
+      <string key="9">{scroll 0}\n        ジル{scroll 1}{clear 40}{scroll 0}\n   クリス 無事だったのね{scroll 1}{clear 70}{scroll 0}\n   そっちこそ ウェスカーは?{scroll 1}{clear 130}{scroll 0}\n   後よ とにかく出ましょう{scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}\n       ベッドがある{scroll 1}</string>
+      <string key="11">{scroll 2}\n    洗面台には何もない{scroll 1}</string>
+      <string key="12">{scroll 2}\n      洗面台のようだ{scroll 1}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Laboratoire SS3</string>
+      <string key="0">{scroll 0}Jill! Désolé de t'avoir fait \nattendre. {scroll 1}{clear 85}{scroll 0}\nChris... {scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}Je savais que je pouvais te \nfaire confiance. {scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}Filons!\nInutile de rester ici. {scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}\nJill? Tu es là? {scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}\nJill...Tu vas bien...! {scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}Oui, Wesker est ici,\nil est... {scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}Oh, je sais. Peu importe, \nsortons d'ici. {scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}\nChris! {scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}\nOh, Jill! {scroll 1}{clear 40}{scroll 0}Désolée de t'avoir fait \nattendre! {scroll 1}{clear 60}{scroll 0}\nAlors, tout est réglé?{scroll 1}{clear 50}{scroll 0}\nPresque. Allons-y maintenant!{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}\nOh, Jill! {scroll 1}{clear 21}{scroll 0}\nOh, Chris! Tu vas bien!? {scroll 1}{clear 70}{scroll 0}Oui! Toi aussi! Qu'est-il \narrivé à Wesker? {scroll 1}{clear 130}{scroll 0}Nous en reparlerons plus\ntard! Sortons d'ici. {scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}\nRien d'important par ici.{scroll 1}</string>
+      <string key="11">{scroll 2}\nRien d'important par ici.{scroll 1}</string>
+      <string key="12">{scroll 2}\nRien d'important par ici.{scroll 1}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 0}Jill! Tut mir leid,\ndass du warten musstest.{scroll 1}{clear 85}{scroll 0}\nChris...{scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}Ich wusste, dass ich\ndir vertrauen konnte.{scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}Lass uns verschwinden! Es gibt\nkeinen Grund mehr, zu bleiben.{scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}Jill!\nBist du hier?{scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}Jill...\nDu bist in Ordnung...!{scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}\nJa, Wesker ist hier, er ist...{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}Oh, ich weiß. Egal,\nwir sollten endlich abhauen.{scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}\nChris!{scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}\nOh, Jill!{scroll 1}{clear 40}{scroll 0}Tut mir Leid,\ndass ich dich warten ließ!{scroll 1}{clear 60}{scroll 0}\nDas heißt, alles ist erledigt?{scroll 1}{clear 65}{scroll 0}Nun, fast, ja.\nLass uns jetzt gehen!{scroll 1}{timed 90}</string>
+      <string key="9">{scroll 0}\nOh, Jill!{scroll 1}{clear 40}{scroll 0}Oh, Chris!\nBist du auch okay?{scroll 1}{clear 70}{scroll 0}Ja! Du ja auch!\nWas ist mit Wesker passiert?{scroll 1}{clear 60}{scroll 0}Darüber können wir\nspäter sprechen!{scroll 1}{clear 70}{scroll 0}\nLass uns bloß abhauen.{scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}\nHier gibt's nichts Wichtiges.{scroll 1}</string>
+      <string key="11">{scroll 2}\nHier gibt's nichts Wichtiges.{scroll 1}</string>
+      <string key="12">{scroll 2}\nHier gibt's nichts Wichtiges.{scroll 1}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Laboratorio S3</string>
+      <string key="0">{scroll 0}Jill! Scusa se ti ho \nfatto aspettare. {scroll 1}{clear 85}{scroll 0}\nChris! {scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}\nSapevo di potermi fidare. {scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}Andiamocene!\nNon dobbiamo stare qui. {scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}\nJill? Sei qui? {scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}\nJill, stai bene! {scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}\nSi, Wesker è qui...è...{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}Oh, Lo so. In ogni caso, \nandiamocene da qui! {scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}\nChris! {scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}\nOh, Jill! {scroll 1}{clear 40}{scroll 0}\nScusa se ti ho fatto aspettare! {scroll 1}{clear 60}{scroll 0}\nQuindi è tutto risolto?{scroll 1}{clear 50}{scroll 0}\nQuasi. Ora andiamocene!{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}\nOh, Jill! {scroll 1}{clear 21}{scroll 0}\nChris! Stai bene? {scroll 1}{clear 70}{scroll 0}Si! Anche tu! \nCos'è successo a Wesker? {scroll 1}{clear 130}{scroll 0}Ne parleremo più tardi! \nUsciamo di qui! {scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}\nNiente di importante.{scroll 1}</string>
+      <string key="11">{scroll 2}\nNiente di importante.{scroll 1}</string>
+      <string key="12">{scroll 2}\nNiente di importante.{scroll 1}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 0}Jill, siento haberte\nhecho esperar.{scroll 1}{clear 85}{scroll 0}\n¡Chris!{scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}\nSabía que podía confiar en ti.{scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}¡Vamos!\nNo tenemos nada que hacer aquí.{scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}\n¿Jill? ¿Estás ahí?{scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}\nJill, ¡estás bien!{scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}Ahh, sí.\nWesker está aquí, él...{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}Sí, lo sé. De todas formas,\ntenemos que salir de aquí.{scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}\n¡Chris!{scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 40}{scroll 0}Siento haberte hecho\nesperar.{scroll 1}{clear 60}{scroll 0}\n¿Está todo hecho?{scroll 1}{clear 65}{scroll 0}Bueno, casi todo.\nPues vamos.{scroll 1}{timed 90}</string>
+      <string key="9">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 40}{scroll 0}\n¡Oh, Chris! ¿Estás bien?{scroll 1}{clear 70}{scroll 0}¡Sí, y tú también!\n¿Qué le ha pasado a Wesker?{scroll 1}{clear 130}{scroll 0}Ya hablaremos después,\n¡tenemos que salir de aquí!{scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}Por aquí no hay nada \nimportante...{scroll 1}</string>
+      <string key="11">{scroll 2}Por aquí no hay nada \nimportante...{scroll 1}</string>
+      <string key="12">{scroll 2}Por aquí no hay nada \nimportante...{scroll 1}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Лаборатория Б3</string>
+      <string key="0">{scroll 0}\n {scroll 1}{clear 85}{scroll 0}\n {scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}\n {scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}\n {scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}\n {scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}\n {scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 60}{scroll 0}\n {scroll 1}{clear 65}{scroll 0}\n {scroll 1}{timed 90}</string>
+      <string key="9">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 130}{scroll 0}\n {scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}\nЗдесь нет ничего важного.{scroll 1}</string>
+      <string key="11">{scroll 2}\nЗдесь нет ничего важного.{scroll 1}</string>
+      <string key="12">{scroll 2}\nЗдесь нет ничего важного.{scroll 1}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Laboratorion olohuone -2 krs</string>
+      <string key="0">{scroll 0}Jill, anteeksi että jouduit\nodottamaan.{scroll 1}{clear 85}{scroll 0}Chris!{scroll 1}{timed 50}</string>
+      <string key="1">{scroll 0}Tiesin että pystyn luottamaan\nsinuun.{scroll 1}{timed 55}</string>
+      <string key="2">{scroll 0}Mennään!\nTurhaan täällä istumme.{scroll 1}{timed 90}</string>
+      <string key="3">{scroll 0}Jill, oletko vielä täällä?{scroll 1}{timed 60}</string>
+      <string key="4">{scroll 0}Olet kunnossa.{scroll 1}{timed 55}</string>
+      <string key="5">{scroll 0}Kyllä. Wesker on täällä,\nhän on...{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}Tiedän. Lähdetään pois täältä.{scroll 1}{timed 100}</string>
+      <string key="7">{scroll 0}Chris!{scroll 1}{timed 50}</string>
+      <string key="8">{scroll 0}Jill!{scroll 1}{clear 40}{scroll 0}Anteeksi että jouduit\nodottamaan.{scroll 1}{clear 60}{scroll 0}Kaikki on hoidettu?{scroll 1}{clear 65}{scroll 0}Melkein, mennään.{scroll 1}{timed 90}</string>
+      <string key="9">{scroll 0}Jill!{scroll 1}{clear 40}{scroll 0}Chris! Olet kunnossa.{scroll 1}{clear 70}{scroll 0}Kyllä! Mitä Weskerille tapahtui?{scroll 1}{clear 130}{scroll 0}Puhutaan siitä myöhemmin.\nNyt meidän on häivyttävä täältä!{scroll 1}{timed 80}</string>
+      <string key="10">{scroll 2}Ei mitään tärkeää...{scroll 1}</string>
+      <string key="11">{scroll 2}Ei mitään tärkeää...{scroll 1}</string>
+      <string key="12">{scroll 2}Ei mitään tärkeää...{scroll 1}</string>
+    </language>
+  </strings>
+</room>

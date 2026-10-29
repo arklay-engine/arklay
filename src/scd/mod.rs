@@ -17,7 +17,7 @@ pub mod vm;
 
 use akscr::Region;
 
-/// One checked-in room script (`games/re1/room/<room>.akscr`) compiled for
+/// One checked-in room script (`games/re1/room/<room>0/room.akscr`) compiled for
 /// one RDT of one region.
 #[derive(Debug)]
 pub struct RoomScript {
@@ -29,6 +29,10 @@ pub struct RoomScript {
     /// The [`ir::Scripts::digest`] of the script's `AUTHENTIC` build: the
     /// RDT's own scripts have it when the script was written from them.
     pub original: u64,
+    /// The `AUTHENTIC` build, an SCD container: the room's own scripts,
+    /// without the port's fixes. `None` when the fixes leave it unchanged,
+    /// so it is the same as [`RoomScript::container`].
+    pub authentic: Option<&'static [u8]>,
     /// The fixed build, an SCD container.
     pub container: &'static [u8],
 }

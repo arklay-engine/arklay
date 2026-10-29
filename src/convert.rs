@@ -31,12 +31,13 @@ use crate::music;
 use crate::pack::PackWriter;
 use crate::progress::{Progress, ProgressObserver, format_duration};
 use crate::scd::RoomScript;
+use crate::scd::akscr::Region;
 use crate::sfx;
 use crate::state::{Image, RoomId};
 use crate::voice;
 use crate::voice_table;
 use crate::weapons;
-use crate::{bmp, door, ivm, lzw, rdt, tim};
+use crate::{bmp, door, ivm, lzw, tim};
 
 /// How many directory levels below the root are searched for the stage and
 /// `sound` directories.
@@ -537,7 +538,7 @@ fn convert_observed_as(
 ) -> Result<()> {
     let jobs = worker_count(jobs);
     // The phase count is only known once the plan is built; `build_plan` fills
-    // it in before reporting the scan, the first phase.
+    // it in before the first phase begins.
     let mut progress = match observer {
         Some(observer) => Progress::observed("convert-game", 0, observer, cancel),
         None => {
@@ -569,13 +570,14 @@ fn convert_observed_as(
         data,
         fonts,
         language,
+        region,
         voice,
         voice_unreferenced,
         voice_dir_found,
         movie,
         movie_dir_found,
         mut warnings,
-    } = build_plan_with_progress(root, jobs, &mut progress)?;
+    } = build_plan_with_progress(root, &mut progress)?;
     if progress.is_cancelled() {
         bail!("conversion cancelled");
     }
@@ -594,8 +596,8 @@ fn convert_observed_as(
 
     let mut writer = PackWriter::new();
     let mut stage_counts = [(0usize, 0usize); RoomId::MAX_STAGE as usize];
-    let mut rdt_count = 0usize;
-    let mut rdt_bytes = 0usize;
+    let mut room_count = 0usize;
+    let mut room_bytes = 0usize;
     let mut scd_count = 0usize;
     let mut scd_bytes = 0usize;
     let mut cut_count = 0usize;
@@ -611,82 +613,105 @@ fn convert_observed_as(
     // Every variant's folder holds its own copy of the room's cameras.
     for room in &rooms {
         for (camera, pak) in room.paks.iter().enumerate() {
-            for rdt in &room.rdts {
+            for variant in &room.variants {
                 cut_sources
                     .entry(pak.clone())
                     .or_default()
-                    .push((rdt.id, camera));
+                    .push((variant.id, camera));
                 cut_total += 1;
             }
         }
     }
 
-    let rdt_total = rooms.iter().map(|room| room.rdts.len() as u64).sum();
-    progress.begin("room", rdt_total);
-    // The room messages are written in the text script of the pack's own
-    // font sheet, as the engine reads them.
-    let text_script = fonts
-        .primary
-        .as_deref()
-        .map_or(crate::charset::Script::Japanese, sheet_script_of);
-    let mut rdts: Vec<Rdt> = rooms.into_iter().flat_map(|room| room.rdts).collect();
-    rdts.sort_by_key(|rdt| rdt.id.rdt_number());
+    // A room's definition and scripts are the repository's; its RDT only
+    // supplies the game art the folder holds (models, effect sheets and the
+    // player animation).
+    let mut variants: Vec<RoomVariant> = rooms.into_iter().flat_map(|room| room.variants).collect();
+    variants.sort_by_key(|variant| variant.id.rdt_number());
+    progress.begin("room", variants.len() as u64);
+    let room_results = parallel_map(variants.len(), jobs, &mut progress, |index| {
+        let variant = &variants[index];
+        let id = variant.id;
+        let mut files: Vec<(String, Vec<u8>)> = variant
+            .definition
+            .iter()
+            .map(|(entry, text)| (entry.clone(), text.as_bytes().to_vec()))
+            .collect();
+        let mut warnings = Vec::new();
+        // The regions whose script build this RDT's own scripts are; `None`
+        // when the room says nothing about the release.
+        let mut matched = None;
+        // A stub room (no cameras) has no models, animation or scripts, even
+        // where the French and German RDTs carry leftover data in its slot.
+        if variant.cameras > 0 {
+            let data = fs::read(&variant.rdt)
+                .with_context(|| format!("failed to read {}", variant.rdt.display()));
+            let assets = data
+                .as_ref()
+                .map_err(|err| anyhow!("{err:#}"))
+                .and_then(|data| crate::room::source::rdt_assets(data, id));
+            match assets {
+                Ok(assets) => files.extend(assets),
+                Err(err) => warnings.push(format!(
+                    "{}: its models and animation are missing: {err:#}",
+                    variant.rdt.display()
+                )),
+            }
+            // The build the RDT's own scripts are, which names its release;
+            // else (a modified RDT) the build for the release the install's
+            // language names.
+            let own = data
+                .as_deref()
+                .ok()
+                .and_then(|data| rdt_room_script(id, data));
+            matched = own.map(|script| script.regions);
+            let script = own.or_else(|| {
+                let fallback = room_script(id, region);
+                if fallback.is_some() {
+                    warnings.push(format!(
+                        "{}: its scripts are not the ones {} was written from, so the room \
+                         runs the {region} build",
+                        variant.rdt.display(),
+                        room_script_path(id)
+                    ));
+                }
+                fallback
+            });
+            match script {
+                Some(script) => {
+                    // The fixed build runs as `room.scd`; the original
+                    // bytecode stays beside it for `room_script_fixes = false`
+                    // where the fixes change it.
+                    if let Some(authentic) = script.authentic {
+                        files.push((id.original_scd_entry(), authentic.to_vec()));
+                    }
+                    files.push((id.scd_entry(), script.container.to_vec()));
+                }
+                None => warnings.push(format!(
+                    "{}: no {region} build of {}, so the room has no scripts",
+                    id.xml_entry(),
+                    room_script_path(id)
+                )),
+            }
+        }
+        Ok((id.xml_entry(), 1, (id, files, warnings, matched)))
+    })?;
     let mut sidecar_count = 0usize;
     let mut sidecar_bytes = 0usize;
-    let names = crate::room::parse_names(crate::room::RE1_NAMES)
-        .context("invalid checked-in room names")?;
-    // The regions every room script build so far is for; the install's
-    // region is the one left.
-    let mut regions = crate::scd::akscr::Region::ALL.to_vec();
-    for rdt in rdts {
-        stage_counts[rdt.id.stage_index() as usize].0 += 1;
-        let definition;
-        let strings = names.get(&rdt.id.room3()).cloned().unwrap_or_default();
-        let named = !strings.is_empty();
-        // A room the XML cannot carry exactly stays a raw RDT, which the
-        // engine still loads, without the names only a `room.xml` carries.
-        let mut files = match crate::room::convert_rdt(&rdt.bytes, rdt.id, text_script, strings) {
-            Ok(files) => {
-                definition = rdt.id.xml_entry();
-                files
-            }
-            Err(err) => {
-                let unnamed = if named { " without its name" } else { "" };
-                warnings.push(format!(
-                    "{}: kept as an RDT{unnamed}: {err:#}",
-                    rdt.id.rdt_entry()
-                ));
-                definition = rdt.id.rdt_entry();
-                vec![(definition.clone(), rdt.bytes.clone())]
-            }
-        };
-        match room_script(rdt.id, &rdt.bytes) {
-            Ok(Some(script)) => {
-                regions.retain(|region| script.regions.contains(region));
-                let container = script.container;
-                // The fixed build runs as `room.scd`; the original bytecode
-                // stays beside it for `room_script_fixes = false`.
-                let scd = rdt.id.scd_entry();
-                let original = match files.iter().position(|(entry, _)| *entry == scd) {
-                    Some(at) => Some(files.remove(at).1),
-                    None => crate::scd::reader::extract_container(&rdt.bytes)
-                        .ok()
-                        .flatten(),
-                };
-                // A room the fixes leave untouched needs no second copy.
-                if let Some(original) = original.filter(|original| original.as_slice() != container)
-                {
-                    files.push((rdt.id.original_scd_entry(), original));
-                }
-                files.push((scd, container.to_vec()));
-            }
-            Ok(None) => {}
-            Err(warning) => warnings.push(warning),
+    // The regions every room's own scripts fit; the install's release is the
+    // one left, else the one its language names.
+    let mut regions = Region::ALL.to_vec();
+    for (_label, (id, files, room_warnings, matched)) in room_results {
+        stage_counts[id.stage_index() as usize].0 += 1;
+        warnings.extend(room_warnings);
+        if let Some(matched) = matched {
+            regions.retain(|region| matched.contains(region));
         }
+        let definition = id.xml_entry();
         for (entry, data) in files {
             if entry == definition {
-                rdt_count += 1;
-                rdt_bytes += data.len();
+                room_count += 1;
+                room_bytes += data.len();
             } else if entry.ends_with(".scd") {
                 scd_count += 1;
                 scd_bytes += data.len();
@@ -698,7 +723,6 @@ fn convert_observed_as(
                 .add(&entry, data)
                 .with_context(|| format!("failed to add {entry}"))?;
         }
-        progress.advance(&definition);
     }
     progress.end_phase();
 
@@ -830,13 +854,11 @@ fn convert_observed_as(
         &mut warnings,
         jobs,
     )?;
-    // An install whose scripts fit no single region (none, or no room
-    // telling two apart) records none, and mods run their USA builds.
     let region = match regions[..] {
-        [region] => Some(region),
-        _ => None,
+        [found] => found,
+        _ => region,
     };
-    let (manifest_count, manifest_bytes) = copy_manifest(&mut writer, &language, region)?;
+    let (manifest_count, manifest_bytes) = copy_manifest(&mut writer, &language, Some(region))?;
 
     // Voice and film land in the same pack as every other category, so a
     // converted game is a single self-contained `.akpak`. Both phases are
@@ -849,10 +871,14 @@ fn convert_observed_as(
     // writes and reports the pack.
     let mut summary = Vec::new();
     if verbose {
-        for (index, (rdts, cuts)) in stage_counts.iter().enumerate() {
-            writeln!(summary, "STAGE{}: {rdts} RDT(s), {cuts} cut(s)", index + 1)?;
+        for (index, (rooms, cuts)) in stage_counts.iter().enumerate() {
+            writeln!(
+                summary,
+                "STAGE{}: {rooms} room(s), {cuts} cut(s)",
+                index + 1
+            )?;
         }
-        writeln!(summary, "room: {rdt_count} entries, {rdt_bytes} bytes")?;
+        writeln!(summary, "room: {room_count} entries, {room_bytes} bytes")?;
         writeln!(
             summary,
             "room sidecars: {sidecar_count} entries, {sidecar_bytes} bytes"
@@ -2589,10 +2615,11 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 10;
+pub const CONVERT_VERSION: u32 = 11;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
-/// revision, the checked-in screen and enemy Lua, and the language sheets.
+/// revision, the checked-in screen and enemy Lua, the language sheets, the
+/// item and room definitions and the room script builds.
 /// Comparing it with a pack's manifest catches a changed script or language
 /// file even when nobody remembered to bump [`CONVERT_VERSION`].
 pub fn packed_source_hash() -> String {
@@ -2612,12 +2639,17 @@ pub fn packed_source_hash() -> String {
         .chain(crate::lua::GAME_SCRIPTS.iter())
         .chain(crate::language::LANGUAGE_FILES.iter())
         .chain(crate::item_catalog::ITEM_FILES.iter())
-        .chain([("room/names.xml", crate::room::RE1_NAMES)].iter())
+        .chain(crate::room::RE1_FILES.iter())
     {
         feed(name.as_bytes());
         feed(&[0]);
         feed(source.as_bytes());
         feed(&[0]);
+    }
+    for script in crate::scd::ROOM_SCRIPTS {
+        feed(&script.id.to_le_bytes());
+        feed(script.container);
+        feed(script.authentic.unwrap_or_default());
     }
     format!("{hash:016x}")
 }
@@ -3040,13 +3072,6 @@ pub(crate) fn stage_dir_digit(name: &str) -> Option<u8> {
     (b'1'..=b'7').contains(&digit).then_some(digit - b'0')
 }
 
-/// One RDT file and its parsed identity.
-#[derive(Debug)]
-struct Rdt {
-    id: RoomId,
-    bytes: Vec<u8>,
-}
-
 /// One player asset resolved to its pack entry.
 #[derive(Debug)]
 struct PlayerAsset {
@@ -3130,14 +3155,27 @@ struct CameraMask {
 struct Room {
     /// Player-variant-independent identity used for entry names.
     id: RoomId,
-    /// Every RDT found for the room, one per player variant.
-    rdts: Vec<Rdt>,
-    /// Highest camera count across the variants.
-    cameras: usize,
-    /// Resolved background paks for cameras `0..cameras`.
+    /// Every variant the install has an RDT for.
+    variants: Vec<RoomVariant>,
+    /// Resolved background paks for the highest camera count across the
+    /// variants.
     paks: Vec<PathBuf>,
-    /// Highest mask group count per camera across the variants.
-    mask_groups: Vec<u8>,
+}
+
+/// One player variant of a room: the install's RDT and the checked-in
+/// definition that replaces it.
+#[derive(Debug)]
+struct RoomVariant {
+    id: RoomId,
+    /// The install's RDT, read for the room's models and animation.
+    rdt: PathBuf,
+    /// The checked-in definition files ([`crate::room::re1_definition`]), as
+    /// `(pack entry, text)`.
+    definition: Vec<(String, &'static str)>,
+    /// The definition's camera count.
+    cameras: usize,
+    /// The definition's mask group count per camera.
+    mask_groups: Vec<usize>,
 }
 
 /// Everything conversion needs, resolved and validated before any decoding.
@@ -3168,6 +3206,10 @@ struct Plan {
     /// The pack's own room-text language, from the tree the fonts and data
     /// came from (the manifest's `language`).
     language: String,
+    /// The release the install's language names ([`install_region`]): the
+    /// script build for a room whose RDT matches none, and the manifest's
+    /// region when the RDTs do not name one.
+    region: Region,
     /// The referenced voice WAVs (the union of the name rows).
     voice: Vec<VoiceAsset>,
     /// Shipped voice files no row references; listed in the summary.
@@ -3185,7 +3227,7 @@ struct Plan {
 /// Discover, enumerate, and validate every conversion input.
 #[cfg(test)]
 fn build_plan(root: &Path) -> Result<Plan> {
-    build_plan_with_progress(root, 1, &mut Progress::new("convert-game", 0))
+    build_plan_with_progress(root, &mut Progress::new("convert-game", 0))
 }
 
 /// The number of phases [`convert_game_with_options`] will report, matching its
@@ -3200,10 +3242,10 @@ fn conversion_phase_count(
     item_m2: &Option<PathBuf>,
     data: &DataPlan,
 ) -> u64 {
-    // scan, room, cut, mask, six model phases (player, weapon, npc,
-    // monster, enemy scripts, effect sheets), font, ui, core00, language, item
-    // definitions, voice, film, compress, write.
-    let mut phases: u64 = 19;
+    // room, cut, mask, six model phases (player, weapon, npc, monster, enemy
+    // scripts, effect sheets), font, ui, core00, language, item definitions,
+    // voice, film, compress, write.
+    let mut phases: u64 = 18;
     phases += 2 * u64::from(sound.is_some()); // bgm, se
     phases += u64::from(item_m1.is_some()); // door
     phases += u64::from(data.palette.is_some() && !data.items.is_empty()); // item
@@ -3214,9 +3256,9 @@ fn conversion_phase_count(
     phases
 }
 
-/// Discover, enumerate, and validate every conversion input, reporting the RDT
-/// read/parse scan on `progress` and using `jobs` workers for it.
-fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -> Result<Plan> {
+/// Discover, enumerate, and validate every conversion input, setting the
+/// phase count on `progress`.
+fn build_plan_with_progress(root: &Path, progress: &mut Progress) -> Result<Plan> {
     let layout = discover_layout(root)?;
     let (npc, npc_warnings) = resolve_npc_assets(&layout)?;
     let (enemy_models, enemy_warnings) = resolve_enemy_assets(&layout)?;
@@ -3243,9 +3285,12 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
     let language = install_language(&fonts);
     let data = resolve_data_assets(data.as_deref())?;
 
-    // Enumerate every RDT first so reading and parsing them can be one
-    // reported parallel phase, then merge the rooms in file order.
-    let mut rdt_files: Vec<(RoomId, PathBuf)> = Vec::new();
+    let region = install_region(&language);
+
+    // The install's RDTs say which rooms it has; each one's definition is the
+    // repository's.
+    let mut rooms: BTreeMap<(u8, u8), Room> = BTreeMap::new();
+    let mut undefined = Vec::new();
     for (digit, dir) in &stages {
         for entry in read_dir_sorted(dir)? {
             let name = entry.file_name();
@@ -3264,37 +3309,37 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
                     id.stage
                 );
             }
-            rdt_files.push((id, entry.path()));
+            let definition = crate::room::re1_definition(id);
+            let Some((_, text)) = definition
+                .iter()
+                .find(|(entry, _)| *entry == id.xml_entry())
+            else {
+                if !UNUSED_EUR_ROOMS.contains(&(id.stage, id.room)) {
+                    undefined.push(name.to_string());
+                }
+                continue;
+            };
+            let source = crate::room::xml::parse(text)
+                .with_context(|| format!("invalid checked-in {}", id.xml_entry()))?;
+            let room = rooms.entry((id.stage, id.room)).or_insert_with(|| Room {
+                id,
+                variants: Vec::new(),
+                paks: Vec::new(),
+            });
+            room.variants.push(RoomVariant {
+                id,
+                rdt: entry.path(),
+                definition,
+                cameras: source.cameras.len(),
+                mask_groups: source
+                    .cameras
+                    .iter()
+                    .map(|camera| camera.mask_groups.len())
+                    .collect(),
+            });
         }
     }
-
     progress.set_phases(conversion_phase_count(&sound, &item_m1, &item_m2, &data));
-    progress.begin("scan", rdt_files.len() as u64);
-    let parsed = parallel_map(rdt_files.len(), jobs, progress, |index| {
-        let (id, path) = &rdt_files[index];
-        let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
-        let state = rdt::parse(&bytes, *id)
-            .with_context(|| format!("failed to parse {}", path.display()))?;
-        Ok((id.rdt_entry(), 1, (bytes, state)))
-    })?;
-    progress.end_phase();
-
-    let mut rooms: BTreeMap<(u8, u8), Room> = BTreeMap::new();
-    for ((id, _), (_label, (bytes, state))) in rdt_files.into_iter().zip(parsed) {
-        let room = rooms.entry((id.stage, id.room)).or_insert_with(|| Room {
-            id,
-            rdts: Vec::new(),
-            cameras: 0,
-            paks: Vec::new(),
-            mask_groups: Vec::new(),
-        });
-        room.cameras = room.cameras.max(state.cuts.len());
-        room.mask_groups.resize(room.cameras, 0);
-        for (camera, cut) in state.cuts.iter().enumerate() {
-            room.mask_groups[camera] = room.mask_groups[camera].max(cut.mask_group_count);
-        }
-        room.rdts.push(Rdt { id, bytes });
-    }
 
     let indices: BTreeMap<u8, HashMap<String, PathBuf>> = stages
         .iter()
@@ -3306,7 +3351,8 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
         let fold = room.id.fold_stage_digit();
         let dir = &stages[&fold];
         let index = &indices[&fold];
-        for camera in 0..room.cameras {
+        let cameras = room.variants.iter().map(|variant| variant.cameras);
+        for camera in 0..cameras.max().unwrap_or(0) {
             let name = camera_pak_name(room.id, camera);
             match index.get(&name.to_ascii_lowercase()) {
                 Some(path) => room.paks.push(path.clone()),
@@ -3328,8 +3374,12 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
     let mut masks = Vec::new();
     let mut missing_masks = Vec::new();
     for room in rooms.values() {
-        for camera in 0..room.cameras {
-            if room.mask_groups.get(camera).copied().unwrap_or(0) == 0 {
+        for camera in 0..room.paks.len() {
+            let masked = room
+                .variants
+                .iter()
+                .any(|variant| variant.mask_groups.get(camera).copied().unwrap_or(0) > 0);
+            if !masked {
                 continue;
             }
             let name = mask_pak_name(room.id, camera);
@@ -3337,8 +3387,8 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
                 .as_ref()
                 .and_then(|index| index.get(&name.to_ascii_lowercase()))
             {
-                Some(path) => masks.extend(room.rdts.iter().map(|rdt| CameraMask {
-                    entry: rdt.id.mask_entry(camera),
+                Some(path) => masks.extend(room.variants.iter().map(|variant| CameraMask {
+                    entry: variant.id.mask_entry(camera),
                     source: path.clone(),
                 })),
                 None => missing_masks.push(name),
@@ -3362,6 +3412,13 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
     }
 
     let mut warnings = Vec::new();
+    if !undefined.is_empty() {
+        warnings.push(format!(
+            "skipped {} RDT(s) with no room definition in games/re1/room: {}",
+            undefined.len(),
+            undefined.join(", ")
+        ));
+    }
     if !missing_effects.is_empty() {
         if effspr.is_none() {
             warnings.push(format!(
@@ -3514,6 +3571,7 @@ fn build_plan_with_progress(root: &Path, jobs: usize, progress: &mut Progress) -
         data,
         fonts,
         language,
+        region,
         voice: voice_assets,
         voice_unreferenced,
         voice_dir_found: voice_dir.is_some(),
@@ -3738,39 +3796,55 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
     Ok(assets)
 }
 
-/// The checked-in room script build to pack as `room/<id>/room.scd` for RDT
-/// `id`, so the engine runs it in place of the RDT's own scripts.
-///
-/// The build for the RDT's region is the one whose `AUTHENTIC` digest equals
-/// the RDT's own scripts'. `None` for a room without a script or an RDT
-/// without scripts. A room whose scripts are no region's (a modified RDT) is
-/// an error naming the room: it keeps its own scripts.
-fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static RoomScript>, String> {
-    // The port's script builds are all RE1's, whose RDT numbers fit 16 bits.
-    let Ok(number) = u16::try_from(id.rdt_number()) else {
-        return Ok(None);
-    };
-    let mut builds = crate::scd::ROOM_SCRIPTS
+/// `(stage, room)` of the rooms only the French and German releases ship,
+/// 313 and 412: leftovers no door leads to, so the repository defines no room
+/// for their RDTs and conversion skips them without a warning.
+const UNUSED_EUR_ROOMS: [(u8, u8); 2] = [(3, 0x13), (4, 0x12)];
+
+/// The checked-in script of the room RDT `id` is a variant of, for messages.
+fn room_script_path(id: RoomId) -> String {
+    let number = u16::try_from(id.rdt_number()).unwrap_or_default();
+    format!(
+        "games/re1/room/{}",
+        crate::scd::akscr::room_script_file(crate::scd::akscr::merged_id(number))
+    )
+}
+
+/// The checked-in build of RDT `id` whose `AUTHENTIC` digest is the scripts
+/// of `data`, the RDT itself: the build for the release the RDT is from.
+/// `None` for an RDT without scripts or scripts no build was written from (a
+/// modified RDT).
+fn rdt_room_script(id: RoomId, data: &[u8]) -> Option<&'static RoomScript> {
+    let number = u16::try_from(id.rdt_number()).ok()?;
+    let digest = crate::scd::reader::parse(data).ok()?.digest();
+    crate::scd::ROOM_SCRIPTS
         .iter()
-        .filter(|script| script.id == number)
-        .peekable();
-    if builds.peek().is_none() {
-        return Ok(None);
+        .find(|script| script.id == number && script.original == digest)
+}
+
+/// The checked-in room script build to pack for room `id` of `region`'s
+/// release: the one `games/re1/room/<room>0/room.akscr` compiles for that RDT and
+/// region. `None` for a room without a script.
+fn room_script(id: RoomId, region: Region) -> Option<&'static RoomScript> {
+    // The port's script builds are all RE1's, whose RDT numbers fit 16 bits.
+    let number = u16::try_from(id.rdt_number()).ok()?;
+    crate::scd::ROOM_SCRIPTS
+        .iter()
+        .find(|script| script.id == number && script.regions.contains(&region))
+}
+
+/// The release an install whose own text is in `language` ([`install_language`])
+/// is: the Japanese tree is the Japanese release, the French and German
+/// trees the European one, and any other the English (USA) one. Only a
+/// fallback: a room's script build is the one its RDT's own scripts are.
+fn install_region(language: &str) -> Region {
+    if crate::language::is_japanese(language) {
+        return Region::Jpn;
     }
-    // The stub RDTs of unused room slots carry no scripts to replace.
-    let Ok(scripts) = crate::scd::reader::parse(rdt) else {
-        return Ok(None);
-    };
-    let digest = scripts.digest();
-    let Some(script) = builds.find(|script| script.original == digest) else {
-        return Err(format!(
-            "{}: its scripts are not the ones games/re1/room/{:03x}.akscr was written \
-             from, so the room keeps them",
-            id.rdt_entry(),
-            crate::scd::akscr::merged_id(number)
-        ));
-    };
-    Ok(Some(script))
+    match language {
+        "fr-FR" | "de-DE" => Region::Eur,
+        _ => Region::Usa,
+    }
 }
 
 /// Parse `ROOM####.RDT` (case-insensitive) into its identity.
@@ -3915,42 +3989,62 @@ mod tests {
     use super::*;
 
     #[test]
-    fn room_scripts_replace_only_the_scripts_they_were_written_from() {
-        let script = |id: u16| {
-            crate::scd::ROOM_SCRIPTS
-                .iter()
-                .find(|script| script.id == id)
-                .unwrap()
-                .container
-        };
-        let container_of = |id, rdt| room_script(id, rdt).map(|found| found.map(|s| s.container));
+    fn rooms_take_their_regions_script_build() {
         let id = RoomId::parse("1000").unwrap();
-        // Room 100 has no `AUTHENTIC` block, so its fixed build carries the
-        // original scripts in the RDT pointer-table layout.
-        assert_eq!(container_of(id, script(0x1000)), Ok(Some(script(0x1000))));
-        let error = room_script(id, script(0x1010)).unwrap_err();
-        assert!(error.contains("room/1000/room.rdt"), "{error}");
-        assert_eq!(container_of(id, &[0; 4]), Ok(None), "a stub RDT");
-        let one = room_script(id, script(0x1000)).unwrap().unwrap();
-        assert_eq!(
-            one.regions,
-            crate::scd::akscr::Region::ALL,
-            "one build for all"
-        );
+        let one = room_script(id, Region::Usa).unwrap();
+        assert_eq!(one.regions, Region::ALL, "one build for all");
+        assert!(std::ptr::eq(one, room_script(id, Region::Jpn).unwrap()));
 
         // Jill's ink ribbons differ by region (`#if USA`), so RDT 1001 has a
-        // USA build and one JPN and EUR share, and each RDT takes its own.
-        let builds: Vec<&RoomScript> = crate::scd::ROOM_SCRIPTS
-            .iter()
-            .filter(|script| script.id == 0x1001)
-            .collect();
-        let regions: Vec<_> = builds.iter().map(|build| build.regions).collect();
-        use crate::scd::akscr::Region;
-        assert_eq!(regions, [&[Region::Usa][..], &[Region::Jpn, Region::Eur]]);
+        // USA build and one JPN and EUR share.
         let id = RoomId::parse("1001").unwrap();
-        for build in builds {
-            assert_eq!(container_of(id, build.container), Ok(Some(build.container)));
+        assert_eq!(room_script(id, Region::Usa).unwrap().regions, [Region::Usa]);
+        let shared = room_script(id, Region::Jpn).unwrap();
+        assert_eq!(shared.regions, [Region::Jpn, Region::Eur]);
+        assert!(std::ptr::eq(shared, room_script(id, Region::Eur).unwrap()));
+
+        // An RDT's own scripts pick the build of its release, whatever the
+        // install's language says. (A build's `AUTHENTIC` container reads
+        // like an RDT's script sections.)
+        let rdt = |script: &RoomScript| script.authentic.unwrap_or(script.container).to_vec();
+        let usa = room_script(id, Region::Usa).unwrap();
+        assert!(std::ptr::eq(rdt_room_script(id, &rdt(usa)).unwrap(), usa));
+        assert!(std::ptr::eq(
+            rdt_room_script(id, &rdt(shared)).unwrap(),
+            shared
+        ));
+        // Scripts no build was written from (a modified RDT) pick none.
+        let fixed = crate::scd::ROOM_SCRIPTS
+            .iter()
+            .find(|script| script.authentic.is_some())
+            .unwrap();
+        let fixed_id = RoomId::parse(&format!("{:04x}", fixed.id)).unwrap();
+        assert!(rdt_room_script(fixed_id, fixed.container).is_none());
+        // Another room's scripts are not this room's.
+        assert!(rdt_room_script(RoomId::parse("1000").unwrap(), &rdt(usa)).is_none());
+
+        // The original scripts ship only where the fixes change them, and
+        // are the build the digest was taken of.
+        let fixed: Vec<&RoomScript> = crate::scd::ROOM_SCRIPTS
+            .iter()
+            .filter(|script| script.authentic.is_some())
+            .collect();
+        assert!(!fixed.is_empty());
+        for script in fixed {
+            let authentic = script.authentic.unwrap();
+            assert_ne!(authentic, script.container);
+            let digest = crate::scd::reader::parse(authentic).unwrap().digest();
+            assert_eq!(digest, script.original, "{:04X}", script.id);
         }
+    }
+
+    #[test]
+    fn the_install_language_names_its_release() {
+        assert_eq!(install_region("en-US"), Region::Usa);
+        assert_eq!(install_region("ja-JP"), Region::Jpn);
+        assert_eq!(install_region("fr-FR"), Region::Eur);
+        assert_eq!(install_region("de-DE"), Region::Eur);
+        assert_eq!(install_region("it-IT"), Region::Usa);
     }
 
     const RDT_HEADER_LEN: usize = 0x94;
@@ -4180,20 +4274,21 @@ mod tests {
         lzw_literals(&tim)
     }
 
-    /// A one-camera RDT whose camera 0 carries a one-group mask table with a
-    /// single 8x16 sprite.
-    fn rdt_with_masks() -> Vec<u8> {
-        let mut data = rdt_bytes(1);
-        let offset = data.len();
-        data[0x94..0x98].copy_from_slice(&(offset as i32).to_le_bytes());
-        data.extend_from_slice(&1i32.to_le_bytes());
-        for word in [1u16, 0, 0, 0] {
-            data.extend_from_slice(&word.to_le_bytes());
-        }
-        for word in [0u16, 0, 380, 0x0800, 8, 16] {
-            data.extend_from_slice(&word.to_le_bytes());
-        }
-        data
+    /// Room 10D, the two-camera room the synthetic installs use: Chris's
+    /// and Jill's RDTs, their stage-6 return copy and both camera
+    /// backgrounds (only the room's checked-in definition says it has two).
+    fn write_room_10d(root: &Path, pak: &[u8]) {
+        fs::write(root.join("STAGE1/ROOM10D0.RDT"), rdt_bytes(1)).unwrap();
+        fs::write(root.join("STAGE1/room10d1.rdt"), rdt_bytes(1)).unwrap();
+        fs::write(root.join("STAGE6/ROOM60D0.RDT"), rdt_bytes(1)).unwrap();
+        fs::write(root.join("STAGE1/RC10D0.pak"), pak).unwrap();
+        fs::write(root.join("STAGE1/RC10D1.pak"), pak).unwrap();
+    }
+
+    /// Room 310, a one-camera room without masks, and its background.
+    fn write_room_310(root: &Path, pak: &[u8]) {
+        fs::write(root.join("STAGE3/ROOM3100.RDT"), rdt_bytes(1)).unwrap();
+        fs::write(root.join("STAGE3/RC3100.pak"), pak).unwrap();
     }
 
     #[test]
@@ -4591,12 +4686,12 @@ mod tests {
     fn enumerates_rdt_files_case_insensitively() {
         let root = TempDir::new("rdt-case");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE1/RoOm1000.RdT"), rdt_bytes(0)).unwrap();
+        fs::write(root.path.join("STAGE1/RoOm1100.RdT"), [0u8; 4]).unwrap();
 
         let plan = build_plan(&root.path).unwrap();
 
         assert_eq!(plan.rooms.len(), 1);
-        assert_eq!(plan.rooms[0].id, RoomId::parse("1000").unwrap());
+        assert_eq!(plan.rooms[0].id, RoomId::parse("1100").unwrap());
     }
 
     #[test]
@@ -4620,44 +4715,64 @@ mod tests {
         let plan = build_plan(&root.path).unwrap();
 
         assert_eq!(plan.rooms.len(), 1);
-        assert_eq!(plan.rooms[0].cameras, 0);
+        assert_eq!(plan.rooms[0].variants[0].cameras, 0);
         assert!(plan.rooms[0].paks.is_empty());
-        assert_eq!(plan.rooms[0].rdts[0].bytes.len(), 4);
     }
 
     #[test]
-    fn plan_merges_player_variants_and_unions_cameras() {
+    fn plan_merges_player_variants_with_the_checked_in_cameras() {
         let root = TempDir::new("variants");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/ROOM1001.RDT"), rdt_bytes(3)).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), b"0").unwrap();
-        fs::write(root.path.join("STAGE1/RC1001.pak"), b"1").unwrap();
-        fs::write(root.path.join("STAGE1/RC1002.pak"), b"2").unwrap();
+        // The RDTs' own camera counts do not matter: room 10D has two.
+        fs::write(root.path.join("STAGE1/ROOM10D0.RDT"), rdt_bytes(1)).unwrap();
+        fs::write(root.path.join("STAGE1/ROOM10D1.RDT"), rdt_bytes(3)).unwrap();
+        fs::write(root.path.join("STAGE1/RC10D0.pak"), b"0").unwrap();
+        fs::write(root.path.join("STAGE1/RC10D1.pak"), b"1").unwrap();
 
         let plan = build_plan(&root.path).unwrap();
 
         assert_eq!(plan.rooms.len(), 1);
         let room = &plan.rooms[0];
-        assert_eq!(room.id, RoomId::parse("1000").unwrap());
-        assert_eq!(room.rdts.len(), 2);
-        assert_eq!(room.cameras, 3);
-        assert_eq!(room.paks.len(), 3);
+        assert_eq!(room.id, RoomId::parse("10d0").unwrap());
+        assert_eq!(room.variants.len(), 2);
+        assert_eq!(room.paks.len(), 2);
+        let entries: Vec<&str> = room.variants[1]
+            .definition
+            .iter()
+            .map(|(entry, _)| entry.as_str())
+            .collect();
+        assert!(entries.contains(&"room/10d1/room.xml"), "{entries:?}");
     }
 
     #[test]
-    fn missing_paks_require_the_union_of_variants() {
+    fn missing_paks_follow_the_checked_in_cameras() {
         let root = TempDir::new("union-missing");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/ROOM1001.RDT"), rdt_bytes(3)).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), b"0").unwrap();
-        fs::write(root.path.join("STAGE1/RC1001.pak"), b"1").unwrap();
+        fs::write(root.path.join("STAGE1/ROOM10D0.RDT"), rdt_bytes(1)).unwrap();
+        fs::write(root.path.join("STAGE1/RC10D0.pak"), b"0").unwrap();
 
         let message = build_plan(&root.path).unwrap_err().to_string();
 
-        assert!(message.contains("RC1002.pak"), "{message}");
-        assert!(!message.contains("RC1001.pak"), "{message}");
+        assert!(message.contains("RC10D1.pak"), "{message}");
+        assert!(!message.contains("RC10D0.pak"), "{message}");
+    }
+
+    #[test]
+    fn rdts_the_repository_does_not_define_are_skipped_with_a_warning() {
+        let root = TempDir::new("undefined");
+        make_stage_dirs(&root.path);
+        fs::write(root.path.join("STAGE1/ROOM11F0.RDT"), rdt_bytes(1)).unwrap();
+
+        let plan = build_plan(&root.path).unwrap();
+
+        assert!(plan.rooms.is_empty());
+        assert!(
+            plan.warnings
+                .iter()
+                .any(|warning| warning.contains("ROOM11F0.RDT")),
+            "{:?}",
+            plan.warnings
+        );
     }
 
     #[test]
@@ -4707,10 +4822,7 @@ mod tests {
         write_npc_files(&root.path);
         let pak = camera_pak();
 
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/room1001.rdt"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), &pak).unwrap();
-        fs::write(root.path.join("STAGE6/ROOM6000.RDT"), rdt_bytes(1)).unwrap();
+        write_room_10d(&root.path, &pak);
 
         fs::create_dir_all(root.path.join("sound")).unwrap();
         fs::write(root.path.join("sound/BGM_13.WAV"), b"wav13").unwrap();
@@ -4724,11 +4836,16 @@ mod tests {
         convert_game(&root.path, &out).unwrap();
         let pack = crate::pack::Pack::open(&out).unwrap();
 
-        assert!(pack.contains("room/1000/room.xml"));
-        assert!(pack.contains("room/1001/room.xml"));
-        assert!(pack.contains("room/6000/room.xml"));
-        assert!(pack.contains("room/1000/cut/00.bmp"));
-        assert!(pack.contains("room/6000/cut/00.bmp"));
+        assert!(pack.contains("room/10d0/room.xml"));
+        assert!(pack.contains("room/10d1/room.xml"));
+        assert!(pack.contains("room/60d0/room.xml"));
+        assert!(pack.contains("room/10d0/cut/01.bmp"));
+        assert!(pack.contains("room/60d0/cut/00.bmp"));
+        // The definition and scripts are the repository's.
+        let text = pack.read("room/10d0/room.xml").unwrap();
+        let checked_in = crate::room::re1_definition(RoomId::parse("10d0").unwrap());
+        assert_eq!(std::str::from_utf8(&text).unwrap(), checked_in[0].1);
+        assert!(pack.contains("room/10d0/room.scd"));
         assert!(pack.contains("bgm/013.wav"));
         assert!(pack.contains("bgm/200.wav"));
         assert!(pack.contains("bgm/002.wav"));
@@ -4814,8 +4931,8 @@ mod tests {
         assert_eq!(count("manifest"), 1);
         let rooms = |file: &str| pack.paths().filter(|path| path.contains(file)).count();
         assert_eq!(rooms("/room.xml"), 3);
-        // The stage 1 cut is shared by both players and the stage 6 copy.
-        assert_eq!(rooms("/cut/"), 3);
+        // The stage 1 cuts are shared by both players and the stage 6 copy.
+        assert_eq!(rooms("/cut/"), 6);
         assert_eq!(rooms("/mask/"), 0);
         assert_eq!(count("bgm/"), 3);
         assert_eq!(count("se/"), sfx::se_entry_names().count());
@@ -4851,7 +4968,7 @@ mod tests {
             3
         );
 
-        let image = bmp::decode(&pack.read("room/1000/cut/00.bmp").unwrap()).unwrap();
+        let image = bmp::decode(&pack.read("room/10d0/cut/00.bmp").unwrap()).unwrap();
         assert_eq!((image.width, image.height), (CUT_WIDTH, CUT_HEIGHT));
     }
 
@@ -5217,8 +5334,7 @@ mod tests {
         let root = TempDir::new("movie-pack");
         make_stage_dirs(&root.path);
         write_npc_files(&root.path);
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), camera_pak()).unwrap();
+        write_room_310(&root.path, &camera_pak());
         fs::create_dir_all(root.path.join("sound")).unwrap();
         write_se_files(&root.path);
         write_door_files(&root.path);
@@ -5239,7 +5355,7 @@ mod tests {
             std::borrow::Cow::Borrowed(_)
         ));
         assert!(matches!(
-            main.read("room/1000/room.xml").unwrap(),
+            main.read("room/3100/room.xml").unwrap(),
             std::borrow::Cow::Owned(_)
         ));
         // No companion pack is written beside the main one.
@@ -5252,8 +5368,7 @@ mod tests {
         make_stage_dirs(&root.path);
         write_npc_files(&root.path);
         let pak = camera_pak();
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), &pak).unwrap();
+        write_room_310(&root.path, &pak);
         fs::create_dir_all(root.path.join("sound")).unwrap();
         write_se_files(&root.path);
         write_door_files(&root.path);
@@ -5298,10 +5413,7 @@ mod tests {
         write_npc_files(&root.path);
         let pak = camera_pak();
 
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/room1001.rdt"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), &pak).unwrap();
-        fs::write(root.path.join("STAGE6/ROOM6000.RDT"), rdt_bytes(1)).unwrap();
+        write_room_10d(&root.path, &pak);
 
         fs::create_dir_all(root.path.join("sound")).unwrap();
         fs::write(root.path.join("sound/BGM_13.WAV"), b"wav13").unwrap();
@@ -5402,27 +5514,27 @@ mod tests {
     fn converts_room_masks_and_folds_return_stages() {
         let root = TempDir::new("masks");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_with_masks()).unwrap();
-        fs::write(root.path.join("STAGE6/ROOM6000.RDT"), rdt_with_masks()).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), camera_pak()).unwrap();
+        // Room 10D's first camera has a mask, its second none.
+        write_room_10d(&root.path, &camera_pak());
         fs::create_dir_all(root.path.join("ObJsPr")).unwrap();
         let mask = mask_pak_at(16, 8);
-        fs::write(root.path.join("ObJsPr/osp00000.PAK"), &mask).unwrap();
+        fs::write(root.path.join("ObJsPr/osp00130.PAK"), &mask).unwrap();
 
         let out = root.path.join("out.akpak");
         convert_game(&root.path, &out).unwrap();
         let pack = crate::pack::Pack::open(&out).unwrap();
 
-        assert!(pack.contains("room/1000/mask/00.bmp"));
-        assert!(pack.contains("room/6000/mask/00.bmp"));
+        assert!(pack.contains("room/10d0/mask/00.bmp"));
+        assert!(pack.contains("room/10d1/mask/00.bmp"));
+        assert!(pack.contains("room/60d0/mask/00.bmp"));
         assert_eq!(
             pack.paths().filter(|path| path.contains("/mask/")).count(),
-            2
+            3
         );
 
         let decoded = tim::decode_8bpp(&lzw::decode(&mask).unwrap()).unwrap();
         let expected = bmp::encode_texture8_to_vec(&decoded).unwrap();
-        assert_eq!(pack.read("room/1000/mask/00.bmp").unwrap(), expected);
+        assert_eq!(pack.read("room/10d0/mask/00.bmp").unwrap(), expected);
         let image = bmp::decode(&expected).unwrap();
         assert_eq!((image.width, image.height), (16, 8));
         let direct = bmp::encode_texture8_to_vec(&decoded).unwrap();
@@ -5500,8 +5612,7 @@ mod tests {
     fn missing_mask_paks_are_warnings() {
         let root = TempDir::new("missing-masks");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_with_masks()).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), camera_pak()).unwrap();
+        write_room_10d(&root.path, &camera_pak());
         fs::create_dir_all(root.path.join("objspr")).unwrap();
 
         let plan = build_plan(&root.path).unwrap();
@@ -5510,7 +5621,7 @@ mod tests {
         assert_eq!(
             plan.warnings
                 .iter()
-                .filter(|warning| warning.contains("OSP00000.pak"))
+                .filter(|warning| warning.contains("OSP00130.pak"))
                 .count(),
             1,
             "{:?}",
@@ -5527,8 +5638,7 @@ mod tests {
     fn a_missing_objspr_directory_warns_once() {
         let root = TempDir::new("no-objspr");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_with_masks()).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), camera_pak()).unwrap();
+        write_room_10d(&root.path, &camera_pak());
 
         let plan = build_plan(&root.path).unwrap();
 
@@ -5548,14 +5658,13 @@ mod tests {
     fn accepts_a_316x236_background() {
         let root = TempDir::new("small-cut");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE3/ROOM3000.RDT"), rdt_bytes(1)).unwrap();
-        fs::write(root.path.join("STAGE3/RC3000.pak"), camera_pak_at(316, 236)).unwrap();
+        write_room_310(&root.path, &camera_pak_at(316, 236));
 
         let out = root.path.join("out.akpak");
         convert_game(&root.path, &out).unwrap();
 
         let pack = crate::pack::Pack::open(&out).unwrap();
-        let image = bmp::decode(&pack.read("room/3000/cut/00.bmp").unwrap()).unwrap();
+        let image = bmp::decode(&pack.read("room/3100/cut/00.bmp").unwrap()).unwrap();
         assert_eq!((image.width, image.height), (316, 236));
     }
 
@@ -5563,15 +5672,15 @@ mod tests {
     fn missing_paks_are_aggregated_and_no_pack_is_written() {
         let root = TempDir::new("missing-paks");
         make_stage_dirs(&root.path);
-        fs::write(root.path.join("STAGE1/ROOM1000.RDT"), rdt_bytes(2)).unwrap();
-        fs::write(root.path.join("STAGE1/RC1000.pak"), b"0").unwrap();
-        fs::write(root.path.join("STAGE2/ROOM2000.RDT"), rdt_bytes(1)).unwrap();
+        fs::write(root.path.join("STAGE1/ROOM10D0.RDT"), rdt_bytes(2)).unwrap();
+        fs::write(root.path.join("STAGE1/RC10D0.pak"), b"0").unwrap();
+        fs::write(root.path.join("STAGE3/ROOM3100.RDT"), rdt_bytes(1)).unwrap();
 
         let out = root.path.join("out.akpak");
         let message = convert_game(&root.path, &out).unwrap_err().to_string();
 
-        assert!(message.contains("RC1001.pak"), "{message}");
-        assert!(message.contains("RC2000.pak"), "{message}");
+        assert!(message.contains("RC10D1.pak"), "{message}");
+        assert!(message.contains("RC3100.pak"), "{message}");
         assert!(!out.exists(), "a failed conversion must not write a pack");
     }
 
@@ -6408,6 +6517,74 @@ mod tests {
         assert_eq!(pack.read("item/02/model.tmd").unwrap().as_ref(), tmd);
         assert_jpn_document_art(&pack);
         assert_eq!(page_tag(&pack.read("map/0b.bmp").unwrap()), tag_colour(11));
+    }
+
+    /// The checked-in room definitions are the install's RDTs as `room.xml`:
+    /// reading each RDT gives the checked-in definition, but for its display
+    /// strings and message text. A stub stays a stub, whatever leftover data
+    /// the French and German RDTs carry in its slot.
+    #[test]
+    #[ignore = "requires a real RE1 installation via ARKLAY_RE1_ROOT (and optionally ARKLAY_RE1_STEAM_ROOT)"]
+    fn checked_in_rooms_match_the_install_rdts() {
+        let Ok(root) = std::env::var("ARKLAY_RE1_ROOT") else {
+            return;
+        };
+        // Every release takes the same definitions, so with
+        // `ARKLAY_RE1_STEAM_ROOT` set each Steam language tree is checked too.
+        let mut roots = vec![PathBuf::from(root)];
+        if let Ok(steam) = std::env::var("ARKLAY_RE1_STEAM_ROOT") {
+            for tree in ["english/USA", "french/FRA", "german/GER", "japanese/JPN"] {
+                roots.push(Path::new(&steam).join(tree));
+            }
+        }
+        for root in roots {
+            checked_in_rooms_match(&root);
+        }
+    }
+
+    fn checked_in_rooms_match(root: &Path) {
+        let plan = build_plan(root).unwrap();
+        assert!(!plan.rooms.is_empty(), "{}", root.display());
+        for variant in plan.rooms.iter().flat_map(|room| &room.variants) {
+            let id = variant.id;
+            let data = fs::read(&variant.rdt).unwrap();
+            let crate::room::Converted { mut source, files } =
+                crate::room::RoomSource::from_rdt(&data, id).unwrap();
+            let checked_in = |entry: &str| {
+                let (_, text) = variant
+                    .definition
+                    .iter()
+                    .find(|(path, _)| path == entry)
+                    .unwrap_or_else(|| panic!("no checked-in {entry}"));
+                *text
+            };
+            let expected = crate::room::xml::parse(checked_in(&id.xml_entry())).unwrap();
+            if expected.cameras.is_empty() {
+                continue;
+            }
+            source.strings.clone_from(&expected.strings);
+            assert!(
+                source == expected,
+                "{}: {} differs",
+                root.display(),
+                id.xml_entry()
+            );
+            // Its scripts are one of the checked-in builds.
+            assert!(
+                rdt_room_script(id, &data).is_some(),
+                "{}: {} has no script build",
+                root.display(),
+                id.rdt_entry()
+            );
+            let effects: Vec<&(String, Vec<u8>)> = files
+                .iter()
+                .filter(|(entry, _)| entry.ends_with(".xml"))
+                .collect();
+            assert_eq!(effects.len() + 1, variant.definition.len(), "{id:?}");
+            for (entry, bytes) in effects {
+                assert_eq!(checked_in(entry).as_bytes(), bytes, "{entry} differs");
+            }
+        }
     }
 
     #[test]

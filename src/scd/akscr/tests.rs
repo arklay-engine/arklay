@@ -928,11 +928,8 @@ fn checked_in_room_scripts_compile() {
         return;
     };
     let paths: Vec<_> = entries
-        .map(|entry| entry.unwrap().path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "akscr")
-        })
+        .map(|entry| entry.unwrap().path().join(super::ROOM_SCRIPT_FILE))
+        .filter(|path| path.is_file())
         .collect();
     assert!(!paths.is_empty(), "no scripts under {}", dir.display());
     // Every script compiles in each room variant and region, which is a few
@@ -945,8 +942,9 @@ fn checked_in_room_scripts_compile() {
                 let load = includes_from(dir);
                 for path in chunk {
                     let text = std::fs::read_to_string(path).unwrap();
-                    let stem = path.file_stem().unwrap().to_string_lossy();
-                    let base = u16::from_str_radix(&stem, 16).unwrap();
+                    let folder = path.parent().unwrap().file_name().unwrap();
+                    let folder = folder.to_string_lossy();
+                    let base = u16::from_str_radix(folder.strip_suffix('0').unwrap(), 16).unwrap();
                     for id in room_variants(base) {
                         for variant in Region::ALL.into_iter().flat_map(|region| {
                             let variant = Variant::for_room(id).in_region(region);

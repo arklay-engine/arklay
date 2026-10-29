@@ -17,12 +17,8 @@ use std::fmt::Write as _;
 use anyhow::{Context, Result, bail};
 use roxmltree::{Document, Node};
 
-use super::markup::{self, Piece};
-use super::source::{
-    Camera, EffectSlot, EffectSprite, MaskGroup, MaskSprite, Messages, RoomSource,
-};
+use super::source::{Camera, EffectSlot, EffectSprite, MaskGroup, MaskSprite, RoomSource};
 use crate::budget;
-use crate::charset::Script;
 use crate::effects::room::{FrameEntry, UvRecord};
 use crate::format::Dialect;
 use crate::language::XmlString;
@@ -31,7 +27,12 @@ use crate::state::{
 };
 
 /// The format version `<room format="...">` declares.
-pub const FORMAT: u32 = 2;
+pub const FORMAT: u32 = 3;
+
+/// The format before [`FORMAT`]: the same but for a `<messages>` block of the
+/// RDT's encoded message text, which is still read and ignored, since a
+/// room's text is its `<strings>`.
+const FORMAT_WITH_MESSAGES: u32 = 2;
 
 /// Element writer with two-space indentation.
 struct Writer {
@@ -109,14 +110,6 @@ impl Writer {
     }
 }
 
-/// The script name a `<messages>` element declares.
-fn script_name(script: Script) -> &'static str {
-    match script {
-        Script::Japanese => "japanese",
-        Script::Latin => "latin",
-    }
-}
-
 /// Lower-case hex of `bytes`.
 fn hex_bytes(bytes: &[u8]) -> String {
     bytes
@@ -150,7 +143,6 @@ pub fn write(room: &RoomSource) -> Result<String> {
         attributes.push(("itemSlots", dec(slots as i64)));
     }
     w.open("room", &attributes);
-    write_strings(&mut w, &room.strings);
     let [r, g, b] = room.ambient;
     w.empty("ambient", &[("r", dec(r)), ("g", dec(g)), ("b", dec(b))]);
     w.open("lights", &[]);
@@ -218,24 +210,14 @@ pub fn write(room: &RoomSource) -> Result<String> {
     }
     w.close("footsteps");
 
-    match &room.messages {
-        None => {}
-        Some(Messages::Raw(block)) => w.empty("messages", &[("raw", text(&hex_bytes(block)))]),
-        Some(Messages::Streams { script, streams }) => {
-            w.open("messages", &[("script", text(script_name(*script)))]);
-            for (index, stream) in streams.iter().enumerate() {
-                write_message(&mut w, index, stream, *script);
-            }
-            w.close("messages");
-        }
-    }
-
+    write_strings(&mut w, &room.strings);
     w.close("room");
     Ok(w.out)
 }
 
 /// The room's display strings as a `<strings>` block, one `<language>` per
-/// tag in first-seen order; nothing when there are none.
+/// tag in the options menu's order ([`crate::language::menu_rank`], then by
+/// tag); nothing when there are none.
 fn write_strings(w: &mut Writer, strings: &[XmlString]) {
     if strings.is_empty() {
         return;
@@ -246,6 +228,11 @@ fn write_strings(w: &mut Writer, strings: &[XmlString]) {
             tags.push(tag);
         }
     }
+    tags.sort_by(|a, b| {
+        crate::language::menu_rank(a)
+            .cmp(&crate::language::menu_rank(b))
+            .then_with(|| a.cmp(b))
+    });
     w.open("strings", &[]);
     for tag in tags {
         w.open("language", &[("lang", text(tag))]);
@@ -258,13 +245,17 @@ fn write_strings(w: &mut Writer, strings: &[XmlString]) {
     w.close("strings");
 }
 
-/// The language-file key a `room.xml` string key reads as, for checking its
-/// value's syntax.
-pub fn string_suffix(key: &str) -> Option<&'static str> {
+/// The language-file key suffix a `room.xml` string key reads as: `name`
+/// and `save_name` are the room's labels, and a decimal message id (`0` to
+/// `255`, no leading zeros) is that room message's text, `TEXT_XX`.
+pub fn string_suffix(key: &str) -> Option<String> {
     match key {
-        "name" => Some("NAME"),
-        "save_name" => Some("NAME_SAVE"),
-        _ => None,
+        "name" => Some("NAME".to_string()),
+        "save_name" => Some("NAME_SAVE".to_string()),
+        _ => {
+            let id: u8 = key.parse().ok()?;
+            (id.to_string() == key).then(|| format!("TEXT_{id:02X}"))
+        }
     }
 }
 
@@ -499,34 +490,6 @@ fn write_zones(w: &mut Writer, zones: &[Zone]) {
     w.close("cameraSwitches");
 }
 
-fn write_message(w: &mut Writer, index: usize, stream: &[u8], script: Script) {
-    let Some(pieces) = markup::encode(stream, script) else {
-        w.empty(
-            "message",
-            &[("id", dec(index as i64)), ("raw", text(&hex_bytes(stream)))],
-        );
-        return;
-    };
-    w.tag("message", &[("id", dec(index as i64))], ">");
-    for piece in &pieces {
-        match piece {
-            Piece::Text(run) => w.out.push_str(&escape(run, false)),
-            Piece::Tag(name, values) => {
-                let _ = write!(w.out, "<{name}");
-                for (key, value) in values {
-                    if *name == "glyph" && *key == "page" || *name == "byte" {
-                        let _ = write!(w.out, " {key}=\"0x{value:02X}\"");
-                    } else {
-                        let _ = write!(w.out, " {key}=\"{value}\"");
-                    }
-                }
-                w.out.push_str("/>");
-            }
-        }
-    }
-    w.out.push_str("</message>\n");
-}
-
 fn write_effect_element(w: &mut Writer, effect: &EffectSlot) {
     let mut attributes = vec![("index", dec(effect.index))];
     let Some(sprite) = &effect.sprite else {
@@ -594,7 +557,7 @@ pub fn parse(text: &str) -> Result<RoomSource> {
     }
     check_attributes(root, &["format", "game", "objectSlots", "itemSlots"])?;
     let format: u32 = attr_or(root, "format", FORMAT)?;
-    if format != FORMAT {
+    if format != FORMAT && format != FORMAT_WITH_MESSAGES {
         bail!("room XML format {format} is not supported (expected {FORMAT})");
     }
 
@@ -670,15 +633,16 @@ pub fn parse(text: &str) -> Result<RoomSource> {
                     .collect::<Result<_>>()?;
                 room.footstep_count = attr_or(node, "count", room.footstep_zones.len() as u16)?;
             }
-            "messages" => room.messages = Some(parse_messages(node)?),
             "strings" => room.strings = parse_strings(node)?,
+            "messages" if format == FORMAT_WITH_MESSAGES => {}
             other => bail!("unknown room element <{other}>"),
         }
     }
     Ok(room)
 }
 
-/// A `<strings>` block: the room's `name` and `save_name` per language.
+/// A `<strings>` block: the room's `name`, `save_name` and message texts
+/// per language.
 pub(crate) fn parse_strings(node: Node<'_, '_>) -> Result<Vec<XmlString>> {
     crate::language::parse_xml_strings(node, |key| {
         string_suffix(key).map(|suffix| format!("ROOM_100_{suffix}"))
@@ -1097,69 +1061,6 @@ fn unhex(text: &str) -> Result<Vec<u8>> {
         .iter()
         .map(|&[high, low]| nibble(high) << 4 | nibble(low))
         .collect())
-}
-
-fn parse_messages(node: Node<'_, '_>) -> Result<Messages> {
-    check_attributes(node, &["script", "raw"])?;
-    if let Some(raw) = node.attribute("raw") {
-        if elements(node).next().is_some() {
-            bail!("a raw <messages> block has no <message> children");
-        }
-        return Ok(Messages::Raw(unhex(raw)?));
-    }
-    let script = match node.attribute("script").unwrap_or("latin") {
-        "latin" => Script::Latin,
-        "japanese" => Script::Japanese,
-        other => bail!("<messages> script `{other}` is not latin or japanese"),
-    };
-    let mut streams = Vec::new();
-    for (index, message) in children(node, "message")?.enumerate() {
-        check_attributes(message, &["id", "raw"])?;
-        let id: usize = attr_or(message, "id", index)?;
-        if id != index {
-            bail!("<message> id {id} is out of order (expected {index})");
-        }
-        if let Some(raw) = message.attribute("raw") {
-            streams.push(unhex(raw)?);
-            continue;
-        }
-        let mut pieces = Vec::new();
-        for child in message.children() {
-            if child.is_text() {
-                let text = child.text().unwrap_or("");
-                // A character the font cannot spell would silently become
-                // another glyph, so it is refused.
-                let mut bytes = Vec::new();
-                crate::charset::encode(text, script, &mut bytes);
-                let mut spelled = String::new();
-                crate::charset::decode(&bytes, script, &mut spelled);
-                if spelled != text {
-                    bail!("message {index}: the font cannot spell `{text}` exactly");
-                }
-                pieces.push(Piece::Text(text.to_string()));
-            } else if child.is_element() {
-                let name = child.tag_name().name();
-                let Some(name) = markup::element(name) else {
-                    bail!("message {index}: unknown element <{name}>");
-                };
-                let names = markup::attributes(name);
-                check_attributes(child, names)?;
-                let values = names
-                    .iter()
-                    .map(|key| {
-                        let raw = attr_text(child, key)?;
-                        let parsed = integer(raw).and_then(|value| u8::try_from(value).ok());
-                        parsed.map(|value| (*key, value)).with_context(|| {
-                            format!("message {index}: <{name}> `{key}` value `{raw}` is not a byte")
-                        })
-                    })
-                    .collect::<Result<_>>()?;
-                pieces.push(Piece::Tag(name, values));
-            }
-        }
-        streams.push(markup::decode(&pieces, script).with_context(|| format!("message {index}"))?);
-    }
-    Ok(Messages::Streams { script, streams })
 }
 
 /// Parse `effect/<slot>.xml`, one effect sprite slot.

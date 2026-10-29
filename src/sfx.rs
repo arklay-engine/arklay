@@ -3302,14 +3302,19 @@ mod tests {
         let mut cues = 0;
         let mut unpacked = Vec::new();
         for entry in std::fs::read_dir(&dir).unwrap() {
-            let path = entry.unwrap().path();
-            if path
-                .extension()
-                .is_none_or(|extension| extension != "akscr")
-            {
+            let path = entry
+                .unwrap()
+                .path()
+                .join(crate::scd::akscr::ROOM_SCRIPT_FILE);
+            if !path.is_file() {
                 continue;
             }
-            let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+            let folder = path.parent().unwrap().file_name().unwrap();
+            let stem = folder
+                .to_string_lossy()
+                .strip_suffix('0')
+                .unwrap()
+                .to_string();
             let base = u16::from_str_radix(&stem, 16).unwrap();
             let stages: std::collections::BTreeSet<u8> = crate::scd::akscr::room_variants(base)
                 .into_iter()

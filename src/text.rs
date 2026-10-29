@@ -140,10 +140,12 @@ impl Text {
         if let Some(bytes) = self.catalog.lookup(&shared) {
             return Some(bytes);
         }
-        // The RDT's own text is encoded in the pack's own script; use it only
-        // when the session draws that script, or its bytes would render as
-        // the wrong characters. A language that lacks the string then reads
-        // as its registry id, like a key no language carries at all.
+        // A raw RDT's own text is encoded in the pack's own script; use it
+        // only when the session draws that script, or its bytes would render
+        // as the wrong characters. A language that lacks the string then
+        // reads as its registry id, like a key no language carries at all.
+        // (A `room.xml` room has no text of its own: its strings are
+        // language keys.)
         if self.script == self.pack_script
             && let Some(bytes) = room.message(id)
         {
@@ -206,11 +208,11 @@ impl Text {
     }
 
     /// Test helper: the sources embedded in the binary plus the checked-in
-    /// room names a converted pack carries, selected as `en-US`.
+    /// room names and messages a converted pack carries, selected as `en-US`.
     #[cfg(test)]
     pub(crate) fn embedded() -> Self {
         let mut writer = crate::pack::PackWriter::new();
-        for (entry, data) in crate::room::re1_name_entries() {
+        for (entry, data) in crate::room::re1_string_entries() {
             writer.add(&entry, data).expect("a room entry adds");
         }
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().expect("the pack writes"))

@@ -18,15 +18,19 @@
 //!
 //! Camera and slot numbers are two lower-case hex digits (`cut/0a.bmp`).
 //!
-//! The room's display names live in `room.xml`'s `<strings>` block and reach
-//! the game as `ROOM_<room3>_NAME`/`ROOM_<room3>_NAME_SAVE` language keys
+//! RE1's definitions are checked in ([`RE1_FILES`]); `convert-game` takes only
+//! the models, effect sheets and player animation from an install's RDTs
+//! ([`source::rdt_assets`]).
+//!
+//! The room's display names and message texts live in `room.xml`'s
+//! `<strings>` block and reach the game as `ROOM_<room3>_NAME`,
+//! `ROOM_<room3>_NAME_SAVE` and `ROOM_<room3>_TEXT_XX` language keys
 //! ([`language_layers`]); a language file's own key still wins.
 //!
 //! A raw `room.rdt` in the folder still loads in place of `room.xml`, so a
 //! mod that ships an RDT keeps working: when a pack holds both, the one from
 //! the higher layer wins, and the XML wins a tie.
 
-pub mod markup;
 pub mod source;
 pub mod xml;
 
@@ -342,10 +346,12 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
 }
 
 /// Every room's `<strings>` as language layers, `(tag, file)` per language,
-/// keyed `ROOM_<room3>_NAME` and `ROOM_<room3>_NAME_SAVE`.
+/// keyed `ROOM_<room3>_NAME`, `ROOM_<room3>_NAME_SAVE` and `ROOM_<room3>_TEXT_XX`.
 ///
 /// Rooms are read in id order, so of a room's player variants the lowest
-/// that names the room in a language supplies that language's name. The
+/// that names the room in a language supplies that language's name, and
+/// its message texts are the room's shared `TEXT_XX` keys; another variant's
+/// differing text gets that variant's own key. The
 /// strings come from the room's `room.xml` even when a mod's raw RDT
 /// defines the room over it, so a mod that ships RDTs keeps the names; an
 /// unreadable `room.xml` warns and is skipped here (loading the room reports
@@ -370,11 +376,21 @@ pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> 
             let Some(suffix) = xml::string_suffix(&key) else {
                 continue;
             };
-            by_tag
-                .entry(tag.to_ascii_lowercase())
-                .or_default()
-                .entry(format!("ROOM_{room3}_{suffix}"))
-                .or_insert(value);
+            let values = by_tag.entry(tag.to_ascii_lowercase()).or_default();
+            // The first variant's text is the room's; a later variant whose
+            // text differs gets its own `ROOM_<room3><player>_TEXT_XX` key,
+            // which `Text::message` reads first.
+            let shared = format!("ROOM_{room3}_{suffix}");
+            match values.get(&shared) {
+                None => {
+                    values.insert(shared, value);
+                }
+                Some(first) if *first != value && suffix.starts_with("TEXT_") => {
+                    let variant = format!("ROOM_{room3}{}_{suffix}", id.player_flag);
+                    values.insert(variant, value);
+                }
+                Some(_) => {}
+            }
         }
     }
     let mut layers = Vec::new();
@@ -390,61 +406,50 @@ pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> 
     layers
 }
 
-/// The checked-in RE1 room display names `convert-game` writes into each
-/// `room.xml` ([`parse_names`]).
-pub const RE1_NAMES: &str = include_str!("../../games/re1/room/names.xml");
+mod checked_in {
+    include!(concat!(env!("OUT_DIR"), "/room_files.rs"));
+}
 
-/// Test helper: a `room/<room3>0/room.xml` per room of [`RE1_NAMES`],
-/// holding only its strings, for tests that need the room names a converted
-/// pack carries.
-#[cfg(test)]
-pub(crate) fn re1_name_entries() -> Vec<(String, Vec<u8>)> {
-    parse_names(RE1_NAMES)
-        .unwrap()
-        .into_iter()
-        .map(|(room3, strings)| {
-            let id = RoomId::parse(&format!("{room3}0")).unwrap();
-            let source = RoomSource {
-                strings,
-                ..RoomSource::default()
-            };
-            (id.xml_entry(), xml::write(&source).unwrap().into_bytes())
+/// The checked-in RE1 room definitions (`games/re1/room/`), `(path, text)`
+/// by path under that directory: each `<id>/` folder's `room.xml` and
+/// `effect/<slot>.xml`. Every release takes the same definitions; the French
+/// and German RDTs' leftover data in rooms the others ship as stubs (and their
+/// unreachable rooms 313 and 412) is not kept.
+///
+/// `convert-game` packs these in place of anything read from the install's
+/// RDTs, which only supply the room's models and animation.
+pub use checked_in::ROOM_FILES as RE1_FILES;
+
+/// The checked-in definition of RE1 room `id`, as `(pack entry, text)`.
+/// Empty when the repository does not define the room.
+pub fn re1_definition(id: RoomId) -> Vec<(String, &'static str)> {
+    let prefix = format!("{}/", id.code());
+    RE1_FILES
+        .iter()
+        .filter_map(|(path, text)| {
+            let file = path.strip_prefix(&prefix)?;
+            Some((format!("{}/{file}", id.dir()), *text))
         })
         .collect()
 }
 
-/// The display strings of a `<rooms>` list (`games/re1/room/names.xml`):
-/// each `<room id="<room3>">`'s `<strings>`, keyed by the upper-case
-/// three-digit room id, for `convert-game` to write into every player
-/// variant's `room.xml`.
-pub fn parse_names(
-    text: &str,
-) -> Result<std::collections::BTreeMap<String, Vec<crate::language::XmlString>>> {
-    let document =
-        roxmltree::Document::parse(text).context("room names are not well-formed XML")?;
-    let root = document.root_element();
-    anyhow::ensure!(root.has_tag_name("rooms"), "room names root is not <rooms>");
-    let mut names = std::collections::BTreeMap::new();
-    for room in root.children().filter(roxmltree::Node::is_element) {
-        anyhow::ensure!(room.has_tag_name("room"), "<rooms> may only contain <room>");
-        let id = room.attribute("id").context("a <room> needs an id")?;
-        let room3 = RoomId::parse(id)
-            .with_context(|| format!("<room id=\"{id}\">"))?
-            .room3();
-        let mut strings = Vec::new();
-        for node in room.children().filter(roxmltree::Node::is_element) {
-            anyhow::ensure!(
-                node.has_tag_name("strings"),
-                "<room> may only contain <strings>"
-            );
-            strings.extend(xml::parse_strings(node).with_context(|| format!("room {room3}"))?);
-        }
-        anyhow::ensure!(
-            names.insert(room3.clone(), strings).is_none(),
-            "room {room3} is named twice"
-        );
-    }
-    Ok(names)
+/// Test helper: a `room/<id>/room.xml` per checked-in room holding only its
+/// strings, for tests that need the room names
+/// and message texts a converted pack carries.
+#[cfg(test)]
+pub(crate) fn re1_string_entries() -> Vec<(String, Vec<u8>)> {
+    RE1_FILES
+        .iter()
+        .filter_map(|(path, text)| {
+            let id = RoomId::parse(path.strip_suffix("/room.xml")?).ok()?;
+            let source = RoomSource {
+                strings: room_strings(text.as_bytes()).unwrap(),
+                ..RoomSource::default()
+            };
+            (!source.strings.is_empty())
+                .then(|| (id.xml_entry(), xml::write(&source).unwrap().into_bytes()))
+        })
+        .collect()
 }
 
 /// Just the `<strings>` of a `room.xml`, without building the rest of it.
@@ -515,13 +520,12 @@ pub fn convert_rdt2(
 pub fn convert_rdt(
     data: &[u8],
     id: RoomId,
-    script: crate::charset::Script,
     strings: Vec<crate::language::XmlString>,
 ) -> Result<Vec<(String, Vec<u8>)>> {
     let Converted {
         mut source,
         mut files,
-    } = RoomSource::from_rdt(data, id, script)?;
+    } = RoomSource::from_rdt(data, id)?;
     source.strings = strings;
     let text = xml::write(&source)?;
     let back = xml::parse(&text).context("the written room XML does not parse")?;
@@ -535,7 +539,10 @@ pub fn convert_rdt(
     }
     let pack = Pack::from_bytes(writer.to_bytes()?)?;
     let loaded = Loaded::from_xml(&pack, id, &text).context("the written room does not build")?;
-    let expected = drawn_messages(crate::rdt::parse(data, id)?, script);
+    // The RDT's own message text is left behind: the room's text is its
+    // strings.
+    let mut expected = crate::rdt::parse(data, id)?;
+    expected.messages = None;
     let mut built = loaded.state.clone();
     // The model stems only name HD replacements, which an RDT has none of.
     for asset in built.object_models.iter_mut().chain(&mut built.item_models) {

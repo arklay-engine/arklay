@@ -27,11 +27,11 @@ fn pack_of(entries: Vec<(String, Vec<u8>)>) -> Pack {
 }
 
 /// Convert `rdts` into a pack of room folders.
-fn converted(rdts: &[(RoomId, Vec<u8>)], script: Script) -> Pack {
+fn converted(rdts: &[(RoomId, Vec<u8>)]) -> Pack {
     let mut entries = Vec::new();
     for (id, data) in rdts {
         entries.extend(
-            convert_rdt(data, *id, script, Vec::new())
+            convert_rdt(data, *id, Vec::new())
                 .unwrap_or_else(|error| panic!("{:04X}: {error:#}", id.rdt_number())),
         );
     }
@@ -39,9 +39,11 @@ fn converted(rdts: &[(RoomId, Vec<u8>)], script: Script) -> Pack {
 }
 
 /// Assert that `pack`'s XML definition of `id` loads the state and scripts
-/// the RDT, with its text in `script`, does.
-fn assert_same_room(pack: &Pack, id: RoomId, rdt: &[u8], script: Script) {
-    let expected = drawn_messages(crate::rdt::parse(rdt, id).unwrap(), script);
+/// the RDT does, but for the RDT's message text, which the XML leaves to its
+/// strings.
+fn assert_same_room(pack: &Pack, id: RoomId, rdt: &[u8]) {
+    let mut expected = crate::rdt::parse(rdt, id).unwrap();
+    expected.messages = None;
     let loaded = load(pack, id).unwrap();
     assert_eq!(
         snapshot(&loaded.state),
@@ -170,18 +172,17 @@ fn synthetic_rdt() -> Vec<u8> {
 #[test]
 fn a_synthetic_room_loads_the_same_from_xml() {
     let rdt = synthetic_rdt();
-    let pack = converted(&[(ID, rdt.clone())], Script::Latin);
+    let pack = converted(&[(ID, rdt.clone())]);
     assert_eq!(format(&pack, ID), Some(Format::Xml));
     assert!(!pack.contains(&ID.rdt_entry()));
-    assert_same_room(&pack, ID, &rdt, Script::Latin);
+    assert_same_room(&pack, ID, &rdt);
 
     let text = std::str::from_utf8(&pack.read(&ID.xml_entry()).unwrap())
         .unwrap()
         .to_string();
-    assert!(
-        text.contains("<message id=\"0\">A key door<br/><color n=\"1\"/><end action=\"0\"/>"),
-        "{text}"
-    );
+    // The RDT's message text is not carried over: a room's text is its
+    // strings.
+    assert!(!text.contains("<message"), "{text}");
     assert!(
         text.contains("<view zoneIndex=\"0\" to=\"0\" x0=\"65535\""),
         "{text}"
@@ -199,7 +200,7 @@ fn a_room_folder_renamed_is_the_room_of_its_new_id() {
     let rdt = synthetic_rdt();
     let other = RoomId::parse("1000").unwrap();
     let from = format!("{}/", ID.dir());
-    let renamed: Vec<(String, Vec<u8>)> = convert_rdt(&rdt, ID, Script::Latin, Vec::new())
+    let renamed: Vec<(String, Vec<u8>)> = convert_rdt(&rdt, ID, Vec::new())
         .unwrap()
         .into_iter()
         .map(|(path, data)| {
@@ -217,11 +218,11 @@ fn a_room_folder_renamed_is_the_room_of_its_new_id() {
 #[test]
 fn a_stub_rdt_is_an_empty_room() {
     let stub = vec![0x00, 0x00, 0x02, 0x01];
-    let pack = converted(&[(ID, stub.clone())], Script::Latin);
+    let pack = converted(&[(ID, stub.clone())]);
     let state = load_state(&pack, ID).unwrap();
     assert!(state.cuts.is_empty());
     assert_eq!((state.omodel_slot_count, state.item_count), (2, 1));
-    assert_same_room(&pack, ID, &stub, Script::Latin);
+    assert_same_room(&pack, ID, &stub);
 }
 
 /// A base pack of `base` entries with a mod layer of `layer` entries over
@@ -284,7 +285,7 @@ fn layered_in(
 
 /// The synthetic room converted: its XML and every entry of its folder.
 fn converted_entries() -> (String, Vec<(String, Vec<u8>)>) {
-    let entries = convert_rdt(&synthetic_rdt(), ID, Script::Latin, Vec::new()).unwrap();
+    let entries = convert_rdt(&synthetic_rdt(), ID, Vec::new()).unwrap();
     let xml = entries
         .iter()
         .find(|(path, _)| *path == ID.xml_entry())
@@ -432,18 +433,28 @@ fn a_mods_region_build_runs_on_its_region() {
 }
 
 #[test]
-fn malformed_hand_edits_fail_without_panicking() {
+fn a_format_2_room_reads_without_its_messages() {
     let (xml, _) = converted_entries();
-    // Non-ASCII hex data.
-    let message = "<message id=\"0\">A key door<br/><color n=\"1\"/><end action=\"0\"/></message>";
-    assert!(xml.contains(message), "{xml}");
-    let raw = xml.replacen(message, "<message id=\"0\" raw=\"a\u{e9}b\"/>", 1);
-    let error = format!("{:#}", xml::parse(&raw).unwrap_err());
-    assert!(error.contains("non-hex digit"), "{error}");
-    // Text the font cannot spell.
-    let unspellable = xml.replacen("A key door", "A key \u{263A}", 1);
-    let error = format!("{:#}", xml::parse(&unspellable).unwrap_err());
-    assert!(error.contains("cannot spell"), "{error}");
+    let current = xml::parse(&xml).unwrap();
+    // Format 2 kept the RDT's message text, which a room no longer has: its
+    // text is its `<strings>`.
+    let messages =
+        "<messages script=\"latin\">\n<message id=\"0\">A</message>\n</messages>\n</room>";
+    let old = xml
+        .replacen("format=\"3\"", "format=\"2\"", 1)
+        .replacen("</room>", messages, 1);
+    assert_eq!(xml::parse(&old).unwrap(), current);
+    // Format 3 has no such block, and no other format reads.
+    let error = format!(
+        "{:#}",
+        xml::parse(&xml.replacen("</room>", messages, 1)).unwrap_err()
+    );
+    assert!(error.contains("unknown room element <messages>"), "{error}");
+    let error = format!(
+        "{:#}",
+        xml::parse(&xml.replacen("format=\"3\"", "format=\"1\"", 1)).unwrap_err()
+    );
+    assert!(error.contains("format 1 is not supported"), "{error}");
 }
 
 #[test]
@@ -461,20 +472,20 @@ fn hand_edits_with_unknown_names_are_refused() {
 
 /// The shipped RDTs under `ARKLAY_RE1_ROOT` (the JPN tree) and, when
 /// present beside it, every Steam language tree.
-fn shipped_trees() -> Option<Vec<(PathBuf, Script)>> {
+fn shipped_trees() -> Option<Vec<PathBuf>> {
     let root = PathBuf::from(std::env::var("ARKLAY_RE1_ROOT").ok()?);
-    let mut trees = vec![(root.join("JPN"), Script::Japanese)];
+    let mut trees = vec![root.join("JPN")];
     let steam = std::env::var("ARKLAY_RE1_STEAM_ROOT")
         .ok()
         .map(PathBuf::from);
     if let Some(steam) = steam {
-        for (language, tree, script) in [
-            ("english", "USA", Script::Latin),
-            ("french", "FRA", Script::Latin),
-            ("german", "GER", Script::Latin),
-            ("japanese", "JPN", Script::Japanese),
+        for (language, tree) in [
+            ("english", "USA"),
+            ("french", "FRA"),
+            ("german", "GER"),
+            ("japanese", "JPN"),
         ] {
-            trees.push((steam.join(language).join(tree), script));
+            trees.push(steam.join(language).join(tree));
         }
     }
     Some(trees)
@@ -505,7 +516,7 @@ fn every_shipped_room_loads_the_same_from_xml() {
     let Some(trees) = shipped_trees() else {
         return;
     };
-    for (tree, script) in trees {
+    for tree in trees {
         let rdts = tree_rdts(&tree);
         assert!(
             rdts.len() > 300,
@@ -513,9 +524,9 @@ fn every_shipped_room_loads_the_same_from_xml() {
             tree.display(),
             rdts.len()
         );
-        let pack = converted(&rdts, script);
+        let pack = converted(&rdts);
         for (id, rdt) in &rdts {
-            assert_same_room(&pack, *id, rdt, script);
+            assert_same_room(&pack, *id, rdt);
         }
         assert!(!pack.paths().any(|path| path.ends_with(".rdt")));
 
@@ -686,7 +697,7 @@ fn a_room_s_strings_round_trip_and_become_room_keys() {
         ("en-US", "save_name", "M. Room 1F"),
         ("ja-JP", "save_name", "館 {s}小部屋"),
     ]);
-    let entries = convert_rdt(&synthetic_rdt(), ID, Script::Latin, named.clone()).unwrap();
+    let entries = convert_rdt(&synthetic_rdt(), ID, named.clone()).unwrap();
     let text = String::from_utf8(entry_of(&entries, &ID.xml_entry())).unwrap();
     assert_eq!(xml::parse(&text).unwrap().strings, named);
     assert_eq!(room_strings(text.as_bytes()).unwrap(), named);
@@ -719,7 +730,7 @@ fn a_room_s_strings_round_trip_and_become_room_keys() {
 #[test]
 fn a_mod_s_raw_rdt_keeps_the_base_room_s_name() {
     let named = strings(&[("en-US", "name", "SAVE ROOM")]);
-    let base = convert_rdt(&synthetic_rdt(), ID, Script::Latin, named).unwrap();
+    let base = convert_rdt(&synthetic_rdt(), ID, named).unwrap();
     let (pack, dir) = layered("rdt-name", base, vec![(ID.rdt_entry(), synthetic_rdt())]);
     assert_eq!(format(&pack, ID), Some(Format::Rdt));
     let text = crate::text::Text::load(&pack, Some("en-US"));
@@ -728,18 +739,87 @@ fn a_mod_s_raw_rdt_keeps_the_base_room_s_name() {
 }
 
 #[test]
+fn room_message_texts_become_text_keys_per_variant() {
+    let chris = RoomId {
+        player_flag: 0,
+        ..ID
+    };
+    let jill = RoomId {
+        player_flag: 1,
+        ..ID
+    };
+    let room = |texts: &[(&str, &str, &str)]| RoomSource {
+        strings: strings(texts),
+        ..RoomSource::default()
+    };
+    let chris_room = room(&[("en-US", "0", "Same"), ("en-US", "10", "Chris")]);
+    let jill_room = room(&[("en-US", "0", "Same"), ("en-US", "10", "Jill")]);
+    let written = xml::write(&chris_room).unwrap();
+    assert!(
+        written.contains(r#"<string key="10">Chris</string>"#),
+        "{written}"
+    );
+    let pack = pack_of(vec![
+        (chris.xml_entry(), written.into_bytes()),
+        (
+            jill.xml_entry(),
+            xml::write(&jill_room).unwrap().into_bytes(),
+        ),
+    ]);
+    let layers = language_layers(&pack);
+    let english = &layers.iter().find(|(tag, _)| tag == "en-us").unwrap().1;
+    let mut keys: Vec<&str> = english.iter().map(|(key, _)| key).collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        ["ROOM_2051_TEXT_0A", "ROOM_205_TEXT_00", "ROOM_205_TEXT_0A"]
+    );
+}
+
+#[test]
 fn bad_room_strings_are_refused() {
     for bad in [
         r#"<room><strings><language lang="en-US"><string key="title">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="01">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="256">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="-1">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="name">A\q</string></language></strings></room>"#,
         r#"<room><strings /><strings /></room>"#,
     ] {
         assert!(xml::parse(bad).is_err(), "{bad}");
     }
-    // The checked-in names all parse, and name a room once.
-    assert!(parse_names(RE1_NAMES).unwrap().len() > 150);
-    let twice = r#"<rooms><room id="100" /><room id="100" /></rooms>"#;
-    assert!(parse_names(twice).is_err());
+}
+
+#[test]
+fn every_checked_in_re1_room_builds() {
+    let ids: Vec<RoomId> = RE1_FILES
+        .iter()
+        .filter_map(|(path, _)| RoomId::parse(path.strip_suffix("/room.xml")?).ok())
+        .collect();
+    assert!(ids.len() > 300, "{} rooms", ids.len());
+    // A pack of the definitions alone: the models and animations are the
+    // install's, and a room builds without them.
+    let files = ids
+        .iter()
+        .flat_map(|id| re1_definition(*id))
+        .map(|(entry, text)| (entry, text.as_bytes().to_vec()))
+        .collect();
+    let pack = pack_of(files);
+    for id in &ids {
+        load(&pack, *id).unwrap_or_else(|err| panic!("{}: {err:#}", id.xml_entry()));
+    }
+    // The display names and message texts are in the rooms themselves.
+    let layers = language_layers(&pack);
+    let english = &layers.iter().find(|(tag, _)| tag == "en-us").unwrap().1;
+    assert!(english.len() > 1_200, "{} strings", english.len());
+
+    // Each file is in the form the writer gives it, `<strings>` last.
+    for (path, text) in RE1_FILES {
+        if path.ends_with("/room.xml") {
+            let written = xml::write(&xml::parse(text).unwrap()).unwrap();
+            assert!(written == *text, "{path} is not in canonical form");
+        }
+    }
 }
 
 #[test]

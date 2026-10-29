@@ -96,8 +96,8 @@ pub use decompile::{decompile, decompile_with};
 pub use merge::{merge, merge_regions, merge_rooms};
 pub use names::{Names, load_names};
 pub use preprocess::{
-    Loader, Preprocessed, Region, SYMBOLS, Variant, includes_from, merged_id, no_includes,
-    preprocess, room_variants,
+    Loader, Preprocessed, ROOM_SCRIPT_FILE, Region, SYMBOLS, Variant, includes_from, merged_id,
+    no_includes, preprocess, room_script_file, room_variants,
 };
 
 #[cfg(test)]

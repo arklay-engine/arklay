@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="944" g="800" b="800"/>
+  <lights>
+    <light x="4771" y="-2000" z="2650" r="200" g="200" b="200" kind="0" radius="3879"/>
+    <light x="4720" y="-2000" z="1640" r="200" g="200" b="200" kind="0" radius="4118"/>
+    <light x="4680" y="-2000" z="5680" r="200" g="200" b="200" kind="0" radius="4519"/>
+  </lights>
+  <cameras>
+    <camera x="2682" y="-1836" z="1872" lookX="4950" lookY="-2628" lookZ="9018" roll="0" fov="207"/>
+    <camera x="2502" y="-1800" z="9900" lookX="4950" lookY="-2610" lookZ="2088" roll="0" fov="207"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="9300" z0="10300" x1="9300" z1="200" x2="0" z2="200" x3="0" z3="10300"/>
+      <switch zoneIndex="1" to="1" x0="678" z0="4927" x1="515" z1="5595" x2="9285" z2="5292" x3="9464" z3="4043"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="2" to="9" x0="0" z0="300" x1="0" z1="10600" x2="9600" z2="10600" x3="9600" z3="300"/>
+      <switch zoneIndex="3" to="0" x0="500" z0="5743" x1="684" z1="7245" x2="9885" z2="6357" x3="9243" z3="5373"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="4572" cellZ="4338">
+    <quadrant index="0">
+      <box xMax="10050" zMax="10744" xMin="4" zMin="8948" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10008" zMax="10332" xMin="7344" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="8280" zMax="3438" xMin="5256" zMin="936" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="10050" zMax="10744" xMin="4" zMin="8948" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1854" zMax="10260" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="8280" zMax="3438" xMin="5256" zMin="936" shape="1" cf2="true"/>
+      <box xMax="3096" zMax="9828" xMin="1242" zMin="7974" shape="3" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="9972" zMax="1944" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10008" zMax="10332" xMin="7344" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="4158" zMax="2682" xMin="1098" zMin="918" shape="1" cf2="true"/>
+      <box xMax="8280" zMax="3438" xMin="5256" zMin="936" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="1854" zMax="10260" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9972" zMax="1944" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="4158" zMax="2682" xMin="1098" zMin="918" shape="1" cf2="true"/>
+      <box xMax="8280" zMax="3438" xMin="5256" zMin="936" shape="1" cf2="true"/>
+      <box xMax="3150" zMax="3222" xMin="1314" zMin="1386" shape="3" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="9700" height="0x2968" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="save_name">Storeroom 1F</string>
+      <string key="0">\nGardening tools.{scroll 2}{clear 0}\nNothing useful.{scroll 2}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s} {s}物置/{s}1{s}F{s}</string>
+      <string key="0">\n 庭の手入れに使う物が置いてある{scroll 2}{clear 0}\n 役に立ちそうな物は見当たらない{scroll 2}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Débarras RdC</string>
+      <string key="0">\nDes outils de jardinage.{scroll 2}{clear 0}\nRien d'utile.{scroll 2}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">\nEs sind Gartengeräte.{scroll 2}{clear 0}\nNichts Brauchbares.{scroll 2}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Magazzino 1P</string>
+      <string key="0">\nAttrezzi da giardinaggio.{scroll 2}{clear 0}\nNiente di utile.{scroll 2}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">\nHerramientas de jardinería...{scroll 2}{clear 0}\nNada útil...{scroll 2}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Кладовая 1-эт.</string>
+      <string key="0">\nСадовые инструменты.{scroll 2}{clear 0}\nНичего полезного.{scroll 2}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Itäsiiven varasto 1 krs</string>
+      <string key="0">Puutarhanhoitovälineitä...{scroll 2}{clear 0}Ei mitään hyödyllistä...{scroll 2}</string>
+    </language>
+  </strings>
+</room>

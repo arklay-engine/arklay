@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1216" g="1072" b="368"/>
+  <lights>
+    <light x="4480" y="-2000" z="1120" r="150" g="150" b="150" kind="0" radius="1879"/>
+    <light x="4560" y="-2000" z="1320" r="150" g="150" b="150" kind="0" radius="4919"/>
+    <light x="4240" y="-2000" z="1040" r="150" g="150" b="150" kind="0" radius="5319"/>
+  </lights>
+  <cameras>
+    <camera x="2916" y="-4860" z="2250" lookX="2376" lookY="-2070" lookZ="2916" roll="0" fov="207"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="4300" z0="5300" x1="4300" z1="1600" x2="1300" z2="1600" x3="1300" z3="5300"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="7074" cellZ="3654">
+    <quadrant index="0">
+      <box xMax="7434" zMax="8568" xMin="0" zMin="5076" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="1764" zMax="7020" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="6066" zMax="8118" xMin="3942" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7434" zMax="8568" xMin="0" zMin="5076" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="6714" zMax="1800" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="1764" zMax="7020" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="6714" zMax="1800" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="6066" zMax="8118" xMin="3942" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="6640" z="5120" width="8800" height="0x19C8" sound="0x0003"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="save_name">Hall 1F</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Hall RdC</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Atrio 1P</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Зал 1-эт.</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Pääaula 1 krs</string>
+    </language>
+  </strings>
+</room>

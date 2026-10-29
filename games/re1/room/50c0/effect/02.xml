@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<effect index="10" clut="0x7840" depthTable="2 10 18 0 0 0 0 0">
+  <frame uv="0" delay="1" width="16" height="16"/>
+  <frame uv="2" delay="1" width="16" height="16"/>
+  <frame uv="1" delay="1" width="16" height="16"/>
+  <frame uv="3" delay="1" width="16" height="16"/>
+  <frame uv="0" delay="255" width="0" height="0"/>
+  <uv u="0" v="0" pivotX="120" pivotY="120"/>
+  <uv u="16" v="0" pivotX="120" pivotY="120"/>
+  <uv u="32" v="0" pivotX="120" pivotY="120"/>
+  <uv u="48" v="0" pivotX="120" pivotY="120"/>
+  <depth row="0">
+    <animFrame>
+      <block>010001090000000000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+  <depth row="1">
+    <animFrame>
+      <block>010001090000000000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+  <depth row="2">
+    <animFrame>
+      <block>010001090000000000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+</effect>

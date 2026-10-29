@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1024" g="1024" b="1024"/>
+  <lights>
+    <light x="0" y="5150" z="0" r="255" g="255" b="175" kind="1" radius="1879"/>
+    <light x="23720" y="-5800" z="8000" r="255" g="255" b="175" kind="0" radius="8119"/>
+    <light x="20240" y="-5800" z="4240" r="255" g="255" b="175" kind="0" radius="8239"/>
+  </lights>
+  <cameras>
+    <camera x="2106" y="-954" z="5598" lookX="4032" lookY="-1638" lookZ="5256" roll="0" fov="207"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="7800" z0="7800" x1="7900" z1="1600" x2="1300" z2="1300" x3="1300" z3="8100"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="7074" cellZ="3654">
+    <quadrant index="0">
+      <box xMax="9468" zMax="9018" xMin="7002" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9450" zMax="8892" xMin="0" zMin="7200" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="2412" zMax="9162" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9468" zMax="9018" xMin="7002" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9450" zMax="8892" xMin="0" zMin="7200" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="9432" zMax="1890" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9468" zMax="9018" xMin="7002" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="2412" zMax="9162" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9432" zMax="1890" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9468" zMax="9018" xMin="7002" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="6640" z="5120" width="8800" height="0x19C8" sound="0x0003"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">ESCAPE ELEVATOR</string>
+      <string key="save_name">Laboratory B3</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Laboratoire SS3</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Laboratorio S3</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Лаборатория Б3</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Laboratorion olohuone -2 krs</string>
+    </language>
+  </strings>
+</room>

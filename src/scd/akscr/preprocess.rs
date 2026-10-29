@@ -157,6 +157,15 @@ pub fn room_variants(base: u16) -> Vec<u16> {
     ids
 }
 
+/// Where the checked-in merged script of room `base` (`0x103`) sits under
+/// `games/re1/room`: in the folder of its first RDT, `1030/room.akscr`.
+pub fn room_script_file(base: u16) -> String {
+    format!("{base:03x}0/{ROOM_SCRIPT_FILE}")
+}
+
+/// The file name of a checked-in room script inside its room folder.
+pub const ROOM_SCRIPT_FILE: &str = "room.akscr";
+
 /// The merged-script id of RDT `id`: stage 6/7 fold onto 1/2 and the player
 /// digit is dropped.
 pub fn merged_id(id: u16) -> u16 {
