@@ -4591,6 +4591,7 @@ impl GameSession {
                         &[
                             ("item", ScreenArg::Int(i64::from(item))),
                             ("pickup", ScreenArg::Bool(true)),
+                            ("discard", ScreenArg::Bool(kind == PickupKind::DiscardKey)),
                         ],
                         ScreenAction::Resume,
                         &mut cx,
@@ -4761,6 +4762,17 @@ impl GameSession {
                 }
             }
             PickupPhase::Message => {
+                // The resting viewer keeps ticking under the prompt: the
+                // discard prompt's key turns there (the original's state 4).
+                if let Some(mut screen) = self.pickup_view.as_mut().and_then(|p| p.screen.take()) {
+                    {
+                        let cx = self.ui_context(pack);
+                        screen.update(&cx, UiInput::default());
+                    }
+                    if let Some(pickup) = self.pickup_view.as_mut() {
+                        pickup.screen = Some(screen);
+                    }
+                }
                 if !was_active || self.game.message.active {
                     return;
                 }
@@ -27430,6 +27442,22 @@ off_0010:
             tick_until(&mut session, &pack, 300, "the yes/no phase", |session| {
                 session.game.message.phase() == crate::message::MessagePhase::YesNo
             });
+            let yaw = |session: &GameSession| {
+                session
+                    .pickup_view
+                    .as_ref()
+                    .and_then(|pickup| pickup.screen.as_ref())
+                    .map(|screen| screen.value("yaw"))
+            };
+            let before = yaw(&session);
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert_eq!(
+                yaw(&session),
+                before.map(|yaw| (yaw - 0x10) & 0x0FFF),
+                "the key turns while the prompt is up"
+            );
             if !discard {
                 // Move the choice to No.
                 session

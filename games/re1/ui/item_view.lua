@@ -14,12 +14,15 @@
 --             screen publishes `settled` and waits; the engine calls
 --             `M.begin_exit` once its prompt resolves and the screen exits
 --             when the closing animation has run. A pick-up reads no input.
+--   discard   with `pickup`, the depleted key's discard prompt (the
+--             original's mode 6): the resting model keeps turning while the
+--             prompt is up.
 --
 -- Without `pickup` the screen is the examine viewer. Each update publishes
 -- `event` (0 none, 1 show the item's description, 2 show global message
 -- `event_id`, marking item `event_mark` examined and selecting
 -- `event_select` first when non-zero, 3 set examined bit `event_id`, 4 the
--- book turned into medal `event_id`), plus `item` and `ready` (the turntable
+-- book turned into medal `event_id`), plus `item`, `yaw` and `ready` (the turntable
 -- is live). It exits once its closing animation has finished.
 --
 -- The model renders with the viewer's three fixed lights over a dim
@@ -53,6 +56,8 @@ local INTRO_START_X = MODEL_REST_X - INTRO_FRAMES * INTRO_ZOOM_STEP
 -- (`main_menu`'s `DAT_00d22700`): upper left, upper right and below.
 local AMBIENT = 0x199
 local LIGHTS = { { 100, 0x50, 0x50 }, { -100, 0x50, 0x50 }, { 0, -100, 0x50 } }
+-- The discard prompt's resting yaw step per frame (state 4).
+local DISCARD_YAW_STEP = 0x10
 -- The book zoom opens its message once object 1's yaw passes this.
 local ZOOM_TARGET = 0x300
 -- The status-sheet arrows (`FUN_0044eca0`) in draw order: left, down,
@@ -341,12 +346,14 @@ local function publish(api)
     api:set("ready", s.stage == "display" and s.action == "turn")
     api:set("settled", s.settled)
     api:set("backdrop", s.backdrop)
+    api:set("yaw", s.yaw)
 end
 
 function M.open(api, args)
     s.item = args.item or 0
     s.quantity = args.quantity or 0
     s.pickup = args.pickup or false
+    s.discard = args.discard or false
     -- The examine viewer draws on black, so a wider aspect gives it a wider
     -- canvas; the pickup viewer draws in the inventory panel, which asks for
     -- the canvas itself.
@@ -384,6 +391,10 @@ function M.update(api, input)
     if s.pickup then
         if s.stage == "setup" or s.stage == "intro" then
             s.settled = step_intro()
+        elseif s.stage == "display" and s.discard then
+            -- State 4: the key turns slowly until the prompt resolves.
+            s.yaw = (s.yaw - DISCARD_YAW_STEP) & 0x0FFF
+            latch_render()
         elseif step_exit() and s.stage == "closed" then
             api:exit()
         end
