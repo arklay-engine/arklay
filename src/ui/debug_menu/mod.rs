@@ -16,7 +16,7 @@
 //! the tool and cursors it was left on; the room browser also follows a room
 //! change made while the menu was closed. Edits that only touch [`GameState`]
 //! (inventory, flags, cheats, the pending player selection) happen inside
-//! [`DebugMenu::handle_input`]; everything that needs the room-load path, the
+//! [`DebugMenu::handle_events`]; everything that needs the room-load path, the
 //! save directory or the app is returned as a [`DebugMenuEvent`].
 //!
 //! The reference has an F1 menu of its own; its flag editor's views and names
