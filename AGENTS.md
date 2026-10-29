@@ -31,6 +31,11 @@ to go to the compiler (#266). Follow these rules:
   `Finished ... in Xs` and `test result:` lines (for example
   `2>&1 | grep -E "^(error|warning)|Finished|test result|panicked"`), so the
   compile cost stays visible.
+- **Seed a new worktree before its first build:** run
+  `./scripts/seed-target.sh`. It reflink-copies the build output of the most
+  recently built other worktree. That is instant on btrfs and XFS, and the
+  script does nothing on other filesystems. The first build then compiles
+  only this crate rather than every dependency.
 - **Do not run `cargo clean`** or delete `target/` unless a build is
   genuinely broken. A cold build takes minutes.
 - Inserting or removing lines near the top of a big file (`src/engine.rs`,

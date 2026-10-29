@@ -86,6 +86,16 @@ opt-level = 3
 [profile.release]
 lto = "thin"
 
+# Build scripts and proc macros run optimised. The crate's build script
+# compiles every room script and takes about 30s unoptimised against 5s
+# optimised, and it runs again in every new worktree and after any change
+# under `games/re1/` or `src/scd/` (#266).
+[profile.dev.build-override]
+opt-level = 3
+
+[profile.release.build-override]
+opt-level = 3
+
 # The release-profile test build, and the one profile for every local test,
 # build and run (see AGENTS.md): release-speed code without the slow parts of
 # an optimised build. `lto = "off"` also turns off rustc's implicit thin-local
