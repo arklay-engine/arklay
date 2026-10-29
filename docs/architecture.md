@@ -590,9 +590,12 @@ These hold across every milestone and are the regression gate:
 - Fuzzing (nightly, separate package):
   `cd fuzz && cargo +nightly fuzz run <target> -- -max_total_time=300`.
   The stable compile gate is `cargo check --manifest-path fuzz/Cargo.toml`.
-- The mirror of the CI gate: `./scripts/check.sh` (add `--full` to include
-  every ignored test, the real-asset suite and the asset-gated unit tests,
-  when the asset variables are set; `--soak` adds the release soak).
+- The check tiers (`AGENTS.md`): `./scripts/check.sh` is the session tier
+  (fmt, clippy, the unit and fast integration tests in `test-release`, five
+  minutes cold) run once before pushing; `--ci` mirrors the Linux CI job;
+  `--full` adds every ignored test, the real-asset suite and the asset-gated
+  unit tests, when the asset variables are set; `--soak` adds the release
+  soak. `--full` and `--soak` are release-cycle checks.
 
 CI runs fmt, clippy `--all-targets --all-features -D warnings`, the debug and
 `test-release` tests, the `--no-default-features` check, the doc build and the
@@ -601,4 +604,4 @@ a `cargo check --all-features` MSRV job on 1.88.0. The soak never runs in CI:
 hosted runners have no game install, so it stays a release check on a machine
 with the assets. A scheduled, non-gating fuzz workflow runs each target for
 300 seconds, and the fuzz package's stable compile gate runs in CI and
-`scripts/check.sh`.
+`scripts/check.sh --ci`.

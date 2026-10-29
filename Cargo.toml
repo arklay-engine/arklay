@@ -86,13 +86,16 @@ opt-level = 3
 [profile.release]
 lto = "thin"
 
-# The release-profile test build: release-speed code without the thin LTO
-# link pass, which costs minutes and buys a test binary nothing. Incremental
-# compilation keeps the single-test edit loop at a few seconds (CI sets
-# CARGO_INCREMENTAL=0; it builds cold anyway). Used by `scripts/check.sh`, CI
-# and the documented test commands; shipped binaries keep `[profile.release]`.
+# The release-profile test build, and the one profile for every local test,
+# build and run (see AGENTS.md): release-speed code without the slow parts of
+# an optimised build. `lto = "off"` also turns off rustc's implicit thin-local
+# LTO across codegen units, which redid about 48s of LLVM work after a
+# one-line edit; 256 codegen units keep the units an edit invalidates small.
+# Incremental compilation keeps the single-test edit loop at seconds (CI sets
+# CARGO_INCREMENTAL=0; it builds cold anyway). Shipped binaries keep
+# `[profile.release]`.
 [profile.test-release]
 inherits = "release"
-lto = false
-codegen-units = 16
+lto = "off"
+codegen-units = 256
 incremental = true
