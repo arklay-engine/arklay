@@ -10,7 +10,8 @@
 # private mount namespace with the worktree bind-mounted at one fixed path,
 # and rewrites the worktree path to that fixed path in rustc's arguments and
 # OUT_DIR. Every worktree then hands rustc identical inputs, so a seeded
-# worktree's first build is incremental: about 20s instead of 100s.
+# worktree's first build is incremental: about 20s instead of 100s. It also
+# keeps line shifts from invalidating unchanged code (see below).
 #
 # Paths in rustc's output and dep-info files are rewritten back, so cargo only
 # ever sees the real ones. CARGO_MANIFEST_DIR is left alone, so tests that
@@ -61,6 +62,20 @@ for a in "$@"; do
     prev=$a
 done
 [[ -n "${OUT_DIR:-}" ]] && export OUT_DIR="$(swap "$OUT_DIR")"
+
+# rustc's incremental fingerprints include spans, so inserting one line near
+# the top of a big file recompiles every function below it, even though only
+# their line numbers moved: 48s instead of 9.5s for a line at the top of
+# src/game.rs. -Zincremental-ignore-spans (unstable, hence RUSTC_BOOTSTRAP)
+# leaves spans out. Compile errors still point at the right lines, but a
+# reused function keeps its old line numbers in panic messages and replayed
+# warnings, so a panic's line can be off by the lines inserted above it.
+# Clippy (the session check's lint step) is run without it, so its spans are
+# exact. ARKLAY_EXACT_SPANS=1 turns it off; switching rebuilds the crate once.
+if [[ "${1##*/}" == rustc && -z "${ARKLAY_EXACT_SPANS:-}" ]]; then
+    args+=(-Zincremental-ignore-spans)
+    export RUSTC_BOOTSTRAP=1
+fi
 
 mkdir -p "$mnt" 2>/dev/null
 [[ -d "$mnt" && -w "$mnt" ]] || exec "$@"
