@@ -18,7 +18,6 @@ hd = [
     "dep:image-webp",
     "dep:lewton",
     "dep:openh264",
-    "dep:png",
     "dep:symphonia-codec-aac",
     "dep:symphonia-core",
 ]
@@ -36,7 +35,8 @@ mlua = { version = "0.10", default-features = false, features = [
 # 0.9.5 and later depend on `wide` 1.x, which needs a newer rustc than our
 # MSRV.
 openh264 = { version = "=0.9.3", optional = true }
-png = { version = "0.18", optional = true }
+# Always built: screenshots are written as PNG. Decoding PNG art is `hd`.
+png = "0.18"
 # The room definitions (`room/<id>/room.xml`).
 roxmltree = { version = "0.21", default-features = false, features = ["std", "positions"] }
 serde = { version = "1", features = ["derive"] }
