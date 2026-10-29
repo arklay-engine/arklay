@@ -1,6 +1,5 @@
 # Pelivalikon ja asetusnäytön tekstit (katso src/gui/locale.rs).
 
-menu.title = "VALIKKO"
 menu.restart = "Aloita alusta"
 menu.load_game = "Lataa peli"
 menu.options = "Asetukset"

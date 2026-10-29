@@ -74,7 +74,7 @@ pub(super) fn call(ui: &mut Ui, uid: u64, event: &str, arg: Value) -> bool {
     if let Some(s) = ui.index_of(uid) {
         ui.screens[s].script = Some(script);
     }
-    ui.dirty = true;
+    ui.touch();
     match result {
         Ok(handled) => handled,
         Err(err) => {
@@ -146,7 +146,7 @@ fn node_op(
     if !ui.screens[s].tree.contains(node) {
         return Err(mlua::Error::runtime("the node was removed"));
     }
-    ui.dirty = true;
+    ui.touch();
     let mut arg = || args.pop_front().unwrap_or(mlua::Value::Nil);
     match op {
         "append" => {
@@ -160,7 +160,12 @@ fn node_op(
             }
             tree.append(node, child);
         }
-        "remove" => ui.screens[s].tree.remove(node),
+        "remove" => {
+            if node == ui.screens[s].root {
+                return Err(mlua::Error::runtime("cannot remove the screen's root"));
+            }
+            ui.screens[s].tree.remove(node);
+        }
         "clear" => {
             let tree = &mut ui.screens[s].tree;
             for child in tree[node].children.clone() {

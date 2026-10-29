@@ -1,6 +1,5 @@
 # ゲーム内メニューとオプション画面の文字列（src/gui/locale.rs を参照）。
 
-menu.title = "メニュー"
 menu.restart = "リスタート"
 menu.load_game = "ロード"
 menu.options = "オプション"

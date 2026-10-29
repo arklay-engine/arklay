@@ -1,7 +1,6 @@
 # The in-game menu and options screen strings (see src/gui/locale.rs).
 # `{}` is replaced by a value.
 
-menu.title = "MENU"
 menu.restart = "Restart"
 menu.load_game = "Load Game"
 menu.options = "Options"

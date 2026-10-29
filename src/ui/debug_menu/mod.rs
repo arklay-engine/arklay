@@ -11,7 +11,7 @@
 //! theme and input hints, and takes its input per presented frame as
 //! [`GuiEvent`]s (key repeat and the pointer included); each key is mapped
 //! onto one [`UiInput`] edge for the tools' state machines. Hovering a row
-//! or cell picks it, clicking activates it and the wheel scrolls the view.
+//! or cell picks it, clicking activates it and the wheel moves the cursor.
 //! F1 closes it from anywhere and reopening returns to
 //! the tool and cursors it was left on; the room browser also follows a room
 //! change made while the menu was closed. Edits that only touch [`GameState`]
@@ -211,6 +211,11 @@ pub struct DebugMenu {
     /// The pack's strings, kept from the first draw for the labels the
     /// screens show.
     text: Option<Text>,
+    /// Every flag's state when `debug.flags` was last published; the
+    /// groups are rebuilt only when one changes (or the strings do).
+    flag_values: Option<Vec<bool>>,
+    /// Where the PLAYER and CHEATS screens were left, by screen name.
+    cursors: std::collections::HashMap<String, usize>,
     view: View,
 }
 
@@ -232,6 +237,8 @@ impl DebugMenu {
             device: Device::Keyboard,
             ui,
             text: None,
+            flag_values: None,
+            cursors: Default::default(),
             view: View {
                 fonts: Fonts::new()
                     .map_err(|err| eprintln!("warning: debug menu fonts: {err:#}"))
@@ -263,10 +270,11 @@ impl DebugMenu {
         self.view.dirty = true;
         self.publish(game);
         if let Some(ui) = &mut self.ui {
-            if ui.is_empty()
-                && let Err(err) = ui.open("debug")
-            {
-                eprintln!("warning: debug menu: {err:#}");
+            if ui.is_empty() {
+                match ui.open("debug") {
+                    Ok(()) => ui.set_focus_index(self.main_cursor),
+                    Err(err) => eprintln!("warning: debug menu: {err:#}"),
+                }
             }
             ui.invalidate();
         }
@@ -312,6 +320,8 @@ impl DebugMenu {
         let tag = crate::language::resolve_tag(settings.language.as_deref());
         if self.locale.tag() != tag {
             self.locale = Locale::new(&tag);
+            // The flag states are named in the language.
+            self.flag_values = None;
         }
         if let Some(ui) = &mut self.ui {
             ui.set_locale(self.locale.clone());
@@ -484,9 +494,19 @@ impl DebugMenu {
             ),
         );
 
-        // FLAGS, while they can be reached.
+        // FLAGS, while they can be reached and when a flag changed.
         if matches!(ui.top(), Some("debug" | "debug_flags")) {
-            ui.set("debug.flags", self.flag_groups(game));
+            let values: Vec<bool> = GROUPS
+                .iter()
+                .flat_map(|group| {
+                    (0..usize::from(group.count))
+                        .map(|row| game.flag_test(group.bank, group.selector(row), false))
+                })
+                .collect();
+            if self.flag_values.as_ref() != Some(&values) {
+                ui.set("debug.flags", self.flag_groups(game));
+                self.flag_values = Some(values);
+            }
         }
         self.ui = Some(ui);
     }
@@ -655,7 +675,9 @@ impl DebugMenu {
     ) -> (Vec<DebugMenuEvent>, Vec<Sound>) {
         let mut out = Vec::new();
         let mut sounds = Vec::new();
-        self.publish(game);
+        if !events.is_empty() {
+            self.publish(game);
+        }
         for &event in events {
             if let GuiEvent::Key(_, device) = event {
                 self.device = device;
@@ -696,6 +718,7 @@ impl DebugMenu {
         let ui = self.ui.as_mut()?;
         let outputs = ui.handle(&[event]);
         let mut result = None;
+        let mut opened = Vec::new();
         for output in outputs {
             match output {
                 UiOutput::Sound(sound) => sounds.push(sound),
@@ -715,24 +738,49 @@ impl DebugMenu {
                 UiOutput::Changed { path, value } => {
                     apply_change(&path, value.as_int().unwrap_or(0), game);
                 }
-                UiOutput::Opened(_) | UiOutput::Closed(_) => {}
+                UiOutput::Opened(name) => opened.push(name),
+                UiOutput::Closed(_) => {}
             }
+        }
+        for name in opened {
+            self.restore(&name);
         }
         self.sync();
         self.publish(game);
         result
     }
 
+    /// Put a tool's screen, just opened, back on the cursor it was left on.
+    fn restore(&mut self, name: &str) {
+        let Some(ui) = &mut self.ui else {
+            return;
+        };
+        match name {
+            "debug" => ui.set_focus_index(self.main_cursor),
+            "debug_flags" => {
+                ui.set_tab_index(self.flags.group());
+                ui.set_focus_index(self.flags.row());
+            }
+            "debug_clear" => ui.set_focus_index(usize::from(self.ending.max(1) - 1)),
+            _ => {
+                if let Some(&index) = self.cursors.get(name) {
+                    ui.set_focus_index(index);
+                }
+            }
+        }
+    }
+
     /// Follow the screens: the open tool and the cursors the accessors
     /// report.
     fn sync(&mut self) {
-        let Some(ui) = &self.ui else {
-            return;
-        };
         if self.legacy() {
             return;
         }
-        self.tool = match ui.top() {
+        let Some(ui) = &mut self.ui else {
+            return;
+        };
+        let top = ui.top().map(str::to_string);
+        self.tool = match top.as_deref() {
             Some("debug_player") => Some(Tool::Player),
             Some("debug_flags") => Some(Tool::Flags),
             Some("debug_cheats") => Some(Tool::Cheats),
@@ -744,7 +792,7 @@ impl DebugMenu {
                 .as_int()
                 .and_then(|i| usize::try_from(i).ok())
         };
-        match ui.top() {
+        match top.as_deref() {
             Some("debug") => {
                 if let Some(i) = index("index") {
                     self.main_cursor = i.min(TOOLS.len() - 1);
@@ -752,11 +800,22 @@ impl DebugMenu {
             }
             Some("debug_flags") => {
                 let group = ui.tab_indices().first().copied().unwrap_or(0);
-                self.flags.sync(group, index("index").unwrap_or(0));
+                if group == self.flags.group() {
+                    self.flags.sync(group, index("index").unwrap_or(0));
+                } else {
+                    // Another group: back to the row it was left on.
+                    self.flags.sync(group, self.flags.row_in(group));
+                    ui.set_focus_index(self.flags.row());
+                }
             }
             Some("debug_clear") => {
                 if let Some(id) = index("lead") {
                     self.ending = id.clamp(1, 7) as u8;
+                }
+            }
+            Some(name @ ("debug_player" | "debug_cheats")) => {
+                if let Some(i) = ui.focus_index() {
+                    self.cursors.insert(name.to_string(), i);
                 }
             }
             _ => {}
@@ -799,18 +858,16 @@ impl DebugMenu {
                 Some(Hit::Key(key)) => Some(self.handle_input(key_input(key), game)),
                 None => None,
             },
-            GuiEvent::Wheel(notches) => {
-                // The wheel scrolls the view; the cursor stays put.
-                if notches != 0.0 {
-                    let rows = if notches > 0.0 { -1 } else { 1 };
-                    match self.tool {
-                        Some(Tool::Rooms) => self.rooms.scroll_by(rows),
-                        Some(Tool::Inventory) => self.inventory.scroll_by(rows),
-                        _ => {}
-                    }
-                }
-                None
+            // The wheel moves the cursor, as on every other screen.
+            GuiEvent::Wheel(notches) if notches != 0.0 => {
+                let key = if notches > 0.0 {
+                    GuiKey::Up
+                } else {
+                    GuiKey::Down
+                };
+                Some(self.handle_input(key_input(key), game))
             }
+            GuiEvent::Wheel(_) => None,
             GuiEvent::PointerMove { x, y } => {
                 // Hovering a row or cell picks it, as in the options.
                 if let Some(Hit::Item(index) | Hit::Decrease(index) | Hit::Increase(index)) =
@@ -897,10 +954,8 @@ impl DebugMenu {
     ) -> bool {
         if self.text.is_none() {
             self.text = Some(text.clone());
-            if let Some(ui) = &mut self.ui {
-                // The flags take their names from the strings too.
-                ui.set("debug.flags", Value::Nil);
-            }
+            // The flags take their names from the strings too.
+            self.flag_values = None;
         }
         if !self.legacy() && self.ui.is_some() {
             self.publish(game);

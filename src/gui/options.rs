@@ -1,10 +1,9 @@
-//! The options model: a flat list of option definitions the options screen
-//! groups into categories, subcategories and groups by their names.
+//! The options model: one definition per setting, which the options screen
+//! (`assets/ui/options.xml`) places by id.
 //!
-//! The model is data, not code: the engine contributes its settings as
-//! [`OptionDef`]s ([`crate::gui::settings`]) and anything else (a mod's own
-//! options, later) appends more, and the screen lays out whatever it is
-//! given. A value is an `i32`: a choice's index or a slider's position.
+//! The engine contributes its settings as [`OptionDef`]s
+//! ([`crate::gui::settings`]). A value is an `i32`: a choice's index or a
+//! slider's position.
 
 /// One choice of an enumerated option.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,9 +53,6 @@ pub enum OptionKind {
 pub struct OptionDef {
     /// A stable key the owner maps back to its setting.
     pub id: String,
-    pub category: String,
-    pub subcategory: String,
-    pub group: String,
     pub label: String,
     pub description: String,
     pub kind: OptionKind,
@@ -96,70 +92,15 @@ impl OptionDef {
             OptionKind::Link | OptionKind::Info => String::new(),
         }
     }
-
-    /// The number of distinct positions.
-    pub fn positions(&self) -> usize {
-        match &self.kind {
-            OptionKind::Choice(choices) => choices.len(),
-            OptionKind::Slider { min, max, step, .. } => ((max - min) / step.max(&1)) as usize + 1,
-            OptionKind::Link | OptionKind::Info => 1,
-        }
-    }
-}
-
-/// The tree the screen shows, built from the flat list in first-seen order.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Category {
-    pub name: String,
-    pub subcategories: Vec<Subcategory>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Subcategory {
-    pub name: String,
-    /// Indices into the option list, in order.
-    pub options: Vec<usize>,
-}
-
-/// Group `defs` by category and subcategory, keeping first-seen order.
-pub fn tree(defs: &[OptionDef]) -> Vec<Category> {
-    let mut categories: Vec<Category> = Vec::new();
-    for (index, def) in defs.iter().enumerate() {
-        let category = match categories.iter_mut().position(|c| c.name == def.category) {
-            Some(position) => &mut categories[position],
-            None => {
-                categories.push(Category {
-                    name: def.category.clone(),
-                    subcategories: Vec::new(),
-                });
-                categories.last_mut().unwrap()
-            }
-        };
-        match category
-            .subcategories
-            .iter_mut()
-            .find(|s| s.name == def.subcategory)
-        {
-            Some(sub) => sub.options.push(index),
-            None => category.subcategories.push(Subcategory {
-                name: def.subcategory.clone(),
-                options: vec![index],
-            }),
-        }
-    }
-    categories
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn def(category: &str, sub: &str, id: &str) -> OptionDef {
+    fn def(id: &str) -> OptionDef {
         OptionDef {
             id: id.into(),
-            category: category.into(),
-            subcategory: sub.into(),
-            group: String::new(),
             label: id.into(),
             description: String::new(),
             kind: OptionKind::Slider {
@@ -174,26 +115,10 @@ mod tests {
     }
 
     #[test]
-    fn tree_keeps_first_seen_order() {
-        let defs = [
-            def("A", "x", "1"),
-            def("B", "y", "2"),
-            def("A", "z", "3"),
-            def("A", "x", "4"),
-        ];
-        let tree = tree(&defs);
-        assert_eq!(tree.len(), 2);
-        assert_eq!(tree[0].subcategories[0].options, vec![0, 3]);
-        assert_eq!(tree[0].subcategories[1].options, vec![2]);
-        assert_eq!(tree[1].subcategories[0].options, vec![1]);
-    }
-
-    #[test]
     fn slider_steps_and_clamps() {
-        let option = def("A", "x", "1");
+        let option = def("1");
         assert_eq!(option.step(4, 1), 6);
         assert_eq!(option.step(10, 1), 10);
         assert_eq!(option.step(0, -1), 0);
-        assert_eq!(option.positions(), 6);
     }
 }

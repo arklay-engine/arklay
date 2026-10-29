@@ -221,7 +221,6 @@ impl From<String> for Value {
 #[derive(Debug, Default)]
 pub struct Store {
     values: BTreeMap<String, Value>,
-    revision: u64,
 }
 
 impl Store {
@@ -247,9 +246,7 @@ impl Store {
         let mut end = path.len();
         while let Some(dot) = path[..end].rfind('.') {
             if let Some(table) = self.values.get_mut(&path[..dot]) {
-                let changed = table.set_at(&path[dot + 1..], value);
-                self.revision += u64::from(changed);
-                return changed;
+                return table.set_at(&path[dot + 1..], value);
             }
             end = dot;
         }
@@ -257,13 +254,7 @@ impl Store {
             return false;
         }
         self.values.insert(path.to_string(), value);
-        self.revision += 1;
         true
-    }
-
-    /// Bumps whenever a value changes.
-    pub fn revision(&self) -> u64 {
-        self.revision
     }
 }
 
@@ -280,10 +271,8 @@ mod tests {
         );
         assert_eq!(store.get("saves.rows.0.tag"), Value::from("01"));
         assert_eq!(store.get("saves.rows.1.tag"), Value::Nil);
-        let revision = store.revision();
         assert!(store.set("saves.rows.0.tag", Value::from("02")));
         assert!(!store.set("saves.rows.0.tag", Value::from("02")));
-        assert_eq!(store.revision(), revision + 1);
         assert_eq!(store.get("saves.rows.0.tag"), Value::from("02"));
     }
 

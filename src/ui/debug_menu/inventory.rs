@@ -185,15 +185,6 @@ impl InventoryEditor {
         self.slot = self.slot.min(capacity.saturating_sub(1));
     }
 
-    /// Scroll the slots, or the open picker, by `rows` without moving the
-    /// cursor.
-    pub(super) fn scroll_by(&mut self, rows: isize) {
-        match self.picker.as_mut() {
-            Some(picker) => picker.scroll.by(rows),
-            None => self.scroll.by(rows),
-        }
-    }
-
     /// Put the cursor on pointer target `index`: a picker cell or a slot.
     pub(super) fn point(&mut self, index: usize, game: &GameState) {
         match self.picker.as_mut() {
@@ -218,10 +209,8 @@ impl InventoryEditor {
                 self.picker = None;
                 // The cursor follows the item to the slot it landed in.
                 self.slot = assign(game, self.slot, item);
-                self.scroll.follow();
             } else if let Some(cell) = grid_step(picker.cell, PICKER_CELLS, picker.columns, input) {
                 picker.cell = cell;
-                picker.scroll.follow();
             }
             return Step::Stay;
         }
@@ -240,7 +229,6 @@ impl InventoryEditor {
             } else {
                 self.slot += 1;
             }
-            self.scroll.follow();
         } else if self.on_size {
             step_size(game, input);
             self.slot = self.slot.min(game.inventory_capacity() - 1);

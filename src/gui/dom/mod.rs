@@ -102,6 +102,9 @@ struct Screen {
 }
 
 /// The screen stack and everything it draws with.
+/// The most screens open at once.
+const MAX_SCREENS: usize = 16;
+
 pub struct Ui {
     library: Library,
     store: Store,
@@ -116,7 +119,10 @@ pub struct Ui {
     /// The size the screens are laid out at.
     size: (u32, u32),
     outputs: Vec<UiOutput>,
+    /// Something shown changed: repaint on the next draw.
     dirty: bool,
+    /// Something changed since the last evaluation and layout.
+    stale: bool,
     next_uid: u64,
 }
 
@@ -136,12 +142,9 @@ impl Ui {
             size: (1920, 1080),
             outputs: Vec::new(),
             dirty: true,
+            stale: true,
             next_uid: 1,
         })
-    }
-
-    pub fn library_mut(&mut self) -> &mut Library {
-        &mut self.library
     }
 
     /// The store value at `path`.
@@ -152,7 +155,7 @@ impl Ui {
     /// Publish `value` at `path`.
     pub fn set(&mut self, path: &str, value: impl Into<Value>) {
         if self.store.set(path, value.into()) {
-            self.dirty = true;
+            self.touch();
         }
     }
 
@@ -163,7 +166,7 @@ impl Ui {
     pub fn set_locale(&mut self, locale: Locale) {
         if locale.tag() != self.locale.tag() {
             self.locale = locale;
-            self.dirty = true;
+            self.touch();
         }
     }
 
@@ -173,7 +176,7 @@ impl Ui {
             self.family = family;
             self.text_scale = text_scale;
             self.fonts.clear_cache();
-            self.dirty = true;
+            self.touch();
         }
     }
 
@@ -181,7 +184,7 @@ impl Ui {
     pub fn set_device(&mut self, device: Device) {
         if device != self.device {
             self.device = device;
-            self.dirty = true;
+            self.touch();
         }
     }
 
@@ -192,12 +195,12 @@ impl Ui {
     /// Paint `<name>` elements with `custom`.
     pub fn register(&mut self, name: &str, custom: Box<dyn Custom>) {
         self.customs.insert(name.to_string(), custom);
-        self.dirty = true;
+        self.touch();
     }
 
     /// Repaint on the next draw.
     pub fn invalidate(&mut self) {
-        self.dirty = true;
+        self.touch();
     }
 
     /// The open screens' names, bottom first.
@@ -225,6 +228,10 @@ impl Ui {
 
     /// Open the screen `name` on top.
     pub fn open(&mut self, name: &str) -> Result<()> {
+        // A script opening screens from `on_open` must not recurse forever.
+        if self.screens.len() >= MAX_SCREENS {
+            bail!("{name}: {MAX_SCREENS} screens are already open");
+        }
         let Some(el) = self.library.screen(name).cloned() else {
             bail!("no screen named {name:?}");
         };
@@ -263,7 +270,7 @@ impl Ui {
             capture: None,
             script,
         });
-        self.dirty = true;
+        self.touch();
         self.refresh();
         if has_script {
             lua::call(self, uid, "open", Value::Nil);
@@ -275,7 +282,7 @@ impl Ui {
     /// Close the top screen.
     pub fn close(&mut self) {
         if let Some(screen) = self.screens.pop() {
-            self.dirty = true;
+            self.touch();
             self.outputs.push(UiOutput::Closed(screen.name));
         }
     }
@@ -283,7 +290,7 @@ impl Ui {
     /// Close every screen.
     pub fn clear(&mut self) {
         self.screens.clear();
-        self.dirty = true;
+        self.touch();
     }
 
     fn index_of(&self, uid: u64) -> Option<usize> {
@@ -302,8 +309,17 @@ impl Ui {
     // ---- bindings and layout ------------------------------------------
 
     /// Evaluate every binding of the drawn screens and lay them out.
+    /// Mark the screens changed: evaluate and lay them out again before
+    /// the next input or draw, and repaint.
+    pub(super) fn touch(&mut self) {
+        self.dirty = true;
+        self.stale = true;
+    }
+
+    /// Evaluate, lay out and settle the focus of every drawn screen, when
+    /// anything changed since the last time.
     fn refresh(&mut self) {
-        if self.screens.is_empty() {
+        if !std::mem::take(&mut self.stale) || self.screens.is_empty() {
             return;
         }
         for s in self.base()..self.screens.len() {
@@ -436,7 +452,7 @@ impl Ui {
                 break;
             }
             if !matches!(event, GuiEvent::PointerMove { .. }) {
-                self.dirty = true;
+                self.touch();
             }
             match event {
                 GuiEvent::Key(key, device) => {
@@ -640,7 +656,7 @@ impl Ui {
             self.screens[s].tree[id]
                 .props
                 .insert("value".into(), value.clone());
-            self.dirty = true;
+            self.touch();
             self.outputs.push(UiOutput::Changed { path, value });
         }
     }
@@ -675,6 +691,9 @@ impl Ui {
     /// Move the focus `step` places, stopping at the ends.
     fn move_focus_clamped(&mut self, s: usize, container: NodeId, step: isize) -> bool {
         let items = self.focusables(s, container);
+        if items.is_empty() {
+            return false;
+        }
         let at = self.screens[s]
             .focus
             .and_then(|f| items.iter().position(|&i| i == f))
@@ -693,7 +712,7 @@ impl Ui {
             return false;
         }
         screen.focus = Some(id);
-        self.dirty = true;
+        self.touch();
         if sound {
             self.outputs.push(UiOutput::Sound(Sound::Cursor));
         }
@@ -707,10 +726,10 @@ impl Ui {
         }
         let index = self.screens[s].tree[tabs].index as isize;
         let next = (index + step).rem_euclid(count as isize) as usize;
-        self.select_tab(s, tabs, next)
+        self.select_tab(s, tabs, next, true)
     }
 
-    fn select_tab(&mut self, s: usize, tabs: NodeId, index: usize) -> bool {
+    fn select_tab(&mut self, s: usize, tabs: NodeId, index: usize, sound: bool) -> bool {
         let screen = &mut self.screens[s];
         let tree = &mut screen.tree;
         let list = layout::tabs_of(tree, tabs);
@@ -727,8 +746,10 @@ impl Ui {
         tree[tabs].index = index;
         screen.focus = None;
         screen.capture = None;
-        self.dirty = true;
-        self.outputs.push(UiOutput::Sound(Sound::Cursor));
+        self.touch();
+        if sound {
+            self.outputs.push(UiOutput::Sound(Sound::Cursor));
+        }
         true
     }
 
@@ -771,7 +792,7 @@ impl Ui {
         if let Some(&id) = self.hit(x, y).iter().find(|&&id| focusable(tree, id))
             && self.focus(s, id, false)
         {
-            self.dirty = true;
+            self.touch();
         }
     }
 
@@ -793,7 +814,7 @@ impl Ui {
             match part {
                 Part::Key(key) => self.key(key),
                 Part::Tab(index) => {
-                    self.select_tab(s, id, index);
+                    self.select_tab(s, id, index, true);
                 }
                 Part::TabPrev => {
                     self.step_tab(s, id, -1);
@@ -846,7 +867,7 @@ impl Ui {
         let step = node.prop("step").as_int().unwrap_or(1).max(1);
         let fraction = ((x - left) / (right - left).max(1.0)).clamp(0.0, 1.0);
         let steps = ((max - min) as f32 / step as f32 * fraction).round() as i64;
-        let value = min + steps * step;
+        let value = (min + steps * step).clamp(min, max.max(min));
         if node.prop("value").as_int() != Some(value) {
             self.write_value(s, id, value);
         }
@@ -912,7 +933,7 @@ impl Ui {
             "dialog" if self.screens[s].modal => {
                 let pending = self.screens[s].pending.take();
                 self.screens.truncate(s);
-                self.dirty = true;
+                self.touch();
                 match (arg, pending) {
                     (Some("yes"), Some((uid, owner, action))) => self.execute(uid, owner, &action),
                     _ => self.outputs.push(UiOutput::Sound(Sound::Cancel)),
@@ -938,7 +959,7 @@ impl Ui {
                 });
             }
         }
-        self.dirty = true;
+        self.touch();
     }
 
     /// Reset the option rows under `owner` (only its shown tab, when it is
@@ -1039,7 +1060,7 @@ impl Ui {
         if resized {
             self.fonts.clear_cache();
             self.size = (width, height);
-            self.dirty = true;
+            self.touch();
         }
         if !self.dirty {
             return false;
@@ -1116,6 +1137,58 @@ impl Ui {
             .collect()
     }
 
+    /// The focused node's position among the top screen's focusable nodes,
+    /// in document order.
+    pub fn focus_index(&mut self) -> Option<usize> {
+        self.refresh();
+        let screen = self.screens.last()?;
+        let focus = screen.focus?;
+        let tree = &screen.tree;
+        tree.descendants(screen.root)
+            .into_iter()
+            .filter(|&id| focusable(tree, id))
+            .position(|id| id == focus)
+    }
+
+    /// Quietly focus the top screen's `index`th focusable node (the last
+    /// when there are fewer), to restore a cursor [`Self::focus_index`]
+    /// reported.
+    pub fn set_focus_index(&mut self, index: usize) {
+        self.refresh();
+        let Some(s) = self.screens.len().checked_sub(1) else {
+            return;
+        };
+        let screen = &self.screens[s];
+        let tree = &screen.tree;
+        let nodes: Vec<NodeId> = tree
+            .descendants(screen.root)
+            .into_iter()
+            .filter(|&id| focusable(tree, id))
+            .collect();
+        if let Some(&id) = nodes.get(index).or(nodes.last()) {
+            self.focus(s, id, false);
+            self.refresh();
+        }
+    }
+
+    /// Quietly select tab `index` of the top screen's outermost tab strip.
+    pub fn set_tab_index(&mut self, index: usize) {
+        self.refresh();
+        let Some(s) = self.screens.len().checked_sub(1) else {
+            return;
+        };
+        let screen = &self.screens[s];
+        let tree = &screen.tree;
+        if let Some(tabs) = tree
+            .descendants(screen.root)
+            .into_iter()
+            .find(|&id| tree[id].kind == Kind::Tabs && tree[id].shown)
+        {
+            self.select_tab(s, tabs, index, false);
+            self.refresh();
+        }
+    }
+
     /// The hints the top screen shows.
     pub fn shown_hints(&self) -> Vec<(GuiKey, String)> {
         if self.screens.is_empty() {
@@ -1142,15 +1215,8 @@ impl Node {
 
 /// Whether `id` can take the focus now.
 fn focusable(tree: &Tree, id: NodeId) -> bool {
-    tree.get(id).is_some_and(|n| {
-        n.kind.focusable()
-            && n.shown
-            && layout::present(tree, id)
-            && match n.kind {
-                Kind::Option(OptionKind::Info) => true,
-                _ => true,
-            }
-    })
+    tree.get(id)
+        .is_some_and(|n| n.kind.focusable() && n.shown && layout::present(tree, id))
 }
 
 /// A node's `confirm`/`note`/`confirm-if` attributes, when it should ask.

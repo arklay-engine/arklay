@@ -156,18 +156,7 @@ impl SystemMenu {
             keys.screen.set_bindings(self.settings.bindings.clone());
             keys.dirty = true;
         }
-        let style = match (device, self.settings.game.button_style) {
-            (Device::Gamepad(style), _) => style,
-            (Device::Keyboard, style) => style.unwrap_or_default(),
-        };
-        self.ui.register(
-            "pad-diagram",
-            Box::new(PadPaint {
-                style,
-                bindings: self.settings.bindings.clone(),
-                text: self.text.clone(),
-            }),
-        );
+        self.register_pad();
         let specs = self.specs();
         for def in settings::defs(&self.settings, &self.text) {
             let value = settings::value(&def.id, &self.settings);
@@ -351,6 +340,22 @@ impl SystemMenu {
 
     /// The device the hints draw for: a controller shows the configured
     /// button style, or its own when that is automatic.
+    /// Paint the controller page's diagram for the pad shown.
+    fn register_pad(&mut self) {
+        let style = match (self.shown_device(), self.settings.game.button_style) {
+            (Device::Gamepad(style), _) => style,
+            (Device::Keyboard, style) => style.unwrap_or_default(),
+        };
+        self.ui.register(
+            "pad-diagram",
+            Box::new(PadPaint {
+                style,
+                bindings: self.settings.bindings.clone(),
+                text: self.text.clone(),
+            }),
+        );
+    }
+
     fn shown_device(&self) -> Device {
         match (self.device, self.settings.game.button_style) {
             (Device::Gamepad(_), Some(style)) => Device::Gamepad(style),
@@ -364,7 +369,12 @@ impl SystemMenu {
         for &event in events {
             let event = match event {
                 GuiEvent::Key(key, device) => {
+                    let before = self.shown_device();
                     self.device = device;
+                    if self.shown_device() != before {
+                        // The diagram follows the pad in hand.
+                        self.register_pad();
+                    }
                     GuiEvent::Key(key, self.shown_device())
                 }
                 other => other,
@@ -379,14 +389,21 @@ impl SystemMenu {
             if self.ui.is_empty() {
                 break;
             }
+            let mut changed = false;
             for output in self.ui.handle(&[event]) {
-                self.output(output, &mut requests);
+                changed |= self.output(output, &mut requests);
+            }
+            if changed {
+                // One request and one refresh for a whole reset.
+                requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
+                self.refresh_options();
             }
         }
         requests
     }
 
-    fn output(&mut self, output: UiOutput, requests: &mut Vec<MenuRequest>) {
+    /// Act on one output; returns whether it changed a setting.
+    fn output(&mut self, output: UiOutput, requests: &mut Vec<MenuRequest>) -> bool {
         match output {
             UiOutput::Sound(sound) => {
                 if self.settings.game.menu_volume > 0 {
@@ -411,12 +428,12 @@ impl SystemMenu {
                     .and_then(|p| p.strip_suffix(".value"));
                 if let (Some(id), Some(value)) = (id, value.as_int()) {
                     settings::apply(id, value as i32, &mut self.settings);
-                    requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
-                    self.refresh_options();
+                    return true;
                 }
             }
             UiOutput::Opened(_) | UiOutput::Closed(_) => {}
         }
+        false
     }
 
     /// Draw the menu at `width` x `height` pixels into [`Self::canvas`],

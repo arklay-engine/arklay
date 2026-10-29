@@ -192,7 +192,6 @@ impl RoomSelect {
         {
             self.stage = stage;
             self.cells[stage] = cell;
-            self.scroll[stage].follow();
         }
     }
 
@@ -206,11 +205,6 @@ impl RoomSelect {
     /// Show stage tab `stage`.
     pub(super) fn set_stage(&mut self, stage: usize) {
         self.stage = stage.min(self.stages.len() - 1);
-    }
-
-    /// Scroll the grid by `rows` without moving the cursor.
-    pub(super) fn scroll_by(&mut self, rows: isize) {
-        self.scroll[self.stage].by(rows);
     }
 
     /// One input edge: the jump target in `character`'s variant on confirm.
@@ -237,7 +231,6 @@ impl RoomSelect {
         let cell = &mut self.cells[self.stage];
         if let Some(next) = grid_step(*cell, count, self.columns, input) {
             *cell = next;
-            self.scroll[self.stage].follow();
         }
         Step::Stay
     }

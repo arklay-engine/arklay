@@ -357,15 +357,6 @@ impl Tree {
         self[parent].children.push(child);
     }
 
-    /// Attach `child` before the `at`th child of `parent`.
-    pub fn insert_at(&mut self, parent: NodeId, at: usize, child: NodeId) {
-        self.detach(child);
-        self[child].parent = Some(parent);
-        let children = &mut self[parent].children;
-        let at = at.min(children.len());
-        children.insert(at, child);
-    }
-
     fn detach(&mut self, id: NodeId) {
         if let Some(parent) = self[id].parent.take()
             && let Some(node) = self.get_mut(parent)

@@ -1,6 +1,5 @@
 # Textos del menú de juego y de la pantalla de opciones (ver src/gui/locale.rs).
 
-menu.title = "MENÚ"
 menu.restart = "Reiniciar"
 menu.load_game = "Cargar partida"
 menu.options = "Opciones"

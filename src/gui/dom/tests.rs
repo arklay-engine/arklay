@@ -281,3 +281,24 @@ fn breadcrumbs_and_modals_draw_over_the_screen_below() {
     assert_eq!(ui.screens(), ["menu", "options", "dialog"]);
     assert!(ui.draw(640, 360));
 }
+
+#[test]
+fn a_script_cannot_remove_the_root_or_open_screens_forever() {
+    let screen = r#"<screen use="standard-screen" title="Lua" script="bad.lua"/>"#;
+    let mut library = library(&[
+        ("test", screen),
+        ("again", r#"<screen script="again.lua"/>"#),
+    ]);
+    library.add_script(
+        "bad.lua",
+        "function on_open(ui) ui:find('frame'):remove() end",
+    );
+    library.add_script("again.lua", "function on_open(ui) ui:open('again') end");
+    let mut ui = Ui::new(library).unwrap();
+    ui.open("test").unwrap();
+    assert!(ui.is_empty(), "the failing script closed its screen");
+    ui.draw(640, 360);
+    ui.open("again").unwrap();
+    assert!(ui.screens().len() <= MAX_SCREENS);
+    ui.draw(640, 360);
+}

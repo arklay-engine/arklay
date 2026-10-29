@@ -21,21 +21,11 @@ const VALUE_RIGHT: f32 = 0.965;
 /// The leading column (a slot number, a flag selector) and its gap.
 const LEAD_W: f32 = 64.0;
 
-/// A scrolled view's first shown row. It keeps the cursor in view until the
-/// wheel scrolls it, and stops at either end.
-#[derive(Debug, Clone, Copy)]
+/// A scrolled view's first shown row. It keeps the cursor in view and
+/// stops at either end.
+#[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Scroll {
     top: usize,
-    follow: bool,
-}
-
-impl Default for Scroll {
-    fn default() -> Self {
-        Self {
-            top: 0,
-            follow: true,
-        }
-    }
 }
 
 impl Scroll {
@@ -44,27 +34,14 @@ impl Scroll {
         self.top
     }
 
-    /// Bring the cursor back into view on the next layout.
-    pub fn follow(&mut self) {
-        self.follow = true;
-    }
-
-    /// Scroll by `rows` and leave the cursor where it is.
-    pub fn by(&mut self, rows: isize) {
-        self.top = self.top.saturating_add_signed(rows);
-        self.follow = false;
-    }
-
     /// Lay out `total` rows of which `visible` fit, the cursor on row
     /// `cursor`; returns the first shown row.
     pub fn layout(&mut self, cursor: usize, visible: usize, total: usize) -> usize {
         let visible = visible.max(1);
-        if self.follow {
-            if cursor < self.top {
-                self.top = cursor;
-            } else if cursor >= self.top + visible {
-                self.top = cursor + 1 - visible;
-            }
+        if cursor < self.top {
+            self.top = cursor;
+        } else if cursor >= self.top + visible {
+            self.top = cursor + 1 - visible;
         }
         self.top = self.top.min(total.saturating_sub(visible));
         self.top

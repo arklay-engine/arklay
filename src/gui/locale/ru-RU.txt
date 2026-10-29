@@ -1,6 +1,5 @@
 # Строки игрового меню и экрана настроек (см. src/gui/locale.rs).
 
-menu.title = "МЕНЮ"
 menu.restart = "Начать заново"
 menu.load_game = "Загрузить игру"
 menu.options = "Настройки"

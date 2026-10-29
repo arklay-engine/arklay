@@ -333,6 +333,11 @@ impl FlagEditor {
         (group, group.selector(self.row()))
     }
 
+    /// The row group `group` was left on.
+    pub(super) fn row_in(&self, group: usize) -> usize {
+        self.rows[group.min(GROUPS.len() - 1)]
+    }
+
     /// Follow the screen's cursor: group tab `group`, row `row`.
     pub(super) fn sync(&mut self, group: usize, row: usize) {
         self.group = group.min(GROUPS.len() - 1);
