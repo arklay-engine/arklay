@@ -32,7 +32,8 @@
 //! `room.rdt`, which the engine still loads. An enemy texture is written as
 //! an indexed BMP page plus a palette swatch per further CLUT row
 //! ([`emd2::texture_bmps`]). Music tracks are numbered as RE1's are
-//! ([`bgm_track`]).
+//! ([`bgm_track`]). Each room's English name comes from Classic REbirth's
+//! debug room table in the install's `ddraw.dll` ([`room_names`]).
 //!
 //! The six `Pdemo**p.dat` files are deliberately not packed: they are
 //! alternate takes of the six reels (three byte-identical, three differing
@@ -66,6 +67,17 @@ const CUTS_PER_ROOM: usize = 16;
 
 /// Room slots per stage in the `roomcut.bin` pointer table.
 const ROOMS_PER_STAGE: usize = 32;
+
+/// Classic REbirth's debug room-name table in `ddraw.dll`: 30 slots per
+/// stage for stages 1-7, each a 24-byte record of a flag word, a 32-bit
+/// value and a space-padded, NUL-terminated 17-character name; an unused
+/// slot is all zeros.
+const NAME_STAGES: usize = 7;
+const NAME_SLOTS_PER_STAGE: usize = 30;
+const NAME_RECORD: usize = 24;
+const NAME_OFFSET: usize = 6;
+/// The table's first record's name (room 100), which locates the table.
+const FIRST_ROOM_NAME: &[u8] = b"BACKSTREET A     \0";
 
 /// Phases [`convert`] reports: scan, room, cut, enemy, player, voice, bgm,
 /// door, movie, demo, manifest, compress, write.
@@ -307,6 +319,58 @@ impl Tally {
     }
 }
 
+/// The English room names in Classic REbirth's `ddraw.dll` beside the
+/// install, keyed by ([`Re2Room::stage_group`], room); empty, with a
+/// warning, when there is no DLL or it holds no table this reader knows.
+fn find_room_names(
+    root: &Path,
+    data: &Path,
+    warnings: &mut Vec<String>,
+) -> BTreeMap<(usize, u8), String> {
+    // The DLL sits beside the executable, at or above the data directory.
+    let dll = data
+        .ancestors()
+        .take_while(|dir| dir.starts_with(root))
+        .find_map(|dir| child(dir, "ddraw.dll"));
+    let names = dll
+        .as_ref()
+        .and_then(|dll| fs::read(dll).ok())
+        .and_then(|bytes| room_names(&bytes));
+    names.unwrap_or_else(|| {
+        warnings.push(match dll {
+            Some(dll) => format!("{}: no room-name table; rooms are unnamed", dll.display()),
+            None => "no Classic REbirth ddraw.dll; rooms are unnamed".to_owned(),
+        });
+        BTreeMap::new()
+    })
+}
+
+/// The room names in Classic REbirth's debug room table in `dll`, keyed by
+/// (zero-based stage, room), trailing spaces trimmed; `None` when the table
+/// is missing or not laid out as expected.
+pub fn room_names(dll: &[u8]) -> Option<BTreeMap<(usize, u8), String>> {
+    let start = dll
+        .windows(FIRST_ROOM_NAME.len())
+        .position(|window| window == FIRST_ROOM_NAME)?
+        .checked_sub(NAME_OFFSET)?;
+    let table = dll.get(start..start + NAME_STAGES * NAME_SLOTS_PER_STAGE * NAME_RECORD)?;
+    let mut names = BTreeMap::new();
+    for (slot, record) in table.as_chunks::<NAME_RECORD>().0.iter().enumerate() {
+        let name = &record[NAME_OFFSET..];
+        if name.iter().all(|&byte| byte == 0) {
+            continue;
+        }
+        let (&nul, text) = name.split_last()?;
+        if nul != 0 || !text.iter().all(|byte| (b' '..=b'~').contains(byte)) {
+            return None;
+        }
+        let text = std::str::from_utf8(text).ok()?.trim_end();
+        let room = u8::try_from(slot % NAME_SLOTS_PER_STAGE).ok()?;
+        names.insert((slot / NAME_SLOTS_PER_STAGE, room), text.to_owned());
+    }
+    Some(names)
+}
+
 /// Convert the RE2 install at or under `root` into the pack `out`.
 pub(crate) fn convert(
     root: &Path,
@@ -334,6 +398,7 @@ pub(crate) fn convert(
         ));
     }
     let rooms = scan_rooms(&layout, &mut warnings)?;
+    let names = find_room_names(root, &layout.data, &mut warnings);
     progress.advance("scan");
     progress.end_phase();
 
@@ -346,11 +411,14 @@ pub(crate) fn convert(
         let id = RoomId::parse(&folder)?;
         // A room the XML cannot carry exactly stays a raw RDT, which the
         // engine still loads.
-        let files =
-            crate::room::convert_rdt2(&room.bytes, id, Vec::new()).unwrap_or_else(|error| {
-                warnings.push(format!("{}: kept as an RDT: {error:#}", id.rdt_entry()));
-                vec![(id.rdt_entry(), room.bytes.clone())]
-            });
+        let strings = names
+            .get(&(room.id.stage_group(), room.id.room))
+            .map(|name| vec![("en-US".to_owned(), "name".to_owned(), name.clone())])
+            .unwrap_or_default();
+        let files = crate::room::convert_rdt2(&room.bytes, id, strings).unwrap_or_else(|error| {
+            warnings.push(format!("{}: kept as an RDT: {error:#}", id.rdt_entry()));
+            vec![(id.rdt_entry(), room.bytes.clone())]
+        });
         for (entry, data) in files {
             tally.add(&mut writer, "room", &entry, data)?;
         }

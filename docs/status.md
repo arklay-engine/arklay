@@ -905,7 +905,10 @@ per further CLUT row (a 256-entry BMP palette holds one row; the 118 retail
 textures read back exactly), and each BGM a numbered `bgm/<id:03x>.wav`
 (`main<nn>` is `0nn`, `sub<nn>` `1nn`, a `_<k>` alternate take adds
 `0x200 * k`). Room names moved out of the language files into each
-`room.xml`'s `<strings>` (RE1's from `games/re1/room/names.xml`), and a
+`room.xml`'s `<strings>` (RE1's from `games/re1/room/names.xml`, RE2's
+English names from the debug room table in the install's Classic REbirth
+`ddraw.dll`, 30 slots of 24 bytes per stage; 500 of 501 rooms are named,
+707 has no slot), and a
 non-RE1 pack takes only the `UI_` strings from the built-in RE1 language
 files, so RE2 rooms no longer show RE1 names.
 

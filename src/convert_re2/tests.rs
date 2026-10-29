@@ -73,10 +73,31 @@ fn roomcut(groups: &[(usize, u8, usize)]) -> (Vec<u8>, usize) {
     (bin, at)
 }
 
+/// A Classic REbirth `ddraw.dll` stand-in holding a room-name table that
+/// names `rooms` ((stage group, room, name)), behind some other bytes.
+pub(crate) fn ddraw(rooms: &[(usize, u8, &str)]) -> Vec<u8> {
+    let mut dll = b"MZ other strings ".to_vec();
+    let start = dll.len();
+    dll.resize(start + NAME_STAGES * NAME_SLOTS_PER_STAGE * NAME_RECORD, 0);
+    let mut put = |group: usize, room: u8, name: &str| {
+        let at = start + (group * NAME_SLOTS_PER_STAGE + usize::from(room)) * NAME_RECORD;
+        dll[at..at + 6].copy_from_slice(&[1, 0, 0x72, 0x49, 0xA4, 0xF3]);
+        dll[at + NAME_OFFSET..at + NAME_RECORD - 1]
+            .copy_from_slice(format!("{name:<17}").as_bytes());
+    };
+    put(0, 0, "BACKSTREET A");
+    for &(group, room, name) in rooms {
+        put(group, room, name);
+    }
+    dll.extend(b"Speed x");
+    dll
+}
+
 /// A small RE2 install with every category, mixing name cases the way the
 /// retail tree does.
 fn make_install(root: &Path) {
     let data = root.join("data");
+    write(&root.join("DDRAW.DLL"), &ddraw(&[(1, 0, "HALL")]));
     write(&data.join("Pl0/Rdt/ROOM1000.RDT"), &rdt(2));
     write(&data.join("Pl1/Rdt/room1001.rdt"), &rdt(2));
     write(&data.join("Pl0/Rdt/ROOMA010.RDT"), &rdt(1));
@@ -212,10 +233,21 @@ fn converts_every_category() {
     // Rooms, both discs and the letter stage; the 4-byte stub is skipped.
     // Rooms, both discs and the letter stage, as RE2 room definitions; the
     // 4-byte stub is skipped.
-    for id in ["1000", "1001", "a010", "2000"] {
+    // Each takes its English name from the Classic REbirth table, which has
+    // none for room 101 (the letter stage's a01).
+    for (id, name) in [
+        ("1000", Some("BACKSTREET A")),
+        ("1001", Some("BACKSTREET A")),
+        ("a010", None),
+        ("2000", Some("HALL")),
+    ] {
         let text = String::from_utf8(read(&pack, &format!("room/{id}/room.xml"))).unwrap();
         let room = crate::room::xml::parse(&text).unwrap();
-        assert_eq!(room, crate::rdt2::read(&rdt_for(id)).unwrap(), "{id}");
+        let mut expected = crate::rdt2::read(&rdt_for(id)).unwrap();
+        expected.strings = name
+            .map(|name| vec![("en-US".into(), "name".into(), name.into())])
+            .unwrap_or_default();
+        assert_eq!(room, expected, "{id}");
         assert_eq!(room.dialect, crate::format::Dialect::Re2);
         assert!(!pack.contains(&format!("room/{id}/room.rdt")));
     }
@@ -363,6 +395,34 @@ fn bgm_names_number_their_tracks() {
     ] {
         assert_eq!(bgm_track(bad), None, "{bad}");
     }
+}
+
+#[test]
+fn room_names_come_from_the_classic_rebirth_table() {
+    let dll = ddraw(&[(6, 4, "CARGO TRAIN CAR"), (1, 0x1D, "P-4 LABORATORY")]);
+    let names = room_names(&dll).unwrap();
+    assert_eq!(names.len(), 3);
+    assert_eq!(names[&(0, 0)], "BACKSTREET A");
+    assert_eq!(names[&(6, 4)], "CARGO TRAIN CAR");
+    assert_eq!(names[&(1, 0x1D)], "P-4 LABORATORY");
+    // No table, a table cut short, or a record that is not a name.
+    assert_eq!(room_names(b"MZ nothing here"), None);
+    assert_eq!(room_names(&dll[..dll.len() - 200]), None);
+    let mut bad = dll.clone();
+    let cargo = bad.windows(5).position(|w| w == b"CARGO").unwrap();
+    bad[cargo + 1] = 0x80;
+    assert_eq!(room_names(&bad), None);
+
+    // Without the DLL the rooms convert unnamed, with a warning.
+    let root = TempDir::new("unnamed");
+    write(&root.path.join("Pl0/Rdt/ROOM1000.RDT"), &rdt(1));
+    let mut warnings = Vec::new();
+    let layout = Layout::discover(&root.path).unwrap();
+    assert!(find_room_names(&root.path, &layout.data, &mut warnings).is_empty());
+    assert!(
+        warnings.iter().any(|warning| warning.contains("ddraw.dll")),
+        "{warnings:?}"
+    );
 }
 
 #[test]
