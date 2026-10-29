@@ -689,7 +689,7 @@ mod tests {
         let Ok(root) = std::env::var("ARKLAY_RE1_ROOT") else {
             return;
         };
-        let dir = Path::new(&root).join("JPN/ITEM_M2");
+        let dir = crate::convert::real_jpn_item_m2_dir(Path::new(&root));
         let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
             .unwrap_or_else(|error| panic!("failed to list {}: {error}", dir.display()))
             .map(|entry| entry.unwrap().path())

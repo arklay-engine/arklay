@@ -3875,6 +3875,24 @@ fn bmp_bpp(data: &[u8]) -> Result<u16> {
     Ok(u16::from_le_bytes([raw[0], raw[1]]))
 }
 
+/// The Japanese tree's `ITEM_M2` directory under a real install root,
+/// found the way the converter finds it: case-insensitively, since the Steam
+/// release ships it as `JPN/Item_m2`.
+#[cfg(test)]
+pub(crate) fn real_jpn_item_m2_dir(root: &Path) -> PathBuf {
+    discover_layout(root)
+        .unwrap()
+        .item_m2_dirs
+        .into_iter()
+        .find(|dir| {
+            dir.parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case("JPN"))
+        })
+        .unwrap_or_else(|| panic!("no JPN/ITEM_M2 directory under {}", root.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6316,7 +6334,7 @@ mod tests {
         let Ok(root) = std::env::var("ARKLAY_RE1_ROOT") else {
             return;
         };
-        let dir = PathBuf::from(&root).join("JPN/ITEM_M2");
+        let dir = real_jpn_item_m2_dir(Path::new(&root));
 
         let mut writer = PackWriter::new();
         let mut progress = Progress::new("test", 1);
@@ -6360,7 +6378,7 @@ mod tests {
         assert_eq!(model_entry_count(&pack), 2 * models);
         assert_eq!(file_art_count(&pack), JPN_FILE_ENTRIES);
         assert_eq!(count("map/"), 16);
-        let ivm = fs::read(dir.join("I00V.IVM")).unwrap();
+        let ivm = fs::read(&index_dir(&dir).unwrap()["i00v.ivm"]).unwrap();
         let (_, tmd) = crate::ivm::split(&ivm).unwrap();
         assert_eq!(pack.read("item/02/model.tmd").unwrap().as_ref(), tmd);
         assert_jpn_document_art(&pack);
