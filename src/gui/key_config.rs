@@ -1,18 +1,21 @@
 //! The key configuration screen: the keyboard and mouse bindings of every
 //! action on two tabs, two columns of keys per action and a diagram of the
-//! keyboard and mouse with the bound keys lit.
+//! keyboard and mouse with the bound keys lit. The same screen in its
+//! gamepad mode ([`KeyConfigScreen::gamepad`]) edits the controller's
+//! buttons instead, with the controller diagram.
 //!
 //! The screen edits a copy of the bindings and reports each accepted change
-//! as a whole [`Bindings`]; the gamepad sources ride along untouched. A key
-//! is captured by the owner, which routes the next raw press through
+//! as a whole [`Bindings`]; the other device's sources ride along untouched.
+//! A key is captured by the owner, which routes the next raw press through
 //! [`KeyConfigScreen::capture`] while [`KeyConfigScreen::capturing`] says so.
 
 use sdl3_sys::scancode::*;
 
 use super::canvas::{Color, Rect};
 use super::dialog::{Dialog, DialogResult};
-use super::input::{Device, GuiEvent, GuiKey};
+use super::input::{Device, GuiEvent, GuiKey, PadStyle};
 use super::locale::Locale;
+use super::pad_diagram;
 use super::text::{Align, Style};
 use super::theme::{Role, palette};
 use super::widgets::{Painter, SELECTION_GLOW};
@@ -50,6 +53,14 @@ const TABS: [Tab; 2] = [
                 ],
             ),
             (
+                "examine",
+                &[
+                    ("interact", Action::Confirm),
+                    ("inventory", Action::Start),
+                    ("map", Action::Map),
+                ],
+            ),
+            (
                 "weapon",
                 &[
                     ("aim", Action::Aim),
@@ -59,14 +70,6 @@ const TABS: [Tab; 2] = [
                     ("weapon_next", Action::WeaponNext),
                     ("target_prev", Action::TargetPrev),
                     ("target_next", Action::TargetNext),
-                ],
-            ),
-            (
-                "examine",
-                &[
-                    ("interact", Action::Confirm),
-                    ("inventory", Action::Start),
-                    ("map", Action::Map),
                 ],
             ),
             (
@@ -144,6 +147,10 @@ enum Line {
 
 pub struct KeyConfigScreen {
     bindings: Bindings,
+    /// Editing the gamepad's sources rather than the keyboard and mouse's.
+    pad: bool,
+    /// The controller drawn while the keyboard is in hand.
+    style: PadStyle,
     tab: usize,
     row: usize,
     column: usize,
@@ -163,6 +170,8 @@ impl KeyConfigScreen {
     pub fn new(bindings: Bindings, text: Locale) -> Self {
         Self {
             bindings,
+            pad: false,
+            style: PadStyle::default(),
             tab: 0,
             row: 0,
             column: 0,
@@ -174,6 +183,20 @@ impl KeyConfigScreen {
             device: Device::Keyboard,
             text,
         }
+    }
+
+    /// The screen for the gamepad's buttons, drawing `style`'s controller
+    /// while no controller is in hand.
+    pub fn gamepad(bindings: Bindings, text: Locale, style: PadStyle) -> Self {
+        Self {
+            pad: true,
+            style,
+            ..Self::new(bindings, text)
+        }
+    }
+
+    pub fn set_pad_style(&mut self, style: PadStyle) {
+        self.style = style;
     }
 
     pub fn set_locale(&mut self, text: Locale) {
@@ -222,9 +245,30 @@ impl KeyConfigScreen {
         self.rows()[self.row]
     }
 
-    /// `action`'s keyboard and mouse sources, in order.
+    /// `action`'s sources on the edited device, in order.
     fn keys(&self, action: Action) -> Vec<Source> {
-        keys(&self.bindings, action)
+        sources(&self.bindings, action, self.pad)
+    }
+
+    /// The controller the cells and the diagram draw.
+    fn pad_style(&self) -> PadStyle {
+        match self.device {
+            Device::Gamepad(style) => style,
+            Device::Keyboard => self.style,
+        }
+    }
+
+    /// The key of string `key` under `keys.`, or of its `keys.pad_` variant
+    /// in the gamepad mode.
+    fn string_key(&self, key: &str) -> String {
+        let prefix = if self.pad { "keys.pad_" } else { "keys." };
+        format!("{prefix}{key}")
+    }
+
+    /// The string `key` under `keys.`, or its `keys.pad_` variant in the
+    /// gamepad mode.
+    fn string(&self, key: &str) -> String {
+        self.text.get(&self.string_key(key)).to_string()
     }
 
     /// The name an action goes by: its row on this tab, else the other's.
@@ -251,11 +295,20 @@ impl KeyConfigScreen {
     }
 
     /// Accept `bindings` unless they leave an essential action without a
-    /// key of its own.
+    /// key of its own ([`Bindings::lockout`]), or on the gamepad without a
+    /// button of its own ([`Bindings::pad_lockout`]; bindings that already
+    /// lacked one, written by hand, may still be edited).
     fn commit(&mut self, bindings: Bindings, events: &mut Vec<KeyConfigEvent>) -> bool {
-        if let Some(action) = bindings.lockout() {
+        let locked = if self.pad {
+            bindings
+                .pad_lockout()
+                .filter(|_| self.bindings.pad_lockout().is_none())
+        } else {
+            bindings.lockout()
+        };
+        if let Some(action) = locked {
             let label = self.action_label(action);
-            self.note = Some(self.text.format("keys.keep_one", label));
+            self.note = Some(self.text.format(&self.string_key("keep_one"), label));
             return false;
         }
         if bindings != self.bindings {
@@ -266,8 +319,13 @@ impl KeyConfigScreen {
     }
 
     /// Feed the raw press that ends a capture, with where the pointer went
-    /// down if it did. Escape, a gamepad press or a click on the cancel hint
-    /// cancels; a key bound elsewhere moves here.
+    /// down if it did. Escape, the pad's start button, a press on the other
+    /// device or a click on the cancel hint cancels. On the keyboard a key
+    /// bound elsewhere moves here, unless the two actions are on different
+    /// tabs only (play and the menus), so a key may do one thing on each. A
+    /// controller has few buttons and its layouts share them on purpose
+    /// (south interacts and fires), so on the gamepad a button bound
+    /// elsewhere stays there too. The note names what moved or is shared.
     pub fn capture(&mut self, source: Source, click: Option<(f32, f32)>) -> Vec<KeyConfigEvent> {
         let mut events = Vec::new();
         if !self.capturing {
@@ -276,7 +334,11 @@ impl KeyConfigScreen {
         self.capturing = false;
         let on_cancel = source == Source::Mouse(1)
             && click.is_some_and(|(x, y)| matches!(self.hit(x, y), Some(Hit::Key(GuiKey::Cancel))));
-        if on_cancel || source.is_pad() || source == Source::key(SDL_SCANCODE_ESCAPE) {
+        if on_cancel
+            || source.reserved_bit().is_some()
+            || source.is_pad() != self.pad
+            || source == Source::key(SDL_SCANCODE_ESCAPE)
+        {
             return events;
         }
         if !source.round_trips() {
@@ -286,8 +348,22 @@ impl KeyConfigScreen {
         let (_, action) = self.selected();
         let mut bindings = self.bindings.clone();
         let mut moved = Vec::new();
+        let mut shared = Vec::new();
+        let on_tab = |tab: usize, action: Action| {
+            TABS[tab]
+                .1
+                .iter()
+                .flat_map(|(_, rows)| rows.iter())
+                .any(|&(_, a)| a == action)
+        };
+        let other_tab = 1 - self.tab;
         for other in ACTIONS {
-            if other != action && bindings.get(other).contains(&source) {
+            if other == action || !bindings.get(other).contains(&source) {
+                continue;
+            }
+            if self.pad || (!on_tab(self.tab, other) && !on_tab(other_tab, action)) {
+                shared.push(self.action_label(other));
+            } else {
                 let rest = bindings
                     .get(other)
                     .iter()
@@ -298,16 +374,20 @@ impl KeyConfigScreen {
                 moved.push(self.action_label(other));
             }
         }
-        let mut keys = keys(&bindings, action);
+        let mut keys = sources(&bindings, action, self.pad);
         // A key already in the other column moves to this one.
         keys.retain(|&s| s != source);
         match keys.get_mut(self.column) {
             Some(slot) => *slot = source,
             None => keys.push(source),
         }
-        set_keys(&mut bindings, action, keys);
-        if self.commit(bindings, &mut events) && !moved.is_empty() {
-            self.note = Some(self.text.format("keys.moved", moved.join(", ")));
+        set_sources(&mut bindings, action, keys, self.pad);
+        if self.commit(bindings, &mut events) {
+            if !moved.is_empty() {
+                self.note = Some(self.text.format("keys.moved", moved.join(", ")));
+            } else if !shared.is_empty() {
+                self.note = Some(self.text.format("keys.shared", shared.join(", ")));
+            }
         }
         events
     }
@@ -319,18 +399,19 @@ impl KeyConfigScreen {
         if self.column < keys.len() {
             keys.remove(self.column);
             let mut bindings = self.bindings.clone();
-            set_keys(&mut bindings, action, keys);
+            set_sources(&mut bindings, action, keys, self.pad);
             self.commit(bindings, events);
         }
     }
 
-    /// Every action's keyboard and mouse sources back to the defaults; the
-    /// gamepad's stay.
+    /// Every action's sources on the edited device back to the defaults
+    /// (Type A's buttons on the gamepad); the other device's stay.
     fn reset(&mut self, events: &mut Vec<KeyConfigEvent>) {
         let defaults = Bindings::default();
         let mut bindings = self.bindings.clone();
         for action in ACTIONS {
-            set_keys(&mut bindings, action, keys(&defaults, action));
+            let keys = sources(&defaults, action, self.pad);
+            set_sources(&mut bindings, action, keys, self.pad);
         }
         self.commit(bindings, events);
     }
@@ -411,7 +492,7 @@ impl KeyConfigScreen {
             GuiKey::ResetGroup => {
                 self.dialog = Some(Dialog::yes_no(
                     &self.text,
-                    self.text.get("keys.reset_question"),
+                    &self.string("reset_question"),
                     None,
                 ));
             }
@@ -458,7 +539,7 @@ impl KeyConfigScreen {
             u(97.0),
             Align::Center,
             palette::TEXT,
-            self.text.get("keys.title"),
+            &self.string("title"),
         );
 
         // The tabs between the Q and E key caps, centred.
@@ -567,7 +648,7 @@ impl KeyConfigScreen {
             y = p.paragraph(Role::Body, desc_left, y, width, palette::TEXT_DIM, &shared);
         }
         let status = if self.capturing {
-            Some(self.text.get("keys.capture").to_string())
+            Some(self.string("capture"))
         } else {
             self.note.clone()
         };
@@ -576,10 +657,16 @@ impl KeyConfigScreen {
             y = p.paragraph(Role::Body, desc_left, y, width, palette::TEXT, &status);
         }
 
-        // The keyboard and mouse, as large as fits under the text.
+        // The keyboard and mouse (or the controller), as large as fits under
+        // the text.
         let room = list.bottom() - (y + u(30.0));
         let k = (width / DIAGRAM_W).min(room / DIAGRAM_H);
-        if k > u(8.0) {
+        if self.pad {
+            if room > u(120.0) {
+                let rect = Rect::new(desc_left, list.bottom() - room, width, room);
+                pad_diagram::draw(p, rect, self.pad_style(), &self.bindings, &self.text);
+            }
+        } else if k > u(8.0) {
             let origin = (
                 desc_left + (width - k * DIAGRAM_W) / 2.0,
                 list.bottom() - k * DIAGRAM_H,
@@ -604,7 +691,12 @@ impl KeyConfigScreen {
 
         // Hints.
         let hints: Vec<(GuiKey, &str)> = if self.capturing {
-            vec![(GuiKey::Cancel, self.text.get("hint.cancel"))]
+            // A controller cancels with start, which has no glyph; the
+            // status line says so.
+            match self.device {
+                Device::Keyboard => vec![(GuiKey::Cancel, self.text.get("hint.cancel"))],
+                Device::Gamepad(_) => Vec::new(),
+            }
         } else {
             vec![
                 (GuiKey::ResetAll, self.text.get("hint.clear")),
@@ -666,10 +758,10 @@ impl KeyConfigScreen {
                     cy,
                     Align::Center,
                     palette::TEXT,
-                    self.text.get("keys.waiting"),
+                    &self.string("waiting"),
                 );
             } else if let Some(&source) = keys.get(column) {
-                draw_source(p, cell.center_x(), cy, source);
+                draw_source(p, cell.center_x(), cy, source, self.pad_style(), &self.text);
             }
             if column == COLUMNS - 1 && keys.len() > COLUMNS {
                 p.text(
@@ -686,31 +778,93 @@ impl KeyConfigScreen {
     }
 }
 
-/// `action`'s keyboard and mouse sources in `bindings`, in order.
-fn keys(bindings: &Bindings, action: Action) -> Vec<Source> {
+/// `action`'s gamepad sources (`pad`) or its keyboard and mouse ones in
+/// `bindings`, in order.
+fn sources(bindings: &Bindings, action: Action, pad: bool) -> Vec<Source> {
     bindings
         .get(action)
         .iter()
         .copied()
-        .filter(|s| !s.is_pad())
+        .filter(|s| s.is_pad() == pad)
         .collect()
 }
 
-/// Replace `action`'s keyboard and mouse sources, keeping its gamepad ones.
-fn set_keys(bindings: &mut Bindings, action: Action, keys: Vec<Source>) {
-    let pads = bindings.get(action).iter().copied().filter(|s| s.is_pad());
-    let sources = keys.into_iter().chain(pads).collect();
+/// Replace `action`'s gamepad sources (`pad`) or its keyboard and mouse
+/// ones, keeping the other device's.
+fn set_sources(bindings: &mut Bindings, action: Action, edited: Vec<Source>, pad: bool) {
+    let others = sources(bindings, action, !pad);
+    // The keyboard and mouse first, as the shipped layout lists them.
+    let sources = if pad {
+        others.into_iter().chain(edited).collect()
+    } else {
+        edited.into_iter().chain(others).collect()
+    };
     bindings.set(action, sources);
 }
 
-/// A source in a list cell, centred on `(cx, cy)`: a key cap, or the mouse
-/// with the button lit.
-fn draw_source(p: &mut Painter<'_>, cx: f32, cy: f32, source: Source) {
+/// A gamepad source with no button glyph, as its cell names it: the
+/// control (`pad.dpad`, `pad.left_stick`, `pad.right_stick`) and its
+/// direction (`pad.up` ...), or SDL's name for a rarer button.
+fn pad_label(source: Source, text: &Locale) -> String {
+    use sdl3_sys::gamepad::*;
+    let (control, direction) = match source {
+        Source::PadButton(button) => match SDL_GamepadButton(button) {
+            SDL_GAMEPAD_BUTTON_DPAD_UP => ("dpad", Some("up")),
+            SDL_GAMEPAD_BUTTON_DPAD_DOWN => ("dpad", Some("down")),
+            SDL_GAMEPAD_BUTTON_DPAD_LEFT => ("dpad", Some("left")),
+            SDL_GAMEPAD_BUTTON_DPAD_RIGHT => ("dpad", Some("right")),
+            SDL_GAMEPAD_BUTTON_LEFT_STICK => ("left_stick", None),
+            SDL_GAMEPAD_BUTTON_RIGHT_STICK => ("right_stick", None),
+            _ => return source.short_name().to_ascii_uppercase(),
+        },
+        Source::PadAxis(axis, positive) => {
+            let (control, vertical) = match SDL_GamepadAxis(axis) {
+                SDL_GAMEPAD_AXIS_LEFTX => ("left_stick", false),
+                SDL_GAMEPAD_AXIS_LEFTY => ("left_stick", true),
+                SDL_GAMEPAD_AXIS_RIGHTX => ("right_stick", false),
+                SDL_GAMEPAD_AXIS_RIGHTY => ("right_stick", true),
+                _ => return source.short_name().to_ascii_uppercase(),
+            };
+            let direction = match (vertical, positive) {
+                (false, false) => "left",
+                (false, true) => "right",
+                (true, false) => "up",
+                (true, true) => "down",
+            };
+            (control, Some(direction))
+        }
+        _ => return source.short_name(),
+    };
+    let control = text.get(&format!("pad.{control}")).to_string();
+    match direction {
+        Some(direction) => format!("{control} {}", text.get(&format!("pad.{direction}"))),
+        None => control,
+    }
+}
+
+/// A source in a list cell, centred on `(cx, cy)`: a key cap, the mouse
+/// with the button lit, or `style`'s button glyph (a cap naming it when it
+/// has none).
+fn draw_source(
+    p: &mut Painter<'_>,
+    cx: f32,
+    cy: f32,
+    source: Source,
+    style: PadStyle,
+    text: &Locale,
+) {
     match source {
         Source::Key(_) => {
             let label = source.short_name();
             let width = p.key_cap_width(&label);
             p.key_cap(cx - width / 2.0, cy, &label);
+        }
+        Source::PadButton(_) | Source::PadAxis(..) => {
+            if p.pad_source(cx, cy, style, source).is_none() {
+                let label = pad_label(source, text);
+                let width = p.key_cap_width(&label);
+                p.key_cap(cx - width / 2.0, cy, &label);
+            }
         }
         _ => {
             let s = p.u(40.0) / MOUSE_H;
@@ -1260,6 +1414,10 @@ mod tests {
         KeyConfigScreen::new(Bindings::default(), Locale::default())
     }
 
+    fn keys(bindings: &Bindings, action: Action) -> Vec<Source> {
+        sources(bindings, action, false)
+    }
+
     fn key(key: GuiKey) -> GuiEvent {
         GuiEvent::Key(key, Device::Keyboard)
     }
@@ -1288,6 +1446,20 @@ mod tests {
     fn every_string_is_translated_to_english() {
         let text = Locale::default();
         let mut keys = vec!["keys.title".to_string()];
+        for key in ["title", "capture", "waiting", "reset_question", "keep_one"] {
+            keys.push(format!("keys.pad_{key}"));
+        }
+        for key in [
+            "dpad",
+            "left_stick",
+            "right_stick",
+            "up",
+            "down",
+            "left",
+            "right",
+        ] {
+            keys.push(format!("pad.{key}"));
+        }
         for (tab, groups) in TABS {
             keys.push(format!("keys.tab.{tab}"));
             for &(group, rows) in groups {
@@ -1459,5 +1631,136 @@ mod tests {
         screen.handle(key(GuiKey::Right));
         screen.handle(key(GuiKey::Confirm));
         changed(screen.capture(Source::Mouse(3), click));
+    }
+
+    fn pad_screen() -> KeyConfigScreen {
+        KeyConfigScreen::gamepad(Bindings::default(), Locale::default(), PadStyle::Xbox)
+    }
+
+    fn pads(bindings: &Bindings, action: Action) -> Vec<Source> {
+        sources(bindings, action, true)
+    }
+
+    /// Select `action`'s row on the current tab.
+    fn select(screen: &mut KeyConfigScreen, action: Action) {
+        while screen.selected().1 != action {
+            screen.handle(key(GuiKey::Down));
+        }
+    }
+
+    #[test]
+    fn a_captured_pad_button_is_shared_not_moved() {
+        use sdl3_sys::gamepad::*;
+        let mut screen = pad_screen();
+        select(&mut screen, Action::Fire);
+        screen.handle(key(GuiKey::Confirm));
+        let west = Source::PadButton(SDL_GAMEPAD_BUTTON_WEST.0);
+        let bindings = changed(screen.capture(west, None));
+        assert_eq!(
+            pads(&bindings, Action::Fire),
+            [
+                west,
+                Source::PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER.0, true)
+            ]
+        );
+        assert_eq!(pads(&bindings, Action::Run), [west], "Run keeps it");
+        assert_eq!(
+            keys(&bindings, Action::Fire),
+            keys(&Bindings::default(), Action::Fire)
+        );
+        assert_eq!(screen.note.as_deref(), Some("Shared with Run."));
+    }
+
+    #[test]
+    fn the_keyboard_and_start_cancel_a_pad_capture() {
+        let mut screen = pad_screen();
+        let start = Source::PadButton(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_START.0);
+        for source in [
+            Source::key(SDL_SCANCODE_ESCAPE),
+            Source::key(SDL_SCANCODE_Q),
+            Source::Mouse(3),
+            start,
+        ] {
+            screen.handle(key(GuiKey::Confirm));
+            assert!(screen.capture(source, None).is_empty(), "{source}");
+            assert!(!screen.capturing());
+        }
+        assert_eq!(screen.bindings, Bindings::default());
+    }
+
+    #[test]
+    fn the_pad_keeps_a_menu_button_of_its_own() {
+        use sdl3_sys::gamepad::*;
+        let mut screen = pad_screen();
+        // Menu tab, Confirm on cancel's button: refused.
+        screen.handle(key(GuiKey::TabNext));
+        select(&mut screen, Action::Confirm);
+        screen.handle(key(GuiKey::Confirm));
+        let east = Source::PadButton(SDL_GAMEPAD_BUTTON_EAST.0);
+        assert!(screen.capture(east, None).is_empty());
+        assert_eq!(screen.bindings, Bindings::default());
+        assert!(screen.note.is_some());
+        // The inventory may share it.
+        screen.handle(key(GuiKey::TabNext));
+        select(&mut screen, Action::Start);
+        screen.handle(key(GuiKey::Confirm));
+        let bindings = changed(screen.capture(east, None));
+        assert_eq!(pads(&bindings, Action::Start), [east]);
+    }
+
+    #[test]
+    fn pad_reset_restores_type_a_and_keeps_the_keyboard() {
+        let mut bindings = Bindings::default();
+        bindings.set(Action::Fire, vec![Source::Mouse(2), Source::PadButton(2)]);
+        let mut screen = KeyConfigScreen::gamepad(bindings, Locale::default(), PadStyle::Xbox);
+        screen.handle(key(GuiKey::ResetGroup));
+        screen.handle(key(GuiKey::Left));
+        let reset = changed(screen.handle(key(GuiKey::Confirm)));
+        assert_eq!(keys(&reset, Action::Fire), [Source::Mouse(2)]);
+        assert_eq!(
+            pads(&reset, Action::Fire),
+            pads(&Bindings::default(), Action::Fire)
+        );
+    }
+
+    #[test]
+    fn a_key_stays_only_between_actions_on_different_tabs() {
+        let backspace = Source::key(SDL_SCANCODE_BACKSPACE);
+        // The inventory (play only) and cancel (menus only) share it.
+        let mut inventory = screen();
+        select(&mut inventory, Action::Start);
+        inventory.handle(key(GuiKey::Confirm));
+        let bindings = changed(inventory.capture(backspace, None));
+        assert!(bindings.get(Action::Cancel).contains(&backspace));
+        assert!(bindings.get(Action::Start).contains(&backspace));
+        // Interact is Confirm, in the menus too: it takes the key.
+        let mut interact = screen();
+        select(&mut interact, Action::Confirm);
+        interact.handle(key(GuiKey::Confirm));
+        let bindings = changed(interact.capture(backspace, None));
+        assert!(!bindings.get(Action::Cancel).contains(&backspace));
+    }
+
+    #[test]
+    fn stick_and_dpad_cells_are_named() {
+        use sdl3_sys::gamepad::*;
+        let text = Locale::new("en-US");
+        let label = |source| pad_label(source, &text);
+        assert_eq!(
+            label(Source::PadAxis(SDL_GAMEPAD_AXIS_LEFTY.0, false)),
+            "LS Up"
+        );
+        assert_eq!(
+            label(Source::PadAxis(SDL_GAMEPAD_AXIS_RIGHTX.0, true)),
+            "RS Right"
+        );
+        assert_eq!(
+            label(Source::PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN.0)),
+            "D-Pad Down"
+        );
+        assert_eq!(
+            label(Source::PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK.0)),
+            "LS"
+        );
     }
 }

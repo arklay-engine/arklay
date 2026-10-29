@@ -5266,8 +5266,10 @@ impl GameSession {
             return;
         }
         // START cycles the top tabs; otherwise one pad edge reaches the menu.
+        // A button bound to both cancel and START (the inventory) only
+        // cancels here, or backing out would also flip to the next tab.
         let mut input = menu_input(ui).map_or_else(UiInput::default, single_input);
-        input.start = ui.start;
+        input.start = ui.start && !ui.cancel;
         let stepped = self.with_menu(pack, |menu, cx, game| {
             let menu = menu.as_mut()?;
             let result = menu.update_with_game(cx, input, game);
@@ -9653,6 +9655,7 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
         language: app.pack.language().map(str::to_string),
         displays: display_names(),
         bindings: app.bindings.clone(),
+        custom_pad: config.custom_pad_or_default(),
         system: system_info(display),
     }
 }
@@ -9885,6 +9888,12 @@ fn apply_menu_settings(
     if settings.bindings != before.bindings {
         input.apply_bindings_change(settings.bindings.clone());
         app.set_bindings(settings.bindings.clone());
+    }
+    if settings.custom_pad != before.custom_pad {
+        let path = crate::config::Config::default_path();
+        if let Err(err) = crate::config::Config::save_custom_pad(&path, &settings.custom_pad) {
+            eprintln!("warning: custom controller layout not saved: {err:#}");
+        }
     }
     if let Mode::Play(session) = &mut app.mode {
         session.game.player_options = app.player_options;
@@ -13871,7 +13880,9 @@ impl InputState {
             }
             self.pressed |= mask;
             self.any_pressed = true;
-            if self.captured.is_none() && source.reserved_bit().is_none() {
+            // The pad's start button is reserved, but it cancels a capture.
+            let pad_start = source == controls::Source::PadButton(SDL_GAMEPAD_BUTTON_START.0);
+            if self.captured.is_none() && (source.reserved_bit().is_none() || pad_start) {
                 self.captured = Some(source);
             }
         }
@@ -16331,6 +16342,7 @@ mod tests {
             language: Some("fr".to_string()),
             displays: Vec::new(),
             bindings: controls::Bindings::default(),
+            custom_pad: controls::Bindings::default(),
             system: Default::default(),
         };
         before.game.quick_turn = false;

@@ -27,7 +27,6 @@
         <list>
           <group label="@group.character_controls">
             <toggle def="{options.quick_turn}"/>
-            <toggle def="{options.analog_movement}"/>
           </group>
           <group label="@group.when_aiming">
             <toggle def="{options.auto_aim}"/>
@@ -39,9 +38,11 @@
         <list>
           <group label="@group.button_settings">
             <choice def="{options.control_type}"/>
+            <link def="{options.pad_config}" action="pad_config"/>
             <choice def="{options.button_style}"/>
           </group>
           <group label="@group.function_settings">
+            <toggle def="{options.analog_movement}"/>
             <choice def="{options.vibration}"/>
           </group>
         </list>

@@ -103,6 +103,33 @@ fn pad_glyph(style: PadStyle, key: GuiKey) -> PadGlyph {
     }
 }
 
+/// The glyph of the gamepad button `source` reads in `style`, for the face
+/// buttons, shoulders, triggers and back; `None` for the rest (the sticks,
+/// the d-pad's directions), which have no glyph of their own.
+fn source_glyph(style: PadStyle, source: crate::controls::Source) -> Option<PadGlyph> {
+    use crate::controls::Source;
+    use sdl3_sys::gamepad::*;
+    let key = match source {
+        Source::PadButton(button) => match SDL_GamepadButton(button) {
+            SDL_GAMEPAD_BUTTON_SOUTH => GuiKey::Confirm,
+            SDL_GAMEPAD_BUTTON_EAST => GuiKey::Cancel,
+            SDL_GAMEPAD_BUTTON_NORTH => GuiKey::ResetGroup,
+            SDL_GAMEPAD_BUTTON_WEST => GuiKey::Aux,
+            SDL_GAMEPAD_BUTTON_LEFT_SHOULDER => GuiKey::TabPrev,
+            SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER => GuiKey::TabNext,
+            SDL_GAMEPAD_BUTTON_BACK => GuiKey::ResetAll,
+            _ => return None,
+        },
+        Source::PadAxis(axis, true) => match SDL_GamepadAxis(axis) {
+            SDL_GAMEPAD_AXIS_LEFT_TRIGGER => GuiKey::SubPrev,
+            SDL_GAMEPAD_AXIS_RIGHT_TRIGGER => GuiKey::SubNext,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(pad_glyph(style, key))
+}
+
 /// Where [`Painter::sub_tabs`] put its pieces, for pointer hit tests.
 pub struct SubTabs {
     /// The previous-tab glyph.
@@ -255,6 +282,20 @@ impl Painter<'_> {
             Device::Gamepad(style) => self.pad_glyph_size(pad_glyph(style, key)).0,
             Device::Keyboard => self.key_cap_width(cap.unwrap_or(key_label(key))),
         }
+    }
+
+    /// The gamepad button `source` as `style` prints it, centred on
+    /// `(cx, cy)`; `None` (and nothing drawn) for a source with no glyph.
+    pub fn pad_source(
+        &mut self,
+        cx: f32,
+        cy: f32,
+        style: PadStyle,
+        source: crate::controls::Source,
+    ) -> Option<Rect> {
+        let glyph = source_glyph(style, source)?;
+        let (width, _) = self.pad_glyph_size(glyph);
+        Some(self.pad_glyph(cx - width / 2.0, cy, glyph))
     }
 
     fn pad_glyph_size(&self, glyph: PadGlyph) -> (f32, f32) {

@@ -25,6 +25,9 @@ pub struct Settings {
     pub displays: Vec<String>,
     /// The action map the key configuration screen edits.
     pub bindings: crate::controls::Bindings,
+    /// The Custom control type's layout (its gamepad sources), kept while
+    /// another type is picked; Type A's until the player edits it.
+    pub custom_pad: crate::controls::Bindings,
     /// The machine, for the PC Specs row.
     pub system: SystemInfo,
 }
@@ -321,10 +324,11 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         row("autosave", on_off(text, "autosave")),
         row("room_script_fixes", on_off(text, "room_script_fixes")),
         row("quick_turn", on_off(text, "quick_turn")),
-        row("analog_movement", on_off(text, "analog_movement")),
         row("auto_aim", on_off(text, "auto_aim")),
         row("tactical_reload", on_off(text, "tactical_reload")),
         row("control_type", named::<ControlType>(text, "control_type")),
+        // Opens the controller configuration screen; it has no value.
+        row("pad_config", OptionKind::Link),
         row(
             "button_style",
             OptionKind::Choice(vec![
@@ -337,6 +341,7 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 Choice::new("Nintendo"),
             ]),
         ),
+        row("analog_movement", on_off(text, "analog_movement")),
         row("vibration", named::<Vibration>(text, "vibration")),
         // Opens the key configuration screen; it has no value.
         row("key_config", OptionKind::Link),
@@ -515,10 +520,25 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 !game.subtitles
             }
             "speaker_name_color" => !game.subtitles || !game.speaker_names,
+            // The presets' buttons are fixed; Custom's are the player's.
+            "pad_config" => game.control_type != ControlType::Custom,
             _ => false,
         };
     }
     list
+}
+
+/// Show bindings whose gamepad sources match no preset (edited by hand or
+/// with the debug menu's tool) as Custom, which they are: the Customize
+/// Buttons row then opens on them, and they become Custom's layout.
+pub fn reconcile(settings: &mut Settings) {
+    let control_type = settings.game.control_type;
+    if control_type != ControlType::Custom
+        && settings.bindings != settings.bindings.clone().with_control_type(control_type)
+    {
+        settings.game.control_type = ControlType::Custom;
+        settings.custom_pad = settings.bindings.clone();
+    }
 }
 
 /// The current value of option `id`.
@@ -604,11 +624,21 @@ pub fn apply(id: &str, value: i32, settings: &mut Settings) {
     }
     match id {
         // The preset's pad sources go with it, so every request carries
-        // bindings that match its control type.
+        // bindings that match its control type. Custom's own layout is put
+        // aside when another type is picked and comes back with Custom.
         "control_type" => {
+            let before = game.control_type;
             set(&mut game.control_type, index);
-            settings.bindings =
-                std::mem::take(&mut settings.bindings).with_control_type(game.control_type);
+            let after = game.control_type;
+            if before == ControlType::Custom && after != ControlType::Custom {
+                settings.custom_pad = settings.bindings.clone();
+            }
+            let bindings = std::mem::take(&mut settings.bindings);
+            settings.bindings = match after {
+                ControlType::Custom if before == ControlType::Custom => bindings,
+                ControlType::Custom => bindings.with_pads_of(&settings.custom_pad),
+                preset => bindings.with_control_type(preset),
+            };
         }
         "vibration" => set(&mut game.vibration, index),
         "menu_text_size" => set(&mut game.menu_text_size, index),
@@ -717,6 +747,58 @@ mod tests {
             settings.bindings,
             crate::controls::Bindings::default().with_control_type(ControlType::C)
         );
+    }
+
+    #[test]
+    fn the_custom_layout_survives_a_preset() {
+        use crate::controls::{Action, Source};
+        let mut settings = settings();
+        apply("control_type", 3, &mut settings);
+        assert_eq!(settings.game.control_type, ControlType::Custom);
+        assert_eq!(settings.bindings, crate::controls::Bindings::default());
+        let custom = vec![
+            Source::key(sdl3_sys::scancode::SDL_SCANCODE_TAB),
+            Source::PadButton(1),
+        ];
+        settings.bindings.set(Action::Start, custom.clone());
+        // Through Type C and back: Custom's layout returns.
+        apply("control_type", 2, &mut settings);
+        assert_ne!(settings.bindings.get(Action::Start), custom);
+        apply("control_type", 3, &mut settings);
+        assert_eq!(settings.bindings.get(Action::Start), custom);
+        // Picking Custom again keeps the edits in hand.
+        settings.bindings.set(Action::Map, Vec::new());
+        apply("control_type", 3, &mut settings);
+        assert!(settings.bindings.get(Action::Map).is_empty());
+    }
+
+    #[test]
+    fn edited_pad_bindings_show_as_custom() {
+        use crate::controls::{Action, Source};
+        let mut settings = settings();
+        reconcile(&mut settings);
+        assert_eq!(settings.game.control_type, ControlType::A);
+        settings
+            .bindings
+            .set(Action::Map, vec![Source::PadButton(1)]);
+        reconcile(&mut settings);
+        assert_eq!(settings.game.control_type, ControlType::Custom);
+        assert_eq!(settings.custom_pad, settings.bindings);
+    }
+
+    #[test]
+    fn the_controller_configuration_needs_the_custom_type() {
+        let disabled = |settings: &Settings| {
+            defs(settings, &Locale::default())
+                .into_iter()
+                .find(|def| def.id == "pad_config")
+                .unwrap()
+                .disabled
+        };
+        let mut settings = settings();
+        assert!(disabled(&settings));
+        apply("control_type", 3, &mut settings);
+        assert!(!disabled(&settings));
     }
 
     #[test]

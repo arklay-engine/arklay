@@ -696,7 +696,9 @@ impl Bindings {
     ///   fires, the triggers page and cycle the target).
     /// - C: A with confirm and cancel swapped (east confirms and fires, south
     ///   cancels).
-    pub fn with_control_type(mut self, control_type: crate::config::ControlType) -> Self {
+    /// - Custom: A, the layout a custom one starts from (the player's own
+    ///   is kept apart and laid in with [`Bindings::with_pads_of`]).
+    pub fn with_control_type(self, control_type: crate::config::ControlType) -> Self {
         use crate::config::ControlType;
         use sdl3_sys::gamepad::{
             SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_GAMEPAD_BUTTON_EAST,
@@ -706,7 +708,7 @@ impl Bindings {
         let axis = |axis: SDL_GamepadAxis| Source::PadAxis(axis.0, true);
         let mut layout = Self::default();
         match control_type {
-            ControlType::A => {}
+            ControlType::A | ControlType::Custom => {}
             ControlType::B => {
                 for (action, source) in [
                     (Action::Aim, pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)),
@@ -731,7 +733,13 @@ impl Bindings {
                 );
             }
         }
-        // The preset's pad sources fill the old ones' slots in order, so the
+        self.with_pads_of(&layout)
+    }
+
+    /// These bindings with every gamepad source replaced by `layout`'s; the
+    /// keyboard and mouse sources are kept.
+    pub fn with_pads_of(mut self, layout: &Bindings) -> Self {
+        // The layout's pad sources fill the old ones' slots in order, so the
         // keyboard and mouse slots stay where the rebind screen shows them.
         for action in ACTIONS {
             let mut pads = layout.get(action).iter().copied().filter(|s| s.is_pad());
@@ -832,6 +840,37 @@ impl Bindings {
                         .all(|other| other == action || !self.get(other).contains(&source))
             })
         })
+    }
+
+    /// The gamepad's counterpart of [`Bindings::lockout`]: the first of the
+    /// menu actions (the directions, confirm and cancel) left without a
+    /// controller button of its own, or the inventory left with none at
+    /// all; `None` when the controller can drive every menu. The pad's
+    /// start button always backs out, but a player with only a controller
+    /// in hand needs these to get anywhere. The inventory may share cancel's
+    /// button: a menu takes that press as cancel.
+    pub fn pad_lockout(&self) -> Option<Action> {
+        let menu = [
+            Action::Up,
+            Action::Down,
+            Action::Left,
+            Action::Right,
+            Action::Confirm,
+            Action::Cancel,
+        ];
+        menu.into_iter()
+            .find(|&action| {
+                !self.get(action).iter().any(|&source| {
+                    source.is_pad()
+                        && menu
+                            .iter()
+                            .all(|&other| other == action || !self.get(other).contains(&source))
+                })
+            })
+            .or_else(|| {
+                let start = self.get(Action::Start);
+                (!start.iter().any(|source| source.is_pad())).then_some(Action::Start)
+            })
     }
 
     /// The other actions `source` is also bound to, besides `action`.
@@ -1092,5 +1131,46 @@ mod tests {
         let back = Source::PadButton(SDL_GAMEPAD_BUTTON_BACK.0);
         assert_eq!(bindings.mask(back), Action::Map.bit());
         assert!(bindings.bind(Action::Fire, 0, back));
+    }
+
+    #[test]
+    fn custom_starts_as_type_a_and_takes_any_layouts_pads() {
+        use crate::config::ControlType;
+        let mut bindings = Bindings::default();
+        assert!(bindings.bind(Action::Aim, usize::MAX, Source::key(SDL_SCANCODE_W)));
+        let a = bindings.clone().with_control_type(ControlType::A);
+        assert_eq!(bindings.clone().with_control_type(ControlType::Custom), a);
+        // A layout's pads, the keyboard kept.
+        let c = Bindings::default().with_control_type(ControlType::C);
+        let laid = bindings.clone().with_pads_of(&c);
+        assert_eq!(laid, bindings.with_control_type(ControlType::C));
+    }
+
+    #[test]
+    fn the_menus_need_a_controller_button_of_their_own() {
+        use crate::config::ControlType;
+        for control_type in [ControlType::A, ControlType::B, ControlType::C] {
+            let bindings = Bindings::default().with_control_type(control_type);
+            assert_eq!(bindings.pad_lockout(), None, "{control_type:?}");
+        }
+        let east = Source::PadButton(1);
+        let mut bindings = Bindings::default();
+        // The inventory may share cancel's button.
+        let keys = |b: &Bindings, a| -> Vec<Source> {
+            b.get(a).iter().copied().filter(|s| !s.is_pad()).collect()
+        };
+        let mut start = keys(&bindings, Action::Start);
+        start.push(east);
+        bindings.set(Action::Start, start);
+        assert_eq!(bindings.pad_lockout(), None);
+        // Confirm on cancel's button only: the menus could not confirm.
+        let mut confirm = keys(&bindings, Action::Confirm);
+        confirm.push(east);
+        bindings.set(Action::Confirm, confirm);
+        assert_eq!(bindings.pad_lockout(), Some(Action::Confirm));
+        // No inventory button at all.
+        let mut bindings = Bindings::default();
+        bindings.set(Action::Start, keys(&bindings, Action::Start));
+        assert_eq!(bindings.pad_lockout(), Some(Action::Start));
     }
 }

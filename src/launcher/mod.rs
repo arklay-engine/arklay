@@ -704,6 +704,7 @@ impl Launcher {
             language: self.config.language.clone(),
             displays: engine::display_names(),
             bindings: self.config.bindings_or_default(),
+            custom_pad: self.config.custom_pad_or_default(),
             system: engine::system_info(display),
         }
     }
@@ -1136,7 +1137,9 @@ impl Launcher {
         let Some(menu) = &mut self.options else {
             return;
         };
-        if source.reserved_bit().is_some() {
+        // The pad's start button is reserved, but it cancels a capture.
+        if source.reserved_bit().is_some() && source != Input::PadButton(SDL_GAMEPAD_BUTTON_START.0)
+        {
             return;
         }
         let requests = menu.capture(source, click);
@@ -1208,6 +1211,15 @@ impl Launcher {
                 logging::write(&format!("warning: bindings not saved: {err:#}"));
             }
             self.config.bindings = Some(settings.bindings.clone());
+        }
+        if settings.custom_pad != before.custom_pad {
+            let path = Config::default_path();
+            if let Err(err) = Config::save_custom_pad(&path, &settings.custom_pad) {
+                logging::write(&format!(
+                    "warning: custom controller layout not saved: {err:#}"
+                ));
+            }
+            self.config.custom_pad = Some(settings.custom_pad.clone());
         }
         let (file, _) = Config::load_default();
         let (saved_graphics, saved_language, saved_game) =

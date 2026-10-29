@@ -5,8 +5,9 @@
 //! The menu and the options are the `menu` and `options` screens of a
 //! [`Ui`] (`assets/ui/*.xml`); this owner publishes the settings as
 //! `options.<id>` definitions and turns what the screens report back into
-//! [`MenuRequest`]s. It never touches the game. The key configuration is
-//! still its own screen, drawn over the options.
+//! [`MenuRequest`]s. It never touches the game. The key configuration (and
+//! the controller configuration, its gamepad mode) is still its own screen,
+//! drawn over the options.
 
 use anyhow::Result;
 
@@ -21,6 +22,7 @@ use super::settings::{self, Settings};
 use super::text::Fonts;
 use super::theme::{Theme, palette};
 use super::widgets::Painter;
+use crate::config::ControlType;
 use crate::controls::Bindings;
 
 /// What the menu asks its owner to do.
@@ -51,7 +53,13 @@ fn short_version(version: &str) -> String {
 }
 
 /// The options whose description shows the controller diagram.
-const PAD_PAGE: [&str; 3] = ["control_type", "button_style", "vibration"];
+const PAD_PAGE: [&str; 5] = [
+    "control_type",
+    "pad_config",
+    "button_style",
+    "analog_movement",
+    "vibration",
+];
 
 /// The controller diagram under a Controller row's description.
 struct PadPaint {
@@ -91,7 +99,8 @@ pub struct SystemMenu {
 }
 
 impl SystemMenu {
-    pub fn new(settings: Settings) -> Result<Self> {
+    pub fn new(mut settings: Settings) -> Result<Self> {
+        settings::reconcile(&mut settings);
         let mut menu = Self {
             ui: Ui::new(Library::builtin())?,
             text: settings.locale(),
@@ -166,9 +175,11 @@ impl SystemMenu {
         );
         let device = self.shown_device();
         self.ui.set_device(device);
+        let style = self.pad_style();
         if let Some(keys) = &mut self.key_config {
             keys.screen.set_locale(self.text.clone());
             keys.screen.set_device(device);
+            keys.screen.set_pad_style(style);
             keys.screen.set_bindings(self.settings.bindings.clone());
             keys.dirty = true;
         }
@@ -269,8 +280,14 @@ impl SystemMenu {
         .collect()
     }
 
-    fn open_key_config(&mut self) -> Result<()> {
-        let mut screen = KeyConfigScreen::new(self.settings.bindings.clone(), self.text.clone());
+    /// Open the key configuration, or its gamepad mode for `pad`.
+    fn open_key_config(&mut self, pad: bool) -> Result<()> {
+        let bindings = self.settings.bindings.clone();
+        let mut screen = if pad {
+            KeyConfigScreen::gamepad(bindings, self.text.clone(), self.pad_style())
+        } else {
+            KeyConfigScreen::new(bindings, self.text.clone())
+        };
         screen.set_device(self.shown_device());
         let mut canvas = Canvas::new(1, 1);
         canvas.set_recording(self.recording);
@@ -322,6 +339,10 @@ impl SystemMenu {
                 KeyConfigEvent::Back => back = true,
                 KeyConfigEvent::Changed(bindings) => {
                     self.settings.bindings = *bindings;
+                    // The custom layout is saved as it is edited.
+                    if self.settings.game.control_type == ControlType::Custom {
+                        self.settings.custom_pad = self.settings.bindings.clone();
+                    }
                     changed = true;
                     requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
                 }
@@ -354,14 +375,18 @@ impl SystemMenu {
         }
     }
 
-    /// The device the hints draw for: a controller shows the configured
-    /// button style, or its own when that is automatic.
-    /// Paint the controller page's diagram for the pad shown.
-    fn register_pad(&mut self) {
-        let style = match (self.shown_device(), self.settings.game.button_style) {
+    /// The controller the diagrams draw: the one in hand, else the
+    /// configured button style.
+    fn pad_style(&self) -> PadStyle {
+        match (self.shown_device(), self.settings.game.button_style) {
             (Device::Gamepad(style), _) => style,
             (Device::Keyboard, style) => style.unwrap_or_default(),
-        };
+        }
+    }
+
+    /// Paint the controller page's diagram for the pad shown.
+    fn register_pad(&mut self) {
+        let style = self.pad_style();
         self.ui.register(
             "pad-diagram",
             Box::new(PadPaint {
@@ -372,6 +397,8 @@ impl SystemMenu {
         );
     }
 
+    /// The device the hints draw for: a controller shows the configured
+    /// button style, or its own when that is automatic.
     fn shown_device(&self) -> Device {
         match (self.device, self.settings.game.button_style) {
             (Device::Gamepad(_), Some(style)) => Device::Gamepad(style),
@@ -431,8 +458,8 @@ impl SystemMenu {
                 "restart" => requests.push(MenuRequest::Restart),
                 "load_game" => requests.push(MenuRequest::LoadGame),
                 "quit" => requests.push(MenuRequest::Quit),
-                "key_config" => {
-                    if let Err(err) = self.open_key_config() {
+                "key_config" | "pad_config" => {
+                    if let Err(err) = self.open_key_config(name == "pad_config") {
                         eprintln!("warning: key configuration: {err:#}");
                     }
                 }
@@ -825,7 +852,7 @@ mod tests {
         assert_eq!(menu.ui.tab_indices(), tabs, "the tabs stay");
         assert_eq!(
             menu.ui.focus_prop("label"),
-            Value::from(menu.text.get("analog_movement.label")),
+            Value::from(menu.text.get("auto_aim.label")),
             "the cursor stays, relabelled"
         );
     }

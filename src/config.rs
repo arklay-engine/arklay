@@ -23,6 +23,11 @@
 //! aim = ["mouse:right", "key:E", "axis:lefttrigger+"]
 //! map = ["key:M", "pad:back"]
 //!
+//! # The Custom control type's gamepad layout, kept while another type is
+//! # picked: the pad sources of each action that differs from Type A.
+//! [custom_pad]
+//! start = ["pad:b"]
+//!
 //! # Gameplay options, both on by default (`--quick-turn` and
 //! # `--tactical-reload` override them; `--no-...` turns one off for a run).
 //! [game]
@@ -45,8 +50,9 @@
 //! button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation"
 //!                        # or "nintendo"
 //! control_type = "a"     # the gamepad layout preset last picked in the
-//!                        # menu: "a", "b" or "c"; picking one rewrites the
-//!                        # pad sources in [bindings], which is what's used
+//!                        # menu: "a", "b", "c" or "custom"; picking a
+//!                        # preset rewrites the pad sources in [bindings],
+//!                        # which is what's used
 //! vibration = "normal"   # "off", "weak", "normal" or "strong"
 //! master_volume = 100    # levels in percent (0..100): everything, then the
 //! music_volume = 100     # music, the ambient loops (rain, machinery), the
@@ -153,6 +159,10 @@ pub struct Config {
     /// The `[bindings]` table over the defaults; `None` when the file has
     /// none (the shipped defaults).
     pub bindings: Option<Bindings>,
+    /// The `[custom_pad]` table: the Custom control type's layout, whose
+    /// gamepad sources are over Type A's (its keyboard and mouse sources
+    /// are the defaults and unused); `None` when the file has none.
+    pub custom_pad: Option<Bindings>,
     /// The `[graphics]` table over the defaults.
     pub graphics: Graphics,
     /// The `[mods]` enable/disable/order selection.
@@ -332,6 +342,9 @@ pub enum ControlType {
     A,
     B,
     C,
+    /// The player's own pad sources, edited on the controller
+    /// configuration screen.
+    Custom,
 }
 
 impl Named for ControlType {
@@ -339,6 +352,7 @@ impl Named for ControlType {
         (ControlType::A, "a"),
         (ControlType::B, "b"),
         (ControlType::C, "c"),
+        (ControlType::Custom, "custom"),
     ];
 }
 
@@ -538,6 +552,7 @@ impl Game {
 enum Table {
     Root,
     Bindings,
+    CustomPad,
     Graphics,
     Mods,
     Games,
@@ -649,6 +664,7 @@ impl Config {
         let mut seen_updates = false;
         let mut seen_game = false;
         let mut bound = Vec::new();
+        let mut custom_bound = Vec::new();
         let mut graphics_keys: Vec<String> = Vec::new();
         let mut mod_keys: Vec<String> = Vec::new();
         let mut games_keys: Vec<String> = Vec::new();
@@ -665,6 +681,10 @@ impl Config {
                     Some("bindings") if config.bindings.is_none() => {
                         config.bindings = Some(Bindings::default());
                         Table::Bindings
+                    }
+                    Some("custom_pad") if config.custom_pad.is_none() => {
+                        config.custom_pad = Some(Bindings::default());
+                        Table::CustomPad
                     }
                     Some("graphics") if !seen_graphics => {
                         seen_graphics = true;
@@ -687,7 +707,8 @@ impl Config {
                         Table::Game
                     }
                     Some(
-                        name @ ("bindings" | "graphics" | "mods" | "games" | "updates" | "game"),
+                        name @ ("bindings" | "custom_pad" | "graphics" | "mods" | "games"
+                        | "updates" | "game"),
                     ) => {
                         warnings.push(format!("line {line}: duplicate [{name}] table ignored"));
                         Table::Ignored
@@ -715,7 +736,16 @@ impl Config {
                     parse_updates_line(&mut config.updates, &mut update_keys, content, line)
                 }
                 Table::Game => parse_game_line(&mut config.game, &mut game_keys, content, line),
-                Table::Bindings => parse_binding_line(&mut config, &mut bound, content, line),
+                Table::Bindings => {
+                    parse_binding_line(config.bindings.as_mut(), &mut bound, content, line, false)
+                }
+                Table::CustomPad => parse_binding_line(
+                    config.custom_pad.as_mut(),
+                    &mut custom_bound,
+                    content,
+                    line,
+                    true,
+                ),
             };
             if let Err(err) = parsed {
                 warnings.push(format!("{err:#}"));
@@ -785,6 +815,28 @@ impl Config {
                 out.push_str(&format!("{} = [{}]\n", action.name(), names.join(", ")));
             }
         }
+        if let Some(custom) = &self.custom_pad {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str("[custom_pad]\n");
+            let defaults = Bindings::default();
+            let pads = |bindings: &Bindings, action| -> Vec<Source> {
+                let sources = bindings.get(action).iter().copied();
+                sources.filter(|source| source.is_pad()).collect()
+            };
+            for action in ACTIONS {
+                let custom_pads = pads(custom, action);
+                if custom_pads == pads(&defaults, action) {
+                    continue;
+                }
+                let names: Vec<String> = custom_pads
+                    .iter()
+                    .map(|source| quote(&source.to_string()))
+                    .collect();
+                out.push_str(&format!("{} = [{}]\n", action.name(), names.join(", ")));
+            }
+        }
         let game = render_game(&self.game);
         if !game.is_empty() {
             if !out.is_empty() {
@@ -818,6 +870,21 @@ impl Config {
     pub fn save_bindings(path: &Path, bindings: &Bindings) -> Result<()> {
         Self::update(path, |config| {
             config.bindings = (*bindings != Bindings::default()).then(|| bindings.clone());
+        })
+    }
+
+    /// The Custom control type's layout, or Type A's.
+    pub fn custom_pad_or_default(&self) -> Bindings {
+        self.custom_pad.clone().unwrap_or_default()
+    }
+
+    /// Persist the Custom control type's layout (its gamepad sources) into
+    /// the file at `path`; Type A's drops the table. Rewritten like
+    /// [`Config::save_bindings`].
+    pub fn save_custom_pad(path: &Path, custom: &Bindings) -> Result<()> {
+        let custom = Bindings::default().with_pads_of(custom);
+        Self::update(path, |config| {
+            config.custom_pad = (custom != Bindings::default()).then_some(custom);
         })
     }
 
@@ -940,13 +1007,16 @@ fn parse_root_key(config: &mut Config, content: &str, line: usize) -> Result<()>
     Ok(())
 }
 
-/// Parse one `[bindings]` line into `config`; a bad line leaves the action
-/// at its default.
+/// Parse one `[bindings]` line (or, with `pad_only`, one `[custom_pad]`
+/// line, which names gamepad sources only and keeps the action's keyboard
+/// and mouse ones) into `bindings`; a bad line leaves the action at its
+/// default.
 fn parse_binding_line(
-    config: &mut Config,
+    bindings: Option<&mut Bindings>,
     bound: &mut Vec<Action>,
     content: &str,
     line: usize,
+    pad_only: bool,
 ) -> Result<()> {
     let (key, value) = key_value(content, line)?;
     let Some(action) = Action::from_name(key) else {
@@ -962,11 +1032,18 @@ fn parse_binding_line(
         // error, so the rest of the file still loads and saves.
         let source = Source::parse_any(&name)
             .with_context(|| format!("line {line}: bad binding for `{key}`"))?;
+        if pad_only && !source.is_pad() {
+            bail!("line {line}: `{name}` is not a gamepad source");
+        }
         if source.reserved_bit().is_none() {
             sources.push(source);
         }
     }
-    if let Some(bindings) = config.bindings.as_mut() {
+    if let Some(bindings) = bindings {
+        if pad_only {
+            let keys = bindings.get(action).iter().copied().filter(|s| !s.is_pad());
+            sources = keys.chain(sources).collect();
+        }
         bindings.set(action, sources);
     }
     Ok(())
@@ -1715,6 +1792,7 @@ menu_text_size = \"huge\"
             save_dir: Some(PathBuf::from("/tmp/saves")),
             language: Some("en-US".into()),
             bindings: None,
+            custom_pad: None,
             graphics: Graphics::default(),
             mods: Mods::default(),
             games: Games::default(),
@@ -1782,6 +1860,24 @@ menu_text_size = \"huge\"
         ] {
             assert!(Config::parse(text).is_err(), "{text:?} must be rejected");
         }
+    }
+
+    #[test]
+    fn the_custom_pad_layout_round_trips() {
+        let config = Config::parse("[custom_pad]\nstart = [\"pad:b\", \"pad:y\"]\n").unwrap();
+        let custom = config.custom_pad_or_default();
+        let start: Vec<String> = custom
+            .get(Action::Start)
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        // The keyboard keys stay the defaults'; the pad's are the table's.
+        assert_eq!(start, ["key:Tab", "key:I", "pad:b", "pad:y"]);
+        let text = config.render();
+        assert_eq!(text, "[custom_pad]\nstart = [\"pad:b\", \"pad:y\"]\n");
+        assert_eq!(Config::parse(&text).unwrap(), config);
+        // Gamepad sources only.
+        assert!(Config::parse("[custom_pad]\nstart = [\"key:Tab\"]\n").is_err());
     }
 
     #[test]

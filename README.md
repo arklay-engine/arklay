@@ -338,6 +338,8 @@ ui_font = "modern"     # the menus' face: "modern" or "retro"
 modern_save_screen = true # the full-screen save/load list, or false for the original's
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
 button_style = "auto"  # controller glyphs: "auto", "xbox", "playstation", "nintendo"
+control_type = "a"     # the controller layout: "a", "b", "c" or "custom"
+vibration = "normal"   # "off", "weak", "normal" or "strong"
 music_volume = 100     # volumes in percent (0 to 100): music,
 ambient_volume = 100   # ambient loops (rain, machinery),
 effects_volume = 100   # sound effects
@@ -471,6 +473,21 @@ from the defaults are written, and actions it leaves out keep their defaults:
 [bindings]
 confirm = ["key:Space", "key:Return", "pad:a", "mouse:left"]
 fire = ["key:Z", "axis:righttrigger+", "mouse:left"]
+```
+
+The options' Controller page picks a controller layout: Type A, B, C or
+Custom. Custom starts as Type A, and its Customize Buttons row opens the same
+screen as the key configuration for the gamepad's buttons, sticks and
+triggers. A button may do several things there (the layouts share them on
+purpose), but up, down, left, right, confirm and cancel must each keep a
+button none of the other five use, and START (inventory) needs a button, so
+the menus can always be driven from the pad. Start cancels a capture. The
+Custom layout is kept while another type is picked, in the `[custom_pad]`
+table, which lists only the gamepad sources that differ from Type A's:
+
+```toml
+[custom_pad]
+start = ["pad:b", "pad:y"]
 ```
 
 Sources are `key:<SDL key name>`, `mouse:left|middle|right|x1|x2`,
