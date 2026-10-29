@@ -44,14 +44,10 @@ to go to the compiler (#266). Follow these rules:
   root.
 - **Do not run `cargo clean`** or delete `target/` unless a build is
   genuinely broken. A cold build takes minutes.
-- The wrapper also passes rustc `-Zincremental-ignore-spans`, so inserting
-  lines no longer recompiles all the unchanged code below the edit. The cost:
-  a **panic's line number can be stale** by the number of lines inserted
-  above it since that function was last compiled. Use the test name and the
-  assertion message to find it. Compile errors and clippy's output are exact.
-  `ARKLAY_EXACT_SPANS=1` turns this off (one full rebuild of the crate).
-- Batch related edits before rebuilding instead of rebuilding after each
-  one.
+- Inserting or removing lines near the top of a big file (`src/engine.rs`,
+  `src/game.rs`) shifts every span below it and costs a bigger rebuild than an
+  edit that keeps the line count. That is no reason to avoid the edit, but
+  batch related edits before rebuilding instead of rebuilding after each one.
 
 ## The check tiers
 
