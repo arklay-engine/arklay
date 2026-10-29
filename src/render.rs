@@ -85,19 +85,8 @@ impl Default for Framebuffer {
 /// brightness: `brightness * 16 + 0x1C2`.
 pub const PENDING_SPRITE_DEPTH_BASE: u32 = 0x1C2;
 
-/// The original's text tint table: the palette row (`clutY - 0x1E0`) picks a
-/// colour multiplier over the sheet's grey ramp.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tint {
-    White,
-    Green,
-    Red,
-    Grey,
-    Yellow,
-    /// An explicit per-channel multiplier, for a caller that has a colour of
-    /// its own (the Lua screen API's `#RRGGBB`).
-    Rgb(u8, u8, u8),
-}
+mod tint;
+pub use tint::Tint;
 
 impl Tint {
     /// The tint a font CLUT row selects. Row 8 is the shadow row and behaves
