@@ -732,6 +732,7 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | `ITEM_M1/*.DOR`, `effspr/*.TIM` | `door/<type>.dor`, `effect/<id>.tim` |
 | `TEXT/ROOM_###.xml` | `ROOM_###_TEXT_##` keys in `language/en-US.txt` |
 | BioRand `init.xml` | `game/new_game.lua` (the start inventory above) |
+| `bgm_tbl.xml` (BioRand room music) | `game/music.lua`: the shipped table plus a `set_room_music` per listed room; an empty `<Room />` keeps the room's music |
 | BioRand `type.png` | `ui/type00.png` |
 
 A folder holding a CR `manifest.txt` with a `[MOD]` section is a mod folder:
@@ -746,9 +747,8 @@ Left out: the CR runtime and its configuration (`.dll`, `.exe`, `.asi`, `.ini`,
 `.conf`, `.cfg`, `.txt`, logs), `savedata/`, the Director's Cut `_bio1dc/`
 textures, BioRand's `biorand.dat`, and every converted file identical to the
 base pack's entry. BioRand's room sound `tables/` are skipped because each
-enemy carries its own sounds, so those tables are no longer needed. Files the
-engine cannot use yet (BioRand's `bgm_tbl.xml`) and files no entry reads are
-listed as warnings.
+enemy carries its own sounds, so those tables are no longer needed. Files no
+entry reads are listed as warnings.
 
 The base pack (`--base`, else `games/re1.akpak` under the data roots) decides
 the stage 6/7 copies and the unchanged-file pruning; without one both are
