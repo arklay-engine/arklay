@@ -663,6 +663,20 @@ fn validate_key(key: &str) -> Result<()> {
 
 /// The stream kind a key selects.
 fn kind_of(key: &str) -> Result<Kind> {
+    // A subtitle's speaker name: `<message key>_SPEAKER` or
+    // `<message key>_SPEAKER_<page>`.
+    if (key.starts_with("MESSAGE_") || key.starts_with("ROOM_"))
+        && let Some((message, suffix)) = key.rsplit_once("_SPEAKER")
+        && (suffix.is_empty()
+            || suffix
+                .strip_prefix('_')
+                .is_some_and(|page| !page.is_empty() && page.bytes().all(|b| b.is_ascii_digit())))
+    {
+        if kind_of(message)? != Kind::Message {
+            bail!("speaker key `{key}` must name a `MESSAGE_` or room `_TEXT_` message");
+        }
+        return Ok(Kind::Plain);
+    }
     if key.starts_with("MESSAGE_") {
         return Ok(Kind::Message);
     }
@@ -921,6 +935,24 @@ ITEM_05_DESCRIPTION = \"A\"
         assert_eq!(encoded(source, "ITEM_05_NAME"), [0x1D, 0x07]);
         assert_eq!(encoded(source, "ITEM_05_NAME_UNCHECKED"), [0x1E, 0x07]);
         assert_eq!(encoded(source, "ITEM_05_DESCRIPTION"), [0x1D, 0x01, 0]);
+    }
+
+    #[test]
+    fn speaker_keys_are_plain_names_of_messages() {
+        let source = "\
+MESSAGE_05_SPEAKER = \"A\"
+ROOM_100_TEXT_00_SPEAKER = \"A\"
+ROOM_1001_TEXT_0A_SPEAKER_12 = \"A\"
+";
+        assert_eq!(encoded(source, "MESSAGE_05_SPEAKER"), [0x1D, 0x01]);
+        assert_eq!(encoded(source, "ROOM_100_TEXT_00_SPEAKER"), [0x1D, 0x01]);
+        assert_eq!(
+            encoded(source, "ROOM_1001_TEXT_0A_SPEAKER_12"),
+            [0x1D, 0x01]
+        );
+        assert!(Language::parse("ROOM_100_NAME_SPEAKER = \"A\"").is_err());
+        // A `UI_` label may still mention a speaker.
+        assert!(Language::parse("UI_SPEAKER = \"A\"").is_ok());
     }
 
     #[test]

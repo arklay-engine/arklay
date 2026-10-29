@@ -7853,6 +7853,9 @@ impl GameState {
         if !self.message.request(id, pause, self.message_menu) {
             return false;
         }
+        // The scripts pair every voiced line with its subtitle message:
+        // `voice_play` raises the voice bit just before `message`.
+        self.message.set_voiced(self.voice_playing());
         self.message_flags_backup = self.message_flags;
         self.message_flags &= !pause;
         true

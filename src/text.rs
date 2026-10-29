@@ -154,6 +154,32 @@ impl Text {
             .or_else(|| self.catalog.key_display(&shared))
     }
 
+    /// The speaker of page `page` of message `id`, for a subtitle: the
+    /// message key with `_SPEAKER_<page>` (the page in decimal) appended, else
+    /// with `_SPEAKER`, resolved like [`Text::message`] (the RDT variant's
+    /// key, then the shared room key; `MESSAGE_<nn>` for a global message).
+    /// `None` when no language names one: the RE1 releases carry no speaker
+    /// names, so they come only from a language file or a mod.
+    pub fn speaker(&self, room: &RoomState, id: u16, page: usize) -> Option<String> {
+        let keys = if id & 0x40 != 0 {
+            vec![format!("MESSAGE_{:02X}", id & 0x3F)]
+        } else {
+            let room3 = format!("{:X}{:02X}", room.stage, room.room);
+            vec![
+                format!("ROOM_{room3}{}_TEXT_{id:02X}", room.player_flag),
+                format!("ROOM_{room3}_TEXT_{id:02X}"),
+            ]
+        };
+        keys.iter()
+            .find_map(|key| {
+                self.catalog
+                    .lookup(&format!("{key}_SPEAKER_{page}"))
+                    .or_else(|| self.catalog.lookup(&format!("{key}_SPEAKER")))
+            })
+            .map(|bytes| self.decode(bytes).trim().to_string())
+            .filter(|name| !name.is_empty())
+    }
+
     /// The room's display name (`ROOM_<room3>_NAME`), shown by the port-only
     /// F1 overlay.
     pub fn room_name(&self, room3: &str) -> Option<&[u8]> {
@@ -384,6 +410,30 @@ mod tests {
         assert_eq!(text.message(&room, 0), Some([0x1E, 0x01, 0x00].as_slice()));
         // No language key: the RDT stream is used.
         assert_eq!(text.message(&room, 1), Some([0xCC, 0x01, 0x00].as_slice()));
+    }
+
+    #[test]
+    fn a_speaker_resolves_per_page_then_per_message() {
+        let pack = pack_with(&[(
+            "language/en-US.txt",
+            "ROOM_FFF_TEXT_00 = \"A{timed 9}\"\n\
+             ROOM_FFF_TEXT_00_SPEAKER = \"Rebecca\"\n\
+             ROOM_FFF_TEXT_00_SPEAKER_1 = \"Chris\"\n\
+             ROOM_FFF1_TEXT_01_SPEAKER = \"Jill\"\n",
+        )]);
+        let text = Text::load(&pack, Some("en-US"));
+        let room = RoomState {
+            stage: 0xF,
+            room: 0xFF,
+            player_flag: 1,
+            ..RoomState::default()
+        };
+        assert_eq!(text.speaker(&room, 0, 0).as_deref(), Some("Rebecca"));
+        assert_eq!(text.speaker(&room, 0, 1).as_deref(), Some("Chris"));
+        assert_eq!(text.speaker(&room, 0, 2).as_deref(), Some("Rebecca"));
+        // The RDT variant's key, as for the message itself.
+        assert_eq!(text.speaker(&room, 1, 0).as_deref(), Some("Jill"));
+        assert_eq!(text.speaker(&room, 2, 0), None);
     }
 
     #[test]

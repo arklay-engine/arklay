@@ -1,16 +1,18 @@
-//! The F6 debug HUD and the corner notices.
+//! The F6 debug HUD, the corner notices and the subtitles.
 //!
-//! Both draw at the window's native resolution with the menu's faces and
+//! All three draw at the window's native resolution with the menu's faces and
 //! theme, over the game and over the in-game menu when it is open. The
 //! overlay knows nothing about the game: its owner hands it a [`Report`] of
-//! labelled lines, refreshed at [`REPORT_INTERVAL`], and short-lived
-//! [`Overlay::notify`] messages (the game speed) that fade out on their own.
+//! labelled lines, refreshed at [`REPORT_INTERVAL`], short-lived
+//! [`Overlay::notify`] messages (the game speed) that fade out on their own,
+//! and the [`Subtitle`] on screen, if any, which the HUD and notices cover.
 
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
 use super::canvas::{Canvas, Color, Rect};
+use super::subtitles::{self, Subtitle, SubtitleStyle};
 use super::text::{Align, Fonts};
 use super::theme::{FontFamily, Role, Theme, palette};
 use super::widgets::Painter;
@@ -166,6 +168,7 @@ pub struct Overlay {
     /// When the owner last refreshed the report.
     reported: Option<Instant>,
     notices: Vec<Notice>,
+    subtitle: Option<(Subtitle, SubtitleStyle)>,
     /// Whether the canvas is stale.
     dirty: bool,
     /// The [`Canvas::serial`] of the layer the canvas was composed over
@@ -183,6 +186,7 @@ impl Overlay {
             report: Report::default(),
             reported: None,
             notices: Vec::new(),
+            subtitle: None,
             dirty: true,
             base: 0,
         })
@@ -242,9 +246,25 @@ impl Overlay {
         self.dirty = true;
     }
 
+    /// Show `subtitle` in `style` along the bottom edge until it is replaced
+    /// or cleared with `None`.
+    pub fn set_subtitle(&mut self, subtitle: Option<(Subtitle, SubtitleStyle)>) {
+        if subtitle != self.subtitle {
+            self.subtitle = subtitle;
+            self.dirty = true;
+        }
+    }
+
+    /// Whether the faces can draw every character of `text`, fallbacks
+    /// included, so a line the GUI would show as boxes can be left to the
+    /// game's own font instead.
+    pub fn can_draw(&self, text: &str) -> bool {
+        self.fonts.covers(text)
+    }
+
     /// Whether there is anything to show.
     pub fn visible(&self) -> bool {
-        self.mode != DebugMode::Off || !self.notices.is_empty()
+        self.mode != DebugMode::Off || !self.notices.is_empty() || self.subtitle.is_some()
     }
 
     /// The canvas the last [`Self::draw`] painted.
@@ -284,6 +304,14 @@ impl Overlay {
             self.canvas.copy_from(base);
         }
         let theme = Theme::new(width, height, self.family);
+        if let Some((subtitle, style)) = &self.subtitle {
+            let mut p = Painter {
+                canvas: &mut self.canvas,
+                fonts: &mut self.fonts,
+                theme: theme.with_text_scale(style.size.scale()),
+            };
+            subtitles::draw(&mut p, subtitle, style);
+        }
         let mut p = Painter {
             canvas: &mut self.canvas,
             fonts: &mut self.fonts,

@@ -66,6 +66,11 @@ pub enum Role {
     Tag,
     /// A small filled badge.
     Badge,
+    /// A subtitle's line, sized by the theme's text scale (the Subtitle Size
+    /// option).
+    Subtitle,
+    /// A subtitle's speaker name.
+    Speaker,
 }
 
 /// The palette.
@@ -157,6 +162,8 @@ impl Theme {
             Role::Detail => (Face::Regular, 26.0),
             Role::Tag => (Face::Regular, 40.0),
             Role::Badge => (Face::Bold, 20.0),
+            Role::Subtitle => (Face::Regular, 50.0),
+            Role::Speaker => (Face::Bold, 50.0),
         };
         // The title, tabs and key caps keep their size: they fill fixed
         // slots.

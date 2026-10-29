@@ -2020,6 +2020,13 @@ struct GameSession {
     /// scripted `--input`/`--trace` run plays every scene out like the
     /// reference.
     skips_enabled: bool,
+    /// The Subtitles option is off: a voiced line's subtitle message runs
+    /// its timing but is not drawn.
+    subtitles_off: bool,
+    /// The native-resolution GUI shows (or the menu over it hides) the
+    /// voiced line on screen this frame, so the message window leaves it out.
+    /// The interactive loop sets it before each frame is drawn.
+    native_subtitle: bool,
     /// The running cutscene skip, if any (see [`CutsceneSkip`]).
     cutscene_skip: Option<CutsceneSkip>,
     /// The session's mixer while a cutscene skip runs: the skipped ticks see
@@ -2537,6 +2544,8 @@ impl GameSession {
             swallow_action: false,
             boot_message: None,
             skips_enabled: false,
+            subtitles_off: false,
+            native_subtitle: false,
             cutscene_skip: None,
             cutscene_skip_music: None,
             cutscene_skip_burst: CUTSCENE_SKIP_BURST,
@@ -2967,6 +2976,40 @@ impl GameSession {
     /// Enable or disable the action-button skips (see [`Self::skips_enabled`]).
     fn set_skips_enabled(&mut self, enabled: bool) {
         self.skips_enabled = enabled;
+    }
+
+    /// The voiced line on screen as a subtitle for the native-resolution GUI:
+    /// its current page's text and, when a language names one, its speaker.
+    /// `None` while no voiced line shows, the Subtitles option is off, the
+    /// line has no text (the English release's voiced lines carry only their
+    /// timing) or a screen that replaces the scene is up.
+    fn subtitle(&self) -> Option<gui::Subtitle> {
+        let message = &self.game.message;
+        if self.subtitles_off
+            || !message.is_subtitle()
+            || self.cutscene_skip.is_some()
+            || self.boot_message.is_some()
+            || self.movie.is_some()
+            || self.transition.is_some()
+            || self.death_screen.is_some()
+        {
+            return None;
+        }
+        let lines = message.page_lines(&self.text);
+        if lines.is_empty() {
+            return None;
+        }
+        let speaker = message.id.and_then(|id| {
+            self.text
+                .speaker(&self.loaded.room, u16::from(id), message.page())
+        });
+        Some(gui::Subtitle { speaker, lines })
+    }
+
+    /// Whether the message window draws this frame: a voiced line's subtitle
+    /// is left out when the option hides it or the GUI shows it instead.
+    fn draws_message_window(&self) -> bool {
+        !(self.game.message.is_subtitle() && (self.subtitles_off || self.native_subtitle))
     }
 
     /// Move the presented band one tick toward the player.
@@ -6594,7 +6637,9 @@ impl GameSession {
         }
         // The pause-menu open/close fade sits over the menu and its overlays.
         self.draw_menu_fade();
-        if let Some(font) = &self.font {
+        if self.draws_message_window()
+            && let Some(font) = &self.font
+        {
             let Self {
                 game,
                 framebuffer,
@@ -7292,6 +7337,11 @@ struct App {
     /// cutscenes, and any button skip the app's films (the ending chain
     /// included): on for the interactive window, off for scripted runs.
     skips_enabled: bool,
+    /// The Subtitles option: on draws voiced lines' subtitles, off hides
+    /// them. Sessions inherit it (see [`GameSession::subtitles_off`]).
+    subtitles: bool,
+    /// How the native-resolution GUI draws subtitles.
+    subtitle_style: gui::SubtitleStyle,
     /// Whether a door's room load writes an autosave (when the player's
     /// autosave option is on): only the interactive window does, so traces,
     /// captures, the oracle and the tests never touch the save directory.
@@ -7400,6 +7450,8 @@ impl App {
             movie_action: None,
             pending_movie: None,
             skips_enabled: false,
+            subtitles: true,
+            subtitle_style: gui::SubtitleStyle::default(),
             autosave: false,
             autosave_writer: save::AutosaveWriter::default(),
             film_chain: VecDeque::new(),
@@ -7821,10 +7873,37 @@ impl App {
         self.autosave = true;
     }
 
+    /// Follow the subtitle options of `[game]`.
+    fn set_subtitle_options(&mut self, game: &crate::config::Game) {
+        self.subtitles = game.subtitles;
+        self.subtitle_style = gui::SubtitleStyle::from(game);
+        if let Mode::Play(session) = &mut self.mode {
+            session.subtitles_off = !self.subtitles;
+        }
+    }
+
+    /// The running session's subtitle for the native-resolution GUI, if any
+    /// (see [`GameSession::subtitle`]).
+    fn subtitle(&self) -> Option<gui::Subtitle> {
+        match &self.mode {
+            Mode::Play(session) => session.subtitle(),
+            _ => None,
+        }
+    }
+
+    /// Tell the running session whether this frame's voiced line is the
+    /// GUI's to show, so its message window leaves the line out.
+    fn set_native_subtitle(&mut self, native: bool) {
+        if let Mode::Play(session) = &mut self.mode {
+            session.native_subtitle = native;
+        }
+    }
+
     /// Enter a gameplay session, opening audio on the interactive path.
     fn start_session(&mut self, mut session: Box<GameSession>) {
         session.set_debug_menu(self.debug_menu);
         session.set_skips_enabled(self.skips_enabled);
+        session.subtitles_off = !self.subtitles;
         session.game.player_options = self.player_options;
         if self.audio {
             session.start_audio(&self.pack);
@@ -9312,6 +9391,7 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     let game_options = crate::config::Config::load_default().0.game;
     crate::audio::set_volumes(game_options.volumes());
     ui::save_load::set_modern(game_options.modern_save_screen);
+    app.set_subtitle_options(&game_options);
     let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
     display.set_title(&window_title(app.pack.manifest()))?;
     // An F12 press waits here for the next presented frame.
@@ -9372,6 +9452,16 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         {
             screen.draw(width, height, display.gpu_active());
         }
+        // A voiced line's subtitle is drawn by the GUI when its faces can
+        // spell it; the in-game menu, debug menu or save screen covers it.
+        let subtitle = app.subtitle().filter(|subtitle| hud.can_draw(subtitle));
+        app.set_native_subtitle(subtitle.is_some());
+        let covered = app.native_layer().is_some();
+        hud.set_subtitle(
+            subtitle
+                .filter(|_| !covered)
+                .map(|subtitle| (subtitle, app.subtitle_style)),
+        );
         hud.draw(app, display, &clock, &input);
         // A frame the GPU fails to draw switches the whole run to the
         // software backend, which then draws it; no frame mixes the two.
@@ -9900,6 +9990,7 @@ fn apply_menu_settings(
     }
     app.set_language(settings.language.as_deref());
     crate::audio::set_volumes(settings.game.volumes());
+    app.set_subtitle_options(&settings.game);
     let path = crate::config::Config::default_path();
     let (file, _) = crate::config::Config::load_default();
     let (saved_graphics, saved_language, saved_game) =
@@ -23487,6 +23578,41 @@ mod tests {
         }
         session.render(&pack);
         assert_eq!(session.room_fade_alpha(), None);
+    }
+
+    /// A voiced line becomes the GUI's subtitle: the message window leaves it
+    /// out while the GUI shows it, and the Subtitles option hides it from
+    /// both.
+    #[test]
+    fn a_voiced_line_is_drawn_by_the_gui_or_hidden() {
+        let dir = TempDir::new();
+        let (pack, a, _b) = two_room_door_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let mut bytes = vec![0x04, 0x00];
+        crate::charset::encode("Hi there", session.text.script(), &mut bytes);
+        bytes.extend([0x04, 0x02, 0x01, 30]);
+        assert!(session.game.message.start(0x40, 0, &bytes, false));
+        session.game.message.set_voiced(true);
+        for _ in 0..4 {
+            session
+                .game
+                .message
+                .update(MessageInput::default(), &session.text, 0);
+        }
+        let subtitle = session.subtitle().expect("a voiced line is a subtitle");
+        assert_eq!(subtitle.lines, ["Hi there"]);
+        assert_eq!(subtitle.speaker, None);
+        assert!(session.draws_message_window(), "until the GUI takes it");
+        session.native_subtitle = true;
+        assert!(!session.draws_message_window());
+        session.native_subtitle = false;
+        session.subtitles_off = true;
+        assert_eq!(session.subtitle(), None);
+        assert!(!session.draws_message_window());
+        // A line without a voice stays the window's whatever the option.
+        session.game.message.set_voiced(false);
+        assert_eq!(session.subtitle(), None);
+        assert!(session.draws_message_window());
     }
 
     /// The cutscene letterbox bars ramp in while the bank-5 intensity flag is

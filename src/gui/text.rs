@@ -218,6 +218,17 @@ impl Fonts {
         &self.faces[face as usize]
     }
 
+    /// Whether an embedded face or a system fallback has every visible
+    /// character of `text`.
+    pub fn covers(&self, text: &str) -> bool {
+        text.chars()
+            .filter(|&ch| !ch.is_whitespace() && !ch.is_control())
+            .all(|ch| {
+                self.font(Face::Regular).lookup_glyph_index(ch) != 0
+                    || fallback_for(Face::Regular, ch).is_some()
+            })
+    }
+
     /// Drop every cached glyph (a resize changed every size in use).
     pub fn clear_cache(&mut self) {
         self.glyphs.clear();

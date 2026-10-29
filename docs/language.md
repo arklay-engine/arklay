@@ -88,6 +88,37 @@ game is not RE1 (its manifest `id` is not `re1`) takes only their `UI_` keys,
 the engine's own strings; its messages, room and item text come from the pack
 alone.
 
+## Subtitles
+
+The room scripts pair each voice line with a message: `voice_play` and then
+`message` with a stream that ends `{timed N}`. A message raised while a voice
+line plays, that times itself out and asks no yes/no question, is a subtitle.
+The interactive window draws its current page with the native-resolution GUI
+along the bottom of the screen, styled by the Language › Subtitles options,
+instead of the message window (see the README). The page's glyphs are decoded
+back to text; each authored line stays a line, trimmed and with runs of
+spaces collapsed, and a line too wide for the screen wraps. If the GUI's faces
+cannot spell a character, the message window draws the line instead.
+
+The USA release's English text keeps only the timing of its voiced lines
+(`"{scroll 0}\n{scroll 2}{timed 70}"`), so it has no subtitles. A language or
+a mod gives English subtitles by filling in those strings and keeping their
+`{clear N}` and `{timed N}` timings.
+
+RE1 names no speakers. A language file may name one per message:
+
+| key | meaning |
+|---|---|
+| `<message key>_SPEAKER` | the speaker of every page of the message, e.g. `ROOM_100_TEXT_03_SPEAKER = "Rebecca"` |
+| `<message key>_SPEAKER_<page>` | the speaker of one page (0 is the first, in decimal), overriding the above, e.g. `ROOM_100_TEXT_04_SPEAKER_1 = "Rebecca"` |
+
+The message key is the one the message resolves through (`MESSAGE_<nn>`,
+`ROOM_<rdt4>_TEXT_<nn>` or `ROOM_<room3>_TEXT_<nn>`), checked in that order
+for room messages. The name shows when Speaker Name Display is on. The GUI
+side takes only the lines and an optional speaker
+(`crate::gui::subtitles::Subtitle`), so subtitle data from another game can
+feed the same drawing.
+
 ## Mods
 
 A mod pack may ship `language/<tag>.txt` with any subset of keys. Every layer's
