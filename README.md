@@ -68,7 +68,8 @@ Data resolves by precedence:
 - configuration and saves: `%APPDATA%\arklay` on Windows,
   `$XDG_CONFIG_HOME/arklay` on Linux; an existing `arklay.toml` in the local
   data directory takes over instead
-- games, mods and logs: `%LOCALAPPDATA%\arklay` (`$XDG_DATA_HOME/arklay`)
+- games, mods, logs and `F12` screenshots: `%LOCALAPPDATA%\arklay`
+  (`$XDG_DATA_HOME/arklay`)
 - `ARKLAY_DATA=C:\one;C:\two` replaces the data-root list entirely, with the
   first path chosen for new files; otherwise the order is the local data
   directory, the roaming directory, then the executable's directory
@@ -450,6 +451,7 @@ when they compare with the reference.
 | `F2`, `F3` | Port-only game speed: F2 steps down and F3 up, 1x to 3x in 0.5x steps; the new speed shows briefly in the bottom-left corner |
 | `F6` | Port-only debug HUD: steps through full information (engine, FPS, resolution, memory, CPU, pack, mods, room, player, boss), a compact player panel (health, condition, ammo) with the boss's health, the FPS alone in the top-right corner, and off |
 | `F9` | Return-to-title prompt: a second F9 returns to the title screen, any other key cancels |
+| `F12` | Port-only screenshot: saves the game frame (without the window's bars, the debug HUD or the in-game menu) as a PNG in `screenshots/` under the data directory, named by the local time; the file name shows briefly in the bottom-left corner |
 
 Every action except the fixed inputs (`F1`, `F9`, the gamepad's Start
 and its Back + Start combination) can be rebound, with any number of keyboard, mouse (buttons and

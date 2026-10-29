@@ -84,8 +84,9 @@ use sdl3_sys::render::{
 };
 use sdl3_sys::scancode::{
     SDL_SCANCODE_1, SDL_SCANCODE_3, SDL_SCANCODE_E, SDL_SCANCODE_ESCAPE, SDL_SCANCODE_F2,
-    SDL_SCANCODE_F3, SDL_SCANCODE_F4, SDL_SCANCODE_F6, SDL_SCANCODE_F8, SDL_SCANCODE_KP_ENTER,
-    SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB, SDL_Scancode,
+    SDL_SCANCODE_F3, SDL_SCANCODE_F4, SDL_SCANCODE_F6, SDL_SCANCODE_F8, SDL_SCANCODE_F12,
+    SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB,
+    SDL_Scancode,
 };
 use sdl3_sys::stdinc::SDL_free;
 use sdl3_sys::surface::{
@@ -1501,6 +1502,38 @@ impl Display {
             }
             Backend::None => bail!("display has no renderer"),
         }
+    }
+
+    /// The frame just presented as a screenshot (see [`crate::screenshot`]):
+    /// `film`, an HD film frame the GPU backend showed in its place, else
+    /// the GPU's drawing of `frame` read back, else `frame`'s pixels enlarged
+    /// by the whole factor the window shows them at. Only the band a wider
+    /// aspect presents is kept.
+    fn screenshot(
+        &mut self,
+        frame: &Framebuffer,
+        film: Option<(&[u8], (u32, u32))>,
+    ) -> Result<crate::screenshot::Image> {
+        use crate::screenshot::Image;
+        let shown = video::shown(frame.width, frame.height, frame.view);
+        if let Backend::Gpu(gpu) = &self.backend {
+            if let Some((rgba, (width, height))) = film {
+                return Image::new(width, height, rgba.to_vec());
+            }
+            if frame.list().is_some() {
+                let (rgba, (width, height)) = gpu.read_frame()?;
+                let image = Image::new(width, height, rgba)?;
+                let scale = f64::from(height) / f64::from(frame.height.max(1));
+                let top = (f64::from(shown.top) * scale).round() as u32;
+                let rows = (f64::from(shown.height) * scale).round() as u32;
+                return Ok(image.rows(top, rows));
+            }
+        }
+        let image = Image::new(frame.width, frame.height, frame.rgba.clone())?;
+        let (width, height) = self.drawable_size();
+        let fit = video::fit_size(width, height, shown.width, shown.height);
+        let scale = fit.height / shown.height.max(1);
+        Ok(image.rows(shown.top, shown.height).enlarged(scale))
     }
 
     /// Replace a failed GPU backend with the software one.
@@ -9279,11 +9312,14 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
     ui::save_load::set_modern(game_options.modern_save_screen);
     let mut hud = debug_hud::DebugHud::new(game_options.ui_font);
     display.set_title(&window_title(app.pack.manifest()))?;
+    // An F12 press waits here for the next presented frame.
+    let mut screenshot = false;
     loop {
         let mut keys = PortKeys::default();
         if poll_events(&mut event, &mut input, &mut keys, Some(display)) {
             return clock.report();
         }
+        screenshot |= keys.screenshot;
         if keys.cut_delta != 0 {
             app.step_camera_cut(keys.cut_delta);
         }
@@ -9361,6 +9397,24 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             clock.frame_drawn(draw);
             let native = hud.layer().or(app.native_layer());
             display.present_frame(app.frame(), None, native)?;
+        }
+        if std::mem::take(&mut screenshot) {
+            #[cfg(feature = "hd")]
+            let film = app
+                .hd_frame()
+                .map(|film| (&film.rgba[..], (film.width, film.height)));
+            #[cfg(not(feature = "hd"))]
+            let film = None;
+            match display.screenshot(app.frame(), film) {
+                Ok(image) => {
+                    let name = crate::screenshot::save_in_background(image);
+                    hud.notify("screenshot", format!("Screenshot saved: {name}"));
+                }
+                Err(err) => {
+                    eprintln!("warning: screenshot failed: {err:#}");
+                    hud.notify("screenshot", "Screenshot failed");
+                }
+            }
         }
         display.show()?;
         hud.frame_presented();
@@ -11784,6 +11838,8 @@ struct PortKeys {
     debug_overlay: u32,
     /// F4 presses: each steps the debug render mode.
     render_mode: u32,
+    /// F12 was pressed: save the next presented frame as a screenshot.
+    screenshot: bool,
 }
 
 /// Poll every queued SDL event into `input`, reporting whether the user quit
@@ -11794,7 +11850,8 @@ struct PortKeys {
 /// refresh rate while the simulation runs at a fixed 30 Hz: a press that lands
 /// between two ticks must still be there when the next tick asks.
 ///
-/// F8 and Alt+Enter change `display`'s window and never reach the game.
+/// F8 and Alt+Enter change `display`'s window and F12 takes a screenshot of
+/// it; none of them reach the game.
 fn poll_events(
     event: &mut SDL_Event,
     input: &mut InputState,
@@ -11840,6 +11897,10 @@ fn poll_events(
                     if !repeat {
                         display.step_window();
                     }
+                    continue;
+                }
+                if scancode == SDL_SCANCODE_F12 {
+                    keys.screenshot |= !repeat;
                     continue;
                 }
                 if matches!(scancode, SDL_SCANCODE_RETURN | SDL_SCANCODE_KP_ENTER)
