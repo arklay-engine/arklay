@@ -86,7 +86,7 @@ case "$mode" in
         mkdir -p "$target" || exit 0
         ./scripts/seed-target.sh >>"$log" 2>&1
         kick
-        echo "This worktree builds in the background, at session start and after each edit to a source file (log: $target/prebuild.log). A cargo command run while that build is still going waits for it (\"Blocking waiting for file lock\"); that is expected and quicker than building again."
+        echo "This worktree builds in the background, at session start and after each edit to a source file (log: $target/prebuild.log). A cargo command run while that build is still going waits for it (\"Blocking waiting for file lock\"); that is expected and quicker than building again. Edit and build in separate tool calls, so the background build gets a head start while you write the build command."
         ;;
     edited)
         [[ -d "$target" ]] && changed && kick
