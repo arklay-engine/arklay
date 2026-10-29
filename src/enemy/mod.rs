@@ -255,6 +255,9 @@ impl EntityModelCache {
 /// the original's `LoadEntityEMD` store at `EntityModelLoader.cpp:555-558`.
 /// The last model with a second bank wins; a model without one leaves the
 /// pair untouched, exactly like the original's `if (*puVar2 != 0)` guard.
+/// [`update_all`] narrows this to the attacker's model once an enemy claims
+/// the player ([`GameState::player_damage_owner`]), so a room can mix enemy
+/// types.
 ///
 /// The reaction clips index the file-base keyframe table the EMD's own header
 /// describes ([`Emd::damage_keyframes`]), never the model's main keyframes.
@@ -300,7 +303,14 @@ pub fn update_all(
             if let Some(keyframes) = models.keyframes(pack, id, player) {
                 game.entity_anims[slot].keyframes = Some(Arc::clone(&keyframes));
             }
-            note_player_damage_bank(game, model.as_deref());
+            // Until an enemy claims the player's reaction, the last loaded
+            // model wins like the original's loader; once one has, only the
+            // claimant repoints the bank, so mixed enemy types in one room
+            // never play another type's reaction clips.
+            let owner = game.player_damage_owner;
+            if owner.is_none_or(|owner| usize::from(owner) == slot) {
+                note_player_damage_bank(game, model.as_deref());
+            }
             if let Some(skeleton) = models.skeleton(pack, id, player) {
                 game.entity_anims[slot].skeleton = Some(skeleton);
             }
@@ -309,6 +319,9 @@ pub fn update_all(
                 && host.update(game, room, pack, slot, clips)
             {
                 updated += 1;
+            }
+            if game.player_damage_owner != owner && game.player_damage_owner == Some(slot as u8) {
+                note_player_damage_bank(game, model.as_deref());
             }
             walk::refresh_entity_sca_world(&mut game.entities[slot]);
             continue;
@@ -515,6 +528,59 @@ mod tests {
             game.player_damage.as_ref().unwrap().clips.len(),
             2,
             "a model without a second bank leaves the pair untouched"
+        );
+    }
+
+    /// A room mixing enemy types: the player's reaction clips follow the
+    /// enemy that attacked, not the last model the update loop touched.
+    #[test]
+    fn mixed_enemy_types_play_the_attackers_reaction_bank() {
+        let mut writer = crate::pack::PackWriter::new();
+        // The zombie (slot 1) bites whenever the attack flag is up; the
+        // hunter (slot 2) only walks.
+        let zombie = "function update(e) if e:flag_bit(0, 1) then e.player_state = 5 end end";
+        writer
+            .add("enemy/00/enemy.lua", zombie.as_bytes().to_vec())
+            .unwrap();
+        writer
+            .add("enemy/06/enemy.lua", b"function update(e) end".to_vec())
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+
+        let mut models = EntityModelCache::default();
+        models
+            .models
+            .insert((0x00, 0), Arc::new(model_with_damage(2)));
+        models
+            .models
+            .insert((0x06, 0), Arc::new(model_with_damage(3)));
+        let mut game = GameState::default();
+        for (slot, id) in [(1, 0x00), (2, 0x06)] {
+            game.entities[slot].id = id;
+            game.entities[slot].set_active(true);
+        }
+        game.enemy_count = 2;
+        let room = RoomState::default();
+        let mut host = LuaEnemyHost::new();
+        let bank = |game: &GameState| game.player_damage.as_ref().map(|bank| bank.clips.len());
+
+        update_all(&mut game, &room, &mut models, &pack, Some(&mut host));
+        assert_eq!(game.player_damage_owner, None);
+        assert_eq!(bank(&game), Some(3), "no attack yet: the last model wins");
+
+        game.flags[0].apply(1, 0);
+        update_all(&mut game, &room, &mut models, &pack, Some(&mut host));
+        assert_eq!(game.player_damage_owner, Some(1));
+        assert_eq!(bank(&game), Some(2), "the zombie's bite plays its own bank");
+
+        game.flags[0].apply(1, 1);
+        update_all(&mut game, &room, &mut models, &pack, Some(&mut host));
+        assert_eq!(bank(&game), Some(2), "the hunter's later update keeps it");
+
+        game.enter_room(crate::state::RoomId::default(), &room);
+        assert_eq!(
+            game.player_damage_owner, None,
+            "room entry clears the claim"
         );
     }
 
