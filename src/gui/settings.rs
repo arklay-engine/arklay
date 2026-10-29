@@ -267,25 +267,11 @@ fn percent_slider() -> OptionKind {
     }
 }
 
-/// One option: its strings come from `{id}.label` and `{id}.description`, its
-/// place from the `category.`, `page.` and `group.` keys. An empty group draws
-/// no header.
-fn def(
-    text: &Locale,
-    id: &str,
-    (category, page, group): (&str, &str, &str),
-    kind: OptionKind,
-    default: i32,
-) -> OptionDef {
+/// One option: its strings come from `{id}.label` and `{id}.description`
+/// (where it shows is up to `assets/ui/options.xml`).
+fn def(text: &Locale, id: &str, kind: OptionKind, default: i32) -> OptionDef {
     OptionDef {
         id: id.to_string(),
-        category: text.get(&format!("category.{category}")).to_string(),
-        subcategory: text.get(&format!("page.{page}")).to_string(),
-        group: if group.is_empty() {
-            String::new()
-        } else {
-            text.get(&format!("group.{group}")).to_string()
-        },
         label: text.get(&format!("{id}.label")).to_string(),
         description: text.get(&format!("{id}.description")).to_string(),
         kind,
@@ -306,26 +292,11 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
     let rate_list = frame_rates(settings.graphics.frame_rate);
     let resolution_list = resolutions(&settings.graphics);
     let language_list = languages();
-    const INK_RIBBONS: (&str, &str, &str) = ("gameplay", "general", "ink_ribbons");
-    const SAVING: (&str, &str, &str) = ("gameplay", "general", "saving");
-    const ROOM_SCRIPTS: (&str, &str, &str) = ("gameplay", "general", "room_scripts");
-    const CHARACTER: (&str, &str, &str) = ("controls", "basic", "character_controls");
-    const AIMING: (&str, &str, &str) = ("controls", "basic", "when_aiming");
-    const BUTTONS: (&str, &str, &str) = ("controls", "controller", "button_settings");
-    const FUNCTIONS: (&str, &str, &str) = ("controls", "controller", "function_settings");
-    const KEYBOARD: (&str, &str, &str) = ("controls", "keyboard_mouse", "keyboard_mouse_settings");
-    const DISPLAY: (&str, &str, &str) = ("graphics", "display", "");
-    const HUD: (&str, &str, &str) = ("graphics", "display", "hud");
-    const IMAGE: (&str, &str, &str) = ("graphics", "image", "");
-    const QUALITY: (&str, &str, &str) = ("graphics", "image", "quality_settings");
-    const VOLUME: (&str, &str, &str) = ("audio", "general", "volume");
-    const LANGUAGE: (&str, &str, &str) = ("language", "general", "language");
-    const SUBTITLES: (&str, &str, &str) = ("language", "general", "subtitles");
 
     // A default is read back through `value`, so each row's mapping lives in
     // one place; a list that grows with the current setting is searched
     // instead.
-    let row = |id: &str, place, kind| {
+    let row = |id: &str, kind| {
         let graphics = &defaults.graphics;
         let default = match id {
             "resolution" => resolution_list
@@ -342,41 +313,20 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 .unwrap_or(0) as i32,
             _ => value(id, &defaults),
         };
-        def(text, id, place, kind, default)
+        def(text, id, kind, default)
     };
     let mut list = vec![
-        row(
-            "chris_ink_ribbons",
-            INK_RIBBONS,
-            on_off(text, "chris_ink_ribbons"),
-        ),
-        row(
-            "jill_ink_ribbons",
-            INK_RIBBONS,
-            on_off(text, "jill_ink_ribbons"),
-        ),
-        row("autosave", SAVING, on_off(text, "autosave")),
-        row(
-            "room_script_fixes",
-            ROOM_SCRIPTS,
-            on_off(text, "room_script_fixes"),
-        ),
-        row("quick_turn", CHARACTER, on_off(text, "quick_turn")),
-        row(
-            "analog_movement",
-            CHARACTER,
-            on_off(text, "analog_movement"),
-        ),
-        row("auto_aim", AIMING, on_off(text, "auto_aim")),
-        row("tactical_reload", AIMING, on_off(text, "tactical_reload")),
-        row(
-            "control_type",
-            BUTTONS,
-            named::<ControlType>(text, "control_type"),
-        ),
+        row("chris_ink_ribbons", on_off(text, "chris_ink_ribbons")),
+        row("jill_ink_ribbons", on_off(text, "jill_ink_ribbons")),
+        row("autosave", on_off(text, "autosave")),
+        row("room_script_fixes", on_off(text, "room_script_fixes")),
+        row("quick_turn", on_off(text, "quick_turn")),
+        row("analog_movement", on_off(text, "analog_movement")),
+        row("auto_aim", on_off(text, "auto_aim")),
+        row("tactical_reload", on_off(text, "tactical_reload")),
+        row("control_type", named::<ControlType>(text, "control_type")),
         row(
             "button_style",
-            BUTTONS,
             OptionKind::Choice(vec![
                 Choice::described(
                     text.get("button_style.auto"),
@@ -387,16 +337,11 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                 Choice::new("Nintendo"),
             ]),
         ),
-        row(
-            "vibration",
-            FUNCTIONS,
-            named::<Vibration>(text, "vibration"),
-        ),
+        row("vibration", named::<Vibration>(text, "vibration")),
         // Opens the key configuration screen; it has no value.
-        row("key_config", KEYBOARD, OptionKind::Link),
+        row("key_config", OptionKind::Link),
         row(
             "fullscreen",
-            DISPLAY,
             OptionKind::Choice(vec![
                 Choice::new(text.get("fullscreen.window")),
                 Choice::new(text.get("fullscreen.fullscreen")),
@@ -404,7 +349,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "monitor",
-            DISPLAY,
             OptionKind::Choice(
                 settings
                     .monitors()
@@ -421,7 +365,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "resolution",
-            DISPLAY,
             OptionKind::Choice(
                 resolution_list
                     .iter()
@@ -431,7 +374,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "aspect",
-            DISPLAY,
             OptionKind::Choice(
                 aspect_list
                     .iter()
@@ -441,7 +383,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "frame_rate",
-            DISPLAY,
             OptionKind::Choice(
                 rate_list
                     .iter()
@@ -449,10 +390,9 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     .collect(),
             ),
         ),
-        row("vsync", DISPLAY, on_off(text, "vsync")),
+        row("vsync", on_off(text, "vsync")),
         row(
             "hdr",
-            DISPLAY,
             OptionKind::Choice(vec![
                 Choice::described(text.get("hdr.auto"), text.get("hdr.auto_note")),
                 Choice::described(text.get("choice.off"), text.get("hdr.off")),
@@ -460,20 +400,14 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "ui_font",
-            HUD,
             OptionKind::Choice(vec![
                 Choice::described(text.get("ui_font.modern"), text.get("ui_font.modern_note")),
                 Choice::described(text.get("ui_font.retro"), text.get("ui_font.retro_note")),
             ]),
         ),
-        row(
-            "menu_text_size",
-            HUD,
-            named::<TextSize>(text, "menu_text_size"),
-        ),
+        row("menu_text_size", named::<TextSize>(text, "menu_text_size")),
         row(
             "save_screen",
-            HUD,
             OptionKind::Choice(vec![
                 Choice::described(
                     text.get("save_screen.modern"),
@@ -486,11 +420,10 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
             ]),
         ),
         // Shows the machine's specifications; it has no value.
-        row("pc_specs", IMAGE, OptionKind::Info),
-        row("blood", IMAGE, on_off(text, "blood")),
+        row("pc_specs", OptionKind::Info),
+        row("blood", on_off(text, "blood")),
         row(
             "graphics_quality",
-            QUALITY,
             OptionKind::Choice(
                 PRESETS
                     .iter()
@@ -507,7 +440,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "renderer",
-            QUALITY,
             OptionKind::Choice(vec![
                 Choice::described(
                     text.get("renderer.software"),
@@ -518,7 +450,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "render_scale",
-            QUALITY,
             OptionKind::Slider {
                 min: 25,
                 max: 400,
@@ -528,7 +459,6 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
         row(
             "msaa",
-            QUALITY,
             OptionKind::Choice(
                 video::MSAA_COUNTS
                     .iter()
@@ -541,17 +471,15 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
         ),
     ];
     for id in VOLUMES {
-        list.push(row(id, VOLUME, percent_slider()));
+        list.push(row(id, percent_slider()));
     }
     list.extend([
         row(
             "voice_language",
-            LANGUAGE,
             OptionKind::Choice(vec![Choice::new(endonym("en-US"))]),
         ),
         row(
             "language",
-            LANGUAGE,
             OptionKind::Choice(
                 language_list
                     .iter()
@@ -568,16 +496,15 @@ pub fn defs(settings: &Settings, text: &Locale) -> Vec<OptionDef> {
                     .collect(),
             ),
         ),
-        row("subtitles", SUBTITLES, on_off(text, "subtitles")),
+        row("subtitles", on_off(text, "subtitles")),
         row(
             "subtitle_size",
-            SUBTITLES,
             named::<SubtitleSize>(text, "subtitle_size"),
         ),
-        row("subtitle_background", SUBTITLES, percent_slider()),
-        row("subtitle_color", SUBTITLES, colors(text)),
-        row("speaker_names", SUBTITLES, on_off(text, "speaker_names")),
-        row("speaker_name_color", SUBTITLES, colors(text)),
+        row("subtitle_background", percent_slider()),
+        row("subtitle_color", colors(text)),
+        row("speaker_names", on_off(text, "speaker_names")),
+        row("speaker_name_color", colors(text)),
     ]);
     for option in &mut list {
         option.disabled = match option.id.as_str() {
@@ -796,7 +723,12 @@ mod tests {
     fn every_option_round_trips() {
         let base = settings();
         for option in defs(&base, &Locale::default()) {
-            for position in 0..option.positions() as i32 {
+            let positions = match &option.kind {
+                OptionKind::Choice(choices) => choices.len() as i32,
+                OptionKind::Slider { min, max, step, .. } => (max - min) / step.max(&1) + 1,
+                OptionKind::Link | OptionKind::Info => 1,
+            };
+            for position in 0..positions {
                 let wanted = match option.kind {
                     OptionKind::Choice(_) => position,
                     OptionKind::Slider { min, step, .. } => min + position * step,
@@ -836,16 +768,10 @@ mod tests {
                 OptionKind::Choice(choices) => choices.clone(),
                 OptionKind::Slider { .. } | OptionKind::Link | OptionKind::Info => Vec::new(),
             };
-            for shown in [
-                &option.category,
-                &option.subcategory,
-                &option.group,
-                &option.label,
-                &option.description,
-            ]
-            .into_iter()
-            .chain(choices.iter().map(|c| &c.label))
-            .chain(choices.iter().filter_map(|c| c.description.as_ref()))
+            for shown in [&option.label, &option.description]
+                .into_iter()
+                .chain(choices.iter().map(|c| &c.label))
+                .chain(choices.iter().filter_map(|c| c.description.as_ref()))
             {
                 assert!(!is_key(shown), "{}: {shown}", option.id);
             }

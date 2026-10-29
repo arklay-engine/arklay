@@ -56,6 +56,16 @@ pub enum Role {
     DebugHeading,
     /// A corner notice (the game speed).
     Notice,
+    /// A small dim line under a heading.
+    Caption,
+    /// A list entry's main line (a save's location).
+    Heading,
+    /// A list entry's secondary lines.
+    Detail,
+    /// A large faint tag (a save's slot).
+    Tag,
+    /// A small filled badge.
+    Badge,
 }
 
 /// The palette.
@@ -140,11 +150,22 @@ impl Theme {
             Role::Debug => (Face::Regular, 22.0),
             Role::DebugHeading => (Face::Bold, 22.0),
             Role::Notice => (Face::Regular, 30.0),
+            Role::Caption => (Face::Regular, 24.0),
+            Role::Heading => (Face::Regular, 36.0),
+            Role::Detail => (Face::Regular, 26.0),
+            Role::Tag => (Face::Regular, 40.0),
+            Role::Badge => (Face::Bold, 20.0),
         };
         // The title, tabs and key caps keep their size: they fill fixed
         // slots.
         let text_scale = match role {
-            Role::Title | Role::Tab | Role::KeyCap | Role::Debug | Role::DebugHeading => 1.0,
+            Role::Title
+            | Role::Tab
+            | Role::KeyCap
+            | Role::Debug
+            | Role::DebugHeading
+            | Role::Tag
+            | Role::Badge => 1.0,
             _ => self.text_scale,
         };
         let px = self.u(units) * text_scale;

@@ -13,6 +13,7 @@ dialog.yes = "Yes"
 dialog.no = "No"
 
 hint.select = "Select"
+hint.change = "Change"
 hint.back = "Back"
 hint.reset_all = "Reset All"
 hint.reset_page = "Reset Subcategory"

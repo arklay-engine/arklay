@@ -185,15 +185,6 @@ impl InventoryEditor {
         self.slot = self.slot.min(capacity.saturating_sub(1));
     }
 
-    /// Scroll the slots, or the open picker, by `rows` without moving the
-    /// cursor.
-    pub(super) fn scroll_by(&mut self, rows: isize) {
-        match self.picker.as_mut() {
-            Some(picker) => picker.scroll.by(rows),
-            None => self.scroll.by(rows),
-        }
-    }
-
     /// Put the cursor on pointer target `index`: a picker cell or a slot.
     pub(super) fn point(&mut self, index: usize, game: &GameState) {
         match self.picker.as_mut() {
@@ -218,10 +209,8 @@ impl InventoryEditor {
                 self.picker = None;
                 // The cursor follows the item to the slot it landed in.
                 self.slot = assign(game, self.slot, item);
-                self.scroll.follow();
             } else if let Some(cell) = grid_step(picker.cell, PICKER_CELLS, picker.columns, input) {
                 picker.cell = cell;
-                picker.scroll.follow();
             }
             return Step::Stay;
         }
@@ -240,7 +229,6 @@ impl InventoryEditor {
             } else {
                 self.slot += 1;
             }
-            self.scroll.follow();
         } else if self.on_size {
             step_size(game, input);
             self.slot = self.slot.min(game.inventory_capacity() - 1);
@@ -357,7 +345,9 @@ impl InventoryEditor {
         let top = picker.scroll.layout(picker.cell / columns, grid.rows, rows);
         let picker = *picker;
         let first = top * columns;
-        let last = (first + grid.rows * columns).min(PICKER_CELLS);
+        let last = (first + grid.shown()).min(PICKER_CELLS);
+        let clip = grid.clip(p);
+        p.canvas.push_clip(clip);
         for cell in first..last {
             let (rect, frame) = grid.cell(cell - first);
             let selected = cell == picker.cell;
@@ -378,8 +368,9 @@ impl InventoryEditor {
                     &text,
                 );
             }
-            cx.hits.push((rect, Hit::Item(cell)));
+            cx.hits.push((rect.intersect(&clip), Hit::Item(cell)));
         }
+        p.canvas.pop_clip();
         grid.scrollbar(p, top, rows);
         let item = picker.item();
         let cy = area.bottom() - footer_h / 2.0;

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The F1 debug menu: its tools, and the live state beside them. The host
+     publishes the pack's labels at `debug.text.*` and the state as
+     `debug.state` (label/value pairs). -->
+<screen use="standard-screen" title="{debug.text.title}">
+  <command key="cancel" label="@debug.close" action="back"/>
+  <split>
+    <list width="560">
+      <item variant="menu" index="0" text="{debug.text.rooms}" action="rooms"/>
+      <item variant="menu" index="1" text="{debug.text.inventory}" action="inventory"/>
+      <item variant="menu" index="2" text="{debug.text.player}" action="open:debug_player"/>
+      <item variant="menu" index="3" text="{debug.text.flags}" action="open:debug_flags"/>
+      <item variant="menu" index="4" text="{debug.text.cheats}" action="open:debug_cheats"/>
+      <item variant="menu" index="5" text="{debug.text.save}" action="save"/>
+      <item variant="menu" index="6" text="{debug.text.item_box}" action="item_box"/>
+      <item variant="menu" index="7" text="{debug.text.clear_game}" action="open:debug_clear"/>
+    </list>
+    <facts items="{debug.state}"/>
+  </split>
+</screen>

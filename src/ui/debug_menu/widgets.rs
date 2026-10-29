@@ -21,21 +21,11 @@ const VALUE_RIGHT: f32 = 0.965;
 /// The leading column (a slot number, a flag selector) and its gap.
 const LEAD_W: f32 = 64.0;
 
-/// A scrolled view's first shown row. It keeps the cursor in view until the
-/// wheel scrolls it, and stops at either end.
-#[derive(Debug, Clone, Copy)]
+/// A scrolled view's first shown row. It keeps the cursor in view and
+/// stops at either end.
+#[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Scroll {
     top: usize,
-    follow: bool,
-}
-
-impl Default for Scroll {
-    fn default() -> Self {
-        Self {
-            top: 0,
-            follow: true,
-        }
-    }
 }
 
 impl Scroll {
@@ -44,27 +34,14 @@ impl Scroll {
         self.top
     }
 
-    /// Bring the cursor back into view on the next layout.
-    pub fn follow(&mut self) {
-        self.follow = true;
-    }
-
-    /// Scroll by `rows` and leave the cursor where it is.
-    pub fn by(&mut self, rows: isize) {
-        self.top = self.top.saturating_add_signed(rows);
-        self.follow = false;
-    }
-
     /// Lay out `total` rows of which `visible` fit, the cursor on row
     /// `cursor`; returns the first shown row.
     pub fn layout(&mut self, cursor: usize, visible: usize, total: usize) -> usize {
         let visible = visible.max(1);
-        if self.follow {
-            if cursor < self.top {
-                self.top = cursor;
-            } else if cursor >= self.top + visible {
-                self.top = cursor + 1 - visible;
-            }
+        if cursor < self.top {
+            self.top = cursor;
+        } else if cursor >= self.top + visible {
+            self.top = cursor + 1 - visible;
         }
         self.top = self.top.min(total.saturating_sub(visible));
         self.top
@@ -124,8 +101,6 @@ pub(super) enum Value<'a> {
     None,
     /// A value stepped between arrows, with (count, current) pips.
     Step(&'a str, Option<(usize, usize)>),
-    /// The options screen's link mark, with an optional note beside it.
-    Link(Option<&'a str>),
 }
 
 /// What a row shows on its left.
@@ -205,20 +180,6 @@ pub(super) fn row(
             );
             cx.hits.push((decrease, Hit::Decrease(index)));
             cx.hits.push((increase, Hit::Increase(index)));
-        }
-        Value::Link(note) => {
-            if let Some(note) = note {
-                let center = (left_arrow + right_arrow) / 2.0;
-                p.text(
-                    Role::Row,
-                    center,
-                    cy,
-                    Align::Center,
-                    palette::TEXT_DIM,
-                    note,
-                );
-            }
-            p.link_icon(right_arrow, cy, 30.0, palette::TEXT);
         }
     }
 }
@@ -311,6 +272,24 @@ impl Grid {
             gap,
             rows,
         }
+    }
+
+    /// How many cells to draw from the top row: the whole rows that fit and
+    /// the partial one below them, which [`Self::clip`] cuts off.
+    pub fn shown(&self) -> usize {
+        (self.rows + 1) * self.columns
+    }
+
+    /// The grid's visible area: cells are clipped to it (with room for the
+    /// selection outline), like a scrolled list.
+    pub fn clip(&self, p: &Painter<'_>) -> Rect {
+        let margin = p.u(4.0);
+        Rect::new(
+            self.area.x - margin,
+            self.area.y - margin,
+            self.area.w + margin * 2.0,
+            self.area.h + margin,
+        )
     }
 
     /// The `shown`th cell on screen: its whole rectangle and its picture.

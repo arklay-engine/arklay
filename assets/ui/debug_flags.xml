@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FLAGS: a tab per flag group, a row per bit. The host publishes
+     `debug.flags`: each group's label and rows (lead, label, choices,
+     value). -->
+<screen use="standard-screen" title="{debug.text.flags}">
+  <tabs items="{debug.flags}">
+    <template>
+      <tab label="{item.label}">
+        <list items="{item.rows}">
+          <template>
+            <choice def="{item}"/>
+          </template>
+        </list>
+      </tab>
+    </template>
+  </tabs>
+</screen>

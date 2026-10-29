@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CHEATS. -->
+<screen use="standard-screen" title="{debug.text.cheats}">
+  <list>
+    <choice def="{debug.invincible}"/>
+    <choice def="{debug.ghost}"/>
+    <choice def="{debug.ammo}"/>
+  </list>
+</screen>

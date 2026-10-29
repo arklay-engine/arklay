@@ -112,7 +112,51 @@ responsibility.
 | `language` | Presentation | `language/<tag>.txt` grammar, the layered catalog, the fallback chain and OS locale detection |
 | `text` | Presentation | The runtime string facade: messages, item names/descriptions, save strings, room labels and `UI_*` |
 | `mask` | Presentation | Room mask (foreground overlay) sprites and depth ordering |
-| `ui` | UI | `Screen` contract, title, character select, pause menu, item box, FILE, map, item viewer, save/load (the ported original and the Lua screen surface, `ui/lua_screen.rs`, selected by the pack's own `api:register_save_screen`); the port-only F1 room-select overlay (`ui/debug_menu.rs`) and the F9 return-to-title prompt (`ui/return_title.rs`) |
+| `ui` | UI | `Screen` contract, title, character select, pause menu, item box, FILE, map, item viewer, save/load (the ported original and the Lua screen surface, `ui/lua_screen.rs`, selected by the pack's own `api:register_save_screen`); the port-only F1 debug tools (`ui/debug_menu/`, on the `gui` screens apart from the room and inventory grids) and the F9 return-to-title prompt (`ui/return_title.rs`) |
+| `gui` | UI | The native-resolution menus (system menu, options, load/save, F1 debug tools): `gui/dom` is a retained widget tree built from `assets/ui/*.xml`, with a layout, focus and input routing, hints, and Lua scripting; `system_menu`, `save_screen` and `ui/debug_menu` drive it and turn its outputs into engine requests |
+
+### GUI screen markup
+
+Each modern screen is one XML document in `assets/ui/`. Its root is a `<screen>`, and `components.xml` defines the shared parts.
+
+- `standard-screen` gives every screen the same title (with breadcrumbs from the screens below it), a caption, a `header` slot, the content, a `footer` slot and the hint bar. Cancel goes back.
+- `option-category`, `option-detail` and `save-row` are the other shared components.
+
+**Elements**
+
+- Containers: `stack` (`orientation`, and `gap` as a theme token), `split`, `list`, `tabs`/`tab`.
+- Content: `text` (with a `variant`), `image`, `badge`, `separator`, `spacer`, `facts`, `hint-bar`.
+- Interactive rows: `item`, `choice`, `toggle`, `slider`, `link` and `info`.
+- Any other hyphenated name is a custom widget that the host registers.
+- Sizes come from the theme. Only `width`/`height` overrides appear in the markup.
+
+**Attributes**
+
+- An attribute value is a literal, a `{path}` binding into the store (`item.*` inside a `<template>`, `focus.*` for the focused row), or `@key` for a GUI string.
+- `items="{path}"` repeats a `<template>` once per list entry.
+- `def="{path}"` fills an option row from a map with keys such as `label`, `choices`, `value` and `default`.
+
+**Actions**
+
+- `back`, `open:<screen>` and `reset` are built in.
+- `confirm`, `note` and `confirm-if` ask in a dialog first.
+- Any other `name:arg` goes to the screen's Lua script, or to the host as a typed output.
+- A `<command key="..." label="..." action="..."/>` binds a key and shows its hint while the focus is inside its parent.
+
+**Tabs**
+
+- Tab keys follow the nesting depth: outer strips use TabPrev/TabNext, inner strips use SubPrev/SubNext.
+
+**Scripting**
+
+A screen with `script="name.lua"` gets a fresh sandboxed Lua state each time it opens. The script's `on_open(ui)` can:
+
+- call `ui:get`/`ui:set` on the store;
+- `ui:find`, `ui:create` and `node:append` nodes;
+- register handlers with `ui:on("action:<name>", fn)`;
+- `ui:emit` actions to the host.
+
+The full table is in `src/gui/dom/lua.rs`.
 
 ### Strings and languages
 

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The in-game menu: the entries centred down the left. -->
+<screen use="standard-screen" backdrop="light">
+  <spacer/>
+  <list width="560" height="auto">
+    <item variant="menu" text="@menu.restart" action="restart" confirm="@menu.restart_question" note="@menu.unsaved_note"/>
+    <item variant="menu" text="@menu.load_game" action="load_game"/>
+    <item variant="menu" text="@menu.options" action="open:options"/>
+    <item variant="menu" text="@menu.quit" action="quit" confirm="@menu.quit_question" note="@menu.unsaved_note"/>
+  </list>
+  <spacer/>
+</screen>

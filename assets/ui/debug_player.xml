@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PLAYER: the character and outfit the next room load uses. -->
+<screen use="standard-screen" title="{debug.text.player}">
+  <stack orientation="horizontal" gap="large">
+    <stack>
+      <image variant="face" src="{debug.portrait}"/>
+    </stack>
+    <stack width="fill" gap="medium">
+      <list height="auto">
+        <choice def="{debug.character}"/>
+        <choice def="{debug.costume}"/>
+      </list>
+      <text variant="note" text="{debug.player_note}"/>
+      <text variant="note" text="{debug.stand_in_note}"/>
+    </stack>
+  </stack>
+</screen>

@@ -192,7 +192,6 @@ impl RoomSelect {
         {
             self.stage = stage;
             self.cells[stage] = cell;
-            self.scroll[stage].follow();
         }
     }
 
@@ -206,11 +205,6 @@ impl RoomSelect {
     /// Show stage tab `stage`.
     pub(super) fn set_stage(&mut self, stage: usize) {
         self.stage = stage.min(self.stages.len() - 1);
-    }
-
-    /// Scroll the grid by `rows` without moving the cursor.
-    pub(super) fn scroll_by(&mut self, rows: isize) {
-        self.scroll[self.stage].by(rows);
     }
 
     /// One input edge: the jump target in `character`'s variant on confirm.
@@ -237,7 +231,6 @@ impl RoomSelect {
         let cell = &mut self.cells[self.stage];
         if let Some(next) = grid_step(*cell, count, self.columns, input) {
             *cell = next;
-            self.scroll[self.stage].follow();
         }
         Step::Stay
     }
@@ -274,11 +267,13 @@ impl RoomSelect {
         let rows = rooms.len().div_ceil(columns);
         let top = self.scroll[self.stage].layout(cell / columns, grid.rows, rows);
         let mut loads = 0;
+        let clip = grid.clip(p);
+        p.canvas.push_clip(clip);
         for (index, room) in rooms
             .iter()
             .enumerate()
             .skip(top * columns)
-            .take(grid.rows * columns)
+            .take(grid.shown())
         {
             let (rect, thumb) = grid.cell(index - top * columns);
             let selected = index == cell;
@@ -325,8 +320,9 @@ impl RoomSelect {
             let name_x = rect.x + id_w + u(12.0);
             let name = fit(p, Role::Body, &name, rect.right() - name_x);
             p.text(Role::Body, name_x, label_y, Align::Left, color, &name);
-            cx.hits.push((rect, Hit::Item(index)));
+            cx.hits.push((rect.intersect(&clip), Hit::Item(index)));
         }
+        p.canvas.pop_clip();
         grid.scrollbar(p, top, rows);
     }
 }

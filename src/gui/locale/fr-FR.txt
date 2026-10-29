@@ -12,6 +12,7 @@ dialog.yes = "Oui"
 dialog.no = "Non"
 
 hint.select = "Choisir"
+hint.change = "Modifier"
 hint.back = "Retour"
 hint.reset_all = "Tout réinitialiser"
 hint.reset_page = "Réinitialiser la page"

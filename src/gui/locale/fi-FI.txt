@@ -12,6 +12,7 @@ dialog.yes = "Kyllä"
 dialog.no = "Ei"
 
 hint.select = "Valitse"
+hint.change = "Muuta"
 hint.back = "Takaisin"
 hint.reset_all = "Palauta kaikki"
 hint.reset_page = "Palauta sivu"

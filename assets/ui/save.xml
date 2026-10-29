@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save: a new save, or over one of `saves.rows`. -->
+<screen use="standard-screen" title="@save.save_title" caption="@save.save_caption">
+  <text slot="header" variant="caption" text="@save.count(saves.count)" wrap="none"/>
+  <list>
+    <item variant="save" action="create" hint="@save.hint_save" autofocus="true">
+      <stack orientation="horizontal">
+        <spacer width="88"/>
+        <text variant="heading" text="@save.new_save" width="fill" wrap="none"/>
+      </stack>
+    </item>
+    <stack gap="small" items="{saves.rows}">
+      <template>
+        <save-row action="overwrite:{item.index}" hint="@save.hint_save" confirm="@save.overwrite_question"/>
+      </template>
+    </stack>
+  </list>
+  <prompt slot="footer" text="@save.save_prompt"/>
+</screen>

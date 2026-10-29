@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CLEAR GAME: play one of the endings; the one the live state would
+     reach starts focused. -->
+<screen use="standard-screen" title="{debug.text.clear_game}">
+  <list items="{debug.endings}">
+    <template>
+      <item lead="{item.id}" text="{item.label}" note="{item.note}" autofocus="{item.expected}" action="ending:{item.id}" hint="@debug.play_ending"/>
+    </template>
+  </list>
+</screen>

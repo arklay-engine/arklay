@@ -12,12 +12,7 @@
 //! audited bits of `ref/docs/SCENARIO_FLAGS.md`; they are debug identifiers,
 //! not translated text.
 
-use super::widgets::{self, Label, ROW_H, Scroll, Value, step_choice};
-use super::{Cx, Step};
-use crate::game::{GameState, ROOM_FLAG_FILE_BASE, ROOM_FLAG_MAP_BASE, STAGE_ROOM_FLAG_OFFSETS};
-use crate::gui::canvas::Rect;
-use crate::gui::widgets::Painter;
-use crate::ui::UiInput;
+use crate::game::{ROOM_FLAG_FILE_BASE, ROOM_FLAG_MAP_BASE, STAGE_ROOM_FLAG_OFFSETS};
 
 /// The documents' first item id: file bit `i` is item `0x5F + i`.
 const FILE_FIRST_ITEM: u8 = 0x5F;
@@ -305,12 +300,11 @@ pub fn flag_name(group: &FlagGroup, sel: u8) -> FlagName {
     }
 }
 
-/// The FLAGS tool's state.
+/// The FLAGS tool's cursor: the shown group and each group's row.
 #[derive(Debug, Clone)]
 pub struct FlagEditor {
     group: usize,
     rows: [usize; GROUPS.len()],
-    scroll: [Scroll; GROUPS.len()],
 }
 
 impl Default for FlagEditor {
@@ -318,7 +312,6 @@ impl Default for FlagEditor {
         Self {
             group: 0,
             rows: [0; GROUPS.len()],
-            scroll: [Scroll::default(); GROUPS.len()],
         }
     }
 }
@@ -340,115 +333,23 @@ impl FlagEditor {
         (group, group.selector(self.row()))
     }
 
-    /// One tick of input: the page keys change group, up/down the row and
-    /// left/right/confirm step the bit like a two-way option (left clears,
-    /// right sets, confirm toggles).
-    pub(super) fn handle_input(&mut self, input: UiInput, game: &mut GameState) -> Step {
-        if input.cancel {
-            return Step::Back;
-        }
-        let count = GROUPS.len();
-        let (group, sel) = self.selected();
-        let rows = usize::from(group.count);
-        if input.page_left {
-            self.group = (self.group + count - 1) % count;
-        } else if input.page_right {
-            self.group = (self.group + 1) % count;
-        } else if input.up {
-            self.rows[self.group] = (self.row() + rows - 1) % rows;
-            self.scroll[self.group].follow();
-        } else if input.down {
-            self.rows[self.group] = (self.row() + 1) % rows;
-            self.scroll[self.group].follow();
-        } else {
-            let set = usize::from(game.flag_test(group.bank, sel, false));
-            if let Some(next) = step_choice(set, 2, input) {
-                // Mode 0 sets the bit, 1 clears it.
-                game.apply_flag(group.bank, sel, if next == 1 { 0 } else { 1 });
-            }
-        }
-        Step::Stay
+    /// The row group `group` was left on.
+    pub(super) fn row_in(&self, group: usize) -> usize {
+        self.rows[group.min(GROUPS.len() - 1)]
     }
 
-    /// Put the cursor on pointer target `index`, a row of the shown group.
-    pub(super) fn point(&mut self, index: usize) {
-        let count = usize::from(GROUPS[self.group].count);
-        self.rows[self.group] = index.min(count.saturating_sub(1));
-    }
-
-    /// Show group tab `group`.
-    pub(super) fn set_group(&mut self, group: usize) {
+    /// Follow the screen's cursor: group tab `group`, row `row`.
+    pub(super) fn sync(&mut self, group: usize, row: usize) {
         self.group = group.min(GROUPS.len() - 1);
-    }
-
-    /// Scroll the rows by `rows` without moving the cursor.
-    pub(super) fn scroll_by(&mut self, rows: isize) {
-        self.scroll[self.group].by(rows);
-    }
-
-    /// Draw the group tabs and the visible bit rows.
-    pub(super) fn draw(&mut self, p: &mut Painter<'_>, cx: &mut Cx<'_>, area: Rect) {
-        let theme = p.theme;
-        let u = |v: f32| theme.u(v);
-        let game = cx.game;
-        let group = GROUPS[self.group];
-        let labels: Vec<String> = GROUPS.iter().map(|group| cx.label(group.label)).collect();
-        let tab_h = widgets::tabs(p, cx, area, &labels, self.group, &[]);
-        let top_y = area.y + tab_h;
-        let width = area.w.min(u(1200.0));
-        let row_h = u(ROW_H);
-        let visible = (((area.bottom() - top_y) / row_h).floor() as usize).max(1);
-        let count = usize::from(group.count);
-        let row = self.rows[self.group];
-        let top = self.scroll[self.group].layout(row, visible, count);
-        let states = match state_names(&group) {
-            Some((clear, set)) => [cx.gui(clear), cx.gui(set)],
-            None => [cx.label("UI_DEBUG_OFF"), cx.label("UI_DEBUG_ON")],
-        };
-        for index in (top..count).take(visible) {
-            let rect = Rect::new(area.x, top_y + row_h * (index - top) as f32, width, row_h);
-            let sel = group.selector(index);
-            let set = usize::from(game.flag_test(group.bank, sel, false));
-            let name = match flag_name(&group, sel) {
-                FlagName::None => String::new(),
-                FlagName::Static(name) => name.to_string(),
-                FlagName::Room(label, room3) => {
-                    let name = cx.room_name(&room3);
-                    if name.is_empty() {
-                        format!("{label} {room3}")
-                    } else {
-                        format!("{room3}  {name}")
-                    }
-                }
-                FlagName::Item(item) => cx.item_name(item),
-            };
-            let lead = format!("{sel:02X}");
-            widgets::row(
-                p,
-                cx,
-                rect,
-                index,
-                index == row,
-                Label::lead(&lead, &name),
-                Value::Step(&states[set], Some((2, set))),
-            );
-        }
-        widgets::scrollbar(
-            p,
-            area.x + width + u(20.0),
-            top_y,
-            row_h * visible as f32,
-            top,
-            visible,
-            count,
-        );
+        let count = usize::from(GROUPS[self.group].count);
+        self.rows[self.group] = row.min(count.saturating_sub(1));
     }
 }
 
 /// The GUI strings naming a group's clear and set states, when they mean
 /// more than off and on: a set lock bit is an unlocked door, a set enemy
 /// bit a dead enemy and a set room-item bit a collected item.
-fn state_names(group: &FlagGroup) -> Option<(&'static str, &'static str)> {
+pub(super) fn state_names(group: &FlagGroup) -> Option<(&'static str, &'static str)> {
     match group.label {
         "UI_DEBUG_FLAGS_LOCKS" => Some(("debug.locked", "debug.unlocked")),
         "UI_DEBUG_FLAGS_ENEMIES" => Some(("debug.alive", "debug.dead")),
@@ -462,10 +363,12 @@ mod tests {
     use super::*;
     use crate::game::{BANK_SCENARIO2, MSF_CHAR_VARIANT, MSF2_COSTUME_VARIANT};
 
-    fn press(f: impl FnOnce(&mut UiInput)) -> UiInput {
-        let mut input = UiInput::default();
-        f(&mut input);
-        input
+    use crate::game::GameState;
+
+    /// Set row `row` of group `group` the way the FLAGS screen does.
+    fn edit(game: &mut GameState, group: usize, row: usize, set: bool) {
+        let path = format!("debug.flags.{group}.rows.{row}.value");
+        super::super::apply_change(&path, i64::from(set), game);
     }
 
     /// The raw byte/mask a selector addresses in a 32-byte bank, MSB-first per
@@ -505,51 +408,31 @@ mod tests {
     #[test]
     fn edits_address_bits_msb_first_like_the_scripts() {
         let mut game = GameState::default();
-        let mut editor = FlagEditor::default();
         // SCENARIO2 row 0xC0, the ending's partner bit.
-        editor.handle_input(press(|i| i.page_right = true), &mut game);
-        assert_eq!(editor.group(), 1);
-        for _ in 0..0x40 {
-            editor.handle_input(press(|i| i.up = true), &mut game);
-        }
-        assert_eq!(editor.selected().1, 0xC0);
-        editor.handle_input(press(|i| i.right = true), &mut game);
+        assert_eq!(GROUPS[1].selector(0xC0), 0xC0);
+        edit(&mut game, 1, 0xC0, true);
         assert!(game.flag_test(BANK_SCENARIO2, 0xC0, false));
         let (byte, mask) = ref_byte_mask(0xC0);
         let raw = game.flags[1].bytes();
         assert_eq!(raw[byte], mask, "the reference's byte and mask");
         assert_eq!(raw.iter().filter(|byte| **byte != 0).count(), 1);
-        // Left clears, confirm toggles twice.
-        editor.handle_input(press(|i| i.left = true), &mut game);
-        assert!(!game.flag_test(BANK_SCENARIO2, 0xC0, false));
-        editor.handle_input(press(|i| i.confirm = true), &mut game);
-        assert!(game.flag_test(BANK_SCENARIO2, 0xC0, false));
-        editor.handle_input(press(|i| i.confirm = true), &mut game);
+        edit(&mut game, 1, 0xC0, false);
         assert!(!game.flag_test(BANK_SCENARIO2, 0xC0, false));
     }
 
     #[test]
     fn the_state_groups_split_bank_five() {
         let mut game = GameState::default();
-        let mut editor = FlagEditor {
-            group: 5,
-            ..FlagEditor::default()
-        };
-        for _ in 0..MSF_CHAR_VARIANT {
-            editor.handle_input(press(|i| i.down = true), &mut game);
-        }
+        let row = usize::from(MSF_CHAR_VARIANT);
         assert_eq!(
-            flag_name(&GROUPS[5], editor.selected().1),
+            flag_name(&GROUPS[5], GROUPS[5].selector(row)),
             FlagName::Static("CHAR_VARIANT")
         );
-        editor.handle_input(press(|i| i.confirm = true), &mut game);
+        edit(&mut game, 5, row, true);
         assert!(game.flag_test(5, MSF_CHAR_VARIANT, false));
         // The msf2 group starts at selector 32.
-        editor.handle_input(press(|i| i.page_right = true), &mut game);
-        for _ in 0..5 {
-            editor.handle_input(press(|i| i.down = true), &mut game);
-        }
-        let (group, sel) = editor.selected();
+        let group = GROUPS[6];
+        let sel = group.selector(5);
         assert_eq!(sel, MSF2_COSTUME_VARIANT);
         assert_eq!(flag_name(&group, sel), FlagName::Static("COSTUME_VARIANT"));
         assert_eq!(flag_name(&group, 0x21), FlagName::None);
@@ -558,18 +441,11 @@ mod tests {
     #[test]
     fn the_message_group_routes_to_the_message_words() {
         let mut game = GameState::default();
-        let mut editor = FlagEditor {
-            group: 7,
-            ..FlagEditor::default()
-        };
         let before = game.message_flags;
-        editor.handle_input(press(|i| i.right = true), &mut game);
+        edit(&mut game, 7, 0, true);
         assert!(game.flag_test(6, 0, false));
         assert_eq!(game.message_flags, before, "selector 0 is the short word's");
-        for _ in 0..16 {
-            editor.handle_input(press(|i| i.down = true), &mut game);
-        }
-        editor.handle_input(press(|i| i.right = true), &mut game);
+        edit(&mut game, 7, 16, true);
         assert_eq!(
             game.message_flags,
             before | 0x8000,
@@ -606,22 +482,5 @@ mod tests {
             FlagName::Static("SECOND_PLAYTHROUGH")
         );
         assert_eq!(flag_name(&GROUPS[3], 0x7B), FlagName::None);
-    }
-
-    #[test]
-    fn rows_and_groups_wrap() {
-        let mut game = GameState::default();
-        let mut editor = FlagEditor::default();
-        editor.handle_input(press(|i| i.page_left = true), &mut game);
-        assert_eq!(editor.group(), GROUPS.len() - 1);
-        editor.handle_input(press(|i| i.up = true), &mut game);
-        assert_eq!(editor.row(), 63, "ITEM USE has 64 bits");
-        assert_eq!(editor.scroll[editor.group].layout(63, 8, 64), 56);
-        editor.handle_input(press(|i| i.page_right = true), &mut game);
-        assert_eq!((editor.group(), editor.row()), (0, 0));
-        assert_eq!(
-            editor.handle_input(press(|i| i.cancel = true), &mut game),
-            Step::Back
-        );
     }
 }

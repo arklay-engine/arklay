@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Load a save. The host publishes `saves.rows` (one table per save),
+     `saves.count`, `saves.empty` and `saves.confirm` (whether loading asks
+     first). -->
+<screen use="standard-screen" title="@save.load_title" caption="@save.load_caption">
+  <text slot="header" variant="caption" text="@save.count(saves.count)" wrap="none"/>
+  <text text="@save.empty" visible="{saves.empty}" align="center"/>
+  <list items="{saves.rows}">
+    <template>
+      <save-row action="load:{item.index}" hint="@save.hint_load" confirm="@save.load_question" note="@menu.unsaved_note" confirm-if="{saves.confirm}"/>
+    </template>
+  </list>
+  <prompt slot="footer" text="@save.load_prompt"/>
+</screen>

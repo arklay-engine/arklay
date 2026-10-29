@@ -12,6 +12,7 @@ dialog.yes = "はい"
 dialog.no = "いいえ"
 
 hint.select = "決定"
+hint.change = "変更"
 hint.back = "戻る"
 hint.reset_all = "すべて初期化"
 hint.reset_page = "この項目を初期化"

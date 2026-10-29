@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The options: one tab per category, sub-tabs per page, a row per
+     setting. Each row's `def` is the setting the host publishes at
+     `options.<id>`: its label, description, choices, range and value. -->
+<screen use="standard-screen" title="@options.title">
+  <command key="reset_all" label="@hint.reset_all" action="reset" confirm="@options.reset_all_question"/>
+  <tabs>
+    <option-category label="@category.gameplay">
+      <tab label="@page.general">
+        <list>
+          <group label="@group.ink_ribbons">
+            <toggle def="{options.chris_ink_ribbons}"/>
+            <toggle def="{options.jill_ink_ribbons}"/>
+          </group>
+          <group label="@group.saving">
+            <toggle def="{options.autosave}"/>
+          </group>
+          <group label="@group.room_scripts">
+            <toggle def="{options.room_script_fixes}"/>
+          </group>
+        </list>
+      </tab>
+    </option-category>
+
+    <option-category label="@category.controls">
+      <tab label="@page.basic">
+        <list>
+          <group label="@group.character_controls">
+            <toggle def="{options.quick_turn}"/>
+            <toggle def="{options.analog_movement}"/>
+          </group>
+          <group label="@group.when_aiming">
+            <toggle def="{options.auto_aim}"/>
+            <toggle def="{options.tactical_reload}"/>
+          </group>
+        </list>
+      </tab>
+      <tab label="@page.controller">
+        <list>
+          <group label="@group.button_settings">
+            <choice def="{options.control_type}"/>
+            <choice def="{options.button_style}"/>
+          </group>
+          <group label="@group.function_settings">
+            <choice def="{options.vibration}"/>
+          </group>
+        </list>
+      </tab>
+      <tab label="@page.keyboard_mouse">
+        <list>
+          <group label="@group.keyboard_mouse_settings">
+            <link def="{options.key_config}" action="key_config"/>
+          </group>
+        </list>
+      </tab>
+    </option-category>
+
+    <option-category label="@category.graphics">
+      <tab label="@page.display">
+        <list>
+          <choice def="{options.fullscreen}"/>
+          <choice def="{options.monitor}"/>
+          <choice def="{options.resolution}"/>
+          <choice def="{options.aspect}"/>
+          <choice def="{options.frame_rate}"/>
+          <toggle def="{options.vsync}"/>
+          <choice def="{options.hdr}"/>
+          <group label="@group.hud">
+            <choice def="{options.ui_font}"/>
+            <choice def="{options.menu_text_size}"/>
+            <choice def="{options.save_screen}"/>
+          </group>
+        </list>
+      </tab>
+      <tab label="@page.image">
+        <list>
+          <info def="{options.pc_specs}"/>
+          <toggle def="{options.blood}"/>
+          <group label="@group.quality_settings">
+            <choice def="{options.graphics_quality}"/>
+            <choice def="{options.renderer}"/>
+            <slider def="{options.render_scale}"/>
+            <choice def="{options.msaa}"/>
+          </group>
+        </list>
+      </tab>
+    </option-category>
+
+    <option-category label="@category.audio">
+      <tab label="@page.general">
+        <list>
+          <group label="@group.volume">
+            <slider def="{options.master_volume}"/>
+            <slider def="{options.effects_volume}"/>
+            <slider def="{options.music_volume}"/>
+            <slider def="{options.ambient_volume}"/>
+            <slider def="{options.voice_volume}"/>
+            <slider def="{options.menu_volume}"/>
+          </group>
+        </list>
+      </tab>
+    </option-category>
+
+    <option-category label="@category.language">
+      <tab label="@page.general">
+        <list>
+          <group label="@group.language">
+            <choice def="{options.voice_language}"/>
+            <choice def="{options.language}"/>
+          </group>
+          <group label="@group.subtitles">
+            <toggle def="{options.subtitles}"/>
+            <choice def="{options.subtitle_size}"/>
+            <slider def="{options.subtitle_background}"/>
+            <choice def="{options.subtitle_color}"/>
+            <toggle def="{options.speaker_names}"/>
+            <choice def="{options.speaker_name_color}"/>
+          </group>
+        </list>
+      </tab>
+    </option-category>
+  </tabs>
+</screen>

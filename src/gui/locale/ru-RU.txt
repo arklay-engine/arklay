@@ -12,6 +12,7 @@ dialog.yes = "Да"
 dialog.no = "Нет"
 
 hint.select = "Выбрать"
+hint.change = "Изменить"
 hint.back = "Назад"
 hint.reset_all = "Сбросить всё"
 hint.reset_page = "Сбросить страницу"
