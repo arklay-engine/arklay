@@ -12475,11 +12475,14 @@ impl ShadowCache {
 /// `base` holds the four sheet files (`esp000` plus the room's up to three
 /// `esp2xx` variants) with the room's embedded sprite TIMs composited at their
 /// packed positions. `variants` holds the CLUT-row variants (`page * 3 +
-/// (row - 1)`) baked from those same TIMs.
+/// (row - 1)`) baked from those same TIMs. `hd` holds the named HD
+/// composite of each, indexed like [`EffectLayer::pages`]
+/// ([`effects::hd::composite`]).
 #[derive(Default)]
 struct EffectPages {
     base: [Option<Image>; 4],
     variants: [Option<Image>; 12],
+    hd: [Option<crate::htexture::Replacement>; 16],
 }
 
 /// Decoded effect pages for the current room, keyed by room id.
@@ -12591,7 +12594,60 @@ fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> E
         }
     }
 
+    build_effect_hd(pack, id, room, &mut pages);
     pages
+}
+
+/// Build the named HD composite of each effect page a pack names art for
+/// ([`effects::hd`]): the sheet `htexture/effect/NN` under a base page, and
+/// `htexture/room/<id>/effect/<slot>` (`_<row>` for a variant) over each
+/// sprite's rows.
+fn build_effect_hd(pack: &Pack, id: RoomId, room: &effects::RoomEffects, pages: &mut EffectPages) {
+    let stage = usize::from(id.stage_index());
+    let room_byte = usize::from(id.room);
+    for page in 0..4 {
+        for row in 0..=3u8 {
+            let index = if row == 0 {
+                page
+            } else {
+                4 + page * 3 + usize::from(row - 1)
+            };
+            let shipped = if row == 0 {
+                pages.base[page].as_ref()
+            } else {
+                pages.variants[index - 4].as_ref()
+            };
+            let Some(shipped) = shipped else {
+                continue;
+            };
+            let sheet = (row == 0)
+                .then(|| effects::pages::room_effect_sheet_index(stage, room_byte, page))
+                .flatten()
+                .and_then(|sheet| {
+                    effects::hd::named_image(pack, &effects::pages::sheet_stem(sheet))
+                });
+            let sprites: Vec<effects::hd::PageSprite<'_>> = room
+                .sprites
+                .iter()
+                .filter(|sprite| {
+                    usize::from(sprite.info.page_index()) == page
+                        && (row == 0 || sprite.geometry.clut_rows > row)
+                })
+                .filter_map(|sprite| {
+                    let texture = sprite.tim.as_ref()?;
+                    let hd = room.slot_of(sprite.index).and_then(|slot| {
+                        effects::hd::named_image(pack, &effects::hd::sprite_stem(id, slot, row))
+                    });
+                    Some(effects::hd::PageSprite {
+                        texture,
+                        v: u32::from(sprite.info.page_v),
+                        hd,
+                    })
+                })
+                .collect();
+            pages.hd[index] = effects::hd::composite(pack, shipped, sheet.as_ref(), &sprites);
+        }
+    }
 }
 
 /// The guardhouse rooms that force every effect blend opaque.
@@ -15631,8 +15687,11 @@ fn render_frame_on(
     let mut page_refs: Vec<Option<&Image>> = Vec::with_capacity(16);
     page_refs.extend(pages.base.iter().map(Option::as_ref));
     page_refs.extend(pages.variants.iter().map(Option::as_ref));
+    let hd_refs: Vec<Option<&crate::htexture::Replacement>> =
+        pages.hd.iter().map(Option::as_ref).collect();
     let effect_layer = EffectLayer {
         pages: &page_refs,
+        hd: &hd_refs,
         quads: &quads,
     };
     // The mirror pass runs only while the room script enables it; the reflected
@@ -30033,6 +30092,73 @@ off_0010:
         pages.base[0] = Some(solid_effect_page());
         pages.base[1] = Some(solid_effect_page());
         pages
+    }
+
+    /// Room 1000 with one sprite in slot 0, 16x8 texels at page 0 row 32,
+    /// with two CLUT rows.
+    fn named_effect_room() -> effects::RoomEffects {
+        let mut sprite = crate::effects::fixtures::sprite(3, std::array::from_fn(|_| Vec::new()));
+        sprite.info.page_id = crate::effects::pages::PAGE_BIAS;
+        sprite.info.page_v = 32;
+        sprite.tim = Some(crate::model::Texture8 {
+            width: 16,
+            height: 8,
+            indices: vec![1; 16 * 8],
+            palettes: vec![[40, 50, 60, 255]; 2 * crate::model::PALETTE_ROW_LEN],
+            stp: Vec::new(),
+        });
+        sprite.geometry.clut_rows = 2;
+        let mut room = effects::RoomEffects::default();
+        room.index[0] = 3;
+        room.sprites.push(sprite);
+        room
+    }
+
+    #[test]
+    fn named_effect_art_builds_an_hd_composite_per_clut_row() {
+        let id = RoomId::parse("1000").unwrap();
+        let room = named_effect_room();
+        let art = |rgba: [u8; 4]| {
+            crate::bmp::encode_to_vec(&Image {
+                width: 64,
+                height: 32,
+                rgba: rgba.repeat(64 * 32),
+            })
+            .unwrap()
+        };
+        let mut writer = crate::pack::PackWriter::new();
+        writer
+            .add("htexture/room/1000/effect/00.bmp", art([200, 0, 0, 255]))
+            .unwrap();
+        writer
+            .add("htexture/room/1000/effect/00_1.bmp", art([0, 200, 0, 255]))
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let pages = build_effect_pages(&pack, id, &room);
+
+        let texel = |image: &Image, x: u32, y: u32| {
+            let at = ((y * image.width + x) * 4) as usize;
+            <[u8; 4]>::try_from(&image.rgba[at..at + 4]).unwrap()
+        };
+        let base = pages.hd[0].as_ref().expect("the base page's composite");
+        assert_eq!(base.frame, [256, 256]);
+        assert_eq!((base.image.width, base.image.height), (1024, 1024));
+        assert_eq!(texel(&base.image, 10, 130), [200, 0, 0, 255]);
+        // The page outside the sprite's rows keeps the shipped composite.
+        assert_eq!(texel(&base.image, 10, 10), [0, 0, 0, 0]);
+        let variant = pages.hd[4].as_ref().expect("CLUT row 1's composite");
+        assert_eq!(texel(&variant.image, 10, 130), [0, 200, 0, 255]);
+        assert!(pages.hd.iter().skip(1).filter(|hd| hd.is_some()).count() == 1);
+    }
+
+    #[test]
+    fn effect_pages_without_named_art_leave_the_hash_route() {
+        let id = RoomId::parse("1000").unwrap();
+        let writer = crate::pack::PackWriter::new();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let pages = build_effect_pages(&pack, id, &named_effect_room());
+        assert!(pages.base[0].is_some());
+        assert!(pages.hd.iter().all(Option::is_none));
     }
 
     fn solid_effect_page() -> Image {

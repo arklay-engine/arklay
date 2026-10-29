@@ -321,6 +321,20 @@ with more than one CLUT row is only replaced by its per-row content hashes.
 The hash names still work, so an HD pack made for RDT rooms keeps replacing
 the same textures.
 
+Effect sprites are composited onto the room's `effect/NN` sheet at their page
+row (plus one variant page per extra CLUT row), and the composite is what the
+content hash covers. An HD pack can instead name the pieces:
+`htexture/room/<id>/effect/<slot>` covers sprite slot `<slot>`'s rows of its
+page under CLUT row 0, `htexture/room/<id>/effect/<slot>_<row>` its rows of
+the variant page for CLUT row `<row>` (1 to 3), and `htexture/effect/NN`
+covers the sheet under the sprites. The GPU renderer then builds an HD page at
+the largest scale of the named images: its base is the named sheet (with the
+unnamed sprites' original texels over it), else the composite's
+content-hash replacement, else the original composite stretched, and each
+named sprite image replaces that sprite's whole rectangle, alpha included. A
+page with no named image is replaced by its content hash as before. The names
+work for rooms loaded from an RDT too.
+
 ### Item art
 
 Everything about one item lives in its own folder, `item/<id>/`, where `<id>`

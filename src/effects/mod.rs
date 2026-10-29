@@ -48,6 +48,7 @@
 pub mod behaviour;
 #[cfg(test)]
 pub(crate) mod fixtures;
+pub mod hd;
 pub mod pages;
 pub mod pool;
 pub mod room;
