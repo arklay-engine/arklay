@@ -1,5 +1,6 @@
 # Texte des Spielmenüs und des Optionsbildschirms (siehe src/gui/locale.rs).
 
+menu.title = "MENÜ"
 menu.restart = "Neustart"
 menu.load_game = "Spiel laden"
 menu.options = "Optionen"
@@ -12,6 +13,7 @@ dialog.yes = "Ja"
 dialog.no = "Nein"
 
 hint.select = "Auswählen"
+hint.change = "Ändern"
 hint.back = "Zurück"
 hint.reset_all = "Alles zurücksetzen"
 hint.reset_page = "Seite zurücksetzen"

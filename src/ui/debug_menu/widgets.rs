@@ -124,8 +124,6 @@ pub(super) enum Value<'a> {
     None,
     /// A value stepped between arrows, with (count, current) pips.
     Step(&'a str, Option<(usize, usize)>),
-    /// The options screen's link mark, with an optional note beside it.
-    Link(Option<&'a str>),
 }
 
 /// What a row shows on its left.
@@ -205,20 +203,6 @@ pub(super) fn row(
             );
             cx.hits.push((decrease, Hit::Decrease(index)));
             cx.hits.push((increase, Hit::Increase(index)));
-        }
-        Value::Link(note) => {
-            if let Some(note) = note {
-                let center = (left_arrow + right_arrow) / 2.0;
-                p.text(
-                    Role::Row,
-                    center,
-                    cy,
-                    Align::Center,
-                    palette::TEXT_DIM,
-                    note,
-                );
-            }
-            p.link_icon(right_arrow, cy, 30.0, palette::TEXT);
         }
     }
 }

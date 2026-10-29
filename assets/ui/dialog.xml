@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The yes/no question an action with `confirm` asks first. -->
+<screen variant="modal">
+  <dialog title="{dialog.title}" note="{dialog.note}">
+    <item variant="dialog" text="@dialog.yes" action="dialog:yes"/>
+    <item variant="dialog" text="@dialog.no" action="dialog:no" autofocus="true"/>
+  </dialog>
+</screen>

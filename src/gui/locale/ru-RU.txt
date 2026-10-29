@@ -1,5 +1,6 @@
 # Строки игрового меню и экрана настроек (см. src/gui/locale.rs).
 
+menu.title = "МЕНЮ"
 menu.restart = "Начать заново"
 menu.load_game = "Загрузить игру"
 menu.options = "Настройки"
@@ -12,6 +13,7 @@ dialog.yes = "Да"
 dialog.no = "Нет"
 
 hint.select = "Выбрать"
+hint.change = "Изменить"
 hint.back = "Назад"
 hint.reset_all = "Сбросить всё"
 hint.reset_page = "Сбросить страницу"

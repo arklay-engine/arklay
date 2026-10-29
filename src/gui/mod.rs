@@ -12,8 +12,10 @@
 //!   every screen is assembled from, so screens look alike by construction;
 //! * [`options`]: the data model of the options screen, a flat list any
 //!   owner can contribute to;
-//! * the screens: [`dialog`], [`options_screen`], [`save_screen`] and
-//!   [`system_menu`];
+//! * [`dom`]: the retained UI the modern screens are built in: screens
+//!   written in markup (`assets/ui/*.xml`), a node tree with layout,
+//!   focus, input routing, hints and Lua scripting;
+//! * the screens' owners: [`dialog`], [`save_screen`] and [`system_menu`];
 //! * [`overlay`]: the F6 debug HUD and the corner notices, drawn over
 //!   everything else.
 //!
@@ -22,11 +24,11 @@
 
 pub mod canvas;
 pub mod dialog;
+pub mod dom;
 pub mod input;
 pub mod key_config;
 pub mod locale;
 pub mod options;
-pub mod options_screen;
 pub mod overlay;
 pub mod pad_diagram;
 pub mod save_screen;

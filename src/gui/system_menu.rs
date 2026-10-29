@@ -1,25 +1,27 @@
 //! The in-game menu: an overlay over the frozen game with Restart, Load
-//! Game, Options and Quit down the left side, their confirmation dialogs,
-//! the options screen and the key configuration screen it opens.
+//! Game, Options and Quit, their confirmation dialogs, the options screen
+//! and the key configuration screen it opens.
 //!
-//! The menu owns its canvas and faces and draws at the window's native
-//! resolution. It never touches the game: every decision comes back as a
-//! [`MenuRequest`] for the session or the app to carry out.
-
-use std::time::Instant;
+//! The menu and the options are the `menu` and `options` screens of a
+//! [`Ui`] (`assets/ui/*.xml`); this owner publishes the settings as
+//! `options.<id>` definitions and turns what the screens report back into
+//! [`MenuRequest`]s. It never touches the game. The key configuration is
+//! still its own screen, drawn over the options.
 
 use anyhow::Result;
 
-use super::canvas::{Axis, Canvas, Color, Rect};
-use super::dialog::{Dialog, DialogResult};
-use super::input::{Device, GuiEvent, GuiKey, Sound};
+use super::canvas::{Canvas, Rect};
+use super::dom::{Custom, Library, Node, Ui, UiOutput, Value};
+use super::input::{Device, GuiEvent, PadStyle, Sound};
 use super::key_config::{KeyConfigEvent, KeyConfigScreen};
 use super::locale::Locale;
-use super::options_screen::{OptionsEvent, OptionsScreen, PadDiagram};
+use super::options::OptionKind;
+use super::pad_diagram;
 use super::settings::{self, Settings};
 use super::text::Fonts;
 use super::theme::{Theme, palette};
-use super::widgets::{Painter, SELECTION_GLOW};
+use super::widgets::Painter;
+use crate::controls::Bindings;
 
 /// What the menu asks its owner to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,97 +50,76 @@ fn short_version(version: &str) -> String {
     parts.join(".")
 }
 
-/// Where the menu's cursor is, compared across one event to pick its sound.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct View {
-    /// How deep the menu is: 0 the item list, 1 its dialog, 2 the options, 3
-    /// the options' dialog, 4 the key configuration, 5 its dialog or a key
-    /// being captured.
-    depth: u8,
-    selected: usize,
-    dialog: Option<usize>,
-    options: Option<(usize, usize, usize, Option<usize>)>,
-    keys: Option<(usize, usize, usize, bool, Option<usize>)>,
+/// The options whose description shows the controller diagram.
+const PAD_PAGE: [&str; 3] = ["control_type", "button_style", "vibration"];
+
+/// The controller diagram under a Controller row's description.
+struct PadPaint {
+    style: PadStyle,
+    bindings: Bindings,
+    text: Locale,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Item {
-    Restart,
-    LoadGame,
-    Options,
-    Quit,
+impl Custom for PadPaint {
+    fn paint(&self, p: &mut Painter<'_>, rect: Rect, _node: &Node) {
+        // A long description in large text can leave no room for it.
+        if rect.h > p.u(120.0) {
+            pad_diagram::draw(p, rect, self.style, &self.bindings, &self.text);
+        }
+    }
 }
 
-/// The items and their label keys.
-const ITEMS: [(Item, &str); 4] = [
-    (Item::Restart, "menu.restart"),
-    (Item::LoadGame, "menu.load_game"),
-    (Item::Options, "menu.options"),
-    (Item::Quit, "menu.quit"),
-];
-
-pub struct SystemMenu {
+/// The key configuration and what it draws with.
+struct KeyConfig {
+    screen: KeyConfigScreen,
     fonts: Fonts,
     canvas: Canvas,
+    dirty: bool,
+}
+
+pub struct SystemMenu {
+    ui: Ui,
     settings: Settings,
     /// The strings in the settings' language.
     text: Locale,
-    selected: usize,
-    hits: Vec<Rect>,
-    hint_hits: Vec<(Rect, GuiKey)>,
-    dialog: Option<(Dialog, Item)>,
-    options: Option<OptionsScreen>,
     /// The key configuration, over the options.
-    key_config: Option<KeyConfigScreen>,
+    key_config: Option<KeyConfig>,
     /// The device of the last key, as detected; [`Self::shown_device`]
     /// applies the button-style setting.
     device: Device,
-    opened: Instant,
-    /// Whether the canvas is stale.
-    dirty: bool,
-    /// The opening animation's progress the canvas shows.
-    drawn_appear: f32,
+    recording: bool,
 }
-
-/// How long the menu takes to slide and fade in.
-const APPEAR_SECONDS: f32 = 0.18;
 
 impl SystemMenu {
     pub fn new(settings: Settings) -> Result<Self> {
-        Ok(Self {
-            fonts: Fonts::new()?,
-            canvas: Canvas::new(1, 1),
+        let mut menu = Self {
+            ui: Ui::new(Library::builtin())?,
             text: settings.locale(),
             settings,
-            selected: 0,
-            hits: Vec::new(),
-            hint_hits: Vec::new(),
-            dialog: None,
-            options: None,
             key_config: None,
             device: Device::Keyboard,
-            opened: Instant::now(),
-            dirty: true,
-            drawn_appear: 0.0,
-        })
-    }
-
-    /// Finish the opening animation, for screenshots.
-    #[cfg(test)]
-    fn skip_intro(&mut self) {
-        if let Some(earlier) = self.opened.checked_sub(std::time::Duration::from_secs(1)) {
-            self.opened = earlier;
-        }
+            recording: false,
+        };
+        menu.refresh_options();
+        menu.ui.open("menu")?;
+        Ok(menu)
     }
 
     /// The canvas the last [`Self::draw`] painted.
     pub fn canvas(&self) -> &Canvas {
-        &self.canvas
+        match &self.key_config {
+            Some(keys) => &keys.canvas,
+            None => self.ui.canvas(),
+        }
     }
 
     /// Record the canvas for the GPU (or paint it) from the next draw.
     pub fn set_recording(&mut self, on: bool) {
-        self.dirty |= self.canvas.set_recording(on);
+        self.recording = on;
+        self.ui.set_recording(on);
+        if let Some(keys) = &mut self.key_config {
+            keys.dirty |= keys.canvas.set_recording(on);
+        }
     }
 
     /// The settings as the menu last left them.
@@ -151,53 +132,106 @@ impl SystemMenu {
     pub fn set_settings(&mut self, settings: Settings) {
         if settings != self.settings {
             self.settings = settings;
-            self.dirty = true;
             self.refresh_options();
         }
     }
 
-    /// Rebuild the options from the settings, in their language.
+    /// Publish the settings: the language, the look and every option.
     fn refresh_options(&mut self) {
         // Comparing tags is cheap; building the strings is not.
         let tag = crate::language::resolve_tag(self.settings.language.as_deref());
         if self.text.tag() != tag {
             self.text = Locale::new(&tag);
-            if let Some(screen) = &mut self.options {
-                screen.set_locale(self.text.clone());
-            }
         }
+        self.ui.set_locale(self.text.clone());
+        self.ui.set_theme(
+            self.settings.game.ui_font,
+            self.settings.game.menu_text_size.scale(),
+        );
         let device = self.shown_device();
-        if let Some(screen) = &mut self.key_config {
-            screen.set_locale(self.text.clone());
-            screen.set_device(device);
-            screen.set_bindings(self.settings.bindings.clone());
+        self.ui.set_device(device);
+        if let Some(keys) = &mut self.key_config {
+            keys.screen.set_locale(self.text.clone());
+            keys.screen.set_device(device);
+            keys.screen.set_bindings(self.settings.bindings.clone());
+            keys.dirty = true;
         }
-        let pad = self.pad_diagram();
+        let style = match (device, self.settings.game.button_style) {
+            (Device::Gamepad(style), _) => style,
+            (Device::Keyboard, style) => style.unwrap_or_default(),
+        };
+        self.ui.register(
+            "pad-diagram",
+            Box::new(PadPaint {
+                style,
+                bindings: self.settings.bindings.clone(),
+                text: self.text.clone(),
+            }),
+        );
         let specs = self.specs();
-        if let Some(screen) = &mut self.options {
-            screen.set_device(device);
-            screen.set_pad_diagram(Some(pad));
-            screen.set_facts(Some(("pc_specs".to_string(), specs)));
-            let defs = settings::defs(&self.settings, &self.text);
-            let values = defs
-                .iter()
-                .map(|d| settings::value(&d.id, &self.settings))
-                .collect();
-            screen.refresh(defs, values);
+        for def in settings::defs(&self.settings, &self.text) {
+            let value = settings::value(&def.id, &self.settings);
+            let mut fields = vec![
+                ("label", Value::from(def.label)),
+                ("description", Value::from(def.description)),
+                ("default", Value::from(def.default)),
+                ("value", Value::from(value)),
+                ("disabled", Value::Bool(def.disabled)),
+                ("pad", Value::Bool(PAD_PAGE.contains(&def.id.as_str()))),
+            ];
+            match def.kind {
+                OptionKind::Choice(choices) => {
+                    fields.push((
+                        "choices",
+                        Value::list(
+                            choices
+                                .iter()
+                                .map(|c| Value::from(c.label.as_str()))
+                                .collect(),
+                        ),
+                    ));
+                    fields.push((
+                        "choice_descriptions",
+                        Value::list(
+                            choices
+                                .iter()
+                                .map(|c| Value::from(c.description.clone().unwrap_or_default()))
+                                .collect(),
+                        ),
+                    ));
+                }
+                OptionKind::Slider {
+                    min,
+                    max,
+                    step,
+                    suffix,
+                } => {
+                    fields.push(("min", Value::from(min)));
+                    fields.push(("max", Value::from(max)));
+                    fields.push(("step", Value::from(step)));
+                    fields.push(("suffix", Value::from(suffix)));
+                }
+                OptionKind::Link | OptionKind::Info => {}
+            }
+            if def.id == "pc_specs" {
+                fields.push((
+                    "facts",
+                    Value::list(
+                        specs
+                            .iter()
+                            .map(|(label, value)| {
+                                Value::map([
+                                    ("label", Value::from(label.as_str())),
+                                    ("value", Value::from(value.as_str())),
+                                ])
+                            })
+                            .collect(),
+                    ),
+                ));
+            }
+            self.ui
+                .set(&format!("options.{}", def.id), Value::map(fields));
         }
-    }
-
-    fn open_options(&mut self) {
-        let defs = settings::defs(&self.settings, &self.text);
-        let values = defs
-            .iter()
-            .map(|d| settings::value(&d.id, &self.settings))
-            .collect();
-        let mut screen = OptionsScreen::new(defs, values, self.text.clone());
-        screen.set_device(self.shown_device());
-        screen.set_pad_diagram(Some(self.pad_diagram()));
-        screen.set_facts(Some(("pc_specs".to_string(), self.specs())));
-        self.options = Some(screen);
     }
 
     /// The PC Specs row's table: what is known of the machine.
@@ -230,24 +264,18 @@ impl SystemMenu {
         .collect()
     }
 
-    /// The Controller page's diagram: the chosen icon type's controller
-    /// (the one in use when automatic, else Xbox) and its bindings.
-    fn pad_diagram(&self) -> PadDiagram {
-        let style = match (self.shown_device(), self.settings.game.button_style) {
-            (Device::Gamepad(style), _) => style,
-            (Device::Keyboard, style) => style.unwrap_or_default(),
-        };
-        PadDiagram {
-            page_of: "control_type".to_string(),
-            style,
-            bindings: self.settings.bindings.clone(),
-        }
-    }
-
-    fn open_key_config(&mut self) {
+    fn open_key_config(&mut self) -> Result<()> {
         let mut screen = KeyConfigScreen::new(self.settings.bindings.clone(), self.text.clone());
         screen.set_device(self.shown_device());
-        self.key_config = Some(screen);
+        let mut canvas = Canvas::new(1, 1);
+        canvas.set_recording(self.recording);
+        self.key_config = Some(KeyConfig {
+            screen,
+            fonts: Fonts::new()?,
+            canvas,
+            dirty: true,
+        });
+        Ok(())
     }
 
     /// Whether the key configuration waits for a key: the owner hands the
@@ -255,7 +283,7 @@ impl SystemMenu {
     pub fn capturing(&self) -> bool {
         self.key_config
             .as_ref()
-            .is_some_and(KeyConfigScreen::capturing)
+            .is_some_and(|keys| keys.screen.capturing())
     }
 
     /// Bind the raw press the key configuration waited for; `click` is
@@ -266,29 +294,58 @@ impl SystemMenu {
         click: Option<(f32, f32)>,
     ) -> Vec<MenuRequest> {
         let mut requests = Vec::new();
-        let before = self.view();
-        if let Some(screen) = &mut self.key_config {
-            let events = screen.capture(source, click);
-            self.key_config_events(events, &mut requests);
-            self.dirty = true;
-        }
-        if let Some(sound) = self.sound(before, &requests)
-            && self.settings.game.menu_volume > 0
-        {
-            requests.push(MenuRequest::Sound(sound));
+        if let Some(keys) = &mut self.key_config {
+            let before = keys.screen.cursor();
+            let events = keys.screen.capture(source, click);
+            keys.dirty = true;
+            self.key_config_events(before, events, &mut requests);
         }
         requests
     }
 
-    fn key_config_events(&mut self, events: Vec<KeyConfigEvent>, requests: &mut Vec<MenuRequest>) {
+    /// Carry out the key configuration's events and sound the step.
+    fn key_config_events(
+        &mut self,
+        before: (usize, usize, usize, bool, Option<usize>),
+        events: Vec<KeyConfigEvent>,
+        requests: &mut Vec<MenuRequest>,
+    ) {
+        let mut changed = false;
+        let mut back = false;
         for event in events {
             match event {
-                KeyConfigEvent::Back => self.key_config = None,
+                KeyConfigEvent::Back => back = true,
                 KeyConfigEvent::Changed(bindings) => {
                     self.settings.bindings = *bindings;
+                    changed = true;
                     requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
                 }
             }
+        }
+        let after = self.key_config.as_ref().map(|keys| keys.screen.cursor());
+        let deep = |c: (usize, usize, usize, bool, Option<usize>)| c.3 || c.4.is_some();
+        let sound = match after {
+            _ if back => Some(Sound::Cancel),
+            Some(after) if deep(after) && !deep(before) => Some(Sound::Decide),
+            Some(after) if deep(before) && !deep(after) => Some(if changed {
+                Sound::Decide
+            } else {
+                Sound::Cancel
+            }),
+            Some(after) if changed || after != before => Some(Sound::Cursor),
+            _ => None,
+        };
+        if back {
+            self.key_config = None;
+            self.ui.invalidate();
+        }
+        if changed {
+            self.refresh_options();
+        }
+        if let Some(sound) = sound
+            && self.settings.game.menu_volume > 0
+        {
+            requests.push(MenuRequest::Sound(sound));
         }
     }
 
@@ -304,9 +361,6 @@ impl SystemMenu {
     /// Feed the frame's events; returns the requests in order.
     pub fn handle(&mut self, events: &[GuiEvent]) -> Vec<MenuRequest> {
         let mut requests = Vec::new();
-        // Any input may change what is drawn (a hover, a step); a pointer
-        // that moves over nothing costs one repaint.
-        self.dirty |= !events.is_empty();
         for &event in events {
             let event = match event {
                 GuiEvent::Key(key, device) => {
@@ -315,270 +369,85 @@ impl SystemMenu {
                 }
                 other => other,
             };
-            let before = self.view();
-            let start = requests.len();
-            self.handle_one(event, &mut requests);
-            if let Some(sound) = self.sound(before, &requests[start..])
-                && self.settings.game.menu_volume > 0
-            {
-                requests.push(MenuRequest::Sound(sound));
+            if let Some(keys) = &mut self.key_config {
+                let before = keys.screen.cursor();
+                let events = keys.screen.handle(event);
+                keys.dirty = true;
+                self.key_config_events(before, events, &mut requests);
+                continue;
+            }
+            if self.ui.is_empty() {
+                break;
+            }
+            for output in self.ui.handle(&[event]) {
+                self.output(output, &mut requests);
             }
         }
         requests
     }
 
-    fn view(&self) -> View {
-        let options = self.options.as_ref().map(OptionsScreen::cursor);
-        let keys = self.key_config.as_ref().map(KeyConfigScreen::cursor);
-        View {
-            depth: match (&keys, &options, &self.dialog) {
-                (Some((.., true, _) | (.., Some(_))), ..) => 5,
-                (Some(_), ..) => 4,
-                (None, Some((.., Some(_))), _) => 3,
-                (None, Some(_), _) => 2,
-                (None, None, Some(_)) => 1,
-                (None, None, None) => 0,
+    fn output(&mut self, output: UiOutput, requests: &mut Vec<MenuRequest>) {
+        match output {
+            UiOutput::Sound(sound) => {
+                if self.settings.game.menu_volume > 0 {
+                    requests.push(MenuRequest::Sound(sound));
+                }
+            }
+            UiOutput::Closed(_) if self.ui.is_empty() => requests.push(MenuRequest::Resume),
+            UiOutput::Action { name, .. } => match name.as_str() {
+                "restart" => requests.push(MenuRequest::Restart),
+                "load_game" => requests.push(MenuRequest::LoadGame),
+                "quit" => requests.push(MenuRequest::Quit),
+                "key_config" => {
+                    if let Err(err) = self.open_key_config() {
+                        eprintln!("warning: key configuration: {err:#}");
+                    }
+                }
+                other => eprintln!("warning: menu: unknown action {other:?}"),
             },
-            selected: self.selected,
-            dialog: self.dialog.as_ref().map(|(dialog, _)| dialog.selected),
-            options,
-            keys,
-        }
-    }
-
-    /// The sound one event earns, given the view before it and the requests
-    /// it raised: going deeper or carrying something out decides, backing
-    /// out cancels, and any other move of the cursor or a value ticks.
-    fn sound(&self, before: View, requests: &[MenuRequest]) -> Option<Sound> {
-        let after = self.view();
-        let acted = requests.iter().any(|request| {
-            matches!(
-                request,
-                MenuRequest::Restart | MenuRequest::LoadGame | MenuRequest::Quit
-            )
-        });
-        let changed = requests
-            .iter()
-            .any(|request| matches!(request, MenuRequest::Settings(_)));
-        if requests.contains(&MenuRequest::Resume) {
-            Some(Sound::Cancel)
-        } else if acted || after.depth > before.depth {
-            Some(Sound::Decide)
-        } else if after.depth < before.depth {
-            // A dialog that reset options was answered Yes.
-            Some(if changed {
-                Sound::Decide
-            } else {
-                Sound::Cancel
-            })
-        } else if changed || after != before {
-            Some(Sound::Cursor)
-        } else {
-            None
-        }
-    }
-
-    fn handle_one(&mut self, event: GuiEvent, requests: &mut Vec<MenuRequest>) {
-        if let Some(screen) = &mut self.key_config {
-            let events = screen.handle(event);
-            self.key_config_events(events, requests);
-            return;
-        }
-        if let Some(screen) = &mut self.options {
-            for result in screen.handle(event) {
-                match result {
-                    OptionsEvent::Back => self.options = None,
-                    OptionsEvent::Open { index } => {
-                        let defs = settings::defs(&self.settings, &self.text);
-                        if defs.get(index).is_some_and(|def| def.id == "key_config") {
-                            self.open_key_config();
-                        }
-                    }
-                    OptionsEvent::Changed { index, value } => {
-                        let defs = settings::defs(&self.settings, &self.text);
-                        if let Some(def) = defs.get(index) {
-                            settings::apply(&def.id, value, &mut self.settings);
-                            requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
-                        }
-                    }
+            UiOutput::Changed { path, value } => {
+                let id = path
+                    .strip_prefix("options.")
+                    .and_then(|p| p.strip_suffix(".value"));
+                if let (Some(id), Some(value)) = (id, value.as_int()) {
+                    settings::apply(id, value as i32, &mut self.settings);
+                    requests.push(MenuRequest::Settings(Box::new(self.settings.clone())));
+                    self.refresh_options();
                 }
             }
-            if self.options.is_some() {
-                self.refresh_options();
-            }
-            return;
-        }
-        if let Some((dialog, item)) = &mut self.dialog {
-            match dialog.handle(event) {
-                DialogResult::Open => {}
-                DialogResult::Chosen(0) => {
-                    let item = *item;
-                    self.dialog = None;
-                    requests.push(match item {
-                        Item::Restart => MenuRequest::Restart,
-                        _ => MenuRequest::Quit,
-                    });
-                }
-                DialogResult::Chosen(_) | DialogResult::Cancelled => self.dialog = None,
-            }
-            return;
-        }
-        let count = ITEMS.len();
-        match event {
-            GuiEvent::Key(GuiKey::Up, _) => self.selected = (self.selected + count - 1) % count,
-            GuiEvent::Key(GuiKey::Down, _) => self.selected = (self.selected + 1) % count,
-            GuiEvent::Key(GuiKey::Confirm, _) => self.activate(requests),
-            GuiEvent::Key(GuiKey::Cancel, _) => requests.push(MenuRequest::Resume),
-            GuiEvent::PointerMove { x, y } => {
-                if let Some(index) = self.hits.iter().position(|r| r.contains(x, y)) {
-                    self.selected = index;
-                }
-            }
-            GuiEvent::PointerDown { x, y } => {
-                if let Some(index) = self.hits.iter().position(|r| r.contains(x, y)) {
-                    self.selected = index;
-                    self.activate(requests);
-                } else if let Some(&(_, key)) =
-                    self.hint_hits.iter().find(|(r, _)| r.contains(x, y))
-                {
-                    self.handle_one(GuiEvent::Key(key, self.shown_device()), requests);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn activate(&mut self, requests: &mut Vec<MenuRequest>) {
-        match ITEMS[self.selected].0 {
-            Item::Restart => {
-                self.dialog = Some((
-                    Dialog::yes_no(
-                        &self.text,
-                        self.text.get("menu.restart_question"),
-                        Some(self.text.get("menu.unsaved_note")),
-                    ),
-                    Item::Restart,
-                ))
-            }
-            Item::LoadGame => requests.push(MenuRequest::LoadGame),
-            Item::Options => self.open_options(),
-            Item::Quit => {
-                self.dialog = Some((
-                    Dialog::yes_no(
-                        &self.text,
-                        self.text.get("menu.quit_question"),
-                        Some(self.text.get("menu.unsaved_note")),
-                    ),
-                    Item::Quit,
-                ))
-            }
+            UiOutput::Opened(_) | UiOutput::Closed(_) => {}
         }
     }
 
     /// Draw the menu at `width` x `height` pixels into [`Self::canvas`],
     /// returning whether anything was repainted: a menu at rest (no input,
-    /// no animation, the same size) keeps its last frame.
+    /// the same size) keeps its last frame.
     pub fn draw(&mut self, width: u32, height: u32) -> bool {
+        let Some(keys) = &mut self.key_config else {
+            return self.ui.draw(width, height);
+        };
         let (width, height) = (width.max(1), height.max(1));
-        let resized = (self.canvas.width, self.canvas.height) != (width, height);
+        let resized = (keys.canvas.width, keys.canvas.height) != (width, height);
         if resized {
-            self.fonts.clear_cache();
+            keys.fonts.clear_cache();
         }
-        let t = self.opened.elapsed().as_secs_f32();
-        let appear = (t / APPEAR_SECONDS).min(1.0);
-        if !self.dirty && !resized && self.drawn_appear >= 1.0 {
+        if !keys.dirty && !resized {
             return false;
         }
-        self.dirty = false;
-        self.drawn_appear = appear;
-        let shade = if self.options.is_some() || self.key_config.is_some() {
-            palette::SCREEN_SHADE
-        } else {
-            palette::MENU_SHADE.fade(appear)
-        };
-        self.canvas.reset_to(width, height, shade);
+        keys.dirty = false;
+        keys.canvas.reset_to(width, height, palette::SCREEN_SHADE);
         let theme = Theme::new(width, height, self.settings.game.ui_font)
             .with_text_scale(self.settings.game.menu_text_size.scale());
-        let device = self.shown_device();
         let mut p = Painter {
-            canvas: &mut self.canvas,
-            fonts: &mut self.fonts,
+            canvas: &mut keys.canvas,
+            fonts: &mut keys.fonts,
             theme,
         };
-        if let Some(screen) = &mut self.key_config {
-            screen.draw(&mut p);
-            return true;
-        }
-        if let Some(screen) = &mut self.options {
-            screen.draw(&mut p);
-            return true;
-        }
-        draw_menu(
-            &mut p,
-            &self.text,
-            self.selected,
-            &mut self.hits,
-            &mut self.hint_hits,
-            device,
-            appear,
-        );
-        if let Some((dialog, _)) = &mut self.dialog {
-            dialog.draw(&mut p, SELECTION_GLOW);
-        }
+        keys.screen.draw(&mut p);
+        // The menu shows again when the key configuration closes.
+        self.ui.invalidate();
         true
     }
-}
-
-fn draw_menu(
-    p: &mut Painter<'_>,
-    text: &Locale,
-    selected: usize,
-    hits: &mut Vec<Rect>,
-    hint_hits: &mut Vec<(Rect, GuiKey)>,
-    device: Device,
-    appear: f32,
-) {
-    let bounds = p.canvas.bounds();
-    let scale = p.theme.scale;
-    let u = |v: f32| v * scale;
-    // The canvas starts darkened; heavier towards the menu side.
-    p.canvas.fill_gradient(
-        Rect::new(0.0, 0.0, bounds.w * 0.55, bounds.h),
-        Axis::Horizontal,
-        Color::rgba(0, 0, 0, (200.0 * appear) as u8),
-        Color::rgba(0, 0, 0, 0),
-    );
-
-    let left = bounds.w * 0.07;
-    let row_h = u(78.0);
-    let top = bounds.h * 0.5 - row_h * ITEMS.len() as f32 / 2.0;
-    // Slide in from the left as the menu appears.
-    let slide = (1.0 - appear) * u(-60.0);
-    hits.clear();
-    let width = u(560.0);
-    for (index, &(_, key)) in ITEMS.iter().enumerate() {
-        let rect = Rect::new(
-            left - u(40.0) + slide,
-            top + row_h * index as f32,
-            width,
-            row_h - u(10.0),
-        );
-        p.menu_item(rect, left + slide, text.get(key), index == selected, appear);
-        hits.push(rect);
-    }
-
-    let hints = [
-        (GuiKey::Confirm, text.get("hint.select")),
-        (GuiKey::Cancel, text.get("hint.back")),
-    ];
-    let rects = p.hint_bar(
-        bounds.w / 2.0,
-        u(1040.0).min(bounds.h - u(40.0)),
-        device,
-        &hints,
-    );
-    hint_hits.clear();
-    hint_hits.extend(rects.into_iter().zip([GuiKey::Confirm, GuiKey::Cancel]));
 }
 
 #[cfg(test)]
@@ -586,6 +455,7 @@ mod tests {
     use super::*;
     use crate::config;
     use crate::gui::PadStyle;
+    use crate::gui::input::GuiKey;
 
     fn menu() -> SystemMenu {
         SystemMenu::new(Settings::default()).unwrap()
@@ -687,7 +557,7 @@ mod tests {
         assert!(actions(&mut menu, &[key(GuiKey::Confirm)]).is_empty());
         // Confirming the default (No) closes the dialog only.
         assert!(actions(&mut menu, &[key(GuiKey::Confirm)]).is_empty());
-        assert!(menu.dialog.is_none());
+        assert_eq!(menu.ui.top(), Some("menu"));
         let requests = actions(
             &mut menu,
             &[
@@ -745,7 +615,6 @@ mod tests {
         };
         let dir = std::path::PathBuf::from(dir);
         let mut menu = menu();
-        menu.skip_intro();
         let shot = |menu: &mut SystemMenu, name: &str, w: u32, h: u32| {
             menu.draw(w, h);
             let canvas = menu.canvas();
@@ -813,7 +682,6 @@ mod tests {
             let mut settings = menu.settings().clone();
             settings.language = Some(tag.to_string());
             menu.set_settings(settings);
-            menu.selected = 0;
             menu.handle(&[key(GuiKey::Confirm)]);
             shot(&mut menu, &format!("restart_{tag}"), 1920, 1080);
             menu.handle(&[
@@ -826,9 +694,9 @@ mod tests {
             shot(&mut menu, &format!("options_{tag}"), 1920, 1080);
             menu.handle(&[key(GuiKey::Cancel), key(GuiKey::Up), key(GuiKey::Up)]);
         }
+
         // The key configuration, from its link row.
         let mut menu = self::menu();
-        menu.skip_intro();
         menu.handle(&[
             key(GuiKey::Down),
             key(GuiKey::Down),
@@ -848,7 +716,6 @@ mod tests {
         shot(&mut menu, "keys_4x3", 1024, 768);
         // The controller diagram, per icon type and with type B.
         let mut menu = self::menu();
-        menu.skip_intro();
         menu.handle(&[
             key(GuiKey::Down),
             key(GuiKey::Down),
@@ -906,16 +773,19 @@ mod tests {
     fn changing_the_language_relabels_the_open_options() {
         let mut menu = menu();
         menu.handle(&[key(GuiKey::Up), key(GuiKey::Up), key(GuiKey::Confirm)]);
-        let language = menu.options.as_ref().map(|o| o.cursor());
-        assert!(language.is_some());
+        menu.handle(&[key(GuiKey::TabNext), key(GuiKey::Down)]);
+        assert_eq!(menu.ui.top(), Some("options"));
+        let tabs = menu.ui.tab_indices();
         let mut settings = menu.settings().clone();
         settings.language = Some("de-DE".to_string());
         menu.set_settings(settings);
+        menu.ui.handle(&[]);
         assert_eq!(menu.text.get("menu.quit"), "Beenden");
+        assert_eq!(menu.ui.tab_indices(), tabs, "the tabs stay");
         assert_eq!(
-            menu.options.as_ref().map(|o| o.cursor()),
-            language,
-            "the cursor stays"
+            menu.ui.focus_prop("label"),
+            Value::from(menu.text.get("analog_movement.label")),
+            "the cursor stays, relabelled"
         );
     }
 
@@ -927,10 +797,8 @@ mod tests {
             GuiEvent::Key(GuiKey::Down, Device::Gamepad(PadStyle::Xbox)),
             GuiEvent::Key(GuiKey::Confirm, Device::Gamepad(PadStyle::Xbox)),
         ]);
-        assert_eq!(
-            menu.options.as_ref().map(|o| o.device),
-            Some(Device::Gamepad(PadStyle::Xbox))
-        );
+        assert_eq!(menu.ui.top(), Some("options"));
+        assert_eq!(menu.ui.device(), Device::Gamepad(PadStyle::Xbox));
     }
 
     #[test]
@@ -938,21 +806,35 @@ mod tests {
         let mut menu = menu();
         let ps = |key| GuiEvent::Key(key, Device::Gamepad(PadStyle::PlayStation));
         menu.handle(&[ps(GuiKey::Up), ps(GuiKey::Up), ps(GuiKey::Confirm)]);
-        let shown = |menu: &SystemMenu| menu.options.as_ref().map(|o| o.device);
-        assert_eq!(shown(&menu), Some(Device::Gamepad(PadStyle::PlayStation)));
+        let shown = |menu: &SystemMenu| menu.ui.device();
+        assert_eq!(shown(&menu), Device::Gamepad(PadStyle::PlayStation));
         let mut settings = menu.settings().clone();
         settings.game.button_style = Some(PadStyle::Nintendo);
         menu.set_settings(settings.clone());
-        assert_eq!(shown(&menu), Some(Device::Gamepad(PadStyle::Nintendo)));
+        assert_eq!(shown(&menu), Device::Gamepad(PadStyle::Nintendo));
         menu.handle(&[ps(GuiKey::Down)]);
-        assert_eq!(shown(&menu), Some(Device::Gamepad(PadStyle::Nintendo)));
+        assert_eq!(shown(&menu), Device::Gamepad(PadStyle::Nintendo));
         // Automatic again: back to what the controller is.
         settings.game.button_style = None;
         menu.set_settings(settings);
-        assert_eq!(shown(&menu), Some(Device::Gamepad(PadStyle::PlayStation)));
+        assert_eq!(shown(&menu), Device::Gamepad(PadStyle::PlayStation));
         // The keyboard keeps its caps whatever the style.
         menu.handle(&[key(GuiKey::Down)]);
-        assert_eq!(shown(&menu), Some(Device::Keyboard));
+        assert_eq!(shown(&menu), Device::Keyboard);
+    }
+
+    #[test]
+    fn every_setting_has_one_row() {
+        let source = include_str!("../../assets/ui/options.xml");
+        for def in settings::defs(&Settings::default(), &Locale::default()) {
+            let binding = format!("{{options.{}}}", def.id);
+            assert_eq!(
+                source.matches(&binding).count(),
+                1,
+                "{} needs exactly one row in options.xml",
+                def.id
+            );
+        }
     }
 
     #[test]
@@ -971,7 +853,6 @@ mod tests {
     #[test]
     fn repaints_only_on_change() {
         let mut menu = menu();
-        menu.skip_intro();
         assert!(menu.draw(640, 480), "the first frame paints");
         assert!(!menu.draw(640, 480), "a menu at rest keeps its frame");
         assert!(menu.draw(800, 600), "a resize repaints");

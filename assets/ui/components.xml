@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The building blocks every engine screen is made of. -->
+<components>
+  <!-- The standard screen: the title (after the titles of the screens it
+       was opened from), a caption, the content, an optional footer and the
+       hint bar. Cancel goes back. -->
+  <component name="standard-screen">
+    <screen title="{title}">
+      <command key="cancel" label="@hint.back" action="back"/>
+      <stack orientation="horizontal">
+        <text variant="title" text="{title}" width="fill" wrap="none"/>
+        <slot name="header"/>
+      </stack>
+      <text variant="caption" text="{caption}"/>
+      <slot height="fill"/>
+      <slot name="footer"/>
+      <hint-bar/>
+    </screen>
+  </component>
+
+  <!-- One options category: its pages as sub-tabs over the rows, and the
+       focused row's description beside them. -->
+  <component name="option-category">
+    <tab label="{label}">
+      <split>
+        <tabs>
+          <command key="reset_group" label="@hint.reset_page" action="reset" confirm="@options.reset_page_question"/>
+          <slot/>
+        </tabs>
+        <option-detail/>
+      </split>
+    </tab>
+  </component>
+
+  <!-- What the focused option row does. -->
+  <component name="option-detail">
+    <stack gap="medium">
+      <text text="{focus.description}"/>
+      <text text="{focus.choice_text}"/>
+      <text text="@options.default(focus.default_label)" visible="{focus.has_value}"/>
+      <facts items="{focus.facts}"/>
+      <pad-diagram visible="{focus.pad}"/>
+    </stack>
+  </component>
+
+  <!-- A save file in a load or save list. -->
+  <component name="save-row">
+    <item variant="save" action="{action}" hint="{hint}" confirm="{confirm}" note="{note}" confirm-if="{confirm-if}" highlight="{item.latest}">
+      <stack orientation="horizontal">
+        <text variant="tag" text="{item.tag}" width="88" align="center" wrap="none" overflow="clip"/>
+        <image variant="portrait" src="{item.portrait}"/>
+        <image variant="thumbnail" src="{item.thumbnail}"/>
+        <stack width="fill" gap="small">
+          <stack orientation="horizontal">
+            <text variant="heading" text="{item.location}" wrap="none"/>
+            <separator visible="{item.room}"/>
+            <text variant="heading-dim" text="{item.room}" width="fill" wrap="none"/>
+          </stack>
+          <stack orientation="horizontal" gap="small">
+            <text variant="detail-dim" text="{item.character}" wrap="none"/>
+            <spacer width="40"/>
+            <text variant="detail-dim" text="@save.play_time" wrap="none"/>
+            <text variant="detail-dim" text="{item.play_time}" wrap="none"/>
+          </stack>
+        </stack>
+        <separator/>
+        <stack width="440" gap="small">
+          <stack orientation="horizontal" gap="small">
+            <text variant="detail" text="{item.date}" width="fill" wrap="none"/>
+            <badge variant="highlight" text="@save.latest" visible="{item.latest}"/>
+            <badge text="@save.autosave" visible="{item.autosave}"/>
+          </stack>
+          <text variant="detail-dim" text="@save.saves(item.saves)" wrap="none"/>
+        </stack>
+      </stack>
+    </item>
+  </component>
+</components>

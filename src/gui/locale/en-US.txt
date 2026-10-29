@@ -1,6 +1,7 @@
 # The in-game menu and options screen strings (see src/gui/locale.rs).
 # `{}` is replaced by a value.
 
+menu.title = "MENU"
 menu.restart = "Restart"
 menu.load_game = "Load Game"
 menu.options = "Options"
@@ -13,6 +14,7 @@ dialog.yes = "Yes"
 dialog.no = "No"
 
 hint.select = "Select"
+hint.change = "Change"
 hint.back = "Back"
 hint.reset_all = "Reset All"
 hint.reset_page = "Reset Subcategory"
