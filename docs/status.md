@@ -47,8 +47,9 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-28.
 | R0 RE2 data | `convert-game` for the RE2 PC release: rooms, backgrounds, models, audio and films into `re2.akpak`; per-file format detection replaces the pack-wide dialect; `verify` classifies the RE2 formats | done |
 | R1 RE2 first light | RE2 rooms: the `rdt2` reader (cameras, RVD switch zones, SCA collision), letter stages A-G, the base manifest's `start_room`, the collision debug overlay, and the TeamX RE2 HD backgrounds | done |
 | R2 RE2 models | RE2 EMD, PLD and PLW through the shared model and animation path, the `--model` viewer, per-camera LIT lights, HD model skins, and the `re2` pack conventions | done |
+| R3 RE2 scripts | The RE2 SCD reader (`scd2`): init and main procedure lists, the RE2 opcode table, `scd export` to `.s` and structured `.akscr`, both round-tripping every retail room byte for byte | done |
 
-RE2 milestones R3 (script reader) onwards are still open and tracked by the
+RE2 milestones R4 onwards are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
@@ -918,6 +919,19 @@ English names from the debug room table in the install's Classic REbirth
 707 has no slot), and a
 non-RE1 pack takes only the `UI_` strings from the built-in RE1 language
 files, so RE2 rooms no longer show RE1 names.
+
+RE2 R3 (#247) reads RE2 scripts (`src/scd2/`). An RE2 RDT's section slots 16
+and 17 hold the init and main procedure lists: a `u16` offset table, then the
+procedures. The last procedure's end is not stored; it ends at the first
+`evt_end` past every block it opens, and the bytes after it are not script.
+The opcode table has 0x8F fixed-width opcodes, with widths and block
+semantics checked against `bio2.exe`'s handlers (`endif` is 2 bytes; IDA's
+`Vib_set1` at 0x14 is `case` and `Case` at 0x18 is `gosub`). `scd export`
+writes an RE2 room as `.s` or `.akscr`; `tests/real/re2_real.rs` checks that
+all 501 rooms (5090 procedures) rebuild their lists byte for byte and
+round-trip through both forms, with every block decompiled to its structured
+form. Running the scripts, `scd build` for RE2 and the `.lst` listing come
+later.
 
 The manifest no longer carries `rdt_version`/`scd_version`: formats are
 detected per file (`src/format.rs`), so one pack may hold both dialects.

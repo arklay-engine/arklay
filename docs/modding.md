@@ -811,6 +811,16 @@ to structured code, and `arklay scd build 1000.akscr --out room/1000/room.scd`
 compiles it back. Every room of the shipped game decompiles to a script that
 compiles to byte-identical init, main and event streams.
 
+An RE2 room's scripts export the same way: `scd export` detects the RDT's
+dialect and writes its init and main procedure lists as `.s` (`.version 1`,
+`.game re2`, one `.proc` per procedure) or `.akscr` (`#game re2`, one
+`proc init_NN` / `proc main_NN` per procedure, with structured `if`/`else`,
+`while`, `do`/`while`, `for`, `for2` and `switch`; `src/scd2/akscr.rs`
+documents the grammar). All 501 retail RE2 rooms decompile, with every block
+structured, to scripts that compile back to byte-identical procedure lists.
+Building RE2 scripts back into a room (`scd build`) and the `--list`
+listing are not supported yet.
+
 `arklay scd export-rooms re1.akpak --out games/re1/room` writes one merged
 script per room, as `<room>0/room.akscr`, covering both players and, for
 stages 1 and 2, the second mansion visit (stages 6 and 7): `1030/room.akscr`

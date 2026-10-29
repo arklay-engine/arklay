@@ -667,6 +667,9 @@ fn parse_room_id(text: &str) -> Result<u16, String> {
 /// decompilation), optionally writing a `.lst` listing beside it.
 fn export_scd(rdt: &std::path::Path, out: &std::path::Path, list: bool) -> Result<()> {
     let data = std::fs::read(rdt).with_context(|| format!("failed to read {}", rdt.display()))?;
+    if arklay::format::rdt(&data).dialect() == Some(arklay::format::Dialect::Re2) {
+        return export_scd_re2(rdt, &data, out, list);
+    }
     let scripts = arklay::scd::reader::parse(&data)
         .with_context(|| format!("failed to parse the SCD in {}", rdt.display()))?;
 
@@ -693,6 +696,32 @@ fn export_scd(rdt: &std::path::Path, out: &std::path::Path, list: bool) -> Resul
             .with_context(|| format!("failed to write {}", listing_path.display()))?;
     }
     Ok(())
+}
+
+/// [`export_scd`] for an RE2 room: its init and main procedure lists as
+/// `.s` or `.akscr`.
+fn export_scd_re2(rdt: &Path, data: &[u8], out: &Path, list: bool) -> Result<()> {
+    if list {
+        bail!("--list is not supported for RE2 rooms yet");
+    }
+    let scripts = arklay::scd2::reader::parse(data)
+        .with_context(|| format!("failed to parse the scripts in {}", rdt.display()))?;
+    let extension = out
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default();
+    let text = if extension.eq_ignore_ascii_case("s") {
+        arklay::scd2::asm::render(&scripts)
+    } else if extension.eq_ignore_ascii_case("akscr") {
+        arklay::scd2::akscr::decompile(&scripts)
+    } else {
+        bail!(
+            "output `{}` must end in .s or .akscr for an RE2 room",
+            out.display()
+        );
+    };
+    arklay::atomic::write(out, text.as_bytes())
+        .with_context(|| format!("failed to write {}", out.display()))
 }
 
 /// Assemble a text `.s` source or compile an `.akscr` script into a

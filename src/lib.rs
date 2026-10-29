@@ -73,6 +73,7 @@ pub mod room;
 pub mod sap;
 pub mod save;
 pub mod scd;
+pub mod scd2;
 pub mod screenshot;
 pub mod sfx;
 pub mod shadow;
