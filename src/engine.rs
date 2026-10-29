@@ -8145,8 +8145,9 @@ impl App {
     }
 
     /// Put `menu` up over the session, freezing it.
-    fn open_system_menu(&mut self, menu: gui::SystemMenu) {
+    fn open_system_menu(&mut self, mut menu: gui::SystemMenu) {
         if let Mode::Play(session) = &mut self.mode {
+            menu.set_play_time(session.game.play_timer());
             session.open_system_menu();
             self.system_menu = Some(Box::new(menu));
         }

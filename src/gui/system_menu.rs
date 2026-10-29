@@ -122,6 +122,13 @@ impl SystemMenu {
         }
     }
 
+    /// Show the running game's play timer (30 Hz ticks). The game is frozen
+    /// under the menu, so the time holds while it is open.
+    pub fn set_play_time(&mut self, ticks: u32) {
+        self.ui
+            .set("menu.play_time", crate::ui::modern_save::play_time(ticks));
+    }
+
     /// The settings as the menu last left them.
     pub fn settings(&self) -> &Settings {
         &self.settings
@@ -560,6 +567,13 @@ mod tests {
     }
 
     #[test]
+    fn the_play_time_shows_as_hours_minutes_seconds() {
+        let mut menu = menu();
+        menu.set_play_time(30 * (2 * 3600 + 5 * 60 + 9) + 29);
+        assert_eq!(menu.ui.get("menu.play_time").to_string(), "2:05:09");
+    }
+
+    #[test]
     fn cancel_resumes() {
         let mut menu = menu();
         assert_eq!(
@@ -656,6 +670,7 @@ mod tests {
             };
             crate::bmp::encode(&image, &dir.join(format!("{name}.bmp"))).unwrap();
         };
+        menu.set_play_time(30 * (3600 + 23 * 60 + 45));
         shot(&mut menu, "menu", 1920, 1080);
         menu.handle(&[key(GuiKey::Confirm)]);
         shot(&mut menu, "restart", 1920, 1080);

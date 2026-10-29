@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The in-game menu: the entries centred down the left. -->
+<!-- The in-game menu: the entries centred down the left, and the running
+     game's play time (`menu.play_time`) under them. -->
 <screen use="standard-screen" backdrop="light">
   <spacer/>
   <list width="560" height="auto">
@@ -9,4 +10,8 @@
     <item variant="menu" text="@menu.quit" action="quit" confirm="@menu.quit_question" note="@menu.unsaved_note"/>
   </list>
   <spacer/>
+  <stack orientation="horizontal" gap="medium" visible="{menu.play_time}">
+    <text variant="detail-dim" text="@save.play_time" wrap="none"/>
+    <text variant="detail" text="{menu.play_time}" wrap="none"/>
+  </stack>
 </screen>
