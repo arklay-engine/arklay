@@ -112,6 +112,15 @@ fn turn_desk_key(game: &mut GameState, desk_slot: u8) -> u8 {
     key
 }
 
+/// Confirm the take viewer state 5 opened on the desk's item, as the 0xC0
+/// prompt's yes branch does, and close it.
+fn take_desk_item(game: &mut GameState, item_slot: u8) {
+    let request = game.item_view_request().expect("state 5 opens the viewer");
+    assert_eq!(request.slot, item_slot, "the viewer takes the desk's item");
+    assert!(game.take_message_item(), "the yes branch awards");
+    game.clear_item_view_flags();
+}
+
 /// Drive one desk through the full flow: refuse without the key, prompt, turn
 /// the key, open the model, pan and award. Returns the awarded item id.
 fn drive_desk(game: &mut GameState, desk_slot: u8) -> u8 {
@@ -148,7 +157,8 @@ fn drive_desk(game: &mut GameState, desk_slot: u8) -> u8 {
         "the desk model is drawn"
     );
 
-    // The pan counts 35 -> 5, then state 5 awards and state 4 closes.
+    // The pan counts 35 -> 5, then state 5 opens the take viewer, its yes
+    // branch awards and state 4 closes.
     for _ in 0..30 {
         game.check_desk_state();
     }
@@ -156,6 +166,7 @@ fn drive_desk(game: &mut GameState, desk_slot: u8) -> u8 {
     assert_eq!(game.last_picked_item, None, "no award before state 5");
     game.check_desk_state();
     assert_eq!(game.desk.state, 4);
+    take_desk_item(game, item_slot);
     assert_eq!(game.last_picked_item, Some(item_id));
     assert!(
         !game.room_item_present(item.room_items_flag),
@@ -251,6 +262,7 @@ fn room_401_desk_locked_refuses_then_opens_after_the_key_turns() {
     }
     assert_eq!(sim.game.desk.state, 5);
     sim.game.check_desk_state();
+    take_desk_item(&mut sim.game, item_slot);
     assert_eq!(sim.game.last_picked_item, Some(0x0C));
     assert!(
         sim.game.room_actions[usize::from(item_slot)].is_none_or(|a| a.handler == 0),

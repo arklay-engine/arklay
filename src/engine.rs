@@ -27813,6 +27813,75 @@ off_0010:
         assert!(!session.game.menu_pending());
     }
 
+    /// Issue #273: an opened drawer goes through the take viewer like a
+    /// ground item (the original's `check_desk_state` state 5), so a full
+    /// inventory gets the no-room message, the item stays in the drawer and
+    /// the desk flow returns to idle with the player gates restored.
+    #[test]
+    fn a_full_inventory_leaves_the_drawer_item_and_the_desk_reopens() {
+        let dir = TempDir::new();
+        let pack_path = message_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        place_player(&mut session);
+        settle_control(&mut session, &pack);
+        for item in [0x41, 0x42, 0x43, 0x44, 0x45, 0x46] {
+            session.game.add_item(item, 1);
+        }
+        let inventory = session.game.inventory.clone();
+        // An unlocked desk (LocksFlags bit 5) on slot 0 opening the item on slot 1.
+        session.game.apply_flag(2, 5, 0);
+        session.game.room_actions[0] = Some(game::RoomAction {
+            slot: 0,
+            kind: game::RoomActionKind::Desk,
+            zone: [100, 100, 10, 10],
+            sce: 0x0E,
+            handler: 0x0E,
+            flags: 0x81,
+            params: [0, 0, 5, 0, 1, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        session.game.room_actions[1] = Some(item_room_action(1, ITEM_SWORD_KEY, 1, 4));
+
+        assert!(session.game.check_desk(0));
+        tick_until(&mut session, &pack, 100, "the desk viewer", |session| {
+            session.pickup_view.is_some()
+        });
+        tick_until(&mut session, &pack, 300, "the no-room message", |session| {
+            session.game.message.id == Some(game::MESSAGE_INVENTORY_FULL)
+        });
+        tick_until(&mut session, &pack, 300, "the message wait", |session| {
+            session.game.message.phase() == crate::message::MessagePhase::WaitInput
+        });
+        session
+            .tick(&pack, UiInput::default(), pressed(), true)
+            .unwrap();
+        tick_until(&mut session, &pack, 300, "the viewer close", |session| {
+            session.pickup_view.is_none()
+        });
+        settle_menu_fade(&mut session, &pack);
+        tick_until(&mut session, &pack, 10, "the desk close", |session| {
+            session.game.desk.state == 0
+        });
+
+        assert_eq!(session.game.inventory, inventory, "nothing was taken");
+        assert!(
+            session.game.room_actions[1].is_some_and(|a| a.handler != 0),
+            "the item stays in the drawer"
+        );
+        // State 5 puts back the gates the open cleared, and the menu close
+        // releases its freeze.
+        tick_until(&mut session, &pack, 30, "the gates restored", |session| {
+            session.game.message_flags & 0x45 == 0x45
+        });
+        // The drawer opens again once there is room.
+        assert!(session.game.check_desk(0));
+    }
+
     #[test]
     fn a_scripted_give_item_shows_global_c1_and_awards_on_completion() {
         let dir = TempDir::new();
