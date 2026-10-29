@@ -486,6 +486,12 @@ enum Command {
         /// bgd, mask, misc, skin or skin2
         #[arg(long, value_name = "CLASS")]
         class: Option<String>,
+
+        /// The file is a screen-border (cave) room background: re-wrap a
+        /// 320x240 PAK at 316x236, as the game does when the room sets
+        /// `MSF2_SCREEN_BORDER`
+        #[arg(long)]
+        border: bool,
     },
 
     /// List every entry of a game pack with its stored size
@@ -874,8 +880,11 @@ fn extract_pack(pack_path: &Path, out_dir: &Path, mods: &[PathBuf]) -> Result<()
 /// decoded the way its loader decodes it: room backgrounds and masks are
 /// bit-replicated, everything else is shifted, and a container is scanned for
 /// every embedded TIM and CLUT row. See [`arklay::hash`].
-fn hash_file(path: &Path, class: Option<&str>) -> Result<()> {
-    use arklay::hash::{Class, Expand, Found, Surface};
+///
+/// A cave background's pak claims 320x240, and only the room's script says
+/// otherwise, so `border` asks for the 316x236 re-wrap the engine applies.
+fn hash_file(path: &Path, class: Option<&str>, border: bool) -> Result<()> {
+    use arklay::hash::{BORDER_HEIGHT, BORDER_WIDTH, Class, Expand, Found, Surface};
 
     let data = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
     let name = path
@@ -896,10 +905,12 @@ fn hash_file(path: &Path, class: Option<&str>) -> Result<()> {
             surface,
         }]
     };
-    // A full-screen 16bpp image is a background; other textures default by
-    // the kind of file that carries them.
-    let screen = |surface: &Surface| surface.width >= 320 && surface.height >= 240;
-    let (found, implied) = match extension.as_str() {
+    // A full-screen 16bpp image, or a 316x236 screen-border one, is a
+    // background; other textures default by the kind of file that carries
+    // them.
+    let screen =
+        |surface: &Surface| (surface.width >= 320 && surface.height >= 240) || surface.is_border();
+    let (mut found, implied) = match extension.as_str() {
         "pak" => {
             let tim = arklay::lzw::decode(&data)
                 .with_context(|| format!("failed to LZW-decode {}", path.display()))?;
@@ -943,6 +954,20 @@ fn hash_file(path: &Path, class: Option<&str>) -> Result<()> {
     };
     if found.is_empty() {
         bail!("{} contains no texture", path.display());
+    }
+    if border {
+        for texture in &mut found {
+            let surface = &mut texture.surface;
+            if surface.width * surface.height < BORDER_WIDTH * BORDER_HEIGHT {
+                bail!(
+                    "{}: a {}x{} texture is too small for a 316x236 screen-border background",
+                    path.display(),
+                    surface.width,
+                    surface.height
+                );
+            }
+            surface.reslice(BORDER_WIDTH, BORDER_HEIGHT);
+        }
     }
     let several = found.len() > 1;
     for texture in &found {
@@ -1164,7 +1189,11 @@ fn main() -> Result<()> {
             jobs: jobs.map_or(0, usize::from),
         }),
         Some(Command::Extract { pack, out, mods }) => extract_pack(&pack, &out, &mods),
-        Some(Command::Hash { file, class }) => hash_file(&file, class.as_deref()),
+        Some(Command::Hash {
+            file,
+            class,
+            border,
+        }) => hash_file(&file, class.as_deref(), border),
         Some(Command::List { pack, mods }) => list_pack(&pack, &mods),
         Some(Command::Verify { pack, mods, strict }) => verify_pack(&pack, &mods, strict),
         Some(Command::Scd { action }) => match action {
@@ -1871,8 +1900,13 @@ entries:
         let cli = Cli::try_parse_from(["arklay", "hash", "RC1000.pak", "--class", "bgd"]).unwrap();
         assert!(matches!(
             cli.command,
-            Some(Command::Hash { file, class: Some(class) })
+            Some(Command::Hash { file, class: Some(class), border: false })
                 if file.as_path() == Path::new("RC1000.pak") && class == "bgd"
+        ));
+        let cli = Cli::try_parse_from(["arklay", "hash", "RC30B0.pak", "--border"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Hash { border: true, .. })
         ));
     }
 

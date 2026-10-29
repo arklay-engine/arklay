@@ -486,14 +486,17 @@ The game's conversion, which the hash depends on:
 - A screen-border background (the caves, 316 x 236) is the exception. The game leaves
   the four spare rows of the 256 x 240 window black, so the renderer also tries that
   window with the spare rows hashed as the black texel (`1`), alpha `0xFF`. That
-  candidate lets an unmodified pack replace the cave cameras. `arklay hash` does not
-  print it yet; it reports only the zero-padded hash.
+  candidate lets an unmodified pack replace the cave cameras. `arklay hash` hashes a
+  316 x 236 `bgd` the same way. A cave room's `.pak` claims 320 x 240, though, and only
+  the room's script sets the screen-border flag, so pass `--border` to re-wrap it at
+  316 x 236 first, as the engine does: `arklay hash --border STAGE3/RC30B0.pak` prints
+  `bgd/11103E64.webp`.
 
 The class comes from how the game uses the texture, so `arklay hash` infers it from
 the file: a `.pak` is `bgd` or `mask`, models (`EMD`, `EMW`, `IVM`, ...) are `skin`,
-rooms (`RDT`) are `skin2`, and other 320x240 images are `bgd`; anything else is
-`misc`. `misc`, `skin` and `skin2` share one hash rule, so `--class` only changes the
-directory for those.
+rooms (`RDT`) are `skin2`, and other 320x240 (or 316x236) images are `bgd`; anything
+else is `misc`. `misc`, `skin` and `skin2` share one hash rule, so `--class` only
+changes the directory for those.
 
 The hash covers the texture the game builds at runtime, so a screen composited from
 several sources has no single source file. Classic REbirth's save screen is its own

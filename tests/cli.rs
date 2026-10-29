@@ -1093,3 +1093,54 @@ fn extraction_writes_every_entry_and_rejects_a_layered_duplicate() {
         .collect();
     assert!(leftovers.is_empty(), "temporary files left: {leftovers:?}");
 }
+
+/// A 16bpp TIM of `width` x `height` whose texels number their position.
+fn numbered_tim(width: u16, height: u16) -> (Vec<u8>, Vec<u16>) {
+    let colours: Vec<u16> = (0..u32::from(width) * u32::from(height))
+        .map(|i| (i % 0x7fff) as u16 + 1)
+        .collect();
+    let mut data = Vec::new();
+    data.extend_from_slice(&0x10u32.to_le_bytes());
+    data.extend_from_slice(&2u32.to_le_bytes());
+    data.extend_from_slice(&(12 + colours.len() as u32 * 2).to_le_bytes());
+    data.extend_from_slice(&[0; 4]);
+    data.extend_from_slice(&width.to_le_bytes());
+    data.extend_from_slice(&height.to_le_bytes());
+    for colour in &colours {
+        data.extend_from_slice(&colour.to_le_bytes());
+    }
+    (data, colours)
+}
+
+#[test]
+fn hash_border_rewraps_a_screen_background_and_pads_it_black() {
+    use arklay::hash::{Class, Expand, Surface, format_hash};
+
+    let dir = TempDir::new("hash-border");
+    let path = dir.join("cave.tim");
+    let (tim, colours) = numbered_tim(320, 240);
+    fs::write(&path, tim).unwrap();
+    let path = path.to_str().unwrap();
+
+    let mut surface = Surface::from_bgr555(320, 240, &colours, Expand::Shift);
+    let plain = format!("bgd/{}.webp\n", format_hash(surface.hash(Class::Bgd)));
+    surface.reslice(316, 236);
+    let border = format!("bgd/{}.webp\n", format_hash(surface.hash(Class::Bgd)));
+    assert_ne!(plain, border);
+
+    let output = run(&["hash", path]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), plain);
+    let output = run(&["hash", path, "--border"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), border);
+}
+
+#[test]
+fn hash_border_rejects_a_texture_smaller_than_the_border_picture() {
+    let dir = TempDir::new("hash-border-small");
+    let path = dir.join("small.tim");
+    fs::write(&path, numbered_tim(16, 16).0).unwrap();
+    let output = run(&["hash", path.to_str().unwrap(), "--border"]);
+    assert_failure(&output, "too small");
+}

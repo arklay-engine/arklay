@@ -23,7 +23,9 @@
 //! 256 x 240 texels with every alpha forced opaque; `mask` takes the left
 //! 256 x 256 texels; the other classes take the whole texture with every
 //! texel but `0` and `1` made opaque. A texture smaller than the window is
-//! padded with zero texels.
+//! padded with zero texels, except a screen-border background
+//! ([`BORDER_WIDTH`] x [`BORDER_HEIGHT`], the caves): the game leaves the
+//! spare rows of its texture black, so they hash as the black texel `1`.
 //!
 //! ```
 //! # use arklay::hash::{crc32, format_hash};
@@ -77,6 +79,11 @@ impl Class {
             .ok_or_else(|| anyhow::anyhow!("unknown HD texture class {name:?}"))
     }
 }
+
+/// The width of a screen-border (`MSF2_SCREEN_BORDER`, the caves) background.
+pub const BORDER_WIDTH: usize = 316;
+/// The height of a screen-border background.
+pub const BORDER_HEIGHT: usize = 236;
 
 /// How the game widens a 5-bit channel to 8 bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -155,9 +162,27 @@ impl Surface {
         }
     }
 
+    /// Re-wrap the same linear texels at `width` x `height`, as the game does
+    /// for a screen-border background: its pak stores the picture 316 texels
+    /// wide while the TIM header claims 320. Texels past the new size drop.
+    pub fn reslice(&mut self, width: usize, height: usize) {
+        self.texels
+            .truncate((width * height).min(self.texels.len()));
+        self.texels.resize(width * height, 0);
+        self.width = width;
+        self.height = height;
+    }
+
+    /// Whether this is a screen-border (cave) background's geometry.
+    pub fn is_border(&self) -> bool {
+        (self.width, self.height) == (BORDER_WIDTH, BORDER_HEIGHT)
+    }
+
     /// The loader's hash of this surface for `class`.
     pub fn hash(&self, class: Class) -> u32 {
         match class {
+            // The rows under a screen-border picture are black, not zero.
+            Class::Bgd if self.is_border() => self.window_crc(256, 240, |t| t.max(1) | 0xff00_0000),
             Class::Bgd => self.window_crc(256, 240, |t| t | 0xff00_0000),
             Class::Mask => self.window_crc(256, 256, |t| if t == 0 { 0 } else { t | 0xff00_0000 }),
             Class::Misc | Class::Skin | Class::Skin2 => {
@@ -444,6 +469,32 @@ mod tests {
             expected.extend_from_slice(&[0, 0, 0, 0xff]);
         }
         assert_eq!(surface.hash(Class::Bgd), crc32(&expected));
+    }
+
+    #[test]
+    fn a_border_background_pads_its_window_with_black() {
+        let colours = vec![bgr(1, 0, 0); BORDER_WIDTH * BORDER_HEIGHT];
+        let surface =
+            Surface::from_bgr555(BORDER_WIDTH, BORDER_HEIGHT, &colours, Expand::Replicate);
+        let mut expected = Vec::new();
+        for _ in 0..BORDER_HEIGHT * 256 {
+            expected.extend_from_slice(&[0, 0, 8, 0xff]);
+        }
+        for _ in BORDER_HEIGHT * 256..240 * 256 {
+            expected.extend_from_slice(&[1, 0, 0, 0xff]);
+        }
+        assert_eq!(surface.hash(Class::Bgd), crc32(&expected));
+    }
+
+    #[test]
+    fn reslice_rewraps_the_linear_texels() {
+        let colours: Vec<u16> = (0..320 * 240).map(|i| (i % 0x7fff) as u16 + 1).collect();
+        let mut surface = Surface::from_bgr555(320, 240, &colours, Expand::Shift);
+        let row_one = surface.texels[BORDER_WIDTH];
+        surface.reslice(BORDER_WIDTH, BORDER_HEIGHT);
+        assert!(surface.is_border());
+        assert_eq!(surface.texels.len(), BORDER_WIDTH * BORDER_HEIGHT);
+        assert_eq!(surface.texels[BORDER_WIDTH], row_one);
     }
 
     #[test]
