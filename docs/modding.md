@@ -1860,7 +1860,12 @@ bit).
 
 Every other reaction entry the original's animation-function table populates
 is wired too, and the clips play from the loaded enemy model's second EDD
-chunk (the damage bank, `emdScratchPtr1/2` in the original):
+chunk (the damage bank, `emdScratchPtr1/2` in the original). A room may mix
+enemy types: the enemy that last wrote the player's reaction (`player_state`,
+`player_anim_frame_id`, `player_attack_anim`, `set_player_animation`,
+`set_player_action`, `grab_player`, `hurt_player` or an attacker latch) owns
+the bank, so the clips come from the attacker's own model. Before any enemy
+has attacked in the room, the last loaded model's bank is used:
 
 - State 5 (`e.player_state = 5`): the zombie's bite writes `animFrameId 0`
   and `e.player_attack_anim` (0/3/6/9 by attacking direction); the recoil

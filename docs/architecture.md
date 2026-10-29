@@ -241,7 +241,9 @@ One gameplay tick (`engine::tick_room`) runs this fixed order:
    animation windows: the attacker-written `animFrameId` selects a handler and
    the reaction clips play from `GameState::player_damage`, the damage scratch
    pair repointed at the last loaded enemy model's second EDD chunk
-   (`ClipSource::Damage`).
+   (`ClipSource::Damage`). Once an enemy writes the player's reaction
+   (`GameState::player_damage_owner`), only that enemy's model repoints it,
+   so a room can mix enemy types.
 8. Effect pool update (`game.tick_effects`).
 9. Room action probe and object update (probes read the frame's final state).
 10. Camera cut switch and mask/shadow bookkeeping.

@@ -527,6 +527,16 @@ mod imp {
             // SAFETY: see the type-level comment.
             unsafe { &*self.game }
         }
+
+        /// The game state with the player's reaction claimed by this slot:
+        /// the reaction clips play from this entity's damage bank
+        /// ([`GameState::player_damage_owner`]).
+        fn claim_player(&mut self) -> &mut GameState {
+            let slot = self.slot as u8;
+            let game = self.game();
+            game.player_damage_owner = Some(slot);
+            game
+        }
     }
 
     impl UserData for EnemyApi {
@@ -1628,14 +1638,14 @@ mod imp {
                 Ok(api.game_ref().entities[0].state())
             });
             fields.add_field_method_set("player_state", |_lua, api, value: i64| {
-                api.game().entities[0].set_state(value as u8);
+                api.claim_player().entities[0].set_state(value as u8);
                 Ok(())
             });
             fields.add_field_method_get("player_anim_frame_id", |_lua, api| {
                 Ok(api.game_ref().entities[0].ignore())
             });
             fields.add_field_method_set("player_anim_frame_id", |_lua, api, value: i64| {
-                api.game().entities[0].set_ignore(value as u8);
+                api.claim_player().entities[0].set_ignore(value as u8);
                 Ok(())
             });
             fields.add_field_method_get("player_attack_anim", |_lua, api| {
@@ -1644,7 +1654,7 @@ mod imp {
             fields.add_field_method_set("player_attack_anim", |_lua, api, value: i64| {
                 // The original's dword store leaves both the generic clip id
                 // and the player's `attackAnim` name on the same value.
-                let player = &mut api.game().entities[0];
+                let player = &mut api.claim_player().entities[0];
                 player.attack_anim = value as u8;
                 player.animation_id = value as u8;
                 Ok(())
@@ -2441,7 +2451,7 @@ mod imp {
                 "hurt_player",
                 |_lua, api, (damage, flags): (i64, Option<i64>)| {
                     Ok(api
-                        .game()
+                        .claim_player()
                         .apply_player_hurt(damage as i16, flags.unwrap_or(0) as u16))
                 },
             );
@@ -2456,7 +2466,7 @@ mod imp {
             // the attacked flag and play the grabbed animation.
             methods.add_method_mut("grab_player", |_lua, api, ()| {
                 let slot = api.slot;
-                api.game().grab_player(slot);
+                api.claim_player().grab_player(slot);
                 Ok(())
             });
 
@@ -2466,7 +2476,7 @@ mod imp {
             methods.add_method_mut(
                 "set_player_animation",
                 |_lua, api, (id, frame): (i64, i64)| {
-                    let player = &mut api.game().entities[0];
+                    let player = &mut api.claim_player().entities[0];
                     player.set_state(id as u8);
                     player.set_ignore(frame as u8);
                     Ok(())
@@ -2475,7 +2485,7 @@ mod imp {
             methods.add_method_mut(
                 "set_player_action",
                 |_lua, api, (behavior, state): (i64, i64)| {
-                    let player = &mut api.game().entities[0];
+                    let player = &mut api.claim_player().entities[0];
                     player.action_behavior = behavior as u8;
                     player.action_state = state as u8;
                     Ok(())
@@ -4859,7 +4869,7 @@ mod imp {
             // applies) and spin the entity's yaw only for the test.
             methods.add_method_mut("latch_player_attacker", |_lua, api, yaw_bias: i64| {
                 let slot = api.slot;
-                let game = api.game();
+                let game = api.claim_player();
                 let bias = yaw_bias as u16;
                 game.player_attacker = Some(slot as u8);
                 let saved = game.entities[slot].angle;
@@ -4877,7 +4887,7 @@ mod imp {
             // facing write).
             methods.add_method_mut("set_player_attacker", |_lua, api, ()| {
                 let slot = api.slot;
-                api.game().player_attacker = Some(slot as u8);
+                api.claim_player().player_attacker = Some(slot as u8);
                 Ok(())
             });
 

@@ -3127,6 +3127,14 @@ pub struct GameState {
     /// windows play their clips from here; `None` (no enemy model with a
     /// second bank has loaded yet) falls back to the body bank.
     pub player_damage: Option<std::sync::Arc<PlayerDamageBank>>,
+    /// The monster slot that last wrote the player's hit/grab reaction
+    /// (state, frame selector, hurt or attacker latch). While set, only that
+    /// slot's model repoints [`Self::player_damage`], so a room mixing enemy
+    /// types plays each attack's reaction clips from the attacker's own bank
+    /// instead of the last model the loop touched. `None` (no attack yet this
+    /// room) keeps the original's last-loaded-model rule; cleared on room
+    /// entry.
+    pub player_damage_owner: Option<u8>,
     /// A scripted death asked for the white death fade ahead of the 90-frame
     /// delay: the original's `player_anim_dispatch_4c2ac8` case 3 calls
     /// `fade_update` at `unk_bc == 0xA0`. The engine's game-over machine
@@ -3521,6 +3529,7 @@ impl Default for GameState {
             tyrant: crate::enemy::tyrant::TyrantState::default(),
             player_attacker: None,
             player_damage: None,
+            player_damage_owner: None,
             death_fade_request: false,
             player_speed: [0; 3],
             web_cap_logged: false,
@@ -4874,6 +4883,7 @@ impl GameState {
         self.plant42_shared_body = None;
         self.tyrant = crate::enemy::tyrant::TyrantState::default();
         self.player_attacker = None;
+        self.player_damage_owner = None;
         self.enemy_count = 0;
         self.selected_entity = 0;
         self.transition = None;
