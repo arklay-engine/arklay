@@ -1683,6 +1683,9 @@ enum PickupKind {
     /// A document: the original's state-8 file screen shows the document's
     /// pages, then global 0xC6 as it closes and the entry is consumed.
     Document,
+    /// A door key used down to an empty stack: global 0xC7's discard prompt
+    /// (the yes branch drops the stack), then the pause menu stays open.
+    DiscardKey,
 }
 
 /// Where a [`PickupView`] is in its message round trip.
@@ -1700,7 +1703,7 @@ enum PickupPhase {
 }
 
 /// The item-viewer flow the engine drives itself (the original's main-menu
-/// modes 3, 4 and 8).
+/// modes 3, 4, 6 and 8).
 ///
 /// The `event` codes `ui/item_view.lua` publishes to the examine tick.
 const EXAMINE_DESCRIPTION: i64 = 1;
@@ -4551,29 +4554,36 @@ impl GameSession {
         if self.pickup_view.is_some() {
             return;
         }
-        let Some(action) = self
-            .game
-            .room_actions
-            .get(usize::from(request.slot))
-            .copied()
-            .flatten()
-            .filter(|action| action.handler != 0)
-        else {
+        let item = if request.kind == game::ItemViewKind::DiscardKey {
+            // Mode 6 views the selected key itself; there is no room action.
+            self.game
+                .selected_item
+                .filter(|&item| self.game.has_item(item))
+        } else {
+            self.game
+                .room_actions
+                .get(usize::from(request.slot))
+                .copied()
+                .flatten()
+                .filter(|action| action.handler != 0)
+                .map(|action| action.item_id())
+        };
+        let Some(item) = item else {
             self.game.clear_item_view_flags();
             return;
         };
-        let item = action.item_id();
         let kind = match request.kind {
             game::ItemViewKind::Take => PickupKind::Take,
             game::ItemViewKind::GotItem => PickupKind::GotItem,
             game::ItemViewKind::Document => PickupKind::Document,
+            game::ItemViewKind::DiscardKey => PickupKind::DiscardKey,
         };
         self.open_menu(pack);
         // The original sets `g_selectedItemId` to the item being taken as the
         // mode opens, so the prompt's `\i` substitution names it.
         self.game.select_item(Some(item));
         let (screen, reader, phase) = match kind {
-            PickupKind::Take | PickupKind::GotItem => {
+            PickupKind::Take | PickupKind::GotItem | PickupKind::DiscardKey => {
                 let screen = {
                     let mut cx = self.ui_context(pack);
                     ui::lua_screen::LuaScreen::open_screen(
@@ -4733,7 +4743,7 @@ impl GameSession {
                 // The reader's own cues: page turns and the exit's cancel.
                 self.play_ui_cue_names(pack, cues);
                 if missing {
-                    self.close_pickup_view();
+                    self.close_pickup_view(pack);
                     return;
                 }
                 if exit_done {
@@ -4756,9 +4766,11 @@ impl GameSession {
                 }
                 let kind = self.pickup_view.as_ref().map(|pickup| pickup.kind);
                 match kind {
-                    Some(PickupKind::Take) => {
+                    Some(PickupKind::Take | PickupKind::DiscardKey) => {
                         // The original plays the character bank's confirm cue
                         // on Yes and cancel cue on No as the prompt resolves.
+                        // A confirmed discard already dropped the key through
+                        // the message post-action.
                         if was_yes_no {
                             let (name, slot) = if self.game.message.menu_choice_id() & 1 == 0 {
                                 (sfx::UI_DECIDE, 6)
@@ -4812,7 +4824,7 @@ impl GameSession {
                     None => true,
                 };
                 if finished {
-                    self.close_pickup_view();
+                    self.close_pickup_view(pack);
                 }
             }
         }
@@ -4841,6 +4853,7 @@ impl GameSession {
             }
             PickupKind::GotItem => game::MESSAGE_GOT_ITEM,
             PickupKind::Document => game::MESSAGE_FILE_FILED,
+            PickupKind::DiscardKey => game::MESSAGE_DISCARD_KEY,
         };
         self.game.show_message(message, 0);
         if let Some(pickup) = self.pickup_view.as_mut() {
@@ -4855,10 +4868,18 @@ impl GameSession {
     /// game state and only then unfreezes; [`Self::tick_menu_fade`] runs that
     /// completion and arms the room-entry fade. No cue plays here: the prompt
     /// already played its own yes/no cue when it resolved.
-    fn close_pickup_view(&mut self) {
-        self.pickup_view = None;
+    ///
+    /// The discard prompt is the exception: the original's mode 6 drops into
+    /// the status screen when its viewer closes, so the pause menu stays open
+    /// on the (possibly rewritten) inventory.
+    fn close_pickup_view(&mut self, pack: &Pack) {
+        let kind = self.pickup_view.take().map(|pickup| pickup.kind);
         self.game.clear_item_view_flags();
-        self.begin_menu_close_silent();
+        if kind == Some(PickupKind::DiscardKey) {
+            self.menu_signal(pack, "reselect", ());
+        } else {
+            self.begin_menu_close_silent();
+        }
     }
 
     /// Open the save screen over the frozen room after the typewriter prompt
@@ -23979,14 +24000,16 @@ end
         // confirm. The branch record is `[no-offset 2][tag 10][arg 0]`: Yes
         // runs the take action, No lands on the `0x01` terminator and does
         // nothing.
+        // Index 7 is global 0xC7, the depleted key's discard prompt, whose
+        // Yes runs the discard action.
         // Index 63 is the same yes/no stream used by the direct post-action
         // test.
         let mut language = String::new();
         for index in 0..64 {
-            let value = if index == 0x00 || index == 0x3F {
-                "0{branch 2 10 0}"
-            } else {
-                "0"
+            let value = match index {
+                0x00 | 0x3F => "0{branch 2 10 0}",
+                0x07 => "0{branch 2 10 2}",
+                _ => "0",
             };
             language.push_str(&format!("MESSAGE_{index:02X} = \"{value}\"\n"));
         }
@@ -27362,6 +27385,82 @@ off_0010:
         assert!(session.menu.is_none());
         assert!(!session.game.menu_pending());
         assert_eq!(session.game.item_view_request(), None);
+    }
+
+    /// A door key used down to an empty stack opens the original's mode-6
+    /// viewer on it with global 0xC7; Yes drops the key and No keeps the
+    /// empty slot. Either way the pause menu stays open and the depletion bit
+    /// is consumed, so it no longer blocks the other menu modes (#279).
+    #[test]
+    fn a_depleted_key_opens_the_discard_prompt() {
+        for discard in [true, false] {
+            let dir = TempDir::new();
+            let pack_path = message_pack(&dir);
+            let pack = Pack::open(&pack_path).unwrap();
+            let mut session =
+                GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                    .unwrap();
+            place_player(&mut session);
+            settle_control(&mut session, &pack);
+            session.game.add_item(ITEM_SWORD_KEY, 1);
+            session.game.select_item(Some(ITEM_SWORD_KEY));
+            session.game.use_selected_item();
+            assert_eq!(session.game.item_count(ITEM_SWORD_KEY), 0);
+            assert!(session.game.has_item(ITEM_SWORD_KEY));
+            assert!(session.game.menu_pending(), "the depletion bit is up");
+
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+            assert!(session.pickup_view.is_some(), "the bit opened the viewer");
+            assert!(session.menu.is_some(), "the inventory panel is underneath");
+            assert_eq!(
+                session
+                    .pickup_view
+                    .as_ref()
+                    .and_then(|pickup| pickup.screen.as_ref())
+                    .map(|screen| screen.value("item") as u8),
+                Some(ITEM_SWORD_KEY),
+                "the viewer loaded the key's model"
+            );
+
+            tick_until(&mut session, &pack, 300, "the discard prompt", |session| {
+                session.game.message.id == Some(game::MESSAGE_DISCARD_KEY)
+            });
+            tick_until(&mut session, &pack, 300, "the yes/no phase", |session| {
+                session.game.message.phase() == crate::message::MessagePhase::YesNo
+            });
+            if !discard {
+                // Move the choice to No.
+                session
+                    .tick(
+                        &pack,
+                        UiInput::default(),
+                        player::Input {
+                            right: true,
+                            ..Default::default()
+                        },
+                        false,
+                    )
+                    .unwrap();
+            }
+            session
+                .tick(&pack, UiInput::default(), pressed(), true)
+                .unwrap();
+            assert_eq!(
+                session.game.has_item(ITEM_SWORD_KEY),
+                !discard,
+                "Yes drops the key, No keeps the empty slot"
+            );
+
+            tick_until(&mut session, &pack, 300, "the viewer close", |session| {
+                session.pickup_view.is_none()
+            });
+            settle_menu_fade(&mut session, &pack);
+            assert!(session.menu.is_some(), "the status screen stays open");
+            assert!(!session.game.menu_pending());
+            assert_eq!(session.game.item_view_request(), None);
+        }
     }
 
     /// The inventory panel under the pick-up viewer keeps its health monitor
