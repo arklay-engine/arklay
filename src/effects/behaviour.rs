@@ -30,13 +30,13 @@ const IDENTITY_MATRIX: [i16; 9] = [4096, 0, 0, 0, 4096, 0, 0, 0, 4096];
 /// The set covers the script-spawned ids (`1,2,3,12,13,18,26,30,33,41,47,51,
 /// 57,58`), their update partners (`0,12,15,19,26,38`), and the ids every
 /// shipped sprite's animation data adds, including the falling projectile
-/// (`10`, the ejected shell casing). The combat-only flame and bullet/rocket
-/// entries (`37,43,45`) stay counted placeholders by design until combat
-/// exists.
+/// (`10`, the ejected shell casing), and the grenade round's bullet (`43`).
+/// The combat-only flame and rocket entries (`37,45`) stay counted
+/// placeholders by design until their combat exists.
 pub const fn implemented(id: u8) -> bool {
     matches!(
         id,
-        0..=36 | 38..=42 | 44 | 46..=63
+        0..=36 | 38..=44 | 46..=63
     )
 }
 
@@ -318,6 +318,187 @@ fn projectile_hit_check(
         }
     }
     true
+}
+
+/// `effect_behavior_bullet` (behaviour 43): the grenade round in flight.
+///
+/// The round stages the player's aim byte from its own height against the
+/// player's (below the waist aims up, between waist and head level, above the
+/// head down), splats on the ground, and otherwise runs the weapon named by
+/// `header[1]` (the equipped id the charge behaviour latched) through the
+/// shared damage pipeline measured from its own position. A hit or a landing
+/// ends in [`shot_impact`]; a miss counts the flight ticks and, once the
+/// round has flown nine, rewinds the sprite's frame cursor every tick.
+fn bullet(game: &mut GameState, room: &RoomState, index: usize) {
+    let Some(effect) = game.effects.slot(index).copied() else {
+        return;
+    };
+    let pos = [
+        i32::from(effect.pos[0]),
+        i32::from(effect.pos[1]),
+        i32::from(effect.pos[2]),
+    ];
+    let player_y = game.entities[0].pos[1];
+    let ground_y = i32::from(h16(&effect, 0x0e)) + pos[1];
+    if player_y < ground_y {
+        shot_impact(game, index, true);
+        return;
+    }
+
+    let level = if player_y - 0xaf0 < ground_y {
+        if player_y - 500 < ground_y {
+            0x20
+        } else {
+            0x40
+        }
+    } else {
+        0x80
+    };
+    if probe_ground(room, pos, [0, 0, 0], 4) == 1 {
+        shot_impact(game, index, true);
+        return;
+    }
+
+    let flags = (game.player_flags & 0x1f) | level;
+    let weapon = effect.header[1];
+    if game.apply_weapon_damage_with(room, weapon, pos, flags) != 0 {
+        shot_impact(game, index, false);
+        return;
+    }
+
+    if let Some(slot) = game.effects.slot_mut(index) {
+        let count = slot.header[2];
+        slot.header[2] = count.wrapping_add(1);
+        if count > 8 {
+            slot.frame_entry = 0;
+        }
+    }
+}
+
+/// `effect_shot_impact` (0x0040f850): the grenade round's end. The round's
+/// weapon byte picks the impact cue and, for a landing (`landed`), the burst:
+/// explosive (7) three embers and a resting smoke column, acid (8) three
+/// splashes and a smoke puff, flame (9) four embers. The round always frees
+/// its slot.
+fn shot_impact(game: &mut GameState, index: usize, landed: bool) {
+    let Some(effect) = game.effects.slot(index).copied() else {
+        return;
+    };
+    let [x, y, z] = [
+        i32::from(effect.pos[0]),
+        i32::from(effect.pos[1]),
+        i32::from(effect.pos[2]),
+    ];
+    let yaw = effect.yaw;
+    let weapon = effect.header[1];
+    let cue = match weapon {
+        7 => 0x0c,
+        8 => 0x0d,
+        9 => 0x0e,
+        _ => {
+            kill(game, index);
+            return;
+        }
+    };
+    let equipped = game.equipped_weapon_id;
+    if let Some(name) = crate::sfx::weapon_sound(equipped, cue) {
+        game.entity_sounds.push(crate::game::EntitySound {
+            name: name.into(),
+            bank: 1,
+            column: equipped,
+            pos: [x, y, z],
+        });
+    }
+
+    if landed {
+        impact_burst(game, weapon, [x, y, z], yaw);
+    }
+    kill(game, index);
+}
+
+/// The landing burst [`shot_impact`] spawns before it frees the round.
+fn impact_burst(game: &mut GameState, weapon: u8, [x, y, z]: [i32; 3], yaw: i16) {
+    match weapon {
+        7 => {
+            spawn(game, 0x0e, 3, Attach::Identity, [x, y - 0x96, z], yaw, 0x19);
+            spawn(
+                game,
+                0x0e,
+                3,
+                Attach::Identity,
+                [x - 0xb4, y, z + 0xb4],
+                yaw,
+                0x1e,
+            );
+            spawn(
+                game,
+                0x0e,
+                3,
+                Attach::Identity,
+                [x + 0xa0, y + 0x96, z - 0xb4],
+                yaw,
+                0x1c,
+            );
+            if let Some(smoke) = spawn(game, 9, 0x0d, Attach::Identity, [x, y - 200, z], yaw, 0x14)
+                && let Some(s) = game.effects.slot_mut(usize::from(smoke))
+            {
+                s.anim_id = 1;
+                s.update_id = 0;
+                s.header[10] = 3;
+                s.header[11] = 0x40;
+                s.header[6] = 0xff;
+                s.header[7] = 0xff;
+                s.header[0x0c..0x10].fill(0);
+                s.header[4] = 0;
+                s.header[5] = 0;
+            }
+        }
+        8 => {
+            for turn in [0, 0x555, 0xaaa] {
+                spawn(
+                    game,
+                    9,
+                    0,
+                    Attach::Identity,
+                    [x, y, z],
+                    yaw.wrapping_add(turn),
+                    0x10,
+                );
+            }
+            if let Some(smoke) = spawn(game, 9, 0, Attach::Identity, [x, y, z], yaw, 0x14)
+                && let Some(s) = game.effects.slot_mut(usize::from(smoke))
+            {
+                s.header[4] = 0;
+                s.header[5] = 0;
+                s.header[0x0c] = 0;
+                s.header[0x0d] = 0;
+                s.header[0x0e] = 0xce;
+                s.header[0x0f] = 0xff;
+            }
+        }
+        _ => {
+            spawn(game, 0x0e, 5, Attach::Identity, [x, y, z], yaw, 0x1b);
+            spawn(game, 0x0e, 4, Attach::Identity, [x - 0xb4, y, z], yaw, 0x17);
+            spawn(
+                game,
+                0x0e,
+                4,
+                Attach::Identity,
+                [x + 0x8c, y, z + 0x8c],
+                yaw,
+                0x16,
+            );
+            spawn(
+                game,
+                0x0e,
+                4,
+                Attach::Identity,
+                [x + 0x8c, y, z - 0x8c],
+                yaw,
+                0x15,
+            );
+        }
+    }
 }
 
 /// Spawn a billboard and remember the returned slot for later behaviours.
@@ -1476,6 +1657,7 @@ fn run_behavior(game: &mut GameState, room: &RoomState, index: usize, id: u8) {
                 _ => {}
             }
         }
+        43 => bullet(game, room, index),
         // Fire burst: spawn a ladder of type-1 billboards, then kill.
         44 => {
             let Some(effect) = game.effects.slot(index).copied() else {
@@ -2470,7 +2652,7 @@ mod tests {
     #[test]
     fn the_implemented_set_matches_the_dispatch_table() {
         // The combat-only entries stay counted placeholders by design.
-        let placeholders = [37u8, 43, 45];
+        let placeholders = [37u8, 45];
         for id in 0..=63u8 {
             assert_eq!(
                 implemented(id),
@@ -2623,6 +2805,77 @@ mod tests {
         let slot = spawn(&mut empty, 0, [0, 0, 0], 0, 0);
         run(&mut empty, &room());
         assert_eq!(empty.effects.slot(usize::from(slot)).unwrap().header[2], 0);
+    }
+
+    /// A grenade round (behaviour 43) latched to `weapon`. Its block has no
+    /// projection flag, so the world position stays where the test puts it.
+    fn grenade_round(game: &mut GameState, weapon: u8, pos: [i16; 3]) -> usize {
+        let slot = usize::from(spawn(game, 0, [0, 0, 0], 0, 0));
+        let round = game.effects.slot_mut(slot).unwrap();
+        round.header[1] = weapon;
+        round.pos = pos;
+        slot
+    }
+
+    fn place_zombie(game: &mut GameState, pos: [i32; 3]) {
+        let zombie = &mut game.entities[1];
+        zombie.id = 0x01;
+        zombie.pos = pos;
+        zombie.set_active(true);
+        zombie.status_flags |= 0x40;
+        zombie.health = 100;
+        game.enemy_count = 1;
+    }
+
+    #[test]
+    fn grenade_round_damages_a_zombie_from_its_own_position() {
+        // #277: the zombie stands well past the launcher's 900-unit reach
+        // from the player; only the round in flight can hit it.
+        let mut game = game_with_row(&[raw_block(43, 0)]);
+        game.id.player_flag = 1;
+        game.player_flags = 0x40;
+        place_zombie(&mut game, [6000, 0, 0]);
+
+        let slot = grenade_round(&mut game, 7, [3000, -1000, 0]);
+        run(&mut game, &room());
+        assert_eq!(game.entities[1].health, 100, "out of reach");
+        assert_eq!(game.effects.slot(slot).unwrap().header[2], 1, "flight tick");
+
+        game.effects.slot_mut(slot).unwrap().pos[0] = 5800;
+        run(&mut game, &room());
+        assert!(game.entities[1].health < 100, "the round hits the zombie");
+        assert_ne!(game.entities[1].hit_state, 0);
+        assert_eq!(
+            game.effects.slot(slot).unwrap().anim_id,
+            0,
+            "the hit frees the round"
+        );
+        assert_eq!(game.player_flags, 0x40, "the staged aim is not kept");
+    }
+
+    #[test]
+    fn grenade_round_aim_level_follows_its_height() {
+        // A round above the player's head stages the downward aim (0x80),
+        // which a level-only (0x40) target does not match.
+        let mut game = game_with_row(&[raw_block(43, 0)]);
+        game.player_flags = 0x40;
+        place_zombie(&mut game, [3000, 0, 0]);
+        let slot = grenade_round(&mut game, 8, [3000, -3000, 0]);
+        run(&mut game, &room());
+        assert_eq!(game.entities[1].health, 100);
+        assert_eq!(game.effects.slot(slot).unwrap().anim_id, 43, "still flying");
+    }
+
+    #[test]
+    fn grenade_round_below_the_floor_lands() {
+        let mut game = game_with_row(&[raw_block(43, 0)]);
+        let slot = grenade_round(&mut game, 9, [0, 100, 0]);
+        run(&mut game, &room());
+        assert_eq!(
+            game.effects.slot(slot).unwrap().anim_id,
+            0,
+            "the landing frees the round"
+        );
     }
 
     #[test]

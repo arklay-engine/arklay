@@ -29,10 +29,11 @@
 //!   through [`pool::Attach::Omodel`] to the object's composed rotation and
 //!   world position; a missing or inactive object keeps the identity
 //!   fallback.
-//! - **Inert combat behaviours.** Behaviour ids 10, 37, 43 and 45 stay counted
-//!   placeholders by design (bullet/rocket/flame combat); the corpus audit
-//!   proves no shipped script or sprite animation reaches them. Every other
-//!   entry has an implementation or a shared helper.
+//! - **Inert combat behaviours.** Behaviour ids 37 and 45 stay counted
+//!   placeholders by design (rocket/flame combat); the corpus audit proves no
+//!   shipped script or sprite animation reaches them. Every other entry,
+//!   including the grenade round's bullet (43), has an implementation or a
+//!   shared helper.
 //! - **Unreached special cases.** The static tables carry the original's
 //!   stage-specific quirks (the stage-4 fixed-depth lab camera and the stage-5
 //!   lesson-room V remap are noted at their render sites); no shipped room
