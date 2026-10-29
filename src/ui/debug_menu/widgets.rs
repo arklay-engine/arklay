@@ -297,6 +297,24 @@ impl Grid {
         }
     }
 
+    /// How many cells to draw from the top row: the whole rows that fit and
+    /// the partial one below them, which [`Self::clip`] cuts off.
+    pub fn shown(&self) -> usize {
+        (self.rows + 1) * self.columns
+    }
+
+    /// The grid's visible area: cells are clipped to it (with room for the
+    /// selection outline), like a scrolled list.
+    pub fn clip(&self, p: &Painter<'_>) -> Rect {
+        let margin = p.u(4.0);
+        Rect::new(
+            self.area.x - margin,
+            self.area.y - margin,
+            self.area.w + margin * 2.0,
+            self.area.h + margin,
+        )
+    }
+
     /// The `shown`th cell on screen: its whole rectangle and its picture.
     pub fn cell(&self, shown: usize) -> (Rect, Rect) {
         let x = self.area.x + (self.cell_w + self.gap) * (shown % self.columns) as f32;

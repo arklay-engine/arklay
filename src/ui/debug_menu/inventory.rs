@@ -357,7 +357,9 @@ impl InventoryEditor {
         let top = picker.scroll.layout(picker.cell / columns, grid.rows, rows);
         let picker = *picker;
         let first = top * columns;
-        let last = (first + grid.rows * columns).min(PICKER_CELLS);
+        let last = (first + grid.shown()).min(PICKER_CELLS);
+        let clip = grid.clip(p);
+        p.canvas.push_clip(clip);
         for cell in first..last {
             let (rect, frame) = grid.cell(cell - first);
             let selected = cell == picker.cell;
@@ -378,8 +380,9 @@ impl InventoryEditor {
                     &text,
                 );
             }
-            cx.hits.push((rect, Hit::Item(cell)));
+            cx.hits.push((rect.intersect(&clip), Hit::Item(cell)));
         }
+        p.canvas.pop_clip();
         grid.scrollbar(p, top, rows);
         let item = picker.item();
         let cy = area.bottom() - footer_h / 2.0;

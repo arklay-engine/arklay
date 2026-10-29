@@ -274,11 +274,13 @@ impl RoomSelect {
         let rows = rooms.len().div_ceil(columns);
         let top = self.scroll[self.stage].layout(cell / columns, grid.rows, rows);
         let mut loads = 0;
+        let clip = grid.clip(p);
+        p.canvas.push_clip(clip);
         for (index, room) in rooms
             .iter()
             .enumerate()
             .skip(top * columns)
-            .take(grid.rows * columns)
+            .take(grid.shown())
         {
             let (rect, thumb) = grid.cell(index - top * columns);
             let selected = index == cell;
@@ -325,8 +327,9 @@ impl RoomSelect {
             let name_x = rect.x + id_w + u(12.0);
             let name = fit(p, Role::Body, &name, rect.right() - name_x);
             p.text(Role::Body, name_x, label_y, Align::Left, color, &name);
-            cx.hits.push((rect, Hit::Item(index)));
+            cx.hits.push((rect.intersect(&clip), Hit::Item(index)));
         }
+        p.canvas.pop_clip();
         grid.scrollbar(p, top, rows);
     }
 }
