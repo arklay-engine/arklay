@@ -62,6 +62,11 @@ not run it after every edit.
 
 - The session tier is fmt, clippy, and the unit and fast integration tests in
   `test-release`. It prints each step's time and what it skipped.
+- **Run it unfiltered:** `./scripts/check.sh`, with no `grep` or `tail`. It
+  prints one line per step and the end of a failing step's log. Its last line
+  is the verdict (`all green` or `FAILED at: ...`), and its exit status is
+  non-zero on failure. The full logs are in `target/check-logs/`. Do not run
+  it a second time to see what the first run printed.
 - Leave the debug test build, `--no-default-features`, the fuzz compile check,
   docs, Windows, MSRV and the artifact smoke to CI.
 - **Never run `--full`, `--soak` or the perf tests unless the task asks for
