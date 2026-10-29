@@ -3039,6 +3039,7 @@ mod tests {
             source_hash: None,
             lua: Vec::new(),
             start_room: None,
+            region: None,
         }
         .render()
         .into_bytes()

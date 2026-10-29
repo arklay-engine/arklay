@@ -3,8 +3,8 @@
 //! The manifest is an ordinary pack entry that describes its pack: the format
 //! version, a stable id, a human name, version and description, whether the pack is a base
 //! or a mod, the base id a mod shadows, the layer order mods sort by, the
-//! language of its own room text, a free-form engine note and the explicit Lua
-//! hook list.
+//! language of its own room text, the region of its room scripts, a
+//! free-form engine note and the explicit Lua hook list.
 //!
 //! A manifest names no file-format dialect: a pack may mix RE1- and
 //! RE2-format files, and each loader detects a file's format from the file
@@ -23,6 +23,7 @@ use std::collections::HashSet;
 use anyhow::{Context, Result, anyhow, bail};
 
 use crate::budget;
+use crate::scd::akscr::Region;
 
 /// The pack entry holding a rendered manifest.
 pub const ENTRY: &str = "manifest.toml";
@@ -94,6 +95,10 @@ pub struct Manifest {
     /// character picking its player variant. Absent, a new game starts in
     /// RE1's main hall.
     pub start_room: Option<String>,
+    /// Base packs: the region whose room scripts the converted install
+    /// ships (`convert-game` records it), which picks a mod's per-region
+    /// script builds. Absent, a mod's scripts run their USA build.
+    pub region: Option<Region>,
 }
 
 impl Manifest {
@@ -114,6 +119,7 @@ impl Manifest {
             source_hash: None,
             lua: Vec::new(),
             start_room: None,
+            region: None,
         }
     }
 
@@ -143,6 +149,7 @@ impl Manifest {
         let mut source_hash = None;
         let mut lua = None;
         let mut start_room = None;
+        let mut region = None;
         let mut seen: HashSet<String> = HashSet::new();
 
         for item in parse_items(text)? {
@@ -236,6 +243,15 @@ impl Manifest {
                     })?;
                     start_room = Some(room);
                 }
+                "region" => {
+                    let name = string_value(item, "region")?;
+                    region = Some(Region::parse(&name).ok_or_else(|| {
+                        anyhow!(
+                            "manifest.toml line {line}: `region` must be \"USA\", \"JPN\" \
+                             or \"EUR\", found \"{name}\""
+                        )
+                    })?);
+                }
                 unknown => bail!("manifest.toml line {line}: unknown key `{unknown}`"),
             }
         }
@@ -248,6 +264,9 @@ impl Manifest {
         }
         if kind == PackKind::Mod && start_room.is_some() {
             bail!("manifest.toml: `start_room` belongs to a base pack, not a mod");
+        }
+        if kind == PackKind::Mod && region.is_some() {
+            bail!("manifest.toml: `region` belongs to a base pack, not a mod");
         }
 
         Ok(Self {
@@ -265,6 +284,7 @@ impl Manifest {
             source_hash,
             lua: lua.unwrap_or_default(),
             start_room,
+            region,
         })
     }
 
@@ -312,6 +332,9 @@ impl Manifest {
         }
         if let Some(room) = &self.start_room {
             write_pair(&mut out, "start_room", &quote(room));
+        }
+        if let Some(region) = self.region {
+            write_pair(&mut out, "region", &quote(region.symbol()));
         }
         out
     }
@@ -620,6 +643,7 @@ mod tests {
             source_hash: None,
             lua: Vec::new(),
             start_room: None,
+            region: None,
         }
     }
 
@@ -639,7 +663,28 @@ mod tests {
             source_hash: None,
             lua: vec!["lua/demo.lua".to_string(), "lua/extra.lua".to_string()],
             start_room: None,
+            region: None,
         }
+    }
+
+    #[test]
+    fn region_round_trips_and_is_checked() {
+        let mut manifest = Manifest::base("re1");
+        manifest.region = Some(Region::Jpn);
+        let text = manifest.render();
+        assert!(text.contains("region = \"JPN\""), "{text}");
+        assert_eq!(Manifest::parse(&text).unwrap(), manifest);
+        let error = Manifest::parse(&text.replace("\"JPN\"", "\"STEAM\""))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("`region` must be"), "{error}");
+        let on_mod = Manifest {
+            kind: PackKind::Mod,
+            base: Some("re1".to_string()),
+            ..manifest
+        };
+        let error = Manifest::parse(&on_mod.render()).unwrap_err().to_string();
+        assert!(error.contains("`region` belongs to a base pack"), "{error}");
     }
 
     #[test]
@@ -760,6 +805,7 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             source_hash: None,
             lua: vec!["lua/a.lua".to_string(), "lua/b.lua".to_string()],
             start_room: None,
+            region: None,
         }
     }
 

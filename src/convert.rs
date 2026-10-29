@@ -30,6 +30,7 @@ use crate::movie;
 use crate::music;
 use crate::pack::PackWriter;
 use crate::progress::{Progress, ProgressObserver, format_duration};
+use crate::scd::RoomScript;
 use crate::sfx;
 use crate::state::{Image, RoomId};
 use crate::voice;
@@ -634,6 +635,9 @@ fn convert_observed_as(
     let mut sidecar_bytes = 0usize;
     let names = crate::room::parse_names(crate::room::RE1_NAMES)
         .context("invalid checked-in room names")?;
+    // The regions every room script build so far is for; the install's
+    // region is the one left.
+    let mut regions = crate::scd::akscr::Region::ALL.to_vec();
     for rdt in rdts {
         stage_counts[rdt.id.stage_index() as usize].0 += 1;
         let definition;
@@ -657,7 +661,9 @@ fn convert_observed_as(
             }
         };
         match room_script(rdt.id, &rdt.bytes) {
-            Ok(Some(container)) => {
+            Ok(Some(script)) => {
+                regions.retain(|region| script.regions.contains(region));
+                let container = script.container;
                 // The fixed build runs as `room.scd`; the original bytecode
                 // stays beside it for `room_script_fixes = false`.
                 let scd = rdt.id.scd_entry();
@@ -824,7 +830,13 @@ fn convert_observed_as(
         &mut warnings,
         jobs,
     )?;
-    let (manifest_count, manifest_bytes) = copy_manifest(&mut writer, &language)?;
+    // An install whose scripts fit no single region (none, or no room
+    // telling two apart) records none, and mods run their USA builds.
+    let region = match regions[..] {
+        [region] => Some(region),
+        _ => None,
+    };
+    let (manifest_count, manifest_bytes) = copy_manifest(&mut writer, &language, region)?;
 
     // Voice and film land in the same pack as every other category, so a
     // converted game is a single self-contained `.akpak`. Both phases are
@@ -903,7 +915,7 @@ fn convert_observed_as(
         writeln!(
             summary,
             "manifest: {manifest_count} entry, {manifest_bytes} bytes (base \"{}\")",
-            base_manifest("ja-JP").id
+            BASE_PACK_ID
         )?;
         writeln!(summary, "voice: {voice_count} entries, {voice_bytes} bytes")?;
         if !voice_unreferenced.is_empty() {
@@ -2577,7 +2589,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 9;
+pub const CONVERT_VERSION: u32 = 10;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, and the language sheets.
@@ -2623,7 +2635,7 @@ mod hash_tests {
     }
 }
 /// The base pack's self-description.
-fn base_manifest(language: &str) -> manifest::Manifest {
+fn base_manifest(language: &str, region: Option<crate::scd::akscr::Region>) -> manifest::Manifest {
     manifest::Manifest {
         format: manifest::FORMAT,
         id: BASE_PACK_ID.to_string(),
@@ -2641,12 +2653,17 @@ fn base_manifest(language: &str) -> manifest::Manifest {
         source_hash: Some(packed_source_hash()),
         lua: Vec::new(),
         start_room: None,
+        region,
     }
 }
 
 /// Add the base pack's rendered `manifest.toml`: its only self-description.
-fn copy_manifest(writer: &mut PackWriter, language: &str) -> Result<(usize, usize)> {
-    let text = base_manifest(language).render().into_bytes();
+fn copy_manifest(
+    writer: &mut PackWriter,
+    language: &str,
+    region: Option<crate::scd::akscr::Region>,
+) -> Result<(usize, usize)> {
+    let text = base_manifest(language, region).render().into_bytes();
     let bytes = text.len();
     writer
         .add(manifest::ENTRY, text)
@@ -3721,14 +3738,14 @@ fn resolve_weapon_assets(players: Option<&Path>) -> Result<Vec<WeaponAsset>> {
     Ok(assets)
 }
 
-/// The checked-in room script's bytecode to pack as `room/<id>/room.scd`
-/// for RDT `id`, so the engine runs it in place of the RDT's own scripts.
+/// The checked-in room script build to pack as `room/<id>/room.scd` for RDT
+/// `id`, so the engine runs it in place of the RDT's own scripts.
 ///
 /// The build for the RDT's region is the one whose `AUTHENTIC` digest equals
 /// the RDT's own scripts'. `None` for a room without a script or an RDT
 /// without scripts. A room whose scripts are no region's (a modified RDT) is
 /// an error naming the room: it keeps its own scripts.
-fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static [u8]>, String> {
+fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static RoomScript>, String> {
     // The port's script builds are all RE1's, whose RDT numbers fit 16 bits.
     let Ok(number) = u16::try_from(id.rdt_number()) else {
         return Ok(None);
@@ -3753,7 +3770,7 @@ fn room_script(id: RoomId, rdt: &[u8]) -> Result<Option<&'static [u8]>, String> 
             crate::scd::akscr::merged_id(number)
         ));
     };
-    Ok(Some(script.container))
+    Ok(Some(script))
 }
 
 /// Parse `ROOM####.RDT` (case-insensitive) into its identity.
@@ -3906,25 +3923,33 @@ mod tests {
                 .unwrap()
                 .container
         };
+        let container_of = |id, rdt| room_script(id, rdt).map(|found| found.map(|s| s.container));
         let id = RoomId::parse("1000").unwrap();
         // Room 100 has no `AUTHENTIC` block, so its fixed build carries the
         // original scripts in the RDT pointer-table layout.
-        assert_eq!(room_script(id, script(0x1000)), Ok(Some(script(0x1000))));
+        assert_eq!(container_of(id, script(0x1000)), Ok(Some(script(0x1000))));
         let error = room_script(id, script(0x1010)).unwrap_err();
         assert!(error.contains("room/1000/room.rdt"), "{error}");
-        assert_eq!(room_script(id, &[0; 4]), Ok(None), "a stub RDT");
+        assert_eq!(container_of(id, &[0; 4]), Ok(None), "a stub RDT");
+        let one = room_script(id, script(0x1000)).unwrap().unwrap();
+        assert_eq!(
+            one.regions,
+            crate::scd::akscr::Region::ALL,
+            "one build for all"
+        );
 
         // Jill's ink ribbons differ by region (`#if USA`), so RDT 1001 has a
         // USA build and one JPN and EUR share, and each RDT takes its own.
-        let builds: Vec<&[u8]> = crate::scd::ROOM_SCRIPTS
+        let builds: Vec<&RoomScript> = crate::scd::ROOM_SCRIPTS
             .iter()
             .filter(|script| script.id == 0x1001)
-            .map(|script| script.container)
             .collect();
-        assert_eq!(builds.len(), 2);
+        let regions: Vec<_> = builds.iter().map(|build| build.regions).collect();
+        use crate::scd::akscr::Region;
+        assert_eq!(regions, [&[Region::Usa][..], &[Region::Jpn, Region::Eur]]);
         let id = RoomId::parse("1001").unwrap();
         for build in builds {
-            assert_eq!(room_script(id, build), Ok(Some(build)));
+            assert_eq!(container_of(id, build.container), Ok(Some(build.container)));
         }
     }
 
@@ -6729,14 +6754,14 @@ mod tests {
 
     #[test]
     fn base_manifest_renders_and_parses_back() {
-        let manifest = base_manifest("ja-JP");
+        let manifest = base_manifest("ja-JP", Some(crate::scd::akscr::Region::Jpn));
         assert_eq!(
             manifest::Manifest::parse(&manifest.render()).unwrap(),
             manifest
         );
 
         let mut writer = PackWriter::new();
-        let (count, bytes) = copy_manifest(&mut writer, "ja-JP").unwrap();
+        let (count, bytes) = copy_manifest(&mut writer, "ja-JP", manifest.region).unwrap();
         assert_eq!(count, 1);
         assert_eq!(bytes, manifest.render().len());
         let pack = crate::pack::Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();

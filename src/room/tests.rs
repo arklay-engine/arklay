@@ -231,6 +231,16 @@ fn layered(
     base: Vec<(String, Vec<u8>)>,
     layer: Vec<(String, Vec<u8>)>,
 ) -> (Pack, PathBuf) {
+    layered_in(name, None, base, layer)
+}
+
+/// [`layered`] over a base pack whose manifest records `region`.
+fn layered_in(
+    name: &str,
+    region: Option<crate::scd::akscr::Region>,
+    base: Vec<(String, Vec<u8>)>,
+    layer: Vec<(String, Vec<u8>)>,
+) -> (Pack, PathBuf) {
     let dir = std::env::temp_dir().join(format!("arklay-room-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -241,7 +251,12 @@ fn layered(
     writer
         .add(
             crate::manifest::ENTRY,
-            crate::manifest::Manifest::base("re1").render().into_bytes(),
+            crate::manifest::Manifest {
+                region,
+                ..crate::manifest::Manifest::base("re1")
+            }
+            .render()
+            .into_bytes(),
         )
         .unwrap();
     for (path, data) in base {
@@ -377,6 +392,42 @@ fn original_scripts_skip_the_base_fixes_but_keep_a_mods() {
         let (scripts, _) = room_scripts(&pack, ID, &loaded, original).unwrap();
         assert_eq!(scripts.digest(), parse(&modded), "{original}");
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_mods_region_build_runs_on_its_region() {
+    use crate::scd::akscr::Region;
+    let parse = |container: &[u8]| crate::scd::reader::parse(container).unwrap().digest();
+    let (_, base) = converted_entries();
+    let (usa, jpn) = (flag_container(2), flag_container(3));
+    let layer = vec![
+        (ID.scd_entry(), usa.clone()),
+        (ID.region_scd_entry(Region::Jpn), jpn.clone()),
+    ];
+    // A JPN base runs the mod's JPN build; any other base, or one whose
+    // manifest names no region, the USA `room.scd`.
+    for (region, expected) in [
+        (Some(Region::Jpn), &jpn),
+        (Some(Region::Eur), &usa),
+        (Some(Region::Usa), &usa),
+        (None, &usa),
+    ] {
+        let (pack, dir) = layered_in("region-mod", region, base.clone(), layer.clone());
+        let loaded = load(&pack, ID).unwrap();
+        let (scripts, source) = loaded.scripts(&pack, false).unwrap();
+        assert_eq!(source, ScriptSource::Room);
+        assert_eq!(scripts.digest(), parse(expected), "{region:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // A region build only stands for the `room.scd` of its own layer: a
+    // higher layer's `room.scd` runs on every region.
+    let mut lower = base;
+    lower.push((ID.region_scd_entry(Region::Jpn), jpn));
+    let only_usa = vec![(ID.scd_entry(), usa.clone())];
+    let (pack, dir) = layered_in("region-shadowed", Some(Region::Jpn), lower, only_usa);
+    assert_eq!(room_scd_entry(&pack, ID), ID.scd_entry());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
