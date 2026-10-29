@@ -35,7 +35,13 @@ to go to the compiler (#266). Follow these rules:
   `./scripts/seed-target.sh`. It reflink-copies the build output of the most
   recently built other worktree. That is instant on btrfs and XFS, and the
   script does nothing on other filesystems. The first build then compiles
-  only this crate rather than every dependency.
+  only this crate rather than every dependency. With
+  `scripts/rustc-wrapper.sh` as `RUSTC_WRAPPER`, even this crate's build is
+  incremental, so a new worktree's first session check takes about a minute.
+  Claude Code sessions get the wrapper automatically through
+  `.claude/settings.json`. In other shells, on Linux, run
+  `export RUSTC_WRAPPER="$PWD/scripts/rustc-wrapper.sh"` from the repository
+  root.
 - **Do not run `cargo clean`** or delete `target/` unless a build is
   genuinely broken. A cold build takes minutes.
 - Inserting or removing lines near the top of a big file (`src/engine.rs`,

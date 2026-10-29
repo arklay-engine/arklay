@@ -7,6 +7,8 @@
 #                                       most recent test-release build
 #   ./scripts/seed-target.sh <checkout> seed from that checkout
 #
+# With scripts/rustc-wrapper.sh as RUSTC_WRAPPER the arklay crate is reused too.
+#
 # It copies `target/test-release` and `target/clippy` (the session check's two
 # build directories) with copy-on-write reflinks, which are instant and take
 # no extra space on btrfs, XFS and APFS-like filesystems. Where reflinks are
