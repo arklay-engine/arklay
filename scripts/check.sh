@@ -17,6 +17,7 @@
 #                               RE2 tests run when ARKLAY_RE2_ROOT is set, alone
 #                               if the RE1 variables are not
 #   ./scripts/check.sh --soak   --full plus the full-game soak (half an hour+)
+#   -v, --verbose               stream each step's output instead of logging it
 #
 # --full and --soak are release-cycle checks. Never run them by default.
 #
@@ -29,16 +30,25 @@
 # The script prints each step's wall-clock time and the total, and warns when
 # the session tier goes over its budget (ARKLAY_CHECK_BUDGET, seconds,
 # default 300).
+#
+# Each step's output goes to a log under target/check-logs, and the console
+# shows one line per step: the whole output is thousands of test lines, which
+# is noise to a reader and buries the verdict. A failing step prints the end
+# of its log. The last line is always the verdict, and the exit status is
+# non-zero on failure, so there is no need to filter the output.
+# -v / --verbose streams every step's output instead.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 tier=session
+verbose=0
 while (($#)); do
     case "$1" in
         --ci) tier=ci ;;
         --full) tier=full ;;
         --soak) tier=soak ;;
+        -v | --verbose) verbose=1 ;;
         -h | --help)
             sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'
             exit 0
@@ -52,18 +62,49 @@ budget=${ARKLAY_CHECK_BUDGET:-300}
 start=$SECONDS
 timings=()
 
+log_dir="${CARGO_TARGET_DIR:-target}/check-logs"
+mkdir -p "$log_dir"
+rm -f "$log_dir"/*.log
+nstep=0
+
+# Prints the end of a failed step's log.
+show_failure() {
+    echo "---- from $1 ----"
+    if grep -q '^failures:$' "$1"; then
+        # A test failure: libtest's report, from its first `failures:` line.
+        sed -n '/^failures:$/,$p' "$1" | head -n 120
+    else
+        grep -v -E '^test .* \.\.\. (ok|ignored)' "$1" | tail -n 80
+    fi
+    echo "---- (full output: $1) ----"
+}
+
 # Runs one step, echoing it and recording its wall-clock time.
 step() {
     local label="$*"
     local t0=$SECONDS
+    local rc=0
+    nstep=$((nstep + 1))
+    local log
+    log="$log_dir/$nstep-$(printf '%s' "$*" | tr -cs 'A-Za-z0-9_' '-' | cut -c1-60).log"
     echo "==> $label"
-    if ! "$@"; then
+    if ((verbose)); then
+        "$@" || rc=$?
+    else
+        "$@" >"$log" 2>&1 || rc=$?
+    fi
+    if ((rc != 0)); then
+        ((verbose)) || show_failure "$log"
         timings+=("$(printf '%5ss  %s  (FAILED)' $((SECONDS - t0)) "$label")")
         summary
         echo "check.sh: $tier tier FAILED at: $label" >&2
         exit 1
     fi
     timings+=("$(printf '%5ss  %s' $((SECONDS - t0)) "$label")")
+    if ((!verbose)) && grep -q '^test result:' "$log"; then
+        grep '^test result:' "$log" | awk '{p += $4; i += $8; f += $12} END {
+            printf "    %d tests passed, %d ignored, %d filtered out\n", p, i, f }'
+    fi
 }
 
 summary() {
@@ -111,8 +152,12 @@ wait_clippy() {
     local rc=0
     wait "$clippy_pid" || rc=$?
     clippy_pid=
-    echo "==> ${clippy[*]} (ran in the background; its output follows)"
-    cat "$clippy_log"
+    echo "==> ${clippy[*]} (ran in the background)"
+    if ((verbose)); then
+        cat "$clippy_log"
+    elif ((rc != 0)); then
+        show_failure "$clippy_log"
+    fi
     local took
     took=$(<"$clippy_log.time")
     if ((rc != 0)); then
