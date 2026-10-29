@@ -221,10 +221,10 @@ fn an_md1_part_becomes_one_tmd_object_with_split_quads() {
     assert_eq!(first.quad, Some([0, 1, 2, 3]));
 }
 
-#[test]
-fn an_emd_has_three_banks_and_takes_its_texture_from_the_tim() {
+/// A whole enemy EMD: three banks (the last empty) and one part.
+pub(crate) fn emd() -> Vec<u8> {
     let empty = vec![0u8; 4];
-    let data = container(&[
+    container(&[
         empty.clone(),
         edd(),
         emr(true),
@@ -233,7 +233,41 @@ fn an_emd_has_three_banks_and_takes_its_texture_from_the_tim() {
         empty.clone(),
         empty,
         md1(),
-    ]);
+    ])
+}
+
+/// A three-row enemy texture with STP bits set, including on the black
+/// transparent entry.
+pub(crate) fn enemy_tim() -> Vec<u8> {
+    let mut data = tim(384, 4, 3, |x, y| (x ^ (y * 7)) as u8);
+    // Entry `i` of row `r` is the `u16` at 20 + 2 * (r * 256 + i).
+    for (row, entry) in [(0usize, 0usize), (2, 5), (1, 255)] {
+        data[20 + 2 * (row * 256 + entry) + 1] |= 0x80;
+    }
+    data
+}
+
+#[test]
+fn an_enemy_texture_round_trips_through_its_page_and_clut_swatches() {
+    let tim = enemy_tim();
+    let bmps = texture_bmps(&tim).unwrap();
+    assert_eq!(bmps.len(), 3);
+    let expected = crate::tim::decode_8bpp(&tim).unwrap();
+    assert_eq!(texture_from_bmps(&bmps[0], &bmps[1..]).unwrap(), expected);
+    // Every file is an ordinary indexed BMP: the page shows in row 0's
+    // colours and a swatch is its row's 256 entries.
+    let swatch = crate::bmp::decode_indexed_page(&bmps[2]).unwrap();
+    assert_eq!((swatch.width, swatch.height), (16, 16));
+    assert_eq!(swatch.palettes[..256], expected.palettes[512..]);
+    assert_eq!(
+        clut_entry("enemy/3a/enemy_1", 2),
+        "enemy/3a/enemy_1_clut_02.bmp"
+    );
+}
+
+#[test]
+fn an_emd_has_three_banks_and_takes_its_texture_from_the_tim() {
+    let data = emd();
     let model = parse_emd(&data, &tim(128, 256, 1, |_, _| 7)).unwrap();
     assert_eq!(model.clips.len(), 1);
     assert_eq!(model.banks.len(), 2);

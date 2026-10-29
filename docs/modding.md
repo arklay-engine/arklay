@@ -233,7 +233,7 @@ four-digit lower-case RDT number, e.g. `room/1000` for `ROOM1000.RDT`). Every
 file in it is found by its name, so nothing in a room refers to a path:
 
 ```text
-room/1000/room.xml        the room: lights, cameras and masks, zones, collision, messages
+room/1000/room.xml        the room: names, lights, cameras and masks, zones, collision, messages
 room/1000/room.scd        the scripts the room runs: init, per-frame and events
 room/1000/original.scd    the original bytecode, when room.scd carries the port's fixes
 room/1000/cut/00.bmp      camera 0's background
@@ -250,6 +250,31 @@ folder moves the whole room to another id or another pack, and the definition
 carries no id of its own. The background and mask of
 a camera shared by the two player variants, or by the stage 6 and 7 return
 visits, are copied into each variant's folder.
+
+The room's names sit first in `room.xml`, in the same `<strings>` shape as an
+item's: a `<language lang="…">` per language holding a `name` (the debug menu
+and save list name) and a `save_name` (the save screen's shorthand label):
+
+```xml
+<room format="2">
+  <strings>
+    <language lang="en-US">
+      <string key="name">SAVE ROOM</string>
+      <string key="save_name">M. Room 1F</string>
+    </language>
+  </strings>
+  ...
+```
+
+They become the `ROOM_<room3>_NAME` and `ROOM_<room3>_NAME_SAVE` language
+keys; of a room's player variants, the lowest-numbered one that names the
+room in a language supplies the name. A language file's own key still wins.
+`convert-game` writes RE1's names from the checked-in
+`games/re1/room/names.xml`; RE2's rooms have none yet.
+
+An RE2 room's `room.xml` carries `game="re2"`, its cameras' own lighting and
+its `<sca>` collision records; the RDT sections the engine does not read yet
+(scripts, masks, models) are not converted.
 
 Model slots are probed in order from `00`; a model texture that does not
 round-trip as an 8-bit BMP is kept as a `.tim`. When the room declares more

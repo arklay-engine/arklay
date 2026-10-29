@@ -38,7 +38,7 @@ use crate::emd::{chunk_slice, parse_clips, parse_skeleton, read_u16, read_u32, v
 use crate::model::{
     AnimBank, Clip, Emd, Keyframe, PALETTE_ROW_LEN, Plw, Texture8, Tmd, TmdObject, TmdPrim,
 };
-use crate::tim;
+use crate::{bmp, tim};
 
 /// The mask of an EDD frame's keyframe index.
 const KEYFRAME_INDEX_MASK: u16 = 0x0FFF;
@@ -109,6 +109,68 @@ fn directory(data: &[u8], expected: usize, kind: &str) -> Result<Vec<usize>> {
 pub fn parse_emd(data: &[u8], tim: &[u8]) -> Result<Emd> {
     let texture = tim::decode_8bpp(tim).context("EMD texture")?;
     parse_emd_with(data, texture)
+}
+
+/// Texels per side of a palette swatch: 16x16 is one 256-entry CLUT row.
+const SWATCH_SIDE: u32 = 16;
+
+/// An RE2 enemy texture as the pack stores it, from its `.TIM`: the page as
+/// an indexed BMP in CLUT row 0's colours ([`bmp::encode_indexed_page`]),
+/// then one palette swatch per further CLUT row, a 16x16 indexed BMP whose
+/// texel `n` is entry `n` ([`texture_from_bmps`] reverses it exactly).
+///
+/// A 256-entry palette is all an 8-bit BMP holds, and the retail textures
+/// carry one to four CLUT rows, one per 128-texel page, though not always
+/// in page order.
+pub fn texture_bmps(tim: &[u8]) -> Result<Vec<Vec<u8>>> {
+    let texture = tim::decode_8bpp(tim)?;
+    if texture.palettes.len() % PALETTE_ROW_LEN != 0 || texture.palettes.is_empty() {
+        bail!(
+            "the TIM's {} CLUT entries are not whole {PALETTE_ROW_LEN}-entry rows",
+            texture.palettes.len()
+        );
+    }
+    let rows = texture.palettes.len() / PALETTE_ROW_LEN;
+    let mut out = vec![bmp::encode_indexed_page(&texture, 0)?];
+    for row in 1..rows {
+        let range = row * PALETTE_ROW_LEN..(row + 1) * PALETTE_ROW_LEN;
+        let swatch = Texture8 {
+            width: SWATCH_SIDE,
+            height: SWATCH_SIDE,
+            indices: (0..=255).collect(),
+            palettes: texture.palettes[range.clone()].to_vec(),
+            stp: texture.stp[range].to_vec(),
+        };
+        out.push(bmp::encode_indexed_page(&swatch, 0)?);
+    }
+    Ok(out)
+}
+
+/// An RE2 enemy texture from its page BMP and the swatches of its CLUT rows
+/// 1 and up ([`texture_bmps`]). The page's texels and row 0 come from
+/// `page`; each swatch supplies only its palette.
+pub fn texture_from_bmps<T: AsRef<[u8]>>(page: &[u8], swatches: &[T]) -> Result<Texture8> {
+    let mut texture = bmp::decode_indexed_page(page).context("texture page")?;
+    for (index, swatch) in swatches.iter().enumerate() {
+        let row = bmp::decode_indexed_page(swatch.as_ref())
+            .with_context(|| format!("CLUT row {} swatch", index + 1))?;
+        texture
+            .palettes
+            .extend_from_slice(&row.palettes[..PALETTE_ROW_LEN]);
+        texture.stp.extend_from_slice(&row.stp[..PALETTE_ROW_LEN]);
+    }
+    budget::check_len(
+        texture.palettes.len(),
+        budget::MAX_CLUT_ENTRIES,
+        "texture CLUT entry count",
+    )?;
+    Ok(texture)
+}
+
+/// The pack entry of an RE2 enemy texture's CLUT row `row` swatch, beside
+/// the page `<stem>.bmp`: `<stem>_clut_<row:02x>.bmp`.
+pub fn clut_entry(stem: &str, row: usize) -> String {
+    format!("{stem}_clut_{row:02x}.bmp")
 }
 
 /// Parse an RE2 enemy EMD with `texture` as its skin.

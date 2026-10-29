@@ -31,13 +31,17 @@ impl Drop for TempDir {
     }
 }
 
-/// A pack with no screen art and no `ui/` scripts.
+/// A pack with no screen art and no `ui/` scripts, only the converted
+/// rooms' names.
 fn empty_pack() -> &'static Pack {
     use std::sync::OnceLock;
     static PACK: OnceLock<Pack> = OnceLock::new();
     PACK.get_or_init(|| {
         let mut writer = crate::pack::PackWriter::new();
         writer.add("unused", Vec::new()).unwrap();
+        for (entry, data) in crate::room::re1_name_entries() {
+            writer.add(&entry, data).unwrap();
+        }
         Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
     })
 }

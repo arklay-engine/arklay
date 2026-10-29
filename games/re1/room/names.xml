@@ -1,0 +1,3948 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Each RE1 room's display strings, which convert-game writes into the
+     <strings> block of every player variant's room/<id>/room.xml. -->
+<rooms>
+  <room id="100">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SAVE ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="101">
+    <strings>
+      <language lang="en-US">
+        <string key="name">1F LEFT STAIRS</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="102">
+    <strings>
+      <language lang="en-US">
+        <string key="name">VACANT ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="103">
+    <strings>
+      <language lang="en-US">
+        <string key="name">F PASSAGE</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="104">
+    <strings>
+      <language lang="en-US">
+        <string key="name">TEA ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="105">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DINING ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="106">
+    <strings>
+      <language lang="en-US">
+        <string key="name">MAIN HALL</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="107">
+    <strings>
+      <language lang="en-US">
+        <string key="name">GALLERY</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="108">
+    <strings>
+      <language lang="en-US">
+        <string key="name">L PASSAGE</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="109">
+    <strings>
+      <language lang="en-US">
+        <string key="name">TRAP PASSAGE</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="10a">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BACK PASSAGE</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="10b">
+    <strings>
+      <language lang="en-US">
+        <string key="name">1F RIGHT STAIRS</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="10c">
+    <strings>
+      <language lang="en-US">
+        <string key="name">GREEN HOUSE</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="10d">
+    <strings>
+      <language lang="en-US">
+        <string key="name">TIGER STATUE ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="10e">
+    <strings>
+      <language lang="en-US">
+        <string key="name">EMPLOYEE ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="10f">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BAR</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="110">
+    <strings>
+      <language lang="en-US">
+        <string key="name">1F ELEVATOR</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="111">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DRESSING ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="112">
+    <strings>
+      <language lang="en-US">
+        <string key="name">WARDROBE</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="113">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BATHROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="114">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BOILER</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="115">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ALMOST A SANDWICH</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="116">
+    <strings>
+      <language lang="en-US">
+        <string key="name">LIVING ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="117">
+    <strings>
+      <language lang="en-US">
+        <string key="name">LARGE GALLERY</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="118">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOM UNDER STAIRS</string>
+        <string key="save_name">Storeroom 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Itäsiiven varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Débarras RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Magazzino 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s} {s}物置/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Кладовая 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="119">
+    <strings>
+      <language lang="en-US">
+        <string key="name">STUDY</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="11a">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOFED PASSAGE</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="11b">
+    <strings>
+      <language lang="en-US">
+        <string key="name">STORE ROOM</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="11c">
+    <strings>
+      <language lang="en-US">
+        <string key="name">WARDROBE S</string>
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="200">
+    <strings>
+      <language lang="en-US">
+        <string key="name">1F &gt; B1 ELEVATOR</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="201">
+    <strings>
+      <language lang="en-US">
+        <string key="name">2F LEFT STAIRS</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="202">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DINING ROOM 2F</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="203">
+    <strings>
+      <language lang="en-US">
+        <string key="name">HALL 2F</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="204">
+    <strings>
+      <language lang="en-US">
+        <string key="name">C PASSAGE</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="205">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ARMOR ROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="206">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DOLL ROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="207">
+    <strings>
+      <language lang="en-US">
+        <string key="name">2F RIGHT STAIRS</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="208">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DEER ROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="209">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BEDROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="20a">
+    <strings>
+      <language lang="en-US">
+        <string key="name">STUDY ROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="20b">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FRONT LESSON ROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="20c">
+    <strings>
+      <language lang="en-US">
+        <string key="name">LESSON ROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="20d">
+    <strings>
+      <language lang="en-US">
+        <string key="name">PILLAR PASSAGE</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="20e">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FRONT OF ATTIC</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="20f">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DINING</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="210">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ATTIC</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="211">
+    <strings>
+      <language lang="en-US">
+        <string key="name">TERRACE PASSAGE</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="212">
+    <strings>
+      <language lang="en-US">
+        <string key="name">TERRACE</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="213">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FRONT ELEVATOR</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="214">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROUGH PASSAGE</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="215">
+    <strings>
+      <language lang="en-US">
+        <string key="name">STUFFED ROOM</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="216">
+    <strings>
+      <language lang="en-US">
+        <string key="name">LIBRARY A</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="217">
+    <strings>
+      <language lang="en-US">
+        <string key="name">LIBRARY B</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="218">
+    <strings>
+      <language lang="en-US">
+        <string key="name">HIDDEN LIBRARY</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="219">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SHED</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="21a">
+    <strings>
+      <language lang="en-US">
+        <string key="name">UNDER PASSAGE 1</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="21b">
+    <strings>
+      <language lang="en-US">
+        <string key="name">UNDER PASSAGE 2</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="21c">
+    <strings>
+      <language lang="en-US">
+        <string key="name">UNDER KITCHEN</string>
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="300">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FIRST HOUSE OUT</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="301">
+    <strings>
+      <language lang="en-US">
+        <string key="name">WATER GATE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="302">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FALLS</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="303">
+    <strings>
+      <language lang="en-US">
+        <string key="name">HELIPORT</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="304">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SECOND HOUSE GATE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="305">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FOUNTAIN</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="306">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ITEM PASSAGE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="307">
+    <strings>
+      <language lang="en-US">
+        <string key="name">LADDER PASSAGE</string>
+        <string key="save_name">Courtyard Path B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Sisääntuloreitti 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chemin de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Sentiero S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}通路/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Внутр. двор Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="308">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BRANCH PASSAGE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="309">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DARKNESS PASSAGE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="30a">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ENRICO ROOM</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="30b">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROCK PASSAGE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="30c">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BLACK TIGER ROOM</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="30d">
+    <strings>
+      <language lang="en-US">
+        <string key="name">STRAIGHT PASSAGE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="30e">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SAVE ROOM</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="30f">
+    <strings>
+      <language lang="en-US">
+        <string key="name">CRANK PASSAGE</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="310">
+    <strings>
+      <language lang="en-US">
+        <string key="name">COURT TO LABO</string>
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="311">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Courtyard Room B1</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Maanalainen varasto 0 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Salle de la cour SS1</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Cortile S1</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната внутр. двора Б1</string>
+      </language>
+    </strings>
+  </room>
+  <room id="400">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ENTER PASSAGE</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="401">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOM 001</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="402">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOM 001 BATHROOM</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="403">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SAVE ROOM</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="404">
+    <strings>
+      <language lang="en-US">
+        <string key="name">BAR</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="405">
+    <strings>
+      <language lang="en-US">
+        <string key="name">CENTER PASSAGE</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="406">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOM 002</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="407">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOM 002 BATHROOM</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="408">
+    <strings>
+      <language lang="en-US">
+        <string key="name">HONEYCOMB PASSAGE</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="409">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DRUG STOREHOUSE</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="40a">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOM 003</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="40b">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ROOM 003 BATHROOM</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="40c">
+    <strings>
+      <language lang="en-US">
+        <string key="name">PLANT BOSS ROOM</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="40d">
+    <strings>
+      <language lang="en-US">
+        <string key="name">UNDER PASSAGE</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="40e">
+    <strings>
+      <language lang="en-US">
+        <string key="name">WATER TANK</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="40f">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SECURITY ROOM</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="410">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ARMS STOREHOUSE</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="411">
+    <strings>
+      <language lang="en-US">
+        <string key="name">CONTROL ROOM</string>
+        <string key="save_name">Guardhouse 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Asuntolan varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Poste de garde RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Guardiola 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Комната охраны 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="500">
+    <strings>
+      <language lang="en-US">
+        <string key="name">UNDER FOUNTAIN</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="501">
+    <strings>
+      <language lang="en-US">
+        <string key="name">HELIPORT PASSAGE</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="502">
+    <strings>
+      <language lang="en-US">
+        <string key="name">LADDER ROOM</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="503">
+    <strings>
+      <language lang="en-US">
+        <string key="name">STAIRS</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="504">
+    <strings>
+      <language lang="en-US">
+        <string key="name">CONFERENCE ROOM</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="505">
+    <strings>
+      <language lang="en-US">
+        <string key="name">O PASSAGE</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="506">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SMALL LABORATORY</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="507">
+    <strings>
+      <language lang="en-US">
+        <string key="name">MORTUARY</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="508">
+    <strings>
+      <language lang="en-US">
+        <string key="name">DOUBLE LOCK</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="509">
+    <strings>
+      <language lang="en-US">
+        <string key="name">PRIVATE ROOM A</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="50a">
+    <strings>
+      <language lang="en-US">
+        <string key="name">PRIVATE ROOM B</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="50b">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FRONT OF CELL</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="50c">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FRONT OF ELEVATOR</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="50d">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ESCAPE ELEVATOR</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="50e">
+    <strings>
+      <language lang="en-US">
+        <string key="name">SAVE ROOM</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="50f">
+    <strings>
+      <language lang="en-US">
+        <string key="name">MAZE A</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="510">
+    <strings>
+      <language lang="en-US">
+        <string key="name">MAZE B</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="511">
+    <strings>
+      <language lang="en-US">
+        <string key="name">ENGINE ROOM</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="512">
+    <strings>
+      <language lang="en-US">
+        <string key="name">CELL</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="513">
+    <strings>
+      <language lang="en-US">
+        <string key="name">TYRANT ROOM</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="514">
+    <strings>
+      <language lang="en-US">
+        <string key="name">FRONT OF TYRANT</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="515">
+    <strings>
+      <language lang="en-US">
+        <string key="name">B4 ELEVATOR</string>
+        <string key="save_name">Laboratory B3</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Laboratorion olohuone -2 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Laboratoire SS3</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Laboratorio S3</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Лаборатория Б3</string>
+      </language>
+    </strings>
+  </room>
+  <room id="600">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="601">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="602">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="603">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="604">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="605">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="606">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="607">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="608">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="609">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="60a">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="60b">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="60c">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="60d">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="60e">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="60f">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="610">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="611">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="612">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="613">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="614">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="615">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="616">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="617">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="618">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Storeroom 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Itäsiiven varasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Débarras RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Magazzino 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s} {s}物置/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Кладовая 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="619">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="61a">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="61b">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="61c">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">M. Room 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Lääkevarasto 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Chambre RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Villa 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Мед. комната 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="700">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="701">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="702">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="703">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="704">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="705">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="706">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="707">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="708">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="709">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="70a">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="70b">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="70c">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="70d">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="70e">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="70f">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="710">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="711">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="712">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="713">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="714">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="715">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="716">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="717">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="718">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="719">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="71a">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="71b">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+  <room id="71c">
+    <strings>
+      <language lang="en-US">
+        <string key="save_name">Hall 1F</string>
+      </language>
+      <language lang="fi-FI">
+        <string key="save_name">Pääaula 1 krs</string>
+      </language>
+      <language lang="fr-FR">
+        <string key="save_name">Hall RdC</string>
+      </language>
+      <language lang="it-IT">
+        <string key="save_name">Atrio 1P</string>
+      </language>
+      <language lang="ja-JP">
+        <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      </language>
+      <language lang="ru-RU">
+        <string key="save_name">Зал 1-эт.</string>
+      </language>
+    </strings>
+  </room>
+</rooms>

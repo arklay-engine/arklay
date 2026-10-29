@@ -29,11 +29,15 @@ fn write(path: &Path, data: &[u8]) {
     fs::write(path, data).unwrap();
 }
 
-/// A minimal RE2 RDT: `cuts` cameras and one section offset past the header.
+/// A minimal RE2 RDT: `cuts` zeroed camera records right after the header,
+/// and no other section.
 fn rdt(cuts: u8) -> Vec<u8> {
-    let mut data = vec![0u8; 0x100];
+    let rid = 0x64usize;
+    let mut data = vec![0u8; (rid + usize::from(cuts) * 0x20).max(0x100)];
     data[1] = cuts;
-    data[8..12].copy_from_slice(&0x64u32.to_le_bytes());
+    data[8..12].copy_from_slice(&(rid as u32).to_le_bytes());
+    let slot = crate::rdt2::OFFSETS + crate::rdt2::RID_SLOT * 4;
+    data[slot..slot + 4].copy_from_slice(&(rid as u32).to_le_bytes());
     data
 }
 
@@ -85,7 +89,10 @@ fn make_install(root: &Path) {
     write(&data.join("Common/bin/roomcut.bin"), &bin);
 
     write(&data.join("Pl0/emd0/em010.emd"), b"emd-010");
-    write(&data.join("Pl0/emd0/EM010.TIM"), b"tim-010");
+    write(
+        &data.join("Pl0/emd0/EM010.TIM"),
+        &crate::emd2::tests::enemy_tim(),
+    );
     write(&data.join("Pl1/emd1/EM110.EMD"), b"emd-110");
     write(&data.join("Pl1/emd1/EM13A.TIM"), b"tim-13a");
     write(&data.join("Pl0/emd0/EM13A.TIM"), b"stray-13a");
@@ -103,6 +110,12 @@ fn make_install(root: &Path) {
     write(&data.join("Pl0/VOICE/stage1/v010.sap"), &sap(b"WAVEv0"));
     write(&data.join("Pl1/Voice/stage0/v000.sap"), &sap(b"WAVEv1"));
     write(&data.join("Common/Sound/BGM/main00.sap"), &sap(b"WAVEbgm"));
+    write(
+        &data.join("Common/Sound/BGM/main00_1.sap"),
+        &sap(b"WAVEtake"),
+    );
+    write(&data.join("Common/Sound/BGM/SUB2F.SAP"), &sap(b"WAVEsub"));
+    write(&data.join("Common/Sound/BGM/extra.sap"), &sap(b"WAVEextra"));
     write(&data.join("Common/Sound/BGM/MAIN00.BGM"), b"sequence");
     write(&data.join("Common/DOOR/DOOR1F.DO2"), b"door");
     write(&data.join("Common/DOOR/vielogo.tga"), b"logo");
@@ -197,10 +210,16 @@ fn converts_every_category() {
     let pack = Pack::open(&out).unwrap();
 
     // Rooms, both discs and the letter stage; the 4-byte stub is skipped.
+    // Rooms, both discs and the letter stage, as RE2 room definitions; the
+    // 4-byte stub is skipped.
     for id in ["1000", "1001", "a010", "2000"] {
-        assert_eq!(read(&pack, &format!("room/{id}/room.rdt")), rdt_for(id));
+        let text = String::from_utf8(read(&pack, &format!("room/{id}/room.xml"))).unwrap();
+        let room = crate::room::xml::parse(&text).unwrap();
+        assert_eq!(room, crate::rdt2::read(&rdt_for(id)).unwrap(), "{id}");
+        assert_eq!(room.dialect, crate::format::Dialect::Re2);
+        assert!(!pack.contains(&format!("room/{id}/room.rdt")));
     }
-    assert!(!pack.contains("room/7050/room.rdt"));
+    assert!(!pack.paths().any(|path| path.starts_with("room/7050/")));
 
     // One decoded background shared by every cut that points at it; room
     // 200's pointer is past the end, so it has none.
@@ -219,8 +238,14 @@ fn converts_every_category() {
 
     // Enemies by the name's disc digit; the stray in the other disc's
     // folder yields to the file in its own.
+    // A texture is an indexed page plus a swatch per further CLUT row; one
+    // that does not decode stays a TIM.
     assert_eq!(read(&pack, "enemy/10/enemy_0.emd"), b"emd-010");
-    assert_eq!(read(&pack, "enemy/10/enemy_0.tim"), b"tim-010");
+    let bmps = crate::emd2::texture_bmps(&crate::emd2::tests::enemy_tim()).unwrap();
+    assert_eq!(read(&pack, "enemy/10/enemy_0.bmp"), bmps[0]);
+    assert_eq!(read(&pack, "enemy/10/enemy_0_clut_01.bmp"), bmps[1]);
+    assert_eq!(read(&pack, "enemy/10/enemy_0_clut_02.bmp"), bmps[2]);
+    assert!(!pack.contains("enemy/10/enemy_0.tim"));
     assert_eq!(read(&pack, "enemy/10/enemy_1.emd"), b"emd-110");
     assert_eq!(read(&pack, "enemy/3a/enemy_1.tim"), b"tim-13a");
 
@@ -232,7 +257,14 @@ fn converts_every_category() {
     // The `.sap` header is stripped, leaving the WAV.
     assert_eq!(read(&pack, "voice/0/01_0a.wav"), riff(b"WAVEv0"));
     assert_eq!(read(&pack, "voice/1/00_00.wav"), riff(b"WAVEv1"));
-    assert_eq!(read(&pack, "bgm/main00.wav"), riff(b"WAVEbgm"));
+    assert_eq!(read(&pack, "bgm/000.wav"), riff(b"WAVEbgm"));
+    assert_eq!(read(&pack, "bgm/200.wav"), riff(b"WAVEtake"));
+    assert_eq!(read(&pack, "bgm/12f.wav"), riff(b"WAVEsub"));
+    assert!(
+        !pack
+            .paths()
+            .any(|path| read(&pack, path) == riff(b"WAVEextra"))
+    );
     assert!(!pack.paths().any(|path| path.ends_with(".bgm")));
 
     assert_eq!(read(&pack, "door/1f.do2"), b"door");
@@ -300,7 +332,7 @@ fn a_rooms_only_install_still_converts() {
     let out = root.path.join("out.akpak");
     convert_game(&root.path, &out).unwrap();
     let pack = Pack::open(&out).unwrap();
-    assert!(pack.contains("room/1000/room.rdt"));
+    assert!(pack.contains("room/1000/room.xml"));
     assert!(pack.contains(manifest::ENTRY));
 }
 
@@ -316,6 +348,36 @@ fn over_long_cut_counts_stop_at_the_pointer_group() {
     let pack = Pack::open(&out).unwrap();
     assert!(pack.contains("room/30c0/cut/0f.bmp"));
     assert!(!pack.contains("room/30c0/cut/10.bmp"));
+}
+
+#[test]
+fn bgm_names_number_their_tracks() {
+    assert_eq!(bgm_track("MAIN00"), Some(0x000));
+    assert_eq!(bgm_track("main0f"), Some(0x00F));
+    assert_eq!(bgm_track("sub44"), Some(0x144));
+    assert_eq!(bgm_track("main00_1"), Some(0x200));
+    assert_eq!(bgm_track("main00_2"), Some(0x400));
+    assert_eq!(bgm_track("sub2f_1"), Some(0x32F));
+    for bad in [
+        "main", "main0", "main+1", "sub_00", "main00_0", "main00_8", "main00_x", "core00",
+    ] {
+        assert_eq!(bgm_track(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn a_room_the_xml_cannot_carry_stays_an_rdt() {
+    let root = TempDir::new("raw-room");
+    // Two cameras declared, but no camera section.
+    let mut broken = rdt(2);
+    let slot = crate::rdt2::OFFSETS + crate::rdt2::RID_SLOT * 4;
+    broken[slot..slot + 4].fill(0);
+    write(&root.path.join("Pl0/Rdt/ROOM1000.RDT"), &broken);
+    let out = root.path.join("out.akpak");
+    convert_game(&root.path, &out).unwrap();
+    let pack = Pack::open(&out).unwrap();
+    assert_eq!(read(&pack, "room/1000/room.rdt"), broken);
+    assert!(!pack.contains("room/1000/room.xml"));
 }
 
 #[test]
@@ -352,7 +414,7 @@ fn a_folder_holding_both_games_needs_an_explicit_game() {
     let error = convert_game(&root.path, &out).unwrap_err();
     assert!(format!("{error:#}").contains("--game"), "{error:#}");
     convert_game_as(&root.path, &out, Some(Game::Re2), 1, false).unwrap();
-    assert!(Pack::open(&out).unwrap().contains("room/1000/room.rdt"));
+    assert!(Pack::open(&out).unwrap().contains("room/1000/room.xml"));
 }
 
 #[test]
@@ -375,7 +437,7 @@ fn the_launcher_checks_an_install_for_the_game_it_builds() {
     let out = root.path.join("re2.akpak");
     crate::convert::convert_game_observed(&root.path, &out, Game::Re2, 1, false, None, None)
         .unwrap();
-    assert!(Pack::open(&out).unwrap().contains("room/1000/room.rdt"));
+    assert!(Pack::open(&out).unwrap().contains("room/1000/room.xml"));
     // A folder with both keeps working for either game.
     make_re1_install(&root.path);
     crate::convert::validate_install(&root.path).unwrap();

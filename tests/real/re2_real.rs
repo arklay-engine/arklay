@@ -84,7 +84,7 @@ fn the_retail_tree_converts_every_category() {
         ("cut", 5028),
         ("demo", 6),
         ("door", 55),
-        ("enemy", 234),
+        ("enemy", 384),
         ("manifest", 1),
         ("movie", 26),
         ("player", 221),
@@ -110,6 +110,85 @@ fn the_retail_tree_converts_every_category() {
     let manifest = pack.manifest().unwrap();
     assert_eq!(manifest.id, "re2");
     assert_eq!(manifest.language, None);
+
+    // Every room is a room definition, every texture a BMP and every track
+    // a numbered `bgm/<id:03x>`.
+    assert!(
+        !pack
+            .paths()
+            .any(|path| path.ends_with(".rdt") || path.ends_with(".tim"))
+    );
+    assert_eq!(
+        pack.paths()
+            .filter(|path| path.ends_with("/room.xml"))
+            .count(),
+        501
+    );
+    for path in pack.paths().filter(|path| path.starts_with("bgm/")) {
+        let id = path
+            .strip_prefix("bgm/")
+            .and_then(|name| name.strip_suffix(".wav"))
+            .unwrap();
+        assert!(
+            id.len() == 3 && u16::from_str_radix(id, 16).is_ok(),
+            "{path}"
+        );
+    }
+    for track in [
+        "bgm/000.wav",
+        "bgm/144.wav",
+        "bgm/200.wav",
+        "bgm/32f.wav",
+        "bgm/400.wav",
+    ] {
+        assert!(pack.contains(track), "{track}");
+    }
+}
+
+/// Every retail enemy texture is stored exactly: the page BMP and its CLUT
+/// swatches read back as the TIM.
+#[test]
+#[ignore]
+fn every_enemy_texture_round_trips_through_its_bmps() {
+    let (Some(pack), Some(root)) = (pack(), re2_root()) else {
+        return;
+    };
+    let mut checked = 0;
+    for path in with_extension(&root, "tim") {
+        let name = name(&path);
+        let Some(rest) = name
+            .strip_prefix("EM")
+            .and_then(|rest| rest.strip_suffix(".TIM"))
+        else {
+            continue;
+        };
+        let disc = &rest[..1];
+        // The stray disc-1 copy under `Pl0/emd0` is not packed.
+        let folder = path
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy();
+        if !folder.eq_ignore_ascii_case(&format!("emd{disc}")) {
+            continue;
+        }
+        let stem = format!("enemy/{}/enemy_{disc}", rest[1..].to_ascii_lowercase());
+        let mut swatches = Vec::new();
+        for row in 1.. {
+            let entry = arklay::emd2::clut_entry(&stem, row);
+            if !pack.contains(&entry) {
+                break;
+            }
+            swatches.push(pack.read(&entry).unwrap().to_vec());
+        }
+        let page = pack.read(&format!("{stem}.bmp")).unwrap();
+        let texture = arklay::emd2::texture_from_bmps(&page, &swatches).unwrap();
+        let expected = arklay::tim::decode_8bpp(&fs::read(&path).unwrap()).unwrap();
+        assert!(texture == expected, "{stem}");
+        checked += 1;
+    }
+    assert_eq!(checked, 118);
 }
 
 #[test]
@@ -126,7 +205,8 @@ fn the_converted_pack_verifies() {
             .get(&format)
             .map_or(0, |stats| stats.entries as usize)
     };
-    assert_eq!(count(verify::Format::Re2Rdt), 501);
+    assert_eq!(count(verify::Format::RoomXml), 501);
+    assert_eq!(count(verify::Format::Re2Rdt), 0);
     assert_eq!(count(verify::Format::Re2Emd), 116);
     assert_eq!(count(verify::Format::Pld), 40);
     assert_eq!(count(verify::Format::Plw), 181);

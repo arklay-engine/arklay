@@ -8,14 +8,15 @@
 //!
 //! | source | entry |
 //! |---|---|
-//! | `Pl{0,1}/Rdt/ROOM####.RDT` | `room/<id>/room.rdt` |
+//! | `Pl{0,1}/Rdt/ROOM####.RDT` | `room/<id>/room.xml` |
 //! | ADT streams in `Common/bin/roomcut.bin` | `room/<id>/cut/<nn>.bmp` |
-//! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD`/`.TIM` | `enemy/<id>/enemy_<s>.emd`/`.tim` |
+//! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
+//! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.TIM` | `enemy/<id>/enemy_<s>.bmp`, `enemy_<s>_clut_<nn>.bmp` |
 //! | `Pl{0,1}/PLD/PL<id>.PLD` | `player/<id>/model_<s>.pld` |
 //! | `Pl{0,1}/PLD/PL<id>CH.PLD` | `player/<id>/model_ch_<s>.pld` |
 //! | `Pl{0,1}/PLD/PL<id>W<nn>.PLW` | `player/<id>/weapon/<nn>_<s>.plw` |
 //! | `Pl{0,1}/Voice/stageN/vNNN.sap` | `voice/<s>/<NN>_<id>.wav` |
-//! | `Common/Sound/BGM/*.sap` | `bgm/<stem>.wav` |
+//! | `Common/Sound/BGM/{main,sub}<nn>[_<k>].sap` | `bgm/<track:03x>.wav` |
 //! | `Common/DOOR/DOOR<nn>.DO2` | `door/<nn>.do2` |
 //! | `Zmovie`, `Pl{0,1}/Zmovie` `*.bin` | `movie/<stem>.mpg` |
 //! | `Pl0/PLD/PDEMO0n.DAT`, `Pl1/PLD/PDEMO1n.DAT` | `demo/<nn>.dat` |
@@ -25,6 +26,13 @@
 //! entry name is lower case. Room ids are the four characters after `ROOM`:
 //! `<stage><room:02x><disc>`, where the stage is `1`-`7` or one of the letter
 //! stages `A`-`G`, whose backgrounds are stage 1-7's groups by letter order.
+//!
+//! A room is converted into its folder's `room.xml` from what [`crate::rdt2`]
+//! reads of the RDT; one the XML cannot carry exactly stays a raw
+//! `room.rdt`, which the engine still loads. An enemy texture is written as
+//! an indexed BMP page plus a palette swatch per further CLUT row
+//! ([`emd2::texture_bmps`]). Music tracks are numbered as RE1's are
+//! ([`bgm_track`]).
 //!
 //! The six `Pdemo**p.dat` files are deliberately not packed: they are
 //! alternate takes of the six reels (three byte-identical, three differing
@@ -44,7 +52,8 @@ use crate::format::{self, Dialect};
 use crate::manifest;
 use crate::pack::PackWriter;
 use crate::progress::Progress;
-use crate::{adt, bmp, sap};
+use crate::state::RoomId;
+use crate::{adt, bmp, emd2, sap};
 
 /// The pack id of a converted RE2 install.
 pub const BASE_PACK_ID: &str = "re2";
@@ -333,9 +342,19 @@ pub(crate) fn convert(
 
     progress.begin("room", rooms.len() as u64);
     for room in &rooms {
-        let entry = format!("room/{}/room.rdt", room.id.folder());
-        tally.add(&mut writer, "room", &entry, room.bytes.clone())?;
-        progress.advance(&entry);
+        let folder = room.id.folder();
+        let id = RoomId::parse(&folder)?;
+        // A room the XML cannot carry exactly stays a raw RDT, which the
+        // engine still loads.
+        let files =
+            crate::room::convert_rdt2(&room.bytes, id, Vec::new()).unwrap_or_else(|error| {
+                warnings.push(format!("{}: kept as an RDT: {error:#}", id.rdt_entry()));
+                vec![(id.rdt_entry(), room.bytes.clone())]
+            });
+        for (entry, data) in files {
+            tally.add(&mut writer, "room", &entry, data)?;
+        }
+        progress.advance(&folder);
     }
     progress.end_phase();
 
@@ -615,7 +634,27 @@ fn copy_enemies(
     }
     progress.begin("enemy", files.len() as u64);
     for (entry, (path, _)) in files {
-        tally.add(writer, "enemy", &entry, read(&path)?)?;
+        let data = read(&path)?;
+        let Some(stem) = entry.strip_suffix(".tim") else {
+            tally.add(writer, "enemy", &entry, data)?;
+            progress.advance(&entry);
+            continue;
+        };
+        match emd2::texture_bmps(&data) {
+            Ok(bmps) => {
+                for (row, bmp) in bmps.into_iter().enumerate() {
+                    let entry = match row {
+                        0 => format!("{stem}.bmp"),
+                        row => emd2::clut_entry(stem, row),
+                    };
+                    tally.add(writer, "enemy", &entry, bmp)?;
+                }
+            }
+            Err(error) => {
+                warnings.push(format!("{}: kept as a TIM: {error:#}", path.display()));
+                tally.add(writer, "enemy", &entry, data)?;
+            }
+        }
         progress.advance(&entry);
     }
     progress.end_phase();
@@ -729,7 +768,33 @@ fn copy_voice(
     Ok(())
 }
 
-/// `Common/Sound/BGM/*.sap` as `bgm/<stem>.wav`.
+/// The track id of a BGM file stem, which names its `bgm/<id:03x>` entry:
+/// `main<nn>` is `0nn`, `sub<nn>` is `1nn`, and an alternate take
+/// `<name>_<k>` adds `0x200 * k` (`main00_1` is `200`, `sub2f_1` is `32f`).
+///
+/// The two-digit numbers are the executable's own hex track numbers (the
+/// `common\sound\bgm\%s.sap` names it formats), so `main0f` is `00f`.
+pub fn bgm_track(stem: &str) -> Option<u16> {
+    let stem = stem.to_ascii_lowercase();
+    let (name, take) = match stem.split_once('_') {
+        Some((name, take)) => (
+            name,
+            take.parse::<u16>()
+                .ok()
+                .filter(|take| (1..=7).contains(take))?,
+        ),
+        None => (stem.as_str(), 0),
+    };
+    let (bank, number) = if let Some(number) = name.strip_prefix("main") {
+        (0, number)
+    } else {
+        (1, name.strip_prefix("sub")?)
+    };
+    Some(take * 0x200 + bank * 0x100 + u16::from(hex_byte(number)?))
+}
+
+/// `Common/Sound/BGM/*.sap` as `bgm/<track:03x>.wav` ([`bgm_track`]); a
+/// file the numbering does not cover is skipped with a warning.
 fn copy_bgm(
     layout: &Layout,
     writer: &mut PackWriter,
@@ -748,7 +813,15 @@ fn copy_bgm(
     progress.begin("bgm", files.len() as u64);
     for path in files {
         let (stem, _) = upper_parts(&path).unwrap();
-        let entry = format!("bgm/{}.wav", stem.to_ascii_lowercase());
+        let Some(track) = bgm_track(&stem) else {
+            warnings.push(format!(
+                "{}: not a numbered BGM track; skipped",
+                path.display()
+            ));
+            progress.advance(&stem);
+            continue;
+        };
+        let entry = format!("bgm/{track:03x}.wav");
         tally.add(writer, "bgm", &entry, sap_wav(&path)?)?;
         progress.advance(&entry);
     }

@@ -73,6 +73,11 @@ pub struct RoomSource {
     pub object_slots: Option<usize>,
     /// The item-model table's slot count, like [`RoomSource::object_slots`].
     pub item_slots: Option<usize>,
+    /// The room's display strings, `(language tag, key, value)`: `name` (the
+    /// debug menu and save list name) and `save_name` (the save screen's
+    /// label). They reach the game as the `ROOM_<room3>_NAME` and
+    /// `ROOM_<room3>_NAME_SAVE` language keys ([`super::language_layers`]).
+    pub strings: Vec<crate::language::XmlString>,
 }
 
 /// One camera cut.
@@ -417,6 +422,7 @@ impl RoomSource {
                 .map(|block| Messages::from_block(block, script, id.stage)),
             object_slots,
             item_slots,
+            strings: Vec::new(),
         };
         Ok(Converted { source, files })
     }

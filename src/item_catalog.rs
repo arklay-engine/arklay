@@ -215,7 +215,7 @@ pub struct HealEffect {
 }
 
 /// One `<string>`: `(language tag, key, value)`.
-type ItemString = (String, String, String);
+type ItemString = crate::language::XmlString;
 
 /// One item's definition.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -368,58 +368,9 @@ fn parse_effects(node: Node) -> Result<HealEffect> {
 }
 
 fn parse_strings(node: Node) -> Result<Vec<ItemString>> {
-    no_attributes(node)?;
-    let mut strings = Vec::new();
-    let mut tags = Vec::new();
-    for language in elements(node) {
-        if language.tag_name().name() != "language" {
-            bail!("unknown <strings> element <{}>", language.tag_name().name());
-        }
-        let mut tag = None;
-        for attribute in language.attributes() {
-            match attribute.name() {
-                "lang" => tag = Some(attribute.value()),
-                other => bail!("unknown <language> attribute `{other}`"),
-            }
-        }
-        let tag = tag.context("a <language> needs a lang")?;
-        if !crate::language::valid_tag(tag) {
-            bail!("invalid language tag `{tag}`");
-        }
-        if tags
-            .iter()
-            .any(|seen: &&str| seen.eq_ignore_ascii_case(tag))
-        {
-            bail!("more than one <language lang=\"{tag}\">");
-        }
-        tags.push(tag);
-        let mut values = Vec::new();
-        for string in elements(language) {
-            if string.tag_name().name() != "string" {
-                bail!("unknown <language> element <{}>", string.tag_name().name());
-            }
-            let mut key = None;
-            for attribute in string.attributes() {
-                match attribute.name() {
-                    "key" => key = Some(attribute.value()),
-                    other => bail!("unknown <string> attribute `{other}`"),
-                }
-            }
-            let key = key.context("a <string> needs a key")?;
-            let suffix =
-                language_key_suffix(key).with_context(|| format!("unknown string key `{key}`"))?;
-            if string.children().any(|child| !child.is_text()) {
-                bail!("<string key=\"{key}\"> must hold only text");
-            }
-            let value = string.text().unwrap_or_default();
-            values.push((format!("ITEM_00_{suffix}"), value));
-            strings.push((tag.to_string(), key.to_string(), value.to_string()));
-        }
-        // The values use the language files' syntax; check it here so a bad
-        // string fails this item rather than the whole language's layer.
-        Language::from_values(values, &format!("<language lang=\"{tag}\">"))?;
-    }
-    Ok(strings)
+    crate::language::parse_xml_strings(node, |key| {
+        language_key_suffix(key).map(|suffix| format!("ITEM_00_{suffix}"))
+    })
 }
 
 /// The language-file key suffix of an `item.xml` string key.

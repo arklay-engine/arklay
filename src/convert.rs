@@ -632,12 +632,15 @@ fn convert_observed_as(
     rdts.sort_by_key(|rdt| rdt.id.rdt_number());
     let mut sidecar_count = 0usize;
     let mut sidecar_bytes = 0usize;
+    let names = crate::room::parse_names(crate::room::RE1_NAMES)
+        .context("invalid checked-in room names")?;
     for rdt in rdts {
         stage_counts[rdt.id.stage_index() as usize].0 += 1;
         let definition;
+        let strings = names.get(&rdt.id.room3()).cloned().unwrap_or_default();
         // A room the XML cannot carry exactly stays a raw RDT, which the
         // engine still loads.
-        let mut files = match crate::room::convert_rdt(&rdt.bytes, rdt.id, text_script) {
+        let mut files = match crate::room::convert_rdt(&rdt.bytes, rdt.id, text_script, strings) {
             Ok(files) => {
                 definition = rdt.id.xml_entry();
                 files
@@ -2569,7 +2572,7 @@ pub const BASE_PACK_ID: &str = "re1";
 /// scripts and language files, the manifest, or the compression policy. The
 /// launcher compares it with the pack's manifest and asks for a rebuild when
 /// they differ.
-pub const CONVERT_VERSION: u32 = 8;
+pub const CONVERT_VERSION: u32 = 9;
 
 /// A stable fingerprint of everything this engine packs itself: the conversion
 /// revision, the checked-in screen and enemy Lua, and the language sheets.
@@ -2592,6 +2595,7 @@ pub fn packed_source_hash() -> String {
         .chain(crate::lua::GAME_SCRIPTS.iter())
         .chain(crate::language::LANGUAGE_FILES.iter())
         .chain(crate::item_catalog::ITEM_FILES.iter())
+        .chain([("room/names.xml", crate::room::RE1_NAMES)].iter())
     {
         feed(name.as_bytes());
         feed(&[0]);
