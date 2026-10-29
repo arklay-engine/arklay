@@ -50,6 +50,11 @@ to go to the compiler (#266). Follow these rules:
   command prints "Blocking waiting for file lock", it is waiting for that
   background build: let it finish. Do not kill it, and do not start other
   builds to work around it.
+- **Edit and build in separate tool calls.** Make edits with the Edit tool
+  or a command that only edits, and run cargo in a later call. The
+  background build starts as soon as an edit lands, so it compiles while you
+  write the next command. An edit and `cargo test` in one command
+  (`python3 - <<EOF ... EOF; cargo test ...`) gives it no head start.
 - **Do not run `cargo clean`** or delete `target/` unless a build is
   genuinely broken. A cold build takes minutes.
 - Inserting or removing lines near the top of a big file (`src/engine.rs`,
