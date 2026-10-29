@@ -453,3 +453,91 @@ fn real_tactical_reload_refills_the_beretta_from_its_ammo_stack() {
     assert_eq!(run.game.item_count(2), 15, "the clip was refilled");
     assert_eq!(run.game.item_count(0x0B), 0, "the spare was consumed");
 }
+
+/// #277: Jill's grenade launcher hits a zombie standing well past the
+/// launcher's 900-unit point-blank reach. The round's packed sprite flies the
+/// bullet behaviour (43), which runs the damage pipeline from its own
+/// position; the fire frame alone never reaches the zombie.
+#[test]
+#[ignore = "requires both ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
+fn jill_grenade_round_hits_a_distant_zombie() {
+    let Some((_root, pack_path)) = common::asset_env() else {
+        return;
+    };
+    const GL_EXPLOSIVE: u8 = 7;
+    let pack = Pack::open(&pack_path).unwrap();
+    let id = RoomId::parse("101").unwrap();
+    let mut run = arklay::engine::simulate_room(&pack, id, 4, Input::default()).unwrap();
+    let slot = (1..arklay::game::ENTITY_COUNT)
+        .find(|&slot| {
+            let entity = run.game.entities[slot];
+            entity.active() && matches!(entity.id, 0x00 | 0x01 | 0x11)
+        })
+        .expect("ROOM101 spawns a zombie");
+
+    run.game.id.player_flag = 1;
+    run.game.inventory.push(arklay::game::InventoryItem {
+        id: GL_EXPLOSIVE,
+        quantity: 6,
+    });
+    run.game.set_equipped(Some(GL_EXPLOSIVE));
+
+    let character = run.game.id.player_flag & 3;
+    let emd = arklay::emd::parse(
+        &pack
+            .read(&arklay::convert::skin_entry(character, 0))
+            .unwrap(),
+    )
+    .unwrap();
+    let emw = arklay::emd::parse_emw(&pack.read(&weapons::weapon_emw_entry(character, 0)).unwrap())
+        .unwrap();
+    let weapon_entry = weapons::weapon_emw_entry(character, GL_EXPLOSIVE);
+    let weapon = arklay::emd::parse_emw(&pack.read(&weapon_entry).unwrap()).unwrap();
+    let clips = WeaponClips {
+        emd: &emd.clips,
+        emw: &emw.clips,
+        room: &[],
+        weapon: &weapon.clips,
+        emd_keyframes: &emd.keyframes,
+        emd_skeleton: &emd.skeleton,
+        weapon_keyframes: &weapon.keyframes,
+        weapon_skeleton: &weapon.skeleton,
+    };
+
+    // Stand 3000 units from the zombie, facing it; it holds still so only
+    // the round can close the distance.
+    let zombie = run.game.entities[slot];
+    let stance = [zombie.pos[0] + 3000, zombie.pos[1], zombie.pos[2]];
+    let angle = arklay::sfx::angle_between_xz(stance[0], stance[2], zombie.pos[0], zombie.pos[2]);
+    let health = zombie.health;
+    run.player.pos = stance;
+    run.player.collision_mirror = [stance[0], stance[2]];
+    run.player.angle = angle;
+    run.game.entities[0].pos = stance;
+    run.game.entities[0].angle = angle;
+    // Store the stance's joint worlds the way the engine's render pass does
+    // every tick, so the weapon hand (and the round it fires) starts there.
+    run.game.joint_worlds[0] = arklay::anim::joint_matrices(
+        &emd.skeleton,
+        &emd.keyframes[0],
+        &arklay::anim::entity_matrix(stance, angle),
+    );
+    let mut hit_tick = None;
+    for tick in 0..120 {
+        run.game.entities[slot].pos = zombie.pos;
+        let input = Input {
+            aim: true,
+            fire: tick < 40,
+            fire_pressed: tick == 0,
+            ..Input::default()
+        };
+        weapons::update(&mut run.game, &mut run.player, &run.room, &clips, input);
+        arklay::effects::behaviour::update(&mut run.game, &run.room);
+        if hit_tick.is_none() && run.game.entities[slot].health < health {
+            hit_tick = Some(tick);
+        }
+    }
+
+    assert!(hit_tick.is_some(), "the grenade round never hit the zombie");
+    assert_eq!(run.game.effect_placeholder_hits[43], 0);
+}

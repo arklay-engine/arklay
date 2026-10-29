@@ -52,9 +52,11 @@
 //!   anchor correction.
 //! - **The projectile damage.** Only the weapons the original damages at a
 //!   fire frame run through [`GameState::apply_weapon_damage_with`] here (the
-//!   GL explosive round among them); the flamethrower/acid/flame/rocket
-//!   damage rides their projectile effect behaviours, which stay in the
-//!   effect pool's placeholder set.
+//!   GL explosive round among them, measured from the player). Every grenade
+//!   round's real reach is its bullet effect (behaviour 43), which flies from
+//!   the muzzle and runs the same pipeline from its own position; the
+//!   flamethrower and rocket damage ride their projectile effect behaviours,
+//!   which stay in the effect pool's placeholder set.
 //! - **The player character sounds.** The original's `PlayEntitySnd` aim/cloth
 //!   cues are a no-op, like the engine's other player-side cue sites.
 
