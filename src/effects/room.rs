@@ -214,6 +214,12 @@ impl RoomEffects {
     pub fn sprite_mut(&mut self, index: u8) -> Option<&mut EffectSprite> {
         self.sprites.iter_mut().find(|sprite| sprite.index == index)
     }
+
+    /// The slot (`0..8`) the sprite with `index` is declared in, which names
+    /// its `room/<id>/effect/<slot>` files.
+    pub fn slot_of(&self, index: u8) -> Option<usize> {
+        self.index.iter().position(|&declared| declared == index)
+    }
 }
 
 /// The global weapon-FX sprite metadata (`data/core00.esp`/`.etm`).

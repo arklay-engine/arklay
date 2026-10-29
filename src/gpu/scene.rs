@@ -507,6 +507,9 @@ pub struct SpriteRun<'a> {
     pub background: Option<&'a Image>,
     /// How an effect billboard meets the frame.
     pub op: render::EffectBlend,
+    /// The HD composite an effect run's page is drawn from in place of its
+    /// content-hash replacement ([`crate::effects::hd`]).
+    pub hd: Option<&'a crate::htexture::Replacement>,
 }
 
 /// The frame's sprites: `before` draws ahead of the meshes (background,
@@ -593,6 +596,7 @@ impl<'a> Sprites<'a> {
             count: count as u32,
             background: None,
             op: render::EffectBlend::Normal,
+            hd: None,
         })
     }
 }
@@ -728,8 +732,16 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                 // mask only covers one strictly behind it.
                 quad.key as f32 - 1.0,
             );
+            let hd = layer.hd.get(quad.page).copied().flatten();
             if let Some(run) = sprites.run(page, first) {
-                after.push((quad.key, SpriteRun { op: quad.op, ..run }));
+                after.push((
+                    quad.key,
+                    SpriteRun {
+                        op: quad.op,
+                        hd,
+                        ..run
+                    },
+                ));
             }
         }
     }
