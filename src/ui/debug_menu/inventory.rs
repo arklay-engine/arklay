@@ -1,10 +1,10 @@
 //! INVENTORY: the slot editor and its icon picker.
 //!
 //! One row per capacity slot shows the slot number, the item icon, its name
-//! and the quantity. Left/right step the quantity inside the item's limit
-//! (down to zero, which keeps the item) and START clears the slot. Confirm
-//! opens the picker: a grid of every item icon, as many to a row as fit, with
-//! an EMPTY cell first. Every edit goes through [`GameState`] and its slot
+//! and the quantity. Left/right step the quantity through the full byte,
+//! `0..=255`, whatever the item (zero keeps the item), and START clears the
+//! slot. Confirm opens the picker: a grid of every item icon, as many to a
+//! row as fit, with an EMPTY cell first. Every edit goes through [`GameState`] and its slot
 //! bookkeeping; the equipped and selected items are dropped when an edit
 //! leaves them dangling.
 
@@ -44,18 +44,6 @@ pub const PICKER_LAST_ITEM: u8 = items::ITEM_MINIMI;
 /// The picker's cell count: EMPTY plus `0x01..=0x70`.
 pub const PICKER_CELLS: usize = PICKER_LAST_ITEM as usize + 1;
 
-/// The highest quantity `item` can hold: the merge cap for an item that
-/// merges (the ammunition and the ribbon), its `stack` otherwise (0: no
-/// quantity).
-pub fn quantity_limit(defs: &ItemCatalog, item: u8) -> u8 {
-    let def = defs.get(item);
-    if def.merge {
-        items::ITEM_QUANTITY_CAP
-    } else {
-        def.stack
-    }
-}
-
 /// The quantity a freshly picked item starts with: its `stack`, and at least
 /// one.
 pub fn default_quantity(defs: &ItemCatalog, item: u8) -> u8 {
@@ -92,18 +80,15 @@ pub fn assign(game: &mut GameState, slot: usize, item: u8) -> usize {
     landed
 }
 
-/// Step `slot`'s quantity by `delta` inside `0..=quantity_limit`; zero keeps
-/// the item in its slot. An item without a quantity is left alone.
+/// Step `slot`'s quantity by `delta` inside `0..=255`, for every item: the
+/// slot's quantity is a raw byte, so the editor ignores the item's own
+/// limits. Zero keeps the item in its slot.
 pub fn adjust(game: &mut GameState, slot: usize, delta: i32) {
     let Some(stack) = game.inventory.get(slot).copied() else {
         return;
     };
-    let limit = i32::from(quantity_limit(&game.item_defs, stack.id));
-    if limit == 0 {
-        return;
-    }
-    let quantity = i32::from(stack.quantity).min(limit) + delta;
-    game.inventory[slot].quantity = quantity.clamp(0, limit) as u8;
+    let quantity = i32::from(stack.quantity) + delta;
+    game.inventory[slot].quantity = quantity.clamp(0, i32::from(u8::MAX)) as u8;
     game.rebuild_slots();
 }
 
@@ -288,18 +273,13 @@ impl InventoryEditor {
             let selected = !self.on_size && slot == self.slot;
             match game.inventory.get(slot) {
                 Some(stack) => {
-                    let limit = quantity_limit(&game.item_defs, stack.id);
                     let name = cx.item_name(stack.id);
                     let label = Label {
                         icon: Some(cx.icon(stack.id)),
                         ..Label::lead(&lead, &name)
                     };
-                    let quantity = format!("{}/{}", stack.quantity, limit);
-                    let value = if limit > 0 {
-                        Value::Step(&quantity, None)
-                    } else {
-                        Value::None
-                    };
+                    let quantity = stack.quantity.to_string();
+                    let value = Value::Step(&quantity, None);
                     widgets::row(p, cx, rect, slot, selected, label, value);
                 }
                 None => {
@@ -380,5 +360,32 @@ impl InventoryEditor {
             format!("{item:02X}   {}", cx.item_name(item))
         };
         p.text(Role::Row, area.x, cy, Align::Left, palette::TEXT, &label);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every item steps through the full `0..=255` byte, past the merge cap
+    /// and on items whose definition has no quantity, such as the door keys.
+    #[test]
+    fn adjust_spans_the_whole_byte_for_every_item() {
+        let mut game = GameState::default();
+        for id in [0x0B, 0x33, 0x3C, 0x40] {
+            game.inventory = vec![InventoryItem { id, quantity: 1 }];
+            adjust(&mut game, 0, -1);
+            assert_eq!(game.inventory[0].quantity, 0, "item {id:#04X}");
+            adjust(&mut game, 0, -1);
+            assert_eq!(game.inventory[0].quantity, 0, "item {id:#04X}");
+            assert_eq!(game.inventory[0].id, id, "zero keeps the item");
+            game.inventory[0].quantity = items::ITEM_QUANTITY_CAP;
+            adjust(&mut game, 0, 1);
+            assert_eq!(game.inventory[0].quantity, items::ITEM_QUANTITY_CAP + 1);
+            game.inventory[0].quantity = 254;
+            adjust(&mut game, 0, 1);
+            adjust(&mut game, 0, 1);
+            assert_eq!(game.inventory[0].quantity, 255, "item {id:#04X}");
+        }
     }
 }
