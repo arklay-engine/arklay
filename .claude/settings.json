@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -n \"$CLAUDE_ENV_FILE\" ] && command -v unshare >/dev/null 2>&1 && [ -x \"$CLAUDE_PROJECT_DIR/scripts/rustc-wrapper.sh\" ]; then echo \"export RUSTC_WRAPPER=\\\"$CLAUDE_PROJECT_DIR/scripts/rustc-wrapper.sh\\\"\" >> \"$CLAUDE_ENV_FILE\"; fi; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
