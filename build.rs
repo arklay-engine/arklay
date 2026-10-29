@@ -1,5 +1,5 @@
 use std::fmt::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // The room scripts compile with the crate's own compiler.
 #[path = "src/budget.rs"]
@@ -25,7 +25,13 @@ fn manifest_dir() -> PathBuf {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=SDL3_DIR");
-    println!("cargo:rerun-if-changed=../vendor/sdl3");
+    // Watch the vendor directory only when it exists: cargo treats a missing
+    // `rerun-if-changed` path as always stale, which would rerun this script
+    // (and so rebuild the crate) on every cargo invocation, even with nothing
+    // changed. Creating the directory later needs a `cargo clean -p arklay`.
+    if Path::new("../vendor/sdl3").exists() {
+        println!("cargo:rerun-if-changed=../vendor/sdl3");
+    }
 
     // Prefer an explicit SDL3_DIR, then the workspace vendor directory
     // (<workspace>/vendor/sdl3, one level above this crate). When neither
