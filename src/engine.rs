@@ -3029,16 +3029,11 @@ impl GameSession {
         let cut_key = (self.loaded.id, self.loaded.room.current_cut);
         let snap = self.view_cut != Some(cut_key) || self.view.height != aspect.height();
         self.view_cut = Some(cut_key);
-        // While the cutscene letterbox is up (or ramping in) the band centres
-        // instead, so the two bars are cropped evenly.
-        let letterbox = self.sprite_anim_intensity as u8 != 0
-            || self.game.flags[5].bit(game::MSF_SCREEN_INTENSITY);
-        let top = if letterbox {
-            video::centre(self.view.top, aspect.height(), snap)
-        } else {
-            let target = band_target(&self.loaded.room, self.player.pos);
-            video::follow(self.view.top, aspect.height(), target, snap)
-        };
+        // The band keeps following through a cutscene: a wider aspect draws
+        // no letterbox bars ([`GameSession::draw_screen_intensity_bars`]),
+        // so there is nothing to crop evenly.
+        let target = band_target(&self.loaded.room, self.player.pos);
+        let top = video::follow(self.view.top, aspect.height(), target, snap);
         let view = video::View::at(top as i32, aspect.height());
         self.view_prev = if snap { view } else { self.view };
         self.view = view;
@@ -6020,9 +6015,12 @@ impl GameSession {
     /// (`MainLoop.cpp` 0x004297e0, `Rendering.cpp` 0x00470350/0x00470580).
     /// The rects are the descriptors' own spans, `(-164,-130,328,38)` and
     /// `(-164,92,328,38)` in the 320x240 origin-centred space.
+    ///
+    /// Only the 4:3 frame draws them: a wider aspect already crops the frame
+    /// to a band, and bars over it would only eat into the scene.
     fn draw_screen_intensity_bars(&mut self) {
         let byte = self.sprite_anim_intensity as u8;
-        if byte == 0 {
+        if byte == 0 || !video::aspect().is_standard() {
             return;
         }
         let alpha = if byte == 0xF0 { 255 } else { byte };
@@ -23669,6 +23667,35 @@ mod tests {
             &[0, 0, 0],
             "the bottom bar ramped away"
         );
+    }
+
+    /// At a wider aspect a cutscene draws no letterbox bars and the band
+    /// keeps where it was rather than sliding back to the centre.
+    #[test]
+    fn a_wide_cutscene_keeps_the_band_and_draws_no_bars() {
+        let dir = TempDir::new();
+        let (pack, a, _b) = two_room_door_pack(&dir);
+        video::set_aspect(video::Aspect::parse("16:9").unwrap());
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        settle_control(&mut session, &pack);
+        // Off the centre, where the top bar would show.
+        session.view = video::View::at(0, 180);
+        session.view_prev = session.view;
+        session.render(&pack);
+        let band = session.view;
+        let room = session.frame().rgba.clone();
+
+        session.game.apply_flag(5, game::MSF_SCREEN_INTENSITY, 0);
+        for _ in 0..16 {
+            session
+                .tick(&pack, UiInput::default(), player::Input::default(), false)
+                .unwrap();
+        }
+        assert_eq!(session.sprite_anim_intensity as u8, 0xF0, "the ramp ran");
+        session.render(&pack);
+        assert_eq!(session.view, band, "the band stays put");
+        assert_eq!(session.frame().rgba, room, "no bars over the scene");
+        video::set_aspect(video::Aspect::default());
     }
 
     fn action_press() -> player::Input {

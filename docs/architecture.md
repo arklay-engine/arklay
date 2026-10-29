@@ -479,7 +479,9 @@ presenting does the same mid-game.
   frame, and the window shows a 320-wide band of it (`video::View`, 180 rows at
   16:9). In a room the band follows the player's projected chest row with a
   dead zone and a few rows per tick, and snaps on a cut or room change
-  (`video::follow`). Films and the loading narration show the centred band.
+  (`video::follow`), cutscenes included: a wider aspect does not draw the
+  cutscene letterbox bars, so the band has no reason to centre on them.
+  Films and the loading narration show the centred band.
   The message window and the other overlays draw in the band
   (`Framebuffer::with_screen`), keeping their distance from its bottom. Lua
   screens lay out in the band, or ask for a full-height canvas of the aspect's
