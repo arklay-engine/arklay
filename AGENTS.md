@@ -38,10 +38,16 @@ to go to the compiler (#266). Follow these rules:
   only this crate rather than every dependency. With
   `scripts/rustc-wrapper.sh` as `RUSTC_WRAPPER`, even this crate's build is
   incremental, so a new worktree's first session check takes about a minute.
-  Claude Code sessions get the wrapper automatically through
-  `.claude/settings.json`. In other shells, on Linux, run
+  In other shells, on Linux, run
   `export RUSTC_WRAPPER="$PWD/scripts/rustc-wrapper.sh"` from the repository
   root.
+- **Claude Code sessions do all of this automatically.** In a worktree,
+  `scripts/session-start.sh` (a SessionStart hook in `.claude/settings.json`)
+  sets the wrapper, seeds `target/`, and starts building the tests and clippy
+  in the background (log: `target/prebuild.log`). Do not run the seed script
+  again. If your first cargo command prints "Blocking waiting for file lock",
+  it is waiting for that background build: let it finish. Do not kill it, and
+  do not start other builds to work around it.
 - **Do not run `cargo clean`** or delete `target/` unless a build is
   genuinely broken. A cold build takes minutes.
 - Inserting or removing lines near the top of a big file (`src/engine.rs`,
