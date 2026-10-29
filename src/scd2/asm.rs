@@ -156,6 +156,7 @@ pub fn assemble(text: &str) -> Result<Scripts> {
             }
         }
     }
+    scripts.check()?;
     Ok(scripts)
 }
 
@@ -171,12 +172,20 @@ pub(crate) fn parse_int(text: &str) -> Option<i64> {
         Some(rest) => (true, rest),
         None => (false, text),
     };
+    if digits.starts_with(['-', '+']) {
+        return None;
+    }
     let value = match digits
         .strip_prefix("0x")
         .or_else(|| digits.strip_prefix("0X"))
     {
-        Some(hex) => i64::from_str_radix(hex, 16).ok()?,
+        Some(hex) if !hex.starts_with(['-', '+']) => i64::from_str_radix(hex, 16).ok()?,
+        Some(_) => return None,
         None => digits.parse().ok()?,
     };
-    Some(if negative { -value } else { value })
+    if negative {
+        value.checked_neg()
+    } else {
+        Some(value)
+    }
 }

@@ -59,14 +59,20 @@
 //!   `for2 (variable) { ... }` and `switch (variable) { case (value) { ... }
 //!   default { ... } }` are the block opcodes with their lengths computed.
 //!   A `while` or `do` condition may join several conditions with `&&` and
-//!   `||`.
+//!   `||`; the decompiler writes such a loop, which the retail scripts never
+//!   use, as `@` instructions.
 //! - `@name(args);` writes a block opcode (`if`, `else`, `endif`, `for`,
 //!   `next`, `while`, `ewhile`, `do`, `edwhile`, `switch`, `case`,
 //!   `default`, `eswitch`, `for2`) as a plain instruction with explicit
 //!   operands. The decompiler uses it for a block whose stored lengths or
 //!   padding differ from what the structured form would compile to.
 //! - `raw(0x.., ...);` as a procedure's last statement gives its trailing
-//!   bytes.
+//!   bytes. The last procedure of a list cannot have any: the reader ends it
+//!   at its closing `evt_end`.
+//!
+//! Blocks nest at most [`MAX_NESTING`] deep in the decompiler's output;
+//! deeper blocks are written as `@` instructions. The compiler accepts up to
+//! [`MAX_PARSE_NESTING`].
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -86,6 +92,11 @@ use crate::scd2::{Insn, ProcList, Procedure, Scripts};
 const BLOCK_OPS: [u8; 14] = [
     IF, ELSE, ENDIF, FOR, NEXT, WHILE, EWHILE, DO, EDWHILE, SWITCH, CASE, DEFAULT, ESWITCH, FOR2,
 ];
+
+/// How deep the decompiler nests structured blocks.
+pub const MAX_NESTING: usize = 64;
+/// How deep the compiler accepts nested blocks.
+pub const MAX_PARSE_NESTING: usize = 256;
 
 fn is_block_op(op: u8) -> bool {
     BLOCK_OPS.contains(&op)
@@ -178,7 +189,12 @@ impl<'a> Decompiler<'a> {
     fn range(&self, lo: usize, hi: usize, depth: usize, out: &mut String) {
         let mut i = lo;
         while i < hi {
-            match self.structure(i, hi) {
+            let matched = if depth <= MAX_NESTING {
+                self.structure(i, hi)
+            } else {
+                None
+            };
+            match matched {
                 Some((matched, next)) => {
                     self.render(&matched, depth, out);
                     i = next;
@@ -413,7 +429,11 @@ fn call(insn: &Insn, statement: bool) -> String {
 /// Compile `.akscr` source into scripts.
 pub fn compile(text: &str) -> Result<Scripts> {
     let tokens = lex(text)?;
-    let mut parser = Parser { tokens, pos: 0 };
+    let mut parser = Parser {
+        tokens,
+        pos: 0,
+        depth: 0,
+    };
     let mut scripts = Scripts::default();
     while !parser.done() {
         let line = parser.line();
@@ -445,6 +465,7 @@ pub fn compile(text: &str) -> Result<Scripts> {
         procedure.trailing.extend(raw);
         target.procs.push(procedure);
     }
+    scripts.check()?;
     Ok(scripts)
 }
 
@@ -483,6 +504,10 @@ fn lex(text: &str) -> Result<Vec<Token>> {
             match directive.split_whitespace().collect::<Vec<_>>().as_slice() {
                 ["version", "1"] => version = true,
                 ["game", "re2"] => game = true,
+                ["version", other] => {
+                    bail!("line {line}: unsupported `#version {other}`; expected 1")
+                }
+                ["game", other] => bail!("line {line}: `#game {other}` is not re2"),
                 _ => bail!("line {line}: unknown directive `#{directive}`"),
             }
             continue;
@@ -557,6 +582,7 @@ enum Stmt {
         conds: Conds,
         body: Vec<Stmt>,
         otherwise: Option<Vec<Stmt>>,
+        line: usize,
     },
     While {
         conds: Conds,
@@ -574,7 +600,8 @@ enum Stmt {
     },
     Switch {
         value: i64,
-        sections: Vec<(Option<i64>, Vec<Stmt>)>,
+        /// Each `case` value (`None` for `default`), body and line.
+        sections: Vec<(Option<i64>, Vec<Stmt>, usize)>,
         line: usize,
     },
 }
@@ -582,6 +609,8 @@ enum Stmt {
 struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    /// How many blocks the parser is inside.
+    depth: usize,
 }
 
 impl Parser {
@@ -694,11 +723,17 @@ impl Parser {
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>> {
+        let line = self.line();
         self.expect('{')?;
+        if self.depth == MAX_PARSE_NESTING {
+            bail!("line {line}: blocks nest more than {MAX_PARSE_NESTING} deep");
+        }
+        self.depth += 1;
         let mut stmts = Vec::new();
         while !self.eat('}') {
             stmts.push(self.stmt()?);
         }
+        self.depth -= 1;
         Ok(stmts)
     }
 
@@ -729,6 +764,7 @@ impl Parser {
                     conds,
                     body,
                     otherwise,
+                    line,
                 })
             }
             "while" => {
@@ -767,9 +803,9 @@ impl Parser {
                     match self.ident()?.as_str() {
                         "case" => {
                             let value = self.paren_number()?;
-                            sections.push((Some(value), self.block()?));
+                            sections.push((Some(value), self.block()?, section_line));
                         }
-                        "default" => sections.push((None, self.block()?)),
+                        "default" => sections.push((None, self.block()?, section_line)),
                         other => bail!(
                             "line {section_line}: expected `case` or `default`, found `{other}`"
                         ),
@@ -884,8 +920,9 @@ fn emit(stmt: &Stmt, out: &mut Vec<u8>) -> Result<()> {
             conds,
             body,
             otherwise,
+            line,
         } => {
-            let line = conds.first().map_or(0, |(_, call)| call.line);
+            let line = *line;
             let at = out.len();
             out.extend_from_slice(&[IF, 0, 0, 0]);
             for (_, call) in conds {
@@ -967,22 +1004,24 @@ fn emit(stmt: &Stmt, out: &mut Vec<u8>) -> Result<()> {
             let header = opcode::encode(&opcode::OPS[usize::from(SWITCH)], &[*value, 0])
                 .map_err(|error| anyhow!("line {line}: {error}"))?;
             out.extend(header);
-            for (index, (value, body)) in sections.iter().enumerate() {
+            for (index, (value, body, section_line)) in sections.iter().enumerate() {
                 match value {
                     Some(value) => {
                         let case = out.len();
                         let header =
                             opcode::encode(&opcode::OPS[usize::from(CASE)], &[0, 0, *value])
-                                .map_err(|error| anyhow!("line {line}: {error}"))?;
+                                .map_err(|error| anyhow!("line {section_line}: {error}"))?;
                         out.extend(header);
                         for stmt in body {
                             emit(stmt, out)?;
                         }
-                        patch_len(out, case + 2, case + 6, *line)?;
+                        patch_len(out, case + 2, case + 6, *section_line)?;
                     }
                     None => {
                         if index + 1 != sections.len() {
-                            bail!("line {line}: `default` must be the switch's last section");
+                            bail!(
+                                "line {section_line}: `default` must be the switch's last section"
+                            );
                         }
                         out.extend_from_slice(&[DEFAULT, 0]);
                         for stmt in body {

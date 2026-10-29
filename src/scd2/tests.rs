@@ -243,3 +243,107 @@ fn empty_lists_are_empty() {
     assert_eq!(asm::assemble(&asm::render(&empty)).unwrap(), empty);
     let _ = Procedure::default();
 }
+
+/// A small deterministic generator for the random tests.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+
+    fn below(&mut self, n: u64) -> usize {
+        (self.next() % n) as usize
+    }
+}
+
+#[test]
+fn random_bytes_round_trip_without_panics() {
+    let mut rng = Rng(0x2545_F491_4F6C_DD1D);
+    for _ in 0..2000 {
+        let mut bodies = Vec::new();
+        for _ in 0..1 + rng.below(3) {
+            let len = rng.below(120);
+            // Mostly known opcodes, so blocks get decoded and matched.
+            let body: Vec<u8> = (0..len)
+                .map(|_| match rng.below(4) {
+                    0 => rng.below(256) as u8,
+                    1 => [
+                        0x06, 0x07, 0x08, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+                        0x16, 0x1B, 0x00, 0x01,
+                    ][rng.below(16)],
+                    _ => rng.below(8) as u8,
+                })
+                .collect();
+            bodies.push(body);
+        }
+        let refs: Vec<&[u8]> = bodies.iter().map(Vec::as_slice).collect();
+        let original = scripts(&refs, &refs[..refs.len() - 1]);
+        assert_akscr_round_trip(&original);
+        assert_eq!(asm::assemble(&asm::render(&original)).unwrap(), original);
+
+        let mut list = original.init.to_bytes();
+        list.extend((0..rng.below(16)).map(|_| rng.below(256) as u8));
+        let _ = parse_list(&list);
+        let _ = parse_list(&bodies[0]);
+        let _ = parse(&bodies[0]);
+    }
+}
+
+#[test]
+fn deep_nesting_falls_back_to_raw_blocks() {
+    let depth = 2000;
+    let mut body = Vec::new();
+    for level in 0..depth {
+        let len = (depth - level - 1) * 6 + 2;
+        body.extend_from_slice(&[0x06, 0, len as u8, (len >> 8) as u8]);
+    }
+    for _ in 0..depth {
+        body.extend_from_slice(&[0x08, 0]);
+    }
+    body.extend_from_slice(&[0x01, 0]);
+    let original = scripts(&[&body], &[]);
+    let text = assert_akscr_round_trip(&original);
+    let structured = text.lines().filter(|line| line.trim() == "if ()").count();
+    assert_eq!(structured, akscr::MAX_NESTING);
+
+    let nested = "if () { ".repeat(akscr::MAX_PARSE_NESTING + 1);
+    let error = akscr::compile_procedure(&nested).unwrap_err().to_string();
+    assert!(error.contains("nest more than"), "{error}");
+}
+
+#[test]
+fn oversized_lists_and_last_trailing_bytes_are_errors() {
+    let half = format!("{} evt_end(0);", "sleep(0, 0); ".repeat(9000));
+    let text = format!(
+        "#version 1\n#game re2\nproc main_00 {{ {half} }}\nproc main_01 {{ {half} }}\nproc main_02 {{ {half} }}"
+    );
+    let error = akscr::compile(&text).unwrap_err().to_string();
+    assert!(error.contains("past the list's 64 KiB"), "{error}");
+
+    let error = akscr::compile_procedure("evt_end(0); raw(0xED);")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("trailing bytes"), "{error}");
+    let error = asm::assemble(".version 1\n.game re2\n.main\n.proc\nevt_end 0\n.db 0xED\n")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("trailing bytes"), "{error}");
+}
+
+#[test]
+fn numbers_reject_doubled_signs() {
+    use super::asm::parse_int;
+    assert_eq!(parse_int("-0x10"), Some(-16));
+    assert_eq!(parse_int("-5"), Some(-5));
+    assert_eq!(parse_int("--5"), None);
+    assert_eq!(parse_int("+5"), None);
+    assert_eq!(parse_int("0x+5"), None);
+    assert_eq!(parse_int("-0x-8000000000000000"), None);
+    assert_eq!(parse_int("--9223372036854775808"), None);
+    let error = akscr::compile("#version 2\n").unwrap_err().to_string();
+    assert!(error.contains("unsupported"), "{error}");
+}

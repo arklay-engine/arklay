@@ -600,4 +600,6 @@ fn every_room_script_round_trips() {
     eprintln!("{rooms} rooms, {procedures} procedures, {fallbacks} raw block instructions");
     assert!(failures.is_empty(), "{failures:#?}");
     assert!(rooms > 0);
+    // Every retail block decompiles to its structured form.
+    assert_eq!(fallbacks, 0);
 }

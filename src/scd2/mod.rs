@@ -24,6 +24,7 @@ pub mod reader;
 #[cfg(test)]
 mod tests;
 
+use anyhow::{Result, bail};
 use opcode::Op;
 
 /// One decoded instruction.
@@ -82,7 +83,29 @@ pub struct ProcList {
 }
 
 impl ProcList {
-    /// The list's bytes: the offset table, then each procedure.
+    /// Check that the list can be stored: every procedure starts within
+    /// reach of the `u16` offset table, and the last procedure has no
+    /// trailing bytes (the reader ends it at its closing `evt_end`).
+    pub fn check(&self, name: &str) -> Result<()> {
+        let mut at = self.procs.len() * 2;
+        for (index, procedure) in self.procs.iter().enumerate() {
+            if at > usize::from(u16::MAX) {
+                bail!("{name} procedure {index:02X} starts at byte {at}, past the list's 64 KiB");
+            }
+            at += procedure.to_bytes().len();
+        }
+        if self
+            .procs
+            .last()
+            .is_some_and(|last| !last.trailing.is_empty())
+        {
+            bail!("the last {name} procedure cannot have trailing bytes");
+        }
+        Ok(())
+    }
+
+    /// The list's bytes: the offset table, then each procedure. Offsets
+    /// past 64 KiB wrap; [`ProcList::check`] rejects such a list.
     pub fn to_bytes(&self) -> Vec<u8> {
         if self.procs.is_empty() {
             return Vec::new();
@@ -108,4 +131,12 @@ pub struct Scripts {
     pub init: ProcList,
     /// The main procedures.
     pub main: ProcList,
+}
+
+impl Scripts {
+    /// [`ProcList::check`] both lists.
+    pub fn check(&self) -> Result<()> {
+        self.init.check("init")?;
+        self.main.check("main")
+    }
 }

@@ -89,9 +89,6 @@ pub fn parse_list(data: &[u8]) -> Result<(ProcList, usize)> {
         bail!("procedure table's first offset 0x{first:x} is not a non-zero even number");
     }
     let count = first / 2;
-    if count > budget::MAX_SCD_BLOCKS {
-        bail!("procedure table claims {count} procedures");
-    }
     let starts = (0..count)
         .map(|index| u16_at(index * 2))
         .collect::<Result<Vec<_>>>()?;
