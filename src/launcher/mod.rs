@@ -1314,10 +1314,8 @@ impl Launcher {
                     self.toggle_channel();
                 }
             }
-            "update.auto_check.value" => {
-                if (index != 0) != self.config.updates.check {
-                    self.toggle_auto_check();
-                }
+            "update.auto_check.value" if (index != 0) != self.config.updates.check => {
+                self.toggle_auto_check();
             }
             _ => {}
         }
