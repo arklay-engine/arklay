@@ -5223,6 +5223,11 @@ impl GameState {
                 // reset just below), so they do not survive the copy.
                 slot.clone_head = None;
                 slot.clone_count = 0;
+                // The additive model tint lives on the original's TMD model
+                // objects, not the entity: the room load rebuilds them with
+                // white multipliers, so a tint (Yawn's, which zeroes green)
+                // never carries into the next room's enemies.
+                slot.model_tint = [0; 3];
             }
         }
         self.entity_anims
@@ -10314,6 +10319,18 @@ mod tests {
         assert_eq!(state.message_flags, MESSAGE_FLAGS_INITIAL);
         state.show_message(0, 0);
         assert!(!state.message_locks_controls());
+    }
+
+    #[test]
+    fn enter_room_drops_the_model_tint_of_the_previous_rooms_enemies() {
+        let mut state = game();
+        state.entities[1].add_model_tint(-1, 0, 0);
+        assert_eq!(state.entities[1].model_tint_rgb()[1], 0, "green is zeroed");
+        state.entities[1].action_ticks_counter = 7;
+        state.enter_room(RoomId::parse("1010").unwrap(), &RoomState::default());
+        assert_eq!(state.entities[1].model_tint_rgb(), [255; 3]);
+        // Other slot scratch still carries over, as in the original.
+        assert_eq!(state.entities[1].action_ticks_counter, 7);
     }
 
     #[test]
