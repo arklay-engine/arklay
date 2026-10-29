@@ -2471,7 +2471,7 @@ fn dispatch_behavior(
     behavior: u8,
 ) {
     match behavior {
-        0 => behavior_plain(game, player, emd_clips),
+        0 => behavior_plain(game, player, emd_clips, emw_clips, room_clips),
         1 => behavior_remapped(game, player, emd_clips, emw_clips, room_clips),
         2 => behavior_walk(game, player, room, emw_clips),
         3 => behavior_run(game, player, room, emd_clips, emw_clips),
@@ -2491,8 +2491,18 @@ fn dispatch_behavior(
 ///
 /// The original's states 2-5 load the equipped weapon's animation and park on
 /// the terminal state 6; without the held-weapon clips the scripted frame
-/// poses directly.
-fn behavior_plain(game: &mut GameState, player: &mut PlayerState, clips: &[Clip]) {
+/// poses directly. Each state poses from its own clip pair, one state above
+/// behavior 1's: 2 the body, 3 the EMW, 4 the room bank (room 100's bed pose)
+/// and 5 the damage bank.
+fn behavior_plain(
+    game: &mut GameState,
+    player: &mut PlayerState,
+    emd_clips: &[Clip],
+    emw_clips: &[Clip],
+    room_clips: &[Clip],
+) {
+    let damage = game.player_damage.clone();
+    let damage_clips: &[Clip] = damage.as_deref().map_or(&[], |bank| bank.clips.as_ref());
     let entity = &mut game.entities[0];
     let clock = &mut game.entity_anims[0];
     match entity.action_state {
@@ -2508,15 +2518,24 @@ fn behavior_plain(game: &mut GameState, player: &mut PlayerState, clips: &[Clip]
         }
         1 => {
             let reverse = entity.flags & 1 != 0;
-            clock.advance(entity, clips, reverse, PLAIN_BLEND_STEP);
+            clock.advance(entity, emd_clips, reverse, PLAIN_BLEND_STEP);
             publish(entity, clock, player, ClipSource::Emd);
         }
-        2..=5 => {
+        state @ 2..=5 => {
             entity.action_state = 6;
             entity.blend_counter = 3;
             entity.unk_8c = 3;
-            // `plw_anim` poses a single scripted frame; show it directly.
-            publish_pose(entity, clock, player, ClipSource::Emd);
+            // `plw_anim` poses a single scripted frame; show it directly. A
+            // missing pair falls back to the body bank, as behavior 1 does.
+            let (source, _) = bank_for(
+                state_source(state - 1),
+                entity.animation_id,
+                emd_clips,
+                emw_clips,
+                room_clips,
+                damage_clips,
+            );
+            publish_pose(entity, clock, player, source);
         }
         _ => {}
     }
@@ -3848,6 +3867,26 @@ mod tests {
         game.entities[0].animation_frame_id = 2;
         run(&mut game, &mut player, &clips, &[], &[]);
         assert_eq!(player.anim.keyframe_index(&clips), 2);
+    }
+
+    #[test]
+    fn a_plain_pose_in_state_four_poses_from_the_room_bank() {
+        // Room 100's `plw_anim(PLW_02, ANIM_30, 0)` lays the poisoned player
+        // on the bed with room-bank clip 0x30.
+        let emd = vec![clip(1, 1); 0x40];
+        let room = vec![clip(3, 1); 0x31];
+        let mut game = test_game(8, 0, 0x30);
+        game.entities[0].action_state = 4;
+        let mut player = test_player();
+        run(&mut game, &mut player, &emd, &[], &room);
+        assert_eq!(game.entities[0].action_state, 6);
+        assert_eq!(player.clip_source, ClipSource::Room);
+        assert_eq!(player.anim.clip, 0x30);
+
+        // A room without the clip falls back to the body bank.
+        game.entities[0].action_state = 4;
+        run(&mut game, &mut player, &emd, &[], &[]);
+        assert_eq!(player.clip_source, ClipSource::Emd);
     }
 
     #[test]
