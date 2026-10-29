@@ -246,15 +246,33 @@ fn write_strings(w: &mut Writer, strings: &[XmlString]) {
 }
 
 /// The language-file key suffix a `room.xml` string key reads as: `name`
-/// and `save_name` are the room's labels, and a decimal message id (`0` to
-/// `255`, no leading zeros) is that room message's text, `TEXT_XX`.
+/// and `save_name` are the room's labels, a decimal message id (`0` to `255`)
+/// is that room message's text, `TEXT_XX`, and `<id>_speaker` or
+/// `<id>_speaker_<page>` names the message's speaker for a subtitle,
+/// `TEXT_XX_SPEAKER[_<page>]`. Numbers have no leading zeros.
 pub fn string_suffix(key: &str) -> Option<String> {
+    /// `text` as a decimal number without leading zeros.
+    fn number<T: std::str::FromStr + ToString>(text: &str) -> Option<T> {
+        let value: T = text.parse().ok()?;
+        (value.to_string() == text).then_some(value)
+    }
     match key {
         "name" => Some("NAME".to_string()),
         "save_name" => Some("NAME_SAVE".to_string()),
         _ => {
-            let id: u8 = key.parse().ok()?;
-            (id.to_string() == key).then(|| format!("TEXT_{id:02X}"))
+            let (id, speaker) = match key.split_once("_speaker") {
+                Some((id, page)) => (id, Some(page)),
+                None => (key, None),
+            };
+            let text = format!("TEXT_{:02X}", number::<u8>(id)?);
+            match speaker {
+                None => Some(text),
+                Some("") => Some(format!("{text}_SPEAKER")),
+                Some(page) => {
+                    let page: u32 = number(page.strip_prefix('_')?)?;
+                    Some(format!("{text}_SPEAKER_{page}"))
+                }
+            }
         }
     }
 }
@@ -641,8 +659,8 @@ pub fn parse(text: &str) -> Result<RoomSource> {
     Ok(room)
 }
 
-/// A `<strings>` block: the room's `name`, `save_name` and message texts
-/// per language.
+/// A `<strings>` block: the room's `name`, `save_name`, message texts and
+/// speaker names per language.
 pub(crate) fn parse_strings(node: Node<'_, '_>) -> Result<Vec<XmlString>> {
     crate::language::parse_xml_strings(node, |key| {
         string_suffix(key).map(|suffix| format!("ROOM_100_{suffix}"))

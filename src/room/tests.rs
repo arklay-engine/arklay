@@ -752,8 +752,18 @@ fn room_message_texts_become_text_keys_per_variant() {
         strings: strings(texts),
         ..RoomSource::default()
     };
-    let chris_room = room(&[("en-US", "0", "Same"), ("en-US", "10", "Chris")]);
-    let jill_room = room(&[("en-US", "0", "Same"), ("en-US", "10", "Jill")]);
+    let chris_room = room(&[
+        ("en-US", "0", "Same"),
+        ("en-US", "0_speaker", "Rebecca"),
+        ("en-US", "10", "Chris"),
+        ("en-US", "10_speaker_1", "Barry"),
+    ]);
+    let jill_room = room(&[
+        ("en-US", "0", "Same"),
+        ("en-US", "0_speaker", "Rebecca"),
+        ("en-US", "10", "Jill"),
+        ("en-US", "10_speaker_1", "Wesker"),
+    ]);
     let written = xml::write(&chris_room).unwrap();
     assert!(
         written.contains(r#"<string key="10">Chris</string>"#),
@@ -772,8 +782,27 @@ fn room_message_texts_become_text_keys_per_variant() {
     keys.sort_unstable();
     assert_eq!(
         keys,
-        ["ROOM_2051_TEXT_0A", "ROOM_205_TEXT_00", "ROOM_205_TEXT_0A"]
+        [
+            "ROOM_2051_TEXT_0A",
+            "ROOM_2051_TEXT_0A_SPEAKER_1",
+            "ROOM_205_TEXT_00",
+            "ROOM_205_TEXT_00_SPEAKER",
+            "ROOM_205_TEXT_0A",
+            "ROOM_205_TEXT_0A_SPEAKER_1",
+        ]
     );
+    // Each variant reads its own text and speakers.
+    let text = crate::text::Text::load(&pack, Some("en-US"));
+    let state = |id: RoomId| RoomState {
+        stage: id.stage,
+        room: id.room,
+        player_flag: id.player_flag,
+        ..RoomState::default()
+    };
+    assert_eq!(text.speaker(&state(jill), 0, 0).as_deref(), Some("Rebecca"));
+    assert_eq!(text.speaker(&state(chris), 10, 1).as_deref(), Some("Barry"));
+    assert_eq!(text.speaker(&state(jill), 10, 1).as_deref(), Some("Wesker"));
+    assert_eq!(text.speaker(&state(jill), 10, 0), None);
 }
 
 #[test]
@@ -783,6 +812,9 @@ fn bad_room_strings_are_refused() {
         r#"<room><strings><language lang="en-US"><string key="01">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="256">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="-1">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="1_speaker_01">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="1_speakers">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="name_speaker">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="name">A\q</string></language></strings></room>"#,
         r#"<room><strings /><strings /></room>"#,
     ] {

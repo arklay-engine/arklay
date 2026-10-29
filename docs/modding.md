@@ -287,8 +287,11 @@ language file syntax (`{scroll 0}`, `\n` for a line break):
 </room>
 ```
 
-They become the `ROOM_<room3>_NAME`, `ROOM_<room3>_NAME_SAVE` and
-`ROOM_<room3>_TEXT_<nn>` language keys (message `42` is `TEXT_2A`). Of a
+A message's subtitle speaker goes beside it as `<id>_speaker`, or
+`<id>_speaker_<page>` for one page. They become the `ROOM_<room3>_NAME`,
+`ROOM_<room3>_NAME_SAVE`, `ROOM_<room3>_TEXT_<nn>` and
+`ROOM_<room3>_TEXT_<nn>_SPEAKER[_<page>]` language keys (message `42` is
+`TEXT_2A`). Of a
 room's player variants, the lowest-numbered one that names the room in a
 language supplies the name, and its messages are the room's shared text; a
 later variant whose message differs gets that variant's own
