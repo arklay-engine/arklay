@@ -560,7 +560,8 @@ more responsive.
 
 `aspect` (also `--aspect` and the F1 DISPLAY tool) presents a wider frame by
 cropping the 320x240 view rather than pillarboxing it. In a room the visible
-band follows the player's chest row with a small dead zone; films show the
+band follows the player's chest row with a small dead zone, also during
+cutscenes, which draw no letterbox bars at a wider aspect; films show the
 centred band, and door transitions keep the whole 4:3 frame, pillarboxed, so
 the door is not cropped. The F1 debug menu fills the whole widescreen area
 over the room's band. The 2D screens lay out in the band, and the pause menu
