@@ -59,8 +59,9 @@ use sdl3_sys::events::{
 use sdl3_sys::gamepad::{
     SDL_AddGamepadMappingsFromFile, SDL_CloseGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER,
     SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER,
-    SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_START, SDL_Gamepad,
-    SDL_GamepadAxis, SDL_GamepadButton, SDL_GamepadType, SDL_GetGamepadAxis, SDL_GetGamepadButton,
+    SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, SDL_GAMEPAD_BUTTON_NORTH,
+    SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_START, SDL_Gamepad, SDL_GamepadAxis,
+    SDL_GamepadButton, SDL_GamepadType, SDL_GetGamepadAxis, SDL_GetGamepadButton,
     SDL_GetGamepadTypeForID, SDL_GetGamepads, SDL_OpenGamepad, SDL_RumbleGamepad,
 };
 use sdl3_sys::hints::{SDL_HINT_RENDER_DRIVER, SDL_HINT_VIDEO_DRIVER, SDL_SetHint};
@@ -13816,9 +13817,10 @@ impl InputState {
     }
 
     /// Queue the GUI commands a source going down raises. The tab, sub-tab
-    /// and reset keys are fixed (their hints name them), Escape always backs
-    /// out, and everything else navigates through the player's bindings.
-    /// Only directions repeat while held.
+    /// and reset keys are fixed (their hints name them, so the pad's
+    /// shoulders page tabs even when the control type binds paging to the
+    /// triggers), Escape always backs out, and everything else navigates
+    /// through the player's bindings. Only directions repeat while held.
     fn gui_keys(&mut self, device: u32, source: controls::Source, mask: u64, repeat: bool) {
         use controls::Source;
         use gui::GuiKey as Key;
@@ -13855,6 +13857,12 @@ impl InputState {
             }
             Source::PadAxis(axis, true) if axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER.0 => {
                 Some(Key::SubNext)
+            }
+            Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER.0 => {
+                Some(Key::TabPrev)
+            }
+            Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER.0 => {
+                Some(Key::TabNext)
             }
             Source::PadButton(button) if button == SDL_GAMEPAD_BUTTON_NORTH.0 => {
                 Some(Key::ResetGroup)
@@ -17965,6 +17973,31 @@ mod tests {
         input.source_down(7, north, false);
         let tick = input.tick();
         assert!(tick.ui.start && !tick.ui.system_menu);
+
+        // The shoulders page tabs as their LB/RB hints say, with any control
+        // type: B binds paging to the triggers, which stay the sub-tab keys.
+        let lb = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER.0);
+        let rb = controls::Source::PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER.0);
+        let lt = controls::Source::PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER.0, true);
+        let pad = |key| GuiEvent::Key(key, Device::Gamepad(gui::PadStyle::Xbox));
+        for control_type in [crate::config::ControlType::A, crate::config::ControlType::B] {
+            let mut input =
+                InputState::new(controls::Bindings::default().with_control_type(control_type));
+            input.source_down(7, lb, false);
+            input.source_up(7, lb);
+            input.source_down(7, rb, false);
+            input.source_up(7, rb);
+            input.source_down(7, lt, false);
+            assert_eq!(
+                input.take_gui_events(),
+                [
+                    pad(GuiKey::TabPrev),
+                    pad(GuiKey::TabNext),
+                    pad(GuiKey::SubPrev)
+                ],
+                "{control_type:?}"
+            );
+        }
     }
 
     #[test]
