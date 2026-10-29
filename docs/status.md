@@ -766,7 +766,7 @@ replaces the retired executable `text/*.bin` tables.
 | `--stats` frame-time report | `src/stats.rs`, `tests/cli.rs`, `tests/perf_real.rs` | present |
 | Full-game soak | `tests/soak_real.rs` (ignored, `ARKLAY_SOAK=1`, release only) | present |
 | CI matrix (Linux/Windows/release/MSRV/artifact) | `.github/workflows/ci.yml` | present |
-| Local gate | `scripts/check.sh` | present |
+| Local check tiers (session, `--ci`, `--full`, `--soak`) | `scripts/check.sh`, `AGENTS.md` | present |
 | `docs/architecture.md`, `docs/status.md`, `docs/m17-deviations.md` | this docs set | present |
 
 Still missing by design:

@@ -41,7 +41,7 @@ before. What follows is what the milestone's tools deliberately do not prove.
   neither is exhaustive, and a clean run is not a proof of memory safety.
 - **The workflow is scheduled, not a gate.** `.github/workflows/fuzz.yml` runs
   the committed `fuzz/` package on a weekly schedule and never gates a pull
-  request. `scripts/check.sh` and CI instead run the stable
+  request. `scripts/check.sh --ci` and CI instead run the stable
   `cargo check --manifest-path fuzz/Cargo.toml` compile gate plus the
   always-run torture matrix on every change.
 

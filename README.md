@@ -613,12 +613,18 @@ lists every approximation M16 leaves.
 - `docs/performance.md` records the frame-time budgets and the reference
   machine; `ARKLAY_PERF_BUDGET_MS` overrides the per-tick p95 budget in the
   ignored performance test.
-- The local CI mirror: `./scripts/check.sh` runs fmt, clippy
-  `--all-targets --all-features -D warnings`, the `--no-default-features`
-  check, the debug tests, the `test-release` tests (release code without thin
-  LTO) and the doc build; `./scripts/check.sh --full` adds every ignored test
-  (the real-asset suite and the asset-gated unit tests) when
-  `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK` are set.
+- The local check has tiers (`AGENTS.md` has the full policy):
+  `./scripts/check.sh` is the session tier, which runs fmt, clippy
+  `--all-targets --all-features -D warnings` and the unit and fast integration
+  tests in the `test-release` profile (release code without LTO). It is
+  budgeted at five minutes cold and is what to run before pushing.
+  `./scripts/check.sh --ci` runs everything the Linux CI job does: also the
+  debug tests, the `--no-default-features` check, the fuzz compile check and
+  the doc build. `./scripts/check.sh --full` adds every ignored test (the
+  real-asset suite and the asset-gated unit tests) when `ARKLAY_RE1_ROOT` and
+  `ARKLAY_RE1_PACK` are set, and is a release-cycle check.
+- Use `--profile test-release` for every local test, build and run
+  (`cargo run --profile test-release -- ...`), so one build serves them all.
 - The real-asset tests are one binary, `tests/real/main.rs`; a module name
   stays a filter, so `cargo test --profile test-release --test real
   stairs_real:: -- --ignored` runs one module's tests and `... --test real --
@@ -629,13 +635,13 @@ lists every approximation M16 leaves.
   runs every `fuzz/` target for 300 seconds:
   `cd fuzz && cargo +nightly fuzz run <target> -- -max_total_time=300`; the
   stable compile gate `cargo check --manifest-path fuzz/Cargo.toml` runs in
-  `scripts/check.sh` and CI.
+  `scripts/check.sh --ci` and CI.
 - A full-game soak (`tests/soak_real.rs`, ignored) walks every RDT with
   transitions and save round-trips under memory and wall-clock ceilings. It
   takes half an hour or more, so it is release-only and opt-in and no routine
   pass runs it:
   `ARKLAY_SOAK=1 cargo test --profile test-release --test soak_real --
-  --ignored --nocapture`, or `./scripts/check.sh --soak` for the whole gate.
+  --ignored --nocapture`, or `./scripts/check.sh --soak` for every tier.
 
 ## License
 
