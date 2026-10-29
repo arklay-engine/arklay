@@ -114,16 +114,8 @@ impl Artwork {
     }
 }
 
-/// How a replacement's geometry is constrained.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Geometry {
-    /// Any size: the caller stretches the image over its frame.
-    Free,
-    /// The shadowed copy of the same stem decides. Its dimensions are decoded
-    /// and a replacement that differs is refused; a headerless `.pix` decodes
-    /// at them.
-    Shipped,
-}
+mod geometry;
+pub use geometry::Geometry;
 
 /// The stem of an entry path: its final component without its extension.
 ///
