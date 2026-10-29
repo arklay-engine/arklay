@@ -7307,13 +7307,7 @@ impl GameState {
     }
 
     /// Per-frame `check_desk_state`: the locked key prompt, its yes/no answer,
-    /// the camera restore and the pan countdown.
-    ///
-    /// # Documented deviation
-    ///
-    /// State 5 opens the original's take-item viewer over the desk; the port
-    /// arms the desk's item action and awards it immediately through the
-    /// existing message-post-action path instead.
+    /// the take-item viewer, the camera restore and the pan countdown.
     pub fn check_desk_state(&mut self) {
         // The guardhouse save room restarts the flow for Jill's first
         // playthrough, so a desk can never be left mid-state across the save.
@@ -7368,16 +7362,19 @@ impl GameState {
                 self.desk.state = 0;
             }
             5 => {
-                // Arm the desk's item action so the shared award path consumes
-                // it and tears its model, sparkle and room-items bit down.
+                // Open the take-item viewer on the desk's item action, exactly
+                // like a ground pick-up: it shows the 0xC0 prompt or, with no
+                // room, the 0xC2 refusal that leaves the item in the drawer.
+                // State 4 closes the desk once the viewer has closed.
                 if let Some(item) = self
                     .desk
                     .action
                     .and_then(|slot| self.desk_item_action(slot))
                 {
                     self.message_item_slot = Some(item.slot);
-                    self.take_message_item();
+                    self.apply_flag(5, MSF_MENU_ITEM_VIEW, 0);
                 }
+                self.message_flags |= 0x0045;
                 self.desk.state = 4;
             }
             state => {
@@ -14265,6 +14262,19 @@ mod tests {
         assert!(state.inventory.is_empty(), "no award before state 5");
         state.check_desk_state();
         assert_eq!(state.desk.state, 4);
+        // State 5 opens the take viewer on the drawer's item and puts back the
+        // gates the open cleared; the prompt's yes branch awards it.
+        assert!(state.inventory.is_empty(), "the viewer decides the award");
+        assert_eq!(
+            state.item_view_request(),
+            Some(ItemViewRequest {
+                slot: 1,
+                kind: ItemViewKind::Take,
+            })
+        );
+        assert_eq!(state.message_flags & 0x0045, 0x0045);
+        assert!(state.take_message_item());
+        state.clear_item_view_flags();
         assert_eq!(state.inventory.len(), 1);
         assert_eq!(state.inventory[0].id, 0x0C);
         assert_eq!(state.inventory[0].quantity, 1);
