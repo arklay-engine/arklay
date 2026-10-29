@@ -1257,6 +1257,7 @@ fn key_input(key: GuiKey) -> UiInput {
         GuiKey::TabPrev | GuiKey::SubPrev => input.page_left = true,
         GuiKey::TabNext | GuiKey::SubNext => input.page_right = true,
         GuiKey::ResetAll | GuiKey::ResetGroup => input.start = true,
+        GuiKey::Aux => {}
     }
     input
 }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One game's install: its source, target, pack and status, published at
+     `install.*`. -->
+<screen use="standard-screen" title="{install.title}" caption="{install.caption}">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="confirm" label="{install.action}" action="install"/>
+  <command key="aux" cap="B" label="Change Source" action="browse"/>
+  <stack gap="small">
+    <field label="Source" value="{install.source}" tone="value"/>
+    <field label="Target" value="{install.target}" tone="value"/>
+    <field label="Pack" value="{install.pack}" tone="value"/>
+    <field label="Status" value="{install.status}" tone="{install.status_tone}"/>
+  </stack>
+</screen>

@@ -9558,14 +9558,14 @@ fn drive_native_screen(
 
 /// Load the system faces the in-game menu needs for `language`'s strings
 /// ahead of its first frame.
-fn warm_gui_fonts(language: Option<&str>) {
+pub(crate) fn warm_gui_fonts(language: Option<&str>) {
     let tag = crate::language::resolve_tag(language);
     gui::text::warm(gui::locale::Locale::new(&tag).characters());
 }
 
 /// The button labels of the controller with instance id `device`. An
 /// unknown or generic controller gets Xbox's, SDL's own default layout.
-fn pad_style(device: u32) -> gui::PadStyle {
+pub(crate) fn pad_style(device: u32) -> gui::PadStyle {
     match unsafe { SDL_GetGamepadTypeForID(SDL_JoystickID(device)) } {
         SDL_GamepadType::PS3 | SDL_GamepadType::PS4 | SDL_GamepadType::PS5 => {
             gui::PadStyle::PlayStation
@@ -9606,7 +9606,7 @@ fn menu_settings(app: &App, display: &Display) -> gui::Settings {
 /// The machine, for the options' PC Specs row; looked up once. The GPU is
 /// the live renderer's, or, under the software renderer, probed with a
 /// device of its own.
-fn system_info(display: &Display) -> gui::settings::SystemInfo {
+pub(crate) fn system_info(display: &Display) -> gui::settings::SystemInfo {
     static INFO: std::sync::OnceLock<gui::settings::SystemInfo> = std::sync::OnceLock::new();
     INFO.get_or_init(|| gui::settings::SystemInfo {
         cpu: cpu_brand(),
@@ -9657,7 +9657,7 @@ fn cpu_brand() -> Option<String> {
 /// the file's own values with only the settings the change touched replaced
 /// (the window's by what took effect, `graphics`), so a run's command-line
 /// overrides (`--quick-turn`, `--language`, `--renderer`) stay out of it.
-fn persisted_options(
+pub(crate) fn persisted_options(
     file: crate::config::Config,
     before: &gui::Settings,
     after: &gui::Settings,
@@ -15976,7 +15976,7 @@ fn displays() -> Vec<SDL_DisplayID> {
 }
 
 /// SDL's displays' names, in its order (empty for one SDL cannot name).
-fn display_names() -> Vec<String> {
+pub(crate) fn display_names() -> Vec<String> {
     displays()
         .into_iter()
         .map(|display| {

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher's main menu. The host publishes `main.*`, each entry's
+     status. -->
+<screen use="standard-screen" title="ARKLAY">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="cancel" label="Quit" action="exit"/>
+  <list width="1100" height="auto">
+    <menu-entry label="Play Game" action="play_screen" hint="Open" status="{main.play}" tone="value-dim"/>
+    <menu-entry label="Install / Rebuild" action="install_screen" hint="Open" status="{main.install}" tone="warn"/>
+    <menu-entry label="Update" action="update_screen" hint="Open" status="{main.update}" tone="warn"/>
+    <menu-entry label="Mods" action="mods_screen" hint="Open" status="{main.mods}" tone="value-dim"/>
+    <menu-entry label="Options" action="options_screen" hint="Open"/>
+    <menu-entry label="Exit" action="exit" hint="Quit"/>
+  </list>
+</screen>

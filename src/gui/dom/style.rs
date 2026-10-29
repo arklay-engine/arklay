@@ -112,6 +112,8 @@ pub fn text_style(variant: &str) -> (Role, bool) {
         "note" => (Role::Body, true),
         "label" => (Role::Body, true),
         "value" => (Role::Row, false),
+        "value-dim" => (Role::Row, true),
+        "warn" => (Role::Row, false),
         "heading" => (Role::Heading, false),
         "heading-dim" => (Role::Heading, true),
         "detail" => (Role::Detail, false),
@@ -119,6 +121,14 @@ pub fn text_style(variant: &str) -> (Role, bool) {
         "tag" => (Role::Tag, true),
         "menu" => (Role::Menu, false),
         _ => (Role::Body, false),
+    }
+}
+
+/// The colour a text variant draws in whatever its row's ink.
+pub fn text_color(variant: &str) -> Option<Color> {
+    match variant {
+        "warn" => Some(palette::WARN),
+        _ => None,
     }
 }
 

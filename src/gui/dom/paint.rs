@@ -20,7 +20,7 @@ pub struct PaintCx<'a> {
     pub device: Device,
     pub focus: Option<NodeId>,
     /// The hint bar's hints.
-    pub hints: Vec<(GuiKey, String)>,
+    pub hints: Vec<super::Hint>,
     /// The titles of the screens under this one.
     pub crumbs: Vec<String>,
     pub customs: &'a HashMap<String, Box<dyn Custom>>,
@@ -132,12 +132,15 @@ pub fn paint(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>,
         Kind::Item => item(tree, id, p, cx),
         Kind::Option(option) => option_row(tree, id, option, p, cx),
         Kind::HintBar => {
-            let hints: Vec<(GuiKey, &str)> =
-                cx.hints.iter().map(|(k, s)| (*k, s.as_str())).collect();
-            let rects = p.hint_bar(rect.center_x(), rect.center_y(), cx.device, &hints);
+            let hints: Vec<(GuiKey, &str, Option<&str>)> = cx
+                .hints
+                .iter()
+                .map(|h| (h.key, h.label.as_str(), h.cap.as_deref()))
+                .collect();
+            let rects = p.capped_hint_bar(rect.center_x(), rect.center_y(), cx.device, &hints);
             tree[id].parts = rects
                 .into_iter()
-                .zip(cx.hints.iter().map(|(k, _)| Part::Key(*k)))
+                .zip(cx.hints.iter().map(|h| Part::Key(h.key)))
                 .collect();
         }
         Kind::Prompt => {
@@ -188,7 +191,7 @@ fn text(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>, ink:
     let rect = node.rect;
     let variant = node.variant();
     let (role, dim) = style::text_style(&variant);
-    let color = if dim { ink.dim } else { ink.fg };
+    let color = style::text_color(&variant).unwrap_or(if dim { ink.dim } else { ink.fg });
     let line = p.line_height(role);
     let lines = node.lines.clone();
     let align = match node.text("align").as_str() {
@@ -229,11 +232,17 @@ fn text(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>, ink:
             x0 += p.u(30.0);
         }
     }
+    // Breadcrumbs only come before left-aligned text; any other alignment
+    // has the whole width.
+    let room = match align {
+        Align::Left => rect.right() - x0,
+        _ => rect.w,
+    };
     for (i, text) in lines.iter().enumerate() {
         let shown = if clip || node_wraps(tree, id) {
             text.clone()
         } else {
-            fit(p, role, text, rect.right() - x0)
+            fit(p, role, text, room)
         };
         p.text(
             role,
@@ -365,6 +374,8 @@ fn item(tree: &mut Tree, id: NodeId, p: &mut Painter<'_>, cx: &PaintCx<'_>) {
             );
         }
         "save" => save_frame(p, rect, selected, node.prop("highlight").truthy()),
+        // A table row: its chrome only; its children are its cells.
+        "row" => p.list_row(rect, selected),
         _ => {
             p.list_row(rect, selected);
             let cy = rect.center_y();

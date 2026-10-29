@@ -84,6 +84,8 @@ pub mod palette {
     pub const MENU_SHADE: Color = Color::rgba(0x00, 0x00, 0x00, 0xA0);
     pub const DIALOG_BAND: Color = Color::rgba(0x08, 0x08, 0x08, 0xF0);
     pub const ACCENT: Color = Color::rgb(0xFF, 0xFF, 0xFF);
+    /// Something that needs the player's attention (a pack to rebuild).
+    pub const WARN: Color = Color::rgb(0xFF, 0xB0, 0x00);
 }
 
 /// The theme resolved for one window size.

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An install, rebuild or engine download in progress, published at
+     `progress.*`. Cancel asks first; the host replaces the screen when the
+     job ends. -->
+<screen use="standard-screen" title="{progress.title}">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="cancel" label="{progress.cancel_hint}" action="cancel_job" confirm="Cancel the install?" note="(No pack will be written.)" confirm-if="{progress.running}"/>
+  <stack gap="medium">
+    <stack orientation="horizontal">
+      <text variant="value" text="{progress.label}" width="fill" wrap="none"/>
+      <text variant="value-dim" text="{progress.count}" wrap="none"/>
+    </stack>
+    <stack orientation="horizontal">
+      <progress-bar width="fill" height="28" value="{progress.fraction}"/>
+      <text variant="value" text="{progress.percent}" width="110" align="end" wrap="none"/>
+    </stack>
+    <text variant="value-dim" text="{progress.item}" wrap="none"/>
+    <spacer height="12"/>
+    <text variant="value-dim" text="{progress.elapsed}" wrap="none"/>
+    <text variant="value-dim" text="{progress.step}" wrap="none"/>
+  </stack>
+</screen>

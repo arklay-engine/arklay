@@ -415,7 +415,7 @@ impl KeyConfigScreen {
                     None,
                 ));
             }
-            GuiKey::SubPrev | GuiKey::SubNext => {}
+            GuiKey::SubPrev | GuiKey::SubNext | GuiKey::Aux => {}
         }
     }
 

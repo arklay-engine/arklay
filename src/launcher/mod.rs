@@ -1,20 +1,20 @@
 //! The startup launcher shown when no game pack is named on the command line.
 //!
-//! The launcher is not a game screen: it opens before any pack exists, so it
-//! carries its own embedded face and draws an 80x25 character grid centred in
-//! the configured window. Every row and column is derived from that grid, so
-//! selecting a row, changing a status or resizing the window never shifts a
-//! table column.
+//! The launcher is not a game screen: it opens before any pack exists. Its
+//! screens are the `launcher_*` documents in `assets/ui/`, run by the same
+//! retained UI as the in-game menus ([`crate::gui::dom`]); this module
+//! publishes the launcher's state into the UI's store, turns the actions the
+//! screens report into installs, updates and settings, and presents the
+//! painted canvas in the window.
 //!
 //! Play hands this window to the game in-process; closing the game window
-//! ends the process. Every base pack is listed; the selected game (RE1 or
-//! RE2, switched with LEFT/RIGHT once more than one is known) scopes the
-//! install, rebuild and mods screens. Mods are discovered from every data
-//! root, filtered by that game's base id, and toggled or reordered through
-//! `[mods]` in `arklay.toml`. Installs and rebuilds run on a worker thread with a live
-//! progress screen and cancellation.
-
-mod text;
+//! ends the process. Every base pack is listed; Install / Rebuild lists the
+//! games and opens the chosen one's install, and Update has a rebuild row
+//! per game. Mods are discovered from every data root for every game and
+//! toggled or reordered through `[mods]` in `arklay.toml`. Options is the
+//! game's own options screen ([`SystemMenu::options`]), in the game's face,
+//! text size and language. Installs and rebuilds run on a worker thread with
+//! a live progress screen and cancellation.
 
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -29,32 +29,42 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow, bail};
 use sdl3_sys::dialog::SDL_ShowOpenFolderDialog;
 use sdl3_sys::events::{
-    SDL_EVENT_GAMEPAD_ADDED, SDL_EVENT_GAMEPAD_BUTTON_DOWN, SDL_EVENT_GAMEPAD_REMOVED,
-    SDL_EVENT_KEY_DOWN, SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_EVENT_QUIT, SDL_EVENT_WINDOW_EXPOSED,
-    SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_FOCUS_LOST,
+    SDL_EVENT_GAMEPAD_ADDED, SDL_EVENT_GAMEPAD_AXIS_MOTION, SDL_EVENT_GAMEPAD_BUTTON_DOWN,
+    SDL_EVENT_GAMEPAD_REMOVED, SDL_EVENT_KEY_DOWN, SDL_EVENT_MOUSE_BUTTON_DOWN,
+    SDL_EVENT_MOUSE_BUTTON_UP, SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_WHEEL, SDL_EVENT_QUIT,
+    SDL_EVENT_WINDOW_EXPOSED, SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_FOCUS_LOST,
     SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, SDL_EVENT_WINDOW_RESIZED, SDL_Event, SDL_PollEvent,
     SDL_WaitEventTimeout,
 };
 use sdl3_sys::gamepad::{
-    SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, SDL_GAMEPAD_BUTTON_BACK,
-    SDL_GAMEPAD_BUTTON_DPAD_DOWN, SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
-    SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
+    SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY,
+    SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_DPAD_DOWN,
+    SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, SDL_GAMEPAD_BUTTON_DPAD_UP,
+    SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, SDL_GAMEPAD_BUTTON_NORTH,
     SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_START,
     SDL_GAMEPAD_BUTTON_WEST,
 };
-use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_CTRL, SDL_KMOD_NONE, SDL_Keymod};
-use sdl3_sys::mouse::SDL_BUTTON_LEFT;
+use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_CTRL, SDL_Keymod};
+use sdl3_sys::mouse::{SDL_BUTTON_LEFT, SDL_MOUSEWHEEL_FLIPPED};
 use sdl3_sys::scancode::{
-    SDL_SCANCODE_A, SDL_SCANCODE_B, SDL_SCANCODE_D, SDL_SCANCODE_DOWN, SDL_SCANCODE_EQUALS,
-    SDL_SCANCODE_ESCAPE, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_LEFT, SDL_SCANCODE_MINUS,
-    SDL_SCANCODE_O, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE,
-    SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_Scancode,
+    SDL_SCANCODE_1, SDL_SCANCODE_3, SDL_SCANCODE_A, SDL_SCANCODE_B, SDL_SCANCODE_D,
+    SDL_SCANCODE_DOWN, SDL_SCANCODE_E, SDL_SCANCODE_EQUALS, SDL_SCANCODE_ESCAPE,
+    SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_LEFT, SDL_SCANCODE_MINUS, SDL_SCANCODE_O, SDL_SCANCODE_Q,
+    SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE,
+    SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_Scancode,
 };
 
 use crate::build_info;
-use crate::config::{Config, Mods};
+use crate::config::{Config, Mods, UpdateChannel};
+use crate::controls::{self, Source as Input};
 use crate::convert::{self, CONVERT_VERSION, Game};
 use crate::engine::{self, Display, Gamepads, ModOptions};
+use crate::gui::canvas::{Canvas, Color, Rect};
+use crate::gui::dom::{Custom, Library, Node, Ui, UiOutput, Value};
+use crate::gui::locale::Locale;
+use crate::gui::theme::palette;
+use crate::gui::widgets::Painter;
+use crate::gui::{Device, GuiEvent, GuiKey, MenuRequest, Settings, SystemMenu};
 use crate::logging;
 use crate::manifest;
 use crate::modding;
@@ -65,26 +75,6 @@ use crate::progress::ProgressSnapshot;
 use crate::steam;
 use crate::update::{self, UpdateInfo};
 use crate::video::{self, RendererKind};
-
-/// A blended text colour.
-#[derive(Clone, Copy)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
-impl Color {
-    pub const BLACK: Self = Self::rgb(0x00, 0x00, 0x00);
-    pub const BODY: Self = Self::rgb(0xD0, 0xD0, 0xD0);
-    pub const DIM: Self = Self::rgb(0x78, 0x78, 0x78);
-    pub const RULE: Self = Self::rgb(0x40, 0x40, 0x40);
-    pub const AMBER: Self = Self::rgb(0xFF, 0xB0, 0x00);
-
-    const fn rgb(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
-    }
-}
 
 /// The launcher's window title. Play replaces it with the pack's name, and a
 /// failed game puts it back.
@@ -104,6 +94,9 @@ const PAD_REPEAT_DELAY: Duration = Duration::from_millis(110);
 struct PadAxis {
     direction: i8,
     next: Option<Instant>,
+    /// The held direction was taken for something else (a key being bound):
+    /// it steps again only once released or reversed.
+    silent: bool,
 }
 
 impl PadAxis {
@@ -124,8 +117,12 @@ impl PadAxis {
         };
         if direction != self.direction {
             self.direction = direction;
+            self.silent = false;
             self.next = (direction != 0 && repeat).then(|| now + PAD_INITIAL_DELAY);
             return (direction != 0).then_some(direction);
+        }
+        if self.silent {
+            return None;
         }
         if repeat && direction != 0 && self.next.is_none_or(|next| now >= next) {
             self.next = Some(now + PAD_REPEAT_DELAY);
@@ -133,152 +130,14 @@ impl PadAxis {
         }
         None
     }
-}
 
-/// The pixel frame the launcher draws into.
-struct Frame {
-    width: u32,
-    height: u32,
-    rgba: Vec<u8>,
-}
-
-impl Frame {
-    fn new(width: u32, height: u32) -> Self {
-        let width = width.max(1);
-        let height = height.max(1);
-        let mut frame = Self {
-            width,
-            height,
-            rgba: vec![0; width as usize * height as usize * 4],
-        };
-        frame.clear();
-        frame
+    /// Take `value`'s direction without a step; it stays silent until it is
+    /// released or reversed.
+    fn swallow(&mut self, value: i16) {
+        self.poll(value, Instant::now(), false);
+        self.next = None;
+        self.silent = true;
     }
-
-    fn clear(&mut self) {
-        for pixel in self.rgba.as_chunks_mut::<4>().0 {
-            *pixel = [0, 0, 0, 255];
-        }
-    }
-}
-
-/// The exact character grid: 80 columns, 25 rows, centred in the window.
-struct Grid {
-    text: text::Text,
-    origin_x: i32,
-    origin_y: i32,
-    cell_w: i32,
-    cell_h: i32,
-}
-
-impl Grid {
-    fn new(width: u32, height: u32) -> Result<Self> {
-        let text = text::Text::new(width, height)?;
-        let cell_w = text.cell_w() as i32;
-        let cell_h = text.cell_h() as i32;
-        let grid_w = text::COLS as i32 * cell_w;
-        let grid_h = text::ROWS as i32 * cell_h;
-        Ok(Self {
-            text,
-            origin_x: ((width as i32 - grid_w) / 2).max(0),
-            origin_y: ((height as i32 - grid_h) / 2).max(0),
-            cell_w,
-            cell_h,
-        })
-    }
-
-    fn row_top(&self, row: usize) -> i32 {
-        self.origin_y + row as i32 * self.cell_h
-    }
-
-    fn col_left(&self, col: usize) -> i32 {
-        self.origin_x + col as i32 * self.cell_w
-    }
-
-    fn grid_width(&self) -> i32 {
-        self.cell_w * text::COLS as i32
-    }
-
-    fn draw(&mut self, frame: &mut Frame, row: usize, col: usize, value: &str, color: Color) {
-        let x = self.col_left(col);
-        let baseline = self.text.baseline(self.row_top(row));
-        self.text.draw(
-            &mut frame.rgba,
-            frame.width,
-            frame.height,
-            x,
-            baseline,
-            value,
-            color,
-        );
-    }
-
-    /// Draw `value` so its last character lands on column 77.
-    fn draw_right(&mut self, frame: &mut Frame, row: usize, value: &str, color: Color) {
-        let len = value.chars().count();
-        let col = (78usize.saturating_sub(len)).max(2);
-        self.draw(frame, row, col, value, color);
-    }
-
-    fn draw_centered(&mut self, frame: &mut Frame, row: usize, value: &str, color: Color) {
-        let col = text::COLS.saturating_sub(value.chars().count()) / 2;
-        self.draw(frame, row, col, value, color);
-    }
-
-    fn bar(&self, frame: &mut Frame, row: usize, color: Color) {
-        fill_rect(
-            frame,
-            self.col_left(0),
-            self.row_top(row),
-            self.grid_width(),
-            self.cell_h,
-            color,
-        );
-    }
-
-    fn rule(&self, frame: &mut Frame, row: usize, color: Color) {
-        fill_rect(
-            frame,
-            self.col_left(0),
-            self.row_top(row + 1) - 1,
-            self.grid_width(),
-            1,
-            color,
-        );
-    }
-}
-
-/// Fill a rectangle in the RGBA frame, clipped to its bounds.
-fn fill_rect(frame: &mut Frame, x: i32, y: i32, width: i32, height: i32, color: Color) {
-    let x0 = x.max(0);
-    let y0 = y.max(0);
-    let x1 = (x + width).min(frame.width as i32);
-    let y1 = (y + height).min(frame.height as i32);
-    if x1 <= x0 || y1 <= y0 {
-        return;
-    }
-    for py in y0..y1 {
-        for px in x0..x1 {
-            let index = (py as usize * frame.width as usize + px as usize) * 4;
-            frame.rgba[index] = color.r;
-            frame.rgba[index + 1] = color.g;
-            frame.rgba[index + 2] = color.b;
-            frame.rgba[index + 3] = 255;
-        }
-    }
-}
-
-/// Trim `value` to at most `max` characters, with a trailing ellipsis.
-fn truncate(value: &str, max: usize) -> String {
-    if value.chars().count() <= max {
-        return value.to_string();
-    }
-    if max <= 3 {
-        return ".".repeat(max);
-    }
-    let mut out: String = value.chars().take(max - 3).collect();
-    out.push_str("...");
-    out
 }
 
 /// Thousands-separated integer, for the progress counters.
@@ -300,69 +159,108 @@ fn format_elapsed(elapsed: Duration) -> String {
     format!("{:02}:{:02}", seconds / 60, seconds % 60)
 }
 
-/// An ASCII progress bar, `width` cells between the brackets.
-fn progress_bar(fraction: f64, width: usize) -> String {
-    let filled = (fraction.clamp(0.0, 1.0) * width as f64).round() as usize;
-    let mut bar = String::with_capacity(width + 2);
-    bar.push('[');
-    bar.extend(std::iter::repeat_n('#', filled.min(width)));
-    bar.extend(std::iter::repeat_n('-', width.saturating_sub(filled)));
-    bar.push(']');
-    bar
-}
-
 /// The screens the launcher can show.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Screen {
     Main,
     Play,
+    /// The games Install / Rebuild offers.
+    Games,
+    /// One game's install.
     Install,
     Update,
     Mods,
-    Options,
     Progress,
     Message,
 }
 
-const MAIN_ITEMS: [&str; 6] = [
-    "PLAY GAME",
-    "INSTALL / REBUILD",
-    "UPDATE",
-    "MODS",
-    "OPTIONS",
-    "EXIT",
+impl Screen {
+    const ALL: [Self; 8] = [
+        Self::Main,
+        Self::Play,
+        Self::Games,
+        Self::Install,
+        Self::Update,
+        Self::Mods,
+        Self::Progress,
+        Self::Message,
+    ];
+
+    /// The screen's document in `assets/ui/`.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Main => "launcher_main",
+            Self::Play => "launcher_play",
+            Self::Games => "launcher_games",
+            Self::Install => "launcher_install",
+            Self::Update => "launcher_update",
+            Self::Mods => "launcher_mods",
+            Self::Progress => "launcher_progress",
+            Self::Message => "launcher_message",
+        }
+    }
+
+    fn named(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|screen| screen.name() == name)
+    }
+
+    /// The screen this one is opened from, under the main menu.
+    fn parent(self) -> Option<Self> {
+        match self {
+            Self::Install => Some(Self::Games),
+            _ => None,
+        }
+    }
+}
+
+/// The launcher's screens and components.
+const DOCUMENTS: [(&str, &str); 9] = [
+    (
+        "launcher_components",
+        include_str!("../../assets/ui/launcher_components.xml"),
+    ),
+    (
+        "launcher_main",
+        include_str!("../../assets/ui/launcher_main.xml"),
+    ),
+    (
+        "launcher_play",
+        include_str!("../../assets/ui/launcher_play.xml"),
+    ),
+    (
+        "launcher_games",
+        include_str!("../../assets/ui/launcher_games.xml"),
+    ),
+    (
+        "launcher_install",
+        include_str!("../../assets/ui/launcher_install.xml"),
+    ),
+    (
+        "launcher_update",
+        include_str!("../../assets/ui/launcher_update.xml"),
+    ),
+    (
+        "launcher_mods",
+        include_str!("../../assets/ui/launcher_mods.xml"),
+    ),
+    (
+        "launcher_progress",
+        include_str!("../../assets/ui/launcher_progress.xml"),
+    ),
+    (
+        "launcher_message",
+        include_str!("../../assets/ui/launcher_message.xml"),
+    ),
 ];
 
-const UPDATE_ITEMS: [&str; 6] = [
-    "CHECK FOR UPDATES",
-    "UPDATE ENGINE",
-    "REBUILD GAME PACK",
-    "ROLL BACK LAST UPDATE",
-    "CHANNEL",
-    "AUTO-CHECK",
-];
-
-/// The title row, which carries the game switch on screens scoped to a game.
-const GAME_HINT_ROW: usize = 3;
-
-/// The launcher's `OPTIONS` rows, in display order.
-const OPTIONS_ITEMS: [&str; 11] = [
-    "RENDERER",
-    "WIDESCREEN",
-    "RESOLUTION",
-    "FULLSCREEN",
-    "VSYNC",
-    "LANGUAGE",
-    "RENDER SCALE",
-    "MSAA",
-    "FRAME RATE",
-    "QUICK TURN",
-    "TACTICAL RELOAD",
-];
-
-/// The `OPTIONS` row whose change is applied to the live backend rather than
-/// to the window.
-const OPTION_VSYNC: usize = 4;
+/// The engine's built-in screens with the launcher's added.
+fn library() -> Result<Library> {
+    let mut library = Library::builtin();
+    for (name, source) in DOCUMENTS {
+        library.add(name, source)?;
+    }
+    Ok(library)
+}
 
 /// Window sizes at the 4:3 aspect, from 3x to 8x the 320x240 frame.
 const RESOLUTIONS_STANDARD: [(u32, u32); 5] = [
@@ -381,9 +279,6 @@ const RESOLUTIONS_WIDE: [(u32, u32); 5] = [
     (1920, 1080),
     (2560, 1440),
 ];
-
-/// Render-scale steps offered by the launcher (`25..=400` is the valid range).
-const RENDER_SCALES: [u32; 7] = [50, 75, 100, 150, 200, 300, 400];
 
 /// One installed pack found under a data root.
 #[derive(Clone)]
@@ -405,22 +300,17 @@ struct Source {
     build: Option<String>,
 }
 
-/// One discovered mod for the selected game.
+/// One discovered mod.
 #[derive(Clone)]
 struct ModRow {
     name: String,
+    /// The title of the game it is for, or its base id when no game has it.
+    game: String,
     id: String,
     version: String,
     enabled: bool,
     load_order: i32,
     path: PathBuf,
-}
-
-/// A modal message with a way back.
-struct Message {
-    title: String,
-    lines: Vec<String>,
-    back: Screen,
 }
 
 /// The latest progress snapshot, copied out of the worker's lock.
@@ -461,6 +351,8 @@ struct Job {
     build: Option<String>,
     target: PathBuf,
     rebuild: bool,
+    /// The screen it was started from, which a failure returns to.
+    back: Screen,
 }
 
 /// A background engine download.
@@ -508,105 +400,186 @@ unsafe extern "C" fn folder_callback(
     state.done.store(true, Ordering::Relaxed);
 }
 
+/// The progress screen's bar: the `value` in thousandths, filled from the
+/// left in the attention colour once anything is done.
+struct ProgressBar;
+
+impl Custom for ProgressBar {
+    fn paint(&self, p: &mut Painter<'_>, rect: Rect, node: &Node) {
+        let value = node.prop("value").as_int().unwrap_or(0).clamp(0, 1000);
+        let edge = p.u(2.0).max(1.0);
+        p.canvas.fill_rect(rect, palette::RULE);
+        let inner = rect.inset(edge, edge);
+        p.canvas.fill_rect(inner, Color::rgb(0x10, 0x10, 0x10));
+        if value > 0 {
+            let filled = Rect::new(inner.x, inner.y, inner.w * value as f32 / 1000.0, inner.h);
+            p.canvas.fill_rect(filled, palette::WARN);
+        }
+    }
+}
+
+/// A mod row's check box: `checked`, centred in its cell.
+struct CheckBox;
+
+impl Custom for CheckBox {
+    fn paint(&self, p: &mut Painter<'_>, rect: Rect, node: &Node) {
+        let checked = node.prop("checked").truthy();
+        p.checkbox(rect.center_x(), rect.center_y(), 30.0, checked);
+    }
+}
+
+/// An option row's definition for the UI: its label, description, choices
+/// and the index of the current one.
+fn option_def(label: &str, description: &str, choices: &[String], value: usize) -> Value {
+    Value::map([
+        ("label", Value::from(label)),
+        ("description", Value::from(description)),
+        (
+            "choices",
+            Value::list(choices.iter().map(|c| Value::from(c.as_str())).collect()),
+        ),
+        ("value", Value::from(value)),
+    ])
+}
+
+/// A status's tone: the attention colour, or dim.
+fn tone(warn: bool) -> &'static str {
+    if warn { "warn" } else { "value-dim" }
+}
+
 /// The launcher state.
 struct Launcher {
-    screen: Screen,
-    main_index: usize,
+    ui: Ui,
     play_index: usize,
-    update_index: usize,
     mods_index: usize,
-    options_index: usize,
     config: Config,
     packs: Vec<PackRow>,
     mods: Vec<ModRow>,
-    /// The game the install, update and mods screens act on.
+    /// The game the install screen and a rebuild act on.
     game: Game,
     /// Each game's remembered or detected installation.
     sources: HashMap<Game, Source>,
-    message: Option<Message>,
     job: Option<Job>,
     update_job: Option<UpdateJob>,
     checking: bool,
     check_rx: Option<mpsc::Receiver<Result<Option<UpdateInfo>, String>>>,
     auto_update: bool,
-    confirm_cancel: bool,
     dialog: Option<Arc<DialogState>>,
     capture_progress: Option<ProgressState>,
+    /// The game's options screen while it is open, over the launcher.
+    options: Option<SystemMenu>,
     pads: Gamepads,
     pad_x: PadAxis,
     pad_y: PadAxis,
+    /// The triggers, which page the options' sub-tabs.
+    pad_lt: PadAxis,
+    pad_rt: PadAxis,
+    /// Each pad axis's latched direction, so the key configuration binds a
+    /// stick or trigger on its press edge.
+    axes: HashMap<(u32, i32), i8>,
     pad_focused: bool,
-    frame: Frame,
-    grid: Grid,
-    hits: Vec<(usize, usize)>,
+    /// The device the last pad input came from.
+    pad_device: Device,
+    /// The painted canvas made opaque for the window, and its size.
+    rgba: Vec<u8>,
+    size: (u32, u32),
+    /// Whether a previous engine build can be restored, looked up when the
+    /// Update screen opens rather than on every event.
+    rollback: bool,
 }
 
 impl Launcher {
-    fn new(config: &Config, width: u32, height: u32) -> Result<Self> {
-        let width = width.max(1);
-        let height = height.max(1);
+    fn new(config: &Config) -> Result<Self> {
         let packs = scan_packs();
-        let sources: HashMap<Game, Source> = Game::ALL
-            .into_iter()
-            .filter_map(|game| {
-                let source = config
-                    .games
-                    .source(game)
-                    .map(|path| Source {
-                        path: path.to_path_buf(),
-                        build: config.games.build(game).map(str::to_string),
-                    })
-                    .or_else(|| {
-                        steam::find(game).map(|install| Source {
-                            path: install.root,
-                            build: install.build_id,
-                        })
-                    })?;
-                Some((game, source))
-            })
-            .collect();
+        let sources = detect_sources(config);
+        let mods = scan_mods(&packs, config, &Config::mod_dirs());
+        Self::with(config, packs, sources, mods)
+    }
+
+    /// A launcher over the given packs, installations and mods.
+    fn with(
+        config: &Config,
+        packs: Vec<PackRow>,
+        sources: HashMap<Game, Source>,
+        mods: Vec<ModRow>,
+    ) -> Result<Self> {
         let game = initial_game(&packs, &sources);
-        let mods = scan_mods(pack_for(&packs, game), config, &Config::mod_dirs());
-        Ok(Self {
-            screen: if packs.is_empty() {
-                Screen::Install
-            } else {
-                Screen::Main
-            },
-            main_index: 0,
+        let mut ui = Ui::new(library()?)?;
+        ui.register("progress-bar", Box::new(ProgressBar));
+        ui.register("checkbox", Box::new(CheckBox));
+        let mut launcher = Self {
+            ui,
             play_index: 0,
-            update_index: 0,
             mods_index: 0,
-            options_index: 0,
             config: config.clone(),
             packs,
             mods,
             game,
             sources,
-            message: None,
             job: None,
             update_job: None,
             checking: false,
             check_rx: None,
             auto_update: false,
-            confirm_cancel: false,
             dialog: None,
             capture_progress: None,
+            options: None,
             pads: Gamepads::default(),
             pad_x: PadAxis::default(),
             pad_y: PadAxis::default(),
+            pad_lt: PadAxis::default(),
+            pad_rt: PadAxis::default(),
+            axes: HashMap::new(),
             pad_focused: true,
-            frame: Frame::new(width, height),
-            grid: Grid::new(width, height)?,
-            hits: Vec::new(),
-        })
+            pad_device: Device::Gamepad(Default::default()),
+            rgba: Vec::new(),
+            size: (0, 0),
+            rollback: false,
+        };
+        launcher.apply_look();
+        launcher.publish();
+        launcher.open(Screen::Main);
+        if launcher.packs.is_empty() {
+            launcher.enter(Screen::Games);
+        }
+        Ok(launcher)
     }
+}
 
-    fn resize(&mut self, width: u32, height: u32) -> Result<()> {
-        self.frame = Frame::new(width, height);
-        self.grid = Grid::new(width, height)?;
-        self.hits.clear();
-        Ok(())
+/// Each game's remembered installation, else the one Steam has.
+fn detect_sources(config: &Config) -> HashMap<Game, Source> {
+    Game::ALL
+        .into_iter()
+        .filter_map(|game| {
+            let source = config
+                .games
+                .source(game)
+                .map(|path| Source {
+                    path: path.to_path_buf(),
+                    build: config.games.build(game).map(str::to_string),
+                })
+                .or_else(|| {
+                    steam::find(game).map(|install| Source {
+                        path: install.root,
+                        build: install.build_id,
+                    })
+                })?;
+            Some((game, source))
+        })
+        .collect()
+}
+
+impl Launcher {
+    /// Draw in the game menus' face, text size and language.
+    fn apply_look(&mut self) {
+        let language = self.config.language.as_deref();
+        engine::warm_gui_fonts(language);
+        self.ui
+            .set_locale(Locale::new(&crate::language::resolve_tag(language)));
+        self.ui.set_theme(
+            self.config.game.ui_font,
+            self.config.game.menu_text_size.scale(),
+        );
     }
 
     /// The selected game's pack, when it is installed.
@@ -624,317 +597,248 @@ impl Launcher {
         target_for(&self.packs, self.game)
     }
 
-    /// The games offered: RE1 always, and any other game with a pack or an
-    /// installation. An RE1-only setup has exactly one, and then nothing on
-    /// screen names or switches the game.
+    /// The games with a pack or an installation, which Update offers to
+    /// rebuild.
     fn games(&self) -> Vec<Game> {
         known_games(&self.packs, &self.sources)
     }
 
-    fn multi_game(&self) -> bool {
-        self.games().len() > 1
-    }
-
-    /// The selected game's title for a screen heading.
-    fn game_title(&self) -> String {
-        self.game.title().to_ascii_uppercase()
-    }
-
-    /// Select `game` and rescan its mods.
+    /// Select `game` for the install screen and a rebuild.
     fn select_game(&mut self, game: Game) {
-        if self.game == game {
-            return;
-        }
         self.game = game;
-        self.mods_index = 0;
-        self.refresh_mods();
     }
 
-    /// Step the selected game through [`Launcher::games`].
-    fn cycle_game(&mut self, delta: isize) {
-        let games = self.games();
-        if games.len() < 2 {
+    // ---- screens ------------------------------------------------------
+
+    /// The screen on top.
+    fn screen(&self) -> Screen {
+        self.ui
+            .top()
+            .and_then(Screen::named)
+            .unwrap_or(Screen::Main)
+    }
+
+    /// Open `screen` on top of the stack.
+    fn open(&mut self, screen: Screen) {
+        if let Err(err) = self.ui.open(screen.name()) {
+            logging::write(&format!("launcher: {err:#}"));
+        }
+    }
+
+    /// Open `screen` over the current one, starting its cursor where the
+    /// launcher's state says.
+    fn enter(&mut self, screen: Screen) {
+        match screen {
+            Screen::Mods => {
+                self.refresh_mods();
+                self.mods_index = 0;
+            }
+            Screen::Update => self.rollback = update::rollback_available(),
+            _ => {}
+        }
+        self.publish_screen(screen);
+        self.open(screen);
+        match screen {
+            Screen::Play => self.ui.set_focus_index(self.play_index),
+            Screen::Games => {
+                let index = Game::ALL.iter().position(|&game| game == self.game);
+                self.ui.set_focus_index(index.unwrap_or(0));
+            }
+            Screen::Mods => self.ui.set_focus_index(self.mods_index),
+            _ => {}
+        }
+    }
+
+    /// Show `screen`: back out to it when it is open, else open it (after
+    /// the screen it is opened from) over the main menu.
+    fn goto(&mut self, screen: Screen) {
+        self.publish();
+        while self.ui.screens().len() > 1 && self.ui.top() != Some(screen.name()) {
+            self.ui.close();
+        }
+        if self.ui.top() == Some(screen.name()) {
             return;
         }
-        let mut index = games
-            .iter()
-            .position(|&game| game == self.game)
-            .unwrap_or(0);
-        step(&mut index, games.len(), delta);
-        self.select_game(games[index]);
-    }
-
-    /// Draw the selected game's switch hint on the title row, when there is
-    /// more than one game to switch between. Clicking the row also switches.
-    fn draw_game_hint(&mut self) {
-        if self.multi_game() {
-            self.grid.draw_right(
-                &mut self.frame,
-                GAME_HINT_ROW,
-                "LEFT/RIGHT CHANGE GAME",
-                Color::DIM,
-            );
+        if self.ui.top() != Some(Screen::Main.name()) {
+            self.ui.clear();
+            self.open(Screen::Main);
+        }
+        if screen != Screen::Main {
+            if let Some(parent) = screen.parent() {
+                self.enter(parent);
+            }
+            self.enter(screen);
         }
     }
 
-    /// Draw the current screen from scratch.
-    fn draw(&mut self) {
-        self.frame.clear();
-        self.hits.clear();
-        self.draw_header();
-        match self.screen {
-            Screen::Main => self.draw_main(),
-            Screen::Play => self.draw_play(),
-            Screen::Install => self.draw_install(),
-            Screen::Update => self.draw_update(),
-            Screen::Mods => self.draw_mods(),
-            Screen::Options => self.draw_options(),
-            Screen::Progress => self.draw_progress(),
-            Screen::Message => self.draw_message(),
+    /// Show a message over `back`; dismissing it returns there.
+    fn show_message(&mut self, title: &str, lines: &[&str], back: Screen) {
+        self.goto(back);
+        self.ui.set("message.title", title);
+        self.ui.set(
+            "message.lines",
+            Value::list(lines.iter().map(|&line| Value::from(line)).collect()),
+        );
+        self.open(Screen::Message);
+    }
+
+    /// Open the game's options screen over the launcher.
+    fn open_options(&mut self, display: &mut Display) {
+        display.note_window_size();
+        self.sync_window(display);
+        match SystemMenu::options(self.settings(display)) {
+            Ok(menu) => self.options = Some(menu),
+            Err(err) => {
+                logging::write(&format!("launcher: options: {err:#}"));
+                self.show_message("OPTIONS", &[&format!("{err:#}")], Screen::Main);
+            }
         }
-        self.draw_footer();
     }
 
-    fn draw_header(&mut self) {
-        self.grid.draw(&mut self.frame, 0, 2, "ARKLAY", Color::BODY);
-        let label = build_info::label();
-        self.grid.draw_right(&mut self.frame, 0, &label, Color::DIM);
-        self.grid.rule(&mut self.frame, 1, Color::RULE);
-    }
-
-    fn draw_footer(&mut self) {
-        let hint = match self.screen {
-            Screen::Main => "UP/DOWN SELECT   ENTER OPEN   ESC QUIT",
-            Screen::Play => "ENTER PLAY   ESC BACK",
-            Screen::Install => {
-                if self.pack().is_some() {
-                    "ENTER REBUILD   B CHANGE SOURCE   ESC BACK"
-                } else {
-                    "ENTER INSTALL   B CHANGE SOURCE   ESC BACK"
-                }
-            }
-            Screen::Update => "ENTER SELECT   LEFT/RIGHT CHANGE   ESC BACK",
-            Screen::Mods => "SPACE TOGGLE   CTRL+UP/DOWN MOVE (DOWN=HIGHER)   O FOLDER   ESC BACK",
-            Screen::Options => "LEFT/RIGHT CHANGE   ENTER NEXT   ESC BACK",
-            Screen::Progress => {
-                if self.confirm_cancel {
-                    "ENTER CANCEL INSTALL   ESC KEEP GOING"
-                } else if self
-                    .job
-                    .as_ref()
-                    .is_some_and(|job| job.cancel.load(Ordering::Relaxed))
-                    || self
-                        .update_job
-                        .as_ref()
-                        .is_some_and(|job| job.cancel.load(Ordering::Relaxed))
-                {
-                    "CANCELLING..."
-                } else {
-                    "ESC CANCEL"
-                }
-            }
-            Screen::Message => "ENTER BACK",
-        };
-        let pad_hint = match self.screen {
-            Screen::Main => "PAD  D-PAD/STICK MOVE   A SELECT   B QUIT",
-            Screen::Play => "PAD  A SELECT   B BACK",
-            Screen::Install => {
-                if self.source().is_none() {
-                    "PAD  X SOURCE   B BACK"
-                } else if self.pack().is_some() {
-                    "PAD  A REBUILD   X SOURCE   B BACK"
-                } else {
-                    "PAD  A INSTALL   X SOURCE   B BACK"
-                }
-            }
-            Screen::Update | Screen::Options => {
-                "PAD  D-PAD/STICK MOVE   LEFT/RIGHT CHANGE   A SELECT   B BACK"
-            }
-            Screen::Mods => "PAD  D-PAD/STICK MOVE   A TOGGLE   X FOLDER   LB/RB REORDER   B BACK",
-            Screen::Progress => {
-                if self.confirm_cancel {
-                    "PAD  A CANCEL INSTALL   B KEEP GOING"
-                } else {
-                    "PAD  B CANCEL"
-                }
-            }
-            Screen::Message => "PAD  A/B BACK",
-        };
-        self.grid.draw(&mut self.frame, 2, 2, pad_hint, Color::DIM);
-        self.grid.draw(&mut self.frame, 24, 2, hint, Color::DIM);
-    }
-
-    fn draw_main(&mut self) {
-        if self.multi_game() {
-            let title = self.game_title();
-            self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
-            self.draw_game_hint();
+    /// The settings the options screen edits: the config's, with the
+    /// window as it is now.
+    fn settings(&self, display: &Display) -> Settings {
+        Settings {
+            graphics: self.config.graphics,
+            game: self.config.game,
+            language: self.config.language.clone(),
+            displays: engine::display_names(),
+            bindings: self.config.bindings_or_default(),
+            system: engine::system_info(display),
         }
-        // A stale pack of a game that is not selected is still flagged, named
-        // so the player knows which game to switch to before rebuilding.
-        let stale_games: Vec<Game> = self
-            .games()
+    }
+
+    // ---- publishing ---------------------------------------------------
+
+    /// Publish what the screen on top shows into the UI's store. Unchanged
+    /// values cost nothing to set again; a screen is published as it opens.
+    fn publish(&mut self) {
+        self.publish_screen(self.screen());
+    }
+
+    /// Publish what `screen` shows, and the main menu's statuses.
+    fn publish_screen(&mut self, screen: Screen) {
+        self.ui.set("launcher.version", build_info::label());
+        self.publish_main();
+        match screen {
+            Screen::Main | Screen::Message => {}
+            Screen::Play => self.publish_play(),
+            Screen::Games => self.publish_games(),
+            Screen::Install => self.publish_install(),
+            Screen::Update => self.publish_update(),
+            Screen::Mods => self.publish_mods(),
+            Screen::Progress => self.publish_progress(),
+        }
+    }
+
+    fn publish_main(&mut self) {
+        let stale: Vec<Game> = Game::ALL
             .into_iter()
             .filter(|&game| pack_for(&self.packs, game).is_some_and(|pack| pack.stale))
             .collect();
-        let rebuild = match stale_games.first() {
-            None => None,
-            Some(_) if stale_games.contains(&self.game) => Some(String::new()),
-            Some(game) => Some(format!(" ({})", game.id().to_ascii_uppercase())),
+        let rebuild = match stale.as_slice() {
+            [] => None,
+            [game] => Some(game.title().to_string()),
+            _ => Some(format!("{} games", stale.len())),
         };
-        for (index, label) in MAIN_ITEMS.iter().enumerate() {
-            let update = self.config.updates.available_version.is_some();
-            let (status, color) = match index {
-                0 => (
+        let update = self.config.updates.available_version.is_some();
+        let plural = |count: usize, noun: &str| {
+            format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
+        };
+        let install = if self.packs.is_empty() {
+            "Required".to_string()
+        } else if let Some(games) = &rebuild {
+            format!("Rebuild {games}")
+        } else {
+            String::new()
+        };
+        let update = match (update, &rebuild) {
+            (true, Some(_)) => "Update + rebuild".to_string(),
+            (true, None) => "Update available".to_string(),
+            (false, Some(games)) => format!("Rebuild {games}"),
+            (false, None) => String::new(),
+        };
+        self.ui.set("main.play", plural(self.packs.len(), "pack"));
+        self.ui.set("main.install", install);
+        self.ui.set("main.update", update);
+        self.ui.set("main.mods", plural(self.mods.len(), "mod"));
+    }
+
+    fn publish_play(&mut self) {
+        let rows = self
+            .packs
+            .iter()
+            .map(|pack| {
+                let version = if pack.error.is_some() {
+                    "Error".to_string()
+                } else if pack.stale {
                     format!(
-                        "{} PACK{}",
-                        self.packs.len(),
-                        if self.packs.len() == 1 { "" } else { "S" }
-                    ),
-                    Color::DIM,
-                ),
-                1 => (
-                    if self.source().is_none() {
-                        "SOURCE NEEDED".to_string()
-                    } else if self.pack().is_none() {
-                        "REQUIRED".to_string()
-                    } else {
-                        String::new()
-                    },
-                    Color::AMBER,
-                ),
-                2 => (
-                    match (update, &rebuild) {
-                        (true, Some(game)) => format!("UPDATE + REBUILD{game}"),
-                        (true, None) => "UPDATE AVAILABLE".to_string(),
-                        (false, Some(game)) => format!("PAK REBUILD{game}"),
-                        (false, None) => String::new(),
-                    },
-                    Color::AMBER,
-                ),
-                3 => (
-                    format!(
-                        "{} MOD{}",
-                        self.mods.len(),
-                        if self.mods.len() == 1 { "" } else { "S" }
-                    ),
-                    Color::DIM,
-                ),
-                4 => (
-                    format!(
-                        "{} {}x{}",
-                        match self.config.graphics.renderer {
-                            RendererKind::Gpu => "GPU",
-                            RendererKind::Software => "SOFTWARE",
-                        },
-                        self.config.graphics.window_width,
-                        self.config.graphics.window_height
-                    ),
-                    Color::DIM,
-                ),
-                _ => (String::new(), Color::DIM),
-            };
-            let row = 4 + index;
-            self.menu_row(row, label, &status, color, index == self.main_index);
-            self.hits.push((row, index));
+                        "{} *",
+                        if pack.version.is_empty() {
+                            "-"
+                        } else {
+                            &pack.version
+                        }
+                    )
+                } else if pack.version.is_empty() {
+                    "-".to_string()
+                } else {
+                    pack.version.clone()
+                };
+                let warning = if let Some(error) = &pack.error {
+                    format!("This pack could not be read: {error}")
+                } else if pack.stale {
+                    "This pack needs a rebuild before it matches this engine.".to_string()
+                } else {
+                    String::new()
+                };
+                Value::map([
+                    ("name", Value::from(pack.name.as_str())),
+                    ("file", Value::from(pack.file.as_str())),
+                    ("version", Value::from(version)),
+                    ("source", Value::from(pack.source.as_str())),
+                    ("warning", Value::from(warning)),
+                ])
+            })
+            .collect();
+        self.ui.set("play.rows", Value::list(rows));
+        self.ui.set("play.empty", self.packs.is_empty());
+    }
+
+    /// A game's pack state for the game lists, and whether it needs
+    /// attention.
+    fn game_status(&self, game: Game) -> (String, bool) {
+        match pack_for(&self.packs, game) {
+            Some(pack) if pack.stale => ("Rebuild required".to_string(), true),
+            Some(pack) if pack.version.is_empty() => ("Installed".to_string(), false),
+            Some(pack) => (format!("Installed ({})", pack.version), false),
+            None if self.sources.contains_key(&game) => ("Ready to install".to_string(), false),
+            None => ("Not installed".to_string(), false),
         }
     }
 
-    fn draw_play(&mut self) {
-        self.grid.draw(&mut self.frame, 3, 4, "PLAY", Color::BODY);
-        self.table_header(
-            5,
-            &[(4, "GAME"), (34, "PACK"), (52, "VERSION"), (64, "SOURCE")],
-        );
-        if self.packs.is_empty() {
-            self.grid
-                .draw(&mut self.frame, 7, 4, "NO GAME PACKS FOUND.", Color::DIM);
-            self.grid.draw(
-                &mut self.frame,
-                9,
-                4,
-                "USE INSTALL / REBUILD TO CREATE ONE.",
-                Color::DIM,
-            );
-            return;
-        }
-        if self.play_index >= self.packs.len() {
-            self.play_index = self.packs.len() - 1;
-        }
-        let packs = self.packs.clone();
-        for (index, pack) in packs.iter().enumerate() {
-            let row = 7 + index;
-            let selected = index == self.play_index;
-            let version = if pack.error.is_some() {
-                "ERROR".to_string()
-            } else if pack.stale {
-                format!(
-                    "{} *",
-                    if pack.version.is_empty() {
-                        "-"
-                    } else {
-                        &pack.version
-                    }
-                )
-            } else if pack.version.is_empty() {
-                "-".to_string()
-            } else {
-                pack.version.clone()
-            };
-            self.table_row(
-                row,
-                selected,
-                &[
-                    (4, &truncate(&pack.name, 28)),
-                    (34, &truncate(&pack.file, 16)),
-                    (52, &truncate(&version, 10)),
-                    (64, &truncate(&pack.source, 12)),
-                ],
-            );
-            self.hits.push((row, index));
-        }
-        if let Some(pack) = self.packs.get(self.play_index) {
-            if let Some(error) = &pack.error {
-                self.grid.draw(
-                    &mut self.frame,
-                    20,
-                    4,
-                    &truncate(&format!("THIS PACK COULD NOT BE READ: {error}"), 72),
-                    Color::AMBER,
-                );
-            } else if pack.stale {
-                self.grid.draw(
-                    &mut self.frame,
-                    20,
-                    4,
-                    "THIS PACK NEEDS A REBUILD BEFORE IT MATCHES THIS ENGINE.",
-                    Color::AMBER,
-                );
-            }
-        }
+    fn publish_games(&mut self) {
+        let rows = Game::ALL
+            .into_iter()
+            .map(|game| {
+                let (status, warn) = self.game_status(game);
+                Value::map([
+                    ("title", Value::from(game.title())),
+                    ("status", Value::from(status)),
+                    ("tone", Value::from(tone(warn))),
+                ])
+            })
+            .collect();
+        self.ui.set("games.rows", Value::list(rows));
     }
 
-    fn draw_install(&mut self) {
+    fn publish_install(&mut self) {
         let pack = self.pack().cloned();
-        let title = if pack.is_none() {
-            "FIRST-TIME SETUP"
-        } else {
-            "INSTALL / REBUILD"
-        };
-        let title = if self.multi_game() {
-            format!("{title} - {}", self.game_title())
-        } else {
-            title.to_string()
-        };
-        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
-        self.draw_game_hint();
+        let game_title = self.game.title();
         let source = self
             .source()
             .map(|source| source.path.display().to_string())
-            .unwrap_or_else(|| "NOT FOUND".to_string());
-        let target = self.target().display().to_string();
-        let not_found = format!("{} NOT FOUND - B/X", self.game_title());
-        let ready = format!("READY - {}", install_size(self.game));
+            .unwrap_or_else(|| "Not found".to_string());
         let pack_value = match &pack {
             Some(pack) => format!(
                 "{}  ({})",
@@ -945,200 +849,161 @@ impl Launcher {
                     &pack.version
                 }
             ),
-            None => "NOT INSTALLED".to_string(),
+            None => "Not installed".to_string(),
         };
-        let (status, status_color) = if self.dialog.is_some() {
-            ("WAITING FOR FOLDER PICKER...", Color::DIM)
+        let (status, warn) = if self.dialog.is_some() {
+            ("Waiting for the folder picker...".to_string(), None)
         } else if self.source().is_none() {
-            (not_found.as_str(), Color::AMBER)
+            (
+                format!("{game_title} not found - choose its folder"),
+                Some(true),
+            )
         } else if !self.source().is_some_and(|source| source.path.is_dir()) {
-            ("SOURCE FOLDER MISSING - B/X", Color::AMBER)
+            (
+                "Source folder missing - choose it again".to_string(),
+                Some(true),
+            )
         } else if pack.is_none() {
-            (ready.as_str(), Color::BODY)
+            (format!("Ready - {}", install_size(self.game)), Some(false))
         } else if pack.as_ref().is_some_and(|pack| pack.stale) {
-            ("REBUILD REQUIRED", Color::AMBER)
+            ("Rebuild required".to_string(), Some(true))
         } else {
-            ("UP TO DATE - REBUILD AVAILABLE", Color::BODY)
+            ("Up to date - rebuild available".to_string(), Some(false))
         };
-        for (row, label, value, color) in [
-            (5, "SOURCE", source.as_str(), Color::BODY),
-            (6, "TARGET", target.as_str(), Color::BODY),
-            (7, "PACK", pack_value.as_str(), Color::BODY),
-            (8, "STATUS", status, status_color),
-        ] {
-            self.grid.draw(&mut self.frame, row, 4, label, Color::DIM);
-            self.grid
-                .draw(&mut self.frame, row, 16, &truncate(value, 62), color);
-        }
+        let status_tone = match warn {
+            Some(true) => "warn",
+            Some(false) => "value",
+            None => "value-dim",
+        };
+        self.ui.set("install.title", game_title.to_uppercase());
+        self.ui.set(
+            "install.caption",
+            if self.packs.is_empty() {
+                "First-time setup"
+            } else {
+                ""
+            },
+        );
+        self.ui.set("install.source", source);
+        self.ui
+            .set("install.target", self.target().display().to_string());
+        self.ui.set("install.pack", pack_value);
+        self.ui.set("install.status", status);
+        self.ui.set("install.status_tone", status_tone);
+        self.ui.set(
+            "install.action",
+            if pack.is_some() { "Rebuild" } else { "Install" },
+        );
     }
 
-    fn draw_update(&mut self) {
-        let title = if self.multi_game() {
-            format!("UPDATE - {}", self.game_title())
-        } else {
-            "UPDATE".to_string()
-        };
-        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
-        let pack_stale = self.pack().map(|pack| pack.stale);
+    fn publish_update(&mut self) {
         let published = build_info::is_published();
         let available = self.config.updates.available_version.clone();
-        for (index, label) in UPDATE_ITEMS.iter().enumerate() {
-            let (status, color) = match index {
-                0 => {
-                    if !published {
-                        ("DEV BUILD".to_string(), Color::DIM)
-                    } else if self.checking {
-                        ("CHECKING...".to_string(), Color::AMBER)
-                    } else if available.is_some() {
-                        ("UPDATE AVAILABLE".to_string(), Color::AMBER)
-                    } else if self.config.updates.last_check > 0 {
-                        ("UP TO DATE".to_string(), Color::DIM)
-                    } else {
-                        (String::new(), Color::DIM)
-                    }
-                }
-                1 => {
-                    if !published {
-                        ("DEV BUILD".to_string(), Color::DIM)
-                    } else if let Some(version) = &available {
-                        (version.clone(), Color::AMBER)
-                    } else {
-                        ("UP TO DATE".to_string(), Color::DIM)
-                    }
-                }
-                2 => match pack_stale {
-                    None => ("NOT INSTALLED".to_string(), Color::DIM),
-                    Some(true) => ("REQUIRED".to_string(), Color::AMBER),
-                    Some(false) => ("UP TO DATE".to_string(), Color::DIM),
-                },
-                3 => (
-                    if update::rollback_available() {
-                        "AVAILABLE".to_string()
-                    } else {
-                        "NONE".to_string()
-                    },
-                    Color::BODY,
-                ),
-                4 => (
-                    match self.config.updates.channel {
-                        crate::config::UpdateChannel::Release => "RELEASE",
-                        crate::config::UpdateChannel::Nightly => "NIGHTLY",
-                    }
-                    .to_string(),
-                    Color::BODY,
-                ),
-                _ => (
-                    if self.config.updates.check {
-                        "ON".to_string()
-                    } else {
-                        "OFF".to_string()
-                    },
-                    Color::BODY,
-                ),
-            };
-            let row = 5 + index;
-            self.menu_row(row, label, &status, color, index == self.update_index);
-            self.hits.push((row, index));
-        }
-    }
-
-    fn draw_mods(&mut self) {
-        let title = format!("MODS - {}", self.game_title());
-        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
-        self.draw_game_hint();
-        self.table_header(5, &[(4, "ON"), (9, "MOD"), (46, "ID"), (68, "VERSION")]);
-        if self.mods.is_empty() {
-            self.grid
-                .draw(&mut self.frame, 7, 4, "NO MODS DISCOVERED.", Color::DIM);
-            let dir = paths::mods_dir(&paths::primary_data_dir());
-            self.grid.draw(
-                &mut self.frame,
-                9,
-                4,
-                &truncate(&format!("PUT MODS IN {}", dir.display()), 72),
-                Color::DIM,
-            );
-            return;
-        }
-        if self.mods_index >= self.mods.len() {
-            self.mods_index = self.mods.len() - 1;
-        }
-        let mods = self.mods.clone();
-        let total = mods.len();
-        if total == 1 {
-            self.grid
-                .draw_centered(&mut self.frame, 6, "-- ONLY MOD --", Color::DIM);
+        let (check, check_warn) = if !published {
+            ("Dev build".to_string(), false)
+        } else if self.checking {
+            ("Checking...".to_string(), true)
+        } else if available.is_some() {
+            ("Update available".to_string(), true)
+        } else if self.config.updates.last_check > 0 {
+            ("Up to date".to_string(), false)
         } else {
-            self.grid
-                .draw_centered(&mut self.frame, 6, "-- LOW PRIORITY --", Color::DIM);
-        }
-        for (index, row) in mods.iter().enumerate() {
-            let line = 7 + index;
-            let selected = index == self.mods_index;
-            let mark = if row.enabled { "[x]" } else { "[ ]" };
-            self.table_row(
-                line,
-                selected,
-                &[
-                    (4, mark),
-                    (9, &truncate(&row.name, 34)),
-                    (46, &truncate(&row.id, 20)),
-                    (68, &truncate(&row.version, 9)),
-                ],
-            );
-            self.hits.push((line, index));
-        }
-        if total > 1 {
-            self.grid.draw_centered(
-                &mut self.frame,
-                7 + total,
-                "-- HIGH PRIORITY --",
-                Color::DIM,
-            );
-        }
-        if let Some(row) = self.mods.get(self.mods_index) {
-            self.grid.draw(
-                &mut self.frame,
-                20,
-                4,
-                &truncate(&row.path.display().to_string(), 72),
-                Color::DIM,
-            );
-        }
-    }
-
-    fn draw_options(&mut self) {
-        self.grid
-            .draw(&mut self.frame, 3, 4, "OPTIONS", Color::BODY);
-        self.table_header(5, &[(4, "SETTING"), (38, "VALUE")]);
-        for (index, label) in OPTIONS_ITEMS.iter().enumerate() {
-            let row = 7 + index;
-            let value = self.option_value(index);
-            self.table_row(
-                row,
-                index == self.options_index,
-                &[(4, label), (38, &value)],
-            );
-            self.hits.push((row, index));
-        }
-        let help = match self.options_index {
-            0 => "GPU draws HD replacements; software keeps the original 320x240 art.",
-            1 => "16:9 crops the frame; off keeps the original 4:3 view.",
-            2 => "Windowed client size. Fullscreen uses the display's desktop size.",
-            3 => "Borderless fullscreen. Alt+Enter also toggles it while playing.",
-            4 => "Wait for the display refresh; off allows tearing and lower latency.",
-            5 => "Game text language. System follows the OS locale.",
-            6 => "GPU only: scene resolution as a percentage of the viewport.",
-            7 => "GPU only: anti-aliasing samples. Higher is smoother and slower.",
-            8 => "Presented frames per second. The game logic still ticks at 30 Hz.",
-            9 => "Classic REbirth quick turn: BACKWARD + RUN turns 180 degrees.",
-            _ => "Classic REbirth tactical reload: AIM + RUN reloads a partial clip.",
+            (String::new(), false)
         };
-        self.grid
-            .draw(&mut self.frame, 19, 4, &truncate(help, 72), Color::DIM);
+        let (engine, engine_warn) = if !published {
+            ("Dev build".to_string(), false)
+        } else if let Some(version) = &available {
+            (version.clone(), true)
+        } else {
+            ("Up to date".to_string(), false)
+        };
+        let games = self
+            .games()
+            .into_iter()
+            .map(|game| {
+                let (status, warn) = match pack_for(&self.packs, game) {
+                    None => ("Not installed", false),
+                    Some(pack) if pack.stale => ("Required", true),
+                    Some(_) => ("Up to date", false),
+                };
+                Value::map([
+                    ("label", Value::from(format!("Rebuild {}", game.title()))),
+                    ("status", Value::from(status)),
+                    ("tone", Value::from(tone(warn))),
+                ])
+            })
+            .collect();
+        self.ui.set("update.check", check);
+        self.ui.set("update.check_tone", tone(check_warn));
+        self.ui.set("update.engine", engine);
+        self.ui.set("update.engine_tone", tone(engine_warn));
+        self.ui.set("update.games", Value::list(games));
+        self.ui.set(
+            "update.rollback",
+            if self.rollback { "Available" } else { "None" },
+        );
+        let channel = match self.config.updates.channel {
+            UpdateChannel::Release => 0,
+            UpdateChannel::Nightly => 1,
+        };
+        self.ui.set(
+            "update.channel",
+            option_def(
+                "Channel",
+                "",
+                &["Release".to_string(), "Nightly".to_string()],
+                channel,
+            ),
+        );
+        self.ui.set(
+            "update.auto_check",
+            option_def(
+                "Auto-Check",
+                "",
+                &["Off".to_string(), "On".to_string()],
+                usize::from(self.config.updates.check),
+            ),
+        );
     }
 
-    fn draw_progress(&mut self) {
+    fn publish_mods(&mut self) {
+        let rows = self
+            .mods
+            .iter()
+            .map(|row| {
+                Value::map([
+                    ("enabled", Value::Bool(row.enabled)),
+                    ("name", Value::from(row.name.as_str())),
+                    ("game", Value::from(row.game.as_str())),
+                    ("id", Value::from(row.id.as_str())),
+                    ("version", Value::from(row.version.as_str())),
+                    ("path", Value::from(row.path.display().to_string())),
+                ])
+            })
+            .collect();
+        let (first, last) = match self.mods.len() {
+            0 => ("", ""),
+            1 => ("- Only mod -", ""),
+            _ => ("- Low priority -", "- High priority -"),
+        };
+        let dir = paths::mods_dir(&paths::primary_data_dir());
+        self.ui.set("mods.rows", Value::list(rows));
+        self.ui.set("mods.empty", self.mods.is_empty());
+        self.ui.set("mods.first", first);
+        self.ui.set("mods.last", last);
+        self.ui
+            .set("mods.dir", format!("Put mods in {}", dir.display()));
+        self.ui.set(
+            "mods.move_hint",
+            if self.mods.len() > 1 {
+                "Move (Down = Higher)"
+            } else {
+                ""
+            },
+        );
+    }
+
+    fn publish_progress(&mut self) {
         let state = if let Some(job) = &self.job {
             job.state
                 .lock()
@@ -1154,148 +1019,307 @@ impl Launcher {
         };
         let rebuild = self.job.as_ref().is_some_and(|job| job.rebuild);
         let game = self.job.as_ref().map_or(self.game, |job| job.game);
-        let game_title = game.title().to_ascii_uppercase();
+        let game_title = game.title().to_uppercase();
         let title = if self.update_job.is_some() {
             "UPDATING ENGINE".to_string()
-        } else if rebuild && self.multi_game() {
-            format!("REBUILDING GAME PACK - {game_title}")
         } else if rebuild {
-            "REBUILDING GAME PACK".to_string()
+            format!("REBUILDING {game_title}")
         } else {
             format!("INSTALLING {game_title}")
         };
-        self.grid.draw(&mut self.frame, 3, 4, &title, Color::BODY);
         let label = if state.label.is_empty() {
-            "STARTING".to_string()
+            "Starting".to_string()
         } else {
-            state.label.to_ascii_uppercase()
+            capitalize(&state.label)
         };
-        self.grid
-            .draw(&mut self.frame, 5, 4, &truncate(&label, 40), Color::BODY);
-        if state.total > 0 {
-            self.grid.draw_right(
-                &mut self.frame,
-                5,
-                &format!(
-                    "{} / {}",
-                    format_count(state.done),
-                    format_count(state.total)
-                ),
-                Color::DIM,
-            );
-        }
-        let percent = (state.overall.clamp(0.0, 1.0) * 100.0).round() as u32;
-        let color = if state.overall > 0.0 {
-            Color::AMBER
+        let count = if state.total > 0 {
+            format!(
+                "{} / {}",
+                format_count(state.done),
+                format_count(state.total)
+            )
         } else {
-            Color::DIM
+            String::new()
         };
-        self.grid.draw(
-            &mut self.frame,
-            7,
-            4,
-            &progress_bar(state.overall, 44),
-            color,
+        let overall = state.overall.clamp(0.0, 1.0);
+        let step = if state.phases_total > 0 {
+            format!("Step {} / {}", state.phases_done, state.phases_total)
+        } else {
+            String::new()
+        };
+        let cancelling = self
+            .job
+            .as_ref()
+            .is_some_and(|job| job.cancel.load(Ordering::Relaxed))
+            || self
+                .update_job
+                .as_ref()
+                .is_some_and(|job| job.cancel.load(Ordering::Relaxed));
+        self.ui.set("progress.title", title);
+        self.ui.set("progress.label", label);
+        self.ui.set("progress.count", count);
+        self.ui
+            .set("progress.fraction", (overall * 1000.0).round() as i64);
+        self.ui.set(
+            "progress.percent",
+            format!("{}%", (overall * 100.0).round() as u32),
         );
-        self.grid
-            .draw_right(&mut self.frame, 7, &format!("{percent:>3}%"), Color::BODY);
-        if !state.item.is_empty() {
-            self.grid.draw(
-                &mut self.frame,
-                9,
-                4,
-                &truncate(&state.item, 70),
-                Color::DIM,
-            );
-        }
-        self.grid.draw(
-            &mut self.frame,
-            11,
-            4,
-            &format!("ELAPSED {}", format_elapsed(state.elapsed)),
-            Color::DIM,
+        self.ui.set("progress.item", state.item);
+        self.ui.set(
+            "progress.elapsed",
+            format!("Elapsed {}", format_elapsed(state.elapsed)),
         );
-        if state.phases_total > 0 {
-            self.grid.draw(
-                &mut self.frame,
-                12,
-                4,
-                &format!("STEP {} / {}", state.phases_done, state.phases_total),
-                Color::DIM,
-            );
-        }
-        if self.confirm_cancel {
-            self.grid
-                .draw(&mut self.frame, 14, 4, "CANCEL THE INSTALL?", Color::AMBER);
-            self.grid.draw(
-                &mut self.frame,
-                15,
-                4,
-                "NO PACK WILL BE WRITTEN.",
-                Color::DIM,
-            );
-        }
+        self.ui.set("progress.step", step);
+        self.ui.set("progress.running", !cancelling);
+        self.ui.set(
+            "progress.cancel_hint",
+            if cancelling {
+                "Cancelling..."
+            } else {
+                "Cancel"
+            },
+        );
     }
 
-    fn draw_message(&mut self) {
-        let Some(message) = &self.message else {
-            self.grid
-                .draw(&mut self.frame, 3, 4, "MESSAGE", Color::BODY);
+    // ---- input --------------------------------------------------------
+
+    /// Feed one event to the screens and act on what they report. Returns
+    /// true when the launcher should close.
+    fn handle(&mut self, event: GuiEvent, display: &mut Display) -> bool {
+        if self.options.is_some() {
+            self.options_events(&[event], display);
+            return false;
+        }
+        self.publish();
+        let outputs = self.ui.handle(&[event]);
+        let mut close = false;
+        for output in outputs {
+            match output {
+                UiOutput::Action { name, arg, .. } => {
+                    close |= self.action(&name, &arg, display);
+                }
+                UiOutput::Changed { path, value } => self.changed(&path, &value),
+                UiOutput::Opened(_) | UiOutput::Closed(_) | UiOutput::Sound(_) => {}
+            }
+        }
+        // The cursor on PLAY is the pack Play starts; the one on MODS is the
+        // mod the folder and reorder keys act on.
+        match self.screen() {
+            Screen::Play => {
+                if let Some(index) = self.ui.focus_index() {
+                    self.play_index = index;
+                }
+            }
+            Screen::Mods => {
+                if let Some(index) = self.ui.focus_index() {
+                    self.mods_index = index;
+                }
+            }
+            _ => {}
+        }
+        self.publish();
+        close
+    }
+
+    /// Feed the options screen and carry out what it asks.
+    fn options_events(&mut self, events: &[GuiEvent], display: &mut Display) {
+        let Some(menu) = &mut self.options else {
             return;
         };
-        self.grid
-            .draw(&mut self.frame, 3, 4, &message.title, Color::BODY);
-        for (index, line) in message.lines.iter().enumerate() {
-            self.grid.draw(
-                &mut self.frame,
-                5 + index,
-                4,
-                &truncate(line, 72),
-                Color::BODY,
-            );
+        let requests = menu.handle(events);
+        self.options_requests(requests, display);
+    }
+
+    /// Hand the options screen's key configuration the raw press it waits
+    /// for; `click` is where the pointer went down, if it did.
+    fn options_capture(&mut self, source: Input, click: Option<(f32, f32)>, display: &mut Display) {
+        let Some(menu) = &mut self.options else {
+            return;
+        };
+        if source.reserved_bit().is_some() {
+            return;
+        }
+        let requests = menu.capture(source, click);
+        self.swallow_pads();
+        self.options_requests(requests, display);
+    }
+
+    /// Whether the options screen's key configuration waits for a key.
+    fn capturing(&self) -> bool {
+        self.options.as_ref().is_some_and(SystemMenu::capturing)
+    }
+
+    fn options_requests(&mut self, requests: Vec<MenuRequest>, display: &mut Display) {
+        for request in requests {
+            match request {
+                MenuRequest::Resume => {
+                    self.options = None;
+                    self.ui.invalidate();
+                }
+                MenuRequest::Settings(settings) => self.apply_settings(*settings, display),
+                // The options screen offers none of these, and the launcher
+                // has no sound.
+                MenuRequest::Restart
+                | MenuRequest::LoadGame
+                | MenuRequest::Quit
+                | MenuRequest::Sound(_) => {}
+            }
         }
     }
 
-    fn table_header(&mut self, row: usize, columns: &[(usize, &str)]) {
-        for (col, label) in columns {
-            self.grid
-                .draw(&mut self.frame, row, *col, label, Color::DIM);
+    /// Apply an options change to the launcher's window and look, persist
+    /// it as the game does and hand the screen back what took effect. The
+    /// renderer settings only take effect when Play hands the window over.
+    fn apply_settings(&mut self, settings: Settings, display: &mut Display) {
+        let before = self.settings(display);
+        let wanted = settings.graphics;
+        let old = before.graphics;
+        let mut graphics = wanted;
+        if wanted.vsync != old.vsync
+            && let Err(err) = display.set_vsync(wanted.vsync)
+        {
+            logging::write(&format!("warning: vsync not applied: {err:#}"));
         }
-        self.grid.rule(&mut self.frame, row, Color::RULE);
+        if wanted.aspect != old.aspect && !wanted.fullscreen {
+            // The window keeps its zoom at the new shape, as in game.
+            let times = (old.window_width / 320).max(1);
+            graphics.window_width = 320 * times;
+            graphics.window_height = wanted.aspect.height() * times;
+        }
+        if (
+            graphics.fullscreen,
+            graphics.window_width,
+            graphics.window_height,
+            graphics.aspect,
+        ) != (
+            old.fullscreen,
+            old.window_width,
+            old.window_height,
+            old.aspect,
+        ) {
+            graphics = display.apply_window_options(graphics);
+        }
+        if wanted.display != old.display {
+            display.move_to_display(wanted.display);
+            graphics.display = wanted.display;
+        }
+        if settings.bindings != before.bindings {
+            if let Err(err) = Config::save_bindings(&Config::default_path(), &settings.bindings) {
+                logging::write(&format!("warning: bindings not saved: {err:#}"));
+            }
+            self.config.bindings = Some(settings.bindings.clone());
+        }
+        let (file, _) = Config::load_default();
+        let (saved_graphics, saved_language, saved_game) =
+            engine::persisted_options(file, &before, &settings, graphics);
+        if let Err(err) = Config::save_options(
+            &Config::default_path(),
+            &saved_graphics,
+            saved_language.as_deref(),
+            saved_game,
+        ) {
+            logging::write(&format!("warning: options not saved: {err:#}"));
+        }
+        self.config.graphics = graphics;
+        self.config.game = settings.game;
+        self.config.language = settings.language.clone();
+        self.apply_look();
+        self.ui.invalidate();
+        if let Some(menu) = &mut self.options {
+            menu.set_settings(Settings {
+                graphics,
+                ..settings
+            });
+        }
     }
 
-    fn menu_row(
-        &mut self,
-        row: usize,
-        label: &str,
-        status: &str,
-        status_color: Color,
-        selected: bool,
-    ) {
-        if selected {
-            self.grid.bar(&mut self.frame, row, Color::AMBER);
+    /// Carry out an action a screen reported. Returns true to close.
+    fn action(&mut self, name: &str, arg: &Value, display: &mut Display) -> bool {
+        let index = arg.as_int().unwrap_or(0).max(0) as usize;
+        match name {
+            "exit" => return true,
+            "play_screen" => self.enter(Screen::Play),
+            "install_screen" => self.enter(Screen::Games),
+            "update_screen" => self.enter(Screen::Update),
+            "mods_screen" => self.enter(Screen::Mods),
+            "options_screen" => self.open_options(display),
+            "play" => {
+                self.play_index = index;
+                return self.play(display);
+            }
+            "install_game" => {
+                if let Some(&game) = Game::ALL.get(index) {
+                    self.select_game(game);
+                    self.enter(Screen::Install);
+                }
+            }
+            "install" => self.install(),
+            "rebuild" => {
+                if let Some(&game) = self.games().get(index) {
+                    self.select_game(game);
+                    self.install();
+                }
+            }
+            "browse" => self.browse(display),
+            "check" => self.start_check(true),
+            "update" => self.start_update(),
+            "rollback" => self.rollback(),
+            "toggle" => {
+                self.mods_index = index;
+                self.toggle_mod();
+            }
+            "move" => {
+                self.move_mod(arg.as_int().unwrap_or(0) as isize);
+                self.publish();
+                self.ui.set_focus_index(self.mods_index);
+            }
+            "folder" => {
+                let dir = match self.mods.get(self.mods_index) {
+                    Some(row) if row.path.is_dir() => row.path.clone(),
+                    Some(row) => row
+                        .path
+                        .parent()
+                        .map(Path::to_path_buf)
+                        .unwrap_or_else(|| row.path.clone()),
+                    None => paths::mods_dir(&paths::primary_data_dir()),
+                };
+                open_folder(&dir);
+            }
+            "cancel_job" => {
+                if let Some(job) = &self.job {
+                    job.cancel.store(true, Ordering::Relaxed);
+                }
+                if let Some(job) = &self.update_job {
+                    job.cancel.store(true, Ordering::Relaxed);
+                }
+            }
+            other => logging::write(&format!("launcher: unknown action {other:?}")),
         }
-        let color = if selected { Color::BLACK } else { Color::BODY };
-        let marker = if selected { ">" } else { " " };
-        self.grid.draw(&mut self.frame, row, 2, marker, color);
-        self.grid
-            .draw(&mut self.frame, row, 4, &truncate(label, 42), color);
-        if !status.is_empty() {
-            let color = if selected { Color::BLACK } else { status_color };
-            self.grid
-                .draw_right(&mut self.frame, row, &truncate(status, 30), color);
-        }
+        false
     }
 
-    fn table_row(&mut self, row: usize, selected: bool, cells: &[(usize, &str)]) {
-        if selected {
-            self.grid.bar(&mut self.frame, row, Color::AMBER);
-        }
-        let color = if selected { Color::BLACK } else { Color::BODY };
-        let marker = if selected { ">" } else { " " };
-        self.grid.draw(&mut self.frame, row, 2, marker, color);
-        for (col, value) in cells {
-            self.grid.draw(&mut self.frame, row, *col, value, color);
+    /// Apply a value an update row changed.
+    fn changed(&mut self, path: &str, value: &Value) {
+        let Some(index) = value.as_int() else {
+            return;
+        };
+        match path {
+            "update.channel.value" => {
+                let channel = if index == 0 {
+                    UpdateChannel::Release
+                } else {
+                    UpdateChannel::Nightly
+                };
+                if channel != self.config.updates.channel {
+                    self.toggle_channel();
+                }
+            }
+            "update.auto_check.value" => {
+                if (index != 0) != self.config.updates.check {
+                    self.toggle_auto_check();
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1313,12 +1337,64 @@ impl Launcher {
         wait
     }
 
-    /// Fold the left stick into keyboard navigation steps. The D-pad is
-    /// handled as button edges, so a quick tap is never missed by polling.
-    fn poll_pad_navigation(&mut self, display: &mut Display) -> bool {
+    /// Fold the left stick into navigation steps, and the triggers into the
+    /// options' sub-tab paging. The D-pad is handled as button edges, so a
+    /// quick tap is never missed by polling. Returns whether a step was
+    /// taken, and whether the launcher should close.
+    fn poll_pad_navigation(&mut self, display: &mut Display) -> (bool, bool) {
         if !self.pad_focused {
-            return false;
+            return (false, false);
         }
+        if self.capturing() {
+            self.swallow_pads();
+            return (false, false);
+        }
+        let (x, y, lt, rt) = self.pad_readings();
+        let now = Instant::now();
+        let device = self.pad_device;
+        let mut keys = Vec::new();
+        // Horizontal changes are one-shot: holding left on a choice must not
+        // keep flipping it.
+        if let Some(direction) = self.pad_x.poll(x, now, false) {
+            keys.push(if direction < 0 {
+                GuiKey::Left
+            } else {
+                GuiKey::Right
+            });
+        }
+        if let Some(direction) = self.pad_y.poll(y, now, true) {
+            keys.push(if direction < 0 {
+                GuiKey::Up
+            } else {
+                GuiKey::Down
+            });
+        }
+        if self.pad_lt.poll(lt, now, false) == Some(1) {
+            keys.push(GuiKey::SubPrev);
+        }
+        if self.pad_rt.poll(rt, now, false) == Some(1) {
+            keys.push(GuiKey::SubNext);
+        }
+        let mut close = false;
+        for &key in &keys {
+            close |= self.handle(GuiEvent::Key(key, device), display);
+        }
+        (!keys.is_empty(), close)
+    }
+
+    /// Let every held pad direction go unanswered until it is released: a
+    /// direction bound in the key configuration must not then move its
+    /// cursor.
+    fn swallow_pads(&mut self) {
+        let (x, y, lt, rt) = self.pad_readings();
+        self.pad_x.swallow(x);
+        self.pad_y.swallow(y);
+        self.pad_lt.swallow(lt);
+        self.pad_rt.swallow(rt);
+    }
+
+    /// The D-pad or left stick across and down, and the two triggers.
+    fn pad_readings(&self) -> (i16, i16, i16, i16) {
         let x = if self.pads.button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) {
             i16::MAX
         } else if self.pads.button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) {
@@ -1333,336 +1409,107 @@ impl Launcher {
         } else {
             self.pads.axis(SDL_GAMEPAD_AXIS_LEFTY)
         };
-        let now = Instant::now();
-        let mut changed = false;
-        // Horizontal changes are one-shot: holding left on UPDATE or OPTIONS
-        // must not keep flipping a setting.
-        if let Some(direction) = self.pad_x.poll(x, now, false) {
-            self.key(
-                if direction < 0 {
-                    SDL_SCANCODE_LEFT
-                } else {
-                    SDL_SCANCODE_RIGHT
-                },
-                SDL_KMOD_NONE,
-                display,
-            );
-            changed = true;
-        }
-        if let Some(direction) = self.pad_y.poll(y, now, true) {
-            self.key(
-                if direction < 0 {
-                    SDL_SCANCODE_UP
-                } else {
-                    SDL_SCANCODE_DOWN
-                },
-                SDL_KMOD_NONE,
-                display,
-            );
-            changed = true;
-        }
-        changed
+        let lt = self.pads.axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+        let rt = self.pads.axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+        (x, y, lt, rt)
     }
 
-    /// Handle one gamepad button. Returns true when the launcher should close.
-    fn gamepad_button(&mut self, button: u8, display: &mut Display) -> bool {
+    /// Handle one gamepad button from pad `which`. Returns true when the
+    /// launcher should close.
+    fn gamepad_button(&mut self, button: u8, which: u32, display: &mut Display) -> bool {
         if !self.pad_focused {
             return false;
         }
+        self.pad_device = Device::Gamepad(engine::pad_style(which));
         let button = i32::from(button);
+        if self.capturing() {
+            self.options_capture(Input::PadButton(button), None, display);
+            return false;
+        }
+        let options = self.options.is_some();
         let mut dpad = None;
-        let scancode = match button {
+        let key = match button {
             b if b == SDL_GAMEPAD_BUTTON_DPAD_UP.0 => {
                 dpad = Some((false, -1));
-                Some(SDL_SCANCODE_UP)
+                GuiKey::Up
             }
             b if b == SDL_GAMEPAD_BUTTON_DPAD_DOWN.0 => {
                 dpad = Some((false, 1));
-                Some(SDL_SCANCODE_DOWN)
+                GuiKey::Down
             }
             b if b == SDL_GAMEPAD_BUTTON_DPAD_LEFT.0 => {
                 dpad = Some((true, -1));
-                Some(SDL_SCANCODE_LEFT)
+                GuiKey::Left
             }
             b if b == SDL_GAMEPAD_BUTTON_DPAD_RIGHT.0 => {
                 dpad = Some((true, 1));
-                Some(SDL_SCANCODE_RIGHT)
+                GuiKey::Right
             }
-            b if b == SDL_GAMEPAD_BUTTON_SOUTH.0 || b == SDL_GAMEPAD_BUTTON_START.0 => {
-                Some(SDL_SCANCODE_RETURN)
-            }
-            b if b == SDL_GAMEPAD_BUTTON_EAST.0 || b == SDL_GAMEPAD_BUTTON_BACK.0 => {
-                Some(SDL_SCANCODE_ESCAPE)
-            }
-            b if b == SDL_GAMEPAD_BUTTON_WEST.0 => match self.screen {
-                Screen::Install => Some(SDL_SCANCODE_B),
-                Screen::Mods => Some(SDL_SCANCODE_O),
-                _ => None,
-            },
-            _ => None,
+            b if b == SDL_GAMEPAD_BUTTON_SOUTH.0 => GuiKey::Confirm,
+            b if b == SDL_GAMEPAD_BUTTON_EAST.0 => GuiKey::Cancel,
+            // In the options the face and system buttons are the game's.
+            b if b == SDL_GAMEPAD_BUTTON_START.0 && options => GuiKey::Cancel,
+            b if b == SDL_GAMEPAD_BUTTON_BACK.0 && options => GuiKey::ResetAll,
+            b if b == SDL_GAMEPAD_BUTTON_NORTH.0 && options => GuiKey::ResetGroup,
+            b if b == SDL_GAMEPAD_BUTTON_START.0 => GuiKey::Confirm,
+            b if b == SDL_GAMEPAD_BUTTON_BACK.0 => GuiKey::Cancel,
+            b if b == SDL_GAMEPAD_BUTTON_WEST.0 => GuiKey::Aux,
+            b if b == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER.0 => GuiKey::TabPrev,
+            b if b == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER.0 => GuiKey::TabNext,
+            _ => return false,
         };
-        if let Some(scancode) = scancode {
-            let closed = self.key(scancode, SDL_KMOD_NONE, display);
-            if let Some((horizontal, direction)) = dpad {
-                let state = if horizontal {
-                    &mut self.pad_x
-                } else {
-                    &mut self.pad_y
-                };
-                state.direction = direction;
-                // Horizontal directions stay one-shot; vertical ones repeat.
-                state.next = (!horizontal).then(|| Instant::now() + PAD_INITIAL_DELAY);
-            }
-            return closed;
+        let closed = self.handle(GuiEvent::Key(key, self.pad_device), display);
+        if let Some((horizontal, direction)) = dpad {
+            let state = if horizontal {
+                &mut self.pad_x
+            } else {
+                &mut self.pad_y
+            };
+            state.direction = direction;
+            // Horizontal directions stay one-shot; vertical ones repeat.
+            state.next = (!horizontal).then(|| Instant::now() + PAD_INITIAL_DELAY);
         }
-        if self.screen == Screen::Mods {
-            if button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER.0 {
-                self.move_mod(-1);
-            } else if button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER.0 {
-                self.move_mod(1);
-            }
-        }
-        false
+        closed
     }
 
-    /// Handle one key press. Returns true when the launcher should close.
-    fn key(
-        &mut self,
-        scancode: SDL_Scancode,
-        modifiers: SDL_Keymod,
-        display: &mut Display,
-    ) -> bool {
-        if self.screen == Screen::Progress {
-            if scancode == SDL_SCANCODE_ESCAPE {
-                self.confirm_cancel = !self.confirm_cancel;
-            } else if matches!(scancode, SDL_SCANCODE_RETURN | SDL_SCANCODE_KP_ENTER)
-                && self.confirm_cancel
-            {
-                if let Some(job) = &self.job {
-                    job.cancel.store(true, Ordering::Relaxed);
-                }
-                if let Some(job) = &self.update_job {
-                    job.cancel.store(true, Ordering::Relaxed);
-                }
-                self.confirm_cancel = false;
-            }
-            return false;
-        }
-        match scancode {
-            SDL_SCANCODE_ESCAPE => {
-                if self.screen == Screen::Main {
-                    return true;
-                }
-                if self.screen == Screen::Message {
-                    self.dismiss_message();
-                } else {
-                    self.screen = Screen::Main;
-                }
-            }
-            SDL_SCANCODE_RETURN | SDL_SCANCODE_KP_ENTER => return self.activate(display),
-            SDL_SCANCODE_SPACE => {
-                if self.screen == Screen::Mods {
-                    self.toggle_mod();
-                } else if self.screen == Screen::Update && self.update_index >= 4 {
-                    self.toggle_update();
-                } else {
-                    return self.activate(display);
-                }
-            }
-            SDL_SCANCODE_UP | SDL_SCANCODE_W => {
-                if self.screen == Screen::Mods && modifiers & SDL_KMOD_CTRL != 0 {
-                    self.move_mod(-1);
-                } else {
-                    self.step_selection(-1);
-                }
-            }
-            SDL_SCANCODE_DOWN | SDL_SCANCODE_S => {
-                if self.screen == Screen::Mods && modifiers & SDL_KMOD_CTRL != 0 {
-                    self.move_mod(1);
-                } else {
-                    self.step_selection(1);
-                }
-            }
-            SDL_SCANCODE_LEFT | SDL_SCANCODE_A => {
-                if self.screen == Screen::Update {
-                    self.toggle_update();
-                } else if self.screen == Screen::Options {
-                    self.change_option(-1, display);
-                } else if matches!(self.screen, Screen::Main | Screen::Install | Screen::Mods)
-                    && self.dialog.is_none()
-                {
-                    self.cycle_game(-1);
-                }
-            }
-            SDL_SCANCODE_RIGHT | SDL_SCANCODE_D => {
-                if self.screen == Screen::Update {
-                    self.toggle_update();
-                } else if self.screen == Screen::Options {
-                    self.change_option(1, display);
-                } else if matches!(self.screen, Screen::Main | Screen::Install | Screen::Mods)
-                    && self.dialog.is_none()
-                {
-                    self.cycle_game(1);
-                }
-            }
-            SDL_SCANCODE_EQUALS => {
-                if self.screen == Screen::Mods {
-                    self.move_mod(-1);
-                }
-            }
-            SDL_SCANCODE_MINUS => {
-                if self.screen == Screen::Mods {
-                    self.move_mod(1);
-                }
-            }
-            SDL_SCANCODE_B if self.screen == Screen::Install => self.browse(display),
-            SDL_SCANCODE_O if self.screen == Screen::Mods => {
-                let dir = match self.mods.get(self.mods_index) {
-                    Some(row) if row.path.is_dir() => row.path.clone(),
-                    Some(row) => row
-                        .path
-                        .parent()
-                        .map(Path::to_path_buf)
-                        .unwrap_or_else(|| row.path.clone()),
-                    None => paths::mods_dir(&paths::primary_data_dir()),
-                };
-                open_folder(&dir);
-            }
-            _ => {}
-        }
-        false
+    /// The navigation key a keyboard key is on the current screen. The
+    /// options screen takes the game's menu keys.
+    fn keyboard_key(&self, scancode: SDL_Scancode, modifiers: SDL_Keymod) -> Option<GuiKey> {
+        let ctrl = modifiers & SDL_KMOD_CTRL != 0;
+        let options = self.options.is_some();
+        Some(match scancode {
+            SDL_SCANCODE_ESCAPE => GuiKey::Cancel,
+            SDL_SCANCODE_RETURN | SDL_SCANCODE_KP_ENTER | SDL_SCANCODE_SPACE => GuiKey::Confirm,
+            SDL_SCANCODE_UP | SDL_SCANCODE_W if ctrl => GuiKey::TabPrev,
+            SDL_SCANCODE_DOWN | SDL_SCANCODE_S if ctrl => GuiKey::TabNext,
+            SDL_SCANCODE_UP | SDL_SCANCODE_W => GuiKey::Up,
+            SDL_SCANCODE_DOWN | SDL_SCANCODE_S => GuiKey::Down,
+            SDL_SCANCODE_LEFT | SDL_SCANCODE_A => GuiKey::Left,
+            SDL_SCANCODE_RIGHT | SDL_SCANCODE_D => GuiKey::Right,
+            SDL_SCANCODE_Q if options => GuiKey::TabPrev,
+            SDL_SCANCODE_E if options => GuiKey::TabNext,
+            SDL_SCANCODE_1 if options => GuiKey::SubPrev,
+            SDL_SCANCODE_3 if options => GuiKey::SubNext,
+            SDL_SCANCODE_TAB if options => GuiKey::ResetAll,
+            SDL_SCANCODE_R if options => GuiKey::ResetGroup,
+            SDL_SCANCODE_EQUALS => GuiKey::TabPrev,
+            SDL_SCANCODE_MINUS => GuiKey::TabNext,
+            SDL_SCANCODE_B if !options && self.screen() == Screen::Install => GuiKey::Aux,
+            SDL_SCANCODE_O if !options && self.screen() == Screen::Mods => GuiKey::Aux,
+            _ => return None,
+        })
     }
 
-    fn step_selection(&mut self, delta: isize) {
-        match self.screen {
-            Screen::Main => step(&mut self.main_index, MAIN_ITEMS.len(), delta),
-            Screen::Play => {
-                step(&mut self.play_index, self.packs.len(), delta);
-                self.follow_play_selection();
-            }
-            Screen::Update => step(&mut self.update_index, UPDATE_ITEMS.len(), delta),
-            Screen::Mods => step(&mut self.mods_index, self.mods.len(), delta),
-            Screen::Options => step(&mut self.options_index, OPTIONS_ITEMS.len(), delta),
-            Screen::Install | Screen::Progress | Screen::Message => {}
-        }
-    }
-
-    /// Enter/Space on the current screen. Returns true to close the launcher.
-    fn activate(&mut self, display: &mut Display) -> bool {
-        match self.screen {
-            Screen::Main => return self.activate_main(display),
-            Screen::Play => return self.play(display),
-            Screen::Install => self.install(),
-            Screen::Update => self.activate_update(),
-            Screen::Mods => self.toggle_mod(),
-            Screen::Options => self.change_option(1, display),
-            Screen::Progress => {}
-            Screen::Message => self.dismiss_message(),
-        }
-        false
-    }
-
-    fn activate_main(&mut self, display: &mut Display) -> bool {
-        match self.main_index {
-            0 => {
-                self.screen = Screen::Play;
-                self.play_index = self
-                    .packs
-                    .iter()
-                    .position(|pack| Game::from_id(&pack.id) == Some(self.game))
-                    .unwrap_or(0);
-            }
-            1 => self.screen = Screen::Install,
-            2 => {
-                self.screen = Screen::Update;
-                self.update_index = 0;
-            }
-            3 => {
-                self.refresh_mods();
-                self.screen = Screen::Mods;
-                self.mods_index = 0;
-            }
-            4 => {
-                display.note_window_size();
-                self.sync_window(display);
-                self.screen = Screen::Options;
-                self.options_index = 0;
-            }
-            5 => return true,
-            _ => {}
-        }
-        false
-    }
-
-    fn activate_update(&mut self) {
-        match self.update_index {
-            0 => self.start_check(true),
-            1 => self.start_update(),
-            2 => self.install(),
-            3 => self.rollback(),
-            4 => self.toggle_channel(),
-            5 => self.toggle_auto_check(),
-            _ => {}
-        }
-    }
-
-    /// The text shown in the `VALUE` column for an `OPTIONS` row.
-    fn option_value(&self, index: usize) -> String {
-        option_value(&self.config, index)
-    }
-
-    /// Change the selected `OPTIONS` row, applying window changes immediately
-    /// and persisting every choice.
-    fn change_option(&mut self, delta: isize, display: &mut Display) {
-        let window = change_option(&mut self.config, self.options_index, delta);
-        if self.options_index == OPTION_VSYNC {
-            if let Err(err) = display.set_vsync(self.config.graphics.vsync) {
-                logging::write(&format!("warning: vsync not applied: {err:#}"));
-                eprintln!("warning: vsync not applied: {err:#}");
-            }
-        } else if window {
-            self.apply_window(display);
-        }
-        self.save_options();
-    }
+    // ---- window and updates ------------------------------------------
 
     /// Copy the window values the display currently has into the config, so
-    /// an entry made after a manual resize starts from the real size.
+    /// the options and Play start from the real size.
     fn sync_window(&mut self, display: &Display) {
         if let Some(current) = display.graphics() {
             self.config.graphics.fullscreen = current.fullscreen;
             self.config.graphics.display = current.display;
             self.config.graphics.window_width = current.window_width;
             self.config.graphics.window_height = current.window_height;
-        }
-    }
-
-    /// Apply windowed size, fullscreen and aspect to the live launcher window,
-    /// keeping the values `play` hands to the game in sync.
-    fn apply_window(&mut self, display: &mut Display) {
-        self.config.graphics = display.apply_window_options(self.config.graphics);
-    }
-
-    /// Persist the options file. A failure is logged but never blocks the
-    /// launcher: the change still applies for this run.
-    fn save_options(&self) {
-        let path = Config::default_path();
-        if let Err(err) = Config::save_options(
-            &path,
-            &self.config.graphics,
-            self.config.language.as_deref(),
-            self.config.game,
-        ) {
-            logging::write(&format!("warning: options not saved: {err:#}"));
-            eprintln!("warning: options not saved: {err:#}");
-        }
-    }
-
-    fn toggle_update(&mut self) {
-        if self.update_index == 4 {
-            self.toggle_channel();
-        } else if self.update_index == 5 {
-            self.toggle_auto_check();
         }
     }
 
@@ -1686,7 +1533,7 @@ impl Launcher {
             if manual {
                 self.show_message(
                     "CHECK FOR UPDATES",
-                    &["DEVELOPMENT BUILDS DO NOT UPDATE THEMSELVES."],
+                    &["Development builds do not update themselves."],
                     Screen::Update,
                 );
             }
@@ -1715,8 +1562,7 @@ impl Launcher {
         self.config.updates.last_check = unix_now();
         match received {
             Ok(Some(info)) => {
-                self.config.updates.available_channel =
-                    crate::config::UpdateChannel::parse(&info.channel);
+                self.config.updates.available_channel = UpdateChannel::parse(&info.channel);
                 self.config.updates.available_version = Some(info.version);
                 self.config.updates.available_sha = Some(info.sha);
             }
@@ -1739,9 +1585,7 @@ impl Launcher {
             return;
         };
         let current = match updates.available_channel {
-            Some(crate::config::UpdateChannel::Nightly) => {
-                !sha.is_empty() && sha == build_info::COMMIT
-            }
+            Some(UpdateChannel::Nightly) => !sha.is_empty() && sha == build_info::COMMIT,
             _ => updates.available_version.as_deref() == Some(build_info::VERSION),
         };
         if current {
@@ -1760,8 +1604,8 @@ impl Launcher {
 
     fn toggle_channel(&mut self) {
         self.config.updates.channel = match self.config.updates.channel {
-            crate::config::UpdateChannel::Release => crate::config::UpdateChannel::Nightly,
-            crate::config::UpdateChannel::Nightly => crate::config::UpdateChannel::Release,
+            UpdateChannel::Release => UpdateChannel::Nightly,
+            UpdateChannel::Nightly => UpdateChannel::Release,
         };
         self.config.updates.available_channel = None;
         self.config.updates.available_version = None;
@@ -1779,7 +1623,7 @@ impl Launcher {
         if !build_info::is_published() {
             self.show_message(
                 "UPDATE ENGINE",
-                &["DEVELOPMENT BUILDS DO NOT UPDATE THEMSELVES."],
+                &["Development builds do not update themselves."],
                 Screen::Update,
             );
             return;
@@ -1790,7 +1634,7 @@ impl Launcher {
         ) else {
             self.show_message(
                 "UPDATE ENGINE",
-                &["THERE IS NO NEWER PUBLISHED BUILD."],
+                &["There is no newer published build."],
                 Screen::Update,
             );
             return;
@@ -1839,8 +1683,8 @@ impl Launcher {
             state,
         });
         self.job = None;
-        self.screen = Screen::Progress;
-        self.confirm_cancel = false;
+        self.publish_screen(Screen::Progress);
+        self.open(Screen::Progress);
     }
 
     fn poll_update_job(&mut self) -> bool {
@@ -1857,7 +1701,7 @@ impl Launcher {
             logging::write("update cancelled");
             self.show_message(
                 "UPDATE CANCELLED",
-                &["THE ENGINE WAS NOT CHANGED."],
+                &["The engine was not changed."],
                 Screen::Update,
             );
             return true;
@@ -1866,20 +1710,13 @@ impl Launcher {
             Ok(()) => {
                 logging::write("update: installing the downloaded engine");
                 if let Err(err) = update::install_staged() {
-                    self.show_message(
-                        "UPDATE FAILED",
-                        &[&truncate(&format!("{err:#}"), 72)],
-                        Screen::Update,
-                    );
+                    self.show_message("UPDATE FAILED", &[&format!("{err:#}")], Screen::Update);
                     return true;
                 }
                 if let Err(err) = update::restart() {
                     self.show_message(
                         "RESTART FAILED",
-                        &[
-                            &truncate(&format!("{err:#}"), 72),
-                            "RESTART ARKLAY MANUALLY.",
-                        ],
+                        &[&format!("{err:#}"), "Restart Arklay manually."],
                         Screen::Update,
                     );
                     return true;
@@ -1890,7 +1727,7 @@ impl Launcher {
                 logging::write(&format!("update failed: {err}"));
                 self.show_message(
                     "UPDATE FAILED",
-                    &[&truncate(&err, 72), "SEE THE LOG FOR DETAILS."],
+                    &[&err, "See the log for details."],
                     Screen::Update,
                 );
             }
@@ -1902,7 +1739,7 @@ impl Launcher {
         if !update::rollback_available() {
             self.show_message(
                 "ROLL BACK LAST UPDATE",
-                &["THERE IS NO PREVIOUS BUILD TO RESTORE."],
+                &["There is no previous build to restore."],
                 Screen::Update,
             );
             return;
@@ -1913,39 +1750,21 @@ impl Launcher {
                 if let Err(err) = update::restart() {
                     self.show_message(
                         "RESTART FAILED",
-                        &[
-                            &truncate(&format!("{err:#}"), 72),
-                            "RESTART ARKLAY MANUALLY.",
-                        ],
+                        &[&format!("{err:#}"), "Restart Arklay manually."],
                         Screen::Update,
                     );
                     return;
                 }
                 std::process::exit(0);
             }
-            Err(err) => self.show_message(
-                "ROLL BACK FAILED",
-                &[&truncate(&format!("{err:#}"), 72)],
-                Screen::Update,
-            ),
-        }
-    }
-
-    /// Make the highlighted pack's game the selected one, so the mods it
-    /// would load are the ones the MODS screen shows.
-    fn follow_play_selection(&mut self) {
-        if let Some(game) = self
-            .packs
-            .get(self.play_index)
-            .and_then(|pack| Game::from_id(&pack.id))
-        {
-            self.select_game(game);
+            Err(err) => {
+                self.show_message("ROLL BACK FAILED", &[&format!("{err:#}")], Screen::Update)
+            }
         }
     }
 
     fn refresh_mods(&mut self) {
-        let pack = self.pack().cloned();
-        self.mods = scan_mods(pack.as_ref(), &self.config, &Config::mod_dirs());
+        self.mods = scan_mods(&self.packs, &self.config, &Config::mod_dirs());
         if self.mods_index >= self.mods.len() {
             self.mods_index = self.mods.len().saturating_sub(1);
         }
@@ -1985,35 +1804,18 @@ impl Launcher {
         }
     }
 
-    fn show_message(&mut self, title: &str, lines: &[&str], back: Screen) {
-        self.message = Some(Message {
-            title: title.to_string(),
-            lines: lines.iter().map(|line| (*line).to_string()).collect(),
-            back,
-        });
-        self.screen = Screen::Message;
-    }
-
-    fn dismiss_message(&mut self) {
-        if let Some(message) = self.message.take() {
-            self.screen = message.back;
-        } else {
-            self.screen = Screen::Main;
-        }
-    }
-
     /// Start (or restart) the conversion for the current source and target.
     fn install(&mut self) {
         if self.job.is_some() {
             return;
         }
         let game = self.game;
-        let title = self.game_title();
+        let title = game.title().to_uppercase();
         let Some(source) = self.source().cloned() else {
             self.show_message(
                 &format!("{title} NOT FOUND"),
-                &["Dismiss, then press B (or X on a pad) to choose the game folder."],
-                self.screen,
+                &["Choose the game folder with Change Source."],
+                Screen::Install,
             );
             return;
         };
@@ -2023,7 +1825,7 @@ impl Launcher {
                 self.show_message(
                     &format!("NOT {title}"),
                     &[&format!("{err:#}")],
-                    if self.screen == Screen::Update {
+                    if self.screen() == Screen::Update {
                         Screen::Update
                     } else {
                         Screen::Install
@@ -2083,10 +1885,14 @@ impl Launcher {
             build: source.build,
             target,
             rebuild: pack.is_some(),
+            back: if self.screen() == Screen::Update {
+                Screen::Update
+            } else {
+                Screen::Install
+            },
         });
-        self.screen = Screen::Progress;
-        self.confirm_cancel = false;
-        self.message = None;
+        self.publish_screen(Screen::Progress);
+        self.open(Screen::Progress);
     }
 
     /// Hand the launcher's window to the game. Returning true means the
@@ -2224,13 +2030,14 @@ impl Launcher {
                 logging::write(&format!("source {}: {}", game.id(), path.display()));
                 self.sources.insert(game, Source { path, build: None });
                 self.select_game(game);
+                self.ui.invalidate();
             }
             None => {
                 let err = resolve_source(&path, self.game)
                     .err()
                     .unwrap_or_else(|| anyhow!("not a game installation"));
                 logging::write(&format!("source rejected: {err:#}"));
-                let title = format!("NOT {}", self.game_title());
+                let title = format!("NOT {}", self.game.title().to_uppercase());
                 self.show_message(&title, &[&format!("{err:#}")], Screen::Install);
             }
         }
@@ -2253,11 +2060,8 @@ impl Launcher {
             return false;
         };
         let job = self.job.take().expect("a running job");
-        let back = if job.rebuild {
-            Screen::Update
-        } else {
-            Screen::Install
-        };
+        self.game = job.game;
+        let back = job.back;
         let cancelled = job.cancel.load(Ordering::Relaxed);
         match result {
             Ok(()) => {
@@ -2279,8 +2083,8 @@ impl Launcher {
                 self.packs = scan_packs();
                 self.game = job.game;
                 self.refresh_mods();
-                self.screen = Screen::Main;
-                self.main_index = 0;
+                self.goto(Screen::Main);
+                self.ui.set_focus_index(0);
                 let title = if job.rebuild {
                     "PACK REBUILT"
                 } else {
@@ -2290,74 +2094,35 @@ impl Launcher {
                     title,
                     &[
                         &job.target.display().to_string(),
-                        "THE PLAY SCREEN LISTS IT.",
+                        "The Play screen lists it.",
                     ],
                     Screen::Main,
                 );
             }
             Err(_) if cancelled => {
                 logging::write("install cancelled");
-                self.show_message("INSTALL CANCELLED", &["NO PACK WAS WRITTEN."], back);
+                self.show_message("INSTALL CANCELLED", &["No pack was written."], back);
             }
             Err(err) => {
                 logging::write(&format!("install failed: {err}"));
-                self.show_message(
-                    "INSTALL FAILED",
-                    &[&truncate(&err, 72), "SEE THE LOG FOR DETAILS."],
-                    back,
-                );
+                self.show_message("INSTALL FAILED", &[&err, "See the log for details."], back);
             }
         }
-        self.confirm_cancel = false;
         true
     }
 
-    /// Turn a mouse click into the row it landed on and activate it.
-    fn click(&mut self, x: i32, y: i32, display: &mut Display) {
-        let x0 = self.grid.col_left(0);
-        let x1 = x0 + self.grid.grid_width();
-        if x < x0 || x >= x1 {
-            return;
-        }
-        let top = self.grid.row_top(GAME_HINT_ROW);
-        if y >= top
-            && y < top + self.grid.cell_h
-            && matches!(self.screen, Screen::Main | Screen::Install | Screen::Mods)
-            && self.dialog.is_none()
-            && self.multi_game()
-        {
-            self.cycle_game(1);
-            return;
-        }
-        let hit = self.hits.iter().find(|(row, _)| {
-            let top = self.grid.row_top(*row);
-            y >= top && y < top + self.grid.cell_h
-        });
-        let Some((_, index)) = hit.copied() else {
-            return;
-        };
-        match self.screen {
-            Screen::Main => self.main_index = index,
-            Screen::Play => {
-                self.play_index = index;
-                self.follow_play_selection();
-            }
-            Screen::Update => self.update_index = index,
-            Screen::Mods => self.mods_index = index,
-            Screen::Options => self.options_index = index,
-            Screen::Install | Screen::Progress | Screen::Message => return,
-        }
-        self.activate(display);
-    }
-
     /// Pick a screen for a headless preview capture.
-    fn set_capture_screen(&mut self, name: &str) {
-        self.screen = match name {
+    fn set_capture_screen(&mut self, name: &str, display: &mut Display) {
+        let screen = match name {
             "play" => Screen::Play,
+            "games" => Screen::Games,
             "install" => Screen::Install,
             "update" => Screen::Update,
             "mods" => Screen::Mods,
-            "options" => Screen::Options,
+            "options" => {
+                self.open_options(display);
+                return;
+            }
             "progress" => {
                 self.capture_progress = Some(ProgressState {
                     label: "roomcut".to_string(),
@@ -2373,16 +2138,43 @@ impl Launcher {
             }
             "message" => {
                 self.show_message("PREVIEW", &["A sample message screen."], Screen::Main);
-                Screen::Message
+                return;
             }
             _ => Screen::Main,
         };
+        self.goto(screen);
+    }
+
+    /// Paint the screens at `width` x `height` and make the canvas opaque
+    /// for the window; returns whether anything was repainted.
+    fn draw(&mut self, width: u32, height: u32) -> bool {
+        self.publish();
+        let painted = match &mut self.options {
+            Some(menu) => menu.draw(width, height),
+            None => self.ui.draw(width, height),
+        };
+        if !painted && !self.rgba.is_empty() {
+            return false;
+        }
+        // The canvas is premultiplied; over black that is its colour as is.
+        let canvas: &Canvas = match &self.options {
+            Some(menu) => menu.canvas(),
+            None => self.ui.canvas(),
+        };
+        self.size = (canvas.width, canvas.height);
+        let pixels = canvas.pixels();
+        self.rgba.clear();
+        self.rgba.extend_from_slice(&pixels);
+        for pixel in self.rgba.as_chunks_mut::<4>().0 {
+            pixel[3] = 255;
+        }
+        true
     }
 }
 
 impl Launcher {
     fn run_loop(&mut self, display: &mut Display) -> Result<()> {
-        let mut dirty = true;
+        let mut present = true;
         let mut event = SDL_Event::default();
         loop {
             let dialog_changed = self.poll_dialog();
@@ -2398,37 +2190,26 @@ impl Launcher {
                 self.auto_update = false;
                 self.start_update();
             }
-            if dialog_changed
-                || job_changed
-                || update_changed
-                || check_changed
-                || self.job.is_some()
-                || self.update_job.is_some()
-                || self.checking
-            {
-                dirty = true;
+            if dialog_changed || job_changed || update_changed || check_changed {
+                self.ui.invalidate();
             }
-            if dirty {
-                let (width, height) = display.drawable_size();
-                if width > 0
-                    && height > 0
-                    && (width != self.frame.width || height != self.frame.height)
-                {
-                    self.resize(width, height)?;
-                }
-                self.draw();
-                display.present_ui(self.frame.width, self.frame.height, &self.frame.rgba)?;
+            let (width, height) = display.drawable_size();
+            if width > 0 && height > 0 && (self.draw(width, height) || present) {
+                display.present_ui(self.size.0, self.size.1, &self.rgba)?;
                 display.show()?;
-                dirty = false;
+                present = false;
             }
             if !unsafe { SDL_WaitEventTimeout(&mut event, self.pad_wait()) } {
-                if self.poll_pad_navigation(display) {
-                    dirty = true;
+                let (_, close) = self.poll_pad_navigation(display);
+                if close {
+                    self.save_window(display);
+                    return Ok(());
                 }
                 continue;
             }
             loop {
                 let kind = unsafe { event.r#type };
+                let mut close = false;
                 if kind == SDL_EVENT_QUIT {
                     // A conversion's temporary pack is only removed by the
                     // worker; give it a moment to see the cancel flag before
@@ -2450,40 +2231,105 @@ impl Launcher {
                     let scancode = unsafe { event.key.scancode };
                     let modifiers = unsafe { event.key.r#mod };
                     let repeat = unsafe { event.key.repeat };
-                    if !repeat {
+                    if self.capturing() {
+                        if !repeat {
+                            self.options_capture(Input::key(scancode), None, display);
+                        }
+                    } else if repeat {
+                        // The options repeat a held direction, as in game.
+                        let key = self.keyboard_key(scancode, modifiers);
+                        if self.options.is_some()
+                            && let Some(
+                                key @ (GuiKey::Up | GuiKey::Down | GuiKey::Left | GuiKey::Right),
+                            ) = key
+                        {
+                            self.handle(GuiEvent::Key(key, Device::Keyboard), display);
+                        }
+                    } else {
                         if modifiers & SDL_KMOD_ALT != 0
                             && matches!(scancode, SDL_SCANCODE_RETURN | SDL_SCANCODE_KP_ENTER)
                         {
                             display.toggle_fullscreen();
-                        } else if self.key(scancode, modifiers, display) {
-                            self.save_window(display);
-                            return Ok(());
+                        } else if let Some(key) = self.keyboard_key(scancode, modifiers) {
+                            close = self.handle(GuiEvent::Key(key, Device::Keyboard), display);
                         }
-                        dirty = true;
                     }
                 } else if kind == SDL_EVENT_GAMEPAD_ADDED {
                     self.pads.open(unsafe { event.gdevice.which });
                 } else if kind == SDL_EVENT_GAMEPAD_REMOVED {
                     self.pads.close(unsafe { event.gdevice.which });
-                } else if kind == SDL_EVENT_GAMEPAD_BUTTON_DOWN {
-                    if self.gamepad_button(unsafe { event.gbutton.button }, display) {
-                        self.save_window(display);
-                        return Ok(());
+                } else if kind == SDL_EVENT_GAMEPAD_AXIS_MOTION {
+                    // Only the key configuration takes a stick or trigger;
+                    // navigation polls them.
+                    let axis = i32::from(unsafe { event.gaxis.axis });
+                    let value = unsafe { event.gaxis.value };
+                    let which = unsafe { event.gaxis.which }.0;
+                    let state = self.axes.get(&(which, axis)).copied().unwrap_or(0);
+                    let next = if value >= PAD_DEADZONE || (state > 0 && value >= PAD_RELEASE) {
+                        1
+                    } else if value <= -PAD_DEADZONE || (state < 0 && value <= -PAD_RELEASE) {
+                        -1
+                    } else {
+                        0
+                    };
+                    self.axes.insert((which, axis), next);
+                    if next != state && next != 0 && self.capturing() {
+                        self.options_capture(Input::PadAxis(axis, next > 0), None, display);
                     }
-                    dirty = true;
-                } else if kind == SDL_EVENT_MOUSE_BUTTON_DOWN {
-                    if unsafe { event.button.button } == SDL_BUTTON_LEFT as u8 {
-                        // Mouse events are in window coordinates; the frame
-                        // is in drawable pixels (they differ under a display
-                        // scale above 100%).
-                        let (window_w, window_h) = display.window_size();
-                        let (pixel_w, pixel_h) = display.drawable_size();
-                        let scale_x = pixel_w as f32 / window_w.max(1) as f32;
-                        let scale_y = pixel_h as f32 / window_h.max(1) as f32;
-                        let x = (unsafe { event.button.x } * scale_x) as i32;
-                        let y = (unsafe { event.button.y } * scale_y) as i32;
-                        self.click(x, y, display);
-                        dirty = true;
+                } else if kind == SDL_EVENT_GAMEPAD_BUTTON_DOWN {
+                    let button = unsafe { event.gbutton.button };
+                    let which = unsafe { event.gbutton.which };
+                    close = self.gamepad_button(button, which.0, display);
+                } else if kind == SDL_EVENT_MOUSE_BUTTON_DOWN || kind == SDL_EVENT_MOUSE_BUTTON_UP {
+                    let button = unsafe { event.button.button };
+                    let (x, y) = pointer(display, unsafe { event.button.x }, unsafe {
+                        event.button.y
+                    });
+                    if self.capturing() {
+                        if kind == SDL_EVENT_MOUSE_BUTTON_DOWN {
+                            self.options_capture(Input::Mouse(button), Some((x, y)), display);
+                        }
+                    } else if button == SDL_BUTTON_LEFT as u8 {
+                        let event = if kind == SDL_EVENT_MOUSE_BUTTON_DOWN {
+                            GuiEvent::PointerDown { x, y }
+                        } else {
+                            GuiEvent::PointerUp { x, y }
+                        };
+                        close = self.handle(event, display);
+                    }
+                } else if kind == SDL_EVENT_MOUSE_MOTION {
+                    let (x, y) = pointer(display, unsafe { event.motion.x }, unsafe {
+                        event.motion.y
+                    });
+                    close = self.handle(GuiEvent::PointerMove { x, y }, display);
+                } else if kind == SDL_EVENT_MOUSE_WHEEL {
+                    let wheel = unsafe { event.wheel };
+                    let notches = wheel.y;
+                    if self.capturing() {
+                        // Whole notches, the right way up, as the game reads
+                        // the wheel.
+                        let sign = if wheel.direction == SDL_MOUSEWHEEL_FLIPPED {
+                            -1
+                        } else {
+                            1
+                        };
+                        let (x, y) = (wheel.integer_x * sign, wheel.integer_y * sign);
+                        let notch =
+                            [
+                                (y, controls::Wheel::Up, controls::Wheel::Down),
+                                (x, controls::Wheel::Right, controls::Wheel::Left),
+                            ]
+                            .into_iter()
+                            .find_map(|(delta, positive, negative)| match delta.signum() {
+                                1 => Some(positive),
+                                -1 => Some(negative),
+                                _ => None,
+                            });
+                        if let Some(notch) = notch {
+                            self.options_capture(Input::Wheel(notch), None, display);
+                        }
+                    } else {
+                        close = self.handle(GuiEvent::Wheel(notches), display);
                     }
                 } else if kind == SDL_EVENT_WINDOW_FOCUS_LOST {
                     // Do not keep polling or repeating a direction while
@@ -2491,12 +2337,14 @@ impl Launcher {
                     self.pad_focused = false;
                     self.pad_x = PadAxis::default();
                     self.pad_y = PadAxis::default();
-                    dirty = true;
+                    self.pad_lt = PadAxis::default();
+                    self.pad_rt = PadAxis::default();
                 } else if kind == SDL_EVENT_WINDOW_FOCUS_GAINED {
                     self.pad_focused = true;
                     self.pad_x = PadAxis::default();
                     self.pad_y = PadAxis::default();
-                    dirty = true;
+                    self.pad_lt = PadAxis::default();
+                    self.pad_rt = PadAxis::default();
                 } else if kind == SDL_EVENT_WINDOW_RESIZED
                     || kind == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED
                     || kind == SDL_EVENT_WINDOW_EXPOSED
@@ -2505,14 +2353,27 @@ impl Launcher {
                         display.note_window_size();
                         self.sync_window(display);
                     }
-                    dirty = true;
+                    self.ui.invalidate();
+                    if let Some(menu) = &mut self.options {
+                        menu.set_settings(Settings {
+                            graphics: self.config.graphics,
+                            ..menu.settings().clone()
+                        });
+                    }
+                    present = true;
+                }
+                if close {
+                    self.save_window(display);
+                    return Ok(());
                 }
                 if !unsafe { SDL_PollEvent(&mut event) } {
                     break;
                 }
             }
-            if self.poll_pad_navigation(display) {
-                dirty = true;
+            let (_, close) = self.poll_pad_navigation(display);
+            if close {
+                self.save_window(display);
+                return Ok(());
             }
         }
     }
@@ -2523,125 +2384,15 @@ impl Launcher {
     }
 }
 
-fn on_off(value: bool) -> String {
-    if value { "ON" } else { "OFF" }.to_string()
-}
-
-/// The text shown in the `VALUE` column for an `OPTIONS` row.
-fn option_value(config: &Config, index: usize) -> String {
-    let graphics = &config.graphics;
-    match index {
-        0 => graphics.renderer.name().to_ascii_uppercase(),
-        1 => format!(
-            "{} ({})",
-            if graphics.aspect.is_standard() {
-                "OFF"
-            } else {
-                "ON"
-            },
-            graphics.aspect.name()
-        ),
-        2 => resolution_label(graphics),
-        3 => on_off(graphics.fullscreen),
-        4 => on_off(graphics.vsync),
-        5 => language_label(config.language.as_deref()),
-        6 => format!("{}%", graphics.render_scale),
-        7 => format!("{}x", graphics.msaa),
-        8 => format!("{} FPS", graphics.frame_rate),
-        9 => on_off(config.game.quick_turn),
-        _ => on_off(config.game.tactical_reload),
-    }
-}
-
-/// Change one `OPTIONS` row. Returns whether the window must be re-applied.
-fn change_option(config: &mut Config, index: usize, delta: isize) -> bool {
-    match index {
-        0 => {
-            config.graphics.renderer = match config.graphics.renderer {
-                RendererKind::Gpu => RendererKind::Software,
-                RendererKind::Software => RendererKind::Gpu,
-            };
-            false
-        }
-        1 => {
-            let aspect = if config.graphics.aspect.is_standard() {
-                video::Aspect::WIDE
-            } else {
-                video::Aspect::STANDARD
-            };
-            let width = config.graphics.window_width;
-            config.graphics.aspect = aspect;
-            config.graphics.window_height =
-                ((u64::from(width) * u64::from(aspect.height()) + 160) / 320) as u32;
-            true
-        }
-        2 => {
-            step_resolution(&mut config.graphics, delta);
-            true
-        }
-        3 => {
-            config.graphics.fullscreen = !config.graphics.fullscreen;
-            true
-        }
-        4 => {
-            config.graphics.vsync = !config.graphics.vsync;
-            false
-        }
-        5 => {
-            step_language(config, delta);
-            false
-        }
-        6 => {
-            config.graphics.render_scale =
-                step_value(&RENDER_SCALES, config.graphics.render_scale, delta);
-            false
-        }
-        7 => {
-            config.graphics.msaa = step_value(&video::MSAA_COUNTS, config.graphics.msaa, delta);
-            false
-        }
-        8 => {
-            config.graphics.frame_rate =
-                video::step_frame_rate(config.graphics.frame_rate, delta as i32);
-            false
-        }
-        9 => {
-            config.game.quick_turn = !config.game.quick_turn;
-            false
-        }
-        _ => {
-            config.game.tactical_reload = !config.game.tactical_reload;
-            false
-        }
-    }
-}
-
-/// Move to the next (or previous) window size for the current aspect.
-fn step_resolution(graphics: &mut video::Graphics, delta: isize) {
-    let presets = resolution_presets(graphics.aspect);
-    let current = presets.iter().position(|&(width, height)| {
-        width == graphics.window_width && height == graphics.window_height
-    });
-    let (width, height) = match current {
-        Some(index) => {
-            presets[(index as isize + delta).rem_euclid(presets.len() as isize) as usize]
-        }
-        None if delta < 0 => presets[presets.len() - 1],
-        None => presets[0],
-    };
-    graphics.window_width = width;
-    graphics.window_height = height;
-}
-
-/// Step the language through `SYSTEM` and every shipped language tag.
-fn step_language(config: &mut Config, delta: isize) {
-    let choices = language_choices();
-    let current = choices
-        .iter()
-        .position(|choice| choice.as_deref() == config.language.as_deref())
-        .unwrap_or(0);
-    let next = (current as isize + delta).rem_euclid(choices.len() as isize) as usize;
-    config.language = choices[next].clone();
+/// A pointer position in canvas pixels. Mouse events are in window
+/// coordinates; the canvas is in drawable pixels (they differ under a
+/// display scale above 100%).
+fn pointer(display: &Display, x: f32, y: f32) -> (f32, f32) {
+    let (window_w, window_h) = display.window_size();
+    let (pixel_w, pixel_h) = display.drawable_size();
+    let scale_x = pixel_w as f32 / window_w.max(1) as f32;
+    let scale_y = pixel_h as f32 / window_h.max(1) as f32;
+    (x * scale_x, y * scale_y)
 }
 
 /// The window-size presets matching `aspect`'s frame shape.
@@ -2650,17 +2401,6 @@ pub(crate) fn resolution_presets(aspect: video::Aspect) -> &'static [(u32, u32)]
         &RESOLUTIONS_STANDARD
     } else {
         &RESOLUTIONS_WIDE
-    }
-}
-
-/// The resolution row's value, with the preset's whole-frame zoom.
-fn resolution_label(graphics: &video::Graphics) -> String {
-    let size = (graphics.window_width, graphics.window_height);
-    if resolution_presets(graphics.aspect).contains(&size) {
-        let scale = (size.1 / graphics.aspect.height().max(1)).max(1);
-        format!("{}x{} ({}x)", size.0, size.1, scale)
-    } else {
-        format!("{}x{} (CUSTOM)", size.0, size.1)
     }
 }
 
@@ -2701,44 +2441,15 @@ fn language_rank(tag: &str) -> u8 {
     }
 }
 
-pub(crate) fn language_name(tag: &str) -> &str {
-    match tag {
-        "en-US" => "ENGLISH",
-        "ja-JP" => "JAPANESE",
-        "fr-FR" => "FRENCH",
-        "de-DE" => "GERMAN",
-        "it-IT" => "ITALIAN",
-        "es-ES" => "SPANISH",
-        "ru-RU" => "RUSSIAN",
-        "fi-FI" => "FINNISH",
-        _ => tag,
+/// `text` with its first letter in capitals, for a progress label.
+fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
 
-fn language_label(language: Option<&str>) -> String {
-    match language {
-        None => format!("SYSTEM ({})", crate::language::resolve_tag(None)),
-        Some(tag) => {
-            let name = language_name(tag);
-            if name.eq_ignore_ascii_case(tag) {
-                tag.to_string()
-            } else {
-                format!("{name} ({tag})")
-            }
-        }
-    }
-}
-
-/// The value after (or before) `current` in `values`, wrapping; a value that
-/// is not a preset starts at the first entry.
-fn step_value<T: Copy + PartialEq>(values: &[T], current: T, delta: isize) -> T {
-    let Some(index) = values.iter().position(|&value| value == current) else {
-        return values[0];
-    };
-    values[(index as isize + delta).rem_euclid(values.len() as isize) as usize]
-}
-
-/// Find every pack under the data roots, first root winning a duplicate id.
 fn scan_packs() -> Vec<PackRow> {
     let roots = paths::data_roots();
     let custom = env::var_os(paths::DATA_ENV).is_some();
@@ -2825,15 +2536,28 @@ fn is_stale(manifest: &manifest::Manifest, source_hash: &str) -> bool {
         && manifest.source_hash.as_deref() != Some(source_hash)
 }
 
-/// Discover the mods for `pack`, filtered to its base id and ordered by the
-/// config's explicit order then each manifest's load order.
-fn scan_mods(pack: Option<&PackRow>, config: &Config, dirs: &[PathBuf]) -> Vec<ModRow> {
-    let Some(pack) = pack else {
-        return Vec::new();
-    };
+/// Discover every mod beside any pack or in `dirs`, whatever its game,
+/// ordered by the config's explicit order then each manifest's load order.
+fn scan_mods(packs: &[PackRow], config: &Config, dirs: &[PathBuf]) -> Vec<ModRow> {
+    // A pack's own `mods` folder is searched; with no pack, the folder a
+    // first install writes to.
+    let mut roots: Vec<PathBuf> = packs.iter().map(|pack| pack.path.clone()).collect();
+    if roots.is_empty() {
+        roots.push(default_target(Game::Re1));
+    }
     let mut seen = HashSet::new();
+    let mut paths = Vec::new();
+    for root in &roots {
+        for path in modding::discover_mods(root, dirs) {
+            let canonical = fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+            if seen.insert(canonical) {
+                paths.push(path);
+            }
+        }
+    }
+    let mut ids = HashSet::new();
     let mut rows = Vec::new();
-    for path in modding::discover_mods(&pack.path, dirs) {
+    for path in paths {
         let manifest = match read_mod_manifest(&path) {
             Ok(Some(manifest)) => manifest,
             Ok(None) => continue,
@@ -2845,15 +2569,15 @@ fn scan_mods(pack: Option<&PackRow>, config: &Config, dirs: &[PathBuf]) -> Vec<M
         if manifest.kind != manifest::PackKind::Mod {
             continue;
         }
-        if manifest.base.as_deref() != Some(pack.id.as_str()) {
+        if !ids.insert(manifest.id.to_ascii_lowercase()) {
             continue;
         }
-        if !seen.insert(manifest.id.to_ascii_lowercase()) {
-            continue;
-        }
+        let base = manifest.base.unwrap_or_default();
+        let game = Game::from_id(&base).map_or(base, |game| game.title().to_string());
         rows.push(ModRow {
             enabled: mod_enabled(&config.mods, &manifest.id),
             name: manifest.name.unwrap_or_else(|| manifest.id.clone()),
+            game,
             version: manifest.version.unwrap_or_default(),
             load_order: manifest.load_order,
             id: manifest.id,
@@ -2877,8 +2601,8 @@ fn scan_mods(pack: Option<&PackRow>, config: &Config, dirs: &[PathBuf]) -> Vec<M
     rows
 }
 
-/// The `[mods]` order after reordering the `shown` mods (one game's), with
-/// every other game's entries kept where they were. The shown mods fill the
+/// The `[mods]` order after reordering the `shown` mods, with entries for
+/// mods not found this run kept where they were. The shown mods fill the
 /// slots they already held, in their new order; any not listed before are
 /// appended.
 fn merge_order(order: &[String], shown: &[String]) -> Vec<String> {
@@ -2954,13 +2678,13 @@ fn open_folder(path: &Path) {
 /// A short label for a data root in the pack table.
 fn root_label(index: usize, custom: bool) -> String {
     if custom {
-        return format!("DATA {}", index + 1);
+        return format!("Data {}", index + 1);
     }
     match index {
-        0 => "LOCAL".to_string(),
-        1 => "ROAMING".to_string(),
-        2 => "INSTALL".to_string(),
-        other => format!("PATH {}", other + 1),
+        0 => "Local".to_string(),
+        1 => "Roaming".to_string(),
+        2 => "Install".to_string(),
+        other => format!("Path {}", other + 1),
     }
 }
 
@@ -3064,15 +2788,6 @@ fn unix_now() -> u64 {
         .map_or(0, |duration| duration.as_secs())
 }
 
-/// Move a selection index by `delta`, wrapping.
-fn step(index: &mut usize, len: usize, delta: isize) {
-    if len == 0 {
-        *index = 0;
-        return;
-    }
-    *index = (*index as isize + delta).rem_euclid(len as isize) as usize;
-}
-
 /// Run the launcher. With `ARKLAY_LAUNCHER_CAPTURE` set it renders one frame
 /// to that BMP and exits, which is how the layout is previewed headlessly.
 pub fn run() -> Result<()> {
@@ -3084,7 +2799,7 @@ pub fn run() -> Result<()> {
     }
     let capture = env::var_os("ARKLAY_LAUNCHER_CAPTURE").map(PathBuf::from);
     let mut graphics = config.graphics;
-    // The launcher is 2D text; the game backend is chosen when Play hands the
+    // The launcher is 2D; the game backend is chosen when Play hands the
     // window over.
     graphics.renderer = RendererKind::Software;
     let mut display = Display::new(WINDOW_TITLE, capture.is_some(), graphics)?;
@@ -3096,7 +2811,7 @@ pub fn run() -> Result<()> {
     } else {
         display.drawable_size()
     };
-    let mut launcher = Launcher::new(&config, width, height)?;
+    let mut launcher = Launcher::new(&config)?;
     if capture.is_none() {
         launcher.pads.init();
     }
@@ -3105,13 +2820,13 @@ pub fn run() -> Result<()> {
     // Headless checkpoints use this to exercise the install path without a
     // keyboard; it never runs for an ordinary launch.
     if capture.is_none() && env::var_os("ARKLAY_LAUNCHER_AUTOINSTALL").is_some() {
-        launcher.screen = Screen::Install;
+        launcher.goto(Screen::Install);
         launcher.install();
     }
     if capture.is_none() && env::var_os("ARKLAY_LAUNCHER_AUTOUPDATE").is_some() {
         launcher.auto_update = true;
-        launcher.screen = Screen::Update;
-        launcher.update_index = 1;
+        launcher.goto(Screen::Update);
+        launcher.ui.set_focus_index(1);
         launcher.start_check(true);
     }
     if capture.is_none() && env::var_os("ARKLAY_LAUNCHER_AUTOROLLBACK").is_some() {
@@ -3125,13 +2840,13 @@ pub fn run() -> Result<()> {
             launcher.select_game(game);
         }
         if let Ok(name) = env::var("ARKLAY_LAUNCHER_SCREEN") {
-            launcher.set_capture_screen(&name);
+            launcher.set_capture_screen(&name, &mut display);
         }
-        launcher.draw();
+        launcher.draw(width, height);
         let image = crate::state::Image {
-            width: launcher.frame.width,
-            height: launcher.frame.height,
-            rgba: launcher.frame.rgba.clone(),
+            width: launcher.size.0,
+            height: launcher.size.1,
+            rgba: launcher.rgba.clone(),
         };
         let bytes = crate::bmp::encode_to_vec(&image)?;
         std::fs::write(&path, bytes)
@@ -3147,13 +2862,6 @@ pub fn run() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn truncation_never_exceeds_the_column() {
-        assert_eq!(truncate("short", 10), "short");
-        assert_eq!(truncate("a long value", 8), "a lon...");
-        assert_eq!(truncate("abcdef", 3), "...");
-    }
 
     #[test]
     fn pad_axes_latch_and_repeat() {
@@ -3209,85 +2917,6 @@ mod tests {
     }
 
     #[test]
-    fn selections_wrap() {
-        let mut index = 0;
-        step(&mut index, 5, -1);
-        assert_eq!(index, 4);
-        step(&mut index, 5, 1);
-        assert_eq!(index, 0);
-        step(&mut index, 0, 1);
-        assert_eq!(index, 0);
-    }
-
-    #[test]
-    fn options_cycle_and_report_every_setting() {
-        let mut config = Config::default();
-        assert_eq!(option_value(&config, 0), "GPU");
-        assert_eq!(option_value(&config, 1), "OFF (4:3)");
-        assert_eq!(option_value(&config, 2), "960x720 (3x)");
-        assert_eq!(option_value(&config, 4), "ON");
-        assert_eq!(option_value(&config, 9), "ON");
-        assert_eq!(option_value(&config, 10), "ON");
-
-        assert!(!change_option(&mut config, 0, 1));
-        assert_eq!(config.graphics.renderer, RendererKind::Software);
-        assert_eq!(option_value(&config, 0), "SOFTWARE");
-        change_option(&mut config, 0, 1);
-        assert_eq!(config.graphics.renderer, RendererKind::Gpu);
-
-        assert!(change_option(&mut config, 1, 1));
-        assert_eq!(config.graphics.aspect, video::Aspect::WIDE);
-        assert_eq!(
-            (config.graphics.window_width, config.graphics.window_height),
-            (960, 540)
-        );
-        assert_eq!(option_value(&config, 1), "ON (16:9)");
-        assert!(change_option(&mut config, 2, 1));
-        assert_eq!(
-            (config.graphics.window_width, config.graphics.window_height),
-            (1280, 720)
-        );
-
-        assert!(change_option(&mut config, 3, 1));
-        assert!(config.graphics.fullscreen);
-        assert_eq!(option_value(&config, 3), "ON");
-        change_option(&mut config, 3, 1);
-        assert!(!config.graphics.fullscreen);
-
-        assert!(!change_option(&mut config, 4, 1));
-        assert!(!config.graphics.vsync);
-        assert_eq!(option_value(&config, 4), "OFF");
-        change_option(&mut config, 4, 1);
-        assert!(config.graphics.vsync);
-
-        assert!(!change_option(&mut config, 5, 1));
-        assert_eq!(config.language.as_deref(), Some("en-US"));
-        assert_eq!(option_value(&config, 5), "ENGLISH (en-US)");
-        assert!(!change_option(&mut config, 6, 1));
-        assert_eq!(config.graphics.render_scale, 150);
-        assert!(!change_option(&mut config, 7, 1));
-        assert_eq!(config.graphics.msaa, 2);
-        assert!(!change_option(&mut config, 8, 1));
-        assert_eq!(config.graphics.frame_rate, 60);
-        assert!(!change_option(&mut config, 9, 1));
-        assert!(!config.game.quick_turn);
-        assert!(!change_option(&mut config, 10, 1));
-        assert!(!config.game.tactical_reload);
-
-        // A custom window size is labelled as such and steps to the first
-        // preset in the chosen direction.
-        config.graphics.aspect = video::Aspect::STANDARD;
-        config.graphics.window_width = 1000;
-        config.graphics.window_height = 700;
-        assert_eq!(option_value(&config, 2), "1000x700 (CUSTOM)");
-        step_resolution(&mut config.graphics, 1);
-        assert_eq!(
-            (config.graphics.window_width, config.graphics.window_height),
-            (960, 720)
-        );
-    }
-
-    #[test]
     fn counts_are_grouped() {
         assert_eq!(format_count(0), "0");
         assert_eq!(format_count(999), "999");
@@ -3296,15 +2925,7 @@ mod tests {
     }
 
     #[test]
-    fn progress_bars_are_bounded() {
-        assert_eq!(progress_bar(0.0, 4), "[----]");
-        assert_eq!(progress_bar(0.5, 4), "[##--]");
-        assert_eq!(progress_bar(1.0, 4), "[####]");
-        assert_eq!(progress_bar(2.0, 4), "[####]");
-    }
-
-    #[test]
-    fn mods_are_filtered_by_base_and_ordered_by_config_then_load_order() {
+    fn every_games_mods_are_listed_and_ordered_by_config_then_load_order() {
         use crate::manifest::{Manifest, PackKind};
         use crate::pack::PackWriter;
 
@@ -3378,18 +2999,28 @@ mod tests {
             error: None,
         };
         let config = Config::default();
-        let rows = scan_mods(Some(&pack), &config, std::slice::from_ref(&mods_dir));
+        let packs = std::slice::from_ref(&pack);
+        let rows = scan_mods(packs, &config, std::slice::from_ref(&mods_dir));
         assert_eq!(
             rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
-            ["early", "demo", "hd"]
+            ["other", "early", "demo", "hd"]
+        );
+        assert_eq!(
+            rows.iter().map(|row| row.game.as_str()).collect::<Vec<_>>(),
+            [
+                "Resident Evil 2",
+                "Resident Evil",
+                "Resident Evil",
+                "Resident Evil"
+            ]
         );
 
         let mut config = Config::default();
         config.mods.order = vec!["hd".to_string()];
-        let rows = scan_mods(Some(&pack), &config, std::slice::from_ref(&mods_dir));
+        let rows = scan_mods(packs, &config, std::slice::from_ref(&mods_dir));
         assert_eq!(
             rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
-            ["hd", "early", "demo"]
+            ["hd", "other", "early", "demo"]
         );
 
         let re2 = games.join("re2.akpak");
@@ -3401,11 +3032,9 @@ mod tests {
             path: re2,
             ..pack.clone()
         };
-        let rows = scan_mods(Some(&re2_pack), &config, std::slice::from_ref(&mods_dir));
-        assert_eq!(
-            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
-            ["other"]
-        );
+        // A second pack beside the first finds each mod once.
+        let rows = scan_mods(&[pack, re2_pack], &config, std::slice::from_ref(&mods_dir));
+        assert_eq!(rows.len(), 4);
 
         let mut mods = Mods::default();
         assert!(mod_enabled(&mods, "hd"));
@@ -3486,7 +3115,7 @@ mod tests {
     }
 
     #[test]
-    fn reordering_one_games_mods_keeps_the_others_order() {
+    fn reordering_keeps_undiscovered_mods_in_place() {
         let ids = |list: &[&str]| list.iter().map(|id| id.to_string()).collect::<Vec<_>>();
         let order = ids(&["re1a", "re2a", "re1b", "re2b"]);
         assert_eq!(
@@ -3543,11 +3172,32 @@ mod tests {
     }
 
     #[test]
-    fn a_capture_screen_is_selectable() {
-        let mut launcher = Launcher::new(&Config::default(), 960, 720).unwrap();
-        launcher.set_capture_screen("progress");
-        assert_eq!(launcher.screen, Screen::Progress);
-        launcher.set_capture_screen("message");
-        assert_eq!(launcher.screen, Screen::Message);
+    fn every_screen_builds() {
+        let mut ui = Ui::new(library().unwrap()).unwrap();
+        ui.register("progress-bar", Box::new(ProgressBar));
+        ui.register("checkbox", Box::new(CheckBox));
+        for screen in Screen::ALL {
+            ui.open(screen.name()).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_game_install_opens_over_the_game_list() {
+        let packs = vec![pack_row("re1")];
+        let mut launcher =
+            Launcher::with(&Config::default(), packs, HashMap::new(), Vec::new()).unwrap();
+        assert_eq!(launcher.ui.screens(), [Screen::Main.name()]);
+        launcher.goto(Screen::Install);
+        assert_eq!(
+            launcher.ui.screens(),
+            [Screen::Main, Screen::Games, Screen::Install].map(Screen::name)
+        );
+        launcher.show_message("PREVIEW", &["A sample message."], Screen::Install);
+        assert_eq!(launcher.screen(), Screen::Message);
+        launcher.goto(Screen::Progress);
+        assert_eq!(
+            launcher.ui.screens(),
+            [Screen::Main, Screen::Progress].map(Screen::name)
+        );
     }
 }

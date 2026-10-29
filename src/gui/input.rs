@@ -27,6 +27,9 @@ pub enum GuiKey {
     ResetAll,
     /// R / Y: reset the shown subcategory.
     ResetGroup,
+    /// X on a pad (the west face button): a screen's extra action. Its
+    /// keyboard key is the screen's own (a command's `cap` names it).
+    Aux,
 }
 
 /// Which kind of device produced the last input, so hints can show the
@@ -97,5 +100,6 @@ pub fn key_label(key: GuiKey) -> &'static str {
         GuiKey::ResetGroup => "R",
         GuiKey::Cancel => "Esc",
         GuiKey::Confirm => "Enter",
+        GuiKey::Aux => "X",
     }
 }

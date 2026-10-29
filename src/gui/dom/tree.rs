@@ -132,6 +132,7 @@ pub fn key_named(name: &str) -> Option<GuiKey> {
         "sub_next" => GuiKey::SubNext,
         "reset_all" => GuiKey::ResetAll,
         "reset_group" => GuiKey::ResetGroup,
+        "aux" => GuiKey::Aux,
         _ => return None,
     })
 }
@@ -149,6 +150,8 @@ pub struct Command {
     pub confirm_if: Option<Expr>,
     /// Shown in the hint bar.
     pub hint: bool,
+    /// The keyboard cap its hint shows, when not the key's own.
+    pub cap: Option<Expr>,
 }
 
 impl Command {
@@ -165,6 +168,7 @@ impl Command {
             note: el.attr("note").map(Expr::parse),
             confirm_if: el.attr("confirm-if").map(Expr::parse),
             hint: el.attr("hint") != Some("false"),
+            cap: el.attr("cap").map(Expr::parse),
         })
     }
 }

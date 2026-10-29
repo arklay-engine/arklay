@@ -85,6 +85,15 @@ impl UiOutput {
     }
 }
 
+/// One hint in the hint bar: its key, what it does and, when the screen
+/// names one, the keyboard cap it shows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hint {
+    pub key: GuiKey,
+    pub label: String,
+    pub cap: Option<String>,
+}
+
 /// One open screen.
 struct Screen {
     uid: u64,
@@ -996,13 +1005,13 @@ impl Ui {
     // ---- hints and drawing --------------------------------------------
 
     /// The hints the focus path offers, in the canonical key order.
-    fn hints(&self, s: usize) -> Vec<(GuiKey, String)> {
+    fn hints(&self, s: usize) -> Vec<Hint> {
         let screen = &self.screens[s];
         let tree = &screen.tree;
-        let mut out: Vec<(GuiKey, String)> = Vec::new();
-        let mut add = |key: GuiKey, label: String| {
-            if !label.is_empty() && !out.iter().any(|(k, _)| *k == key) {
-                out.push((key, label));
+        let mut out: Vec<Hint> = Vec::new();
+        let mut add = |key: GuiKey, label: String, cap: Option<String>| {
+            if !label.is_empty() && !out.iter().any(|h| h.key == key) {
+                out.push(Hint { key, label, cap });
             }
         };
         let path = self.focus_path(s);
@@ -1020,23 +1029,37 @@ impl Ui {
                         } else {
                             hint
                         },
+                        None,
                     );
                 }
                 Kind::Option(OptionKind::Link) if !node.prop("disabled").truthy() => {
-                    add(GuiKey::Confirm, self.locale.get("hint.select").to_string());
+                    add(
+                        GuiKey::Confirm,
+                        self.locale.get("hint.select").to_string(),
+                        None,
+                    );
                 }
                 Kind::Option(OptionKind::Toggle | OptionKind::Choice | OptionKind::Slider)
                     if !node.prop("disabled").truthy() =>
                 {
-                    add(GuiKey::Left, self.locale.get("hint.change").to_string());
+                    add(
+                        GuiKey::Left,
+                        self.locale.get("hint.change").to_string(),
+                        None,
+                    );
                 }
                 _ => {}
             }
         }
         for &id in &path {
             for command in tree[id].commands.iter().rev().filter(|c| c.hint) {
-                let label = eval_in(tree, id, &command.label, &self.store, &self.locale);
-                add(command.key, label.to_string());
+                let eval = |expr: &Expr| eval_in(tree, id, expr, &self.store, &self.locale);
+                let cap = command.cap.as_ref().map(|c| eval(c).to_string());
+                add(
+                    command.key,
+                    eval(&command.label).to_string(),
+                    cap.filter(|c| !c.is_empty()),
+                );
             }
         }
         let order = |key: GuiKey| match key {
@@ -1044,11 +1067,12 @@ impl Ui {
             GuiKey::Left | GuiKey::Right => 1,
             GuiKey::Up | GuiKey::Down => 2,
             GuiKey::TabPrev | GuiKey::TabNext | GuiKey::SubPrev | GuiKey::SubNext => 3,
-            GuiKey::ResetAll => 4,
-            GuiKey::ResetGroup => 5,
-            GuiKey::Cancel => 6,
+            GuiKey::Aux => 4,
+            GuiKey::ResetAll => 5,
+            GuiKey::ResetGroup => 6,
+            GuiKey::Cancel => 7,
         };
-        out.sort_by_key(|(key, _)| order(*key));
+        out.sort_by_key(|h| order(h.key));
         out
     }
 
@@ -1195,6 +1219,9 @@ impl Ui {
             return Vec::new();
         }
         self.hints(self.base())
+            .into_iter()
+            .map(|h| (h.key, h.label))
+            .collect()
     }
 
     /// Run `f` on the top screen's tree.
