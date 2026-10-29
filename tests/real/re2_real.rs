@@ -545,3 +545,61 @@ fn the_hd_pack_names_most_model_pages() {
         "{matched} matched"
     );
 }
+
+/// Every room's init and main scripts parse, rebuild byte for byte, and
+/// round-trip through `.s` and `.akscr` to the same bytes.
+#[test]
+#[ignore]
+fn every_room_script_round_trips() {
+    use arklay::scd2::{akscr, asm, reader};
+
+    let Some(root) = re2_root() else {
+        return;
+    };
+    let mut rooms = 0;
+    let mut procedures = 0;
+    let mut fallbacks = 0;
+    let mut failures = Vec::new();
+    for path in with_extension(&root, "rdt") {
+        let data = fs::read(&path).unwrap();
+        if format::rdt(&data).dialect() != Some(Dialect::Re2) {
+            continue;
+        }
+        let (scripts, spans) = match reader::parse_with_spans(&data) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                failures.push(format!("{}: {error:#}", path.display()));
+                continue;
+            }
+        };
+        rooms += 1;
+        let lists = [&scripts.init, &scripts.main];
+        for (list, span) in lists.iter().zip(spans) {
+            procedures += list.procs.len();
+            if let Some(span) = span
+                && list.to_bytes() != data[span.start..span.start + span.len]
+            {
+                failures.push(format!("{}: a list does not rebuild", path.display()));
+            }
+        }
+        match asm::assemble(&asm::render(&scripts)) {
+            Ok(back) if back == scripts => {}
+            Ok(_) => failures.push(format!("{}: .s round trip differs", path.display())),
+            Err(error) => failures.push(format!("{}: .s: {error:#}", path.display())),
+        }
+        let text = akscr::decompile(&scripts);
+        fallbacks += text.matches('@').count();
+        match akscr::compile(&text) {
+            Ok(back)
+                if back.init.to_bytes() == scripts.init.to_bytes()
+                    && back.main.to_bytes() == scripts.main.to_bytes() => {}
+            Ok(_) => failures.push(format!("{}: .akscr round trip differs", path.display())),
+            Err(error) => failures.push(format!("{}: .akscr: {error:#}", path.display())),
+        }
+    }
+    eprintln!("{rooms} rooms, {procedures} procedures, {fallbacks} raw block instructions");
+    assert!(failures.is_empty(), "{failures:#?}");
+    assert!(rooms > 0);
+    // Every retail block decompiles to its structured form.
+    assert_eq!(fallbacks, 0);
+}
