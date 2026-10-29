@@ -379,8 +379,17 @@ otherwise.
 
 The Language › Subtitles options (`subtitles`, `subtitle_size`,
 `subtitle_background`, `subtitle_color`, `speaker_names`, `speaker_name_color`)
-are persisted and editable in the menu, but subtitles are not drawn yet; see
-issue #187.
+style the subtitles of voiced lines. The room scripts pair each voice line with
+a message that times itself out. In the interactive window the
+native-resolution GUI draws that message's text centred along the bottom edge,
+in place of the original's message window, with the chosen size, colour and
+background band, and the speaker's name in front when the language file names
+one (see [docs/language.md](docs/language.md#subtitles)). `subtitles = false`
+hides these lines; their timing still runs. The French, German, Spanish,
+Italian, Finnish and Japanese texts carry subtitle text. The USA release's
+English (and the Russian seed) keeps only the timing, so
+English shows no subtitles until a language file or mod adds them. Captures,
+traces and `--ticks` runs still draw the message window as before.
 
 `quick_turn` enables Classic REbirth's quick turn: while walking backward
 (including the back diagonals), pressing RUN turns the player 180 degrees in

@@ -1,5 +1,5 @@
 //! What the interactive loop shows over the game: the F6 debug HUD's
-//! readouts and the corner notices (the game speed), drawn by
+//! readouts, the corner notices (the game speed) and the subtitles, drawn by
 //! [`gui::Overlay`].
 
 use std::collections::{HashMap, VecDeque};
@@ -78,6 +78,25 @@ impl DebugHud {
     pub(super) fn notify(&mut self, key: &'static str, text: impl Into<String>) {
         if let Some(overlay) = self.overlay.as_mut() {
             overlay.notify(key, text);
+        }
+    }
+
+    /// Whether the overlay can draw `subtitle`: its faces are loaded and
+    /// spell every character of it.
+    pub(super) fn can_draw(&self, subtitle: &gui::Subtitle) -> bool {
+        self.overlay.as_ref().is_some_and(|overlay| {
+            subtitle
+                .lines
+                .iter()
+                .chain(&subtitle.speaker)
+                .all(|line| overlay.can_draw(line))
+        })
+    }
+
+    /// Show `subtitle` until the next call replaces or clears it.
+    pub(super) fn set_subtitle(&mut self, subtitle: Option<(gui::Subtitle, gui::SubtitleStyle)>) {
+        if let Some(overlay) = self.overlay.as_mut() {
+            overlay.set_subtitle(subtitle);
         }
     }
 

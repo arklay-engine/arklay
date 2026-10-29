@@ -54,7 +54,7 @@
 //! effects_volume = 100
 //! voice_volume = 100
 //! menu_volume = 100
-//! subtitles = true       # the subtitle options (stored; not drawn yet)
+//! subtitles = true       # the voiced lines' subtitles, drawn by the GUI
 //! subtitle_size = "standard"   # "small", "standard" or "large"
 //! subtitle_background = 50     # the band's opacity in percent
 //! subtitle_color = "white"     # "white", "red", "blue", "green", "yellow"
@@ -474,7 +474,8 @@ pub struct Game {
     pub voice_volume: u8,
     /// The menus' cursor, confirm and cancel sounds, 0..=100 percent.
     pub menu_volume: u8,
-    /// Show subtitles. Stored only: subtitles are not drawn yet.
+    /// Show the subtitles of voiced lines (see [`crate::gui::subtitles`]).
+    /// Off hides them; their timing still runs.
     pub subtitles: bool,
     pub subtitle_size: SubtitleSize,
     /// The opacity of the band behind the subtitles, 0..=100 percent.

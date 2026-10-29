@@ -17,7 +17,7 @@
 //!   focus, input routing, hints and Lua scripting;
 //! * the screens' owners: [`dialog`], [`save_screen`] and [`system_menu`];
 //! * [`overlay`]: the F6 debug HUD and the corner notices, drawn over
-//!   everything else.
+//!   everything else, and the [`subtitles`] it shows under them.
 //!
 //! Input arrives per presented frame as [`GuiEvent`]s, not per game tick, so
 //! navigation repeats at the keyboard's rate and the pointer is live.
@@ -33,6 +33,7 @@ pub mod overlay;
 pub mod pad_diagram;
 pub mod save_screen;
 pub mod settings;
+pub mod subtitles;
 pub mod system_menu;
 pub mod text;
 pub mod theme;
@@ -42,5 +43,6 @@ pub use canvas::Canvas;
 pub use input::{Device, GuiEvent, GuiKey, PadStyle, Sound};
 pub use overlay::{DebugMode, Overlay};
 pub use settings::Settings;
+pub use subtitles::{Subtitle, SubtitleStyle};
 pub use system_menu::{MenuRequest, SystemMenu};
 pub use theme::FontFamily;

@@ -158,6 +158,21 @@ fn skip(cursor: Cursor) -> Cursor {
     next(next(cursor))
 }
 
+/// Whether a message stream ends on a timed dismissal (`0x01 <frames>`, frames
+/// non-zero) without a yes/no prompt before it.
+fn timed_line(bytes: &[u8]) -> bool {
+    let mut index = 0;
+    while let Some(&byte) = bytes.get(index) {
+        match byte {
+            0x01 => return bytes.get(index + 1).is_some_and(|&frames| frames != 0),
+            0x08 => return false,
+            0x03..=0x06 | 0xF8..=0xFA => index += 2,
+            _ => index += 1,
+        }
+    }
+    false
+}
+
 /// Resolve the stream drawn for an item-name substitution.
 ///
 /// Item ids with a real name draw from the name table; an item the player has
@@ -237,6 +252,12 @@ pub struct MessageWindow {
     menu_choice: u8,
     previous: MessageInput,
     actions: Vec<MessageAction>,
+    /// Whether the request was raised with a voice line playing (the
+    /// scripts' `voice_play` then `message` pair); see
+    /// [`MessageWindow::is_subtitle`].
+    voiced: bool,
+    /// How many pages the window has turned since the request.
+    page: usize,
 }
 
 impl Default for MessageWindow {
@@ -264,6 +285,8 @@ impl Default for MessageWindow {
             menu_choice: 0,
             previous: MessageInput::default(),
             actions: Vec::new(),
+            voiced: false,
+            page: 0,
         }
     }
 }
@@ -350,7 +373,87 @@ impl MessageWindow {
         self.char_delay = 0;
         self.char_timer = 0;
         self.actions.clear();
+        self.voiced = false;
+        self.page = 0;
         true
+    }
+
+    /// Mark the request as raised alongside a voice line.
+    pub fn set_voiced(&mut self, voiced: bool) {
+        self.voiced = voiced;
+    }
+
+    /// Whether the window is showing a voiced line's subtitle: a message
+    /// requested while a voice line plays that times itself out (`0x01
+    /// <frames>`) and never asks a yes/no question. The engine can draw these
+    /// with the native-resolution GUI instead of the window, or hide them.
+    pub fn is_subtitle(&self) -> bool {
+        self.active && self.source_ready && self.voiced && timed_line(&self.bytes)
+    }
+
+    /// The index of the page on screen: 0 until the first page break turns.
+    pub fn page(&self) -> usize {
+        self.page
+    }
+
+    /// The text the window shows on its current page, decoded in the
+    /// session's script: one string per line, each trimmed, with runs of
+    /// spaces collapsed and blank lines dropped. Item names are substituted;
+    /// tints and timing tags are not text. An English voiced line, whose
+    /// stream carries only its timing, reads as no lines.
+    pub fn page_lines(&self, text: &Text) -> Vec<String> {
+        if !self.active || !self.source_ready {
+            return Vec::new();
+        }
+        let mut glyphs = Vec::new();
+        let mut cursor = Cursor::Message(self.render_start);
+        let mut saved = 0usize;
+        while cursor != self.ptr {
+            let Some(byte) = self.peek(cursor) else {
+                break;
+            };
+            match byte {
+                0x00 | 0x02 => {
+                    glyphs.push(byte);
+                    cursor = next(cursor);
+                }
+                0x03..=0x05 => cursor = skip(cursor),
+                0x06 => {
+                    let argument = self.peek(next(cursor)).unwrap_or(0);
+                    let item = if argument == 0 {
+                        self.selected_item
+                    } else {
+                        argument
+                    };
+                    saved = cursor.index();
+                    cursor = skip(cursor);
+                    if !item_name_bytes(text, item, &self.examined).is_empty() {
+                        cursor = Cursor::Name(0);
+                    }
+                }
+                0x07 => {
+                    cursor = match cursor {
+                        Cursor::Name(_) => Cursor::Message(saved + 2),
+                        Cursor::Message(_) => next(cursor),
+                    };
+                }
+                0xF8..=0xFA => {
+                    glyphs.push(byte);
+                    glyphs.push(self.peek(next(cursor)).unwrap_or(0));
+                    cursor = skip(cursor);
+                }
+                0x01 | 0x08 | 0xFB | 0xFF => cursor = next(cursor),
+                _ => {
+                    glyphs.push(byte);
+                    cursor = next(cursor);
+                }
+            }
+        }
+        text.decode(&glyphs)
+            .lines()
+            .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|line| !line.is_empty())
+            .collect()
     }
 
     /// Arm a message and its encoded bytes directly. Refuses exactly like
@@ -417,6 +520,7 @@ impl MessageWindow {
             MessagePhase::Reveal => self.update_reveal(input, text, shifted),
             MessagePhase::PageWait => {
                 if pressed_dismiss {
+                    self.page += 1;
                     self.render_start = match self.ptr {
                         Cursor::Message(index) => index,
                         Cursor::Name(_) => self.render_start,
@@ -432,6 +536,7 @@ impl MessageWindow {
                 self.char_timer = self.char_timer.wrapping_sub(1);
                 if self.char_timer == 0 {
                     self.phase = MessagePhase::Reveal;
+                    self.page += 1;
                     self.render_start = match self.ptr {
                         Cursor::Message(index) => index,
                         Cursor::Name(_) => self.render_start,
@@ -1584,6 +1689,81 @@ mod tests {
             .filter(|pixel| pixel[3] != 0)
             .count();
         assert!(opaque > 0, "the room message drew no pixels");
+    }
+
+    /// A session whose `MESSAGE_00` is `source`, and that message's stream.
+    fn latin_message(source: &str) -> (Text, Vec<u8>) {
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                "language/en-US.txt",
+                format!("MESSAGE_00 = \"{source}\"\n").into_bytes(),
+            )
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let text = Text::load(&pack, Some("en-US"));
+        let bytes = text.global(0).unwrap().to_vec();
+        (text, bytes)
+    }
+
+    /// Tick `window` with no input until `done` holds, at most 200 ticks.
+    fn run_until(window: &mut MessageWindow, text: &Text, done: impl Fn(&MessageWindow) -> bool) {
+        for _ in 0..200 {
+            if done(window) {
+                return;
+            }
+            window.update(MessageInput::default(), text, 0);
+        }
+        panic!("the window never got there: {:?}", window.phase());
+    }
+
+    #[test]
+    fn a_voiced_timed_line_is_a_subtitle_and_reads_page_by_page() {
+        let (text, bytes) = latin_message(
+            "{scroll 0}Hello   there\\n\\n  friend {scroll 2}{clear 10}\
+             {scroll 0}Page two{scroll 2}{timed 30}",
+        );
+        let mut window = MessageWindow::default();
+        assert!(window.start(0x40, 0, &bytes, false));
+        assert!(!window.is_subtitle(), "not raised with a voice line");
+        window.set_voiced(true);
+        assert!(window.is_subtitle());
+        run_until(&mut window, &text, |w| w.phase() == MessagePhase::Delay);
+        assert_eq!(window.page(), 0);
+        assert_eq!(window.page_lines(&text), ["Hello there", "friend"]);
+        run_until(&mut window, &text, |w| {
+            w.phase() == MessagePhase::AutoDismiss
+        });
+        assert_eq!(window.page(), 1);
+        assert_eq!(window.page_lines(&text), ["Page two"]);
+        run_until(&mut window, &text, |w| !w.active);
+        assert!(!window.is_subtitle());
+        assert!(window.page_lines(&text).is_empty());
+    }
+
+    #[test]
+    fn prompts_and_lines_held_for_a_press_are_not_subtitles() {
+        for source in ["Take it?{branch 2 10 0}", "Wait for me.", "A{timed 0}"] {
+            let (_, bytes) = latin_message(source);
+            let mut window = MessageWindow::default();
+            assert!(window.start(0x40, 0, &bytes, false));
+            window.set_voiced(true);
+            assert!(!window.is_subtitle(), "{source}");
+        }
+    }
+
+    #[test]
+    fn an_english_voiced_line_has_no_text() {
+        // The USA release keeps only the timing of its voiced lines.
+        let (text, bytes) = latin_message("{scroll 0}\\n{scroll 2}{timed 70}");
+        let mut window = MessageWindow::default();
+        assert!(window.start(0x40, 0, &bytes, false));
+        window.set_voiced(true);
+        assert!(window.is_subtitle());
+        run_until(&mut window, &text, |w| {
+            w.phase() == MessagePhase::AutoDismiss
+        });
+        assert!(window.page_lines(&text).is_empty());
     }
 
     #[test]
