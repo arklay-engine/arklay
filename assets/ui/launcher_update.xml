@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UPDATE: the engine's update track, then a rebuild row per game. The
+     host publishes each row's status at `update.*`, the games at
+     `update.games` (title, status and tone), and the channel and
+     auto-check rows as option definitions. -->
+<screen use="standard-screen" title="UPDATE">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <list>
+    <status-row label="Check for Updates" action="check" hint="Select" status="{update.check}" tone="{update.check_tone}"/>
+    <status-row label="Update Engine" action="update" hint="Select" status="{update.engine}" tone="{update.engine_tone}"/>
+    <status-row label="Roll Back Last Update" action="rollback" hint="Select" status="{update.rollback}" tone="value"/>
+    <choice def="{update.channel}"/>
+    <choice def="{update.auto_check}"/>
+    <stack gap="none" items="{update.games}">
+      <template>
+        <item variant="row" action="rebuild:{item.index}" hint="Rebuild">
+          <stack orientation="horizontal" height="fill">
+            <text variant="value" text="{item.label}" width="fill" wrap="none"/>
+            <text variant="{item.tone}" text="{item.status}" wrap="none"/>
+          </stack>
+        </item>
+      </template>
+    </stack>
+  </list>
+</screen>

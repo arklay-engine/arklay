@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher's shared parts. -->
+<components>
+  <!-- A row that carries out `action`: its label, and its status on the
+       right in `tone` (`value-dim`, or `warn` when it needs attention). -->
+  <component name="status-row">
+    <item variant="row" action="{action}" hint="{hint}">
+      <stack orientation="horizontal" height="fill">
+        <text variant="value" text="{label}" width="fill" wrap="none"/>
+        <text variant="{tone}" text="{status}" wrap="none"/>
+      </stack>
+    </item>
+  </component>
+
+  <!-- A main-menu entry with its status on the right. -->
+  <component name="menu-entry">
+    <item variant="menu" text="{label}" action="{action}" hint="{hint}">
+      <stack orientation="horizontal" height="fill">
+        <spacer/>
+        <text variant="{tone}" text="{status}" wrap="none"/>
+        <spacer width="24"/>
+      </stack>
+    </item>
+  </component>
+
+  <!-- A label beside its value. -->
+  <component name="field">
+    <stack orientation="horizontal" gap="none">
+      <text variant="value-dim" text="{label}" width="260" wrap="none"/>
+      <text variant="{tone}" text="{value}" width="fill" wrap="none"/>
+    </stack>
+  </component>
+</components>

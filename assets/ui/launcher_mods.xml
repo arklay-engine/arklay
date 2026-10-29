@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MODS: every discovered mod, whatever its game, in application order,
+     the lowest priority first. The host publishes `mods.rows` (enabled,
+     name, game, id, version, path), `mods.empty`, `mods.first` and
+     `mods.last` (the priority labels around the rows) and `mods.dir`. -->
+<screen use="standard-screen" title="MODS">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="aux" cap="O" label="Folder" action="folder"/>
+  <command key="tab_prev" cap="Ctrl+Up/Down" label="{mods.move_hint}" action="move:-1"/>
+  <command key="tab_next" label="{mods.move_hint}" action="move:1" hint="false"/>
+  <stack orientation="horizontal" gap="none">
+    <spacer width="30"/>
+    <stack orientation="horizontal" gap="medium" width="fill">
+      <spacer width="44"/>
+      <text variant="value-dim" text="Mod" width="38%" wrap="none"/>
+      <text variant="value-dim" text="Game" width="20%" wrap="none"/>
+      <text variant="value-dim" text="ID" width="21%" wrap="none"/>
+      <text variant="value-dim" text="Version" width="fill" wrap="none"/>
+    </stack>
+    <spacer width="24"/>
+  </stack>
+  <rule/>
+  <stack gap="medium" visible="{mods.empty}">
+    <text variant="value-dim" text="No mods discovered."/>
+    <text variant="value-dim" text="{mods.dir}"/>
+  </stack>
+  <text variant="value-dim" text="{mods.first}" align="center" wrap="none"/>
+  <list items="{mods.rows}" height="auto">
+    <template>
+      <item variant="row" action="toggle:{item.index}" hint="Toggle" path="{item.path}">
+        <stack orientation="horizontal" gap="medium" height="fill">
+          <checkbox width="44" height="fill" checked="{item.enabled}"/>
+          <text variant="value" text="{item.name}" width="38%" wrap="none"/>
+          <text variant="value" text="{item.game}" width="20%" wrap="none"/>
+          <text variant="value" text="{item.id}" width="21%" wrap="none"/>
+          <text variant="value" text="{item.version}" width="fill" wrap="none"/>
+        </stack>
+      </item>
+    </template>
+  </list>
+  <text variant="value-dim" text="{mods.last}" align="center" wrap="none"/>
+  <text slot="footer" variant="value-dim" text="{focus.path}" wrap="none"/>
+</screen>

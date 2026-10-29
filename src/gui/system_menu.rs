@@ -105,6 +105,15 @@ impl SystemMenu {
         Ok(menu)
     }
 
+    /// The options screen on its own, as the launcher shows it: backing out
+    /// of it resumes, which closes it.
+    pub fn options(settings: Settings) -> Result<Self> {
+        let mut menu = Self::new(settings)?;
+        menu.ui.clear();
+        menu.ui.open("options")?;
+        Ok(menu)
+    }
+
     /// The canvas the last [`Self::draw`] painted.
     pub fn canvas(&self) -> &Canvas {
         match &self.key_config {

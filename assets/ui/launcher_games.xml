@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- INSTALL / REBUILD: every game the engine converts, with its pack's
+     state. The host publishes `games.rows` (title, status and tone);
+     choosing one opens its install screen. -->
+<screen use="standard-screen" title="INSTALL / REBUILD">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <list items="{games.rows}">
+    <template>
+      <item variant="row" action="install_game:{item.index}" hint="Select">
+        <stack orientation="horizontal" height="fill">
+          <text variant="value" text="{item.title}" width="fill" wrap="none"/>
+          <text variant="{item.tone}" text="{item.status}" wrap="none"/>
+        </stack>
+      </item>
+    </template>
+  </list>
+</screen>

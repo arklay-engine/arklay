@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PLAY: every installed pack. The host publishes `play.rows` (name, file,
+     version, source and the warning shown while the row is focused) and
+     `play.empty`. -->
+<screen use="standard-screen" title="PLAY">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <stack orientation="horizontal" gap="none">
+    <spacer width="30"/>
+    <stack orientation="horizontal" gap="medium" width="fill">
+      <text variant="value-dim" text="Game" width="37.5%" wrap="none"/>
+      <text variant="value-dim" text="Pack" width="22.5%" wrap="none"/>
+      <text variant="value-dim" text="Version" width="15%" wrap="none"/>
+      <text variant="value-dim" text="Source" width="fill" wrap="none"/>
+    </stack>
+    <spacer width="24"/>
+  </stack>
+  <rule/>
+  <stack gap="medium" visible="{play.empty}">
+    <text variant="value-dim" text="No game packs found."/>
+    <text variant="value-dim" text="Use Install / Rebuild to create one."/>
+  </stack>
+  <list items="{play.rows}">
+    <template>
+      <item variant="row" action="play:{item.index}" hint="Play" warning="{item.warning}">
+        <stack orientation="horizontal" gap="medium" height="fill">
+          <text variant="value" text="{item.name}" width="37.5%" wrap="none"/>
+          <text variant="value" text="{item.file}" width="22.5%" wrap="none"/>
+          <text variant="value" text="{item.version}" width="15%" wrap="none"/>
+          <text variant="value" text="{item.source}" width="fill" wrap="none"/>
+        </stack>
+      </item>
+    </template>
+  </list>
+  <text slot="footer" variant="warn" text="{focus.warning}" wrap="none"/>
+</screen>

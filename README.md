@@ -35,24 +35,24 @@ Steam's RE1 and RE2 installs, creates or refreshes `games/re1.akpak` and
 `games/re2.akpak`, plays a pack in the same window (closing the game window
 ends the process), discovers mods across the data roots and remembers their
 enable/disable state and order, and checks the release and nightly update
-tracks. Once both games are known (a pack or an install of each), LEFT/RIGHT
-on the main, INSTALL and MODS screens switches the selected game: INSTALL,
-REBUILD GAME PACK and MODS act on it, and MODS lists only the mods whose
-`base` is that game's pack. Clicking the switch hint, or highlighting a pack
-on PLAY, selects a game too, and picking an RE2 folder with the INSTALL folder
-picker sets up RE2. The OPTIONS screen edits the renderer, widescreen,
-resolution, fullscreen, V-Sync, language, GPU render scale and MSAA, frame
-rate, quick turn and tactical reload, writing every change back to
-`arklay.toml`; booting the game and opening the in-game menu reaches the rest
-(see "Gameplay options" and the `[graphics]` table). MODS shows the
-application order: the top row is applied first (lowest priority) and the
-bottom row last (highest); Ctrl+Down moves a mod toward higher priority.
+tracks. Its screens are drawn by the same UI as the in-game menus, in the
+face and text size set in the options, with the button hints in its language. INSTALL / REBUILD lists the
+games with the state of each pack and opens the chosen game's install; picking
+an RE2 folder with that screen's folder picker sets up RE2. UPDATE has a
+REBUILD row for Resident Evil and for each other game with a pack or an
+install. OPTIONS is the in-game
+options screen itself, key configuration included, writing every change back
+to `arklay.toml` (the renderer settings take effect when a game starts). MODS
+lists every discovered mod, whatever its game, in application order: the top
+row is applied first (lowest priority) and the bottom row last (highest);
+Ctrl+Down moves a mod toward higher priority.
 
 The launcher also takes a gamepad. The D-pad or left stick moves and changes
-OPTIONS/UPDATE values left and right; A/Start confirms; B/Back backs out,
-quitting from the main menu and arming the cancel prompt during an install. On
-MODS, X opens the folder and LB/RB moves the selected mod toward lower/higher
-priority; on INSTALL, X opens the source folder picker.
+UPDATE values left and right; A/Start confirms; B/Back backs out, quitting
+from the main menu and asking first during an install. On MODS, X opens the
+folder and LB/RB moves the selected mod toward lower/higher priority; on a
+game's install, X opens the source folder picker. OPTIONS takes the in-game
+menu's keys and buttons.
 
 Updates publish a small `build.json` next to the platform binary. `release`
 follows the latest normal release; `nightly` follows the rolling pre-release
@@ -60,7 +60,7 @@ that CI replaces on every push to `main`. The launcher verifies the download's
 SHA-256, swaps the executable while keeping `<exe>.old`, and restarts; the
 Update screen can restore that previous image. Only CI builds (with
 `ARKLAY_CHANNEL` baked in) update themselves, so a local `cargo build` shows
-`DEV BUILD` instead. The Linux binary expects SDL3 to be installed on the
+`Dev build` instead. The Linux binary expects SDL3 to be installed on the
 system; Windows links SDL3 statically.
 
 Data resolves by precedence:
@@ -74,9 +74,9 @@ Data resolves by precedence:
   directory, the roaming directory, then the executable's directory
 - `ARKLAY_CONFIG_DIR` relocates configuration and saves
 
-The launcher's text face is [Departure Mono](https://github.com/rektdeckard/departure-mono),
-MIT licensed; the notice is in `assets/DepartureMono-LICENSE`. The in-game
-menu's modern face is [Barlow](https://github.com/jpt/barlow), under the SIL
+The menus' retro face is [Departure Mono](https://github.com/rektdeckard/departure-mono),
+MIT licensed; the notice is in `assets/DepartureMono-LICENSE`. Their modern
+face is [Barlow](https://github.com/jpt/barlow), under the SIL
 Open Font License; the notice is in `assets/Barlow-LICENSE`.
 
 ## Usage

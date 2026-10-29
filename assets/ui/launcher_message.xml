@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A message with a way back: `message.title` over `message.lines`. -->
+<screen use="standard-screen" title="{message.title}">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <command key="confirm" label="Back" action="back" hint="false"/>
+  <stack gap="small" items="{message.lines}">
+    <template>
+      <text variant="value" text="{item}"/>
+    </template>
+  </stack>
+</screen>

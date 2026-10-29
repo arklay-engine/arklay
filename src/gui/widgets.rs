@@ -46,11 +46,12 @@ enum Symbol {
     Cross,
     Circle,
     Triangle,
+    Square,
 }
 
 /// The controller glyph for `key` in `style`. The keys sit on the same
 /// buttons by position whatever the style: confirm south, cancel east,
-/// reset-page north.
+/// reset-page north, the extra action west.
 fn pad_glyph(style: PadStyle, key: GuiKey) -> PadGlyph {
     let white = Color::WHITE;
     let dark = Color::rgb(0x14, 0x14, 0x14);
@@ -66,6 +67,7 @@ fn pad_glyph(style: PadStyle, key: GuiKey) -> PadGlyph {
         (PadStyle::Xbox, GuiKey::ResetGroup) => {
             PadGlyph::Face("Y", Color::rgb(0xE8, 0xB8, 0x20), dark)
         }
+        (PadStyle::Xbox, GuiKey::Aux) => PadGlyph::Face("X", Color::rgb(0x34, 0x7C, 0xD8), white),
         (PadStyle::Xbox, GuiKey::TabPrev) => PadGlyph::Bumper("LB"),
         (PadStyle::Xbox, GuiKey::TabNext) => PadGlyph::Bumper("RB"),
         (PadStyle::Xbox, GuiKey::SubPrev) => PadGlyph::Trigger("LT"),
@@ -80,6 +82,9 @@ fn pad_glyph(style: PadStyle, key: GuiKey) -> PadGlyph {
         (PadStyle::PlayStation, GuiKey::ResetGroup) => {
             PadGlyph::Symbol(Symbol::Triangle, Color::rgb(0x48, 0xCC, 0xAA))
         }
+        (PadStyle::PlayStation, GuiKey::Aux) => {
+            PadGlyph::Symbol(Symbol::Square, Color::rgb(0xE8, 0x8C, 0xC8))
+        }
         (PadStyle::PlayStation, GuiKey::TabPrev) => PadGlyph::Bumper("L1"),
         (PadStyle::PlayStation, GuiKey::TabNext) => PadGlyph::Bumper("R1"),
         (PadStyle::PlayStation, GuiKey::SubPrev) => PadGlyph::Trigger("L2"),
@@ -89,6 +94,7 @@ fn pad_glyph(style: PadStyle, key: GuiKey) -> PadGlyph {
         (PadStyle::Nintendo, GuiKey::Confirm) => PadGlyph::Face("B", nintendo, white),
         (PadStyle::Nintendo, GuiKey::Cancel) => PadGlyph::Face("A", nintendo, white),
         (PadStyle::Nintendo, GuiKey::ResetGroup) => PadGlyph::Face("X", nintendo, white),
+        (PadStyle::Nintendo, GuiKey::Aux) => PadGlyph::Face("Y", nintendo, white),
         (PadStyle::Nintendo, GuiKey::TabPrev) => PadGlyph::Bumper("L"),
         (PadStyle::Nintendo, GuiKey::TabNext) => PadGlyph::Bumper("R"),
         (PadStyle::Nintendo, GuiKey::SubPrev) => PadGlyph::Trigger("ZL"),
@@ -220,17 +226,34 @@ impl Painter<'_> {
     /// `center_y`: a key cap on the keyboard, the controller's own button
     /// shape on a gamepad. Returns its rectangle.
     pub fn glyph(&mut self, x: f32, center_y: f32, device: Device, key: GuiKey) -> Rect {
+        self.capped_glyph(x, center_y, device, key, None)
+    }
+
+    /// [`Painter::glyph`] with the keyboard's cap reading `cap` instead of
+    /// the key's own label.
+    fn capped_glyph(
+        &mut self,
+        x: f32,
+        center_y: f32,
+        device: Device,
+        key: GuiKey,
+        cap: Option<&str>,
+    ) -> Rect {
         match device {
             Device::Gamepad(style) => self.pad_glyph(x, center_y, pad_glyph(style, key)),
-            Device::Keyboard => self.key_cap(x, center_y, key_label(key)),
+            Device::Keyboard => self.key_cap(x, center_y, cap.unwrap_or(key_label(key))),
         }
     }
 
     /// The width [`Painter::glyph`] would draw.
     pub fn glyph_width(&mut self, device: Device, key: GuiKey) -> f32 {
+        self.capped_glyph_width(device, key, None)
+    }
+
+    fn capped_glyph_width(&mut self, device: Device, key: GuiKey, cap: Option<&str>) -> f32 {
         match device {
             Device::Gamepad(style) => self.pad_glyph_size(pad_glyph(style, key)).0,
-            Device::Keyboard => self.key_cap_width(key_label(key)),
+            Device::Keyboard => self.key_cap_width(cap.unwrap_or(key_label(key))),
         }
     }
 
@@ -405,6 +428,12 @@ impl Painter<'_> {
                 self.canvas.fill_polygon(&corners(r), color);
                 self.canvas.fill_polygon(&corners(r - line * 2.0), hole);
             }
+            Symbol::Square => {
+                let half = size * 0.8;
+                let outer = Rect::new(cx - half, cy - half, half * 2.0, half * 2.0);
+                self.canvas.fill_rect(outer, color);
+                self.canvas.fill_rect(outer.inset(line, line), hole);
+            }
             Symbol::Cross => {
                 let reach = size * 0.75;
                 let half = line / 2.0 * std::f32::consts::SQRT_2;
@@ -434,7 +463,18 @@ impl Painter<'_> {
         key: GuiKey,
         label: &str,
     ) -> Rect {
-        let glyph = self.glyph(x, center_y, device, key);
+        self.capped_hint(x, center_y, device, (key, label, None))
+    }
+
+    /// [`Painter::hint`] with an optional keyboard cap.
+    fn capped_hint(
+        &mut self,
+        x: f32,
+        center_y: f32,
+        device: Device,
+        (key, label, cap): (GuiKey, &str, Option<&str>),
+    ) -> Rect {
+        let glyph = self.capped_glyph(x, center_y, device, key, cap);
         let text_x = glyph.right() + self.u(14.0);
         let width = self.text(
             Role::Hint,
@@ -449,7 +489,15 @@ impl Painter<'_> {
 
     /// The width [`Painter::hint`] would draw.
     pub fn hint_width(&mut self, device: Device, key: GuiKey, label: &str) -> f32 {
-        self.glyph_width(device, key) + self.u(14.0) + self.measure(Role::Hint, label)
+        self.capped_hint_width(device, (key, label, None))
+    }
+
+    fn capped_hint_width(
+        &mut self,
+        device: Device,
+        (key, label, cap): (GuiKey, &str, Option<&str>),
+    ) -> f32 {
+        self.capped_glyph_width(device, key, cap) + self.u(14.0) + self.measure(Role::Hint, label)
     }
 
     /// A centred row of hints; returns each hint's rectangle in order.
@@ -460,16 +508,31 @@ impl Painter<'_> {
         device: Device,
         hints: &[(GuiKey, &str)],
     ) -> Vec<Rect> {
+        let hints: Vec<_> = hints
+            .iter()
+            .map(|&(key, label)| (key, label, None))
+            .collect();
+        self.capped_hint_bar(center_x, center_y, device, &hints)
+    }
+
+    /// [`Painter::hint_bar`] where a hint may name its keyboard cap.
+    pub fn capped_hint_bar(
+        &mut self,
+        center_x: f32,
+        center_y: f32,
+        device: Device,
+        hints: &[(GuiKey, &str, Option<&str>)],
+    ) -> Vec<Rect> {
         let gap = self.u(36.0);
         let total: f32 = hints
             .iter()
-            .map(|&(key, label)| self.hint_width(device, key, label))
+            .map(|&hint| self.capped_hint_width(device, hint))
             .sum::<f32>()
             + gap * hints.len().saturating_sub(1) as f32;
         let mut x = center_x - total / 2.0;
         let mut rects = Vec::with_capacity(hints.len());
-        for &(key, label) in hints {
-            let rect = self.hint(x, center_y, device, key, label);
+        for &hint in hints {
+            let rect = self.capped_hint(x, center_y, device, hint);
             x = rect.right() + gap;
             rects.push(rect);
         }
@@ -553,6 +616,48 @@ impl Painter<'_> {
             &[(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)],
             color,
         );
+    }
+
+    /// A check box `size` units square centred on `(cx, cy)`: a rounded
+    /// outline, or filled bright with a dark tick when `checked`.
+    pub fn checkbox(&mut self, cx: f32, cy: f32, size: f32, checked: bool) {
+        let side = self.u(size);
+        let rect = Rect::new(cx - side / 2.0, cy - side / 2.0, side, side);
+        let radius = side * 0.2;
+        if !checked {
+            let edge = self.u(2.0).max(1.0);
+            self.canvas
+                .fill_round_rect(rect, radius, palette::RULE_BRIGHT);
+            self.canvas.fill_round_rect(
+                rect.inset(edge, edge),
+                (radius - edge).max(0.0),
+                Color::rgb(0x14, 0x14, 0x14),
+            );
+            return;
+        }
+        self.canvas.fill_round_rect(rect, radius, palette::ACCENT);
+        // The tick: a short stroke down to the elbow, a long one up.
+        let half = self.u(1.8).max(1.0);
+        let point = |x: f32, y: f32| (rect.x + side * x, rect.y + side * y);
+        let ink = Color::rgb(0x10, 0x10, 0x10);
+        let elbow = point(0.42, 0.70);
+        for (from, to) in [(point(0.23, 0.50), elbow), (elbow, point(0.78, 0.30))] {
+            let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+            let length = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
+            let (nx, ny) = (-dy / length * half, dx / length * half);
+            // Run each stroke half a width past its ends so the elbow and
+            // the tips are square.
+            let (ex, ey) = (dx / length * half, dy / length * half);
+            self.canvas.fill_polygon(
+                &[
+                    (from.0 - ex + nx, from.1 - ey + ny),
+                    (to.0 + ex + nx, to.1 + ey + ny),
+                    (to.0 + ex - nx, to.1 + ey - ny),
+                    (from.0 - ex - nx, from.1 - ey - ny),
+                ],
+                ink,
+            );
+        }
     }
 
     /// The selected row's silver sheen.
