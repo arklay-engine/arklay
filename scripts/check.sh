@@ -87,6 +87,14 @@ for path in tests/*.rs tests/*/main.rs; do
     [[ " ${slow_tests[*]} " == *" $name "* ]] && continue
     session_tests+=(--test "$name")
 done
+# Slow unit tests the session tier skips; --ci runs them. The GHOST cheat
+# sweep replays every enemy script through 33 spawn behaviours and is about a
+# third of the unit tests' CPU time (#266).
+slow_unit_tests=(enemy::ghost_tests::)
+session_skips=()
+for name in "${slow_unit_tests[@]}"; do
+    session_skips+=(--skip "$name")
+done
 
 # Clippy only type-checks, so it shares no build output with the test
 # builds. It runs in the background, in its own target directory so cargo's
@@ -129,7 +137,7 @@ mkdir -p "$clippy_dir"
 clippy_pid=$!
 
 if [[ "$tier" == "session" ]]; then
-    step cargo test --profile test-release "${session_tests[@]}"
+    step cargo test --profile test-release "${session_tests[@]}" -- "${session_skips[@]}"
 else
     step cargo check --no-default-features
     step cargo check --manifest-path fuzz/Cargo.toml
@@ -160,6 +168,7 @@ case "$tier" in
     session)
         echo "  skipped here, covered by CI on the PR: the debug test build, the"
         echo "  real/perf_real/soak_real binaries' non-ignored tests,"
+        echo "  the slow unit tests (${slow_unit_tests[*]}),"
         echo "  --no-default-features, the fuzz compile check, docs, Windows,"
         echo "  the MSRV check and the artifact smoke (./scripts/check.sh --ci"
         echo "  runs the Linux part locally)."

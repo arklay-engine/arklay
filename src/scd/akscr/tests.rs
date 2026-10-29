@@ -927,32 +927,40 @@ fn checked_in_room_scripts_compile() {
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return;
     };
-    let mut count = 0;
-    for entry in entries {
-        let path = entry.unwrap().path();
-        if path
-            .extension()
-            .is_none_or(|extension| extension != "akscr")
-        {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).unwrap();
-        let stem = path.file_stem().unwrap().to_string_lossy();
-        let base = u16::from_str_radix(&stem, 16).unwrap();
-        let load = includes_from(&dir);
-        for id in room_variants(base) {
-            for variant in Region::ALL.into_iter().flat_map(|region| {
-                let variant = Variant::for_room(id).in_region(region);
-                [variant, variant.authentic()]
-            }) {
-                if let Err(error) = compile_with(&text, Some(variant), &load)
-                    .and_then(|assembled| assembled.to_container())
-                {
-                    panic!("{} as {variant:?}: {error:#}", path.display());
+    let paths: Vec<_> = entries
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "akscr")
+        })
+        .collect();
+    assert!(!paths.is_empty(), "no scripts under {}", dir.display());
+    // Every script compiles in each room variant and region, which is a few
+    // seconds of work: spread the scripts over the cores.
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    std::thread::scope(|scope| {
+        for chunk in paths.chunks(paths.len().div_ceil(threads)) {
+            let dir = &dir;
+            scope.spawn(move || {
+                let load = includes_from(dir);
+                for path in chunk {
+                    let text = std::fs::read_to_string(path).unwrap();
+                    let stem = path.file_stem().unwrap().to_string_lossy();
+                    let base = u16::from_str_radix(&stem, 16).unwrap();
+                    for id in room_variants(base) {
+                        for variant in Region::ALL.into_iter().flat_map(|region| {
+                            let variant = Variant::for_room(id).in_region(region);
+                            [variant, variant.authentic()]
+                        }) {
+                            if let Err(error) = compile_with(&text, Some(variant), &load)
+                                .and_then(|assembled| assembled.to_container())
+                            {
+                                panic!("{} as {variant:?}: {error:#}", path.display());
+                            }
+                        }
+                    }
                 }
-            }
+            });
         }
-        count += 1;
-    }
-    assert!(count > 0, "no scripts under {}", dir.display());
+    });
 }
