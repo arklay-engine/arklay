@@ -213,6 +213,9 @@ pub const MESSAGE_TAKE_PROMPT: u8 = 0xC0;
 pub const MESSAGE_INVENTORY_FULL: u8 = 0xC2;
 /// Global 0xC6: the document pick-up "has been filed" line.
 pub const MESSAGE_FILE_FILED: u8 = 0xC6;
+/// Global 0xC7: "This key is useless now. Discard?". The yes branch carries
+/// the discard action (post-action 2).
+pub const MESSAGE_DISCARD_KEY: u8 = 0xC7;
 /// Global 0x5B: the new-game loading narration shown on a black screen once
 /// the intro film ends and before the first room tick.
 pub const MESSAGE_BOOT_NEW_GAME: u8 = 0x5B;
@@ -1270,7 +1273,7 @@ pub struct RoomInteraction {
 }
 
 /// Which item-viewer menu mode a pending main-state flag asks the engine to
-/// open (the original's `main_menu` modes 3, 4 and 8).
+/// open (the original's `main_menu` modes 3, 4, 6 and 8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemViewKind {
     /// A ground pick-up (`set_key_flag`, `MSF_MENU_ITEM_VIEW`): the item
@@ -1284,12 +1287,18 @@ pub enum ItemViewKind {
     /// runs its file-list screen; the port shows global 0xC6 and files the
     /// entry.
     Document,
+    /// A door key used down to an empty stack (`use_room_action_item`'s
+    /// `MSF_MENU_KEY_DEPLETED`): the selected key's model intro, then global
+    /// 0xC7's discard prompt. The original's mode 1 becomes mode 6 for every
+    /// key and drops into the status screen once the viewer closes.
+    DiscardKey,
 }
 
 /// A pending item-viewer request read from the main-state flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ItemViewRequest {
-    /// The room action slot the viewer will award or file.
+    /// The room action slot the viewer will award or file. The discard
+    /// prompt works on the selected item instead and leaves it 0.
     pub slot: u8,
     /// Which viewer flow the flags selected.
     pub kind: ItemViewKind,
@@ -6943,8 +6952,8 @@ impl GameState {
     /// is raised and its action entry is still present.
     ///
     /// The original tests `MSF_PICKUP_SCREEN` before the mode scan, then
-    /// priority-encodes modes 4 (got item) and 3 (item view). `None` when no
-    /// viewer is pending.
+    /// priority-encodes modes 4 (got item), 3 (item view) and, last, 1 (the
+    /// depleted key). `None` when no viewer is pending.
     pub fn item_view_request(&self) -> Option<ItemViewRequest> {
         let request = if self.flags[5].bit(MSF_PICKUP_SCREEN) {
             ItemViewRequest {
@@ -6961,6 +6970,11 @@ impl GameState {
                 slot: self.message_item_slot?,
                 kind: ItemViewKind::Take,
             }
+        } else if self.flags[5].bit(MSF_MENU_KEY_DEPLETED) {
+            return Some(ItemViewRequest {
+                slot: 0,
+                kind: ItemViewKind::DiscardKey,
+            });
         } else {
             return None;
         };
@@ -6974,7 +6988,12 @@ impl GameState {
     /// closes (the original's `menu_restore_game_state` clearing the whole
     /// `MSF_MENU_BYTE` field).
     pub fn clear_item_view_flags(&mut self) {
-        for sel in [MSF_PICKUP_SCREEN, MSF_MENU_GOT_ITEM, MSF_MENU_ITEM_VIEW] {
+        for sel in [
+            MSF_PICKUP_SCREEN,
+            MSF_MENU_GOT_ITEM,
+            MSF_MENU_ITEM_VIEW,
+            MSF_MENU_KEY_DEPLETED,
+        ] {
             self.apply_flag(5, sel, 1);
         }
         self.message_item_slot = None;
