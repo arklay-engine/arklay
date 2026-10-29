@@ -627,17 +627,21 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
 }
 
 /// Check a parsed room the way the engine loads it: it needs a camera cut,
-/// every cut's background, and scripts that parse.
+/// every cut's background (an RE2 room may lack some, as the retail data
+/// does, and draws those cameras black), and scripts that parse.
 fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<()> {
     // The engine refuses a room with no camera cuts, so verification must
     // reject it too.
     if loaded.state.cuts.is_empty() {
         bail!("room has no camera cuts");
     }
-    for cut in &loaded.state.cuts {
-        let stem = id.cut_stem(cut.index);
-        if !pack.has_asset(&stem, crate::pack::AssetClass::Image) {
-            bail!("room references missing background {stem}.bmp");
+    // Retail RE2 lacks some backgrounds, all of room 707's among them.
+    if loaded.dialect != crate::format::Dialect::Re2 {
+        for cut in &loaded.state.cuts {
+            let stem = id.cut_stem(cut.index);
+            if !pack.has_asset(&stem, crate::pack::AssetClass::Image) {
+                bail!("room references missing background {stem}.bmp");
+            }
         }
     }
     // The scripts the engine runs: a corrupt embedded table is not a failure

@@ -2,7 +2,7 @@
 //! posed and animated in a room with no AI (`--model`).
 //!
 //! A model is named by its pack entry and loaded by [`load`], whatever game
-//! it is from: an RE1 EMD, an RE2 enemy EMD (with the `.tim` beside it), an
+//! it is from: an RE1 EMD, an RE2 enemy EMD (with the texture page and CLUT swatches beside it), an
 //! RE2 player PLD, or an RE2 weapon PLW drawn in its character's hands. The
 //! [`Viewer`] stands the model on the floor of the camera's view and plays
 //! one clip of one animation bank on a loop, one frame per 30 Hz tick
@@ -30,11 +30,9 @@ pub fn load_with(pack: &Pack, entry: &str, data: &[u8]) -> Result<Emd> {
     let lower = entry.to_ascii_lowercase();
     let model = match lower.rsplit_once('.').map(|(_, extension)| extension) {
         Some("emd") if format::emd(data).dialect() == Some(Dialect::Re2) => {
-            let tim = texture_entry(entry);
-            let texture = pack
-                .read(&tim)
-                .with_context(|| format!("the texture of {entry}"))?;
-            emd2::parse_emd(data, &texture)
+            let texture =
+                enemy_texture(pack, entry).with_context(|| format!("the texture of {entry}"))?;
+            emd2::parse_emd_with(data, texture)
         }
         Some("emd") => emd::parse(data),
         Some("pld") => emd2::parse_pld(data),
@@ -50,10 +48,30 @@ pub fn load_with(pack: &Pack, entry: &str, data: &[u8]) -> Result<Emd> {
     model.with_context(|| format!("invalid model {entry}"))
 }
 
-/// An RE2 EMD's texture entry: the `.tim` with the same stem.
-fn texture_entry(entry: &str) -> String {
+/// An RE2 enemy EMD's texture: the `<stem>.bmp` page beside it with the
+/// `<stem>_clut_<nn>.bmp` swatches of the same layer
+/// ([`emd2::texture_from_bmps`]), or a raw `<stem>.tim` a mod ships over
+/// it.
+fn enemy_texture(pack: &Pack, entry: &str) -> Result<crate::model::Texture8> {
     let stem = entry.rsplit_once('.').map_or(entry, |(stem, _)| stem);
-    format!("{stem}.tim")
+    let page = format!("{stem}.bmp");
+    let tim = format!("{stem}.tim");
+    let depth = pack.depth_of(&page);
+    if pack
+        .depth_of(&tim)
+        .is_some_and(|tim| depth.is_none_or(|page| tim > page))
+    {
+        return crate::tim::decode_8bpp(&pack.read(&tim)?);
+    }
+    let mut swatches = Vec::new();
+    for row in 1.. {
+        let swatch = emd2::clut_entry(stem, row);
+        if pack.depth_of(&swatch) != depth {
+            break;
+        }
+        swatches.push(pack.read(&swatch)?);
+    }
+    emd2::texture_from_bmps(&pack.read(&page)?, &swatches)
 }
 
 /// The character a weapon belongs to: `player/<id>/weapon/<nn>_<s>.plw` is
@@ -247,10 +265,63 @@ mod tests {
             Some("player/0b/model_1.pld")
         );
         assert_eq!(character_entry("player/0b/model_1.pld"), None);
+    }
+
+    #[test]
+    fn an_re2_enemy_takes_its_texture_from_the_page_and_swatches_or_a_tim() {
+        fn writer_bytes(entries: Vec<(String, Vec<u8>)>) -> Vec<u8> {
+            let mut writer = crate::pack::PackWriter::new();
+            for (path, data) in entries {
+                writer.add(&path, data).unwrap();
+            }
+            writer.to_bytes().unwrap()
+        }
+        let tim = crate::emd2::tests::enemy_tim();
+        let expected = crate::tim::decode_8bpp(&tim).unwrap();
+        let bmps = emd2::texture_bmps(&tim).unwrap();
+        let mut base_entries = vec![
+            (
+                "enemy/3a/enemy_1.emd".to_string(),
+                crate::emd2::tests::emd(),
+            ),
+            ("enemy/3a/enemy_1.bmp".to_string(), bmps[0].clone()),
+            (
+                "enemy/3b/enemy_0.emd".to_string(),
+                crate::emd2::tests::emd(),
+            ),
+            ("enemy/3b/enemy_0.tim".to_string(), tim),
+        ];
+        for (row, swatch) in bmps.iter().enumerate().skip(1) {
+            base_entries.push((emd2::clut_entry("enemy/3a/enemy_1", row), swatch.clone()));
+        }
+        let pack = Pack::from_bytes(writer_bytes(base_entries.clone())).unwrap();
         assert_eq!(
-            texture_entry("enemy/3a/enemy_1.emd"),
-            "enemy/3a/enemy_1.tim"
+            load(&pack, "enemy/3a/enemy_1.emd").unwrap().texture,
+            expected
         );
+        assert_eq!(
+            load(&pack, "enemy/3b/enemy_0.emd").unwrap().texture,
+            expected
+        );
+
+        // A mod's raw TIM wins over the base's page; a mod's page takes no
+        // swatches from the base.
+        let base = writer_bytes(base_entries);
+        let flat = crate::emd2::tests::tim(128, 4, 1, |x, y| (x + y) as u8);
+        let flat_texture = crate::tim::decode_8bpp(&flat).unwrap();
+        let page = emd2::texture_bmps(&flat).unwrap().remove(0);
+        for entry in [
+            ("enemy/3a/enemy_1.tim", flat),
+            ("enemy/3a/enemy_1.bmp", page),
+        ] {
+            let layer =
+                Pack::from_bytes(writer_bytes(vec![(entry.0.to_string(), entry.1)])).unwrap();
+            let modded = Pack::from_bytes(base.clone()).unwrap().with_overlay(layer);
+            assert_eq!(
+                enemy_texture(&modded, "enemy/3a/enemy_1.emd").unwrap(),
+                flat_texture
+            );
+        }
     }
 
     /// One joint, two keyframes and one two-frame clip, plus a further bank

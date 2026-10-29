@@ -1641,6 +1641,13 @@ impl Pack {
 
     /// How deep in the layers the copy of `path` that wins sits: 0 for the
     /// base, `n` for the `n`th mod applied, `None` without one.
+    /// Test helper: `self` with `layer` applied over it as a mod.
+    #[cfg(test)]
+    pub(crate) fn with_overlay(mut self, layer: Pack) -> Pack {
+        self.overlays.push(layer);
+        self
+    }
+
     pub fn depth_of(&self, path: &str) -> Option<usize> {
         let key = path.to_ascii_lowercase();
         (0..self.overlays.len())

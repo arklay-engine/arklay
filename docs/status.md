@@ -897,5 +897,20 @@ RE1 scales. RE2 HD model skins are hashed per 128-texel page through
 that page's CLUT row (359 of 383 pages named); weapon-composited pages
 no longer match their skin.
 
+The RE2 pack follows the RE1 pack's conventions (convert version 9): each
+room is a `room.xml` (`game="re2"`, converted through `rdt2` and checked to
+read back and build the same room), each enemy texture an indexed
+`enemy_<s>.bmp` page plus a 16x16 palette swatch `enemy_<s>_clut_<nn>.bmp`
+per further CLUT row (a 256-entry BMP palette holds one row; the 118 retail
+textures read back exactly), and each BGM a numbered `bgm/<id:03x>.wav`
+(`main<nn>` is `0nn`, `sub<nn>` `1nn`, a `_<k>` alternate take adds
+`0x200 * k`). Room names moved out of the language files into each
+`room.xml`'s `<strings>` (RE1's from `games/re1/room/names.xml`, RE2's
+English names from the debug room table in the install's Classic REbirth
+`ddraw.dll`, 30 slots of 24 bytes per stage; 500 of 501 rooms are named,
+707 has no slot), and a
+non-RE1 pack takes only the `UI_` strings from the built-in RE1 language
+files, so RE2 rooms no longer show RE1 names.
+
 The manifest no longer carries `rdt_version`/`scd_version`: formats are
 detected per file (`src/format.rs`), so one pack may hold both dialects.

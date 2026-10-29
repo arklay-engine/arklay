@@ -18,6 +18,10 @@
 //!
 //! Camera and slot numbers are two lower-case hex digits (`cut/0a.bmp`).
 //!
+//! The room's display names live in `room.xml`'s `<strings>` block and reach
+//! the game as `ROOM_<room3>_NAME`/`ROOM_<room3>_NAME_SAVE` language keys
+//! ([`language_layers`]); a language file's own key still wins.
+//!
 //! A raw `room.rdt` in the folder still loads in place of `room.xml`, so a
 //! mod that ships an RDT keeps working: when a pack holds both, the one from
 //! the higher layer wins, and the XML wins a tie.
@@ -317,6 +321,171 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
     ids
 }
 
+/// Every room's `<strings>` as language layers, `(tag, file)` per language,
+/// keyed `ROOM_<room3>_NAME` and `ROOM_<room3>_NAME_SAVE`.
+///
+/// Rooms are read in id order, so of a room's player variants the lowest
+/// that names the room in a language supplies that language's name. The
+/// strings come from the room's `room.xml` even when a mod's raw RDT
+/// defines the room over it, so a mod that ships RDTs keeps the names; an
+/// unreadable `room.xml` warns and is skipped here (loading the room reports
+/// it properly).
+pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> {
+    use std::collections::BTreeMap;
+    let mut by_tag: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for id in ids(pack) {
+        let entry = id.xml_entry();
+        if !pack.contains(&entry) {
+            continue;
+        }
+        let strings = match pack.read(&entry).and_then(|data| room_strings(&data)) {
+            Ok(strings) => strings,
+            Err(error) => {
+                eprintln!("warning: {entry}: {error:#}");
+                continue;
+            }
+        };
+        let room3 = id.room3();
+        for (tag, key, value) in strings {
+            let Some(suffix) = xml::string_suffix(&key) else {
+                continue;
+            };
+            by_tag
+                .entry(tag.to_ascii_lowercase())
+                .or_default()
+                .entry(format!("ROOM_{room3}_{suffix}"))
+                .or_insert(value);
+        }
+    }
+    let mut layers = Vec::new();
+    for (tag, values) in &by_tag {
+        let values = values
+            .iter()
+            .map(|(key, value)| (key.clone(), value.as_str()));
+        match crate::language::Language::from_values(values, &format!("room strings for {tag}")) {
+            Ok(language) => layers.push((tag.clone(), language)),
+            Err(error) => eprintln!("warning: {error:#}"),
+        }
+    }
+    layers
+}
+
+/// The checked-in RE1 room display names `convert-game` writes into each
+/// `room.xml` ([`parse_names`]).
+pub const RE1_NAMES: &str = include_str!("../../games/re1/room/names.xml");
+
+/// Test helper: a `room/<room3>0/room.xml` per room of [`RE1_NAMES`],
+/// holding only its strings, for tests that need the room names a converted
+/// pack carries.
+#[cfg(test)]
+pub(crate) fn re1_name_entries() -> Vec<(String, Vec<u8>)> {
+    parse_names(RE1_NAMES)
+        .unwrap()
+        .into_iter()
+        .map(|(room3, strings)| {
+            let id = RoomId::parse(&format!("{room3}0")).unwrap();
+            let source = RoomSource {
+                strings,
+                ..RoomSource::default()
+            };
+            (id.xml_entry(), xml::write(&source).unwrap().into_bytes())
+        })
+        .collect()
+}
+
+/// The display strings of a `<rooms>` list (`games/re1/room/names.xml`):
+/// each `<room id="<room3>">`'s `<strings>`, keyed by the upper-case
+/// three-digit room id, for `convert-game` to write into every player
+/// variant's `room.xml`.
+pub fn parse_names(
+    text: &str,
+) -> Result<std::collections::BTreeMap<String, Vec<crate::language::XmlString>>> {
+    let document =
+        roxmltree::Document::parse(text).context("room names are not well-formed XML")?;
+    let root = document.root_element();
+    anyhow::ensure!(root.has_tag_name("rooms"), "room names root is not <rooms>");
+    let mut names = std::collections::BTreeMap::new();
+    for room in root.children().filter(roxmltree::Node::is_element) {
+        anyhow::ensure!(room.has_tag_name("room"), "<rooms> may only contain <room>");
+        let id = room.attribute("id").context("a <room> needs an id")?;
+        let room3 = RoomId::parse(id)
+            .with_context(|| format!("<room id=\"{id}\">"))?
+            .room3();
+        let mut strings = Vec::new();
+        for node in room.children().filter(roxmltree::Node::is_element) {
+            anyhow::ensure!(
+                node.has_tag_name("strings"),
+                "<room> may only contain <strings>"
+            );
+            strings.extend(xml::parse_strings(node).with_context(|| format!("room {room3}"))?);
+        }
+        anyhow::ensure!(
+            names.insert(room3.clone(), strings).is_none(),
+            "room {room3} is named twice"
+        );
+    }
+    Ok(names)
+}
+
+/// Just the `<strings>` of a `room.xml`, without building the rest of it.
+///
+/// Startup reads every room's strings, so only the `<strings>` element is
+/// parsed: its text cannot hold a literal `</strings>` (a `<` is escaped),
+/// and a room without the tag has none. Anything unusual (the tag inside a
+/// comment, say) falls back to parsing the whole file.
+fn room_strings(data: &[u8]) -> Result<Vec<crate::language::XmlString>> {
+    const CLOSE: &str = "</strings>";
+    let text = std::str::from_utf8(data).context("not UTF-8")?;
+    let Some(start) = text.find("<strings") else {
+        return Ok(Vec::new());
+    };
+    if let Some(end) = text[start..].find(CLOSE)
+        && let Ok(fragment) = roxmltree::Document::parse(&text[start..start + end + CLOSE.len()])
+    {
+        return xml::parse_strings(fragment.root_element());
+    }
+    let document = roxmltree::Document::parse(text).context("not well-formed XML")?;
+    match document
+        .root_element()
+        .children()
+        .find(|node| node.has_tag_name("strings"))
+    {
+        Some(node) => xml::parse_strings(node),
+        None => Ok(Vec::new()),
+    }
+}
+
+/// Convert an RE2 RDT into its room folder's `room.xml`, as `(pack entry,
+/// bytes)`, with `strings` as its display strings.
+///
+/// The written definition must read back as the one [`crate::rdt2`] reads
+/// from the RDT, and build the same room state, so a conversion never ships
+/// a room that loads differently from its RDT. The RDT sections the engine
+/// does not read yet (scripts, masks, models) are not carried over; a later
+/// conversion that reads them writes them into the folder.
+pub fn convert_rdt2(
+    data: &[u8],
+    id: RoomId,
+    strings: Vec<crate::language::XmlString>,
+) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut source = crate::rdt2::read(data)?;
+    source.strings = strings;
+    let text = xml::write(&source)?;
+    let back = xml::parse(&text).context("the written room XML does not parse")?;
+    if back != source {
+        bail_difference("does not read back as the same definition", &source, &back)?;
+    }
+    let pack = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes()?)?;
+    let built = Loaded::from_xml(&pack, id, &text)
+        .context("the written room does not build")?
+        .state;
+    let expected = Loaded::from_rdt(&pack, id, data.to_vec())?.state;
+    if format!("{built:?}") != format!("{expected:?}") {
+        bail_difference("builds a different room from its RDT", &expected, &built)?;
+    }
+    Ok(vec![(id.xml_entry(), text.into_bytes())])
+}
+
 /// Convert one RDT into its room folder: `room.xml` and the other files it
 /// is made of, as `(pack entry, bytes)`, besides the camera images.
 ///
@@ -327,8 +496,13 @@ pub fn convert_rdt(
     data: &[u8],
     id: RoomId,
     script: crate::charset::Script,
+    strings: Vec<crate::language::XmlString>,
 ) -> Result<Vec<(String, Vec<u8>)>> {
-    let Converted { source, mut files } = RoomSource::from_rdt(data, id, script)?;
+    let Converted {
+        mut source,
+        mut files,
+    } = RoomSource::from_rdt(data, id, script)?;
+    source.strings = strings;
     let text = xml::write(&source)?;
     let back = xml::parse(&text).context("the written room XML does not parse")?;
     if back != source {

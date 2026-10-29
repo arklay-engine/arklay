@@ -31,7 +31,7 @@ fn converted(rdts: &[(RoomId, Vec<u8>)], script: Script) -> Pack {
     let mut entries = Vec::new();
     for (id, data) in rdts {
         entries.extend(
-            convert_rdt(data, *id, script)
+            convert_rdt(data, *id, script, Vec::new())
                 .unwrap_or_else(|error| panic!("{:04X}: {error:#}", id.rdt_number())),
         );
     }
@@ -199,7 +199,7 @@ fn a_room_folder_renamed_is_the_room_of_its_new_id() {
     let rdt = synthetic_rdt();
     let other = RoomId::parse("1000").unwrap();
     let from = format!("{}/", ID.dir());
-    let renamed: Vec<(String, Vec<u8>)> = convert_rdt(&rdt, ID, Script::Latin)
+    let renamed: Vec<(String, Vec<u8>)> = convert_rdt(&rdt, ID, Script::Latin, Vec::new())
         .unwrap()
         .into_iter()
         .map(|(path, data)| {
@@ -269,7 +269,7 @@ fn layered(
 
 /// The synthetic room converted: its XML and every entry of its folder.
 fn converted_entries() -> (String, Vec<(String, Vec<u8>)>) {
-    let entries = convert_rdt(&synthetic_rdt(), ID, Script::Latin).unwrap();
+    let entries = convert_rdt(&synthetic_rdt(), ID, Script::Latin, Vec::new()).unwrap();
     let xml = entries
         .iter()
         .find(|(path, _)| *path == ID.xml_entry())
@@ -618,4 +618,88 @@ fn a_camera_s_lighting_must_come_once_before_its_masks_with_three_lights() {
     ] {
         assert!(xml::parse(&with(bad)).is_err(), "{why}");
     }
+}
+
+/// `(tag, key, value)` strings, owned.
+fn strings(values: &[(&str, &str, &str)]) -> Vec<crate::language::XmlString> {
+    values
+        .iter()
+        .map(|(tag, key, value)| (tag.to_string(), key.to_string(), value.to_string()))
+        .collect()
+}
+
+#[test]
+fn a_room_s_strings_round_trip_and_become_room_keys() {
+    let named = strings(&[
+        ("en-US", "name", "SAVE ROOM"),
+        ("en-US", "save_name", "M. Room 1F"),
+        ("ja-JP", "save_name", "館 {s}小部屋"),
+    ]);
+    let entries = convert_rdt(&synthetic_rdt(), ID, Script::Latin, named.clone()).unwrap();
+    let text = String::from_utf8(entry_of(&entries, &ID.xml_entry())).unwrap();
+    assert_eq!(xml::parse(&text).unwrap().strings, named);
+    assert_eq!(room_strings(text.as_bytes()).unwrap(), named);
+
+    // The lowest player variant naming the room in a language wins; a raw
+    // RDT names nothing.
+    let other = RoomId {
+        player_flag: 0,
+        ..ID
+    };
+    let source = RoomSource {
+        strings: strings(&[("en-US", "name", "OTHER"), ("fr-FR", "name", "AUTRE")]),
+        ..RoomSource::default()
+    };
+    let mut files = entries;
+    files.push((other.xml_entry(), xml::write(&source).unwrap().into_bytes()));
+    files.push(("room/1000/room.rdt".to_string(), synthetic_rdt()));
+    let pack = pack_of(files);
+    let layers = language_layers(&pack);
+    let layer = |tag: &str| &layers.iter().find(|(t, _)| t == tag).unwrap().1;
+    assert_eq!(layer("en-us").len(), 2);
+    assert!(layer("fr-fr").get("ROOM_205_NAME").is_some());
+    assert!(layer("ja-jp").get("ROOM_205_NAME_SAVE").is_some());
+    let text = crate::text::Text::load(&pack, Some("en-US"));
+    assert_eq!(text.decode(text.room_name("205").unwrap()), "OTHER");
+    assert_eq!(text.decode(text.room_label(2, 5).unwrap()), "M. Room 1F");
+    assert_eq!(text.room_name("100"), None);
+}
+
+#[test]
+fn a_mod_s_raw_rdt_keeps_the_base_room_s_name() {
+    let named = strings(&[("en-US", "name", "SAVE ROOM")]);
+    let base = convert_rdt(&synthetic_rdt(), ID, Script::Latin, named).unwrap();
+    let (pack, dir) = layered("rdt-name", base, vec![(ID.rdt_entry(), synthetic_rdt())]);
+    assert_eq!(format(&pack, ID), Some(Format::Rdt));
+    let text = crate::text::Text::load(&pack, Some("en-US"));
+    assert_eq!(text.decode(text.room_name("205").unwrap()), "SAVE ROOM");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn bad_room_strings_are_refused() {
+    for bad in [
+        r#"<room><strings><language lang="en-US"><string key="title">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="name">A\q</string></language></strings></room>"#,
+        r#"<room><strings /><strings /></room>"#,
+    ] {
+        assert!(xml::parse(bad).is_err(), "{bad}");
+    }
+    // The checked-in names all parse, and name a room once.
+    assert!(parse_names(RE1_NAMES).unwrap().len() > 150);
+    let twice = r#"<rooms><room id="100" /><room id="100" /></rooms>"#;
+    assert!(parse_names(twice).is_err());
+}
+
+#[test]
+fn an_re2_rdt_converts_to_a_room_that_builds_the_same() {
+    let data = crate::rdt2::tests::sample();
+    let id = RoomId::parse("1000").unwrap();
+    let entries = convert_rdt2(&data, id, Vec::new()).unwrap();
+    assert_eq!(entries.len(), 1);
+    let pack = pack_of(entries);
+    let loaded = load(&pack, id).unwrap();
+    assert_eq!(loaded.dialect, Dialect::Re2);
+    let expected = Loaded::from_rdt(&pack, id, data).unwrap();
+    assert_eq!(snapshot(&loaded.state), snapshot(&expected.state));
 }

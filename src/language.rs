@@ -250,6 +250,76 @@ impl Language {
             .iter()
             .map(|(key, entry)| (key.as_str(), entry))
     }
+
+    /// Keep only the entries whose key passes `keep`.
+    pub fn retain(&mut self, mut keep: impl FnMut(&str) -> bool) {
+        self.entries.retain(|key, _| keep(key));
+    }
+}
+
+/// One `<string>` of an XML `<strings>` block (an `item.xml`'s or a
+/// `room.xml`'s): `(language tag, key, value)`.
+pub type XmlString = (String, String, String);
+
+/// Parse a `<strings>` element: one `<language lang="…">` per language, each
+/// holding `<string key="…">value</string>` elements.
+///
+/// `language_key` maps a string key to a language-file key of the same kind
+/// (e.g. `name` to `ITEM_00_NAME`), or `None` for a key the file does not
+/// take; each value is checked in that key's syntax so a bad string fails
+/// its own file rather than the whole language's layer.
+pub fn parse_xml_strings(
+    node: roxmltree::Node,
+    language_key: impl Fn(&str) -> Option<String>,
+) -> Result<Vec<XmlString>> {
+    if let Some(attribute) = node.attributes().next() {
+        bail!("unknown <strings> attribute `{}`", attribute.name());
+    }
+    let mut strings = Vec::new();
+    let mut tags: Vec<&str> = Vec::new();
+    for language in node.children().filter(roxmltree::Node::is_element) {
+        if language.tag_name().name() != "language" {
+            bail!("unknown <strings> element <{}>", language.tag_name().name());
+        }
+        let mut tag = None;
+        for attribute in language.attributes() {
+            match attribute.name() {
+                "lang" => tag = Some(attribute.value()),
+                other => bail!("unknown <language> attribute `{other}`"),
+            }
+        }
+        let tag = tag.ok_or_else(|| anyhow!("a <language> needs a lang"))?;
+        if !valid_tag(tag) {
+            bail!("invalid language tag `{tag}`");
+        }
+        if tags.iter().any(|seen| seen.eq_ignore_ascii_case(tag)) {
+            bail!("more than one <language lang=\"{tag}\">");
+        }
+        tags.push(tag);
+        let mut values = Vec::new();
+        for string in language.children().filter(roxmltree::Node::is_element) {
+            if string.tag_name().name() != "string" {
+                bail!("unknown <language> element <{}>", string.tag_name().name());
+            }
+            let mut key = None;
+            for attribute in string.attributes() {
+                match attribute.name() {
+                    "key" => key = Some(attribute.value()),
+                    other => bail!("unknown <string> attribute `{other}`"),
+                }
+            }
+            let key = key.ok_or_else(|| anyhow!("a <string> needs a key"))?;
+            let full = language_key(key).ok_or_else(|| anyhow!("unknown string key `{key}`"))?;
+            if string.children().any(|child| !child.is_text()) {
+                bail!("<string key=\"{key}\"> must hold only text");
+            }
+            let value = string.text().unwrap_or_default();
+            values.push((full, value));
+            strings.push((tag.to_string(), key.to_string(), value.to_string()));
+        }
+        Language::from_values(values, &format!("<language lang=\"{tag}\">"))?;
+    }
+    Ok(strings)
 }
 
 /// One language file's encoded entries.
@@ -293,6 +363,7 @@ impl Catalog {
         for (entry, source) in LANGUAGE_FILES {
             sources.push((entry.to_string(), source.to_string()));
         }
+        let embedded = sources.len();
         for path in pack.paths() {
             let lower = path.to_ascii_lowercase();
             if !lower.starts_with(ENTRY_PREFIX) || !lower.ends_with(".txt") {
@@ -305,15 +376,24 @@ impl Catalog {
                 }
             }
         }
-        // Item names and descriptions come from each `item/<id>/item.xml`;
-        // they go in first so a language file's own `ITEM_` key still wins.
+        // Item names and descriptions come from each `item/<id>/item.xml`
+        // and room names from each `room/<id>/room.xml`; they go in first so
+        // a language file's own `ITEM_`/`ROOM_` key still wins.
         let items = crate::item_catalog::language_layers(pack);
+        let rooms = crate::room::language_layers(pack);
+        // The embedded sources are RE1's text: another game's pack takes
+        // only the engine's own `UI_` strings from them.
+        let foreign = !is_re1(pack);
+        let builtin =
+            parse_sources(sources[..embedded].iter().map(as_strs)).map(|(tag, mut language)| {
+                if foreign {
+                    language.retain(|key| key.starts_with("UI_"));
+                }
+                (tag, language)
+            });
+        let files = builtin.chain(parse_sources(sources[embedded..].iter().map(as_strs)));
         assemble_layers(
-            items.into_iter().chain(parse_sources(
-                sources
-                    .iter()
-                    .map(|(entry, source)| (entry.as_str(), source.as_str())),
-            )),
+            items.into_iter().chain(rooms).chain(files),
             requested,
             script,
         )
@@ -448,6 +528,22 @@ pub fn resolve_tag(requested: Option<&str>) -> String {
 /// Whether a resolved tag selects the Japanese language (`ja`, `ja-JP`).
 pub fn is_japanese(tag: &str) -> bool {
     language_part(tag).eq_ignore_ascii_case("ja")
+}
+
+/// An owned `(entry, source)` pair as borrowed strings.
+fn as_strs((entry, source): &(String, String)) -> (&str, &str) {
+    (entry, source)
+}
+
+/// Whether `pack`'s base game is RE1, whose text the embedded sources are:
+/// any pack but an RE2 one. A base pack without a manifest predates it and
+/// is RE1, whatever id opening it gives the pack (its file name).
+fn is_re1(pack: &Pack) -> bool {
+    !pack.manifest().is_some_and(|manifest| {
+        manifest
+            .id
+            .eq_ignore_ascii_case(crate::convert_re2::BASE_PACK_ID)
+    })
 }
 
 /// The tag of a `language/<tag>.txt` entry, lower-cased.
@@ -911,10 +1007,41 @@ ITEM_05_DESCRIPTION = \"A\"
     }
 
     #[test]
+    fn another_game_s_pack_takes_only_the_engine_s_strings_from_the_embedded_files() {
+        let pack_with = |id: &str| {
+            let mut writer = crate::pack::PackWriter::new();
+            writer
+                .add(
+                    crate::manifest::ENTRY,
+                    crate::manifest::Manifest::base(id).render().into_bytes(),
+                )
+                .unwrap();
+            writer
+                .add("language/en-US.txt", b"MESSAGE_7F = \"own\"\n".to_vec())
+                .unwrap();
+            Pack::from_bytes(writer.to_bytes().unwrap()).unwrap()
+        };
+        let re1 = Catalog::load(&pack_with("re1"), Some("en-US"), charset::Script::Latin);
+        let re2 = Catalog::load(&pack_with("re2"), Some("en-US"), charset::Script::Latin);
+        assert!(re1.lookup("MESSAGE_00").is_some());
+        assert!(re2.lookup("MESSAGE_00").is_none());
+        // The pack's own files and the engine's UI strings still load.
+        assert!(re2.lookup("MESSAGE_7F").is_some());
+        let ui = LANGUAGE_FILES
+            .iter()
+            .find_map(|(entry, source)| {
+                (*entry == "language/en-US.txt").then(|| Language::parse(source).unwrap())
+            })
+            .unwrap();
+        let (key, _) = ui.iter().find(|(key, _)| key.starts_with("UI_")).unwrap();
+        assert!(re2.lookup(key).is_some());
+    }
+
+    #[test]
     fn parses_and_encodes_the_japanese_seed() {
         let source = include_str!("../games/re1/language/ja-JP.txt");
         let language = Language::parse(source).unwrap();
-        assert!(language.len() > 1_400, "{} entries", language.len());
+        assert!(language.len() > 1_100, "{} entries", language.len());
         // The item names and descriptions live in each item's `item.xml`.
         let empty = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap()).unwrap();
         let items = crate::item_catalog::language_layers(&empty)
@@ -923,7 +1050,19 @@ ITEM_05_DESCRIPTION = \"A\"
             .map(|(_, language)| language)
             .unwrap();
         assert!(items.len() > 200, "{} item entries", items.len());
-        for (key, entry) in language.iter().chain(items.iter()) {
+        // So do the room names, in each `room.xml`.
+        let mut writer = crate::pack::PackWriter::new();
+        for (entry, data) in crate::room::re1_name_entries() {
+            writer.add(&entry, data).unwrap();
+        }
+        let named = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let rooms = crate::room::language_layers(&named)
+            .into_iter()
+            .find(|(tag, _)| tag == "ja-jp")
+            .map(|(_, language)| language)
+            .unwrap();
+        assert!(rooms.len() > 150, "{} room entries", rooms.len());
+        for (key, entry) in language.iter().chain(items.iter()).chain(rooms.iter()) {
             assert_eq!(
                 entry.missing_glyphs(charset::Script::Japanese),
                 0,

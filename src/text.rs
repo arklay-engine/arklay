@@ -179,15 +179,16 @@ impl Text {
         self.catalog.lookup(key).unwrap_or(&[])
     }
 
-    /// Test helper: the sources embedded in the binary, selected as `en-US`.
+    /// Test helper: the sources embedded in the binary plus the checked-in
+    /// room names a converted pack carries, selected as `en-US`.
     #[cfg(test)]
     pub(crate) fn embedded() -> Self {
-        let pack = crate::pack::Pack::from_bytes(
-            crate::pack::PackWriter::new()
-                .to_bytes()
-                .expect("an empty pack writes"),
-        )
-        .expect("an empty pack parses");
+        let mut writer = crate::pack::PackWriter::new();
+        for (entry, data) in crate::room::re1_name_entries() {
+            writer.add(&entry, data).expect("a room entry adds");
+        }
+        let pack = crate::pack::Pack::from_bytes(writer.to_bytes().expect("the pack writes"))
+            .expect("the pack parses");
         Self::load(&pack, Some("en-US"))
     }
 }

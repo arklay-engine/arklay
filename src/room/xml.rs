@@ -25,6 +25,7 @@ use crate::budget;
 use crate::charset::Script;
 use crate::effects::room::{FrameEntry, UvRecord};
 use crate::format::Dialect;
+use crate::language::XmlString;
 use crate::state::{
     CameraLight, Collision, CollisionRect, FootstepZone, Light, Sca, ScaRect, WalkZone, Zone,
 };
@@ -149,6 +150,7 @@ pub fn write(room: &RoomSource) -> Result<String> {
         attributes.push(("itemSlots", dec(slots as i64)));
     }
     w.open("room", &attributes);
+    write_strings(&mut w, &room.strings);
     let [r, g, b] = room.ambient;
     w.empty("ambient", &[("r", dec(r)), ("g", dec(g)), ("b", dec(b))]);
     w.open("lights", &[]);
@@ -230,6 +232,40 @@ pub fn write(room: &RoomSource) -> Result<String> {
 
     w.close("room");
     Ok(w.out)
+}
+
+/// The room's display strings as a `<strings>` block, one `<language>` per
+/// tag in first-seen order; nothing when there are none.
+fn write_strings(w: &mut Writer, strings: &[XmlString]) {
+    if strings.is_empty() {
+        return;
+    }
+    let mut tags: Vec<&str> = Vec::new();
+    for (tag, _, _) in strings {
+        if !tags.contains(&tag.as_str()) {
+            tags.push(tag);
+        }
+    }
+    w.open("strings", &[]);
+    for tag in tags {
+        w.open("language", &[("lang", text(tag))]);
+        for (_, key, value) in strings.iter().filter(|(t, _, _)| t == tag) {
+            w.tag("string", &[("key", text(key))], ">");
+            let _ = writeln!(w.out, "{}</string>", escape(value, false));
+        }
+        w.close("language");
+    }
+    w.close("strings");
+}
+
+/// The language-file key a `room.xml` string key reads as, for checking its
+/// value's syntax.
+pub fn string_suffix(key: &str) -> Option<&'static str> {
+    match key {
+        "name" => Some("NAME"),
+        "save_name" => Some("NAME_SAVE"),
+        _ => None,
+    }
 }
 
 /// The collision box shape byte (the type word's low byte).
@@ -635,10 +671,19 @@ pub fn parse(text: &str) -> Result<RoomSource> {
                 room.footstep_count = attr_or(node, "count", room.footstep_zones.len() as u16)?;
             }
             "messages" => room.messages = Some(parse_messages(node)?),
+            "strings" => room.strings = parse_strings(node)?,
             other => bail!("unknown room element <{other}>"),
         }
     }
     Ok(room)
+}
+
+/// A `<strings>` block: the room's `name` and `save_name` per language.
+pub(crate) fn parse_strings(node: Node<'_, '_>) -> Result<Vec<XmlString>> {
+    crate::language::parse_xml_strings(node, |key| {
+        string_suffix(key).map(|suffix| format!("ROOM_100_{suffix}"))
+    })
+    .context("<strings>")
 }
 
 /// The element children of `node`.
@@ -884,8 +929,9 @@ fn parse_zones(node: Node<'_, '_>) -> Result<Vec<Zone>> {
     for group in children(node, "switches")? {
         check_attributes(group, &["from"])?;
         let from: i16 = attr(group, "from")?;
-        if !(0..=7).contains(&from) {
-            bail!("<switches> from camera {from} is not 0-7");
+        // The RDTs store the camera in a byte; RE2 rooms have up to 17.
+        if !(0..=0xFF).contains(&from) {
+            bail!("<switches> from camera {from} is not 0-255");
         }
         for (position, record) in elements(group).enumerate() {
             let expected = if position == 0 { "view" } else { "switch" };

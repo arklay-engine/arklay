@@ -53,7 +53,7 @@ responsibility.
 | `player_script` | Runtime | The player's scripted-animation states |
 | `rdt` | Format | RDT room parser (header pointers, cameras, zones, collisions, embedded model/TIM pairs) |
 | `rdt2` | Format | RE2 RDT room reader into a `RoomSource`: cameras (RID), camera switch zones (RVD), collision (SCA) and per-camera lights (LIT) |
-| `room` | Format | `room/<id>/` room folders: the `room.xml` reader/writer, message markup, the RDT-to-folder conversion (models, effects, animation and scripts by slot), and the loader that picks the XML or a raw `room.rdt` |
+| `room` | Format | `room/<id>/` room folders: the `room.xml` reader/writer, message markup, the RE1 and RE2 RDT-to-folder conversions (models, effects, animation and scripts by slot), the room names' language layers, and the loader that picks the XML or a raw `room.rdt` |
 | `scd` | Runtime/Format | SCD opcode tables, reader, IR, disassembler/decompiler, assembler, command and event VMs |
 | `door` | Format/Runtime | `.dor` container parser and the door-animation VM |
 | `transition` | Runtime | The door-transition timeline (screen space, masks, camera, `.dor` stepper hand-off) |

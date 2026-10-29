@@ -3303,6 +3303,12 @@ mod tests {
         let mut unpacked = Vec::new();
         for entry in std::fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();
+            if path
+                .extension()
+                .is_none_or(|extension| extension != "akscr")
+            {
+                continue;
+            }
             let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
             let base = u16::from_str_radix(&stem, 16).unwrap();
             let stages: std::collections::BTreeSet<u8> = crate::scd::akscr::room_variants(base)

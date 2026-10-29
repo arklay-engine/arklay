@@ -67,8 +67,8 @@ formatted-text renderers index the sheet. Only the original's ASCII-buffer
 | `MESSAGE_<nn>` | global message `nn` (`00`..`3F`), including the boot narration |
 | `ROOM_<room3>_TEXT_<nn>` | room message shared by the RDT variants |
 | `ROOM_<rdt4>_TEXT_<nn>` | per-variant override, e.g. `ROOM_1001_TEXT_0A` |
-| `ROOM_<room3>_NAME` | room display name (the F1 overlay) |
-| `ROOM_<room3>_NAME_SAVE` | shorthand room name for save data, falling back to `NAME` |
+| `ROOM_<room3>_NAME` | room display name (the F1 overlay, the save list) |
+| `ROOM_<room3>_NAME_SAVE` | shorthand room name for the save screen, falling back to `NAME` |
 | `ITEM_<nn>_NAME` | item name by item id |
 | `ITEM_<nn>_NAME_UNCHECKED` | the generic name shown before the item is examined, only where it differs from `NAME` |
 | `ITEM_<nn>_DESCRIPTION` | item description by item id |
@@ -77,8 +77,16 @@ formatted-text renderers index the sheet. Only the original's ASCII-buffer
 | `UI_PROMPT_RETURN_TITLE_*`, `UI_DEBUG_*` | the F9 prompt and the F1 debug tools (tool labels, hints, stage columns, ending names, flag group names; individual flag names are port-only code tables) |
 
 The item keys for an item with a definition come from the `<strings>` of its
-`item/<nn>/item.xml` (see [Item definitions](modding.md#item-definitions)); a
-language file may still set them, and its value wins over the item file's.
+`item/<nn>/item.xml` (see [Item definitions](modding.md#item-definitions)), and
+the room name keys from the `<strings>` of each `room/<id>/room.xml` (see
+[Room definitions](modding.md#room-definitions)); the checked-in language
+files carry neither. A language file may still set them, and its value wins
+over the definition's.
+
+The language files built into the engine are RE1's text. A pack whose base
+game is not RE1 (its manifest `id` is not `re1`) takes only their `UI_` keys,
+the engine's own strings; its messages, room and item text come from the pack
+alone.
 
 ## Mods
 
