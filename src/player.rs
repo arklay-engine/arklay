@@ -868,6 +868,21 @@ pub fn update_with_options(
         player.locked = LockedAction::Push;
         player.action_state = 0;
     }
+    // The object pass keeps the push going while forward is held. Under the
+    // analog stick, forward is a stick pointing within a quarter turn of the
+    // facing; a stick pushed left or right on screen only raises the side
+    // directions, which would otherwise drop the push after its first frame.
+    if player.locked == LockedAction::Push
+        && let Some(target) = analog
+    {
+        player.input = Input {
+            up: angle_distance(target, player.angle) < 0x400,
+            down: false,
+            left: false,
+            right: false,
+            ..input
+        };
+    }
     if player.locked != LockedAction::None {
         update_locked(player, room, emd_clips, emw_clips, room_clips);
         return;
@@ -6440,5 +6455,44 @@ mod tests {
         assert_eq!(player.behavior, BEHAVIOR_IDLE);
         assert_eq!(player.pos, [1000, 0, 1000]);
         assert_eq!(player.analog_hold, None);
+    }
+
+    #[test]
+    fn analog_stick_holds_a_push_on_the_screen_x_axis() {
+        // The object pass keeps a push going only while `input.up` is held.
+        // A stick pushed screen right (+X here) toward a box the player
+        // faces raises only the digital right, so the push lock must read
+        // it as forward; pulling the stick the other way lets go.
+        let room = analog_room();
+        let (_, emw) = shipped_clips();
+        let push = |stick: [i16; 2], right: bool, left: bool| {
+            let mut player = player_at(1000, 1000);
+            player.angle = 0;
+            player.locked = LockedAction::Push;
+            player.object_push = true;
+            update_with_options(
+                &mut player,
+                &room,
+                &emw,
+                &emw,
+                &[],
+                Input {
+                    analog: Some(stick),
+                    right,
+                    left,
+                    ..Input::default()
+                },
+                Options {
+                    analog_movement: true,
+                    ..Options::default()
+                },
+            );
+            player.input.up
+        };
+        assert!(
+            push([20000, 0], true, false),
+            "toward the box holds the push"
+        );
+        assert!(!push([-20000, 0], false, true), "away from the box lets go");
     }
 }
