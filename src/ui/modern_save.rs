@@ -335,7 +335,7 @@ fn character_name(cx: &UiContext<'_>, character: u8) -> String {
 }
 
 /// The play timer as `h:mm:ss`.
-fn play_time(timer: u32) -> String {
+pub(crate) fn play_time(timer: u32) -> String {
     let seconds = timer / TICKS_PER_SECOND;
     format!(
         "{}:{:02}:{:02}",
