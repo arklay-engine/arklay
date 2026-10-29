@@ -2426,8 +2426,8 @@ pub(crate) fn language_choices() -> Vec<Option<String>> {
         })
         .collect();
     tags.sort_by(|a, b| {
-        language_rank(a)
-            .cmp(&language_rank(b))
+        crate::language::menu_rank(a)
+            .cmp(&crate::language::menu_rank(b))
             .then_with(|| a.cmp(b))
     });
     tags.dedup();
@@ -2435,20 +2435,6 @@ pub(crate) fn language_choices() -> Vec<Option<String>> {
     choices.push(None);
     choices.extend(tags.into_iter().map(Some));
     choices
-}
-
-fn language_rank(tag: &str) -> u8 {
-    match tag {
-        "en-US" => 0,
-        "ja-JP" => 1,
-        "fr-FR" => 2,
-        "de-DE" => 3,
-        "it-IT" => 4,
-        "es-ES" => 5,
-        "ru-RU" => 6,
-        "fi-FI" => 7,
-        _ => 8,
-    }
 }
 
 /// `text` with its first letter in capitals, for a progress label.

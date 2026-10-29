@@ -361,13 +361,24 @@ fn scd_source_output(relative: &str) -> Option<String> {
     ))
 }
 
-/// A merged room script `room/<room>.akscr` (three hex digits, e.g.
-/// `room/103.akscr`): the room id. It builds `room/<id>/room.scd` for every
-/// player and mansion variant of the room, for the USA region (`#if USA`): a
-/// mod's script has no build per region, so the build warns when another
-/// region's would differ.
+/// A merged room script: the room id. It is either the repository's layout,
+/// `room.akscr` in the folder of the room's first RDT (`room/1030/room.akscr`
+/// for room 103), or `room/<room>.akscr` (three hex digits, `room/103.akscr`).
+/// It builds `room/<id>/room.scd` for every player and mansion variant of the
+/// room, for the USA region (`#if USA`), with another region's build beside
+/// it where that differs.
 fn merged_scd_source(relative: &str) -> Option<u16> {
     let name = under_room(relative)?;
+    if let Some((folder, file)) = name.split_once('/') {
+        let base = folder.strip_suffix('0')?;
+        if base.len() != 3
+            || !base.bytes().all(|b| b.is_ascii_hexdigit())
+            || !file.eq_ignore_ascii_case(crate::scd::akscr::ROOM_SCRIPT_FILE)
+        {
+            return None;
+        }
+        return u16::from_str_radix(base, 16).ok();
+    }
     let (stem, extension) = name.split_at_checked(3)?;
     if !extension.eq_ignore_ascii_case(".akscr") || !stem.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
@@ -573,7 +584,7 @@ mod tests {
             mod_manifest_text("demo", "re1").as_bytes(),
         );
         write(
-            &source.join("room/103.akscr"),
+            &source.join("room/1030/room.akscr"),
             b"#version 1\nproc main noreturn\n{\n#if JILL\n    nop(1);\n#endif\n#if MANSION2\n    nop(2);\n#endif\n}\n",
         );
 
@@ -725,7 +736,12 @@ mod tests {
     fn merged_room_scripts_are_recognised() {
         assert_eq!(merged_scd_source("room/103.akscr"), Some(0x103));
         assert_eq!(merged_scd_source("ROOM/20A.AKSCR"), Some(0x20A));
-        assert_eq!(merged_scd_source("room/1030/room.akscr"), None);
+        assert_eq!(merged_scd_source("room/1030/room.akscr"), Some(0x103));
+        assert_eq!(merged_scd_source("Room/20A0/ROOM.AKSCR"), Some(0x20A));
+        // Another variant's folder, or another script name, is one RDT's.
+        assert_eq!(merged_scd_source("room/1031/room.akscr"), None);
+        assert_eq!(merged_scd_source("room/1030/door.akscr"), None);
+        assert_eq!(merged_scd_source("room/1030/sub/room.akscr"), None);
         assert_eq!(merged_scd_source("room/10x.akscr"), None);
         assert_eq!(merged_scd_source("room/103.s"), None);
         assert_eq!(merged_scd_source("lua/103.akscr"), None);

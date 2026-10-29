@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<effect index="1" clut="0x7840" depthTable="2 10 24 38 52 0 0 0">
+  <frame uv="0" delay="1" width="64" height="64"/>
+  <frame uv="0" delay="255" width="0" height="0"/>
+  <frame uv="1" delay="1" width="48" height="96"/>
+  <frame uv="2" delay="255" width="0" height="0"/>
+  <frame uv="2" delay="1" width="48" height="96"/>
+  <frame uv="4" delay="255" width="0" height="0"/>
+  <frame uv="3" delay="1" width="192" height="240"/>
+  <frame uv="6" delay="255" width="0" height="0"/>
+  <frame uv="0" delay="0" width="0" height="0"/>
+  <uv u="0" v="192" pivotX="96" pivotY="72"/>
+  <uv u="0" v="0" pivotX="80" pivotY="56"/>
+  <uv u="0" v="96" pivotX="128" pivotY="56"/>
+  <uv u="64" v="0" pivotX="32" pivotY="8"/>
+  <uv u="56" v="24" pivotX="128" pivotY="128"/>
+  <uv u="64" v="24" pivotX="128" pivotY="128"/>
+  <uv u="64" v="16" pivotX="128" pivotY="128"/>
+  <depth row="0">
+    <animFrame>
+      <block>2c0001010001010000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+  <depth row="1">
+    <animFrame>
+      <block>1f1c01030000000000000000000003400000000000000000</block>
+      <block>2e0001030000490000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+  <depth row="2">
+    <animFrame>
+      <block>1f1c01040200000000000000000003400000000000000000</block>
+      <block>2e0001040000480000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+  <depth row="3">
+    <animFrame>
+      <block>1f1c01040400000000000000000003400000000000000000</block>
+      <block>2e0001040000480000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+  <depth row="4">
+    <animFrame>
+      <block>1f1c01010600000000000000000003400000000000000000</block>
+      <block>2e0001010000470000000000000003400000000000000000</block>
+    </animFrame>
+  </depth>
+</effect>

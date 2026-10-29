@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="600" g="600" b="560"/>
+  <lights>
+    <light x="1508" y="-2000" z="12157" r="255" g="255" b="200" kind="0" radius="6000"/>
+    <light x="4038" y="-2000" z="3397" r="255" g="255" b="200" kind="0" radius="6000"/>
+    <light x="188" y="146" z="537" r="83" g="87" b="84" kind="1" radius="12161"/>
+  </lights>
+  <cameras>
+    <camera x="10818" y="-1116" z="23508" lookX="15570" lookY="-2304" lookZ="21852" roll="0" fov="289"/>
+    <camera x="22968" y="-4806" z="15912" lookX="28602" lookY="-1062" lookZ="18180" roll="0" fov="289"/>
+    <camera x="12600" y="-5778" z="23274" lookX="15786" lookY="-2142" lookZ="22518" roll="0" fov="289"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="0" x1="0" z1="27306" x2="28497" z2="27801" x3="30598" z3="0"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="1" to="9" x0="0" z0="900" x1="0" z1="38101" x2="37202" z2="35300" x3="35709" z3="896"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="2" to="9" x0="0" z0="800" x1="0" z1="35201" x2="36800" z2="34400" x3="36301" z3="97"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="3" to="9" x0="700" z0="54303" x1="43105" z1="51200" x2="36223" z2="6198" x3="703" z3="9390"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="1516" cellZ="1862">
+    <quadrant index="0">
+    </quadrant>
+    <quadrant index="1">
+    </quadrant>
+    <quadrant index="2">
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="36" zMax="18" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="6640" z="5120" width="8800" height="0x19C8" sound="0x0003"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="save_name">Courtyard Room B1</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Salle de la cour SS1</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Cortile S1</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Комната внутр. двора Б1</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Maanalainen varasto 0 krs</string>
+    </language>
+  </strings>
+</room>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<effect index="28" clut="0x7840" depthTable="2 0 0 0 0 0 0 0">
+  <frame uv="0" delay="10" width="40" height="40"/>
+  <frame uv="1" delay="10" width="40" height="40"/>
+  <frame uv="2" delay="10" width="40" height="40"/>
+  <frame uv="3" delay="10" width="40" height="40"/>
+  <frame uv="4" delay="10" width="40" height="40"/>
+  <frame uv="5" delay="10" width="40" height="40"/>
+  <frame uv="6" delay="10" width="40" height="40"/>
+  <frame uv="7" delay="10" width="40" height="40"/>
+  <frame uv="8" delay="10" width="40" height="40"/>
+  <frame uv="9" delay="10" width="40" height="40"/>
+  <frame uv="10" delay="10" width="40" height="40"/>
+  <frame uv="11" delay="10" width="40" height="40"/>
+  <frame uv="12" delay="10" width="40" height="40"/>
+  <frame uv="13" delay="10" width="40" height="40"/>
+  <frame uv="0" delay="10" width="40" height="40"/>
+  <frame uv="1" delay="10" width="40" height="40"/>
+  <frame uv="2" delay="10" width="40" height="40"/>
+  <frame uv="3" delay="10" width="40" height="40"/>
+  <frame uv="4" delay="10" width="40" height="40"/>
+  <frame uv="5" delay="10" width="40" height="40"/>
+  <frame uv="14" delay="10" width="40" height="40"/>
+  <frame uv="15" delay="10" width="40" height="40"/>
+  <frame uv="14" delay="10" width="40" height="40"/>
+  <frame uv="5" delay="10" width="40" height="40"/>
+  <frame uv="4" delay="10" width="40" height="40"/>
+  <frame uv="3" delay="10" width="40" height="40"/>
+  <frame uv="2" delay="10" width="40" height="40"/>
+  <frame uv="2" delay="10" width="40" height="40"/>
+  <frame uv="1" delay="10" width="40" height="40"/>
+  <frame uv="0" delay="255" width="0" height="0"/>
+  <uv u="0" v="0" pivotX="108" pivotY="108"/>
+  <uv u="40" v="0" pivotX="108" pivotY="108"/>
+  <uv u="80" v="0" pivotX="108" pivotY="108"/>
+  <uv u="120" v="0" pivotX="108" pivotY="108"/>
+  <uv u="160" v="0" pivotX="108" pivotY="108"/>
+  <uv u="200" v="0" pivotX="108" pivotY="108"/>
+  <uv u="0" v="40" pivotX="108" pivotY="108"/>
+  <uv u="40" v="40" pivotX="108" pivotY="108"/>
+  <uv u="80" v="40" pivotX="108" pivotY="108"/>
+  <uv u="120" v="40" pivotX="108" pivotY="108"/>
+  <uv u="160" v="40" pivotX="108" pivotY="108"/>
+  <uv u="200" v="40" pivotX="108" pivotY="108"/>
+  <uv u="0" v="80" pivotX="108" pivotY="108"/>
+  <uv u="40" v="80" pivotX="108" pivotY="108"/>
+  <uv u="80" v="80" pivotX="108" pivotY="108"/>
+  <uv u="120" v="80" pivotX="108" pivotY="108"/>
+  <depth row="0">
+    <animFrame>
+      <block>101301040000010100000000000003409600000000000000</block>
+    </animFrame>
+  </depth>
+</effect>

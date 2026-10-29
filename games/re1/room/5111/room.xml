@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="927" g="799" b="304"/>
+  <lights>
+    <light x="14720" y="-2100" z="9400" r="200" g="90" b="90" kind="0" radius="11455"/>
+    <light x="12390" y="-2100" z="9320" r="200" g="90" b="90" kind="0" radius="14415"/>
+    <light x="6680" y="-600" z="5000" r="91" g="222" b="255" kind="0" radius="2655"/>
+  </lights>
+  <cameras>
+    <camera x="21870" y="-7344" z="15390" lookX="11232" lookY="-360" lookZ="11610" roll="0" fov="207">
+      <maskGroup originX="61" originY="-54" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="971" blend="3" colorMode="1" size="8"/>
+        <sprite u="8" v="0" x="128" y="136" depthData="986" blend="3" colorMode="1" size="8"/>
+        <sprite u="16" v="0" x="128" y="144" depthData="1003" blend="3" colorMode="1" size="8"/>
+        <sprite u="24" v="0" x="128" y="152" depthData="1027" blend="3" colorMode="1" size="8"/>
+      </maskGroup>
+      <maskGroup originX="22" originY="-110" texBits="0x7800">
+        <sprite u="0" v="8" x="128" y="128" depthData="859" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="0" v="32" x="128" y="152" depthData="907" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="16" v="8" x="144" y="128" depthData="839" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="16" v="32" x="144" y="152" depthData="887" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="32" v="8" x="160" y="128" depthData="827" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="32" v="32" x="160" y="152" depthData="875" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="8" x="168" y="128" depthData="819" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="32" x="168" y="152" depthData="859" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="48" v="8" x="128" y="176" depthData="966" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="64" v="8" x="144" y="176" depthData="935" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="80" v="8" x="160" y="176" depthData="927" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="88" v="8" x="168" y="176" depthData="950" blend="3" colorMode="1" width="8" height="40"/>
+      </maskGroup>
+      <maskGroup originX="111" originY="-70" texBits="0x7800">
+        <sprite u="0" v="56" x="128" y="128" depthData="463" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="56" x="136" y="136" depthData="478" blend="3" colorMode="1" size="8"/>
+      </maskGroup>
+      <maskGroup originX="108" originY="-45" texBits="0x7800">
+        <sprite u="0" v="64" x="128" y="128" depthData="451" blend="3" colorMode="1" width="24" height="8"/>
+        <sprite u="24" v="64" x="128" y="136" depthData="459" blend="3" colorMode="1" width="24" height="8"/>
+      </maskGroup>
+      <maskGroup originX="-90" originY="-133" texBits="0x7800">
+        <sprite u="0" v="72" x="176" y="128" depthData="931" blend="3" colorMode="1" width="24" height="56"/>
+        <sprite u="24" v="88" x="128" y="192" depthData="1138" blend="3" colorMode="1" width="32" height="40"/>
+        <sprite u="56" v="80" x="160" y="184" depthData="1043" blend="3" colorMode="1" width="32" height="48"/>
+        <sprite u="88" v="80" x="192" y="184" depthData="1030" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="0" v="128" x="200" y="176" depthData="935" blend="3" colorMode="1" width="40" height="56"/>
+      </maskGroup>
+    </camera>
+    <camera x="3150" y="-1332" z="15714" lookX="5832" lookY="-2952" lookZ="3258" roll="0" fov="207">
+      <maskGroup originX="-33" originY="-70" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="642" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="520" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="24" x="128" y="152" depthData="626" blend="2" colorMode="1" width="8" height="32"/>
+        <sprite u="8" v="24" x="136" y="152" depthData="623" blend="2" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="48" x="128" y="184" depthData="611" blend="2" colorMode="1" width="24" height="8"/>
+        <sprite u="40" v="0" x="128" y="192" depthData="607" blend="2" colorMode="1" width="16" height="24"/>
+        <sprite u="56" v="0" x="144" y="192" depthData="598" blend="2" colorMode="1" width="16" height="24"/>
+        <sprite u="72" v="8" x="160" y="200" depthData="639" blend="2" colorMode="1" size="16"/>
+        <sprite u="88" v="8" x="176" y="200" depthData="630" blend="2" colorMode="1" size="16"/>
+        <sprite u="40" v="24" x="128" y="216" depthData="599" blend="2" colorMode="1" width="16" height="32"/>
+        <sprite u="56" v="24" x="144" y="216" depthData="591" blend="2" colorMode="1" width="16" height="32"/>
+        <sprite u="72" v="24" x="160" y="216" depthData="623" blend="2" colorMode="1" width="16" height="32"/>
+        <sprite u="88" v="24" x="176" y="216" depthData="618" blend="2" colorMode="1" width="16" height="32"/>
+      </maskGroup>
+      <maskGroup originX="-128" originY="-128" texBits="0x7800">
+        <sprite u="0" v="56" x="128" y="128" depthData="714" blend="2" colorMode="1" width="24" height="64"/>
+        <sprite u="24" v="56" x="152" y="128" depthData="694" blend="2" colorMode="1" width="24" height="64"/>
+        <sprite u="48" v="56" x="176" y="128" depthData="675" blend="2" colorMode="1" width="24" height="64"/>
+        <sprite u="72" v="56" x="200" y="128" depthData="671" blend="2" colorMode="1" width="16" height="40"/>
+        <sprite u="72" v="104" x="200" y="176" depthData="655" blend="2" colorMode="1" width="24" height="16"/>
+        <sprite u="0" v="120" x="128" y="192" depthData="683" blend="2" colorMode="1" width="24" height="64"/>
+        <sprite u="24" v="120" x="152" y="192" depthData="663" blend="2" colorMode="1" width="24" height="64"/>
+        <sprite u="48" v="120" x="176" y="192" depthData="642" blend="2" colorMode="1" width="24" height="64"/>
+        <sprite u="72" v="120" x="200" y="192" depthData="626" blend="2" colorMode="1" width="24" height="64"/>
+      </maskGroup>
+      <maskGroup originX="-128" originY="0" texBits="0x7800">
+        <sprite u="0" v="184" x="128" y="128" depthData="659" blend="2" colorMode="1" width="24" height="48"/>
+        <sprite u="24" v="184" x="152" y="128" depthData="643" blend="2" colorMode="1" width="24" height="48"/>
+        <sprite u="48" v="184" x="176" y="128" depthData="623" blend="2" colorMode="1" width="24" height="48"/>
+        <sprite u="72" v="184" x="200" y="128" depthData="607" blend="2" colorMode="1" width="24" height="48"/>
+      </maskGroup>
+    </camera>
+    <camera x="5148" y="-5292" z="3546" lookX="7182" lookY="-1908" lookZ="3888" roll="0" fov="207">
+      <maskGroup originX="-35" originY="-31" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="287" blend="0" colorMode="1" size="16"/>
+        <sprite u="0" v="16" x="128" y="144" depthData="274" blend="0" colorMode="1" size="16"/>
+        <sprite u="8" v="32" x="136" y="160" depthData="271" blend="0" colorMode="1" size="8"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="287" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="275" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="32" x="144" y="160" depthData="270" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="8" x="160" y="136" depthData="279" blend="0" colorMode="1" size="16"/>
+        <sprite u="32" v="24" x="160" y="152" depthData="278" blend="0" colorMode="1" size="8"/>
+      </maskGroup>
+      <maskGroup originX="-69" originY="-23" texBits="0x7800">
+        <sprite u="32" v="32" x="136" y="128" depthData="290" blend="0" colorMode="1" size="16"/>
+        <sprite u="48" v="32" x="152" y="128" depthData="267" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="64" v="0" x="128" y="144" depthData="255" blend="0" colorMode="1" size="16"/>
+        <sprite u="80" v="0" x="144" y="144" depthData="258" blend="0" colorMode="1" size="16"/>
+        <sprite u="96" v="0" x="160" y="144" depthData="267" blend="0" colorMode="1" size="16"/>
+        <sprite u="112" v="0" x="176" y="144" depthData="266" blend="0" colorMode="1" size="16"/>
+        <sprite u="64" v="16" x="128" y="160" depthData="247" blend="0" colorMode="1" size="16"/>
+        <sprite u="80" v="16" x="144" y="160" depthData="243" blend="0" colorMode="1" size="16"/>
+        <sprite u="96" v="16" x="160" y="160" depthData="259" blend="0" colorMode="1" size="16"/>
+        <sprite u="112" v="16" x="176" y="160" depthData="258" blend="0" colorMode="1" size="16"/>
+        <sprite u="72" v="32" x="136" y="176" depthData="240" blend="0" colorMode="1" size="16"/>
+        <sprite u="88" v="32" x="152" y="176" depthData="254" blend="0" colorMode="1" size="16"/>
+        <sprite u="104" v="32" x="168" y="176" depthData="251" blend="0" colorMode="1" size="16"/>
+      </maskGroup>
+      <maskGroup originX="96" originY="-89" texBits="0x7800">
+        <sprite u="16" v="48" x="168" y="128" depthData="150" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="40" v="48" x="192" y="128" depthData="137" blend="0" colorMode="1" size="16"/>
+        <sprite u="56" v="48" x="208" y="128" depthData="135" blend="0" colorMode="1" size="16"/>
+        <sprite u="8" v="64" x="160" y="144" depthData="171" blend="0" colorMode="1" size="16"/>
+        <sprite u="24" v="64" x="176" y="144" depthData="163" blend="0" colorMode="1" size="16"/>
+        <sprite u="40" v="64" x="192" y="144" depthData="147" blend="0" colorMode="1" size="16"/>
+        <sprite u="56" v="64" x="208" y="144" depthData="143" blend="0" colorMode="1" size="16"/>
+        <sprite u="0" v="80" x="152" y="160" depthData="183" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="80" x="168" y="160" depthData="175" blend="0" colorMode="1" size="16"/>
+        <sprite u="32" v="80" x="184" y="160" depthData="159" blend="0" colorMode="1" size="16"/>
+        <sprite u="48" v="80" x="200" y="160" depthData="143" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="8" v="96" x="136" y="176" depthData="198" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="32" v="96" x="160" y="176" depthData="179" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="56" v="96" x="184" y="176" depthData="154" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="0" v="112" x="128" y="192" depthData="234" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="112" x="144" y="192" depthData="211" blend="0" colorMode="1" size="16"/>
+        <sprite u="32" v="112" x="160" y="192" depthData="199" blend="0" colorMode="1" size="16"/>
+        <sprite u="48" v="112" x="176" y="192" depthData="179" blend="0" colorMode="1" width="24" height="16"/>
+      </maskGroup>
+      <maskGroup originX="88" originY="-9" texBits="0x7800">
+        <sprite u="72" v="48" x="128" y="128" depthData="247" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="96" v="48" x="152" y="128" depthData="223" blend="0" colorMode="1" size="16"/>
+        <sprite u="112" v="48" x="168" y="128" depthData="207" blend="0" colorMode="1" size="16"/>
+        <sprite u="88" v="64" x="128" y="144" depthData="278" blend="0" colorMode="1" size="16"/>
+        <sprite u="104" v="64" x="144" y="144" depthData="234" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="88" v="80" x="128" y="160" depthData="298" blend="0" colorMode="1" size="16"/>
+        <sprite u="104" v="80" x="144" y="160" depthData="255" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="88" v="96" x="128" y="176" depthData="326" blend="0" colorMode="1" size="16"/>
+        <sprite u="104" v="96" x="144" y="176" depthData="286" blend="0" colorMode="1" size="16"/>
+        <sprite u="88" v="112" x="128" y="192" depthData="358" blend="0" colorMode="1" size="16"/>
+        <sprite u="72" v="112" x="184" y="128" depthData="186" blend="0" colorMode="1" size="16"/>
+        <sprite u="112" v="112" x="168" y="144" depthData="215" blend="0" colorMode="1" size="16"/>
+      </maskGroup>
+    </camera>
+    <camera x="4554" y="-2466" z="3834" lookX="23850" lookY="522" lookZ="6048" roll="0" fov="207">
+      <maskGroup originX="150" originY="-112" texBits="0x7800">
+        <sprite u="16" v="8" x="128" y="136" depthData="158" blend="3" colorMode="1" width="16" height="32"/>
+        <sprite u="16" v="40" x="128" y="168" depthData="159" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="72" x="128" y="200" depthData="163" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="104" x="128" y="232" depthData="166" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="24" v="40" x="136" y="168" depthData="158" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="24" v="72" x="136" y="200" depthData="163" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="24" v="104" x="136" y="232" depthData="167" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="32" v="0" x="144" y="128" depthData="154" blend="3" colorMode="1" width="16" height="56"/>
+        <sprite u="32" v="56" x="144" y="184" depthData="159" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="32" v="96" x="144" y="224" depthData="166" blend="3" colorMode="1" width="16" height="32"/>
+      </maskGroup>
+      <maskGroup originX="142" originY="16" texBits="0x7800">
+        <sprite u="8" v="128" x="128" y="128" depthData="171" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="8" v="160" x="128" y="160" depthData="175" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="8" v="192" x="128" y="192" depthData="178" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="128" x="136" y="128" depthData="171" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="160" x="136" y="160" depthData="175" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="192" x="136" y="192" depthData="178" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="24" v="128" x="144" y="128" depthData="171" blend="3" colorMode="1" width="16" height="32"/>
+        <sprite u="24" v="192" x="144" y="192" depthData="174" blend="3" colorMode="1" width="16" height="32"/>
+        <sprite u="24" v="160" x="144" y="160" depthData="170" blend="3" colorMode="1" width="16" height="32"/>
+      </maskGroup>
+      <maskGroup originX="-13" originY="-80" texBits="0x7800">
+        <sprite u="64" v="0" x="128" y="128" depthData="707" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="64" v="40" x="128" y="168" depthData="727" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="80" v="48" x="144" y="176" depthData="727" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="80" v="8" x="144" y="136" depthData="706" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="88" v="16" x="152" y="144" depthData="707" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="88" v="40" x="152" y="168" depthData="719" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="88" v="64" x="152" y="192" depthData="731" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="96" v="40" x="160" y="168" depthData="714" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="96" v="56" x="160" y="184" depthData="727" blend="3" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+      <maskGroup originX="-13" originY="-32" texBits="0x7800">
+        <sprite u="64" v="96" x="128" y="144" depthData="746" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="96" x="136" y="144" depthData="738" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="88" x="144" y="136" depthData="735" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="88" v="88" x="152" y="136" depthData="734" blend="3" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+      <maskGroup originX="19" originY="-32" texBits="0x7800">
+        <sprite u="88" v="112" x="128" y="128" depthData="723" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="96" v="112" x="136" y="128" depthData="719" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="104" v="112" x="144" y="128" depthData="715" blend="3" colorMode="1" width="8" height="32"/>
+      </maskGroup>
+      <maskGroup originX="-39" originY="19" texBits="0x7800">
+        <sprite u="64" v="144" x="128" y="128" depthData="278" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="80" v="144" x="144" y="128" depthData="307" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="152" x="144" y="136" depthData="266" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="152" x="160" y="136" depthData="266" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="160" x="144" y="144" depthData="223" blend="3" colorMode="1" size="16"/>
+        <sprite u="96" v="160" x="160" y="144" depthData="222" blend="3" colorMode="1" size="16"/>
+      </maskGroup>
+      <maskGroup originX="76" originY="-26" texBits="0x7800">
+        <sprite u="56" v="176" x="128" y="128" depthData="775" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="64" v="176" x="136" y="128" depthData="770" blend="3" colorMode="1" width="8" height="40"/>
+      </maskGroup>
+    </camera>
+    <camera x="22482" y="-2466" z="15660" lookX="16902" lookY="-1458" lookZ="2610" roll="0" fov="207">
+      <maskGroup originX="8" originY="-9" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="631" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="643" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="655" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="24" v="8" x="152" y="136" depthData="631" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="32" v="8" x="160" y="136" depthData="642" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="8" x="168" y="136" depthData="655" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="8" x="176" y="136" depthData="667" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="56" v="8" x="184" y="136" depthData="674" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="0" x="128" y="152" depthData="639" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="0" x="136" y="152" depthData="647" blend="2" colorMode="1" size="8"/>
+        <sprite u="80" v="0" x="144" y="152" depthData="659" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="88" v="0" x="152" y="152" depthData="634" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="96" v="0" x="160" y="152" depthData="647" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="104" v="0" x="168" y="152" depthData="659" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="112" v="8" x="176" y="160" depthData="671" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="120" v="16" x="184" y="168" depthData="687" blend="2" colorMode="1" size="8"/>
+      </maskGroup>
+      <maskGroup originX="27" originY="-21" texBits="0x7800">
+        <sprite u="0" v="24" x="128" y="128" depthData="619" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="24" x="136" y="128" depthData="631" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="24" x="128" y="136" depthData="623" blend="2" colorMode="1" size="8"/>
+        <sprite u="32" v="24" x="136" y="136" depthData="631" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="48" v="24" x="152" y="136" depthData="654" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="64" v="24" x="128" y="144" depthData="623" blend="2" colorMode="1" size="8"/>
+        <sprite u="72" v="24" x="136" y="144" depthData="635" blend="2" colorMode="1" size="8"/>
+        <sprite u="80" v="24" x="144" y="144" depthData="647" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="24" x="160" y="144" depthData="667" blend="2" colorMode="1" size="8"/>
+      </maskGroup>
+      <maskGroup originX="11" originY="-9" texBits="0x7800">
+        <sprite u="0" v="32" x="128" y="128" depthData="639" blend="2" colorMode="1" width="24" height="8"/>
+        <sprite u="24" v="32" x="128" y="144" depthData="639" blend="2" colorMode="1" width="24" height="8"/>
+      </maskGroup>
+      <maskGroup originX="41" originY="2" texBits="0x7800">
+        <sprite u="0" v="40" x="128" y="128" depthData="642" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="40" x="136" y="128" depthData="655" blend="2" colorMode="1" size="8"/>
+        <sprite u="16" v="40" x="144" y="128" depthData="667" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="40" x="128" y="136" depthData="651" blend="2" colorMode="1" size="8"/>
+        <sprite u="40" v="40" x="136" y="136" depthData="655" blend="2" colorMode="1" size="8"/>
+        <sprite u="48" v="40" x="144" y="136" depthData="671" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="64" v="40" x="128" y="144" depthData="658" blend="2" colorMode="1" size="8"/>
+        <sprite u="72" v="40" x="136" y="144" depthData="658" blend="2" colorMode="1" size="8"/>
+        <sprite u="80" v="40" x="144" y="144" depthData="671" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="96" v="40" x="128" y="152" depthData="642" blend="2" colorMode="1" size="8"/>
+        <sprite u="104" v="40" x="136" y="152" depthData="663" blend="2" colorMode="1" size="8"/>
+        <sprite u="112" v="40" x="144" y="152" depthData="671" blend="2" colorMode="1" width="16" height="8"/>
+      </maskGroup>
+      <maskGroup originX="67" originY="-131" texBits="0x7800">
+        <sprite u="96" v="48" x="224" y="128" depthData="827" blend="2" colorMode="1" width="24" height="40"/>
+        <sprite u="96" v="88" x="224" y="168" depthData="831" blend="2" colorMode="1" width="16" height="40"/>
+        <sprite u="96" v="128" x="224" y="208" depthData="846" blend="2" colorMode="1" width="32" height="48"/>
+        <sprite u="64" v="120" x="192" y="200" depthData="774" blend="2" colorMode="1" width="32" height="56"/>
+        <sprite u="40" v="120" x="168" y="200" depthData="730" blend="2" colorMode="1" width="24" height="56"/>
+        <sprite u="24" v="128" x="152" y="208" depthData="707" blend="2" colorMode="1" width="16" height="32"/>
+        <sprite u="0" v="160" x="128" y="240" depthData="675" blend="2" colorMode="1" width="40" height="16"/>
+      </maskGroup>
+      <maskGroup originX="67" originY="-3" texBits="0x7800">
+        <sprite u="0" v="176" x="128" y="128" depthData="679" blend="2" colorMode="1" width="24" height="40"/>
+        <sprite u="24" v="176" x="152" y="128" depthData="719" blend="2" colorMode="1" width="24" height="40"/>
+        <sprite u="48" v="176" x="176" y="128" depthData="763" blend="2" colorMode="1" width="24" height="40"/>
+        <sprite u="72" v="176" x="200" y="128" depthData="811" blend="2" colorMode="1" width="24" height="40"/>
+        <sprite u="96" v="176" x="224" y="128" depthData="867" blend="2" colorMode="1" width="32" height="40"/>
+      </maskGroup>
+    </camera>
+    <camera x="23166" y="-2466" z="6768" lookX="20196" lookY="-1458" lookZ="15282" roll="0" fov="207">
+      <maskGroup originX="-128" originY="-20" texBits="0x7800">
+        <sprite u="24" v="8" x="152" y="136" depthData="402" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="56" v="8" x="184" y="136" depthData="391" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="8" x="176" y="136" depthData="399" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="8" x="192" y="136" depthData="383" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="0" v="0" x="128" y="128" depthData="423" blend="3" colorMode="1" size="24"/>
+        <sprite u="80" v="32" x="208" y="160" depthData="411" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="48" x="208" y="176" depthData="415" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="48" x="200" y="176" depthData="423" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="24" x="200" y="152" depthData="414" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="56" v="24" x="184" y="152" depthData="431" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="56" v="40" x="184" y="168" depthData="435" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="24" x="192" y="152" depthData="423" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="40" x="192" y="168" depthData="427" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="24" x="168" y="152" depthData="439" blend="3" colorMode="1" size="16"/>
+        <sprite u="40" v="40" x="168" y="168" depthData="443" blend="3" colorMode="1" width="16" height="24"/>
+        <sprite u="0" v="24" x="128" y="152" depthData="455" blend="3" colorMode="1" size="40"/>
+      </maskGroup>
+      <maskGroup originX="-128" originY="-14" texBits="0x7800">
+        <sprite u="0" v="64" x="128" y="128" depthData="431" blend="3" colorMode="1" width="40" height="8"/>
+        <sprite u="40" v="64" x="168" y="128" depthData="399" blend="3" colorMode="1" width="40" height="8"/>
+        <sprite u="80" v="64" x="208" y="128" depthData="395" blend="3" colorMode="1" size="8"/>
+        <sprite u="88" v="64" x="216" y="128" depthData="387" blend="3" colorMode="1" size="8"/>
+        <sprite u="96" v="64" x="224" y="128" depthData="407" blend="3" colorMode="1" size="8"/>
+        <sprite u="104" v="64" x="232" y="128" depthData="399" blend="3" colorMode="1" size="8"/>
+        <sprite u="40" v="72" x="168" y="136" depthData="426" blend="3" colorMode="1" width="24" height="8"/>
+        <sprite u="64" v="72" x="192" y="136" depthData="414" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="80" v="72" x="208" y="136" depthData="386" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="40" v="80" x="168" y="144" depthData="442" blend="3" colorMode="1" size="8"/>
+        <sprite u="40" v="88" x="168" y="152" depthData="451" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="112" x="168" y="176" depthData="454" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="104" v="72" x="232" y="136" depthData="403" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="104" v="88" x="232" y="152" depthData="407" blend="3" colorMode="1" size="8"/>
+        <sprite u="104" v="96" x="232" y="160" depthData="407" blend="3" colorMode="1" size="8"/>
+        <sprite u="112" v="88" x="240" y="152" depthData="399" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="88" v="88" x="216" y="152" depthData="411" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="72" v="88" x="200" y="152" depthData="411" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="88" v="96" x="216" y="160" depthData="415" blend="3" colorMode="1" size="16"/>
+        <sprite u="72" v="96" x="200" y="160" depthData="414" blend="3" colorMode="1" size="16"/>
+        <sprite u="48" v="104" x="176" y="168" depthData="431" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="24" v="88" x="152" y="152" depthData="458" blend="3" colorMode="1" size="16"/>
+        <sprite u="0" v="96" x="128" y="160" depthData="475" blend="3" colorMode="1" width="24" height="8"/>
+        <sprite u="0" v="104" x="128" y="168" depthData="474" blend="3" colorMode="1" width="32" height="24"/>
+      </maskGroup>
+    </camera>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="500" z0="0" x1="0" z1="17202" x2="25001" z2="17504" x3="4907" z3="0"/>
+      <switch zoneIndex="1" to="5" x0="17100" z0="18000" x1="18907" z1="17900" x2="18997" z2="12301" x3="18000" z3="12097"/>
+      <switch zoneIndex="2" to="1" x0="0" z0="11400" x1="100" z1="12900" x2="6199" z2="10000" x3="5800" z3="8400"/>
+      <switch zoneIndex="3" to="4" x0="17400" z0="900" x1="17400" z1="5300" x2="23000" z2="5400" x3="24306" z3="400"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="4" to="9" x0="103" z0="685" x1="0" z1="19342" x2="4857" z2="19444" x3="14257" z3="789"/>
+      <switch zoneIndex="5" to="0" x0="300" z0="13300" x1="800" z1="14700" x2="7000" z2="12100" x3="6700" z3="10200"/>
+      <switch zoneIndex="6" to="2" x0="8676" z0="7300" x1="7400" z1="0" x2="5800" z2="200" x3="5800" z3="5800"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="7" to="9" x0="0" z0="0" x1="0" z1="15100" x2="5799" z2="11401" x3="20908" z3="0"/>
+      <switch zoneIndex="8" to="1" x0="3900" z0="0" x1="4000" z1="5901" x2="5700" z2="7200" x3="5700" z3="0"/>
+      <switch zoneIndex="9" to="3" x0="9699" z0="7100" x1="10996" z1="6500" x2="10798" z2="300" x3="9600" z3="600"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="10" to="9" x0="24894" z0="0" x1="309" z1="0" x2="400" z2="5999" x3="25199" z3="7800"/>
+      <switch zoneIndex="11" to="4" x0="19000" z0="400" x1="19000" z1="5900" x2="21000" z2="5900" x3="21000" z3="400"/>
+      <switch zoneIndex="12" to="2" x0="8906" z0="300" x1="6708" z1="300" x2="8105" z2="6800" x3="9402" z3="7197"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="13" to="9" x0="18701" z0="14501" x1="26300" z1="14200" x2="26404" z2="0" x3="7200" z3="100"/>
+      <switch zoneIndex="14" to="3" x0="18601" z0="5300" x1="18601" z1="200" x2="17501" z2="200" x3="17301" z3="5300"/>
+      <switch zoneIndex="15" to="5" x0="24800" z0="12400" x1="25206" z1="10100" x2="18800" z2="10400" x3="18500" z3="12400"/>
+    </switches>
+    <switches from="5">
+      <view zoneIndex="16" to="9" x0="24700" z0="17900" x1="24605" z1="4500" x2="18200" z2="4600" x3="8200" z3="17900"/>
+      <switch zoneIndex="17" to="4" x0="25705" z0="7904" x1="18906" z1="8204" x2="18905" z2="9904" x3="25105" z3="9704"/>
+      <switch zoneIndex="18" to="0" x0="16900" z0="18400" x1="17000" z1="11800" x2="15400" z2="11700" x3="13900" z3="17900"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="19008" cellZ="11142">
+    <quadrant index="0">
+      <box xMax="26046" zMax="18720" xMin="0" zMin="16254" shape="1" cf1="true" cf2="true"/>
+      <box xMax="26064" zMax="18828" xMin="23346" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="19854" zMax="12942" xMin="5400" zMin="5202" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="1800" zMax="18648" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="26046" zMax="18720" xMin="0" zMin="16254" shape="1" cf1="true" cf2="true"/>
+      <box xMax="19854" zMax="12942" xMin="5400" zMin="5202" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="26046" zMax="1926" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="26064" zMax="18828" xMin="23346" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="19854" zMax="12942" xMin="5400" zMin="5202" shape="1" cf1="true" cf2="true"/>
+      <box xMax="19206" zMax="2718" xMin="10386" zMin="918" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="26046" zMax="1926" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1800" zMax="18648" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="8244" zMax="2700" xMin="4662" zMin="900" shape="1" cf1="true" cf2="true"/>
+      <box xMax="19854" zMax="12942" xMin="5400" zMin="5202" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1800" zMax="1800" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7884" zMax="7020" xMin="6390" zMin="4500" shape="1" cf2="true"/>
+      <box xMax="19206" zMax="2718" xMin="10386" zMin="918" shape="1" cf2="true"/>
+      <box xMax="12330" zMax="2448" xMin="10476" zMin="864" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1500" z1="2500" x2="5600" z2="5300" field8="0x0041" links="1 11 12"/>
+    <walk x1="5600" z1="2500" x2="6500" z2="5300" field8="0x0011" links="0 2"/>
+    <walk x1="6500" z1="2500" x2="7800" z2="4600" field8="0x0011" links="1 5"/>
+    <walk x1="8000" z1="1700" x2="10600" z2="2500" field8="0x0044" links="5"/>
+    <walk x1="19700" z1="2500" x2="23500" z2="5300" field8="0x0054" links="5 6 7"/>
+    <walk x1="7800" z1="2500" x2="19700" z2="5300" field8="0x0011" links="2 3 4 6"/>
+    <walk x1="19000" z1="1700" x2="23500" z2="2500" field8="0x0044" links="4 5"/>
+    <walk x1="19700" z1="5300" x2="23500" z2="12800" field8="0x0044" links="4 8"/>
+    <walk x1="19700" z1="12800" x2="23500" z2="16400" field8="0x0014" links="7 9"/>
+    <walk x1="5600" z1="12800" x2="19700" z2="16400" field8="0x0011" links="8 10"/>
+    <walk x1="1500" z1="12800" x2="5600" z2="16400" field8="0x0005" links="9 12"/>
+    <walk x1="1400" z1="1700" x2="4800" z2="2500" field8="0x0044" links="0"/>
+    <walk x1="1500" z1="5300" x2="5600" z2="12800" field8="0x0044" links="0 10"/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="27700" height="0x5974" sound="0x002A"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">ENGINE ROOM</string>
+      <string key="save_name">Laboratory B3</string>
+      <string key="0">{scroll 2}“Triggering System\nActivation Admitted\"{clear 0}“1st Degree Emergency\nIssued\"{clear 0}\n“Unlock All Blocks\"{clear 0}“Triggering System\nDeactivation Impossible\"{scroll 2}</string>
+      <string key="1">{scroll 2}It's a triggering system\nactivator.{clear 0}It's quite big.{scroll 2}</string>
+      <string key="2">{scroll 2}\nWhat a miserable death...{scroll 2}</string>
+      <string key="3">{scroll 2}A power connection switch.\nThe elevator power is off.{clear 0}Will you connect it?{branch 0 1 1}{scroll 2}The power isn't supplied\nto the elevator.{scroll 2}</string>
+      <string key="4">{scroll 2}The power isn't supplied\nto the elevator.{scroll 2}</string>
+      <string key="5">{scroll 2}I've got to get power to\nthe elevator.{scroll 2}</string>
+      <string key="6">{scroll 2}The power for the elevator\nis activated as the power{clear 0}supply and the circuit\nhave been connected.{scroll 2}</string>
+      <string key="7">{scroll 2}Rebecca is activating the\ntriggering device.{scroll 2}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      <string key="0">{scroll 2}  “起爆システム作動を認める”{clear 0} “起爆システム作動にともない”\n   “第一級非常事態発令”{clear 0} “すべてのブロックのロック解除”{clear 0}  “なお起爆システム解除は”\n    “一切認められない”{scroll 2}</string>
+      <string key="1">{scroll 2}\n   起爆システム作動装置だ{clear 0}\n   かなり大がかりなものだ{scroll 2}</string>
+      <string key="2">{scroll 2}\n     無残な死にざまだ・・・{scroll 2}</string>
+      <string key="3">{scroll 2} 電力の回路接続スイッチだ\n エレベーターへの接続が切れている{clear 0}\n接続しますか?{branch 0 1 1}{scroll 2} エレベーターに電力が回っていない\n 電力が供給されていないようだ{scroll 2}</string>
+      <string key="4">{scroll 2} エレベーターに電力が回っていない\n 電力が供給されていないようだ{scroll 2}</string>
+      <string key="5">{scroll 2}\nエレベーターの電力を確保しなければ{scroll 2}</string>
+      <string key="6">{scroll 2} 回路接続、電力供給が行われ\n エレベーターへの動力確保は確実だ{scroll 2}</string>
+      <string key="7">{scroll 2}   レベッカは起爆システムを\n   作動させている{scroll 2}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Laboratoire SS3</string>
+      <string key="0">{scroll 2}‟Système de Compte à \nRebours Activé\"{clear 0}\n‟Alerte Optimale Donnée\"{clear 0}\n‟Déverrouiller tous les bâtiments\"{clear 0}‟Impossible de désactiver\n le Système de Compte à Rebours\"{scroll 2}</string>
+      <string key="1">{scroll 2}C'est un système de compte\nà rebours.{clear 0}\nC'est assez grand.{scroll 2}</string>
+      <string key="2">{scroll 2}\nQuelle mort pathétique...{scroll 2}</string>
+      <string key="3">{scroll 2}Un interrupteur. L'ascenseur\nest débranché.{clear 0}Le brancher?{branch 0 6 1}</string>
+      <string key="4">{scroll 2}L'ascenseur n'est pas raccordé\nau système électrique.{scroll 2}</string>
+      <string key="5">{scroll 2}Il faut que je branche\nl'ascenseur.{scroll 2}</string>
+      <string key="6">{scroll 2}L'ascenseur est branché\nlorsque l'électricité et les{clear 0}\ncircuits ont été raccordés.{scroll 2}</string>
+      <string key="7">{scroll 2}Rebecca active le système\nde compte à rebours.{scroll 2}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 2}\"Auslöser \nDeaktivierung erlaubt\"{clear 0}\n\"Notfallstufe eins ausgelöst\"{clear 0}\n\"Alle Blöcke freigegeben\"{clear 0}\"Auslöser\nDeaktivierung nicht möglich\"{scroll 2}</string>
+      <string key="1">{scroll 2}Das ist ein Aktivator\nfür den Auslöser.{clear 0}\nEr ist ziemlich groß.{scroll 2}</string>
+      <string key="2">{scroll 2}\nWas für ein schrecklicher Tod...{scroll 2}</string>
+      <string key="3">{scroll 2}Der Hauptstromschalter.\nDer Aufzug hat keinen Strom.{clear 0}Möchten Sie ihn anschließen?{branch 0 6 1}</string>
+      <string key="4">{scroll 2}Der Aufzug wird nicht\nmit Strom versorgt.{scroll 2}</string>
+      <string key="5">{scroll 2}Ich muss den Aufzug\nirgendwie unter Strom setzen.{scroll 2}</string>
+      <string key="6">{scroll 2}Die Stromversorgung für den\nAufzug wird aktiviert, wenn{clear 0}die Energiequelle an den\nStromkreis angeschlossen wird.{scroll 2}</string>
+      <string key="7">{scroll 2}Rebecca aktiviert\ndie Auslösevorrichtung.{scroll 2}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Laboratorio S3</string>
+      <string key="0">{scroll 2}\"Sistema di conto alla \nrovescia attivato\"{clear 0}\n\"Allarme ottimale inviato\"{clear 0}\n\"Sbloccaggio di tutto \nl'edificio\"{clear 0}\"Impossibile disattivare il \nconto alla rovescia\"{scroll 2}</string>
+      <string key="1">{scroll 2}È il sistema di \ninnesco.{clear 0}\nÈ piuttosto grande.{scroll 2}</string>
+      <string key="2">{scroll 2}\nChe morte patetica...{scroll 2}</string>
+      <string key="3">{scroll 2}L'interruttore di alimentazione. \nL'ascensore è scollegato.{clear 0}Vuoi collegarlo?{branch 0 6 1}</string>
+      <string key="4">{scroll 2}L'ascensore non è collegato \nall'impianto elettrico.{scroll 2}</string>
+      <string key="5">{scroll 2}Devo collegare l'ascensore.{scroll 2}</string>
+      <string key="6">{scroll 2}L'elettricità per l'ascensore \nè stata ripristinata{clear 0}grazie al collegamento con \nil supporto elettrico.{scroll 2}</string>
+      <string key="7">{scroll 2}Rebecca ha avviato il \nconto alla rovescia.{scroll 2}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 2}\"Activación del sistema\nde detonación aceptada\"{clear 0}\"Declarada emergencia\nen primer grado\"{clear 0}\n\"Abrir todas las cerraduras\"{clear 0}\"La desactivación del sistema\nde detonación es imposible\"{scroll 2}</string>
+      <string key="1">{scroll 2}Es un sistema de\ndetonación...{clear 0}\nEs bastante grande...{scroll 2}</string>
+      <string key="2">{scroll 2}\nQué muerte tan triste...{scroll 2}</string>
+      <string key="3">{scroll 2}Un interruptor de energía...\nEl ascensor no tiene suministro{clear 0}eléctrico.\n¿Quieres conectarlo?{branch 0 6 1}</string>
+      <string key="4">{scroll 2}El ascensor no recibe\nelectricidad.{scroll 2}</string>
+      <string key="5">{scroll 2}Tengo que conectar el\nascensor...{scroll 2}</string>
+      <string key="6">{scroll 2}El ascensor\nse activa cuando se{clear 0}conecta la energía \na través del circuito.{scroll 2}</string>
+      <string key="7">{scroll 2}Rebecca está activando\nel detonador...{scroll 2}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Лаборатория Б3</string>
+      <string key="0">{scroll 2}“Запуск системы\nуничтожения разрешен\"{clear 0}“Чрезвычайная ситуация\n1-й степени выпущена\"{clear 0}\n“Все блоки разблокированы\"{clear 0}“Запуск системы\nуничтожения невозможен\"{scroll 2}</string>
+      <string key="1">{scroll 2}Управление системой\nсамоуничтожения.{clear 0}\nЭто очень важно.{scroll 2}</string>
+      <string key="2">{scroll 2}\nКакая жалкая смерть...{scroll 2}</string>
+      <string key="3">{scroll 2}Кнопка подачи питания.\nПитание лифта отключено.{clear 0}Нажать её?{branch 0 1 1}{scroll 2}Питание не идёт\nна лифт.{scroll 2}</string>
+      <string key="4">{scroll 2}Питание не идёт\nна лифт.{scroll 2}</string>
+      <string key="5">{scroll 2}Мне нужно подать\nэлектричество к лифту.{scroll 2}</string>
+      <string key="6">{scroll 2}Лифт работает,\nпитание восстановлено.{scroll 2}</string>
+      <string key="7">{scroll 2}Ребекка запускает систему\nсамоуничтожения.{scroll 2}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Laboratorion olohuone -2 krs</string>
+      <string key="0">{scroll 2}\"Laitoiksen itsetuhojärjestelmä.\nAktivointi suoritettu.\"{clear 0}\"Ensimmäisen asteen hätätila\njulistettu.\"{clear 0}\"Kaikki lukitut tilat avattu.\"{clear 0}\"Laitoksen itsetuhojärjestelmää\nei voi deaktivoida.\"{scroll 2}</string>
+      <string key="1">{scroll 2}Laitoksen itsetuhojärjestelmän\naktivointilaite...{clear 0}Se on melko suuri...{scroll 2}</string>
+      <string key="2">{scroll 2}Kurja tapa kuolla...{scroll 2}</string>
+      <string key="3">{scroll 2}Virranohjausjärjestelmä...\nHissin virta on katkaistu...{clear 0}Palautatko sen?{branch 0 6 1}</string>
+      <string key="4">{scroll 2}Hissiin ei kulje sähköä...{scroll 2}</string>
+      <string key="5">{scroll 2}Minun on saatava hissiin virtaa...{scroll 2}</string>
+      <string key="6">{scroll 2}Sähköpaneelin avulla saatiin virta\nvirranohjausjärjestelmään.{clear 0}Hissin sähköt palautettu...{scroll 2}</string>
+      <string key="7">{scroll 2}Rebecca käynnistää laitoksen\nitsetuhojärjestelmää...{scroll 2}</string>
+    </language>
+  </strings>
+</room>

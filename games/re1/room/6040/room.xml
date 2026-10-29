@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1334" g="1334" b="1334"/>
+  <lights>
+    <light x="15191" y="-98" z="2149" r="200" g="200" b="200" kind="0" radius="600"/>
+    <light x="36" y="2963" z="2" r="150" g="150" b="150" kind="1" radius="10024"/>
+    <light x="4136" y="-1287" z="3622" r="130" g="130" b="130" kind="0" radius="16680"/>
+  </lights>
+  <cameras>
+    <camera x="7686" y="-5688" z="3420" lookX="13806" lookY="684" lookZ="3456" roll="0" fov="230"/>
+    <camera x="13626" y="-3024" z="3636" lookX="7002" lookY="-1836" lookZ="2826" roll="0" fov="230">
+      <maskGroup originX="90" originY="-128" texBits="0x7800">
+        <sprite u="8" v="0" x="136" y="128" depthData="350" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="0" v="16" x="128" y="144" depthData="539" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="40" x="136" y="168" depthData="359" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="8" v="80" x="136" y="208" depthData="371" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="347" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="16" v="40" x="144" y="168" depthData="355" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="16" v="80" x="144" y="208" depthData="367" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="347" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="32" v="40" x="160" y="168" depthData="355" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="32" v="80" x="160" y="208" depthData="363" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="48" v="0" x="176" y="128" depthData="343" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="48" v="40" x="176" y="168" depthData="351" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="48" v="80" x="176" y="208" depthData="363" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="64" v="0" x="192" y="128" depthData="338" blend="3" colorMode="1" width="24" height="40"/>
+        <sprite u="64" v="40" x="192" y="168" depthData="347" blend="3" colorMode="1" width="24" height="40"/>
+        <sprite u="64" v="80" x="192" y="208" depthData="359" blend="3" colorMode="1" width="24" height="48"/>
+        <sprite u="88" v="0" x="216" y="128" depthData="338" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="88" v="40" x="216" y="168" depthData="347" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="88" v="80" x="216" y="208" depthData="354" blend="3" colorMode="1" width="16" height="48"/>
+      </maskGroup>
+      <maskGroup originX="90" originY="0" texBits="0x7800">
+        <sprite u="8" v="128" x="136" y="128" depthData="383" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="8" v="168" x="136" y="168" depthData="395" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="0" v="136" x="128" y="136" depthData="387" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="0" v="176" x="128" y="176" depthData="399" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="128" x="144" y="128" depthData="351" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="16" v="168" x="144" y="168" depthData="391" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="24" v="128" x="152" y="128" depthData="379" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="24" v="168" x="152" y="168" depthData="391" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="40" v="128" x="168" y="128" depthData="374" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="40" v="168" x="168" y="168" depthData="387" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="56" v="128" x="184" y="128" depthData="375" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="56" v="168" x="184" y="168" depthData="383" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="72" v="128" x="200" y="128" depthData="371" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="72" v="168" x="200" y="168" depthData="378" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="88" v="128" x="216" y="128" depthData="367" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="88" v="168" x="216" y="168" depthData="379" blend="3" colorMode="1" width="16" height="48"/>
+      </maskGroup>
+    </camera>
+    <camera x="10782" y="-3654" z="3204" lookX="16488" lookY="-2160" lookZ="3348" roll="0" fov="230"/>
+    <camera x="26298" y="-4140" z="1908" lookX="27306" lookY="-3528" lookZ="2394" roll="0" fov="230">
+      <maskGroup originX="93" originY="-101" texBits="0x7800">
+        <sprite u="0" v="0" x="144" y="128" depthData="43" blend="0" colorMode="1" width="72" height="16"/>
+        <sprite u="72" v="0" x="136" y="144" depthData="35" blend="0" colorMode="1" width="56" height="16"/>
+        <sprite u="0" v="16" x="192" y="144" depthData="35" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="24" v="16" x="136" y="160" depthData="35" blend="0" colorMode="1" width="80" height="16"/>
+        <sprite u="104" v="16" x="144" y="176" depthData="35" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="0" v="32" x="168" y="176" depthData="35" blend="0" colorMode="1" width="40" height="16"/>
+        <sprite u="40" v="32" x="208" y="176" depthData="35" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="32" x="128" y="192" depthData="35" blend="0" colorMode="1" width="64" height="16"/>
+        <sprite u="112" v="32" x="200" y="192" depthData="35" blend="0" colorMode="1" size="16"/>
+        <sprite u="0" v="48" x="128" y="208" depthData="35" blend="0" colorMode="1" width="88" height="16"/>
+        <sprite u="88" v="48" x="152" y="224" depthData="35" blend="0" colorMode="1" size="16"/>
+        <sprite u="104" v="48" x="168" y="224" depthData="35" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="0" v="64" x="192" y="224" depthData="35" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="64" x="192" y="232" depthData="35" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="64" x="184" y="240" depthData="35" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="56" v="64" x="184" y="248" depthData="35" blend="0" colorMode="1" width="16" height="8"/>
+      </maskGroup>
+    </camera>
+    <camera x="4950" y="-4500" z="-936" lookX="4860" lookY="-2502" lookZ="4032" roll="0" fov="230">
+      <maskGroup originX="-15" originY="-128" texBits="0x7800">
+        <sprite u="0" v="8" x="128" y="136" depthData="391" blend="1" colorMode="1" size="8"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="391" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="391" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="24" v="0" x="152" y="128" depthData="391" blend="1" colorMode="1" width="16" height="24"/>
+        <sprite u="24" v="24" x="152" y="152" depthData="403" blend="1" colorMode="1" width="16" height="8"/>
+        <sprite u="40" v="0" x="168" y="128" depthData="391" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="48" v="0" x="176" y="128" depthData="391" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="56" v="8" x="184" y="136" depthData="391" blend="1" colorMode="1" size="8"/>
+      </maskGroup>
+    </camera>
+    <camera x="4410" y="-1080" z="3996" lookX="4356" lookY="108" lookZ="6318" roll="0" fov="289"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="100" z0="0" x1="100" z1="5600" x2="31100" z2="5200" x3="31900" z3="0"/>
+      <switch zoneIndex="1" to="2" x0="15200" z0="1000" x1="14300" z1="6100" x2="21600" z2="5400" x3="22000" z3="1000"/>
+      <switch zoneIndex="2" to="3" x0="26709" z0="709" x1="26700" z1="6500" x2="34400" z2="6200" x3="33700" z3="700"/>
+      <switch zoneIndex="3" to="1" x0="7400" z0="500" x1="7900" z1="7100" x2="9900" z2="7500" x3="9400" z3="500"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="4" to="9" x0="0" z0="0" x1="0" z1="7400" x2="24900" z2="5600" x3="26000" z3="0"/>
+      <switch zoneIndex="5" to="0" x0="9600" z0="600" x1="10400" z1="7700" x2="12000" z2="7600" x3="12500" z3="300"/>
+      <switch zoneIndex="6" to="4" x0="500" z0="3600" x1="500" z1="8300" x2="8200" z2="8600" x3="7000" z3="5000"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="7" to="9" x0="9000" z0="800" x1="9000" z1="6200" x2="33700" z2="6200" x3="33700" z3="800"/>
+      <switch zoneIndex="8" to="0" x0="12401" z0="600" x1="12401" z1="6300" x2="14001" z2="6200" x3="14901" z3="700"/>
+      <switch zoneIndex="9" to="3" x0="29290" z0="900" x1="27890" z1="6100" x2="30490" z2="6100" x3="31290" z3="100"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="10" to="9" x0="14100" z0="0" x1="14100" z1="7300" x2="34100" z2="7300" x3="34100" z3="0"/>
+      <switch zoneIndex="11" to="2" x0="26600" z0="900" x1="25900" z1="6600" x2="27500" z2="6800" x3="28900" z3="100"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="12" to="9" x0="0" z0="0" x1="0" z1="11000" x2="11400" z2="11200" x3="8000" z3="0"/>
+      <switch zoneIndex="13" to="1" x0="700" z0="1800" x1="0" z1="3100" x2="7900" z2="3700" x3="8000" z3="1800"/>
+      <switch zoneIndex="14" to="1" x0="6600" z0="2000" x1="8800" z1="6300" x2="10100" z2="6800" x3="10200" z3="2000"/>
+    </switches>
+    <switches from="5">
+      <view zoneIndex="15" to="9" x0="3549" z0="6401" x1="3551" z1="6401" x2="3551" z2="6399" x3="3549" z3="6399"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="12006" cellZ="3222">
+    <quadrant index="0">
+      <box xMax="35518" zMax="13644" xMin="7133" zMin="4642" shape="1" cf1="true" cf2="true"/>
+      <box xMax="35687" zMax="13626" xMin="31998" zMin="102" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="35518" zMax="13644" xMin="7133" zMin="4642" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1843" zMax="13639" xMin="17" zMin="7" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7937" zMax="11950" xMin="424" zMin="8222" shape="1" cf2="true"/>
+      <box xMax="9054" zMax="12528" xMin="5940" zMin="5544" shape="1" cf2="true"/>
+      <box xMax="8352" zMax="13662" xMin="0" zMin="8694" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7884" zMax="6498" xMin="5940" zMin="4554" shape="3" cf2="true"/>
+      <box xMax="5274" zMax="15750" xMin="4104" zMin="14562" shape="5" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="35605" zMax="1817" xMin="27" zMin="69" shape="1" cf1="true" cf2="true"/>
+      <box xMax="35687" zMax="13626" xMin="31998" zMin="102" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="1843" zMax="13639" xMin="17" zMin="7" shape="1" cf1="true" cf2="true"/>
+      <box xMax="35605" zMax="1817" xMin="27" zMin="69" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1500" z1="1900" x2="6900" z2="5000" field8="0x0041" links="1 2"/>
+    <walk x1="6900" z1="1900" x2="-32536" z2="5000" field8="0x0511" links="0"/>
+    <walk x1="1500" z1="5000" x2="6900" z2="9800" field8="0x0244" links="0"/>
+  </walkZones>
+  <footsteps count="2">
+    <footstep x="2640" z="4940" width="2380" height="0x0BA4" sound="0x002D"/>
+    <footstep x="0" z="0" width="32700" height="0x3714" sound="0x002A"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="save_name">M. Room 1F</string>
+      <string key="0">He's Kenneth from\nthe ＳＴＡＲＳ Bravo team...!{clear 0}Now he's become a mere\nshadow of his former self.</string>
+      <string key="1">It's a ＳＴＡＲＳ\nemblem...</string>
+      <string key="2">There is no time to check\nit.</string>
+      <string key="3">It looks like a picture of\nthis mansion.</string>
+      <string key="4">\nNothing unusual.</string>
+      <string key="5">It's ominously quiet\noutside.</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      <string key="0">S.T.A.R.S.・ブラヴォーチームの\nケネスだ・・・!{clear 0}\n   いまはもう見るかげもない</string>
+      <string key="1">\n S.T.A.R.S.のエンブレムだ・・・</string>
+      <string key="2">\n   調べている時間はない!</string>
+      <string key="3">\n    この館の絵だろうか</string>
+      <string key="4">\n   別に変わったところはない</string>
+      <string key="5">\n   外は不気味なほどしずかだ</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Chambre RdC</string>
+      <string key="0">C'est Kenneth de l'Équipe\nBravo des ＳＴＡＲＳ.{clear 0}A présent, il n'est que \nl'ombre de lui-même.</string>
+      <string key="1">\nC'est le symbole des ＳＴＡＲＳ.</string>
+      <string key="2">\nPas de temps pour vérifier.</string>
+      <string key="3">On dirait une photo de la \nmaison.</string>
+      <string key="4">\nRien d'extraordinaire.</string>
+      <string key="5">Le silence qui règne dehors\nest de mauvais augure.</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">Das ist Kenneth vom Bravo-Team\nder ＳＴＡＲＳ...!{clear 0}\nEr ist kaum noch zu erkennen.</string>
+      <string key="1">\nDas ist ein Emblem von ＳＴＡＲＳ...</string>
+      <string key="2">Es ist keine Zeit,\ndas zu überprüfen.</string>
+      <string key="3">Es sieht aus, wie ein Bild von\ndiesem Herrenhaus.</string>
+      <string key="4">\nNichts Ungewöhnliches.</string>
+      <string key="5">Draußen ist es seltsam\nstill.</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Villa 1P</string>
+      <string key="0">È Kenneth della Squadra\nBravo ＳＴＡＲＳ...!{clear 0}Ma di lui non è rimasta che \nun'ombra...</string>
+      <string key="1">\nC'è il simbolo della ＳＴＡＲＳ.</string>
+      <string key="2">\nNon c'è tempo per controllare.</string>
+      <string key="3">Sembra una foto della \nvilla.</string>
+      <string key="4">\nNiente di strano.</string>
+      <string key="5">È sinistramente \nsilenzioso fuori.</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">¡Es Kenneth, del\nequipo Bravo de ＳＴＡＲＳ...!{clear 0}Ahora sólo es una\nsombra de lo que fue...</string>
+      <string key="1">Es un emblema de ＳＴＡＲＳ\n</string>
+      <string key="2">No hay tiempo para\ncomprobarlo...</string>
+      <string key="3">Parece un cuadro de\nla mansión...</string>
+      <string key="4">\nEl sofá no tiene nada especial...</string>
+      <string key="5">Fuera hay un silencio\nominoso...</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Мед. комната 1-эт.</string>
+      <string key="0">Это Кеннет из команды Браво,\nотряда ＳＴＡＲＳ..!{clear 0}Теперь он стал лишь\nтенью самого себя.</string>
+      <string key="1">Это эмблема ＳＴＡＲＳ..</string>
+      <string key="2">\nНа это нет времени.</string>
+      <string key="3">Похоже на картину\nэтого особняка.</string>
+      <string key="4">\nНичего необычного.</string>
+      <string key="5">Снаружи\nпугающая тишина.</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Lääkevarasto 1 krs</string>
+      <string key="0">Se on Kenneth ＳＴＡＲＳ\nBravo-tiimistä...!{clear 0}Nyt hän on vain varjo\nentisestään...</string>
+      <string key="1">Se on ＳＴＡＲＳ embleemi...</string>
+      <string key="2">Ei ole aikaa tutkia sitä...</string>
+      <string key="3">Se näyttäisi olevan maalaus\ntästä kartanosta...</string>
+      <string key="4">Ei mitään epätavallista...</string>
+      <string key="5">Ulkona on pahaenteisen hiljaista...</string>
+    </language>
+  </strings>
+</room>

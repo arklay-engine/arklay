@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3" objectSlots="1" itemSlots="1">
+  <ambient r="860" g="860" b="860"/>
+  <lights>
+    <light x="26000" y="-3600" z="3400" r="200" g="200" b="200" kind="0" radius="9000"/>
+    <light x="6200" y="-3600" z="3500" r="200" g="200" b="200" kind="0" radius="9000"/>
+    <light x="15500" y="-3600" z="2900" r="200" g="200" b="200" kind="0" radius="9000"/>
+  </lights>
+  <cameras>
+    <camera x="20304" y="-1008" z="2574" lookX="8532" lookY="-2556" lookZ="6462" roll="0" fov="230"/>
+    <camera x="13896" y="-3708" z="3276" lookX="2862" lookY="-2556" lookZ="3978" roll="0" fov="230"/>
+    <camera x="9954" y="-1008" z="2808" lookX="22626" lookY="-2304" lookZ="5058" roll="0" fov="230"/>
+    <camera x="17766" y="-4122" z="2880" lookX="28674" lookY="-684" lookZ="6336" roll="0" fov="230"/>
+    <camera x="4608" y="-4068" z="4824" lookX="4140" lookY="-2556" lookZ="6534" roll="0" fov="257"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="0" x1="0" z1="9801" x2="22700" z2="9800" x3="23000" z3="0"/>
+      <switch zoneIndex="1" to="1" x0="0" z0="9301" x1="8600" z1="9500" x2="6600" z2="0" x3="0" z3="0"/>
+      <switch zoneIndex="2" to="2" x0="16400" z0="400" x1="17200" z1="8700" x2="19400" z2="8700" x3="18000" z3="0"/>
+      <switch zoneIndex="3" to="3" x0="27200" z0="4999" x1="26500" z1="8900" x2="30800" z2="9100" x3="33900" z3="5900"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="4" to="9" x0="0" z0="0" x1="0" z1="9600" x2="23400" z2="9600" x3="24400" z3="0"/>
+      <switch zoneIndex="5" to="0" x0="8400" z0="0" x1="8900" z1="9304" x2="12200" z2="9103" x3="10400" z3="0"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="6" to="9" x0="10900" z0="0" x1="10799" z1="9601" x2="34000" z2="9500" x3="34100" z3="0"/>
+      <switch zoneIndex="7" to="3" x0="22900" z0="0" x1="23501" z1="9500" x2="25400" z2="9200" x3="24700" z3="0"/>
+      <switch zoneIndex="8" to="0" x0="14500" z0="500" x1="14700" z1="8600" x2="16900" z2="8600" x3="15700" z3="400"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="9" to="9" x0="15900" z0="8801" x1="32300" z1="8800" x2="32600" z2="0" x3="15900" z3="0"/>
+      <switch zoneIndex="10" to="2" x0="19600" z0="0" x1="21000" z1="9600" x2="23200" z2="10000" x3="22600" z3="0"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="11" to="9" x0="3500" z0="7000" x1="3500" z1="10700" x2="18600" z2="10700" x3="18600" z3="7000"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="15318" cellZ="4662">
+    <quadrant index="0">
+      <box xMax="31788" zMax="8856" xMin="0" zMin="7074" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32778" zMax="9036" xMin="30402" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="1840" zMax="8783" xMin="0" zMin="13" shape="1" cf1="true" cf2="true"/>
+      <box xMax="31788" zMax="8856" xMin="0" zMin="7074" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="31716" zMax="1872" xMin="0" zMin="18" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32778" zMax="9036" xMin="30402" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="1840" zMax="8783" xMin="0" zMin="13" shape="1" cf1="true" cf2="true"/>
+      <box xMax="31716" zMax="1872" xMin="0" zMin="18" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="32600" height="0x26AC" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">STRAIGHT PASSAGE</string>
+      <string key="save_name">Courtyard Room B1</string>
+      <string key="0">{scroll 2}\nIt looks like a hook.</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      <string key="0">{scroll 2}\n  何かをかけるフックのようだ</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Salle de la cour SS1</string>
+      <string key="0">{scroll 2}\nOn dirait un crochet.</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 2}\nDas sieht wie ein Haken aus.</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Cortile S1</string>
+      <string key="0">{scroll 2}\nSembra essere un gancio.</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 2}\nParece un gancho...</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Комната внутр. двора Б1</string>
+      <string key="0">{scroll 2}\nЭто похоже на крючок.</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Maanalainen varasto 0 krs</string>
+      <string key="0">{scroll 2}Jonkinlainen teline...</string>
+    </language>
+  </strings>
+</room>

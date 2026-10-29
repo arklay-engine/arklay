@@ -627,7 +627,8 @@ enum ScdAction {
         #[arg(value_name = "[REGION=]PACK", required = true, value_parser = parse_region_pack)]
         packs: Vec<(arklay::scd::akscr::Region, PathBuf)>,
 
-        /// Directory to write `<room>.akscr` into (e.g. `103.akscr`)
+        /// Directory to write each room's script into, in the folder of its
+        /// first RDT (e.g. `1030/room.akscr` for room 103)
         #[arg(long, short)]
         out: PathBuf,
     },
@@ -753,7 +754,7 @@ fn build_scd(
 }
 
 /// Decompile every room RDT in each region's pack and write one merged
-/// `.akscr` per room into `out`.
+/// `.akscr` per room into `out`, as `<room>0/room.akscr`.
 fn export_rooms(packs: &[(arklay::scd::akscr::Region, PathBuf)], out: &Path) -> Result<()> {
     fs::create_dir_all(out).with_context(|| format!("failed to create {}", out.display()))?;
     let names = arklay::scd::akscr::load_names(out)?;
@@ -768,7 +769,11 @@ fn export_rooms(packs: &[(arklay::scd::akscr::Region, PathBuf)], out: &Path) -> 
             .collect::<Vec<_>>(),
     )?;
     for (base, text) in &merged {
-        let path = out.join(format!("{base:03x}.akscr"));
+        let path = out.join(arklay::scd::akscr::room_script_file(*base));
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir)
+                .with_context(|| format!("failed to create {}", dir.display()))?;
+        }
         arklay::atomic::write(&path, text.as_bytes())
             .with_context(|| format!("failed to write {}", path.display()))?;
     }

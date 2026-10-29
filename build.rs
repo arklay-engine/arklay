@@ -77,6 +77,7 @@ fn main() {
     emit_language_files();
     emit_item_files();
     emit_room_scripts();
+    emit_room_files();
 }
 
 /// Generate the pack-entry table for the checked-in Lua scripts under each
@@ -243,7 +244,9 @@ fn emit_language_files() {
 /// are the ones the script was written from. Where regions build the same
 /// `AUTHENTIC` bytecode the first one's container stands for them all.
 fn emit_room_scripts() {
-    use scd::akscr::preprocess::{Region, Variant, includes_from, room_variants};
+    use scd::akscr::preprocess::{
+        ROOM_SCRIPT_FILE, Region, Variant, includes_from, room_script_file, room_variants,
+    };
 
     let root = manifest_dir().join("games/re1/room");
     for watched in [
@@ -256,6 +259,8 @@ fn emit_room_scripts() {
         println!("cargo:rerun-if-changed={watched}");
     }
 
+    // Each room's merged script sits in the folder of its first RDT
+    // (`1030/room.akscr` for room 103).
     let mut scripts: Vec<(u16, PathBuf)> = Vec::new();
     let read = std::fs::read_dir(&root).unwrap_or_else(|err| {
         panic!(
@@ -264,13 +269,22 @@ fn emit_room_scripts() {
         )
     });
     for entry in read.flatten() {
-        let path = entry.path();
-        let name = entry.file_name();
-        let Some(stem) = name.to_str().and_then(|name| name.strip_suffix(".akscr")) else {
+        let path = entry.path().join(ROOM_SCRIPT_FILE);
+        if !path.is_file() {
             continue;
-        };
-        let base = u16::from_str_radix(stem, 16)
-            .unwrap_or_else(|_| panic!("{} is not named by its room id", path.display()));
+        }
+        let name = entry.file_name();
+        let base = name
+            .to_str()
+            .and_then(|name| name.strip_suffix('0'))
+            .and_then(|stem| u16::from_str_radix(stem, 16).ok())
+            .unwrap_or_else(|| panic!("{} is not in its room's first folder", path.display()));
+        assert_eq!(
+            root.join(room_script_file(base)),
+            path,
+            "{} is not in its room's first folder",
+            path.display()
+        );
         scripts.push((base, path));
     }
     scripts.sort();
@@ -298,24 +312,27 @@ fn emit_room_scripts() {
         let text = std::fs::read_to_string(path)
             .unwrap_or_else(|err| panic!("cannot read {}: {err}", path.display()));
         for id in room_variants(base) {
-            // The digest of a variant's `AUTHENTIC` build and its fixed build.
+            // The digest of a variant's `AUTHENTIC` build, that build, and
+            // its fixed build.
             let build = |variant: Variant| {
                 let authentic = compile(&text, variant.authentic(), path);
                 let original = scd::reader::parse(&authentic)
                     .unwrap_or_else(|err| panic!("{} as {id:04X}: {err:#}", path.display()))
                     .digest();
-                (original, compile(&text, variant, path))
+                (original, authentic, compile(&text, variant, path))
             };
             // One build per distinct `AUTHENTIC` digest, named after the first
             // of the regions it stands for.
             struct Build {
                 regions: Vec<Region>,
                 original: u64,
+                authentic: Vec<u8>,
                 container: Vec<u8>,
             }
             let mut builds: Vec<Build> = Vec::new();
             for region in Region::ALL {
-                let (original, container) = build(Variant::for_room(id).in_region(region));
+                let (original, authentic, container) =
+                    build(Variant::for_room(id).in_region(region));
                 if let Some(Build {
                     regions,
                     container: first_container,
@@ -336,19 +353,27 @@ fn emit_room_scripts() {
                 builds.push(Build {
                     regions: vec![region],
                     original,
+                    authentic,
                     container,
                 });
             }
             for Build {
                 regions,
                 original,
+                authentic,
                 container,
             } in builds
             {
-                let file = scd_dir.join(format!(
-                    "{id:04x}-{}.scd",
-                    regions[0].symbol().to_lowercase()
-                ));
+                let stem = format!("{id:04x}-{}", regions[0].symbol().to_lowercase());
+                let file = scd_dir.join(format!("{stem}.scd"));
+                // The `AUTHENTIC` build only ships where the fixes change it.
+                let authentic = if authentic == container {
+                    "None".to_string()
+                } else {
+                    let file = scd_dir.join(format!("{stem}-authentic.scd"));
+                    std::fs::write(&file, authentic).expect("failed to write room bytecode");
+                    format!("Some(include_bytes!({:?}))", file.to_string_lossy())
+                };
                 std::fs::write(&file, container).expect("failed to write room bytecode");
                 let regions: Vec<String> = regions
                     .iter()
@@ -357,7 +382,8 @@ fn emit_room_scripts() {
                 writeln!(
                     out,
                     "    RoomScript {{ id: 0x{id:04X}, regions: &[{}], \
-                     original: 0x{original:016X}, container: include_bytes!({:?}) }},",
+                     original: 0x{original:016X}, authentic: {authentic}, \
+                     container: include_bytes!({:?}) }},",
                     regions.join(", "),
                     file.to_string_lossy()
                 )
@@ -397,4 +423,79 @@ fn emit_room_scripts() {
     out.push_str("]\n");
     std::fs::write(out_dir.join("room_scripts.rs"), out)
         .expect("failed to write the generated room script table");
+}
+
+/// Generate the table of the checked-in RE1 room definitions under
+/// `games/re1/room/`: every `<id>/` folder's XML files (`room.xml` and its
+/// `effect/<slot>.xml`). `convert-game` packs them in place of anything read
+/// from the install's RDTs.
+fn emit_room_files() {
+    fn walk(dir: &Path, root: &Path, files: &mut Vec<(String, PathBuf)>) {
+        let read = std::fs::read_dir(dir)
+            .unwrap_or_else(|err| panic!("cannot read room directory {}: {err}", dir.display()));
+        for entry in read.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, root, files);
+            } else if path.extension().is_some_and(|ext| ext == "xml") {
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("walked paths are under the root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                files.push((relative, path));
+            }
+        }
+    }
+
+    // `emit_room_scripts` already watches `games/re1/room`.
+    let root = manifest_dir().join("games/re1/room");
+    let mut files = Vec::new();
+    walk(&root, &root, &mut files);
+    files.sort();
+    assert!(
+        files.iter().any(|(path, _)| path.ends_with("/room.xml")),
+        "no room definitions found under {}; the build would ship an empty ROOM_FILES",
+        root.display()
+    );
+
+    // Most player variants (and the European copies of unchanged effect
+    // definitions) are the same file, so each distinct text is embedded once.
+    let mut texts: Vec<(String, &PathBuf)> = Vec::new();
+    let mut table = Vec::new();
+    for (relative, path) in &files {
+        let text = std::fs::read_to_string(path)
+            .unwrap_or_else(|err| panic!("cannot read {}: {err}", path.display()));
+        let index = match texts.iter().position(|(seen, _)| *seen == text) {
+            Some(index) => index,
+            None => {
+                texts.push((text, path));
+                texts.len() - 1
+            }
+        };
+        table.push((relative, index));
+    }
+
+    let mut out = String::from(
+        "// @generated by build.rs from games/re1/room: the checked-in room\n\
+         // definitions, by path under that directory.\n",
+    );
+    for (index, (_, path)) in texts.iter().enumerate() {
+        writeln!(
+            out,
+            "static TEXT_{index}: &str = include_str!({:?});",
+            path.to_string_lossy()
+        )
+        .expect("writing to a String cannot fail");
+    }
+    out.push_str("pub static ROOM_FILES: &[(&str, &str)] = &[\n");
+    for (relative, index) in &table {
+        writeln!(out, "    ({relative:?}, TEXT_{index}),")
+            .expect("writing to a String cannot fail");
+    }
+    out.push_str("];\n");
+
+    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
+    std::fs::write(out_dir.join("room_files.rs"), out)
+        .expect("failed to write the generated room definition table");
 }

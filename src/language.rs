@@ -45,6 +45,23 @@ pub const ENTRY_PREFIX: &str = "language/";
 /// The ultimate fallback language every lookup resolves to.
 pub const FALLBACK_TAG: &str = "en-US";
 
+/// Where language `tag` sits in the options menu's language list: the
+/// shipped languages in a stable, familiar order, any other after them.
+/// Definition files list their `<language>` blocks in the same order.
+pub fn menu_rank(tag: &str) -> u8 {
+    match tag {
+        "en-US" => 0,
+        "ja-JP" => 1,
+        "fr-FR" => 2,
+        "de-DE" => 3,
+        "it-IT" => 4,
+        "es-ES" => 5,
+        "ru-RU" => 6,
+        "fi-FI" => 7,
+        _ => 8,
+    }
+}
+
 mod sources {
     include!(concat!(env!("OUT_DIR"), "/language_files.rs"));
 }
@@ -1073,7 +1090,7 @@ ROOM_1001_TEXT_0A_SPEAKER_12 = \"A\"
     fn parses_and_encodes_the_japanese_seed() {
         let source = include_str!("../games/re1/language/ja-JP.txt");
         let language = Language::parse(source).unwrap();
-        assert!(language.len() > 1_100, "{} entries", language.len());
+        assert!(language.len() > 50, "{} entries", language.len());
         // The item names and descriptions live in each item's `item.xml`.
         let empty = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap()).unwrap();
         let items = crate::item_catalog::language_layers(&empty)
@@ -1082,9 +1099,9 @@ ROOM_1001_TEXT_0A_SPEAKER_12 = \"A\"
             .map(|(_, language)| language)
             .unwrap();
         assert!(items.len() > 200, "{} item entries", items.len());
-        // So do the room names, in each `room.xml`.
+        // So do the room names and messages, in each `room.xml`.
         let mut writer = crate::pack::PackWriter::new();
-        for (entry, data) in crate::room::re1_name_entries() {
+        for (entry, data) in crate::room::re1_string_entries() {
             writer.add(&entry, data).unwrap();
         }
         let named = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
@@ -1093,7 +1110,7 @@ ROOM_1001_TEXT_0A_SPEAKER_12 = \"A\"
             .find(|(tag, _)| tag == "ja-jp")
             .map(|(_, language)| language)
             .unwrap();
-        assert!(rooms.len() > 150, "{} room entries", rooms.len());
+        assert!(rooms.len() > 1_100, "{} room entries", rooms.len());
         for (key, entry) in language.iter().chain(items.iter()).chain(rooms.iter()) {
             assert_eq!(
                 entry.missing_glyphs(charset::Script::Japanese),

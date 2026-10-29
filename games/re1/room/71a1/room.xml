@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1775" g="1983" b="1984"/>
+  <lights>
+    <light x="17078" y="-10200" z="5597" r="255" g="255" b="255" kind="0" radius="23081"/>
+    <light x="24838" y="-10050" z="15837" r="255" g="255" b="255" kind="0" radius="12161"/>
+    <light x="9188" y="-10202" z="15897" r="255" g="255" b="255" kind="0" radius="12161"/>
+  </lights>
+  <cameras>
+    <camera x="21672" y="-1116" z="2376" lookX="27504" lookY="-2322" lookZ="3816" roll="0" fov="207"/>
+    <camera x="13932" y="-1116" z="2556" lookX="27414" lookY="-1746" lookZ="5490" roll="0" fov="207">
+      <maskGroup originX="-58" originY="-85" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="379" blend="3" colorMode="1" width="16" height="56"/>
+        <sprite u="0" v="56" x="128" y="184" depthData="375" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="375" blend="3" colorMode="1" width="8" height="56"/>
+        <sprite u="16" v="56" x="144" y="184" depthData="371" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="24" v="0" x="152" y="128" depthData="371" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="24" v="40" x="152" y="168" depthData="371" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="24" v="72" x="152" y="200" depthData="367" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="371" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="32" v="40" x="160" y="168" depthData="367" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="32" v="72" x="160" y="200" depthData="363" blend="3" colorMode="1" width="8" height="32"/>
+      </maskGroup>
+      <maskGroup originX="-58" originY="19" texBits="0x7800">
+        <sprite u="0" v="104" x="128" y="128" depthData="370" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="16" v="104" x="144" y="128" depthData="367" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="24" v="104" x="152" y="128" depthData="363" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="32" v="104" x="160" y="128" depthData="363" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="104" x="168" y="128" depthData="358" blend="3" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+      <maskGroup originX="-109" originY="-128" texBits="0x7800">
+        <sprite u="48" v="0" x="128" y="128" depthData="387" blend="3" colorMode="1" width="32" height="48"/>
+        <sprite u="48" v="48" x="128" y="176" depthData="383" blend="3" colorMode="1" width="32" height="48"/>
+        <sprite u="48" v="96" x="128" y="224" depthData="379" blend="3" colorMode="1" size="32"/>
+        <sprite u="80" v="0" x="160" y="128" depthData="375" blend="3" colorMode="1" width="24" height="48"/>
+        <sprite u="80" v="48" x="160" y="176" depthData="371" blend="3" colorMode="1" width="24" height="48"/>
+        <sprite u="80" v="96" x="160" y="224" depthData="367" blend="3" colorMode="1" width="24" height="32"/>
+      </maskGroup>
+      <maskGroup originX="-109" originY="0" texBits="0x7800">
+        <sprite u="48" v="128" x="128" y="128" depthData="375" blend="3" colorMode="1" width="32" height="56"/>
+        <sprite u="80" v="128" x="160" y="128" depthData="362" blend="3" colorMode="1" width="24" height="56"/>
+      </maskGroup>
+      <maskGroup originX="-53" originY="-128" texBits="0x7800">
+        <sprite u="0" v="144" x="128" y="128" depthData="375" blend="3" colorMode="1" width="24" height="48"/>
+        <sprite u="24" v="144" x="152" y="128" depthData="370" blend="3" colorMode="1" width="16" height="48"/>
+      </maskGroup>
+    </camera>
+    <camera x="20376" y="-1134" z="2106" lookX="21906" lookY="-1782" lookZ="10980" roll="0" fov="207">
+      <maskGroup originX="65" originY="-52" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="551" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="555" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="0" v="64" x="128" y="192" depthData="543" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="0" v="24" x="128" y="152" depthData="547" blend="3" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="48" x="128" y="176" depthData="547" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="32" x="136" y="160" depthData="547" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="8" v="64" x="136" y="192" depthData="543" blend="3" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="555" blend="3" colorMode="1" width="8" height="56"/>
+        <sprite u="16" v="56" x="144" y="184" depthData="547" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="24" v="48" x="152" y="176" depthData="551" blend="3" colorMode="1" width="8" height="56"/>
+        <sprite u="24" v="0" x="152" y="128" depthData="559" blend="3" colorMode="1" width="8" height="48"/>
+      </maskGroup>
+      <maskGroup originX="65" originY="-95" texBits="0x7800">
+        <sprite u="32" v="0" x="128" y="128" depthData="559" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="48" v="0" x="144" y="128" depthData="567" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="64" v="0" x="160" y="128" depthData="563" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="80" v="0" x="176" y="128" depthData="566" blend="3" colorMode="1" width="32" height="48"/>
+        <sprite u="64" v="48" x="160" y="176" depthData="551" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="80" v="48" x="176" y="176" depthData="559" blend="3" colorMode="1" width="32" height="48"/>
+        <sprite u="64" v="96" x="160" y="224" depthData="546" blend="3" colorMode="1" width="16" height="32"/>
+        <sprite u="80" v="96" x="176" y="224" depthData="551" blend="3" colorMode="1" size="32"/>
+      </maskGroup>
+      <maskGroup originX="97" originY="33" texBits="0x7800">
+        <sprite u="32" v="48" x="128" y="128" depthData="539" blend="3" colorMode="1" size="24"/>
+        <sprite u="32" v="72" x="152" y="128" depthData="551" blend="3" colorMode="1" width="24" height="32"/>
+      </maskGroup>
+    </camera>
+    <camera x="19206" y="-1152" z="11790" lookX="28440" lookY="-2034" lookZ="13554" roll="0" fov="207"/>
+    <camera x="22392" y="-1116" z="2556" lookX="2088" lookY="-2502" lookZ="7416" roll="0" fov="207"/>
+    <camera x="8604" y="-4374" z="3096" lookX="2898" lookY="-1044" lookZ="4158" roll="0" fov="207"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="19400" z0="0" x1="19200" z1="8900" x2="32300" z2="8900" x3="32300" z3="0"/>
+      <switch zoneIndex="1" to="5" x0="300" z0="2200" x1="200" z1="8000" x2="6700" z2="8000" x3="6700" z3="2200"/>
+      <switch zoneIndex="2" to="1" x0="24900" z0="0" x1="23600" z1="7801" x2="24989" z2="7994" x3="26095" z3="0"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="3" to="9" x0="6100" z0="0" x1="7300" z1="5102" x2="28800" z2="8254" x3="35700" z3="2100"/>
+      <switch zoneIndex="4" to="0" x0="26300" z0="200" x1="25101" z1="8000" x2="26300" z2="7900" x3="27700" z3="0"/>
+      <switch zoneIndex="5" to="4" x0="16599" z0="0" x1="17899" z1="9000" x2="19099" z2="8100" x3="18299" z3="0"/>
+      <switch zoneIndex="6" to="2" x0="24700" z0="5664" x1="17300" z1="5663" x2="18200" z2="7164" x3="24800" z3="7364"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="7" to="9" x0="13800" z0="0" x1="13800" z1="17500" x2="26697" z2="17500" x3="23297" z3="0"/>
+      <switch zoneIndex="8" to="1" x0="24396" z0="1101" x1="16495" z1="802" x2="16096" z2="5500" x3="26596" z3="5601"/>
+      <switch zoneIndex="9" to="3" x0="21700" z0="15700" x1="24400" z1="15700" x2="27500" z2="10300" x3="24000" z3="9800"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="10" to="9" x0="16500" z0="6200" x1="16500" z1="18400" x2="30800" z2="18400" x3="30700" z3="9200"/>
+      <switch zoneIndex="11" to="2" x0="17900" z0="14304" x1="20200" z1="15604" x2="24800" z2="8404" x3="24300" z3="6704"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="12" to="9" x0="600" z0="0" x1="600" z1="9800" x2="26400" z2="7000" x3="26100" z3="0"/>
+      <switch zoneIndex="13" to="1" x0="20700" z0="0" x1="18600" z1="102" x2="19500" z2="7802" x3="20900" z3="8802"/>
+      <switch zoneIndex="14" to="5" x0="0" z0="0" x1="1700" z1="6600" x2="5800" z2="6704" x3="4500" z3="0"/>
+    </switches>
+    <switches from="5">
+      <view zoneIndex="15" to="9" x0="0" z0="0" x1="0" z1="32000" x2="32000" z2="32000" x3="32000" z3="0"/>
+      <switch zoneIndex="16" to="4" x0="7698" z0="0" x1="4998" z1="0" x2="6298" z2="6798" x3="8998" z3="6899"/>
+      <switch zoneIndex="17" to="0" x0="22404" z0="100" x1="21504" z1="11700" x2="26604" z2="11400" x3="24604" z3="500"/>
+      <switch zoneIndex="18" to="0" x0="18100" z0="11902" x1="18400" z1="13702" x2="27000" z2="12402" x3="26200" z3="7402"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="6552" cellZ="8352">
+    <quadrant index="0">
+      <box xMax="31770" zMax="16650" xMin="16578" zMin="14508" shape="1" cf1="true" cf2="true"/>
+      <box xMax="20070" zMax="16488" xMin="0" zMin="5112" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32310" zMax="16650" xMin="29358" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32220" zMax="11142" xMin="23148" zMin="5364" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32274" zMax="16398" xMin="28512" zMin="5742" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="20070" zMax="16488" xMin="0" zMin="5112" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1800" zMax="8478" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="20070" zMax="16488" xMin="0" zMin="5112" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32364" zMax="1908" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32310" zMax="16650" xMin="29358" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32220" zMax="11142" xMin="23148" zMin="5364" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32274" zMax="16398" xMin="28512" zMin="5742" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="20070" zMax="16488" xMin="0" zMin="5112" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1800" zMax="8478" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="32364" zMax="1908" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1800" zMax="1800" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1800" zMax="1800" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1500" z1="1900" x2="19500" z2="5700" field8="0x0011" links="2"/>
+    <walk x1="23600" z1="1900" x2="29700" z2="5700" field8="0x0011" links="2"/>
+    <walk x1="19500" z1="1900" x2="23600" z2="5700" field8="0x0051" links="0 1 3"/>
+    <walk x1="19500" z1="5700" x2="23600" z2="10900" field8="0x0044" links="2 4"/>
+    <walk x1="19500" z1="10900" x2="23600" z2="14600" field8="0x0005" links="3 5"/>
+    <walk x1="23600" z1="10900" x2="28700" z2="14600" field8="0x0011" links="4"/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="32000" height="0x4FB0" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="save_name">Hall 1F</string>
+      <string key="0">There's a ladder. Will\nyou climb it?{scroll 1}{branch 0 1 0}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      <string key="0">      ハシゴがある\n上りますか?{scroll 1}{branch 0 1 0}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Hall RdC</string>
+      <string key="0">Il y a une échelle.\nMonter?{scroll 1}{branch 0 6 0}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">\nDa ist eine Leiter.{clear 0}Möchten Sie hinaufklettern?{scroll 1}{branch 0 6 0}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Atrio 1P</string>
+      <string key="0">C'è una scala.\nVuoi salire?{scroll 1}{branch 0 6 0}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">Hay una escalera...\n¿quieres subir?{scroll 1}{branch 0 6 0}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Зал 1-эт.</string>
+      <string key="0">Здесь лестница.\nПодняться по ней?{scroll 1}{branch 0 1 0}   \xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE4\xE4\xE4\xE4\xE4\x81d\x6D“““\x65\xE4\xE4\xE4\xE4\xE4\xE4\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE4\x81d\x6D““““““““\x84\xE4\xE4\xE4\xE4\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\x81d\x6D\x87““““““““““\x84\x84“\x65\xE4\xE4\xE4\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\x81d\x6D““\x7F“\x6D““\x6D\x6D“\x84\x81\x6D\x6D\x6D\x65\x65““\x65\xE4\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3\x81d\x6D“““\x6D\x6D““\x6D\x6D\x6D“\x84\x81\x81\x81\x81\x81\x6D\x84\x84w““““\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3““““\x6D“““““\x6D\x84\x81\x81\x81\x81\x81\x81\x81\x81\x84\x84\x84\x84\x6D“““\x6D\x6D\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\x81““““\x6D““\x6D\x6D\x6D“\x84\x84\x81\x84\x84\x84““\x6D\x6D“\x6D“\x6D““\x84\x81\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\x81\x65““\x6D\x6D“\x65““\x84\x81\x81\x84“\x6D\x6D\x6D\x6D\x6D“\x6D\x6D“w\x81\x81ＲＲ4\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3Ｒ\x81““\x6D““\x81Ｒ\x81\x81\x84“““\x6D\x6D\x6D\x6D\x6Dw\x81\x81\x81\x81\x813444\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3Ｒ\x81\x81“\x6D“““\x6D“““\x6D\x6D\x6D\x6D“\x84\x81ＲＲＲＲＲ34ＲＲＲ\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3Ｒ\x81\x81““\x6D\x6D\x6D\x6D\x6D\x6D\x6D\x6D\x6D\x81\x81\x81\x81\x81\x81\x81Ｒ44ＲＲＲＲＲ\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3Ｒ\x84\x81\x81“\x6D\x6D\x6D\x6D\x65\x65\x81\x81\x81\x81\x81\x81\x81\x813444ＲＲ3ＲＲＲ\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3Ｒ\x81\x81\x81\x81\x65\x65\x81\x81\x81\x81\x81\x81\x81\x81\x81Ｒ344ＲＲＲＲＲＲＲＲ4\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3ＲＲ\x84\x81Ｒ\x81\x81\x81\x81\x81\x81\x81\x81\x81Ｒ44ＲＲＲＲＲＲ3ＲＲＲＲ5\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE34Ｒ\x81\x84Ｒ\x81\x81\x81\x81\x81\x81\x81344ＲＲＲＲ34433ＲＲＲＲ\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE33Ｒ\x81\x81Ｒ\x81\x81\x81\x81344ＲＲＲＲＲ3444443ＲＲＲ4\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE33ＲＲ\x843\x81Ｒ34ＲＲＲＲＲ4344433Ｒ34ＲＲＲ5\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE32Ｒ\x8114433ＲＲＲ3434433Ｒ44333ＲＲＲ\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE324Ｒ044ＲＲＲＲＲ3443ＲＲＲ444334ＲＲＲ\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE32Ｒ4044ＲＲＲＲＲＲＲ44433434444ＲＲ4\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE4Ｒ\x81Ｒ043ＲＲＲＲＲＲ444443433ＲＲＲＲＲ5\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE4\xE4Ｒ\x81044ＲＲＲＲＲ3434443ＲＲＲＲＲＲ35\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE4\xE4\xE4Ｒ\x84\x0B43ＲＲＲＲＲＲ443ＲＲＲＲＲＲＲ35\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE4\xE4\xE4\xE4Ｒ144ＲＲＲＲＲ3ＲＲＲＲＲＲＲ335\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE4\xE4\xE4\xE4\xE44443ＲＲＲＲＲＲＲＲＲＲＲ33\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4444ＲＲＲＲＲＲＲＲ335\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE444ＲＲＲＲＲ335\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE444ＲＲＲ35\xE4\xE4\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4ＲＲ5\xE4\xE4\xE4\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6{clear 4}\xFF\xFF\xFF\xFF\xFF\xFF{branch 0 9 0}d“   {timed 16}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Pääaula 1 krs</string>
+      <string key="0">Siinä on tikkaat...\nKiipeätkö niitä?{scroll 1}{branch 0 6 0}</string>
+    </language>
+  </strings>
+</room>

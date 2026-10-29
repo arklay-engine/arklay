@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="384" g="322" b="432"/>
+  <lights>
+    <light x="8578" y="3000" z="5017" r="90" g="90" b="90" kind="1" radius="20000"/>
+    <light x="-8500" y="3000" z="5000" r="90" g="90" b="90" kind="1" radius="20000"/>
+    <light x="0" y="3000" z="-7333" r="90" g="90" b="90" kind="1" radius="20000"/>
+  </lights>
+  <cameras>
+    <camera x="90" y="-4662" z="4752" lookX="15660" lookY="-360" lookZ="8766" roll="0" fov="207"/>
+    <camera x="10512" y="-10962" z="7812" lookX="16110" lookY="-2664" lookZ="8136" roll="0" fov="207"/>
+    <camera x="16488" y="-4104" z="12834" lookX="4338" lookY="-918" lookZ="7758" roll="0" fov="207"/>
+    <camera x="9504" y="-2934" z="9090" lookX="10890" lookY="-1458" lookZ="2574" roll="0" fov="257"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="0" x1="0" z1="16200" x2="22600" z2="16300" x3="22800" z3="0"/>
+      <switch zoneIndex="1" to="2" x0="0" z0="0" x1="0" z1="16100" x2="7600" z2="16100" x3="5398" z3="0"/>
+      <switch zoneIndex="2" to="1" x0="16209" z0="0" x1="14309" z1="16800" x2="22209" z2="16000" x3="22109" z3="0"/>
+      <switch zoneIndex="3" to="3" x0="8188" z0="0" x1="8895" z1="3600" x2="12796" z2="4000" x3="14096" z3="0"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="4" to="9" x0="0" z0="100" x1="0" z1="17600" x2="22900" z2="18500" x3="22900" z3="100"/>
+      <switch zoneIndex="5" to="0" x0="10000" z0="0" x1="10200" z1="16100" x2="13700" z2="16000" x3="15901" z3="0"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="6" to="9" x0="0" z0="0" x1="0" z1="16404" x2="23000" z2="16700" x3="23000" z3="0"/>
+      <switch zoneIndex="7" to="0" x0="5600" z0="0" x1="8000" z1="16500" x2="11000" z2="16500" x3="11600" z3="0"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="8" to="9" x0="0" z0="0" x1="0" z1="17000" x2="22702" z2="17200" x3="22707" z3="0"/>
+      <switch zoneIndex="9" to="0" x0="7800" z0="3800" x1="7600" z1="5000" x2="14000" z2="5600" x3="14100" z3="4300"/>
+      <switch zoneIndex="10" to="0" x0="13700" z0="5600" x1="15600" z1="100" x2="14400" z2="0" x3="12800" z3="5100"/>
+      <switch zoneIndex="11" to="0" x0="6799" z0="0" x1="7899" z1="5000" x2="8900" z2="4800" x3="7899" z3="0"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="10458" cellZ="8460">
+    <quadrant index="0">
+      <box xMax="23256" zMax="15594" xMin="9" zMin="13758" shape="1" cf1="true" cf2="true"/>
+      <box xMax="22885" zMax="16160" xMin="20065" zMin="2" shape="1" cf1="true" cf2="true"/>
+      <box xMax="21924" zMax="15768" xMin="18936" zMin="11646" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="23256" zMax="15594" xMin="9" zMin="13758" shape="1" cf1="true" cf2="true"/>
+      <box xMax="3029" zMax="16200" xMin="14" zMin="2" shape="1" cf1="true" cf2="true"/>
+      <box xMax="5472" zMax="15624" xMin="486" zMin="13014" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="23528" zMax="2281" xMin="4" zMin="5" shape="1" cf1="true" cf2="true"/>
+      <box xMax="22885" zMax="16160" xMin="20065" zMin="2" shape="1" cf1="true" cf2="true"/>
+      <box xMax="20880" zMax="3510" xMin="18756" zMin="1458" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="3029" zMax="16200" xMin="14" zMin="2" shape="1" cf1="true" cf2="true"/>
+      <box xMax="23528" zMax="2281" xMin="4" zMin="5" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="23400" height="0x5078" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">BLACK TIGER ROOM</string>
+      <string key="save_name">Courtyard Room B1</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Salle de la cour SS1</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Cortile S1</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Комната внутр. двора Б1</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Maanalainen varasto 0 krs</string>
+    </language>
+  </strings>
+</room>

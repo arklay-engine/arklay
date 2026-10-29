@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1400" g="1400" b="1400"/>
+  <lights>
+    <light x="600" y="-2222" z="3840" r="150" g="150" b="150" kind="0" radius="12040"/>
+    <light x="220" y="-5555" z="16320" r="150" g="150" b="150" kind="0" radius="12159"/>
+    <light x="7520" y="-2222" z="22400" r="200" g="200" b="200" kind="0" radius="16319"/>
+  </lights>
+  <cameras>
+    <camera x="3132" y="-5832" z="6408" lookX="5724" lookY="-54" lookZ="2466" roll="0" fov="207"/>
+    <camera x="2502" y="-5670" z="16704" lookX="6930" lookY="54" lookZ="4878" roll="0" fov="230"/>
+    <camera x="2520" y="-1584" z="9234" lookX="4104" lookY="-2556" lookZ="15642" roll="0" fov="230">
+      <maskGroup originX="24" originY="-81" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="925" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="0" v="32" x="128" y="160" depthData="905" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="56" x="128" y="184" depthData="860" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="24" x="136" y="152" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="48" x="136" y="176" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="850" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="40" x="144" y="168" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="64" x="144" y="192" depthData="850" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="24" v="0" x="152" y="128" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="24" v="32" x="152" y="160" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="24" v="56" x="152" y="184" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="32" v="24" x="160" y="152" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="32" v="48" x="160" y="176" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="40" v="0" x="168" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="24" x="168" y="152" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="48" x="168" y="176" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="48" v="0" x="176" y="128" depthData="850" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="16" x="176" y="146" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="48" v="40" x="176" y="168" depthData="850" blend="1" colorMode="1" width="8" height="40"/>
+      </maskGroup>
+      <maskGroup originX="24" originY="-1" texBits="0x7800">
+        <sprite u="56" v="0" x="128" y="128" depthData="870" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="56" v="24" x="128" y="152" depthData="855" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="56" v="48" x="128" y="176" depthData="840" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="0" x="136" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="24" x="136" y="152" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="48" x="136" y="176" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="72" v="0" x="144" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="72" v="24" x="144" y="152" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="72" v="56" x="144" y="184" depthData="850" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="0" x="152" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="80" v="24" x="152" y="152" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="80" v="56" x="152" y="184" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="88" v="0" x="160" y="128" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="88" v="32" x="160" y="160" depthData="850" blend="1" colorMode="1" width="8" height="32"/>
+        <sprite u="88" v="64" x="160" y="192" depthData="850" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="96" v="0" x="168" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="96" v="24" x="168" y="152" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="96" v="48" x="168" y="176" depthData="850" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="96" v="64" x="168" y="192" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="104" v="0" x="176" y="128" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="104" v="24" x="176" y="152" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+        <sprite u="104" v="48" x="176" y="176" depthData="850" blend="1" colorMode="1" width="8" height="16"/>
+        <sprite u="104" v="64" x="176" y="192" depthData="850" blend="1" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+    </camera>
+    <camera x="2772" y="-5850" z="23886" lookX="7758" lookY="-2070" lookZ="25560" roll="0" fov="230"/>
+    <camera x="6498" y="-2970" z="26028" lookX="7290" lookY="-2106" lookZ="27162" roll="0" fov="230"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="585" x1="0" z1="15771" x2="7907" z2="15799" x3="7885" z3="685"/>
+      <switch zoneIndex="1" to="1" x0="7142" z0="7599" x1="300" z1="3414" x2="385" z2="8857" x3="7185" z3="8899"/>
+      <switch zoneIndex="2" to="3" x0="4200" z0="22500" x1="4300" z1="30000" x2="10700" z2="30400" x3="10900" z3="22600"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="3" to="9" x0="0" z0="0" x1="0" z1="17814" x2="8371" z2="17714" x3="8371" z3="0"/>
+      <switch zoneIndex="4" to="0" x0="457" z0="2742" x1="6899" z1="6671" x2="6928" z2="2214" x3="500" z3="1957"/>
+      <switch zoneIndex="5" to="2" x0="371" z0="16228" x1="6885" z1="15971" x2="6971" z2="13542" x3="371" z3="12542"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="6" to="9" x0="0" z0="6200" x1="0" z1="30371" x2="8199" z2="30471" x3="8085" z3="6200"/>
+      <switch zoneIndex="7" to="1" x0="7571" z0="9257" x1="200" z1="8400" x2="200" z2="12086" x3="6999" z3="13072"/>
+      <switch zoneIndex="8" to="3" x0="4799" z0="29028" x1="9128" z1="29571" x2="9042" z2="22028" x3="6071" z3="21757"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="9" to="9" x0="0" z0="19280" x1="0" z1="31614" x2="13211" z2="31585" x3="13199" z3="19199"/>
+      <switch zoneIndex="10" to="2" x0="471" z0="24999" x1="4285" z1="29699" x2="5971" z2="20199" x3="5585" z3="17999"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="11" to="9" x0="4300" z0="26900" x1="4300" z1="30400" x2="11100" z2="30400" x3="11000" z3="26900"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="4360" cellZ="23660">
+    <quadrant index="0">
+      <box xMax="11072" zMax="29602" xMin="8700" zMin="20196" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11084" zMax="29644" xMin="60" zMin="27214" shape="1" cf1="true" cf2="true"/>
+      <box xMax="5588" zMax="29634" xMin="2100" zMin="26146" shape="3" cf1="true" cf2="true"/>
+      <box xMax="3646" zMax="27968" xMin="444" zMin="24766" shape="3" cf1="true" cf2="true"/>
+      <box xMax="8486" zMax="23841" xMin="5288" zMin="20643" shape="3" cf1="true" cf2="true"/>
+      <box xMax="11088" zMax="23616" xMin="7344" zMin="20718" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="1882" zMax="28024" xMin="92" zMin="290" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11084" zMax="29644" xMin="60" zMin="27214" shape="1" cf1="true" cf2="true"/>
+      <box xMax="5588" zMax="29634" xMin="2100" zMin="26146" shape="3" cf1="true" cf2="true"/>
+      <box xMax="3646" zMax="27968" xMin="444" zMin="24766" shape="3" cf1="true" cf2="true"/>
+      <box xMax="2428" zMax="25844" xMin="208" zMin="23710" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="11072" zMax="29602" xMin="8700" zMin="20196" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7196" zMax="1868" xMin="290" zMin="432" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10306" zMax="22158" xMin="5340" zMin="400" shape="1" cf1="true" cf2="true"/>
+      <box xMax="8486" zMax="23841" xMin="5288" zMin="20643" shape="3" cf1="true" cf2="true"/>
+      <box xMax="11088" zMax="23616" xMin="7344" zMin="20718" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="1882" zMax="28024" xMin="92" zMin="290" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7196" zMax="1868" xMin="290" zMin="432" shape="1" cf1="true" cf2="true"/>
+      <box xMax="2428" zMax="25844" xMin="208" zMin="23710" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="20200" height="0x7C9C" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">ROOFED PASSAGE</string>
+      <string key="save_name">M. Room 1F</string>
+      <string key="0">{scroll 2}\n</string>
+      <string key="1">{scroll 2}\n</string>
+      <string key="2">{scroll 2}\n</string>
+      <string key="3">{scroll 2}Crests are placed in all\nthe hollows.</string>
+      <string key="4">{scroll 0}\n{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}\n{scroll 1}{clear 84}{scroll 0}\n{scroll 1}{clear 127}{scroll 0}\n{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}\n{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}\n{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}When the sun sets in the\nwest and the moon rises in{clear 0}{scroll 2}the east, stars will begin\nto appear in the sky and{clear 0}{scroll 2}wind will blow towards the\nground.{clear 0}{scroll 2}Then the gate of new life\nwill open.</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      <string key="0">{scroll 2}\n     くぼみが3っある</string>
+      <string key="1">{scroll 2}\n   クレストがはまっている</string>
+      <string key="2">{scroll 2}\n    残るはあとひとつだ</string>
+      <string key="3">{scroll 2}\n全てのくぼみにクレストがはまっている</string>
+      <string key="4">{scroll 0}\n        何だ‽{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}\n   これはS.T.A.R.S.の通信機{scroll 1}{clear 84}{scroll 0}\n  少し壊れているが使えそうだな{scroll 1}{clear 127}{scroll 0}\n     身につけておこう{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}\n  あいつらは? バケモノか‽{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}\n  レベッカはまだあの部屋に‽{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}\n       奴らは‽{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}\n    レベッカ! 上か!{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}“西に日がしずみ、東に月がのぼる時\n 天には星がかかり、地には風がふく”{clear 0}{scroll 2}\n   “そして人生は開かれる”</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Chambre RdC</string>
+      <string key="0">{scroll 2}\n</string>
+      <string key="1">{scroll 2}\n</string>
+      <string key="2">{scroll 2}\n</string>
+      <string key="3">{scroll 2}Les symboles sont tous dans\nleur cavité.</string>
+      <string key="4">{scroll 0}\nQuoi?{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}Ça doit être...La radio \ndes ＳＴＡＲＳ...! {scroll 1}{clear 84}{scroll 0}Elle est un peu abîmée, \nmais elle peut peut-être {scroll 1}{clear 84}{scroll 0}\nm'être utile. {scroll 1}{clear 43}{scroll 0}\nJe la prends.{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}Qu'est-ce que c'est? \nDes monstres?{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}Rebecca! Est-elle encore dans \nla maison?{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}\nQu'est-ce que c'est?{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}C'est Rebecca! Elle doit être \nà l'étage!{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}Lorsque le soleil se couche à\nl'ouest et la lune se lève à{clear 0}{scroll 2}l'est, apparaîtront les \nétoiles dans le ciel et{clear 0}{scroll 2}le vent soufflera en direction\nde la terre.{clear 0}{scroll 2}C'est alors que la porte de la\nnouvelle vie s'ouvrira.</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 2}\n</string>
+      <string key="1">{scroll 2}\n</string>
+      <string key="2">{scroll 2}\n</string>
+      <string key="3">{scroll 2}In allen Hohlräumen\n wurden Wappen platziert.</string>
+      <string key="4">{scroll 0}\nWas?{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}Das muss...\nein ＳＴＡＲＳ-Funkgerät sein!{scroll 1}{clear 84}{scroll 0}\nEs ist ein bisschen defekt,{scroll 1}{clear 77}{scroll 0}könnte aber immer noch\nfunktionieren.{scroll 1}{clear 50}{scroll 0}\nIch werde es mitnehmen.{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}Was ist das?\nMonster?{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}Rebecca!\nIst sie immer noch im Haus?{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}\nWas sind das für welche?{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}Es ist Rebecca!\nSie muss oben sein!{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}Geht die Sonne im Westen unter\nund der Mond im Osten auf,{clear 0}{scroll 2}werden nach und nach Sterne\nam Himmel erscheinen und{clear 0}{scroll 2}der Wind wird dem Boden\nentgegenwehen.{clear 0}{scroll 2}Dann öffnet sich das Tor\ndes neuen Lebens.</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Villa 1P</string>
+      <string key="0">{scroll 2}\n</string>
+      <string key="1">{scroll 2}\n</string>
+      <string key="2">{scroll 2}\n</string>
+      <string key="3">{scroll 2}I simboli sono in tutte \nle cavità.</string>
+      <string key="4">{scroll 0}\nCosa?{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}Deve essere...La radio \ndella ＳＴＡＲＳ! {scroll 1}{clear 84}{scroll 0}È un po' danneggiata, \nma forse può{scroll 1}{clear 84}{scroll 0}\nessere ancora utile. {scroll 1}{clear 43}{scroll 0}\nLa prendo.{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}\nCosa sono?!{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}Rebecca! È ancora nella \nmagione?{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}\nChe cos'è?{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}È Rebecca! Deve essere \ndi sopra!{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}Quando il sole tramonta a\novest e la luna sorge a{clear 0}{scroll 2}est, le stelle compaiono \nnel cielo e il vento prende{clear 0}{scroll 2}a soffiare verso \nla terra.{clear 0}{scroll 2}Allora la porta della nuova \nvita si spalancherà.</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 2}\n</string>
+      <string key="1">{scroll 2}\n</string>
+      <string key="2">{scroll 2}\n</string>
+      <string key="3">{scroll 2}Hay blasones en todos\nlos huecos...</string>
+      <string key="4">{scroll 0}\n{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}\nDebe de ser una radio de ＳＴＡＲＳ.{scroll 1}{clear 84}{scroll 0}Está algo rota, pero\ntodavía podría funcionar.{scroll 1}{clear 127}{scroll 0}\nMe la llevaré.{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}¿Q-Qué son?\n¿M-Monstruos?{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}¡Rebecca!\n¿Sigue estando en la casa?{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}\n¿Qué son?{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}Es Rebecca,\n¡tiene que estar arriba!{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}Cuando el sol se pone por\nel oeste y la luna sale{clear 0}{scroll 2}por el este, aparecen\nestrellas en el cielo y el{clear 0}{scroll 2}viento sopla hacia el\nsuelo...{clear 0}{scroll 2}Entonces se abrirá\nla puerta de la nueva vida...</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Мед. комната 1-эт.</string>
+      <string key="0">{scroll 2}\n</string>
+      <string key="1">{scroll 2}\n</string>
+      <string key="2">{scroll 2}\n</string>
+      <string key="3">{scroll 2}Таблички во всех\nуглублениях.</string>
+      <string key="4">{scroll 0}\n{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}\n{scroll 1}{clear 84}{scroll 0}\n{scroll 1}{clear 127}{scroll 0}\n{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}\n{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}\n{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}Когда солнце сядет на западе,\nа луна поднимется на востоке,{clear 0}{scroll 2}звезды появятся\nв небе{clear 0}{scroll 2}и ветер пронесётся\nпо земле.{clear 0}{scroll 2}Тогда врата новой\nжизни откроются.</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Lääkevarasto 1 krs</string>
+      <string key="0">{scroll 2}\n</string>
+      <string key="1">{scroll 2}\n</string>
+      <string key="2">{scroll 2}\n</string>
+      <string key="3">{scroll 2}Kaikki laatat on asetettu\npaikoilleen...</string>
+      <string key="4">{scroll 0}\n{scroll 1}{timed 50}</string>
+      <string key="5">{scroll 0}Tämän täytyy olla ＳＴＡＲＳin radio.{scroll 1}{clear 84}{scroll 0}Se on hieman rikki, mutta se voi\nvielä toimia.{scroll 1}{clear 127}{scroll 0}Otan sen mukaani.{scroll 1}{timed 41}</string>
+      <string key="6">{scroll 0}Mitä nuo ovat? Hirviöitä?{scroll 2}{timed 140}</string>
+      <string key="7">{scroll 0}Rebecca!\nOnko hän vielä kartanossa?{scroll 2}{timed 100}</string>
+      <string key="8">{scroll 0}Mitä nuo ovat?{scroll 2}{timed 70}</string>
+      <string key="9">{scroll 0}Tuo on Rebecca,\nhänen on oltava yläkerrassa!{scroll 2}{timed 110}</string>
+      <string key="10">{scroll 2}Kun aurinko laskee länteen,\nkuu nousee idästä,{clear 0}{scroll 2}tähdet loistavat taivaalla ja{clear 0}{scroll 2}tuuli puhaltaa maahan...{clear 0}{scroll 2}Silloin uuden elämän portti\navautuu...</string>
+    </language>
+  </strings>
+</room>

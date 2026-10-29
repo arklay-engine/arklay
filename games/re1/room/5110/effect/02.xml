@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<effect index="29" clut="0x7840" depthTable="2 16 30 44 58 72 86 100">
+  <frame uv="0" delay="2" width="32" height="24"/>
+  <frame uv="1" delay="2" width="32" height="24"/>
+  <frame uv="2" delay="2" width="32" height="24"/>
+  <frame uv="3" delay="2" width="32" height="24"/>
+  <frame uv="4" delay="2" width="32" height="24"/>
+  <frame uv="5" delay="2" width="32" height="24"/>
+  <frame uv="0" delay="255" width="0" height="0"/>
+  <frame uv="6" delay="2" width="32" height="24"/>
+  <frame uv="7" delay="2" width="32" height="24"/>
+  <frame uv="8" delay="2" width="32" height="24"/>
+  <frame uv="9" delay="2" width="32" height="24"/>
+  <frame uv="10" delay="2" width="32" height="24"/>
+  <frame uv="11" delay="2" width="32" height="24"/>
+  <frame uv="7" delay="255" width="0" height="0"/>
+  <frame uv="12" delay="2" width="32" height="24"/>
+  <frame uv="13" delay="2" width="32" height="24"/>
+  <frame uv="14" delay="2" width="32" height="24"/>
+  <frame uv="15" delay="2" width="32" height="24"/>
+  <frame uv="16" delay="2" width="32" height="24"/>
+  <frame uv="17" delay="2" width="32" height="24"/>
+  <frame uv="14" delay="255" width="0" height="0"/>
+  <frame uv="18" delay="2" width="32" height="24"/>
+  <frame uv="19" delay="2" width="32" height="24"/>
+  <frame uv="20" delay="2" width="32" height="24"/>
+  <frame uv="21" delay="2" width="32" height="24"/>
+  <frame uv="22" delay="2" width="32" height="24"/>
+  <frame uv="23" delay="2" width="32" height="24"/>
+  <frame uv="21" delay="255" width="0" height="0"/>
+  <uv u="0" v="0" pivotX="112" pivotY="120"/>
+  <uv u="32" v="0" pivotX="112" pivotY="120"/>
+  <uv u="64" v="0" pivotX="112" pivotY="120"/>
+  <uv u="96" v="0" pivotX="112" pivotY="120"/>
+  <uv u="128" v="0" pivotX="112" pivotY="120"/>
+  <uv u="160" v="0" pivotX="112" pivotY="120"/>
+  <uv u="192" v="0" pivotX="112" pivotY="120"/>
+  <uv u="224" v="0" pivotX="112" pivotY="120"/>
+  <uv u="0" v="24" pivotX="112" pivotY="120"/>
+  <uv u="32" v="24" pivotX="112" pivotY="120"/>
+  <uv u="64" v="24" pivotX="112" pivotY="120"/>
+  <uv u="96" v="24" pivotX="112" pivotY="120"/>
+  <uv u="128" v="24" pivotX="112" pivotY="120"/>
+  <uv u="160" v="24" pivotX="112" pivotY="120"/>
+  <uv u="192" v="24" pivotX="112" pivotY="120"/>
+  <uv u="224" v="24" pivotX="112" pivotY="120"/>
+  <uv u="0" v="48" pivotX="112" pivotY="120"/>
+  <uv u="32" v="48" pivotX="112" pivotY="120"/>
+  <uv u="64" v="48" pivotX="112" pivotY="120"/>
+  <uv u="96" v="48" pivotX="112" pivotY="120"/>
+  <uv u="128" v="48" pivotX="112" pivotY="120"/>
+  <uv u="160" v="48" pivotX="112" pivotY="120"/>
+  <uv u="192" v="48" pivotX="112" pivotY="120"/>
+  <uv u="224" v="48" pivotX="112" pivotY="120"/>
+  <depth row="0">
+    <animFrame>
+      <block>1f1c01040000000000000000000002700000000000000000</block>
+      <block>340701040000000000001000000002708c00b0ff00000000</block>
+    </animFrame>
+  </depth>
+  <depth row="1">
+    <animFrame>
+      <block>1f1c01040700000000000000000002700000000000000000</block>
+      <block>340701040000000000001000000002707800bfff00000000</block>
+    </animFrame>
+  </depth>
+  <depth row="2">
+    <animFrame>
+      <block>1f1c01040e00000000000000000002700000000000000000</block>
+      <block>340701040000000000001000000002705000ceff00000000</block>
+    </animFrame>
+  </depth>
+  <depth row="3">
+    <animFrame>
+      <block>1f1c01041500000000000000000002700000000000000000</block>
+      <block>340701040000000000001000000002706400ddff00000000</block>
+    </animFrame>
+  </depth>
+  <depth row="4">
+    <animFrame>
+      <block>1f1c01060000000000000000000002700000000000000000</block>
+      <block>340701060000000000001000000002708200abff00000000</block>
+    </animFrame>
+  </depth>
+  <depth row="5">
+    <animFrame>
+      <block>1f1c01060700000000000000000002700000000000000000</block>
+      <block>340701060000000000001000000002706e00baff00000000</block>
+    </animFrame>
+  </depth>
+  <depth row="6">
+    <animFrame>
+      <block>1f1c01060e00000000000000000002700000000000000000</block>
+      <block>340701060000000000001000000002704600bfff00000000</block>
+    </animFrame>
+  </depth>
+  <depth row="7">
+    <animFrame>
+      <block>1f1c01061500000000000000000002700000000000000000</block>
+      <block>340701060000000000001000000002705a00ceff00000000</block>
+    </animFrame>
+  </depth>
+</effect>

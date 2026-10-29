@@ -231,10 +231,24 @@ BMP is read as true colour.
 
 `convert-game` writes each room as a folder `room/<id>` (`<id>` is the
 four-digit lower-case RDT number, e.g. `room/1000` for `ROOM1000.RDT`). Every
-file in it is found by its name, so nothing in a room refers to a path:
+file in it is found by its name, so nothing in a room refers to a path.
+
+For RE1 the repository owns the room definitions: `room.xml` and the effect
+definitions (`effect/<slot>.xml`) are checked in under
+`games/re1/room/<id>/`, and `room.scd` and `original.scd` are built from the
+room's script, `room.akscr` in the folder of its first RDT (room 103's is
+`games/re1/room/1030/room.akscr`). The script itself is not packed. Every
+release takes the same definitions: the French and German RDTs carry
+leftover data in rooms the other releases ship as empty stubs (110, 119, 200,
+20C, 213 to 21C) and two extra rooms (313 and 412), none of which a door
+leads to, so they stay stubs and the extra rooms are not converted. The
+install's `ROOM*.RDT` files say which rooms exist, and supply only the game
+art: the object and item models, the effect sheets and the player animation.
+The camera backgrounds and mask pages come from the install's `RC*.pak` and
+`objspr` files.
 
 ```text
-room/1000/room.xml        the room: names, lights, cameras and masks, zones, collision, messages
+room/1000/room.xml        the room: lights, cameras and masks, zones, collision, strings
 room/1000/room.scd        the scripts the room runs: init, per-frame and events
 room/1000/original.scd    the original bytecode, when room.scd carries the port's fixes
 room/1000/cut/00.bmp      camera 0's background
@@ -252,26 +266,42 @@ carries no id of its own. The background and mask of
 a camera shared by the two player variants, or by the stage 6 and 7 return
 visits, are copied into each variant's folder.
 
-The room's names sit first in `room.xml`, in the same `<strings>` shape as an
+The room's text sits last in `room.xml`, in the same `<strings>` shape as an
 item's: a `<language lang="…">` per language holding a `name` (the debug menu
-and save list name) and a `save_name` (the save screen's shorthand label):
+and save list name), a `save_name` (the save screen's shorthand label), and
+then the room's messages, each keyed by its decimal message id, in the
+language file syntax (`{scroll 0}`, `\n` for a line break):
 
 ```xml
-<room format="2">
+<room format="3">
+  ...
   <strings>
     <language lang="en-US">
       <string key="name">SAVE ROOM</string>
       <string key="save_name">M. Room 1F</string>
+      <string key="0">{scroll 0}\n{scroll 2}{timed 70}</string>
+      ...
+      <string key="42">\nVitamins and serums.{scroll 2}</string>
     </language>
   </strings>
-  ...
+</room>
 ```
 
-They become the `ROOM_<room3>_NAME` and `ROOM_<room3>_NAME_SAVE` language
-keys; of a room's player variants, the lowest-numbered one that names the
-room in a language supplies the name. A language file's own key still wins.
-`convert-game` writes RE1's names from the checked-in
-`games/re1/room/names.xml`; RE2's rooms have none yet.
+A message's subtitle speaker goes beside it as `<id>_speaker`, or
+`<id>_speaker_<page>` for one page. They become the `ROOM_<room3>_NAME`,
+`ROOM_<room3>_NAME_SAVE`, `ROOM_<room3>_TEXT_<nn>` and
+`ROOM_<room3>_TEXT_<nn>_SPEAKER[_<page>]` language keys (message `42` is
+`TEXT_2A`). Of a
+room's player variants, the lowest-numbered one that names the room in a
+language supplies the name, and its messages are the room's shared text; a
+later variant whose message differs gets that variant's own
+`ROOM_<rdt4>_TEXT_<nn>` key. A language file's own key still wins. English
+is a language like any other: a room has no message text outside
+`<strings>`, and a message no language has reads as its key. RE1's names and
+message texts are in its checked-in `room.xml` files; RE2's rooms have none
+yet. Format 2 rooms kept the RDT's encoded messages in a `<messages>` block;
+format 3 has none, and a format 2 room still loads with its block ignored, so
+its text must be in `<strings>` (or a language file) to show.
 
 An RE2 room's `room.xml` carries `game="re2"`, its cameras' own lighting and
 its `<sca>` collision records; the RDT sections the engine does not read yet
@@ -299,13 +329,6 @@ stay contiguous from 0. Packed flag words are split into named attributes:
 - a mask `<sprite>` has its texture `page`, `blend`, `colorMode` and
   `otherBits`, and a square `size` or explicit `width` and `height`;
 - a `<walk>` zone lists the zones it connects to as `links="1 7"`.
-
-Messages are text plus elements for the control bytes (`<br/>`, `<page n>`,
-`<speed n>`, `<color n>`, `<item n>`, `<itemEnd/>`, `<yesno a b c>`,
-`<end action>`, `<s/>`); a glyph the room's script cannot spell is a
-`<glyph page="0xF8" n>` or `<byte v="0x..">`. A message whose bytes no
-markup reproduces exactly is kept as a `raw` hex attribute. Text the room's
-font cannot spell exactly is refused rather than drawn as another glyph.
 
 A room runs `room.scd`. With `[game] room_script_fixes = false` it runs
 `original.scd` instead, unless a later layer ships its own `room.scd`: a mod's
@@ -622,13 +645,16 @@ arklay re1.akpak --mod fr.akpak --language fr-FR --room 100
 `arklay mod build <dir> --out <pack.akpak>` builds a mod from a directory:
 `manifest.toml` is required and packed, every other file maps to a pack entry
 equal to its directory-relative path, and a `room/<id>/<stem>.s` source is
-assembled into `room/<id>/<stem>.scd` (the `.s` itself is not packed); a
-`room/<id>/<stem>.akscr` script is compiled the same way, and a merged room
-script named by three hex digits (`room/103.akscr`) is compiled once per
-variant, into `room/1030/room.scd`, `room/1031/room.scd`, `room/6030/room.scd`
-and `room/6031/room.scd`, each built for the
-USA region (`#if USA` is defined). Where a variant builds differently for
-JPN or EUR, that build goes beside it as `room/1030/room-jpn.scd` or
+assembled into `room/<id>/<stem>.scd` (the `.s` itself is not packed), and a
+`room/<id>/<stem>.akscr` script is compiled the same way. A merged room
+script, laid out like the checked-in ones (`room.akscr` in the folder of the
+room's first RDT, `room/1030/room.akscr` for room 103) or named by three hex
+digits (`room/103.akscr`), is compiled once per variant, into
+`room/1030/room.scd`, `room/1031/room.scd`, `room/6030/room.scd` and
+`room/6031/room.scd`, each built for the USA region (`#if USA` is defined).
+A `room.akscr` in another variant's folder (`room/1031/room.akscr`) is that
+one RDT's script. Where a variant builds differently for JPN or EUR, that
+build goes beside it as `room/1030/room-jpn.scd` or
 `room/1030/room-eur.scd`, so a mod copied from the checked-in scripts keeps
 the lines that follow each region's RDT data (a camera number, an AOT
 position). The engine runs the build for the region the base pack's
@@ -786,9 +812,10 @@ compiles it back. Every room of the shipped game decompiles to a script that
 compiles to byte-identical init, main and event streams.
 
 `arklay scd export-rooms re1.akpak --out games/re1/room` writes one merged
-script per room, covering both players and, for stages 1 and 2, the second
-mansion visit (stages 6 and 7): `103.akscr` holds RDTs 1030, 1031, 6030 and
-6031. Where the variants differ, `#if` blocks pick the lines:
+script per room, as `<room>0/room.akscr`, covering both players and, for
+stages 1 and 2, the second mansion visit (stages 6 and 7): `1030/room.akscr`
+holds RDTs 1030, 1031, 6030 and 6031. Where the variants differ, `#if` blocks
+pick the lines:
 
 ```c
 #if CHRIS
@@ -806,9 +833,9 @@ stage (neither is defined outside the mansion); blocks nest. The
 directives work on whole lines; the exporter keeps whole statements inside
 each block (balanced braces, an `if` with its `else`), lining up each
 variant's events by content, so only a section header such as
-`event event_01` / `event event_04` stands alone in a block. `arklay scd build 103.akscr --room 6031 --out
-room/6031/room.scd` compiles one variant; a script without a variant must not use
-`#if`. The merged scripts are checked in under `games/re1/room/` and are
+`event event_01` / `event event_04` stands alone in a block.
+`arklay scd build 1030/room.akscr --room 6031 --out room/6031/room.scd`
+compiles one variant; a script without a variant must not use `#if`. The merged scripts are checked in under `games/re1/room/` and are
 maintained by hand from there: the real-data tests build each one for every
 variant and compare it with the original RDT's bytecode, so a rename or
 restructure is safe as long as the `AUTHENTIC` build still matches.

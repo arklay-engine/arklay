@@ -1,7 +1,7 @@
 //! `.akscr` checks over every room of a converted pack.
 //!
 //! Needs `ARKLAY_RE1_ROOT` and `ARKLAY_RE1_PACK`; without them the tests
-//! skip. The checked-in `games/re1/room/<room>.akscr` scripts are edited by
+//! skip. The checked-in `games/re1/room/<room>0/room.akscr` scripts are edited by
 //! hand: built as `AUTHENTIC` for each variant they must give that RDT's
 //! init, main and event streams byte for byte, for the pack's region
 //! (`#if USA`, `#if JPN` or `#if EUR`), and their fixed build must compile.
@@ -104,10 +104,6 @@ fn original_rooms(pack: &Pack) -> BTreeMap<u16, Scripts> {
     rooms
 }
 
-/// Rooms only the French and German releases ship (USA and JPN have no RDT
-/// for them), so a pack of another region has no room for their scripts.
-const EUR_ONLY_ROOMS: [&str; 2] = ["313", "412"];
-
 #[test]
 #[ignore = "requires a real RE1 installation via ARKLAY_RE1_ROOT and ARKLAY_RE1_PACK"]
 fn checked_in_room_scripts_build_the_original_bytecode() {
@@ -127,7 +123,7 @@ fn checked_in_room_scripts_build_the_original_bytecode() {
     for (&id, original) in &originals {
         let base = akscr::merged_id(id);
         bases.insert(format!("{base:03x}"));
-        let script = checked_in.join(format!("{base:03x}.akscr"));
+        let script = checked_in.join(akscr::room_script_file(base));
         let text = std::fs::read_to_string(&script)
             .unwrap_or_else(|error| panic!("{}: {error}", script.display()));
         let compiled: Vec<Scripts> = regions
@@ -152,7 +148,8 @@ fn checked_in_room_scripts_build_the_original_bytecode() {
         let (base, compiled) = &builds[&id];
         assert_identical(
             &format!(
-                "{base:03x}.akscr as {id:04X} for the {name} region, which {} of {} RDTs fit",
+                "{} as {id:04X} for the {name} region, which {} of {} RDTs fit",
+                akscr::room_script_file(*base),
                 fits[region],
                 originals.len()
             ),
@@ -162,17 +159,19 @@ fn checked_in_room_scripts_build_the_original_bytecode() {
     }
 
     for entry in std::fs::read_dir(&checked_in).unwrap() {
-        let path = entry.unwrap().path();
-        if path
-            .extension()
-            .is_none_or(|extension| extension != "akscr")
-        {
+        let path = entry.unwrap().path().join(akscr::ROOM_SCRIPT_FILE);
+        if !path.is_file() {
             continue;
         }
-        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let folder = path
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy();
+        let stem = folder.strip_suffix('0').unwrap().to_string();
         assert!(
-            bases.contains(&stem)
-                || (name != akscr::Region::Eur && EUR_ONLY_ROOMS.contains(&stem.as_str())),
+            bases.contains(&stem),
             "{} has no room in the pack",
             path.display()
         );
@@ -317,9 +316,8 @@ fn original_room_scripts_are_the_installed_rdt_bytecode() {
         if let Some(rdt) = installed_rdt(&root, id) {
             assert_identical(&entry, &reader::parse(&rdt).unwrap(), &original);
         }
-        let text = std::fs::read_to_string(room_dir().join(format!(
-            "{:03x}.akscr",
-            akscr::merged_id(u16::try_from(id.rdt_number()).unwrap())
+        let text = std::fs::read_to_string(room_dir().join(akscr::room_script_file(
+            akscr::merged_id(u16::try_from(id.rdt_number()).unwrap()),
         )))
         .unwrap();
         let authentic = akscr::Region::ALL

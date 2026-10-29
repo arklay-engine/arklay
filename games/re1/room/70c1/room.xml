@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="751" g="847" b="977"/>
+  <lights>
+    <light x="6908" y="-2000" z="3837" r="255" g="255" b="255" kind="0" radius="13761"/>
+    <light x="6558" y="-2950" z="16287" r="255" g="255" b="255" kind="0" radius="13321"/>
+    <light x="0" y="347" z="0" r="230" g="230" b="230" kind="1" radius="9115"/>
+  </lights>
+  <cameras>
+    <camera x="2556" y="-2448" z="6894" lookX="9270" lookY="-2448" lookZ="19584" roll="0" fov="207">
+      <maskGroup originX="137" originY="-5" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="471" blend="2" colorMode="1" size="8"/>
+        <sprite u="0" v="8" x="128" y="136" depthData="471" blend="2" colorMode="1" size="8"/>
+        <sprite u="0" v="16" x="128" y="144" depthData="471" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="40" x="128" y="168" depthData="471" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="487" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="16" x="136" y="144" depthData="487" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="40" x="136" y="168" depthData="487" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="503" blend="2" colorMode="1" width="24" height="8"/>
+        <sprite u="16" v="8" x="144" y="136" depthData="503" blend="2" colorMode="1" width="24" height="8"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="503" blend="2" colorMode="1" size="24"/>
+        <sprite u="16" v="40" x="144" y="168" depthData="493" blend="2" colorMode="1" size="24"/>
+      </maskGroup>
+    </camera>
+    <camera x="2520" y="-2448" z="17100" lookX="9810" lookY="-2448" lookZ="3384" roll="0" fov="207">
+      <maskGroup originX="-102" originY="-5" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="497" blend="2" colorMode="1" size="8"/>
+        <sprite u="0" v="8" x="128" y="136" depthData="497" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="0" v="24" x="128" y="152" depthData="481" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="48" x="128" y="176" depthData="481" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="483" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="16" x="136" y="144" depthData="483" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="40" x="136" y="168" depthData="483" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="471" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="8" x="144" y="136" depthData="467" blend="2" colorMode="1" width="16" height="24"/>
+        <sprite u="16" v="32" x="144" y="160" depthData="467" blend="2" colorMode="1" width="16" height="32"/>
+      </maskGroup>
+      <maskGroup originX="-62" originY="-5" texBits="0x7800">
+        <sprite u="40" v="0" x="128" y="128" depthData="571" blend="2" colorMode="1" width="24" height="8"/>
+        <sprite u="64" v="0" x="152" y="128" depthData="617" blend="2" colorMode="1" size="8"/>
+        <sprite u="40" v="8" x="128" y="136" depthData="571" blend="2" colorMode="1" width="24" height="16"/>
+        <sprite u="64" v="8" x="152" y="136" depthData="616" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="24" x="128" y="152" depthData="571" blend="2" colorMode="1" width="16" height="24"/>
+        <sprite u="56" v="24" x="144" y="152" depthData="618" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="24" x="152" y="152" depthData="617" blend="2" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+      <maskGroup originX="115" originY="30" texBits="0x7800">
+        <sprite u="0" v="64" x="128" y="128" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="64" x="136" y="128" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="16" v="64" x="144" y="128" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="24" v="64" x="152" y="128" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="0" v="72" x="128" y="136" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="72" x="136" y="136" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="16" v="72" x="144" y="136" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="24" v="72" x="152" y="136" depthData="1000" blend="2" colorMode="1" size="8"/>
+      </maskGroup>
+    </camera>
+    <camera x="4662" y="-7434" z="9036" lookX="5544" lookY="-486" lookZ="4500" roll="0" fov="207">
+      <maskGroup originX="57" originY="-96" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="451" blend="2" colorMode="1" size="16"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="447" blend="2" colorMode="1" width="24" height="16"/>
+        <sprite u="0" v="16" x="128" y="144" depthData="490" blend="2" colorMode="1" size="16"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="475" blend="2" colorMode="1" width="24" height="16"/>
+        <sprite u="0" v="32" x="128" y="160" depthData="524" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="32" x="144" y="160" depthData="515" blend="2" colorMode="1" width="24" height="8"/>
+        <sprite u="0" v="40" x="128" y="168" depthData="546" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="40" x="144" y="168" depthData="534" blend="2" colorMode="1" width="24" height="8"/>
+        <sprite u="0" v="48" x="128" y="176" depthData="568" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="0" v="64" x="128" y="192" depthData="628" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="48" x="136" y="176" depthData="580" blend="2" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="48" x="144" y="176" depthData="568" blend="2" colorMode="1" width="16" height="24"/>
+      </maskGroup>
+      <maskGroup originX="69" originY="-18" texBits="0x7800">
+        <sprite u="8" v="72" x="136" y="128" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="16" v="72" x="144" y="128" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="24" v="72" x="152" y="128" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="0" v="80" x="128" y="136" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="80" x="136" y="136" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="16" v="80" x="144" y="136" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="80" x="160" y="136" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="0" v="88" x="128" y="144" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="88" x="136" y="144" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="88" x="152" y="144" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="40" v="88" x="168" y="144" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="0" v="96" x="128" y="152" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="96" x="136" y="152" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="96" x="152" y="152" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="40" v="96" x="168" y="152" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="0" v="104" x="128" y="160" depthData="1000" blend="2" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="104" x="136" y="160" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="104" x="152" y="160" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="40" v="104" x="168" y="160" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="112" x="136" y="168" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="16" v="112" x="144" y="168" depthData="1000" blend="2" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="112" x="160" y="168" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="8" v="120" x="136" y="176" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="16" v="120" x="144" y="176" depthData="1000" blend="2" colorMode="1" size="8"/>
+        <sprite u="24" v="120" x="152" y="176" depthData="1000" blend="2" colorMode="1" size="8"/>
+      </maskGroup>
+    </camera>
+    <camera x="7848" y="-954" z="6048" lookX="3888" lookY="-1548" lookZ="4680" roll="0" fov="207"/>
+    <camera x="19170" y="-108" z="2286" lookX="29502" lookY="-4968" lookZ="6084" roll="0" fov="207"/>
+    <camera x="25128" y="-1206" z="2088" lookX="16848" lookY="-2412" lookZ="4284" roll="0" fov="207"/>
+    <camera x="15606" y="-4770" z="2250" lookX="17082" lookY="-2412" lookZ="2970" roll="0" fov="207"/>
+    <camera x="16002" y="-2916" z="2772" lookX="25722" lookY="-6318" lookZ="4176" roll="0" fov="207"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="600" z0="1299" x1="700" z1="22900" x2="11900" z2="23100" x3="12000" z3="799"/>
+      <switch zoneIndex="1" to="1" x0="0" z0="10780" x1="0" z1="12904" x2="13700" z2="12700" x3="13800" z3="10404"/>
+      <switch zoneIndex="2" to="5" x0="14800" z0="300" x1="14900" z1="7000" x2="21200" z2="7000" x3="21200" z3="300"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="3" to="9" x0="600" z0="399" x1="500" z1="22383" x2="11000" z2="21800" x3="11000" z3="299"/>
+      <switch zoneIndex="4" to="0" x0="0" z0="13105" x1="0" z1="15102" x2="14300" z2="15104" x3="13500" z3="13005"/>
+      <switch zoneIndex="5" to="2" x0="0" z0="6499" x1="100" z1="8000" x2="13200" z2="8301" x3="12286" z3="6402"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="6" to="9" x0="0" z0="200" x1="0" z1="23301" x2="13401" z2="22801" x3="12401" z3="300"/>
+      <switch zoneIndex="7" to="1" x0="13002" z0="10205" x1="12602" z1="8605" x2="0" z2="8205" x3="0" z3="10505"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="8" to="9" x0="800" z0="9056" x1="12590" z1="9344" x2="11701" z2="834" x3="31" z3="1131"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="9" to="9" x0="12900" z0="700" x1="13000" z1="6800" x2="26600" z2="6700" x3="26500" z3="700"/>
+      <switch zoneIndex="10" to="5" x0="19500" z0="1300" x1="20600" z1="6200" x2="22300" z2="6200" x3="21500" z3="1100"/>
+    </switches>
+    <switches from="5">
+      <view zoneIndex="11" to="9" x0="13300" z0="7000" x1="25905" z1="7000" x2="25906" z2="400" x3="13200" z3="400"/>
+      <switch zoneIndex="12" to="4" x0="22500" z0="6400" x1="25600" z1="6400" x2="25500" z2="600" x3="21700" z3="600"/>
+    </switches>
+    <switches from="6">
+      <view zoneIndex="13" to="9" x0="13400" z0="1200" x1="13301" z1="6399" x2="26100" z2="6600" x3="26001" z3="1199"/>
+      <switch zoneIndex="14" to="5" x0="17500" z0="5900" x1="18700" z1="5900" x2="18600" z2="1700" x3="17400" z3="1600"/>
+    </switches>
+    <switches from="7">
+      <view zoneIndex="15" to="9" x0="12800" z0="800" x1="13100" z1="7400" x2="25502" z2="7500" x3="26201" z3="999"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="7776" cellZ="9036">
+    <quadrant index="0">
+      <box xMax="14220" zMax="22896" xMin="54" zMin="20952" shape="1" cf1="true" cf2="true"/>
+      <box xMax="14418" zMax="22626" xMin="10926" zMin="54" shape="1" cf1="true" cf2="true"/>
+      <box xMax="13176" zMax="12510" xMin="9630" zMin="9342" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="14220" zMax="22896" xMin="54" zMin="20952" shape="1" cf1="true" cf2="true"/>
+      <box xMax="2052" zMax="23058" xMin="72" zMin="486" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="14418" zMax="22626" xMin="10926" zMin="54" shape="1" cf1="true" cf2="true"/>
+      <box xMax="14292" zMax="2052" xMin="0" zMin="162" shape="1" cf1="true" cf2="true"/>
+      <box xMax="13176" zMax="12510" xMin="9630" zMin="9342" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18684" zMax="4446" xMin="16542" zMin="2808" shape="1" cf1="true" cf2="true"/>
+      <box xMax="27972" zMax="7884" xMin="25218" zMin="0" shape="1" cf2="true"/>
+      <box xMax="27720" zMax="1800" xMin="11502" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="27738" zMax="7938" xMin="11340" zMin="5346" shape="1" cf1="true" cf2="true"/>
+      <box xMax="27648" zMax="4140" xMin="23940" zMin="396" shape="1" cf1="true" cf2="true"/>
+      <box xMax="27630" zMax="7956" xMin="24138" zMin="4680" shape="1" cf1="true" cf2="true"/>
+      <box xMax="12384" zMax="4104" xMin="10026" zMin="900" shape="1" cf1="true" cf2="true"/>
+      <box xMax="12402" zMax="2844" xMin="9126" zMin="936" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="14292" zMax="2052" xMin="0" zMin="162" shape="1" cf1="true" cf2="true"/>
+      <box xMax="2052" zMax="23058" xMin="72" zMin="486" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1044" zMax="4428" xMin="306" zMin="1710" shape="1" cf2="true"/>
+      <box xMax="4554" zMax="3186" xMin="0" zMin="90" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="2">
+    <footstep x="0" z="0" width="12700" height="0x5B04" sound="0x002A"/>
+    <footstep x="12700" z="300" width="14100" height="0x1AF4" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="save_name">Hall 1F</string>
+      <string key="0">Someone has moved this\ntombstone.{scroll 2}</string>
+      <string key="1">It's too dark to see \nanything.{scroll 2}</string>
+      <string key="2">It's too dark to see.Will\nyou jump down?{scroll 1}{branch 0 1 0}There's a rope. Will you\ndescend it?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="3">There's a rope. Will you\ndescend it?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="4">{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}\n{scroll 2}{timed 130}</string>
+      <string key="7">{scroll 0}\n{scroll 2}{timed 120}</string>
+      <string key="8">{scroll 0}\n{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}\n{scroll 2}{timed 160}</string>
+      <string key="10">{scroll 0}\n{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}\n{scroll 2}{clear 70}{scroll 0}\n{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}\n{scroll 2}{clear 85}{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="14">{scroll 0}\n{scroll 2}{clear 80}{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}\n{scroll 2}{timed 50}</string>
+      <string key="16">{scroll 0}\n{scroll 2}{clear 95}{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\n{scroll 2}{clear 65}{scroll 0}\n{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}\n{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="21">{branch 2 9 22}«\x17</string>
+      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 22}«\x17</string>
+      <string key="23">There's a switch below.\nWill you push it?{scroll 1}{branch 0 1 0}{branch 2 9 25}</string>
+      <string key="24">{branch 2 9 25}</string>
+      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 25}</string>
+      <string key="26">There's a rope. Will you\nclimb it?{scroll 1}{branch 0 1 0}There's a ladder. Will\nyou descend it?{scroll 1}{branch 0 1 0}A hole opens in the\nfireplace.{scroll 2}</string>
+      <string key="27">There's a ladder. Will\nyou descend it?{scroll 1}{branch 0 1 0}A hole opens in the\nfireplace.{scroll 2}</string>
+      <string key="28">A hole opens in the\nfireplace.{scroll 2}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      <string key="0">\n 基の下にずらしたような跡がある{scroll 2}</string>
+      <string key="1">\n    暗くてよく見えない{scroll 2}</string>
+      <string key="2">    暗くてよく見えない\nとび下りますか?{scroll 1}{branch 0 1 0}   ロープが下ろされている\n下りますか?{scroll 1}{branch 0 1 0}{scroll 0}\n  めずらしいものでもあるのか{scroll 2}{timed 95}</string>
+      <string key="3">   ロープが下ろされている\n下りますか?{scroll 1}{branch 0 1 0}{scroll 0}\n  めずらしいものでもあるのか{scroll 2}{timed 95}</string>
+      <string key="4">{scroll 0}\n  めずらしいものでもあるのか{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}\n    よく見えないんだけど{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}     下りてみるか?\n     ロープならあるぜ{scroll 2}{timed 130}</string>
+      <string key="7">{scroll 0}\n   そう やってみようかしら{scroll 2}{timed 120}</string>
+      <string key="8">{scroll 0}\n       待ってな{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}   そういえばリチャードから\n   通信機をあずかってたんだ{scroll 2}{timed 160}</string>
+      <string key="10">{scroll 0}\n      リチャード…{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}\n     おまえが持ってろ{scroll 2}{clear 70}{scroll 0}\n       いくぞ{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}\n    ちょっと 冗談でしょ{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}\n   やっちまった すまんジル{scroll 2}{clear 85}{scroll 0}   待っててくれ すぐ別の\n   ロープを取ってくる{scroll 2}{timed 90}</string>
+      <string key="14">{scroll 0}\n     いるか ジル?{scroll 2}{clear 80}{scroll 0}\n     ロープを下ろすぞ{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}\n    すまなかった ジル{scroll 2}{timed 50}</string>
+      <string key="16">{scroll 0}\n   どうなる事かと思ったわ{scroll 2}{clear 95}{scroll 0}\n   すまん うっかりしてた{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\n     本当に大丈夫?{scroll 2}{clear 65}{scroll 0}\n    具合でも悪いんじゃ…{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}\n     いや 心配無用だ{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}\n  そうだ これを見つけたんだ{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}\n  ありがとう もらっておくわ{scroll 2}{timed 90}</string>
+      <string key="21"> 何かが刻んである よみますか?{branch 2 9 22}\x09、</string>
+      <string key="22">わがよき\nそしてこの館を作りし者 トレヴァー{scroll 2}{clear 0}自らが生み出したものの手にかかり\nここの久のねむりにつく{scroll 2}{clear 0}1967年12月5日\n     オズウェル二E二スペンサー{scroll 2}{clear 0} もう一度よみますか?{branch 2 9 22}\x09、</string>
+      <string key="23"> 下にスイッチのような物がある\n押しますか{scroll 1}{branch 0 1 0} 何かが刻んである よみますか?{branch 2 9 25}</string>
+      <string key="24"> 何かが刻んである よみますか?{branch 2 9 25}</string>
+      <string key="25">わがよき\nそしてこの館を作りし者 トレヴァー{scroll 2}{clear 0}自らが生み出したものの手にかかり\nここの久のねむりにつく{scroll 2}{clear 0}1967年12月5日\n     オズウェル二E二スペンサー{scroll 2}{clear 0} もう一度よみますか?{branch 2 9 25}</string>
+      <string key="26">   ロープが下ろされている\n上りますか?{scroll 1}{branch 0 1 0}      ハシゴがある\n下りますか?{scroll 1}{branch 0 1 0}\n ぽっかりとダンロの穴が開いている{scroll 2}</string>
+      <string key="27">      ハシゴがある\n下りますか?{scroll 1}{branch 0 1 0}\n ぽっかりとダンロの穴が開いている{scroll 2}</string>
+      <string key="28">\n ぽっかりとダンロの穴が開いている{scroll 2}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Hall RdC</string>
+      <string key="0">Cette pierre tombale a été\ndéplacée.{scroll 2}</string>
+      <string key="1">Il fait trop sombre pour\nvoir quoi que ce soit.{scroll 2}</string>
+      <string key="2">Il fait trop sombre.\nDescendre?{scroll 1}{branch 0 6 0}</string>
+      <string key="3">Il y a une corde.\nDescendre?{scroll 1}{branch 0 6 0}</string>
+      <string key="4">{scroll 0}Jill! Tu as trouvé quelque \nchose d'intéressant?{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}Oui, mais je n'arrive pas à \nbien voir...{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}Et si tu descendais pour y \nregarder de plus près? {scroll 2}{clear 70}{scroll 0}\nJ'ai une corde.{scroll 2}{timed 61}</string>
+      <string key="7">{scroll 0}\nOh, c'est vrai...?{scroll 2}{clear 40}{scroll 0}Dans ce cas, je vais \nl'utiliser pour descendre...{scroll 2}{timed 80}</string>
+      <string key="8">{scroll 0}\nAttends!{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}Ah, oui.\nRichard m'a donné ça.{scroll 2}{clear 80}{scroll 0}Cette radio peut te sortir \nd'un mauvais pas.{scroll 2}{timed 80}</string>
+      <string key="10">{scroll 0}\nRichard?{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}Elle te sera plus utile à toi \nqu'à moi. {scroll 2}{clear 70}{scroll 0}\nPrête?{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}\nEh! Que se passe-t-il?{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}Voilà, c'est malin! Désolé, \nJill. {scroll 2}{clear 77}{scroll 0}Attends! Je reviens tout de \nsuite avec une autre corde!{scroll 2}{timed 98}</string>
+      <string key="14">{scroll 0}\nEh! Tu es là, Jill? {scroll 2}{clear 80}{scroll 0}\nAttrape la corde!{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}\nDésolé, Jill.{scroll 2}{timed 43}</string>
+      <string key="16">{scroll 0}Je ne savais pas que ça\nallait m'arriver!{scroll 2}{clear 95}{scroll 0}Désolé. Je n'ai pas fait \nsuffisamment attention.{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\nEst-ce que ça va, Barry? {scroll 2}{clear 65}{scroll 0}\nPas trop fatigué?{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}\nNon, ça va. Ne t'inquiète pas.{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}Jill... \nJ'ai trouvé quelque chose.{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}\nMerci. Je le prends alors.{scroll 2}{timed 90}</string>
+      <string key="21">{branch 2 8 22}\x08\x17</string>
+      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
+      <string key="23">Il y a un bouton dessous.\nAppuyer dessus?{scroll 1}{branch 0 6 0}</string>
+      <string key="24">{branch 2 8 25}</string>
+      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
+      <string key="26">Il y a une corde.\nMonter?{scroll 1}{branch 0 6 0}</string>
+      <string key="27">Il y a une échelle.\nDescendre?{scroll 1}{branch 0 6 0}</string>
+      <string key="28">Un trou s'ouvre dans la\ncheminée.{scroll 2}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">Irgendjemand hat diesen\nGrabstein verschoben.{scroll 2}</string>
+      <string key="1">Es ist zu dunkel,\num irgendetwas zu erkennen.{scroll 2}</string>
+      <string key="2">Es ist so dunkel, man sieht nichts.\nHinunterspringen?{scroll 1}{branch 0 6 0}</string>
+      <string key="3">\nDa hängt ein Seil.{clear 0}Möchten Sie hinunterklettern?{scroll 1}{branch 0 6 0}</string>
+      <string key="4">{scroll 0}Jill! Hast du irgend etwas\nInteressantes gefunden?{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}Ja. Aber ich kann hier\nkaum etwas sehen...{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}Warum gehst du nicht hinunter\nund überprüfst es selbst?{scroll 2}{clear 70}{scroll 0}\nIch habe hier ein Seil.{scroll 2}{timed 61}</string>
+      <string key="7">{scroll 0}\nOh, hast du?{scroll 2}{clear 40}{scroll 0}Gut, dann werde ich am Seil\nden Abstieg versuchen.{scroll 2}{timed 80}</string>
+      <string key="8">{scroll 0}\nWarte noch!{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}Ach ja.\nRichard gab mir das hier.{scroll 2}{clear 80}{scroll 0}Dieses Funkgerät ist\nein Andenken von ihm.{scroll 2}{timed 80}</string>
+      <string key="10">{scroll 0}\nRichard...{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}Das wird für dich viel\nnützlicher sein als für mich-{scroll 2}{clear 70}{scroll 0}\nbereit zu gehen?{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}Hey!\nWas ist jetzt los?{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}Ach, ich hab's verpatzt!\nTut mir leid, Jill.{scroll 2}{clear 77}{scroll 0}Warte! Ich werde gehen\nund ein anderes Seil holen!{scroll 2}{timed 98}</string>
+      <string key="14">{scroll 0}Hey!\nBist du da, Jill?{scroll 2}{clear 80}{scroll 0}\nSchnapp dir das Seil!{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}\nTut mir Leid, Jill.{scroll 2}{timed 43}</string>
+      <string key="16">{scroll 0}Ich habe nicht erwartet,\ndass das passieren würde!{scroll 2}{clear 95}{scroll 0}Pardon.\nIch hab nicht aufgepasst.{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\nBist du okay, Barry?{scroll 2}{clear 65}{scroll 0}Vielleicht wirst du\nlangsam müde.{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}Nein, Ich bin schon okay.\nKeine Sorge.{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}Jill,\nIch habe etwas gefunden.{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}Ich danke dir.\nIch werde es nehmen.{scroll 2}{timed 90}</string>
+      <string key="21">{branch 2 8 22}\x08\x17</string>
+      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
+      <string key="23">Darunter ist ein Schalter.\nMöchten Sie ihn betätigen?{scroll 1}{branch 0 6 0}</string>
+      <string key="24">{branch 2 8 25}</string>
+      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
+      <string key="26">\nDa hängt ein Seil.{clear 0}Möchten Sie hinaufklettern?{scroll 1}{branch 0 6 0}</string>
+      <string key="27">\nDa ist eine Leiter.{clear 0}Möchten Sie hinuntersteigen?{scroll 1}{branch 0 6 0}</string>
+      <string key="28">\nIm Kamin ist eine Öffnung.{scroll 2}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Atrio 1P</string>
+      <string key="0">La lapide è stata spostata.{scroll 2}</string>
+      <string key="1">È troppo buio per vedere \nqualcosa.{scroll 2}</string>
+      <string key="2">È troppo buio per vedere.\nVuoi scendere?{scroll 1}{branch 0 6 0}</string>
+      <string key="3">C'è una corda.\nVuoi scendere?{scroll 1}{branch 0 6 0}</string>
+      <string key="4">{scroll 0}Jill! Hai trovato qualcosa \ndi interessante?{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}Si, ma non riesco a vedere \nbene.{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}Che ne dici di calarti \ne controllare? {scroll 2}{clear 70}{scroll 0}\nHo con me una corda.{scroll 2}{timed 61}</string>
+      <string key="7">{scroll 0}\nDavvero?{scroll 2}{clear 40}{scroll 0}Allora proverò a scendere \nusando la corda.{scroll 2}{timed 80}</string>
+      <string key="8">{scroll 0}\nAspetta!{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}Ah, si.\nRichard mi ha dato questa.{scroll 2}{clear 80}{scroll 0}Questa radio può tirarti fuori \nda una brutta situazione.{scroll 2}{timed 80}</string>
+      <string key="10">{scroll 0}\nRichard?{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}Sarà più utile a te \nche a me. {scroll 2}{clear 70}{scroll 0}\nPronto?{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}\nEhi! Che succede?{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}Stavolta l'ho fatta grossa! \nScusa, Jill. {scroll 2}{clear 77}{scroll 0}Aspettami! Vado a prendere \nun'altra corda!{scroll 2}{timed 98}</string>
+      <string key="14">{scroll 0}Ehi! Sei ancora \nlà, Jill? {scroll 2}{clear 80}{scroll 0}\nAggrappati alla corda!{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}\nScusami, Jill.{scroll 2}{timed 43}</string>
+      <string key="16">{scroll 0}Non ce lo potevamo \naspettare.{scroll 2}{clear 95}{scroll 0}Scusa. Sono stato parecchio \nsbadato.{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\nStai bene, Barry? {scroll 2}{clear 65}{scroll 0}\nForse sei stanco.{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}No, va tutto bene. \nNon preoccuparti.{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}Jill... \nHo trovato questo.{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}\nGrazie. Lo porto con me.{scroll 2}{timed 90}</string>
+      <string key="21">{branch 2 8 22}\x08\x17</string>
+      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
+      <string key="23">C'è un bottone.\nVuoi premerlo?{scroll 1}{branch 0 6 0}</string>
+      <string key="24">{branch 2 8 25}</string>
+      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
+      <string key="26">C'è una corda.\nVuoi salire?{scroll 1}{branch 0 6 0}</string>
+      <string key="27">C'è una scala.\nVuoi scendere?{scroll 1}{branch 0 6 0}</string>
+      <string key="28">C'è un buco nel \ncamino.{scroll 2}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">Alguien ha movido esta\nlápida...{scroll 2}</string>
+      <string key="1">Está demasiado oscuro, \nno se ve nada...{scroll 2}</string>
+      <string key="2">Está oscuro... ¿Quieres\nsaltar abajo?{scroll 1}{branch 0 6 0}</string>
+      <string key="3">Hay una cuerda... ¿Quieres\nbajar por ella?{scroll 1}{branch 0 6 0}</string>
+      <string key="4">{scroll 0}Jill, ¿has encontrado\nalgo interesante?{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}Sí, pero no puedo\nver demasiado bien.{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}¿Qué te parece bajar\na verlo tú misma?{scroll 2}{clear 70}{scroll 0}\nTengo una cuerda.{scroll 2}{timed 61}</string>
+      <string key="7">{scroll 0}¿De verdad? Bueno, intentaré\nbajar con la cuerda.{scroll 2}{timed 120}</string>
+      <string key="8">{scroll 0}\nEspera.{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}\nSí, Richard me dio ésto.{scroll 2}{clear 80}{scroll 0}\nLe estaba guardando su radio.{scroll 2}{timed 80}</string>
+      <string key="10">{scroll 0}\n¡Richard!{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}Te será más útil a\nti que a mí.{scroll 2}{clear 70}{scroll 0}\n¿Lista?{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}\n¡Eh! ¿Qué pasa?{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}Ahora sí que la he liado.\nLo siento, Jill.{scroll 2}{clear 77}{scroll 0}Espera, iré a conseguir\notra cuerda.{scroll 2}{timed 98}</string>
+      <string key="14">{scroll 0}\n¡Oye! Jill, ¿estás ahí?{scroll 2}{clear 80}{scroll 0}\n¡Coge la cuerda!{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}\nLo siento, Jill.{scroll 2}{timed 43}</string>
+      <string key="16">{scroll 0}No sabía que fuera\na pasar eso.{scroll 2}{clear 95}{scroll 0}Lo siento, he sido\nmuy descuidado.{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\nBarry, ¿estás bien?{scroll 2}{clear 65}{scroll 0}\nQuizás estas cansando.{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}No, estoy bien,\nno te preocupes.{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}\nJill, he encontrado algo.{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}Gracias,\nme lo llevaré.{scroll 2}{timed 90}</string>
+      <string key="21">{branch 2 8 22}\x08\x17</string>
+      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
+      <string key="23">Abajo hay un interruptor...\n¿Lo aprietas?{scroll 1}{branch 0 6 0}</string>
+      <string key="24">{branch 2 8 25}</string>
+      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
+      <string key="26">Hay una cuerda... ¿Quieres\nsubir por ella?{scroll 1}{branch 0 6 0}</string>
+      <string key="27">Hay una escalera...\n¿quieres bajar?{scroll 1}{branch 0 6 0}</string>
+      <string key="28">Se abre un agujero\nen la chimenea...{scroll 2}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Зал 1-эт.</string>
+      <string key="0">Кто-то сдвинул\nэту плиту.{scroll 2}</string>
+      <string key="1">Слишком темно,\nничего не видно.{scroll 2}</string>
+      <string key="2">Слишком темно, ничего не видно.\nСпрыгнуть вниз?{scroll 1}{branch 0 1 0}Здесь есть веревка.\nСпуститься вниз?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="3">Здесь есть веревка.\nСпуститься вниз?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="4">{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}\n{scroll 2}{timed 130}</string>
+      <string key="7">{scroll 0}\n{scroll 2}{timed 120}</string>
+      <string key="8">{scroll 0}\n{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}\n{scroll 2}{timed 160}</string>
+      <string key="10">{scroll 0}\n{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}\n{scroll 2}{clear 70}{scroll 0}\n{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}\n{scroll 2}{clear 85}{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="14">{scroll 0}\n{scroll 2}{clear 80}{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}\n{scroll 2}{timed 50}</string>
+      <string key="16">{scroll 0}\n{scroll 2}{clear 95}{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\n{scroll 2}{clear 65}{scroll 0}\n{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}\n{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}\n{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}\n{scroll 2}{timed 90}</string>
+      <string key="21">{branch 2 9 22}«\x17</string>
+      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 22}«\x17</string>
+      <string key="23">Здесь кнопка.\nНажать её?{scroll 1}{branch 0 1 0}{branch 2 9 25}</string>
+      <string key="24">{branch 2 9 25}</string>
+      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 25}</string>
+      <string key="26">Здесь есть веревка.\nПодняться по ней?{scroll 1}{branch 0 1 0}Здесь лестница.\nСпуститься по ней?{scroll 1}{branch 0 1 0}В камине открывается\nуглубление.{scroll 2}</string>
+      <string key="27">Здесь лестница.\nСпуститься по ней?{scroll 1}{branch 0 1 0}\n\nВ камине дыра.{scroll 2}</string>
+      <string key="28">\nВ камине дыра.{scroll 2}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Pääaula 1 krs</string>
+      <string key="0">Joku on liikuttanut tätä\nhautakiveä...{scroll 2}</string>
+      <string key="1">Liian pimeää nähdäkseen mitään...{scroll 2}</string>
+      <string key="2">Liian pimeää nähdäkseen mitään...\nHyppäätkö alas?{scroll 1}{branch 0 6 0}</string>
+      <string key="3">Siinä on köysi...\nLaskeudutko alas?{scroll 1}{branch 0 6 0}</string>
+      <string key="4">{scroll 0}Jill, oletko löytänyt mitään\nmielenkiintoista?{scroll 2}{timed 95}</string>
+      <string key="5">{scroll 0}Kyllä, mutta en nää tuonne kovin\nhyvin.{scroll 2}{timed 90}</string>
+      <string key="6">{scroll 0}Mitä jos menisit alas katsomaan\ntarkemmin?{scroll 2}{clear 70}{scroll 0}Minulla on köyttä mukanani.{scroll 2}{timed 61}</string>
+      <string key="7">{scroll 0}Ai onko? Laskeudun sitten sen\navulla alas.{scroll 2}{timed 120}</string>
+      <string key="8">{scroll 0}Odota.{scroll 2}{timed 40}</string>
+      <string key="9">{scroll 0}Richard antoi tämän minulle.{scroll 2}{clear 80}{scroll 0}Tämä radio on muisto hänestä.{scroll 2}{timed 80}</string>
+      <string key="10">{scroll 0}Richard!{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}Tästä on enemmän hyötyä sinulle\nkuin minulle.{scroll 2}{clear 70}{scroll 0}Oleko valmis?{scroll 2}{timed 40}</string>
+      <string key="12">{scroll 0}Hei! Mitä ihmettä?{scroll 2}{timed 70}</string>
+      <string key="13">{scroll 0}Nyt tyrin pahemman kerran.\nAnteeksi, Jill.{scroll 2}{clear 77}{scroll 0}Odota, käyn hakemassa toisen\nköyden.{scroll 2}{timed 98}</string>
+      <string key="14">{scroll 0}Hei! Oletko siellä, Jill?{scroll 2}{clear 80}{scroll 0}Tartu köyteen!{scroll 2}{timed 70}</string>
+      <string key="15">{scroll 0}Olen pahoillani.{scroll 2}{timed 43}</string>
+      <string key="16">{scroll 0}En odottanut että noin pääsisi\nkäymään.{scroll 2}{clear 95}{scroll 0}Olin todella huolimaton,\nanteeksi.{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}Barry, onko kaikki hyvin?{scroll 2}{clear 65}{scroll 0}Ehkä olet uupunut.{scroll 2}{timed 65}</string>
+      <string key="18">{scroll 0}Olen kunnossa, älä huoli.{scroll 2}{timed 95}</string>
+      <string key="19">{scroll 0}Jill, löysin jotakin.{scroll 2}{timed 80}</string>
+      <string key="20">{scroll 0}Otan tämän, kiitos.{scroll 2}{timed 90}</string>
+      <string key="21">{branch 2 8 22}</string>
+      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}</string>
+      <string key="23">Alla on painike...\nPainatko sitä?{scroll 1}{branch 0 6 0}</string>
+      <string key="24">{branch 2 8 25}</string>
+      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
+      <string key="26">Siinä on köysi...\nKiipeätkö sitä?{scroll 1}{branch 0 6 0}</string>
+      <string key="27">Siinä on tikkaat...\nLaskeudutko niitä?{scroll 1}{branch 0 6 0}</string>
+      <string key="28">Takan perällä on aukko...{scroll 2}</string>
+    </language>
+  </strings>
+</room>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="0" g="0" b="0"/>
+  <lights>
+    <light x="0" y="0" z="0" r="0" g="0" b="0" kind="0" radius="0"/>
+    <light x="0" y="0" z="0" r="0" g="0" b="0" kind="0" radius="0"/>
+    <light x="0" y="0" z="0" r="0" g="0" b="0" kind="0" radius="0"/>
+  </lights>
+  <cameras>
+  </cameras>
+  <cameraSwitches>
+  </cameraSwitches>
+  <collision cellX="0" cellZ="0">
+    <quadrant index="0">
+    </quadrant>
+    <quadrant index="1">
+    </quadrant>
+    <quadrant index="2">
+    </quadrant>
+    <quadrant index="3">
+    </quadrant>
+  </collision>
+  <walkZones>
+  </walkZones>
+  <footsteps count="0">
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">1F &gt; B1 ELEVATOR</string>
+      <string key="save_name">Hall 1F</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Hall RdC</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Atrio 1P</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Зал 1-эт.</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Pääaula 1 krs</string>
+    </language>
+  </strings>
+</room>

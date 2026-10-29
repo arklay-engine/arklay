@@ -1,0 +1,4 @@
+# The checked-in room definitions are embedded and packed byte for byte, and
+# must match the room XML writer's output, so they keep LF line endings on
+# every platform.
+games/re1/room/**/*.xml text eol=lf
