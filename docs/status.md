@@ -3,8 +3,9 @@
 A milestone-by-milestone feature table, the parser/format coverage a fresh
 `arklay verify` reports, the verification-spine checklist with what is still
 missing, the known `TODO(parity)` sites and their dispositions, and the
-completed enemy milestone's closing state. Numbers below were measured on 2026-10-18 with the
-workspace install (`/path/to/re1`) and its converted pack.
+completed enemy milestone's closing state. RE1 numbers below were measured on
+2026-10-18 with the workspace install (`/path/to/re1`) and its converted pack;
+the RE2 rows were measured against the retail RE2 install on 2026-10-28.
 
 ## Milestones
 
@@ -43,6 +44,12 @@ workspace install (`/path/to/re1`) and its converted pack.
 | E11b Player death | The player damage/death state machine: the state-1 entry checks (the HP<0 death trigger with the back-shot facing flip and the cannot-die guard, the hit pre-emption into the generic reaction, the poison status drain), the death fall (state 3: the scream, the body clip, the slide, the blood pool that reuses the ground quad and grows 16 a frame for 148 frames, and the blocked state), the game-over machine (the 90-frame delay, the room-variant immediate fades for the two Yawn rooms and the water tank, the scripted-death rooms that skip the pool, the white-out and the black fade-out), and the DIED screen (`src/ui/death.rs`: the `died.tim` mirrored static backdrop, the fixed camera over the corpse with the 8-unit-per-frame spin, the 256-column sine-wavy strip with its exact phase/amplitude ramps, the black overlay ramp and the confirm skip), returning to the title; `ui/died.tim` is packed and `--ui death` joins the debug boot list | done |
 | E12 Enemy verification | The closing gate over the whole arc: the corpus spawn census re-measured across all 348 rooms with twenty-one scripted monster ids and zero script errors, the per-id real-asset boots (`enemy_real`), the real weapon/damage kills (`weapons_real`/`combat_real`), the shipped DIED-screen run (`death_real`), the NPC/actor/walk/entities/fire regression suites, `verify` on the reconverted pack (the new `emw`/`tmd` rows green, `tim` 124/124), and the status/deviations close-out | done |
 | M19 Config and Lua screens | The `arklay.toml` user config and the `<config dir>/save` default location; the general Lua screen surface (`on_init` + `api:register_save_screen`, the save list, save/load/remove, the pad edges, the screen sounds and immediate-mode drawing) and the Classic REbirth-style save/load screen as the `mods/crloadsave` mod | done |
+| R0 RE2 data | `convert-game` for the RE2 PC release: rooms, backgrounds, models, audio and films into `re2.akpak`; per-file format detection replaces the pack-wide dialect; `verify` classifies the RE2 formats | done |
+| R1 RE2 first light | RE2 rooms: the `rdt2` reader (cameras, RVD switch zones, SCA collision), letter stages A-G, the base manifest's `start_room`, the collision debug overlay, and the TeamX RE2 HD backgrounds | done |
+| R2 RE2 models | RE2 EMD, PLD and PLW through the shared model and animation path, the `--model` viewer, per-camera LIT lights, HD model skins, and the `re2` pack conventions | done |
+
+RE2 milestones R3 (script reader) onwards are still open and tracked by the
+milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
 shared `lib/**.lua` modules) behind the same sandbox as the mod hooks;
