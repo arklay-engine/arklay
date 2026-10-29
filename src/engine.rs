@@ -6016,8 +6016,8 @@ impl GameSession {
     /// The rects are the descriptors' own spans, `(-164,-130,328,38)` and
     /// `(-164,92,328,38)` in the 320x240 origin-centred space.
     ///
-    /// Only the 4:3 frame draws them: a wider aspect is already letterboxed
-    /// by its band, and bars over it would only eat into the scene.
+    /// Only the 4:3 frame draws them: a wider aspect already crops the frame
+    /// to a band, and bars over it would only eat into the scene.
     fn draw_screen_intensity_bars(&mut self) {
         let byte = self.sprite_anim_intensity as u8;
         if byte == 0 || !video::aspect().is_standard() {
