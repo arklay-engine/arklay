@@ -4669,6 +4669,24 @@ impl GameSession {
         if was_active && !self.game.message.active && action {
             self.swallow_action = true;
         }
+        self.step_pickup_view(pack, ui, was_active, was_yes_no);
+        // The original's state 4 runs `menu_draw_health_bar` after the viewer
+        // on every frame the viewer stays up, so the face and the EKG keep
+        // sweeping (and drawing from the shared `rand()`) under the model.
+        // The document reader is the panel-less state 8 and has no monitor.
+        if self
+            .pickup_view
+            .as_ref()
+            .is_some_and(|pickup| pickup.screen.is_some())
+        {
+            self.menu_signal(pack, "tick_monitor", ());
+        }
+    }
+
+    /// The pick-up viewer's phase machine for one frozen tick, after the
+    /// message window has advanced (`was_active` and `was_yes_no` describe the
+    /// message before it did).
+    fn step_pickup_view(&mut self, pack: &Pack, ui: UiInput, was_active: bool, was_yes_no: bool) {
         let Some(phase) = self.pickup_view.as_ref().map(|pickup| pickup.phase) else {
             return;
         };
@@ -27344,6 +27362,53 @@ off_0010:
         assert!(session.menu.is_none());
         assert!(!session.game.menu_pending());
         assert_eq!(session.game.item_view_request(), None);
+    }
+
+    /// The inventory panel under the pick-up viewer keeps its health monitor
+    /// running (the original's state 4 calls `menu_draw_health_bar` after the
+    /// viewer), so the ECG sweeps behind the model and the prompt (#272).
+    #[test]
+    fn a_ground_pickup_keeps_the_health_monitor_sweeping() {
+        let dir = TempDir::new();
+        let pack_path = message_pack(&dir);
+        let pack = Pack::open(&pack_path).unwrap();
+        let mut session =
+            GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
+                .unwrap();
+        place_player(&mut session);
+        settle_control(&mut session, &pack);
+        session.game.room_actions[1] = Some(item_room_action(1, ITEM_FIRST_AID_SPRAY, 1, 4));
+        session
+            .tick(&pack, UiInput::default(), pressed(), true)
+            .unwrap();
+        assert!(session.pickup_view.is_some(), "the flag opened the viewer");
+
+        let monitor = |session: &GameSession| {
+            let menu = session.menu.as_ref().unwrap();
+            (
+                menu.value("monitor"),
+                menu.value("monitor_left"),
+                menu.value("monitor_right"),
+            )
+        };
+        tick_until(&mut session, &pack, 300, "the monitor sweep", |session| {
+            monitor(session).0 == 1
+        });
+        // The sweep keeps moving under the prompt as well. The spans clamp to
+        // the EKG window, so give the head one whole sweep to show it.
+        tick_until(&mut session, &pack, 300, "the take prompt", |session| {
+            session.game.message.id == Some(game::MESSAGE_TAKE_PROMPT)
+        });
+        let before = monitor(&session);
+        tick_until(
+            &mut session,
+            &pack,
+            0x50,
+            "the sweep under the prompt",
+            |session| monitor(session) != before,
+        );
+        assert!(session.game.message.active, "the prompt is still up");
+        assert_eq!(monitor(&session).0, 1, "the monitor is sweeping");
     }
 
     /// The pause-menu / item-viewer exit restore: the opening scene's

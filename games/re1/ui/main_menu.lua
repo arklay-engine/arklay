@@ -14,6 +14,8 @@
 --   health monitor, and drawing from the shared `rand()`, there);
 -- * `update(api, input)`: one frame's input, with at most one of the pad
 --   edges set plus `start`;
+-- * `tick_monitor(api)`: one frame of the health monitor alone, run under
+--   the pick-up viewer;
 -- * `view_closed(api)`, `reselect(api)`, `move_cursor(api, cursor)`: the
 --   item viewer closed, re-read the item under the cursor, follow the item
 --   box's cursor;
@@ -272,6 +274,14 @@ function M.tick(api)
     end
     Bar.update(s.bar, api)
     resolve_pending(api)
+    publish(api)
+end
+
+--- One frame of the health monitor alone. The pick-up viewer (the
+--- original's state 4) runs `menu_draw_health_bar` after the viewer each
+--- frame, but none of the inventory's own animation or selection.
+function M.tick_monitor(api)
+    Bar.update(s.bar, api)
     publish(api)
 end
 
