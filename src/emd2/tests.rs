@@ -138,7 +138,7 @@ fn md1() -> Vec<u8> {
 
 /// An 8bpp TIM `width` x `height` with `rows` CLUT rows, entry `i` of row
 /// `r` being BGR555 `r * 256 + i` and every texel `index(x, y)`.
-fn tim(width: u16, height: u16, rows: u16, index: impl Fn(u16, u16) -> u8) -> Vec<u8> {
+pub(crate) fn tim(width: u16, height: u16, rows: u16, index: impl Fn(u16, u16) -> u8) -> Vec<u8> {
     let mut data = Vec::new();
     put32(&mut data, 0x10);
     put32(&mut data, 0x09);

@@ -391,7 +391,16 @@ fn bgm_names_number_their_tracks() {
     assert_eq!(bgm_track("main00_2"), Some(0x400));
     assert_eq!(bgm_track("sub2f_1"), Some(0x32F));
     for bad in [
-        "main", "main0", "main+1", "sub_00", "main00_0", "main00_8", "main00_x", "core00",
+        "main",
+        "main0",
+        "main+1",
+        "sub_00",
+        "main00_0",
+        "main00_8",
+        "main00_x",
+        "main00_01",
+        "main00_+1",
+        "core00",
     ] {
         assert_eq!(bgm_track(bad), None, "{bad}");
     }
@@ -412,6 +421,15 @@ fn room_names_come_from_the_classic_rebirth_table() {
     let cargo = bad.windows(5).position(|w| w == b"CARGO").unwrap();
     bad[cargo + 1] = 0x80;
     assert_eq!(room_names(&bad), None);
+
+    // A stray copy of the first name before the table is passed over, and a
+    // blank name is left out.
+    let mut stray = b"MZ header BACKSTREET A     \0 junk".to_vec();
+    stray.extend(&ddraw(&[(2, 3, "")]));
+    assert_eq!(
+        room_names(&stray).unwrap(),
+        room_names(&ddraw(&[])).unwrap()
+    );
 
     // Without the DLL the rooms convert unnamed, with a warning.
     let root = TempDir::new("unnamed");

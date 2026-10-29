@@ -48,20 +48,25 @@ pub fn load_with(pack: &Pack, entry: &str, data: &[u8]) -> Result<Emd> {
     model.with_context(|| format!("invalid model {entry}"))
 }
 
-/// An RE2 enemy EMD's texture: the `<stem>.bmp` page beside it with its
-/// `<stem>_clut_<nn>.bmp` swatches ([`emd2::texture_from_bmps`]), or a raw
-/// `<stem>.tim` a mod ships in its place.
+/// An RE2 enemy EMD's texture: the `<stem>.bmp` page beside it with the
+/// `<stem>_clut_<nn>.bmp` swatches of the same layer
+/// ([`emd2::texture_from_bmps`]), or a raw `<stem>.tim` a mod ships over
+/// it.
 fn enemy_texture(pack: &Pack, entry: &str) -> Result<crate::model::Texture8> {
     let stem = entry.rsplit_once('.').map_or(entry, |(stem, _)| stem);
     let page = format!("{stem}.bmp");
     let tim = format!("{stem}.tim");
-    if !pack.contains(&page) && pack.contains(&tim) {
+    let depth = pack.depth_of(&page);
+    if pack
+        .depth_of(&tim)
+        .is_some_and(|tim| depth.is_none_or(|page| tim > page))
+    {
         return crate::tim::decode_8bpp(&pack.read(&tim)?);
     }
     let mut swatches = Vec::new();
     for row in 1.. {
         let swatch = emd2::clut_entry(stem, row);
-        if !pack.contains(&swatch) {
+        if pack.depth_of(&swatch) != depth {
             break;
         }
         swatches.push(pack.read(&swatch)?);
@@ -264,24 +269,32 @@ mod tests {
 
     #[test]
     fn an_re2_enemy_takes_its_texture_from_the_page_and_swatches_or_a_tim() {
+        fn writer_bytes(entries: Vec<(String, Vec<u8>)>) -> Vec<u8> {
+            let mut writer = crate::pack::PackWriter::new();
+            for (path, data) in entries {
+                writer.add(&path, data).unwrap();
+            }
+            writer.to_bytes().unwrap()
+        }
         let tim = crate::emd2::tests::enemy_tim();
         let expected = crate::tim::decode_8bpp(&tim).unwrap();
         let bmps = emd2::texture_bmps(&tim).unwrap();
-        let mut writer = crate::pack::PackWriter::new();
-        writer
-            .add("enemy/3a/enemy_1.emd", crate::emd2::tests::emd())
-            .unwrap();
-        writer.add("enemy/3a/enemy_1.bmp", bmps[0].clone()).unwrap();
+        let mut base_entries = vec![
+            (
+                "enemy/3a/enemy_1.emd".to_string(),
+                crate::emd2::tests::emd(),
+            ),
+            ("enemy/3a/enemy_1.bmp".to_string(), bmps[0].clone()),
+            (
+                "enemy/3b/enemy_0.emd".to_string(),
+                crate::emd2::tests::emd(),
+            ),
+            ("enemy/3b/enemy_0.tim".to_string(), tim),
+        ];
         for (row, swatch) in bmps.iter().enumerate().skip(1) {
-            writer
-                .add(&emd2::clut_entry("enemy/3a/enemy_1", row), swatch.clone())
-                .unwrap();
+            base_entries.push((emd2::clut_entry("enemy/3a/enemy_1", row), swatch.clone()));
         }
-        writer
-            .add("enemy/3b/enemy_0.emd", crate::emd2::tests::emd())
-            .unwrap();
-        writer.add("enemy/3b/enemy_0.tim", tim).unwrap();
-        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let pack = Pack::from_bytes(writer_bytes(base_entries.clone())).unwrap();
         assert_eq!(
             load(&pack, "enemy/3a/enemy_1.emd").unwrap().texture,
             expected
@@ -290,6 +303,25 @@ mod tests {
             load(&pack, "enemy/3b/enemy_0.emd").unwrap().texture,
             expected
         );
+
+        // A mod's raw TIM wins over the base's page; a mod's page takes no
+        // swatches from the base.
+        let base = writer_bytes(base_entries);
+        let flat = crate::emd2::tests::tim(128, 4, 1, |x, y| (x + y) as u8);
+        let flat_texture = crate::tim::decode_8bpp(&flat).unwrap();
+        let page = emd2::texture_bmps(&flat).unwrap().remove(0);
+        for entry in [
+            ("enemy/3a/enemy_1.tim", flat),
+            ("enemy/3a/enemy_1.bmp", page),
+        ] {
+            let layer =
+                Pack::from_bytes(writer_bytes(vec![(entry.0.to_string(), entry.1)])).unwrap();
+            let modded = Pack::from_bytes(base.clone()).unwrap().with_overlay(layer);
+            assert_eq!(
+                enemy_texture(&modded, "enemy/3a/enemy_1.emd").unwrap(),
+                flat_texture
+            );
+        }
     }
 
     /// One joint, two keyframes and one two-frame clip, plus a further bank

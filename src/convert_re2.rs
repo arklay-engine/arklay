@@ -346,13 +346,18 @@ fn find_room_names(
 }
 
 /// The room names in Classic REbirth's debug room table in `dll`, keyed by
-/// (zero-based stage, room), trailing spaces trimmed; `None` when the table
-/// is missing or not laid out as expected.
+/// (zero-based stage, room), trailing spaces trimmed; `None` when no copy of
+/// the first name starts a table laid out as expected.
 pub fn room_names(dll: &[u8]) -> Option<BTreeMap<(usize, u8), String>> {
-    let start = dll
-        .windows(FIRST_ROOM_NAME.len())
-        .position(|window| window == FIRST_ROOM_NAME)?
-        .checked_sub(NAME_OFFSET)?;
+    dll.windows(FIRST_ROOM_NAME.len())
+        .enumerate()
+        .filter(|(_, window)| *window == FIRST_ROOM_NAME)
+        .find_map(|(at, _)| name_table(dll, at.checked_sub(NAME_OFFSET)?))
+}
+
+/// The room-name table starting at `start` in `dll`, if every record there
+/// is empty or a name; a blank name is left out.
+fn name_table(dll: &[u8], start: usize) -> Option<BTreeMap<(usize, u8), String>> {
     let table = dll.get(start..start + NAME_STAGES * NAME_SLOTS_PER_STAGE * NAME_RECORD)?;
     let mut names = BTreeMap::new();
     for (slot, record) in table.as_chunks::<NAME_RECORD>().0.iter().enumerate() {
@@ -365,6 +370,9 @@ pub fn room_names(dll: &[u8]) -> Option<BTreeMap<(usize, u8), String>> {
             return None;
         }
         let text = std::str::from_utf8(text).ok()?.trim_end();
+        if text.is_empty() {
+            continue;
+        }
         let room = u8::try_from(slot % NAME_SLOTS_PER_STAGE).ok()?;
         names.insert((slot / NAME_SLOTS_PER_STAGE, room), text.to_owned());
     }
@@ -409,14 +417,22 @@ pub(crate) fn convert(
     for room in &rooms {
         let folder = room.id.folder();
         let id = RoomId::parse(&folder)?;
-        // A room the XML cannot carry exactly stays a raw RDT, which the
-        // engine still loads.
         let strings = names
             .get(&(room.id.stage_group(), room.id.room))
             .map(|name| vec![("en-US".to_owned(), "name".to_owned(), name.clone())])
             .unwrap_or_default();
+        let unnamed = if strings.is_empty() {
+            ""
+        } else {
+            " without its name"
+        };
+        // A room the XML cannot carry exactly stays a raw RDT, which the
+        // engine still loads, without the name only a `room.xml` carries.
         let files = crate::room::convert_rdt2(&room.bytes, id, strings).unwrap_or_else(|error| {
-            warnings.push(format!("{}: kept as an RDT: {error:#}", id.rdt_entry()));
+            warnings.push(format!(
+                "{}: kept as an RDT{unnamed}: {error:#}",
+                id.rdt_entry()
+            ));
             vec![(id.rdt_entry(), room.bytes.clone())]
         });
         for (entry, data) in files {
@@ -847,9 +863,10 @@ pub fn bgm_track(stem: &str) -> Option<u16> {
     let (name, take) = match stem.split_once('_') {
         Some((name, take)) => (
             name,
-            take.parse::<u16>()
-                .ok()
-                .filter(|take| (1..=7).contains(take))?,
+            match take.as_bytes() {
+                &[digit @ b'1'..=b'7'] => u16::from(digit - b'0'),
+                _ => return None,
+            },
         ),
         None => (stem.as_str(), 0),
     };

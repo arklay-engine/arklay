@@ -666,6 +666,17 @@ fn a_room_s_strings_round_trip_and_become_room_keys() {
 }
 
 #[test]
+fn a_mod_s_raw_rdt_keeps_the_base_room_s_name() {
+    let named = strings(&[("en-US", "name", "SAVE ROOM")]);
+    let base = convert_rdt(&synthetic_rdt(), ID, Script::Latin, named).unwrap();
+    let (pack, dir) = layered("rdt-name", base, vec![(ID.rdt_entry(), synthetic_rdt())]);
+    assert_eq!(format(&pack, ID), Some(Format::Rdt));
+    let text = crate::text::Text::load(&pack, Some("en-US"));
+    assert_eq!(text.decode(text.room_name("205").unwrap()), "SAVE ROOM");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn bad_room_strings_are_refused() {
     for bad in [
         r#"<room><strings><language lang="en-US"><string key="title">A</string></language></strings></room>"#,

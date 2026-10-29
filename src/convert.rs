@@ -638,15 +638,20 @@ fn convert_observed_as(
         stage_counts[rdt.id.stage_index() as usize].0 += 1;
         let definition;
         let strings = names.get(&rdt.id.room3()).cloned().unwrap_or_default();
+        let named = !strings.is_empty();
         // A room the XML cannot carry exactly stays a raw RDT, which the
-        // engine still loads.
+        // engine still loads, without the names only a `room.xml` carries.
         let mut files = match crate::room::convert_rdt(&rdt.bytes, rdt.id, text_script, strings) {
             Ok(files) => {
                 definition = rdt.id.xml_entry();
                 files
             }
             Err(err) => {
-                warnings.push(format!("{}: kept as an RDT: {err:#}", rdt.id.rdt_entry()));
+                let unnamed = if named { " without its name" } else { "" };
+                warnings.push(format!(
+                    "{}: kept as an RDT{unnamed}: {err:#}",
+                    rdt.id.rdt_entry()
+                ));
                 definition = rdt.id.rdt_entry();
                 vec![(definition.clone(), rdt.bytes.clone())]
             }

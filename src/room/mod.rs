@@ -325,17 +325,19 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
 /// keyed `ROOM_<room3>_NAME` and `ROOM_<room3>_NAME_SAVE`.
 ///
 /// Rooms are read in id order, so of a room's player variants the lowest
-/// that names the room in a language supplies that language's name. A room
-/// defined by a raw RDT has no strings; an unreadable `room.xml` warns and
-/// is skipped here (loading the room reports it properly).
+/// that names the room in a language supplies that language's name. The
+/// strings come from the room's `room.xml` even when a mod's raw RDT
+/// defines the room over it, so a mod that ships RDTs keeps the names; an
+/// unreadable `room.xml` warns and is skipped here (loading the room reports
+/// it properly).
 pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> {
     use std::collections::BTreeMap;
     let mut by_tag: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     for id in ids(pack) {
-        if format(pack, id) != Some(Format::Xml) {
+        let entry = id.xml_entry();
+        if !pack.contains(&entry) {
             continue;
         }
-        let entry = id.xml_entry();
         let strings = match pack.read(&entry).and_then(|data| room_strings(&data)) {
             Ok(strings) => strings,
             Err(error) => {

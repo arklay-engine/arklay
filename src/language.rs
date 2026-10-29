@@ -535,11 +535,15 @@ fn as_strs((entry, source): &(String, String)) -> (&str, &str) {
     (entry, source)
 }
 
-/// Whether `pack`'s base game is RE1, whose text the embedded sources are.
-/// A base pack without a manifest predates the manifest and is RE1.
+/// Whether `pack`'s base game is RE1, whose text the embedded sources are:
+/// any pack but an RE2 one. A base pack without a manifest predates it and
+/// is RE1, whatever id opening it gives the pack (its file name).
 fn is_re1(pack: &Pack) -> bool {
-    pack.manifest()
-        .is_none_or(|manifest| manifest.id.eq_ignore_ascii_case("re1"))
+    !pack.manifest().is_some_and(|manifest| {
+        manifest
+            .id
+            .eq_ignore_ascii_case(crate::convert_re2::BASE_PACK_ID)
+    })
 }
 
 /// The tag of a `language/<tag>.txt` entry, lower-cased.
