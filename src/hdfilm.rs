@@ -20,7 +20,7 @@
 
 use std::ops::Range;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread::JoinHandle;
 
@@ -35,6 +35,7 @@ use symphonia_core::packet::PacketRef;
 use symphonia_core::units::{Duration, Timestamp};
 
 use crate::audio::SAMPLE_RATE;
+pub use crate::media::VideoFrame;
 use crate::media::{self, Colour, Media, Planes, StereoResampler};
 
 /// The software canvas width.
@@ -48,25 +49,6 @@ const MAX_FAILED_UNITS: usize = 48;
 /// AAC frames per packet: a packet that fails to decode stands in as this
 /// much silence.
 const AAC_FRAME: usize = 1024;
-
-/// The source of [`VideoFrame::serial`].
-static NEXT_SERIAL: AtomicU64 = AtomicU64::new(1);
-
-/// One decoded picture: the full-size RGBA and its 320x240 canvas.
-#[derive(Debug, Default)]
-pub struct VideoFrame {
-    /// Picture width in pixels.
-    pub width: u32,
-    /// Picture height in pixels.
-    pub height: u32,
-    /// The full-size picture, RGBA8.
-    pub rgba: Vec<u8>,
-    /// The picture letterboxed onto 320x240, RGBA8.
-    pub canvas: Vec<u8>,
-    /// Unique to each picture put on screen, so a renderer can skip
-    /// re-uploading one it already has.
-    pub serial: u64,
-}
 
 /// What the worker sends: a display-indexed frame, or a fatal error.
 type WorkerMessage = std::result::Result<(usize, VideoFrame), String>;
@@ -156,7 +138,7 @@ impl HdFilm {
                     return Ok(());
                 }
                 let (next, mut frame) = self.pending.take().expect("pending frame");
-                frame.serial = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
+                frame.serial = media::next_frame_serial();
                 let old = std::mem::replace(&mut self.current, frame);
                 // The worker may already have exited; the buffer is then dropped.
                 let _ = self.spare.send(old);

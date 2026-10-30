@@ -47,8 +47,11 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-28.
 | R0 RE2 data | `convert-game` for the RE2 PC release: rooms, backgrounds, models, audio and films into `re2.akpak`; per-file format detection replaces the pack-wide dialect; `verify` classifies the RE2 formats | done |
 | R1 RE2 first light | RE2 rooms: the `rdt2` reader (cameras, RVD switch zones, SCA collision), letter stages A-G, the base manifest's `start_room`, the collision debug overlay, and the TeamX RE2 HD backgrounds | done |
 | R2 RE2 models | RE2 EMD, PLD and PLW through the shared model and animation path, the `--model` viewer, per-camera LIT lights, HD model skins, and the `re2` pack conventions | done |
+| R3 RE2 scripts | The RE2 SCD reader (`scd2`): init and main procedure lists, the RE2 opcode table, `scd export` to `.s` and structured `.akscr`, both round-tripping every retail room byte for byte | done |
+| R5 RE2 audio | MS-ADPCM decoding (`adpcm`), matching ffmpeg up to its rounding, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
+| R6 RE2 FMV | The in-house MPEG-1 decoder (`mpeg`: program stream demux, MPEG-1 video, MP2 audio) behind the movie path, RE2 films played by name (`--fmv opn1stl`, `r109`, `staff`), and `verify` parsing MPEG; all 26 retail films play end to end with ffprobe's frame counts | done |
 
-RE2 milestones R3 (script reader) onwards are still open and tracked by the
+The other RE2 milestones (R4, R7 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
@@ -918,6 +921,74 @@ English names from the debug room table in the install's Classic REbirth
 707 has no slot), and a
 non-RE1 pack takes only the `UI_` strings from the built-in RE1 language
 files, so RE2 rooms no longer show RE1 names.
+
+RE2 R3 (#247) reads RE2 scripts (`src/scd2/`). An RE2 RDT's section slots 16
+and 17 hold the init and main procedure lists: a `u16` offset table, then the
+procedures. The last procedure's end is not stored; it ends at the first
+`evt_end` past every block it opens, and the bytes after it are not script.
+The opcode table has 0x8F fixed-width opcodes, with widths and block
+semantics checked against `bio2.exe`'s handlers (`endif` is 2 bytes; IDA's
+`Vib_set1` at 0x14 is `case` and `Case` at 0x18 is `gosub`). `scd export`
+writes an RE2 room as `.s` or `.akscr`; `tests/real/re2_real.rs` checks that
+all 501 rooms (5090 procedures) rebuild their lists byte for byte and
+round-trip through both forms, with every block decompiled to its structured
+form. Running the scripts, `scd build` for RE2 and the `.lst` listing come
+later.
+
+RE2 R5 (#249) makes RE2 audio play. `adpcm` decodes MS-ADPCM (WAVE tag 2),
+ported from biohazard-utils' `MSADPCMDecoder`, and `audio::parse_wav` uses it,
+so every voice, BGM and sound WAV loads; `verify` parses them instead of
+listing them as unsupported. The port predicts with an arithmetic shift where
+ffmpeg divides; `tests/real/re2_real.rs` decodes all 2893 MS-ADPCM WAVs (1454
+distinct, 316M samples) and checks that the dividing variant matches ffmpeg
+sample for sample and the shipped shift stays within 79 (the bound is 128).
+Each `.sap` bank's 64-bit mask gives the slot of each WAV it fronts, so the
+converter splits the door, arms, room, enemy and core banks into
+`sound/<kind>/<id>/<slot>.wav` (hex ids; the `.sap` names are decimal, the
+`.EDH` names hex), footstep sets into `sound/step/<id>/`, and stores each
+bank's EDH sound table (EDT entries plus the VAB header the tone volumes live
+in) as `bank.edh`; a room's own table, RDT sections 0 and 1, becomes
+`room/<id>/sound.edh` (476 of 501 rooms). `se2::Banks` loads banks the way
+`SsLoadBanks` does (the room bank, its three footstep sets at slots 23, 26 and
+29 from `footstep_tbl`, `room000` for the rooms `Room_fs_ck` lists, core 0x16
+over every core but 0x15, the reverb enemy bank for 0x25/0x26) and resolves
+a `Snd_se_on` id (type byte 3, slot byte 2) to a WAV and the `SsSetVol` gain
+of its EDT tone. `bgm2` holds the room music table: `bgm_tbl` has one `u16`
+per room (main id low, sub id high, `0x3f` none) written only by script opcode
+0x57 `sce_bgmtbl_set`, and the `bgm_lut`/`sbgm_lut` channel tables and the
+track name tables from `bio2.exe`; every referenced track is packed except
+`main26`, which the game does not ship. The `.BGM` files are PSX leftovers (a
+pQES sequence and a pBAV VAB): the PC executable has no sequencer and only
+reads them for a size check, so they are not packed and need no sequencer;
+the streamed `.sap` WAVs are the music. Not modelled yet: the `Snd_se_on` and
+`SsPlay` per-room special cases, 3D panning, the `SsLoadHack` dual-BGM
+speaker setup, and running the music table, which waits for the RE2 script VM
+(R8).
+
+RE2 R6 (#250) plays the RE2 films. Conversion already packs each retail
+`.bin` raw as `movie/<name>.mpg`: an MPEG-1 program stream with 640x480
+MPEG-1 video at 29.97 fps and 192 kbit/s 44.1 kHz stereo MP2 audio. Shipped
+formats use the port's own decoders, so `src/mpeg/` decodes them in-house:
+a program stream demuxer, an MPEG-1 video decoder ported from pl_mpeg
+(MIT) and an MP2 decoder after kjmp2. There are three departures from the
+references. A damaged slice is counted and its picture kept. Motion
+vectors that point outside the picture read clamped edge pixels. MP2
+requantisation and output scaling follow the standard, as ffmpeg does,
+not kjmp2's approximations, which played about 2% quiet. Against ffmpeg's decode,
+video is above 40 dB PSNR on the unit fixture and above 35 dB on a retail
+film, and audio is above 40 dB SNR. A film has one display frame per
+coded picture. Its audio starts at the PTS offset from the video (both
+start at 0.403 s in every retail film) and is resampled to the mixer's
+22050 Hz. Frames are shown full size through the HD film path, which no
+longer needs the `hd` feature. RE2 films have no id table, so
+`MovieSession::open_named` opens one by name and `--fmv` takes a name or
+an RE1 id. A mod's `movie/<name>.mp4` or `.avi` still wins over the
+`.mpg`. `tests/real/re2_real.rs` plays all 26 films end to end and checks
+each one's picture count and MP2 frame count against `ffprobe`: 120 to
+9173 pictures, with a duration within a frame of ffprobe's, whose duration
+ends half a frame early. No film has a damaged slice. One thread decodes
+about 6 ms per 640x480 frame, so decoding runs on the caller's thread.
+`verify` now parses the MPEG entries, so strict mode passes them.
 
 The manifest no longer carries `rdt_version`/`scd_version`: formats are
 detected per file (`src/format.rs`), so one pack may hold both dialects.

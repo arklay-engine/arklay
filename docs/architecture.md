@@ -29,7 +29,10 @@ responsibility.
 | `convert` | Tooling | `convert-game`: discover an install and migrate every asset category — rooms, audio, voice and films — into one pack; progress on stderr, per-file sizes with `--verbose` |
 | `convert_re2` | Tooling | `convert-game` for the RE2 PC install: rooms of both discs, `roomcut.bin` backgrounds, enemies, players, voice, BGM, doors, films and demos |
 | `adt` | Format | RE2 ADT background decompression (three-table Huffman with a 16 KiB history) and the 320x240 page reorganisation |
-| `sap` | Format | RE2 `.sap` sound containers: the bit-mask header and the RIFF WAVs it fronts |
+| `sap` | Format | RE2 `.sap` sound containers: the bit-mask header and the RIFF WAVs it fronts, one per slot |
+| `adpcm` | Format | MS-ADPCM (WAVE tag 2) decoding to 16-bit PCM, used by `audio::parse_wav` |
+| `se2` | Runtime | RE2 sound banks: pack names, EDH sound tables, the `SsLoadBanks` bank layering and `Snd_se_on` id to WAV and gain |
+| `bgm2` | Runtime | RE2 room music table (`bgm_tbl`), its channel and track name tables, and the `.BGM` decision |
 | `progress` | Tooling | One terminal-aware overall progress bar per command, spanning its internal phases (and periodic plain lines when redirected) |
 | `atomic` | Tooling | Sibling-temp-then-rename single-file output used by every artifact writer |
 | `verify` | Tooling | `arklay verify`: path-classified parse of every pack entry with a per-format report |

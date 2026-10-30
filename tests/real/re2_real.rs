@@ -9,6 +9,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use arklay::adpcm;
 use arklay::convert::{Game, convert_game_as};
 use arklay::format::{self, Detection, Dialect};
 use arklay::pack::Pack;
@@ -74,6 +75,7 @@ fn the_retail_tree_converts_every_category() {
     for path in pack.paths() {
         let category = match path.split('/').collect::<Vec<_>>().as_slice() {
             ["room", _, "cut", _] => "cut",
+            ["room", _, "sound.edh"] => "sound",
             [first, ..] => first.trim_end_matches(".toml"),
             [] => unreachable!(),
         };
@@ -89,6 +91,7 @@ fn the_retail_tree_converts_every_category() {
         ("movie", 26),
         ("player", 221),
         ("room", 501),
+        ("sound", 2768),
         ("voice", 599),
     ];
     assert_eq!(categories, BTreeMap::from(expected));
@@ -210,7 +213,9 @@ fn the_converted_pack_verifies() {
     assert_eq!(count(verify::Format::Re2Emd), 116);
     assert_eq!(count(verify::Format::Pld), 40);
     assert_eq!(count(verify::Format::Plw), 181);
-    assert_eq!(count(verify::Format::AdpcmWav), 717);
+    assert_eq!(count(verify::Format::AdpcmWav), 2893);
+    assert_eq!(count(verify::Format::Wav), 4);
+    assert_eq!(count(verify::Format::Edh), 588);
     assert_eq!(count(verify::Format::Mpeg), 26);
     // Strict mode fails exactly the formats nothing parses yet, plus the
     // opaque demo reels.
@@ -544,4 +549,480 @@ fn the_hd_pack_names_most_model_pages() {
         matched * 10 >= (matched + unmatched.len()) * 9,
         "{matched} matched"
     );
+}
+
+/// Every room's init and main scripts parse, rebuild byte for byte, and
+/// round-trip through `.s` and `.akscr` to the same bytes.
+#[test]
+#[ignore]
+fn every_room_script_round_trips() {
+    use arklay::scd2::{akscr, asm, reader};
+
+    let Some(root) = re2_root() else {
+        return;
+    };
+    let mut rooms = 0;
+    let mut procedures = 0;
+    let mut fallbacks = 0;
+    let mut failures = Vec::new();
+    for path in with_extension(&root, "rdt") {
+        let data = fs::read(&path).unwrap();
+        if format::rdt(&data).dialect() != Some(Dialect::Re2) {
+            continue;
+        }
+        let (scripts, spans) = match reader::parse_with_spans(&data) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                failures.push(format!("{}: {error:#}", path.display()));
+                continue;
+            }
+        };
+        rooms += 1;
+        let lists = [&scripts.init, &scripts.main];
+        for (list, span) in lists.iter().zip(spans) {
+            procedures += list.procs.len();
+            if let Some(span) = span
+                && list.to_bytes() != data[span.start..span.start + span.len]
+            {
+                failures.push(format!("{}: a list does not rebuild", path.display()));
+            }
+        }
+        match asm::assemble(&asm::render(&scripts)) {
+            Ok(back) if back == scripts => {}
+            Ok(_) => failures.push(format!("{}: .s round trip differs", path.display())),
+            Err(error) => failures.push(format!("{}: .s: {error:#}", path.display())),
+        }
+        let text = akscr::decompile(&scripts);
+        fallbacks += text.matches('@').count();
+        match akscr::compile(&text) {
+            Ok(back)
+                if back.init.to_bytes() == scripts.init.to_bytes()
+                    && back.main.to_bytes() == scripts.main.to_bytes() => {}
+            Ok(_) => failures.push(format!("{}: .akscr round trip differs", path.display())),
+            Err(error) => failures.push(format!("{}: .akscr: {error:#}", path.display())),
+        }
+    }
+    eprintln!("{rooms} rooms, {procedures} procedures, {fallbacks} raw block instructions");
+    assert!(failures.is_empty(), "{failures:#?}");
+    assert!(rooms > 0);
+    // Every retail block decompiles to its structured form.
+    assert_eq!(fallbacks, 0);
+}
+
+/// The packed WAVs: every voice line, BGM track and sound-bank slot.
+fn wav_entries(pack: &Pack) -> Vec<String> {
+    let mut entries: Vec<String> = pack
+        .paths()
+        .filter(|path| {
+            path.ends_with(".wav")
+                && ["voice/", "bgm/", "sound/"]
+                    .iter()
+                    .any(|prefix| path.starts_with(prefix))
+        })
+        .map(str::to_owned)
+        .collect();
+    entries.sort();
+    entries
+}
+
+/// ffmpeg's decode of `wav` as interleaved 16-bit samples.
+fn ffmpeg_decode(dir: &Path, name: &str, wav: &[u8]) -> Vec<i16> {
+    let input = dir.join(format!("{name}.wav"));
+    fs::write(&input, wav).unwrap();
+    let output = std::process::Command::new("ffmpeg")
+        .args(["-v", "error", "-i"])
+        .arg(&input)
+        .args(["-f", "s16le", "-acodec", "pcm_s16le", "pipe:1"])
+        .output()
+        .unwrap();
+    fs::remove_file(&input).unwrap();
+    assert!(
+        output.status.success(),
+        "{name}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output
+        .stdout
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&pair| i16::from_le_bytes(pair))
+        .collect()
+}
+
+/// A WAV's `fmt ` and `data` chunk bodies.
+fn wav_chunks(wav: &[u8]) -> (&[u8], &[u8]) {
+    let (mut fmt, mut data) = (None, None);
+    let mut at = 12;
+    while at + 8 <= wav.len() {
+        let size = u32::from_le_bytes(wav[at + 4..at + 8].try_into().unwrap()) as usize;
+        let body = &wav[at + 8..(at + 8 + size).min(wav.len())];
+        match &wav[at..at + 4] {
+            b"fmt " => fmt = Some(body),
+            b"data" => data = Some(body),
+            _ => {}
+        }
+        at += 8 + size + (size & 1);
+    }
+    (fmt.unwrap(), data.unwrap())
+}
+
+/// Every converted WAV decodes, and the MS-ADPCM decoder agrees with
+/// ffmpeg's `adpcm_ms` on every distinct one. With ffmpeg's rounding (a
+/// division) the samples are identical; with the port's (a shift, what the
+/// engine plays) they differ only where a negative prediction rounds the
+/// other way and the filter carries that through the block.
+#[test]
+#[ignore]
+fn every_wav_decodes_and_matches_ffmpeg() {
+    let Some(pack) = pack() else {
+        return;
+    };
+    let entries = wav_entries(pack);
+    let mut distinct = BTreeMap::new();
+    let mut adpcm = 0;
+    for entry in &entries {
+        let data = pack.read(entry).unwrap().to_vec();
+        let wav =
+            arklay::audio::parse_wav(&data).unwrap_or_else(|error| panic!("{entry}: {error:#}"));
+        assert!(!wav.data.is_empty(), "{entry}");
+        // The few PCM slots pass through undecoded.
+        if format::wav_codec(&data) != Some(format::WAV_MS_ADPCM) {
+            continue;
+        }
+        adpcm += 1;
+        let mut hasher = DefaultHasher::new();
+        data.hash(&mut hasher);
+        distinct
+            .entry(hasher.finish())
+            .or_insert((entry.clone(), data, wav));
+    }
+    eprintln!(
+        "{} WAVs ({adpcm} MS-ADPCM), {} distinct",
+        entries.len(),
+        distinct.len()
+    );
+    assert!(entries.len() > 2000);
+
+    if std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .output()
+        .is_err()
+    {
+        eprintln!("ffmpeg is not installed: skipping the cross-check");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ffmpeg-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let work: Vec<_> = distinct.values().collect();
+    let jobs = std::thread::available_parallelism().map_or(1, usize::from);
+    let results: Vec<(String, usize, u32, usize)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = work
+            .chunks(work.len().div_ceil(jobs))
+            .enumerate()
+            .map(|(job, chunk)| {
+                let dir = &dir;
+                scope.spawn(move || {
+                    chunk
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (entry, data, wav))| {
+                            let ours: Vec<i16> = wav
+                                .data
+                                .as_chunks::<2>()
+                                .0
+                                .iter()
+                                .map(|&pair| i16::from_le_bytes(pair))
+                                .collect();
+                            let theirs = ffmpeg_decode(dir, &format!("{job}_{index}"), data);
+                            assert_eq!(ours.len(), theirs.len(), "{entry}: sample count");
+                            let (fmt, body) = wav_chunks(data);
+                            let format = adpcm::Format::parse(fmt).unwrap();
+                            let divided =
+                                adpcm::decode_with(&format, body, adpcm::Rounding::Divide).unwrap();
+                            assert!(divided == theirs, "{entry}: differs from ffmpeg");
+                            let mut max = 0u32;
+                            let mut differing = 0;
+                            for (a, b) in ours.iter().zip(&theirs) {
+                                let diff = (i32::from(*a) - i32::from(*b)).unsigned_abs();
+                                max = max.max(diff);
+                                differing += usize::from(diff != 0);
+                            }
+                            (entry.clone(), ours.len(), max, differing)
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect()
+    });
+    let _ = fs::remove_dir_all(&dir);
+    let samples: usize = results.iter().map(|r| r.1).sum();
+    let differing: usize = results.iter().map(|r| r.3).sum();
+    let worst = results.iter().max_by_key(|r| r.2).unwrap();
+    eprintln!(
+        "{} files, {samples} samples: {differing} differ, worst {} by {}",
+        results.len(),
+        worst.0,
+        worst.2
+    );
+    assert!(worst.2 <= MAX_FFMPEG_DIFFERENCE, "{worst:?}");
+}
+
+/// The largest sample difference the shift's rounding makes against
+/// ffmpeg's (79 in the retail data).
+const MAX_FFMPEG_DIFFERENCE: u32 = 128;
+
+/// Every room's sound banks load through `se2` the way `SsLoadBanks` fills
+/// them. Some table entries name slots no bank fills; the game plays nothing
+/// for those, so their count is pinned rather than required to be zero.
+#[test]
+#[ignore]
+fn every_room_sound_bank_resolves() {
+    use arklay::se2::{Banks, Edh, Kind};
+    let Some(pack) = pack() else {
+        return;
+    };
+    let mut rooms = 0;
+    let mut sounds = 0;
+    let mut tables = 0;
+    let mut named_but_empty = Vec::new();
+    for path in pack.paths().filter(|path| path.ends_with("/room.xml")) {
+        let folder = path.split('/').nth(1).unwrap();
+        let (stage, room) = (folder.as_bytes()[0], &folder[1..3]);
+        // The letter stages are stages 1-7 by letter order.
+        let stage = match stage {
+            b'1'..=b'7' => stage - b'0',
+            b'a'..=b'g' => stage - b'a' + 1,
+            _ => panic!("{folder}"),
+        };
+        let room = u8::from_str_radix(room, 16).unwrap();
+        let table = pack
+            .read(&format!("room/{folder}/{}", arklay::se2::ROOM_EDH_NAME))
+            .ok()
+            .map(|data| Edh::parse(&data).unwrap());
+        tables += usize::from(table.is_some());
+        let mut banks = Banks::new();
+        banks.load_room(pack, stage - 1, room, table.clone());
+        rooms += 1;
+        for slot in 0..48 {
+            if banks.stem(Kind::Room, slot).is_some() {
+                sounds += 1;
+            } else if table
+                .as_ref()
+                .and_then(|table| table.volume(slot))
+                .is_some()
+            {
+                named_but_empty.push(format!("{folder}:{slot:02x}"));
+            }
+        }
+    }
+    eprintln!(
+        "{rooms} rooms, {tables} sound tables, {sounds} room sounds, {} table slots without a sound",
+        named_but_empty.len()
+    );
+    assert_eq!(rooms, 501);
+    assert_eq!(tables, 476);
+    assert_eq!(sounds, ROOM_SOUNDS);
+    assert_eq!(named_but_empty.len(), ROOM_TABLE_SLOTS_WITHOUT_SOUND);
+}
+
+/// The room sounds the retail rooms load, over all 501 rooms.
+const ROOM_SOUNDS: usize = 5256;
+/// The room table entries that name a slot no bank fills.
+const ROOM_TABLE_SLOTS_WITHOUT_SOUND: usize = 304;
+
+/// Every BGM track the executable's music tables name is a packed track,
+/// apart from the names the retail install ships no `.sap` for.
+#[test]
+#[ignore]
+fn every_music_table_track_is_packed() {
+    use arklay::bgm2;
+    let Some(pack) = pack() else {
+        return;
+    };
+    let mut missing = std::collections::BTreeSet::new();
+    let mut found = 0;
+    let names = (0..bgm2::MAIN_TRACKS.len() as u8)
+        .flat_map(|id| bgm2::main_tracks(id).into_iter().flatten())
+        .chain(
+            (0..bgm2::SUB_TRACKS.len() as u8)
+                .flat_map(|id| bgm2::sub_tracks(id).into_iter().flatten()),
+        );
+    for name in names {
+        let stem = bgm2::track_stem(name).unwrap();
+        if pack.contains(&format!("{stem}.wav")) {
+            found += 1;
+        } else {
+            missing.insert(name);
+        }
+    }
+    eprintln!("{found} track references packed; no file for {missing:?}");
+    assert_eq!(missing, ["main26"].into_iter().collect());
+}
+
+/// Every retail film by pack stem, with `ffprobe`'s count of video pictures
+/// and of MP2 audio frames.
+const FILMS: [(&str, usize, u64); 26] = [
+    ("opn1stl", 4162, 5314),
+    ("opn2ndl", 2999, 3829),
+    ("opn2ndrl", 2999, 3829),
+    ("r108l", 1351, 1726),
+    ("r204l", 534, 683),
+    ("r409", 4306, 5501),
+    ("r700l", 2094, 2673),
+    ("r703l", 3191, 4074),
+    ("r704l", 9173, 11715),
+    ("title_l", 997, 1270),
+    ("opn1stc", 4076, 5204),
+    ("opn2ndc", 2999, 3829),
+    ("opn2ndrc", 2999, 3829),
+    ("r108c", 1351, 1726),
+    ("r204c", 534, 683),
+    ("r408", 4306, 5501),
+    ("r700c", 3031, 3869),
+    ("r703c", 2396, 3058),
+    ("r704c", 9173, 11715),
+    ("titlec", 997, 1270),
+    ("r109", 690, 881),
+    ("r10b", 150, 192),
+    ("r200", 120, 154),
+    ("r505", 600, 764),
+    ("r602", 194, 246),
+    ("staff", 4616, 5876),
+];
+
+#[test]
+#[ignore]
+fn every_film_plays_end_to_end() {
+    use arklay::movie::{MovieSession, MovieTick};
+    use arklay::mpeg::Film;
+
+    let Some(pack) = pack() else {
+        return;
+    };
+    let films: Vec<_> = pack
+        .paths()
+        .filter(|path| path.starts_with("movie/"))
+        .collect();
+    assert_eq!(films.len(), FILMS.len(), "{films:?}");
+    let results: Vec<String> = std::thread::scope(|scope| {
+        let handles: Vec<_> = FILMS
+            .iter()
+            .map(|&(name, pictures, mp2_frames)| {
+                scope.spawn(move || {
+                    let data = pack.read(&format!("movie/{name}.mpg")).unwrap();
+                    // Every picture decodes cleanly at the film's own size.
+                    let start = std::time::Instant::now();
+                    let mut film = Film::open(&data).unwrap();
+                    assert_eq!(film.size(), (640, 480), "{name}");
+                    assert_eq!(film.frame_rate(), (30_000, 1001), "{name}");
+                    assert_eq!(film.frame_count(), pictures, "{name}");
+                    for index in 1..pictures {
+                        film.present(index).unwrap();
+                        assert_eq!(film.frame_index(), Some(index), "{name}");
+                    }
+                    let per_frame = start.elapsed().as_secs_f64() / pictures as f64;
+                    assert_eq!(film.damaged_slices(), 0, "{name}");
+                    assert_eq!(
+                        film.audio_frames(),
+                        Some((mp2_frames * 1152, 44_100)),
+                        "{name}"
+                    );
+                    // ffprobe's duration ends half a frame before the last
+                    // picture's display period does.
+                    let duration = pictures as f64 * 1001.0 / 30_000.0;
+                    let probed = (pictures as f64 - 0.5) * 1001.0 / 30_000.0;
+                    assert!((duration - probed).abs() < 1001.0 / 30_000.0, "{name}");
+
+                    // The movie path plays it by name to the last frame,
+                    // queueing the whole soundtrack.
+                    let mut session = MovieSession::open_named(pack, name).unwrap();
+                    assert_eq!(session.frame_count(), pictures, "{name}");
+                    let mut audio = session.take_audio().len() as u64;
+                    loop {
+                        match session.tick(0, None) {
+                            MovieTick::Finished => break,
+                            MovieTick::Skipped => panic!("{name} skipped"),
+                            MovieTick::Advanced | MovieTick::Waiting => {}
+                        }
+                        audio += session.take_audio().len() as u64;
+                    }
+                    assert_eq!(session.frame_index(), pictures - 1, "{name}");
+                    assert_eq!(audio, session.samples_before(pictures) * 2, "{name}");
+                    format!(
+                        "{name}: {pictures} frames, {duration:.3} s, {:.2} ms/frame",
+                        per_frame * 1000.0
+                    )
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect()
+    });
+    for line in results {
+        println!("{line}");
+    }
+}
+
+/// The decode against ffmpeg's on the opening seconds of a retail film,
+/// when `ffmpeg` is on `PATH`.
+#[test]
+#[ignore]
+fn a_film_matches_ffmpeg() {
+    use arklay::mpeg::Film;
+    use std::process::{Command, Stdio};
+
+    let Some(pack) = pack() else {
+        return;
+    };
+    const FRAMES: usize = 60;
+    let data = pack.read("movie/r10b.mpg").unwrap();
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ffmpeg-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let input = dir.join("r10b.mpg");
+    fs::write(&input, &data).unwrap();
+    let output = Command::new("ffmpeg")
+        .args(["-v", "error", "-i"])
+        .arg(&input)
+        .args([
+            "-frames:v",
+            &FRAMES.to_string(),
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "-",
+        ])
+        .stderr(Stdio::inherit())
+        .output();
+    let _ = fs::remove_dir_all(&dir);
+    let Ok(output) = output else {
+        eprintln!("ffmpeg is not on PATH; skipping");
+        return;
+    };
+    assert!(output.status.success());
+    let size = 640 * 480 * 4;
+    assert_eq!(output.stdout.len(), FRAMES * size);
+    let mut film = Film::open(&data).unwrap();
+    for index in 0..FRAMES {
+        film.present(index).unwrap();
+        let got = &film.frame().rgba;
+        let expected = &output.stdout[index * size..(index + 1) * size];
+        let error: f64 = got
+            .iter()
+            .zip(expected)
+            .enumerate()
+            .filter(|(at, _)| at % 4 != 3)
+            .map(|(_, (&a, &b))| (f64::from(a) - f64::from(b)).powi(2))
+            .sum::<f64>()
+            / (640.0 * 480.0 * 3.0);
+        let psnr = 10.0 * (255.0f64 * 255.0 / error.max(1e-9)).log10();
+        assert!(psnr > 35.0, "frame {index}: {psnr:.1} dB");
+    }
 }

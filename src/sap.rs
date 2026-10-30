@@ -4,21 +4,38 @@
 //! low word first, stands for one RIFF WAV that follows the 8-byte header
 //! back to back (openre's `audio.cpp` documents the masks). Every voice and
 //! BGM `.sap` in the retail data has mask `0x1`: exactly one WAV.
+//!
+//! A sound bank's bits are its slots: `bio2.exe`'s `SsLoadSap` creates the
+//! buffer for slot `n` from the WAV of the `n`th bit (low word bits 0-31,
+//! then high word bits 0-15 as slots 32-47), so a bank may leave slots
+//! empty.
 
 use anyhow::{Result, bail, ensure};
+
+/// The slots a bank holds: the low word's 32 bits and the high word's low 16.
+pub const SLOTS: u32 = 48;
 
 /// The header length before the first WAV.
 pub const HEADER_LEN: usize = 8;
 
 /// The WAVs a `.sap` holds, in order, as slices of `data`.
 pub fn wavs(data: &[u8]) -> Result<Vec<&[u8]>> {
+    Ok(slots(data)?.into_iter().map(|(_, wav)| wav).collect())
+}
+
+/// The WAVs a `.sap` holds with the slot each fills: the index of its mask
+/// bit, the high word's bits counting from 32.
+pub fn slots(data: &[u8]) -> Result<Vec<(u8, &[u8])>> {
     ensure!(data.len() >= HEADER_LEN, "SAP is shorter than its header");
-    let low = u32::from_le_bytes(data[0..4].try_into().unwrap());
-    let high = u32::from_le_bytes(data[4..8].try_into().unwrap());
-    let count = (low.count_ones() + high.count_ones()) as usize;
-    let mut out = Vec::with_capacity(count);
+    let mask = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    ensure!(
+        mask >> SLOTS == 0,
+        "SAP mask 0x{mask:016x} names slots past the {SLOTS} a bank holds"
+    );
+    let slots = (0..64u8).filter(|bit| mask >> bit & 1 != 0);
+    let mut out = Vec::with_capacity(mask.count_ones() as usize);
     let mut at = HEADER_LEN;
-    for index in 0..count {
+    for (index, slot) in slots.enumerate() {
         let Some(header) = data.get(at..at + 8) else {
             bail!("SAP WAV {index} at byte {at} is truncated");
         };
@@ -30,7 +47,7 @@ pub fn wavs(data: &[u8]) -> Result<Vec<&[u8]>> {
         let Some(wav) = data.get(at..at + len) else {
             bail!("SAP WAV {index} at byte {at} runs past the end");
         };
-        out.push(wav);
+        out.push((slot, wav));
         at += len;
     }
     Ok(out)
@@ -78,7 +95,7 @@ mod tests {
         let third = riff(b"WAVEccc");
         let data = sap(
             0b101,
-            0x8000_0000,
+            0x8000,
             &[first.clone(), second.clone(), third.clone()],
         );
         assert_eq!(
@@ -86,6 +103,31 @@ mod tests {
             vec![first.as_slice(), second.as_slice(), third.as_slice()]
         );
         assert!(single_wav(&data).is_err());
+    }
+
+    #[test]
+    fn each_wav_fills_its_bits_slot() {
+        let first = riff(b"WAVEa");
+        let second = riff(b"WAVEbb");
+        let data = sap(0b1000_0100, 0b10, &[first.clone(), second.clone()]);
+        assert!(wavs(&data).is_err());
+        let third = riff(b"WAVEccc");
+        let data = sap(
+            0b1000_0100,
+            0b10,
+            &[first.clone(), second.clone(), third.clone()],
+        );
+        assert_eq!(
+            slots(&data).unwrap(),
+            vec![
+                (2, first.as_slice()),
+                (7, second.as_slice()),
+                (33, third.as_slice())
+            ]
+        );
+        assert!(slots(&sap(0, 0, &[])).unwrap().is_empty());
+        // A bank has 48 slots; the high word's top 16 bits name none.
+        assert!(slots(&sap(0, 0x1_0000, std::slice::from_ref(&first))).is_err());
     }
 
     #[test]

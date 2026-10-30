@@ -101,11 +101,15 @@ pub enum Format {
     Pld,
     /// An RE2 player weapon model (`*.plw`), with the character holding it.
     Plw,
+    /// An RE2 sound table and VAB header (`*.edh`), read through
+    /// [`crate::se2::Edh`].
+    Edh,
     /// An RE2 door archive (`*.do2`). TODO(re2): parse it.
     Do2,
-    /// A Microsoft ADPCM WAV (RE2 voice and music). TODO(re2): decode it.
+    /// A Microsoft ADPCM WAV (RE2 voice, music and sound banks), decoded
+    /// through [`crate::adpcm`].
     AdpcmWav,
-    /// An MPEG program stream film (`movie/*.mpg`). TODO(re2): decode it.
+    /// An MPEG-1 program stream film (`movie/*.mpg`).
     Mpeg,
     /// Any entry outside the known table.
     Opaque,
@@ -145,6 +149,7 @@ impl Format {
             Self::Re2Emd => "re2-emd",
             Self::Pld => "pld",
             Self::Plw => "plw",
+            Self::Edh => "edh",
             Self::Do2 => "do2",
             Self::AdpcmWav => "adpcm-wav",
             Self::Mpeg => "mpeg",
@@ -160,7 +165,7 @@ impl Format {
     /// Whether the format is recognised but has no parser yet: it never
     /// fails a normal run and fails `--strict` like an opaque entry.
     pub fn unsupported(self) -> bool {
-        matches!(self, Self::Do2 | Self::AdpcmWav | Self::Mpeg)
+        matches!(self, Self::Do2)
     }
 }
 
@@ -277,6 +282,7 @@ pub fn classify(path: &str) -> Format {
         Some((_, "pld")) => Format::Pld,
         Some((_, "plw")) => Format::Plw,
         Some((_, "do2")) => Format::Do2,
+        Some((_, "edh")) => Format::Edh,
         Some((_, "mpg")) => Format::Mpeg,
         _ => Format::Opaque,
     }
@@ -573,7 +579,7 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
         Format::Dor => {
             crate::door::parse(data)?;
         }
-        Format::Wav => {
+        Format::Wav | Format::AdpcmWav => {
             crate::audio::parse_wav(data)?;
         }
         Format::Language => {
@@ -603,18 +609,26 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
         Format::Mp4 => {
             crate::mp4::parse(data.to_vec())?.validate()?;
         }
+        Format::Mpeg => {
+            // Demux, index the pictures and the audio frames and decode the
+            // first picture.
+            crate::mpeg::Film::open(data)?;
+        }
         Format::Lua => {
             crate::lua::verify_source(data)?;
         }
         Format::Re2Rdt => {
             crate::rdt2::read(data)?;
         }
+        Format::Edh => {
+            crate::se2::Edh::parse(data)?;
+        }
         Format::Re2Emd | Format::Pld | Format::Plw => {
             // The model viewer's load: an enemy needs the texture beside it
             // and a weapon the character model it belongs to.
             crate::model_viewer::load_with(pack, path, data)?;
         }
-        Format::Opaque | Format::Do2 | Format::AdpcmWav | Format::Mpeg => {
+        Format::Opaque | Format::Do2 => {
             unreachable!("opaque and unsupported entries are handled by the caller")
         }
     }
@@ -991,10 +1005,21 @@ mod tests {
         crate::rdt2::tests::sample()
     }
 
+    /// A one-block mono MS-ADPCM WAV with a single coefficient pair.
     fn adpcm_wav() -> Vec<u8> {
-        let mut data = b"RIFF\x1c\0\0\0WAVEfmt \x10\0\0\0".to_vec();
-        data.extend(crate::format::WAV_MS_ADPCM.to_le_bytes());
-        data.extend([0u8; 14]);
+        let mut fmt = crate::format::WAV_MS_ADPCM.to_le_bytes().to_vec();
+        for field in [1u16, 22050, 0, 0, 0, 8, 4, 4, 4, 1, 256, 0] {
+            fmt.extend(field.to_le_bytes());
+        }
+        let block = [0, 16, 0, 0, 0, 0, 0, 0];
+        let mut data = b"RIFF".to_vec();
+        data.extend((4 + 8 + fmt.len() as u32 + 8 + block.len() as u32).to_le_bytes());
+        data.extend(b"WAVEfmt ");
+        data.extend((fmt.len() as u32).to_le_bytes());
+        data.extend(fmt);
+        data.extend(b"data");
+        data.extend((block.len() as u32).to_le_bytes());
+        data.extend(block);
         data
     }
 
@@ -1019,6 +1044,8 @@ mod tests {
             Format::AdpcmWav
         );
         assert_eq!(classify("player/00/model_0.pld"), Format::Pld);
+        assert_eq!(classify("sound/core/16/bank.edh"), Format::Edh);
+        assert_eq!(classify("room/1000/sound.edh"), Format::Edh);
 
         let mut writer = PackWriter::new();
         writer.add("room/1000/room.rdt", re2_rdt()).unwrap();
@@ -1029,6 +1056,9 @@ mod tests {
         broken[crate::rdt2::OFFSETS + crate::rdt2::RID_SLOT * 4..][..4].fill(0);
         writer.add("room/1002/room.rdt", broken).unwrap();
         writer.add("voice/0/01_00.wav", adpcm_wav()).unwrap();
+        let mut truncated = adpcm_wav();
+        truncated.truncate(30);
+        writer.add("voice/0/01_01.wav", truncated).unwrap();
         writer
             .add("player/00/model_0.pld", crate::emd2::tests::pld())
             .unwrap();
@@ -1040,7 +1070,14 @@ mod tests {
 
         let report = verify_pack(&pack, false);
         let failed: Vec<&str> = report.failures.iter().map(|f| f.path.as_str()).collect();
-        assert_eq!(failed, ["player/00/model_1.pld", "room/1002/room.rdt"]);
+        assert_eq!(
+            failed,
+            [
+                "player/00/model_1.pld",
+                "room/1002/room.rdt",
+                "voice/0/01_01.wav"
+            ]
+        );
         assert_eq!(report.formats[&Format::Re2Rdt].ok, 2);
         assert_eq!(report.formats[&Format::AdpcmWav].ok, 1);
         assert_eq!(report.formats[&Format::Pld].ok, 1);
@@ -1053,7 +1090,7 @@ mod tests {
             [
                 "player/00/model_1.pld",
                 "room/1002/room.rdt",
-                "voice/0/01_00.wav"
+                "voice/0/01_01.wav"
             ]
         );
     }

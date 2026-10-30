@@ -31,7 +31,7 @@
 //! | [`MAX_EMD_JOINTS`] | 4,096 | 16 | EMD/EMW skeleton joints |
 //! | [`MAX_EMD_KEYFRAMES`] | 65,536 | 123 | EMD/EMW keyframes |
 //! | [`MAX_EMD_CLIPS`] | 4,096 | 35 | EMD/EMW animation clips |
-//! | [`MAX_AVI_FRAMES`] | 1,048,576 | ~5,000 | AVI frame index |
+//! | [`MAX_AVI_FRAMES`] | 1,048,576 | ~9,200 | AVI frame and MPEG picture index |
 //! | [`MAX_MASK_GROUPS`] | 32 | 20 | camera mask groups |
 //! | [`MAX_MASK_SPRITES`] | 65,536 | 53 | camera mask sprites |
 //! | [`MAX_WAV_DATA`] | 64 MiB | ~8 MiB | WAV `data` chunk |
@@ -97,7 +97,7 @@ pub const MAX_EMD_JOINTS: usize = 1 << 12;
 pub const MAX_EMD_KEYFRAMES: usize = 1 << 16;
 /// Largest EMD/EMW clip list.
 pub const MAX_EMD_CLIPS: usize = 1 << 12;
-/// Largest AVI frame index.
+/// Largest AVI frame index, and the largest MPEG-1 picture index.
 pub const MAX_AVI_FRAMES: usize = 1 << 20;
 /// Largest camera mask group count (group bits live in a `u32`).
 pub const MAX_MASK_GROUPS: usize = 32;

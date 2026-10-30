@@ -1476,15 +1476,11 @@ impl Display {
         self.set_renderer(graphics)
     }
 
-    /// Present an HD film frame at its own resolution on the GPU backend in
-    /// place of `frame` (see [`GpuRenderer::present_image`]); the software
-    /// backend shows `frame`, the film's 320x240 canvas.
-    #[cfg(feature = "hd")]
-    fn present_film(
-        &mut self,
-        frame: &Framebuffer,
-        film: &crate::hdfilm::VideoFrame,
-    ) -> Result<()> {
+    /// Present a film frame (an HD replacement or an MPEG film) at its own
+    /// resolution on the GPU backend in place of `frame` (see
+    /// [`GpuRenderer::present_image`]); the software backend shows `frame`,
+    /// the film's 320x240 canvas.
+    fn present_film(&mut self, frame: &Framebuffer, film: &crate::media::VideoFrame) -> Result<()> {
         match &mut self.backend {
             Backend::Software {
                 texture, renderer, ..
@@ -8658,10 +8654,10 @@ impl App {
         }
     }
 
-    /// The HD film frame on screen, if a film playing now is an HD
-    /// replacement: the GPU backend presents it at its own resolution.
-    #[cfg(feature = "hd")]
-    fn hd_frame(&self) -> Option<&crate::hdfilm::VideoFrame> {
+    /// The film frame on screen, if a film playing now has its own size (an
+    /// HD replacement or an MPEG film): the GPU backend presents it at its
+    /// own resolution.
+    fn hd_frame(&self) -> Option<&crate::media::VideoFrame> {
         match &self.mode {
             Mode::Movie(session) => session.hd_frame(),
             Mode::Play(session) => session.movie.as_ref()?.hd_frame(),
@@ -9473,14 +9469,11 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
         if gpu_drawn {
             clock.frame_drawn(draw);
             let native = hud.layer().or(app.native_layer());
-            #[cfg(feature = "hd")]
             if let Some(film) = app.hd_frame() {
                 display.present_film(app.frame(), film)?;
             } else {
                 display.present_frame(app.frame(), None, native)?;
             }
-            #[cfg(not(feature = "hd"))]
-            display.present_frame(app.frame(), None, native)?;
         } else {
             app.draw();
             clock.frame_drawn(draw);
@@ -9488,12 +9481,9 @@ fn run_app_loop(app: &mut App, display: &mut Display, stats: bool) -> Result<()>
             display.present_frame(app.frame(), None, native)?;
         }
         if std::mem::take(&mut screenshot) {
-            #[cfg(feature = "hd")]
             let film = app
                 .hd_frame()
                 .map(|film| (&film.rgba[..], (film.width, film.height)));
-            #[cfg(not(feature = "hd"))]
-            let film = None;
             match display.screenshot(app.frame(), film) {
                 Ok(image) => {
                     let name = crate::screenshot::save_in_background(image);
@@ -10004,7 +9994,9 @@ fn apply_menu_settings(
     }
 }
 
-/// Play one film standalone, the `--fmv` debug path.
+/// Play one film standalone, the `--fmv` debug path. `film` is a table id
+/// (`0`-`28`) or the name of a pack film (`movie/<name>`, any accepted
+/// format), the way RE2's opening, in-game films and staff roll are played.
 ///
 /// The film is read from the game pack. A capture never opens audio: it
 /// advances `ticks` fixed 30 Hz ticks, draws the current frame and writes it,
@@ -10014,7 +10006,7 @@ fn apply_menu_settings(
 #[allow(clippy::too_many_arguments)] // the CLI run options are all needed
 pub fn run_fmv(
     pack: &Path,
-    id: u8,
+    film: &str,
     character: u8,
     capture: Option<&Path>,
     ticks: u32,
@@ -10024,7 +10016,7 @@ pub fn run_fmv(
     let save_dir = save::default_save_dir();
     if let Some(capture_path) = capture {
         let pack = open_game_pack(pack, mods, None)?;
-        let mut session = MovieSession::open(&pack, id, character)?;
+        let mut session = MovieSession::open_reference(&pack, film, character)?;
         for _ in 0..ticks {
             // Audio-free: the fixed 30 Hz tick is the clock.
             session.tick(0, None);
@@ -10037,7 +10029,7 @@ pub fn run_fmv(
     }
 
     let pack = open_game_pack(pack, mods, None)?;
-    let session = MovieSession::open(&pack, id, character)?;
+    let session = MovieSession::open_reference(&pack, film, character)?;
     let mut app = App::new(pack, save_dir, true);
     app.queue_movie(session, None);
     let mut display = Display::new("Arklay", false, renderer)?;
@@ -19169,11 +19161,10 @@ mod tests {
             display.present_layers(&recorded, None).unwrap();
         }
         assert!(display.gpu().is_some());
-        // An HD film frame is presented at its own size, and the frames
-        // return to 320x240 after it.
-        #[cfg(feature = "hd")]
+        // An HD or MPEG film frame is presented at its own size, and the
+        // frames return to 320x240 after it.
         {
-            let film = crate::hdfilm::VideoFrame {
+            let film = crate::media::VideoFrame {
                 width: 1280,
                 height: 960,
                 rgba: vec![128; 1280 * 960 * 4],

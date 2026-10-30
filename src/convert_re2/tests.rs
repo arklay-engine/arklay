@@ -55,6 +55,24 @@ fn sap(tag: &[u8]) -> Vec<u8> {
     out
 }
 
+/// A sound-bank `.sap` holding one WAV per entry of `slots`, each with the
+/// body `WAVE<slot>`.
+fn bank(slots: &[u8]) -> Vec<u8> {
+    let mask: u64 = slots.iter().map(|slot| 1u64 << slot).sum();
+    let mut out = mask.to_le_bytes().to_vec();
+    for slot in slots {
+        out.extend(riff(format!("WAVE{slot}").as_bytes()));
+    }
+    out
+}
+
+/// A bank EDH with an empty sound table entry.
+fn edh() -> Vec<u8> {
+    let mut vh = vec![0; 0x820];
+    vh[..4].copy_from_slice(b"pBAV");
+    se2::Edh::new(&[0xff; 4], &vh).unwrap().to_bytes()
+}
+
 /// A `roomcut.bin` whose groups for `rooms` (stage group, room, cuts) point
 /// at one shared uniform background stream, plus pointers left for the
 /// caller to break.
@@ -138,6 +156,15 @@ fn make_install(root: &Path) {
     write(&data.join("Common/Sound/BGM/SUB2F.SAP"), &sap(b"WAVEsub"));
     write(&data.join("Common/Sound/BGM/extra.sap"), &sap(b"WAVEextra"));
     write(&data.join("Common/Sound/BGM/MAIN00.BGM"), b"sequence");
+    write(&data.join("Common/Sound/room/room10a.sap"), &bank(&[1, 33]));
+    write(&data.join("Common/Sound/room/fs53.sap"), &bank(&[0]));
+    write(&data.join("Common/Sound/room/junk.sap"), &bank(&[0]));
+    write(&data.join("Common/Sound/door/door54.sap"), &bank(&[0]));
+    write(&data.join("Common/Sound/arms/weapon19.sap"), &bank(&[2]));
+    write(&data.join("Common/Sound/arms/ARMS13.EDH"), &edh());
+    write(&data.join("Common/Sound/enemy/enemy37.sap"), &bank(&[4]));
+    write(&data.join("Common/Sound/enemy/enem25.edh"), &edh());
+    write(&data.join("Common/Sound/core/core22.sap"), &bank(&[5]));
     write(&data.join("Common/DOOR/DOOR1F.DO2"), b"door");
     write(&data.join("Common/DOOR/vielogo.tga"), b"logo");
     write(&data.join("Zmovie/r109.bin"), &[0, 0, 1, 0xBA, 1]);
@@ -298,6 +325,20 @@ fn converts_every_category() {
             .any(|path| read(&pack, path) == riff(b"WAVEextra"))
     );
     assert!(!pack.paths().any(|path| path.ends_with(".bgm")));
+
+    // Each bank slot is its own WAV, in a hex-numbered bank folder.
+    assert_eq!(read(&pack, "sound/room/10a/01.wav"), riff(b"WAVE1"));
+    assert_eq!(read(&pack, "sound/room/10a/21.wav"), riff(b"WAVE33"));
+    assert_eq!(read(&pack, "sound/step/35/00.wav"), riff(b"WAVE0"));
+    assert_eq!(read(&pack, "sound/door/36/00.wav"), riff(b"WAVE0"));
+    assert_eq!(read(&pack, "sound/arms/13/02.wav"), riff(b"WAVE2"));
+    assert_eq!(read(&pack, "sound/arms/13/bank.edh"), edh());
+    assert_eq!(read(&pack, "sound/enemy/25/04.wav"), riff(b"WAVE4"));
+    assert_eq!(read(&pack, "sound/enemy/25/bank.edh"), edh());
+    assert_eq!(read(&pack, "sound/core/16/05.wav"), riff(b"WAVE5"));
+    assert!(!pack.paths().any(|path| path.contains("junk")));
+    // The fixture rooms carry no sound sections.
+    assert!(!pack.contains("room/1000/sound.edh"));
 
     assert_eq!(read(&pack, "door/1f.do2"), b"door");
     assert!(!pack.paths().any(|path| path.contains("vielogo")));

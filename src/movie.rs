@@ -36,6 +36,13 @@
 //! up to the first cut point, decodes the removed frames to keep the Cinepak
 //! canvas exact and resumes presenting and queueing audio at the second cut
 //! point, which is what the original's restart-at-cut-end achieves.
+//!
+//! RE2's films are MPEG-1 program streams (`movie/<name>.mpg`, 640x480 at
+//! 29.97 fps with MP2 audio) decoded by [`crate::mpeg`]. They have no id
+//! table: [`MovieSession::open_named`] opens one by its pack name (`opn1stl`,
+//! `r109`, `staff`) with the [`NAMED_ID`] id, no prologue cut and any button
+//! as a skip, and [`MovieSession::open_reference`] takes either form, as
+//! `--fmv` does.
 
 use anyhow::{Context, Result, bail};
 
@@ -43,8 +50,9 @@ use crate::audio::SAMPLE_RATE;
 use crate::avi::{AudioFormat, Avi};
 use crate::cinepak::Decoder;
 #[cfg(feature = "hd")]
-use crate::hdfilm::{HdFilm, VideoFrame};
-use crate::pack::{AssetClass, Pack};
+use crate::hdfilm::HdFilm;
+use crate::media::VideoFrame;
+use crate::pack::{AssetClass, Pack, PackAsset};
 
 /// Film ids and their lower-case basenames, in id order 0..=28. Id 10 is the
 /// original's null entry and has no file.
@@ -87,6 +95,10 @@ static UNSKIPPABLE: [u8; 14] = [2, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 2
 
 /// The skip mask of a skippable film: any button.
 const SKIPPABLE_MASK: u16 = 0x0FFF;
+
+/// The id a film opened by name ([`MovieSession::open_named`]) carries: past
+/// the RE1 table, so no table rule applies to it.
+pub const NAMED_ID: u8 = u8::MAX;
 
 /// The prologue cut window in milliseconds (the JPN/US PC intro, id 1).
 const PROLOGUE_CUT_START_MS: u32 = 177_800;
@@ -239,6 +251,8 @@ enum Source {
     /// An HD H.264/AAC replacement (MP4 or AVI), decoded on a worker.
     #[cfg(feature = "hd")]
     Hd(Box<HdFilm>),
+    /// A shipped RE2 MPEG-1 program stream, decoded on the caller's thread.
+    Mpeg(Box<crate::mpeg::Film>),
 }
 
 /// One film being played: the decoder source, the audio queue and the skip
@@ -308,8 +322,14 @@ impl MovieSession {
         let asset = pack
             .read_asset(&stem(id), AssetClass::Movie)?
             .with_context(|| format!("missing film {}", pack_path(id)))?;
+        Self::from_asset(&asset, id, character)
+    }
+
+    /// Open the winning copy of a film, falling back with a warning to the
+    /// copy it shadows when it cannot be played.
+    fn from_asset(asset: &PackAsset<'_>, id: u8, character: u8) -> Result<Self> {
         let path = asset.path().to_owned();
-        let err = match Self::from_bytes(asset.data().to_vec(), id, character)
+        let err = match Self::from_bytes(asset.data(), id, character)
             .with_context(|| format!("failed to open film {path}"))
         {
             Ok(session) => return Ok(session),
@@ -320,25 +340,75 @@ impl MovieSession {
         };
         eprintln!("warning: {err:#}; playing {} instead", shadowed.path());
         let path = shadowed.path().to_owned();
-        Self::from_bytes(shadowed.data().to_vec(), id, character)
+        Self::from_bytes(shadowed.data(), id, character)
             .with_context(|| format!("failed to open film {path}"))
+    }
+
+    /// Open the film a command line names: a table id (`0`-`28`, as
+    /// [`Self::open`]) or a film name (as [`Self::open_named`]).
+    pub fn open_reference(pack: &Pack, film: &str, character: u8) -> Result<Self> {
+        match film.parse::<u8>() {
+            Ok(id) => Self::open(pack, id, character),
+            Err(_) => Self::open_named(pack, film),
+        }
+    }
+
+    /// Open the film stored as `movie/<name>` (any accepted format) and arm
+    /// playback at frame 0: the by-name path for films outside the RE1 id
+    /// table, such as RE2's `opn1stl` opening, `r109` in-game film or
+    /// `staff` roll.
+    ///
+    /// A named film carries [`NAMED_ID`] as its id, so no RE1 table rule
+    /// (the prologue cut, the unskippable class) applies; it accepts any
+    /// button as a skip.
+    pub fn open_named(pack: &Pack, name: &str) -> Result<Self> {
+        let name = name.to_ascii_lowercase();
+        if name.is_empty() || name.contains(['/', '\\', '.']) {
+            bail!("`{name}` is not a film name");
+        }
+        let stem = format!("movie/{name}");
+        let asset = pack
+            .read_asset(&stem, AssetClass::Movie)?
+            .with_context(|| format!("missing film {stem}"))?;
+        let mut session = Self::from_asset(&asset, NAMED_ID, 0)?;
+        session.skip_mask = SKIPPABLE_MASK;
+        Ok(session)
     }
 
     /// Build a session over one film file, picking the decoder from its
     /// container and codec.
-    fn from_bytes(bytes: Vec<u8>, id: u8, character: u8) -> Result<Self> {
+    fn from_bytes(bytes: &[u8], id: u8, character: u8) -> Result<Self> {
+        if crate::format::is_mpeg_program(bytes) {
+            return Self::from_mpeg(bytes, id, character);
+        }
         if bytes.starts_with(b"RIFF") {
-            let avi = Avi::parse_any(bytes).context("failed to parse AVI")?;
+            let avi = Avi::parse_any(bytes.to_vec()).context("failed to parse AVI")?;
             if avi.format().video_codec.eq_ignore_ascii_case(b"cvid") {
                 // Re-run the Cinepak checks (size, PCM audio) on the parse.
                 return Self::from_avi(Avi::parse(avi.into_data())?, id, character);
             }
             return Self::from_media(crate::media::Media::from_avi(avi)?, id, character);
         }
-        if crate::mp4::is_mp4(&bytes) {
-            return Self::from_media(crate::mp4::parse(bytes)?, id, character);
+        if crate::mp4::is_mp4(bytes) {
+            return Self::from_media(crate::mp4::parse(bytes.to_vec())?, id, character);
         }
-        bail!("film is neither AVI nor MP4")
+        bail!("film is neither AVI, MP4 nor an MPEG program stream")
+    }
+
+    /// Build a session over a shipped MPEG-1 film.
+    fn from_mpeg(bytes: &[u8], id: u8, character: u8) -> Result<Self> {
+        let film = crate::mpeg::Film::open(bytes)?;
+        let frame_rate = film.frame_rate();
+        let frame_count = film.frame_count();
+        let cut = cut_frames(id, character, frame_rate, frame_count);
+        Self::with_source(
+            Source::Mpeg(Box::new(film)),
+            id,
+            character,
+            frame_rate,
+            frame_count,
+            cut,
+        )
     }
 
     /// Build a session over an HD film.
@@ -471,6 +541,7 @@ impl MovieSession {
             }
             #[cfg(feature = "hd")]
             Source::Hd(film) => film.present(target)?,
+            Source::Mpeg(film) => film.present(target)?,
         }
         self.presented = kept;
         Ok(())
@@ -505,6 +576,11 @@ impl MovieSession {
             }
             #[cfg(feature = "hd")]
             Source::Hd(film) => {
+                let start = samples_at(index, self.frame_rate);
+                let end = samples_at(index + 1, self.frame_rate);
+                film.audio(start, end, &mut self.pending_audio);
+            }
+            Source::Mpeg(film) => {
                 let start = samples_at(index, self.frame_rate);
                 let end = samples_at(index + 1, self.frame_rate);
                 film.audio(start, end, &mut self.pending_audio);
@@ -680,22 +756,26 @@ impl MovieSession {
     }
 
     /// The presented frame as 320x240 RGBA8, refreshed on every advance. An
-    /// HD film is box-filtered onto the canvas, letterboxed to its aspect.
+    /// HD or MPEG film is box-filtered onto the canvas, letterboxed to its
+    /// aspect.
     pub fn frame_rgba(&self) -> &[u8] {
         match &self.source {
             Source::Cinepak { rgba, .. } => rgba,
             #[cfg(feature = "hd")]
             Source::Hd(film) => &film.frame().canvas,
+            Source::Mpeg(film) => &film.frame().canvas,
         }
     }
 
-    /// The presented HD frame at its own size, for a renderer that scales it
-    /// to the output itself; `None` for a Cinepak film.
-    #[cfg(feature = "hd")]
+    /// The presented frame at its own size (an HD replacement or an MPEG
+    /// film), for a renderer that scales it to the output itself; `None`
+    /// for a 320x240 Cinepak film.
     pub fn hd_frame(&self) -> Option<&VideoFrame> {
         match &self.source {
             Source::Cinepak { .. } => None,
+            #[cfg(feature = "hd")]
             Source::Hd(film) => Some(film.frame()),
+            Source::Mpeg(film) => Some(film.frame()),
         }
     }
 
@@ -1289,6 +1369,58 @@ mod tests {
         assert!(MovieSession::open(&pack, 10, 0).is_err());
         assert!(MovieSession::open(&pack, 3, 0).is_err());
         assert!(MovieSession::open(&pack, 0, 0).is_ok());
+    }
+
+    #[test]
+    fn a_named_mpeg_film_plays_end_to_end() {
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                "movie/tiny.mpg",
+                include_bytes!("mpeg/testdata/tiny.mpg").to_vec(),
+            )
+            .unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        assert!(MovieSession::open_named(&pack, "missing").is_err());
+        assert!(MovieSession::open_named(&pack, "../tiny").is_err());
+        // A replacement that cannot be played falls back to the film.
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                "movie/tiny.mpg",
+                include_bytes!("mpeg/testdata/tiny.mpg").to_vec(),
+            )
+            .unwrap();
+        writer.add("movie/tiny.avi", b"RIFF....".to_vec()).unwrap();
+        let shadowing = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        assert_eq!(
+            MovieSession::open_named(&shadowing, "tiny")
+                .unwrap()
+                .frame_count(),
+            9
+        );
+        let mut session = MovieSession::open_reference(&pack, "TINY", 0).unwrap();
+        assert_eq!(session.id(), NAMED_ID);
+        assert_eq!(session.skip_mask(), SKIPPABLE_MASK);
+        assert_eq!(session.frame_count(), 9);
+        assert_eq!(session.hd_frame().unwrap().width, 48);
+        assert_eq!(session.frame_rgba().len(), 320 * 240 * 4);
+        // 29.97 fps on the 30 Hz tick: one frame a tick, the last tick ends it.
+        let mut advanced = 0;
+        let mut audio = session.take_audio().len();
+        loop {
+            match session.tick(0, None) {
+                MovieTick::Advanced => advanced += 1,
+                MovieTick::Waiting => {}
+                MovieTick::Finished => break,
+                MovieTick::Skipped => panic!("no button was pressed"),
+            }
+            audio += session.take_audio().len();
+        }
+        assert_eq!(advanced, 8);
+        assert_eq!(session.frame_index(), 8);
+        // Every kept frame's span of stereo audio was queued.
+        assert_eq!(audio as u64, session.samples_before(9) * 2);
     }
 
     #[test]

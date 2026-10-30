@@ -121,7 +121,7 @@ audio the original shipped. Every loader therefore looks an asset up by *stem*
 | --- | --- |
 | image | `webp` > `png` > `bmp` > `tim` > `pix` |
 | audio | `ogg` > `wav` |
-| movie | `mp4` > `avi` |
+| movie | `mp4` > `avi` > `mpg` |
 
 **Any entry in a mod whose stem matches a known asset is an override.** The
 winning layer is still decided by `(load_order, id)` exactly as above, and only
@@ -143,7 +143,8 @@ never carry a replacement format.
 
 A film replacement is either an MP4 or an AVI holding H.264 video (any
 profile OpenH264 decodes, e.g. High) with optional AAC-LC audio, or a Cinepak
-AVI like the shipped films. The decoder is picked from the container and the
+AVI like the shipped RE1 films. RE2's shipped films are MPEG-1 program streams
+(`movie/<name>.mpg`), so an MP4 or AVI at the same stem replaces one. The decoder is picked from the container and the
 codec, so an H.264 AVI can sit at the shipped `movie/<name>.avi` path or an MP4
 next to it at `movie/<name>.mp4`; there is no hash lookup. The film plays at
 its own frame rate on the 30 Hz clock and its audio is resampled to the
@@ -196,7 +197,9 @@ is exact.
 | BGM | `bgm/013`, `bgm/100` | ogg, wav | any |
 | sound effect | `se/a_mcn03`, `se/ft_wda` | ogg, wav | any |
 | voice | `voice/01_09` | ogg, wav | any |
-| film | `movie/00`, `movie/17`, `movie/0f` (the film id) | mp4, avi | any size up to 4096x4096, any frame rate |
+| RE2 sound bank slot | `sound/room/10a/01`, `sound/door/36/00`, `sound/step/35/00` | ogg, wav | any |
+| RE2 sound table | `sound/enemy/25/bank.edh`, `room/1000/sound.edh` | edh | — |
+| film | `movie/00`, `movie/17`, `movie/0f` (the film id); RE2 `movie/opn1stl`, `movie/staff` (the film name) | mp4, avi, mpg | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' names without their extensions: a room's
 files sit in its folder `room/<room>` (the three-digit lower-case room id,
@@ -207,7 +210,8 @@ the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
 stage row and the lowercase hex id (`voice::entry_path`), `door`, `movie`,
 `effect`, `map`, `file` and `font` use two lower-case hex digits of the door
 type, film id, room effect-sheet index, map number, document (item
-`0x5F + doc`) and page, and font id, and everything else is the literal name `arklay list` prints. Music tracks, including the former
+`0x5F + doc`) and page, and font id, RE2 sound banks use `sound/<kind>/<bank id>/<slot>`
+with two lower-case hex digits for the slot (`se2::slot_stem`), and everything else is the literal name `arklay list` prints. Music tracks, including the former
 `Se_*` group layers, are all `bgm/<track id>`; the converter owns the only
 name-to-id table.
 
@@ -864,6 +868,16 @@ events are inert.
 to structured code, and `arklay scd build 1000.akscr --out room/100/room.scd`
 compiles it back. Every room of the shipped game decompiles to a script that
 compiles to byte-identical init, main and event streams.
+
+An RE2 room's scripts export the same way: `scd export` detects the RDT's
+dialect and writes its init and main procedure lists as `.s` (`.version 1`,
+`.game re2`, one `.proc` per procedure) or `.akscr` (`#game re2`, one
+`proc init_NN` / `proc main_NN` per procedure, with structured `if`/`else`,
+`while`, `do`/`while`, `for`, `for2` and `switch`; `src/scd2/akscr.rs`
+documents the grammar). All 501 retail RE2 rooms decompile, with every block
+structured, to scripts that compile back to byte-identical procedure lists.
+Building RE2 scripts back into a room (`scd build`) and the `--list`
+listing are not supported yet.
 
 One script covers every variant of a room: both players, both mansion visits
 and every release. Where the variants differ, an `if` tests the variant as

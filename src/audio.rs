@@ -162,8 +162,10 @@ impl Wav {
 /// Parse a RIFF/WAVE image, returning its format and `data` chunk bytes.
 ///
 /// Walks the chunk list, skipping anything that is not `fmt ` or `data`.
-/// Only integer PCM is supported: 8-bit unsigned or 16-bit little-endian
-/// signed, any sample rate, any non-zero channel count.
+/// Integer PCM (8-bit unsigned or 16-bit little-endian signed) is returned
+/// as is; Microsoft ADPCM (RE2's codec) is decoded to 16-bit samples
+/// ([`crate::adpcm`]). Any sample rate and non-zero channel count is
+/// accepted.
 pub fn parse_wav(bytes: &[u8]) -> Result<Wav> {
     if bytes.len() < 12 {
         bail!("WAV file is smaller than the 12-byte RIFF header");
@@ -176,6 +178,7 @@ pub fn parse_wav(bytes: &[u8]) -> Result<Wav> {
     }
 
     let mut format = None;
+    let mut adpcm = None;
     let mut channels = 0u16;
     let mut sample_rate = 0u32;
     let mut data = None;
@@ -212,9 +215,21 @@ pub fn parse_wav(bytes: &[u8]) -> Result<Wav> {
                 }
                 let fmt = &bytes[start..end];
                 let tag = u16::from_le_bytes([fmt[0], fmt[1]]);
-                if tag != 1 {
-                    bail!("unsupported WAV format tag {tag}: only integer PCM (1) is supported");
+                if tag == crate::adpcm::FORMAT_TAG {
+                    let decoder = crate::adpcm::Format::parse(fmt)?;
+                    channels = decoder.channels;
+                    sample_rate = decoder.sample_rate;
+                    format = Some(WavFormat::S16Le);
+                    adpcm = Some(decoder);
+                    offset = end + (size & 1);
+                    continue;
                 }
+                if tag != 1 {
+                    bail!(
+                        "unsupported WAV format tag {tag}: only integer PCM (1) and MS-ADPCM (2) are supported"
+                    );
+                }
+                adpcm = None;
                 let fmt_channels = u16::from_le_bytes([fmt[2], fmt[3]]);
                 let fmt_rate = u32::from_le_bytes([fmt[4], fmt[5], fmt[6], fmt[7]]);
                 let bits = u16::from_le_bytes([fmt[14], fmt[15]]);
@@ -245,7 +260,14 @@ pub fn parse_wav(bytes: &[u8]) -> Result<Wav> {
     }
 
     let format = format.context("WAV file has no `fmt ` chunk")?;
-    let data = data.context("WAV file has no `data` chunk")?;
+    let mut data = data.context("WAV file has no `data` chunk")?;
+    if let Some(decoder) = adpcm {
+        let samples = crate::adpcm::decode(&decoder, &data)?;
+        data = Vec::with_capacity(samples.len() * 2);
+        for sample in samples {
+            data.extend(sample.to_le_bytes());
+        }
+    }
     Ok(Wav {
         format,
         channels,
@@ -1478,6 +1500,24 @@ mod tests {
         body.extend_from_slice(&chunk(b"data", &[0u8; 4]));
         let err = parse_body(&body);
         assert!(err.contains("zero sample rate"), "{err}");
+    }
+
+    #[test]
+    fn decodes_ms_adpcm_to_s16() {
+        let mut fmt = fmt_payload(2, 1, 22050, 4);
+        fmt[12..14].copy_from_slice(&8u16.to_le_bytes());
+        fmt.extend_from_slice(&4u16.to_le_bytes());
+        fmt.extend_from_slice(&4u16.to_le_bytes());
+        fmt.extend_from_slice(&1u16.to_le_bytes());
+        fmt.extend_from_slice(&256i16.to_le_bytes());
+        fmt.extend_from_slice(&0i16.to_le_bytes());
+        let mut body = chunk(b"fmt ", &fmt);
+        body.extend_from_slice(&chunk(b"fact", &4u32.to_le_bytes()));
+        body.extend_from_slice(&chunk(b"data", &[0, 16, 0, 7, 0, 3, 0, 0x10]));
+        let wav = parse_wav(&riff(&body)).unwrap();
+        assert_eq!(wav.format, WavFormat::S16Le);
+        assert_eq!((wav.channels, wav.sample_rate), (1, 22050));
+        assert_eq!(to_mono(&wav).unwrap(), vec![3, 7, 23, 23]);
     }
 
     #[test]
