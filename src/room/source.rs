@@ -556,7 +556,7 @@ impl RoomSource {
         let room_anim = anim
             .filter(|anim| pack.contains(&format!("{anim}.emr")))
             .and_then(|anim| {
-                build_anim(&anim, pack)
+                build_anim(&anim, pack, self.dialect)
                     .map_err(|error| model_warnings.push(format!("animation {anim}: {error:#}")))
                     .ok()
             });
@@ -945,9 +945,27 @@ fn build_effects(dir: &str, files: Option<&[Option<u8>]>, pack: &Pack) -> Result
 }
 
 /// Load the room's player-animation pair `stem` (`.emr` + `.edd`).
-fn build_anim(stem: &str, pack: &Pack) -> Result<crate::model::RoomAnim> {
+fn build_anim(stem: &str, pack: &Pack, dialect: Dialect) -> Result<crate::model::RoomAnim> {
     let read = |extension: &str| pack.read(&format!("{stem}.{extension}"));
-    emd::parse_room_anim_files(&read("emr")?, &read("edd")?)
+    let (emr, edd) = (read("emr")?, read("edd")?);
+    match dialect {
+        Dialect::Re1 => emd::parse_room_anim_files(&emr, &edd),
+        Dialect::Re2 => crate::emd2::parse_room_anim(&emr, &edd),
+    }
+}
+
+/// The pack entries of an RE2 room's own player animations, as `(entry, bytes)`.
+pub(super) fn re2_anim_files(data: &[u8], id: RoomId) -> Vec<(String, Vec<u8>)> {
+    let Some((emr, edd)) = crate::rdt2::room_anim(data)
+        .filter(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).is_ok())
+    else {
+        return Vec::new();
+    };
+    let stem = slot_stem(&format!("{}/anim", id.rdt_dir()), PLAYER_ANIMATION);
+    vec![
+        (format!("{stem}.emr"), emr.to_vec()),
+        (format!("{stem}.edd"), edd.to_vec()),
+    ]
 }
 
 /// An animation frame from its raw 24-byte blocks.

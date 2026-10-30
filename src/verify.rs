@@ -483,7 +483,9 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
                 pack.read(&entry)
                     .with_context(|| format!("the pair's {entry} is missing"))
             };
-            crate::emd::parse_room_anim_files(&half("emr")?, &half("edd")?)?;
+            let (emr, edd) = (half("emr")?, half("edd")?);
+            crate::emd::parse_room_anim_files(&emr, &edd)
+                .or_else(|_| crate::emd2::parse_room_anim(&emr, &edd))?;
         }
         Format::Cut => {
             crate::assets::decode_image_bytes(path_extension(path), data)?;

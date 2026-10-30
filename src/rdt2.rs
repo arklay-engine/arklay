@@ -132,6 +132,44 @@ pub fn messages(data: &[u8]) -> Result<Vec<&[u8]>> {
         .collect()
 }
 
+/// Section slot of the room's animation banks (`Rbj_set`).
+const RBJ_SLOT: usize = 22;
+
+/// The bit of a bank's mask that gives it to the player.
+const RBJ_PLAYER: u32 = 1;
+
+/// The room's own player animations (`Rbj_set`), as `(EMR, EDD)`: a table
+/// offset and count, then per bank the offsets of its mask, which the EMR
+/// follows, and of its EDD, all from the section's start. As in `Rbj_set`, the
+/// last bank for the player wins.
+pub fn room_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
+    let start = offset(data, RBJ_SLOT).ok()? as usize;
+    if start == 0 {
+        return None;
+    }
+    let section = data.get(start..)?;
+    let table = u32_at(section, 0).ok()? as usize;
+    let count = u32_at(section, 4).ok()? as usize;
+    let bank = |index: usize| {
+        let at = table + index * 8;
+        Some((
+            u32_at(section, at).ok()? as usize,
+            u32_at(section, at + 4).ok()? as usize,
+        ))
+    };
+    let (mask, edd) = (0..count)
+        .filter_map(bank)
+        .rfind(|&(mask, _)| u32_at(section, mask).is_ok_and(|bits| bits & RBJ_PLAYER != 0))?;
+    // A bank runs up to whatever comes next: another bank, or the table.
+    let end = (0..count)
+        .filter_map(bank)
+        .map(|(mask, _)| mask)
+        .chain([table])
+        .filter(|&at| at > edd)
+        .min()?;
+    Some((section.get(mask + 4..edd)?, section.get(edd..end)?))
+}
+
 /// Section slot of the room's sound table (EDT); slot 1 is its VAB header.
 const EDT_SLOT: usize = 0;
 

@@ -268,7 +268,9 @@ impl Loaded {
     /// else (including the undetectable stub RDTs) through the RE1 parser.
     pub fn from_rdt(pack: &Pack, id: RoomId, data: Vec<u8>) -> Result<Self> {
         if crate::format::rdt(&data).dialect() == Some(Dialect::Re2) {
-            let state = crate::rdt2::read(&data)?.build(id, pack)?;
+            let mut state = crate::rdt2::read(&data)?.build(id, pack)?;
+            state.room_anim = crate::rdt2::room_anim(&data)
+                .and_then(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).ok());
             return Ok(Self {
                 id,
                 state,
@@ -628,7 +630,16 @@ pub fn convert_rdt2(
     if back != source {
         bail_difference("does not read back as the same definition", &source, &back)?;
     }
-    let pack = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes()?)?;
+    let anim = source::re2_anim_files(data, id);
+    let mut writer = crate::pack::PackWriter::new();
+    for (path, bytes) in &anim {
+        writer.add(path, bytes.clone())?;
+    }
+    writer.add(
+        &format!("{}/{}", id.rdt_dir(), source::XML_FILE),
+        text.clone().into_bytes(),
+    )?;
+    let pack = Pack::from_bytes(writer.to_bytes()?)?;
     let built = Loaded::from_xml(&pack, id, &text)
         .context("the written room does not build")?
         .state;
@@ -644,7 +655,7 @@ pub fn convert_rdt2(
         anyhow::bail!("the written room script does not compile back to the room's scripts");
     }
     // An RE2 room is one RDT's: its folder is the RDT's.
-    Ok(vec![
+    let mut files = vec![
         (
             format!("{}/{}", id.rdt_dir(), source::XML_FILE),
             text.into_bytes(),
@@ -653,7 +664,9 @@ pub fn convert_rdt2(
             format!("{}/{}", id.rdt_dir(), crate::scd2::SCRIPT_FILE),
             script_text.into_bytes(),
         ),
-    ])
+    ];
+    files.extend(anim);
+    Ok(files)
 }
 
 /// Convert one RDT into its room folder: `room.xml` and the other files it
