@@ -17,6 +17,9 @@
 //! | `Pl{0,1}/PLD/PL<id>W<nn>.PLW` | `player/<id>/weapon/<nn>_<s>.plw` |
 //! | `Pl{0,1}/Voice/stageN/vNNN.sap` | `voice/<s>/<NN>_<id>.wav` |
 //! | `Common/Sound/BGM/{main,sub}<nn>[_<k>].sap` | `bgm/<track:03x>.wav` |
+//! | `Common/Sound/{door,arms,room,enemy,core}/*.sap` | `sound/<kind>/<id>/<slot:02x>.wav` |
+//! | `Common/Sound/{arms,enemy,core}/*.EDH` | `sound/<kind>/<id>/bank.edh` |
+//! | RDT sections 0 and 1 (sound table, VAB header) | `room/<id>/sound.edh` |
 //! | `Common/DOOR/DOOR<nn>.DO2` | `door/<nn>.do2` |
 //! | `Zmovie`, `Pl{0,1}/Zmovie` `*.bin` | `movie/<stem>.mpg` |
 //! | `Pl0/PLD/PDEMO0n.DAT`, `Pl1/PLD/PDEMO1n.DAT` | `demo/<nn>.dat` |
@@ -32,7 +35,8 @@
 //! `room.rdt`, which the engine still loads. An enemy texture is written as
 //! an indexed BMP page plus a palette swatch per further CLUT row
 //! ([`emd2::texture_bmps`]). Music tracks are numbered as RE1's are
-//! ([`bgm_track`]). Each room's English name comes from Classic REbirth's
+//! ([`bgm_track`]). Sound banks are split into one WAV per slot, named as
+//! [`crate::se2`] describes. Each room's English name comes from Classic REbirth's
 //! debug room table in the install's `ddraw.dll` ([`room_names`]).
 //!
 //! The six `Pdemo**p.dat` files are deliberately not packed: they are
@@ -54,7 +58,7 @@ use crate::manifest;
 use crate::pack::PackWriter;
 use crate::progress::Progress;
 use crate::state::RoomId;
-use crate::{adt, bmp, emd2, sap};
+use crate::{adt, bmp, emd2, sap, se2};
 
 /// The pack id of a converted RE2 install.
 pub const BASE_PACK_ID: &str = "re2";
@@ -80,8 +84,8 @@ const NAME_OFFSET: usize = 6;
 const FIRST_ROOM_NAME: &[u8] = b"BACKSTREET A     \0";
 
 /// Phases [`convert`] reports: scan, room, cut, enemy, player, voice, bgm,
-/// door, movie, demo, manifest, compress, write.
-const PHASES: u64 = 13;
+/// sound, door, movie, demo, manifest, compress, write.
+const PHASES: u64 = 14;
 
 /// The child of `dir` named `name`, matched case-insensitively.
 fn child(dir: &Path, name: &str) -> Option<PathBuf> {
@@ -438,6 +442,19 @@ pub(crate) fn convert(
         for (entry, data) in files {
             tally.add(&mut writer, "room", &entry, data)?;
         }
+        match crate::rdt2::sound_sections(&room.bytes)
+            .and_then(|sections| sections.map(|(edt, vh)| se2::Edh::new(edt, vh)).transpose())
+        {
+            Ok(Some(edh)) => {
+                let entry = format!("room/{folder}/{}", se2::ROOM_EDH_NAME);
+                tally.add(&mut writer, "sound", &entry, edh.to_bytes())?;
+            }
+            Ok(None) => {}
+            Err(error) => warnings.push(format!(
+                "{}: no room sound table: {error:#}",
+                id.rdt_entry()
+            )),
+        }
         progress.advance(&folder);
     }
     progress.end_phase();
@@ -455,6 +472,7 @@ pub(crate) fn convert(
     copy_players(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_voice(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_bgm(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
+    copy_sound_banks(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_doors(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_demos(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
@@ -909,6 +927,64 @@ fn copy_bgm(
         let entry = format!("bgm/{track:03x}.wav");
         tally.add(writer, "bgm", &entry, sap_wav(&path)?)?;
         progress.advance(&entry);
+    }
+    progress.end_phase();
+    Ok(())
+}
+
+/// The `Common/Sound` sound banks: every `.sap`'s WAVs as
+/// `sound/<kind>/<id>/<slot:02x>.wav` and every `.EDH` as
+/// `sound/<kind>/<id>/bank.edh` ([`se2`]). A file the naming does not cover
+/// is skipped with a warning.
+fn copy_sound_banks(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+    progress: &mut Progress,
+) -> Result<()> {
+    let mut files = Vec::new();
+    for kind in ["door", "arms", "room", "enemy", "core"] {
+        let dir = layout.common(&["Sound", kind]);
+        if dir.is_none() && layout.common.is_some() {
+            warnings.push(format!(
+                "no Common/Sound/{kind} directory; its sound bank will be missing"
+            ));
+        }
+        files.extend(
+            files_in(dir)?
+                .into_iter()
+                .filter_map(|path| upper_parts(&path).map(|parts| (path, parts)))
+                .filter(|(_, (_, extension))| matches!(extension.as_str(), "SAP" | "EDH")),
+        );
+    }
+    progress.begin("sound", files.len() as u64);
+    for (path, (stem, extension)) in files {
+        let bank = if extension == "SAP" {
+            se2::sap_bank(&stem)
+        } else {
+            se2::edh_bank(&stem)
+        };
+        let Some((folder, id)) = bank else {
+            warnings.push(format!(
+                "{}: not a numbered sound bank; skipped",
+                path.display()
+            ));
+            progress.advance(&stem);
+            continue;
+        };
+        let dir = se2::bank_dir(folder, &id);
+        let data = read(&path)?;
+        if extension == "EDH" {
+            se2::Edh::parse(&data).with_context(|| format!("{}", path.display()))?;
+            tally.add(writer, "sound", &format!("{dir}/{}", se2::EDH_NAME), data)?;
+        } else {
+            for (slot, wav) in sap::slots(&data).with_context(|| format!("{}", path.display()))? {
+                let entry = format!("{}.wav", se2::slot_stem(&dir, slot));
+                tally.add(writer, "sound", &entry, wav.to_vec())?;
+            }
+        }
+        progress.advance(&dir);
     }
     progress.end_phase();
     Ok(())

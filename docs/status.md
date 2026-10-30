@@ -48,8 +48,9 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-28.
 | R1 RE2 first light | RE2 rooms: the `rdt2` reader (cameras, RVD switch zones, SCA collision), letter stages A-G, the base manifest's `start_room`, the collision debug overlay, and the TeamX RE2 HD backgrounds | done |
 | R2 RE2 models | RE2 EMD, PLD and PLW through the shared model and animation path, the `--model` viewer, per-camera LIT lights, HD model skins, and the `re2` pack conventions | done |
 | R3 RE2 scripts | The RE2 SCD reader (`scd2`): init and main procedure lists, the RE2 opcode table, `scd export` to `.s` and structured `.akscr`, both round-tripping every retail room byte for byte | done |
+| R5 RE2 audio | MS-ADPCM decoding (`adpcm`), matching ffmpeg up to its rounding, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
 
-RE2 milestones R4 onwards are still open and tracked by the
+The other RE2 milestones (R4, R6 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
@@ -932,6 +933,36 @@ all 501 rooms (5090 procedures) rebuild their lists byte for byte and
 round-trip through both forms, with every block decompiled to its structured
 form. Running the scripts, `scd build` for RE2 and the `.lst` listing come
 later.
+
+RE2 R5 (#249) makes RE2 audio play. `adpcm` decodes MS-ADPCM (WAVE tag 2),
+ported from biohazard-utils' `MSADPCMDecoder`, and `audio::parse_wav` uses it,
+so every voice, BGM and sound WAV loads; `verify` parses them instead of
+listing them as unsupported. The port predicts with an arithmetic shift where
+ffmpeg divides; `tests/real/re2_real.rs` decodes all 2893 MS-ADPCM WAVs (1454
+distinct, 316M samples) and checks that the dividing variant matches ffmpeg
+sample for sample and the shipped shift stays within 79 (the bound is 128).
+Each `.sap` bank's 64-bit mask gives the slot of each WAV it fronts, so the
+converter splits the door, arms, room, enemy and core banks into
+`sound/<kind>/<id>/<slot>.wav` (hex ids; the `.sap` names are decimal, the
+`.EDH` names hex), footstep sets into `sound/step/<id>/`, and stores each
+bank's EDH sound table (EDT entries plus the VAB header the tone volumes live
+in) as `bank.edh`; a room's own table, RDT sections 0 and 1, becomes
+`room/<id>/sound.edh` (476 of 501 rooms). `se2::Banks` loads banks the way
+`SsLoadBanks` does (the room bank, its three footstep sets at slots 23, 26 and
+29 from `footstep_tbl`, `room000` for the rooms `Room_fs_ck` lists, core 0x16
+over every core but 0x15, the reverb enemy bank for 0x25/0x26) and resolves
+a `Snd_se_on` id (type byte 3, slot byte 2) to a WAV and the `SsSetVol` gain
+of its EDT tone. `bgm2` holds the room music table: `bgm_tbl` has one `u16`
+per room (main id low, sub id high, `0x3f` none) written only by script opcode
+0x57 `sce_bgmtbl_set`, and the `bgm_lut`/`sbgm_lut` channel tables and the
+track name tables from `bio2.exe`; every referenced track is packed except
+`main26`, which the game does not ship. The `.BGM` files are PSX leftovers (a
+pQES sequence and a pBAV VAB): the PC executable has no sequencer and only
+reads them for a size check, so they are not packed and need no sequencer;
+the streamed `.sap` WAVs are the music. Not modelled yet: the `Snd_se_on` and
+`SsPlay` per-room special cases, 3D panning, the `SsLoadHack` dual-BGM
+speaker setup, and running the music table, which waits for the RE2 script VM
+(R8).
 
 The manifest no longer carries `rdt_version`/`scd_version`: formats are
 detected per file (`src/format.rs`), so one pack may hold both dialects.
