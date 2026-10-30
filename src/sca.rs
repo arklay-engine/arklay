@@ -11,6 +11,10 @@ use crate::state::{Sca, ScaRect};
 
 /// The record id bit the player's collision mask tests (`Sc_id 0x80 << 8`).
 pub const PLAYER_MASK: u16 = 0x8000;
+/// `_Spl`'s mask: the records that stop a script's character.
+pub const CHARACTER_MASK: u16 = 0x1000;
+/// The mask of the two characters `_Spl` treats apart, ids 0x45 and 0x4F.
+pub const CHARACTER_MASK_LOW: u16 = 0x0800;
 /// The record id bit that exempts a record from the body push.
 const NO_PUSH: u16 = 0x0100;
 /// The player's collision radius (`Player_set`).
@@ -54,9 +58,9 @@ fn area(sca: &Sca, x: i32, z: i32) -> u16 {
 
 /// Whether the record applies to a player at `(x, z)` on `floor`, inside the
 /// outline grown by `radius`.
-fn applies(record: &ScaRect, area: u16, pos: [i32; 3], radius: i32, floor: u8) -> bool {
+fn applies(record: &ScaRect, mask: u16, area: u16, pos: [i32; 3], radius: i32, floor: u8) -> bool {
     record.kind & area != 0
-        && record.id & PLAYER_MASK != 0
+        && record.id & mask != 0
         && record.floor & (1u32 << floor) != 0
         && inside_grown(record, pos[0], pos[2], radius)
 }
@@ -70,6 +74,17 @@ fn inside_grown(record: &ScaRect, x: i32, z: i32, radius: i32) -> bool {
 
 /// Move a body from `prev` to `proposed`, pushing it out of the records.
 pub fn resolve(sca: &Sca, prev: [i32; 3], proposed: [i32; 3], radius: i32) -> Resolved {
+    resolve_masked(sca, PLAYER_MASK, prev, proposed, radius)
+}
+
+/// [`resolve`] against the records for `mask`, `Sca_ck_em`'s second argument.
+pub fn resolve_masked(
+    sca: &Sca,
+    mask: u16,
+    prev: [i32; 3],
+    proposed: [i32; 3],
+    radius: i32,
+) -> Resolved {
     let mut pos = proposed;
     let floor = floor_of(pos[1]);
     // `Sca_ck_info` picks the quadrant once, before anything pushes the body.
@@ -77,7 +92,7 @@ pub fn resolve(sca: &Sca, prev: [i32; 3], proposed: [i32; 3], radius: i32) -> Re
     let mut hit = false;
     let mut push_z = None;
     for record in &sca.records {
-        if !applies(record, area, pos, radius, floor) || record.id & NO_PUSH != 0 {
+        if !applies(record, mask, area, pos, radius, floor) || record.id & NO_PUSH != 0 {
             continue;
         }
         let before = pos;
@@ -648,7 +663,15 @@ pub fn stairs_ahead(sca: &Sca, pos: [i32; 3], angle: u16, radius: i32) -> Option
     let area = area(sca, x, z);
     // `Sca_ck_info` doesn't stop at a hit, so the last stairs in reach win.
     sca.records.iter().rev().find(|record| {
-        record.shape() == 12 && applies(record, area, [x, pos[1], z], STAIRS_REACH, floor)
+        record.shape() == 12
+            && applies(
+                record,
+                PLAYER_MASK,
+                area,
+                [x, pos[1], z],
+                STAIRS_REACH,
+                floor,
+            )
     })
 }
 
@@ -702,6 +725,26 @@ mod tests {
         let start = 1000 - PLAYER_RADIUS - 1;
         let hit = resolve(&sca, [start, 0, 1500], [start + 50, 0, 1600], PLAYER_RADIUS);
         assert_eq!(hit.pos, [start, 0, 1600]);
+    }
+
+    #[test]
+    fn a_character_answers_to_its_own_records() {
+        let mut sca = crate::state::Sca::default();
+        sca.records.push(ScaRect {
+            kind: 0xFFFF,
+            floor: u32::MAX,
+            id: PLAYER_MASK,
+            x: 1000,
+            z: 1000,
+            width: 1000,
+            depth: 1000,
+        });
+        let (prev, proposed) = ([0, 0, 1500], [900, 0, 1500]);
+        let blocked = resolve_masked(&sca, PLAYER_MASK, prev, proposed, PLAYER_RADIUS);
+        assert!(blocked.hit);
+        let through = resolve_masked(&sca, CHARACTER_MASK, prev, proposed, PLAYER_RADIUS);
+        assert!(!through.hit);
+        assert_eq!(through.pos, proposed);
     }
 
     #[test]

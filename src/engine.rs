@@ -618,6 +618,7 @@ pub fn run_with_options(
                         cam: loaded.room.current_cut as u8,
                         player_flags: game.player_flags,
                         re2_player: None,
+                        re2_character: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
                     })?;
@@ -5543,6 +5544,12 @@ impl GameSession {
         self.transition = Some(session);
         if frame.load {
             self.enter_transition_destination(pack);
+            crate::character2::init(
+                &mut self.game,
+                &self.loaded.room,
+                pack,
+                &mut self.npc_models,
+            );
         }
         if let Some(spd) = carried {
             self.game.re2.player = self.game.re2.player.clone().after_pl_init();
@@ -6186,6 +6193,7 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2.player.trace_fields()),
+            re2_character: self.game.re2.character_trace(),
             entities,
             frame_hash: trace::frame_hash(frame),
         }
@@ -13425,12 +13433,16 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
     let scenario = u8::from(game.re2.scenario_b);
     game.re2.set_flag(1, 0, character);
     game.re2.set_flag(1, 1, scenario);
+    game.re2.characters = Default::default();
+    game.re2.room_loading = true;
     let mut vm = vm.clone();
     let mut host = crate::scd2::host::GameHost { game };
     vm.run_init(&mut host);
     vm.start_main();
     // `Sce_scheduler_set` ends in a pass of `Sce_scheduler_main`.
     vm.tick(&mut host);
+    game.re2.clear_tick_flags();
+    game.re2.room_loading = false;
     game.re2.vm = Some(Box::new(vm));
 }
 
@@ -13454,6 +13466,7 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
         };
         vm.tick(&mut host);
     }
+    context.game.re2.clear_tick_flags();
     context.game.re2.vm = Some(vm);
     for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
         apply_re2_cut_edit(context.room, edit);
@@ -13568,11 +13581,15 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
     }
 }
 
+/// Where the enemy slots' characters number their tween keys, past the entities.
+const RE2_CHARACTER_TWEEN_SLOT: usize = 0x100;
+
 /// RE2's player machine (`Game_loop`'s call of `Player_move`).
 fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: player::Input) {
     if context.game.re2.player.kind & crate::player2::KIND_NOT_MOVED != 0 {
         return;
     }
+    crate::character2::tick(context.game, context.room, context.pack, context.npc_models);
     let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
     let room_anim = context.room.room_anim.as_ref();
     let tick = crate::player2::Tick {
@@ -15487,8 +15504,15 @@ fn render_frame_on(
                 &locomotion.clips,
             ),
             player::ClipSource::Room => match &room.room_anim {
+                // An RE2 room's pair has no bones of its own: it plays on the
+                // model's.
                 Some(anim) if !anim.clips.is_empty() => {
-                    (&anim.skeleton, &anim.keyframes, &anim.clips)
+                    let skeleton = if anim.skeleton.relative.is_empty() {
+                        &assets.emd.skeleton
+                    } else {
+                        &anim.skeleton
+                    };
+                    (skeleton, &anim.keyframes, &anim.clips)
                 }
                 _ => (
                     &assets.emd.skeleton,
@@ -15668,6 +15692,37 @@ fn render_frame_on(
         });
         npc_zone_gate.push(entity.has_enter_switch_zone & 0x7F != 0 || debug_view::unculled());
         npc_lights.push((entity.pos, matches!(entity.id, 0x0D | 0x12)));
+    }
+
+    // The characters in RE2's enemy slots, which scripts drive.
+    crate::character2::init(game, room, pack, npc_models);
+    for (slot, character) in game.re2.characters.0.iter().enumerate() {
+        let Some(character) = character.as_deref().filter(|c| c.be_flg & 1 != 0) else {
+            continue;
+        };
+        let Some(model) = npc_models.get(pack, character.id, id.player_flag & 1) else {
+            continue;
+        };
+        let tick = crate::character2::tick_of(room, game, character, slot, &model);
+        let (clips, keyframes) = tick.banks.get(character.work.bank);
+        let Some(keyframe) = character.body.anim.pose_keyframe(clips, keyframes) else {
+            continue;
+        };
+        let matrix =
+            anim::entity_matrix_rotated_scaled(character.body.pos, 0, character.body.angle, 0, 0);
+        let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
+        tween.joints(
+            tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
+            &mut joints,
+        );
+        models.push(model);
+        npc_joints.push(joints);
+        npc_hidden.push(0);
+        npc_tints.push([255; 3]);
+        npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
+        npc_weapons.push(None);
+        npc_zone_gate.push(true);
+        npc_lights.push((character.body.pos, false));
     }
 
     // The `--model` viewer's model, stood in front of the current camera.

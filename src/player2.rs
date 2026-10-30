@@ -49,6 +49,10 @@ const MOVE_STAIRS: u8 = 7;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
 /// `Plc_stop`'s routine, which no table entry animates.
+/// `Type`'s bit that gives a character to `Spl_Auto`, not to the scripts.
+const SPL_AUTO: u16 = 0x400;
+/// `Spl_Init`'s `Joint_move` late step.
+const SPL_INIT_STEP: u16 = 0x100;
 const STOPPED_ROUTINE: [u8; 4] = [MODE_SCENARIO, 0x14, 0, 0];
 
 /// A clip by health (`D_life_u`), `pl_mv_00`..`04`.
@@ -143,6 +147,52 @@ const DEST_WALK_TURN: i16 = 0x30;
 const DEST_RUN_TURN: i16 = 0x48;
 const DEST_BACK_TURN: i16 = 0x30;
 const DEST_ROTATE_TURN: [i16; 16] = [
+    0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x58, 0x50,
+];
+// The same tables' other half, for the characters from id 0x40 up.
+/// `Spl_sce04`, `12`.
+const SPL_WALK_SPEED: [i16; 32] = [
+    0x14, 0x46, 0x14, 0x46, 0x3C, 0x32, 0x3C, 0x41, 0x3C, 0x41, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x32,
+    0x4B, 0x46, 0x4B, 0x46, 0x4B, 0x46, 0x4B, 0x46, 0x4B, 0x46, 0x4B, 0x4B, 0x4B, 0x4B, 0x46, 0x32,
+];
+/// `Spl_sce05`.
+const SPL_RUN_SPEED: [i16; 32] = [
+    0x1E, 0xDC, 0x1E, 0xDC, 0xBE, 0x78, 0xBE, 0xAA, 0xA0, 0xAA, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x78,
+    0xC8, 0xD2, 0xC8, 0xD2, 0xC8, 0xD2, 0xC8, 0xD2, 0xC8, 0xD2, 0xC8, 0xC8, 0xC8, 0xC8, 0xDC, 0x78,
+];
+/// `Spl_sce07`.
+const SPL_BACK_SPEED: [i16; 32] = [
+    0x19, 0x37, 0x19, 0x37, 0x37, 0x23, 0x37, 0x37, 0x37, 0x37, 0x19, 0x00, 0x00, 0x00, 0x00, 0x23,
+    0x46, 0x41, 0x46, 0x41, 0x46, 0x41, 0x46, 0x41, 0x46, 0x41, 0x46, 0x46, 0x46, 0x46, 0x37, 0x23,
+];
+/// `Spl_sce08`.
+const SPL_BACK_RUN_SPEED: [i16; 32] = [
+    0x0A, 0x2D, 0x0A, 0x2D, 0x28, 0x1E, 0x28, 0x28, 0x28, 0x28, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x1E,
+    0x28, 0x2D, 0x28, 0x2D, 0x28, 0x2D, 0x28, 0x2D, 0x28, 0x2D, 0x28, 0x28, 0x28, 0x28, 0x2D, 0x1E,
+];
+/// `Plc_dest`'s routines 4 and 0x12.
+const SPL_DEST_WALK_TURN: [i16; 32] = [
+    0x10, 0x30, 0x10, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x10, 0x00, 0x00, 0x00, 0x00, 0x30,
+    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
+];
+/// `Plc_dest`'s routine 5.
+const SPL_DEST_RUN_TURN: [i16; 32] = [
+    0x1E, 0x48, 0x1E, 0x48, 0x48, 0x40, 0x48, 0x48, 0x3C, 0x48, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x40,
+    0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x40,
+];
+/// `Plc_dest`'s routine 7.
+const SPL_DEST_BACK_TURN: [i16; 32] = [
+    0x10, 0x30, 0x10, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x10, 0x00, 0x00, 0x00, 0x00, 0x30,
+    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
+];
+/// `Plc_dest`'s routine 8.
+const SPL_DEST_BACK_RUN_TURN: [i16; 32] = [
+    0x08, 0x30, 0x08, 0x30, 0x30, 0x28, 0x30, 0x28, 0x28, 0x28, 0x08, 0x00, 0x00, 0x00, 0x00, 0x28,
+    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x28,
+];
+/// `Plc_dest`'s routine 9.
+const SPL_DEST_ROTATE_TURN: [i16; 32] = [
+    0x20, 0x58, 0x20, 0x58, 0x58, 0x50, 0x58, 0x58, 0x58, 0x58, 0x20, 0x00, 0x00, 0x00, 0x00, 0x50,
     0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x58, 0x50,
 ];
 /// How close to a destination counts as being there (`Spl_sce_mv02`).
@@ -282,7 +332,7 @@ pub struct Banks<'a> {
 }
 
 impl<'a> Banks<'a> {
-    fn get(&self, bank: Bank) -> (&'a [Clip], &'a [Keyframe]) {
+    pub fn get(&self, bank: Bank) -> (&'a [Clip], &'a [Keyframe]) {
         match bank {
             Bank::Pld => self.pld,
             Bank::Weapon => self.weapon,
@@ -1179,21 +1229,21 @@ impl Mover<'_, '_> {
     }
 
     fn spl_sce(&mut self) {
-        let id = usize::from(self.tick.id & 0x0F);
+        let id = self.tick.id;
         match self.work.routine[1] {
             0x00 => self.spl_sce_mv00(Bank::Room),
             0x01 => self.spl_sce_mv00(Bank::Pld),
             0x02 | 0x03 => self.spl_sce_mv00(Bank::Weapon),
-            0x04 | 0x12 => self.spl_walk(SCE_WALK_SPEED[id], 0),
-            0x05 => self.spl_walk(SCE_RUN_SPEED[id], 1),
+            0x04 | 0x12 => self.spl_walk(by_id(id, &SCE_WALK_SPEED, &SPL_WALK_SPEED), 0),
+            0x05 => self.spl_walk(by_id(id, &SCE_RUN_SPEED, &SPL_RUN_SPEED), 1),
             0x06 => {
                 if self.work.routine[2] == 0 {
                     self.start_motion(Bank::Weapon, IDLE_CLIPS[0]);
                 }
                 self.joint_move();
             }
-            0x07 => self.spl_back(SCE_BACK_SPEED[id], 0),
-            0x08 => self.spl_back(SCE_BACK_RUN_SPEED[id], 1),
+            0x07 => self.spl_back(by_id(id, &SCE_BACK_SPEED, &SPL_BACK_SPEED), 0),
+            0x08 => self.spl_back(by_id(id, &SCE_BACK_RUN_SPEED, &SPL_BACK_RUN_SPEED), 1),
             0x09 => self.spl_sce09(),
             0x0A => self.spl_sce_mv04(Bank::Room),
             0x0B => self.spl_sce_mv04(Bank::Pld),
@@ -1538,17 +1588,30 @@ fn goto(angle: u16, target: u16, rate: i32) -> u16 {
     (stepped & 0x0FFF) as u16
 }
 
+/// A value of the tables `Spl_sce*` and `Plc_dest` keep by character.
+fn by_id(id: u8, low: &[i16; 16], high: &[i16; 32]) -> i16 {
+    match id {
+        0..0x10 => low[usize::from(id)],
+        0x40..0x60 => high[usize::from(id - 0x40)],
+        _ => 0,
+    }
+}
+
 /// `Plc_dest`: start routine `routine`, walking to `(x, z)`, raising room flag
 /// `flag` there. The turn rate depends on the routine and the character.
 pub fn plc_dest(work: &mut Work, id: u8, routine: u8, flag: u8, x: i16, z: i16) {
     if work.sce_flg & 4 == 0 || work.routine[1] != routine {
         work.routine = [MODE_SCENARIO, routine, 0, 0];
     }
+    let low = [DEST_WALK_TURN; 16];
+    let run = [DEST_RUN_TURN; 16];
+    let back = [DEST_BACK_TURN; 16];
     match routine {
-        0x04 | 0x12 => work.sce_free[0] = DEST_WALK_TURN,
-        0x05 => work.sce_free[0] = DEST_RUN_TURN,
-        0x07 | 0x08 => work.sce_free[0] = DEST_BACK_TURN,
-        0x09 => work.sce_free[0] = DEST_ROTATE_TURN[usize::from(id & 0x0F)],
+        0x04 | 0x12 => work.sce_free[0] = by_id(id, &low, &SPL_DEST_WALK_TURN),
+        0x05 => work.sce_free[0] = by_id(id, &run, &SPL_DEST_RUN_TURN),
+        0x07 => work.sce_free[0] = by_id(id, &back, &SPL_DEST_BACK_TURN),
+        0x08 => work.sce_free[0] = by_id(id, &back, &SPL_DEST_BACK_RUN_TURN),
+        0x09 => work.sce_free[0] = by_id(id, &DEST_ROTATE_TURN, &SPL_DEST_ROTATE_TURN),
         _ => {}
     }
     work.sce_flg_no = flag;
@@ -1564,6 +1627,52 @@ pub fn plc_motion(work: &mut Work, routine: u8, clip: u8, flags: u8) {
     work.move_cnt = 0;
     work.sce_flg = u16::from(flags);
     work.sce_free = [0; 2];
+}
+
+/// `Spl_Init`: a script's character, whose first pose is the first frame of
+/// its model's first clip, and which then waits for the script.
+pub fn spl_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>, kind: u16) {
+    work.routine = if kind & SPL_AUTO == 0 {
+        [MODE_SCENARIO, 6, 0, 0]
+    } else {
+        [MODE_MOVE, 0, 0, 0]
+    };
+    work.bank = Bank::Pld;
+    work.move_no = 0;
+    work.move_cnt = 0;
+    work.hokan = 0;
+    let mut mover = Mover {
+        work,
+        player,
+        tick,
+        arrived: None,
+        stairs: None,
+    };
+    mover.joint_move_late(SPL_INIT_STEP);
+}
+
+/// Whether it has no routine yet, which `_Spl` starts with `Spl_Init`.
+pub fn uninitialised(work: &Work) -> bool {
+    work.routine[0] == 0
+}
+
+/// Whether a script is steering it: `_Spl`'s `Spl_Scenario`, the only routine
+/// a character has so far.
+pub fn in_scenario(work: &Work) -> bool {
+    work.routine[0] == MODE_SCENARIO
+}
+
+/// `Em_init_move`'s second `_Spl`, for a character the room places mid-clip:
+/// the routine and clip it plays, and its `Sce_flg`.
+pub fn spl_start(work: &mut Work, start: u16, flags: u16) {
+    work.routine = [
+        MODE_SCENARIO,
+        ((start & 0xFF00).wrapping_sub(0x100) >> 8) as u8,
+        0,
+        0,
+    ];
+    work.move_no = start as u8;
+    work.sce_flg = flags;
 }
 
 /// `Plc_ret`: back to the pad.
@@ -2056,6 +2165,38 @@ mod tests {
         assert_eq!(setup.work.routine[1], 6, "stands at the end");
         let (dx, dz) = (setup.player.pos[0] - 1000, setup.player.pos[2]);
         assert!(dx * dx + dz * dz < 100 * 100, "{:?}", setup.player.pos);
+    }
+
+    #[test]
+    fn a_character_s_speeds_and_turns_come_by_its_id() {
+        const KENDO: u8 = 0x48;
+        assert_eq!(by_id(KENDO, &SCE_WALK_SPEED, &SPL_WALK_SPEED), 60);
+        assert_eq!(by_id(KENDO, &SCE_RUN_SPEED, &SPL_RUN_SPEED), 160);
+        assert_eq!(by_id(KENDO, &SCE_BACK_SPEED, &SPL_BACK_SPEED), 55);
+        assert_eq!(by_id(KENDO, &SCE_BACK_RUN_SPEED, &SPL_BACK_RUN_SPEED), 40);
+        assert_eq!(by_id(1, &SCE_RUN_SPEED, &SPL_RUN_SPEED), SCE_RUN_SPEED[1]);
+        assert_eq!(by_id(0x20, &SCE_RUN_SPEED, &SPL_RUN_SPEED), 0);
+
+        let mut work = Work::default();
+        plc_dest(&mut work, KENDO, 9, 33, 0, 0);
+        assert_eq!(work.sce_free[0], 88);
+        plc_dest(&mut work, KENDO, 5, 33, 0, 0);
+        assert_eq!(work.sce_free[0], 60);
+        plc_dest(&mut work, KENDO, 8, 33, 0, 0);
+        assert_eq!(work.sce_free[0], 40);
+    }
+
+    #[test]
+    fn a_character_the_room_places_starts_on_its_clip() {
+        let mut work = Work::default();
+        // The room's `sce_em_set` said 0x10A, flags 4: routine 0, clip 10.
+        spl_start(&mut work, 0x10A, 4);
+        assert_eq!(work.routine, [MODE_SCENARIO, 0, 0, 0]);
+        assert_eq!(work.move_no, 10);
+        assert_eq!(work.sce_flg, 4);
+        spl_start(&mut work, 0x207, 0);
+        assert_eq!(work.routine[1], 1);
+        assert_eq!(work.move_no, 7);
     }
 
     #[test]

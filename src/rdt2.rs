@@ -143,6 +143,16 @@ const RBJ_PLAYER: u32 = 1;
 /// follows, and of its EDD, all from the section's start. As in `Rbj_set`, the
 /// last bank for the player wins.
 pub fn room_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
+    room_anim_of(data, RBJ_PLAYER)
+}
+
+/// The room animations of enemy slot `slot`, which `Rbj_set` looks for two
+/// bits above the player's.
+pub fn character_anim(data: &[u8], slot: u8) -> Option<(&[u8], &[u8])> {
+    room_anim_of(data, RBJ_PLAYER << (u32::from(slot) + 2))
+}
+
+fn room_anim_of(data: &[u8], wanted: u32) -> Option<(&[u8], &[u8])> {
     let start = offset(data, RBJ_SLOT).ok()? as usize;
     if start == 0 {
         return None;
@@ -159,7 +169,7 @@ pub fn room_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
     };
     let (mask, edd) = (0..count)
         .filter_map(bank)
-        .rfind(|&(mask, _)| u32_at(section, mask).is_ok_and(|bits| bits & RBJ_PLAYER != 0))?;
+        .rfind(|&(mask, _)| u32_at(section, mask).is_ok_and(|bits| bits & wanted != 0))?;
     // A bank runs up to whatever comes next: another bank, or the table.
     let end = (0..count)
         .filter_map(bank)

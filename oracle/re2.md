@@ -52,6 +52,8 @@ runs them or collides with them. That leaves the player alone to compare with
 arklay until enemies are ported. `oracle/inputs-re2/` holds the scripts in use,
 and `street_wander.txt` is a random walk through room 100.
 
+`--keep-enemy SLOT` leaves that slot running, for a character arklay has. Room 101's scene wants `--no-enemies --keep-enemy 0`: the input `first_door.txt` over 4500 ticks, compared with `--fields room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,em`, matches from the room's first line. Its zombies have no state in arklay yet, and the street's would attack the route, so this doesn't show the scene with them.
+
 `--give SLOT:ID:COUNT` puts an item in the inventory when play begins, for what
 the start of a game has nothing to test with. `street_reload.txt` wants
 `--give 3:0x14:20` and the same stack added to the end of arklay's
@@ -82,6 +84,7 @@ game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 | `pad` | the pad value given this tick |
 | `fgsys`, `fgstat`, `fgstop`, `fgscn`, `fgcom`, `fgroom` | `fg_system`, `fg_status`, `fg_stop`, and the scenario, common and room flag banks |
 | `mot` | the player's `routine_2`, `routine_3`, `Move_no`, `Move_cnt`, `Hokan_flg`, `D_life_u` and speed x, y, z |
+| `em` | enemy slot 0 when it's a character (id 0x40 up): id, x, y, z, `cdir.y & 0xFFF`, `routine_0`-`routine_3`, `Move_no`, `Move_cnt`, `Hokan_flg`, `D_life_u` and speed x, y, z; `scripts/oracle.py` compares all but the speed |
 
 `rseed`, `fade` and `f` are placeholders so the line parses: `rseed` and the fade
 have no RE2 equivalent recorded yet, and the frame isn't hashed. A screenshot of

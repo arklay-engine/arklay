@@ -337,10 +337,10 @@ def warp(game: Game, target: str) -> None:
     game.write(FG_STOP, struct.pack("<I", game.u32(FG_STOP) | 0xFF000000))
 
 
-def remove_enemies(game: Game) -> None:
-    """Switch off every live enemy: nothing runs or touches an entity whose first bit is clear."""
-    for pointer in struct.unpack("<16I", game.read(ENEMIES, 64)):
-        if pointer != 0:
+def remove_enemies(game: Game, keep: set[int]) -> None:
+    """Switch off live enemies but `keep`: nothing runs or touches an entity whose first bit is clear."""
+    for slot, pointer in enumerate(struct.unpack("<16I", game.read(ENEMIES, 64))):
+        if pointer != 0 and slot not in keep:
             flags = game.u32(pointer + ENTITY_BE_FLG)
             if flags & 1:
                 game.write(pointer + ENTITY_BE_FLG, struct.pack("<I", flags & ~1))
@@ -379,6 +379,18 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"fgscn={game.read(FG_SCENARIO, 32).hex()}")
     fields.append(f"fgcom={game.read(FG_COMMON, 32).hex()}")
     fields.append(f"fgroom={game.u32(FG_ROOM):08x}")
+    first = game.u32(ENEMIES)
+    if first != 0 and game.u8(first + ENTITY_ID) >= 0x40:
+        ex, ey, ez = game.i32s(first + ENTITY_POS, 3)
+        routine = game.read(first + ENTITY_ROUTINES, 4)
+        motion = game.read(first + ENTITY_MOTION, 4)
+        speed = struct.unpack("<3h", game.read(first + ENTITY_SPD, 6))
+        fields.append(
+            f"em={game.u8(first + ENTITY_ID)},{ex},{ey},{ez},"
+            f"{game.u16(first + ENTITY_CDIR_Y) & 0x0FFF},{routine[0]},{routine[1]},{routine[2]},"
+            f"{routine[3]},{motion[0]},{motion[1]},{motion[2]},{game.u8(first + ENTITY_D_LIFE_U)},"
+            f"{speed[0]},{speed[1]},{speed[2]}"
+        )
     spd = struct.unpack("<3h", game.read(PL + ENTITY_SPD, 6))
     motion = game.read(PL + ENTITY_MOTION, 4)
     fields.append(
@@ -467,7 +479,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                             slot, item_id, count = (int(part, 0) for part in item.split(":"))
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
                 if settled and args.no_enemies:
-                    remove_enemies(game)
+                    remove_enemies(game, set(args.keep_enemy))
                 if tick < 0:
                     if boot_tick > BOOT_TICKS:
                         raise SystemExit("the title route did not reach play")
@@ -595,6 +607,7 @@ def main() -> int:
         command.add_argument("--shot-dir", default=None)
         command.add_argument("--shot-every", type=int, default=0)
         command.add_argument("--no-enemies", action="store_true")
+        command.add_argument("--keep-enemy", action="append", type=int, default=[])
         command.add_argument(
             "--warp", default=None, metavar="ROOM:X:Y:Z:ANGLE",
             help="when play begins, go through a door to a room (three hex digits) and a position",

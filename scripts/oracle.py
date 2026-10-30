@@ -65,6 +65,7 @@ class Tick:
     frame_hash: str = ""
     # RE2's `mot` field: the player's motion state.
     motion: str | None = None
+    character: str | None = None
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -134,6 +135,7 @@ def parse_trace(path: str) -> list[Tick]:
                     entities=entities,
                     frame_hash=fields.get("f", ""),
                     motion=fields.get("mot"),
+                    character=fields.get("em"),
                 )
             )
     return ticks
@@ -151,6 +153,10 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append((f"p.{name}", tick.player.get(name, "?")))
     if tick.motion is not None:
         items.append(("mot", tick.motion))
+    if tick.character is not None:
+        # Without the speed: nothing reads what `Joint_move` leaves in `Spd`
+        # before `Spl_sce*` sets it.
+        items.append(("em", ",".join(tick.character.split(",")[:13])))
     for slot in sorted(tick.entities):
         entity = tick.entities[slot]
         for name in ENTITY_FIELDS:

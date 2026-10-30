@@ -613,6 +613,8 @@ pub struct RoomState {
     /// declares no pair or it fails to parse; behaviours then fall back to the
     /// no-op stance.
     pub room_anim: Option<crate::model::RoomAnim>,
+    /// RE2's room animations of the enemy slots that have their own.
+    pub character_anims: Vec<(u8, crate::model::RoomAnim)>,
 }
 
 impl RoomState {

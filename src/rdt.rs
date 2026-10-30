@@ -132,6 +132,7 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
         item_models,
         model_warnings,
         room_anim,
+        character_anims: Vec::new(),
     })
 }
 

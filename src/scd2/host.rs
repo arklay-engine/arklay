@@ -44,6 +44,12 @@ pub struct Re2State {
     pub key_trg: u16,
     /// A stop was masking `key` last tick.
     pub key_was_stopped: bool,
+    /// Characters in the enemy slots.
+    pub characters: Characters,
+    /// Room flags of `plc_dest`s on works that aren't modelled, not yet raised.
+    pub unmodelled_arrivals: Vec<u8>,
+    /// A room's load is running its init scripts.
+    pub room_loading: bool,
     /// The player's `PLAYER_WORK`.
     pub player: crate::player2::Work,
     /// The room's running scripts.
@@ -72,13 +78,43 @@ pub enum CutEdit {
     Replace { a: u8, b: u8 },
 }
 
-/// A `work_set` target. Only the player is modelled so far.
+/// A `work_set` target: the player, or a character in an enemy slot.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Work {
     #[default]
     Player,
+    Character(u8),
     Other,
 }
+
+/// `_Spl`'s character: a body and a `PLAYER_WORK`, driven by the room's scripts.
+#[derive(Debug, Clone)]
+pub struct Character {
+    pub id: u8,
+    /// `Be_flg`, whose first bit is whether it's in play.
+    pub be_flg: u16,
+    pub work: crate::player2::Work,
+    pub body: crate::player::PlayerState,
+    /// `Type`, whose `0x400` gives it to `Spl_Auto` rather than the scripts.
+    pub kind: u16,
+    /// `sce_em_set`'s last two words: `Em_init_move`'s second `_Spl`.
+    pub start: (u16, u16),
+    /// The room's load places it, rather than a script during play.
+    pub with_room: bool,
+}
+
+/// The enemy slots' characters. A save doesn't hold them: the room's scripts
+/// make them again.
+#[derive(Debug, Clone, Default)]
+pub struct Characters(pub Vec<Option<Box<Character>>>);
+
+impl PartialEq for Characters {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Characters {}
 
 /// The bytes of [`Re2State::to_save_bytes`].
 const SAVE_LEN: usize = (BANKS * 8 + 2) * 4 + 512 + crate::bgm2::ROOMS * 2 + 5;
@@ -88,6 +124,21 @@ const TASK_SLOTS: usize = super::vm::TASKS;
 /// `set 2, 7`: `FG_STOP_DISABLE_INPUT`, a cutscene holding the player's input.
 const STOP_BANK: u8 = 2;
 const STOP_INPUT: u8 = 7;
+/// `Spl_Init`'s `Atd[0].W`, by id from 0x40.
+const CHARACTER_SIZES: [u16; 28] = [
+    500, 350, 500, 350, 86, 250, 86, 350, 450, 350, 450, 350, 0, 0, 0, 250, 450, 350, 450, 350,
+    450, 350, 450, 350, 450, 350, 450, 450,
+];
+/// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
+const STATUS_BANK: u8 = 1;
+const STATUS_ENEMY_FLAGS: u8 = 6;
+/// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
+const ENEMY_BANK: u8 = 6;
+const CAMPAIGN_ENEMY_STAGES: u8 = 3;
+/// `Sce_em_set`'s flag of someone who can't die.
+const NO_ENEMY_FLAG: u8 = 0xFF;
+/// `enemy_work`'s size.
+const CHARACTER_SLOTS: usize = 16;
 /// `FlagGroup::Message`, `fg_message`: bit 31 is a question's answer, `no`.
 const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
@@ -148,6 +199,9 @@ impl Default for Re2State {
             key: 0,
             key_trg: 0,
             key_was_stopped: false,
+            characters: Characters::default(),
+            unmodelled_arrivals: Vec::new(),
+            room_loading: false,
             player: crate::player2::Work::default(),
             vm: None,
             scenario_b: false,
@@ -213,6 +267,36 @@ impl Re2State {
         self.flag(STOP_BANK, STOP_INPUT)
     }
 
+    /// The `em` trace field: slot 0's position, facing and motion.
+    pub fn character_trace(&self) -> Option<[i32; 16]> {
+        let character = self.characters.0.first()?.as_deref()?;
+        let (routine, motion) = character.work.trace_fields();
+        let [x, y, z] = character.body.pos;
+        Some([
+            i32::from(character.id),
+            x,
+            y,
+            z,
+            i32::from(character.body.angle & 0x0FFF),
+            i32::from(routine[0]),
+            i32::from(routine[1]),
+            motion[0],
+            motion[1],
+            motion[2],
+            motion[3],
+            motion[4],
+            motion[5],
+            motion[6],
+            motion[7],
+            motion[8],
+        ])
+    }
+
+    /// `fg_stop`'s third bit, which keeps the enemy slots from running.
+    pub fn characters_stopped(&self) -> bool {
+        self.flag(STOP_BANK, 2)
+    }
+
     /// `fg_stop`'s top bit, which keeps `Player_move` from running.
     /// The end of `Pad_set`: a stop leaves only some of the keys, and the
     /// tick it ends on raises none of them.
@@ -235,6 +319,17 @@ impl Re2State {
 
     pub fn player_stopped(&self) -> bool {
         self.flag(STOP_BANK, 0)
+    }
+
+    /// `Sce_work_clr`'s `fg_tick`, which is the room bank's second word: the
+    /// flags a walk's end raises for one pass of the scripts.
+    pub fn clear_tick_flags(&mut self) {
+        if let Some(words) = self.banks.get_mut(usize::from(ROOM_BANK)) {
+            words[1] = 0;
+        }
+        for flag in std::mem::take(&mut self.unmodelled_arrivals) {
+            self.raise_room_flag(flag);
+        }
     }
 
     /// `Flg_on(&fg_room, ...)`, a finished scripted walk's.
@@ -321,6 +416,7 @@ fn probe_flags(sat: u8) -> u8 {
 
 /// `work_set`'s kind byte for the player (`WK_PLAYER`).
 const WK_PLAYER: i64 = 1;
+const WK_ENEMY: i64 = 3;
 
 /// The work members holding the position (`Member_set_branch`).
 const MEMBER_POS_X: usize = 0x0B;
@@ -499,13 +595,78 @@ impl GameHost<'_> {
         self.game.set_camera_cut(usize::from(cut & 0x7F));
     }
 
+    fn character_mut(&mut self, slot: u8) -> Option<&mut Character> {
+        self.game
+            .re2
+            .characters
+            .0
+            .get_mut(usize::from(slot))?
+            .as_deref_mut()
+    }
+
+    /// The character `task` is working on.
+    fn task_character(&mut self, task: usize) -> Option<&mut Character> {
+        match self.game.re2.work.get(task) {
+            Some(&Work::Character(slot)) => self.character_mut(slot),
+            _ => None,
+        }
+    }
+
+    /// `Sce_em_set`, for the characters `_Spl` runs.
+    fn sce_em_set(&mut self, at: impl Fn(usize) -> i64) {
+        let (slot, id) = (at(1) as usize, at(2) as u8);
+        if slot >= CHARACTER_SLOTS {
+            return;
+        }
+        // Someone already dead stays so.
+        let dead = at(8) as u8;
+        let bank = if self.game.id.stage.saturating_sub(1) < CAMPAIGN_ENEMY_STAGES
+            && !self.game.re2.flag(STATUS_BANK, STATUS_ENEMY_FLAGS)
+        {
+            ENEMY_BANK
+        } else {
+            ENEMY_BANK + 1
+        };
+        if dead != NO_ENEMY_FLAG && self.game.re2.flag(bank, dead) {
+            return;
+        }
+        // Any other enemy takes the slot, and isn't modelled yet.
+        if !(0x40..0x5C).contains(&id) {
+            if let Some(character) = self.game.re2.characters.0.get_mut(slot) {
+                *character = None;
+            }
+            return;
+        }
+        let mut body = crate::player::spawn(self.game.id, &Default::default());
+        body.pos = [at(9) as i32, at(10) as i32, at(11) as i32];
+        body.angle = at(12) as u16;
+        body.collision_mirror = [body.pos[0], body.pos[2]];
+        body.radius = i32::from(CHARACTER_SIZES[usize::from(id - 0x40)]);
+        let mut work = crate::player2::Work::default();
+        work.routine = [0; 4];
+        let characters = &mut self.game.re2.characters.0;
+        characters.resize_with(CHARACTER_SLOTS, || None);
+        characters[slot] = Some(Box::new(Character {
+            id,
+            be_flg: 1,
+            work,
+            body,
+            kind: (at(3) as u16) | (at(4) as u16) << 8,
+            start: (at(13) as u16, at(14) as u16),
+            with_room: self.game.re2.room_loading,
+        }));
+    }
+
     /// Set the player's position or facing for `pos_set` and `dir_set`.
     fn work_is_player(&self, task: usize) -> bool {
         self.game.re2.work.get(task) == Some(&Work::Player)
     }
 
     /// `Load_member_branch` for what the engine models: the player.
-    fn member(&self, task: usize, member: u8) -> Option<i32> {
+    fn member(&mut self, task: usize, member: u8) -> Option<i32> {
+        if let Some(character) = self.task_character(task) {
+            return character_member(character, member);
+        }
         if !self.work_is_player(task) {
             return None;
         }
@@ -539,6 +700,15 @@ impl GameHost<'_> {
             self.game.re2.pending_player.angle = Some(value as u16 & 0x0FFF);
         } else {
             crate::player2::set_member(&mut self.game.re2.player, member, value);
+        }
+    }
+
+    /// `Member_set_branch` on whichever work `task` has, if it's modelled.
+    fn set_member(&mut self, task: usize, member: u8, value: i32) {
+        if let Some(character) = self.task_character(task) {
+            set_character_member(character, member, value);
+        } else if self.work_is_player(task) {
+            self.set_player_member(member, value);
         }
     }
 
@@ -682,11 +852,58 @@ impl Host for GameHost<'_> {
             "work_set" => {
                 let work = if at(0) == WK_PLAYER {
                     Work::Player
+                } else if at(0) == WK_ENEMY && self.character_mut(at(1) as u8).is_some() {
+                    Work::Character(at(1) as u8)
                 } else {
                     Work::Other
                 };
                 if let Some(slot) = self.game.re2.work.get_mut(task) {
                     *slot = work;
+                }
+            }
+            "sce_em_set" => self.sce_em_set(at),
+            "pos_set" if self.task_character(task).is_some() => {
+                let pos = [at(1) as i32, at(2) as i32, at(3) as i32];
+                if let Some(character) = self.task_character(task) {
+                    character.body.pos = pos;
+                }
+            }
+            "dir_set" if self.task_character(task).is_some() => {
+                let angle = at(2) as u16;
+                if let Some(character) = self.task_character(task) {
+                    character.body.angle = angle;
+                }
+            }
+            "plc_motion" if self.task_character(task).is_some() => {
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::plc_motion(
+                        &mut character.work,
+                        at(0) as u8,
+                        at(1) as u8,
+                        at(2) as u8,
+                    );
+                }
+            }
+            "plc_dest" if self.task_character(task).is_some() => {
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::plc_dest(
+                        &mut character.work,
+                        character.id,
+                        at(1) as u8,
+                        at(2) as u8,
+                        at(3) as i16,
+                        at(4) as i16,
+                    );
+                }
+            }
+            "plc_stop" if self.task_character(task).is_some() => {
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::plc_stop(&mut character.work);
+                }
+            }
+            "plc_cnt" if self.task_character(task).is_some() => {
+                if let Some(character) = self.task_character(task) {
+                    character.work.move_cnt = at(0) as u8;
                 }
             }
             "pos_set" if self.work_is_player(task) => {
@@ -721,11 +938,12 @@ impl Host for GameHost<'_> {
                 );
             }
             // A character that isn't modelled is there as soon as it's told
-            // to go: the destination's flag goes up for the `edwhile` on it.
+            // to go: the destination's flag goes up for the next pass, whose
+            // `edwhile` on it would miss one that this pass's end clears.
             "plc_dest" => {
                 let flag = at(2) as u8;
                 if flag != 0 {
-                    self.game.re2.set_flag(ROOM_BANK, flag, 1);
+                    self.game.re2.unmodelled_arrivals.push(flag);
                 }
             }
             "plc_ret" if self.work_is_player(task) => {
@@ -733,6 +951,35 @@ impl Host for GameHost<'_> {
             }
             "plc_stop" if self.work_is_player(task) => {
                 crate::player2::plc_stop(&mut self.game.re2.player);
+            }
+            "plc_rot" if self.task_character(task).is_some() => {
+                let by = at(1) as i16;
+                let which = at(0);
+                if let Some(character) = self.task_character(task) {
+                    match which {
+                        0 => character.work.sce_free[0] = by,
+                        1 => character.work.sce_free[1] = by,
+                        _ => {}
+                    }
+                }
+            }
+            "plc_flg" if self.task_character(task).is_some() => {
+                let value = at(1) as u16;
+                let how = at(0);
+                if let Some(character) = self.task_character(task) {
+                    let work = &mut character.work;
+                    match how {
+                        0 => work.sce_flg |= value,
+                        1 => work.sce_flg = value,
+                        2 => work.sce_flg ^= value,
+                        _ => {}
+                    }
+                }
+            }
+            "plc_ret" if self.task_character(task).is_some() => {
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::plc_ret(&mut character.work);
+                }
             }
             "plc_rot" if self.work_is_player(task) => {
                 let by = at(1) as i16;
@@ -769,8 +1016,10 @@ impl Host for GameHost<'_> {
                     return Step::False;
                 }
             }
-            "member_set" if self.work_is_player(task) => {
-                self.set_player_member(at(0) as u8, at(1) as i32);
+            "member_set" => self.set_member(task, at(0) as u8, at(1) as i32),
+            "member_set2" => {
+                let value = i32::from(self.var(at(1) as u8));
+                self.set_member(task, at(0) as u8, value);
             }
             "sce_key_ck" | "sce_trg_ck" => {
                 let keys = if op.mnemonic == "sce_key_ck" {
@@ -797,9 +1046,110 @@ impl Host for GameHost<'_> {
     }
 }
 
+/// `Load_member_branch` on a character.
+fn character_member(character: &Character, member: u8) -> Option<i32> {
+    if let Some(axis) = usize::from(member)
+        .checked_sub(MEMBER_POS_X)
+        .filter(|axis| *axis < 3)
+    {
+        return Some(character.body.pos[axis]);
+    }
+    match member {
+        0 => Some(i32::from(character.be_flg)),
+        MEMBER_ANGLE => Some(i32::from(character.body.angle & 0x0FFF)),
+        _ => crate::player2::member(&character.work, member),
+    }
+}
+
+/// `Member_set_branch` on a character.
+fn set_character_member(character: &mut Character, member: u8, value: i32) {
+    if let Some(axis) = usize::from(member)
+        .checked_sub(MEMBER_POS_X)
+        .filter(|axis| *axis < 3)
+    {
+        character.body.pos[axis] = value;
+        return;
+    }
+    match member {
+        0 => character.be_flg = value as u16,
+        MEMBER_ANGLE => character.body.angle = value as u16,
+        _ => {
+            crate::player2::set_member(&mut character.work, member, value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn exec(game: &mut GameState, mnemonic: &str, operands: &[i64]) {
+        let op = crate::scd2::opcode::by_mnemonic(mnemonic).unwrap();
+        GameHost { game }.exec(0, op, operands);
+    }
+
+    /// `sce_em_set` of id `id` in slot 0, and `work_set` on it.
+    fn spawn_character(game: &mut GameState, id: i64, flag: i64) {
+        exec(
+            game,
+            "sce_em_set",
+            &[0, 0, id, 0, 0, 0, 0, 0, flag, -100, 0, -200, 3950, 266, 4],
+        );
+        exec(game, "work_set", &[WK_ENEMY, 0]);
+    }
+
+    #[test]
+    fn a_script_s_character_takes_its_slot_and_its_commands() {
+        let mut game = GameState::default();
+        spawn_character(&mut game, 72, 255);
+        let character = game.re2.characters.0[0].as_deref().unwrap();
+        assert_eq!(character.id, 72);
+        assert_eq!(character.be_flg, 1);
+        assert_eq!(character.body.pos, [-100, 0, -200]);
+        assert_eq!(character.body.angle, 3950);
+        assert_eq!(character.body.radius, 450);
+        assert_eq!(character.start, (266, 4));
+        assert!(matches!(game.re2.work[0], Work::Character(0)));
+
+        exec(&mut game, "plc_dest", &[0, 4, 33, -15372, -14079]);
+        exec(&mut game, "pos_set", &[0, 5, 6, 7]);
+        exec(&mut game, "member_set", &[0, 5]);
+        let character = game.re2.characters.0[0].as_deref().unwrap();
+        assert_eq!(character.work.routine[..2], [4, 4]);
+        assert_eq!(character.work.sce_flg_no, 33);
+        assert_eq!(character.work.dest, [-15372, -14079]);
+        // `Plc_dest` takes the walk's turn from the character's table.
+        assert_eq!(character.work.sce_free[0], 48);
+        assert_eq!(character.body.pos, [5, 6, 7]);
+        assert_eq!(character.be_flg, 5);
+        assert!(!game.re2.flag(ROOM_BANK, 33));
+    }
+
+    #[test]
+    fn someone_dead_stays_dead_and_an_enemy_is_not_a_character() {
+        let mut game = GameState::default();
+        game.re2.set_flag(ENEMY_BANK, 28, 1);
+        spawn_character(&mut game, 74, 28);
+        assert!(game.re2.characters.0.is_empty());
+        spawn_character(&mut game, 31, 255);
+        assert!(game.re2.characters.0.is_empty());
+        assert!(matches!(game.re2.work[0], Work::Other));
+        // One that isn't modelled is there as soon as it's told to go.
+        exec(&mut game, "plc_dest", &[0, 4, 33, 0, 0]);
+        assert!(!game.re2.flag(ROOM_BANK, 33));
+        game.re2.clear_tick_flags();
+        assert!(game.re2.flag(ROOM_BANK, 33));
+    }
+
+    #[test]
+    fn a_walk_s_end_lasts_one_pass_of_the_scripts() {
+        let mut state = Re2State::default();
+        state.set_flag(ROOM_BANK, 0, 1);
+        state.raise_room_flag(33);
+        state.clear_tick_flags();
+        assert!(!state.flag(ROOM_BANK, 33));
+        assert!(state.flag(ROOM_BANK, 0));
+    }
 
     #[test]
     fn a_flag_bit_counts_from_the_top_of_its_word() {

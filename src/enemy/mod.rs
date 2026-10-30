@@ -188,6 +188,22 @@ impl EntityModelCache {
         if self.missing.contains(&key) {
             return None;
         }
+        // RE2 keeps a model for each scenario's disc.
+        let re2 = format!("enemy/{id:02x}/enemy_{}.emd", key.1);
+        if pack.contains(&re2) {
+            return match crate::model_viewer::load(pack, &re2) {
+                Ok(model) => {
+                    let model = Arc::new(model);
+                    self.models.insert(key, Arc::clone(&model));
+                    Some(model)
+                }
+                Err(err) => {
+                    eprintln!("warning: invalid enemy model {re2}: {err:#}");
+                    self.missing.insert(key);
+                    None
+                }
+            };
+        }
         let candidates = model_candidates(id, key.1);
         if candidates.is_empty() {
             self.missing.insert(key);
