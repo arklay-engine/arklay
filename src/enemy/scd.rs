@@ -863,6 +863,7 @@ mod tests {
                 ClipFrame {
                     keyframe: 0,
                     timing,
+                    flags: 0,
                 };
                 frames
             ],

@@ -3045,6 +3045,7 @@ mod tests {
                     ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     };
                     frames
                 ],

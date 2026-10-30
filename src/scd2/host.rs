@@ -27,12 +27,17 @@ pub struct Re2State {
     pub cut_old: u8,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
     pub pending_events: Vec<(u8, u8)>,
+    /// `Sce_Damage` areas the player's position probe hit this tick: the box,
+    /// the kind and the damage. The tick applies them to the player.
+    pub pending_damage: Vec<([i16; 4], u8, i16)>,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// A scripted move of the player, applied at the next tick.
     pub pending_player: PendingPlayer,
+    /// The player's `PLAYER_WORK`.
+    pub player: crate::player2::Work,
     /// The room's running scripts.
     pub vm: Option<Box<super::vm::Vm>>,
     /// Scenario B (`FG_STATUS_SCENARIO`).
@@ -113,6 +118,7 @@ const SCE_MESSAGE: u8 = 4;
 const SCE_EVENT: u8 = 5;
 const SCE_SAVE: u8 = 9;
 const SCE_ITEMBOX: u8 = 10;
+pub const SCE_DAMAGE: u8 = 11;
 
 impl Default for Re2State {
     fn default() -> Self {
@@ -124,9 +130,11 @@ impl Default for Re2State {
             random: 0x1382_01C3,
             cut_old: 0,
             pending_events: Vec::new(),
+            pending_damage: Vec::new(),
             pending_cuts: Vec::new(),
             work: [Work::Player; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
+            player: crate::player2::Work::default(),
             vm: None,
             scenario_b: false,
             bgm: Default::default(),
@@ -189,6 +197,16 @@ impl Re2State {
     /// Whether a script holds the player's input.
     pub fn input_stopped(&self) -> bool {
         self.flag(STOP_BANK, STOP_INPUT)
+    }
+
+    /// `fg_stop`'s top bit, which keeps `Player_move` from running.
+    pub fn player_stopped(&self) -> bool {
+        self.flag(STOP_BANK, 0)
+    }
+
+    /// `Flg_on(&fg_room, ...)`, a finished scripted walk's.
+    pub fn raise_room_flag(&mut self, flag: u8) {
+        self.set_flag(ROOM_BANK, flag, 1);
     }
 
     pub fn flag(&self, bank: u8, index: u8) -> bool {
@@ -273,6 +291,8 @@ const WK_PLAYER: i64 = 1;
 
 /// The work members holding the position (`Member_set_branch`).
 const MEMBER_POS_X: usize = 0x0B;
+/// The member that reads and writes `cdir.y`.
+const MEMBER_ANGLE: u8 = 0x0F;
 /// The room's flag bank, which `plc_dest` raises its arrival flag in.
 const ROOM_BANK: u8 = 5;
 
@@ -451,13 +471,42 @@ impl GameHost<'_> {
         self.game.re2.work.get(task) == Some(&Work::Player)
     }
 
-    /// `Load_member_branch` for what the engine models: the player's position.
+    /// `Load_member_branch` for what the engine models: the player.
     fn member(&self, task: usize, member: u8) -> Option<i32> {
-        let axis = usize::from(member).checked_sub(MEMBER_POS_X)?;
         if !self.work_is_player(task) {
             return None;
         }
-        self.game.entities[0].pos.get(axis).copied()
+        if let Some(axis) = usize::from(member)
+            .checked_sub(MEMBER_POS_X)
+            .filter(|axis| *axis < 3)
+        {
+            return self.game.entities[0].pos.get(axis).copied();
+        }
+        match member {
+            MEMBER_ANGLE => Some(i32::from(self.game.entities[0].angle & 0x0FFF)),
+            _ => crate::player2::member(&self.game.re2.player, member),
+        }
+    }
+
+    /// `Member_set_branch` on the player.
+    fn set_player_member(&mut self, member: u8, value: i32) {
+        if let Some(axis) = usize::from(member)
+            .checked_sub(MEMBER_POS_X)
+            .filter(|axis| *axis < 3)
+        {
+            let mut pos = self
+                .game
+                .re2
+                .pending_player
+                .pos
+                .unwrap_or(self.game.entities[0].pos);
+            pos[axis] = value;
+            self.game.re2.pending_player.pos = Some(pos);
+        } else if member == MEMBER_ANGLE {
+            self.game.re2.pending_player.angle = Some(value as u16 & 0x0FFF);
+        } else {
+            crate::player2::set_member(&mut self.game.re2.player, member, value);
+        }
     }
 
     /// `door_aot_set` and `door_aot_set_4p`: the area and its door record.
@@ -614,17 +663,59 @@ impl Host for GameHost<'_> {
                     .bgm
                     .set(at(1) as u8, at(2) as u8, at(3) as u16, at(4) as u16);
             }
-            // The player's scripted walk ends at once: the destination's flag
-            // goes up for the `edwhile` waiting on it, and the player is there.
+            "plc_motion" if self.work_is_player(task) => {
+                crate::player2::plc_motion(
+                    &mut self.game.re2.player,
+                    at(0) as u8,
+                    at(1) as u8,
+                    at(2) as u8,
+                );
+            }
+            "plc_dest" if self.work_is_player(task) => {
+                let id = self.game.id.player_flag;
+                crate::player2::plc_dest(
+                    &mut self.game.re2.player,
+                    id,
+                    at(1) as u8,
+                    at(2) as u8,
+                    at(3) as i16,
+                    at(4) as i16,
+                );
+            }
+            // A character that isn't modelled is there as soon as it's told
+            // to go: the destination's flag goes up for the `edwhile` on it.
             "plc_dest" => {
-                let (flag, x, z) = (at(2) as u8, at(3) as i32, at(4) as i32);
+                let flag = at(2) as u8;
                 if flag != 0 {
                     self.game.re2.set_flag(ROOM_BANK, flag, 1);
                 }
-                if self.work_is_player(task) && (x, z) != (0, 0) {
-                    let y = self.game.entities[0].pos[1];
-                    self.game.re2.pending_player.pos = Some([x, y, z]);
+            }
+            "plc_ret" if self.work_is_player(task) => {
+                crate::player2::plc_ret(&mut self.game.re2.player);
+            }
+            "plc_stop" if self.work_is_player(task) => {
+                crate::player2::plc_stop(&mut self.game.re2.player);
+            }
+            "plc_rot" if self.work_is_player(task) => {
+                let by = at(1) as i16;
+                match at(0) {
+                    0 => self.game.re2.player.sce_free[0] = by,
+                    1 => self.game.re2.player.sce_free[1] = by,
+                    _ => {}
                 }
+            }
+            "plc_flg" if self.work_is_player(task) => {
+                let work = &mut self.game.re2.player;
+                let value = at(1) as u16;
+                match at(0) {
+                    0 => work.sce_flg |= value,
+                    1 => work.sce_flg = value,
+                    2 => work.sce_flg ^= value,
+                    _ => {}
+                }
+            }
+            "plc_cnt" if self.work_is_player(task) => {
+                self.game.re2.player.move_cnt = at(0) as u8;
             }
             "member_copy" => {
                 let value = self.member(task, at(1) as u8).unwrap_or(0);
@@ -641,19 +732,7 @@ impl Host for GameHost<'_> {
                 }
             }
             "member_set" if self.work_is_player(task) => {
-                let mut pos = self
-                    .game
-                    .re2
-                    .pending_player
-                    .pos
-                    .unwrap_or(self.game.entities[0].pos);
-                if let Some(axis) = (at(0) as usize)
-                    .checked_sub(MEMBER_POS_X)
-                    .filter(|axis| *axis < 3)
-                {
-                    pos[axis] = at(1) as i32;
-                    self.game.re2.pending_player.pos = Some(pos);
-                }
+                self.set_player_member(at(0) as u8, at(1) as i32);
             }
             // Any key answers a wait for one: the mask's pad layout isn't mapped.
             "sce_key_ck" | "sce_trg_ck" => {

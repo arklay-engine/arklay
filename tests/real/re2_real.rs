@@ -1245,6 +1245,23 @@ fn no_event_holds_the_player_for_good() {
     let Some(pack) = pack() else {
         return;
     };
+    // Scripted walks finish in `Player_move`, so the player has to run too.
+    let banks: Vec<_> = [(0, 2), (1, 3)]
+        .into_iter()
+        .map(|(character, weapon)| {
+            let read = |name: String| {
+                pack.read(&name)
+                    .or_else(|_| pack.read(&name.replace("_0", "_1")))
+            };
+            let pld = read(format!("player/{character:02x}/model_0.pld")).unwrap();
+            let plw = read(format!("player/{character:02x}/weapon/{weapon:02x}_0.plw")).unwrap();
+            arklay::emd2::player_banks(
+                &arklay::emd2::parse_pld(&pld).unwrap(),
+                &arklay::emd2::parse_plw(&plw).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
     let mut events = 0;
     let mut stuck = Vec::new();
     for id in arklay::room::ids(pack) {
@@ -1252,6 +1269,9 @@ fn no_event_holds_the_player_for_good() {
         let Some(scripts) = loaded.re2_scripts(pack).unwrap() else {
             continue;
         };
+        let (emd, emw) = &banks[usize::from(id.player_flag & 1)];
+        let empty: (&[arklay::model::Clip], &[arklay::model::Keyframe]) = (&[], &[]);
+        let room_anim = loaded.state.room_anim.as_ref();
         let mut game = GameState::default();
         game.is_re2_room = true;
         game.id = id;
@@ -1262,12 +1282,34 @@ fn no_event_holds_the_player_for_good() {
             events += 1;
             let mut game = game.clone();
             let mut vm = vm.clone();
+            let mut player = arklay::player::spawn(id, &loaded.state);
             vm.exec_event(2, proc);
             for _ in 0..7200 {
                 game.dpad_pressed = 1;
                 game.dpad_held = 1;
                 vm.tick(&mut GameHost { game: &mut game });
                 game.message.active = false;
+                if game.re2.player.kind & arklay::player2::KIND_NOT_MOVED == 0 {
+                    let tick = arklay::player2::Tick {
+                        room: &loaded.state,
+                        banks: arklay::player2::Banks {
+                            pld: (&emd.clips, &emd.keyframes),
+                            weapon: (&emw.clips, &emw.keyframes),
+                            room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
+                        },
+                        input: Default::default(),
+                        options: Default::default(),
+                        id: id.player_flag,
+                        life: 200,
+                        poisoned: false,
+                        stopped: game.re2.player_stopped(),
+                    };
+                    let arrived =
+                        arklay::player2::player_move(&mut game.re2.player, &mut player, &tick);
+                    if let Some(flag) = arrived {
+                        game.re2.raise_room_flag(flag);
+                    }
+                }
             }
             if game.re2.input_stopped() {
                 stuck.push(format!("{} proc {proc}: {:?}", id.code(), vm.describe()));

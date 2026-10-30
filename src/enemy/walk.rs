@@ -4699,6 +4699,7 @@ mod tests {
                     crate::model::ClipFrame {
                         keyframe: 0,
                         timing: 0,
+                        flags: 0,
                     };
                     32
                 ],
@@ -5172,6 +5173,7 @@ mod tests {
             frames: vec![ClipFrame {
                 keyframe: 0,
                 timing: 1,
+                flags: 0,
             }],
         }];
         let anim = leg_anim(leg_skeleton(true));
@@ -5202,6 +5204,7 @@ mod tests {
             frames: vec![ClipFrame {
                 keyframe: 0,
                 timing: 1,
+                flags: 0,
             }],
         }];
         let anim = leg_anim(leg_skeleton(false));
@@ -5574,6 +5577,7 @@ mod tests {
             frames: vec![ClipFrame {
                 keyframe: 0,
                 timing: 1,
+                flags: 0,
             }],
         }];
         let mut game = GameState::default();

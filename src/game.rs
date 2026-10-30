@@ -7968,6 +7968,19 @@ impl GameState {
     /// hit, which the probe already did.
     pub fn fire_re2_area(&mut self, action: RoomAction) {
         let slot = action.slot;
+        if action.sce == crate::scd2::host::SCE_DAMAGE {
+            // A four-point area's first corners stand where the box would be.
+            let zone = self.re2.gates[usize::from(slot)]
+                .quad
+                .map_or(action.zone, |quad| {
+                    [quad[0][0], quad[0][1], quad[1][0], quad[1][1]]
+                });
+            let damage = i16::from_le_bytes([action.params[2], action.params[3]]);
+            self.re2
+                .pending_damage
+                .push((zone, action.params[0], damage));
+            return;
+        }
         match action.kind {
             RoomActionKind::Door => {
                 self.try_door(slot);

@@ -437,10 +437,12 @@ mod tests {
                 ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 },
                 ClipFrame {
                     keyframe: 1,
                     timing: 1,
+                    flags: 0,
                 },
             ],
         }]
@@ -603,6 +605,7 @@ mod tests {
         let frame = ClipFrame {
             keyframe: 0,
             timing: 1,
+            flags: 0,
         };
         let mut clips = vec![Clip::default(); 0x34];
         clips[usize::from(data::REBECCA_WOUNDED_ANIM)] = Clip {
@@ -873,6 +876,7 @@ mod tests {
                 ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 };
                 4
             ],
@@ -917,6 +921,7 @@ mod tests {
         let instant = ClipFrame {
             keyframe: 0,
             timing: 0,
+            flags: 0,
         };
         let mut clips = vec![Clip::default(); 0x34];
         clips[0x30] = Clip {
@@ -974,6 +979,7 @@ mod tests {
         let instant = ClipFrame {
             keyframe: 0,
             timing: 0,
+            flags: 0,
         };
         let mut clips = vec![Clip::default(); 0x34];
         clips[0x30] = Clip {
@@ -1028,6 +1034,7 @@ mod tests {
         let instant = ClipFrame {
             keyframe: 0,
             timing: 0,
+            flags: 0,
         };
         let mut clips = vec![Clip::default(); 0x34];
         clips[0x30] = Clip {

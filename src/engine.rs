@@ -617,6 +617,7 @@ pub fn run_with_options(
                         fade_state: inactive.state(),
                         cam: loaded.room.current_cut as u8,
                         player_flags: game.player_flags,
+                        re2_player: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
                     })?;
@@ -3187,7 +3188,9 @@ impl GameSession {
         // not step. The accumulator is read before this tick's fade step
         // because the original draws and tests it before `main_loop` adds the
         // counter.
-        let events_enabled = !self.room_boot_gate || self.room_fade.state() < 1;
+        // RE2's room entry doesn't hold the game: its fade is only drawn.
+        let events_enabled =
+            !self.room_boot_gate || self.game.is_re2_room || self.room_fade.state() < 1;
         if events_enabled {
             if self.room_boot_gate {
                 self.room_boot_gate = false;
@@ -6157,6 +6160,10 @@ impl GameSession {
             fade_state,
             cam: self.loaded.room.current_cut as u8,
             player_flags: self.game.player_flags,
+            re2_player: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.player.trace_fields()),
             entities,
             frame_hash: trace::frame_hash(frame),
         }
@@ -13374,8 +13381,11 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
     };
     game.re2.gates = Default::default();
     game.re2.pending_events.clear();
+    game.re2.pending_damage.clear();
     game.re2.pending_cuts.clear();
     game.re2.pending_player = Default::default();
+    // `Pl_init`, which runs before a room's first tick of play.
+    game.re2.player = game.re2.player.entering_room();
     game.camera.locked = false;
     // `FG_STATUS_PLAYER` and `FG_STATUS_SCENARIO`.
     let character = game.id.player_flag & 1;
@@ -13539,8 +13549,39 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
     }
 }
 
+/// RE2's player machine (`Game_loop`'s call of `Player_move`).
+fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: player::Input) {
+    if context.game.re2.player.kind & crate::player2::KIND_NOT_MOVED != 0 {
+        return;
+    }
+    let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
+    let room_anim = context.room.room_anim.as_ref();
+    let tick = crate::player2::Tick {
+        room: context.room,
+        banks: crate::player2::Banks {
+            pld: (&assets.emd.clips, &assets.emd.keyframes),
+            weapon: (&assets.emw.clips, &assets.emw.keyframes),
+            room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
+        },
+        input: pad,
+        options: context.game.player_options,
+        id: context.game.id.player_flag,
+        life: i32::from(context.game.entities[0].health),
+        poisoned: false,
+        stopped: context.game.re2.player_stopped(),
+    };
+    let arrived = crate::player2::player_move(&mut context.game.re2.player, context.player, &tick);
+    if let Some(flag) = arrived {
+        context.game.re2.raise_room_flag(flag);
+    }
+}
+
 /// The locomotion and weapon machine, which needs the player's model assets.
 fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: player::Input) {
+    if context.game.is_re2_room {
+        tick_re2_player(context, assets, pad);
+        return;
+    }
     // A scripted state can hand the player back mid-settle: `action_state`
     // already 1, the settle's pose words written on the entity. The
     // reference's idle then skips its case-0 entry and the settle's first
@@ -13974,6 +14015,16 @@ fn tick_room_timed(
     {
         let mut host = game::ScdGameHost::new(context.game);
         host.interact(context.player.pos, context.player.angle, false);
+    }
+    for (zone, kind, damage) in std::mem::take(&mut context.game.re2.pending_damage) {
+        crate::player2::sce_damage(
+            &mut context.game.re2.player,
+            context.player,
+            zone,
+            kind,
+            damage,
+            &mut context.game.entities[0].health,
+        );
     }
     // The room objects run after the player's physics and the player-side
     // probe: the push probe, the object-side action probe and the climb scan
@@ -16610,9 +16661,9 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
 }
 
 /// The weapon RE2's player carries until weapon changes arrive with the
-/// inventory: each character's handgun (Leon's 02, Claire's 09), whose bank
-/// has the locomotion the other character's stub files lack.
-const RE2_DEFAULT_WEAPONS: [u8; 2] = [0x02, 0x09];
+/// inventory: each character's starting handgun (Leon's 02, Claire's 03),
+/// whose bank has the locomotion the other character's stub files lack.
+const RE2_DEFAULT_WEAPONS: [u8; 2] = [0x02, 0x03];
 
 /// RE2's character `character` holding the default weapon, from either disc's
 /// files. `None` when the pack has no RE2 player, as an RE1 pack doesn't.
@@ -25039,6 +25090,7 @@ return M
                         .map(|_| ClipFrame {
                             keyframe: 0,
                             timing: 1,
+                            flags: 0,
                         })
                         .collect(),
                 };
@@ -25089,6 +25141,7 @@ return M
             frames: vec![ClipFrame {
                 keyframe,
                 timing: 1,
+                flags: 0,
             }],
         };
         let pose = |x: i16| Keyframe {
@@ -25191,6 +25244,7 @@ return M
             frames: vec![ClipFrame {
                 keyframe: 0,
                 timing: 1,
+                flags: 0,
             }],
         };
         assets.emw.clips = vec![
@@ -25202,10 +25256,12 @@ return M
                     ClipFrame {
                         keyframe: 1,
                         timing: 1,
+                        flags: 0,
                     },
                     ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     },
                 ],
             },
@@ -31310,6 +31366,7 @@ end
                 frames: vec![ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 }],
             }],
             damage_clips: Vec::new(),

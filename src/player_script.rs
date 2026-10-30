@@ -3294,6 +3294,7 @@ mod tests {
                 .map(|_| ClipFrame {
                     keyframe: 0,
                     timing,
+                    flags: 0,
                 })
                 .collect(),
         }
@@ -3852,6 +3853,7 @@ mod tests {
                     .map(|index| ClipFrame {
                         keyframe: index,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             };
@@ -3933,10 +3935,12 @@ mod tests {
                 ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 },
                 ClipFrame {
                     keyframe: 2,
                     timing: 1,
+                    flags: 0,
                 },
             ],
         }];

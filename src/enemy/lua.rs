@@ -5530,10 +5530,12 @@ end
                     ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     },
                     ClipFrame {
                         keyframe: 1,
                         timing: 1,
+                        flags: 0,
                     },
                 ],
             })
@@ -5808,6 +5810,7 @@ end
             frames: vec![ClipFrame {
                 keyframe: 0,
                 timing: 1,
+                flags: 0,
             }],
         }];
 
@@ -5851,6 +5854,7 @@ end
             frames: vec![ClipFrame {
                 keyframe: 0,
                 timing: 1,
+                flags: 0,
             }],
         }];
 
@@ -6079,6 +6083,7 @@ end
                     .map(|index| ClipFrame {
                         keyframe: 0,
                         timing: (index % 3) + 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -6769,6 +6774,7 @@ end
                     .map(|_| ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -6846,6 +6852,7 @@ end
                     .map(|_| ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -8420,6 +8427,7 @@ end
                     .map(|_| ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -9101,6 +9109,7 @@ end
                                 .map(|_| crate::model::ClipFrame {
                                     keyframe: 0,
                                     timing: 1,
+                                    flags: 0,
                                 })
                                 .collect(),
                         })
@@ -10327,6 +10336,7 @@ mod spider_tests {
                     .map(|_| ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -11025,6 +11035,7 @@ mod zombie_tests {
                 frames: vec![crate::model::ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 }],
             })
             .collect()
@@ -11430,6 +11441,7 @@ mod zombie_tests {
                             .map(|_| crate::model::ClipFrame {
                                 keyframe: 0,
                                 timing: 1,
+                                flags: 0,
                             })
                             .collect(),
                     })
@@ -11478,6 +11490,7 @@ mod zombie_tests {
                             .map(|_| crate::model::ClipFrame {
                                 keyframe: 0,
                                 timing: 1,
+                                flags: 0,
                             })
                             .collect(),
                     })
@@ -11569,6 +11582,7 @@ mod zombie_tests {
                                 .map(|_| crate::model::ClipFrame {
                                     keyframe: 0,
                                     timing: 1,
+                                    flags: 0,
                                 })
                                 .collect(),
                         })
@@ -12309,6 +12323,7 @@ mod cerberus_tests {
                 frames: vec![crate::model::ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 }],
             })
             .collect()
@@ -12650,6 +12665,7 @@ mod cerberus_tests {
                             .map(|_| crate::model::ClipFrame {
                                 keyframe: 0,
                                 timing: 1,
+                                flags: 0,
                             })
                             .collect(),
                     })
@@ -12932,6 +12948,7 @@ mod chimera_tests {
                 frames: vec![crate::model::ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 }],
             })
             .collect()
@@ -13188,6 +13205,7 @@ mod chimera_tests {
                             .map(|_| crate::model::ClipFrame {
                                 keyframe: 0,
                                 timing: 1,
+                                flags: 0,
                             })
                             .collect(),
                     })
@@ -13200,6 +13218,7 @@ mod chimera_tests {
                     .map(|_| crate::model::ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -13520,6 +13539,7 @@ mod hunter_tests {
                 frames: vec![crate::model::ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 }],
             })
             .collect()
@@ -13534,6 +13554,7 @@ mod hunter_tests {
                     .map(|_| crate::model::ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -13912,6 +13933,7 @@ mod hunter_tests {
                             .map(|_| crate::model::ClipFrame {
                                 keyframe: 0,
                                 timing: 1,
+                                flags: 0,
                             })
                             .collect(),
                     })
@@ -14599,6 +14621,7 @@ mod monster_plant_tests {
                 frames: vec![crate::model::ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 }],
             })
             .collect()
@@ -14613,6 +14636,7 @@ mod monster_plant_tests {
                     .map(|_| crate::model::ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -14890,6 +14914,7 @@ mod monster_plant_tests {
                     .map(|_| crate::model::ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -15240,6 +15265,7 @@ mod computer_arms_tests {
                 frames: vec![crate::model::ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 }],
             })
             .collect()
@@ -15253,6 +15279,7 @@ mod computer_arms_tests {
                     .map(|_| crate::model::ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     })
                     .collect(),
             })
@@ -15709,6 +15736,7 @@ mod computer_arms_tests {
                         .map(|_| crate::model::ClipFrame {
                             keyframe: 0,
                             timing: 1,
+                            flags: 0,
                         })
                         .collect(),
                 })
@@ -16110,6 +16138,7 @@ mod computer_arms_tests {
                                 .map(|_| crate::model::ClipFrame {
                                     keyframe: 0,
                                     timing: 1,
+                                    flags: 0,
                                 })
                                 .collect(),
                         })
@@ -16394,6 +16423,7 @@ mod computer_arms_tests {
                         .map(|keyframe| ClipFrame {
                             keyframe,
                             timing: 1,
+                            flags: 0,
                         })
                         .collect(),
                 })
@@ -16849,6 +16879,7 @@ mod computer_arms_tests {
                         .map(|_| ClipFrame {
                             keyframe: 0,
                             timing: 1,
+                            flags: 0,
                         })
                         .collect(),
                 })
@@ -17178,6 +17209,7 @@ mod computer_arms_tests {
                                 .map(|_| crate::model::ClipFrame {
                                     keyframe: 0,
                                     timing: 1,
+                                    flags: 0,
                                 })
                                 .collect(),
                         })
@@ -17561,6 +17593,7 @@ mod computer_arms_tests {
                     frames: vec![crate::model::ClipFrame {
                         keyframe: 0,
                         timing: 1,
+                        flags: 0,
                     }],
                 })
                 .collect()
@@ -17575,6 +17608,7 @@ mod computer_arms_tests {
                         .map(|_| crate::model::ClipFrame {
                             keyframe: 0,
                             timing: 1,
+                            flags: 0,
                         })
                         .collect(),
                 })

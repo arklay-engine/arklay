@@ -534,7 +534,11 @@ mod tests {
         Clip {
             frames: timings
                 .iter()
-                .map(|&(keyframe, timing)| ClipFrame { keyframe, timing })
+                .map(|&(keyframe, timing)| ClipFrame {
+                    keyframe,
+                    timing,
+                    flags: 0,
+                })
                 .collect(),
         }
     }

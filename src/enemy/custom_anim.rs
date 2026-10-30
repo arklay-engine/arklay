@@ -1047,7 +1047,11 @@ mod tests {
         Clip {
             frames: frames
                 .iter()
-                .map(|&(keyframe, timing)| ClipFrame { keyframe, timing })
+                .map(|&(keyframe, timing)| ClipFrame {
+                    keyframe,
+                    timing,
+                    flags: 0,
+                })
                 .collect(),
         }
     }
@@ -1286,6 +1290,7 @@ mod tests {
                 .map(|keyframe| crate::model::ClipFrame {
                     keyframe: keyframe as u16,
                     timing: 1,
+                    flags: 0,
                 })
                 .collect(),
         }
@@ -1501,6 +1506,7 @@ mod tests {
             frames: vec![crate::model::ClipFrame {
                 keyframe: 0,
                 timing: 1,
+                flags: 0,
             }],
         };
         (skeleton, vec![keyframe], vec![clip])
