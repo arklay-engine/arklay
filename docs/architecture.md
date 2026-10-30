@@ -60,6 +60,7 @@ responsibility.
 | `room` | Format | `room/<id>/` room folders: the `room.xml` reader/writer, the RE1 and RE2 RDT-to-folder conversions (models, effects, animation and scripts by slot), the checked-in RE1 definitions and the art `convert-game` takes from an RDT beside them, the room strings' language layers, and the loader that picks the XML or a raw `room.rdt` |
 | `scd` | Runtime/Format | SCD opcode tables, reader, IR, disassembler/decompiler, assembler, command and event VMs |
 | `door` | Format/Runtime | `.dor` container parser and the door-animation VM |
+| `door2` | Format/Runtime | RE2 `.do2` parser (VAB sounds, MD1 mesh, TIM) and its SCD door VM, framed like `door` |
 | `transition` | Runtime | The door-transition timeline (screen space, masks, camera, `.dor` stepper hand-off) |
 | `stairs` | Runtime | `stairs_height_update` and `set_stairs_zone` room actions |
 | `objects` | Runtime | RDT-embedded object TMD/TIM pairs, runtime object records and transforms |
@@ -100,7 +101,7 @@ responsibility.
 | `tim` | Format | PSX TIM decoder: 16bpp direct, 8bpp/4bpp indexed with CLUT |
 | `emd` | Format | EMD character/room model containers and EMW weapon animations |
 | `emd2` | Format | RE2 EMD/PLD/PLW model containers (MD1 meshes, packed-angle EDD/EMR banks, weapon composites onto the player) |
-| `model_viewer` | Runtime | Posed, animated model in a room with no AI (`--model`), placed in front of each camera |
+| `model_viewer` | Runtime | Posed, animated model in a room with no AI (`--model`), placed in front of each camera or at `--model-pos` |
 | `ivm` | Format | Item-view model (texture page + TMD) parser |
 | `avi` | Format | RIFF/AVI demuxer for the shipped Cinepak films |
 | `mp4` | Format | Minimal ISO-BMFF demuxer for HD (H.264/AAC) film replacements |

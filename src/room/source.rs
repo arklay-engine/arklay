@@ -102,6 +102,10 @@ pub struct MaskGroup {
 }
 
 /// One mask sprite record.
+///
+/// An RE1 sprite's `flags` is its sprite word, whose high nibble packs a
+/// square size; an RE2 sprite's is its size word: the square's side, or 0
+/// for an explicit size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MaskSprite {
     /// Texel origin in the mask page.
@@ -110,21 +114,31 @@ pub struct MaskSprite {
     pub offset: (u8, u8),
     /// The depth/brightness word.
     pub depth: u16,
-    /// Raw flags; a non-zero high nibble selects the packed square size.
+    /// Raw flags (RE1) or size word (RE2).
     pub flags: u16,
-    /// The explicit size, present exactly when the flags' high nibble is 0.
+    /// The explicit size, present exactly when [`MaskSprite::packs_size`]
+    /// is false.
     pub size: Option<(u16, u16)>,
 }
 
 impl MaskSprite {
+    /// Whether `flags` carries the size, so the record has no explicit one.
+    pub fn packs_size(flags: u16, dialect: Dialect) -> bool {
+        match dialect {
+            Dialect::Re1 => flags & 0xF000 != 0,
+            Dialect::Re2 => flags != 0,
+        }
+    }
+
     /// The sprite's pixel size: explicit, or packed in the flags.
-    fn pixel_size(&self) -> (u16, u16) {
-        match self.size {
-            Some(size) => size,
-            None => {
+    fn pixel_size(&self, dialect: Dialect) -> (u16, u16) {
+        match (self.size, dialect) {
+            (Some(size), _) => size,
+            (None, Dialect::Re1) => {
                 let size = (self.flags & 0xF1FF) >> 9;
                 (size, size)
             }
+            (None, Dialect::Re2) => (self.flags, self.flags),
         }
     }
 }
@@ -423,7 +437,7 @@ impl RoomSource {
             .cameras
             .iter()
             .enumerate()
-            .map(|(index, camera)| build_cut(camera, index))
+            .map(|(index, camera)| build_cut(camera, index, self.dialect))
             .collect::<Result<Vec<_>>>()?;
         budget::check_len(
             self.zones.len(),
@@ -509,8 +523,20 @@ fn footstep_count(data: &[u8], pointer: u32) -> u16 {
 
 /// One camera's definition from its parsed cut and raw mask table.
 fn camera_source(cut: &Cut, table: &mask::MaskTable) -> Camera {
+    Camera {
+        pos: cut.pos,
+        look_at: cut.look_at,
+        roll: cut.roll,
+        fov: cut.fov,
+        mask_groups: mask_groups(table, Dialect::Re1),
+        light: cut.light,
+    }
+}
+
+/// A parsed mask table as the camera definition's groups.
+pub(crate) fn mask_groups(table: &mask::MaskTable, dialect: Dialect) -> Vec<MaskGroup> {
     let mut sprites = table.sprites.iter();
-    let mask_groups: Vec<MaskGroup> = table
+    table
         .groups
         .iter()
         .map(|group| MaskGroup {
@@ -527,19 +553,11 @@ fn camera_source(cut: &Cut, table: &mask::MaskTable) -> Camera {
                     ),
                     depth: sprite.pos_data,
                     flags: sprite.flags,
-                    size: (sprite.flags & 0xF000 == 0).then_some(sprite.size),
+                    size: (!MaskSprite::packs_size(sprite.flags, dialect)).then_some(sprite.size),
                 })
                 .collect(),
         })
-        .collect();
-    Camera {
-        pos: cut.pos,
-        look_at: cut.look_at,
-        roll: cut.roll,
-        fov: cut.fov,
-        mask_groups,
-        light: cut.light,
-    }
+        .collect()
 }
 
 /// Slot `slot`'s `{TMD, TIM}` pair in the model table at `pointer`, each cut
@@ -616,8 +634,9 @@ fn effect_slots<'a>(
     slots
 }
 
-/// Build one cut, laying the mask sprites out exactly like the RDT parser.
-fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
+/// Build one cut, laying the mask sprites out exactly like the RDT parser
+/// of its dialect.
+fn build_cut(camera: &Camera, index: usize, dialect: Dialect) -> Result<Cut> {
     if camera.mask_groups.len() > budget::MAX_MASK_GROUPS {
         bail!(
             "camera {index} has {} mask groups, more than the supported {}",
@@ -635,10 +654,10 @@ fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
             origin: group.origin,
         });
         for sprite in &group.sprites {
-            if (sprite.flags & 0xF000 == 0) != sprite.size.is_some() {
+            if MaskSprite::packs_size(sprite.flags, dialect) == sprite.size.is_some() {
                 bail!(
                     "camera {index} mask group {group_index}: a sprite has an explicit size \
-                     exactly when its flags' high nibble is 0"
+                     exactly when its flags do not pack one"
                 );
             }
             budget::check_len(
@@ -652,10 +671,14 @@ fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
                     i32::from(group.origin.0) + i32::from(sprite.offset.0),
                     i32::from(group.origin.1) + i32::from(sprite.offset.1),
                 ),
-                size: sprite.pixel_size(),
+                size: sprite.pixel_size(dialect),
                 pos_data: sprite.depth,
                 flags: sprite.flags,
-                group: (group_index + 1) as u8,
+                // RE2's `Psp_set` numbers the groups from the last.
+                group: match dialect {
+                    Dialect::Re1 => group_index + 1,
+                    Dialect::Re2 => camera.mask_groups.len() - group_index,
+                } as u8,
             });
         }
     }
@@ -669,6 +692,7 @@ fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,
+        mask_dialect: dialect,
         light: camera.light,
     })
 }

@@ -145,3 +145,90 @@ fn the_definition_round_trips_through_xml() {
     let text = crate::room::xml::write(&room).unwrap();
     assert_eq!(crate::room::xml::parse(&text).unwrap(), room);
 }
+
+/// [`sample`] with a two-group mask table on its camera: a square sprite
+/// and a rectangle in the first group, a square in the second.
+fn sample_with_masks() -> Vec<u8> {
+    let mut data = sample();
+    let table = data.len();
+    let rid = u32_at(&data, OFFSETS + RID_SLOT * 4).unwrap() as usize;
+    data[rid + 0x1C..rid + 0x20].copy_from_slice(&(table as u32).to_le_bytes());
+    for word in [2u16, 3, 2, 0x7800, 10, 20, 1, 0x7800, 0, 100] {
+        data.extend_from_slice(&word.to_le_bytes());
+    }
+    data.extend_from_slice(&[0, 0, 1, 2, 30, 0, 16, 0]);
+    data.extend_from_slice(&[16, 0, 3, 4, 31, 0, 0, 0, 24, 0, 8, 0]);
+    data.extend_from_slice(&[0, 64, 5, 6, 2, 0, 32, 0]);
+    data
+}
+
+#[test]
+fn reads_a_camera_s_mask_table() {
+    let room = read(&sample_with_masks()).unwrap();
+    let groups = &room.cameras[0].mask_groups;
+    assert_eq!(groups.len(), 2);
+    assert_eq!((groups[0].origin, groups[0].tex_bits), ((10, 20), 0x7800));
+    assert_eq!(groups[0].sprites[0].size, None);
+    assert_eq!(groups[0].sprites[0].flags, 16);
+    assert_eq!(groups[0].sprites[1].size, Some((24, 8)));
+    assert_eq!(groups[1].sprites[0].depth, 2);
+
+    let pack = crate::pack::PackWriter::new().to_bytes().unwrap();
+    let pack = crate::pack::Pack::from_bytes(pack).unwrap();
+    let state = room
+        .build(crate::state::RoomId::parse("100").unwrap(), &pack)
+        .unwrap();
+    let cut = &state.cuts[0];
+    assert_eq!(cut.mask_dialect, Dialect::Re2);
+    let sprites: Vec<_> = cut
+        .masks
+        .iter()
+        .map(|sprite| (sprite.group, sprite.pos, sprite.size))
+        .collect();
+    assert_eq!(
+        sprites,
+        [
+            (2, (11, 22), (16, 16)),
+            (2, (13, 24), (24, 8)),
+            (1, (5, 106), (32, 32)),
+        ]
+    );
+    assert_eq!(cut.mask_active, 0b11);
+}
+
+#[test]
+fn a_mask_table_round_trips_through_xml() {
+    let room = read(&sample_with_masks()).unwrap();
+    let text = crate::room::xml::write(&room).unwrap();
+    assert!(text.contains(r#"size="16""#), "{text}");
+    assert_eq!(crate::room::xml::parse(&text).unwrap(), room);
+}
+
+#[test]
+fn reads_the_footstep_zones_by_their_count() {
+    let mut data = sample();
+    let table = data.len();
+    data[OFFSETS + FLR_SLOT * 4..OFFSETS + FLR_SLOT * 4 + 4]
+        .copy_from_slice(&(table as u32).to_le_bytes());
+    for word in [
+        2u16, 0xFC18, 500, 2000, 3000, 0x17, 0, 100, 200, 300, 400, 0x1A, 0x83,
+    ] {
+        data.extend_from_slice(&word.to_le_bytes());
+    }
+    let room = read(&data).unwrap();
+    assert_eq!(room.footstep_count, 2);
+    let zone = room.footstep_zones[0];
+    assert_eq!(
+        (zone.base_x, zone.base_z, zone.width, zone.height),
+        (0xFC18, 500, 2000, 3000)
+    );
+    assert_eq!((zone.sound_data, zone.flags), (0x17, 0));
+    assert_eq!(room.footstep_zones[1].flags, 0x83);
+    let text = crate::room::xml::write(&room).unwrap();
+    assert!(text.contains(r#"flags="0x0083""#), "{text}");
+    assert_eq!(crate::room::xml::parse(&text).unwrap(), room);
+
+    // A count past the file's end fails rather than reading short.
+    data.truncate(data.len() - 2);
+    assert!(read(&data).is_err());
+}

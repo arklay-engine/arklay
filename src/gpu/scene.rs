@@ -47,6 +47,9 @@ const PACKED_UNTEXTURED: u32 = 1 << 25;
 const PACKED_NUDGE_SHIFT: u32 = 26;
 /// `in_packed` bits 29..31: which of `MeshVertex::corners` the vertex is.
 const PACKED_CORNER_SHIFT: u32 = 29;
+/// `in_packed` bit: a blending packet adds to the background
+/// (`TmdPrim::additive`), drawn lit in the additive pass.
+pub const PACKED_ADDITIVE: u32 = 1 << 31;
 
 /// One mesh corner in the static vertex buffer (84 bytes).
 /// A `repr(C)` type made only of 4-byte scalars, with no padding, so its
@@ -84,7 +87,7 @@ pub struct MeshVertex {
     /// An untextured packet's colour word / 1024; white otherwise.
     pub colour: [f32; 3],
     /// `joint | palette_row << 8 | triangle_corners << 16 | blend << 24 |
-    /// untextured << 25 | uv_nudge << 26 | corner << 29`.
+    /// untextured << 25 | uv_nudge << 26 | corner << 29 | additive << 31`.
     pub packed: u32,
 }
 
@@ -166,6 +169,9 @@ pub fn mesh_vertices(mesh: &Tmd) -> MeshVertices {
             }
             if prim.flat_color.is_some() {
                 packed |= PACKED_UNTEXTURED;
+            }
+            if blend && prim.additive {
+                packed |= PACKED_ADDITIVE;
             }
             let corners: [[f32; 3]; 4] = std::array::from_fn(|corner| {
                 let vertex = ring_positions[corner];
@@ -306,11 +312,11 @@ fn draw_mode(blend_weight: Option<u8>, cull: bool) -> u32 {
 /// record at weight zero.
 pub fn pass_range(
     blend_weight: Option<u8>,
-    blend_pass: bool,
+    pass: MeshPass,
     blend_start: u32,
     vertex_count: u32,
 ) -> (u32, u32) {
-    match (blend_pass, blend_weight) {
+    match (pass != MeshPass::Opaque, blend_weight) {
         (false, _) | (true, Some(1..)) => (0, vertex_count),
         (true, Some(0)) => (0, 0),
         (true, None) => (blend_start, vertex_count - blend_start),
@@ -410,10 +416,25 @@ pub fn key_depth(key: u32) -> f32 {
 /// The fragment-stage uniform block of a mesh draw (`mesh.frag`'s
 /// `Material`): `x` the alpha of a blended texel, `render::blend_alpha`
 /// rounded to unorm8 as the software blend rounds it, `y` the pass (0
-/// opaque, 1 blend).
-pub fn material(blend_weight: Option<u8>, blend_pass: bool) -> [f32; 4] {
+/// opaque, 1 blend, 2 additive).
+pub fn material(blend_weight: Option<u8>, pass: MeshPass) -> [f32; 4] {
     let alpha = (render::blend_alpha(blend_weight) * 255.0).round_ties_even() / 255.0;
-    [alpha, if blend_pass { 1.0 } else { 0.0 }, 0.0, 0.0]
+    let pass = match pass {
+        MeshPass::Opaque => 0.0,
+        MeshPass::Blend => 1.0,
+        MeshPass::Additive => 2.0,
+    };
+    [alpha, pass, 0.0, 0.0]
+}
+
+/// The passes of a mesh draw, in order: its opaque texels, then the STP
+/// texels of its blending packets, then those of its additive packets
+/// (`PACKED_ADDITIVE`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeshPass {
+    Opaque,
+    Blend,
+    Additive,
 }
 
 /// `flags.y` bit: cull packets facing away.
@@ -766,7 +787,8 @@ pub fn fingerprint(parts: &[u64], chunks: &[&[u8]]) -> u64 {
     hash
 }
 
-/// [`fingerprint`] of a TMD's geometry: its vertices and packet layout.
+/// [`fingerprint`] of a TMD's geometry: its vertices, packet layout and each
+/// packet's blend flags (a door's script can switch a part to additive).
 pub fn mesh_fingerprint(mesh: &Tmd) -> u64 {
     let mut parts = vec![mesh.objects.len() as u64, mesh.objects.as_ptr() as u64];
     for object in &mesh.objects {
@@ -774,6 +796,12 @@ pub fn mesh_fingerprint(mesh: &Tmd) -> u64 {
         parts.push(object.prims.as_ptr() as u64);
         parts.push(object.vertices.len() as u64);
         parts.push(object.vertices.as_ptr() as u64);
+        parts.extend(
+            object
+                .prims
+                .iter()
+                .map(|prim| u64::from(prim.blend) | u64::from(prim.additive) << 1),
+        );
         for vertex in &object.vertices {
             parts.push(
                 u64::from(vertex[0] as u16)
@@ -860,6 +888,7 @@ mod tests {
             tsb: 0x11,
             textured: true,
             blend: false,
+            additive: false,
             raw_y: false,
             uv_nudge: [0; 3],
             flat_color: None,
@@ -976,6 +1005,7 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,
@@ -1062,6 +1092,7 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,
@@ -1128,6 +1159,7 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,
@@ -1191,9 +1223,10 @@ mod tests {
             draw_mode(Some(0x33), true),
             DRAW_CULL | DRAW_RECORD | DRAW_RECORD_BLENDS
         );
-        assert_eq!(pass_range(None, false, 6, 9), (0, 9));
-        assert_eq!(pass_range(None, true, 6, 9), (6, 3));
-        assert_eq!(pass_range(Some(0x80), true, 6, 9), (0, 9));
-        assert_eq!(pass_range(Some(0), true, 6, 9), (0, 0));
+        assert_eq!(pass_range(None, MeshPass::Opaque, 6, 9), (0, 9));
+        assert_eq!(pass_range(None, MeshPass::Blend, 6, 9), (6, 3));
+        assert_eq!(pass_range(None, MeshPass::Additive, 6, 9), (6, 3));
+        assert_eq!(pass_range(Some(0x80), MeshPass::Blend, 6, 9), (0, 9));
+        assert_eq!(pass_range(Some(0), MeshPass::Blend, 6, 9), (0, 0));
     }
 }

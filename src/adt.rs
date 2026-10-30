@@ -17,7 +17,9 @@
 //! a background holds a 256 x 256 page followed by a 128 x 128 page whose two
 //! 64-wide halves are the right-hand 64 columns of the 320 x 240 frame (rows
 //! 0-127, then 128-239), all as 15-bit `0BBBBBGGGGGRRRRR` texels (the PSX order, red lowest); [`reorganize`] lays them out as
-//! one 320 x 240 frame.
+//! one 320 x 240 frame. A camera with mask sprites has its mask page right
+//! after the two pages: an 8bpp TIM with one 256-colour CLUT row
+//! ([`mask_page`]).
 
 use anyhow::{Context, Result, ensure};
 
@@ -351,8 +353,20 @@ fn widen(texel: u16) -> [u8; 3] {
 
 /// Decode a background stream into a 320 x 240 opaque image.
 pub fn background(data: &[u8]) -> Result<Image> {
-    let decoded = decode(data)?;
-    let frame = reorganize(&decoded).context("ADT stream is not a background")?;
+    frame_image(&decode(data)?)
+}
+
+/// The mask page TIM after a decoded background's two pages, if the stream
+/// carries one.
+pub fn mask_page(decoded: &[u8]) -> Option<&[u8]> {
+    decoded
+        .get(BACKGROUND_BYTES..)
+        .filter(|tail| tail.starts_with(&[0x10, 0, 0, 0]))
+}
+
+/// A decoded background's frame as a 320 x 240 opaque image.
+pub fn frame_image(decoded: &[u8]) -> Result<Image> {
+    let frame = reorganize(decoded).context("ADT stream is not a background")?;
     let mut rgba = Vec::with_capacity(WIDTH * HEIGHT * 4);
     for texel in frame {
         let [red, green, blue] = widen(texel);

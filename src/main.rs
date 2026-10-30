@@ -98,6 +98,23 @@ struct Cli {
     )]
     fmv: Option<String>,
 
+    /// Play RE2 door `ID` (two hex digits, `door/<ID>.do2`) as a door
+    /// transition headlessly and write the frame after `--ticks` fixed ticks
+    /// to the `--capture` file
+    #[arg(
+        long,
+        value_name = "ID",
+        requires_all = ["pack", "capture"],
+        conflicts_with_all = ["room", "ui", "fmv", "ending"],
+        value_parser = parse_hex_byte
+    )]
+    door: Option<u8>,
+
+    /// The door-type byte `--door` plays: its low seven bits pick the
+    /// animation variant
+    #[arg(long, value_name = "N", default_value_t = 0, requires = "door", value_parser = parse_hex_byte)]
+    door_type: u8,
+
     /// Play ending row `ID` (1-7): its film chain, the RESULT screen, the
     /// rocket-launcher epilogue (endings 6/7) and the next-cycle save, then the
     /// title. With `--capture` the frame after `--ticks` fixed ticks is
@@ -224,6 +241,11 @@ struct Cli {
     /// The `--model` clip of the bank, looped
     #[arg(long, value_name = "N", default_value_t = 0, requires = "model")]
     clip: usize,
+
+    /// Stand the `--model` at world position X,Y,Z instead of in front of
+    /// the camera (still facing it), e.g. behind a masked foreground
+    #[arg(long, value_name = "X,Y,Z", requires = "model", value_parser = parse_position, allow_hyphen_values = true)]
+    model_pos: Option<[i32; 3]>,
 
     /// Run N fixed 30 Hz ticks before a capture frame is drawn, so scripted
     /// NPC scenes and `--fmv` frames can be captured deterministically and
@@ -658,6 +680,22 @@ fn parse_region_pack(text: &str) -> Result<(arklay::scd::akscr::Region, PathBuf)
 }
 
 /// Parse a hex RDT id such as `1030`.
+fn parse_hex_byte(text: &str) -> Result<u8, String> {
+    u8::from_str_radix(text.trim_start_matches("0x"), 16)
+        .map_err(|err| format!("`{text}` is not a hex byte: {err}"))
+}
+
+fn parse_position(text: &str) -> Result<[i32; 3], String> {
+    let parts: Vec<i32> = text
+        .split(',')
+        .map(|part| part.trim().parse())
+        .collect::<Result<_, _>>()
+        .map_err(|err| format!("`{text}` is not X,Y,Z: {err}"))?;
+    parts
+        .try_into()
+        .map_err(|_| format!("`{text}` is not three comma-separated numbers X,Y,Z"))
+}
+
 fn parse_room_id(text: &str) -> Result<u16, String> {
     u16::from_str_radix(text, 16)
         .ok()
@@ -1413,6 +1451,7 @@ fn main() -> Result<()> {
                     entry,
                     bank: cli.bank,
                     clip: cli.clip,
+                    pos: cli.model_pos,
                 }),
             };
             let save_dir = cli
@@ -1430,6 +1469,16 @@ fn main() -> Result<()> {
                     &mods,
                     renderer,
                     player_options,
+                );
+            }
+            if let (Some(id), Some(capture)) = (cli.door, cli.capture.as_deref()) {
+                return arklay::engine::run_door(
+                    &pack,
+                    id,
+                    cli.door_type,
+                    capture,
+                    cli.ticks,
+                    &mods,
                 );
             }
             if let Some(film) = &cli.fmv {

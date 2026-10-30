@@ -976,6 +976,16 @@ pub fn image_candidates(image: &Image) -> Vec<Candidate> {
         frame: [256, 256],
         origin: [0, 0],
     });
+    // RE2's loader hashes a smaller mask page (128 or 64 square) over its own
+    // size, but its replacement is still a 256-texel square at 4x whose
+    // top-left corner holds the page.
+    if width < 256 && height < 256 {
+        candidates.push(Candidate {
+            hash: replicated.window_crc(width, height, finish_mask),
+            frame: [256, 256],
+            origin: [0, 0],
+        });
+    }
     for black_clear in [false, true] {
         let shifted = surface(Expand::Shift, black_clear);
         candidates.push(Candidate {
@@ -1559,6 +1569,35 @@ mod tests {
                 origin: [0, 0],
             }
         );
+    }
+
+    #[test]
+    fn a_small_re2_mask_page_hashes_over_its_own_size() {
+        // A 64 x 64 page as the mask decoder keys it: black is clear. The
+        // hash covers the page alone; its replacement is a 256 square at 4x.
+        let pixel = |x: u32, y: u32| {
+            if (x + y).is_multiple_of(5) {
+                [0, 0, 0, 0]
+            } else {
+                [(x * 4) as u8, (y * 4) as u8, 0x80, 255]
+            }
+        };
+        let image = image_of(64, 64, pixel);
+        let mut expected = Vec::new();
+        for y in 0..64 {
+            for x in 0..64 {
+                let texel = match pixel(x, y) {
+                    [_, _, _, 0] => 0,
+                    [r, g, b, _] => texel(colour_of([r, g, b]), Expand::Replicate) | 0xff00_0000,
+                };
+                expected.extend_from_slice(&texel.to_le_bytes());
+            }
+        }
+        assert!(image_candidates(&image).contains(&Candidate {
+            hash: crc32(&expected),
+            frame: [256, 256],
+            origin: [0, 0],
+        }));
     }
 
     #[test]

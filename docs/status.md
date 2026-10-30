@@ -48,10 +48,11 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-28.
 | R1 RE2 first light | RE2 rooms: the `rdt2` reader (cameras, RVD switch zones, SCA collision), letter stages A-G, the base manifest's `start_room`, the collision debug overlay, and the TeamX RE2 HD backgrounds | done |
 | R2 RE2 models | RE2 EMD, PLD and PLW through the shared model and animation path, the `--model` viewer, per-camera LIT lights, HD model skins, and the `re2` pack conventions | done |
 | R3 RE2 scripts | The RE2 SCD reader (`scd2`): init and main procedure lists, the RE2 opcode table, `scd export` to `.s` and structured `.akscr`, both round-tripping every retail room byte for byte | done |
+| R4 RE2 doors and masks | The DO2 parser and door VM (`door2`) played through the door transition (`--door`), RE2 mask tables and mask pages (`convert-game` packs `room/<id>/mask/<nn>.bmp`), their TeamX HD names, the FLR footstep zones, and `verify` parsing DO2s | done |
 | R5 RE2 audio | MS-ADPCM decoding (`adpcm`), matching ffmpeg up to its rounding, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
 | R6 RE2 FMV | The in-house MPEG-1 decoder (`mpeg`: program stream demux, MPEG-1 video, MP2 audio) behind the movie path, RE2 films played by name (`--fmv opn1stl`, `r109`, `staff`), and `verify` parsing MPEG; all 26 retail films play end to end with ffprobe's frame counts | done |
 
-The other RE2 milestones (R4, R7 onwards) are still open and tracked by the
+The other RE2 milestones (R7 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
@@ -875,8 +876,8 @@ runtime milestones parse them). Retail-data quirks the converter handles:
 - `Pl0/emd0/EM13A.TIM` is a stray, differing copy of the disc-1 texture; the
   file in its own disc's folder wins.
 - The `Pdemo**p.dat` alternate demo takes are not packed.
-- Each decoded ADT stream carries 66,080 bytes after the background,
-  probably a 256x256 8bpp mask TIM; R4 (#248) takes it up.
+- A decoded ADT stream whose camera has mask sprites carries its mask page,
+  an 8bpp TIM, after the background; R4 (#248) packs it.
 
 R1 (#245) loads RE2 rooms. Room loading detects the RDT dialect and reads an
 RE2 RDT through `rdt2` into the same `RoomSource` RE1 rooms build from:
@@ -889,7 +890,7 @@ room (`100` for RE2). `F4`/`--render-mode collision-overlay` draws the
 collision over the background from the cut camera. All 501 rooms and 5040
 cameras load against the retail install (`tests/real/re2_real.rs`); the 12
 cameras without a background (above) log a warning instead of failing the
-room. RE2 rooms run no scripts and have no player yet; masks and the RVD
+room. RE2 rooms run no scripts and have no player yet; the RVD
 floor/flag bytes are not read. The TeamX RE2 HD pack converts with
 `convert-mod --base re2.akpak`; its backgrounds are named by the CRC of the
 camera's whole 256 x 256 main page (`bio2hd.asi`: the 240 picture rows with
@@ -934,6 +935,62 @@ all 501 rooms (5090 procedures) rebuild their lists byte for byte and
 round-trip through both forms, with every block decompiled to its structured
 form. Running the scripts, `scd build` for RE2 and the `.lst` listing come
 later.
+
+RE2 R4 (#248) adds doors, masks and footstep zones.
+
+- Doors (`src/door2.rs`, `src/door2/`): a DO2 is an EDT sound table, a
+  PlayStation VAB, then a sector-aligned block holding an RE2 SCD procedure
+  list, an MD1 mesh of up to ten door parts and an 8bpp TIM. `door2::vm`
+  runs the procedures the way `Door_init`/`Door_move`/`Door_Trans`/
+  `Door_exit` do: four tasks (10-13) on the RE2 scheduler, the part
+  hierarchy and speeds, the fades and `se_on`. Its frame is the RE1 door
+  VM's, so the existing door transition and renderer play it. As
+  `Door_load` does, the sounds are the slots of a PC door bank
+  (`door%02d.sap`, converted by R5; `door2::sound_bank` maps the doors that
+  share one) at the volume of the tone the DO2's sound table names; a pack
+  without the bank falls back to the DO2's PlayStation VAB, decoded from
+  ADPCM. All 55 retail DO2s parse and play to the end with every door type
+  and no fault (`tests/real/re2_real.rs`). Doors `20`, `21`, `32`, `34` and
+  `36` are fade-only (no visible part), and the second sound of doors `33`
+  and `35` is silent, as in the original: their banks hold slot 0 only. `arklay re2.akpak --door ID [--door-type N] --capture F` plays one
+  headlessly. The parts are lit as the PC port lights them
+  (`render::re2_door_light`): `Door_Trans` sets the GTE light matrix to
+  `door_ll` times the part's view matrix and the colour matrix to
+  `door_lc`, and Marni colours each corner
+  `min(255, sum (door_lc >> 4) * max(0, l . n))` with no ambient (the PC
+  never reads the GTE back colour, so attribute `0x1000` and the `0x100`
+  pulse change nothing). Attribute `0x4000` draws a part in Marni's
+  additive mode (`0x200000`, `source + destination`, lit), and door `2D`'s
+  `Marni_door_disp1` parts are full-bright. The transition follows
+  `Door_main` (`transition::Timing::Re2`): one black frame for
+  `Door_init`, no phase-2 hold, no entry fade, and a skip press on any
+  frame stops task 10, after which `Door_move` draws nothing and
+  `Door_exit` still waits for fade 0. Gaps: the light reads the current
+  frame's view matrix where the original reads the previous frame's, the
+  "please wait" text `Door_move` prints over doors `32` and `34` (frames
+  `0x29`-`0x103`) is not drawn, and no room triggers a door yet (there is no RE2 player), so `Set_door`'s
+  room-side order is untested.
+- Masks: the camera record's `+0x1C` word points at its mask table (every
+  camera has one; 1646 of the 5040 start with `-1`, no sprites). The table is a
+  `u16` group and sprite count, 8-byte groups (count, `0x7800`, origin) and
+  8- or 12-byte sprites (`u, v, x, y`, depth, then a square size or `0`
+  and an explicit width and height). `mask::MaskTable::parse_re2` reads it,
+  `room.xml` round-trips it, and the renderer orders the sprites by
+  `AddMask`'s key, `max(depth << 5, focal / 2)`, in file order. The mask
+  page is the 8bpp TIM after the decoded background (256, 128 or 64
+  square); `convert-game` packs it as `room/<id>/mask/<nn>.bmp` for the
+  3394 cameras with sprites. `F4`/`--render-mode masks` shows them, and
+  `--model-pos X,Y,Z` stands a `--model` behind a masked foreground.
+- HD masks: TeamX names an RE2 mask page by `bio2hd.asi`'s CRC of the page
+  as the mask decoder keys it (black clear, 5-to-8-bit replication) over
+  the page's own size, with a 1024 x 1024 replacement whose top-left `4w x
+  4h` holds it; `htexture::image_candidates` offers that name for the 128
+  and 64 pages too.
+- Footsteps: section slot 11 (`rdt + 0x34`, `Floor_check`/`Flr_set`) is a
+  `u16` count and 12-byte records (`x`, `z`, width, depth, sound, flags:
+  the low 7 bits the floor level, bit 7 off). `rdt2` reads them into the
+  room's footstep zones (1387 in the retail rooms), kept in `room.xml` with
+  a `flags` attribute; nothing plays them until RE2 has a player.
 
 RE2 R5 (#249) makes RE2 audio play. `adpcm` decodes MS-ADPCM (WAVE tag 2),
 ported from biohazard-utils' `MSADPCMDecoder`, and `audio::parse_wav` uses it,

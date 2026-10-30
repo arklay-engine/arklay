@@ -153,7 +153,7 @@ pub fn write(room: &RoomSource) -> Result<String> {
 
     w.open("cameras", &[]);
     for camera in &room.cameras {
-        write_camera(&mut w, camera);
+        write_camera(&mut w, camera, room.dialect);
     }
     w.close("cameras");
 
@@ -196,17 +196,19 @@ pub fn write(room: &RoomSource) -> Result<String> {
 
     w.open("footsteps", &[("count", dec(room.footstep_count))]);
     for zone in &room.footstep_zones {
-        w.empty(
-            "footstep",
-            &[
-                ("x", dec(zone.base_x)),
-                ("z", dec(zone.base_z)),
-                ("width", dec(zone.width)),
-                // The high byte is the surface type.
-                ("height", hex(zone.height)),
-                ("sound", hex(zone.sound_data)),
-            ],
-        );
+        let mut attributes = vec![
+            ("x", dec(zone.base_x)),
+            ("z", dec(zone.base_z)),
+            ("width", dec(zone.width)),
+            // The high byte is the surface type.
+            ("height", hex(zone.height)),
+            ("sound", hex(zone.sound_data)),
+        ];
+        // RE2's level and switch-off word; RE1 records have none.
+        if zone.flags != 0 {
+            attributes.push(("flags", hex(zone.flags)));
+        }
+        w.empty("footstep", &attributes);
     }
     w.close("footsteps");
 
@@ -364,7 +366,7 @@ fn light_attributes(light: &Light) -> Vec<(&'static str, Value)> {
     ]
 }
 
-fn write_camera(w: &mut Writer, camera: &Camera) {
+fn write_camera(w: &mut Writer, camera: &Camera, dialect: Dialect) {
     let attributes = vec![
         ("x", dec(camera.pos[0])),
         ("y", dec(camera.pos[1])),
@@ -399,7 +401,11 @@ fn write_camera(w: &mut Writer, camera: &Camera) {
             ],
         );
         for sprite in &group.sprites {
-            w.empty("sprite", &sprite_attributes(sprite));
+            let attributes = match dialect {
+                Dialect::Re1 => sprite_attributes(sprite),
+                Dialect::Re2 => re2_sprite_attributes(sprite),
+            };
+            w.empty("sprite", &attributes);
         }
         w.close("maskGroup");
     }
@@ -444,6 +450,26 @@ fn sprite_attributes(sprite: &MaskSprite) -> Vec<(&'static str, Value)> {
             attributes.push(("height", dec(height)));
         }
         None => attributes.push(("size", dec((sprite.flags >> SPRITE_SIZE_SHIFT) * 8))),
+    }
+    attributes
+}
+
+/// An RE2 mask sprite's attributes: its size word is the side of a square
+/// `size`, or 0 for an explicit `width` and `height`.
+fn re2_sprite_attributes(sprite: &MaskSprite) -> Vec<(&'static str, Value)> {
+    let mut attributes = vec![
+        ("u", dec(sprite.uv.0)),
+        ("v", dec(sprite.uv.1)),
+        ("x", dec(sprite.offset.0)),
+        ("y", dec(sprite.offset.1)),
+        ("depthData", dec(sprite.depth)),
+    ];
+    match sprite.size {
+        Some((width, height)) => {
+            attributes.push(("width", dec(width)));
+            attributes.push(("height", dec(height)));
+        }
+        None => attributes.push(("size", dec(sprite.flags))),
     }
     attributes
 }
@@ -613,7 +639,7 @@ pub fn parse(text: &str) -> Result<RoomSource> {
             "cameras" => {
                 check_attributes(node, &[])?;
                 room.cameras = children(node, "camera")?
-                    .map(parse_camera)
+                    .map(|camera| parse_camera(camera, room.dialect))
                     .collect::<Result<_>>()?;
             }
             "cameraSwitches" => room.zones = parse_zones(node)?,
@@ -639,13 +665,14 @@ pub fn parse(text: &str) -> Result<RoomSource> {
                 check_attributes(node, &["count"])?;
                 room.footstep_zones = children(node, "footstep")?
                     .map(|zone| {
-                        check_attributes(zone, &["x", "z", "width", "height", "sound"])?;
+                        check_attributes(zone, &["x", "z", "width", "height", "sound", "flags"])?;
                         Ok(FootstepZone {
                             base_x: attr(zone, "x")?,
                             base_z: attr(zone, "z")?,
                             width: attr(zone, "width")?,
                             height: attr(zone, "height")?,
                             sound_data: attr(zone, "sound")?,
+                            flags: attr_or(zone, "flags", 0)?,
                         })
                     })
                     .collect::<Result<_>>()?;
@@ -790,7 +817,7 @@ fn parse_light(node: Node<'_, '_>) -> Result<Light> {
     })
 }
 
-fn parse_camera(node: Node<'_, '_>) -> Result<Camera> {
+fn parse_camera(node: Node<'_, '_>, dialect: Dialect) -> Result<Camera> {
     check_attributes(
         node,
         &["x", "y", "z", "lookX", "lookY", "lookZ", "roll", "fov"],
@@ -814,7 +841,10 @@ fn parse_camera(node: Node<'_, '_>) -> Result<Camera> {
         .map(|group| {
             check_attributes(group, &["originX", "originY", "texBits"])?;
             let sprites = children(group, "sprite")?
-                .map(parse_sprite)
+                .map(|sprite| match dialect {
+                    Dialect::Re1 => parse_sprite(sprite),
+                    Dialect::Re2 => parse_re2_sprite(sprite),
+                })
                 .collect::<Result<_>>()?;
             Ok(MaskGroup {
                 tex_bits: attr_or(group, "texBits", 0)?,
@@ -894,6 +924,36 @@ fn parse_sprite(sprite: Node<'_, '_>) -> Result<MaskSprite> {
             None
         }
         (None, Some(_), Some(_)) => Some((attr(sprite, "width")?, attr(sprite, "height")?)),
+        _ => bail!("<sprite> needs a `size`, or a `width` and a `height`"),
+    };
+    Ok(MaskSprite {
+        uv: (attr(sprite, "u")?, attr(sprite, "v")?),
+        offset: (attr(sprite, "x")?, attr(sprite, "y")?),
+        depth: attr(sprite, "depthData")?,
+        flags,
+        size,
+    })
+}
+
+/// An RE2 `<sprite>` ([`re2_sprite_attributes`]).
+fn parse_re2_sprite(sprite: Node<'_, '_>) -> Result<MaskSprite> {
+    check_attributes(
+        sprite,
+        &["u", "v", "x", "y", "depthData", "size", "width", "height"],
+    )?;
+    let (flags, size) = match (
+        sprite.attribute("size"),
+        sprite.attribute("width"),
+        sprite.attribute("height"),
+    ) {
+        (Some(_), None, None) => {
+            let size: u16 = attr(sprite, "size")?;
+            if size == 0 {
+                bail!("<sprite> size must not be 0; give a `width` and a `height` instead");
+            }
+            (size, None)
+        }
+        (None, Some(_), Some(_)) => (0, Some((attr(sprite, "width")?, attr(sprite, "height")?))),
         _ => bail!("<sprite> needs a `size`, or a `width` and a `height`"),
     };
     Ok(MaskSprite {

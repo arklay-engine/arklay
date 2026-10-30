@@ -3960,6 +3960,7 @@ mod tests {
                 width: 0x8000,
                 height: 0x8000,
                 sound_data: 0x2D,
+                flags: 0,
             }],
             ..RoomState::default()
         };
@@ -3988,6 +3989,7 @@ mod tests {
                 width: 0x8000,
                 height: 0x8000,
                 sound_data: 0x2D,
+                flags: 0,
             }],
             ..RoomState::default()
         };
@@ -4335,6 +4337,7 @@ mod tests {
                 width: 0x8000,
                 height: 0x8000,
                 sound_data: 0x2D,
+                flags: 0,
             }],
             ..RoomState::default()
         };
@@ -5660,6 +5663,7 @@ mod tests {
                 width: 0x8000,
                 height: 0x8000,
                 sound_data: 0x2D,
+                flags: 0,
             }],
             ..RoomState::default()
         };

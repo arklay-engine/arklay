@@ -108,6 +108,8 @@ pub struct Viewer {
     pub angle: u16,
     /// The cut the model was last stood in front of.
     placed: Option<usize>,
+    /// `--model-pos`: where the model stands instead of in front of the cut.
+    fixed: Option<[i32; 3]>,
     /// The first pose's extent about the entity origin, facing angle 0:
     /// the widest horizontal reach and the top and bottom (`y` grows down).
     reach: i32,
@@ -130,6 +132,7 @@ impl Viewer {
             pos: [0; 3],
             angle: 0,
             placed: None,
+            fixed: None,
             reach: 0,
             top: 0,
             bottom: 0,
@@ -170,7 +173,15 @@ impl Viewer {
         (self.reach, self.top, self.bottom) = (reach.ceil() as i32, top as i32, bottom as i32);
     }
 
-    /// Stand the model in front of `cut`, turned to face it.
+    /// Stand the model at `pos` in every cut rather than in front of it, still
+    /// turned to face the camera: to put it behind a masked foreground.
+    pub fn with_position(mut self, pos: [i32; 3]) -> Self {
+        self.fixed = Some(pos);
+        self
+    }
+
+    /// Stand the model in front of `cut` (or at its fixed position), turned
+    /// to face it.
     ///
     /// It stands along the view, as far out as fits its first pose's
     /// extent into the middle of the frame (`FIT_HALF_HEIGHT` pixels of
@@ -192,8 +203,10 @@ impl Viewer {
         } else {
             (0.0, 1.0)
         };
-        let x = from[0] + dx * distance;
-        let z = from[2] + dz * distance;
+        let (x, z) = match self.fixed {
+            Some([x, _, z]) => (f64::from(x), f64::from(z)),
+            None => (from[0] + dx * distance, from[2] + dz * distance),
+        };
         // The screen rows of world height `y` at that spot, measured as the
         // angle below the line of sight against the frame's half-height.
         let pitch = view[1].atan2(level);
@@ -205,7 +218,9 @@ impl Viewer {
             // The line of sight's height there, less the pose's middle.
             from[1] + pitch.tan() * distance - (top + bottom) / 2.0
         };
-        self.pos = [x.round() as i32, y.round() as i32, z.round() as i32];
+        self.pos = self
+            .fixed
+            .unwrap_or([x.round() as i32, y.round() as i32, z.round() as i32]);
         // An entity at angle `a` faces `(cos a, -sin a)` on X/Z in 4096ths
         // of a turn (`entity_matrix`); it faces back along the view.
         let turn = dz.atan2(-dx) / std::f64::consts::TAU;
@@ -415,6 +430,23 @@ mod tests {
         viewer.follow(&cuts, 1);
         assert!(near(viewer.pos, [-1500, 0, 0]), "{:?}", viewer.pos);
         assert_eq!(viewer.angle, 0);
+    }
+
+    #[test]
+    fn a_fixed_position_holds_in_every_camera() {
+        let mut viewer = Viewer::new(model(), 0, 0)
+            .unwrap()
+            .with_position([300, 0, 4000]);
+        let cut = Cut {
+            pos: [0, -600, 0],
+            look_at: [0, -600, 10_000],
+            fov: 240,
+            ..Cut::default()
+        };
+        viewer.follow(&[cut], 0);
+        assert_eq!(viewer.pos, [300, 0, 4000]);
+        // Still turned back along the view: -Z, a quarter turn.
+        assert_eq!(viewer.angle, 1024);
     }
 
     #[test]

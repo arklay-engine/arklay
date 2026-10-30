@@ -103,7 +103,7 @@ pub enum Format {
     /// An RE2 sound table and VAB header (`*.edh`), read through
     /// [`crate::se2::Edh`].
     Edh,
-    /// An RE2 door archive (`*.do2`). TODO(re2): parse it.
+    /// An RE2 door animation (`*.do2`).
     Do2,
     /// A Microsoft ADPCM WAV (RE2 voice, music and sound banks), decoded
     /// through [`crate::adpcm`].
@@ -158,13 +158,7 @@ impl Format {
 
     /// Whether the format has a parser and a failure is a verification error.
     pub fn known(self) -> bool {
-        self != Self::Opaque && !self.unsupported()
-    }
-
-    /// Whether the format is recognised but has no parser yet: it never
-    /// fails a normal run and fails `--strict` like an opaque entry.
-    pub fn unsupported(self) -> bool {
-        matches!(self, Self::Do2)
+        self != Self::Opaque
     }
 }
 
@@ -422,12 +416,6 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
                 Err(anyhow::anyhow!("unknown entry format (--strict): {}", path))
             }
             Format::Opaque => Ok(()),
-            _ if format.unsupported() && strict => Err(anyhow::anyhow!(
-                "{} is recognised but not supported yet (--strict): {}",
-                format.name(),
-                path
-            )),
-            _ if format.unsupported() => Ok(()),
             _ => match read {
                 Some(Ok(data)) => verify_entry(pack, path, format, &data),
                 _ => pack
@@ -628,13 +616,16 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
         Format::Edh => {
             crate::se2::Edh::parse(data)?;
         }
+        Format::Do2 => {
+            crate::door2::parse(data)?;
+        }
         Format::Re2Emd | Format::Pld | Format::Plw => {
             // The model viewer's load: an enemy needs the texture beside it
             // and a weapon the character model it belongs to.
             crate::model_viewer::load_with(pack, path, data)?;
         }
-        Format::Opaque | Format::Do2 => {
-            unreachable!("opaque and unsupported entries are handled by the caller")
+        Format::Opaque => {
+            unreachable!("opaque entries are handled by the caller")
         }
     }
     Ok(())

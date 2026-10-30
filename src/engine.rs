@@ -112,6 +112,7 @@ use crate::bmp;
 use crate::controls::{self, Action};
 use crate::demo;
 use crate::door;
+use crate::door2;
 use crate::effects;
 use crate::emd;
 use crate::ending;
@@ -124,7 +125,7 @@ use crate::items;
 use crate::lua;
 use crate::mask;
 use crate::message::MessageInput;
-use crate::model::{Clip, Emd};
+use crate::model::{Clip, Emd, Texture8};
 use crate::movie::{self, MovieSession, MovieTick};
 use crate::objects;
 use crate::pacer::{FramePacer, Pace};
@@ -354,14 +355,19 @@ pub struct ModelView<'a> {
     pub entry: &'a str,
     pub bank: usize,
     pub clip: usize,
+    /// `--model-pos`: stand the model here instead of in front of the cut.
+    pub pos: Option<[i32; 3]>,
 }
 
 impl ModelView<'_> {
     /// The viewer the options name, loaded from `pack`.
     fn viewer(&self, pack: &Pack) -> Result<Box<crate::model_viewer::Viewer>> {
         let model = crate::model_viewer::load(pack, self.entry)?;
-        let viewer = crate::model_viewer::Viewer::new(model, self.bank, self.clip)
+        let mut viewer = crate::model_viewer::Viewer::new(model, self.bank, self.clip)
             .with_context(|| format!("--model {}", self.entry))?;
+        if let Some(pos) = self.pos {
+            viewer = viewer.with_position(pos);
+        }
         Ok(Box::new(viewer))
     }
 }
@@ -5478,6 +5484,7 @@ impl GameSession {
                 &mut self.sfx_cache,
                 pack,
                 &session.door,
+                session.transition.stepper(),
                 effect,
             );
         }
@@ -5913,6 +5920,7 @@ impl GameSession {
                 complex_object: None,
                 aliased_light: false,
                 light_rotation: None,
+                fixed_light: None,
                 joint_colours: crate::render::NO_JOINT_COLOURS,
                 hd_name: None,
             }];
@@ -10322,17 +10330,26 @@ const FALLBACK_TRANSITION_FRAMES: u32 = 30;
 /// Safety bound for the headless transition driver.
 const MAX_TRANSITION_FRAMES: u32 = 10_000;
 
-/// The `.dor` interpreter adapted to the transition's [`DoorStepper`] seam.
+/// The door art a transition plays.
+enum DoorArt {
+    /// An RE1 `.dor` and its VM.
+    Re1(Box<door::Dor>, Box<door::vm::Vm>),
+    /// An RE2 `.do2`, its VM and the PC door bank's sounds by slot.
+    Re2(Box<door2::Do2>, Box<door2::vm::Vm>, Box<DoorBank>),
+    /// No art: the fallback black screen.
+    Missing,
+}
+
+/// The `.dor` or `.do2` interpreter adapted to the transition's
+/// [`DoorStepper`] seam.
 ///
 /// The adapter drains the VM frame's sound and message queues into per-frame
 /// buffers for the engine and forwards the sound-busy handshake. When the pack
 /// carries no door art it holds a short black screen instead, so a missing
-/// `.dor` never aborts a doorway.
+/// door file never aborts a doorway.
 struct DoorAnimation {
-    /// Parsed door file; `None` in the no-art fallback.
-    dor: Option<door::Dor>,
-    /// The animation VM; `None` in the no-art fallback.
-    vm: Option<door::vm::Vm>,
+    /// The door file and its VM.
+    art: DoorArt,
     /// Fallback frame counter.
     fallback_frames: u32,
     /// Sound effects emitted since the engine last drained them.
@@ -10343,23 +10360,57 @@ struct DoorAnimation {
 
 impl DoorAnimation {
     fn new(dor: door::Dor, vm: door::vm::Vm) -> Self {
+        Self::with_art(DoorArt::Re1(Box::new(dor), Box::new(vm)))
+    }
+
+    fn new_re2(do2: door2::Do2, vm: door2::vm::Vm, bank: DoorBank) -> Self {
+        Self::with_art(DoorArt::Re2(Box::new(do2), Box::new(vm), Box::new(bank)))
+    }
+
+    fn missing() -> Self {
+        Self::with_art(DoorArt::Missing)
+    }
+
+    fn with_art(art: DoorArt) -> Self {
         Self {
-            dor: Some(dor),
-            vm: Some(vm),
+            art,
             fallback_frames: 0,
             sfx: Vec::new(),
             messages: Vec::new(),
         }
     }
 
-    fn missing() -> Self {
-        Self {
-            dor: None,
-            vm: None,
-            fallback_frames: 0,
-            sfx: Vec::new(),
-            messages: Vec::new(),
+    /// An RE2 door sound, its gain and pan. `None` for RE1 art.
+    ///
+    /// As the PC original does, the sound is the door bank's WAV in the
+    /// effect's slot ([`door_bank`]), centred, at the volume of the tone the
+    /// DO2's sound table names for it ([`crate::se2::Edh::volume`]; full
+    /// scale when it names none). A pack without the bank falls back to the
+    /// DO2's own PlayStation VAB: the same tone decoded from ADPCM at
+    /// [`door2::vab::SAMPLE_RATE`], with the tone's pan.
+    fn re2_sound(&self, effect: door::vm::Sfx) -> Option<(audio::Wav, f32, f32)> {
+        let DoorArt::Re2(do2, ..) = &self.art else {
+            return None;
+        };
+        let tone = do2.sound_tone(usize::from(effect.id));
+        if let Some(wav) = self.bank_sound(effect) {
+            let volume = tone.map_or(0x7f, |tone| tone.volume);
+            return Some((wav.clone(), crate::se2::volume_gain(volume), 0.0));
         }
+        let tone = tone?;
+        let samples = door2::vab::decode_adpcm(do2.vab.vag(tone.vag)?);
+        let wav = audio::Wav::from_s16(&samples, 1, door2::vab::SAMPLE_RATE);
+        let gain = crate::se2::volume_gain(tone.volume);
+        let pan = ((f32::from(tone.pan) - 64.0) / 64.0).clamp(-1.0, 1.0);
+        Some((wav, gain, pan))
+    }
+
+    /// The PC door bank's WAV for an RE2 door sound, if the bank has one.
+    fn bank_sound(&self, effect: door::vm::Sfx) -> Option<&audio::Wav> {
+        let DoorArt::Re2(_, _, bank) = &self.art else {
+            return None;
+        };
+        bank.get(usize::from(effect.id))?.as_ref()
     }
 
     /// Drain the sound effects emitted since the last call.
@@ -10372,59 +10423,95 @@ impl DoorAnimation {
         std::mem::take(&mut self.messages)
     }
 
-    /// The parsed file and a renderable snapshot of the current VM state.
-    fn render_frame(&self) -> Option<(&door::Dor, door::vm::Frame<'_>)> {
-        let dor = self.dor.as_ref()?;
-        let vm = self.vm.as_ref()?;
-        Some((dor, vm.frame()))
+    /// The door texture and a renderable snapshot of the current VM state.
+    fn render_frame(&self) -> Option<(&Texture8, door::vm::Frame<'_>)> {
+        match &self.art {
+            DoorArt::Re1(dor, vm) => Some((&dor.texture, vm.frame())),
+            DoorArt::Re2(do2, vm, _) => Some((&do2.texture, vm.frame())),
+            DoorArt::Missing => None,
+        }
+    }
+}
+
+/// The sounds of an RE2 door's PC bank, by slot.
+type DoorBank = [Option<audio::Wav>; door2::SOUND_COUNT];
+
+/// The PC sound bank RE2 door `id` plays ([`door2::sound_bank`]), loaded
+/// from the pack's `sound/door/<bank>/<slot>.wav`; a slot the pack lacks or
+/// cannot decode is `None`.
+fn door_bank(pack: &Pack, id: u8) -> DoorBank {
+    let kind = crate::se2::Kind::Door;
+    let dir = crate::se2::bank_dir(kind.folder(), &format!("{:02x}", door2::sound_bank(id)));
+    std::array::from_fn(|slot| {
+        let stem = crate::se2::slot_stem(&dir, slot as u8);
+        let asset = pack.read_asset(&stem, AssetClass::Audio).ok()??;
+        assets::decode_audio(&asset).ok()
+    })
+}
+
+/// A VM frame as the transition's [`transition::DoorFrame`]; `fade_written`
+/// and `sound_busy` are the caller's.
+fn door_frame(frame: &door::vm::Frame<'_>) -> transition::DoorFrame {
+    transition::DoorFrame {
+        camera: transition::Camera {
+            from: frame.camera.from,
+            to: frame.camera.to,
+            focal: frame.camera.focal,
+        },
+        fade_type: frame.fade.fade_type,
+        fade_counter: frame.fade.counter,
+        fade_state: frame.fade.state,
+        fade_written: false,
+        done: frame.done,
+        phase: frame.phase,
+        hold: frame.hold,
+        black: frame.black,
+        sound_busy: false,
     }
 }
 
 impl DoorStepper for DoorAnimation {
     fn step(&mut self) -> transition::DoorFrame {
-        if let (Some(_), Some(vm)) = (self.dor.as_ref(), self.vm.as_mut()) {
-            let writes = vm.fade_writes();
-            let frame = vm.step();
-            self.sfx.extend(frame.sfx.iter().copied());
-            self.messages.extend(frame.messages.iter().copied());
-            let mut door_frame = transition::DoorFrame {
-                camera: transition::Camera {
-                    from: frame.camera.from,
-                    to: frame.camera.to,
-                    focal: frame.camera.focal,
-                },
-                fade_type: frame.fade.fade_type,
-                fade_counter: frame.fade.counter,
-                fade_state: frame.fade.state,
-                fade_written: false,
-                done: frame.done,
-                phase: frame.phase,
-                hold: frame.hold,
-                black: frame.black,
-                sound_busy: false,
-            };
-            door_frame.fade_written = vm.fade_writes() != writes;
-            door_frame.sound_busy = vm.sound_busy();
-            return door_frame;
-        }
-
-        self.fallback_frames += 1;
-        transition::DoorFrame {
-            done: self.fallback_frames >= FALLBACK_TRANSITION_FRAMES,
-            black: self.fallback_frames < transition::BLACK_FRAMES,
-            ..transition::DoorFrame::default()
+        match &mut self.art {
+            DoorArt::Re1(_, vm) => {
+                let writes = vm.fade_writes();
+                let frame = vm.step();
+                self.sfx.extend(frame.sfx.iter().copied());
+                self.messages.extend(frame.messages.iter().copied());
+                let mut door_frame = door_frame(&frame);
+                door_frame.fade_written = vm.fade_writes() != writes;
+                door_frame.sound_busy = vm.sound_busy();
+                door_frame
+            }
+            DoorArt::Re2(_, vm, _) => {
+                let writes = vm.fade_writes();
+                let frame = vm.step();
+                self.sfx.extend(frame.sfx.iter().copied());
+                let mut door_frame = door_frame(&frame);
+                door_frame.fade_written = vm.fade_writes() != writes;
+                door_frame
+            }
+            DoorArt::Missing => {
+                self.fallback_frames += 1;
+                transition::DoorFrame {
+                    done: self.fallback_frames >= FALLBACK_TRANSITION_FRAMES,
+                    black: self.fallback_frames < transition::BLACK_FRAMES,
+                    ..transition::DoorFrame::default()
+                }
+            }
         }
     }
 
     fn finish(&mut self) {
-        match self.vm.as_mut() {
-            Some(vm) => vm.finish(),
-            None => self.fallback_frames = FALLBACK_TRANSITION_FRAMES,
+        match &mut self.art {
+            DoorArt::Re1(_, vm) => vm.finish(),
+            DoorArt::Re2(_, vm, _) => vm.finish(),
+            DoorArt::Missing => self.fallback_frames = FALLBACK_TRANSITION_FRAMES,
         }
     }
 
     fn set_sound_busy(&mut self, busy: bool) {
-        if let Some(vm) = self.vm.as_mut() {
+        if let DoorArt::Re1(_, vm) = &mut self.art {
             vm.set_sound_busy(busy);
         }
     }
@@ -10509,21 +10596,29 @@ fn load_door_animation(pack: &Pack, record: &game::Door, entry_camera: u8) -> Do
 /// the door panels over black with the accumulated fade overlay.
 fn render_transition(framebuffer: &mut Framebuffer, session: &TransitionMode) {
     framebuffer.clear();
-    if let Some((dor, frame)) = transition_frame(session) {
-        render::draw_door_scene(framebuffer, dor, &frame);
+    if let Some((texture, frame)) = transition_frame(session) {
+        render::draw_door_scene(framebuffer, texture, &frame);
     }
 }
 
 /// The transition's door frame with the timeline's fade, or `None` while it
 /// shows black.
-fn transition_frame(session: &TransitionMode) -> Option<(&door::Dor, door::vm::Frame<'_>)> {
-    if session.frame.black {
+fn transition_frame(session: &TransitionMode) -> Option<(&Texture8, door::vm::Frame<'_>)> {
+    timeline_frame(&session.transition, &session.frame)
+}
+
+/// [`transition_frame`] for a timeline and its latest frame.
+fn timeline_frame<'a>(
+    transition: &'a transition::Transition<DoorAnimation>,
+    timeline: &transition::TransitionFrame,
+) -> Option<(&'a Texture8, door::vm::Frame<'a>)> {
+    if timeline.black {
         return None;
     }
-    let (dor, mut frame) = session.transition.stepper().render_frame()?;
+    let (texture, mut frame) = transition.stepper().render_frame()?;
     // The timeline owns the accumulated fade; feed it through the door
     // frame's fade fields so the shared overlay path draws it.
-    match session.frame.overlay {
+    match timeline.overlay {
         Some(overlay) => {
             frame.fade = door::vm::Fade {
                 fade_type: match overlay.color {
@@ -10536,7 +10631,7 @@ fn transition_frame(session: &TransitionMode) -> Option<(&door::Dor, door::vm::F
         }
         None => frame.fade.state = -1,
     }
-    Some((dor, frame))
+    Some((texture, frame))
 }
 
 /// [`render_transition`] for one of [`GameSession::render_pass`]'s passes:
@@ -10558,11 +10653,11 @@ fn render_transition_on(
         ScenePass::Record(gpu) => gpu,
     };
     framebuffer.clear();
-    let Some((dor, frame)) = transition_frame(session) else {
+    let Some((texture, frame)) = transition_frame(session) else {
         return Ok(false);
     };
     let door = render::DoorScene::new(&frame);
-    let meshes = door.meshes(dor);
+    let meshes = door.meshes(texture);
     gpu.record_scene(&door.scene(&meshes), Some(pack))?;
     framebuffer.show_scene();
     render::draw_fade_overlay(framebuffer, &frame.fade);
@@ -10713,6 +10808,109 @@ fn play_room_close_sfx(
     }
 }
 
+/// The result of [`simulate_do2`].
+pub struct SimulatedDo2 {
+    /// `(frame counter, black, overlay alpha)` for every ticked frame.
+    pub timeline: Vec<(u32, bool, u8)>,
+    /// The sound-table index of every sound the door played, in order.
+    pub sounds: Vec<u8>,
+    /// The sounds that had something to play.
+    pub playable_sounds: usize,
+    /// The sounds played from the PC door bank rather than the DO2's VAB.
+    pub bank_sounds: usize,
+}
+
+/// Play RE2 door `id` (`door/<id>.do2`) as a camera-only door transition,
+/// headlessly: tick the shared transition timeline to its end and hand each
+/// rendered frame to `on_frame` with its index.
+///
+/// RE2 rooms do not run their scripts yet, so no door record triggers this
+/// in play; `kind` stands for the record's door-type byte (variable `0x0C`
+/// picks the animation variant).
+pub fn simulate_do2(
+    pack: &Pack,
+    id: u8,
+    kind: u8,
+    mut on_frame: impl FnMut(usize, &Framebuffer) -> Result<()>,
+) -> Result<SimulatedDo2> {
+    let path = door2::entry(id);
+    let bytes = pack
+        .read(&path)
+        .with_context(|| format!("reading {path}"))?;
+    let do2 = door2::parse(&bytes).with_context(|| format!("parsing {path}"))?;
+    let vm = door2::vm::Vm::new(&do2, door2::vm::DoorParams { kind, door: id });
+    let mut transition =
+        transition::Transition::new(DoorAnimation::new_re2(do2, vm, door_bank(pack, id)))
+            .with_load(true, false)
+            .with_timing(transition::Timing::Re2);
+    let mut framebuffer = Framebuffer::new();
+    let mut result = SimulatedDo2 {
+        timeline: Vec::new(),
+        sounds: Vec::new(),
+        playable_sounds: 0,
+        bank_sounds: 0,
+    };
+    for _ in 0..MAX_TRANSITION_FRAMES {
+        let frame = transition.tick(false);
+        for effect in transition.stepper_mut().take_sfx() {
+            result.sounds.push(effect.id);
+            let stepper = transition.stepper();
+            if stepper.re2_sound(effect).is_some() {
+                result.playable_sounds += 1;
+            }
+            if stepper.bank_sound(effect).is_some() {
+                result.bank_sounds += 1;
+            }
+        }
+        result.timeline.push((
+            frame.frame,
+            frame.black,
+            frame.overlay.map_or(0, |overlay| overlay.alpha),
+        ));
+        framebuffer.clear();
+        if let Some((texture, door_frame)) = timeline_frame(&transition, &frame) {
+            render::draw_door_scene(&mut framebuffer, texture, &door_frame);
+        }
+        on_frame(result.timeline.len() - 1, &framebuffer)?;
+        if frame.finished {
+            return Ok(result);
+        }
+    }
+    bail!("{path} did not finish in {MAX_TRANSITION_FRAMES} frames")
+}
+
+/// `--door`: play RE2 door `id` headlessly and write the frame after `ticks`
+/// fixed ticks (or the last one) to `capture`.
+pub fn run_door(
+    pack: &Path,
+    id: u8,
+    kind: u8,
+    capture: &Path,
+    ticks: u32,
+    mods: &ModOptions,
+) -> Result<()> {
+    let pack = open_game_pack(pack, mods, None)?;
+    let mut shot = None;
+    let simulated = simulate_do2(&pack, id, kind, |index, framebuffer| {
+        if shot.is_none() || index <= ticks as usize {
+            shot = Some(Image {
+                width: framebuffer.width,
+                height: framebuffer.height,
+                rgba: framebuffer.rgba.clone(),
+            });
+        }
+        Ok(())
+    })?;
+    let shot = shot.context("the door drew no frame")?;
+    bmp::encode(&shot, capture)?;
+    println!(
+        "door {id:02x} type {kind:#04x}: {} frames, sounds {:?}",
+        simulated.timeline.len(),
+        simulated.sounds
+    );
+    Ok(())
+}
+
 /// The result of [`simulate_door`]: destination state plus the frame timeline
 /// and two rendered frames for deterministic capture checks.
 pub struct SimulatedDoor {
@@ -10799,7 +10997,14 @@ pub fn simulate_door(
         let frame = session.transition.tick(false);
         session.frame = frame;
         for effect in session.transition.stepper_mut().take_sfx() {
-            play_door_animation_sfx(&mut mixer, &mut sfx_cache, pack, &session.door, effect);
+            play_door_animation_sfx(
+                &mut mixer,
+                &mut sfx_cache,
+                pack,
+                &session.door,
+                session.transition.stepper(),
+                effect,
+            );
         }
         for message in session.transition.stepper_mut().take_messages() {
             apply_door_message(&mut game, message);
@@ -11696,8 +11901,15 @@ fn play_door_animation_sfx(
     cache: &mut SfxCache,
     pack: &Pack,
     record: &game::Door,
+    animation: &DoorAnimation,
     effect: door::vm::Sfx,
 ) {
+    if let Some((wav, gain, pan)) = animation.re2_sound(effect) {
+        if let Some(mixer) = music.as_mut() {
+            mixer.play_sfx_on_bank(sfx_bank_key(0, effect.id), wav, gain, pan);
+        }
+        return;
+    }
     let Some(name) = door_animation_sfx_name(record, effect) else {
         return;
     };
@@ -15216,6 +15428,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
         });
@@ -15233,6 +15446,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
         });
@@ -15272,6 +15486,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: *joint_colours,
             hd_name: None,
         });
@@ -15312,6 +15527,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15329,6 +15545,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15367,6 +15584,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: Some(player_state.detached_clip.world.r),
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15395,6 +15613,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15427,6 +15646,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15512,6 +15732,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15637,6 +15858,7 @@ fn render_frame_on(
             complex_object: *complex,
             aliased_light: complex.is_none() && aliased,
             light_rotation,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15713,6 +15935,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -19232,6 +19455,7 @@ mod tests {
                 entry,
                 bank: 0,
                 clip: 0,
+                pos: None,
             };
             let mut frame = |pack: &Pack| {
                 model_view_frames(pack, room, Some(view), &[0], Some(&mut gpu))
@@ -20451,6 +20675,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -30770,6 +30995,7 @@ end
                         tsb: 0x80,
                         textured: true,
                         blend: false,
+                        additive: false,
                         raw_y: false,
                         flat_color: None,
                         quad: None,
@@ -30869,6 +31095,7 @@ end
                 tsb: 0x80,
                 textured: true,
                 blend: false,
+                additive: false,
                 raw_y: false,
                 flat_color: None,
                 quad: None,

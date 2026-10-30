@@ -68,6 +68,18 @@
 //! * `CLR_FLAGS2` can clear the sound-busy wait inside the animation, so the
 //!   busy flag reported by the stepper is authoritative over the value last
 //!   passed to [`Transition::set_sound_busy`].
+//!
+//! # RE2
+//!
+//! [`Timing::Re2`] follows `Door_main` instead: `Door_init`'s pass runs no
+//! script and draws nothing (one black frame), `Door_move` steps and draws
+//! from the next, there is no
+//! phase-2 hold, and `Door_move` reads a fresh skip press on every frame.
+//! A skip only stops the door's task 10 ([`DoorStepper::finish`]); the
+//! animation still ends when the stepper says so, after its own fade.
+//! `Sce_Door` and `Set_door` start no fade, so there is no menu-path
+//! `set_fading`. The room side (`Set_door`'s load and `Set_room`) still runs
+//! RE1's order; no RE2 room triggers a door yet.
 
 /// Leading animation frames the original draws fully black.
 pub const BLACK_FRAMES: u32 = 3;
@@ -75,6 +87,18 @@ pub const BLACK_FRAMES: u32 = 3;
 pub const PHASE2_HOLD_FRAMES: u8 = 5;
 /// First animation frame on which a skip press may end the transition.
 pub const SKIP_AFTER_FRAME: u32 = 10;
+/// Leading frames an RE2 door draws black: `Door_init`'s pass.
+pub const RE2_BLACK_FRAMES: u32 = 1;
+
+/// Which game's door loop the timeline follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Timing {
+    /// RE1's `DoorAnimLoop` (the module docs).
+    #[default]
+    Re1,
+    /// RE2's `Door_main` (see [the module docs](self#re2)).
+    Re2,
+}
 
 /// Overlay colour selected by the animation's fade type id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -437,6 +461,7 @@ pub struct Transition<S> {
     /// button already down when the transition starts cannot skip until it
     /// comes up again.
     skip_released: bool,
+    timing: Timing,
 }
 
 impl<S: DoorStepper> Transition<S> {
@@ -463,7 +488,14 @@ impl<S: DoorStepper> Transition<S> {
             last_black: true,
             sound_busy: false,
             skip_released: false,
+            timing: Timing::Re1,
         }
+    }
+
+    /// Follow `timing`'s door loop.
+    pub fn with_timing(mut self, timing: Timing) -> Self {
+        self.timing = timing;
+        self
     }
 
     /// Seed the shared fade with the values the room left in
@@ -560,8 +592,9 @@ impl<S: DoorStepper> Transition<S> {
         match self.main {
             MainTask::Settle => self.main = MainTask::Spawn,
             MainTask::Spawn => {
-                // `set_fading` only latches while the accumulator is idle.
-                if self.fade.state() < 1 {
+                // `set_fading` only latches while the accumulator is idle;
+                // RE2's `Set_door` starts no fade.
+                if self.timing == Timing::Re1 && self.fade.state() < 1 {
                     self.fade_active = true;
                     self.fade
                         .set(DOOR_FADE_TYPE, DOOR_FADE_COUNTER, self.fade.state());
@@ -616,6 +649,17 @@ impl<S: DoorStepper> Transition<S> {
 
     /// One `DoorAnimLoop` pass.
     fn anim_pass(&mut self, skip: bool, out: &mut FrameOut) {
+        // RE2's `Door_init` returns without sleeping, so `Door_main` runs
+        // `Door_move` only on the next frame: these frames step no script.
+        if self.timing == Timing::Re2 && self.frame < RE2_BLACK_FRAMES {
+            self.drawn = (self.frame, self.phase, self.hold);
+            self.last_black = true;
+            out.black = true;
+            out.drew = true;
+            self.phase += 1;
+            self.frame += 1;
+            return;
+        }
         let raw = self.stepper.step();
         self.last = raw;
         self.sound_busy = raw.sound_busy;
@@ -625,7 +669,11 @@ impl<S: DoorStepper> Transition<S> {
         }
         let frame = self.frame;
         self.drawn = (self.frame, self.phase, self.hold);
-        self.last_black = frame < BLACK_FRAMES || raw.black;
+        let black_frames = match self.timing {
+            Timing::Re1 => BLACK_FRAMES,
+            Timing::Re2 => RE2_BLACK_FRAMES,
+        };
+        self.last_black = frame < black_frames || raw.black;
         out.black |= self.last_black;
         out.drew = true;
 
@@ -633,16 +681,26 @@ impl<S: DoorStepper> Transition<S> {
         // drawn, then the loop exits, skipping the phase-2 hold and the
         // frame-counter increment. A skip press ends the loop the same way.
         let mut ended = raw.done;
-        if !ended && skip && frame > SKIP_AFTER_FRAME {
-            self.stepper.finish();
-            ended = true;
+        match self.timing {
+            Timing::Re1 => {
+                if !ended && skip && frame > SKIP_AFTER_FRAME {
+                    self.stepper.finish();
+                    ended = true;
+                }
+            }
+            // `Door_move` clears task 10 and keeps going until `Door_exit`.
+            Timing::Re2 => {
+                if !ended && skip {
+                    self.stepper.finish();
+                }
+            }
         }
         if ended {
             self.anim = AnimTask::Teardown;
             return;
         }
         // Phase 2 holds for five extra frames with the frame counter frozen.
-        if self.phase == 2 && self.hold < PHASE2_HOLD_FRAMES {
+        if self.timing == Timing::Re1 && self.phase == 2 && self.hold < PHASE2_HOLD_FRAMES {
             self.hold += 1;
         } else {
             self.hold = 0;
@@ -812,6 +870,35 @@ mod tests {
 
     fn fade(transition: &Transition<FakeStepper>) -> (i32, i16) {
         (transition.fade().counter(), transition.fade().state())
+    }
+
+    #[test]
+    fn an_re2_door_blanks_one_frame_holds_none_and_skips_at_once() {
+        let mut transition = Transition::new(FakeStepper::default())
+            .with_fade(2, -6144, -4097)
+            .with_load(true, false)
+            .with_timing(Timing::Re2);
+        // `Set_door` starts no fade; the animation's first pass is the third
+        // frame, and only it is black.
+        let mut black = Vec::new();
+        for _ in 0..7 {
+            black.push(transition.tick(false).black);
+        }
+        assert_eq!(fade(&transition), (-6144, -4097));
+        assert_eq!(black, [true, true, true, false, false, false, false]);
+        // Five passes, the first `Door_init`'s with no script step, and no
+        // phase-2 hold.
+        assert_eq!(transition.stepper().steps, 4);
+        assert_eq!(transition.frame(), 5);
+        // A skip before frame 10 stops the door, which then ends on its own.
+        let frame = transition.tick(true);
+        assert!(!frame.finished);
+        assert_eq!(transition.stepper().finish_calls, 1);
+        let mut ticks = 0;
+        while !transition.tick(false).finished {
+            ticks += 1;
+            assert!(ticks < 10, "the skipped door never finished");
+        }
     }
 
     #[test]

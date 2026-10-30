@@ -277,6 +277,7 @@ fn room_107_objects_render() {
                 complex_object: None,
                 aliased_light: false,
                 light_rotation: None,
+                fixed_light: None,
                 joint_colours: arklay::render::NO_JOINT_COLOURS,
                 hd_name: None,
             })
@@ -1101,6 +1102,7 @@ fn room_112_mirror_renders_reflection_pixels() {
         complex_object: None,
         aliased_light: false,
         light_rotation: None,
+        fixed_light: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
         hd_name: None,
     }];
@@ -1126,6 +1128,7 @@ fn room_112_mirror_renders_reflection_pixels() {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: arklay::render::NO_JOINT_COLOURS,
             hd_name: None,
         },
@@ -1141,6 +1144,7 @@ fn room_112_mirror_renders_reflection_pixels() {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: arklay::render::NO_JOINT_COLOURS,
             hd_name: None,
         },

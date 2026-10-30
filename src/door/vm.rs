@@ -172,6 +172,20 @@ pub struct OrderFrame<'a> {
     pub mesh: Option<&'a TmdObject>,
     /// Vertex writes applied during this frame.
     pub vertex_writes: Vec<VertexWrite>,
+    /// How the order is shaded: RE1 draws every door full-bright.
+    pub shading: DoorShading,
+}
+
+/// How a door order is shaded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DoorShading {
+    /// Every texel as stored.
+    #[default]
+    FullBright,
+    /// RE2's door light (`door_ll`/`door_lc`, see [`crate::door2::vm`]).
+    Lit,
+    /// RE2's door light, with every packet added to the background.
+    LitAdditive,
 }
 
 /// One rendered frame of the door animation.
@@ -498,6 +512,7 @@ impl Vm {
                 rot_velocity: state.rot_velocity,
                 mesh: state.mesh.as_ref(),
                 vertex_writes: std::mem::take(&mut writes[index]),
+                shading: DoorShading::FullBright,
             });
         }
         Frame {

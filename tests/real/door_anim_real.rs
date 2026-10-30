@@ -227,7 +227,7 @@ fn door00_mid_animation_frame_renders_non_black_and_stable() {
     for _ in 0..20 {
         let frame = vm.step();
         let mut framebuffer = Framebuffer::new();
-        draw_door_scene(&mut framebuffer, &dor, &frame);
+        draw_door_scene(&mut framebuffer, &dor.texture, &frame);
         rendered = Some(framebuffer);
     }
     let first = rendered.expect("a rendered frame");
@@ -257,7 +257,7 @@ fn door00_mid_animation_frame_renders_non_black_and_stable() {
     for _ in 0..20 {
         let frame = vm.step();
         let mut framebuffer = Framebuffer::new();
-        draw_door_scene(&mut framebuffer, &dor, &frame);
+        draw_door_scene(&mut framebuffer, &dor.texture, &frame);
         again = Some(framebuffer);
     }
     let second = again.expect("a rendered frame");
