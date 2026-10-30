@@ -3,9 +3,15 @@
 //! Reads an RE2 RDT into the engine's [`RoomSource`], so the rest of the
 //! engine builds and draws the room without caring which game it came from.
 //! This covers what a room needs to be shown: the camera cuts (RID), the
-//! camera switch zones (RVD), the collision records (SCA) and each camera's
-//! lights (LIT). The scripts, masks (PRI), models and everything else stay
+//! camera switch zones (RVD), the collision records (SCA), each camera's
+//! lights (LIT) and mask table ([`crate::mask::MaskTable::parse_re2`]), and
+//! the footstep zones (FLR). The scripts, models and everything else stay
 //! unread for now.
+//!
+//! The FLR section (`Floor_check`, `Flr_set`) is a `u16` count and that many
+//! 12-byte records: `x`, `z`, width and depth, the sound word and a flags
+//! word whose low 7 bits are the floor level the zone answers and whose bit
+//! 7 switches it off. A walker on no zone gets sound `0x1D`.
 //!
 //! An RE2 room lights each camera on its own: the LIT section holds one
 //! 40-byte record per camera (Patrice Mandin's `rdt2_light_t`): two `u16`
@@ -26,8 +32,9 @@ use anyhow::{Context, Result, bail};
 
 use crate::budget;
 use crate::format::Dialect;
-use crate::room::source::{Camera, RoomSource};
-use crate::state::{CameraLight, Light, Sca, ScaRect, Zone};
+use crate::mask::MaskTable;
+use crate::room::source::{Camera, RoomSource, mask_groups};
+use crate::state::{CameraLight, FootstepZone, Light, Sca, ScaRect, Zone};
 
 /// Offset of the section offset table.
 pub(crate) const OFFSETS: usize = 0x08;
@@ -41,11 +48,15 @@ pub(crate) const RID_SLOT: usize = 7;
 const RVD_SLOT: usize = 8;
 /// Section slot of the per-camera lights (LIT).
 const LIT_SLOT: usize = 9;
+/// Section slot of the footstep zones (FLR, `rdt + 0x34`).
+const FLR_SLOT: usize = 11;
+/// Size of one footstep zone record.
+const FLR_RECORD_SIZE: usize = 12;
 /// Size of one camera's light record.
 const LIGHT_SIZE: usize = 0x28;
 /// Size of one camera record: flags, perspective, position, target and the
 /// mask table offset.
-const CAMERA_SIZE: usize = 0x20;
+pub(crate) const CAMERA_SIZE: usize = 0x20;
 /// Size of one camera switch zone record (`VCut`).
 const ZONE_SIZE: usize = 0x14;
 /// Size of the collision header and of one collision record.
@@ -144,17 +155,46 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
     }
     let zones = parse_zones(data, offset(data, RVD_SLOT)?)?;
     let sca = parse_sca(data, offset(data, SCA_SLOT)?)?;
+    let footstep_zones =
+        parse_footsteps(data, offset(data, FLR_SLOT)?).context("footstep zones")?;
     Ok(RoomSource {
         cameras,
         zones,
         sca,
+        footstep_count: footstep_zones.len() as u16,
+        footstep_zones,
         dialect: Dialect::Re2,
         ..RoomSource::default()
     })
 }
 
-/// The camera records: `u16` flags, the `u16` perspective, the position and
-/// the target. The record's mask table offset is not read yet.
+/// The footstep zones at `offset` (none when it is 0). The table is read by
+/// its count as the game reads it: in six small rooms (`ROOM6111` among
+/// them) the last record's flags word is the next section's first word.
+fn parse_footsteps(data: &[u8], offset: u32) -> Result<Vec<FootstepZone>> {
+    if offset == 0 {
+        return Ok(Vec::new());
+    }
+    let base = offset as usize;
+    let count = usize::from(u16_at(data, base)?);
+    budget::check_len(count, budget::MAX_RECORDS, "footstep zone count")?;
+    (0..count)
+        .map(|index| {
+            let at = base + 2 + index * FLR_RECORD_SIZE;
+            Ok(FootstepZone {
+                base_x: u16_at(data, at)?,
+                base_z: u16_at(data, at + 2)?,
+                width: u16_at(data, at + 4)?,
+                height: u16_at(data, at + 6)?,
+                sound_data: u16_at(data, at + 8)?,
+                flags: u16_at(data, at + 10)?,
+            })
+        })
+        .collect()
+}
+
+/// The camera records: `u16` flags, the `u16` perspective, the position, the
+/// target and the mask table's file offset (`u32::MAX` for none).
 fn parse_cameras(data: &[u8], offset: u32, count: u8) -> Result<Vec<Camera>> {
     if count == 0 {
         return Ok(Vec::new());
@@ -168,12 +208,14 @@ fn parse_cameras(data: &[u8], offset: u32, count: u8) -> Result<Vec<Camera>> {
             bytes(data, at, CAMERA_SIZE).with_context(|| format!("camera {index}"))?;
             let perspective = u16_at(data, at + 2)?;
             let field = |n: usize| i32_at(data, at + 4 + n * 4);
+            let masks = MaskTable::parse_re2(data, u32_at(data, at + 0x1C)?)
+                .with_context(|| format!("camera {index}'s mask table"))?;
             Ok(Camera {
                 pos: [field(0)?, field(1)?, field(2)?],
                 look_at: [field(3)?, field(4)?, field(5)?],
                 roll: 0,
                 fov: i32::from(perspective >> PERSPECTIVE_SHIFT),
-                mask_groups: Vec::new(),
+                mask_groups: mask_groups(&masks, Dialect::Re2),
                 light: None,
             })
         })

@@ -9,7 +9,7 @@
 //! | source | entry |
 //! |---|---|
 //! | `Pl{0,1}/Rdt/ROOM####.RDT` | `room/<id>/room.xml` |
-//! | ADT streams in `Common/bin/roomcut.bin` | `room/<id>/cut/<nn>.bmp` |
+//! | ADT streams in `Common/bin/roomcut.bin` | `room/<id>/cut/<nn>.bmp`, `room/<id>/mask/<nn>.bmp` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.TIM` | `enemy/<id>/enemy_<s>.bmp`, `enemy_<s>_clut_<nn>.bmp` |
 //! | `Pl{0,1}/PLD/PL<id>.PLD` | `player/<id>/model_<s>.pld` |
@@ -45,7 +45,7 @@
 //! template, `pl0\pld\pdemo00.dat` with its digits patched from the demo
 //! index, can never name.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -55,10 +55,11 @@ use anyhow::{Context, Result, bail};
 use crate::convert::{finish_pack, parallel_map, read_dir_sorted};
 use crate::format::{self, Dialect};
 use crate::manifest;
+use crate::mask::MaskTable;
 use crate::pack::PackWriter;
 use crate::progress::Progress;
 use crate::state::RoomId;
-use crate::{adt, bmp, emd2, sap, se2};
+use crate::{adt, bmp, emd2, rdt2, sap, se2, tim};
 
 /// The pack id of a converted RE2 install.
 pub const BASE_PACK_ID: &str = "re2";
@@ -555,7 +556,9 @@ fn scan_rooms(layout: &Layout, warnings: &mut Vec<String>) -> Result<Vec<Room>> 
 /// The cut count is byte 1 of the RDT. Each unique stream is decoded once and
 /// written under every room folder that points at it, sharing one buffer. A
 /// zero pointer, one past the end of the file, or a stream that fails to
-/// decode warns and produces no entry.
+/// decode warns and produces no entry. A camera with a mask table also gets
+/// the stream's mask page ([`adt::mask_page`]) as an indexed BMP, as RE1's
+/// mask pages are.
 fn copy_backgrounds(
     layout: &Layout,
     rooms: &[Room],
@@ -573,6 +576,7 @@ fn copy_backgrounds(
     };
     let bin = read(&path)?;
     let mut streams: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    let mut masked = HashSet::new();
     let mut zero = 0usize;
     let mut outside = 0usize;
     for room in rooms {
@@ -609,6 +613,9 @@ fn copy_backgrounds(
             match pointer {
                 Some(0) => zero += 1,
                 Some(pointer) if pointer < bin.len() => {
+                    if camera_has_masks(&room.bytes, cut) {
+                        masked.insert(entry.clone());
+                    }
                     streams.entry(pointer).or_default().push(entry)
                 }
                 _ => outside += 1,
@@ -638,19 +645,52 @@ fn copy_backgrounds(
     progress.begin("cut", total);
     let decoded = parallel_map(streams.len(), jobs, progress, |index| {
         let (pointer, entries) = &streams[index];
+        let wants_mask = entries.iter().any(|entry| masked.contains(entry));
         // A corrupt stream costs only its own cameras.
-        let bmp = adt::background(&bin[*pointer..])
-            .and_then(|image| bmp::encode_to_vec(&image))
+        let bmps = adt::decode(&bin[*pointer..])
+            .and_then(|decoded| {
+                let background = bmp::encode_to_vec(&adt::frame_image(&decoded)?)?;
+                let mask = adt::mask_page(&decoded).filter(|_| wants_mask).map(|tim| {
+                    tim::decode_8bpp(tim)
+                        .and_then(|page| bmp::encode_texture8_to_vec(&page))
+                        .map_err(|error| format!("{error:#}"))
+                });
+                Ok((background, mask))
+            })
             .map_err(|error| format!("{error:#}"));
-        Ok((entries[0].clone(), entries.len() as u64, bmp))
+        Ok((entries[0].clone(), entries.len() as u64, bmps))
     })?;
     progress.end_phase();
-    for ((pointer, entries), (_, bmp)) in streams.iter().zip(decoded) {
-        match bmp {
-            Ok(bmp) => {
+    for ((pointer, entries), (_, bmps)) in streams.iter().zip(decoded) {
+        match bmps {
+            Ok((bmp, mask)) => {
                 let bmp = Arc::new(bmp);
                 for entry in entries {
                     tally.add_shared(writer, "cut", entry, Arc::clone(&bmp))?;
+                }
+                let masked: Vec<&String> = entries
+                    .iter()
+                    .filter(|entry| masked.contains(*entry))
+                    .collect();
+                match mask {
+                    _ if masked.is_empty() => {}
+                    Some(Ok(mask)) => {
+                        let mask = Arc::new(mask);
+                        for entry in masked {
+                            let entry = entry.replacen("/cut/", "/mask/", 1);
+                            tally.add_shared(writer, "mask", &entry, Arc::clone(&mask))?;
+                        }
+                    }
+                    Some(Err(error)) => warnings.push(format!(
+                        "roomcut.bin stream at {pointer:#x} has a mask page that does not \
+                         decode ({error}); no mask page for {}",
+                        entries.join(", ")
+                    )),
+                    None => warnings.push(format!(
+                        "roomcut.bin stream at {pointer:#x} has no mask page; the masks of {} \
+                         will not draw",
+                        entries.join(", ")
+                    )),
                 }
             }
             Err(error) => warnings.push(format!(
@@ -661,6 +701,21 @@ fn copy_backgrounds(
         }
     }
     Ok(())
+}
+
+/// Whether camera `cut` of RDT `bytes` has mask sprites. Every camera
+/// record points at a table; `Psp_set` skips one whose first word is `-1`,
+/// which [`MaskTable::parse_re2`] reads as empty.
+fn camera_has_masks(bytes: &[u8], cut: usize) -> bool {
+    let word = |at: usize| {
+        bytes
+            .get(at..at + 4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+    };
+    word(rdt2::OFFSETS + rdt2::RID_SLOT * 4)
+        .and_then(|rid| word(rid as usize + cut * rdt2::CAMERA_SIZE + 0x1C))
+        .and_then(|table| MaskTable::parse_re2(bytes, table).ok())
+        .is_some_and(|table| !table.sprites.is_empty())
 }
 
 /// The pack entry for an enemy file name, e.g. `EM13A.TIM` is

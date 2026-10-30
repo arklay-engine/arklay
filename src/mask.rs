@@ -5,6 +5,10 @@
 //! model must pass behind. The table itself is parsed by [`MaskTable`]; the
 //! per-(room, camera) bias records and the room-specific overrides that turn a
 //! sprite's `pos_data` into a far-to-near draw key live here as well.
+//!
+//! RE2 keeps the same idea in its own layout ([`MaskTable::parse_re2`]) and
+//! orders it more simply ([`re2_sprite_key`]): no bias tables, no per-room
+//! overrides, and the sprites go to the screen in file order.
 
 use anyhow::{Context, Result, bail};
 
@@ -138,6 +142,93 @@ impl MaskTable {
             }
         }
 
+        Ok(Self { groups, sprites })
+    }
+
+    /// Parse an RE2 camera's table at file offset `offset` (the camera
+    /// record's word at `+0x1C`); `u32::MAX` (the shipped rooms) or 0 is no
+    /// table.
+    ///
+    /// ```text
+    /// u16 group count, u16 sprite count
+    /// group:  u16 sprite count, u16 (0x7800 in every shipped room), i16 x, i16 y
+    /// sprite: u8 u, v, x, y; u16 depth; u16 size
+    ///         size 0: u16 width, u16 height follow (12 bytes); else square
+    /// ```
+    ///
+    /// The group ids count down like `Psp_set`'s (the first group is the
+    /// highest id, the last is 1). `pos_data` holds the depth and `flags` the
+    /// raw size word; the unnamed group word is kept in `tex_bits`.
+    pub fn parse_re2(data: &[u8], offset: u32) -> Result<Self> {
+        if offset == u32::MAX || offset == 0 {
+            return Ok(Self::default());
+        }
+        let base = offset as usize;
+        let group_count = read_u16(data, base)?;
+        if group_count == 0 || group_count == u16::MAX {
+            return Ok(Self::default());
+        }
+        let group_count = usize::from(group_count);
+        if group_count > MAX_GROUPS {
+            bail!(
+                "mask table at 0x{offset:x} has {group_count} groups, more than the supported \
+                 {MAX_GROUPS}"
+            );
+        }
+        let declared = usize::from(read_u16(data, base + 2)?);
+        budget::check_len(declared, budget::MAX_MASK_SPRITES, "mask sprite count")?;
+        let mut groups = Vec::with_capacity(group_count);
+        let mut at = base + 4;
+        for _ in 0..group_count {
+            groups.push(MaskGroup {
+                sprite_count: read_u16(data, at)?,
+                tex_bits: read_u16(data, at + 2)?,
+                origin: (
+                    read_u16(data, at + 4)? as i16,
+                    read_u16(data, at + 6)? as i16,
+                ),
+            });
+            at += 8;
+        }
+        let total: usize = groups
+            .iter()
+            .map(|group| usize::from(group.sprite_count))
+            .sum();
+        if total != declared {
+            bail!(
+                "mask table at 0x{offset:x} declares {declared} sprites but its groups hold {total}"
+            );
+        }
+        let mut sprites = Vec::with_capacity(total);
+        for (index, group) in groups.iter().enumerate() {
+            let group_id = (group_count - index) as u8;
+            for _ in 0..group.sprite_count {
+                let record = data
+                    .get(at..at + 8)
+                    .with_context(|| format!("mask sprite at 0x{at:x} is past the RDT's end"))?;
+                let pos_data = u16::from_le_bytes([record[4], record[5]]);
+                let flags = u16::from_le_bytes([record[6], record[7]]);
+                let size = if flags == 0 {
+                    let size = (read_u16(data, at + 8)?, read_u16(data, at + 10)?);
+                    at += 12;
+                    size
+                } else {
+                    at += 8;
+                    (flags, flags)
+                };
+                sprites.push(MaskSprite {
+                    uv: (record[0], record[1]),
+                    pos: (
+                        i32::from(group.origin.0) + i32::from(record[2]),
+                        i32::from(group.origin.1) + i32::from(record[3]),
+                    ),
+                    size,
+                    pos_data,
+                    flags,
+                    group: group_id,
+                });
+            }
+        }
         Ok(Self { groups, sprites })
     }
 
@@ -575,6 +666,15 @@ pub fn mask_submission_order(id: RoomId, camera: usize, count: usize) -> Vec<usi
     }
     order.retain(|&index| mask_override(id, camera, index) != Some(MaskEntryOverride::Hidden));
     order
+}
+
+/// An RE2 mask sprite's ordering key: `Psp_trans` submits it at
+/// `depth << 5`, and `AddMask` raises that to at least half the projection
+/// distance (`projection`, the cut's focal length). A triangle's key is its
+/// mean view Z on the same scale.
+pub fn re2_sprite_key(sprite: &MaskSprite, projection: i32) -> u32 {
+    let depth = u32::from(sprite.pos_data) << 5;
+    depth.max(u32::try_from(projection / 2).unwrap_or(0))
 }
 
 /// Stable far-to-near order for a mixed draw list.
@@ -1022,5 +1122,66 @@ mod tests {
         set_group_active(&mut bits, 0, true);
         set_group_active(&mut bits, 33, true);
         assert_eq!(bits, 1 << 2);
+    }
+
+    #[test]
+    fn re2_tables_count_group_ids_down_and_mix_square_and_rect_sprites() {
+        let mut data = vec![0xAA; 4];
+        let offset = data.len() as u32;
+        let words = |data: &mut Vec<u8>, words: &[u16]| {
+            for word in words {
+                data.extend_from_slice(&word.to_le_bytes());
+            }
+        };
+        words(&mut data, &[2, 3]);
+        words(&mut data, &[2, 0x7800, 10, 20]);
+        words(&mut data, &[1, 0x7800, (-5i16) as u16, 0]);
+        // A 16-pixel square, then a 24x8 rectangle, in group 2.
+        data.extend_from_slice(&[1, 2, 3, 4]);
+        words(&mut data, &[40, 16]);
+        data.extend_from_slice(&[5, 6, 7, 8]);
+        words(&mut data, &[41, 0, 24, 8]);
+        // Group 1.
+        data.extend_from_slice(&[9, 10, 11, 12]);
+        words(&mut data, &[2, 32]);
+        let table = MaskTable::parse_re2(&data, offset).unwrap();
+        assert_eq!(table.groups.len(), 2);
+        let summary: Vec<_> = table
+            .sprites
+            .iter()
+            .map(|sprite| (sprite.group, sprite.pos, sprite.size, sprite.pos_data))
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                (2, (13, 24), (16, 16), 40),
+                (2, (17, 28), (24, 8), 41),
+                (1, (6, 12), (32, 32), 2),
+            ]
+        );
+        assert_eq!(table.sprites[1].uv, (5, 6));
+
+        assert!(
+            MaskTable::parse_re2(&data, u32::MAX)
+                .unwrap()
+                .sprites
+                .is_empty()
+        );
+        // A sprite count that disagrees with the groups is an error.
+        data[offset as usize + 2] = 4;
+        assert!(MaskTable::parse_re2(&data, offset).is_err());
+        data.truncate(data.len() - 2);
+        data[offset as usize + 2] = 3;
+        assert!(MaskTable::parse_re2(&data, offset).is_err());
+    }
+
+    #[test]
+    fn re2_keys_scale_the_depth_and_stop_at_half_the_projection() {
+        let sprite = |depth| MaskSprite {
+            pos_data: depth,
+            ..MaskSprite::default()
+        };
+        assert_eq!(re2_sprite_key(&sprite(100), 0x120), 3200);
+        assert_eq!(re2_sprite_key(&sprite(2), 0x120), 0x90);
     }
 }

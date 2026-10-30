@@ -2275,13 +2275,13 @@ fn unorm_mul(a: u32, b: u32) -> u32 {
 /// The background stays black because the room behind the animation is hidden.
 pub fn draw_door_scene(
     framebuffer: &mut Framebuffer,
-    dor: &crate::door::Dor,
+    texture: &Texture8,
     frame: &crate::door::vm::Frame<'_>,
 ) {
     framebuffer.clear();
     let camera = door_camera(frame);
     let objects = door_draws(frame).map(|(order, mesh)| (mesh, &order.matrix));
-    framebuffer.draw_objects_unlit(objects, &dor.texture, &camera);
+    framebuffer.draw_objects_unlit(objects, texture, &camera);
     draw_fade_overlay(framebuffer, &frame.fade);
 }
 
@@ -2359,10 +2359,10 @@ impl DoorScene {
         }
     }
 
-    pub fn meshes<'a>(&'a self, dor: &'a crate::door::Dor) -> [EntityMesh<'a>; 1] {
+    pub fn meshes<'a>(&'a self, texture: &'a Texture8) -> [EntityMesh<'a>; 1] {
         [EntityMesh {
             mesh: &self.mesh,
-            texture: &dor.texture,
+            texture,
             joints: &self.joints,
             tint: [255; 3],
             blend_weight: None,
@@ -2841,6 +2841,9 @@ fn collect_masks(layer: &MaskLayer<'_>, offset: [i32; 2], items: &mut Vec<SceneI
 /// A layer's active mask sprites in submission order, the list
 /// [`collect_masks`] feeds the painter's sort.
 pub(crate) fn mask_quads(layer: &MaskLayer<'_>, offset: [i32; 2]) -> Vec<MaskQuad> {
+    if layer.cut.mask_dialect == crate::format::Dialect::Re2 {
+        return re2_mask_quads(layer, offset);
+    }
     let mut quads = Vec::new();
     for index in mask::mask_submission_order(layer.room, layer.camera, layer.cut.masks.len()) {
         let Some(sprite) = layer.cut.masks.get(index) else {
@@ -2860,6 +2863,23 @@ pub(crate) fn mask_quads(layer: &MaskLayer<'_>, offset: [i32; 2]) -> Vec<MaskQua
         });
     }
     quads
+}
+
+/// [`mask_quads`] for an RE2 cut: `Psp_trans` submits the active groups'
+/// sprites in file order at [`mask::re2_sprite_key`].
+fn re2_mask_quads(layer: &MaskLayer<'_>, offset: [i32; 2]) -> Vec<MaskQuad> {
+    layer
+        .cut
+        .masks
+        .iter()
+        .filter(|sprite| mask::group_active(layer.active, sprite.group))
+        .map(|sprite| MaskQuad {
+            key: mask::re2_sprite_key(sprite, layer.cut.fov),
+            uv: (u32::from(sprite.uv.0), u32::from(sprite.uv.1)),
+            pos: (sprite.pos.0 + offset[0], sprite.pos.1 + offset[1]),
+            size: (u32::from(sprite.size.0), u32::from(sprite.size.1)),
+        })
+        .collect()
 }
 
 /// Every ground shadow's projected commands in `DrawFadeSpr`'s queue order,

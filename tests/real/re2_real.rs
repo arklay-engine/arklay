@@ -76,6 +76,7 @@ fn the_retail_tree_converts_every_category() {
         let category = match path.split('/').collect::<Vec<_>>().as_slice() {
             ["room", _, "cut", _] => "cut",
             ["room", _, "sound.edh"] => "sound",
+            ["room", _, "mask", _] => "mask",
             [first, ..] => first.trim_end_matches(".toml"),
             [] => unreachable!(),
         };
@@ -88,6 +89,7 @@ fn the_retail_tree_converts_every_category() {
         ("door", 55),
         ("enemy", 384),
         ("manifest", 1),
+        ("mask", 3394),
         ("movie", 26),
         ("player", 221),
         ("room", 501),
@@ -216,6 +218,7 @@ fn the_converted_pack_verifies() {
     assert_eq!(count(verify::Format::AdpcmWav), 2893);
     assert_eq!(count(verify::Format::Wav), 4);
     assert_eq!(count(verify::Format::Edh), 588);
+    assert_eq!(count(verify::Format::Do2), 55);
     assert_eq!(count(verify::Format::Mpeg), 26);
     // Strict mode fails exactly the formats nothing parses yet, plus the
     // opaque demo reels.
@@ -289,7 +292,7 @@ fn every_room_loads_with_its_backgrounds() {
     };
     let ids = arklay::room::ids(pack);
     assert_eq!(ids.len(), 501, "every converted RDT");
-    let (mut cameras, mut missing) = (0, Vec::new());
+    let (mut cameras, mut missing, mut masked, mut footsteps) = (0, Vec::new(), 0, 0);
     for id in ids {
         let loaded = arklay::room::load(pack, id)
             .unwrap_or_else(|error| panic!("room {}: {error:#}", id.code()));
@@ -309,6 +312,7 @@ fn every_room_loads_with_its_backgrounds() {
             "room {} has camera 0's switch zones",
             id.code()
         );
+        footsteps += room.footstep_zones.len();
         assert!(
             loaded.own_scripts(pack).unwrap().init.is_empty(),
             "an RE2 room runs no scripts yet"
@@ -328,9 +332,35 @@ fn every_room_loads_with_its_backgrounds() {
             {
                 missing.push(format!("{}/{:02x}", id.code(), cut.index));
             }
+            if cut.masks.is_empty() {
+                continue;
+            }
+            // A camera with mask sprites has its mask page, and every
+            // sprite's texels lie on that 256-wide page.
+            masked += 1;
+            let page = pack
+                .read(&id.mask_entry(cut.index))
+                .unwrap_or_else(|error| {
+                    panic!("room {} camera {}: {error:#}", id.code(), cut.index)
+                });
+            let page = arklay::bmp::decode_mask(&page).unwrap();
+            for sprite in &cut.masks {
+                let (width, height) = sprite.size;
+                assert!(
+                    u32::from(sprite.uv.0) + u32::from(width) <= page.width
+                        && u32::from(sprite.uv.1) + u32::from(height) <= page.height,
+                    "room {} camera {}: sprite {sprite:?} is off its {}x{} page",
+                    id.code(),
+                    cut.index,
+                    page.width,
+                    page.height
+                );
+            }
         }
     }
     eprintln!("{cameras} cameras, no background for {missing:?}");
+    assert_eq!(masked, 3394, "cameras with mask sprites");
+    assert_eq!(footsteps, 1387, "footstep zones (FLR)");
     // Room 7071's first eight cameras point past the end of `roomcut.bin`,
     // and the 17-camera rooms' 17th has no pointer slot.
     let mut expected: Vec<String> = ["30c0/10", "30c1/10", "c0c0/10", "c0c1/10"]
@@ -340,6 +370,29 @@ fn every_room_loads_with_its_backgrounds() {
     expected.sort();
     missing.sort();
     assert_eq!(missing, expected);
+}
+
+/// The TeamX RE2 HD pack names a mask page by `bio2hd.asi`'s hash of the
+/// page as the mask decoder keys it; these are the pack's own names for two
+/// cameras' masks.
+#[test]
+#[ignore]
+fn the_mask_pages_carry_their_hd_names() {
+    let Some(pack) = pack() else {
+        return;
+    };
+    for (entry, hash) in [
+        ("room/1000/mask/00.bmp", 0x07B2_E200),
+        ("room/20a0/mask/01.bmp", 0xCC65_7C42),
+    ] {
+        let page = arklay::bmp::decode_mask(&pack.read(entry).unwrap()).unwrap();
+        assert!(
+            arklay::htexture::image_candidates(&page)
+                .iter()
+                .any(|candidate| candidate.hash == hash && candidate.frame == [256, 256]),
+            "{entry} is named {hash:08X}"
+        );
+    }
 }
 
 /// The TeamX RE2 HD pack's backgrounds are named by `bio2hd.asi`'s hash of
@@ -468,6 +521,7 @@ fn every_model_parses_draws_textured_and_animates() {
             entry,
             bank: 0,
             clip: 0,
+            pos: None,
         };
         let frames = model_view_frames(pack, room, Some(view), &[0, 8], None).unwrap();
         let changed: HashSet<[u8; 4]> = frames[0]
@@ -1025,4 +1079,87 @@ fn a_film_matches_ffmpeg() {
         let psnr = 10.0 * (255.0f64 * 255.0 / error.max(1e-9)).log10();
         assert!(psnr > 35.0, "frame {index}: {psnr:.1} dB");
     }
+}
+
+#[test]
+#[ignore]
+fn every_door_parses_and_plays_to_the_end() {
+    use arklay::door2;
+    let Some(root) = re2_root() else {
+        return;
+    };
+    let doors = with_extension(&root, "DO2");
+    assert_eq!(doors.len(), usize::from(door2::RETAIL_COUNT));
+    let mut fade_only = Vec::new();
+    for path in &doors {
+        let data = fs::read(path).unwrap();
+        let do2 = door2::parse(&data).unwrap_or_else(|err| panic!("{}: {err:#}", name(path)));
+        assert!(!do2.mesh.objects.is_empty(), "{}", name(path));
+        let id = u8::from_str_radix(&name(path)[4..6], 16).unwrap();
+        // The variants the procedures switch on, and the top-bit flag.
+        for kind in [0, 1, 2, 3, 0x80, 0x81] {
+            let mut vm = door2::vm::Vm::new(&do2, door2::vm::DoorParams { kind, door: id });
+            let mut frames = 0;
+            let mut drew = false;
+            while !vm.step().done {
+                drew |= vm.frame().orders.iter().any(|order| order.flags != 0);
+                frames += 1;
+                assert!(frames < 3000, "{} variant {kind} never ends", name(path));
+            }
+            assert_eq!(vm.faults(), 0, "{} variant {kind}", name(path));
+            if kind == 0 {
+                assert!(frames > 30, "{} plays {frames} frames", name(path));
+                if !drew {
+                    fade_only.push(name(path));
+                }
+            }
+        }
+    }
+    // These show no part: a fade to black, a wait and a fade back (0x32 and
+    // 0x34 are the doors that print "please wait").
+    assert_eq!(
+        fade_only,
+        [
+            "DOOR20.DO2",
+            "DOOR21.DO2",
+            "DOOR32.DO2",
+            "DOOR34.DO2",
+            "DOOR36.DO2"
+        ]
+    );
+}
+
+#[test]
+#[ignore]
+fn every_packed_door_plays_through_the_transition() {
+    use arklay::door2;
+    let Some(pack) = pack() else {
+        return;
+    };
+    let (mut silent, mut off_bank) = (Vec::new(), Vec::new());
+    for id in 0..door2::RETAIL_COUNT {
+        let mut drawn = 0;
+        let door = arklay::engine::simulate_do2(pack, id, 0, |_, framebuffer| {
+            drawn += usize::from(framebuffer.rgba.chunks(4).any(|pixel| pixel[..3] != [0; 3]));
+            Ok(())
+        })
+        .unwrap_or_else(|err| panic!("door {id:02x}: {err:#}"));
+        assert!(door.timeline.len() > 30, "door {id:02x}");
+        assert!(!door.sounds.is_empty(), "door {id:02x} plays no sound");
+        if door.playable_sounds != door.sounds.len() {
+            silent.push(id);
+        }
+        if door.bank_sounds != door.sounds.len() {
+            off_bank.push(id);
+        }
+        if ![0x20, 0x21, 0x32, 0x34, 0x36].contains(&id) {
+            assert!(drawn > 10, "door {id:02x} drew {drawn} frames");
+        }
+    }
+    // Every sound plays from the PC door bank (`door%02d.sap`) but the
+    // second sound of doors 33 and 35, whose banks hold slot 0 only and
+    // whose sound table names a tone their VAB lacks: silent in the original
+    // too.
+    assert_eq!(off_bank, [0x33, 0x35]);
+    assert_eq!(silent, [0x33, 0x35]);
 }

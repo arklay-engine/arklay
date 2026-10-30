@@ -430,6 +430,7 @@ fn parse_footstep_zones(data: &[u8], pointer: u32, next: u32) -> Result<Vec<Foot
             width: u16_at(data, offset + 4)?,
             height: u16_at(data, offset + 6)?,
             sound_data: u16_at(data, offset + 8)?,
+            flags: 0,
         });
     }
     Ok(zones)
@@ -517,6 +518,7 @@ fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,
+        mask_dialect: crate::format::Dialect::Re1,
         light: None,
     })
 }

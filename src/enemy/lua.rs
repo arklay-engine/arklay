@@ -5519,6 +5519,7 @@ end
                 width: 0x8000,
                 height: 0x8000,
                 sound_data: 0x2D,
+                flags: 0,
             }],
             ..RoomState::default()
         };
@@ -6163,6 +6164,7 @@ end
                 width: 0x8000,
                 height: 0x8000,
                 sound_data: 45,
+                flags: 0,
             }],
             ..RoomState::default()
         };

@@ -3078,6 +3078,7 @@ mod tests {
                 width: 8700,
                 height: 9800,
                 sound_data: 45,
+                flags: 0,
             }],
             ..RoomState::default()
         }
@@ -3157,6 +3158,7 @@ mod tests {
                 width: 1000,
                 height: 1000,
                 sound_data: 45,
+                flags: 0,
             }],
             ..RoomState::default()
         };

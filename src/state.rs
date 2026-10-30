@@ -392,7 +392,8 @@ impl Zone {
     }
 }
 
-/// One footstep sound zone from the RDT's `.flr` table.
+/// One footstep sound zone from the RDT's `.flr` table (RE1 slot 5, RE2
+/// slot 11).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct FootstepZone {
     pub base_x: u16,
@@ -400,6 +401,10 @@ pub struct FootstepZone {
     pub width: u16,
     pub height: u16,
     pub sound_data: u16,
+    /// RE2 only (`Floor_check`): the low 7 bits are the floor level the zone
+    /// answers, bit 7 switches it off (`Flr_set`). RE1 records have no such
+    /// word and keep it 0.
+    pub flags: u16,
 }
 
 /// One walkable zone used by NPC navigation.
@@ -439,6 +444,9 @@ pub struct Cut {
     pub mask_active: u32,
     /// The camera's parsed mask sprites in group order.
     pub masks: Vec<MaskSprite>,
+    /// The game whose rules order the mask sprites: RE1's bias tables and
+    /// overrides, or RE2's plain depth ([`crate::mask::re2_sprite_key`]).
+    pub mask_dialect: crate::format::Dialect,
     /// The camera's own lighting, which replaces the room's while it is the
     /// current cut; `None` lights it with the room's (every RE1 room).
     pub light: Option<CameraLight>,
@@ -684,6 +692,7 @@ mod tests {
                     width: 0x0200,
                     height: 0x0020,
                     sound_data: 0x2D45,
+                    flags: 0,
                 },
                 FootstepZone {
                     base_x: 0,
@@ -691,6 +700,7 @@ mod tests {
                     width: 0x7FE4,
                     height: 0x7FEC,
                     sound_data: 0,
+                    flags: 0,
                 },
             ],
             ..RoomState::default()
@@ -718,6 +728,7 @@ mod tests {
                     width: 1,
                     height: 1,
                     sound_data: index,
+                    flags: 0,
                 })
                 .collect(),
             ..RoomState::default()

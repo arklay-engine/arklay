@@ -103,9 +103,9 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 
 # Convert the RE2 PC release (the directory holding data/Pl0, data/Pl1 and
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
-# The engine shows RE2 rooms (backgrounds, cameras and collision) and poses any
-# RE2 EMD, PLD or PLW with --model, but has no RE2 player or scripts yet (see
-# issue #244); --game re2 skips detection
+# The engine shows RE2 rooms (backgrounds, cameras, collision and masks), poses
+# any RE2 EMD, PLD or PLW with --model and plays RE2 doors with --door, but has
+# no RE2 player or scripts yet (see issue #244); --game re2 skips detection
 cargo run -- convert-game /path/to/re2
 
 # Convert a Classic REbirth mod (.zip or directory: HD texture packs, BioRand
@@ -168,6 +168,11 @@ cargo run -- re1.akpak --room 100 --player 0 --capture cut0.bmp
 cargo run -- re2.akpak --room 100 --render-mode collision-overlay --capture col.bmp
 # An RE2 model posed and animated in a room (no AI): any EMD, PLD or PLW
 cargo run -- re2.akpak --room 100 --model enemy/10/enemy_0.emd --clip 0 --ticks 30 --capture zombie.bmp
+# The same model stood at a world position, here behind room 100's masked car
+cargo run -- re2.akpak --room 100 --model player/00/model_0.pld --model-pos 17899,0,-4323 --capture masked.bmp
+# An RE2 door (DO2 id in hex, door type in hex) played headlessly; the
+# capture is the frame after --ticks, or the last one
+cargo run -- re2.akpak --door 03 --ticks 40 --capture door.bmp
 # Run N fixed 30 Hz ticks before a room capture (deterministic, audio-free),
 # so scripted NPC scenes are captured in motion
 cargo run -- re1.akpak --room 20D --player 0 --ticks 30 --capture npc.bmp
