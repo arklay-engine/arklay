@@ -149,14 +149,19 @@ pub fn open_save_screen(
 /// Remove one ink ribbon from the block the screen is about to write, the way
 /// the original's `use_room_action_item` does before assembling the file.
 pub(crate) fn consume_snapshot_ribbon(file: &mut SaveFile) {
+    let ribbon = if file.re2.is_some() {
+        crate::scd2::host::ITEM_INK_RIBBON
+    } else {
+        items::ITEM_INK_RIBBONS
+    };
     let Some(index) = file
         .player_slots
         .iter()
-        .position(|stack| stack.id == items::ITEM_INK_RIBBONS && stack.quantity > 0)
+        .position(|stack| stack.id == ribbon && stack.quantity > 0)
     else {
         return;
     };
-    file.used_item = items::ITEM_INK_RIBBONS;
+    file.used_item = ribbon;
     file.player_slots[index].quantity -= 1;
     if file.player_slots[index].quantity == 0 {
         for read in index + 1..PLAYER_SLOT_COUNT {

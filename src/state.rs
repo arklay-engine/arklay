@@ -417,11 +417,12 @@ pub struct Zone {
     pub corners: [[i16; 2]; 4],
 }
 
-/// The gate on one RE2 camera switch zone: a zone only switches while it is
-/// enabled and the player is on its floor.
+/// The gate on one RE2 camera switch zone: a zone only switches while its
+/// flag is non-zero and the player is on its floor. Scripts rewrite both
+/// (`cut_be_set`, `cut_replace`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ZoneGate {
-    pub enabled: bool,
+    pub flag: u8,
     /// The zone's floor; `0xFF` means every floor.
     pub floor: u8,
 }
@@ -429,7 +430,7 @@ pub struct ZoneGate {
 impl Default for ZoneGate {
     fn default() -> Self {
         Self {
-            enabled: true,
+            flag: 1,
             floor: 0xFF,
         }
     }

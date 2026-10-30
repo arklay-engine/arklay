@@ -10,7 +10,7 @@ use super::opcode::{self, Op};
 use super::{ProcList, Scripts};
 
 /// The number of task slots (`get_max_tasks`).
-const TASKS: usize = 14;
+pub const TASKS: usize = 14;
 /// The task slots a procedure can be auto-assigned to by `evt_exec`.
 const AUTO_TASKS: std::ops::Range<usize> = 2..10;
 /// The first task id `evt_exec` treats as "any free slot".
@@ -64,7 +64,7 @@ struct Loop {
     if_depth: usize,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Frame {
     proc: usize,
     pc: usize,
@@ -72,7 +72,7 @@ struct Frame {
     loops: Vec<Loop>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Task {
     frame: Frame,
     calls: Vec<Frame>,
@@ -87,7 +87,7 @@ enum Active {
 }
 
 /// A room's script run.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Vm {
     init: Vec<Vec<u8>>,
     main: Vec<Vec<u8>>,
@@ -162,6 +162,48 @@ impl Vm {
                 self.run_task(task, host);
             }
         }
+    }
+
+    /// `Sce_event`: start main procedure `event` on `task` for an interaction
+    /// area. A task id past the fixed slots takes any free one.
+    pub fn exec_event(&mut self, task: usize, event: usize) {
+        self.active = Active::Main;
+        let slot = if task >= AUTO_TASK_ID {
+            AUTO_TASKS.clone().find(|slot| !self.tasks[*slot].running)
+        } else {
+            Some(task)
+        };
+        if let Some(slot) = slot.filter(|slot| *slot < TASKS) {
+            self.start(slot, event);
+        }
+    }
+
+    /// The room's main procedure count.
+    pub fn main_procedures(&self) -> usize {
+        self.main.len()
+    }
+
+    /// The instruction each running task is at, for diagnostics.
+    pub fn describe(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        for (task, state) in self
+            .tasks
+            .iter()
+            .enumerate()
+            .filter(|(_, task)| task.running)
+        {
+            let frame = &state.frame;
+            let code = self.list().get(frame.proc).map_or(&[][..], Vec::as_slice);
+            let op = code
+                .get(frame.pc)
+                .and_then(|op| super::opcode::lookup(*op))
+                .map_or("?", |op| op.mnemonic);
+            lines.push(format!(
+                "task {task} proc {} pc {} {op}",
+                frame.proc, frame.pc
+            ));
+        }
+        lines
     }
 
     /// Whether any task is still running.
@@ -567,7 +609,7 @@ impl Vm {
 }
 
 /// The script variable `sce_rnd` writes.
-const RANDOM_VAR: u8 = 0x10;
+const RANDOM_VAR: u8 = 29;
 
 /// `Calc_branch`.
 fn calc(host: &mut impl Host, operation: u8, index: u8, value: i16) {

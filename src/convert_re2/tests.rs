@@ -365,11 +365,7 @@ fn converts_every_category() {
     assert!(!text.contains("rdt =") && !text.contains("scd ="), "{text}");
 
     // No RE1 content rides along.
-    assert!(
-        !pack
-            .paths()
-            .any(|path| path.ends_with(".lua") || path.starts_with("language/"))
-    );
+    assert!(!pack.paths().any(|path| path.ends_with("/room.lua")));
 }
 
 /// The RDT bytes [`make_install`] wrote for `id`.

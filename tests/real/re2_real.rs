@@ -88,12 +88,18 @@ fn the_retail_tree_converts_every_category() {
         ("demo", 6),
         ("door", 55),
         ("enemy", 384),
+        ("font", 2),
+        ("game", 2),
+        ("item", 103),
+        ("language", 1),
         ("manifest", 1),
         ("mask", 3394),
         ("movie", 26),
         ("player", 221),
-        ("room", 501),
+        // Each room's definition and compiled script.
+        ("room", 1002),
         ("sound", 2768),
+        ("ui", 4),
         ("voice", 599),
     ];
     assert_eq!(categories, BTreeMap::from(expected));
@@ -220,14 +226,16 @@ fn the_converted_pack_verifies() {
     assert_eq!(count(verify::Format::Edh), 588);
     assert_eq!(count(verify::Format::Do2), 55);
     assert_eq!(count(verify::Format::Mpeg), 26);
-    // Every recognised format parses, so strict mode fails only the opaque
-    // demo reels.
+    // Every recognised format parses, so strict mode fails only what it can't
+    // read: the demo reels, the rooms' compiled scripts and the font's layout.
     let strict = verify::verify_pack(pack, true);
     assert!(
         strict
             .failures
             .iter()
-            .all(|failure| failure.path.starts_with("demo/")),
+            .all(|failure| failure.path.starts_with("demo/")
+                || failure.path.ends_with("/room.akscr")
+                || failure.path == "font/00.xml"),
         "{:?}",
         strict.failures
     );
@@ -1224,4 +1232,62 @@ fn every_packed_door_plays_through_the_transition() {
     // too.
     assert_eq!(off_bank, [0x33, 0x35]);
     assert_eq!(silent, [0x33, 0x35]);
+}
+
+/// Every room's main procedures run to where the player has their input back:
+/// one that kept `FG_STOP_DISABLE_INPUT` raised would soft-lock the game, since the
+/// cutscene's player and enemy actions are not played yet.
+#[test]
+#[ignore]
+fn no_event_holds_the_player_for_good() {
+    use arklay::game::GameState;
+    use arklay::scd2::{host::GameHost, vm::Vm};
+    let Some(pack) = pack() else {
+        return;
+    };
+    let mut events = 0;
+    let mut stuck = Vec::new();
+    for id in arklay::room::ids(pack) {
+        let loaded = arklay::room::load(pack, id).unwrap();
+        let Some(scripts) = loaded.re2_scripts(pack).unwrap() else {
+            continue;
+        };
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        game.id = id;
+        let mut vm = Vm::new(&scripts);
+        vm.run_init(&mut GameHost { game: &mut game });
+        vm.start_main();
+        for proc in 0..vm.main_procedures() {
+            events += 1;
+            let mut game = game.clone();
+            let mut vm = vm.clone();
+            vm.exec_event(2, proc);
+            for _ in 0..7200 {
+                game.dpad_pressed = 1;
+                game.dpad_held = 1;
+                vm.tick(&mut GameHost { game: &mut game });
+                game.message.active = false;
+            }
+            if game.re2.input_stopped() {
+                stuck.push(format!("{} proc {proc}: {:?}", id.code(), vm.describe()));
+            }
+        }
+    }
+    println!(
+        "{events} procedures, {} hold the player: {stuck:#?}",
+        stuck.len()
+    );
+    assert!(events > 1000, "only {events} procedures ran");
+    // Scenario A's way from the street to the police station must never hold.
+    // The rest are known and tracked until cutscenes play: they wait on enemies
+    // and objects that aren't simulated yet.
+    let route = [
+        "100", "101", "102", "118", "119", "11a", "11b", "103", "200",
+    ];
+    let on_route: Vec<_> = stuck
+        .iter()
+        .filter(|line| route.iter().any(|room| line.starts_with(room)))
+        .collect();
+    assert!(on_route.is_empty(), "{on_route:#?}");
 }

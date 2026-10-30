@@ -56,6 +56,10 @@ pub const HEIGHT_TRAILER: [u8; 4] = *b"AKY\x01";
 /// Bytes of the height trailer: the magic, the `i16` height and two
 /// reserved bytes.
 pub const HEIGHT_TRAILER_LEN: usize = 8;
+
+/// Port-only: the magic of the RE2 state trailer, which follows the height
+/// trailer: a `u32` length and [`crate::scd2::host::Re2State::to_save_bytes`].
+pub const RE2_TRAILER: [u8; 4] = *b"AKY\x02";
 /// Bytes of the bio-card prefix at the start of the block.
 pub const PREFIX_LEN: usize = 0x200;
 /// BioCard offset the [`GameState`] state image starts at.
@@ -194,6 +198,7 @@ impl SaveFile {
             examined: state.examined_flags(),
             item_box: state.item_box,
             room_bgm: state.room_bgm,
+            re2: state.is_re2_room.then(|| state.re2.to_save_bytes()),
             ..Self::default()
         };
         file.scenario.copy_from_slice(&state.flags[0].bytes()[..16]);
@@ -292,6 +297,12 @@ impl SaveFile {
             .filter(|stack| stack.id != 0)
             .collect();
         state.item_box = self.item_box;
+        if let Some(re2) = &self.re2 {
+            state.is_re2_room = true;
+            if state.re2.load_save_bytes(re2).is_none() {
+                eprintln!("warning: the save's RE2 state has the wrong size; ignoring it");
+            }
+        }
         state
             .rebecca_inventory
             .copy_from_slice(&self.player_slots[6..12]);
@@ -337,6 +348,11 @@ impl SaveFile {
             bytes.extend_from_slice(&HEIGHT_TRAILER);
             bytes.extend_from_slice(&self.pos_y.to_le_bytes());
             bytes.extend_from_slice(&[0, 0]);
+        }
+        if let Some(re2) = &self.re2 {
+            bytes.extend_from_slice(&RE2_TRAILER);
+            bytes.extend_from_slice(&(re2.len() as u32).to_le_bytes());
+            bytes.extend_from_slice(re2);
         }
         bytes
     }
@@ -426,6 +442,7 @@ impl SaveFile {
             pos_x: get_i16(bytes, 0x22C),
             pos_z: get_i16(bytes, 0x22E),
             pos_y: height_trailer(bytes).unwrap_or(0),
+            re2: re2_trailer(bytes).map(<[u8]>::to_vec),
             angle: get_i16(bytes, 0x230),
             health_status: bytes[0x232],
             ..Self::default()
@@ -457,8 +474,20 @@ impl SaveFile {
 /// The height a file's trailer carries ([`HEIGHT_TRAILER`]), if it has one.
 fn height_trailer(bytes: &[u8]) -> Option<i16> {
     let trailer = bytes.get(SAVE_BLOCK_SIZE..)?;
-    (trailer.len() == HEIGHT_TRAILER_LEN && trailer[..4] == HEIGHT_TRAILER)
+    let rest = trailer.get(HEIGHT_TRAILER_LEN..)?;
+    (trailer[..4] == HEIGHT_TRAILER && (rest.is_empty() || rest.starts_with(&RE2_TRAILER)))
         .then(|| i16::from_le_bytes([trailer[4], trailer[5]]))
+}
+
+/// The RE2 state a file's trailer carries ([`RE2_TRAILER`]), if it has one.
+fn re2_trailer(bytes: &[u8]) -> Option<&[u8]> {
+    let mut trailer = bytes.get(SAVE_BLOCK_SIZE..)?;
+    if trailer.starts_with(&HEIGHT_TRAILER) {
+        trailer = trailer.get(HEIGHT_TRAILER_LEN..)?;
+    }
+    let body = trailer.strip_prefix(&RE2_TRAILER)?;
+    let (length, body) = body.split_first_chunk::<4>()?;
+    (body.len() == u32::from_le_bytes(*length) as usize).then_some(body)
 }
 
 /// The block's 1-based file name for a zero-based slot index.
@@ -1006,6 +1035,21 @@ mod tests {
     fn a_floor_level_save_is_the_plain_block() {
         let file = filled();
         assert_eq!(file.to_file_bytes(), file.to_bytes().to_vec());
+    }
+
+    #[test]
+    fn the_re2_state_rides_after_the_height() {
+        let mut file = SaveFile {
+            pos_y: -1800,
+            re2: Some(vec![1, 2, 3]),
+            ..SaveFile::default()
+        };
+        for pos_y in [-1800, 0] {
+            file.pos_y = pos_y;
+            let parsed = SaveFile::from_bytes(&file.to_file_bytes()).unwrap();
+            assert_eq!(parsed.pos_y, pos_y);
+            assert_eq!(parsed.re2.as_deref(), Some(&[1, 2, 3][..]));
+        }
     }
 
     #[test]

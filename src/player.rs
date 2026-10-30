@@ -2534,7 +2534,7 @@ pub fn camera_for_position(room: &RoomState, current: usize, pos: [i32; 3]) -> u
             // `Cut_check`: signed corners, and a zone gated on being enabled
             // and on the player's floor.
             let gate = room.zone_gates.get(index).copied().unwrap_or_default();
-            if !gate.enabled
+            if gate.flag == 0
                 || (gate.floor != 0xFF && gate.floor != crate::sca::floor_of(pos[1]))
                 || !zone.contains_signed(pos[0], pos[2])
             {

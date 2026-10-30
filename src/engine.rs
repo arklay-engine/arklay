@@ -2243,16 +2243,28 @@ impl GameSession {
         save_dir: &Path,
         options: player::Options,
     ) -> Result<Box<Self>> {
+        let scenario_b = character & 2 != 0;
         let character = character & 1;
-        let id = new_game_id(pack, character);
+        let manifest = pack.manifest();
+        let start_pos = manifest.and_then(|manifest| manifest.start_pos);
+        let scenario_b = scenario_b && start_pos.is_some();
+        let id = if scenario_b {
+            RoomId::from_room_and_player(RE2_SCENARIO_B_ROOM, character)?
+        } else {
+            new_game_id(pack, character)
+        };
         let loaded = load_room(pack, id)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
+        game.is_re2_room = loaded.re2_vm.is_some();
+        game.re2.scenario_b = scenario_b;
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
-        let manifest = pack.manifest();
-        let start_pos = manifest.and_then(|manifest| manifest.start_pos);
-        if let Some(pos) = start_pos {
+        if scenario_b {
+            player_state.pos = RE2_SCENARIO_B_POS;
+            player_state.collision_mirror = [RE2_SCENARIO_B_POS[0], RE2_SCENARIO_B_POS[2]];
+            player_state.angle = RE2_SCENARIO_B_ANGLE;
+        } else if let Some(pos) = start_pos {
             player_state.pos = pos;
             player_state.collision_mirror = [pos[0], pos[2]];
             player_state.angle = manifest
@@ -7088,6 +7100,11 @@ pub fn render_mode_names() -> impl Iterator<Item = &'static str> {
     debug_view::names()
 }
 
+/// Where Scenario B starts (`Title_game_init`).
+const RE2_SCENARIO_B_ROOM: &str = "104";
+const RE2_SCENARIO_B_POS: [i32; 3] = [-0x4600, 0, -0x54DA];
+const RE2_SCENARIO_B_ANGLE: u16 = 400;
+
 /// The new-game identity: the base pack's `start_room` ([`pack_start_room`]),
 /// else the shipped card's start room, the main hall.
 fn new_game_id(pack: &Pack, character: u8) -> RoomId {
@@ -8889,7 +8906,8 @@ pub fn run_ui_with_mods(
                 path: path.to_path_buf(),
             },
             None => AppBoot::NewGame {
-                character: room.map_or(character & 1, |id| id.player_flag & 1),
+                // Keep RE2's Scenario B bit: `GameSession::new_with` reads it.
+                character: room.map_or(character, |id| id.player_flag & 1),
                 room,
             },
         },
@@ -13309,6 +13327,11 @@ fn new_game_state(
     game.player_options = options;
     game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
+    if let Some(health) = pack.manifest().and_then(|manifest| manifest.start_health) {
+        game.entities[0].health = health;
+        game.max_health = health;
+        game.set_health_copy(health);
+    }
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -13350,8 +13373,84 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
         return;
     };
     game.re2.gates = Default::default();
+    game.re2.pending_events.clear();
+    game.re2.pending_cuts.clear();
+    game.re2.pending_player = Default::default();
+    game.camera.locked = false;
+    // `FG_STATUS_PLAYER` and `FG_STATUS_SCENARIO`.
+    let character = game.id.player_flag & 1;
+    let scenario = u8::from(game.re2.scenario_b);
+    game.re2.set_flag(1, 0, character);
+    game.re2.set_flag(1, 1, scenario);
+    let mut vm = vm.clone();
     let mut host = crate::scd2::host::GameHost { game };
     vm.run_init(&mut host);
+    vm.start_main();
+    game.re2.vm = Some(Box::new(vm));
+}
+
+/// One tick of an RE2 room's scripts: the events the areas raised last tick
+/// start, every task runs, then what they asked of the room and the player
+/// applies.
+fn tick_re2_scripts(context: &mut RoomContext<'_>) {
+    let Some(mut vm) = context.game.re2.vm.take() else {
+        return;
+    };
+    for (task, event) in std::mem::take(&mut context.game.re2.pending_events) {
+        vm.exec_event(usize::from(task), usize::from(event));
+    }
+    {
+        let mut host = crate::scd2::host::GameHost {
+            game: &mut *context.game,
+        };
+        vm.tick(&mut host);
+    }
+    context.game.re2.vm = Some(vm);
+    for edit in std::mem::take(&mut context.game.re2.pending_cuts) {
+        apply_re2_cut_edit(context.room, edit);
+    }
+    let moved = std::mem::take(&mut context.game.re2.pending_player);
+    if let Some(pos) = moved.pos {
+        context.player.pos = pos;
+        context.player.collision_mirror = [pos[0], pos[2]];
+    }
+    if let Some(angle) = moved.angle {
+        context.player.angle = angle;
+    }
+    if moved.pos.is_some() || moved.angle.is_some() {
+        context.game.sync_entity_from_player(context.player);
+    }
+}
+
+/// `cut_be_set` and `cut_replace` on the room's switch zones.
+fn apply_re2_cut_edit(room: &mut RoomState, edit: crate::scd2::host::CutEdit) {
+    use crate::scd2::host::CutEdit;
+    match edit {
+        CutEdit::SetGate { cut, index, value } => {
+            let header = room
+                .zones
+                .iter()
+                .position(|zone| zone.cam_from == i16::from(cut));
+            if let Some(gate) =
+                header.and_then(|at| room.zone_gates.get_mut(at + usize::from(index)))
+            {
+                gate.flag = value;
+            }
+        }
+        CutEdit::Replace { a, b } => {
+            let swap = |value: &mut u8| {
+                if *value == a {
+                    *value = b;
+                } else if *value == b {
+                    *value = a;
+                }
+            };
+            for gate in &mut room.zone_gates {
+                swap(&mut gate.flag);
+                swap(&mut gate.floor);
+            }
+        }
+    }
 }
 
 /// Apply the command pass's `evt_exec` starts and `task_kill` kills in
@@ -13527,6 +13626,12 @@ fn tick_room_timed(
     mut phases: Option<&mut stats::PhaseTotals>,
 ) -> Option<game::RoomTransition> {
     let update_start = Instant::now();
+    // A cutscene holds the player's input (`FG_STOP_DISABLE_INPUT`).
+    let input = if context.game.re2.input_stopped() {
+        player::Input::default()
+    } else {
+        input
+    };
     // The original's `main_loop` rolls the screen-shake offset at the very top
     // of the rendered frame, before the game task runs its scripts and its
     // per-frame random draw. Doing it here (rather than at render time) keeps
@@ -13559,6 +13664,7 @@ fn tick_room_timed(
     context.game.check_desk_state();
     context.game.check_itembox_state();
     context.game.check_event_item_usage();
+    tick_re2_scripts(&mut context);
     {
         let mut host = game::ScdGameHost::new(context.game);
         command_vm.run_main(&mut host);

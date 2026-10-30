@@ -100,7 +100,7 @@ pub const BANK_ROOM_FLAGS: u8 = 8;
 pub const ROOM_FLAG_FILE_BASE: u8 = 0x82;
 /// Number of room action slots the game state tracks: the original's table is
 /// cleared over 288 bytes of 12-byte entries.
-pub const ROOM_ACTION_SLOTS: usize = 24;
+pub const ROOM_ACTION_SLOTS: usize = 32;
 /// Entity slots: 0 is the player, 1.. are enemies and scripted objects.
 pub const ENTITY_COUNT: usize = 32;
 /// `selected_entity` value when the event pointed at something this slice does
@@ -995,6 +995,9 @@ impl RoomActionKind {
         }
     }
 }
+
+/// An RE2 message stops everything until it is dismissed.
+const RE2_MESSAGE_PAUSE: u16 = 0xFFFF;
 
 /// The typewriter save flow, the part of the original's `g_typewriter_state`
 /// the engine observes: idle, or a yes/no save prompt awaiting its answer.
@@ -5144,6 +5147,9 @@ impl GameState {
 
     /// The number of inventory slots the current character has of its own.
     pub fn character_inventory_capacity(&self) -> usize {
+        if self.is_re2_room {
+            return INVENTORY_SLOTS_JILL;
+        }
         if self.id.player_flag & 1 == 1 {
             INVENTORY_SLOTS_JILL
         } else {
@@ -5172,15 +5178,18 @@ impl GameState {
     /// caps the stack and spills the remainder into a new slot, exactly like
     /// the original's pickup path.
     pub fn add_item(&mut self, item: u8, quantity: u8) {
-        let quantity = if item == items::ITEM_INK_RIBBONS {
+        let quantity = if item == items::ITEM_INK_RIBBONS && !self.is_re2_room {
             3
         } else {
             quantity
         };
         let capacity = self.inventory_capacity();
-        if self.item_defs.get(item).merge
-            && let Some(index) = self.inventory.iter().position(|stack| stack.id == item)
-        {
+        let merges = if self.is_re2_room {
+            crate::scd2::host::item_stacks(item)
+        } else {
+            self.item_defs.get(item).merge
+        };
+        if merges && let Some(index) = self.inventory.iter().position(|stack| stack.id == item) {
             let merged = u16::from(self.inventory[index].quantity) + u16::from(quantity);
             if merged <= u16::from(items::ITEM_QUANTITY_CAP) {
                 self.inventory[index].quantity = merged as u8;
@@ -5259,6 +5268,9 @@ impl GameState {
     /// Whether the player's character needs ink ribbons to save, from the
     /// ink ribbon options. One who does not never sees an ink ribbon either.
     pub fn needs_ink_ribbons(&self) -> bool {
+        if self.is_re2_room {
+            return true;
+        }
         if self.id.player_flag & 3 == 1 {
             self.player_options.jill_ink_ribbons
         } else {
@@ -5273,12 +5285,21 @@ impl GameState {
     /// playthrough, and does not consume one; the other gets the "no ink
     /// ribbon" message instead. The original also made Jill need one on a
     /// second playthrough. Returns whether the prompt was shown.
+    /// The ink ribbon's item id in this game.
+    pub fn ink_ribbon_item(&self) -> u8 {
+        if self.is_re2_room {
+            crate::scd2::host::ITEM_INK_RIBBON
+        } else {
+            items::ITEM_INK_RIBBONS
+        }
+    }
+
     pub fn check_typewriter(&mut self) -> bool {
         if self.typewriter != TypewriterFlow::Idle {
             return false;
         }
         let free_save = !self.needs_ink_ribbons();
-        let ribbon = self.has_item(items::ITEM_INK_RIBBONS);
+        let ribbon = self.has_item(self.ink_ribbon_item());
         if !ribbon && !free_save {
             self.show_message(MESSAGE_TYPEWRITER_NO_RIBBON, 0xFF);
             return false;
@@ -5314,11 +5335,12 @@ impl GameState {
     /// Spend one ink ribbon the way the save flow does: record the use and
     /// remove (or decrement) the stack.
     pub fn consume_ink_ribbon(&mut self) {
-        self.record_used_item(items::ITEM_INK_RIBBONS);
+        let ribbon = self.ink_ribbon_item();
+        self.record_used_item(ribbon);
         let Some(index) = self
             .inventory
             .iter()
-            .position(|stack| stack.id == items::ITEM_INK_RIBBONS && stack.quantity > 0)
+            .position(|stack| stack.id == ribbon && stack.quantity > 0)
         else {
             return;
         };
@@ -6131,6 +6153,16 @@ impl GameState {
             // `fwdPosActionId`, the entity-position probe `entPosActionId`.
             // Scripts read both with `cmpb` 16/17.
             let hit = (slot as u8).saturating_add(1);
+            // `Sce_at_check`: the same record in the script variables; only
+            // `SCE_AUTO` puts them back.
+            if re2 && room_action.sce != crate::scd2::host::SCE_AUTO {
+                let var = if flags & 0x40 != 0 {
+                    crate::scd2::host::VAR_BODY_AREA
+                } else {
+                    crate::scd2::host::VAR_FORWARD_AREA
+                };
+                self.re2.vars[var] = slot as u16;
+            }
             if flags & 0x40 != 0 {
                 self.state_bytes[usize::from(STATE_BYTE_ENT_ACTION)] = hit;
             } else {
@@ -6148,6 +6180,10 @@ impl GameState {
 
     /// Dispatch one matched room action to its handler.
     fn fire_room_action(&mut self, room_action: RoomAction, pos: [i32; 3]) {
+        if self.is_re2_room {
+            self.fire_re2_area(room_action);
+            return;
+        }
         match room_action.kind {
             RoomActionKind::Door => {
                 self.try_door(room_action.slot);
@@ -6701,7 +6737,7 @@ impl GameState {
         if !self.item_defs.get(item).merge {
             return false;
         }
-        let quantity = if item == items::ITEM_INK_RIBBONS {
+        let quantity = if item == items::ITEM_INK_RIBBONS && !self.is_re2_room {
             3
         } else {
             action.item_quantity().max(1)
@@ -7890,14 +7926,100 @@ impl GameState {
     /// `Sce_door`: an open door starts the transition. A locked one (bit
     /// `0x80` of its lock byte, unlocked by its bit in `door_locks`) stays
     /// shut until R8 brings the keys and their messages.
+    #[cfg(test)]
+    pub(crate) fn try_re2_door_for_test(&mut self, door: &Door) -> bool {
+        self.try_re2_door(door)
+    }
+
     fn try_re2_door(&mut self, door: &Door) -> bool {
+        use crate::scd2::host::{
+            KEY_LOCKED, KEY_UNLOCK, MESSAGE_LOCKED, MESSAGE_LOCKED_OTHER_SIDE, MESSAGE_UNLOCKED,
+            MESSAGE_USED_KEY,
+        };
         let bit = door.lock & 0x3F;
         let word = usize::from(bit >> 5) & 1;
-        let unlocked = self.re2.door_locks[word] & (0x8000_0000 >> (bit & 31)) != 0;
-        if door.lock & 0x80 == 0 || unlocked {
+        let mask = 0x8000_0000 >> (bit & 31);
+        if door.lock & 0x80 == 0 || self.re2.door_locks[word] & mask != 0 {
             return self.begin_transition(door);
         }
+        // `sce_door`: a locked door opens on a later press once this one has
+        // unlocked it.
+        match door.key {
+            KEY_UNLOCK => self.show_re2_global(MESSAGE_UNLOCKED),
+            KEY_LOCKED => {
+                self.show_re2_global(MESSAGE_LOCKED_OTHER_SIDE);
+                return false;
+            }
+            key if !self.has_item(key) => {
+                self.show_re2_global(MESSAGE_LOCKED);
+                return false;
+            }
+            key => {
+                self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = key;
+                self.show_re2_global(MESSAGE_USED_KEY);
+            }
+        }
+        self.re2.door_locks[word] |= mask;
         false
+    }
+
+    /// Fire an RE2 interaction area (`Sce_at_jump_tbl`). The kinds with no
+    /// game side yet (`SCE_NORMAL`, water, slopes, damage) only record their
+    /// hit, which the probe already did.
+    pub fn fire_re2_area(&mut self, action: RoomAction) {
+        let slot = action.slot;
+        match action.kind {
+            RoomActionKind::Door => {
+                self.try_door(slot);
+            }
+            RoomActionKind::Item => self.pick_up_re2_item(action),
+            RoomActionKind::Message => self.show_re2_message(action.params[0]),
+            RoomActionKind::Event => {
+                // `Sce_event`: `[task (u16), pad, event]`.
+                let event = (action.params[0], action.params[3]);
+                self.re2.pending_events.push(event);
+            }
+            RoomActionKind::ItemBox => {
+                self.open_itembox(slot);
+                self.record_interaction(slot, action.kind, None);
+            }
+            RoomActionKind::Typewriter => self.record_interaction(slot, action.kind, None),
+            _ => {}
+        }
+    }
+
+    /// `sce_item`, without the pick-up screen: the item goes to the inventory
+    /// and its area dies, or a full inventory leaves it where it is.
+    fn pick_up_re2_item(&mut self, action: RoomAction) {
+        use crate::scd2::host::{ITEM_BANK, MESSAGE_FULL, MESSAGE_PICKED_UP};
+        if self.message.active {
+            return;
+        }
+        let [item, amount, flag, ..] = action.params;
+        if self.inventory.len() >= self.inventory_capacity() && !self.has_item(item) {
+            self.show_re2_global(MESSAGE_FULL);
+            return;
+        }
+        self.add_item(item, amount);
+        self.re2.set_flag(ITEM_BANK, flag, 1);
+        self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
+        self.show_re2_global(MESSAGE_PICKED_UP);
+        if let Some(entry) = self.room_actions[usize::from(action.slot)].as_mut() {
+            entry.sce = crate::scd2::host::SCE_AUTO;
+            entry.handler = 0;
+        }
+    }
+
+    /// A room message by its RE2 number; the language key's index keeps the
+    /// bits past the low six in the id's high byte ([`crate::text::message_index`]).
+    pub fn show_re2_message(&mut self, id: u8) {
+        let id = u16::from(id);
+        self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
+    }
+
+    /// One of the executable's own messages.
+    fn show_re2_global(&mut self, id: u8) {
+        self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
     }
 
     /// Restore the message word a door zeroed. The original's gameplay loop
@@ -8311,7 +8433,7 @@ impl<'a> ScdGameHost<'a> {
                 .is_some_and(|action| {
                     action
                         .item_data
-                        .is_some_and(|data| data[0] == items::ITEM_INK_RIBBONS)
+                        .is_some_and(|data| data[0] == self.state.ink_ribbon_item())
                 })
     }
 
@@ -8896,7 +9018,7 @@ impl ScdHost for ScdGameHost<'_> {
                 let z = operand_i16(operands, 11).to_le_bytes();
                 let room_items_flag = operand_u8(operands, 13);
                 let flags_word = operand_u16(operands, 15);
-                if item == items::ITEM_INK_RIBBONS && !self.state.needs_ink_ribbons() {
+                if item == self.state.ink_ribbon_item() && !self.state.needs_ink_ribbons() {
                     self.state.mark_item_taken(room_items_flag);
                     // Port-only: the original leaves the slot unwritten, so a
                     // room that swaps the ribbon's zone for a typewriter once

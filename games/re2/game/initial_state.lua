@@ -1,0 +1,2 @@
+-- RE2 starts with an empty item box and no room music: the scripts fill the
+-- music table themselves (`sce_bgmtbl_set`).
