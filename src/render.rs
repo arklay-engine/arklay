@@ -3739,6 +3739,10 @@ pub struct EffectLayer<'a> {
     /// Decoded effect texture pages; a missing entry is a page this room does
     /// not have art for.
     pub pages: &'a [Option<&'a Image>],
+    /// The named HD composite of each page, indexed like `pages`; a missing
+    /// entry leaves the GPU renderer to the page's content hash
+    /// ([`crate::effects::hd`]). The software renderer ignores it.
+    pub hd: &'a [Option<&'a crate::htexture::Replacement>],
     /// This frame's live billboards, in pool submission order.
     pub quads: &'a [EffectQuad],
 }
@@ -6441,6 +6445,7 @@ mod tests {
         let pages = [Some(page)];
         let layer = EffectLayer {
             pages: &pages,
+            hd: &[],
             quads,
         };
         draw_gameplay_scene_with_effects(
@@ -6554,6 +6559,7 @@ mod tests {
         let quads = [effect_quad(0, [160, 120], [200, 200], [255, 255, 255], 0)];
         let layer = EffectLayer {
             pages: &pages,
+            hd: &[],
             quads: &quads,
         };
         let mut framebuffer = Framebuffer::new();

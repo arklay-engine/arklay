@@ -487,6 +487,9 @@ pub struct SpriteRun<'a> {
     /// mask's HD replacement when its own hash doesn't
     /// ([`crate::htexture::HdTable::paired_masks`]).
     pub background: Option<&'a Image>,
+    /// The HD composite an effect run's page is drawn from in place of its
+    /// content-hash replacement ([`crate::effects::hd`]).
+    pub hd: Option<&'a crate::htexture::Replacement>,
 }
 
 /// The frame's sprites: `before` draws ahead of the meshes (background,
@@ -557,6 +560,7 @@ impl<'a> Sprites<'a> {
             first: first as u32,
             count: count as u32,
             background: None,
+            hd: None,
         })
     }
 }
@@ -682,7 +686,10 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                 // mask only covers one strictly behind it.
                 quad.key as f32 - 1.0,
             );
-            sprites.after.extend(sprites.run(page, first));
+            let hd = layer.hd.get(quad.page).copied().flatten();
+            sprites
+                .after
+                .extend(sprites.run(page, first).map(|run| SpriteRun { hd, ..run }));
         }
     }
 

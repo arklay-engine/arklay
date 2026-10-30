@@ -1781,12 +1781,14 @@ impl GpuRenderer {
     }
 
     /// Make an RGBA image, or the HD replacement `pack` carries for it,
-    /// resident.
+    /// resident. A named `hd` composite takes the place of the content-hash
+    /// lookup.
     fn ensure_image(
         &mut self,
         copy: *mut SDL_GPUCopyPass,
         image: &Image,
         background: Option<&Image>,
+        hd: Option<&htexture::Replacement>,
         pack: Option<&Pack>,
     ) -> Result<Option<ImageTexture>> {
         if image.width == 0
@@ -1796,19 +1798,41 @@ impl GpuRenderer {
             return Ok(None);
         }
         let key = image as *const Image as usize;
-        let fingerprint = scene::image_fingerprint(image);
+        let mut fingerprint = scene::image_fingerprint(image);
+        // A composite is built once per room, so its buffer names it without
+        // hashing its texels every frame.
+        if let Some(hd) = hd {
+            fingerprint ^= scene::fingerprint(
+                &[
+                    u64::from(hd.image.width),
+                    u64::from(hd.image.height),
+                    hd.image.rgba.as_ptr() as u64,
+                ],
+                &[],
+            );
+        }
         if let Some(entry) = self.images.get_mut(&key)
             && entry.fingerprint == fingerprint
         {
             entry.last_used = self.frame;
             return Ok(Some(entry.value));
         }
-        let replacement = pack
-            .filter(|pack| !pack.htexture().is_empty())
-            .and_then(|pack| Self::image_replacement(image, background, pack));
-        let (source, scale) = match &replacement {
-            Some((hd, scale)) => (hd, *scale),
-            None => (image, [1.0, 1.0]),
+        let replacement = match hd {
+            Some(_) => None,
+            None => pack
+                .filter(|pack| !pack.htexture().is_empty())
+                .and_then(|pack| Self::image_replacement(image, background, pack)),
+        };
+        let (source, scale) = match (hd, &replacement) {
+            (Some(hd), _) => (
+                &hd.image,
+                [
+                    hd.image.width as f32 / hd.frame[0].max(1) as f32,
+                    hd.image.height as f32 / hd.frame[1].max(1) as f32,
+                ],
+            ),
+            (None, Some((hd, scale))) => (hd, *scale),
+            (None, None) => (image, [1.0, 1.0]),
         };
         let texture = self.texture(
             SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
@@ -2022,7 +2046,7 @@ impl GpuRenderer {
                 let key = run.image as *const Image as usize;
                 if let std::collections::hash_map::Entry::Vacant(slot) = sprite_textures.entry(key)
                     && let Some(texture) =
-                        self.ensure_image(copy, run.image, run.background, pack)?
+                        self.ensure_image(copy, run.image, run.background, run.hd, pack)?
                 {
                     slot.insert(texture);
                 }
