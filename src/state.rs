@@ -275,9 +275,10 @@ impl RoomId {
         self.file_stem("mask", camera)
     }
 
-    /// Zero-based stage index for stage-indexed tables.
+    /// Zero-based stage index for stage-indexed tables; stage 0 (no room yet,
+    /// as in a fresh default state) reads as the first.
     pub fn stage_index(self) -> u8 {
-        self.stage - 1
+        self.stage.saturating_sub(1)
     }
 }
 
