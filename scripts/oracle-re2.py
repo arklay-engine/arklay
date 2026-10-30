@@ -17,9 +17,10 @@ Usage:
     scripts/oracle-re2.py patches
 
 ``--game`` names a retail install with Classic Rebirth's ``ddraw.dll``, by
-default ``$ARKLAY_RE2_ROOT``. Tick 0 is the first tick with a live player, and
-input scripts (the format of ``oracle/inputs``) count from there, as arklay's
-do. See ``oracle/re2.md``.
+default ``$ARKLAY_RE2_ROOT``. Tick 0 is the first tick of play, once the room's
+load has finished, and a trace line holds the state after its tick, as arklay's
+does. Input scripts (the format of ``oracle/inputs``) count from there. See
+``oracle/re2.md``.
 """
 
 from __future__ import annotations
@@ -59,6 +60,10 @@ ENTITY_ID = 0x08
 ENTITY_POS = 0x38  # m.t: x, y, z as i32
 ENTITY_CDIR_Y = 0x76
 ENTITY_LIFE = 0x156
+ENTITY_BE_FLG = 0x00
+ENTITY_SPD = 0x144  # x, y, z as i16
+ENTITY_MOTION = 0x14C  # move_no, move_cnt, hokan_flg, mplay_flg
+ENTITY_D_LIFE_U = 0x151
 
 # Raw pad bits, the left column of the table `Pad_set` maps them with.
 BUTTONS = {
@@ -78,6 +83,9 @@ BUTTONS = {
 }
 
 BOOT_TICKS = 3000
+# The ticks from the first with a live player to the first of play: `Pl_init`,
+# then the room's load collision pass, then the tick the load's `fg_stop` ends.
+SETTLE_TICKS = 3
 # The title screen to the first tick of play, as `(tick, raw pad)` from the first
 # tick the tool sees. The game is deterministic, so fixed ticks are enough.
 def press(tick: int, button: str) -> list[tuple[int, int]]:
@@ -92,9 +100,9 @@ ROUTES = {
     ],
 }
 CHARACTERS = {"leon": 0, "claire": 1}
-# What the two engines can compare today. arklay's `beh` and `as` are RE1's
-# player machine, and its random stream, fades and frames aren't RE2's yet.
-RE2_FIELDS = "room,cam,p.x,p.y,p.z,p.angle,p.hp"
+# What the two engines can compare today. arklay's random stream, fades and frames
+# aren't RE2's yet.
+RE2_FIELDS = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot"
 
 PTRACE_CONT = 7
 PTRACE_SINGLESTEP = 9
@@ -311,6 +319,15 @@ class Game:
         ptrace(PTRACE_CONT, tid)
 
 
+def remove_enemies(game: Game) -> None:
+    """Switch off every live enemy: nothing runs or touches an entity whose first bit is clear."""
+    for pointer in struct.unpack("<16I", game.read(ENEMIES, 64)):
+        if pointer != 0:
+            flags = game.u32(pointer + ENTITY_BE_FLG)
+            if flags & 1:
+                game.write(pointer + ENTITY_BE_FLG, struct.pack("<I", flags & ~1))
+
+
 def trace_line(game: Game, tick: int, pad: int) -> str:
     """One tick's state: the `oracle-trace v1` fields RE2 has, then RE2's own."""
     x, y, z = game.i32s(PL + ENTITY_POS, 3)
@@ -344,6 +361,12 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"fgscn={game.read(FG_SCENARIO, 32).hex()}")
     fields.append(f"fgcom={game.read(FG_COMMON, 32).hex()}")
     fields.append(f"fgroom={game.u32(FG_ROOM):08x}")
+    spd = struct.unpack("<3h", game.read(PL + ENTITY_SPD, 6))
+    motion = game.read(PL + ENTITY_MOTION, 4)
+    fields.append(
+        f"mot={routines[2]},{routines[3]},{motion[0]},{motion[1]},{motion[2]},"
+        f"{game.u8(PL + ENTITY_D_LIFE_U)},{spd[0]},{spd[1]},{spd[2]}"
+    )
     return " ".join(fields)
 
 
@@ -408,32 +431,42 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             boot_tick = 0
             cursor = 0
             pad = 0
+            settled = 0
             tick = -1  # The trace's tick, once play has begun.
-            while tick + 1 < args.ticks:
+            while tick <= args.ticks:
                 tid, regs = game.run_to_break()
-                if tick < 0 and game.i16(PL + ENTITY_LIFE) != 0:
-                    tick = 0
-                    cursor = 0
-                    pad = 0
-                    print(f"play begins {boot_tick} ticks after boot")
-                elif tick >= 0:
-                    tick += 1
+                if tick < 0:
+                    if game.i16(PL + ENTITY_LIFE) != 0:
+                        settled += 1
+                    if settled > SETTLE_TICKS:
+                        tick = 0
+                        cursor = 0
+                        pad = 0
+                        print(f"play begins {boot_tick} ticks after boot")
+                if settled and args.no_enemies:
+                    remove_enemies(game)
                 if tick < 0:
                     if boot_tick > BOOT_TICKS:
                         raise SystemExit("the title route did not reach play")
                     if args.shot_dir and args.shot_every and boot_tick % args.shot_every == 0:
                         screenshot(session.display, Path(args.shot_dir) / f"boot{boot_tick:06d}.png")
-                    while cursor < len(route) and route[cursor][0] <= boot_tick:
-                        pad = route[cursor][1]
-                        cursor += 1
+                    if not settled:
+                        while cursor < len(route) and route[cursor][0] <= boot_tick:
+                            pad = route[cursor][1]
+                            cursor += 1
+                    else:
+                        pad = 0
                     boot_tick += 1
                 else:
+                    # This stop is the end of the tick before it.
+                    if tick > 0:
+                        trace.write(trace_line(game, tick - 1, pad) + "\n")
+                        if args.shot_dir and args.shot_every and (tick - 1) % args.shot_every == 0:
+                            screenshot(session.display, Path(args.shot_dir) / f"t{tick - 1:06d}.png")
                     while cursor < len(entries) and entries[cursor][0] <= tick:
                         pad = entries[cursor][1]
                         cursor += 1
-                    trace.write(trace_line(game, tick, pad) + "\n")
-                    if args.shot_dir and args.shot_every and tick % args.shot_every == 0:
-                        screenshot(session.display, Path(args.shot_dir) / f"t{tick:06d}.png")
+                    tick += 1
                 regs.rax = pad
                 if tick_delay:
                     time.sleep(tick_delay)
@@ -538,6 +571,7 @@ def main() -> int:
         command.add_argument("--input", default=None)
         command.add_argument("--shot-dir", default=None)
         command.add_argument("--shot-every", type=int, default=0)
+        command.add_argument("--no-enemies", action="store_true")
 
     command = commands.add_parser("record", help="record a trace from the original")
     common(command)

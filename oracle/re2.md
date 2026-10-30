@@ -39,10 +39,18 @@ second time with a delay on every tick, and needs the two traces to be identical
 
 ## Ticks and input
 
-Tick 0 is the first tick with a live player (`pl.life != 0`). `--start leon` or
-`--start claire` takes a fixed route there through the title screen: Original
-Mode, the character, Normal, then confirm every 60 ticks until play begins. That
-takes 904 ticks for both, and they aren't traced.
+Tick 0 is the first tick after the room's load has settled: a few ticks after
+the player comes alive (`pl.life != 0`), which is when `Pl_init` has run and the
+start position's collision push has landed. `--start leon` or `--start claire`
+takes a fixed route there through the title screen: Original Mode, the
+character, Normal, then confirm every 60 ticks until play begins. That takes 907
+ticks for both, and they aren't traced. A line holds the state at the end of its
+tick, and a pad value given for tick `t` first shows in line `t + 1`.
+
+`--no-enemies` clears bit 0 of every enemy's `be_flg` at each stop, so nothing
+runs them or collides with them. That leaves the player alone to compare with
+arklay until enemies are ported. `oracle/inputs-re2/` holds the scripts in use,
+and `street_wander.txt` is a random walk through room 100.
 
 Input scripts have the format of `oracle/inputs`, counted from tick 0. This
 game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
@@ -60,6 +68,7 @@ game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 | `e` | each `enemies[n]` with bit 0 of `be_flg` set, as slot `n + 1`: id, position, angle, `routine_0`-`routine_2`, `life`, then three zeros |
 | `pad` | the pad value given this tick |
 | `fgsys`, `fgstat`, `fgstop`, `fgscn`, `fgcom`, `fgroom` | `fg_system`, `fg_status`, `fg_stop`, and the scenario, common and room flag banks |
+| `mot` | the player's `routine_2`, `routine_3`, `Move_no`, `Move_cnt`, `Hokan_flg`, `D_life_u` and speed x, y, z |
 
 `rseed`, `fade` and `f` are placeholders so the line parses: `rseed` and the fade
 have no RE2 equivalent recorded yet, and the frame isn't hashed. A screenshot of
@@ -67,11 +76,11 @@ any tick is available through `--shot-dir` and `--shot-every`.
 
 ## What compares today
 
-`scenario` compares `room`, `cam` and the player's x, y, z, angle and health
-(`--fields`). The other fields describe things arklay doesn't model RE2's way yet:
-its `beh` and `as` are RE1's player machine, its random stream isn't `Rnd`, and it
-has no enemies. Add each one to the default in `RE2_FIELDS` when the milestone
-that makes it comparable lands. arklay doesn't emit the `fg*` flag banks yet.
+`scenario` compares `room`, `cam`, the player's x, y, z, angle, `beh`, `as` and
+health, and `mot` (`--fields`). The other fields describe things arklay doesn't
+model RE2's way yet: its random stream isn't `Rnd`, and it has no enemies. Add
+each one to the default in `RE2_FIELDS` when the milestone that makes it
+comparable lands. arklay doesn't emit the `fg*` flag banks yet.
 
 ## Classic Rebirth
 

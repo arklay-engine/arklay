@@ -63,6 +63,8 @@ class Tick:
     cam: str
     entities: dict[int, Entity] = field(default_factory=dict)
     frame_hash: str = ""
+    # RE2's `mot` field: the player's motion state.
+    motion: str | None = None
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -131,6 +133,7 @@ def parse_trace(path: str) -> list[Tick]:
                     cam=fields["cam"],
                     entities=entities,
                     frame_hash=fields.get("f", ""),
+                    motion=fields.get("mot"),
                 )
             )
     return ticks
@@ -146,6 +149,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
     ]
     for name in PLAYER_FIELDS:
         items.append((f"p.{name}", tick.player.get(name, "?")))
+    if tick.motion is not None:
+        items.append(("mot", tick.motion))
     for slot in sorted(tick.entities):
         entity = tick.entities[slot]
         for name in ENTITY_FIELDS:

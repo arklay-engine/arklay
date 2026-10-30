@@ -346,6 +346,7 @@ mod tests {
         let frame = |keyframe| ClipFrame {
             keyframe,
             timing: 0,
+            flags: 0,
         };
         Emd {
             skeleton: Skeleton {

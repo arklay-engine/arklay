@@ -31,6 +31,7 @@ fn clips() -> Vec<Clip> {
             frames: vec![ClipFrame {
                 keyframe: 0,
                 timing: 2,
+                flags: 0,
             }],
         })
         .collect()

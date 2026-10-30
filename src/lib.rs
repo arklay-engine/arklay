@@ -66,6 +66,7 @@ pub mod pacer;
 pub mod pack;
 pub mod paths;
 pub mod player;
+pub mod player2;
 pub mod player_script;
 pub mod process_stats;
 pub mod progress;

@@ -56,6 +56,9 @@ pub struct TraceTick<'a> {
     pub fade_state: i16,
     /// Current camera cut index.
     pub cam: u8,
+    /// RE2's player machine, which isn't in the entity: its `beh` and `as`,
+    /// and the `mot` field's values.
+    pub re2_player: Option<([u8; 2], [i32; 9])>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
     /// aim direction bits. The reference reads the player's status byte at
     /// entity +0x00, which the player entity shares with this flags byte, so
@@ -133,8 +136,10 @@ impl TraceWriter {
                 player.pos[1],
                 player.pos[2],
                 player.angle & 0x0FFF,
-                player.action_behavior,
-                player.action_state,
+                tick.re2_player
+                    .map_or(player.action_behavior, |(routines, _)| routines[0]),
+                tick.re2_player
+                    .map_or(player.action_state, |(routines, _)| routines[1]),
                 player.health
             )?,
             None => write!(self.out, " p=")?,
@@ -175,7 +180,12 @@ impl TraceWriter {
                 entity.action_ticks_counter
             )?;
         }
-        writeln!(self.out, " f={}", tick.frame_hash)?;
+        write!(self.out, " f={}", tick.frame_hash)?;
+        if let Some((_, motion)) = tick.re2_player {
+            let motion = motion.map(|value| value.to_string()).join(",");
+            write!(self.out, " mot={motion}")?;
+        }
+        writeln!(self.out)?;
         self.ticks += 1;
         Ok(())
     }
@@ -272,6 +282,7 @@ mod tests {
             cam: 3,
             player_flags: 0,
             entities: &*game.entities,
+            re2_player: None,
             frame_hash: 0xDEAD_BEEF,
         };
         writer.write_tick(&tick).unwrap();
@@ -308,6 +319,7 @@ mod tests {
             cam: 0,
             player_flags: 0,
             entities: &*game.entities,
+            re2_player: None,
             frame_hash: 0,
         };
         for index in 0..3 {

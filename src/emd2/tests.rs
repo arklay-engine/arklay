@@ -332,10 +332,10 @@ fn a_weapon_replaces_the_hand_and_pastes_its_texels_with_their_colours() {
             .map(|frame| frame.keyframe)
             .collect::<Vec<_>>()
     };
-    assert_eq!(frames(&locomotion.clips[2]), moved(&moving.clips[0]));
-    assert_eq!(frames(&locomotion.clips[3]), moved(&moving.clips[1]));
-    assert_eq!(frames(&locomotion.clips[1]), moved(&moving.clips[2]));
-    assert_eq!(frames(&body.clips[3]), frames(&player.clips[0]));
+    for (index, clip) in moving.clips.iter().enumerate() {
+        assert_eq!(frames(&locomotion.clips[index]), moved(clip));
+    }
+    assert_eq!(frames(&body.clips[0]), frames(&player.clips[0]));
     // A bank without locomotion can't drive the machine.
     assert!(
         player_banks(

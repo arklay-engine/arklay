@@ -1,21 +1,23 @@
 # RE2 deviations
 
-RE2 play is approximate at this stage (Phase B of #244): the engine reuses RE1's player machine and takes small lookups from bio2's PC 1.10 executable. Every place where RE2 play knowingly differs from the original is listed here, so that an exact port (Phase C) has the list to work from.
+RE2 play is being ported to exactness (Phase C of #244), checked tick by tick against the original with `scripts/oracle-re2.py` (`oracle/re2.md`). Every place where RE2 play knowingly still differs from the original is listed here, so that the rest of the port has the list to work from.
 
 ## Player
 
-- **Movement speed.** The player machine keeps RE1's walk and run speed curves. The original reads each frame's speed from the animation (`Spd_get`).
-- **Turning.** The player machine keeps RE1's turn rate. The original turns by `0x28`, `0x20` or `0x10` units per tick while walking and by `0x38`, `0x30` or `0x18` while running, by health.
-- **Hurt animations.** The clips are the healthy character's. The original picks the walk, run and idle clips by health (`D_life_u`).
-- **The held weapon.** The player always holds the handgun, whose bank has the locomotion the knife's lacks.
-- **No aiming, no combat, no other weapons.** RE2's weapon clips aren't wired to the weapon machine.
+The pad's walking, running, backing, turning, hurt clips and scripted motions (`player2`, a port of `Player_move`), collision and `Sce_Damage` areas match the original on random walks around room 100 for both characters.
+
+- **The held weapon.** The player always holds the starting handgun, whose bank has the locomotion the knife's lacks.
+- **No aiming, no combat, no other weapons.** `Pl_move`'s routine 5 and RE2's weapon clips aren't wired up, and neither is the weapon machine.
 - **Stairs.** The action key at a set of stairs puts the player straight at its other end. The original plays the climb (`Sca_hit_stairs`).
+- **Falls and death.** `Pl_damage`'s falls (`Routine_1` 4 and 5) play as the plain hit, without their `pSub1` clips or getting up, and `Pl_dead` leaves the player standing with no game over.
+- **Sounds of hits.** `Pl_damage` plays none of its sounds.
+- **What the player's routine leaves out.** The neck, `Oma_*updown`, water and `Lim_dir_ck`'s clip swap aren't ported.
 
 ## Collision
 
-- **Shapes other than boxes.** Boxes follow `Sca_hit_box`. Triangles, diamonds, discs and rounded boxes test the original's outline, and push straight out of it, where the original has its own slides.
-- **Curves and shape 10.** Shape 13 records (`Sca_hit_curve`, 8 in the game) and shape 10 records (50) don't block or change the player's height.
-- **Objects and other bodies.** Only the room's SCA records block. `Sca_ck_hit`'s object models (`Omd_in_check`) don't.
+- **The floor.** A body's floor comes from its height. The original keeps it in `nFloor`, which rounds differently on a slope (`Sca_hit_slope`).
+- **Objects and other bodies.** Only the room's SCA records block. `Sca_ck_hit`'s object models (`Omd_in_check`) and `Oba_ck_em2`'s other bodies don't.
+- **Offsets.** `Sca_hit_*` add `Atd`'s `Ofs_x` and `Ofs_z`, which are zero for the player. Other bodies will need them.
 
 ## Doors
 
@@ -26,9 +28,9 @@ RE2 play is approximate at this stage (Phase B of #244): the engine reuses RE1's
 ## Scripts
 
 - **Sleeps in an init procedure.** They don't wait: a room's init runs to its end inside the load.
-- **Cutscenes.** There are none. `plc_dest` moves the player to the end of the walk at once, `member_cmp` always answers false and any `member_set` of a script character is dropped, so a script waiting on a character's motion moves on. `tests/real/re2_real.rs` runs every main procedure and names those still holding (103, none in the rooms from the start to the police station).
+- **Script characters.** `plc_dest` and `plc_motion` move the player as the original does, but a non-player's arrive at once, `member_cmp` on one always answers false and any `member_set` of one is dropped, so a script waiting on a character's motion moves on. `tests/real/re2_real.rs` runs every main procedure and names those still holding (92, none in the rooms from the start to the police station).
 - **Script waits on input.** `sce_key_ck` and `sce_trg_ck` accept any key.
-- **Unmodelled instructions.** They do nothing and log once. That includes enemies and NPCs (`sce_em_set`), `sce_bgm_control`, and damage, water and movement areas (`sce_at`'s other kinds).
+- **Unmodelled instructions.** They do nothing and log once. That includes enemies and NPCs (`sce_em_set`), `sce_bgm_control`, and water and movement areas (`sce_at`'s other kinds).
 - **Scenario B.** It starts in room 104 with the scenario flag set. Nothing ties it to a finished Scenario A, and there is no zapping.
 
 ## Game flow

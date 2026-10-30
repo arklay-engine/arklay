@@ -1,0 +1,47 @@
+# Random holds through room 100, from a seeded generator: walls, every turn and the damage areas.
+0 down
+32 up run
+55 up right
+85 up right
+157 up run left
+255 up
+296 up
+373 up run left
+437 left
+529 right
+544 up run
+616 left
+723 down
+767 up run right
+795 up
+813 down left
+831 up
+915 down left
+978 up run left
+1020 up
+1127 up run
+1209 up right
+1280 up run
+1365 up run
+1424 up run
+1525 up run
+1598 up run left
+1615 down left
+1701 up
+1728 right
+1823 up
+1875 up run right
+1985 right
+2092 up run left
+2171
+2250 up run
+2350 up run
+2403 up right
+2493 up run left
+2572
+2662 up right
+2681 right
+2727 up run left
+2793 up
+2893 up left
+2954 left

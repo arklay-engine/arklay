@@ -746,7 +746,7 @@ pub fn spawn(id: RoomId, room: &RoomState) -> PlayerState {
         pos,
         angle: 0,
         radius: if room.sca.is_some() {
-            crate::sca::PLAYER_RADIUS
+            crate::sca::player_radius(id.player_flag)
         } else if id.player_flag & 1 == 0 {
             CHRIS_RADIUS
         } else {
@@ -1321,6 +1321,15 @@ fn run_stop_tick(
 }
 
 impl PlayerState {
+    /// Record a footfall of RE2's player, whose frames mark their own.
+    pub(crate) fn emit_footstep(&mut self, frame: u8, sound_type: u8) {
+        self.footsteps.push(Footstep {
+            pos: self.pos,
+            frame,
+            sound_type,
+        });
+    }
+
     fn set_clip(&mut self, source: ClipSource, clip: usize) {
         self.clip_source = source;
         self.anim.set_clip(clip);
@@ -2232,6 +2241,40 @@ fn analog_target(
     Some(hold.camera_yaw.wrapping_add(stick_angle) & 0x0FFF)
 }
 
+/// The analog stick's reading for RE2's player: the pad as forward (a walk, or
+/// a run on a full push), and the facing it asks for.
+pub(crate) fn analog_input(
+    player: &mut PlayerState,
+    room: &RoomState,
+    input: Input,
+    options: Options,
+    running: bool,
+) -> (Input, Option<u16>) {
+    let target = analog_target(player, room, input, options);
+    let (Some(_), Some(stick)) = (target, input.analog) else {
+        return (input, None);
+    };
+    let threshold = if running {
+        ANALOG_RUN_RELEASE
+    } else {
+        ANALOG_RUN
+    };
+    let input = Input {
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        run: input.run || stick_deflection(stick) >= i64::from(threshold).pow(2),
+        ..input
+    };
+    (input, target)
+}
+
+/// One tick's turn toward the analog stick's direction.
+pub(crate) fn analog_turned(angle: u16, target: u16) -> u16 {
+    turn_toward(angle, target, ANALOG_TURN)
+}
+
 /// The squared length of a raw stick reading (`i64`: a corner push of
 /// `-32768` on both axes overflows `i32`).
 pub fn stick_deflection([x, y]: [i16; 2]) -> i64 {
@@ -2499,7 +2542,8 @@ impl PlayerState {
 /// ([`PlayerState::collision_flags`]).
 pub fn position_blocked(room: &RoomState, pos: [i32; 3], radius: i32, collision_flags: u8) -> bool {
     if let Some(sca) = &room.sca {
-        return crate::sca::resolve(sca, pos, pos, radius).hit;
+        // A slope or a curve "hits" any body on it without blocking it.
+        return crate::sca::resolve(sca, pos, pos, radius).pos != pos;
     }
     room.collision
         .records(pos[0], pos[2])
@@ -2665,7 +2709,7 @@ pub fn reach_offset(angle: u16) -> (i32, i32) {
 
 /// [`reach_offset`] for RE2, whose reach point stands further out (`Sce_at`).
 pub fn reach_offset_re2(angle: u16) -> (i32, i32) {
-    move_player_xz(angle, crate::sca::REACH_DISTANCE, 0)
+    crate::player2::rotate(angle, crate::sca::REACH_DISTANCE, 0)
 }
 
 /// `MovePlayerXZ`: rotate the local point `(x, 0, z)` by the yaw.
@@ -3435,6 +3479,7 @@ mod tests {
                 ClipFrame {
                     keyframe: 0,
                     timing: 1,
+                    flags: 0,
                 };
                 frames
             ],
@@ -3538,6 +3583,7 @@ mod tests {
                     ClipFrame {
                         keyframe,
                         timing: 1,
+                        flags: 0,
                     };
                     frames
                 ],
