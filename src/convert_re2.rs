@@ -684,12 +684,20 @@ fn copy_backgrounds(
                     Some(Err(error)) => warnings.push(format!(
                         "roomcut.bin stream at {pointer:#x} has a mask page that does not \
                          decode ({error}); no mask page for {}",
-                        entries.join(", ")
+                        masked
+                            .iter()
+                            .map(|entry| entry.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )),
                     None => warnings.push(format!(
                         "roomcut.bin stream at {pointer:#x} has no mask page; the masks of {} \
                          will not draw",
-                        entries.join(", ")
+                        masked
+                            .iter()
+                            .map(|entry| entry.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )),
                 }
             }

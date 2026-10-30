@@ -87,7 +87,7 @@ pub struct MeshVertex {
     /// An untextured packet's colour word / 1024; white otherwise.
     pub colour: [f32; 3],
     /// `joint | palette_row << 8 | triangle_corners << 16 | blend << 24 |
-    /// untextured << 25 | uv_nudge << 26 | corner << 29`.
+    /// untextured << 25 | uv_nudge << 26 | corner << 29 | additive << 31`.
     pub packed: u32,
 }
 
@@ -787,7 +787,8 @@ pub fn fingerprint(parts: &[u64], chunks: &[&[u8]]) -> u64 {
     hash
 }
 
-/// [`fingerprint`] of a TMD's geometry: its vertices and packet layout.
+/// [`fingerprint`] of a TMD's geometry: its vertices, packet layout and each
+/// packet's blend flags (a door's script can switch a part to additive).
 pub fn mesh_fingerprint(mesh: &Tmd) -> u64 {
     let mut parts = vec![mesh.objects.len() as u64, mesh.objects.as_ptr() as u64];
     for object in &mesh.objects {
@@ -795,6 +796,12 @@ pub fn mesh_fingerprint(mesh: &Tmd) -> u64 {
         parts.push(object.prims.as_ptr() as u64);
         parts.push(object.vertices.len() as u64);
         parts.push(object.vertices.as_ptr() as u64);
+        parts.extend(
+            object
+                .prims
+                .iter()
+                .map(|prim| u64::from(prim.blend) | u64::from(prim.additive) << 1),
+        );
         for vertex in &object.vertices {
             parts.push(
                 u64::from(vertex[0] as u16)

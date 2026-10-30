@@ -230,7 +230,7 @@ impl Vm {
             .map(|part| OrderFrame {
                 flags: if part.visible { 0x8001 } else { 0 },
                 model: part.model,
-                parent: (part.attribute & ATTR_PARENT != 0).then_some((part.attribute & 0xF) as u8),
+                parent: parent(part.attribute).map(|parent| parent as u8),
                 tpage: 0,
                 local: part.world,
                 matrix: part.world,
@@ -374,11 +374,9 @@ impl Vm {
                 ),
                 t: part.position,
             };
-            self.parts[index].world = if part.attribute & ATTR_PARENT != 0 {
-                let parent = self.parts[usize::from(part.attribute & 0xF)].world;
-                anim::compose(&parent, &local)
-            } else {
-                local
+            self.parts[index].world = match parent(part.attribute) {
+                Some(parent) => anim::compose(&self.parts[parent].world, &local),
+                None => local,
             };
         }
     }
@@ -397,7 +395,7 @@ impl Vm {
                     }
                     task.sp = task.sp.checked_sub(1).ok_or(Fault)?;
                     task.data = task.stack[task.sp];
-                    task.ifel[sub] -= 1;
+                    task.ifel[sub] = task.ifel[sub].wrapping_sub(1);
                 }
             }
             if !self.tasks[index].active {
@@ -456,7 +454,7 @@ impl Vm {
                 let target = at + 4 + ushort(2)?;
                 let task = &mut self.tasks[index];
                 task.data = at + 4;
-                task.ifel[task.sub] += 1;
+                task.ifel[task.sub] = task.ifel[task.sub].wrapping_add(1);
                 *task.stack.get_mut(task.sp).ok_or(Fault)? = target;
                 task.sp += 1;
                 Step::Next
@@ -467,7 +465,7 @@ impl Vm {
                 let task = &mut self.tasks[index];
                 task.sp = task.sp.checked_sub(1).ok_or(Fault)?;
                 task.data = target;
-                task.ifel[task.sub] -= 1;
+                task.ifel[task.sub] = task.ifel[task.sub].wrapping_sub(1);
                 Step::Next
             }
             // endif
@@ -475,7 +473,7 @@ impl Vm {
                 let task = &mut self.tasks[index];
                 task.sp = task.sp.checked_sub(1).ok_or(Fault)?;
                 task.data = at + 2;
-                task.ifel[task.sub] -= 1;
+                task.ifel[task.sub] = task.ifel[task.sub].wrapping_sub(1);
                 Step::Next
             }
             // sleep: push a counter, then fall into the `sleeping` that
@@ -495,7 +493,7 @@ impl Vm {
                 task.lcnt[sub][slot] = task.lcnt[sub][slot].wrapping_sub(1);
                 if task.lcnt[sub][slot] == 0 {
                     task.data = at + 3;
-                    task.loops[sub] -= 1;
+                    task.loops[sub] = task.loops[sub].wrapping_sub(1);
                 }
                 Step::Yield
             }
@@ -523,7 +521,7 @@ impl Vm {
                 task.lcnt[sub][slot] = task.lcnt[sub][slot].wrapping_sub(1);
                 if task.lcnt[sub][slot] == 0 {
                     task.data = at + 2;
-                    task.loops[sub] -= 1;
+                    task.loops[sub] = task.loops[sub].wrapping_sub(1);
                 } else {
                     task.data = task.lstack[sub][slot];
                 }
@@ -546,7 +544,7 @@ impl Vm {
                     let task = &mut self.tasks[index];
                     let sub = task.sub;
                     task.data = task.lbreak[sub][slot];
-                    task.loops[sub] -= 1;
+                    task.loops[sub] = task.loops[sub].wrapping_sub(1);
                 }
                 Step::Next
             }
@@ -555,7 +553,7 @@ impl Vm {
                 let task = &mut self.tasks[index];
                 let (sub, slot) = loop_slot(task)?;
                 task.data = task.lstack[sub][slot];
-                task.loops[sub] -= 1;
+                task.loops[sub] = task.loops[sub].wrapping_sub(1);
                 Step::Next
             }
             // switch
@@ -567,7 +565,7 @@ impl Vm {
             // eswitch
             0x16 => {
                 let task = &mut self.tasks[index];
-                task.loops[task.sub] -= 1;
+                task.loops[task.sub] = task.loops[task.sub].wrapping_sub(1);
                 task.data = at + 2;
                 Step::Next
             }
@@ -609,7 +607,7 @@ impl Vm {
                 let (sub, slot) = loop_slot(task)?;
                 task.data = task.lbreak[sub][slot];
                 task.ifel[sub] = task.loop_if_class[sub][slot];
-                task.loops[sub] -= 1;
+                task.loops[sub] = task.loops[sub].wrapping_sub(1);
                 Step::Next
             }
             // work_copy: patch the instruction stream.
@@ -682,7 +680,8 @@ impl Vm {
                 let Task { work, speed, .. } = self.tasks[index];
                 if let Some(part) = work.map(|part| &mut self.parts[part]) {
                     for axis in 0..3 {
-                        part.position[axis] += i32::from(speed[axis]);
+                        part.position[axis] =
+                            part.position[axis].wrapping_add(i32::from(speed[axis]));
                         part.rotation[axis] = part.rotation[axis].wrapping_add(speed[3 + axis]);
                     }
                 }
@@ -799,7 +798,7 @@ impl Vm {
     fn push_loop(&mut self, index: usize) -> Result<usize, Fault> {
         let task = &mut self.tasks[index];
         let sub = task.sub;
-        task.loops[sub] += 1;
+        task.loops[sub] = task.loops[sub].wrapping_add(1);
         let slot = usize::try_from(task.loops[sub]).map_err(|_| Fault)?;
         if slot >= LOOP_LEVELS {
             return Err(Fault);
@@ -848,7 +847,7 @@ impl Vm {
                 }
                 0x16 => {
                     let task = &mut self.tasks[index];
-                    task.loops[task.sub] -= 1;
+                    task.loops[task.sub] = task.loops[task.sub].wrapping_sub(1);
                     task.data = entry + 2;
                     return Ok(Step::Next);
                 }
@@ -898,6 +897,13 @@ fn loop_slot(task: &Task) -> Result<(usize, usize), Fault> {
         return Err(Fault);
     }
     Ok((sub, slot))
+}
+
+/// The part an attribute hangs its part off, if any. A parent past the last
+/// part (only a malformed script sets one) leaves the part at the root.
+fn parent(attribute: u16) -> Option<usize> {
+    let parent = usize::from(attribute & 0xF);
+    (attribute & ATTR_PARENT != 0 && parent < PART_COUNT).then_some(parent)
 }
 
 /// The stack pointer for `ifel` open `if`s at subroutine level `sub`.

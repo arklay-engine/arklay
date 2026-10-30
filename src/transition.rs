@@ -71,8 +71,9 @@
 //!
 //! # RE2
 //!
-//! [`Timing::Re2`] follows `Door_main` instead: `Door_init`'s pass draws
-//! nothing (one black frame), `Door_move` draws from the next, there is no
+//! [`Timing::Re2`] follows `Door_main` instead: `Door_init`'s pass runs no
+//! script and draws nothing (one black frame), `Door_move` steps and draws
+//! from the next, there is no
 //! phase-2 hold, and `Door_move` reads a fresh skip press on every frame.
 //! A skip only stops the door's task 10 ([`DoorStepper::finish`]); the
 //! animation still ends when the stepper says so, after its own fade.
@@ -648,6 +649,17 @@ impl<S: DoorStepper> Transition<S> {
 
     /// One `DoorAnimLoop` pass.
     fn anim_pass(&mut self, skip: bool, out: &mut FrameOut) {
+        // RE2's `Door_init` returns without sleeping, so `Door_main` runs
+        // `Door_move` only on the next frame: these frames step no script.
+        if self.timing == Timing::Re2 && self.frame < RE2_BLACK_FRAMES {
+            self.drawn = (self.frame, self.phase, self.hold);
+            self.last_black = true;
+            out.black = true;
+            out.drew = true;
+            self.phase += 1;
+            self.frame += 1;
+            return;
+        }
         let raw = self.stepper.step();
         self.last = raw;
         self.sound_busy = raw.sound_busy;
@@ -874,8 +886,9 @@ mod tests {
         }
         assert_eq!(fade(&transition), (-6144, -4097));
         assert_eq!(black, [true, true, true, false, false, false, false]);
-        // Five passes and no phase-2 hold.
-        assert_eq!(transition.stepper().steps, 5);
+        // Five passes, the first `Door_init`'s with no script step, and no
+        // phase-2 hold.
+        assert_eq!(transition.stepper().steps, 4);
         assert_eq!(transition.frame(), 5);
         // A skip before frame 10 stops the door, which then ends on its own.
         let frame = transition.tick(true);

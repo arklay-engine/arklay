@@ -158,14 +158,7 @@ impl Format {
 
     /// Whether the format has a parser and a failure is a verification error.
     pub fn known(self) -> bool {
-        self != Self::Opaque && !self.unsupported()
-    }
-
-    /// Whether the format is recognised but has no parser yet: it never
-    /// fails a normal run and fails `--strict` like an opaque entry. Every
-    /// recognised format has a parser now.
-    pub fn unsupported(self) -> bool {
-        false
+        self != Self::Opaque
     }
 }
 
@@ -423,12 +416,6 @@ pub fn verify_pack(pack: &Pack, strict: bool) -> VerifyReport {
                 Err(anyhow::anyhow!("unknown entry format (--strict): {}", path))
             }
             Format::Opaque => Ok(()),
-            _ if format.unsupported() && strict => Err(anyhow::anyhow!(
-                "{} is recognised but not supported yet (--strict): {}",
-                format.name(),
-                path
-            )),
-            _ if format.unsupported() => Ok(()),
             _ => match read {
                 Some(Ok(data)) => verify_entry(pack, path, format, &data),
                 _ => pack
@@ -638,7 +625,7 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
             crate::model_viewer::load_with(pack, path, data)?;
         }
         Format::Opaque => {
-            unreachable!("opaque and unsupported entries are handled by the caller")
+            unreachable!("opaque entries are handled by the caller")
         }
     }
     Ok(())

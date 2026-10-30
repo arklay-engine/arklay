@@ -220,14 +220,14 @@ fn the_converted_pack_verifies() {
     assert_eq!(count(verify::Format::Edh), 588);
     assert_eq!(count(verify::Format::Do2), 55);
     assert_eq!(count(verify::Format::Mpeg), 26);
-    // Strict mode fails exactly the formats nothing parses yet, plus the
-    // opaque demo reels.
+    // Every recognised format parses, so strict mode fails only the opaque
+    // demo reels.
     let strict = verify::verify_pack(pack, true);
     assert!(
         strict
             .failures
             .iter()
-            .all(|failure| failure.format.unsupported() || failure.path.starts_with("demo/")),
+            .all(|failure| failure.path.starts_with("demo/")),
         "{:?}",
         strict.failures
     );
