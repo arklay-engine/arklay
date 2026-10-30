@@ -107,6 +107,16 @@ impl Folder {
         format!("{}/{name}", self.dir)
     }
 
+    /// Pack stem of a camera's background, `room/100/cut/03`.
+    pub fn cut_stem(&self, camera: usize) -> String {
+        format!("{}/cut/{camera:02x}", self.dir)
+    }
+
+    /// Pack stem of a camera's mask page, `room/100/mask/03`.
+    pub fn mask_stem(&self, camera: usize) -> String {
+        format!("{}/mask/{camera:02x}", self.dir)
+    }
+
     /// The raw RDT of the variant: its own (`room/100/jill.rdt`), else the
     /// folder's `room.rdt`.
     pub fn rdt(&self) -> &str {

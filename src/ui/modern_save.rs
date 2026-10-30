@@ -378,7 +378,7 @@ impl Art {
             .entry((file.stage, file.room, file.camera))
             .or_insert_with(|| {
                 let id = RoomId::parse(&format!("{}0", room3(file))).ok()?;
-                let stem = id.cut_stem(usize::from(file.camera));
+                let stem = crate::room::Folder::of(cx.pack, id).cut_stem(usize::from(file.camera));
                 let image = super::load_picture(cx.pack, &stem, Geometry::Free, None).ok()?;
                 let picture = save_screen::downscale(opaque(image), THUMBNAIL_WIDTH);
                 Some(pair(picture))

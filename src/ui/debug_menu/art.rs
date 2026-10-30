@@ -41,7 +41,7 @@ impl Art {
     /// Load `room`'s thumbnail.
     pub fn load_thumbnail(&mut self, pack: &Pack, room: RoomId) {
         let picture = (|| {
-            let stem = room.cut_stem(0);
+            let stem = crate::room::Folder::of(pack, room).cut_stem(0);
             let image = crate::ui::load_picture(pack, &stem, Geometry::Free, None).ok()?;
             Some(Arc::new(save_screen::downscale(
                 opaque(image),
