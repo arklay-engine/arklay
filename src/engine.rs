@@ -13689,6 +13689,7 @@ fn tick_room_timed(
     mut phases: Option<&mut stats::PhaseTotals>,
 ) -> Option<game::RoomTransition> {
     let update_start = Instant::now();
+    context.game.re2.set_key(crate::player2::key_word(&input));
     // A cutscene holds the player's input (`FG_STOP_DISABLE_INPUT`).
     let input = if context.game.re2.input_stopped()
         || (context.game.is_re2_room && context.game.message.active)

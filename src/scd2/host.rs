@@ -38,6 +38,12 @@ pub struct Re2State {
     pub work: [Work; TASK_SLOTS],
     /// A scripted move of the player, applied at the next tick.
     pub pending_player: PendingPlayer,
+    /// `Key`, the pad as the scripts read it.
+    pub key: u16,
+    /// `Key_trg`, the keys that rose this tick.
+    pub key_trg: u16,
+    /// A stop was masking `key` last tick.
+    pub key_was_stopped: bool,
     /// The player's `PLAYER_WORK`.
     pub player: crate::player2::Work,
     /// The room's running scripts.
@@ -139,6 +145,9 @@ impl Default for Re2State {
             door_settling: false,
             work: [Work::Player; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
+            key: 0,
+            key_trg: 0,
+            key_was_stopped: false,
             player: crate::player2::Work::default(),
             vm: None,
             scenario_b: false,
@@ -205,6 +214,25 @@ impl Re2State {
     }
 
     /// `fg_stop`'s top bit, which keeps `Player_move` from running.
+    /// The end of `Pad_set`: a stop leaves only some of the keys, and the
+    /// tick it ends on raises none of them.
+    pub fn set_key(&mut self, word: u16) {
+        let stopped = self.input_stopped();
+        let key = if stopped {
+            word & crate::player2::KEYS_IN_A_STOP
+        } else {
+            word
+        };
+        let previous = if self.key_was_stopped && !stopped {
+            key
+        } else {
+            self.key
+        };
+        self.key_trg = (previous ^ key) & key;
+        self.key = key;
+        self.key_was_stopped = stopped;
+    }
+
     pub fn player_stopped(&self) -> bool {
         self.flag(STOP_BANK, 0)
     }
@@ -744,14 +772,13 @@ impl Host for GameHost<'_> {
             "member_set" if self.work_is_player(task) => {
                 self.set_player_member(at(0) as u8, at(1) as i32);
             }
-            // Any key answers a wait for one: the mask's pad layout isn't mapped.
             "sce_key_ck" | "sce_trg_ck" => {
-                let pressed = if op.mnemonic == "sce_key_ck" {
-                    self.game.dpad_held != 0
+                let keys = if op.mnemonic == "sce_key_ck" {
+                    self.game.re2.key
                 } else {
-                    self.game.dpad_pressed != 0
+                    self.game.re2.key_trg
                 };
-                if pressed != (at(0) != 0) {
+                if (keys & at(1) as u16 != 0) != (at(0) != 0) {
                     return Step::False;
                 }
             }
@@ -782,6 +809,43 @@ mod tests {
         assert!(state.flag(3, 33));
         state.set_flag(3, 33, 7);
         assert!(!state.flag(3, 33));
+    }
+
+    #[test]
+    fn a_stop_leaves_some_keys_and_its_end_raises_none() {
+        const CONFIRM: u16 = 0x1000;
+        const FORWARD: u16 = 0x0001;
+        let mut state = Re2State::default();
+        state.set_key(CONFIRM | FORWARD);
+        assert_eq!(state.key_trg, CONFIRM | FORWARD);
+        state.set_key(CONFIRM | FORWARD);
+        assert_eq!(state.key_trg, 0);
+        state.set_key(0);
+
+        state.set_flag(STOP_BANK, STOP_INPUT, 1);
+        state.set_key(CONFIRM | FORWARD);
+        assert_eq!(state.key, CONFIRM);
+        assert_eq!(state.key_trg, CONFIRM);
+        state.set_flag(STOP_BANK, STOP_INPUT, 0);
+        state.set_key(CONFIRM | FORWARD);
+        assert_eq!(state.key, CONFIRM | FORWARD);
+        assert_eq!(state.key_trg, 0);
+    }
+
+    #[test]
+    fn a_key_wait_answers_for_its_own_keys() {
+        let mut game = GameState::default();
+        game.re2.key = 0x20;
+        game.re2.key_trg = 0x1000;
+        let mut host = GameHost { game: &mut game };
+        let key = crate::scd2::opcode::by_mnemonic("sce_key_ck").unwrap();
+        let trg = crate::scd2::opcode::by_mnemonic("sce_trg_ck").unwrap();
+        assert!(matches!(host.exec(0, key, &[1, 0x20]), Step::Next));
+        assert!(matches!(host.exec(0, key, &[1, 0x40]), Step::False));
+        assert!(matches!(host.exec(0, key, &[0, 0x40]), Step::Next));
+        assert!(matches!(host.exec(0, trg, &[1, 0x20]), Step::False));
+        assert!(matches!(host.exec(0, trg, &[0, 0x3000]), Step::False));
+        assert!(matches!(host.exec(0, trg, &[1, 0x3000]), Step::Next));
     }
 
     #[test]

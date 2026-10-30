@@ -32,7 +32,6 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 
 - **Sleeps in an init procedure.** They don't wait: a room's init runs to its end inside the load.
 - **Script characters.** `plc_dest` and `plc_motion` move the player as the original does, but a non-player's arrive at once, `member_cmp` on one always answers false and any `member_set` of one is dropped, so a script waiting on a character's motion moves on. `tests/real/re2_real.rs` runs every main procedure and names those still holding (92, none in the rooms from the start to the police station).
-- **Script waits on input.** `sce_key_ck` and `sce_trg_ck` accept any key.
 - **Unmodelled instructions.** They do nothing and log once. That includes enemies and NPCs (`sce_em_set`), `sce_bgm_control`, and water and movement areas (`sce_at`'s other kinds).
 - **Scenario B.** It starts in room 104 with the scenario flag set. Nothing ties it to a finished Scenario A, and there is no zapping.
 
@@ -40,7 +39,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 
 - **Pick-ups.** The item goes straight into the inventory with a "You picked up" message. There is no pick-up screen or item model.
 - **Messages.** The ones the executable draws itself are written from memory, and every message uses RE1's Western font. A room's text is its RDT's English list (`rdt + 0x40`), where the executable reads the list before it (`rdt + 0x3C`), so a line with text reveals at the English length; a voiced line has none in either list, so its timing is the original's. A voice line lasts as long as its message: `wsleep` doesn't wait for the audio, as the original does when the audio outlasts the message.
-- **Start items.** `games/re2/game/new_game.lua` is written from memory, not read from `Stage_init_item`.
+- **Start items.** `games/re2/game/new_game.lua` copies `Stage_init_item`'s table for Leon and Claire, with the lighter or lockpick in slot 2 rather than slot 10, and no other character's or mode's row.
 - **Text screens.** The title, new-game choice, inventory and item box are plain text stand-ins (`games/re2/ui`), and the save screen has no background: RE2's own art is not converted.
 - **The inventory.** Confirm equips a weapon or uses a healing item. There is no CHECK, MOVE, combining, map or file tab, and equipping changes nothing about the weapon the player holds.
 - **Healing.** Herbs and first aid heal in RE1's thirds of the maximum, not RE2's amounts (`item_definitions`).
