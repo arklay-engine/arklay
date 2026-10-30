@@ -12708,7 +12708,7 @@ impl MaskCache {
             self.missing.clear();
         }
         if !self.pages.contains_key(&camera) && !self.missing.contains(&camera) {
-            let stem = id.mask_stem(camera);
+            let stem = crate::room::Folder::of(pack, id).mask_stem(camera);
             // A mask page is addressed by the cut's sprite UVs, so a
             // replacement keeps the shipped page's dimensions.
             match pack.read_asset(&stem, AssetClass::Image) {
@@ -13166,8 +13166,9 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
     if room.cuts.is_empty() {
         bail!("room {} has no camera cuts", id.room3());
     }
+    let folder = crate::room::Folder::of(pack, id);
     for cut in &mut room.cuts {
-        let stem = id.cut_stem(cut.index);
+        let stem = folder.cut_stem(cut.index);
         let Some(asset) = pack.read_asset(&stem, AssetClass::Image)? else {
             // The retail RE2 data leaves a few cameras without a background
             // (room 7071, the 17th camera of the 17-camera rooms); the room
@@ -16622,6 +16623,23 @@ mod tests {
         let simulated = simulate_new_game(&pack, 0, 0, player::Input::default()).unwrap();
         assert_eq!(simulated.id, session.game.id);
         assert_eq!(simulated.player.pos, session.player.pos);
+    }
+
+    #[test]
+    fn a_room_in_its_rdts_folder_finds_its_background_and_mask_page() {
+        let id = RoomId::parse("1001").unwrap();
+        let image = bmp::encode_to_vec(&test_image()).unwrap();
+        let mut writer = PackWriter::new();
+        writer
+            .add("room/1001/room.rdt", crate::rdt2::tests::sample())
+            .unwrap();
+        writer.add("room/1001/cut/00.bmp", image.clone()).unwrap();
+        writer.add("room/1001/mask/00.bmp", image).unwrap();
+        let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        let loaded = load_room(&pack, id).unwrap();
+        assert!(loaded.room.cuts[0].background.is_some());
+        let mut masks = MaskCache::default();
+        assert!(masks.page_for(&pack, id, 0).is_some());
     }
 
     #[test]

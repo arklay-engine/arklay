@@ -297,6 +297,7 @@ fn every_room_loads_with_its_backgrounds() {
         let loaded = arklay::room::load(pack, id)
             .unwrap_or_else(|error| panic!("room {}: {error:#}", id.code()));
         assert_eq!(loaded.dialect, Dialect::Re2, "room {}", id.code());
+        let folder = arklay::room::Folder::of(pack, id);
         let room = &loaded.state;
         assert!(!room.cuts.is_empty(), "room {} has cameras", id.code());
         assert!(room.sca.is_some(), "room {} has collision", id.code());
@@ -326,7 +327,7 @@ fn every_room_loads_with_its_backgrounds() {
                 cut.index
             );
             if pack
-                .read_asset(&id.cut_stem(cut.index), arklay::pack::AssetClass::Image)
+                .read_asset(&folder.cut_stem(cut.index), arklay::pack::AssetClass::Image)
                 .unwrap()
                 .is_none()
             {
@@ -339,7 +340,7 @@ fn every_room_loads_with_its_backgrounds() {
             // sprite's texels lie on that 256-wide page.
             masked += 1;
             let page = pack
-                .read(&id.mask_entry(cut.index))
+                .read(&format!("{}.bmp", folder.mask_stem(cut.index)))
                 .unwrap_or_else(|error| {
                     panic!("room {} camera {}: {error:#}", id.code(), cut.index)
                 });
