@@ -26,6 +26,12 @@ const KEY_TILT_DOWN: u16 = 0x0020;
 const KEY_FIRE: u16 = 0x0040;
 const KEY_ACTION: u16 = 0x0080;
 const KEY_AIM: u16 = 0x0100;
+const KEY_SIDE_LEFT: u16 = 0x0400;
+const KEY_SIDE_RIGHT: u16 = 0x0800;
+const KEY_CONFIRM: u16 = 0x1000;
+const KEY_CANCEL: u16 = 0x2000;
+/// What `Pad_set` leaves of the word while the input is stopped.
+pub const KEYS_IN_A_STOP: u16 = KEY_SIDE_LEFT | KEY_SIDE_RIGHT | KEY_CONFIRM | KEY_CANCEL;
 
 /// `routine[0]`: the pad's mode and the scripts' mode.
 const MODE_MOVE: u8 = 1;
@@ -353,16 +359,20 @@ struct Mover<'a, 'b> {
     stairs: Option<&'b ScaRect>,
 }
 
-fn key_word(input: &Input) -> u16 {
+/// `Pad_set`'s word, whose bits are each a column of the table it maps the
+/// pad with.
+pub fn key_word(input: &Input) -> u16 {
     let bit = |set: bool, value: u16| if set { value } else { 0 };
+    let action = input.action_held || input.action_pressed;
     bit(input.up, KEY_FORWARD | KEY_TILT_UP)
-        | bit(input.right, KEY_RIGHT)
+        | bit(input.right, KEY_RIGHT | KEY_SIDE_RIGHT)
         | bit(input.down, KEY_BACKWARD | KEY_TILT_DOWN)
-        | bit(input.left, KEY_LEFT)
-        | bit(input.run, KEY_RUN)
+        | bit(input.left, KEY_LEFT | KEY_SIDE_LEFT)
+        | bit(input.run, KEY_RUN | KEY_CANCEL)
+        | bit(action || input.fire, KEY_CONFIRM)
         | bit(input.aim, KEY_AIM)
         | bit(input.fire, KEY_FIRE)
-        | bit(input.action_held || input.action_pressed, KEY_ACTION)
+        | bit(action, KEY_ACTION)
 }
 
 impl Mover<'_, '_> {
