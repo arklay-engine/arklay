@@ -153,8 +153,15 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
     return items
 
 
+def selected(key: str, fields: list[str] | None) -> bool:
+    """Whether `key` is compared: `None` compares everything, else a name or `e*`."""
+    if fields is None:
+        return True
+    return key in fields or (key.startswith("e") and "e*" in fields)
+
+
 def compare_pair(ref: list[Tick], ark: list[Tick], ref_offset: int, ark_offset: int,
-                 first: int, context: int) -> dict:
+                 first: int, context: int, fields: list[str] | None = None) -> dict:
     """Compare the two traces at the given start offsets."""
     length = min(len(ref) - ref_offset, len(ark) - ark_offset)
     first_divergences: list[dict] = []
@@ -165,8 +172,8 @@ def compare_pair(ref: list[Tick], ark: list[Tick], ref_offset: int, ark_offset: 
     for i in range(length):
         left = ref[ref_offset + i]
         right = ark[ark_offset + i]
-        left_fields = dict(tick_fields(left))
-        right_fields = dict(tick_fields(right))
+        left_fields = {k: v for k, v in tick_fields(left) if selected(k, fields)}
+        right_fields = {k: v for k, v in tick_fields(right) if selected(k, fields)}
         keys = sorted(set(left_fields) | set(right_fields))
         differences = [
             (key, left_fields.get(key, "absent"), right_fields.get(key, "absent"))
@@ -425,6 +432,9 @@ def main() -> int:
     compare.add_argument("--max-scan", type=int, default=600,
                          help="scan this many start offsets for the best alignment")
     compare.add_argument("--json", dest="json_out", default=None)
+    compare.add_argument("--fields", default=None,
+                         help="comma-separated fields to compare (room, cam, p.x, ..., e*); "
+                              "default: every field")
 
     pixels = sub.add_parser("pixels", help="compare the capture frame directories")
     pixels.add_argument("ref_dir")
@@ -452,7 +462,8 @@ def main() -> int:
     )
 
     result = compare_pair(
-        ref, ark, alignment["offset"], args.ark_offset, args.first, args.context
+        ref, ark, alignment["offset"], args.ark_offset, args.first, args.context,
+        args.fields.split(",") if args.fields else None,
     )
     result["alignment_scan"] = alignment
 
