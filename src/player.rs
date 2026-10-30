@@ -745,7 +745,9 @@ pub fn spawn(id: RoomId, room: &RoomState) -> PlayerState {
     PlayerState {
         pos,
         angle: 0,
-        radius: if id.player_flag & 1 == 0 {
+        radius: if room.sca.is_some() {
+            crate::sca::PLAYER_RADIUS
+        } else if id.player_flag & 1 == 0 {
             CHRIS_RADIUS
         } else {
             JILL_RADIUS
@@ -1441,13 +1443,7 @@ impl PlayerState {
                 step: proposed,
                 anchor: self.collision_mirror,
             });
-            let r = resolve_collision_full(
-                &room.collision,
-                prev,
-                proposed,
-                self.radius,
-                self.collision_flags,
-            );
+            let r = resolve_room_collision(room, prev, proposed, self.radius, self.collision_flags);
             // `collision_accept` advances the `position` mirror only when the
             // pass accepted; a rollback leaves it alone.
             if r.code != 2 {
@@ -1547,13 +1543,7 @@ impl PlayerState {
             self.collision_mirror[1],
         ];
         let proposed = [self.pos[0] + dx, self.pos[1], self.pos[2] + dz];
-        let r = resolve_collision_full(
-            &room.collision,
-            prev,
-            proposed,
-            self.radius,
-            self.collision_flags,
-        );
+        let r = resolve_room_collision(room, prev, proposed, self.radius, self.collision_flags);
         if r.code != 2 {
             self.collision_mirror = [r.pos[0], r.pos[2]];
         }
@@ -2508,6 +2498,9 @@ impl PlayerState {
 /// unless `collision_flags` has bit `0x10` set, the original's per-entity skip
 /// ([`PlayerState::collision_flags`]).
 pub fn position_blocked(room: &RoomState, pos: [i32; 3], radius: i32, collision_flags: u8) -> bool {
+    if let Some(sca) = &room.sca {
+        return crate::sca::resolve(sca, pos, pos, radius).hit;
+    }
     room.collision
         .records(pos[0], pos[2])
         .iter()
@@ -2524,6 +2517,7 @@ pub fn position_blocked(room: &RoomState, pos: [i32; 3], radius: i32, collision_
 /// same `cam_from` whose quad contains the player; return its `cam_to` when it
 /// is a valid cut index, otherwise `current`.
 pub fn camera_for_position(room: &RoomState, current: usize, pos: [i32; 3]) -> usize {
+    let re2 = room.sca.is_some();
     let Some(header) = room
         .zones
         .iter()
@@ -2532,11 +2526,22 @@ pub fn camera_for_position(room: &RoomState, current: usize, pos: [i32; 3]) -> u
         return current;
     };
 
-    for zone in &room.zones[header + 1..] {
+    for (index, zone) in room.zones.iter().enumerate().skip(header + 1) {
         if zone.cam_from < 0 || zone.cam_from as usize != current {
             break;
         }
-        if zone.contains(pos[0], pos[2]) {
+        if re2 {
+            // `Cut_check`: signed corners, and a zone gated on being enabled
+            // and on the player's floor.
+            let gate = room.zone_gates.get(index).copied().unwrap_or_default();
+            if !gate.enabled
+                || (gate.floor != 0xFF && gate.floor != crate::sca::floor_of(pos[1]))
+                || !zone.contains_signed(pos[0], pos[2])
+            {
+                continue;
+            }
+        }
+        if re2 || zone.contains(pos[0], pos[2]) {
             let cam_to = zone.cam_to as i64;
             if (0..room.cuts.len() as i64).contains(&cam_to) {
                 return cam_to as usize;
@@ -2656,6 +2661,11 @@ fn walk_speed(radius: i32, frame: usize) -> i32 {
 /// player is still short of its box.
 pub fn reach_offset(angle: u16) -> (i32, i32) {
     move_player_xz(angle, REACH_DISTANCE, 0)
+}
+
+/// [`reach_offset`] for RE2, whose reach point stands further out (`Sce_at`).
+pub fn reach_offset_re2(angle: u16) -> (i32, i32) {
+    move_player_xz(angle, crate::sca::REACH_DISTANCE, 0)
 }
 
 /// `MovePlayerXZ`: rotate the local point `(x, 0, z)` by the yaw.
@@ -2830,6 +2840,30 @@ pub(crate) struct CollisionResolution {
     /// (`collision_flag_set`) only raises `collisionFlags` bit 3 on the
     /// entity; the zombie's walk reads it to start its vomit behaviour.
     pub soft_zone: bool,
+}
+
+/// [`resolve_collision_full`] against whichever collision the room has: an
+/// RE2 room's SCA records, or an RE1 room's quadrants.
+pub(crate) fn resolve_room_collision(
+    room: &RoomState,
+    prev: [i32; 3],
+    proposed: [i32; 3],
+    radius: i32,
+    collision_flags: u8,
+) -> CollisionResolution {
+    let Some(sca) = &room.sca else {
+        return resolve_collision_full(&room.collision, prev, proposed, radius, collision_flags);
+    };
+    let resolved = crate::sca::resolve(sca, prev, proposed, radius);
+    CollisionResolution {
+        pos: resolved.pos,
+        code: u8::from(resolved.hit),
+        floor_step: 0,
+        scratch: resolved.pos,
+        push_z: resolved.push_z,
+        entity_bkp: None,
+        soft_zone: false,
+    }
 }
 
 /// The two-pass resolve with the scratch snapshot [`CollisionResolution`]

@@ -456,7 +456,13 @@ pub fn in_camera_zone(room: &RoomState, camera: usize, pos: [i32; 3]) -> bool {
     room.zones
         .iter()
         .find(|zone| zone.cam_from >= 0 && zone.cam_from as usize == camera)
-        .is_some_and(|zone| zone.contains(pos[0], pos[2]))
+        .is_some_and(|zone| {
+            if room.sca.is_some() {
+                zone.contains_signed(pos[0], pos[2])
+            } else {
+                zone.contains(pos[0], pos[2])
+            }
+        })
 }
 
 /// The look-at target to refresh this tick, or `None` when the entity's

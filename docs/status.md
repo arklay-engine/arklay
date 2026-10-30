@@ -51,8 +51,9 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-30.
 | R4 RE2 doors and masks | The DO2 parser and door VM (`door2`) played through the door transition (`--door`), RE2 mask tables and mask pages (`convert-game` packs `room/<id>/mask/<nn>.bmp`), their TeamX HD names, the FLR footstep zones, and `verify` parsing DO2s | done |
 | R5 RE2 audio | MS-ADPCM decoding (`adpcm`), matching ffmpeg up to its rounding, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
 | R6 RE2 FMV | The in-house MPEG-1 decoder (`mpeg`: program stream demux, MPEG-1 video, MP2 audio) behind the movie path, RE2 films played by name (`--fmv opn1stl`, `r109`, `staff`), and `verify` parsing MPEG; all 26 retail films play end to end with ffprobe's frame counts | done |
+| R7 RE2 player | A new RE2 game: Leon or Claire at the retail start of room 100 with RE2's health, the PLD and handgun PLW as the player's banks, SCA collision for every shape (`sca`), RVD camera zones with their signed corners, floors and enable bytes, the RE2 script VM (`scd2::vm`) running room init procedures from the pack's `room.akscr`, and doors with their DO2 animation, arrival camera and locks; `docs/re2-deviations.md` records the approximations. Every one of the 1037 doors of the 501 rooms reaches a loadable room, camera and animation (`tests/real/re2_real.rs`). | done |
 
-The other RE2 milestones (R7 onwards) are still open and tracked by the
+The other RE2 milestones (R8 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
@@ -890,8 +891,7 @@ room (`100` for RE2). `F4`/`--render-mode collision-overlay` draws the
 collision over the background from the cut camera. All 501 rooms and 5040
 cameras load against the retail install (`tests/real/re2_real.rs`); the 12
 cameras without a background (above) log a warning instead of failing the
-room. RE2 rooms run no scripts and have no player yet; the RVD
-floor/flag bytes are not read. The TeamX RE2 HD pack converts with
+room. R7 (#251) adds the player, collision, init scripts and doors; `docs/re2-deviations.md` lists its approximations. The TeamX RE2 HD pack converts with
 `convert-mod --base re2.akpak`; its backgrounds are named by the CRC of the
 camera's whole 256 x 256 main page (`bio2hd.asi`: the 240 picture rows with
 black clear, then 16 zero rows), which names 4740 of the 5028 cameras'

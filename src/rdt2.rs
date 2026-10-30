@@ -34,7 +34,7 @@ use crate::budget;
 use crate::format::Dialect;
 use crate::mask::MaskTable;
 use crate::room::source::{Camera, RoomSource, mask_groups};
-use crate::state::{CameraLight, FootstepZone, Light, Sca, ScaRect, Zone};
+use crate::state::{CameraLight, FootstepZone, Light, Sca, ScaRect, Zone, ZoneGate};
 
 /// Offset of the section offset table.
 pub(crate) const OFFSETS: usize = 0x08;
@@ -153,13 +153,14 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
             );
         }
     }
-    let zones = parse_zones(data, offset(data, RVD_SLOT)?)?;
+    let (zones, zone_gates) = parse_zones(data, offset(data, RVD_SLOT)?)?;
     let sca = parse_sca(data, offset(data, SCA_SLOT)?)?;
     let footstep_zones =
         parse_footsteps(data, offset(data, FLR_SLOT)?).context("footstep zones")?;
     Ok(RoomSource {
         cameras,
         zones,
+        zone_gates,
         sca,
         footstep_count: footstep_zones.len() as u16,
         footstep_zones,
@@ -253,11 +254,12 @@ fn parse_light(data: &[u8], at: usize) -> Result<CameraLight> {
 /// `u8` from-camera, `u8` to-camera and four `(x, z)` corners, up to the
 /// all-`0xFF` terminator. Like RE1's, each from-camera's first record is its
 /// group's header.
-fn parse_zones(data: &[u8], offset: u32) -> Result<Vec<Zone>> {
+fn parse_zones(data: &[u8], offset: u32) -> Result<(Vec<Zone>, Vec<ZoneGate>)> {
     if offset == 0 {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let mut zones = Vec::new();
+    let mut gates = Vec::new();
     let mut at = offset as usize;
     loop {
         if bytes(data, at, 4)? == [0xFF; 4] {
@@ -281,9 +283,13 @@ fn parse_zones(data: &[u8], offset: u32) -> Result<Vec<Zone>> {
             cam_to: i16::from(record[3]),
             corners,
         });
+        gates.push(ZoneGate {
+            enabled: record[0] != 0,
+            floor: record[1],
+        });
         at += ZONE_SIZE;
     }
-    Ok(zones)
+    Ok((zones, gates))
 }
 
 /// The collision section: a 16-byte header (`i16` centre, `u32` count that

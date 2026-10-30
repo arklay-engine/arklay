@@ -878,7 +878,7 @@ fn an_re2_rdt_converts_to_a_room_that_builds_the_same() {
     let data = crate::rdt2::tests::sample();
     let id = RoomId::parse("1000").unwrap();
     let entries = convert_rdt2(&data, id, Vec::new()).unwrap();
-    assert_eq!(entries.len(), 1);
+    assert_eq!(entries.len(), 2);
     let pack = pack_of(entries);
     let loaded = load(&pack, id).unwrap();
     assert_eq!(loaded.dialect, Dialect::Re2);

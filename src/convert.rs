@@ -2711,6 +2711,9 @@ fn base_manifest(language: &str, region: Option<crate::scd::akscr::Region>) -> m
         source_hash: Some(packed_source_hash()),
         lua: Vec::new(),
         start_room: None,
+        start_pos: None,
+        start_angle: None,
+        start_health: None,
         region,
     }
 }

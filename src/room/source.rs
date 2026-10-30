@@ -24,6 +24,7 @@ use crate::objects::ObjectAsset;
 use crate::pack::{AssetClass, Pack};
 use crate::state::{
     CameraLight, Collision, Cut, FootstepZone, Light, RoomId, RoomState, Sca, WalkZone, Zone,
+    ZoneGate,
 };
 use crate::{assets, bmp, budget, emd, rdt, tim, tmd};
 
@@ -51,6 +52,8 @@ pub struct RoomSource {
     /// Camera switch zones in flat `zoneIndex` order, group headers included:
     /// SCD `cut_zone_set` indexes this table.
     pub zones: Vec<Zone>,
+    /// RE2's gates on `zones`, one per zone; empty for an RE1 room.
+    pub zone_gates: Vec<ZoneGate>,
     /// Collision boundaries by quadrant.
     pub collision: Collision,
     /// RE2 collision records, from an RE2 room's SCA section.
@@ -482,6 +485,7 @@ impl RoomSource {
             lights: state.lights,
             cameras,
             zones: state.zones,
+            zone_gates: Vec::new(),
             collision: state.collision,
             sca: None,
             dialect: Dialect::Re1,
@@ -572,6 +576,7 @@ impl RoomSource {
             collision: self.collision.clone(),
             sca: self.sca.clone(),
             zones: self.zones.clone(),
+            zone_gates: self.zone_gates.clone(),
             walk_zones: self.walk_zones.clone(),
             footstep_zones: self.footstep_zones.clone(),
             messages: None,

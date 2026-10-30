@@ -122,6 +122,7 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
         lights,
         collision,
         sca: None,
+        zone_gates: Vec::new(),
         zones,
         walk_zones,
         footstep_zones,

@@ -36,7 +36,8 @@ use anyhow::{Context, Result, bail};
 use crate::budget;
 use crate::emd::{chunk_slice, parse_clips, parse_skeleton, read_u16, read_u32, vec3};
 use crate::model::{
-    AnimBank, Clip, Emd, Keyframe, PALETTE_ROW_LEN, Plw, Texture8, Tmd, TmdObject, TmdPrim,
+    AnimBank, Clip, ClipFrame, Emd, Emw, Keyframe, PALETTE_ROW_LEN, Plw, Texture8, Tmd, TmdObject,
+    TmdPrim,
 };
 use crate::{bmp, tim};
 
@@ -232,6 +233,56 @@ pub fn parse_plw(data: &[u8]) -> Result<Plw> {
         mesh,
         texture,
     })
+}
+
+/// The clips of a weapon's bank the player's locomotion plays
+/// (`pl_mv_00`..`02`): walk, run and idle, for a healthy character.
+const PLW_WALK: usize = 0;
+const PLW_RUN: usize = 1;
+const PLW_IDLE: usize = 2;
+/// The character's own bank's walk-back clip, for a healthy character.
+const PLD_BACK: usize = 0;
+
+/// The character `pld` holding `plw` as the two banks the player machine
+/// reads. RE1's player has a body bank and a locomotion bank; RE2's one
+/// keyframe table per bank is merged so that both keep working, and the clips
+/// take the slots the machine plays them from: the body bank's settle (0) and
+/// walk-back (3), the locomotion bank's breathe (0, 1), walk (2), run (3) and
+/// reach (4). `None` when the weapon's bank has no locomotion, as the knife's
+/// doesn't.
+pub fn player_banks(pld: &Emd, plw: &Plw) -> Option<(Emd, Emw)> {
+    let base = pld.keyframes.len() as u16;
+    let moved = |clip: &Clip| Clip {
+        frames: clip
+            .frames
+            .iter()
+            .map(|frame| ClipFrame {
+                keyframe: frame.keyframe + base,
+                ..*frame
+            })
+            .collect(),
+    };
+    let walk = moved(plw.clips.get(PLW_WALK)?);
+    let run = moved(plw.clips.get(PLW_RUN)?);
+    let idle = moved(plw.clips.get(PLW_IDLE)?);
+    let back = pld.clips.get(PLD_BACK)?.clone();
+    let keyframes: Vec<_> = pld
+        .keyframes
+        .iter()
+        .chain(&plw.keyframes)
+        .cloned()
+        .collect();
+    let mut body = with_weapon(pld, plw);
+    body.keyframes = keyframes.clone();
+    body.clips = vec![idle.clone(), idle.clone(), idle.clone(), back];
+    body.banks = Vec::new();
+    let locomotion = Emw {
+        skeleton: pld.skeleton.clone(),
+        keyframes,
+        clips: vec![idle.clone(), idle.clone(), walk, run, idle],
+        mesh: Tmd::default(),
+    };
+    Some((body, locomotion))
 }
 
 /// The character `pld` holding `plw`: the weapon's first part replaces the

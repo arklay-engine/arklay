@@ -308,6 +308,45 @@ fn a_weapon_replaces_the_hand_and_pastes_its_texels_with_their_colours() {
         mesh: parse_md1(&md1()).unwrap(),
         texture: tim::decode_8bpp(&tim(56, 32, 1, |x, _| if x == 0 { 5 } else { 9 })).unwrap(),
     };
+    // The player machine's two banks share one merged keyframe table.
+    let moving = Plw {
+        clips: vec![weapon.clips[0].clone(); 3],
+        ..weapon.clone()
+    };
+    let (body, locomotion) = player_banks(&player, &moving).unwrap();
+    assert_eq!(body.keyframes, locomotion.keyframes);
+    assert_eq!(
+        body.keyframes.len(),
+        player.keyframes.len() + moving.keyframes.len()
+    );
+    let base = player.keyframes.len() as u16;
+    let moved = |clip: &Clip| {
+        clip.frames
+            .iter()
+            .map(|frame| frame.keyframe + base)
+            .collect::<Vec<u16>>()
+    };
+    let frames = |clip: &Clip| {
+        clip.frames
+            .iter()
+            .map(|frame| frame.keyframe)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(frames(&locomotion.clips[2]), moved(&moving.clips[0]));
+    assert_eq!(frames(&locomotion.clips[3]), moved(&moving.clips[1]));
+    assert_eq!(frames(&locomotion.clips[1]), moved(&moving.clips[2]));
+    assert_eq!(frames(&body.clips[3]), frames(&player.clips[0]));
+    // A bank without locomotion can't drive the machine.
+    assert!(
+        player_banks(
+            &player,
+            &Plw {
+                clips: Vec::new(),
+                ..weapon.clone()
+            }
+        )
+        .is_none()
+    );
     let model = with_weapon(&player, &weapon);
     assert_eq!(model.mesh.objects[WEAPON_PART], weapon.mesh.objects[0]);
     assert_eq!(model.mesh.objects[0], TmdObject::default());
