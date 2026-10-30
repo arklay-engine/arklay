@@ -41,8 +41,6 @@ use crate::model::{
 };
 use crate::{bmp, tim};
 
-/// The mask of an EDD frame's keyframe index.
-const KEYFRAME_INDEX_MASK: u16 = 0x0FFF;
 /// The EMR header: armature offset, keyframe offset, joint count, stride.
 const EMR_HEADER_LEN: usize = 8;
 /// An EMR keyframe's root offset and root-motion vertex.
@@ -436,8 +434,8 @@ fn parse_bank(data: &[u8], edd: usize, emr: usize, end: usize) -> Result<AnimBan
                     .frames
                     .into_iter()
                     .map(|mut frame| {
-                        frame.flags = frame.keyframe & !KEYFRAME_INDEX_MASK;
-                        frame.keyframe &= KEYFRAME_INDEX_MASK;
+                        // `pNow_seq`'s whole word: RE1's hold count is its top half.
+                        frame.flags |= u32::from(frame.timing) << 16;
                         frame.timing = 0;
                         frame
                     })

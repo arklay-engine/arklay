@@ -9,7 +9,7 @@
 //!
 //! What isn't ported is in `docs/re2-deviations.md`.
 
-use crate::model::{Clip, ClipFrame, Keyframe};
+use crate::model::{Clip, ClipFrame, Keyframe, Skeleton};
 use crate::player::{self, ClipSource, Input, Options, PlayerState};
 use crate::state::RoomState;
 
@@ -20,6 +20,11 @@ const KEY_BACKWARD: u16 = 0x0004;
 const KEY_LEFT: u16 = 0x0008;
 const KEY_TURN: u16 = KEY_RIGHT | KEY_LEFT;
 const KEY_RUN: u16 = 0x0200;
+/// The aim tilts: the up and down pad bits have a `Key` bit of their own too.
+const KEY_TILT_UP: u16 = 0x0010;
+const KEY_TILT_DOWN: u16 = 0x0020;
+const KEY_FIRE: u16 = 0x0040;
+const KEY_AIM: u16 = 0x0100;
 
 /// `routine[0]`: the pad's mode and the scripts' mode.
 const MODE_MOVE: u8 = 1;
@@ -32,6 +37,7 @@ const MOVE_FORWARD: u8 = 1;
 const MOVE_RUN: u8 = 2;
 const MOVE_BACKWARD: u8 = 3;
 const MOVE_ROTATE: u8 = 4;
+const MOVE_AIM: u8 = 5;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
 /// `Plc_stop`'s routine, which no table entry animates.
@@ -59,6 +65,30 @@ const DANGER_LIFE: i32 = 0x15;
 const BLEND_STEP: u16 = 0x200;
 /// A motion change's blend: `Hokan_flg` in the `0x70000` the routines write.
 const FULL_BLEND: u8 = 7;
+/// `pl_mv05_w1`'s clips: raising; holding, then firing, at each tilt.
+const AIM_RAISE_CLIP: u8 = 9;
+const AIM_HOLD_CLIPS: [u8; 3] = [0x0F, 0x0B, 0x0D];
+const AIM_FIRE_CLIPS: [u8; 3] = [0x0E, 0x0A, 0x0C];
+const AIM_RELOAD_CLIP: u8 = 0x10;
+/// `Status_flg`'s tilt.
+const TILT_DOWN: u16 = 0x2000;
+const TILT_LEVEL: u16 = 0x4000;
+const TILT_UP: u16 = 0x8000;
+/// `Cdir_y` per tick in each part of the stance.
+const AIM_RAISE_TURN: u16 = 0x20;
+const AIM_HOLD_TURN: u16 = 0x40;
+const AIM_FIRE_TURN: u16 = 8;
+/// The handguns' row of the table at `0x53A305`: the frame from which the
+/// raise can tilt, and from which a released shot is cut short.
+const AIM_TILT_DOWN_FRAME: u8 = 5;
+const AIM_TILT_UP_FRAME: u8 = 7;
+const AIM_FIRE_CANCEL_FRAME: u8 = 8;
+const AIM_LOWER_BLEND: u8 = 0x0F;
+/// The parts from the root to the foot the handguns' stance plants.
+const AIM_FOOT_CHAIN: [usize; 5] = [0, 1, 5, 6, 7];
+const AIM_LOWER_STEP: u16 = 0x100;
+/// The frame flag `pl_mv05_w1_t4` fills the magazine on.
+const FRAME_RELOAD: u32 = 0x40_0000;
 /// The blend step of `Pl_damage`'s `Joint_move`s.
 const DAMAGE_BLEND_STEP: u16 = 0x400;
 /// The blend `Pl_damage` starts its clips with (`0x30000` in `Move_no`'s word).
@@ -74,8 +104,8 @@ const DAMAGE_LOCK: u8 = 0x80;
 /// `Status_flg`'s bit: damage just ended, so the next area hit is forgiven.
 const STATUS_RECOVERED: u16 = 2;
 /// The EDD frame bits: a footfall, and that it's the second kind of floor.
-pub const FRAME_FOOTSTEP: u16 = 0x4000;
-pub const FRAME_FOOTSTEP_ALT: u16 = 0x2000;
+pub const FRAME_FOOTSTEP: u32 = 0x4000;
+pub const FRAME_FOOTSTEP_ALT: u32 = 0x2000;
 
 /// The scripted walks' constant speeds by character id (`Spl_sce04`..`08`).
 const SCE_WALK_SPEED: [i16; 16] = [
@@ -129,7 +159,7 @@ pub struct Work {
     spd_base: [i16; 3],
     timer0: u16,
     /// The flags of `pNow_seq`, the frame `Joint_move` played last.
-    now_seq: u16,
+    now_seq: u32,
     /// `Type`: the weapon, and the bit that stops the player being moved.
     pub kind: u16,
     /// `Sce_flg`: a script's motion options.
@@ -144,6 +174,10 @@ pub struct Work {
     /// `Damage_cnt` and `Status_flg`, for `Pl_damage` and `Sce_Damage`.
     damage_cnt: u8,
     status_flg: u16,
+    /// A round was spent this tick (`Tama_decrease_i`), for the inventory.
+    pub fired: bool,
+    /// The magazine was filled this tick (`Tama_reload`), for the inventory.
+    pub reloaded: bool,
 }
 
 impl Default for Work {
@@ -168,6 +202,8 @@ impl Default for Work {
             stopped: [0; 4],
             damage_cnt: 0,
             status_flg: 0,
+            fired: false,
+            reloaded: false,
         }
     }
 }
@@ -232,6 +268,7 @@ impl<'a> Banks<'a> {
 pub struct Tick<'a> {
     pub room: &'a RoomState,
     pub banks: Banks<'a>,
+    pub skeleton: &'a Skeleton,
     pub input: Input,
     pub options: Options,
     /// The character id, `Id`.
@@ -240,6 +277,25 @@ pub struct Tick<'a> {
     pub poisoned: bool,
     /// `fg_stop`'s top bit, which freezes the player's whole routine.
     pub stopped: bool,
+    pub weapon: Weapon,
+}
+
+/// What the player's `Type` and the inventory say about the held weapon.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Weapon {
+    /// `Type & 0xFFF`.
+    pub id: u8,
+    /// `Tama_ck_i`: there is a round in it.
+    pub loaded: bool,
+    /// `Tama_reload_ck`: the inventory has its ammunition.
+    pub spare: bool,
+}
+
+impl Weapon {
+    /// Whether [`Mover::pl_mv_aim`] handles it: the starting handguns.
+    fn aims(&self) -> bool {
+        matches!(self.id, 2 | 3)
+    }
 }
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
@@ -275,11 +331,13 @@ struct Mover<'a, 'b> {
 
 fn key_word(input: &Input) -> u16 {
     let bit = |set: bool, value: u16| if set { value } else { 0 };
-    bit(input.up, KEY_FORWARD)
+    bit(input.up, KEY_FORWARD | KEY_TILT_UP)
         | bit(input.right, KEY_RIGHT)
-        | bit(input.down, KEY_BACKWARD)
+        | bit(input.down, KEY_BACKWARD | KEY_TILT_DOWN)
         | bit(input.left, KEY_LEFT)
         | bit(input.run, KEY_RUN)
+        | bit(input.aim, KEY_AIM)
+        | bit(input.fire, KEY_FIRE)
 }
 
 impl Mover<'_, '_> {
@@ -344,6 +402,7 @@ impl Mover<'_, '_> {
             MOVE_ROTATE => self.pl_br_rotate(key),
             _ => {}
         }
+        // `pl_mv_05` reads the keys itself.
         if let Some(target) = target {
             self.player.angle = player::analog_turned(self.player.angle, target);
         }
@@ -353,8 +412,16 @@ impl Mover<'_, '_> {
             MOVE_RUN => self.pl_mv_run(),
             MOVE_BACKWARD => self.pl_mv_backward(),
             MOVE_ROTATE => self.pl_mv_rotate(),
+            MOVE_AIM => self.pl_mv_aim(key),
             MOVE_QUICK_TURN => self.mv_quick_turn(),
             _ => {}
+        }
+    }
+
+    /// The end of the `pl_br_*` that can raise the weapon.
+    fn aim_branch(&mut self, key: u16) {
+        if key & KEY_AIM != 0 && self.tick.weapon.aims() {
+            self.set_routine(MOVE_AIM);
         }
     }
 
@@ -373,6 +440,7 @@ impl Mover<'_, '_> {
                 MOVE_FORWARD
             });
         }
+        self.aim_branch(key);
     }
 
     fn pl_br_forward(&mut self, key: u16) {
@@ -391,6 +459,7 @@ impl Mover<'_, '_> {
         if key & KEY_RUN != 0 {
             self.set_routine(MOVE_RUN);
         }
+        self.aim_branch(key);
     }
 
     fn pl_br_run(&mut self, key: u16) {
@@ -426,6 +495,7 @@ impl Mover<'_, '_> {
             return;
         }
         self.turn(key, &BACK_TURN);
+        self.aim_branch(key);
     }
 
     fn pl_br_rotate(&mut self, key: u16) {
@@ -444,6 +514,215 @@ impl Mover<'_, '_> {
             });
         }
         self.turn(key, &ROTATE_TURN);
+        self.aim_branch(key);
+    }
+
+    /// `pl_mv05_w1`: the handguns' stance. `Status_flg`'s top bits hold the tilt.
+    fn pl_mv_aim(&mut self, key: u16) {
+        // `Foot_set_pl` reads last tick's world matrix from the parts.
+        let planted = self.foot_position();
+        match self.work.routine[2] {
+            0 => self.aim_raise(key),
+            1 => self.aim_hold(key),
+            2 => self.aim_fire(key),
+            3 => self.aim_lower(key),
+            4 => self.aim_reload(),
+            5 => {
+                // `pl_mv05_w1_t5`: a lock on nothing goes straight back.
+                self.work.routine[2] = 1;
+                self.work.routine[3] = 0;
+            }
+            _ => {}
+        }
+        if self.work.spd[0] == 0 && (self.work.routine[2] != 0 || self.work.hokan == 0) {
+            self.foot_set(planted);
+        }
+    }
+
+    /// The handguns' foot in the world, on the current pose: `Foot_set_pl`'s
+    /// chain, the root, the hips and that leg's three parts.
+    fn foot_position(&self) -> Option<[i32; 3]> {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
+        let mut world = Matrix {
+            m: rot_matrix([0, self.player.angle as i16, 0]),
+            t: self.player.pos,
+        };
+        for part in AIM_FOOT_CHAIN {
+            let t = if part == 0 {
+                pose.offset
+            } else {
+                *self.tick.skeleton.relative.get(part)?
+            };
+            world = world.comp(&Matrix {
+                m: rot_matrix(*pose.rotations.get(part)?),
+                t: t.map(i32::from),
+            });
+        }
+        Some(world.t)
+    }
+
+    /// `Foot_set_pl`: move the player so the foot stays where it was planted.
+    fn foot_set(&mut self, planted: Option<[i32; 3]>) {
+        if let (Some(planted), Some(foot)) = (planted, self.foot_position()) {
+            self.player.pos[0] += planted[0] - foot[0];
+            self.player.pos[2] += planted[2] - foot[2];
+        }
+    }
+
+    /// A clip of the stance, from its first frame, blended in.
+    fn aim_clip(&mut self, clip: u8) {
+        self.work.routine[3] = 1;
+        self.work.bank = Bank::Weapon;
+        self.work.move_no = clip;
+        self.work.move_cnt = 0;
+        self.work.hokan = FULL_BLEND;
+    }
+
+    fn aim_turn(&mut self, key: u16, rate: u16) {
+        if key & KEY_LEFT != 0 {
+            self.player.angle = self.player.angle.wrapping_sub(rate) & 0x0FFF;
+        }
+        if key & KEY_RIGHT != 0 {
+            self.player.angle = self.player.angle.wrapping_add(rate) & 0x0FFF;
+        }
+    }
+
+    fn aim_stage(&mut self, stage: u8) {
+        self.work.routine[2] = stage;
+        self.work.routine[3] = 0;
+    }
+
+    fn set_tilt(&mut self, tilt: u16) {
+        self.work.status_flg = self.work.status_flg & 0x1FFF | tilt;
+    }
+
+    /// `pl_mv05_w1_t0`.
+    fn aim_raise(&mut self, key: u16) {
+        match self.work.routine[3] {
+            0 => {
+                self.aim_clip(AIM_RAISE_CLIP);
+                self.set_tilt(TILT_LEVEL);
+                self.work.spd[0] = 0;
+            }
+            1 => {}
+            2 => {
+                self.aim_stage(1);
+                return;
+            }
+            _ => return,
+        }
+        self.aim_turn(key, AIM_RAISE_TURN);
+        if self.joint_move() {
+            self.work.routine[3] += 1;
+        }
+        if self.work.move_cnt > AIM_TILT_DOWN_FRAME && key & KEY_TILT_DOWN != 0 {
+            self.aim_stage(1);
+            self.set_tilt(TILT_DOWN);
+            return;
+        }
+        if self.work.move_cnt > AIM_TILT_UP_FRAME && key & KEY_TILT_UP != 0 {
+            self.aim_stage(1);
+            self.set_tilt(TILT_UP);
+        }
+    }
+
+    /// `pl_mv05_w1_t1`.
+    fn aim_hold(&mut self, key: u16) {
+        if self.work.routine[3] == 0 {
+            let clip = match self.work.status_flg >> 13 {
+                1 => AIM_HOLD_CLIPS[0],
+                2 => AIM_HOLD_CLIPS[1],
+                4 => AIM_HOLD_CLIPS[2],
+                _ => 0,
+            };
+            self.aim_clip(clip);
+        }
+        if key & KEY_AIM == 0 {
+            self.aim_stage(3);
+            return;
+        }
+        if key & KEY_TILT_UP != 0 && self.work.status_flg & TILT_UP == 0 {
+            self.work.routine[3] = 0;
+            self.set_tilt(TILT_UP);
+            return;
+        }
+        if key & KEY_TILT_DOWN != 0 && self.work.status_flg & TILT_DOWN == 0 {
+            self.work.routine[3] = 0;
+            self.set_tilt(TILT_DOWN);
+            return;
+        }
+        if key & (KEY_TILT_UP | KEY_TILT_DOWN) == 0 && self.work.status_flg & TILT_LEVEL == 0 {
+            self.work.routine[3] = 0;
+            self.set_tilt(TILT_LEVEL);
+            return;
+        }
+        if self.tick.input.lock_drop {
+            self.aim_stage(5);
+        }
+        if key & KEY_FIRE != 0 {
+            if self.tick.weapon.loaded {
+                self.aim_stage(2);
+                return;
+            }
+            if self.tick.input.fire_pressed && self.tick.weapon.spare {
+                self.aim_stage(4);
+                return;
+            }
+        }
+        self.aim_turn(key, AIM_HOLD_TURN);
+        self.joint_move();
+    }
+
+    /// `pl_mv05_w1_t2`. Nothing to hit yet: the shot only spends a round.
+    fn aim_fire(&mut self, key: u16) {
+        if self.work.routine[3] == 0 {
+            let clip = match self.work.status_flg >> 13 {
+                1 => AIM_FIRE_CLIPS[0],
+                2 => AIM_FIRE_CLIPS[1],
+                4 => AIM_FIRE_CLIPS[2],
+                _ => 0,
+            };
+            self.aim_clip(clip);
+            self.work.fired = true;
+            self.work.spd = [0; 3];
+        }
+        self.aim_turn(key, AIM_FIRE_TURN);
+        if key & KEY_AIM == 0 && self.work.move_cnt > AIM_FIRE_CANCEL_FRAME {
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+            return;
+        }
+        if self.joint_move() {
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+        }
+    }
+
+    /// `pl_mv05_w1_t3`: the raising clip backwards, back to the pad.
+    fn aim_lower(&mut self, key: u16) {
+        if self.work.routine[3] == 0 {
+            self.aim_clip(AIM_RAISE_CLIP);
+            self.work.move_cnt = 1;
+            self.work.hokan = AIM_LOWER_BLEND;
+        }
+        self.aim_turn(key, AIM_HOLD_TURN);
+        if self.joint_move_late_reversed(AIM_LOWER_STEP, true) {
+            self.set_routine(MOVE_IDLE);
+        }
+    }
+
+    /// `pl_mv05_w1_t4`: the frame marked for it fills the magazine.
+    fn aim_reload(&mut self) {
+        if self.work.routine[3] == 0 {
+            self.aim_clip(AIM_RELOAD_CLIP);
+        }
+        if self.joint_move() {
+            self.aim_stage(1);
+        }
+        if self.work.now_seq & FRAME_RELOAD != 0 {
+            self.work.reloaded = true;
+        }
     }
 
     /// The first tick of a motion: its clip, from the first frame, blended in.
@@ -649,6 +928,11 @@ impl Mover<'_, '_> {
     }
 
     fn joint_move_late(&mut self, late: u16) -> bool {
+        let reverse = self.work.routine[0] == MODE_SCENARIO && self.work.sce_flg & 0x80 != 0;
+        self.joint_move_late_reversed(late, reverse)
+    }
+
+    fn joint_move_late_reversed(&mut self, late: u16, reverse: bool) -> bool {
         let (clips, _) = self.tick.banks.get(self.work.bank);
         let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
             return true;
@@ -656,7 +940,6 @@ impl Mover<'_, '_> {
         if clip.frames.is_empty() {
             return true;
         }
-        let reverse = self.work.routine[0] == MODE_SCENARIO && self.work.sce_flg & 0x80 != 0;
         let count = usize::from(self.work.move_cnt) % clip.frames.len();
         let index = if reverse {
             clip.frames.len() - 1 - count
@@ -674,6 +957,7 @@ impl Mover<'_, '_> {
         anim.frame = count;
         anim.blend_counter = u16::from(self.work.hokan);
         anim.blend_step = late;
+        anim.re2_blend = true;
         anim.reverse = reverse;
         anim.timing = 0;
         let ended = anim.update(clips);
@@ -978,6 +1262,54 @@ fn rcos(angle: i32) -> i32 {
     rsin(angle + 0x400)
 }
 
+/// `MulMatrix0`: every element is narrowed to a `short`.
+fn mul_matrix(a: &[[i16; 3]; 3], b: &[[i16; 3]; 3]) -> [[i16; 3]; 3] {
+    std::array::from_fn(|row| {
+        std::array::from_fn(|column| {
+            let sum: i32 = (0..3)
+                .map(|k| i32::from(a[row][k]) * i32::from(b[k][column]))
+                .sum();
+            (sum >> 12) as i16
+        })
+    })
+}
+
+/// `RotMatrix`: Z, then Y, then X, onto the identity.
+fn rot_matrix(angle: [i16; 3]) -> [[i16; 3]; 3] {
+    let (sin, cos) = (
+        |a: i16| rsin(i32::from(a)) as i16,
+        |a: i16| rcos(i32::from(a)) as i16,
+    );
+    let (sx, cx) = (sin(angle[0]), cos(angle[0]));
+    let (sy, cy) = (sin(angle[1]), cos(angle[1]));
+    let (sz, cz) = (sin(angle[2]), cos(angle[2]));
+    let z = [[cz, -sz, 0], [sz, cz, 0], [0, 0, 0x1000]];
+    let y = [[cy, 0, sy], [0, 0x1000, 0], [-sy, 0, cy]];
+    let x = [[0x1000, 0, 0], [0, cx, -sx], [0, sx, cx]];
+    mul_matrix(&x, &mul_matrix(&y, &z))
+}
+
+/// A `MATRIX`.
+struct Matrix {
+    m: [[i16; 3]; 3],
+    t: [i32; 3],
+}
+
+impl Matrix {
+    /// `CompMatrix`, whose `ApplyMatrixLV` floors.
+    fn comp(&self, child: &Matrix) -> Matrix {
+        Matrix {
+            m: mul_matrix(&self.m, &child.m),
+            t: std::array::from_fn(|row| {
+                let sum: i32 = (0..3)
+                    .map(|k| i32::from(self.m[row][k]).wrapping_mul(child.t[k]))
+                    .fold(0, i32::wrapping_add);
+                (sum >> 12) + self.t[row]
+            }),
+        }
+    }
+}
+
 /// `RotMatrix(0, angle, 0)` then `ApplyMatrixSV`: its products floor rather
 /// than truncate, and the result is narrowed to a `short`.
 pub(crate) fn rotate(angle: u16, x: i32, z: i32) -> (i32, i32) {
@@ -1143,6 +1475,8 @@ mod tests {
         work: Work,
         player: PlayerState,
         room: RoomState,
+        skeleton: Skeleton,
+        weapon: Weapon,
         clips: Vec<Clip>,
         keyframes: Vec<Keyframe>,
     }
@@ -1155,6 +1489,8 @@ mod tests {
                 work: Work::default(),
                 player: player::spawn(RoomId::parse("1000").unwrap(), &room),
                 room,
+                skeleton: Skeleton::default(),
+                weapon: Weapon::default(),
                 clips,
                 keyframes,
             }
@@ -1164,6 +1500,7 @@ mod tests {
             let bank = (self.clips.as_slice(), self.keyframes.as_slice());
             let tick = Tick {
                 room: &self.room,
+                skeleton: &self.skeleton,
                 banks: Banks {
                     pld: bank,
                     weapon: bank,
@@ -1175,6 +1512,7 @@ mod tests {
                 life,
                 poisoned: false,
                 stopped: false,
+                weapon: self.weapon,
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
@@ -1187,6 +1525,133 @@ mod tests {
             run,
             ..Input::default()
         }
+    }
+
+    /// A setup holding a handgun, in banks with every stance clip.
+    fn armed(loaded: bool, spare: bool) -> Setup {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(0x11, 4, 0);
+        setup.weapon = Weapon {
+            id: 2,
+            loaded,
+            spare,
+        };
+        setup
+    }
+
+    fn aiming(fire: bool, fire_pressed: bool) -> Input {
+        Input {
+            aim: true,
+            fire,
+            fire_pressed,
+            ..Input::default()
+        }
+    }
+
+    #[test]
+    fn only_a_handgun_raises_into_the_stance() {
+        let mut setup = armed(true, false);
+        setup.weapon.id = 0x10;
+        setup.tick(aiming(false, false), 200);
+        assert_eq!(setup.work.routine[1], MOVE_IDLE);
+
+        let mut setup = armed(true, false);
+        setup.tick(aiming(false, false), 200);
+        assert_eq!(setup.work.routine, [MODE_MOVE, MOVE_AIM, 0, 1]);
+        assert_eq!(setup.work.move_no, AIM_RAISE_CLIP);
+        assert_eq!(setup.work.bank, Bank::Weapon);
+    }
+
+    #[test]
+    fn the_stance_tilts_fires_once_a_press_and_lowers_on_release() {
+        let mut setup = armed(true, false);
+        for _ in 0..6 {
+            setup.tick(aiming(false, false), 200);
+        }
+        assert_eq!(setup.work.routine[2], 1);
+        assert_eq!(setup.work.move_no, AIM_HOLD_CLIPS[1]);
+
+        setup.tick(
+            Input {
+                up: true,
+                ..aiming(false, false)
+            },
+            200,
+        );
+        setup.tick(
+            Input {
+                up: true,
+                ..aiming(false, false)
+            },
+            200,
+        );
+        assert_eq!(setup.work.move_no, AIM_HOLD_CLIPS[2]);
+        setup.tick(aiming(false, false), 200);
+        setup.tick(aiming(false, false), 200);
+        assert_eq!(setup.work.move_no, AIM_HOLD_CLIPS[1]);
+
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2], 2);
+        assert!(!setup.work.fired);
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.move_no, AIM_FIRE_CLIPS[1]);
+        assert!(setup.work.fired);
+
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.routine[2], 3);
+        for _ in 0..5 {
+            setup.tick(Input::default(), 200);
+        }
+        assert_eq!(setup.work.routine[1], MOVE_IDLE);
+    }
+
+    #[test]
+    fn an_empty_handgun_reloads_only_on_a_press_with_ammunition() {
+        let mut setup = armed(false, false);
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.work.status_flg = TILT_LEVEL;
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2], 1, "nothing to reload with");
+
+        let mut setup = armed(false, true);
+        setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
+        setup.work.status_flg = TILT_LEVEL;
+        setup.tick(aiming(true, false), 200);
+        assert_eq!(setup.work.routine[2], 1, "a held button doesn't reload");
+        setup.tick(aiming(true, true), 200);
+        assert_eq!(setup.work.routine[2], 4);
+        // The frame marked for it fills the magazine.
+        setup.clips[usize::from(AIM_RELOAD_CLIP)].frames[1].flags = FRAME_RELOAD;
+        setup.tick(aiming(false, false), 200);
+        assert!(!setup.work.reloaded);
+        setup.tick(aiming(false, false), 200);
+        assert!(setup.work.reloaded);
+    }
+
+    #[test]
+    fn rot_matrix_turns_in_the_original_order() {
+        assert_eq!(
+            rot_matrix([0, 0x400, 0]),
+            [[0, 0, 0x1000], [0, 0x1000, 0], [-0x1000, 0, 0]]
+        );
+        assert_eq!(
+            rot_matrix([0x400, 0, 0x400]),
+            [[0, -0x1000, 0], [0, 0, -0x1000], [0x1000, 0, 0]]
+        );
+    }
+
+    #[test]
+    fn a_composed_matrix_floors_its_translation() {
+        let parent = Matrix {
+            m: rot_matrix([0, 0x400, 0]),
+            t: [10, 20, 30],
+        };
+        let child = Matrix {
+            m: rot_matrix([0, 0, 0]),
+            t: [1, 2, 3],
+        };
+        assert_eq!(parent.comp(&child).t, [13, 22, 29]);
     }
 
     #[test]
@@ -1309,6 +1774,7 @@ mod tests {
         let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
         let tick = Tick {
             room: &setup.room,
+            skeleton: &setup.skeleton,
             banks: Banks {
                 pld: bank,
                 weapon: bank,
@@ -1320,6 +1786,7 @@ mod tests {
             life: 200,
             poisoned: false,
             stopped: true,
+            weapon: Weapon::default(),
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         assert_eq!(setup.work, before);

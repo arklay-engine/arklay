@@ -319,6 +319,9 @@ class Game:
         ptrace(PTRACE_CONT, tid)
 
 
+ITEM_WORK = 0x98ED34
+
+
 def remove_enemies(game: Game) -> None:
     """Switch off every live enemy: nothing runs or touches an entity whose first bit is clear."""
     for pointer in struct.unpack("<16I", game.read(ENEMIES, 64)):
@@ -443,6 +446,9 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         cursor = 0
                         pad = 0
                         print(f"play begins {boot_tick} ticks after boot")
+                        for item in args.give:
+                            slot, item_id, count = (int(part, 0) for part in item.split(":"))
+                            game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
                 if settled and args.no_enemies:
                     remove_enemies(game)
                 if tick < 0:
@@ -572,6 +578,10 @@ def main() -> int:
         command.add_argument("--shot-dir", default=None)
         command.add_argument("--shot-every", type=int, default=0)
         command.add_argument("--no-enemies", action="store_true")
+        command.add_argument(
+            "--give", action="append", default=[], metavar="SLOT:ID:COUNT",
+            help="put an item in the inventory when play begins",
+        )
 
     command = commands.add_parser("record", help="record a trace from the original")
     common(command)

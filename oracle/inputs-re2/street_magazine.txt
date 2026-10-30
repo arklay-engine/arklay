@@ -1,0 +1,14 @@
+# hold fire through a whole magazine, then keep pressing it on empty
+0 
+20 aim
+40 aim fire
+560 aim
+570 aim fire
+575 aim
+590 aim fire
+595 aim
+620 
+640 left aim
+680 aim up
+700 aim down
+720 

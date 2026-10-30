@@ -7,7 +7,8 @@ RE2 play is being ported to exactness (Phase C of #244), checked tick by tick ag
 The pad's walking, running, backing, turning, hurt clips and scripted motions (`player2`, a port of `Player_move`), collision and `Sce_Damage` areas match the original on random walks around room 100 for both characters.
 
 - **The held weapon.** The player always holds the starting handgun, whose bank has the locomotion the knife's lacks.
-- **No aiming, no combat, no other weapons.** `Pl_move`'s routine 5 and RE2's weapon clips aren't wired up, and neither is the weapon machine.
+- **The handguns' stance only.** `Pl_move`'s routine 5 is `pl_mv05_w1` for Leon's and Claire's starting handguns: raising, tilting, firing, reloading and lowering, with their ammunition. The other weapons don't raise. A shot hits nothing and has no sound, flash, shell or camera kick, and neither do the click or the reload; `Em_ck`'s lock-on and the lock-drop button have nothing to do without enemies.
+- **The pose before play.** The first tick's blend starts from the clip's own frame rather than the pose `Pl_init` leaves, so raising the gun within the first few ticks of a game lands a few units off.
 - **Stairs.** The action key at a set of stairs puts the player straight at its other end. The original plays the climb (`Sca_hit_stairs`).
 - **Falls and death.** `Pl_damage`'s falls (`Routine_1` 4 and 5) play as the plain hit, without their `pSub1` clips or getting up, and `Pl_dead` leaves the player standing with no game over.
 - **Sounds of hits.** `Pl_damage` plays none of its sounds.

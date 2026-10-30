@@ -1,0 +1,21 @@
+# aim, fire, tilt, turn, lower and walk in the street, from a settled pose
+0 
+30 aim
+60 aim up
+90 aim
+100 aim fire
+102 aim
+140 aim down
+160 aim down fire
+162 aim down
+200 aim left
+220 aim right
+230 aim
+240
+270 up
+290 up aim
+330
+360 left aim
+390 aim fire
+430 down aim
+470

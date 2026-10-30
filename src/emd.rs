@@ -355,7 +355,7 @@ pub(crate) fn parse_clips(data: &[u8], edd_offset: usize, chunk_end: usize) -> R
                 .map(|f| ClipFrame {
                     keyframe: u16::from_le_bytes([f[0], f[1]]) & KEYFRAME_INDEX_MASK,
                     timing: u16::from_le_bytes([f[2], f[3]]),
-                    flags: 0,
+                    flags: u32::from(u16::from_le_bytes([f[0], f[1]]) & !KEYFRAME_INDEX_MASK),
                 })
                 .collect(),
         });

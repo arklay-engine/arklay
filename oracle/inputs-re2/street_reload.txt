@@ -1,0 +1,17 @@
+# empty a magazine, reload, empty it, reload the rest, empty it, click
+# Needs ammunition to reload with: --give 3:0x14:20 on the original, and the same stack in new_game.lua on arklay.
+0 
+20 aim
+40 aim fire
+560 aim
+570 aim fire
+575 aim
+640 aim fire
+1180 aim
+1190 aim fire
+1195 aim
+1260 aim fire
+1400 aim
+1405 aim fire
+1410 aim
+1420 

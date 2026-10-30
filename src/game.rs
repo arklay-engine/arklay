@@ -998,6 +998,8 @@ impl RoomActionKind {
 
 /// An RE2 message stops everything until it is dismissed.
 const RE2_MESSAGE_PAUSE: u16 = 0xFFFF;
+/// The handguns' ammunition item.
+const RE2_HANDGUN_BULLETS: u8 = 0x14;
 
 /// The typewriter save flow, the part of the original's `g_typewriter_state`
 /// the engine observes: idle, or a yes/no save prompt awaiting its answer.
@@ -8031,6 +8033,46 @@ impl GameState {
         self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
     }
 
+    /// The player's weapon for [`crate::player2::player_move`].
+    pub fn re2_weapon(&self) -> crate::player2::Weapon {
+        let id = self.equipped_weapon_id;
+        crate::player2::Weapon {
+            id,
+            loaded: self.item_count(id) != 0,
+            spare: self.item_count(RE2_HANDGUN_BULLETS) != 0,
+        }
+    }
+
+    /// `Tama_decrease_i` and `Tama_reload`, for what the player's tick did.
+    pub fn re2_settle_ammo(&mut self) {
+        let weapon = self.equipped_weapon_id;
+        if std::mem::take(&mut self.re2.player.fired)
+            && let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon)
+        {
+            slot.quantity = slot.quantity.saturating_sub(1);
+        }
+        if std::mem::take(&mut self.re2.player.reloaded) {
+            // `Item_data_tbl`'s magazines.
+            let magazine = if weapon == 3 { 13 } else { 18 };
+            let Some(index) = self
+                .inventory
+                .iter()
+                .position(|slot| slot.id == RE2_HANDGUN_BULLETS)
+            else {
+                return;
+            };
+            let spare = &mut self.inventory[index];
+            let taken = spare.quantity.min(magazine);
+            spare.quantity -= taken;
+            if spare.quantity == 0 {
+                self.inventory.remove(index);
+            }
+            if let Some(slot) = self.inventory.iter_mut().find(|slot| slot.id == weapon) {
+                slot.quantity = slot.quantity.saturating_add(taken);
+            }
+        }
+    }
+
     /// One of the executable's own messages.
     fn show_re2_global(&mut self, id: u8) {
         self.message.set_re2_timing();
@@ -9726,6 +9768,37 @@ mod tests {
 
     fn game() -> GameState {
         GameState::new(RoomId::parse("1001").unwrap(), &RoomState::default())
+    }
+
+    #[test]
+    fn a_re2_reload_fills_up_to_a_magazine_and_spends_the_stack() {
+        let mut game = GameState {
+            equipped_weapon_id: 3,
+            inventory: vec![
+                InventoryItem { id: 3, quantity: 1 },
+                InventoryItem {
+                    id: RE2_HANDGUN_BULLETS,
+                    quantity: 20,
+                },
+            ],
+            ..Default::default()
+        };
+        game.re2.player.fired = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(3), 0);
+        assert!(!game.re2_weapon().loaded);
+        assert!(game.re2_weapon().spare);
+
+        game.re2.player.reloaded = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(3), 13);
+        assert_eq!(game.item_count(RE2_HANDGUN_BULLETS), 7);
+
+        game.re2.player.reloaded = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(3), 20);
+        assert_eq!(game.inventory.len(), 1, "the empty stack is gone");
+        assert!(!game.re2_weapon().spare);
     }
 
     #[test]
