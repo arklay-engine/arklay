@@ -104,8 +104,9 @@ cargo run -- convert-game /path/to/steam/4249100_Biohazard --out re1.akpak
 # Convert the RE2 PC release (the directory holding data/Pl0, data/Pl1 and
 # data/Common) into re2.akpak: rooms, backgrounds, models, audio and films.
 # The engine shows RE2 rooms (backgrounds, cameras, collision and masks), poses
-# any RE2 EMD, PLD or PLW with --model and plays RE2 doors with --door, but has
-# no RE2 player or scripts yet (see issue #244); --game re2 skips detection
+# any RE2 EMD, PLD or PLW with --model, plays RE2 doors with --door, sounds and
+# films, and reads and exports RE2 room scripts, but has no RE2 player,
+# room-script VM or enemies yet (see issue #244); --game re2 skips detection
 cargo run -- convert-game /path/to/re2
 
 # Convert a Classic REbirth mod (.zip or directory: HD texture packs, BioRand
