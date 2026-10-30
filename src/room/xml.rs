@@ -39,7 +39,7 @@ use crate::format::Dialect;
 use crate::language::XmlString;
 use crate::state::{
     CameraLight, Collision, CollisionRect, FootstepZone, Light, RoomId, Sca, ScaRect, WalkZone,
-    Zone,
+    Zone, ZoneGate,
 };
 
 /// The format version `<room format="...">` declares.
@@ -173,7 +173,7 @@ pub fn write(room: &RoomSource) -> Result<String> {
     }
     w.close("cameras");
 
-    write_zones(&mut w, &room.zones);
+    write_zones(&mut w, &room.zones, &room.zone_gates);
 
     w.open(
         "collision",
@@ -597,7 +597,7 @@ fn write_sca(w: &mut Writer, sca: &Sca) {
 /// The switch zones grouped by source camera: each group's first record is
 /// its `<view>` header (the culling quad), the rest are `<switch>` records.
 /// Every record keeps its flat index, the one SCD `cut_zone_set` addresses.
-fn write_zones(w: &mut Writer, zones: &[Zone]) {
+fn write_zones(w: &mut Writer, zones: &[Zone], gates: &[ZoneGate]) {
     w.open("cameraSwitches", &[]);
     let mut index = 0;
     while index < zones.len() {
@@ -617,6 +617,10 @@ fn write_zones(w: &mut Writer, zones: &[Zone]) {
                 // The corners are zero-extended when tested.
                 attributes.push((x, dec(corner[0] as u16)));
                 attributes.push((z, dec(corner[1] as u16)));
+            }
+            if let Some(gate) = gates.get(index + offset) {
+                attributes.push(("enabled", dec(i64::from(gate.enabled))));
+                attributes.push(("floor", dec(gate.floor)));
             }
             w.empty(if offset == 0 { "view" } else { "switch" }, &attributes);
         }
@@ -811,7 +815,7 @@ fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
                     .map(|camera| parse_camera(camera, room.dialect))
                     .collect::<Result<_>>()?;
             }
-            "cameraSwitches" => room.zones = parse_zones(node)?,
+            "cameraSwitches" => (room.zones, room.zone_gates) = parse_zones(node)?,
             "collision" => room.collision = parse_collision(node)?,
             "sca" => room.sca = Some(parse_sca(node)?),
             "walkZones" => {
@@ -1211,9 +1215,10 @@ fn parse_re2_sprite(sprite: Node<'_, '_>) -> Result<MaskSprite> {
     })
 }
 
-fn parse_zones(node: Node<'_, '_>) -> Result<Vec<Zone>> {
+fn parse_zones(node: Node<'_, '_>) -> Result<(Vec<Zone>, Vec<ZoneGate>)> {
     check_attributes(node, &[])?;
     let mut zones: Vec<(usize, Zone)> = Vec::new();
+    let mut gates: Vec<(usize, ZoneGate)> = Vec::new();
     for group in children(node, "switches")? {
         check_attributes(group, &["from"])?;
         let from: i16 = attr(group, "from")?;
@@ -1242,8 +1247,19 @@ fn parse_zones(node: Node<'_, '_>) -> Result<Vec<Zone>> {
                     "z2",
                     "x3",
                     "z3",
+                    "enabled",
+                    "floor",
                 ],
             )?;
+            if record.has_attribute("enabled") {
+                gates.push((
+                    attr::<usize>(record, "zoneIndex")?,
+                    ZoneGate {
+                        enabled: attr::<u8>(record, "enabled")? != 0,
+                        floor: attr_or(record, "floor", 0xFF)?,
+                    },
+                ));
+            }
             let corner = |x: &str, z: &str| -> Result<[i16; 2]> {
                 Ok([
                     attr::<u16>(record, x)? as i16,
@@ -1275,7 +1291,14 @@ fn parse_zones(node: Node<'_, '_>) -> Result<Vec<Zone>> {
             );
         }
     }
-    Ok(zones.into_iter().map(|(_, zone)| zone).collect())
+    if !gates.is_empty() && gates.len() != zones.len() {
+        bail!("every camera switch zone needs a gate, or none of them");
+    }
+    gates.sort_by_key(|(index, _)| *index);
+    Ok((
+        zones.into_iter().map(|(_, zone)| zone).collect(),
+        gates.into_iter().map(|(_, gate)| gate).collect(),
+    ))
 }
 
 fn parse_collision(node: Node<'_, '_>) -> Result<Collision> {

@@ -3040,6 +3040,9 @@ mod tests {
             source_hash: None,
             lua: Vec::new(),
             start_room: None,
+            start_pos: None,
+            start_angle: None,
+            start_health: None,
             region: None,
         }
         .render()

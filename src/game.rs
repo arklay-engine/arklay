@@ -1136,6 +1136,8 @@ pub struct Door {
     /// player position instead of the forward reach point, low bits select
     /// which per-frame probe masks can fire it.
     pub sub_type: u8,
+    /// An RE2 door's destination; `next_room` then holds only the room.
+    pub re2: Option<crate::scd2::host::Re2Door>,
 }
 
 /// A room change requested by a door.
@@ -3059,6 +3061,10 @@ pub struct GameState {
     pub room_actions: [Option<RoomAction>; ROOM_ACTION_SLOTS],
     /// Door records, one per door action slot.
     pub doors: [Option<Door>; ROOM_ACTION_SLOTS],
+    /// RE2's script state: flag banks, variables and area gates.
+    pub re2: crate::scd2::host::Re2State,
+    /// The room is an RE2 room, which reads the areas through `re2`'s gates.
+    pub is_re2_room: bool,
     /// Stair zones collected from the live room action table.
     pub stair_zones: StairZones,
     /// Height the last `stairs_height_update` probe applied to the player.
@@ -3505,6 +3511,8 @@ impl Default for GameState {
             rebecca_inventory: [InventoryItem::default(); INVENTORY_SLOTS_CHRIS],
             room_actions: [None; ROOM_ACTION_SLOTS],
             doors: [None; ROOM_ACTION_SLOTS],
+            re2: Default::default(),
+            is_re2_room: false,
             stair_zones: StairZones::default(),
             stair_height: None,
             stair_entry: None,
@@ -6082,7 +6090,12 @@ impl GameState {
         entity_pos: [i32; 3],
         action_press: bool,
     ) {
-        let (dx, dz) = crate::player::reach_offset(angle);
+        let re2 = self.is_re2_room;
+        let (dx, dz) = if re2 {
+            crate::player::reach_offset_re2(angle)
+        } else {
+            crate::player::reach_offset(angle)
+        };
         let reach = [pos[0] + dx, pos[1], pos[2] + dz];
         let mut action_fired = false;
         for slot in 0..ROOM_ACTION_SLOTS {
@@ -6101,7 +6114,17 @@ impl GameState {
                 continue;
             }
             let probe = if flags & 0x40 != 0 { entity_pos } else { reach };
-            if !room_action.contains(probe[0], probe[2]) {
+            let inside = if re2 {
+                self.re2.gates[slot].contains(
+                    room_action.zone,
+                    probe[0],
+                    probe[2],
+                    crate::sca::floor_of(pos[1]),
+                )
+            } else {
+                room_action.contains(probe[0], probe[2])
+            };
+            if !inside {
                 continue;
             }
             // Record which entry the probe hit: the forward reach point writes
@@ -7686,6 +7709,9 @@ impl GameState {
         let Some(door) = self.doors.get(usize::from(slot)).copied().flatten() else {
             return false;
         };
+        if door.re2.is_some() {
+            return self.try_re2_door(&door);
+        }
         // The character-restriction test is inert for the two PC characters:
         // it compares the player id against 3, and ids 0/1 never match. Keep
         // the original's exact test so a record with bit 0x40 behaves the same.
@@ -7810,7 +7836,13 @@ impl GameState {
     /// as the target: the transition re-aims the camera without a reload.
     fn begin_transition(&mut self, door: &Door) -> bool {
         let camera_only = door.camera & 0x80 != 0;
-        let target = if camera_only {
+        let target = if let Some(re2) = door.re2 {
+            RoomId {
+                stage: re2.stage,
+                room: re2.room,
+                ..self.id
+            }
+        } else if camera_only {
             self.id
         } else {
             let Some(target) = self.door_destination(self.id, door.next_room) else {
@@ -7839,7 +7871,7 @@ impl GameState {
         // pass is suspended. The climb faces the doorway and is torn down
         // when the destination loads. The original's door handler raises no
         // zone flag here, so none is latched.
-        if crate::door::is_stair_type(door.door_type) {
+        if door.re2.is_none() && crate::door::is_stair_type(door.door_type) {
             let target_x = i32::from(door.zone[0]) + i32::from(door.zone[2]) / 2;
             let target_z = i32::from(door.zone[1]) + i32::from(door.zone[3]) / 2;
             self.stair_entry = Some(StairEntryState {
@@ -7853,6 +7885,19 @@ impl GameState {
             self.stair_climb = true;
         }
         true
+    }
+
+    /// `Sce_door`: an open door starts the transition. A locked one (bit
+    /// `0x80` of its lock byte, unlocked by its bit in `door_locks`) stays
+    /// shut until R8 brings the keys and their messages.
+    fn try_re2_door(&mut self, door: &Door) -> bool {
+        let bit = door.lock & 0x3F;
+        let word = usize::from(bit >> 5) & 1;
+        let unlocked = self.re2.door_locks[word] & (0x8000_0000 >> (bit & 31)) != 0;
+        if door.lock & 0x80 == 0 || unlocked {
+            return self.begin_transition(door);
+        }
+        false
     }
 
     /// Restore the message word a door zeroed. The original's gameplay loop
@@ -8686,6 +8731,7 @@ impl ScdHost for ScdGameHost<'_> {
                     lock: operand_u8(operands, 9),
                     key: operand_u8(operands, 15),
                     sub_type: operand_u8(operands, 16),
+                    re2: None,
                 };
                 let action = RoomAction {
                     slot,
@@ -12737,6 +12783,7 @@ mod tests {
             lock,
             key: 0,
             sub_type: 0x81,
+            re2: None,
         }
     }
 

@@ -254,8 +254,8 @@ fn read_scripts(pack: &Pack, entry: &str) -> Result<scd::ir::Scripts> {
 pub struct Loaded {
     pub id: RoomId,
     pub state: RoomState,
-    /// The game the room's files are in. An RE2 room has no scripts the
-    /// engine can run yet, so it runs none.
+    /// The game the room's files are in. An RE2 room's scripts run on
+    /// [`crate::scd2::vm`], not this crate's RE1 VM: see [`Loaded::re2_scripts`].
     pub dialect: Dialect,
     rdt: Option<Vec<u8>>,
 }
@@ -314,6 +314,25 @@ impl Loaded {
             ScriptSource::Room => read_scripts(pack, &folder.file(SCD_FILE))?,
         };
         Ok((scripts, source))
+    }
+
+    /// An RE2 room's scripts: from its RDT, or from its folder's script file.
+    /// `None` when the room isn't RE2's or its folder has none.
+    pub fn re2_scripts(&self, pack: &Pack) -> Result<Option<crate::scd2::Scripts>> {
+        if self.dialect != Dialect::Re2 {
+            return Ok(None);
+        }
+        if let Some(data) = &self.rdt {
+            return crate::scd2::reader::parse(data).map(Some);
+        }
+        let path = Folder::of(pack, self.id).file(crate::scd2::SCRIPT_FILE);
+        let Ok(bytes) = pack.read(&path) else {
+            return Ok(None);
+        };
+        let text = std::str::from_utf8(&bytes).with_context(|| format!("reading {path}"))?;
+        crate::scd2::akscr::compile(text)
+            .with_context(|| format!("compiling {path}"))
+            .map(Some)
     }
 
     /// The scripts the room runs, wherever they come from.
@@ -617,11 +636,24 @@ pub fn convert_rdt2(
     if format!("{built:?}") != format!("{expected:?}") {
         bail_difference("builds a different room from its RDT", &expected, &built)?;
     }
+    // The scripts travel as text; they must compile back to the same lists.
+    let scripts = crate::scd2::reader::parse(data).context("the room's scripts")?;
+    let script_text = crate::scd2::akscr::decompile(&scripts);
+    let compiled = crate::scd2::akscr::compile(&script_text).context("the written room script")?;
+    if compiled != scripts {
+        anyhow::bail!("the written room script does not compile back to the room's scripts");
+    }
     // An RE2 room is one RDT's: its folder is the RDT's.
-    Ok(vec![(
-        format!("{}/{}", id.rdt_dir(), source::XML_FILE),
-        text.into_bytes(),
-    )])
+    Ok(vec![
+        (
+            format!("{}/{}", id.rdt_dir(), source::XML_FILE),
+            text.into_bytes(),
+        ),
+        (
+            format!("{}/{}", id.rdt_dir(), crate::scd2::SCRIPT_FILE),
+            script_text.into_bytes(),
+        ),
+    ])
 }
 
 /// Convert one RDT into its room folder: `room.xml` and the other files it

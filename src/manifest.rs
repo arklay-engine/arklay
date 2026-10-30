@@ -95,6 +95,12 @@ pub struct Manifest {
     /// character picking its player variant. Absent, a new game starts in
     /// RE1's main hall.
     pub start_room: Option<String>,
+    /// Base packs: where a new game places the player in the start room, and
+    /// the facing and health it starts with. Absent, the player enters the
+    /// room through its first door, with RE1's health.
+    pub start_pos: Option<[i32; 3]>,
+    pub start_angle: Option<u16>,
+    pub start_health: Option<i16>,
     /// Base packs: the region whose room scripts the converted install
     /// ships (`convert-game` records it), which picks a mod's per-region
     /// script builds. Absent, a mod's scripts run their USA build.
@@ -119,6 +125,9 @@ impl Manifest {
             source_hash: None,
             lua: Vec::new(),
             start_room: None,
+            start_pos: None,
+            start_angle: None,
+            start_health: None,
             region: None,
         }
     }
@@ -149,6 +158,9 @@ impl Manifest {
         let mut source_hash = None;
         let mut lua = None;
         let mut start_room = None;
+        let mut start_pos = None;
+        let mut start_angle = None;
+        let mut start_health = None;
         let mut region = None;
         let mut seen: HashSet<String> = HashSet::new();
 
@@ -243,6 +255,32 @@ impl Manifest {
                     })?;
                     start_room = Some(room);
                 }
+                "start_pos" => {
+                    let text = non_empty_string(item, "start_pos")?;
+                    let values: Vec<i32> = text
+                        .split(',')
+                        .map(|value| value.trim().parse())
+                        .collect::<Result<_, _>>()
+                        .map_err(|error| {
+                            anyhow!("manifest.toml line {line}: bad `start_pos`: {error}")
+                        })?;
+                    let [x, y, z] = values[..] else {
+                        bail!("manifest.toml line {line}: `start_pos` must be \"x,y,z\"");
+                    };
+                    start_pos = Some([x, y, z]);
+                }
+                "start_angle" => {
+                    let text = non_empty_string(item, "start_angle")?;
+                    start_angle = Some(text.parse().map_err(|error| {
+                        anyhow!("manifest.toml line {line}: bad `start_angle`: {error}")
+                    })?);
+                }
+                "start_health" => {
+                    let text = non_empty_string(item, "start_health")?;
+                    start_health = Some(text.parse().map_err(|error| {
+                        anyhow!("manifest.toml line {line}: bad `start_health`: {error}")
+                    })?);
+                }
                 "region" => {
                     let name = string_value(item, "region")?;
                     region = Some(Region::parse(&name).ok_or_else(|| {
@@ -262,7 +300,12 @@ impl Manifest {
         if kind == PackKind::Mod && base.is_none() {
             bail!("manifest.toml: a mod manifest must name a `base`");
         }
-        if kind == PackKind::Mod && start_room.is_some() {
+        if kind == PackKind::Mod
+            && (start_room.is_some()
+                || start_pos.is_some()
+                || start_angle.is_some()
+                || start_health.is_some())
+        {
             bail!("manifest.toml: `start_room` belongs to a base pack, not a mod");
         }
         if kind == PackKind::Mod && region.is_some() {
@@ -284,6 +327,9 @@ impl Manifest {
             source_hash,
             lua: lua.unwrap_or_default(),
             start_room,
+            start_pos,
+            start_angle,
+            start_health,
             region,
         })
     }
@@ -332,6 +378,15 @@ impl Manifest {
         }
         if let Some(room) = &self.start_room {
             write_pair(&mut out, "start_room", &quote(room));
+        }
+        if let Some([x, y, z]) = self.start_pos {
+            write_pair(&mut out, "start_pos", &quote(&format!("{x},{y},{z}")));
+        }
+        if let Some(angle) = self.start_angle {
+            write_pair(&mut out, "start_angle", &quote(&angle.to_string()));
+        }
+        if let Some(health) = self.start_health {
+            write_pair(&mut out, "start_health", &quote(&health.to_string()));
         }
         if let Some(region) = self.region {
             write_pair(&mut out, "region", &quote(region.symbol()));
@@ -643,6 +698,9 @@ mod tests {
             source_hash: None,
             lua: Vec::new(),
             start_room: None,
+            start_pos: None,
+            start_angle: None,
+            start_health: None,
             region: None,
         }
     }
@@ -663,6 +721,9 @@ mod tests {
             source_hash: None,
             lua: vec!["lua/demo.lua".to_string(), "lua/extra.lua".to_string()],
             start_room: None,
+            start_pos: None,
+            start_angle: None,
+            start_health: None,
             region: None,
         }
     }
@@ -685,6 +746,18 @@ mod tests {
         };
         let error = Manifest::parse(&on_mod.render()).unwrap_err().to_string();
         assert!(error.contains("`region` belongs to a base pack"), "{error}");
+    }
+
+    #[test]
+    fn the_start_placement_round_trips() {
+        let mut manifest = Manifest::base("re2");
+        manifest.start_pos = Some([18802, 0, -3164]);
+        manifest.start_angle = Some(0x800);
+        manifest.start_health = Some(200);
+        let back = Manifest::parse(&manifest.render()).unwrap();
+        assert_eq!(back.start_pos, Some([18802, 0, -3164]));
+        assert_eq!(back.start_angle, Some(0x800));
+        assert_eq!(back.start_health, Some(200));
     }
 
     #[test]
@@ -805,6 +878,9 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             source_hash: None,
             lua: vec!["lua/a.lua".to_string(), "lua/b.lua".to_string()],
             start_room: None,
+            start_pos: None,
+            start_angle: None,
+            start_health: None,
             region: None,
         }
     }

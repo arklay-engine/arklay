@@ -495,11 +495,18 @@ fn base_manifest() -> manifest::Manifest {
     // A new game starts on the street, room 100 (Leon's disc is variant 0,
     // Claire's 1).
     manifest.start_room = Some(START_ROOM.to_string());
+    manifest.start_pos = Some(START_POS);
+    manifest.start_angle = Some(START_ANGLE);
+    manifest.start_health = Some(START_HEALTH);
     manifest
 }
 
 /// The room a new RE2 game starts in.
 const START_ROOM: &str = "100";
+/// Where a new game places the player, facing and health (`Title_game_init`).
+const START_POS: [i32; 3] = [18802, 0, -3164];
+const START_ANGLE: u16 = 0x800;
+const START_HEALTH: i16 = 200;
 
 /// Every `ROOM####.RDT` of both discs, in id order. A file that is not an
 /// RE2 RDT (the retail `ROOM7051.RDT` is a broken stub) is skipped with a

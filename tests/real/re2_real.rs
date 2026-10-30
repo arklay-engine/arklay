@@ -316,7 +316,7 @@ fn every_room_loads_with_its_backgrounds() {
         footsteps += room.footstep_zones.len();
         assert!(
             loaded.own_scripts(pack).unwrap().init.is_empty(),
-            "an RE2 room runs no scripts yet"
+            "an RE2 room's scripts run on scd2::vm, not the RE1 VM"
         );
         for cut in &room.cuts {
             cameras += 1;
@@ -376,6 +376,67 @@ fn every_room_loads_with_its_backgrounds() {
 /// The TeamX RE2 HD pack names a mask page by `bio2hd.asi`'s hash of the
 /// page as the mask decoder keys it; these are the pack's own names for two
 /// cameras' masks.
+/// Every door a room's init sets up leads somewhere real: the destination
+/// room loads, the arrival camera exists and the door's DO2 is in the pack.
+#[test]
+#[ignore]
+fn every_door_leads_to_a_room_a_camera_and_an_animation() {
+    use arklay::game::GameState;
+    use arklay::scd2::{host::GameHost, vm::Vm};
+    let Some(pack) = pack() else {
+        return;
+    };
+    let mut rooms = 0;
+    let mut doors = 0;
+    let mut problems = Vec::new();
+    for id in arklay::room::ids(pack) {
+        let code = id.code();
+        let loaded = arklay::room::load(pack, id).unwrap();
+        let scripts = loaded
+            .re2_scripts(pack)
+            .unwrap()
+            .expect("the room has scripts");
+        let mut game = GameState::new(id, &loaded.state);
+        Vm::new(&scripts).run_init(&mut GameHost { game: &mut game });
+        rooms += 1;
+        for door in game.doors.iter().flatten() {
+            doors += 1;
+            let re2 = door.re2.unwrap();
+            let target = arklay::state::RoomId {
+                stage: re2.stage,
+                room: re2.room,
+                ..id
+            };
+            let Ok(destination) = arklay::room::load(pack, target) else {
+                problems.push(format!(
+                    "{code} door {}: no room {}",
+                    door.slot,
+                    target.code()
+                ));
+                continue;
+            };
+            if usize::from(re2.cut) >= destination.state.cuts.len() {
+                problems.push(format!(
+                    "{code} door {}: {} has no camera {}",
+                    door.slot,
+                    target.code(),
+                    re2.cut
+                ));
+            }
+            if pack.read(&arklay::door2::entry(door.door_type)).is_err() {
+                problems.push(format!(
+                    "{code} door {}: no DO2 {:02x}",
+                    door.slot, door.door_type
+                ));
+            }
+        }
+    }
+    eprintln!("{rooms} rooms, {doors} doors, {} problems", problems.len());
+    assert!(rooms > 200, "{rooms} rooms");
+    assert!(doors > 400, "{doors} doors");
+    assert!(problems.is_empty(), "{problems:#?}");
+}
+
 #[test]
 #[ignore]
 fn the_mask_pages_carry_their_hd_names() {

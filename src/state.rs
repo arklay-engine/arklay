@@ -417,7 +417,47 @@ pub struct Zone {
     pub corners: [[i16; 2]; 4],
 }
 
+/// The gate on one RE2 camera switch zone: a zone only switches while it is
+/// enabled and the player is on its floor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneGate {
+    pub enabled: bool,
+    /// The zone's floor; `0xFF` means every floor.
+    pub floor: u8,
+}
+
+impl Default for ZoneGate {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            floor: 0xFF,
+        }
+    }
+}
+
 impl Zone {
+    /// [`Zone::contains`] for RE2 (`Hit_ck_point4`), whose coordinates are
+    /// signed.
+    pub fn contains_signed(&self, x: i32, z: i32) -> bool {
+        let corner = |index: usize| {
+            [
+                i64::from(self.corners[index][0]),
+                i64::from(self.corners[index][1]),
+            ]
+        };
+        let [x0, z0] = corner(0);
+        let [x1, z1] = corner(1);
+        let [x2, z2] = corner(2);
+        let [x3, z3] = corner(3);
+        let (x, z) = (i64::from(x), i64::from(z));
+        let (dx, dz) = (x - x0, z - z0);
+        if (x1 - x0) * dz > (z1 - z0) * dx || (x3 - x0) * dz < (z3 - z0) * dx {
+            return false;
+        }
+        let (dx, dz) = (x - x2, z - z2);
+        (x3 - x2) * dz <= (z3 - z2) * dx && (x1 - x2) * dz >= (z1 - z2) * dx
+    }
+
     /// Whether `(x, z)` lies inside the quad.
     ///
     /// Faithful to the original: every corner is zero-extended to unsigned
@@ -545,6 +585,8 @@ pub struct RoomState {
     pub sca: Option<Sca>,
     /// Camera switch zones in file order, group headers included.
     pub zones: Vec<Zone>,
+    /// RE2's gates on `zones`, one per zone; empty for an RE1 room.
+    pub zone_gates: Vec<ZoneGate>,
     /// Walkable zones for NPC navigation.
     pub walk_zones: Vec<WalkZone>,
     /// Footstep sound zones, in file order.

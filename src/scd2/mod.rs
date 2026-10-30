@@ -18,8 +18,13 @@
 
 pub mod akscr;
 pub mod asm;
+pub mod host;
 pub mod opcode;
 pub mod reader;
+pub mod vm;
+
+/// The room folder's script file: the room's scripts as `.akscr` text.
+pub const SCRIPT_FILE: &str = "room.akscr";
 
 #[cfg(test)]
 mod tests;

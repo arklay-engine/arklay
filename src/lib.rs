@@ -76,6 +76,7 @@ pub mod render;
 pub mod room;
 pub mod sap;
 pub mod save;
+pub mod sca;
 pub mod scd;
 pub mod scd2;
 pub mod screenshot;

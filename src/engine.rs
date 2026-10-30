@@ -2250,15 +2250,30 @@ impl GameSession {
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
-        if !own_start {
+        let manifest = pack.manifest();
+        let start_pos = manifest.and_then(|manifest| manifest.start_pos);
+        if let Some(pos) = start_pos {
+            player_state.pos = pos;
+            player_state.collision_mirror = [pos[0], pos[2]];
+            player_state.angle = manifest
+                .and_then(|manifest| manifest.start_angle)
+                .unwrap_or(0);
+        } else if !own_start {
             player_state.pos = [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z];
             player_state.angle = NEW_GAME_ANGLE;
         }
+        if let Some(health) = manifest.and_then(|manifest| manifest.start_health) {
+            game.entities[0].health = health;
+            game.max_health = health;
+            game.set_health_copy(health);
+        }
         game.sync_entity_from_player(&player_state);
         let mut session = Self::from_loaded(pack, loaded, game, player_state, save_dir, options)?;
-        // A pack's own start room has no shipped start position: the player
+        // A pack's own start room with no recorded start position: the player
         // enters like a `--room` boot.
-        if own_start {
+        if start_pos.is_some() {
+            session.rescan_room_camera();
+        } else if own_start {
             session.place_room_entry(pack, id);
         }
         Ok(session)
@@ -2632,6 +2647,7 @@ impl GameSession {
         {
             let mut host = game::ScdGameHost::new(&mut self.game);
             self.command_vm.run_init(&mut host);
+            run_re2_init(self.loaded.re2_vm.as_mut(), &mut self.game);
         }
         self.apply_screen_border();
         // The init script's starts and kills apply in program order before the
@@ -2704,6 +2720,11 @@ impl GameSession {
             self.player.angle = angle;
             self.game.sync_entity_from_player(&self.player);
         }
+        self.rescan_room_camera();
+    }
+
+    /// Select the cut for the player's placement, as a room load does.
+    fn rescan_room_camera(&mut self) {
         // `room_set` zeroes `g_roomCameraId` before its switch-zone scan, so a
         // room load selects its cut from camera 0. The boot scan above ran at
         // the walk-zone spawn (or, for a debug jump, at the source room's
@@ -6944,6 +6965,19 @@ pub fn room_entry_placement(
     target: RoomId,
 ) -> Option<([i32; 3], u16)> {
     let door = entry_door(&game.doors);
+    if let Some(re2) = door.and_then(|door| door.re2) {
+        let dest = RoomId {
+            stage: re2.stage,
+            room: re2.room,
+            ..target
+        };
+        let neighbour = room_door_state(pack, dest).ok()?;
+        let back = neighbour.doors.iter().flatten().find(|back| {
+            back.re2
+                .is_some_and(|re2| re2.stage == target.stage && re2.room == target.room)
+        })?;
+        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF));
+    }
     if let Some(door) = door
         && let Some(dest) = game.door_destination(target, door.next_room)
         && dest != target
@@ -6968,7 +7002,7 @@ fn entry_door(doors: &[Option<game::Door>; game::ROOM_ACTION_SLOTS]) -> Option<g
         .iter()
         .flatten()
         .copied()
-        .find(|door| crate::door::is_stair_type(door.door_type))
+        .find(|door| door.re2.is_none() && crate::door::is_stair_type(door.door_type))
         .or_else(|| doors.iter().flatten().copied().next())
 }
 
@@ -6983,6 +7017,10 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
     vm.run_init(&mut host);
+    let mut re2_vm = loaded
+        .re2_scripts(pack)?
+        .map(|scripts| crate::scd2::vm::Vm::new(&scripts));
+    run_re2_init(re2_vm.as_mut(), &mut game);
     Ok(game)
 }
 
@@ -10524,7 +10562,11 @@ fn start_transition(
     let camera_only = record.camera & 0x80 != 0;
     let silent = record.camera & 0x40 != 0;
     let entry_camera = record.camera & 0x3F;
-    let animation = load_door_animation(pack, record, entry_camera);
+    let animation = if record.re2.is_some() {
+        load_re2_door_animation(pack, record)
+    } else {
+        load_door_animation(pack, record, entry_camera)
+    };
     let destination = if camera_only {
         None
     } else {
@@ -10532,12 +10574,19 @@ fn start_transition(
     };
     // A destination byte of 0x20 and up changes stage: `init_room` yields a
     // frame before its `room_set`.
-    let stage_change = record.next_room >= 0x20;
+    let stage_change = match record.re2 {
+        Some(re2) => re2.stage != source.stage,
+        None => record.next_room >= 0x20,
+    };
+    let mut timeline = transition::Transition::new(animation)
+        .with_fade(fade.fade_type(), fade.counter(), fade.state())
+        .with_load(camera_only, stage_change);
+    if record.re2.is_some() {
+        timeline = timeline.with_timing(transition::Timing::Re2);
+    }
     Ok(TransitionMode {
         stage_change: stage_change && !camera_only,
-        transition: transition::Transition::new(animation)
-            .with_fade(fade.fade_type(), fade.counter(), fade.state())
-            .with_load(camera_only, stage_change),
+        transition: timeline,
         door: *record,
         target: transition.target,
         camera_only,
@@ -10584,6 +10633,34 @@ fn load_door_animation(pack: &Pack, record: &game::Door, entry_camera: u8) -> Do
         },
     );
     DoorAnimation::new(dor, vm)
+}
+
+/// An RE2 door's DO2 from the pack: its `door_type` holds the file, its
+/// `direction` the door type its script reads.
+fn load_re2_door_animation(pack: &Pack, record: &game::Door) -> DoorAnimation {
+    let path = door2::entry(record.door_type);
+    let bytes = match pack.read(&path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("warning: missing door animation {path}: {err}");
+            return DoorAnimation::missing();
+        }
+    };
+    let do2 = match door2::parse(&bytes) {
+        Ok(do2) => do2,
+        Err(err) => {
+            eprintln!("warning: invalid door animation {path}: {err:#}");
+            return DoorAnimation::missing();
+        }
+    };
+    let vm = door2::vm::Vm::new(
+        &do2,
+        door2::vm::DoorParams {
+            kind: record.direction,
+            door: record.door_type,
+        },
+    );
+    DoorAnimation::new_re2(do2, vm, door_bank(pack, record.door_type))
 }
 
 /// Render one transition frame: black while the timeline says so, otherwise
@@ -10768,6 +10845,14 @@ fn load_transition_destination(
     // feeds the .dor animation, so it must not seed the room camera.
     loaded.room.current_cut = 0;
     game.camera.current_cut = 0;
+    // An RE2 door names the camera the player arrives under (`Door_load`).
+    if let Some(re2) = session.door.re2 {
+        let cut = usize::from(re2.cut);
+        if cut < loaded.room.cuts.len() {
+            loaded.room.current_cut = cut;
+            game.camera.current_cut = cut;
+        }
+    }
 }
 
 /// `room_transition_load`'s `update_room_bgm` for a finished transition into
@@ -13148,6 +13233,8 @@ struct LoadedRoom {
     room: RoomState,
     scripts: scd::ir::Scripts,
     script_source: ScriptSource,
+    /// An RE2 room's script run, in place of `scripts`.
+    re2_vm: Option<crate::scd2::vm::Vm>,
     player_assets: Option<PlayerAssets>,
 }
 
@@ -13158,6 +13245,9 @@ struct LoadedRoom {
 fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
     let loaded = crate::room::load(pack, id)?;
     let (scripts, script_source) = room_scripts(pack, id, &loaded)?;
+    let re2_vm = loaded
+        .re2_scripts(pack)?
+        .map(|scripts| crate::scd2::vm::Vm::new(&scripts));
     let dialect = loaded.dialect;
     let mut room = loaded.state;
     for warning in &room.model_warnings {
@@ -13190,6 +13280,7 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
         room,
         scripts,
         script_source,
+        re2_vm,
         player_assets,
     })
 }
@@ -13247,8 +13338,20 @@ fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     let mut command_vm = scd::vm::CommandVm::new(&loaded.scripts);
     let mut host = game::ScdGameHost::new(game);
     command_vm.run_init(&mut host);
+    run_re2_init(loaded.re2_vm.as_mut(), game);
     game.apply_room_edits(&mut loaded.room);
     apply_screen_border(game, &mut loaded.room);
+}
+
+/// An RE2 room's init procedure.
+fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState) {
+    game.is_re2_room = vm.is_some();
+    let Some(vm) = vm else {
+        return;
+    };
+    game.re2.gates = Default::default();
+    let mut host = crate::scd2::host::GameHost { game };
+    vm.run_init(&mut host);
 }
 
 /// Apply the command pass's `evt_exec` starts and `task_kill` kills in
@@ -13278,6 +13381,23 @@ struct RoomContext<'a> {
     enemy_lua: Option<&'a mut enemy::LuaEnemyHost>,
 }
 
+/// The action key at the foot or head of RE2 stairs takes the player to their
+/// other end at once; the climb itself isn't played yet.
+fn climb_re2_stairs(context: &mut RoomContext<'_>) -> bool {
+    let Some(sca) = &context.room.sca else {
+        return false;
+    };
+    let radius = context.player.radius;
+    let Some(stairs) = crate::sca::stairs_at(sca, context.player.pos, radius) else {
+        return false;
+    };
+    let exit = crate::sca::stairs_exit(stairs, context.player.pos, radius);
+    context.player.pos = exit;
+    context.player.collision_mirror = [exit[0], exit[2]];
+    context.game.sync_entity_from_player(context.player);
+    true
+}
+
 /// The pad-driven half of the player's frame: the control gate has passed, so
 /// the action-key scan, the stair/ladder zone branch and then the locomotion
 /// (or weapon) machine run in the original's order.
@@ -13286,6 +13406,9 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
     // player's frame-0 dispatch, before the behaviour it selects executes on
     // the same tick (`update_player_anim`, 0x00480ebd). `pad` is already
     // blanked for a closed controls latch, and the message gate is open here.
+    if pad.action_pressed && climb_re2_stairs(context) {
+        return;
+    }
     if pad.action_pressed {
         context.game.player_action_press(context.player);
         // `check_action_object` follows the climb scan in the same dispatch,
@@ -13652,8 +13775,8 @@ fn tick_room_timed(
                 context.player.collision_mirror[1],
             ],
         };
-        let resolution = player::resolve_collision_full(
-            &context.room.collision,
+        let resolution = player::resolve_room_collision(
+            context.room,
             prev,
             context.game.entities[0].pos,
             context.player.radius,
@@ -16380,8 +16503,47 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
     load_character_assets(pack, id.player_flag & 3)
 }
 
+/// The weapon RE2's player carries until weapon changes arrive with the
+/// inventory: each character's handgun (Leon's 02, Claire's 09), whose bank
+/// has the locomotion the other character's stub files lack.
+const RE2_DEFAULT_WEAPONS: [u8; 2] = [0x02, 0x09];
+
+/// RE2's character `character` holding the default weapon, from either disc's
+/// files. `None` when the pack has no RE2 player, as an RE1 pack doesn't.
+fn load_re2_player_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
+    let pld_bytes = (0..2).find_map(|disc| {
+        pack.read(&format!("player/{character:02x}/model_{disc}.pld"))
+            .ok()
+    })?;
+    let weapon = RE2_DEFAULT_WEAPONS[usize::from(character & 1)];
+    let plw_bytes = (0..2).find_map(|disc| {
+        pack.read(&format!(
+            "player/{character:02x}/weapon/{weapon:02x}_{disc}.plw"
+        ))
+        .ok()
+    })?;
+    let banks = crate::emd2::parse_pld(&pld_bytes).and_then(|pld| {
+        let plw = crate::emd2::parse_plw(&plw_bytes)?;
+        crate::emd2::player_banks(&pld, &plw).context("the weapon has no locomotion clips")
+    });
+    match banks {
+        Ok((emd, emw)) => Some(PlayerAssets {
+            emd,
+            emw,
+            weapons: std::collections::HashMap::new(),
+        }),
+        Err(err) => {
+            eprintln!("warning: invalid RE2 player {character}: {err:#}");
+            None
+        }
+    }
+}
+
 /// Load character block `character`'s model, locomotion and weapon clips.
 fn load_character_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
+    if let Some(assets) = load_re2_player_assets(pack, character) {
+        return Some(assets);
+    }
     let emd_path = crate::convert::skin_entry(character, 0);
     let emw_path = crate::weapons::weapon_emw_entry(character, 0);
     let emd_bytes = pack.read(&emd_path).map_err(|err| {
@@ -20953,6 +21115,7 @@ mod tests {
                 ..RoomState::default()
             },
             scripts: Default::default(),
+            re2_vm: None,
             script_source: ScriptSource::Rdt,
             player_assets: None,
         };
@@ -21012,6 +21175,7 @@ mod tests {
                     ..RoomState::default()
                 },
                 scripts: Default::default(),
+                re2_vm: None,
                 script_source: ScriptSource::Rdt,
                 player_assets: None,
             }),
