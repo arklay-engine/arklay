@@ -104,20 +104,24 @@ const EDT_SLOT: usize = 0;
 /// running to the next section; none when the room has no sound sections.
 pub fn sound_sections(data: &[u8]) -> Result<Option<(&[u8], &[u8])>> {
     bytes(data, OFFSETS, OFFSET_COUNT * 4).context("section offset table")?;
-    let offsets: Vec<usize> = (0..OFFSET_COUNT)
-        .map(|slot| offset(data, slot).map(|offset| offset as usize))
-        .collect::<Result<_>>()?;
-    let section = |slot: usize| {
-        let start = offsets[slot];
-        let end = offsets
+    // Only the two sound sections are checked; another section's bad offset
+    // just cannot end one.
+    let ends: Vec<usize> = (0..OFFSET_COUNT)
+        .filter_map(|slot| u32_at(data, OFFSETS + slot * 4).ok())
+        .map(|offset| offset as usize)
+        .filter(|&offset| offset <= data.len())
+        .collect();
+    let section = |slot: usize| -> Result<Option<&[u8]>> {
+        let start = offset(data, slot)? as usize;
+        let end = ends
             .iter()
             .copied()
             .filter(|&offset| offset > start)
             .min()
             .unwrap_or(data.len());
-        (start != 0).then(|| &data[start..end])
+        Ok((start != 0).then(|| &data[start..end]))
     };
-    Ok(section(EDT_SLOT).zip(section(EDT_SLOT + 1)))
+    Ok(section(EDT_SLOT)?.zip(section(EDT_SLOT + 1)?))
 }
 
 /// Read an RE2 RDT into a room definition.

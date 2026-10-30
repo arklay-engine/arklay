@@ -262,10 +262,11 @@ pub fn parse_wav(bytes: &[u8]) -> Result<Wav> {
     let format = format.context("WAV file has no `fmt ` chunk")?;
     let mut data = data.context("WAV file has no `data` chunk")?;
     if let Some(decoder) = adpcm {
-        data = crate::adpcm::decode(&decoder, &data)?
-            .iter()
-            .flat_map(|sample| sample.to_le_bytes())
-            .collect();
+        let samples = crate::adpcm::decode(&decoder, &data)?;
+        data = Vec::with_capacity(samples.len() * 2);
+        for sample in samples {
+            data.extend(sample.to_le_bytes());
+        }
     }
     Ok(Wav {
         format,

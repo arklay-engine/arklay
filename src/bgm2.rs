@@ -260,9 +260,10 @@ mod tests {
         assert_eq!(music.main_id(), None);
         assert_eq!(music.sub_id(), Some(0x12));
         // Stage 0 and rooms past a stage are not in the table.
+        let before = table.clone();
         table.set(0, 0, 1, 0);
         table.set(8, 7, 1, 0);
-        assert_eq!(table.get(6, 7).unwrap(), RoomMusic::default());
+        assert_eq!(table, before);
     }
 
     #[test]

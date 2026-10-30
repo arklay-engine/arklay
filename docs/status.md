@@ -48,7 +48,7 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-28.
 | R1 RE2 first light | RE2 rooms: the `rdt2` reader (cameras, RVD switch zones, SCA collision), letter stages A-G, the base manifest's `start_room`, the collision debug overlay, and the TeamX RE2 HD backgrounds | done |
 | R2 RE2 models | RE2 EMD, PLD and PLW through the shared model and animation path, the `--model` viewer, per-camera LIT lights, HD model skins, and the `re2` pack conventions | done |
 | R3 RE2 scripts | The RE2 SCD reader (`scd2`): init and main procedure lists, the RE2 opcode table, `scd export` to `.s` and structured `.akscr`, both round-tripping every retail room byte for byte | done |
-| R5 RE2 audio | MS-ADPCM decoding (`adpcm`) matching ffmpeg, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
+| R5 RE2 audio | MS-ADPCM decoding (`adpcm`), matching ffmpeg up to its rounding, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
 
 The other RE2 milestones (R4, R6 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
@@ -950,7 +950,7 @@ in) as `bank.edh`; a room's own table, RDT sections 0 and 1, becomes
 `room/<id>/sound.edh` (476 of 501 rooms). `se2::Banks` loads banks the way
 `SsLoadBanks` does (the room bank, its three footstep sets at slots 23, 26 and
 29 from `footstep_tbl`, `room000` for the rooms `Room_fs_ck` lists, core 0x16
-under every core but 0x15, the reverb enemy bank for 0x25/0x26) and resolves
+over every core but 0x15, the reverb enemy bank for 0x25/0x26) and resolves
 a `Snd_se_on` id (type byte 3, slot byte 2) to a WAV and the `SsSetVol` gain
 of its EDT tone. `bgm2` holds the room music table: `bgm_tbl` has one `u16`
 per room (main id low, sub id high, `0x3f` none) written only by script opcode

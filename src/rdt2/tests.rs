@@ -102,6 +102,22 @@ fn the_sample_detects_as_re2() {
 }
 
 #[test]
+fn sound_sections_run_to_the_next_section() {
+    let mut data = sample();
+    assert_eq!(sound_sections(&data).unwrap(), None);
+    let end = data.len();
+    data.extend([0xAA; 8]);
+    data.extend([0xBB; 4]);
+    data[OFFSETS..OFFSETS + 4].copy_from_slice(&(end as u32).to_le_bytes());
+    data[OFFSETS + 4..OFFSETS + 8].copy_from_slice(&(end as u32 + 8).to_le_bytes());
+    // A bad offset in a section not read neither fails nor ends one.
+    data[OFFSETS + 20..OFFSETS + 24].copy_from_slice(&u32::MAX.to_le_bytes());
+    let (edt, vh) = sound_sections(&data).unwrap().unwrap();
+    assert_eq!(edt, [0xAA; 8]);
+    assert_eq!(vh, [0xBB; 4]);
+}
+
+#[test]
 fn truncated_tables_fail_cleanly() {
     let data = sample();
     for len in [0, 1, 0x20, 0x70, data.len() - 1] {

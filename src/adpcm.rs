@@ -80,6 +80,10 @@ impl Format {
         ensure!(channels > 0, "MS-ADPCM declares zero channels");
         ensure!(sample_rate > 0, "MS-ADPCM declares a zero sample rate");
         ensure!(count > 0, "MS-ADPCM declares no predictor coefficients");
+        ensure!(
+            samples_per_block != 1,
+            "MS-ADPCM declares 1 frame per block, fewer than its two header frames"
+        );
         let header = HEADER_PER_CHANNEL * usize::from(channels);
         ensure!(
             usize::from(block_align) > header,
@@ -144,11 +148,15 @@ struct Channel {
 impl Channel {
     fn expand(&mut self, nibble: u8, rounding: Rounding) -> i16 {
         let signed = i32::from(nibble) - if nibble >= 8 { 16 } else { 0 };
-        let product = self.sample1 * self.coefficient1 + self.sample2 * self.coefficient2;
+        // A file's own coefficients can be any `i16`, so the sum can pass
+        // `i32`; the prediction is clamped below either way.
+        let product = i64::from(self.sample1) * i64::from(self.coefficient1)
+            + i64::from(self.sample2) * i64::from(self.coefficient2);
         let prediction = match rounding {
             Rounding::Shift => product >> 8,
             Rounding::Divide => product / 256,
-        };
+        }
+        .clamp(i32::MIN.into(), i32::MAX.into()) as i32;
         let sample = (prediction + signed * self.delta).clamp(i16::MIN.into(), i16::MAX.into());
         self.sample2 = self.sample1;
         self.sample1 = sample;
@@ -271,6 +279,8 @@ mod tests {
         assert!(Format::parse(&fmt(1, 512, 1012)[..30]).is_err());
         assert!(Format::parse(&fmt(0, 512, 1012)).is_err());
         assert!(Format::parse(&fmt(2, 14, 2)).is_err());
+        // A block always decodes its two header frames.
+        assert!(Format::parse(&fmt(1, 512, 1)).is_err());
     }
 
     #[test]
@@ -336,6 +346,19 @@ mod tests {
         assert_eq!(
             decode(&format, &positive).unwrap(),
             decode_with(&format, &positive, Rounding::Divide).unwrap()
+        );
+    }
+
+    #[test]
+    fn extreme_coefficients_clamp_instead_of_overflowing() {
+        let mut fmt = fmt(1, 8, 4);
+        // Predictor 0 becomes (-32768, -32768).
+        fmt[22..26].copy_from_slice(&[0x00, 0x80, 0x00, 0x80]);
+        let format = Format::parse(&fmt).unwrap();
+        let block = [0, 16, 0, 0x00, 0x80, 0x00, 0x80, 0x00];
+        assert_eq!(
+            decode(&format, &block).unwrap(),
+            [i16::MIN, i16::MIN, i16::MAX, 128]
         );
     }
 

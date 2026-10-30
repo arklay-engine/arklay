@@ -951,17 +951,19 @@ fn copy_sound_banks(
                 "no Common/Sound/{kind} directory; its sound bank will be missing"
             ));
         }
-        files.extend(files_in(dir)?);
+        files.extend(
+            files_in(dir)?
+                .into_iter()
+                .filter_map(|path| upper_parts(&path).map(|parts| (path, parts)))
+                .filter(|(_, (_, extension))| matches!(extension.as_str(), "SAP" | "EDH")),
+        );
     }
     progress.begin("sound", files.len() as u64);
-    for path in files {
-        let Some((stem, extension)) = upper_parts(&path) else {
-            continue;
-        };
-        let bank = match extension.as_str() {
-            "SAP" => se2::sap_bank(&stem),
-            "EDH" => se2::edh_bank(&stem),
-            _ => continue,
+    for (path, (stem, extension)) in files {
+        let bank = if extension == "SAP" {
+            se2::sap_bank(&stem)
+        } else {
+            se2::edh_bank(&stem)
         };
         let Some((folder, id)) = bank else {
             warnings.push(format!(

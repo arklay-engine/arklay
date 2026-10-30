@@ -12,6 +12,9 @@
 
 use anyhow::{Result, bail, ensure};
 
+/// The slots a bank holds: the low word's 32 bits and the high word's low 16.
+pub const SLOTS: u32 = 48;
+
 /// The header length before the first WAV.
 pub const HEADER_LEN: usize = 8;
 
@@ -25,6 +28,10 @@ pub fn wavs(data: &[u8]) -> Result<Vec<&[u8]>> {
 pub fn slots(data: &[u8]) -> Result<Vec<(u8, &[u8])>> {
     ensure!(data.len() >= HEADER_LEN, "SAP is shorter than its header");
     let mask = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    ensure!(
+        mask >> SLOTS == 0,
+        "SAP mask 0x{mask:016x} names slots past the {SLOTS} a bank holds"
+    );
     let slots = (0..64u8).filter(|bit| mask >> bit & 1 != 0);
     let mut out = Vec::with_capacity(mask.count_ones() as usize);
     let mut at = HEADER_LEN;
@@ -88,7 +95,7 @@ mod tests {
         let third = riff(b"WAVEccc");
         let data = sap(
             0b101,
-            0x8000_0000,
+            0x8000,
             &[first.clone(), second.clone(), third.clone()],
         );
         assert_eq!(
@@ -119,6 +126,8 @@ mod tests {
             ]
         );
         assert!(slots(&sap(0, 0, &[])).unwrap().is_empty());
+        // A bank has 48 slots; the high word's top 16 bits name none.
+        assert!(slots(&sap(0, 0x1_0000, std::slice::from_ref(&first))).is_err());
     }
 
     #[test]

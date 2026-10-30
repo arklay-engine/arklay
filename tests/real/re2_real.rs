@@ -777,7 +777,8 @@ fn every_wav_decodes_and_matches_ffmpeg() {
 const MAX_FFMPEG_DIFFERENCE: u32 = 128;
 
 /// Every room's sound banks load through `se2` the way `SsLoadBanks` fills
-/// them, and every slot a room's table names has a sound.
+/// them. Some table entries name slots no bank fills; the game plays nothing
+/// for those, so their count is pinned rather than required to be zero.
 #[test]
 #[ignore]
 fn every_room_sound_bank_resolves() {
@@ -824,8 +825,15 @@ fn every_room_sound_bank_resolves() {
         named_but_empty.len()
     );
     assert_eq!(rooms, 501);
-    assert!(sounds > 0);
+    assert_eq!(tables, 476);
+    assert_eq!(sounds, ROOM_SOUNDS);
+    assert_eq!(named_but_empty.len(), ROOM_TABLE_SLOTS_WITHOUT_SOUND);
 }
+
+/// The room sounds the retail rooms load, over all 501 rooms.
+const ROOM_SOUNDS: usize = 5256;
+/// The room table entries that name a slot no bank fills.
+const ROOM_TABLE_SLOTS_WITHOUT_SOUND: usize = 304;
 
 /// Every BGM track the executable's music tables name is a packed track,
 /// apart from the names the retail install ships no `.sap` for.

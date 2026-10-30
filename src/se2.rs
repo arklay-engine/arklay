@@ -160,7 +160,7 @@ pub fn sap_bank(stem: &str) -> Option<(&'static str, String)> {
     }
     let digits = stem.strip_prefix("room")?;
     let bytes = digits.as_bytes();
-    (bytes.len() == 3 && bytes[0].is_ascii_digit() && u8::from_str_radix(&digits[1..], 16).is_ok())
+    (bytes.len() == 3 && bytes[0].is_ascii_digit() && bytes[1..].iter().all(u8::is_ascii_hexdigit))
         .then(|| ("room", digits.to_owned()))
 }
 
@@ -170,7 +170,8 @@ pub fn edh_bank(stem: &str) -> Option<(&'static str, String)> {
     let stem = stem.to_ascii_lowercase();
     let hex = |prefix: &str| -> Option<String> {
         let digits = stem.strip_prefix(prefix)?;
-        (digits.len() == 2 && u8::from_str_radix(digits, 16).is_ok()).then(|| digits.to_owned())
+        (digits.len() == 2 && digits.bytes().all(|b| b.is_ascii_hexdigit()))
+            .then(|| digits.to_owned())
     };
     if let Some(id) = hex("arms") {
         return Some(("arms", id));
@@ -306,10 +307,16 @@ pub struct Play<'a> {
 }
 
 /// The sounds loaded per kind, as `SsLoadBanks` leaves the buffer arrays.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Banks {
     slots: [Vec<Option<String>>; 5],
     tables: [Option<Edh>; 5],
+}
+
+impl Default for Banks {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Banks {
@@ -389,7 +396,7 @@ impl Banks {
     pub fn load_enemy(&mut self, pack: &Pack, id: u8, reverb: u8) {
         self.unload(Kind::Enemy);
         let bank = if reverb == 1 && ECHO_ENEMIES.contains(&id) {
-            id + ECHO_OFFSET
+            id.wrapping_add(ECHO_OFFSET)
         } else {
             id
         };
@@ -419,12 +426,15 @@ impl Banks {
     /// room's [`ROOM_EDH_NAME`].
     pub fn load_room(&mut self, pack: &Pack, stage: u8, room: u8, table: Option<Edh>) {
         self.unload(Kind::Room);
-        let dir = bank_dir("room", &room_bank(stage + 1, room));
+        let Some(bank_stage) = stage.checked_add(1) else {
+            return;
+        };
+        let dir = bank_dir("room", &room_bank(bank_stage, room));
         self.load_dir(pack, Kind::Room, &dir, 0, 48);
         for (set, step) in footsteps(stage, room).into_iter().enumerate() {
             if let Some(step) = step {
                 let dir = bank_dir(STEP_FOLDER, &format!("{step:02x}"));
-                self.load_dir(pack, Kind::Room, &dir, STEP_BASE + 3 * set as u8, 32);
+                self.load_dir(pack, Kind::Room, &dir, STEP_BASE + 3 * set as u8, 3);
             }
         }
         if shares_room000(stage, room) {
@@ -558,6 +568,8 @@ mod tests {
         assert_eq!(edh_bank("arms13"), Some(("arms", "13".into())));
         assert_eq!(edh_bank("CORE0B"), Some(("core", "0b".into())));
         assert_eq!(edh_bank("enemy00"), None);
+        assert_eq!(sap_bank("room1+a"), None);
+        assert_eq!(edh_bank("ARMS+1"), None);
     }
 
     #[test]
@@ -655,6 +667,11 @@ mod tests {
 
         banks.unload(Kind::Room);
         assert_eq!(banks.stem(Kind::Room, 0), None);
+        // An out-of-range stage loads nothing rather than overflowing.
+        banks.load_room(&pack, u8::MAX, 0, None);
+        assert_eq!(banks.stem(Kind::Room, 0), None);
+        // A default bank set is as usable as a new one.
+        Banks::default().load_core(&pack, 0);
     }
 
     #[test]
