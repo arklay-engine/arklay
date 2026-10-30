@@ -38,7 +38,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 ## Game flow
 
 - **Pick-ups.** The item goes straight into the inventory with a "You picked up" message. There is no pick-up screen or item model.
-- **Messages.** The ones the executable draws itself are written from memory, and every message uses RE1's Western font. Rooms' yes/no prompts lose their choices.
+- **Messages.** The ones the executable draws itself are written from memory, and every message uses RE1's Western font. A room's text is its RDT's English list (`rdt + 0x40`), where the executable reads the list before it (`rdt + 0x3C`), so a line with text reveals at the English length; a voiced line has none in either list, so its timing is the original's. A voice line lasts as long as its message: `wsleep` doesn't wait for the audio, as the original does when the audio outlasts the message.
 - **Start items.** `games/re2/game/new_game.lua` is written from memory, not read from `Stage_init_item`.
 - **Text screens.** The title, new-game choice, inventory and item box are plain text stand-ins (`games/re2/ui`), and the save screen has no background: RE2's own art is not converted.
 - **The inventory.** Confirm equips a weapon or uses a healing item. There is no CHECK, MOVE, combining, map or file tab, and equipping changes nothing about the weapon the player holds.

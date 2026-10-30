@@ -82,6 +82,8 @@ const TASK_SLOTS: usize = super::vm::TASKS;
 /// `set 2, 7`: `FG_STOP_DISABLE_INPUT`, a cutscene holding the player's input.
 const STOP_BANK: u8 = 2;
 const STOP_INPUT: u8 = 7;
+/// `FlagGroup::Message`, `fg_message`: bit 31 is a question's answer, `no`.
+const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
 pub const ITEM_BANK: u8 = 8;
 /// The ink ribbon's item id.
@@ -580,6 +582,11 @@ impl GameHost<'_> {
 
 impl Host for GameHost<'_> {
     fn flag(&self, bank: u8, index: u8) -> bool {
+        if bank == MESSAGE_BANK
+            && u32::from(self.game.message.menu_choice_id()) & (0x8000_0000 >> (index & 31)) != 0
+        {
+            return true;
+        }
         self.game.re2.flag(bank, index)
     }
 
@@ -775,6 +782,16 @@ mod tests {
         assert!(state.flag(3, 33));
         state.set_flag(3, 33, 7);
         assert!(!state.flag(3, 33));
+    }
+
+    #[test]
+    fn a_question_s_answer_reads_as_the_message_flag() {
+        let mut game = GameState::default();
+        game.message.set_menu_choice_id(0x81);
+        let host = GameHost { game: &mut game };
+        assert!(host.flag(MESSAGE_BANK, 31));
+        assert!(host.flag(MESSAGE_BANK, 24));
+        assert!(!host.flag(MESSAGE_BANK, 30));
     }
 
     #[test]

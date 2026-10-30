@@ -260,6 +260,9 @@ pub struct MessageWindow {
     /// scripts' `voice_play` then `message` pair); see
     /// [`MessageWindow::is_subtitle`].
     voiced: bool,
+    /// Whether the window keeps `Mess_disp`'s timing rather than RE1's: a
+    /// space costs no tick and a page break has no settle passes.
+    re2_timing: bool,
     /// How many pages the window has turned since the request.
     page: usize,
 }
@@ -291,6 +294,7 @@ impl Default for MessageWindow {
             previous: MessageInput::default(),
             actions: Vec::new(),
             voiced: false,
+            re2_timing: false,
             page: 0,
         }
     }
@@ -387,6 +391,11 @@ impl MessageWindow {
     /// Mark the request as raised alongside a voice line.
     pub fn set_voiced(&mut self, voiced: bool) {
         self.voiced = voiced;
+    }
+
+    /// Keep `Mess_disp`'s timing from now on.
+    pub fn set_re2_timing(&mut self) {
+        self.re2_timing = true;
     }
 
     /// Whether the window is showing a voiced line's subtitle: a message
@@ -613,6 +622,9 @@ impl MessageWindow {
             match byte {
                 0x00 => {
                     self.ptr = next(self.ptr);
+                    if self.re2_timing {
+                        continue;
+                    }
                     self.char_timer = self.char_delay;
                     return;
                 }
@@ -635,7 +647,7 @@ impl MessageWindow {
                 0x03 => {
                     let line = self.line_counter;
                     self.line_counter = line.wrapping_add(1);
-                    if line < 5 {
+                    if line < 5 && !self.re2_timing {
                         self.char_timer = self.char_timer.wrapping_add(1);
                         return;
                     }
@@ -1761,6 +1773,26 @@ mod tests {
             window.set_voiced(true);
             assert!(!window.is_subtitle(), "{source}");
         }
+    }
+
+    #[test]
+    fn re2_timing_has_free_spaces_and_no_settle_passes() {
+        let (text, bytes) = latin_message("{scroll 1}A  B{clear 3}C{timed 9}");
+        let ticks = |re2: bool| {
+            let mut window = MessageWindow::default();
+            if re2 {
+                window.set_re2_timing();
+            }
+            assert!(window.start(0x40, 0, &bytes, false));
+            let mut ticks = 0;
+            while window.active {
+                window.update(MessageInput::default(), &text, 0);
+                ticks += 1;
+            }
+            ticks
+        };
+        // The two spaces and the five settle passes.
+        assert_eq!(ticks(false) - ticks(true), 7);
     }
 
     #[test]

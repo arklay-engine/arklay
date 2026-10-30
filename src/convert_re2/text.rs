@@ -16,28 +16,52 @@ const SHARED: &str = include_str!("../../games/re2/language/en-US.txt");
 const TABLE: &str =
     " .___()__“”_0123456789:_,\"!?_ABCDEFGHIJKLMNOPQRSTUVWXYZ[/]'-_abcdefghijklmnopqrstuvwxyz";
 
-/// A message stream as a language value: the printing bytes and the line and
-/// page breaks. `0xFB`'s yes/no prompts have no counterpart yet, so their text
-/// reads as a statement.
+/// A message stream as a language value, in the terms of `Mess_disp`: the
+/// printing bytes, the line and page breaks, the character delay and how the
+/// message ends. A delay of zero skips to the next `0xFA`, which holds the
+/// delay instead; the delays are halved as `Mess_disp` halves them.
 pub(super) fn decode_message(stream: &[u8]) -> String {
     let table: Vec<char> = TABLE.chars().collect();
     let mut value = String::new();
     let mut bytes = stream.iter().copied();
     while let Some(byte) = bytes.next() {
+        let mut operand = || bytes.next().unwrap_or(0);
         match byte {
-            0xFE => break,
+            0xFE => {
+                let ticks = operand();
+                if ticks != 0 {
+                    let _ = write!(value, "{{timed {ticks}}}");
+                }
+                break;
+            }
             0xFC => value.push_str("\\n"),
             0xFD => {
-                bytes.next();
-                value.push_str("{clear 0}");
+                let _ = write!(value, "{{clear {}}}", operand());
             }
             0xF9 => {
-                let on = bytes.next().unwrap_or(0) == 1;
+                let on = operand() == 1;
                 let _ = write!(value, "{{color {}}}", u8::from(on));
             }
-            0xFA | 0xFB => {
-                bytes.next();
+            0xF8 => {
+                let _ = write!(value, "{{string {}}}", operand());
             }
+            0xFA => {
+                let delay = operand();
+                let delay = if delay == 0 { 0 } else { (delay / 2).max(1) };
+                let _ = write!(value, "{{scroll {delay}}}");
+            }
+            // A question: the rest of the bytes are the next message's.
+            0xFB => {
+                value.push_str("{branch 0 0 0}");
+                break;
+            }
+            0xEE..=0xF0 => match (byte, operand()) {
+                (0xEF, 0xE6) => value.push_str("S."),
+                (0xF0, 0x09) => value.push_str("T."),
+                (0xF0, 0x0A) => value.push_str("A."),
+                (0xF0, 0x0B) => value.push_str("R."),
+                _ => {}
+            },
             _ => match table.get(usize::from(byte)) {
                 Some('_') | None => {}
                 Some('"') => value.push_str("\\\""),
@@ -155,7 +179,24 @@ mod tests {
         let stream = [
             0xFA, 2, 0x24, 0x45, 0xFC, 0x24, 0xFD, 0, 0x1B, 0xFE, 0, 0x24,
         ];
-        assert_eq!(decode_message(&stream), "Hi\\nH{clear 0}?");
+        assert_eq!(decode_message(&stream), "{scroll 1}Hi\\nH{clear 0}?");
+    }
+
+    #[test]
+    fn a_message_keeps_how_it_ends() {
+        // A voiced line's subtitle: skipped text, a delay, a timed end.
+        let stream = [0xFA, 0, 0x24, 0xFA, 1, 0xFE, 0x14, 0x24];
+        assert_eq!(decode_message(&stream), "{scroll 0}H{scroll 1}{timed 20}");
+        // A page held for a while.
+        assert_eq!(decode_message(&[0xFD, 0x49, 0xFE, 0]), "{clear 73}");
+        // A question stops where the next message begins.
+        assert_eq!(decode_message(&[0x24, 0xFB, 0x44, 0x24]), "H{branch 0 0 0}");
+    }
+
+    #[test]
+    fn a_message_spells_the_stars_ligature() {
+        let stream = [0xEF, 0xE6, 0xF0, 0x09, 0xF0, 0x0A, 0xF0, 0x0B, 0xEF, 0xE6];
+        assert_eq!(decode_message(&stream), "S.T.A.R.S.");
     }
 
     #[test]

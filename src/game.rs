@@ -8027,11 +8027,13 @@ impl GameState {
     /// bits past the low six in the id's high byte ([`crate::text::message_index`]).
     pub fn show_re2_message(&mut self, id: u8) {
         let id = u16::from(id);
+        self.message.set_re2_timing();
         self.show_message_word((id & 0x3F) | ((id >> 6) << 8), RE2_MESSAGE_PAUSE);
     }
 
     /// One of the executable's own messages.
     fn show_re2_global(&mut self, id: u8) {
+        self.message.set_re2_timing();
         self.show_message_word(u16::from(id) | 0x40, RE2_MESSAGE_PAUSE);
     }
 

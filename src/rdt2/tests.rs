@@ -232,3 +232,26 @@ fn reads_the_footstep_zones_by_their_count() {
     data.truncate(data.len() - 2);
     assert!(read(&data).is_err());
 }
+
+#[test]
+fn reads_the_last_room_animations_for_the_player() {
+    let mut data = sample();
+    assert!(room_anim(&data).is_none());
+    let start = data.len();
+    data[OFFSETS + RBJ_SLOT * 4..][..4].copy_from_slice(&(start as u32).to_le_bytes());
+    // A header, then two banks for the player and one for another character.
+    for word in [44u32, 3] {
+        data.extend(word.to_le_bytes());
+    }
+    for (mask, emr, edd) in [(1u32, 1u8, 2u8), (5, 4, 5), (2, 6, 7)] {
+        data.extend(mask.to_le_bytes());
+        data.extend([emr; 4]);
+        data.extend([edd; 4]);
+    }
+    for bank in [[8u32, 16], [20, 28], [32, 40]] {
+        data.extend(bank.iter().flat_map(|word| word.to_le_bytes()));
+    }
+    let (emr, edd) = room_anim(&data).unwrap();
+    assert_eq!(emr, [4u8; 4]);
+    assert_eq!(edd, [5u8; 4]);
+}

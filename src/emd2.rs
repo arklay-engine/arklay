@@ -411,6 +411,18 @@ fn palette_slot(
         .unwrap_or(0) as u8
 }
 
+/// A room's own player animations ([`crate::rdt2::room_anim`]). They pose the
+/// PLD's skeleton, so the bank has none of its own.
+pub fn parse_room_anim(emr: &[u8], edd: &[u8]) -> Result<crate::model::RoomAnim> {
+    let data = [edd, emr].concat();
+    let bank = parse_bank(&data, 0, edd.len(), data.len())?;
+    Ok(crate::model::RoomAnim {
+        skeleton: Default::default(),
+        keyframes: bank.keyframes,
+        clips: bank.clips,
+    })
+}
+
 /// One EDD/EMR pair over `edd..emr..end`. A chunk too short for its header
 /// (EM020's empty second bank is four bytes each) is an empty bank.
 fn parse_bank(data: &[u8], edd: usize, emr: usize, end: usize) -> Result<AnimBank> {
