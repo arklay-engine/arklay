@@ -1,0 +1,54 @@
+# From the start of room 100 to its door, through it, and a few steps into room 101, up to the script that starts there.
+0 up run
+25 right
+26 right
+27 up run
+52 up run
+65 right
+77 right
+85 up
+91 left
+103 left
+112 up run
+137 up run
+162 up run
+187 left
+188 left
+189 up run
+214 up run
+227 left
+239 left
+250 up
+256 right
+268 right
+271 up run
+288 right
+300 right
+311 up
+317 left
+329 left
+341 left
+342 up run
+367 up run
+392 left
+393 left
+394 up run
+419 left
+431 left
+443 up
+449 left
+461 left
+463 up
+469 left
+471 up
+475 left
+477 left
+478 
+480 confirm
+482 
+700 up
+760 
+790 confirm
+792 
+1300 up
+1330 

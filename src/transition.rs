@@ -77,9 +77,12 @@
 //! phase-2 hold, and `Door_move` reads a fresh skip press on every frame.
 //! A skip only stops the door's task 10 ([`DoorStepper::finish`]); the
 //! animation still ends when the stepper says so, after its own fade.
-//! `Sce_Door` and `Set_door` start no fade, so there is no menu-path
-//! `set_fading`. The room side (`Set_door`'s load and `Set_room`) still runs
-//! RE1's order; no RE2 room triggers a door yet.
+//! `Sce_Door` starts `Game_loop`'s door path, which holds the room on screen
+//! for [`RE2_FADE_TICKS`] while `Psx_main` darkens it, before `Set_door` loads
+//! the door and places the player, with `Set_room` running from the next tick.
+//! There is no menu-path `set_fading`. The
+//! original's `Door_exit` and `Set_door`'s tail hand back a tick sooner than
+//! RE1's teardown, so the animation's end isn't followed by its own pass.
 
 /// Leading animation frames the original draws fully black.
 pub const BLACK_FRAMES: u32 = 3;
@@ -89,6 +92,11 @@ pub const PHASE2_HOLD_FRAMES: u8 = 5;
 pub const SKIP_AFTER_FRAME: u32 = 10;
 /// Leading frames an RE2 door draws black: `Door_init`'s pass.
 pub const RE2_BLACK_FRAMES: u32 = 1;
+/// The ticks `Psx_main` keeps darkening the frozen room (`fg_system`'s
+/// `0x10000`) before `Set_door` starts, the tick after the door fired.
+pub const RE2_FADE_TICKS: u8 = 32;
+/// What `Fade_adjust` takes off every channel per tick of that hold.
+const RE2_FADE_STEP: u8 = 8;
 
 /// Which game's door loop the timeline follows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -366,12 +374,15 @@ pub struct TransitionFrame {
     pub finished: bool,
     /// The animation's sound-busy wait state.
     pub sound_busy: bool,
+    /// RE2's hold before the door: the room stays on screen under this veil.
+    pub room_veil: Option<Overlay>,
 }
 
 /// What one frame's scheduler passes did.
 #[derive(Debug, Default)]
 struct FrameOut {
     overlay: Option<Overlay>,
+    room_veil: Option<Overlay>,
     black: bool,
     drew: bool,
     place: bool,
@@ -462,6 +473,8 @@ pub struct Transition<S> {
     /// comes up again.
     skip_released: bool,
     timing: Timing,
+    /// The ticks of [`RE2_FADE_TICKS`] gone.
+    room_fade: u8,
 }
 
 impl<S: DoorStepper> Transition<S> {
@@ -489,6 +502,7 @@ impl<S: DoorStepper> Transition<S> {
             sound_busy: false,
             skip_released: false,
             timing: Timing::Re1,
+            room_fade: 0,
         }
     }
 
@@ -590,6 +604,13 @@ impl<S: DoorStepper> Transition<S> {
 
     fn run_main(&mut self, out: &mut FrameOut) {
         match self.main {
+            MainTask::Settle if self.timing == Timing::Re2 && self.room_fade < RE2_FADE_TICKS => {
+                self.room_fade += 1;
+                out.room_veil = Some(Overlay {
+                    alpha: self.room_fade.saturating_mul(RE2_FADE_STEP),
+                    color: FadeColor::Black,
+                });
+            }
             MainTask::Settle => self.main = MainTask::Spawn,
             MainTask::Spawn => {
                 // `set_fading` only latches while the accumulator is idle;
@@ -697,6 +718,9 @@ impl<S: DoorStepper> Transition<S> {
         }
         if ended {
             self.anim = AnimTask::Teardown;
+            if self.timing == Timing::Re2 {
+                self.run_anim(skip, out);
+            }
             return;
         }
         // Phase 2 holds for five extra frames with the frame counter frozen.
@@ -782,6 +806,7 @@ impl<S: DoorStepper> Transition<S> {
             place: out.place,
             load: out.load,
             finished: out.finished,
+            room_veil: out.room_veil,
             ..self.output_with()
         }
     }
@@ -878,6 +903,12 @@ mod tests {
             .with_fade(2, -6144, -4097)
             .with_load(true, false)
             .with_timing(Timing::Re2);
+        // `Psx_main` darkens the room first, with nothing of the door running.
+        for tick in 1..=RE2_FADE_TICKS {
+            let veil = transition.tick(false).room_veil.expect("the room is up");
+            assert_eq!(veil.alpha, tick.saturating_mul(RE2_FADE_STEP));
+        }
+        assert_eq!(transition.stepper().steps, 0);
         // `Set_door` starts no fade; the animation's first pass is the third
         // frame, and only it is black.
         let mut black = Vec::new();
