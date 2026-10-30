@@ -49,8 +49,9 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-28.
 | R2 RE2 models | RE2 EMD, PLD and PLW through the shared model and animation path, the `--model` viewer, per-camera LIT lights, HD model skins, and the `re2` pack conventions | done |
 | R3 RE2 scripts | The RE2 SCD reader (`scd2`): init and main procedure lists, the RE2 opcode table, `scd export` to `.s` and structured `.akscr`, both round-tripping every retail room byte for byte | done |
 | R5 RE2 audio | MS-ADPCM decoding (`adpcm`), matching ffmpeg up to its rounding, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
+| R6 RE2 FMV | The in-house MPEG-1 decoder (`mpeg`: program stream demux, MPEG-1 video, MP2 audio) behind the movie path, RE2 films played by name (`--fmv opn1stl`, `r109`, `staff`), and `verify` parsing MPEG; all 26 retail films play end to end with ffprobe's frame counts | done |
 
-The other RE2 milestones (R4, R6 onwards) are still open and tracked by the
+The other RE2 milestones (R4, R7 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
@@ -963,6 +964,31 @@ the streamed `.sap` WAVs are the music. Not modelled yet: the `Snd_se_on` and
 `SsPlay` per-room special cases, 3D panning, the `SsLoadHack` dual-BGM
 speaker setup, and running the music table, which waits for the RE2 script VM
 (R8).
+
+RE2 R6 (#250) plays the RE2 films. Conversion already packs each retail
+`.bin` raw as `movie/<name>.mpg`: an MPEG-1 program stream with 640x480
+MPEG-1 video at 29.97 fps and 192 kbit/s 44.1 kHz stereo MP2 audio. Shipped
+formats use the port's own decoders, so `src/mpeg/` decodes them in-house:
+a program stream demuxer, an MPEG-1 video decoder ported from pl_mpeg
+(MIT) and an MP2 decoder after kjmp2. There are three departures from the
+references. A damaged slice is counted and its picture kept. Motion
+vectors that point outside the picture read clamped edge pixels. MP2
+requantisation and output scaling follow the standard, as ffmpeg does,
+not kjmp2's approximations, which played about 2% quiet. Against ffmpeg's decode,
+video is above 40 dB PSNR on the unit fixture and above 35 dB on a retail
+film, and audio is above 40 dB SNR. A film has one display frame per
+coded picture. Its audio starts at the PTS offset from the video (both
+start at 0.403 s in every retail film) and is resampled to the mixer's
+22050 Hz. Frames are shown full size through the HD film path, which no
+longer needs the `hd` feature. RE2 films have no id table, so
+`MovieSession::open_named` opens one by name and `--fmv` takes a name or
+an RE1 id. A mod's `movie/<name>.mp4` or `.avi` still wins over the
+`.mpg`. `tests/real/re2_real.rs` plays all 26 films end to end and checks
+each one's picture count and MP2 frame count against `ffprobe`: 120 to
+9173 pictures, with a duration within a frame of ffprobe's, whose duration
+ends half a frame early. No film has a damaged slice. One thread decodes
+about 6 ms per 640x480 frame, so decoding runs on the caller's thread.
+`verify` now parses the MPEG entries, so strict mode passes them.
 
 The manifest no longer carries `rdt_version`/`scd_version`: formats are
 detected per file (`src/format.rs`), so one pack may hold both dialects.

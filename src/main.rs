@@ -86,15 +86,17 @@ struct Cli {
     )]
     save_out: Option<PathBuf>,
 
-    /// Play one film id (0-28) standalone and exit; with `--capture` the
-    /// frame after `--ticks` fixed ticks is written headlessly
+    /// Play one film standalone and exit: an RE1 film id (0-28) or a film
+    /// name (`movie/<name>` in the pack, such as RE2's `opn1stl`, `r109` or
+    /// `staff`); with `--capture` the frame after `--ticks` fixed ticks is
+    /// written headlessly
     #[arg(
         long,
-        value_name = "ID",
+        value_name = "FILM",
         requires = "pack",
         conflicts_with_all = ["room", "ui", "ending"]
     )]
-    fmv: Option<u8>,
+    fmv: Option<String>,
 
     /// Play ending row `ID` (1-7): its film chain, the RESULT screen, the
     /// rocket-launcher epilogue (endings 6/7) and the next-cycle save, then the
@@ -1430,10 +1432,10 @@ fn main() -> Result<()> {
                     player_options,
                 );
             }
-            if let Some(id) = cli.fmv {
+            if let Some(film) = &cli.fmv {
                 return arklay::engine::run_fmv(
                     &pack,
-                    id,
+                    film,
                     cli.character,
                     cli.capture.as_deref(),
                     cli.ticks,

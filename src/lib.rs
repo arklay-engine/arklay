@@ -58,6 +58,7 @@ pub mod model;
 pub mod model_viewer;
 pub mod movie;
 pub mod mp4;
+pub mod mpeg;
 pub mod music;
 pub mod objects;
 pub mod pacer;

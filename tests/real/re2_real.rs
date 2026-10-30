@@ -863,3 +863,166 @@ fn every_music_table_track_is_packed() {
     eprintln!("{found} track references packed; no file for {missing:?}");
     assert_eq!(missing, ["main26"].into_iter().collect());
 }
+
+/// Every retail film by pack stem, with `ffprobe`'s count of video pictures
+/// and of MP2 audio frames.
+const FILMS: [(&str, usize, u64); 26] = [
+    ("opn1stl", 4162, 5314),
+    ("opn2ndl", 2999, 3829),
+    ("opn2ndrl", 2999, 3829),
+    ("r108l", 1351, 1726),
+    ("r204l", 534, 683),
+    ("r409", 4306, 5501),
+    ("r700l", 2094, 2673),
+    ("r703l", 3191, 4074),
+    ("r704l", 9173, 11715),
+    ("title_l", 997, 1270),
+    ("opn1stc", 4076, 5204),
+    ("opn2ndc", 2999, 3829),
+    ("opn2ndrc", 2999, 3829),
+    ("r108c", 1351, 1726),
+    ("r204c", 534, 683),
+    ("r408", 4306, 5501),
+    ("r700c", 3031, 3869),
+    ("r703c", 2396, 3058),
+    ("r704c", 9173, 11715),
+    ("titlec", 997, 1270),
+    ("r109", 690, 881),
+    ("r10b", 150, 192),
+    ("r200", 120, 154),
+    ("r505", 600, 764),
+    ("r602", 194, 246),
+    ("staff", 4616, 5876),
+];
+
+#[test]
+#[ignore]
+fn every_film_plays_end_to_end() {
+    use arklay::movie::{MovieSession, MovieTick};
+    use arklay::mpeg::Film;
+
+    let Some(pack) = pack() else {
+        return;
+    };
+    let films: Vec<_> = pack
+        .paths()
+        .filter(|path| path.starts_with("movie/"))
+        .collect();
+    assert_eq!(films.len(), FILMS.len(), "{films:?}");
+    let results: Vec<String> = std::thread::scope(|scope| {
+        let handles: Vec<_> = FILMS
+            .iter()
+            .map(|&(name, pictures, mp2_frames)| {
+                scope.spawn(move || {
+                    let data = pack.read(&format!("movie/{name}.mpg")).unwrap();
+                    // Every picture decodes cleanly at the film's own size.
+                    let start = std::time::Instant::now();
+                    let mut film = Film::open(&data).unwrap();
+                    assert_eq!(film.size(), (640, 480), "{name}");
+                    assert_eq!(film.frame_rate(), (30_000, 1001), "{name}");
+                    assert_eq!(film.frame_count(), pictures, "{name}");
+                    for index in 1..pictures {
+                        film.present(index).unwrap();
+                        assert_eq!(film.frame_index(), Some(index), "{name}");
+                    }
+                    let per_frame = start.elapsed().as_secs_f64() / pictures as f64;
+                    assert_eq!(film.damaged_slices(), 0, "{name}");
+                    assert_eq!(
+                        film.audio_frames(),
+                        Some((mp2_frames * 1152, 44_100)),
+                        "{name}"
+                    );
+                    // ffprobe's duration ends half a frame before the last
+                    // picture's display period does.
+                    let duration = pictures as f64 * 1001.0 / 30_000.0;
+                    let probed = (pictures as f64 - 0.5) * 1001.0 / 30_000.0;
+                    assert!((duration - probed).abs() < 1001.0 / 30_000.0, "{name}");
+
+                    // The movie path plays it by name to the last frame,
+                    // queueing the whole soundtrack.
+                    let mut session = MovieSession::open_named(pack, name).unwrap();
+                    assert_eq!(session.frame_count(), pictures, "{name}");
+                    let mut audio = session.take_audio().len() as u64;
+                    loop {
+                        match session.tick(0, None) {
+                            MovieTick::Finished => break,
+                            MovieTick::Skipped => panic!("{name} skipped"),
+                            MovieTick::Advanced | MovieTick::Waiting => {}
+                        }
+                        audio += session.take_audio().len() as u64;
+                    }
+                    assert_eq!(session.frame_index(), pictures - 1, "{name}");
+                    assert_eq!(audio, session.samples_before(pictures) * 2, "{name}");
+                    format!(
+                        "{name}: {pictures} frames, {duration:.3} s, {:.2} ms/frame",
+                        per_frame * 1000.0
+                    )
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect()
+    });
+    for line in results {
+        println!("{line}");
+    }
+}
+
+/// The decode against ffmpeg's on the opening seconds of a retail film,
+/// when `ffmpeg` is on `PATH`.
+#[test]
+#[ignore]
+fn a_film_matches_ffmpeg() {
+    use arklay::mpeg::Film;
+    use std::process::{Command, Stdio};
+
+    let Some(pack) = pack() else {
+        return;
+    };
+    const FRAMES: usize = 60;
+    let data = pack.read("movie/r10b.mpg").unwrap();
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ffmpeg-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let input = dir.join("r10b.mpg");
+    fs::write(&input, &data).unwrap();
+    let output = Command::new("ffmpeg")
+        .args(["-v", "error", "-i"])
+        .arg(&input)
+        .args([
+            "-frames:v",
+            &FRAMES.to_string(),
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "-",
+        ])
+        .stderr(Stdio::inherit())
+        .output();
+    let _ = fs::remove_dir_all(&dir);
+    let Ok(output) = output else {
+        eprintln!("ffmpeg is not on PATH; skipping");
+        return;
+    };
+    assert!(output.status.success());
+    let size = 640 * 480 * 4;
+    assert_eq!(output.stdout.len(), FRAMES * size);
+    let mut film = Film::open(&data).unwrap();
+    for index in 0..FRAMES {
+        film.present(index).unwrap();
+        let got = &film.frame().rgba;
+        let expected = &output.stdout[index * size..(index + 1) * size];
+        let error: f64 = got
+            .iter()
+            .zip(expected)
+            .enumerate()
+            .filter(|(at, _)| at % 4 != 3)
+            .map(|(_, (&a, &b))| (f64::from(a) - f64::from(b)).powi(2))
+            .sum::<f64>()
+            / (640.0 * 480.0 * 3.0);
+        let psnr = 10.0 * (255.0f64 * 255.0 / error.max(1e-9)).log10();
+        assert!(psnr > 35.0, "frame {index}: {psnr:.1} dB");
+    }
+}

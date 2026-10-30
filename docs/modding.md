@@ -121,7 +121,7 @@ audio the original shipped. Every loader therefore looks an asset up by *stem*
 | --- | --- |
 | image | `webp` > `png` > `bmp` > `tim` > `pix` |
 | audio | `ogg` > `wav` |
-| movie | `mp4` > `avi` |
+| movie | `mp4` > `avi` > `mpg` |
 
 **Any entry in a mod whose stem matches a known asset is an override.** The
 winning layer is still decided by `(load_order, id)` exactly as above, and only
@@ -143,7 +143,8 @@ never carry a replacement format.
 
 A film replacement is either an MP4 or an AVI holding H.264 video (any
 profile OpenH264 decodes, e.g. High) with optional AAC-LC audio, or a Cinepak
-AVI like the shipped films. The decoder is picked from the container and the
+AVI like the shipped RE1 films. RE2's shipped films are MPEG-1 program streams
+(`movie/<name>.mpg`), so an MP4 or AVI at the same stem replaces one. The decoder is picked from the container and the
 codec, so an H.264 AVI can sit at the shipped `movie/<name>.avi` path or an MP4
 next to it at `movie/<name>.mp4`; there is no hash lookup. The film plays at
 its own frame rate on the 30 Hz clock and its audio is resampled to the
@@ -198,7 +199,7 @@ is exact.
 | voice | `voice/01_09` | ogg, wav | any |
 | RE2 sound bank slot | `sound/room/10a/01`, `sound/door/36/00`, `sound/step/35/00` | ogg, wav | any |
 | RE2 sound table | `sound/enemy/25/bank.edh`, `room/1000/sound.edh` | edh | — |
-| film | `movie/00`, `movie/17`, `movie/0f` (the film id) | mp4, avi | any size up to 4096x4096, any frame rate |
+| film | `movie/00`, `movie/17`, `movie/0f` (the film id); RE2 `movie/opn1stl`, `movie/staff` (the film name) | mp4, avi, mpg | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' names without their extensions: a room's
 files sit in its folder `room/<id>` (the four-digit lower-case RDT number),

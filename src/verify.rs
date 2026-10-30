@@ -108,7 +108,7 @@ pub enum Format {
     /// A Microsoft ADPCM WAV (RE2 voice, music and sound banks), decoded
     /// through [`crate::adpcm`].
     AdpcmWav,
-    /// An MPEG program stream film (`movie/*.mpg`). TODO(re2): decode it.
+    /// An MPEG-1 program stream film (`movie/*.mpg`).
     Mpeg,
     /// Any entry outside the known table.
     Opaque,
@@ -164,7 +164,7 @@ impl Format {
     /// Whether the format is recognised but has no parser yet: it never
     /// fails a normal run and fails `--strict` like an opaque entry.
     pub fn unsupported(self) -> bool {
-        matches!(self, Self::Do2 | Self::Mpeg)
+        matches!(self, Self::Do2)
     }
 }
 
@@ -614,6 +614,11 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
         Format::Mp4 => {
             crate::mp4::parse(data.to_vec())?.validate()?;
         }
+        Format::Mpeg => {
+            // Demux, index the pictures and the audio frames and decode the
+            // first picture.
+            crate::mpeg::Film::open(data)?;
+        }
         Format::Lua => {
             crate::lua::verify_source(data)?;
         }
@@ -628,7 +633,7 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
             // and a weapon the character model it belongs to.
             crate::model_viewer::load_with(pack, path, data)?;
         }
-        Format::Opaque | Format::Do2 | Format::Mpeg => {
+        Format::Opaque | Format::Do2 => {
             unreachable!("opaque and unsupported entries are handled by the caller")
         }
     }
