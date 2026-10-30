@@ -636,49 +636,32 @@ fn push_curve(record: &ScaRect, pos: &mut [i32; 3]) -> bool {
     true
 }
 
-/// The stairs a player at `pos` can climb with the action key, if any.
-pub fn stairs_at(sca: &Sca, pos: [i32; 3], radius: i32) -> Option<&ScaRect> {
+/// `Sca_hit_stairs`'s and the front point's reach.
+const STAIRS_REACH: i32 = 0x1C2;
+
+/// The stairs a player at `pos` can climb with the action key, if any:
+/// `Set_front_pos`'s point in front of the player, in `Sca_ck_info`'s reach.
+pub fn stairs_ahead(sca: &Sca, pos: [i32; 3], angle: u16, radius: i32) -> Option<&ScaRect> {
+    let (dx, dz) = crate::player2::rotate(angle, (radius * 0xB3) >> 7, 0);
+    let (x, z) = (pos[0] + dx, pos[2] + dz);
     let floor = floor_of(pos[1]);
-    let area = area(sca, pos[0], pos[2]);
-    sca.records
-        .iter()
-        .find(|record| record.shape() == 12 && applies(record, area, pos, radius + 1, floor))
+    let area = area(sca, x, z);
+    // `Sca_ck_info` doesn't stop at a hit, so the last stairs in reach win.
+    sca.records.iter().rev().find(|record| {
+        record.shape() == 12 && applies(record, area, [x, pos[1], z], STAIRS_REACH, floor)
+    })
 }
 
-/// Where climbing `stairs` from `pos` ends: past the far end along its axis
-/// and on the floor at that end (`Sca_hit_stairs`, without the climb itself).
-pub fn stairs_exit(stairs: &ScaRect, pos: [i32; 3], radius: i32) -> [i32; 3] {
-    let low =
-        -i32::from((stairs.kind >> 6) & 0x1F) * 0x12 * 100 - i32::from(stairs.kind >> 11) * 100;
+/// The floor heights at `stairs`' two ends: `FUN_004E3910` and `FUN_004E3940`.
+pub fn stairs_ends(stairs: &ScaRect) -> (i32, i32) {
+    let low = (-i32::from((stairs.kind >> 6) & 0x1F) * 0x12 - i32::from(stairs.kind >> 11)) * 100;
     let mut bits = stairs.floor;
     let mut high = 0;
     while bits & 1 == 0 && bits != 0 {
         high -= FLOOR_HEIGHT;
         bits >>= 1;
     }
-    let target = if floor_of(pos[1]) == floor_of(low) {
-        high
-    } else {
-        low
-    };
-    let mut exit = pos;
-    exit[1] = target;
-    let (x, z) = (i32::from(stairs.x), i32::from(stairs.z));
-    let (width, depth) = (i32::from(stairs.width), i32::from(stairs.depth));
-    if (stairs.kind >> 4) & 2 == 0 {
-        exit[0] = if pos[0] - x < width / 2 {
-            x + width + radius + 1
-        } else {
-            x - radius - 1
-        };
-    } else {
-        exit[2] = if pos[2] - z < depth / 2 {
-            z + depth + radius + 1
-        } else {
-            z - radius - 1
-        };
-    }
-    exit
+    (low, high)
 }
 
 #[cfg(test)]
@@ -841,15 +824,33 @@ mod tests {
     }
 
     #[test]
-    fn stairs_block_and_climbing_them_changes_floor() {
+    fn stairs_are_found_at_their_foot_and_know_their_ends() {
         let mut stairs = record(12);
         stairs.floor = 2;
         stairs.kind = 0xF;
         let sca = room(vec![stairs]);
+        // Angle 0 faces +x: in front of the player, and not behind.
         let foot = [1000 - PLAYER_RADIUS - 1, -1800, 1500];
-        let found = stairs_at(&sca, foot, PLAYER_RADIUS).unwrap();
-        let exit = stairs_exit(found, foot, PLAYER_RADIUS);
-        assert_eq!(exit[0], 2000 + PLAYER_RADIUS + 1);
-        assert_eq!(exit[1], 0);
+        let found = stairs_ahead(&sca, foot, 0, PLAYER_RADIUS).unwrap();
+        let away = [1000 - 1079 - 1, -1800, 1500];
+        assert!(stairs_ahead(&sca, away, 0x800, PLAYER_RADIUS).is_none());
+        assert_eq!(stairs_ends(found), (0, -1800));
+        // Three floors' worth, as room 116's second set of stairs is.
+        stairs.floor = 30;
+        stairs.kind = 0x9113;
+        assert_eq!(stairs_ends(&stairs), (-9000, -1800));
+    }
+
+    #[test]
+    fn the_last_stairs_in_reach_are_the_ones_taken() {
+        let mut first = record(12);
+        first.floor = 2;
+        first.kind = 0xF;
+        let mut last = first;
+        last.kind = 0x10F;
+        let sca = room(vec![first, last]);
+        let foot = [1000 - PLAYER_RADIUS - 1, -1800, 1500];
+        let found = stairs_ahead(&sca, foot, 0, PLAYER_RADIUS).unwrap();
+        assert_eq!(found.kind, 0x10F);
     }
 }

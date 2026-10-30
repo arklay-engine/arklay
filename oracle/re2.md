@@ -57,6 +57,14 @@ the start of a game has nothing to test with. `street_reload.txt` wants
 `--give 3:0x14:20` and the same stack added to the end of arklay's
 `games/re2/game/new_game.lua` for the comparison.
 
+`--warp ROOM:X:Y:Z:ANGLE` takes the player from the street to any room the way
+`Sce_Door` does, for what is far from the start. The new room's play begins at
+tick 344, so an arklay run of that room with `--room`, `--player`, `--character`
+and a `--setup-script` that places the player compares at `--offset 344`, with
+the script's input moved 344 ticks earlier and the health set to the original's.
+`stairs_up_and_down.txt`, `stairs_refused.txt` and `stairs_at_a_run.txt` want
+`--warp 116:-14800:0:-24000:0xc00`.
+
 Input scripts have the format of `oracle/inputs`, counted from tick 0. This
 game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 `0x8000`, `confirm`/`action`/`fire` `0x0080`, `cancel`/`run` `0x0040`, `aim`

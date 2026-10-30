@@ -11,7 +11,7 @@
 
 use crate::model::{Clip, ClipFrame, Keyframe, Skeleton};
 use crate::player::{self, ClipSource, Input, Options, PlayerState};
-use crate::state::RoomState;
+use crate::state::{RoomState, ScaRect};
 
 /// `Key`, the mapped pad word `pl_br_*` test.
 const KEY_FORWARD: u16 = 0x0001;
@@ -24,6 +24,7 @@ const KEY_RUN: u16 = 0x0200;
 const KEY_TILT_UP: u16 = 0x0010;
 const KEY_TILT_DOWN: u16 = 0x0020;
 const KEY_FIRE: u16 = 0x0040;
+const KEY_ACTION: u16 = 0x0080;
 const KEY_AIM: u16 = 0x0100;
 
 /// `routine[0]`: the pad's mode and the scripts' mode.
@@ -38,6 +39,7 @@ const MOVE_RUN: u8 = 2;
 const MOVE_BACKWARD: u8 = 3;
 const MOVE_ROTATE: u8 = 4;
 const MOVE_AIM: u8 = 5;
+const MOVE_STAIRS: u8 = 7;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
 /// `Plc_stop`'s routine, which no table entry animates.
@@ -65,6 +67,15 @@ const DANGER_LIFE: i32 = 0x15;
 const BLEND_STEP: u16 = 0x200;
 /// A motion change's blend: `Hokan_flg` in the `0x70000` the routines write.
 const FULL_BLEND: u8 = 7;
+/// The first of `pRoom`'s climbing clips, going up and down: a first step,
+/// the step repeated, and the last.
+const STAIRS_CLIPS: [u8; 2] = [0, 3];
+const STAIRS_TURN: i32 = 0x50;
+const STAIRS_TURN_CLOSE: i32 = 0x28;
+/// The walk off the stairs lasts until this frame.
+const STAIRS_WALK_OFF_FRAME: u8 = 9;
+const STAIRS_FIRST_BLEND: u8 = 3;
+const STAIRS_FIRST_STEP: u16 = 0x400;
 /// `pl_mv05_w1`'s clips: raising; holding, then firing, at each tilt.
 const AIM_RAISE_CLIP: u8 = 9;
 const AIM_HOLD_CLIPS: [u8; 3] = [0x0F, 0x0B, 0x0D];
@@ -158,6 +169,9 @@ pub struct Work {
     pub spd: [i16; 3],
     spd_base: [i16; 3],
     timer0: u16,
+    /// `Timer1` and `Timer2`: the climb's steps left and whether it goes down.
+    timer1: i16,
+    timer2: u8,
     /// The flags of `pNow_seq`, the frame `Joint_move` played last.
     now_seq: u32,
     /// `Type`: the weapon, and the bit that stops the player being moved.
@@ -193,6 +207,8 @@ impl Default for Work {
             spd: [0; 3],
             spd_base: [0; 3],
             timer0: 0,
+            timer1: 0,
+            timer2: 0,
             now_seq: 0,
             kind: 0,
             sce_flg: 0,
@@ -224,6 +240,11 @@ impl Work {
         self.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
         self.hokan = 0;
         self
+    }
+
+    /// `Be_flg`'s bit 8: on the stairs, nothing collides.
+    pub fn climbing(&self) -> bool {
+        self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_STAIRS
     }
 
     /// The trace's `beh` and `as`, and its `mot` field: `Routine_2`, `Routine_3`,
@@ -311,6 +332,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         player,
         tick,
         arrived: None,
+        stairs: None,
     };
     match mover.work.routine[0] {
         MODE_MOVE => mover.pl_move(),
@@ -327,6 +349,8 @@ struct Mover<'a, 'b> {
     player: &'a mut PlayerState,
     tick: &'a Tick<'b>,
     arrived: Option<u8>,
+    /// `Sca_info`'s stairs: those last tick's end left in front of the player.
+    stairs: Option<&'b ScaRect>,
 }
 
 fn key_word(input: &Input) -> u16 {
@@ -338,6 +362,7 @@ fn key_word(input: &Input) -> u16 {
         | bit(input.run, KEY_RUN)
         | bit(input.aim, KEY_AIM)
         | bit(input.fire, KEY_FIRE)
+        | bit(input.action_held || input.action_pressed, KEY_ACTION)
 }
 
 impl Mover<'_, '_> {
@@ -376,6 +401,9 @@ impl Mover<'_, '_> {
 
     /// `Pl_move`: the branch on the keys, then the movement it chose.
     fn pl_move(&mut self) {
+        self.stairs = self.tick.room.sca.as_ref().and_then(|sca| {
+            crate::sca::stairs_ahead(sca, self.player.pos, self.player.angle, self.player.radius)
+        });
         let (input, target) = player::analog_input(
             self.player,
             self.tick.room,
@@ -413,6 +441,7 @@ impl Mover<'_, '_> {
             MOVE_BACKWARD => self.pl_mv_backward(),
             MOVE_ROTATE => self.pl_mv_rotate(),
             MOVE_AIM => self.pl_mv_aim(key),
+            MOVE_STAIRS => self.pl_mv_stairs(),
             MOVE_QUICK_TURN => self.mv_quick_turn(),
             _ => {}
         }
@@ -423,6 +452,145 @@ impl Mover<'_, '_> {
         if key & KEY_AIM != 0 && self.tick.weapon.aims() {
             self.set_routine(MOVE_AIM);
         }
+    }
+
+    /// The end of the `pl_br_*` with both: the stairs come first.
+    fn end_branch(&mut self, key: u16) {
+        if !self.stairs_branch(key) {
+            self.aim_branch(key);
+        }
+    }
+
+    /// The action key at stairs, whether or not `Sca_hit_stairs` takes it.
+    fn stairs_branch(&mut self, key: u16) -> bool {
+        if key & KEY_ACTION == 0 {
+            return false;
+        }
+        let Some(stairs) = self.stairs else {
+            return false;
+        };
+        self.sca_hit_stairs(stairs);
+        true
+    }
+
+    /// `Sca_hit_stairs`: from either end, in reach of the middle of its width.
+    /// It also writes the end's position to `Atd[0]`, which the next tick
+    /// replaces from the player's own.
+    fn sca_hit_stairs(&mut self, stairs: &ScaRect) {
+        let (x, z) = (i32::from(stairs.x), i32::from(stairs.z));
+        let (width, depth) = (i32::from(stairs.width), i32::from(stairs.depth));
+        let (px, pz) = (self.player.pos[0] - x, self.player.pos[2] - z);
+        let axis = stairs.kind >> 4;
+        let along_x = axis & 2 == 0;
+        let (across, across_size, along, along_size) = if along_x {
+            (pz, depth, px, width)
+        } else {
+            (px, width, pz, depth)
+        };
+        if ((across_size - 500) as u32) < ((across - 0xFA) as u32)
+            || ((along_size + 0x514) as u32) < ((along + 0x28A) as u32)
+        {
+            return;
+        }
+        let (low, high) = crate::sca::stairs_ends(stairs);
+        let diff = low - high;
+        let steps = ((i64::from(diff) * 0x6E5D_4C3B) >> 32) as i32 - diff;
+        self.work.timer1 = ((steps >> 10) - (steps >> 31) - 1) as i16;
+        self.work.routine[1] = MOVE_STAIRS;
+        self.work.routine[2] = 0;
+        let near = along < along_size >> 1;
+        self.work.timer2 = u8::from((axis & 1 == 1) == near);
+        self.work.timer0 = match (along_x, near) {
+            (true, true) => 0,
+            (true, false) => 0x800,
+            (false, true) => 0xC00,
+            (false, false) => 0x400,
+        };
+    }
+
+    /// `pl_mv_07`: turn to the stairs, climb them step by step, walk off.
+    /// The shadow's own path isn't ported.
+    fn pl_mv_stairs(&mut self) {
+        let climb = STAIRS_CLIPS[usize::from(self.work.timer2 != 0)];
+        if self.work.routine[2] == 0 {
+            self.work.routine[2] = 1;
+            self.work.bank = Bank::Weapon;
+            self.work.move_no = 0;
+            self.work.move_cnt = 0;
+            self.work.hokan = FULL_BLEND;
+            self.work.damage_cnt |= DAMAGE_LOCK;
+        }
+        match self.work.routine[2] {
+            1 => {
+                let target = self.work.timer0;
+                self.player.angle = goto(self.player.angle, target, STAIRS_TURN);
+                let error =
+                    (i32::from(target) - i32::from(self.player.angle) + STAIRS_TURN_CLOSE) & 0x0FFF;
+                if error < STAIRS_TURN_CLOSE * 2 {
+                    self.work.routine[2] = 2;
+                    self.player.angle = goto(self.player.angle, target, STAIRS_TURN);
+                }
+                self.joint_move();
+            }
+            2 => {
+                self.work.routine[2] = 3;
+                self.work.bank = Bank::Room;
+                self.work.move_no = climb;
+                self.work.move_cnt = 0;
+                self.work.hokan = STAIRS_FIRST_BLEND;
+                self.stairs_step(climb, STAIRS_FIRST_STEP);
+            }
+            3 => self.stairs_step(climb, STAIRS_FIRST_STEP),
+            4 => self.stairs_step(climb, BLEND_STEP),
+            5 => {
+                self.spd_get();
+                if self.joint_move() {
+                    self.work.routine[2] = 6;
+                }
+                self.add_speed_xyz();
+            }
+            6 | 7 => {
+                if self.work.routine[2] == 6 {
+                    self.work.routine[2] = 7;
+                    self.work.bank = Bank::Weapon;
+                    self.work.move_no = 0;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = FULL_BLEND;
+                }
+                self.spd_get();
+                self.joint_move();
+                self.add_speed_xz();
+                if self.work.move_cnt > STAIRS_WALK_OFF_FRAME {
+                    self.set_routine(MOVE_IDLE);
+                    self.work.damage_cnt &= !DAMAGE_LOCK;
+                }
+            }
+            _ => {}
+        }
+        self.footstep(0);
+    }
+
+    /// A step of the climb's first or repeated clip: the last step's clip
+    /// follows when the steps run out.
+    fn stairs_step(&mut self, climb: u8, late: u16) {
+        self.spd_get();
+        if self.joint_move_late(late) {
+            let first = self.work.routine[2] == 3;
+            self.work.timer1 -= 1;
+            if first {
+                self.work.routine[2] = 4;
+                self.work.move_no = climb + 1;
+                self.work.move_cnt = 0;
+                self.work.hokan = 0;
+            }
+            if self.work.timer1 == 0 {
+                self.work.routine[2] = 5;
+                self.work.move_no = climb + 2;
+                self.work.move_cnt = 0;
+                self.work.hokan = 0;
+            }
+        }
+        self.add_speed_xyz();
     }
 
     fn pl_br_idle(&mut self, key: u16) {
@@ -440,7 +608,7 @@ impl Mover<'_, '_> {
                 MOVE_FORWARD
             });
         }
-        self.aim_branch(key);
+        self.end_branch(key);
     }
 
     fn pl_br_forward(&mut self, key: u16) {
@@ -459,7 +627,7 @@ impl Mover<'_, '_> {
         if key & KEY_RUN != 0 {
             self.set_routine(MOVE_RUN);
         }
-        self.aim_branch(key);
+        self.end_branch(key);
     }
 
     fn pl_br_run(&mut self, key: u16) {
@@ -480,6 +648,7 @@ impl Mover<'_, '_> {
         if self.work.spd[0] > RUN_TURN_MIN_SPEED {
             self.turn(key, &RUN_TURN);
         }
+        self.stairs_branch(key);
     }
 
     fn pl_br_backward(&mut self, key: u16) {
@@ -514,7 +683,7 @@ impl Mover<'_, '_> {
             });
         }
         self.turn(key, &ROTATE_TURN);
-        self.aim_branch(key);
+        self.end_branch(key);
     }
 
     /// `pl_mv05_w1`: the handguns' stance. `Status_flg`'s top bits hold the tilt.
@@ -1546,6 +1715,77 @@ mod tests {
             fire_pressed,
             ..Input::default()
         }
+    }
+
+    /// A setup at `pos` facing `angle`, with stairs along z over floor 0.
+    fn at_stairs(pos: [i32; 3], angle: u16) -> Setup {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(10, 12, 0);
+        setup.room.sca = Some(crate::state::Sca {
+            records: vec![ScaRect {
+                x: 1000,
+                z: 1000,
+                width: 1000,
+                depth: 1000,
+                id: 0x8000 | 12,
+                kind: 0x906F,
+                floor: 3,
+            }],
+            ..Default::default()
+        });
+        setup.player.pos = pos;
+        setup.player.angle = angle;
+        setup
+    }
+
+    fn action() -> Input {
+        Input {
+            action_held: true,
+            ..Input::default()
+        }
+    }
+
+    #[test]
+    fn the_action_key_climbs_stairs_from_the_low_end_and_descends_from_the_high() {
+        let mut setup = at_stairs([1500, 0, 700], 0xC00);
+        setup.tick(action(), 200);
+        assert_eq!(setup.work.routine[1], MOVE_STAIRS);
+        assert_eq!(setup.work.timer0, 0xC00);
+        assert_eq!(setup.work.timer2, 0);
+        assert!(setup.work.climbing());
+
+        let mut setup = at_stairs([1500, 0, 2300], 0x400);
+        setup.tick(action(), 200);
+        assert_eq!(setup.work.routine[1], MOVE_STAIRS);
+        assert_eq!(setup.work.timer0, 0x400);
+        assert_eq!(setup.work.timer2, 1);
+    }
+
+    #[test]
+    fn stairs_refuse_a_press_too_near_their_side() {
+        let mut setup = at_stairs([1100, 0, 700], 0xC00);
+        setup.tick(action(), 200);
+        assert_eq!(setup.work.routine[1], MOVE_IDLE);
+    }
+
+    #[test]
+    fn a_climb_plays_its_steps_then_walks_off_into_idle() {
+        let mut setup = at_stairs([1500, 0, 700], 0xC00);
+        setup.tick(action(), 200);
+        let mut clips = Vec::new();
+        for _ in 0..200 {
+            setup.tick(Input::default(), 200);
+            if setup.work.routine[1] != MOVE_STAIRS {
+                break;
+            }
+            if clips.last() != Some(&setup.work.move_no) {
+                clips.push(setup.work.move_no);
+            }
+        }
+        assert_eq!(setup.work.routine[1], MOVE_IDLE);
+        // These stairs are one flight, with no repeated step.
+        assert_eq!(clips, [0, 2, 0]);
+        assert!(!setup.work.climbing());
     }
 
     #[test]

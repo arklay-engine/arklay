@@ -1,0 +1,6 @@
+# run at the foot of the stairs and press while running
+0 
+350 up run
+356 confirm up run
+358 up run
+560 

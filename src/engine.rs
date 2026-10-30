@@ -13529,23 +13529,6 @@ struct RoomContext<'a> {
     enemy_lua: Option<&'a mut enemy::LuaEnemyHost>,
 }
 
-/// The action key at the foot or head of RE2 stairs takes the player to their
-/// other end at once; the climb itself isn't played yet.
-fn climb_re2_stairs(context: &mut RoomContext<'_>) -> bool {
-    let Some(sca) = &context.room.sca else {
-        return false;
-    };
-    let radius = context.player.radius;
-    let Some(stairs) = crate::sca::stairs_at(sca, context.player.pos, radius) else {
-        return false;
-    };
-    let exit = crate::sca::stairs_exit(stairs, context.player.pos, radius);
-    context.player.pos = exit;
-    context.player.collision_mirror = [exit[0], exit[2]];
-    context.game.sync_entity_from_player(context.player);
-    true
-}
-
 /// The pad-driven half of the player's frame: the control gate has passed, so
 /// the action-key scan, the stair/ladder zone branch and then the locomotion
 /// (or weapon) machine run in the original's order.
@@ -13554,9 +13537,6 @@ fn tick_pad_driven_player(context: &mut RoomContext<'_>, pad: player::Input) {
     // player's frame-0 dispatch, before the behaviour it selects executes on
     // the same tick (`update_player_anim`, 0x00480ebd). `pad` is already
     // blanked for a closed controls latch, and the message gate is open here.
-    if pad.action_pressed && climb_re2_stairs(context) {
-        return;
-    }
     if pad.action_pressed {
         context.game.player_action_press(context.player);
         // `check_action_object` follows the climb scan in the same dispatch,
@@ -13943,7 +13923,10 @@ fn tick_room_timed(
     context.game.sync_entity_from_player(context.player);
     // The stairway (`action_behavior` 0x11) skips both passes as well: its
     // clip carries the player through the stairs' own collision volume.
-    if context.game.entities[0].state() != 5
+    if context.game.re2.player.climbing() {
+        context.player.collision_mirror = [context.player.pos[0], context.player.pos[2]];
+        context.game.entities[0].pos = context.player.pos;
+    } else if context.game.entities[0].state() != 5
         && context.player.locked != player::LockedAction::Stairs
     {
         // The reference runs this pass on the *free* step the behaviour's

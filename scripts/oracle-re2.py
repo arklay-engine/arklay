@@ -320,6 +320,21 @@ class Game:
 
 
 ITEM_WORK = 0x98ED34
+DOOR_RECORD = 0x9886F8 + 0x54 * 4  # `em_die_table[0x54]`: `Sce_Door`'s record
+GAME_STATE = 0x991F80
+SCRATCH = 0x99EF00  # the unused end of the last page of `.data`
+
+
+def warp(game: Game, target: str) -> None:
+    """Do what `Sce_Door` does, with a door record of our own."""
+    room, *place = target.split(":")
+    x, y, z, angle = (int(part, 0) for part in place)
+    stage, number = int(room[0], 16) - 1, int(room[1:], 16)
+    floor = max(0, -y // 1800)
+    game.write(SCRATCH, struct.pack("<hhhH4B8x", x, y, z, angle, stage, number, 0, floor))
+    game.write(DOOR_RECORD, struct.pack("<I", SCRATCH))
+    game.write(GAME_STATE, b"\x01")
+    game.write(FG_STOP, struct.pack("<I", game.u32(FG_STOP) | 0xFF000000))
 
 
 def remove_enemies(game: Game) -> None:
@@ -446,6 +461,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         cursor = 0
                         pad = 0
                         print(f"play begins {boot_tick} ticks after boot")
+                        if args.warp:
+                            warp(game, args.warp)
                         for item in args.give:
                             slot, item_id, count = (int(part, 0) for part in item.split(":"))
                             game.write(ITEM_WORK + slot * 4, bytes((item_id, count, 0)))
@@ -578,6 +595,10 @@ def main() -> int:
         command.add_argument("--shot-dir", default=None)
         command.add_argument("--shot-every", type=int, default=0)
         command.add_argument("--no-enemies", action="store_true")
+        command.add_argument(
+            "--warp", default=None, metavar="ROOM:X:Y:Z:ANGLE",
+            help="when play begins, go through a door to a room (three hex digits) and a position",
+        )
         command.add_argument(
             "--give", action="append", default=[], metavar="SLOT:ID:COUNT",
             help="put an item in the inventory when play begins",

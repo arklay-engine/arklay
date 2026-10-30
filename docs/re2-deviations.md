@@ -9,7 +9,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **The held weapon.** The player always holds the starting handgun, whose bank has the locomotion the knife's lacks.
 - **The handguns' stance only.** `Pl_move`'s routine 5 is `pl_mv05_w1` for Leon's and Claire's starting handguns: raising, tilting, firing, reloading and lowering, with their ammunition. The other weapons don't raise. A shot hits nothing and has no sound, flash, shell or camera kick, and neither do the click or the reload; `Em_ck`'s lock-on and the lock-drop button have nothing to do without enemies.
 - **The pose before play.** The first tick's blend starts from the clip's own frame rather than the pose `Pl_init` leaves, so raising the gun within the first few ticks of a game lands a few units off.
-- **Stairs.** The action key at a set of stairs puts the player straight at its other end. The original plays the climb (`Sca_hit_stairs`).
+- **Stairs.** `pl_mv_07` climbs and descends them, but its shadow's path isn't ported, and whether stairs are in reach goes by the floor the player's height is on rather than by `nFloor`, which nothing ports yet.
 - **Falls and death.** `Pl_damage`'s falls (`Routine_1` 4 and 5) play as the plain hit, without their `pSub1` clips or getting up, and `Pl_dead` leaves the player standing with no game over.
 - **Sounds of hits.** `Pl_damage` plays none of its sounds.
 - **What the player's routine leaves out.** The neck, `Oma_*updown`, water and `Lim_dir_ck`'s clip swap aren't ported.
