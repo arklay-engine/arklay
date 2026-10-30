@@ -266,6 +266,9 @@ struct MeshBuffer {
     buffer: *mut SDL_GPUBuffer,
     vertex_count: u32,
     blend_start: u32,
+    /// Some packet adds to the background (`scene::PACKED_ADDITIVE`), so the
+    /// mesh draws an additive pass.
+    additive: bool,
     /// The CLUT rows its packets read, one bit each.
     rows: u32,
 }
@@ -296,6 +299,9 @@ struct Pipelines {
     /// like the software path (and leaves the mirror copy unculled).
     mesh_opaque: *mut SDL_GPUGraphicsPipeline,
     mesh_blend: *mut SDL_GPUGraphicsPipeline,
+    /// The additive pass: `mesh.frag` writes alpha 0, so the premultiplied
+    /// blend adds the fragment to the target.
+    mesh_add: *mut SDL_GPUGraphicsPipeline,
     /// The masks' keys into `mask_keys` (depth only).
     mask_keys: *mut SDL_GPUGraphicsPipeline,
     sprite: *mut SDL_GPUGraphicsPipeline,
@@ -620,6 +626,7 @@ impl GpuRenderer {
             pipelines: Pipelines {
                 mesh_opaque: std::ptr::null_mut(),
                 mesh_blend: std::ptr::null_mut(),
+                mesh_add: std::ptr::null_mut(),
                 mask_keys: std::ptr::null_mut(),
                 sprite: std::ptr::null_mut(),
                 sprite_depth: std::ptr::null_mut(),
@@ -1165,6 +1172,7 @@ impl GpuRenderer {
         // still releases it (via `Drop`).
         self.pipelines.mesh_opaque = mesh(self, Blend::None, true)?;
         self.pipelines.mesh_blend = mesh(self, Blend::Alpha, false)?;
+        self.pipelines.mesh_add = mesh(self, Blend::Premultiplied, false)?;
         self.pipelines.mask_keys = sprite(
             self,
             (SDL_GPU_TEXTUREFORMAT_D16_UNORM, true),
@@ -1450,6 +1458,10 @@ impl GpuRenderer {
             buffer,
             vertex_count: built.vertices.len() as u32,
             blend_start: built.blend_start,
+            additive: built
+                .vertices
+                .iter()
+                .any(|vertex| vertex.packed & scene::PACKED_ADDITIVE != 0),
             rows,
         };
         self.fresh.push(Upload::Mesh(key));
@@ -2151,9 +2163,11 @@ impl GpuRenderer {
             .meshes
             .iter()
             .map(|mesh| {
-                scene
-                    .lighting
-                    .latched(mesh.light_pos.unwrap_or(root_position(mesh.joints)))
+                mesh.fixed_light.unwrap_or_else(|| {
+                    scene
+                        .lighting
+                        .latched(mesh.light_pos.unwrap_or(root_position(mesh.joints)))
+                })
             })
             .collect();
         let lights = &lights;
@@ -2191,26 +2205,33 @@ impl GpuRenderer {
                 })
         });
         let draws: Vec<_> = primary.chain(mirrored).collect();
-        for blend_pass in [false, true] {
+        for mesh_pass in [
+            scene::MeshPass::Opaque,
+            scene::MeshPass::Blend,
+            scene::MeshPass::Additive,
+        ] {
             for &(index, mesh, ref uniforms) in &draws {
                 let Some((buffer, page)) = meshes[index] else {
                     continue;
                 };
+                if mesh_pass == scene::MeshPass::Additive && !buffer.additive {
+                    continue;
+                }
                 let (first, count) = scene::pass_range(
                     mesh.blend_weight,
-                    blend_pass,
+                    mesh_pass,
                     buffer.blend_start,
                     buffer.vertex_count,
                 );
                 if buffer.buffer.is_null() || count == 0 || uniforms.flags[0] == u32::MAX {
                     continue;
                 }
-                let pipeline = if blend_pass {
-                    self.pipelines.mesh_blend
-                } else {
-                    self.pipelines.mesh_opaque
+                let pipeline = match mesh_pass {
+                    scene::MeshPass::Opaque => self.pipelines.mesh_opaque,
+                    scene::MeshPass::Blend => self.pipelines.mesh_blend,
+                    scene::MeshPass::Additive => self.pipelines.mesh_add,
                 };
-                let mut material = scene::material(mesh.blend_weight, blend_pass);
+                let mut material = scene::material(mesh.blend_weight, mesh_pass);
                 let hd = if page.hd.is_null() {
                     [self.no_hd, self.no_hd_rows]
                 } else {
@@ -2764,7 +2785,7 @@ impl GpuRenderer {
             buffer: self.model_buffer,
             offset: 0,
         };
-        let mut material = scene::material(None, false);
+        let mut material = scene::material(None, scene::MeshPass::Opaque);
         let hd = if page.hd.is_null() {
             [self.no_hd, self.no_hd_rows]
         } else {
@@ -3533,6 +3554,7 @@ impl Drop for GpuRenderer {
             let pipelines = [
                 self.pipelines.mesh_opaque,
                 self.pipelines.mesh_blend,
+                self.pipelines.mesh_add,
                 self.pipelines.mask_keys,
                 self.pipelines.sprite,
                 self.pipelines.sprite_depth,
@@ -3639,6 +3661,7 @@ mod tests {
                     tsb: 0,
                     textured: true,
                     blend: false,
+                    additive: false,
                     raw_y: false,
                     uv_nudge: [0; 3],
                     flat_color: None,
@@ -3711,6 +3734,7 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,
@@ -3910,6 +3934,7 @@ mod tests {
             light_pos: None,
             per_joint_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
             complex_object: None,

@@ -6,9 +6,10 @@
 //! four script variables: `0x0C` the door type's low seven bits, `0x0D` the
 //! "still loading" flag, `0x0E` the type's top bit and `0x0F` the DO2 id.
 //! Each frame `Door_move` runs every task until it yields, then `Door_Trans`
-//! draws the ten door parts. The door is over once task 10 has ended and fade
-//! 0 has run out; `Door_exit` then holds the screen black and plays sound 1
-//! when a `door_model_set` set attribute bit `0x800`.
+//! draws the ten door parts. A fresh skip press (`Door_move`'s trigger
+//! check) stops task 10 at once. Once task 10 has ended `Door_move` draws
+//! nothing more, and when fade 0 has run out `Door_exit` holds the screen
+//! black and plays sound 1 when a `door_model_set` set attribute bit `0x800`.
 //!
 //! Only the opcodes the retail DO2s use are run (control flow, variables,
 //! `work_set`/`speed_set`/`add_speed`/`add_aspeed`, the `member_*` position
@@ -16,14 +17,24 @@
 //! ends its task, as does a jump outside the procedure list.
 //!
 //! The frame is a [`crate::door::vm::Frame`], so the RE1 door renderer and
-//! transition draw it unchanged: each part is an order whose flags draw it
-//! (`0x8001`) while its `be_flg` is set. Faithfulness gaps: the parts are
-//! drawn full-bright (the original lights them with `door_lc`/`door_ll` and
-//! a back colour of `0x44`, and pulses parts with attribute bit `0x100`), and
-//! the semi-transparent attribute `0x4000` is ignored.
+//! transition draw it: each part is an order whose flags draw it (`0x8001`)
+//! while its `be_flg` is set, and whose [`DoorShading`] says how it is lit.
+//!
+//! `Door_Trans` lights a part through the GTE: `SetColorMatrix(door_lc)`,
+//! `SetLightMatrix(door_ll * M)` with `M` the part's view matrix
+//! (`Sp_matrix` times its world matrix), and a back colour of `0x44`
+//! (`0x88` with attribute bit `0x1000`). The PC port hands Marni the light
+//! and colour matrices (`FUN_004462e0`) but never reads the back colour, and
+//! no code feeds Marni's own ambient, so a part's corner colour is
+//! `min(255, sum_i (door_lc >> 4) * max(0, (door_ll * M)_i . n))`; see
+//! [`crate::render::re2_door_light`]. The attribute bit `0x100` pulse writes
+//! a part colour that nothing on the PC reads, so it is not run. Attribute
+//! `0x4000` draws the part in Marni's additive mode (`0x200000`), and door
+//! `0x2D` draws its parts with `attribute & 0xC0 == 0x40` through
+//! `Marni_door_disp1`, as flat `0x808080` (full-bright) polygons.
 
 use crate::anim::{self, Mat4x3};
-use crate::door::vm::{DoorCamera, Fade, Frame, OrderFrame, Sfx};
+use crate::door::vm::{DoorCamera, DoorShading, Fade, Frame, OrderFrame, Sfx};
 use crate::model::Tmd;
 
 use super::Do2;
@@ -52,6 +63,16 @@ const VAR_LOADING: usize = 0x0D;
 const ATTR_PARENT: u16 = 0x10;
 /// Attribute bit: play sound 1 when the door ends.
 const ATTR_EXIT_SOUND: u16 = 0x800;
+/// Attribute bit: draw the part additively (`Marni_door_disp0`'s flag).
+const ATTR_ADDITIVE: u16 = 0x4000;
+/// The door `Marni_door_disp1` draws unlit, for its parts with
+/// `attribute & 0xC0 == 0x40`.
+const FLAT_DOOR: u8 = 0x2D;
+/// `door_ll` (bio2.exe `0x525F5C`): the GTE light matrix, one light per row.
+pub const LIGHT_MATRIX: [[i16; 3]; 3] =
+    [[400, 800, -500], [-1800, -1000, -2700], [3500, 6700, 1200]];
+/// `door_lc` (bio2.exe `0x525F7C`): every light white at `1600`.
+pub const COLOUR_MATRIX: [[i16; 3]; 3] = [[1600; 3]; 3];
 /// The `se_on` sound type of the door's own bank.
 const DOOR_SOUND_TYPE: u8 = 0;
 
@@ -118,6 +139,7 @@ pub struct Vm {
     scripts: Vec<u8>,
     procedures: Vec<usize>,
     mesh: Tmd,
+    door: u8,
     tasks: [Task; TASK_COUNT],
     parts: [Part; PART_COUNT],
     vars: [i16; VARIABLE_COUNT],
@@ -127,6 +149,8 @@ pub struct Vm {
     sfx: Vec<Sfx>,
     frame: u32,
     ended: bool,
+    /// The last step ran `Door_Trans`.
+    drawn: bool,
     done: bool,
     faults: u32,
 }
@@ -138,6 +162,7 @@ impl Vm {
             scripts: do2.scripts.clone(),
             procedures: do2.procedures.clone(),
             mesh: do2.mesh.clone(),
+            door: params.door,
             tasks: Default::default(),
             parts: [Part::default(); PART_COUNT],
             vars: [0; VARIABLE_COUNT],
@@ -151,6 +176,7 @@ impl Vm {
             sfx: Vec::new(),
             frame: 0,
             ended: false,
+            drawn: false,
             done: false,
             faults: 0,
         };
@@ -166,7 +192,9 @@ impl Vm {
     pub fn step(&mut self) -> Frame<'_> {
         self.sfx.clear();
         if !self.done {
+            self.drawn = !self.ended;
             if self.ended {
+                // `Door_move` finds task 10 gone and draws nothing.
                 self.exit_if_faded();
             } else {
                 // The art is loaded before the door starts.
@@ -188,10 +216,10 @@ impl Vm {
         self.frame()
     }
 
-    /// The skip press: empty task 10 and run `Door_exit` at once.
+    /// The skip press: `Door_move` clears task 10, so the door ends the way
+    /// it does when task 10 runs out, once fade 0 has.
     pub fn finish(&mut self) {
         self.ended = true;
-        self.exit();
     }
 
     /// A renderable snapshot of the current state.
@@ -211,6 +239,7 @@ impl Vm {
                 rot_velocity: [0; 3],
                 mesh: self.mesh.objects.get(usize::from(part.model)),
                 vertex_writes: Vec::new(),
+                shading: self.shading(part.attribute),
             })
             .collect();
         Frame {
@@ -227,7 +256,18 @@ impl Vm {
             phase: 0,
             frame: self.frame,
             hold: 0,
-            black: self.done,
+            black: !self.drawn,
+        }
+    }
+
+    /// How `Door_Trans` draws a part with `attribute`.
+    fn shading(&self, attribute: u16) -> DoorShading {
+        if attribute & 0xC0 == 0x40 && self.door == FLAT_DOOR {
+            DoorShading::FullBright
+        } else if attribute & ATTR_ADDITIVE != 0 {
+            DoorShading::LitAdditive
+        } else {
+            DoorShading::Lit
         }
     }
 
@@ -968,6 +1008,38 @@ mod tests {
     }
 
     #[test]
+    fn attributes_pick_how_a_part_is_shaded() {
+        // Part 0 plain, part 1 additive, part 2 `disp1`'s flat attribute.
+        let main = [
+            model_set(0, 0x80, [0; 3]),
+            model_set(1, 0x40D0, [0; 3]),
+            model_set(2, 0x52, [0; 3]),
+            vec![0x01, 0x00],
+        ]
+        .concat();
+        let shading = |door| {
+            let mut vm = Vm::new(&do2(&[&main]), DoorParams { kind: 0, door });
+            vm.step().orders[..3]
+                .iter()
+                .map(|order| order.shading)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            shading(0x2D),
+            [
+                DoorShading::Lit,
+                DoorShading::LitAdditive,
+                DoorShading::FullBright
+            ]
+        );
+        // Only door 0x2D draws through `Marni_door_disp1`.
+        assert_eq!(
+            shading(0x00),
+            [DoorShading::Lit, DoorShading::LitAdditive, DoorShading::Lit]
+        );
+    }
+
+    #[test]
     fn loops_and_speeds_move_a_part_one_step_a_frame() {
         // door_model_set 0; work_set 5 0; speed_set 0 = 5; speed_set 4 = 8;
         // for 3 { add_speed; evt_next } ; evt_end
@@ -1036,6 +1108,29 @@ mod tests {
         assert!(frame.done && frame.black);
         assert_eq!(frame.sfx.len(), 1);
         assert_eq!(frame.sfx[0].id, 1);
+    }
+
+    #[test]
+    fn a_skip_stops_the_door_and_blanks_it_until_the_fade_ends() {
+        // A part, a slow fade 0, then a long sleep.
+        let script = [
+            model_set(0, 0, [0, 0, 0]),
+            vec![0x53, 0x00, 0x02, 0x00, 0x00, 0x01],
+            vec![0x09, 0x0A, 0xFF, 0x7F, 0x01, 0x00],
+        ]
+        .concat();
+        let mut vm = Vm::new(&do2(&[&script]), DoorParams::default());
+        assert!(!vm.step().black);
+        vm.finish();
+        let frame = vm.step();
+        assert!(frame.black && !frame.done);
+        // The fade, 0x100 a frame, wraps negative on its 128th frame (the
+        // 127th after the skip) and `Door_exit` runs on the next.
+        let mut frames = 1;
+        while !vm.step().done {
+            frames += 1;
+        }
+        assert_eq!(frames, 127);
     }
 
     #[test]

@@ -953,9 +953,23 @@ RE2 R4 (#248) adds doors, masks and footstep zones.
   and no fault (`tests/real/re2_real.rs`). Doors `20`, `21`, `32`, `34` and
   `36` are fade-only (no visible part), and the second sound of doors `33`
   and `35` is silent, as in the original: their banks hold slot 0 only. `arklay re2.akpak --door ID [--door-type N] --capture F` plays one
-  headlessly. Gaps: the parts are drawn full-bright, attribute `0x4000`
-  (semi-transparency) is ignored, the transition keeps RE1's timing, and
-  no room triggers a door yet (there is no RE2 player).
+  headlessly. The parts are lit as the PC port lights them
+  (`render::re2_door_light`): `Door_Trans` sets the GTE light matrix to
+  `door_ll` times the part's view matrix and the colour matrix to
+  `door_lc`, and Marni colours each corner
+  `min(255, sum (door_lc >> 4) * max(0, l . n))` with no ambient (the PC
+  never reads the GTE back colour, so attribute `0x1000` and the `0x100`
+  pulse change nothing). Attribute `0x4000` draws a part in Marni's
+  additive mode (`0x200000`, `source + destination`, lit), and door `2D`'s
+  `Marni_door_disp1` parts are full-bright. The transition follows
+  `Door_main` (`transition::Timing::Re2`): one black frame for
+  `Door_init`, no phase-2 hold, no entry fade, and a skip press on any
+  frame stops task 10, after which `Door_move` draws nothing and
+  `Door_exit` still waits for fade 0. Gaps: the light reads the current
+  frame's view matrix where the original reads the previous frame's, the
+  "please wait" text `Door_move` prints over doors `32` and `34` (frames
+  `0x29`-`0x103`) is not drawn, and no room triggers a door yet (there is no RE2 player), so `Set_door`'s
+  room-side order is untested.
 - Masks: the camera record's `+0x1C` word points at its mask table (every
   camera has one; 1646 of the 5040 start with `-1`, no sprites). The table is a
   `u16` group and sprite count, 8-byte groups (count, `0x7800`, origin) and

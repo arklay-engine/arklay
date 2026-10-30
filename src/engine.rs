@@ -5920,6 +5920,7 @@ impl GameSession {
                 complex_object: None,
                 aliased_light: false,
                 light_rotation: None,
+                fixed_light: None,
                 joint_colours: crate::render::NO_JOINT_COLOURS,
                 hd_name: None,
             }];
@@ -10840,7 +10841,8 @@ pub fn simulate_do2(
     let vm = door2::vm::Vm::new(&do2, door2::vm::DoorParams { kind, door: id });
     let mut transition =
         transition::Transition::new(DoorAnimation::new_re2(do2, vm, door_bank(pack, id)))
-            .with_load(true, false);
+            .with_load(true, false)
+            .with_timing(transition::Timing::Re2);
     let mut framebuffer = Framebuffer::new();
     let mut result = SimulatedDo2 {
         timeline: Vec::new(),
@@ -15426,6 +15428,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
         });
@@ -15443,6 +15446,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
         });
@@ -15482,6 +15486,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: *joint_colours,
             hd_name: None,
         });
@@ -15522,6 +15527,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15539,6 +15545,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15577,6 +15584,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: Some(player_state.detached_clip.world.r),
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15605,6 +15613,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15637,6 +15646,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15722,6 +15732,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15847,6 +15858,7 @@ fn render_frame_on(
             complex_object: *complex,
             aliased_light: complex.is_none() && aliased,
             light_rotation,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -15923,6 +15935,7 @@ fn render_frame_on(
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         });
@@ -20662,6 +20675,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -30981,6 +30995,7 @@ end
                         tsb: 0x80,
                         textured: true,
                         blend: false,
+                        additive: false,
                         raw_y: false,
                         flat_color: None,
                         quad: None,
@@ -31080,6 +31095,7 @@ end
                 tsb: 0x80,
                 textured: true,
                 blend: false,
+                additive: false,
                 raw_y: false,
                 flat_color: None,
                 quad: None,

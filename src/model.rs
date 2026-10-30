@@ -27,6 +27,10 @@ pub struct TmdPrim {
     /// The packet's semi-transparency command bit (`0x36000609`). The
     /// renderer's fallback is a flat half blend.
     pub blend: bool,
+    /// A blending packet adds its texels to the background instead
+    /// (`source + destination`, saturating): an RE2 door part with attribute
+    /// `0x4000`, which Marni draws in its additive mode `0x200000`.
+    pub additive: bool,
     /// The packet stores its vertices with an unnegated Y (`0x25010607`). The
     /// render path skips the standard Y conjugation for these vertices; every
     /// other form negates Y like the PSX vertex reader does.

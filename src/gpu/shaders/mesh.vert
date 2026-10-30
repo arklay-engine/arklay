@@ -15,7 +15,7 @@ layout(location = 4) in vec3 in_normal;    // stored normal with Y negated
 layout(location = 5) in vec2 in_uv;        // texel coordinates with the page offset
 layout(location = 6) in vec3 in_colour;    // untextured packet colour / 1024, else 1
 // joint | row << 8 | triangle corners << 16 | blend << 24 | untextured << 25 |
-// nudge << 26 | corner << 29
+// nudge << 26 | corner << 29 | additive << 31
 layout(location = 7) in uint in_packed;
 
 // Normalised texture coordinates and the shade in 0..1, both interpolated
@@ -113,10 +113,12 @@ void main() {
         packed = (packed & ~(1u << 24)) | (((flags.y >> 2) & 1u) << 24);
     }
     bool blend = ((packed >> 24) & 1u) != 0u;
+    bool additive = ((packed >> 31) & 1u) != 0u;
     vec3 shade;
-    if (blend || record) {
+    if ((blend && !additive) || record) {
         // A semi-transparent packet and every packet of a transparent record
-        // are full-bright: the mesh tint alone.
+        // are full-bright: the mesh tint alone. An additive packet (an RE2
+        // door part) is lit.
         shade = tint.rgb;
     } else {
         shade = ambient.rgb;

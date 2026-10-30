@@ -2041,7 +2041,11 @@ impl Framebuffer {
             for (index, destination) in slot[..3].iter_mut().enumerate() {
                 let source =
                     unorm8(f32::from(texel[index]) * (1.0 / 255.0) * fragment.color[index]);
-                *destination = blend_unorm8(source, *destination, source_alpha);
+                *destination = if blend && triangle.additive {
+                    destination.saturating_add(source)
+                } else {
+                    blend_unorm8(source, *destination, source_alpha)
+                };
             }
             slot[3] = 255;
         });
@@ -2278,12 +2282,66 @@ pub fn draw_door_scene(
     texture: &Texture8,
     frame: &crate::door::vm::Frame<'_>,
 ) {
-    framebuffer.clear();
-    let camera = door_camera(frame);
-    let objects = door_draws(frame).map(|(order, mesh)| (mesh, &order.matrix));
-    framebuffer.draw_objects_unlit(objects, texture, &camera);
+    let full_bright = door_draws(frame)
+        .all(|(order, _)| order.shading == crate::door::vm::DoorShading::FullBright);
+    if full_bright {
+        framebuffer.clear();
+        let camera = door_camera(frame);
+        let objects = door_draws(frame).map(|(order, mesh)| (mesh, &order.matrix));
+        framebuffer.draw_objects_unlit(objects, texture, &camera);
+    } else {
+        // An RE2 door draws through the same scene the GPU renders.
+        let door = DoorScene::new(frame);
+        let meshes = door.meshes(texture);
+        door.scene(&meshes).draw(framebuffer);
+    }
     draw_fade_overlay(framebuffer, &frame.fade);
 }
+
+/// The light an RE2 door part is drawn with through `camera`.
+///
+/// `Door_Trans` sets `SetLightMatrix(door_ll * M)` and
+/// `SetColorMatrix(door_lc)`, with `M` the part's composite view matrix
+/// (`Sp_matrix` times its world matrix; the original reads the previous
+/// frame's, which this does not model). Marni (`FUN_004462e0`,
+/// `TransObject`) then colours a corner
+/// `min(255, sum_i (door_lc >> 4) * max(0, door_ll_i . (M n)))` with `n` the
+/// unit normal and no ambient: the back colour never reaches Marni. A source
+/// here adds `max(0, -(C R n) . (C dir) / 4096) * colour * 255 / 128` for the
+/// camera `C` and part rotation `R`, so each `door_ll` row goes through
+/// `C`'s transpose, negated and scaled by `(door_lc >> 4) / 255` at a colour
+/// of `0x80`.
+pub fn re2_door_light(camera: &Camera) -> EntityLight {
+    use crate::door2::vm::{COLOUR_MATRIX, LIGHT_MATRIX};
+    let view = stored_camera_matrix(camera.from, camera.look_at);
+    EntityLight {
+        ambient: [0.0; 3],
+        sources: std::array::from_fn(|light| {
+            let scale = f64::from(COLOUR_MATRIX[0][light] >> 4) / CHANNEL_MAX;
+            let row = LIGHT_MATRIX[light];
+            EntityLightSource {
+                dir: std::array::from_fn(|axis| {
+                    let world: f64 = (0..3)
+                        .map(|k| f64::from(view[k][axis]) * f64::from(row[k]))
+                        .sum::<f64>()
+                        / 4096.0;
+                    (-world * scale).round() as i32
+                }),
+                color: [0x80; 3],
+            }
+        }),
+    }
+}
+
+/// The light of a full-bright door part: an ambient of 255 and no sources,
+/// every texel as stored.
+const FULL_BRIGHT_LIGHT: EntityLight = EntityLight {
+    ambient: [CHANNEL_MAX; 3],
+    sources: [EntityLightSource {
+        dir: [0; 3],
+        color: [0; 3],
+    }; 3],
+};
 
 fn door_camera(frame: &crate::door::vm::Frame<'_>) -> Camera {
     Camera::from_points(frame.camera.from, frame.camera.to, frame.camera.focal)
@@ -2308,8 +2366,7 @@ fn door_draws<'f, 'a>(
 /// like any model's. The fade is left to the overlay.
 pub struct DoorScene {
     pub camera: Camera,
-    /// Full-bright: an ambient of `0x1000` and no lights shade every texel
-    /// as stored, as [`Framebuffer::draw_objects_unlit`] draws.
+    /// No room lights: each mesh carries its own fixed light.
     pub lighting: Lighting,
     /// Each order's mesh copy (its vertex writes applied) as an object.
     mesh: Tmd,
@@ -2317,6 +2374,9 @@ pub struct DoorScene {
     joints: Vec<anim::Mat4x3>,
     /// The orders that don't draw this frame.
     hidden: u32,
+    /// The drawing orders RE2's door light shades ([`re2_door_light`]); the
+    /// others draw full-bright, as every RE1 door does.
+    lit: u32,
 }
 
 /// `mesh` with direct UVs and CLUT row: the door TIM is one 128x256 page
@@ -2336,10 +2396,23 @@ impl DoorScene {
         let mut hidden = 0u32;
         let mut objects = Vec::new();
         let mut joints = Vec::new();
+        let mut lit = 0u32;
         for (index, order) in frame.orders.iter().take(32).enumerate() {
             let draws = order.flags & 0x8000 != 0 && matches!(order.flags & 0xF, 1..=3);
             match order.mesh {
-                Some(mesh) if draws => objects.push(door_object(mesh)),
+                Some(mesh) if draws => {
+                    let mut object = door_object(mesh);
+                    if order.shading == crate::door::vm::DoorShading::LitAdditive {
+                        for prim in &mut object.prims {
+                            prim.blend = true;
+                            prim.additive = true;
+                        }
+                    }
+                    if order.shading != crate::door::vm::DoorShading::FullBright {
+                        lit |= 1 << index;
+                    }
+                    objects.push(object);
+                }
                 _ => {
                     hidden |= 1 << index;
                     objects.push(TmdObject::default());
@@ -2350,31 +2423,39 @@ impl DoorScene {
         Self {
             camera: door_camera(frame),
             lighting: Lighting {
-                ambient: [0x1000; 3],
+                ambient: [0; 3],
                 lights: [Light::default(); 3],
             },
             mesh: Tmd { objects },
             joints,
             hidden,
+            lit,
         }
     }
 
-    pub fn meshes<'a>(&'a self, texture: &'a Texture8) -> [EntityMesh<'a>; 1] {
-        [EntityMesh {
+    /// The door as two meshes over the same objects: the full-bright orders,
+    /// then the lit ones.
+    pub fn meshes<'a>(&'a self, texture: &'a Texture8) -> [EntityMesh<'a>; 2] {
+        let mesh = |hidden_joints, light| EntityMesh {
             mesh: &self.mesh,
             texture,
             joints: &self.joints,
             tint: [255; 3],
             blend_weight: None,
-            hidden_joints: self.hidden,
+            hidden_joints,
             light_pos: None,
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: Some(light),
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
-        }]
+        };
+        [
+            mesh(self.hidden | self.lit, FULL_BRIGHT_LIGHT),
+            mesh(self.hidden | !self.lit, re2_door_light(&self.camera)),
+        ]
     }
 
     /// The scene over black: the meshes and nothing else.
@@ -2389,7 +2470,9 @@ impl DoorScene {
             lighting: &self.lighting,
             mask_layer: None,
             effect_layer: None,
-            mirror_from: meshes.len(),
+            // No mesh takes the room pass's light rotation: the door light
+            // is in world space.
+            mirror_from: 0,
             mirror: None,
             debug: &[],
         }
@@ -2463,6 +2546,9 @@ pub struct EntityMesh<'a> {
     /// `SetLightMatrix(MulMatrix0(g_lightMatrix, rotation))`. The Tyrant's
     /// heart passes its anchor joint's world rotation.
     pub light_rotation: Option<[[i32; 3]; 3]>,
+    /// A light that replaces the room's latched one: an RE2 door's
+    /// ([`re2_door_light`]).
+    pub fixed_light: Option<EntityLight>,
     /// Per-joint `JointSetColorTint` colours (1/128 multipliers); a non-zero
     /// entry draws the joint unlit in that colour.
     pub joint_colours: [[u8; 3]; 32],
@@ -2731,6 +2817,7 @@ pub fn draw_gameplay_scene_with_effects<'a>(
             } else {
                 light
             };
+            let light = mesh.fixed_light.unwrap_or(light);
             let light = if mesh.aliased_light {
                 light.aliased_identity_product()
             } else {
@@ -2772,6 +2859,7 @@ pub fn draw_gameplay_scene_with_effects<'a>(
                 } else {
                     light
                 };
+                let light = mesh.fixed_light.unwrap_or(light);
                 // The mirrored X scale reverses screen-space winding, so the
                 // usual back-face test would drop every front face; the
                 // reflection is submitted unculled (the original culls with
@@ -3562,6 +3650,9 @@ struct Triangle {
     /// The record's background blend weight in 256ths. `None` is the M16
     /// per-packet half blend; see [`EntityMesh::blend_weight`].
     blend_weight: Option<u8>,
+    /// A blending texel adds to the background (`TmdPrim::additive`)
+    /// instead of mixing by `blend_weight`.
+    additive: bool,
     /// Per corner, `PSXObject_Store`'s degenerate-UV nudge: bit 0 adds
     /// `0.003` to the normalised u, bit 1 to v.
     uv_nudge: [u8; 3],
@@ -3792,7 +3883,8 @@ fn collect_triangles(
             Some(weight) => weight != 0,
             None => prim.blend || prim.clut & ABE_BIT != 0,
         };
-        let full_bright = blend_weight.is_some() || blend;
+        // An additive packet (an RE2 door part) stays lit.
+        let full_bright = blend_weight.is_some() || (blend && !prim.additive);
         let (page_x, page_y, palette_row) = match lighting {
             Some(_) => (
                 f64::from(u32::from(prim.tsb & 0xF) * 128),
@@ -3890,6 +3982,7 @@ fn collect_triangles(
             flat: prim.flat_color.map(|_| [255, 255, 255]),
             blend,
             blend_weight,
+            additive: blend && prim.additive,
             uv_nudge: prim.uv_nudge,
         });
     }
@@ -4005,6 +4098,7 @@ fn collect_complex_pool(
             flat: None,
             blend: false,
             blend_weight: None,
+            additive: false,
             uv_nudge: [0; 3],
         });
     }
@@ -4466,6 +4560,7 @@ fn collect_ivm_triangles(
                 flat,
                 blend: prim.blend,
                 blend_weight: None,
+                additive: false,
                 uv_nudge: [0; 3],
             });
         }
@@ -4896,6 +4991,7 @@ mod tests {
                     tsb: 0x80,
                     textured: true,
                     blend: false,
+                    additive: false,
                     raw_y: false,
                     flat_color: None,
                     quad: None,
@@ -5275,6 +5371,7 @@ mod tests {
             flat: None,
             blend: false,
             blend_weight: None,
+            additive: false,
             uv_nudge: [0; 3],
         })
     }
@@ -5327,6 +5424,7 @@ mod tests {
                 complex_object: None,
                 aliased_light: false,
                 light_rotation: None,
+                fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
                 hd_name: None,
             },
@@ -5342,6 +5440,7 @@ mod tests {
                 complex_object: None,
                 aliased_light: false,
                 light_rotation: None,
+                fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
                 hd_name: None,
             },
@@ -5420,6 +5519,7 @@ mod tests {
                 complex_object: None,
                 aliased_light: false,
                 light_rotation: None,
+                fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
                 hd_name: None,
             }
@@ -5639,6 +5739,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -6439,6 +6540,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -6552,6 +6654,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -6588,6 +6691,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -6653,6 +6757,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -6705,6 +6810,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
             hd_name: None,
         }];
@@ -6748,6 +6854,7 @@ mod tests {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours,
             hd_name: None,
         }];
@@ -6879,6 +6986,7 @@ mod tests {
             flat: None,
             blend: true,
             blend_weight: None,
+            additive: false,
             uv_nudge: [0; 3],
         };
         let mut framebuffer = Framebuffer::new();
@@ -6925,6 +7033,7 @@ mod tests {
             tsb,
             textured: true,
             blend: false,
+            additive: false,
             raw_y: false,
             flat_color: None,
             quad: None,
@@ -6958,6 +7067,7 @@ mod tests {
                     tsb,
                     textured: true,
                     blend,
+                    additive: false,
                     raw_y: false,
                     flat_color: None,
                     quad: None,
@@ -7022,6 +7132,7 @@ mod tests {
             flat: None,
             blend: true,
             blend_weight,
+            additive: false,
             uv_nudge: [0; 3],
         };
         let mut framebuffer = Framebuffer::new();
@@ -7050,6 +7161,100 @@ mod tests {
             framebuffer_pixel(&framebuffer, 11, 11),
             [255, 255, 255, 255]
         );
+    }
+
+    #[test]
+    fn an_additive_packet_adds_its_shaded_texel() {
+        let mut texture = solid_texture([200, 120, 40, 255]);
+        texture.stp = vec![false, true];
+        let raster_vertex = |position: [f32; 2], u: f32, v: f32| RasterVertex {
+            position,
+            w: 1000.0,
+            u,
+            v,
+            shade: [0.5; 3],
+        };
+        let triangle = Triangle {
+            raster: [
+                raster_vertex([10.0, 10.0], 0.0, 0.0),
+                raster_vertex([20.0, 10.0], 2.0, 0.0),
+                raster_vertex([10.0, 20.0], 0.0, 0.0),
+            ],
+            depth: 1000.0,
+            key: 1000,
+            texture: 0,
+            palette_row: 0,
+            flat: None,
+            blend: true,
+            blend_weight: None,
+            additive: true,
+            uv_nudge: [0; 3],
+        };
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.blit(&solid_image(320, 240, [100, 100, 100, 255]));
+        rasterize_alone(&mut framebuffer, &texture, &triangle);
+        // Half the texel on top of the background, saturating.
+        assert_eq!(
+            framebuffer_pixel(&framebuffer, 11, 11),
+            [200, 160, 120, 255]
+        );
+    }
+
+    #[test]
+    fn the_re2_door_light_is_marnis() {
+        use crate::door2::vm::LIGHT_MATRIX;
+        let camera = Camera::from_points(
+            crate::door2::vm::CAMERA_FROM,
+            [0; 3],
+            crate::door2::vm::FOCAL_LENGTH,
+        );
+        let light = re2_door_light(&camera);
+        assert_eq!(light.ambient, [0.0; 3]);
+        let stored = stored_camera_matrix(camera.from, camera.look_at);
+        for rotation in [[0, 0, 0], [0, 1024, 0], [300, -700, 90]] {
+            let world = anim::rotation_matrix(rotation[0], rotation[1], rotation[2]);
+            let draw_matrix = mul_matrix0(&stored, &world)
+                .map(|row| row.map(|entry| f32::from(entry as i16) / 4096.0));
+            for normal in [
+                [4096i16, 0, 0],
+                [0, 4096, 0],
+                [0, -4096, 0],
+                [2896, -2896, 0],
+            ] {
+                let shade = reference_vertex_shade(&stored, &draw_matrix, normal, &light, None);
+                // `door_ll * view * world`, applied to the normal the
+                // vertices' Y flip applies to as well.
+                let n = [
+                    f64::from(normal[0]),
+                    -f64::from(normal[1]),
+                    f64::from(normal[2]),
+                ];
+                let composite = mul_matrix0(&stored, &world);
+                let view_normal: [f64; 3] = std::array::from_fn(|row| {
+                    (0..3)
+                        .map(|k| f64::from(composite[row][k]) * n[k])
+                        .sum::<f64>()
+                        / 4096.0
+                });
+                let expected = LIGHT_MATRIX
+                    .iter()
+                    .map(|row| {
+                        let l = (0..3)
+                            .map(|k| f64::from(row[k]) * view_normal[k])
+                            .sum::<f64>()
+                            / (4096.0 * 4096.0);
+                        100.0 * l.max(0.0)
+                    })
+                    .sum::<f64>()
+                    .min(CHANNEL_MAX);
+                for channel in shade {
+                    assert!(
+                        (channel.min(CHANNEL_MAX) - expected).abs() < 0.5,
+                        "{rotation:?} {normal:?}: {channel} vs {expected}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -7093,6 +7298,7 @@ mod tests {
                     tsb: 0x80,
                     textured: true,
                     blend: false,
+                    additive: false,
                     raw_y: false,
                     flat_color: None,
                     quad: Some([0, 1, 3, 2]),

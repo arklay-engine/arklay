@@ -90,6 +90,7 @@ fn player_triangle(camera: &Camera, corners: [(f64, f64); 3], depth: f64) -> Tmd
                 tsb: 0x80,
                 textured: true,
                 blend: false,
+                additive: false,
                 raw_y: false,
                 flat_color: None,
                 quad: None,
@@ -172,6 +173,7 @@ fn player_occluded_by_a_group_1_pillar_until_the_group_is_disabled() {
         complex_object: None,
         aliased_light: false,
         light_rotation: None,
+        fixed_light: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
         hd_name: None,
     }];
@@ -277,6 +279,7 @@ fn room1000_player_frame_is_deterministic_and_mask_aware() {
         complex_object: None,
         aliased_light: false,
         light_rotation: None,
+        fixed_light: None,
         joint_colours: arklay::render::NO_JOINT_COLOURS,
         hd_name: None,
     }];

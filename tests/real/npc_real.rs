@@ -502,6 +502,7 @@ fn a_real_actor_room_draws_player_and_npc_shadows_in_one_frame() {
             complex_object: None,
             aliased_light: false,
             light_rotation: None,
+            fixed_light: None,
             joint_colours: arklay::render::NO_JOINT_COLOURS,
             hd_name: None,
         })
