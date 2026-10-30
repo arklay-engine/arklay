@@ -13,7 +13,9 @@ api:set_item_slot(0, KNIFE, 0)
 if character == 0 then
     api:set_item_slot(1, HANDGUN_LEON, 18)
     api:set_item_slot(2, LIGHTER, 1)
+    api:set_equipped(HANDGUN_LEON)
 else
     api:set_item_slot(1, HANDGUN_CLAIRE, 13)
     api:set_item_slot(2, LOCKPICK, 1)
+    api:set_equipped(HANDGUN_CLAIRE)
 end

@@ -413,6 +413,8 @@ pub struct AnimPlayer {
     /// The step the blend weights are derived from (0x400 for the player
     /// clips). `0x1000 / blend_step - 1` is the counter a switch arms.
     pub blend_step: u16,
+    /// Blend as RE2's `J_seq` does: see [`blend_keyframes_re2`].
+    pub re2_blend: bool,
     /// The keyframe displayed before the latest consuming tick. The blend
     /// source is `AnimPlayer::applied`; this is kept for diagnostics and the
     /// within-clip tests that inspect the pending frame transition.
@@ -442,6 +444,7 @@ impl AnimPlayer {
             reverse: false,
             blend_counter: 0,
             blend_step: 0x400,
+            re2_blend: false,
             previous_keyframe: 0,
             blend_used: 0,
             applied: RefCell::new(None),
@@ -629,9 +632,11 @@ impl AnimPlayer {
                 continue;
             };
             pose = match pose.take() {
-                Some(source) if blend != 0 && step != 0 => {
-                    Some(blend_keyframes(&source, target, blend, step))
-                }
+                Some(source) if blend != 0 && step != 0 => Some(if self.re2_blend {
+                    blend_keyframes_re2(&source, target, blend, step)
+                } else {
+                    blend_keyframes(&source, target, blend, step)
+                }),
                 // A direct step needs no source; a blend with no pose on
                 // screen (a fresh spawn) starts from the target instead of
                 // truncating it against itself.
@@ -714,6 +719,57 @@ pub fn blend_keyframes(
     }
 }
 
+/// `J_seq`'s blend: a weight of `blend * step` of `current`, with the rest of
+/// `target`, through `MulDiv`'s rounding. Unlike RE1 it wraps the angles on
+/// every step, from a `current` masked to a turn, and it blends the whole root
+/// translation.
+pub fn blend_keyframes_re2(
+    current: &model::Keyframe,
+    target: &model::Keyframe,
+    blend: u16,
+    step: u16,
+) -> model::Keyframe {
+    let kept = i32::from(blend) * i32::from(step);
+    let rest = 0x1000 - kept;
+    let mix = |cur: i32, tgt: i32| (mul_div_12(cur, kept) + mul_div_12(tgt, rest)) as i16;
+    let count = current.rotations.len().max(target.rotations.len());
+    let rotations = (0..count)
+        .map(|joint| {
+            std::array::from_fn(|axis| {
+                let cur = current.rotations.get(joint).map_or(0, |r| r[axis]);
+                let cur = i32::from(cur) & 0x0FFF;
+                let tgt = target.rotations.get(joint).map_or(0, |r| r[axis]);
+                let mut tgt = i32::from(tgt);
+                let diff = (tgt - cur + 0x800) as u32;
+                if diff > 0x1000 {
+                    tgt += if diff & 0x8000 == 0 { -0x1000 } else { 0x1000 };
+                }
+                mix(cur, tgt)
+            })
+        })
+        .collect();
+    model::Keyframe {
+        offset: std::array::from_fn(|axis| {
+            mix(
+                i32::from(current.offset[axis]),
+                i32::from(target.offset[axis]),
+            )
+        }),
+        vertex: target.vertex,
+        rotations,
+    }
+}
+
+/// `MulDiv(value, weight, 0x1000)`, which rounds halves away from zero.
+fn mul_div_12(value: i32, weight: i32) -> i32 {
+    let product = value * weight;
+    if product < 0 {
+        -((-product + 0x800) >> 12)
+    } else {
+        (product + 0x800) >> 12
+    }
+}
+
 /// The original's last-blend-step angle adjustment: shift `current` by one
 /// full turn when the target lies more than half a turn away in the lerp's
 /// direction.
@@ -739,6 +795,32 @@ fn trunc_div_12(value: i32) -> i32 {
 mod tests {
     use super::*;
     use crate::model::{Clip, ClipFrame, Keyframe, Skeleton};
+
+    #[test]
+    fn re2_blends_the_whole_root_and_wraps_every_step() {
+        let keyframe = |offset, angle| Keyframe {
+            offset,
+            vertex: [0; 3],
+            rotations: vec![[angle, 0, 0]],
+        };
+        // A weight of 0xE00 of the current pose.
+        let pose = blend_keyframes_re2(
+            &keyframe([800, 0, -800], 0xFF0),
+            &keyframe([0, 0, 0], 0x10),
+            7,
+            0x200,
+        );
+        assert_eq!(pose.offset, [700, 0, -700]);
+        // 0xFF0 goes up through a whole turn to 0x1010, not down.
+        assert_eq!(pose.rotations[0][0], 0xFF0 + 4);
+    }
+
+    #[test]
+    fn mul_div_rounds_halves_away_from_zero() {
+        assert_eq!(mul_div_12(1, 0x800), 1);
+        assert_eq!(mul_div_12(-1, 0x800), -1);
+        assert_eq!(mul_div_12(1, 0x7FF), 0);
+    }
 
     fn axis_x(matrix: &Mat4x3) -> [i32; 3] {
         [matrix.r[0][0], matrix.r[1][0], matrix.r[2][0]]

@@ -148,8 +148,8 @@ pub struct Keyframe {
 pub struct ClipFrame {
     pub keyframe: u16,
     pub timing: u16,
-    /// An RE2 frame's top bits (`pNow_seq`): its footfall marks.
-    pub flags: u16,
+    /// An RE2 frame's word without its index (`pNow_seq`): its event marks.
+    pub flags: u32,
 }
 
 /// An animation clip: an ordered list of keyframe/timing pairs.

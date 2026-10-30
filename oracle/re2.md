@@ -52,6 +52,11 @@ runs them or collides with them. That leaves the player alone to compare with
 arklay until enemies are ported. `oracle/inputs-re2/` holds the scripts in use,
 and `street_wander.txt` is a random walk through room 100.
 
+`--give SLOT:ID:COUNT` puts an item in the inventory when play begins, for what
+the start of a game has nothing to test with. `street_reload.txt` wants
+`--give 3:0x14:20` and the same stack added to the end of arklay's
+`games/re2/game/new_game.lua` for the comparison.
+
 Input scripts have the format of `oracle/inputs`, counted from tick 0. This
 game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 `0x8000`, `confirm`/`action`/`fire` `0x0080`, `cancel`/`run` `0x0040`, `aim`

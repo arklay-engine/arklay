@@ -13597,6 +13597,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let room_anim = context.room.room_anim.as_ref();
     let tick = crate::player2::Tick {
         room: context.room,
+        skeleton: &assets.emd.skeleton,
         banks: crate::player2::Banks {
             pld: (&assets.emd.clips, &assets.emd.keyframes),
             weapon: (&assets.emw.clips, &assets.emw.keyframes),
@@ -13608,8 +13609,10 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         life: i32::from(context.game.entities[0].health),
         poisoned: false,
         stopped: context.game.re2.player_stopped(),
+        weapon: context.game.re2_weapon(),
     };
     let arrived = crate::player2::player_move(&mut context.game.re2.player, context.player, &tick);
+    context.game.re2_settle_ammo();
     if let Some(flag) = arrived {
         context.game.re2.raise_room_flag(flag);
     }

@@ -1293,6 +1293,7 @@ fn no_event_holds_the_player_for_good() {
                 if game.re2.player.kind & arklay::player2::KIND_NOT_MOVED == 0 {
                     let tick = arklay::player2::Tick {
                         room: &loaded.state,
+                        skeleton: &emd.skeleton,
                         banks: arklay::player2::Banks {
                             pld: (&emd.clips, &emd.keyframes),
                             weapon: (&emw.clips, &emw.keyframes),
@@ -1304,6 +1305,7 @@ fn no_event_holds_the_player_for_good() {
                         life: 200,
                         poisoned: false,
                         stopped: game.re2.player_stopped(),
+                        weapon: Default::default(),
                     };
                     let arrived =
                         arklay::player2::player_move(&mut game.re2.player, &mut player, &tick);
