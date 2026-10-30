@@ -65,8 +65,8 @@ formatted-text renderers index the sheet. Only the original's ASCII-buffer
 | key | meaning |
 |---|---|
 | `MESSAGE_<nn>` | global message `nn` (`00`..`3F`), including the boot narration |
-| `ROOM_<room3>_TEXT_<nn>` | room message shared by the RDT variants |
-| `ROOM_<rdt4>_TEXT_<nn>` | per-variant override, e.g. `ROOM_1001_TEXT_0A` |
+| `ROOM_<room3>_TEXT_<nn>` | room message shared by the room's variants |
+| `ROOM_<room3>_<VARIANT>_TEXT_<nn>` | a variant's own text: `<VARIANT>` is `CHRIS` or `JILL`, `MANSION1` or `MANSION2` (the mansion visit), or a player and a visit, e.g. `ROOM_100_JILL_MANSION2_TEXT_0A` |
 | `ROOM_<room3>_NAME` | room display name (the F1 overlay, the save list) |
 | `ROOM_<room3>_NAME_SAVE` | shorthand room name for the save screen, falling back to `NAME` |
 | `ITEM_<nn>_NAME` | item name by item id |
@@ -112,9 +112,10 @@ RE1 names no speakers. A language file may name one per message:
 | `<message key>_SPEAKER` | the speaker of every page of the message, e.g. `ROOM_100_TEXT_03_SPEAKER = "Rebecca"` |
 | `<message key>_SPEAKER_<page>` | the speaker of one page (0 is the first, in decimal), overriding the above, e.g. `ROOM_100_TEXT_04_SPEAKER_1 = "Rebecca"` |
 
-The message key is the one the message resolves through (`MESSAGE_<nn>`,
-`ROOM_<rdt4>_TEXT_<nn>` or `ROOM_<room3>_TEXT_<nn>`), checked in that order
-for room messages. The name shows when Speaker Name Display is on. The GUI
+The message key is the one the message resolves through (`MESSAGE_<nn>`, or
+for a room message the most specific of `ROOM_<room3>_<PLAYER>_<VISIT>_TEXT_<nn>`,
+`ROOM_<room3>_<PLAYER>_TEXT_<nn>`, `ROOM_<room3>_<VISIT>_TEXT_<nn>` and
+`ROOM_<room3>_TEXT_<nn>` that exists). The name shows when Speaker Name Display is on. The GUI
 side takes only the lines and an optional speaker
 (`crate::gui::subtitles::Subtitle`), so subtitle data from another game can
 feed the same drawing.

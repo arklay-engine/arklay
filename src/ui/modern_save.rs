@@ -277,14 +277,14 @@ fn free_file(dir: &std::path::Path) -> (PathBuf, Option<usize>) {
 
 /// The room's three-digit id, as the cut names spell it.
 fn room3(file: &SaveFile) -> String {
-    format!("{:X}{:02X}", file.stage.saturating_add(1), file.room)
+    file.room_id().room3()
 }
 
 /// The save screen's shorthand location ("Hall 1F").
 fn location(cx: &UiContext<'_>, file: &SaveFile) -> String {
     cx.text
         .and_then(|text| {
-            text.save_location(file.stage, file.room)
+            text.save_location(file.room_id().stage, file.room)
                 .map(|bytes| text.decode(bytes))
         })
         .map(|label| label.trim().to_string())

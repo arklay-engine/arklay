@@ -116,7 +116,9 @@ impl TraceWriter {
             self.out,
             "t={} room={}:{} rng={} rseed={} fade={}:{}",
             self.ticks,
-            tick.room.stage,
+            // The reference's own stage numbering: the second mansion
+            // visit is its stages 6 and 7.
+            tick.room.table_row() + 1,
             tick.room.room,
             tick.rng,
             tick.rseed,
@@ -261,6 +263,7 @@ mod tests {
                 stage: 1,
                 room: 0x06,
                 player_flag: 0,
+                mansion2: false,
             },
             rng: 1,
             rseed: 2,
@@ -296,6 +299,7 @@ mod tests {
                 stage: 1,
                 room: 0x06,
                 player_flag: 0,
+                mansion2: false,
             },
             rng: 0,
             rseed: 0,

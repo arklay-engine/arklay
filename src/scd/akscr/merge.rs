@@ -10,12 +10,15 @@
 //! the mansion, the player or a region, whichever writes fewer lines (on a
 //! tie, in that order), into `#if` / `#else` / `#endif` blocks. A section
 //! header alone may differ.
+//!
+//! [`merge_rooms`] and [`merge_regions`] then [`super::lift`] that form into
+//! the run-time variant tests the checked-in scripts use.
 
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
-use super::preprocess::{Region, Variant, kept_lines_with, merged_id};
+use super::preprocess::{Build, Region, Variant, kept_lines_with, merged_id};
 
 /// One bit per merge input.
 type Mask = u16;
@@ -249,7 +252,7 @@ pub fn merge(variants: &[(Variant, &str)]) -> Result<String> {
     }
 
     for (variant, text) in variants {
-        let kept = kept_lines_with(&out, Some(*variant), Some("AUTHENTIC"))?;
+        let kept = kept_lines_with(&out, Some(Build::Legacy(*variant)), Some("AUTHENTIC"))?;
         let same = kept.len() == text.lines().count()
             && kept
                 .iter()
@@ -636,7 +639,8 @@ fn split_block(
 /// 6031).
 ///
 /// The variants' `#define` lines are pooled first: a define changes no
-/// bytecode, so every variant gets them all and they need no `#if`.
+/// bytecode, so every variant gets them all and they need no `#if`. The
+/// result is lifted ([`super::lift`]): the variants are run-time tests.
 pub fn merge_rooms(rooms: &BTreeMap<u16, String>) -> Result<BTreeMap<u16, String>> {
     merge_variants(
         rooms
@@ -646,8 +650,8 @@ pub fn merge_rooms(rooms: &BTreeMap<u16, String>) -> Result<BTreeMap<u16, String
 }
 
 /// [`merge_rooms`] over several regions, each with its per-RDT scripts: the
-/// lines they differ in go under `#if USA`, `#if JPN` or `#if EUR`. A region
-/// may hold RDTs the others lack.
+/// lines they differ in go under `if (USA)`, `if (JPN)` or `if (EUR)`. A
+/// region may hold RDTs the others lack.
 pub fn merge_regions(
     regions: &[(Region, &BTreeMap<u16, String>)],
 ) -> Result<BTreeMap<u16, String>> {
@@ -694,7 +698,11 @@ fn merge_variants<'a>(
                 .map(|((variant, _), text)| (*variant, text.as_str()))
                 .collect();
             let merged = merge(&variants).with_context(|| format!("room {base:03X}"))?;
-            Ok((base, merged))
+            // The variants are run-time tests in a checked-in script.
+            let mansion = matches!(base >> 8, 1 | 2);
+            let lifted =
+                super::lift::lift(&merged, mansion).with_context(|| format!("room {base:03X}"))?;
+            Ok((base, lifted))
         })
         .collect()
 }

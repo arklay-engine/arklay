@@ -80,8 +80,9 @@ pub struct ConvertModOptions {
     /// Only convert this folder of the input (`re1hd` of a multi-game
     /// archive); paths are taken relative to it.
     pub root: Option<String>,
-    /// Base pack for stage 6/7 background copies and unchanged-file
-    /// pruning; `None` looks for `games/re1.akpak` under the data roots.
+    /// Base pack for the room layout (RE1's room folders or RE2's per-RDT
+    /// ones) and unchanged-file pruning; `None` looks for `games/re1.akpak`
+    /// under the data roots.
     pub base: Option<PathBuf>,
     /// Pack id override.
     pub id: Option<String>,
@@ -144,9 +145,9 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         .and_then(|base| base.manifest())
         .filter(|manifest| manifest.kind == manifest::PackKind::Base)
         .map_or_else(|| BASE_ID.to_string(), |manifest| manifest.id.clone());
-    // Only RE1 folds stages 6 and 7 onto the stage 1 and 2 backgrounds; the
-    // base's rooms say which game it is.
-    let folds_stages = base.as_ref().is_none_or(|base| {
+    // RE1 keeps a folder per room, RE2 one per RDT; the base's rooms say
+    // which game it is.
+    let room_folders = base.as_ref().is_none_or(|base| {
         crate::room::ids(base)
             .first()
             .is_none_or(|&id| crate::room::dialect(base, id) == crate::format::Dialect::Re1)
@@ -201,7 +202,7 @@ pub fn convert_mod(options: &ConvertModOptions) -> Result<ConvertModSummary> {
         }
     }
     plan.drop_shadowed_films();
-    plan.add_variant_copies(base.as_ref(), folds_stages);
+    plan.place_rooms(base.as_ref(), room_folders);
 
     // Settle every entry before writing any: the pack's table of contents and
     // path list come first, so the entry set must be final. Only an override
@@ -454,8 +455,7 @@ fn open_base(path: Option<&Path>, warnings: &mut Vec<String>) -> Result<Option<P
         }
         None => {
             warnings.push(
-                "no base pack found (pass --base); stage 6/7 background copies and unchanged-file pruning are skipped"
-                    .to_string(),
+                "no base pack found (pass --base); unchanged-file pruning is skipped".to_string(),
             );
             Ok(None)
         }
@@ -860,10 +860,12 @@ fn classify(relative: &str, mod_roots: &[String]) -> Class {
     }
 }
 
-/// `STAGEn/ROOM####.RDT` and `STAGEn/RC*.pak`.
+/// `STAGEn/ROOM####.RDT` and `STAGEn/RC*.pak`, planned in the RDT's own
+/// folder (`room/6031/`) until [`Plan::place_rooms`] knows the base's
+/// layout.
 fn classify_stage(name: &str) -> Class {
     if let Some(Ok(id)) = convert::rdt_id_from_file_name(name) {
-        return raw(id.rdt_entry());
+        return raw(format!("{}/{}", id.rdt_dir(), crate::room::RDT_FILE));
     }
     // `RC{stage}{room:02X}{camera:X}.pak`.
     if let Some(digits) = name
@@ -877,14 +879,18 @@ fn classify_stage(name: &str) -> Class {
         )
         && (1..=5).contains(&stage)
     {
-        // Planned for the player 0 variant; `add_variant_copies` fills in
-        // the others.
+        // Planned for the player 0 variant; `place_rooms` moves it to the
+        // room's folder or copies it to the other player's.
         let id = RoomId {
             stage,
             room,
             player_flag: 0,
+            mansion2: false,
         };
-        return converted(id.cut_entry(camera), Convert::Camera);
+        return converted(
+            format!("{}/cut/{camera:02x}.bmp", id.rdt_dir()),
+            Convert::Camera,
+        );
     }
     Class::Unmapped
 }
@@ -914,8 +920,12 @@ fn classify_mask(name: &str) -> Class {
         stage: stage + 1,
         room,
         player_flag: 0,
+        mansion2: false,
     };
-    converted(id.mask_entry(camera), Convert::Mask)
+    converted(
+        format!("{}/mask/{camera:02x}.bmp", id.rdt_dir()),
+        Convert::Mask,
+    )
 }
 
 /// `ENEMY/`: player, costume, scripted-character and monster models.
@@ -1224,49 +1234,68 @@ impl Plan {
         });
     }
 
-    /// A CR camera background or mask file serves every variant of its room:
-    /// both player variants, and stages 6 and 7 reuse the stage 1 and 2
-    /// files. Copy each cut or mask override (planned for the player 0
-    /// variant) into every other variant's folder the base pack (or the mod
-    /// itself) defines. Over another game's base (`folds_stages` false) only
-    /// the player variants share a file.
-    fn add_variant_copies(&mut self, base: Option<&Pack>, folds_stages: bool) {
-        let defined = |id: RoomId| {
-            [id.xml_entry(), id.rdt_entry()].iter().any(|entry| {
-                self.targets.contains_key(entry) || base.is_some_and(|base| base.contains(entry))
-            })
-        };
-        let mut copies = Vec::new();
+    /// Move the planned room files (each RDT, background and mask, planned
+    /// in its RDT's own folder) where the base keeps them. RE1 has a folder
+    /// per room (`room_folders`): a background or mask serves every variant
+    /// from the room's folder, and an RDT is its variant's, in the variant's
+    /// folder (`room/103/jill-mansion2/room.rdt` for the original's
+    /// `ROOM6031.RDT`). RE2 keeps a folder per RDT, so a background or mask
+    /// (planned for player 0) is copied to the other player's folder the base
+    /// (or the mod itself) defines.
+    fn place_rooms(&mut self, base: Option<&Pack>, room_folders: bool) {
+        let mut moves = Vec::new();
         for (entry, planned) in &self.targets {
-            if !matches!(planned.convert, Convert::Camera | Convert::Mask) {
-                continue;
-            }
-            let Some((id, file)) = entry
+            let Some((folder, file)) = entry
                 .strip_prefix("room/")
                 .and_then(|rest| rest.split_once('/'))
-                .and_then(|(id, file)| Some((RoomId::parse(id).ok()?, file)))
             else {
                 continue;
             };
-            let stages = match id.stage {
-                1 | 2 if folds_stages => vec![id.stage, id.stage + 5],
-                stage => vec![stage],
-            };
-            for stage in stages {
-                for player_flag in 0..=1 {
-                    let variant = RoomId {
-                        stage,
-                        room: id.room,
-                        player_flag,
-                    };
-                    if variant != id && defined(variant) {
-                        copies.push((format!("{}/{file}", variant.dir()), planned.clone()));
-                    }
-                }
+            if folder.len() != 4 {
+                continue;
             }
+            let Some(id) = u16::from_str_radix(folder, 16).ok() else {
+                continue;
+            };
+            moves.push((entry.clone(), id, file.to_string(), planned.clone()));
         }
-        for (entry, planned) in copies {
-            self.targets.entry(entry).or_insert(planned);
+        for (entry, number, file, planned) in moves {
+            if room_folders {
+                let Some(id) = RoomId::from_original(number) else {
+                    continue;
+                };
+                let target = if file == crate::room::RDT_FILE {
+                    id.rdt_entry()
+                } else {
+                    format!("{}/{file}", id.dir())
+                };
+                self.targets.remove(&entry);
+                self.targets.entry(target).or_insert(planned);
+                continue;
+            }
+            if !matches!(planned.convert, Convert::Camera | Convert::Mask) {
+                continue;
+            }
+            let Ok(id) = RoomId::parse(&format!("{number:04x}")) else {
+                continue;
+            };
+            let other = RoomId {
+                player_flag: 1,
+                ..id
+            };
+            let defined = [
+                format!("{}/room.xml", other.rdt_dir()),
+                format!("{}/{}", other.rdt_dir(), crate::room::RDT_FILE),
+            ]
+            .iter()
+            .any(|entry| {
+                self.targets.contains_key(entry) || base.is_some_and(|base| base.contains(entry))
+            });
+            if defined {
+                self.targets
+                    .entry(format!("{}/{file}", other.rdt_dir()))
+                    .or_insert(planned);
+            }
         }
     }
 }
@@ -1503,7 +1532,7 @@ fn start_inventory_script(source: &str) -> Result<String> {
 /// followed by the mod's rooms; an empty `<Room />` keeps the shipped row.
 fn room_music_script(source: &str) -> Result<String> {
     let rooms = parse_bgm_rooms(source)?;
-    let rows = usize::from(crate::state::RoomId::MAX_STAGE) * 32;
+    let rows = crate::state::RoomId::TABLE_ROWS * 32;
     if rooms.len() > rows {
         bail!("{} <Room> elements, at most {rows}", rooms.len());
     }
@@ -1524,11 +1553,19 @@ fn room_music_script(source: &str) -> Result<String> {
             continue;
         }
         let groups: Vec<String> = groups.iter().map(|group| format!("{group:#04x}")).collect();
+        // The table's rows past the laboratory are the second mansion
+        // visit's.
+        let id = RoomId::from_table_row(index / 32, (index % 32) as u8);
+        let visit = if id.mansion2 {
+            ", { mansion2 = true }"
+        } else {
+            ""
+        };
         let _ = writeln!(
             out,
-            "api:set_room_music({}, {:#04x}, {{ {} }})",
-            index / 32 + 1,
-            index % 32,
+            "api:set_room_music({}, {:#04x}, {{ {} }}{visit})",
+            id.stage,
+            id.room,
             groups.join(", ")
         );
     }
@@ -1933,6 +1970,7 @@ mod tests {
                 stage: 1,
                 room: 6,
                 player_flag: character,
+                mansion2: false,
             };
             game.rebuild_slots();
             crate::lua::run_chunk(&mut game, script.as_bytes(), "init.xml", character).unwrap();
@@ -1992,7 +2030,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_backgrounds_copy_to_every_variant_that_exists() {
+    fn room_files_go_where_the_base_keeps_them() {
         let mut plan = Plan::default();
         for (entry, convert) in [
             ("room/1060/cut/00.bmp", Convert::Camera),
@@ -2010,31 +2048,30 @@ mod tests {
             );
         }
         let mut re2 = plan.clone();
-        let planned = |plan: &Plan| -> Vec<String> {
-            plan.targets
-                .keys()
-                .filter(|entry| !entry.ends_with(".rdt"))
-                .cloned()
-                .collect()
-        };
-        plan.add_variant_copies(None, true);
+        let planned = |plan: &Plan| -> Vec<String> { plan.targets.keys().cloned().collect() };
+        // RE1: a background serves every variant from the room's folder, and
+        // an RDT is its variant's, the original's stage 6 the second visit.
+        plan.place_rooms(None, true);
         assert_eq!(
             planned(&plan),
             [
-                "room/1060/cut/00.bmp",
-                "room/1061/cut/00.bmp",
-                "room/2030/mask/01.bmp",
-                "room/6060/cut/00.bmp"
+                "room/106/chris-mansion2/room.rdt",
+                "room/106/cut/00.bmp",
+                "room/106/jill-mansion1/room.rdt",
+                "room/203/mask/01.bmp"
             ]
         );
-        // RE2's stage 6 is its own: only the player variant shares the file.
-        re2.add_variant_copies(None, false);
+        // RE2 keeps a folder per RDT, and its stage 6 is its own: only the
+        // player variant shares the file.
+        re2.place_rooms(None, false);
         assert_eq!(
             planned(&re2),
             [
                 "room/1060/cut/00.bmp",
                 "room/1061/cut/00.bmp",
-                "room/2030/mask/01.bmp"
+                "room/1061/room.rdt",
+                "room/2030/mask/01.bmp",
+                "room/6060/room.rdt"
             ]
         );
     }
@@ -2138,9 +2175,11 @@ mod tests {
         .unwrap();
         let base = dir.join("base.akpak");
         let mut writer = crate::pack::PackWriter::new();
-        writer.add("room/1000/room.rdt", b"same".to_vec()).unwrap();
         writer
-            .add("room/1010/room.rdt", b"original".to_vec())
+            .add("room/100/chris-mansion1/room.rdt", b"same".to_vec())
+            .unwrap();
+        writer
+            .add("room/101/chris-mansion1/room.rdt", b"original".to_vec())
             .unwrap();
         writer.write(&base).unwrap();
 
@@ -2167,12 +2206,18 @@ mod tests {
             [
                 TEXT_ENTRY,
                 manifest::ENTRY,
-                "room/1010/room.rdt",
-                "room/1020/room.rdt"
+                "room/101/chris-mansion1/room.rdt",
+                "room/102/chris-mansion1/room.rdt"
             ]
         );
-        assert_eq!(*pack.read("room/1010/room.rdt").unwrap(), *b"changed");
-        assert_eq!(*pack.read("room/1020/room.rdt").unwrap(), *b"new");
+        assert_eq!(
+            *pack.read("room/101/chris-mansion1/room.rdt").unwrap(),
+            *b"changed"
+        );
+        assert_eq!(
+            *pack.read("room/102/chris-mansion1/room.rdt").unwrap(),
+            *b"new"
+        );
         let language = pack.read(TEXT_ENTRY).unwrap();
         assert!(String::from_utf8_lossy(&language).contains("Hello"));
         assert_eq!(

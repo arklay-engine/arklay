@@ -581,7 +581,7 @@ fn seed_ogg() -> Vec<u8> {
 
 /// The checked-in example mod's 2x PNG room background.
 fn seed_png() -> Vec<u8> {
-    include_bytes!("../mods/hd/room/1000/cut/00.png").to_vec()
+    include_bytes!("../mods/hd/room/100/cut/00.png").to_vec()
 }
 
 /// The checked-in example mod's lossless WebP UI page.

@@ -1,0 +1,510 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_05_MESSAGE 0x05
+#define AOT_06_USEITEM 0x06
+#define AOT_07_USEITEM 0x07
+#define AOT_08_USEITEM 0x08
+#define AOT_09_EVENT 0x09
+#define AOT_0A_MESSAGE 0x0A
+#define AOT_0B_MESSAGE 0x0B
+#define AOT_0C_USEITEM 0x0C
+#define AOT_0D_MESSAGE 0x0D
+#define AOT_0E_ITEM 0x0E
+#define AOT_0F_ITEM 0x0F
+#define CAM_00 0x00
+#define FX_09 0x09
+#define F_ROOM_00 0x00
+#define F_ROOM_01 0x01
+#define F_ROOM_02 0x02
+#define F_ROOM_03 0x03
+#define F_ROOM_04 0x04
+#define F_ROOM_05 0x05
+#define F_ROOM_06 0x06
+#define F_ROOM_07 0x07
+#define F_ROOM_08 0x08
+#define F_ROOM_0A 0x0A
+#define F_ROOM_0C 0x0C
+#define F_ROOM_21 0x21
+#define F_ROOM_22 0x22
+#define F_ROOM_23 0x23
+#define F_ROOM_24 0x24
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define IMDL_03 0x03
+#define MSG_POISON_GAS_IS_ESCAPING 0x03
+#define MSG_THERE_IS_AN_AIR_SHAFTWILL_YOU 0x02
+#define OBJ_00 0x00
+#define OBJ_01 0x01
+#define OBJ_02 0x02
+#define SE_19_CHAKUCHI 0x19
+#define SE_1A_SW_PUSH3 0x1A
+#define SE_PL_02 0x02
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 10800, 0, 2200, 2200, 6, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, DOOR_LOCKED | F_LOCK_2D, ROOM_505_O_PASSAGE, 16600, 0, 4200, 1024, LOCK, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 20000, 0, 2600, 2700, 9, DOOR_SND_01_DR_MTL, DOOR_0D_DOOR13, 6, 0, ROOM_50C_FRONT_OF_ELEVATOR, 6100, 0, 18000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_ITEM, F_ITEM_7B, TRUE))
+    {
+        item_aot_set(AOT_02_ITEM, 23930, 1380, 1800, 1800, IT_43_HEAL_HERB_RED, 1, IMDL_00, SCA_NONE, 24830, -1500, 2280, 0, F_ITEM_7B, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    if (ck(FG_ITEM, F_ITEM_94, TRUE))
+    {
+        item_aot_set(AOT_03_ITEM, 13200, 9860, 1800, 1800, IT_0E_AMMO_MAGNUM, 6, IMDL_01, SCA_NONE, 14100, -2890, 10760, 0, F_ITEM_94, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_4);
+    }
+    aot_set(AOT_04_MESSAGE, 25000, 6000, 1100, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 128, 0, 1, 1, 0, 0);
+    aot_set(AOT_05_MESSAGE, 16600, 11900, 1380, 820, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 129, 0, 1, 1, 0, 0);
+    aot_set(AOT_06_USEITEM, 16680, 9820, 1090, 1190, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 34, 0, 1, 0);
+    aot_set(AOT_07_USEITEM, 16680, 6430, 1090, 1020, SCE_USEITEM, SAT_UNDER | SAT_OBJECT, 4, 0, 35, 0, 1, 0);
+    aot_set(AOT_08_USEITEM, 17000, 8000, 900, 1000, SCE_USEITEM, SAT_UNDER | SAT_OBJECT | SAT_PLAYER, 4, 0, 36, 0, 1, 0);
+    aot_set(AOT_09_EVENT, 15000, 8200, 1800, 500, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    aot_set(AOT_0A_MESSAGE, 9600, 10800, 1800, 1800, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 1, 1, 0, 0);
+    aot_set(AOT_0B_MESSAGE, 2300, 9100, 8700, 1500, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 133, 0, 1, 1, 0, 0);
+    aot_set(AOT_0C_USEITEM, 2520, 5720, 2300, 1800, SCE_USEITEM, SAT_PLAYER, 9, 0, 20, 0, 1, 0);
+    aot_set(AOT_0D_MESSAGE, 2520, 5720, 2300, 1800, SCE_NONE, SAT_PLAYER, 0, 0, 0, 0, 0, 0);
+    if (ck(FG_ITEM, F_ITEM_62, TRUE))
+    {
+        item_aot_set(AOT_0E_ITEM, 0, 0, 1, 1, IT_6C_FILE_PASS_CODE_02, 1, IMDL_02, SCA_NONE, 0, 0, 0, 0, F_ITEM_62, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    if (ck(FG_ITEM, F_ITEM_7C, TRUE))
+    {
+        item_aot_set(AOT_0F_ITEM, 23540, 7100, 1900, 1500, IT_0C_AMMO_SHOTGUN, 7, IMDL_03, SCA_NONE, 24280, -1630, 7540, 2270, F_ITEM_7C, SAT_MANUAL | SAT_PLAYER, 0);
+    }
+    obj(OBJ_00, OF_10 | OF_ACTIVE, SCA_NONE, 22226, -500, 9880, 0, 0, 0, 0, 0, 650, 900, 900, 900);
+    obj(OBJ_01, OF_10 | OF_ACTIVE, SCA_NONE, 22210, -500, 7780, 0, 0, 0, 0, 0, 650, 900, 900, 900);
+    obj(OBJ_PUSH_GRUNT | OBJ_02, OF_CLIMBABLE | OF_10 | OF_ACTIVE, SCA_NONE, 19970, 0, 7930, 0, -650, 0, 350, 0, 300, 900, 1100, 550);
+}
+
+proc main
+{
+    if (ck(FG_ROOM, F_ROOM_04, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_04, TRUE);
+        evt_exec(0, TASK_00, from_main);
+    }
+    if (ck(FG_ROOM, F_ROOM_05, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_05, TRUE);
+        evt_exec(0, TASK_01, from_main_2);
+    }
+    if (ck(FG_ROOM, F_ROOM_06, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_06, TRUE);
+        evt_exec(0, TASK_02, from_main_3);
+    }
+    if (ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_STATUS, F_STATUS_18, TRUE))
+    {
+        aot_reset(AOT_09_EVENT, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 5, on_aot_09, 0);
+    }
+    else
+    {
+        aot_reset(AOT_09_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+    }
+    if (CHRIS)
+    {
+        if (ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_COMMON, F_COMMON_69, FALSE) && ck(FG_ROOM, F_ROOM_01, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_01, TRUE);
+            evt_exec(0, TASK_03, from_main_4);
+        }
+        if (ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_COMMON, F_COMMON_6A, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_02, TRUE);
+            evt_exec(0, TASK_04, from_main_5);
+        }
+        if (ck(FG_COMMON, F_COMMON_69, FALSE) && ck(FG_ROOM, F_ROOM_01, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_00, TRUE);
+            if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+            {
+                bgm_play(BGM_SUB_1);
+            }
+        }
+        if (ck(FG_COMMON, F_COMMON_6A, FALSE) && ck(FG_ROOM, F_ROOM_02, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_00, TRUE);
+            if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+            {
+                bgm_play(BGM_SUB_1);
+            }
+        }
+        if (ck(FG_COMMON, F_COMMON_69, TRUE) && ck(FG_ROOM, F_ROOM_01, TRUE))
+        {
+            set(FG_COMMON, F_COMMON_69, FALSE);
+            set(FG_ROOM, F_ROOM_01, FALSE);
+            task_kill(TASK_03);
+        }
+        if (ck(FG_COMMON, F_COMMON_6A, TRUE) && ck(FG_ROOM, F_ROOM_02, TRUE))
+        {
+            set(FG_COMMON, F_COMMON_6A, FALSE);
+            set(FG_ROOM, F_ROOM_02, FALSE);
+            task_kill(TASK_04);
+        }
+    }
+    else
+    {
+        if (ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_ROOM, F_ROOM_01, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_01, TRUE);
+            evt_exec(0, TASK_03, from_main_4);
+        }
+        if (ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_COMMON, F_COMMON_68, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_02, TRUE);
+            evt_exec(0, TASK_04, from_main_5);
+        }
+        if (ck(FG_COMMON, F_COMMON_67, FALSE) && ck(FG_ROOM, F_ROOM_01, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_00, TRUE);
+            if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+            {
+                bgm_play(BGM_SUB_1);
+            }
+        }
+        if (ck(FG_COMMON, F_COMMON_68, FALSE) && ck(FG_ROOM, F_ROOM_02, TRUE) && ck(FG_ROOM, F_ROOM_00, FALSE))
+        {
+            set(FG_ROOM, F_ROOM_00, TRUE);
+            if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+            {
+                bgm_play(BGM_SUB_1);
+            }
+        }
+        if (ck(FG_COMMON, F_COMMON_67, TRUE) && ck(FG_ROOM, F_ROOM_01, TRUE))
+        {
+            set(FG_COMMON, F_COMMON_67, FALSE);
+            set(FG_ROOM, F_ROOM_01, FALSE);
+            task_kill(TASK_03);
+        }
+        if (ck(FG_COMMON, F_COMMON_68, TRUE) && ck(FG_ROOM, F_ROOM_02, TRUE))
+        {
+            set(FG_COMMON, F_COMMON_68, FALSE);
+            set(FG_ROOM, F_ROOM_02, FALSE);
+            task_kill(TASK_04);
+        }
+    }
+    if (ck(FG_ROOM, F_ROOM_01, FALSE) && ck(FG_ROOM, F_ROOM_02, FALSE) && ck(FG_ROOM, F_ROOM_00, TRUE))
+    {
+        set(FG_ROOM, F_ROOM_00, FALSE);
+        if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+        {
+            bgm_stop(BGM_SUB_1);
+        }
+    }
+    if (ck(FG_ROOM, F_ROOM_07, TRUE) && ck(FG_ROOM, F_ROOM_08, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_08, TRUE);
+        if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+        {
+            bgm_stop(BGM_SUB_1);
+        }
+        task_kill(TASK_01);
+        task_kill(TASK_02);
+        task_kill(TASK_03);
+        task_kill(TASK_04);
+    }
+    if (testitem(IT_45_HEAL_HERB_BLUE) && ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_ROOM, F_ROOM_07, FALSE))
+    {
+        evt_exec(0, TASK_07, event_07);
+    }
+    if (testitem(IT_48_HEAL_HERB_MIX_GB) && ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_ROOM, F_ROOM_07, FALSE))
+    {
+        evt_exec(0, TASK_07, event_07);
+    }
+    if (testitem(IT_49_HEAL_HERB_MIX_GRB) && ck(FG_ROOM, F_ROOM_03, TRUE) && ck(FG_ROOM, F_ROOM_07, FALSE))
+    {
+        evt_exec(0, TASK_07, event_07);
+    }
+    if (ck(FG_ITEM, F_ITEM_62, TRUE))
+    {
+        aot_reset(AOT_0D_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 257, 0);
+        aot_reset(AOT_0C_USEITEM, SCE_USEITEM, SAT_PLAYER, 9, 13, 1);
+    }
+    else
+    {
+        aot_reset(AOT_0D_MESSAGE, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 135, 257, 0);
+        aot_reset(AOT_0C_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER, 0, 0, 0);
+    }
+    if (testitem(IT_28_KEY_MO_DISK))
+    {
+        aot_on(AOT_0E_ITEM, SCE_DOCUMENT, 0);
+    }
+}
+
+event from_main
+{
+    do
+    {
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_ROOM, F_ROOM_24, FALSE));
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_STATUS, F_STATUS_18, TRUE));
+    }
+    while (ck(FG_ROOM, F_ROOM_24, FALSE));
+    evt_nop();
+    run
+    {
+        se_play_3d(SND_BANK_ROOM, SE_1A_SW_PUSH3, 0, SND_AT_POINT, 0, 17000, 8400);
+        set(FG_ROOM, F_ROOM_03, TRUE);
+    }
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_00, FALSE));
+    message(MSG_POISON_GAS_IS_ESCAPING | MSG_FAST, RUN_CONTROLS | RUN_PLAYER); // "Poison gas is escaping...!"
+    sleep(20);
+    timer_setup(LIGHT_FADE_HALF, 600, FADE_R | FADE_G);
+    set(FG_ROOM, F_ROOM_0A, TRUE);
+    sleep(40);
+    single(4) setw(W_LIGHT_DELTA, 0);
+    evt_nop();
+    evt_nop();
+    for (15)
+    {
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_ROOM, F_ROOM_0C, TRUE));
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_STATUS, F_STATUS_27, TRUE));
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_RUN, F_RUN_CONTROLS, FALSE));
+    }
+    evt_nop();
+    run
+    {
+        sys_multi(SYS_HEALTH_STATUS, SYS_OR | HS_40);
+        se_play_3d(SND_BANK_PLAYER, SE_PL_02, 0, SND_AT_PLAYER, 0, 0, 0);
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_01, F_ROOM_21, 0);
+    sleep(20);
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    single(4) set(FG_RUN, 0, 0);
+    raw(0x17, 0x00, 0x07, 0x04, 0x05, 0x06, 0x19, 0x00, 0xFF, 0x00, 0x00, 0x00);
+}
+
+event from_main_2
+{
+    do
+    {
+        run
+        {
+            if (ck(FG_ROOM, F_ROOM_22, TRUE))
+            {
+                if (CHRIS)
+                {
+                    set(FG_COMMON, F_COMMON_69, TRUE);
+                }
+                else
+                {
+                    set(FG_COMMON, F_COMMON_67, TRUE);
+                }
+            }
+            else
+            {
+                if (CHRIS)
+                {
+                    set(FG_COMMON, F_COMMON_69, FALSE);
+                }
+                else
+                {
+                    set(FG_COMMON, F_COMMON_67, FALSE);
+                }
+            }
+        }
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_05, TRUE));
+    evt_finish();
+}
+
+event from_main_3
+{
+    do
+    {
+        run
+        {
+            if (ck(FG_ROOM, F_ROOM_23, TRUE))
+            {
+                if (CHRIS)
+                {
+                    set(FG_COMMON, F_COMMON_6A, TRUE);
+                }
+                else
+                {
+                    set(FG_COMMON, F_COMMON_68, TRUE);
+                }
+            }
+            else
+            {
+                if (CHRIS)
+                {
+                    set(FG_COMMON, F_COMMON_6A, FALSE);
+                }
+                else
+                {
+                    set(FG_COMMON, F_COMMON_68, FALSE);
+                }
+            }
+        }
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_06, TRUE));
+    evt_finish();
+}
+
+event from_main_4
+{
+    do
+    {
+        for (10)
+        {
+            evt_next();
+        }
+        single(12) effect(FX_09, FX_ROW_18, FX_AT_WORLD, 17320, 0, 10500, 0);
+    }
+    while (ck(FG_ROOM, F_ROOM_01, TRUE));
+    evt_finish();
+}
+
+event from_main_5
+{
+    do
+    {
+        for (10)
+        {
+            evt_next();
+        }
+        single(12) effect(FX_09, FX_ROW_18, FX_AT_WORLD, 17320, 0, 7060, 0);
+    }
+    while (ck(FG_ROOM, F_ROOM_02, TRUE));
+    evt_finish();
+}
+
+event on_aot_09
+{
+    message(MSG_THERE_IS_AN_AIR_SHAFTWILL_YOU | MSG_FAST, RUN_CONTROLS | RUN_PLAYER); // "There's an air shaft.Will you enter it? Poison gas is escaping...!"
+    set(FG_ROOM, F_ROOM_0C, TRUE);
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (cmpb(B_MENU_CHOICE, CMP_EQ, 0))
+        {
+            evt_exec(0, TASK_06, on_aot_09_sub1);
+        }
+        else
+        {
+            set(FG_ROOM, F_ROOM_0C, FALSE);
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_09_sub1
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
+    }
+    timer_setup(LIGHT_FADE_VEIL, -2000, FADE_R | FADE_G | FADE_B);
+    sleep(1);
+    setw(W_LIGHT_DELTA, 0);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    run
+    {
+        spd_set(ENT_PLAYER, 0);
+        dir_set(0, 0, 2048, 0, 11800, 0, 6800);
+        set(FG_STATUS, F_STATUS_18, FALSE);
+        msg_list(0, 8760, -2500, 9040, 130, 130, 130, LIGHT_KIND_00, 10495, 6680, -2600, 9240, 130, 130, 130, LIGHT_KIND_00, 10895, 7600, -2800, 9240, 130, 130, 130, LIGHT_KIND_00, 9935, 1135, 1135, 1120);
+    }
+    sleep(20);
+    timer_setup(LIGHT_FADE_VEIL, -2000, FADE_R | FADE_G | FADE_B);
+    cutnext(CAM_00);
+    sleep(10);
+    if (CHRIS)
+    {
+        se_play_3d(SND_BANK_ROOM, SE_19_CHAKUCHI, 0, SND_AT_POINT, 0, -13072, 6800);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_09, F_ROOM_21, 0);
+    act_flag_op(EF_OR, EF_0001);
+    act_reset();
+    evt_nop();
+    sleep(7);
+    se_play_3d(SND_BANK_ROOM, SE_19_CHAKUCHI, 0, SND_AT_POINT, 0, -13072, 6800);
+    sleep(18);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    run
+    {
+        if (ck(FG_ROOM, F_ROOM_0A, TRUE))
+        {
+            timer_setup(LIGHT_FADE_HALF, 600, FADE_R | FADE_G);
+        }
+    }
+    sleep(45);
+    run
+    {
+        if (ck(FG_ROOM, F_ROOM_0A, TRUE))
+        {
+            setw(W_LIGHT_DELTA, 0);
+        }
+        cut_auto(CUT_FREE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_ROOM, F_ROOM_07, TRUE);
+        set(FG_RUN, F_RUN_READY, TRUE);
+        set(FG_ROOM, F_ROOM_0C, FALSE);
+        set(FG_MAP, F_MAP_VISITED_516, TRUE);
+    }
+    evt_finish();
+}

@@ -5,6 +5,12 @@
 //! animation and scripts sit in its folder under conventional names, and the
 //! room's id is its folder's name.
 //!
+//! One `room.xml` defines every variant of a room. An element only some
+//! variants have carries `when="..."`: space-separated terms, each `CHRIS`,
+//! `JILL`, `MANSION1` or `MANSION2` with an optional `!`, that must all hold
+//! for the variant read ([`parse_for`]). A room read for no variant
+//! ([`parse`]) may not have any.
+//!
 //! Every integer attribute is read as decimal or `0x` hex; the writer uses
 //! hex for the few raw words and decimal for everything else. The packed
 //! flag words of the RDT (collision boxes, walk zones, mask sprites) are
@@ -23,7 +29,8 @@ use crate::effects::room::{FrameEntry, UvRecord};
 use crate::format::Dialect;
 use crate::language::XmlString;
 use crate::state::{
-    CameraLight, Collision, CollisionRect, FootstepZone, Light, Sca, ScaRect, WalkZone, Zone,
+    CameraLight, Collision, CollisionRect, FootstepZone, Light, RoomId, Sca, ScaRect, WalkZone,
+    Zone,
 };
 
 /// The format version `<room format="...">` declares.
@@ -562,11 +569,88 @@ fn write_effect_element(w: &mut Writer, effect: &EffectSlot) {
 /// The largest room XML read. The shipped rooms are well under 1 MiB.
 const MAX_XML_BYTES: usize = 4 << 20;
 
-/// Parse `room.xml`, a room definition.
+thread_local! {
+    /// The room variant a `when` condition is tested against while one
+    /// room XML is read ([`parse_for`]).
+    static VARIANT: std::cell::Cell<Option<RoomId>> = const { std::cell::Cell::new(None) };
+}
+
+/// Whether the terms of a `when` condition all hold for room variant `id`;
+/// an error names a term that is not a variant.
+pub fn condition_holds(condition: &str, id: RoomId) -> Result<bool> {
+    let mut holds = true;
+    for term in condition.split_whitespace() {
+        let (negated, name) = match term.strip_prefix('!') {
+            Some(name) => (true, name),
+            None => (false, term),
+        };
+        let value = match name {
+            "CHRIS" => id.player_flag & 1 == 0,
+            "JILL" => id.player_flag & 1 == 1,
+            "MANSION1" => id.is_mansion() && !id.mansion2,
+            "MANSION2" => id.is_mansion() && id.mansion2,
+            _ => bail!(
+                "`when` term `{term}` is not CHRIS, JILL, MANSION1 or MANSION2 (or `!` before one)"
+            ),
+        };
+        holds &= value != negated;
+    }
+    Ok(holds)
+}
+
+/// Whether `node` is in the variant being read: it has no `when`, or its
+/// condition holds. (The conditions are checked before reading.)
+fn active(node: &Node<'_, '_>) -> bool {
+    match (node.attribute("when"), VARIANT.with(std::cell::Cell::get)) {
+        (None, _) => true,
+        (Some(condition), Some(id)) => condition_holds(condition, id).unwrap_or(false),
+        (Some(_), None) => false,
+    }
+}
+
+/// Check every `when` of `document`: a valid condition, and only where the
+/// room is read for a variant.
+fn check_conditions(document: &Document<'_>, id: Option<RoomId>) -> Result<()> {
+    for node in document.descendants().filter(Node::is_element) {
+        let Some(condition) = node.attribute("when") else {
+            continue;
+        };
+        let name = node.tag_name().name();
+        let Some(id) = id else {
+            bail!("<{name} when=\"{condition}\"> needs a room variant to read for");
+        };
+        condition_holds(condition, id).with_context(|| format!("<{name}>"))?;
+    }
+    Ok(())
+}
+
+/// Parse `room.xml`, a room definition, for no particular variant: it may
+/// not hold `when` conditions.
 pub fn parse(text: &str) -> Result<RoomSource> {
+    parse_variant(text, None)
+}
+
+/// Parse `room.xml`, a room definition, for room variant `id`: an element
+/// whose `when` does not hold for it is left out.
+pub fn parse_for(text: &str, id: RoomId) -> Result<RoomSource> {
+    parse_variant(text, Some(id))
+}
+
+fn parse_variant(text: &str, id: Option<RoomId>) -> Result<RoomSource> {
     budget::check_len(text.len(), MAX_XML_BYTES, "room XML size")?;
     let document = Document::parse(text).context("room XML is not well-formed")?;
+    check_conditions(&document, id)?;
+    let previous = VARIANT.with(|variant| variant.replace(id));
+    let parsed = parse_document(&document);
+    VARIANT.with(|variant| variant.set(previous));
+    parsed
+}
+
+fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
     let root = document.root_element();
+    if root.attribute("when").is_some() {
+        bail!("<room> may not have a `when`");
+    }
     if root.tag_name().name() != "room" {
         bail!(
             "room XML root is <{}>, expected <room>",
@@ -660,17 +744,93 @@ pub fn parse(text: &str) -> Result<RoomSource> {
 }
 
 /// A `<strings>` block: the room's `name`, `save_name`, message texts and
-/// speaker names per language.
+/// speaker names per language, for the variant being read: a string whose
+/// `when` holds replaces the room's own.
 pub(crate) fn parse_strings(node: Node<'_, '_>) -> Result<Vec<XmlString>> {
-    crate::language::parse_xml_strings(node, |key| {
-        string_suffix(key).map(|suffix| format!("ROOM_100_{suffix}"))
+    let variant = VARIANT.with(std::cell::Cell::get);
+    let strings = conditional_strings(node)?;
+    // The most specific string of each key whose condition holds.
+    let mut chosen: Vec<(XmlString, usize)> = Vec::new();
+    for (tag, key, value, condition) in strings {
+        let rank = match (&condition, variant) {
+            (None, _) => 0,
+            (Some(condition), Some(id)) if condition_holds(condition, id)? => {
+                condition.split_whitespace().count()
+            }
+            _ => continue,
+        };
+        match chosen
+            .iter_mut()
+            .find(|((t, k, _), _)| *t == tag && *k == key)
+        {
+            Some(entry) if entry.1 <= rank => *entry = ((tag, key, value), rank),
+            Some(_) => {}
+            None => chosen.push(((tag, key, value), rank)),
+        }
+    }
+    Ok(chosen.into_iter().map(|(string, _)| string).collect())
+}
+
+/// One `<string>` of a room, with its `when` condition if it has one.
+pub type ConditionalString = crate::language::ConditionalXmlString;
+
+/// Every `<string>` of a `<strings>` block, with its `when` condition.
+pub(crate) fn conditional_strings(node: Node<'_, '_>) -> Result<Vec<ConditionalString>> {
+    crate::language::parse_xml_strings_when(node, |key, condition| {
+        let tag = match condition {
+            None => String::new(),
+            Some(condition) => format!("{}_", string_variant(condition)?),
+        };
+        Ok(string_suffix(key).map(|suffix| format!("ROOM_100_{tag}{suffix}")))
     })
     .context("<strings>")
 }
 
-/// The element children of `node`.
+/// The key tag a string's `when` gives its language key: the variant terms
+/// in order, player first, joined by `_` (`JILL_MANSION2`). Only plain
+/// terms name a string's variant.
+pub fn string_variant(condition: &str) -> Result<String> {
+    let mut terms: Vec<&str> = condition.split_whitespace().collect();
+    for term in &terms {
+        if !matches!(*term, "CHRIS" | "JILL" | "MANSION1" | "MANSION2") {
+            bail!("a string's `when` term must be CHRIS, JILL, MANSION1 or MANSION2, not `{term}`");
+        }
+    }
+    terms.sort_by_key(|term| term.starts_with("MANSION"));
+    terms.dedup();
+    if terms.is_empty() || terms.len() > 2 || (terms.len() == 2 && terms[0] == terms[1]) {
+        bail!("a string's `when` names one player and one visit at most, not `{condition}`");
+    }
+    Ok(terms.join("_"))
+}
+
+/// The key tags of the strings room variant `id` reads, most specific
+/// first, then the room's own (`""`): for a mansion room `JILL_MANSION2`,
+/// `JILL`, `MANSION2`, for any other room `JILL`.
+pub fn string_variants(id: RoomId) -> Vec<String> {
+    let player = if id.player_flag & 1 == 0 {
+        "CHRIS"
+    } else {
+        "JILL"
+    };
+    let mut tags = Vec::new();
+    if id.is_mansion() {
+        let visit = if id.mansion2 { "MANSION2" } else { "MANSION1" };
+        tags.push(format!("{player}_{visit}"));
+        tags.push(player.to_string());
+        tags.push(visit.to_string());
+    } else {
+        tags.push(player.to_string());
+    }
+    tags.push(String::new());
+    tags
+}
+
+/// The element children of `node` in the variant being read.
 fn elements<'a, 'input>(node: Node<'a, 'input>) -> impl Iterator<Item = Node<'a, 'input>> {
-    node.children().filter(Node::is_element)
+    node.children()
+        .filter(Node::is_element)
+        .filter(|node| active(node))
 }
 
 /// The element children of `node`, all of which must be `<name>`.
@@ -690,10 +850,10 @@ fn children<'a, 'input>(
     Ok(elements(node))
 }
 
-/// Refuse any attribute of `node` not in `known`.
+/// Refuse any attribute of `node` not in `known` (or its `when`).
 fn check_attributes(node: Node<'_, '_>, known: &[&str]) -> Result<()> {
     for attribute in node.attributes() {
-        if !known.contains(&attribute.name()) {
+        if !known.contains(&attribute.name()) && attribute.name() != "when" {
             bail!(
                 "<{}> has an unknown attribute `{}`",
                 node.tag_name().name(),

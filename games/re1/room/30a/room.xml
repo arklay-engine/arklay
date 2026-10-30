@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1008" g="1104" b="1008"/>
+  <lights>
+    <light x="5176" y="-3030" z="18658" r="255" g="255" b="255" kind="0" radius="6320"/>
+    <light x="7537" y="-3050" z="1968" r="255" g="255" b="255" kind="0" radius="6320"/>
+    <light x="10975" y="-3050" z="11678" r="255" g="255" b="255" kind="0" radius="6320"/>
+  </lights>
+  <cameras>
+    <camera x="3096" y="-1044" z="7650" lookX="5328" lookY="-2448" lookZ="21186" roll="0" fov="230"/>
+    <camera x="2466" y="-1044" z="14652" lookX="6516" lookY="-1854" lookZ="2268" roll="0" fov="230">
+      <maskGroup originX="-48" originY="-128" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="527" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="0" v="48" x="128" y="176" depthData="519" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="515" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="16" v="48" x="144" y="176" depthData="507" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="507" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="32" v="48" x="160" y="176" depthData="499" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="40" v="0" x="168" y="128" depthData="499" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="40" v="48" x="168" y="176" depthData="495" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="48" v="8" x="176" y="136" depthData="495" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="48" v="56" x="176" y="184" depthData="491" blend="3" colorMode="1" width="8" height="16"/>
+      </maskGroup>
+      <maskGroup originX="-48" originY="-32" texBits="0x7800">
+        <sprite u="56" v="0" x="128" y="128" depthData="511" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="56" v="48" x="128" y="176" depthData="507" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="72" v="0" x="144" y="128" depthData="499" blend="3" colorMode="1" width="16" height="48"/>
+        <sprite u="72" v="48" x="144" y="176" depthData="495" blend="3" colorMode="1" width="16" height="40"/>
+        <sprite u="88" v="0" x="160" y="128" depthData="495" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="88" v="48" x="160" y="176" depthData="487" blend="3" colorMode="1" width="8" height="40"/>
+        <sprite u="96" v="0" x="168" y="128" depthData="487" blend="3" colorMode="1" width="8" height="48"/>
+        <sprite u="96" v="48" x="168" y="176" depthData="483" blend="3" colorMode="1" width="8" height="40"/>
+      </maskGroup>
+    </camera>
+    <camera x="2106" y="-3258" z="2592" lookX="7236" lookY="-2106" lookZ="4374" roll="0" fov="230">
+      <maskGroup originX="-32" originY="-103" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="747" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="0" v="24" x="128" y="152" depthData="763" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="0" v="48" x="128" y="176" depthData="778" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="727" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="738" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="32" x="144" y="160" depthData="747" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="48" x="144" y="176" depthData="759" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="719" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="32" v="16" x="160" y="144" depthData="731" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="32" v="32" x="160" y="160" depthData="739" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="32" v="48" x="160" y="176" depthData="751" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="40" v="0" x="168" y="128" depthData="711" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="16" x="168" y="144" depthData="723" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="32" x="168" y="160" depthData="731" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="48" x="168" y="176" depthData="743" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="48" v="0" x="176" y="128" depthData="703" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="16" x="176" y="144" depthData="711" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="32" x="176" y="160" depthData="723" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="56" v="0" x="184" y="128" depthData="695" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="0" x="128" y="200" depthData="799" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="64" v="24" x="128" y="224" depthData="818" blend="0" colorMode="1" size="16"/>
+        <sprite u="64" v="40" x="128" y="240" depthData="831" blend="0" colorMode="1" size="16"/>
+        <sprite u="80" v="0" x="144" y="200" depthData="779" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="80" v="24" x="144" y="224" depthData="799" blend="0" colorMode="1" size="16"/>
+        <sprite u="80" v="40" x="144" y="240" depthData="807" blend="0" colorMode="1" size="16"/>
+        <sprite u="96" v="0" x="160" y="200" depthData="767" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="104" v="0" x="168" y="200" depthData="759" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="96" v="24" x="160" y="224" depthData="787" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="104" v="24" x="168" y="224" depthData="775" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="112" v="0" x="176" y="200" depthData="751" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="112" v="16" x="176" y="216" depthData="762" blend="0" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+      <maskGroup originX="-32" originY="25" texBits="0x7800">
+        <sprite u="64" v="56" x="128" y="128" depthData="831" blend="0" colorMode="1" width="24" height="8"/>
+      </maskGroup>
+    </camera>
+    <camera x="11664" y="-4158" z="18324" lookX="12870" lookY="-864" lookZ="7938" roll="0" fov="230">
+      <maskGroup originX="15" originY="-121" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="583" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="0" v="16" x="128" y="144" depthData="591" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="40" x="128" y="168" depthData="607" blend="0" colorMode="1" width="8" height="32"/>
+        <sprite u="0" v="72" x="128" y="200" depthData="635" blend="0" colorMode="1" width="8" height="32"/>
+        <sprite u="0" v="104" x="128" y="232" depthData="663" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="0" x="136" y="128" depthData="579" blend="0" colorMode="1" size="16"/>
+        <sprite u="8" v="16" x="136" y="144" depthData="587" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="8" v="40" x="136" y="168" depthData="603" blend="0" colorMode="1" width="16" height="32"/>
+        <sprite u="8" v="72" x="136" y="200" depthData="627" blend="0" colorMode="1" width="16" height="32"/>
+        <sprite u="8" v="104" x="136" y="232" depthData="655" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="24" v="0" x="152" y="128" depthData="575" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="24" v="16" x="152" y="144" depthData="579" blend="0" colorMode="1" width="32" height="24"/>
+        <sprite u="24" v="40" x="152" y="168" depthData="595" blend="0" colorMode="1" size="32"/>
+        <sprite u="24" v="72" x="152" y="200" depthData="619" blend="0" colorMode="1" size="32"/>
+        <sprite u="24" v="104" x="152" y="232" depthData="647" blend="0" colorMode="1" width="32" height="24"/>
+        <sprite u="56" v="0" x="184" y="128" depthData="563" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="56" v="16" x="184" y="144" depthData="571" blend="0" colorMode="1" width="32" height="24"/>
+        <sprite u="56" v="40" x="184" y="168" depthData="587" blend="0" colorMode="1" size="32"/>
+        <sprite u="56" v="72" x="184" y="200" depthData="607" blend="0" colorMode="1" size="32"/>
+        <sprite u="56" v="104" x="184" y="232" depthData="635" blend="0" colorMode="1" width="32" height="24"/>
+        <sprite u="88" v="0" x="216" y="128" depthData="555" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="88" v="16" x="216" y="144" depthData="563" blend="0" colorMode="1" width="32" height="24"/>
+        <sprite u="88" v="40" x="216" y="168" depthData="579" blend="0" colorMode="1" size="32"/>
+        <sprite u="88" v="72" x="216" y="200" depthData="599" blend="0" colorMode="1" size="32"/>
+        <sprite u="88" v="104" x="216" y="232" depthData="626" blend="0" colorMode="1" width="32" height="24"/>
+      </maskGroup>
+      <maskGroup originX="15" originY="7" texBits="0x7800">
+        <sprite u="0" v="128" x="128" y="128" depthData="687" blend="0" colorMode="1" size="8"/>
+        <sprite u="8" v="128" x="136" y="128" depthData="678" blend="0" colorMode="1" size="16"/>
+        <sprite u="24" v="128" x="152" y="128" depthData="671" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="56" v="128" x="184" y="128" depthData="655" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="88" v="128" x="216" y="128" depthData="647" blend="0" colorMode="1" width="24" height="16"/>
+      </maskGroup>
+    </camera>
+    <camera x="12204" y="-4014" z="8820" lookX="12510" lookY="-1224" lookZ="13698" roll="0" fov="230"/>
+    <camera x="9954" y="-1926" z="9576" lookX="12312" lookY="-1422" lookZ="14238" roll="0" fov="230"/>
+    <camera x="11160" y="-2286" z="14238" lookX="22392" lookY="-1440" lookZ="10044" roll="0" fov="230"/>
+    <camera x="11718" y="-2178" z="12798" lookX="10998" lookY="-486" lookZ="15930" roll="0" fov="230"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="3700" x1="0" z1="21400" x2="7200" z2="21400" x3="8700" z3="3601"/>
+      <switch zoneIndex="1" to="1" x0="8423" z0="9171" x1="771" z1="9586" x2="765" z2="11142" x3="7874" z3="10557"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="2" to="9" x0="0" z0="0" x1="0" z1="16900" x2="6900" z2="16900" x3="8400" z3="0"/>
+      <switch zoneIndex="3" to="0" x0="493" z0="11299" x1="985" z1="12345" x2="7571" z2="11742" x3="8171" z3="10899"/>
+      <switch zoneIndex="4" to="2" x0="5400" z0="1200" x1="7300" z1="10397" x2="8080" z2="10298" x3="8300" z3="1700"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="5" to="9" x0="0" z0="0" x1="0" z1="7492" x2="34596" z2="11295" x3="34596" z3="0"/>
+      <switch zoneIndex="6" to="3" x0="18076" z0="9242" x1="18000" z1="7157" x2="9011" z2="7900" x3="12204" z3="9000"/>
+      <switch zoneIndex="7" to="1" x0="1582" z0="1400" x1="6193" z1="9500" x2="6695" z2="8800" x3="5294" z3="900"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="8" to="9" x0="16600" z0="0" x1="6900" z1="11200" x2="15900" z2="26100" x3="19100" z3="1900"/>
+      <switch zoneIndex="9" to="2" x0="8200" z0="6457" x1="6300" z1="8157" x2="17757" z2="6500" x3="17158" z3="4600"/>
+      <switch zoneIndex="10" to="4" x0="7300" z0="13900" x1="7800" z1="15400" x2="17500" z2="15600" x3="18000" z3="13800"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="11" to="9" x0="7599" z0="8500" x1="7000" z1="18700" x2="17900" z2="18800" x3="19601" z3="8300"/>
+      <switch zoneIndex="12" to="3" x0="17900" z0="11900" x1="7700" z1="12000" x2="7200" z2="13500" x3="17804" z3="13500"/>
+    </switches>
+    <switches from="5">
+      <view zoneIndex="13" to="9" x0="7200" z0="8400" x1="7200" z1="19216" x2="18500" z2="19200" x3="19500" z3="8200"/>
+    </switches>
+    <switches from="6">
+      <view zoneIndex="14" to="9" x0="7600" z0="9000" x1="7600" z1="18301" x2="18500" z2="18300" x3="18100" z3="7499"/>
+    </switches>
+    <switches from="7">
+      <view zoneIndex="15" to="9" x0="15600" z0="18400" x1="15600" z1="15700" x2="8900" z2="15700" x3="8900" z3="18400"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="14900" cellZ="11518">
+    <quadrant index="0">
+      <box xMax="18648" zMax="19134" xMin="6768" zMin="17046" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18864" zMax="19062" xMin="16164" zMin="2754" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="2542" zMax="22661" xMin="0" zMin="13" shape="1" cf1="true" cf2="true"/>
+      <box xMax="8910" zMax="23220" xMin="0" zMin="20664" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9036" zMax="22986" xMin="6462" zMin="7218" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18648" zMax="19134" xMin="6768" zMin="17046" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="34560" zMax="2700" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18864" zMax="19062" xMin="16164" zMin="2754" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="2542" zMax="22661" xMin="0" zMin="13" shape="1" cf1="true" cf2="true"/>
+      <box xMax="34560" zMax="2700" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9036" zMax="22986" xMin="6462" zMin="7218" shape="1" cf1="true" cf2="true"/>
+      <box xMax="13536" zMax="9342" xMin="9000" zMin="7218" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="8500" z1="9200" x2="16500" z2="17300" field8="0x00FF" links="1"/>
+    <walk x1="13000" z1="7800" x2="16500" z2="9200" field8="0x0044" links="0 2"/>
+    <walk x1="13000" z1="1600" x2="16500" z2="7800" field8="0x0050" links="1 3"/>
+    <walk x1="6600" z1="1600" x2="13000" z2="7800" field8="0x0011" links="2 4"/>
+    <walk x1="1500" z1="1600" x2="6600" z2="7800" field8="0x0041" links="3 5"/>
+    <walk x1="1500" z1="7800" x2="6600" z2="21200" field8="0x0044" links="4"/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="19800" height="0x5D5C" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">ENRICO ROOM</string>
+      <string key="save_name">Courtyard Room B1</string>
+      <string key="0">{scroll 0}\n {scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 65}{scroll 0}\n {scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}\n {scroll 1}{timed 110}</string>
+      <string key="4">{scroll 40} {scroll 0}\n {scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}He couldn't have moved\nbecause of this injury...{scroll 1}{clear 0}{scroll 2}\nHe's holding something.{scroll 1}</string>
+      <string key="7">{scroll 0}\n {scroll 1}{clear 45}{scroll 0}\n {scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}\n {scroll 1}{timed 160}</string>
+      <string key="10">{scroll 0}\n {scroll 1}{timed 180}</string>
+      <string key="11">{scroll 0}\n {scroll 1}{timed 250}</string>
+      <string key="12">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}\n {scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}\n {scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}\n {scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\n {scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}\n {scroll 1}{timed 240}</string>
+      <string key="20">{scroll 0}\n {scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}\n{scroll 1}{branch 0 1 0}{scroll 1}\n {scroll 1}{timed 30}</string>
+      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}He couldn't have moved\nbecause of this injury...{scroll 1}{clear 0}{scroll 2}\nHe's holding something.{scroll 1}</string>
+      <string key="24">{scroll 2}\nBarry is investigating...{scroll 1}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
+      <string key="0">{scroll 0}\n       エンリコ{scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}\n     来るな クリス{scroll 1}{clear 70}{scroll 0}\n      どうしたんだ{scroll 1}{clear 65}{scroll 0}\n      裏切り者め{scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}\n        よせ{scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}\n    誰だ 誰かいるのか!{scroll 1}{timed 110}</string>
+      <string key="4">{scroll 40} {scroll 0}\n     アンブレラめ…{scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}\n  “裏切り者”? 一体何を…{scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}\n     エンリコ・・・{scroll 1}{clear 0}{scroll 2} ひどいキズだ・・・\n これで身動き出来なっかたのだろう{scroll 1}{clear 0}{scroll 2}\n     何か持っている{scroll 1}</string>
+      <string key="7">{scroll 0}\n       ジルか?{scroll 1}{clear 45}{scroll 0}\n    その声はエンリコ?{scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\n        ああ{scroll 1}{clear 30}{scroll 0}\n      生きてたのね{scroll 1}{clear 30}{scroll 0}\n    待て ジル1人か?{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}\n    ええ でもどうして{scroll 1}{timed 160}</string>
+      <string key="10">{scroll 0}   S.T.A.R.S.は もうだめだ\n   裏切り者がいる{scroll 1}{timed 180}</string>
+      <string key="11">{scroll 0}     はめられたんだ\n     アンブレラに…{scroll 1}{timed 250}</string>
+      <string key="12">{scroll 0}\n       エンリコ!{scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}\n      一体誰が…{scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}\n     え? 違うけれど{scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}\n       エンリコ{scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}\n     バリーも一緒か{scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\n     大丈夫なのか?{scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}   S.T.A.R.S.は もうだめだ\n   裏切り者がいる{scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}     はめられたんだ\n     アンブレラに…{scroll 1}{timed 240}</string>
+      <string key="20">{scroll 0}\n      エンリコ!{scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}  クランクを見つけた\n取りますか{scroll 1}{branch 0 1 0}{scroll 1}\n   アイテムがいっぱいです{scroll 1}{timed 30}</string>
+      <string key="22">{scroll 1}\n   アイテムがいっぱいです{scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}\n     エンリコ・・・{scroll 1}{clear 0}{scroll 2} ひどいキズだ・・・\n これで身動き出来なっかたのだろう{scroll 1}{clear 0}{scroll 2}\n     何か持っている{scroll 1}</string>
+      <string key="24">{scroll 2}\n  バリーはエンリコを調べている{scroll 1}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Salle de la cour SS1</string>
+      <string key="0">{scroll 0}\nEnrico!{scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}\nNe vous approchez pas, Chris.{scroll 1}{clear 70}{scroll 0}Attendez.\nQue s'est-il passé?{scroll 1}{clear 65}{scroll 0}\nTraître! {scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}\nNon! {scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}Qui est-ce...!\nIl y a quelqu'un? {scroll 1}{timed 110}</string>
+      <string key="4">{scroll 40} {scroll 0}\nBon sang, Umbrella... {scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}Traître...? Qu'est-ce qu'il \nveut dire par là? {scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}Il n'aurait pas pu bouger\nà cause de sa blessure...{scroll 1}{clear 0}{scroll 2}\nIl tient quelque chose.{scroll 1}</string>
+      <string key="7">{scroll 0}\nC'est toi Jill? {scroll 1}{clear 45}{scroll 0}Ce ne serait pas la \nvoix...d'Enrico? {scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\nOui. {scroll 1}{clear 30}{scroll 0}\nTu es vivant! {scroll 1}{clear 30}{scroll 0}\nAttends! Tu es seule, Jill? {scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}Quoi?\nOui, je suis seule...mais{scroll 1}{clear 90}{scroll 0}\npourquoi me demandes-tu ça?{scroll 1}{timed 70}</string>
+      <string key="10">{scroll 0}Ecoute! La destruction des \nＳＴＡＲＳ est proche.  {scroll 1}{clear 90}{scroll 0}\nIl y a un traître parmi nous.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}Tout a été manigancé depuis\nle départ par Umbrella... {scroll 1}{timed 250}</string>
+      <string key="12">{scroll 0}\nEnrico! {scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}Je me demande qui a bien pu \nle tuer. {scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}\nQuoi? Oh, oui. {scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}\nEnrico! {scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}\nBarry et Jill ensemble... {scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\nEst-que ça va, Enrico? {scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}Les ＳＴＡＲＳ sont perdus... \nIl y a un traître... {scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}Tout a été manigancé depuis\nle départ par Umbrella...{scroll 1}{timed 205}</string>
+      <string key="20">{scroll 0}\nEnrico! {scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
+      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}Il n'aurait pas pu bouger\nà cause de sa blessure...{scroll 1}{clear 0}{scroll 2}\nIl tient quelque chose.{scroll 1}</string>
+      <string key="24">{scroll 2}\nBarry enquête...{scroll 1}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 0}\nEnrico!{scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}\nKomm nur nicht näher, Chris.{scroll 1}{clear 70}{scroll 0}Moment.\nWas ist passiert?{scroll 1}{clear 65}{scroll 0}\nFalschspieler!{scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}\nTu's nicht!{scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}Wer ist da?\nIst da jemand?{scroll 1}{timed 110}</string>
+      <string key="4">{scroll 40} {scroll 0}\nVerdammt, Umbrella...{scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}Falschspieler?\nWas hat er damit gemeint?{scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}Er konnte sich mit dieser\nVerletzung nicht mehr bewegen.{scroll 1}{clear 0}{scroll 2}\nEr hält irgendwas fest.{scroll 1}</string>
+      <string key="7">{scroll 0}\nIst das Jill?{scroll 1}{clear 45}{scroll 0}Ist das deine Stimme,\nEnrico?{scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\nBleib stehen!{scroll 1}{clear 30}{scroll 0}Bleib stehen!\nIst jemand bei dir, Jill?{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}Wie? Oh, nein.\nIch bin allein hier...{scroll 1}{clear 80}{scroll 0}\naber warum fragst du das?{scroll 1}{timed 80}</string>
+      <string key="10">{scroll 0}Hür zu! Die ＳＴＡＲＳ sind\nsowieso bald erledigt.{scroll 1}{clear 144}{scroll 0}\nEs gibt einen Verräter.{scroll 1}{timed 72}</string>
+      <string when="JILL" key="10">{scroll 0}Hür zu! Die ＳＴＡＲＳ sind\nsowieso bald erledigt.{scroll 1}{clear 90}{scroll 0}\nEs gibt einen Verräter.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}Von Beginn an wurde alles\nvon Umbrella so geplant.{scroll 1}{timed 250}</string>
+      <string when="JILL" key="11">{scroll 0}Von Beginn an wurde alles\nvon Umbrella so geplant.{scroll 1}{timed 210}</string>
+      <string key="12">{scroll 0}\nEnrico!{scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}Ich frage mich,\nwer ihn umgebracht hat.{scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}\nWie? Oh, ja.{scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}\nEnrico!{scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}\nAha, Barry und Jill vereint...{scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\nIst alles in Ordnung, Enrico?{scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}Die ＳＴＡＲＳ sind\ndem Untergang geweiht...{scroll 1}{clear 65}{scroll 0}Einer von uns ist ein\nVerräter...{scroll 1}{timed 65}</string>
+      <string key="19">{scroll 0}Von Anfang an war alles\n von Umbrella so geplant...{scroll 1}{timed 240}</string>
+      <string when="JILL" key="19">{scroll 0}Von Anfang an war alles\n von Umbrella so geplant...{scroll 1}{timed 205}</string>
+      <string key="20">{scroll 0}\nEnrico!{scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
+      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}Mit dieser Verletzung konnte\ner sich nicht mehr bewegen...{scroll 1}{clear 0}{scroll 2}\nEr hält irgendwas fest.{scroll 1}</string>
+      <string key="24">{scroll 2}\nBarry untersucht gerade etwas...{scroll 1}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Cortile S1</string>
+      <string key="0">{scroll 0}\nEnrico!{scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}\nNon ti avvicinare, Chris.{scroll 1}{clear 70}{scroll 0}Aspetta,\nCosa è successo?{scroll 1}{clear 65}{scroll 0}\nTraditore! {scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}\nNon farlo! {scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}Chi va là?\nC'è qualcuno? {scroll 1}{timed 110}</string>
+      <string key="4">{scroll 40} {scroll 0}\nMaledizione... Umbrella... {scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}Traditore...? Cosa avrà \nvoluto dire? {scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}Non poteva muoversi a causa \ndi questa ferita...{scroll 1}{clear 0}{scroll 2}\nHa qualcosa in mano.{scroll 1}</string>
+      <string key="7">{scroll 0}\nSei tu, Jill? {scroll 1}{clear 45}{scroll 0}\nÈ la tua voce... Enrico? {scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\nSi. {scroll 1}{clear 30}{scroll 0}\nSei vivo! {scroll 1}{clear 30}{scroll 0}Ferma lì! \nSei con qualcuno, Jill? {scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}Cosa?\nOh, no... sono da sola.{scroll 1}{clear 90}{scroll 0}\nPerché me lo chiedi?{scroll 1}{timed 70}</string>
+      <string key="10">{scroll 0}Ascolta! La ＳＴＡＲＳ sta per \nessere eliminata. {scroll 1}{clear 90}{scroll 0}\nC'è un traditore fra noi.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}È stato tutto architettato \ndalla Umbrella... {scroll 1}{timed 250}</string>
+      <string key="12">{scroll 0}\nEnrico! {scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}Mi chiedo chi possa \naverlo ucciso. {scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}\nCosa? Oh, sì. {scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}\nEnrico! {scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}Quindi... \nBarry e Jill, insieme. {scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\nStai bene, Enrico? {scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}Per la ＳＴＡＲＳ è finita... \nQualcuno ci ha traditi! {scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}È stato tutto architettato \ndalla Umbrella...{scroll 1}{timed 205}</string>
+      <string key="20">{scroll 0}\nEnrico!!! {scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
+      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}Non poteva muoversi a causa \ndi questa ferita...{scroll 1}{clear 0}{scroll 2}\nQualcosa in mano.{scroll 1}</string>
+      <string key="24">{scroll 2}\nBarry sta investigando...{scroll 1}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 0}\n¡Enrico!{scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}\nNo te acerques más, Chris.{scroll 1}{clear 70}{scroll 0}\nEspera, ¿qué ha pasado?{scroll 1}{clear 65}{scroll 0}\n¡Traidor!{scroll 1}{timed 45}</string>
+      <string when="JILL" key="1">{scroll 0}\nChris, no te acerques más.{scroll 1}{clear 70}{scroll 0}\nEspera, ¿qué ha pasado?{scroll 1}{clear 65}{scroll 0}\n¡Traidor!{scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}\n¡NO LO HAGAS!{scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}¿Quién es?\n¿H-Hay alguien ahí?{scroll 1}{timed 110}</string>
+      <string key="4">{scroll 0}\nUh... ahhh, demonios... Umbrella...{scroll 1}{timed 180}</string>
+      <string when="JILL" key="4">{scroll 0}\nUhhh-ahhh, demonios... Umbrella...{scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}¿Traidor?\n¿A qué se refería?{scroll 1}{timed 130}</string>
+      <string when="JILL" key="5">{scroll 0}¿Traidor?\n¿Qué ha querido decir con eso?{scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}No podría moverse\ncon esta herida...{scroll 1}{clear 0}{scroll 2}\nEstá sujetando algo...{scroll 1}</string>
+      <string when="JILL" key="6">{scroll 2}No podría moverse\ncon esa herida...{scroll 1}{clear 0}{scroll 2}\nEstá sujetando algo...{scroll 1}</string>
+      <string key="7">{scroll 0}\n¿Es Jill?{scroll 1}{clear 45}{scroll 0}\n¿Es la voz de Enrico?{scroll 1}{timed 85}</string>
+      <string when="JILL" key="7">{scroll 0}\n¿Eres Jill?{scroll 1}{clear 45}{scroll 0}\nEsa voz, ¿Enrico?{scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\n¿Sí?{scroll 1}{clear 30}{scroll 0}\n¡Estás bien!{scroll 1}{clear 30}{scroll 0}¡Espera aquí!\nJill, ¿estás con alguien?{scroll 1}{timed 100}</string>
+      <string when="JILL" key="8">{scroll 0}\n¿Sí?{scroll 1}{clear 30}{scroll 0}\n¡Estás vivo!{scroll 1}{clear 30}{scroll 0}¡Quédate ahí!\n¿Estás con alguien, Jill?{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}¿Qué? Oh, no, estoy sola pero,\n¿por qué lo preguntas?{scroll 1}{timed 160}</string>
+      <string when="JILL" key="9">{scroll 0}¿Qué? Oh no, estoy sola pero,\n¿por qué lo preguntas?{scroll 1}{timed 160}</string>
+      <string key="10">{scroll 0}¡Escucha! ＳＴＡＲＳ pronto\ndesaparecerá.{scroll 1}{clear 144}{scroll 0}\nAlguien es un traidor.{scroll 1}{timed 72}</string>
+      <string when="JILL" key="10">{scroll 0}¡Escucha! Los ＳＴＡＲＳ\nestamos acabados.{scroll 1}{clear 90}{scroll 0}\nHay un traidor.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 180}{scroll 0}\nAHH.... Ohhhh... cough... uhh{scroll 1}{timed 70}</string>
+      <string when="JILL" key="11">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 80}{scroll 0}\nAhh.... Ohhhh... Cof... Uhh{scroll 1}{timed 130}</string>
+      <string key="12">{scroll 0}\n¡Enrico!{scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}\n¿Qué lo habrá matado?{scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}\n¿Qué? ¡Oh, sí!{scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}\n¡Enrico!{scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}\nMira, Barry y Jill juntos.{scroll 1}{timed 110}</string>
+      <string when="JILL" key="16">{scroll 0}\nAsí que Barry y Jill juntos.{scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\nEnrico, ¿estás bien?{scroll 1}{timed 80}</string>
+      <string when="JILL" key="17">{scroll 0}\n¿Estás bien, Enrico?{scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}ＳＴＡＲＳ está condenado. \nHay un traidor.{scroll 1}{timed 130}</string>
+      <string when="JILL" key="18">{scroll 0}Los ＳＴＡＲＳ estamos acabados. \nHay un traidor.{scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 175}{scroll 0}\nAHH.... Ohhhh... cough... uhh{scroll 1}{timed 65}</string>
+      <string when="JILL" key="19">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 75}{scroll 0}\nAhh.... Ohhhh... Cof... Uhh.{scroll 1}{timed 130}</string>
+      <string key="20">{scroll 0}\n¡Enrico!{scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
+      <string key="22">{scroll 1}\n{scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}No podría moverse\ncon esa herida...{scroll 1}{clear 0}{scroll 2}\nSujeta algo...{scroll 1}</string>
+      <string key="24">{scroll 2}\nBarry está investigando...{scroll 1}</string>
+      <string when="JILL" key="24">{scroll 2}\nBarry está examinandole...{scroll 1}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Комната внутр. двора Б1</string>
+      <string key="0">{scroll 0}\n {scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 65}{scroll 0}\n {scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}\n {scroll 1}{timed 110}</string>
+      <string key="4">{scroll 40} {scroll 0}\n {scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}Из-за ранения он\nне мог двигаться...{scroll 1}{clear 0}{scroll 2}\nУ него что-то в руках.{scroll 1}</string>
+      <string key="7">{scroll 0}\n {scroll 1}{clear 45}{scroll 0}\n {scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}\n {scroll 1}{timed 160}</string>
+      <string key="10">{scroll 0}\n {scroll 1}{timed 180}</string>
+      <string key="11">{scroll 0}\n {scroll 1}{timed 250}</string>
+      <string key="12">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}\n {scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}\n {scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}\n {scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\n {scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}\n {scroll 1}{timed 240}</string>
+      <string key="20">{scroll 0}\n {scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}\n{scroll 1}{branch 0 1 0}{scroll 1}\n {scroll 1}{timed 30}</string>
+      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}Из-за ранения он\nне мог двигаться...{scroll 1}{clear 0}{scroll 2}\nУ него что-то в руках.{scroll 1}</string>
+      <string key="24">{scroll 2}\nБарри исследует...{scroll 1}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Maanalainen varasto 0 krs</string>
+      <string key="0">{scroll 0}Enrico!{scroll 1}{timed 65}</string>
+      <string key="1">{scroll 0}Chris, älä tule yhtään lähemmäksi.{scroll 1}{clear 70}{scroll 0}Odota, mitä tapahtui?{scroll 1}{clear 65}{scroll 0}Petturi!{scroll 1}{timed 45}</string>
+      <string key="2">{scroll 0}Älä!{scroll 1}{timed 60}</string>
+      <string key="3">{scroll 0}Kuka siellä?\nOnko siellä joku?{scroll 1}{timed 110}</string>
+      <string key="4">{scroll 0}Helvetti, Umbrella...{scroll 1}{timed 180}</string>
+      <string key="5">{scroll 0}Petturi? Mitä hän tuolla\ntarkoitti?{scroll 1}{timed 130}</string>
+      <string key="6">{scroll 2}Hän ei voinut liikkua vammojensa\ntakia...{scroll 1}{clear 0}{scroll 2}Hän pitelee jotakin...{scroll 1}</string>
+      <string key="7">{scroll 0}Jill, sinäkö siellä?{scroll 1}{clear 45}{scroll 0}Enrico, sinäkö se olet?{scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}Kyllä?{scroll 1}{clear 30}{scroll 0}Olet elossa!{scroll 1}{clear 30}{scroll 0}Odota siellä!\nOletko kenenkään kanssa?{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}Mitä? En, olen yksin.\nMiksi kysyt?{scroll 1}{timed 160}</string>
+      <string key="10">{scroll 0}Kuuntele! ＳＴＡＲＳ on pian mennyttä.{scroll 1}{clear 144}{scroll 0}Joukossamme on petturi.{scroll 1}{timed 72}</string>
+      <string when="JILL" key="10">{scroll 0}Kuuntele! ＳＴＡＲＳ on pian mennyttä.{scroll 1}{clear 90}{scroll 0}Joukossamme on petturi.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 180}{scroll 0}\n{scroll 1}{timed 70}</string>
+      <string when="JILL" key="11">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 80}{scroll 0}\n{scroll 1}{timed 130}</string>
+      <string key="12">{scroll 0}Enrico!{scroll 1}{timed 60}</string>
+      <string key="13">{scroll 0}Kuka olisi voinut tappaa hänet?{scroll 1}{timed 60}</string>
+      <string key="14">{scroll 0}Mitä? Kyllä vain!{scroll 1}{timed 80}</string>
+      <string key="15">{scroll 0}Enrico!{scroll 1}{timed 50}</string>
+      <string key="16">{scroll 0}Vai niin, Barry ja Jill yhdessä.{scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}Oletko kunnossa?{scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}ＳＴＡＲＳ on mennyttä.\nJoukossamme on petturi.{scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 175}{scroll 0}\n{scroll 1}{timed 65}</string>
+      <string when="JILL" key="19">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 75}{scroll 0}\n{scroll 1}{timed 130}</string>
+      <string key="20">{scroll 0}Enrico!{scroll 1}{timed 70}</string>
+      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
+      <string key="22">{scroll 1}\n{scroll 1}{timed 30}</string>
+      <string key="23">{scroll 2}Hän ei voinut liikkua vammojensa\ntakia...{scroll 1}{clear 0}{scroll 2}Hän pitelee jotakin...{scroll 1}</string>
+      <string key="24">{scroll 2}Barry tutkii...{scroll 1}</string>
+    </language>
+  </strings>
+</room>

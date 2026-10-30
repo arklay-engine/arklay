@@ -294,7 +294,9 @@ fn corpus_walk_spawns_all_43_shipped_sparkles_and_frees_them() {
         if room.item_models.is_empty() {
             continue;
         }
-        let Ok(scripts) = loaded.own_scripts(&pack) else {
+        // The RDT's own scripts: the room's runtime build holds every
+        // variant's sites.
+        let Some(scripts) = common::rdt_scripts(&pack, id) else {
             continue;
         };
         // Every `item_aot_set` site whose flags word carries the sparkle bit,

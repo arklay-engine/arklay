@@ -69,12 +69,14 @@ impl RoomVariants {
             stage: self.stage,
             room: self.room,
             player_flag,
+            mansion2: false,
         }
     }
 }
 
 /// Enumerate the pack's rooms (`room/<id>/room.xml` or `room.rdt`), sorted by
-/// stage/room with every room's player variants collected.
+/// stage/room with every room's player variants collected. A jump to a
+/// mansion room goes to the visit the game is on.
 pub fn room_variants(pack: &Pack) -> Vec<RoomVariants> {
     let mut rooms: BTreeMap<(u8, u8), Vec<u8>> = BTreeMap::new();
     for id in crate::room::ids(pack) {
@@ -132,7 +134,11 @@ impl RoomSelect {
         let named = rooms
             .first()
             .is_none_or(|room| crate::room::dialect(pack, room.id(0)) == Dialect::Re1);
-        let mut stage_ids: Vec<u8> = (1..=RoomId::MAX_STAGE).collect();
+        let mut stage_ids: Vec<u8> = if named {
+            (1..=RoomId::RE1_STAGES).collect()
+        } else {
+            Vec::new()
+        };
         for room in &rooms {
             if !stage_ids.contains(&room.stage) {
                 stage_ids.push(room.stage);
@@ -345,8 +351,8 @@ mod tests {
     fn letter_stages_get_their_own_tabs() {
         let pack = pack(&["1000", "1001", "a000", "g010"]);
         let mut select = RoomSelect::new(&pack, RoomId::parse("G010").unwrap());
-        assert_eq!(select.stage_ids, [1, 2, 3, 4, 5, 6, 7, 10, 16]);
-        assert_eq!(select.column(), 8, "the cursor follows the current room");
+        assert_eq!(select.stage_ids, [1, 2, 3, 4, 5, 10, 16]);
+        assert_eq!(select.column(), 6, "the cursor follows the current room");
         assert_eq!(select.selected().map(|room| room.room), Some(0x01));
         let right = UiInput {
             page_right: true,
@@ -357,10 +363,11 @@ mod tests {
     }
 
     #[test]
-    fn an_re1_pack_keeps_seven_tabs() {
-        let pack = pack(&["1000", "7001"]);
+    fn an_re1_pack_keeps_five_tabs() {
+        // The second mansion visit is the mansion rooms', no tab of its own.
+        let pack = pack(&["1000", "5001"]);
         let select = RoomSelect::new(&pack, RoomId::parse("1000").unwrap());
-        assert_eq!(select.stage_ids, [1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(select.stage_ids, [1, 2, 3, 4, 5]);
         assert!(select.named, "an RE1 pack's tabs take the RE1 stage names");
     }
 

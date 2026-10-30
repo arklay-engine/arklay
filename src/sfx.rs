@@ -2576,7 +2576,7 @@ pub fn play_sfx_3d(
             if id > 0x2F {
                 return Sfx3dPlay::noop();
             }
-            match room_sound(room_row(room.stage, room.room), usize::from(id)) {
+            match room_sound(room_row(room.table_row(), room.room), usize::from(id)) {
                 Some(name) => with_gain_pan(name, from, to, sound),
                 None => Sfx3dPlay::noop(),
             }
@@ -2625,9 +2625,10 @@ pub fn room_sfx(index: usize, slot: usize) -> Option<&'static str> {
     ROOM_SFX.get(index)?.get(slot).copied().flatten()
 }
 
-/// The room sound table row for a 1-based stage and room number.
-pub fn room_row(stage: u8, room: u8) -> usize {
-    usize::from(stage.saturating_sub(1)) * ROOMS_PER_STAGE + usize::from(room)
+/// The room sound table row of a room: its row of the original's per-room
+/// tables ([`crate::state::RoomId::table_row`]) and room number.
+pub fn room_row(table_row: usize, room: u8) -> usize {
+    table_row * ROOMS_PER_STAGE + usize::from(room)
 }
 
 /// Entity sound column: the zone offset plus the sound type, reduced by three
@@ -2816,8 +2817,8 @@ pub static ENEMY_SOUNDS: &[(u8, u8, EnemySoundSlots)] = &[
 
 /// The enemy sounds a room script still plays through the room bank
 /// (`se_play_3d(SND_BANK_ROOM, ..)`), so they keep their `se/` copy beside the
-/// enemy's own: room 309's `SE_07_HE_NOUT` and the Hunter swipe room 706
-/// (room 206's stage 7 copy) plays as `SE_03`.
+/// enemy's own: room 309's `SE_07_HE_NOUT` and the Hunter swipe room 206
+/// plays as `SE_03` on the second visit.
 pub static ROOM_BANK_ENEMY_SOUNDS: &[&str] = &["He_Nout", "HU_att"];
 
 /// Whether `name` (any case) is packed as `se/{name}.wav`.
@@ -2909,7 +2910,8 @@ pub fn play_3d_cue(
             if id > 0x2F {
                 return None;
             }
-            room_sound(room_row(room.stage, room.room), usize::from(id)).map(|name| (name, 2, id))
+            room_sound(room_row(room.table_row(), room.room), usize::from(id))
+                .map(|name| (name, 2, id))
         }
         3 => {
             if id > 0x0F {
@@ -2931,7 +2933,7 @@ pub fn footstep_sound(
 ) -> Option<&'static str> {
     let zone = room.footstep_zone(pos[0], pos[2])?;
     let index = entity_sound_index(zone as u8, sound_type, slow);
-    room_sound(room_row(room.stage, room.room), usize::from(index))
+    room_sound(room_row(room.table_row(), room.room), usize::from(index))
 }
 
 /// 12-bit XZ angle from `(from_x, from_z)` to `(to_x, to_z)`.
@@ -3115,11 +3117,12 @@ mod tests {
 
     #[test]
     fn room_row_uses_the_original_layout() {
-        assert_eq!(room_row(1, 0), 0);
-        assert_eq!(room_row(1, 1), 1);
-        assert_eq!(room_row(2, 0), 29);
-        assert_eq!(room_row(7, 28), 202);
         assert_eq!(room_row(0, 0), 0);
+        assert_eq!(room_row(0, 1), 1);
+        assert_eq!(room_row(1, 0), 29);
+        // The second visit of room 21C.
+        let id = crate::state::RoomId::from_original(0x71C0).unwrap();
+        assert_eq!(room_row(id.table_row(), id.room), 202);
     }
 
     #[test]
@@ -3293,8 +3296,8 @@ mod tests {
     }
 
     /// Every room-bank cue a checked-in room script plays resolves, in each
-    /// room the script compiles to (stages 1 and 2 also build their stage 6
-    /// and 7 copies), to a sound the pack carries under `se/`: an enemy sound
+    /// variant of the room (a mansion room's second visit reads a table row
+    /// of its own), to a sound the pack carries under `se/`: an enemy sound
     /// the room table names there must be listed in [`ROOM_BANK_ENEMY_SOUNDS`].
     #[test]
     fn room_script_room_bank_cues_resolve_to_packed_se_entries() {
@@ -3310,15 +3313,13 @@ mod tests {
                 continue;
             }
             let folder = path.parent().unwrap().file_name().unwrap();
-            let stem = folder
-                .to_string_lossy()
-                .strip_suffix('0')
-                .unwrap()
-                .to_string();
+            let stem = folder.to_string_lossy().to_string();
             let base = u16::from_str_radix(&stem, 16).unwrap();
-            let stages: std::collections::BTreeSet<u8> = crate::scd::akscr::room_variants(base)
+            // Each table row the room's variants read.
+            let stages: std::collections::BTreeSet<usize> = crate::scd::akscr::room_variants(base)
                 .into_iter()
-                .map(|id| (id >> 12) as u8)
+                .filter_map(crate::state::RoomId::from_original)
+                .map(crate::state::RoomId::table_row)
                 .collect();
             let room = base as u8;
             let text = std::fs::read_to_string(&path).unwrap();

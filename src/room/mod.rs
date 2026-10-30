@@ -1,8 +1,16 @@
 //! Room definitions: the `room/<id>/` folder, or a raw RDT.
 //!
-//! Everything a room is made of sits in one folder named by its four-digit
-//! RDT number, under conventional names, so a room can be copied to another
-//! pack or renamed by renaming its folder:
+//! Everything a room is made of sits in one folder named by its three-digit
+//! room id (`room/10b/`), under conventional names, so a room can be copied
+//! to another pack or renamed by renaming its folder. The folder holds every
+//! variant of the room: both players and, for the mansion's stages 1 and 2,
+//! both visits. `room.xml` marks what only some variants have with `when`
+//! ([`xml`]), and a file that differs per variant goes in a variant folder
+//! inside the room's ([`RoomId::variant_dirs`]: `jill-mansion2/`, `jill/`,
+//! `mansion2/`), the most specific of which wins. A variant folder's model,
+//! effect or animation slots replace the room folder's slots of that kind
+//! whole ([`Folder::kind`]). An RE2 pack keeps one folder per RDT
+//! (`room/1001/`), each player's room its own.
 //!
 //! | entry | content |
 //! |---|---|
@@ -29,7 +37,8 @@
 //!
 //! A raw `room.rdt` in the folder still loads in place of `room.xml`, so a
 //! mod that ships an RDT keeps working: when a pack holds both, the one from
-//! the higher layer wins, and the XML wins a tie.
+//! the higher layer wins, and the XML wins a tie. An RDT is one variant's,
+//! so a mod's RDT goes in that variant's folder ([`RoomId::variant_tag`]).
 
 pub mod source;
 pub mod xml;
@@ -44,12 +53,70 @@ use crate::state::{RoomId, RoomState};
 pub use source::{Converted, RoomSource};
 
 impl RoomId {
-    /// Pack path of the room definition, e.g. `room/1001/room.xml`.
+    /// Pack path of the room definition, e.g. `room/100/room.xml`.
     pub fn xml_entry(self) -> String {
         format!("{}/{}", self.dir(), source::XML_FILE)
     }
 }
 
+/// The folders one variant of a room reads its files from in a pack, most
+/// specific first, ending with the room's own folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Folder {
+    dirs: Vec<String>,
+}
+
+impl Folder {
+    /// The folders of room variant `id` in `pack`: the room folder and its
+    /// variant folders ([`RoomId::variant_dirs`]), or, for a pack that keeps
+    /// one folder per RDT (RE2), that RDT's folder alone.
+    pub fn of(pack: &Pack, id: RoomId) -> Self {
+        let defines = |dir: &str| {
+            [source::XML_FILE, RDT_FILE]
+                .iter()
+                .any(|file| pack.contains(&format!("{dir}/{file}")))
+        };
+        let rdt_dir = id.rdt_dir();
+        if !defines(&id.dir()) && defines(&rdt_dir) {
+            return Self {
+                dirs: vec![rdt_dir],
+            };
+        }
+        Self {
+            dirs: id.variant_dirs(),
+        }
+    }
+
+    /// The room's own folder, `room/100`.
+    pub fn dir(&self) -> &str {
+        self.dirs.last().expect("a room has a folder")
+    }
+
+    /// The path of `name` in the most specific folder that has it, else in
+    /// the room's own folder.
+    pub fn file(&self, pack: &Pack, name: &str) -> String {
+        self.dirs
+            .iter()
+            .map(|dir| format!("{dir}/{name}"))
+            .find(|path| pack.contains(path))
+            .unwrap_or_else(|| format!("{}/{name}", self.dir()))
+    }
+
+    /// The folder of the room's `kind` slots (`object`, `item`, `effect`,
+    /// `anim`), `room/100/mansion2/effect`: in the most specific folder
+    /// whose `kind/` has slot 0 (`first`, e.g. `00.tmd`), else the room
+    /// folder's. One variant folder's slots replace the room folder's whole.
+    pub fn kind(&self, pack: &Pack, kind: &str, first: &str) -> String {
+        self.dirs
+            .iter()
+            .map(|dir| format!("{dir}/{kind}"))
+            .find(|path| pack.contains(&format!("{path}/{first}")))
+            .unwrap_or_else(|| format!("{}/{kind}", self.dir()))
+    }
+}
+
+/// The file name of a raw RDT in a room folder.
+pub const RDT_FILE: &str = "room.rdt";
 /// Which file a room's definition comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
@@ -59,11 +126,22 @@ pub enum Format {
     Rdt,
 }
 
+/// The pack entry of room variant `id`'s `room.xml`.
+pub fn xml_entry(pack: &Pack, id: RoomId) -> String {
+    format!("{}/{}", Folder::of(pack, id).dir(), source::XML_FILE)
+}
+
+/// The pack entry of the raw RDT room variant `id` takes, the most specific
+/// variant folder's.
+pub fn rdt_entry(pack: &Pack, id: RoomId) -> String {
+    Folder::of(pack, id).file(pack, RDT_FILE)
+}
+
 /// The file `pack` defines room `id` with, or `None` when it has neither.
 pub fn format(pack: &Pack, id: RoomId) -> Option<Format> {
     match (
-        pack.depth_of(&id.xml_entry()),
-        pack.depth_of(&id.rdt_entry()),
+        pack.depth_of(&xml_entry(pack, id)),
+        pack.depth_of(&rdt_entry(pack, id)),
     ) {
         (Some(xml), Some(rdt)) if rdt > xml => Some(Format::Rdt),
         (Some(_), _) => Some(Format::Xml),
@@ -77,14 +155,14 @@ pub fn format(pack: &Pack, id: RoomId) -> Option<Format> {
 pub fn dialect(pack: &Pack, id: RoomId) -> Dialect {
     match format(pack, id) {
         Some(Format::Rdt) => pack
-            .read(&id.rdt_entry())
+            .read(&rdt_entry(pack, id))
             .ok()
             .and_then(|data| crate::format::rdt(&data).dialect())
             .unwrap_or_default(),
         Some(Format::Xml) => pack
-            .read(&id.xml_entry())
+            .read(&xml_entry(pack, id))
             .ok()
-            .and_then(|data| xml::parse(std::str::from_utf8(&data).ok()?).ok())
+            .and_then(|data| xml::parse_for(std::str::from_utf8(&data).ok()?, id).ok())
             .map(|source| source.dialect)
             .unwrap_or_default(),
         None => Dialect::Re1,
@@ -99,8 +177,8 @@ pub fn exists(pack: &Pack, id: RoomId) -> bool {
 /// The pack entry room `id` is defined by, for messages and layer checks.
 pub fn entry(pack: &Pack, id: RoomId) -> String {
     match format(pack, id) {
-        Some(Format::Rdt) => id.rdt_entry(),
-        _ => id.xml_entry(),
+        Some(Format::Rdt) => rdt_entry(pack, id),
+        _ => xml_entry(pack, id),
     }
 }
 
@@ -130,15 +208,19 @@ pub enum ScriptSource {
 /// base pack's `room.scd`, one that ships a `room.scd` runs it whatever the
 /// option says, and one that only edits `room.xml` keeps the base scripts.
 pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptSource {
+    let folder = Folder::of(pack, id);
     let rdt = (format(pack, id) == Some(Format::Rdt))
-        .then(|| pack.depth_of(&id.rdt_entry()))
+        .then(|| pack.depth_of(&folder.file(pack, RDT_FILE)))
         .flatten();
     let original = original_scripts
-        .then(|| pack.depth_of(&id.original_scd_entry()))
+        .then(|| pack.depth_of(&folder.file(pack, ORIGINAL_SCD_FILE)))
         .flatten();
     [
         (rdt, ScriptSource::Rdt),
-        (pack.depth_of(&id.scd_entry()), ScriptSource::Room),
+        (
+            pack.depth_of(&folder.file(pack, SCD_FILE)),
+            ScriptSource::Room,
+        ),
         (original, ScriptSource::Original),
     ]
     .into_iter()
@@ -148,25 +230,11 @@ pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptS
     .map_or(ScriptSource::Room, |(_, source)| source)
 }
 
-/// The entry room `id`'s `room.scd` scripts are read from: the build for
-/// the base pack's region (`room-jpn.scd`, [`RoomId::region_scd_entry`])
-/// when the layer whose `room.scd` wins carries one, otherwise `room.scd`.
-///
-/// A mod packs a region's build only where its script builds differently
-/// for that region, and a base pack whose manifest names no region runs the
-/// USA build.
-pub fn room_scd_entry(pack: &Pack, id: RoomId) -> String {
-    let entry = id.scd_entry();
-    let region = pack.manifest().and_then(|manifest| manifest.region);
-    if let Some(region) = region.filter(|region| *region != scd::akscr::Region::Usa) {
-        let regional = id.region_scd_entry(region);
-        let depth = pack.depth_of(&regional);
-        if depth.is_some() && depth == pack.depth_of(&entry) {
-            return regional;
-        }
-    }
-    entry
-}
+/// The file name of a room folder's scripts.
+pub const SCD_FILE: &str = "room.scd";
+/// The file name of a room folder's original scripts, kept beside a
+/// `room.scd` holding the port's fixes.
+pub const ORIGINAL_SCD_FILE: &str = "original.scd";
 
 /// The scripts embedded in RDT `data`: none for an RE2 RDT, whose script
 /// dialect the engine does not run yet.
@@ -227,7 +295,7 @@ impl Loaded {
     /// Build room `id` from XML definition `text`, reading the rest of its
     /// folder from `pack`.
     pub fn from_xml(pack: &Pack, id: RoomId, text: &str) -> Result<Self> {
-        let source = xml::parse(text)?;
+        let source = xml::parse_for(text, id)?;
         let state = source.build(id, pack)?;
         Ok(Self {
             id,
@@ -247,13 +315,14 @@ impl Loaded {
         if self.dialect == Dialect::Re2 {
             return Ok((scd::ir::Scripts::default(), source));
         }
+        let folder = Folder::of(pack, self.id);
         let scripts = match source {
             ScriptSource::Rdt => match &self.rdt {
                 Some(data) => rdt_scripts(data)?,
-                None => rdt_scripts(&pack.read(&self.id.rdt_entry())?)?,
+                None => rdt_scripts(&pack.read(&folder.file(pack, RDT_FILE))?)?,
             },
-            ScriptSource::Room => read_scripts(pack, &room_scd_entry(pack, self.id))?,
-            ScriptSource::Original => read_scripts(pack, &self.id.original_scd_entry())?,
+            ScriptSource::Room => read_scripts(pack, &folder.file(pack, SCD_FILE))?,
+            ScriptSource::Original => read_scripts(pack, &folder.file(pack, ORIGINAL_SCD_FILE))?,
         };
         Ok((scripts, source))
     }
@@ -270,11 +339,11 @@ impl Loaded {
 pub fn load(pack: &Pack, id: RoomId) -> Result<Loaded> {
     match format(pack, id) {
         Some(Format::Rdt) => {
-            let data = pack.read(&id.rdt_entry())?.into_owned();
+            let data = pack.read(&rdt_entry(pack, id))?.into_owned();
             Loaded::from_rdt(pack, id, data)
         }
         Some(Format::Xml) => {
-            let entry = id.xml_entry();
+            let entry = xml_entry(pack, id);
             let data = pack.read(&entry)?;
             let text =
                 std::str::from_utf8(&data).with_context(|| format!("{entry} is not UTF-8"))?;
@@ -297,11 +366,21 @@ fn drawn_messages(mut state: RoomState, script: crate::charset::Script) -> RoomS
 /// The error of a room the pack does not define.
 fn missing(id: RoomId) -> String {
     format!(
-        "room {} is missing: no {} or {}",
-        id.code().to_ascii_uppercase(),
+        "room {}{} is missing: no {} or {}",
+        id.room3(),
+        variant_label(id),
         id.xml_entry(),
         id.rdt_entry()
     )
+}
+
+/// How a message names room variant `id`: ` (jill, second visit)`.
+pub fn variant_label(id: RoomId) -> String {
+    if id.mansion2 {
+        format!(" ({}, second visit)", id.player_tag())
+    } else {
+        format!(" ({})", id.player_tag())
+    }
 }
 
 /// Load just room `id`'s state.
@@ -324,43 +403,89 @@ pub fn own_scripts(pack: &Pack, id: RoomId) -> Result<scd::ir::Scripts> {
     .own_scripts(pack)
 }
 
-/// Every room id `pack` defines, sorted, with either format.
+/// Every room variant `pack` defines, sorted: each player, and each visit
+/// of a mansion room, of every room folder (`room/100/`), and every RDT of a
+/// pack that keeps one folder per RDT (`room/1001/`, RE2).
 pub fn ids(pack: &Pack) -> Vec<RoomId> {
-    let mut ids: Vec<RoomId> = pack
-        .paths()
-        .filter_map(|path| {
-            let rest = path.strip_prefix("room/")?;
-            let (stem, file) = rest.split_once('/')?;
-            if stem.len() != 4
-                || !(file.eq_ignore_ascii_case(source::XML_FILE)
-                    || file.eq_ignore_ascii_case("room.rdt"))
-            {
-                return None;
+    let mut ids: Vec<RoomId> = Vec::new();
+    for path in pack.paths() {
+        let Some(rest) = path.strip_prefix("room/") else {
+            continue;
+        };
+        let Some((stem, file)) = rest.split_once('/') else {
+            continue;
+        };
+        // A raw RDT may sit in one of the room's variant folders.
+        let file = match file.split_once('/') {
+            Some((_, file)) if stem.len() == 3 && !file.contains('/') => file,
+            Some(_) => continue,
+            None => file,
+        };
+        if !(file.eq_ignore_ascii_case(source::XML_FILE) || file.eq_ignore_ascii_case(RDT_FILE)) {
+            continue;
+        }
+        match stem.len() {
+            3 => {
+                let Ok(room) = RoomId::parse(stem) else {
+                    continue;
+                };
+                for player_flag in 0..2 {
+                    let id = RoomId {
+                        player_flag,
+                        ..room
+                    };
+                    ids.push(id);
+                    if id.is_mansion() {
+                        ids.push(id.with_visit(true));
+                    }
+                }
             }
-            RoomId::parse(stem).ok()
-        })
-        .collect();
-    ids.sort_by_key(|id| id.rdt_number());
+            4 => ids.extend(RoomId::parse(stem).ok()),
+            _ => {}
+        }
+    }
+    ids.sort_by_key(|id| (id.mansion2, id.rdt_number()));
     ids.dedup();
     ids
 }
 
+/// Every room `pack` defines, as its lowest variant (Chris on the first
+/// visit, where the pack has it), sorted.
+pub fn rooms(pack: &Pack) -> Vec<RoomId> {
+    let mut rooms: Vec<RoomId> = Vec::new();
+    for id in ids(pack) {
+        if !rooms
+            .iter()
+            .any(|room| (room.stage, room.room) == (id.stage, id.room))
+        {
+            rooms.push(id);
+        }
+    }
+    rooms.sort_by_key(|id| (id.stage, id.room));
+    rooms
+}
+
 /// Every room's `<strings>` as language layers, `(tag, file)` per language,
-/// keyed `ROOM_<room3>_NAME`, `ROOM_<room3>_NAME_SAVE` and `ROOM_<room3>_TEXT_XX`.
+/// keyed `ROOM_<room3>_NAME`, `ROOM_<room3>_NAME_SAVE` and
+/// `ROOM_<room3>_TEXT_XX`, and a string only some variants have (its
+/// `when`) as `ROOM_<room3>_<VARIANT>_TEXT_XX` (`ROOM_100_JILL_MANSION2_TEXT_0A`,
+/// [`xml::string_variant`]), which [`crate::text::Text::message`] reads
+/// first for those variants.
 ///
-/// Rooms are read in id order, so of a room's player variants the lowest
-/// that names the room in a language supplies that language's name, and
-/// its message texts are the room's shared `TEXT_XX` keys; another variant's
-/// differing text gets that variant's own key. The
-/// strings come from the room's `room.xml` even when a mod's raw RDT
+/// The strings come from the room's `room.xml` even when a mod's raw RDT
 /// defines the room over it, so a mod that ships RDTs keeps the names; an
 /// unreadable `room.xml` warns and is skipped here (loading the room reports
 /// it properly).
 pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> {
     use std::collections::BTreeMap;
     let mut by_tag: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
-    for id in ids(pack) {
-        let entry = id.xml_entry();
+    let mut entries: Vec<(RoomId, String)> = rooms(pack)
+        .into_iter()
+        .map(|id| (id, xml_entry(pack, id)))
+        .collect();
+    // A per-RDT folder (RE2) names its room as the first player's does.
+    entries.dedup_by(|(_, a), (_, b)| a == b);
+    for (id, entry) in entries {
         if !pack.contains(&entry) {
             continue;
         }
@@ -372,25 +497,23 @@ pub fn language_layers(pack: &Pack) -> Vec<(String, crate::language::Language)> 
             }
         };
         let room3 = id.room3();
-        for (tag, key, value) in strings {
+        for (tag, key, value, condition) in strings {
             let Some(suffix) = xml::string_suffix(&key) else {
                 continue;
             };
+            let variant = match condition.as_deref().map(xml::string_variant) {
+                None => String::new(),
+                Some(Ok(variant)) => format!("{variant}_"),
+                Some(Err(error)) => {
+                    eprintln!("warning: {entry}: {error:#}");
+                    continue;
+                }
+            };
             let values = by_tag.entry(tag.to_ascii_lowercase()).or_default();
-            // The first variant's text is the room's; a later variant whose
-            // text differs gets its own `ROOM_<room3><player>_TEXT_XX` key,
-            // which `Text::message` reads first.
-            let shared = format!("ROOM_{room3}_{suffix}");
-            match values.get(&shared) {
-                None => {
-                    values.insert(shared, value);
-                }
-                Some(first) if *first != value && suffix.starts_with("TEXT_") => {
-                    let variant = format!("ROOM_{room3}{}_{suffix}", id.player_flag);
-                    values.insert(variant, value);
-                }
-                Some(_) => {}
-            }
+            // A per-RDT folder's later player keeps the first's text.
+            values
+                .entry(format!("ROOM_{room3}_{variant}{suffix}"))
+                .or_insert(value);
         }
     }
     let mut layers = Vec::new();
@@ -420,10 +543,12 @@ mod checked_in {
 /// RDTs, which only supply the room's models and animation.
 pub use checked_in::ROOM_FILES as RE1_FILES;
 
-/// The checked-in definition of RE1 room `id`, as `(pack entry, text)`.
-/// Empty when the repository does not define the room.
+/// The checked-in definition of RE1 room `id` (any variant of it), as
+/// `(pack entry, text)`: its folder's `room.xml` and effect definitions,
+/// variant folders included. Empty when the repository does not define the
+/// room.
 pub fn re1_definition(id: RoomId) -> Vec<(String, &'static str)> {
-    let prefix = format!("{}/", id.code());
+    let prefix = format!("{}/", id.room3().to_ascii_lowercase());
     RE1_FILES
         .iter()
         .filter_map(|(path, text)| {
@@ -433,21 +558,16 @@ pub fn re1_definition(id: RoomId) -> Vec<(String, &'static str)> {
         .collect()
 }
 
-/// Test helper: a `room/<id>/room.xml` per checked-in room holding only its
-/// strings, for tests that need the room names
-/// and message texts a converted pack carries.
+/// Test helper: each checked-in room's `room.xml` at its pack entry, for
+/// tests that need the room names and message texts a converted pack
+/// carries.
 #[cfg(test)]
 pub(crate) fn re1_string_entries() -> Vec<(String, Vec<u8>)> {
     RE1_FILES
         .iter()
         .filter_map(|(path, text)| {
-            let id = RoomId::parse(path.strip_suffix("/room.xml")?).ok()?;
-            let source = RoomSource {
-                strings: room_strings(text.as_bytes()).unwrap(),
-                ..RoomSource::default()
-            };
-            (!source.strings.is_empty())
-                .then(|| (id.xml_entry(), xml::write(&source).unwrap().into_bytes()))
+            let room = path.strip_suffix("/room.xml")?;
+            (room.len() == 3).then(|| (format!("room/{room}/room.xml"), text.as_bytes().to_vec()))
         })
         .collect()
 }
@@ -458,7 +578,7 @@ pub(crate) fn re1_string_entries() -> Vec<(String, Vec<u8>)> {
 /// parsed: its text cannot hold a literal `</strings>` (a `<` is escaped),
 /// and a room without the tag has none. Anything unusual (the tag inside a
 /// comment, say) falls back to parsing the whole file.
-fn room_strings(data: &[u8]) -> Result<Vec<crate::language::XmlString>> {
+fn room_strings(data: &[u8]) -> Result<Vec<xml::ConditionalString>> {
     const CLOSE: &str = "</strings>";
     let text = std::str::from_utf8(data).context("not UTF-8")?;
     let Some(start) = text.find("<strings") else {
@@ -467,7 +587,7 @@ fn room_strings(data: &[u8]) -> Result<Vec<crate::language::XmlString>> {
     if let Some(end) = text[start..].find(CLOSE)
         && let Ok(fragment) = roxmltree::Document::parse(&text[start..start + end + CLOSE.len()])
     {
-        return xml::parse_strings(fragment.root_element());
+        return xml::conditional_strings(fragment.root_element());
     }
     let document = roxmltree::Document::parse(text).context("not well-formed XML")?;
     match document
@@ -475,7 +595,7 @@ fn room_strings(data: &[u8]) -> Result<Vec<crate::language::XmlString>> {
         .children()
         .find(|node| node.has_tag_name("strings"))
     {
-        Some(node) => xml::parse_strings(node),
+        Some(node) => xml::conditional_strings(node),
         None => Ok(Vec::new()),
     }
 }
@@ -508,7 +628,11 @@ pub fn convert_rdt2(
     if format!("{built:?}") != format!("{expected:?}") {
         bail_difference("builds a different room from its RDT", &expected, &built)?;
     }
-    Ok(vec![(id.xml_entry(), text.into_bytes())])
+    // An RE2 room is one RDT's: its folder is the RDT's.
+    Ok(vec![(
+        format!("{}/{}", id.rdt_dir(), source::XML_FILE),
+        text.into_bytes(),
+    )])
 }
 
 /// Convert one RDT into its room folder: `room.xml` and the other files it
@@ -533,10 +657,12 @@ pub fn convert_rdt(
         bail_difference("does not read back as the same definition", &source, &back)?;
     }
 
+    let entry = format!("{}/{}", id.rdt_dir(), source::XML_FILE);
     let mut writer = crate::pack::PackWriter::new();
     for (path, bytes) in &files {
         writer.add(path, bytes.clone())?;
     }
+    writer.add(&entry, text.clone().into_bytes())?;
     let pack = Pack::from_bytes(writer.to_bytes()?)?;
     let loaded = Loaded::from_xml(&pack, id, &text).context("the written room does not build")?;
     // The RDT's own message text is left behind: the room's text is its
@@ -557,7 +683,7 @@ pub fn convert_rdt(
         anyhow::bail!("the written room's scripts differ from its RDT's");
     }
 
-    files.push((id.xml_entry(), text.into_bytes()));
+    files.push((entry, text.into_bytes()));
     Ok(files)
 }
 

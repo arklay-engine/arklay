@@ -10,33 +10,49 @@ use anyhow::{Result, bail};
 use std::collections::HashMap;
 
 use super::layout;
-use super::preprocess::{Loader, Region, Variant, no_includes, preprocess};
+use super::preprocess::{Build, Loader, Region, Variant, no_includes, preprocess};
 use crate::budget;
 use crate::scd::asm::{self, Arg, Assembled, InsnSrc, Item, ItemKind, Source};
 use crate::scd::disasm::{ACTOR_SIG, CONTROL_SIG, EVENT_TOP_SIG, TWEEN_SIG};
 
-/// Compile `.akscr` source into the SCD IR. The script must not use `#if`
-/// or `#include`; see [`compile_with`].
+/// Compile `.akscr` source into the SCD IR: the runtime build, which keeps
+/// the variant tests. The script must not use `#include`; see
+/// [`compile_with`].
 pub fn compile(text: &str) -> Result<Assembled> {
     compile_with(text, None, &no_includes)
 }
 
-/// Compile the `variant` of a merged `.akscr` script into the SCD IR.
+/// Compile the `variant` of a merged `.akscr` script into the SCD IR: its
+/// variant tests fold away, giving that RDT's own bytecode.
 pub fn compile_variant(text: &str, variant: Variant) -> Result<Assembled> {
     compile_with(text, Some(variant), &no_includes)
 }
 
-/// Compile a script for `variant` (required when it uses `#if`), reading
-/// its `#include` files through `load`.
+/// Compile a script for `variant`, or the runtime build for every variant
+/// when `None`, reading its `#include` files through `load`.
 pub fn compile_with(text: &str, variant: Option<Variant>, load: Loader) -> Result<Assembled> {
-    let preprocessed = preprocess(text, variant, load)?;
-    let sections = parse(&preprocessed.text, &preprocessed.defines)?;
+    let build = variant.map_or(Build::RUNTIME, Build::Variant);
+    compile_build(text, build, load)
+}
+
+/// Compile a script for `build`, reading its `#include` files through
+/// `load`.
+pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled> {
+    let preprocessed = preprocess(text, build, load)?;
+    let sections = parse(&preprocessed.text, &preprocessed.defines, build)?;
     let mut source = Source::default();
     let mut pad_events = Vec::new();
     let mut init_done = false;
     let mut main_done = false;
     for section in &sections {
-        let items = lower_section(section)?;
+        // A section another RDT variant carries is not in this one's
+        // streams; the runtime build carries every section.
+        if let Some(variant) = build.variant()
+            && !variant.matches(section.when)
+        {
+            continue;
+        }
+        let items = lower_section(section, build)?;
         match section.kind {
             SectionKind::Init => {
                 if init_done {
@@ -69,7 +85,7 @@ pub fn compile_with(text: &str, variant: Option<Variant>, load: Loader) -> Resul
                     );
                 }
                 source.events.push(items);
-                pad_events.push(!section.nopad);
+                pad_events.push(!holds(section.nopad, build));
             }
         }
     }
@@ -84,14 +100,14 @@ pub(super) fn section_bytes(
     defines: &HashMap<String, i64>,
     authentic: bool,
 ) -> Result<Vec<u8>> {
-    let variant = Variant {
+    let build = Build::Variant(Variant {
         jill: false,
         mansion: None,
         authentic,
         // The decompiler checks one RDT's section, which holds no region.
         region: Region::Usa,
-    };
-    let kept: Vec<&str> = super::preprocess::kept_lines(text, Some(variant))?
+    });
+    let kept: Vec<&str> = super::preprocess::kept_lines(text, Some(build))?
         .into_iter()
         .map(|(_, line)| line)
         .collect();
@@ -101,13 +117,150 @@ pub(super) fn section_bytes(
     } else {
         format!("#version 1\n{text}")
     };
-    let sections = parse(&text, defines)?;
+    let sections = parse(&text, defines, build)?;
     let [section] = sections.as_slice() else {
         bail!("expected exactly one section");
     };
-    let items = lower_section(section)?;
+    let items = lower_section(section, build)?;
     let event = matches!(section.kind, SectionKind::Event(_));
-    asm::assemble_stream(&items, event, !section.nopad)
+    asm::assemble_stream(&items, event, !holds(section.nopad, build))
+}
+
+/// Whether a section flag held for the variants of `mask` (`None` when the
+/// section does not carry it) holds in `build`. The runtime build takes a
+/// flag only when every variant holds it.
+fn holds(flag: Option<u8>, build: Build) -> bool {
+    match (flag, build.variant()) {
+        (None, _) => false,
+        (Some(mask), Some(variant)) => variant.matches(mask),
+        (Some(mask), None) => mask == 0,
+    }
+}
+
+/// The condition names a variant test may use, with their mask bits.
+const VARIANT_ATOMS: [(&str, u8); 7] = {
+    use crate::scd::opcode::variant::*;
+    [
+        ("CHRIS", CHRIS),
+        ("JILL", JILL),
+        ("MANSION1", MANSION1),
+        ("MANSION2", MANSION2),
+        ("USA", USA),
+        ("JPN", JPN),
+        ("EUR", EUR),
+    ]
+};
+
+/// The mask bit of variant condition name `name`.
+fn variant_atom(name: &str) -> Option<u8> {
+    VARIANT_ATOMS
+        .iter()
+        .find(|(atom, _)| *atom == name)
+        .map(|(_, bit)| *bit)
+}
+
+/// Parse a variant condition from `tokens` (`JILL`, `!JPN`, `CHRIS &&
+/// MANSION2`), up to the closing `)`, into a mask
+/// ([`crate::scd::opcode::variant_matches`]); returns the mask and the
+/// tokens used.
+fn variant_condition(tokens: &[Token]) -> Result<(u8, usize)> {
+    use crate::scd::opcode::variant::DIMENSIONS;
+    // The allowed values of each dimension, narrowed by every term.
+    let mut allowed = DIMENSIONS;
+    let mut pos = 0usize;
+    loop {
+        let negated = matches!(tokens.get(pos).map(|t| &t.tok), Some(Tok::Punct("!")));
+        if negated {
+            pos += 1;
+        }
+        let Some(token) = tokens.get(pos) else {
+            bail!("the variant condition is not closed");
+        };
+        let bit = match &token.tok {
+            Tok::Ident(name) => variant_atom(name),
+            _ => None,
+        };
+        let Some(bit) = bit else {
+            bail!(
+                "line {}, column {}: expected a variant (one of {}), found {}; a variant test \
+                 cannot mix with other conditions",
+                token.line,
+                token.col,
+                VARIANT_ATOMS.map(|(atom, _)| atom).join(", "),
+                describe(&token.tok)
+            );
+        };
+        pos += 1;
+        for dimension in allowed.iter_mut().zip(DIMENSIONS) {
+            let (allowed, all) = dimension;
+            if all & bit != 0 {
+                *allowed &= if negated { all & !bit } else { bit };
+                if *allowed == 0 {
+                    bail!(
+                        "line {}, column {}: this variant condition never holds",
+                        token.line,
+                        token.col
+                    );
+                }
+            }
+        }
+        match tokens.get(pos).map(|token| &token.tok) {
+            Some(Tok::Punct("&&")) => pos += 1,
+            _ => break,
+        }
+    }
+    let mask = allowed
+        .iter()
+        .zip(DIMENSIONS)
+        .filter(|(allowed, all)| *allowed != all)
+        .fold(0u8, |mask, (allowed, _)| mask | allowed);
+    Ok((mask, pos))
+}
+
+/// Whether the tokens at the start of an `if` condition are a variant test.
+fn starts_variant_condition(tokens: &[Token]) -> bool {
+    match tokens.first().map(|token| &token.tok) {
+        Some(Tok::Punct("!")) => true,
+        Some(Tok::Ident(name)) => {
+            variant_atom(name).is_some()
+                && !matches!(tokens.get(1).map(|t| &t.tok), Some(Tok::Punct("(")))
+        }
+        _ => false,
+    }
+}
+
+/// A token as an error message names it.
+fn describe(tok: &Tok) -> String {
+    match tok {
+        Tok::Ident(name) => format!("`{name}`"),
+        Tok::Num(value) => format!("`{value}`"),
+        Tok::Punct(punct) => format!("`{punct}`"),
+        Tok::Asm(_) => "`asm`".to_string(),
+        Tok::Eof => "end of file".to_string(),
+    }
+}
+
+/// The `when (...)` mask of a section header starting at `tokens` (the
+/// tokens after the section's name, up to its body); 0 when it has none.
+fn header_when(tokens: &[Token]) -> Result<u8> {
+    let mut pos = 0usize;
+    while let Some(token) = tokens.get(pos) {
+        match &token.tok {
+            Tok::Punct("{") | Tok::Eof => break,
+            Tok::Ident(word) if word == "when" => {
+                if !matches!(tokens.get(pos + 1).map(|t| &t.tok), Some(Tok::Punct("("))) {
+                    bail!(
+                        "line {}, column {}: expected `(` after `when`",
+                        token.line,
+                        token.col
+                    );
+                }
+                return Ok(variant_condition(&tokens[pos + 2..])?.0);
+            }
+            _ => pos += 1,
+        }
+    }
+    Ok(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +284,7 @@ struct Token {
     col: usize,
 }
 
-const PUNCTUATION: [&str; 10] = ["&&", "(", ")", "{", "}", ",", ";", "|", "-", "#"];
+const PUNCTUATION: [&str; 11] = ["&&", "(", ")", "{", "}", ",", ";", "|", "-", "#", "!"];
 
 fn lex(text: &str) -> Result<Vec<Token>> {
     let lines: Vec<&str> = text.lines().collect();
@@ -271,9 +424,15 @@ enum SectionKind {
 #[derive(Debug)]
 struct Section {
     kind: SectionKind,
-    noreturn: bool,
-    /// An event without the four-byte padding after its final `evt_finish`.
-    nopad: bool,
+    /// A block without the implicit final `end 0`, for the variants of the
+    /// mask (`noreturn` alone is mask 0, every variant).
+    noreturn: Option<u8>,
+    /// An event without the four-byte padding after its final `evt_finish`,
+    /// for the variants of the mask.
+    nopad: Option<u8>,
+    /// The variants whose RDT carries the section (`when (...)`); 0 for
+    /// every variant.
+    when: u8,
     body: Vec<Stmt>,
     line: usize,
 }
@@ -296,6 +455,15 @@ enum Stmt {
     Require(Call),
     If {
         conditions: Vec<Call>,
+        then: Vec<Stmt>,
+        otherwise: Option<Vec<Stmt>>,
+        line: usize,
+        col: usize,
+    },
+    /// `if (JILL) { ... } else { ... }`: a test of the room variant, which
+    /// is a variant jump at run time and folds away in a variant's build.
+    Variant {
+        mask: u8,
         then: Vec<Stmt>,
         otherwise: Option<Vec<Stmt>>,
         line: usize,
@@ -339,6 +507,7 @@ impl Stmt {
             }
             Stmt::Return { line, col }
             | Stmt::If { line, col, .. }
+            | Stmt::Variant { line, col, .. }
             | Stmt::Run { line, col, .. }
             | Stmt::For { line, col, .. }
             | Stmt::DoWhile { line, col, .. }
@@ -380,7 +549,11 @@ fn substitute(line: &str, defines: &HashMap<String, i64>) -> String {
     out
 }
 
-fn parse(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<Section>> {
+/// The index an event a variant's build leaves out stands for: no event,
+/// so a reference that survives the fold fails to encode.
+const ABSENT_EVENT: i64 = -1;
+
+fn parse(text: &str, defines: &HashMap<String, i64>, build: Build) -> Result<Vec<Section>> {
     budget::check_len(text.len(), budget::MAX_TEXT_BYTES, "script size")?;
     let tokens = lex(text)?;
     let mut defines = defines.clone();
@@ -388,26 +561,41 @@ fn parse(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<Section>> {
         defines.entry(name.clone()).or_insert(*value);
     }
     // Event names stand for their index, so any event may name any other.
+    // A variant's build numbers only the events its RDT carries; the
+    // runtime build numbers every event in order.
     let mut depth = 0usize;
     let mut events = 0i64;
-    for pair in tokens.windows(2) {
-        match &pair[0].tok {
+    for (pos, token) in tokens.iter().enumerate() {
+        match &token.tok {
             Tok::Punct("{") => depth += 1,
             Tok::Punct("}") => depth = depth.saturating_sub(1),
             Tok::Ident(word) if depth == 0 && word == "event" => {
-                if let Tok::Ident(name) = &pair[1].tok {
-                    // A generic `event_XX` is index XX wherever it stands.
-                    let index = name
-                        .strip_prefix("event_")
-                        .filter(|hex| hex.len() == 2)
-                        .and_then(|hex| i64::from_str_radix(hex, 16).ok())
-                        .unwrap_or(events);
-                    if defines.insert(name.clone(), index).is_some() {
-                        bail!(
-                            "line {}: event name `{name}` is already defined",
-                            pair[1].line
-                        );
-                    }
+                let Some(Token {
+                    tok: Tok::Ident(name),
+                    line,
+                    ..
+                }) = tokens.get(pos + 1)
+                else {
+                    continue;
+                };
+                let when = header_when(&tokens[pos + 2..])?;
+                let present = build.variant().is_none_or(|variant| variant.matches(when));
+                // In a variant's build a generic `event_XX` is index XX
+                // wherever it stands.
+                let generic = build
+                    .variant()
+                    .and(name.strip_prefix("event_"))
+                    .filter(|hex| hex.len() == 2)
+                    .and_then(|hex| i64::from_str_radix(hex, 16).ok());
+                let index = if present {
+                    generic.unwrap_or(events)
+                } else {
+                    ABSENT_EVENT
+                };
+                if defines.insert(name.clone(), index).is_some() {
+                    bail!("line {line}: event name `{name}` is already defined");
+                }
+                if present {
                     events += 1;
                 }
             }
@@ -540,31 +728,60 @@ impl Parser {
             }
             "event" => {
                 let (name, name_token) = self.expect_ident()?;
-                // A generic `event_XX` name must sit at index XX.
-                if let Some(hex) = name.strip_prefix("event_").filter(|hex| hex.len() == 2)
-                    && let Ok(index) = u8::from_str_radix(hex, 16)
-                {
-                    SectionKind::Event(index)
-                } else {
-                    match u8::try_from(self.defines[&name]) {
+                match self.defines[&name] {
+                    // Left out of this variant's build: skipped unlowered.
+                    ABSENT_EVENT => SectionKind::Event(u8::MAX),
+                    index => match u8::try_from(index) {
                         Ok(index) => SectionKind::Event(index),
                         Err(_) => return self.error(&name_token, "at most 256 events"),
-                    }
+                    },
                 }
             }
             _ => return self.error(&token, "`proc` or `event`"),
         };
         let event = matches!(kind, SectionKind::Event(_));
-        let noreturn = !event && self.eat_ident("noreturn");
-        let nopad = event && self.eat_ident("nopad");
+        let mut noreturn = None;
+        let mut nopad = None;
+        let mut when = 0;
+        loop {
+            if !event && self.eat_ident("noreturn") {
+                noreturn = Some(self.optional_condition()?);
+            } else if event && self.eat_ident("nopad") {
+                nopad = Some(self.optional_condition()?);
+            } else if self.eat_ident("when") {
+                self.expect_punct("(")?;
+                when = self.condition_mask()?;
+            } else {
+                break;
+            }
+        }
         let body = self.block()?;
         Ok(Section {
             kind,
             noreturn,
             nopad,
+            when,
             body,
             line: token.line,
         })
+    }
+
+    /// A section flag's optional `(variants)`: the mask it holds for, 0
+    /// (every variant) without one.
+    fn optional_condition(&mut self) -> Result<u8> {
+        if self.eat_punct("(") {
+            self.condition_mask()
+        } else {
+            Ok(0)
+        }
+    }
+
+    /// A variant condition after its `(`, through the closing `)`.
+    fn condition_mask(&mut self) -> Result<u8> {
+        let (mask, used) = variant_condition(&self.tokens[self.pos..])?;
+        self.pos += used;
+        self.expect_punct(")")?;
+        Ok(mask)
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>> {
@@ -679,22 +896,25 @@ impl Parser {
 
     fn if_statement(&mut self, line: usize, col: usize) -> Result<Stmt> {
         self.expect_punct("(")?;
+        if starts_variant_condition(&self.tokens[self.pos..]) {
+            let mask = self.condition_mask()?;
+            let then = self.block()?;
+            let otherwise = self.else_branch()?;
+            return Ok(Stmt::Variant {
+                mask,
+                then,
+                otherwise,
+                line,
+                col,
+            });
+        }
         let mut conditions = vec![self.call()?];
         while self.eat_punct("&&") {
             conditions.push(self.call()?);
         }
         self.expect_punct(")")?;
         let then = self.block()?;
-        let otherwise = if self.eat_ident("else") {
-            let next = self.peek().clone();
-            if self.eat_ident("if") {
-                Some(vec![self.if_statement(next.line, next.col)?])
-            } else {
-                Some(self.block()?)
-            }
-        } else {
-            None
-        };
+        let otherwise = self.else_branch()?;
         Ok(Stmt::If {
             conditions,
             then,
@@ -702,6 +922,19 @@ impl Parser {
             line,
             col,
         })
+    }
+
+    /// An `if`'s optional `else { ... }` or `else if ...`.
+    fn else_branch(&mut self) -> Result<Option<Vec<Stmt>>> {
+        if !self.eat_ident("else") {
+            return Ok(None);
+        }
+        let next = self.peek().clone();
+        if self.eat_ident("if") {
+            Ok(Some(vec![self.if_statement(next.line, next.col)?]))
+        } else {
+            Ok(Some(self.block()?))
+        }
     }
 
     /// `name(arg, ...)`; an argument is a number, a constant name or a
@@ -767,26 +1000,83 @@ impl Parser {
 // ---------------------------------------------------------------------------
 
 /// Lower one section to assembler items.
-fn lower_section(section: &Section) -> Result<Vec<Item>> {
-    let mut lowerer = Lowerer::default();
+fn lower_section(section: &Section, build: Build) -> Result<Vec<Item>> {
+    let mut lowerer = Lowerer {
+        build,
+        items: Vec::new(),
+        pending: Vec::new(),
+        next_label: 0,
+    };
     match section.kind {
+        SectionKind::Init | SectionKind::Main if build.variant().is_some() => {
+            let noreturn = holds(section.noreturn, build);
+            lowerer.command_block(&section.body, noreturn, section.line)?;
+        }
+        // The runtime build carries every variant's blocks: the variants
+        // whose RDT lacks this one skip to an `end 0` of their own.
         SectionKind::Init | SectionKind::Main => {
-            lowerer.command_block(&section.body, section.noreturn, section.line)?;
+            let line = section.line;
+            let skip = (section.when != 0).then(|| {
+                let skip = lowerer.label();
+                lowerer.push(
+                    "variant_if",
+                    vec![Arg::Num(i64::from(section.when)), Arg::Symbol(skip.clone())],
+                    line,
+                    1,
+                );
+                skip
+            });
+            lowerer.commands(&section.body)?;
+            // A `noreturn` block runs off its end, which ends the block list
+            // too; the variants it is not `noreturn` for end it plainly.
+            let fall = match section.noreturn {
+                None => {
+                    lowerer.push("end", vec![Arg::Num(0)], line, 1);
+                    None
+                }
+                Some(0) if skip.is_none() => None,
+                Some(mask) => {
+                    let fall = lowerer.label();
+                    if mask == 0 {
+                        lowerer.push("variant_jump", vec![Arg::Symbol(fall.clone())], line, 1);
+                    } else {
+                        let end = lowerer.label();
+                        lowerer.push(
+                            "variant_if",
+                            vec![Arg::Num(i64::from(mask)), Arg::Symbol(end.clone())],
+                            line,
+                            1,
+                        );
+                        lowerer.push("variant_jump", vec![Arg::Symbol(fall.clone())], line, 1);
+                        lowerer.pending.push(end);
+                        lowerer.push("end", vec![Arg::Num(0)], line, 1);
+                    }
+                    Some(fall)
+                }
+            };
+            if let Some(skip) = skip {
+                lowerer.pending.push(skip);
+                lowerer.push("end", vec![Arg::Num(0)], line, 1);
+            }
+            lowerer.pending.extend(fall);
         }
         SectionKind::Event(_) => lowerer.events(&section.body)?,
     }
-    if let Some(label) = lowerer.pending.first() {
-        bail!(
-            "line {}: the jump to `{label}` has no instruction to land on; end the block \
-             with a statement",
-            section.line
-        );
+    if !lowerer.pending.is_empty() {
+        // A variant jump past the last statement lands on the end of the
+        // stream.
+        lowerer.items.push(Item {
+            labels: std::mem::take(&mut lowerer.pending),
+            kind: ItemKind::Db(Vec::new()),
+            line: section.line,
+            col: 1,
+        });
     }
     Ok(lowerer.items)
 }
 
-#[derive(Default)]
 struct Lowerer {
+    build: Build,
     items: Vec<Item>,
     /// Labels for the next item.
     pending: Vec<String>,
@@ -892,6 +1182,13 @@ impl Lowerer {
                     }
                 }
                 Stmt::Asm(lines) => self.asm(lines)?,
+                Stmt::Variant {
+                    mask,
+                    then,
+                    otherwise,
+                    line,
+                    col,
+                } => self.variant(*mask, then, otherwise.as_deref(), false, *line, *col)?,
                 _ => {
                     let (line, col) = stmt.position();
                     bail!(
@@ -904,9 +1201,64 @@ impl Lowerer {
         Ok(())
     }
 
+    /// A variant test: in a variant's build the branch that variant takes,
+    /// in the runtime build a variant jump over `then` (and an unconditional
+    /// one over `otherwise`) in the command or, for `event`, the event VM.
+    fn variant(
+        &mut self,
+        mask: u8,
+        then: &[Stmt],
+        otherwise: Option<&[Stmt]>,
+        event: bool,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        let lower = |lowerer: &mut Self, body: &[Stmt]| {
+            if event {
+                lowerer.events(body)
+            } else {
+                lowerer.commands(body)
+            }
+        };
+        if let Some(variant) = self.build.variant() {
+            return match (variant.matches(mask), otherwise) {
+                (true, _) => lower(self, then),
+                (false, Some(otherwise)) => lower(self, otherwise),
+                (false, None) => Ok(()),
+            };
+        }
+        let (test, jump) = if event {
+            ("evt_variant_if", "evt_jump")
+        } else {
+            ("variant_if", "variant_jump")
+        };
+        let skip = self.label();
+        self.push(
+            test,
+            vec![Arg::Num(i64::from(mask)), Arg::Symbol(skip.clone())],
+            line,
+            col,
+        );
+        lower(self, then)?;
+        match otherwise {
+            None => self.pending.push(skip),
+            Some(otherwise) => {
+                let end = self.label();
+                self.push(jump, vec![Arg::Symbol(end.clone())], line, col);
+                self.pending.push(skip);
+                lower(self, otherwise)?;
+                self.pending.push(end);
+            }
+        }
+        Ok(())
+    }
+
     /// A plain command statement; flow opcodes must use the statement forms.
     fn command_call(&mut self, call: &Call) -> Result<()> {
-        if matches!(call.name.as_str(), "end" | "if" | "else" | "endif") {
+        if matches!(
+            call.name.as_str(),
+            "end" | "if" | "else" | "endif" | "variant_if" | "variant_jump"
+        ) {
             bail!(
                 "line {}, column {}: write `{}` with the `if`/`else`/`return` statements",
                 call.line,
@@ -992,6 +1344,13 @@ impl Lowerer {
                     });
                 }
                 Stmt::Asm(lines) => self.asm(lines)?,
+                Stmt::Variant {
+                    mask,
+                    then,
+                    otherwise,
+                    line,
+                    col,
+                } => self.variant(*mask, then, otherwise.as_deref(), true, *line, *col)?,
                 Stmt::Return { .. } | Stmt::Require(_) | Stmt::If { .. } => {
                     let (line, col) = stmt.position();
                     bail!(

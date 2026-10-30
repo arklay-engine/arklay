@@ -4729,6 +4729,7 @@ mod tests {
                 stage: 1,
                 room: 0,
                 player_flag: 0,
+                mansion2: false,
             },
             &room,
         );
@@ -4743,6 +4744,7 @@ mod tests {
                 stage: 1,
                 room: 0,
                 player_flag: 1,
+                mansion2: false,
             },
             &RoomState::default(),
         );

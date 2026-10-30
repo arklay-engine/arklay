@@ -515,7 +515,7 @@ fn snd3d_sites(root: &Path) -> Vec<Snd3dSite> {
                 sites.push(Snd3dSite {
                     bank: insn.operands.first().map_or(0, |operand| operand.value) as u8,
                     id: insn.operands.get(1).map_or(0, |operand| operand.value) as u8,
-                    row: sfx::room_row(id.stage, id.room),
+                    row: sfx::room_row(id.table_row(), id.room),
                     stage: id.stage,
                     room: id.room,
                 });

@@ -278,6 +278,9 @@ impl Language {
 /// `room.xml`'s): `(language tag, key, value)`.
 pub type XmlString = (String, String, String);
 
+/// An [`XmlString`] with the `when` condition its `<string>` carries.
+pub type ConditionalXmlString = (String, String, String, Option<String>);
+
 /// Parse a `<strings>` element: one `<language lang="…">` per language, each
 /// holding `<string key="…">value</string>` elements.
 ///
@@ -289,6 +292,24 @@ pub fn parse_xml_strings(
     node: roxmltree::Node,
     language_key: impl Fn(&str) -> Option<String>,
 ) -> Result<Vec<XmlString>> {
+    let strings = parse_xml_strings_when(node, |key, condition| match condition {
+        None => Ok(language_key(key)),
+        Some(_) => bail!("a <string> here may not have a `when`"),
+    })?;
+    Ok(strings
+        .into_iter()
+        .map(|(tag, key, value, _)| (tag, key, value))
+        .collect())
+}
+
+/// [`parse_xml_strings`] for strings that may each carry a `when`
+/// condition (a room's per-variant text), returned beside each string;
+/// `language_key` gets the condition too and must give each string a key of
+/// its own.
+pub fn parse_xml_strings_when(
+    node: roxmltree::Node,
+    language_key: impl Fn(&str, Option<&str>) -> Result<Option<String>>,
+) -> Result<Vec<ConditionalXmlString>> {
     if let Some(attribute) = node.attributes().next() {
         bail!("unknown <strings> attribute `{}`", attribute.name());
     }
@@ -319,20 +340,28 @@ pub fn parse_xml_strings(
                 bail!("unknown <language> element <{}>", string.tag_name().name());
             }
             let mut key = None;
+            let mut condition = None;
             for attribute in string.attributes() {
                 match attribute.name() {
                     "key" => key = Some(attribute.value()),
+                    "when" => condition = Some(attribute.value()),
                     other => bail!("unknown <string> attribute `{other}`"),
                 }
             }
             let key = key.ok_or_else(|| anyhow!("a <string> needs a key"))?;
-            let full = language_key(key).ok_or_else(|| anyhow!("unknown string key `{key}`"))?;
+            let full = language_key(key, condition)?
+                .ok_or_else(|| anyhow!("unknown string key `{key}`"))?;
             if string.children().any(|child| !child.is_text()) {
                 bail!("<string key=\"{key}\"> must hold only text");
             }
             let value = string.text().unwrap_or_default();
             values.push((full, value));
-            strings.push((tag.to_string(), key.to_string(), value.to_string()));
+            strings.push((
+                tag.to_string(),
+                key.to_string(),
+                value.to_string(),
+                condition.map(str::to_string),
+            ));
         }
         Language::from_values(values, &format!("<language lang=\"{tag}\">"))?;
     }
@@ -1110,7 +1139,7 @@ ROOM_1001_TEXT_0A_SPEAKER_12 = \"A\"
             .find(|(tag, _)| tag == "ja-jp")
             .map(|(_, language)| language)
             .unwrap();
-        assert!(rooms.len() > 1_100, "{} room entries", rooms.len());
+        assert!(rooms.len() > 1_000, "{} room entries", rooms.len());
         for (key, entry) in language.iter().chain(items.iter()).chain(rooms.iter()) {
             assert_eq!(
                 entry.missing_glyphs(charset::Script::Japanese),

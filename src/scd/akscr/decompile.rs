@@ -157,7 +157,8 @@ fn fx_at_enemy(slot: u8) -> String {
 fn sound_names(room: u16) -> BTreeMap<(u8, u8), String> {
     let rows: Vec<usize> = room_variants(merged_id(room))
         .into_iter()
-        .map(|variant| sfx::room_row((variant >> 12) as u8, ((variant >> 4) & 0xFF) as u8))
+        .filter_map(crate::state::RoomId::from_original)
+        .map(|variant| sfx::room_row(variant.table_row(), variant.room))
         .collect();
     let mut names = BTreeMap::new();
     for id in 0..=u8::MAX {

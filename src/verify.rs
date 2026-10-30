@@ -41,7 +41,8 @@ const MAP_TABLES_BYTES: usize = 4 + 6 + 6 + 16 + 16 + 16 + 4 + 4;
 pub enum Format {
     /// `manifest.toml`, the pack manifest.
     Manifest,
-    /// `room/<id>/room.rdt`, a room plus its embedded SCD streams.
+    /// `room/<id>/[<variant>/]room.rdt`, a room plus its embedded SCD
+    /// streams.
     Rdt,
     /// `room/<id>/room.xml`, a room definition.
     RoomXml,
@@ -204,7 +205,22 @@ fn is_image_extension(lower: &str) -> bool {
 /// rather than failing third-party packs.
 fn room_file(lower: &str) -> Option<&str> {
     let (id, file) = lower.strip_prefix("room/")?.split_once('/')?;
-    (id.len() == 4 && RoomId::parse(id).is_ok()).then_some(file)
+    if !matches!(id.len(), 3 | 4) || RoomId::parse(id).is_err() {
+        return None;
+    }
+    // A variant folder's file is the room's kind of file too.
+    let file = match file.split_once('/') {
+        Some((variant, rest))
+            if id.len() == 3
+                && (variant.starts_with("chris")
+                    || variant.starts_with("jill")
+                    || variant.starts_with("mansion")) =>
+        {
+            rest
+        }
+        _ => file,
+    };
+    Some(file)
 }
 
 /// Whether a lowercased path is a room's effect sheet (`effect/<slot>.bmp`).
@@ -457,27 +473,16 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
             crate::manifest::Manifest::parse(text)?;
         }
         Format::Rdt => {
-            let id = room_id_from_path(path)?;
-            let loaded = crate::room::Loaded::from_rdt(pack, id, data.to_vec())?;
-            verify_room(pack, id, &loaded)?;
+            for id in room_ids_from_path(path)? {
+                let loaded = crate::room::Loaded::from_rdt(pack, id, data.to_vec())?;
+                verify_room(pack, id, &loaded)?;
+            }
         }
         Format::RoomXml => {
-            let id = room_id_from_path(path)?;
             let text = std::str::from_utf8(data).context("room XML is not valid UTF-8")?;
-            let loaded = crate::room::Loaded::from_xml(pack, id, text)?;
-            // The engine skips a model, animation or effect sheet that does
-            // not load with a warning; a pack that ships a broken one is still
-            // broken.
-            let warnings = &loaded.state;
-            if let Some(warning) = warnings
-                .model_warnings
-                .iter()
-                .chain(&warnings.effects.warnings)
-                .next()
-            {
-                bail!("{warning}");
+            for id in room_ids_from_path(path)? {
+                verify_room_xml(pack, id, text)?;
             }
-            verify_room(pack, id, &loaded)?;
         }
         Format::RoomEffect => {
             let text = std::str::from_utf8(data).context("effect XML is not valid UTF-8")?;
@@ -629,6 +634,24 @@ fn verify_entry(pack: &Pack, path: &str, format: Format, data: &[u8]) -> Result<
 /// Check a parsed room the way the engine loads it: it needs a camera cut,
 /// every cut's background (an RE2 room may lack some, as the retail data
 /// does, and draws those cameras black), and scripts that parse.
+/// Load room variant `id` from its `room.xml` `text`.
+fn verify_room_xml(pack: &Pack, id: RoomId, text: &str) -> Result<()> {
+    let loaded = crate::room::Loaded::from_xml(pack, id, text)
+        .with_context(|| format!("as {}", crate::room::variant_label(id).trim()))?;
+    // The engine skips a model, animation or effect sheet that does not load
+    // with a warning; a pack that ships a broken one is still broken.
+    let warnings = &loaded.state;
+    if let Some(warning) = warnings
+        .model_warnings
+        .iter()
+        .chain(&warnings.effects.warnings)
+        .next()
+    {
+        bail!("{warning}");
+    }
+    verify_room(pack, id, &loaded)
+}
+
 fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<()> {
     // The engine refuses a room with no camera cuts, so verification must
     // reject it too.
@@ -637,8 +660,9 @@ fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<
     }
     // Retail RE2 lacks some backgrounds, all of room 707's among them.
     if loaded.dialect != crate::format::Dialect::Re2 {
+        let folder = crate::room::Folder::of(pack, id);
         for cut in &loaded.state.cuts {
-            let stem = id.cut_stem(cut.index);
+            let stem = format!("{}/cut/{:02x}", folder.dir(), cut.index);
             if !pack.has_asset(&stem, crate::pack::AssetClass::Image) {
                 bail!("room references missing background {stem}.bmp");
             }
@@ -650,19 +674,40 @@ fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<
     Ok(())
 }
 
-/// The [`RoomId`] named by a path inside a room folder (`room/<id>/...`),
-/// whatever its case.
-fn room_id_from_path(path: &str) -> Result<RoomId> {
-    let stem = path
+/// The room variants a path inside a room folder names, whatever its case:
+/// every variant of the room for its folder (`room/100/room.xml`), the
+/// variants that read a variant folder (`room/100/jill/...`), or one RDT's
+/// for an RE2 folder (`room/1001/...`).
+fn room_ids_from_path(path: &str) -> Result<Vec<RoomId>> {
+    let mut parts = path
         .split_once('/')
         .filter(|(prefix, _)| prefix.eq_ignore_ascii_case("room"))
-        .and_then(|(_, rest)| rest.split_once('/'))
-        .map(|(stem, _)| stem)
+        .map(|(_, rest)| rest.split('/'))
         .with_context(|| format!("`{path}` is not a room/<id>/ path"))?;
-    if stem.len() != 4 {
-        bail!("`{path}` does not name a four-digit room id");
+    let stem = parts.next().unwrap_or_default();
+    let id = RoomId::parse(stem).with_context(|| format!("`{path}` has no valid room id"))?;
+    match stem.len() {
+        4 => Ok(vec![id]),
+        3 => {
+            let rest: Vec<&str> = parts.collect();
+            let tag = (rest.len() > 1).then(|| rest[0].to_ascii_lowercase());
+            let mut ids = Vec::new();
+            for player_flag in 0..2 {
+                for mansion2 in [false, true] {
+                    let variant = RoomId { player_flag, ..id }.with_visit(mansion2);
+                    if !ids.contains(&variant)
+                        && tag
+                            .as_ref()
+                            .is_none_or(|tag| variant.variant_tags().contains(tag))
+                    {
+                        ids.push(variant);
+                    }
+                }
+            }
+            Ok(ids)
+        }
+        _ => bail!("`{path}` does not name a room folder"),
     }
-    RoomId::parse(stem).with_context(|| format!("`{path}` has no valid room id"))
 }
 
 impl fmt::Display for Format {
@@ -705,9 +750,18 @@ mod tests {
         assert_eq!(classify("room/1000/room.rdt"), Format::Rdt);
         assert_eq!(classify("ROOM/1000/ROOM.RDT"), Format::Rdt);
         assert_eq!(
-            room_id_from_path("ROOM/1000/ROOM.RDT").unwrap(),
-            RoomId::parse("1000").unwrap()
+            room_ids_from_path("ROOM/1000/ROOM.RDT").unwrap(),
+            [RoomId::parse("1000").unwrap()]
         );
+        // A room folder holds every variant; a variant folder its own.
+        assert_eq!(room_ids_from_path("room/100/room.xml").unwrap().len(), 4);
+        assert_eq!(room_ids_from_path("room/305/room.xml").unwrap().len(), 2);
+        assert_eq!(
+            room_ids_from_path("room/100/jill-mansion2/room.rdt").unwrap(),
+            [RoomId::parse("1001").unwrap().with_visit(true)]
+        );
+        assert_eq!(classify("room/100/jill/anim/00.emr"), Format::RoomAnimation);
+        assert_eq!(classify("room/100/room.xml"), Format::RoomXml);
         assert_eq!(classify("room/1000/room.xml"), Format::RoomXml);
         assert_eq!(classify("room/1000/room.scd"), Format::Scd);
         assert_eq!(classify("room/1000/original.scd"), Format::Scd);
@@ -749,7 +803,7 @@ mod tests {
         assert_eq!(classify("language/notes.md"), Format::Opaque);
         assert_eq!(classify("room/1000.rdt"), Format::Opaque);
         assert_eq!(classify("room/bonus/room.rdt"), Format::Opaque);
-        assert_eq!(classify("room/100/room.rdt"), Format::Opaque);
+        assert_eq!(classify("room/10/room.rdt"), Format::Opaque);
         assert_eq!(classify("room/zzzz/room.rdt"), Format::Opaque);
     }
 

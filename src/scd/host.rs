@@ -107,6 +107,14 @@ pub trait ScdHost {
         StepResult::Placeholder
     }
 
+    /// The room variant being run, one bit of each dimension of
+    /// [`crate::scd::opcode::variant`] (the player, the mansion visit and the
+    /// region), for the variant jumps. Defaults to none, so every jump that
+    /// tests a variant skips.
+    fn room_variant(&mut self) -> u8 {
+        0
+    }
+
     /// Bit test used by the condition opcodes (bank, bit, expected).
     fn flag_test(&mut self, _bank: u8, _bit: u8, _expected: bool) -> bool {
         false

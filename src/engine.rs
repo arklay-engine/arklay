@@ -2432,12 +2432,7 @@ impl GameSession {
         save_dir: &Path,
         options: player::Options,
     ) -> Result<Box<Self>> {
-        let id = RoomId {
-            // The block's stage byte is the original's 0-based `g_stageId`.
-            stage: file.stage + 1,
-            room: file.room,
-            player_flag: file.character & 1,
-        };
+        let id = file.room_id();
         let loaded = load_room(pack, id, options.no_room_script_fixes)?;
         let mut game = new_game_state(pack, id, &loaded.room, options);
         file.apply_to(&mut game);
@@ -4126,7 +4121,7 @@ impl GameSession {
     /// the `column` slot of the loaded room's sound-table row, keyed by its
     /// bank slot like the original's `play_sfx(2, column)`.
     fn play_room_bank_sound(&mut self, pack: &Pack, column: u8) {
-        let row = sfx::room_row(self.loaded.room.stage, self.loaded.room.room);
+        let row = sfx::room_row(self.loaded.room.table_row(), self.loaded.room.room);
         let Some(name) = sfx::room_sound(row, usize::from(column)) else {
             return;
         };
@@ -4491,6 +4486,11 @@ impl GameSession {
     /// placement is left in place - the first gameplay tick's collision pass
     /// settles it, exactly like a door arrival.
     fn debug_jump(&mut self, pack: &Pack, target: RoomId) -> Result<()> {
+        // A mansion room on the visit the game is on, as a door leads there.
+        let mansion2 =
+            self.game
+                .flag_test(game::BANK_SCENARIO, game::SCENARIO_FLAG_MANSION2, false);
+        let target = target.with_visit(mansion2);
         let from = self.loaded.id;
         let loaded = load_room(pack, target, self.game.player_options.no_room_script_fixes)?;
         self.loaded = loaded;
@@ -6978,6 +6978,7 @@ fn room_door_state(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<ga
     let loaded = crate::room::load(pack, id)?;
     let (scripts, _) = room_scripts(pack, id, &loaded, original_scripts)?;
     let mut game = game::GameState::new(id, &loaded.state);
+    game.region = pack_region(pack);
     let mut vm = scd::vm::CommandVm::new(&scripts);
     let mut host = game::ScdGameHost::new(&mut game);
     vm.run_init(&mut host);
@@ -7055,6 +7056,7 @@ fn new_game_id(pack: &Pack, character: u8) -> RoomId {
         stage: 1,
         room: NEW_GAME_ROOM,
         player_flag: character & 1,
+        mansion2: false,
     })
 }
 
@@ -12644,7 +12646,7 @@ fn blit_effect_sprite(page: &mut Image, texture: &crate::model::Texture8, v: u32
 
 /// Decode and composite the room's effect pages.
 fn build_effect_pages(pack: &Pack, id: RoomId, room: &effects::RoomEffects) -> EffectPages {
-    let stage = usize::from(id.stage_index());
+    let stage = id.table_row();
     let room_byte = usize::from(id.room);
     let mut pages = EffectPages::default();
 
@@ -12698,8 +12700,9 @@ const GUARDHOUSE_FORCED_OPAQUE_ROOMS: [u8; 3] = [0x0E, 0x0F, 0x11];
 const STAGE_DIGIT_LABORATORY: u8 = 5;
 /// Room byte of the laboratory's main hall.
 const ROOM_MAIN_LAB: u8 = 0x13;
-/// Stage digit of the second mansion return (the lesson-room V remap).
-const STAGE_DIGIT_MANSION_RETURN_2F: u8 = 7;
+/// Stage digit of the mansion's 2F, whose lesson room remaps its effect V on
+/// the second visit.
+const STAGE_DIGIT_MANSION_2F: u8 = 2;
 /// Room byte of the lesson room.
 const ROOM_LESSON: u8 = 0x0C;
 
@@ -12719,9 +12722,9 @@ fn build_effect_quads(
     tween: &mut Tween,
 ) -> Vec<EffectQuad> {
     let mut quads = Vec::new();
-    let stage = usize::from(id.stage_index());
-    let folded = if stage > 4 { stage - 5 } else { stage };
-    let lesson_room = id.stage == STAGE_DIGIT_MANSION_RETURN_2F && id.room == ROOM_LESSON;
+    // The camera light records share the mansion's rows between its visits.
+    let folded = usize::from(id.stage_index());
+    let lesson_room = id.stage == STAGE_DIGIT_MANSION_2F && id.mansion2 && id.room == ROOM_LESSON;
     let lab_special =
         id.stage == STAGE_DIGIT_LABORATORY && id.room == ROOM_MAIN_LAB && room.current_cut == 5;
 
@@ -12811,7 +12814,7 @@ fn build_effect_quads(
         let tex_v = tex_v as u8;
 
         let Some(sheet) =
-            effects::pages::room_effect_sheet_index(stage, usize::from(id.room), page)
+            effects::pages::room_effect_sheet_index(id.table_row(), usize::from(id.room), page)
         else {
             continue;
         };
@@ -13002,6 +13005,14 @@ fn load_room(pack: &Pack, id: RoomId, original_scripts: bool) -> Result<LoadedRo
     })
 }
 
+/// The release the base pack's manifest records, whose room scripts the run
+/// plays; USA for a pack that records none.
+fn pack_region(pack: &Pack) -> scd::akscr::Region {
+    pack.manifest()
+        .and_then(|manifest| manifest.region)
+        .unwrap_or(scd::akscr::Region::Usa)
+}
+
 /// Build a fresh game state for `id`/`room` with the pack's static music
 /// tables, item definitions and global weapon-FX metadata installed, so room entry and script
 /// effect spawns resolve both the room's declared sprites and the `core00`
@@ -13014,6 +13025,7 @@ fn new_game_state(
     options: player::Options,
 ) -> game::GameState {
     let mut game = game::GameState::new(id, room);
+    game.region = pack_region(pack);
     game.player_options = options;
     game.music = crate::music::load(pack, options);
     seed_start_health(&mut game, id.player_flag);
@@ -16391,6 +16403,7 @@ mod tests {
             stage: 1,
             room: NEW_GAME_ROOM,
             player_flag: 0,
+            mansion2: false,
         };
         assert_eq!(new_game_id(&with(None), 0), main_hall);
     }
@@ -17241,11 +17254,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
 
         let mut writer = PackWriter::new();
@@ -17342,11 +17357,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         let mut writer = PackWriter::new();
         writer
@@ -17444,11 +17461,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
         let mut writer = PackWriter::new();
@@ -18236,7 +18255,10 @@ mod tests {
                     synthetic_rdt_with_blocking_collision(&door),
                 )
                 .unwrap();
-            writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
+            // Both players share the room's backgrounds.
+            if id.player_flag == 0 {
+                writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
+            }
         }
         writer
             .add(
@@ -18675,6 +18697,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
 
         let mut writer = PackWriter::new();
@@ -18721,6 +18744,7 @@ mod tests {
             stage: 3,
             room: 6,
             player_flag: 0,
+            mansion2: false,
         };
         // Number the pixels so the re-wrap is observable: row 1 of the 316-wide
         // view starts at linear pixel 316, not 320.
@@ -18763,6 +18787,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut game = game::GameState::new(id, &RoomState::default());
 
@@ -18816,6 +18841,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut game = game::GameState::new(id, &room);
 
@@ -18949,7 +18975,8 @@ mod tests {
             RoomId {
                 stage: 2,
                 room: 3,
-                player_flag: 0
+                player_flag: 0,
+                mansion2: false,
             }
         );
 
@@ -20037,11 +20064,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
 
         let mut writer = PackWriter::new();
@@ -20086,11 +20115,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
 
         let mut writer = PackWriter::new();
@@ -21136,11 +21167,15 @@ mod tests {
                 stage: 1,
                 room: NEW_GAME_ROOM,
                 player_flag,
+                mansion2: false,
             };
             writer
                 .add(&id.rdt_entry(), synthetic_rdt(&[0x00, 0x00]))
                 .unwrap();
-            writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
+            // Both players share the room's backgrounds.
+            if player_flag == 0 {
+                writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
+            }
         }
         for (entry, bytes) in extra {
             writer.add(entry, bytes.to_vec()).unwrap();
@@ -21559,7 +21594,8 @@ mod tests {
             RoomId {
                 stage: 1,
                 room: NEW_GAME_ROOM,
-                player_flag: 0
+                player_flag: 0,
+                mansion2: false,
             }
         );
         assert_eq!(session.game.entities[0].health, NEW_GAME_HEALTH[0]);
@@ -22757,6 +22793,7 @@ mod tests {
                 stage: 1,
                 room: NEW_GAME_ROOM,
                 player_flag: 0,
+                mansion2: false,
             },
             Path::new("saves"),
         )
@@ -22818,11 +22855,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         let red = solid_image([200, 0, 0, 255]);
         let blue = solid_image([0, 0, 200, 255]);
@@ -22922,11 +22961,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         let mut writer = PackWriter::new();
         writer
@@ -23012,6 +23053,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         // Room 1003 resolves group 0x00 (Bgm_00), unlike the source's 0x0B
         // (Bgm_13) at state 0x08, so the handoff is observable.
@@ -23019,6 +23061,7 @@ mod tests {
             stage: 1,
             room: 3,
             player_flag: 0,
+            mansion2: false,
         };
         let pack_path = dir.0.join("game.akpak");
         let mut writer = PackWriter::new();
@@ -23107,6 +23150,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         // Destination byte 0x23 is stage 1 room 3 again but takes the stage
         // change path, whose `init_room` resets the BGM state to 0xFF.
@@ -23114,6 +23158,7 @@ mod tests {
             stage: 1,
             room: 3,
             player_flag: 0,
+            mansion2: false,
         };
         let pack_path = dir.0.join("game.akpak");
         let mut writer = PackWriter::new();
@@ -23169,11 +23214,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let target = RoomId {
             stage: 1,
             room: 3,
             player_flag: 0,
+            mansion2: false,
         };
         let pack_path = dir.0.join("game.akpak");
         let mut writer = PackWriter::new();
@@ -23267,6 +23314,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let pack_path = dir.0.join("game.akpak");
         let mut writer = PackWriter::new();
@@ -24178,11 +24226,13 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let b = RoomId {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         let manifest = manifest::Manifest {
             kind: manifest::PackKind::Mod,
@@ -24267,6 +24317,7 @@ end
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         // Index 0 is global 0xC0, the ground pick-up yes/no prompt: "A" then
         // confirm. The branch record is `[no-offset 2][tag 10][arg 0]`: Yes
@@ -24306,6 +24357,7 @@ end
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut writer = PackWriter::new();
         writer
@@ -24355,6 +24407,7 @@ return M
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut language = String::new();
         for index in 0..64 {
@@ -24751,6 +24804,7 @@ return M
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let room = effect_test_room();
         let mut game = game::GameState::new(id, &room);
@@ -26447,11 +26501,15 @@ off_0010:
                 stage: 1,
                 room: NEW_GAME_ROOM,
                 player_flag,
+                mansion2: false,
             };
             writer
                 .add(&id.rdt_entry(), synthetic_rdt(&[0x00, 0x00]))
                 .unwrap();
-            writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
+            // Both players share the room's backgrounds.
+            if player_flag == 0 {
+                writer.add(&id.cut_entry(0), bmp_bytes.clone()).unwrap();
+            }
         }
         for &(film_id, _) in films {
             writer
@@ -29137,7 +29195,8 @@ off_0010:
                 RoomId {
                     stage: 1,
                     room: NEW_GAME_ROOM,
-                    player_flag: character
+                    player_flag: character,
+                    mansion2: false,
                 }
             );
             assert_eq!(session.player.pos, [NEW_GAME_POS_X, 0, NEW_GAME_POS_Z]);
@@ -29312,6 +29371,7 @@ off_0010:
             stage: 1,
             room: NEW_GAME_ROOM,
             player_flag: 0,
+            mansion2: false,
         };
         let boot = |options| {
             let session =
@@ -29352,6 +29412,7 @@ off_0010:
             stage: 1,
             room: NEW_GAME_ROOM,
             player_flag: 0,
+            mansion2: false,
         };
         let start_items = |options| {
             let session =
@@ -29429,6 +29490,7 @@ off_0010:
             stage: 1,
             room: 0x07,
             player_flag: 1,
+            mansion2: false,
         };
         let room_rdt = synthetic_rdt(&[0x00, 0x00]);
         let cut = bmp::encode_to_vec(&test_image()).unwrap();
@@ -29486,6 +29548,7 @@ off_0010:
                 stage: 1,
                 room: NEW_GAME_ROOM,
                 player_flag: character,
+                mansion2: false,
             };
             let session = GameSession::from_room(&pack, id, Path::new("saves")).unwrap();
             let health = NEW_GAME_HEALTH[usize::from(character)];
@@ -29627,7 +29690,8 @@ off_0010:
                 RoomId {
                     stage: 1,
                     room: NEW_GAME_ROOM,
-                    player_flag: character
+                    player_flag: character,
+                    mansion2: false,
                 }
             );
             // The main hall's init script repositions the player for the
@@ -31018,6 +31082,7 @@ end
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
         let pack_path = dir.0.join("death.akpak");
@@ -31082,6 +31147,7 @@ end
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
         let pack_path = dir.0.join("death-fade.akpak");
@@ -31132,6 +31198,7 @@ end
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let bmp_bytes = bmp::encode_to_vec(&test_image()).unwrap();
         let pack_path = dir.0.join("death-art.akpak");

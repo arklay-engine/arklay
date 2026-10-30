@@ -1312,12 +1312,12 @@ fn save_load_japanese_fields_keep_their_authored_cells() {
     }
     // One room of every save location the reference names.
     for (stage, room) in [
-        (0, 0x00),
-        (0, 0x06),
         (1, 0x00),
+        (1, 0x06),
         (2, 0x00),
         (3, 0x00),
         (4, 0x00),
+        (5, 0x00),
     ] {
         let authored = strip(text.save().location(stage, room));
         assert_eq!(authored.len(), 16, "stage {stage} room {room:02X}");

@@ -470,9 +470,9 @@ impl ObjectTable {
         if slot != 0 || (self.built != 0 && self.last_asset == Some(slot)) {
             return None;
         }
-        if id.stage == 1 && id.room == 0x0C {
+        if id.stage == 1 && !id.mansion2 && id.room == 0x0C {
             Some(PaletteFixup::Greenhouse)
-        } else if id.stage % 5 == 2 && id.room == 0x0B {
+        } else if id.stage == 2 && id.room == 0x0B {
             Some(PaletteFixup::FrontLesson)
         } else {
             None
@@ -746,7 +746,7 @@ pub fn build_item(operands: &[Operand], visible: bool, built: u8, id: RoomId) ->
         i32::from(operand_i16(operands, 11)),
     ];
     // The trophy room's second declaration sits 0x96 units lower.
-    if id.stage == 7 && id.room == 0x15 && built & 0x3F == 1 {
+    if id.stage == 2 && id.mansion2 && id.room == 0x15 && built & 0x3F == 1 {
         pos[2] -= 0x96;
     }
     ItemRecord {
@@ -837,7 +837,7 @@ pub fn apply_palette_fixup(texture: &mut Texture8, fixup: PaletteFixup) {
 fn apply_position_overrides(pos: &mut [i32; 3], slot: usize, id: RoomId) {
     // Front lesson room (stages 2F and their return): slot 0 shifts Z by
     // +10, slot 1 by -0x28.
-    if id.stage % 5 == 2 && id.room == 0x0B {
+    if id.stage == 2 && id.room == 0x0B {
         match slot {
             0 => pos[2] += 10,
             1 => pos[2] -= 0x28,
@@ -854,8 +854,8 @@ fn apply_position_overrides(pos: &mut [i32; 3], slot: usize, id: RoomId) {
     if id.stage == 4 && id.room == 0x0F && slot == 0 {
         pos[1] -= 0x15E;
     }
-    // Dining room slot 1, Jill's RDT variant.
-    if id.stage == 1 && id.room == 0x05 && id.player_flag == 1 && slot == 1 {
+    // Dining room slot 1, Jill's RDT variant on the first visit.
+    if id.stage == 1 && !id.mansion2 && id.room == 0x05 && id.player_flag == 1 && slot == 1 {
         pos[1] = -5;
     }
 }
@@ -1460,6 +1460,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         assert!(objects.build(&obj_operands(1, OBJECT_FLAG_ACTIVE, 0xFF), id));
         assert_eq!(objects.built, 1);
@@ -1481,6 +1482,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut objects = table(2);
         // Slot 1, push-grunt bit 0x40 set, texture bit 0x80 set.
@@ -1528,6 +1530,7 @@ mod tests {
                 stage,
                 room,
                 player_flag: 0,
+                mansion2: false,
             };
             let mut objects = table(3);
             assert!(objects.build(&obj_operands(slot, 1, 0xFF), id));
@@ -1547,6 +1550,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut objects = table(2);
         assert!(!objects.build(&obj_operands(0x3F, 1, 0), id));
@@ -1558,11 +1562,11 @@ mod tests {
     #[test]
     fn obj_position_overrides_match_the_room_slots() {
         let build = |stage: u8, room: u8, player_flag: u8, slot: u8| {
-            let id = RoomId {
-                stage,
-                room,
-                player_flag,
-            };
+            // The original's numbering: stage 7 is the second visit's 2F.
+            let id = RoomId::from_original(
+                (u16::from(stage) << 12) | (u16::from(room) << 4) | u16::from(player_flag),
+            )
+            .unwrap();
             let mut objects = table(2);
             let mut values = vec![i64::from(slot), 1, 0xFF, 100, -200, 300, 0];
             values.extend([0; 16]);
@@ -1586,6 +1590,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut objects = table(6);
         objects.record_mut(0).unwrap().flag = 0x01;
@@ -1601,6 +1606,7 @@ mod tests {
             stage: 4,
             room: 0x0D,
             player_flag: 0,
+            mansion2: false,
         };
         assert!(objects.set_flag(&operands(&[0, 5, 0x40]), water_tank));
         assert_eq!(objects.record(5).unwrap().flag, 0);
@@ -2055,11 +2061,8 @@ mod tests {
     }
 
     fn room(stage: u8, room: u8) -> RoomId {
-        RoomId {
-            stage,
-            room,
-            player_flag: 0,
-        }
+        // The original's numbering: stages 6 and 7 are the second mansion visit.
+        RoomId::from_original((u16::from(stage) << 12) | (u16::from(room) << 4)).unwrap()
     }
 
     #[test]
@@ -2121,7 +2124,7 @@ mod tests {
         assert_eq!(alternate.rotation, [0, 0x100, 0]);
         assert_eq!(alternate.pos, [1, 2, 3]);
 
-        // Stage 7 room 0x15's second built item drops 0x96 from Z.
+        // Room 215's second built item drops 0x96 from Z on the second visit.
         let trophy = build_item(
             &item_operands(0x33, 0, 0xFF, 1, 2, 0x200),
             true,
@@ -2224,7 +2227,7 @@ mod tests {
         assert_eq!(greenhouse.stp, vec![true, true, true]);
 
         // Only the first slot-0 bind in the two rooms asks for one.
-        let lesson_id = RoomId::parse("70B").unwrap();
+        let lesson_id = RoomId::from_original(0x70B0).unwrap();
         let mut objects = table(2);
         let slot0 = obj_operands(0x80, OBJECT_FLAG_ACTIVE, 0xFF);
         assert_eq!(

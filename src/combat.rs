@@ -2360,6 +2360,7 @@ mod tests {
             stage: 1,
             room: 0x30,
             player_flag: 0,
+            mansion2: false,
         };
         game.enemy_count = 1;
         let entity = &mut game.entities[1];

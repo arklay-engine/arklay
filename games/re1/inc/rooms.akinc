@@ -7,8 +7,11 @@
 #define STAGE_3 0x60
 #define STAGE_4 0x80
 #define STAGE_5 0xA0
-#define STAGE_6 0xC0
-#define STAGE_7 0xE0
+
+// A door into the mansion leads to the room's second visit once scenario
+// flag 0 is set; the original's own data can also name it directly.
+#define MANSION2_STAGE_1 0xC0
+#define MANSION2_STAGE_2 0xE0
 
 #define ROOM_100_SAVE_ROOM 0x00
 #define ROOM_101_1F_LEFT_STAIRS 0x01

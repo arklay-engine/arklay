@@ -7,7 +7,8 @@
 //!
 //! - `IT_*` an item id, `EM_*` an enemy type, `MSG_*` a global message
 //!   (`0x40` and up, as `message` takes it);
-//! - `STAGE_*` a door target's stage bits (`0x40` for stage 2);
+//! - `STAGE_*` a door target's stage bits (`0x40` for stage 2), and
+//!   `MANSION2_STAGE_*` the second mansion visit's (`0xC0` for stage 1);
 //! - `ROOM_<stage><room>*` a room within its stage (`ROOM_106_MAIN_HALL` is
 //!   `0x06`), for door targets;
 //! - `F_<group>_*` a bit of flag group `FG_<group>`;
@@ -91,7 +92,7 @@ impl Names {
             self.doors.entry(byte).or_insert(name);
         } else if name.starts_with("MOVIE_") {
             self.movies.entry(byte).or_insert(name);
-        } else if name.starts_with("STAGE_") {
+        } else if name.starts_with("STAGE_") || name.starts_with("MANSION2_STAGE_") {
             self.stages.entry(byte >> 5).or_insert(name);
         } else if let Some(stage) = name
             .strip_prefix("ROOM_")
@@ -246,9 +247,11 @@ impl Names {
         let target = value >> 5;
         let stage_name = self.stages.get(&target)?;
         let room = value & 0x1F;
+        // The second mansion visit's rooms are the mansion's.
+        let stage = crate::state::RoomId::from_table_row(usize::from(target) - 1, room).stage;
         let room = self
             .rooms
-            .get(&(target, room))
+            .get(&(stage, room))
             .cloned()
             .unwrap_or_else(|| room.to_string());
         Some(format!("{stage_name} | {room}"))

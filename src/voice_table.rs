@@ -1,8 +1,8 @@
 //! The shipped per-stage voice-line name tables, read only by `convert-game`.
 //!
-//! Each 0-based stage selects one of five name rows through the selector in
-//! [`crate::voice`]: stages 5 and 6 reuse the rows of stages 0 and 1, and
-//! stage 7 has no table at all. Conversion resolves every non-empty record to
+//! Each room's table row selects one of five name rows through the selector
+//! in [`crate::voice`]: the second mansion visit's rows (5 and 6) reuse the
+//! rows of stages 1 and 2, and no row past them has a table. Conversion resolves every non-empty record to
 //! its `voice/{row+1:02}_{id:02x}.wav` pack entry (1-based row, lowercase hex
 //! id); the runtime never reads these tables, only the selector.
 

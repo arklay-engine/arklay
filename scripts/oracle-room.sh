@@ -10,7 +10,9 @@
 # Usage:
 #   scripts/oracle-room.sh ROOM PLAYER [TICKS] [OUTDIR]
 #
-#   ROOM    three hex digits, stage + room (e.g. 100, 11C)
+#   ROOM    three hex digits, stage + room (e.g. 100, 11C), in the
+#           reference's numbering: 6xx and 7xx are the second mansion visit
+#           of rooms 1xx and 2xx (arklay's `--room 1xx --mansion2`)
 #   PLAYER  0 = Chris, 1 = Jill (selects the RDT variant on both sides)
 #   TICKS   traced gameplay ticks (default 600)
 #   OUTDIR  output directory (default target/oracle/room<ROOM>_p<PLAYER>)
@@ -107,10 +109,20 @@ LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_LOADER_DRIVER_OVERRIDE=llvm
     --test-capture-every 30 --test-capture-dir "$OUT/refcaps" \
     --test-exit-after "$TICKS" --test-nolimit )
 
+# arklay names the second mansion visit by its room and `--mansion2`.
+ARK_ROOM="$ROOM"
+ARK_VISIT=()
+case "$ROOM" in
+    6??|7??)
+        ARK_ROOM="$(( ${ROOM:0:1} - 5 ))${ROOM:1}"
+        ARK_VISIT=(--mansion2)
+        ;;
+esac
+
 echo "== arklay: room $ROOM player $PLAYER, $TICKS ticks"
 # The reference refuses a healing item with no effect, so compare under the
 # authentic item rules.
-"$ARK_BIN" "$PACK" --ui game --room "$ROOM" --player "$PLAYER" \
+"$ARK_BIN" "$PACK" --ui game --room "$ARK_ROOM" "${ARK_VISIT[@]}" --player "$PLAYER" \
     --character "$PLAYER" --ticks "$TICKS" --no-mods \
     --language "$LANGUAGE" --authentic --trace "$OUT/ark.trace" \
     --capture-every 30 --capture-dir "$OUT/arkcaps"

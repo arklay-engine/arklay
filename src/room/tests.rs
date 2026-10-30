@@ -63,10 +63,17 @@ fn assert_same_room(pack: &Pack, id: RoomId, rdt: &[u8]) {
     }
 }
 
+/// File `name` in RDT `id`'s own folder (`room/2051/room.xml`), where a
+/// standalone RDT conversion puts it.
+fn rdt_file(id: RoomId, name: &str) -> String {
+    format!("{}/{name}", id.rdt_dir())
+}
+
 const ID: RoomId = RoomId {
     stage: 2,
     room: 5,
     player_flag: 1,
+    mansion2: false,
 };
 
 fn put_u16(data: &mut [u8], at: usize, value: u16) {
@@ -174,10 +181,10 @@ fn a_synthetic_room_loads_the_same_from_xml() {
     let rdt = synthetic_rdt();
     let pack = converted(&[(ID, rdt.clone())]);
     assert_eq!(format(&pack, ID), Some(Format::Xml));
-    assert!(!pack.contains(&ID.rdt_entry()));
+    assert!(!pack.contains(&rdt_file(ID, "room.rdt")));
     assert_same_room(&pack, ID, &rdt);
 
-    let text = std::str::from_utf8(&pack.read(&ID.xml_entry()).unwrap())
+    let text = std::str::from_utf8(&pack.read(&rdt_file(ID, "room.xml")).unwrap())
         .unwrap()
         .to_string();
     // The RDT's message text is not carried over: a room's text is its
@@ -192,24 +199,26 @@ fn a_synthetic_room_loads_the_same_from_xml() {
     // Nothing in the definition names a file or its own room.
     assert!(!text.contains("src=") && !text.contains("room/"), "{text}");
     assert!(!text.contains(" id=\"2051\""), "{text}");
-    assert!(pack.contains(&ID.scd_entry()));
+    assert!(pack.contains(&rdt_file(ID, "room.scd")));
 }
 
 #[test]
 fn a_room_folder_renamed_is_the_room_of_its_new_id() {
     let rdt = synthetic_rdt();
     let other = RoomId::parse("1000").unwrap();
-    let from = format!("{}/", ID.dir());
+    let from = format!("{}/", ID.rdt_dir());
     let renamed: Vec<(String, Vec<u8>)> = convert_rdt(&rdt, ID, Vec::new())
         .unwrap()
         .into_iter()
         .map(|(path, data)| {
             let file = path.strip_prefix(&from).unwrap();
-            (format!("{}/{file}", other.dir()), data)
+            (format!("{}/{file}", other.rdt_dir()), data)
         })
         .collect();
     let pack = pack_of(renamed);
-    assert_eq!(ids(&pack), [other]);
+    // Every variant of the folder's room.
+    assert_eq!(rooms(&pack), [other]);
+    assert!(ids(&pack).contains(&other));
     let state = load_state(&pack, other).unwrap();
     assert_eq!(state.cuts.len(), 1);
     assert!(!own_scripts(&pack, other).unwrap().init.is_empty());
@@ -288,7 +297,7 @@ fn converted_entries() -> (String, Vec<(String, Vec<u8>)>) {
     let entries = convert_rdt(&synthetic_rdt(), ID, Vec::new()).unwrap();
     let xml = entries
         .iter()
-        .find(|(path, _)| *path == ID.xml_entry())
+        .find(|(path, _)| *path == rdt_file(ID, "room.xml"))
         .map(|(_, data)| String::from_utf8(data.clone()).unwrap())
         .unwrap();
     (xml, entries)
@@ -310,11 +319,11 @@ fn the_higher_layer_definition_wins() {
     let (pack, dir) = layered(
         "layers",
         base.clone(),
-        vec![(ID.rdt_entry(), vec![0, 0, 0, 0])],
+        vec![(rdt_file(ID, "room.rdt"), vec![0, 0, 0, 0])],
     );
     assert_eq!(format(&pack, ID), Some(Format::Rdt));
     assert!(load_state(&pack, ID).unwrap().cuts.is_empty());
-    assert_eq!(ids(&pack), [ID]);
+    assert!(ids(&pack).contains(&ID));
     assert_eq!(format(&pack_of(base), ID), Some(Format::Xml));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -322,18 +331,18 @@ fn the_higher_layer_definition_wins() {
 #[test]
 fn an_xml_only_mod_keeps_the_base_scripts() {
     let (xml, base) = converted_entries();
-    let container = entry_of(&base, &ID.scd_entry());
+    let container = entry_of(&base, &rdt_file(ID, "room.scd"));
     let edited = xml.replacen("<ambient", "<!-- edited --><ambient", 1);
 
     // An edit of the XML alone keeps the base layer's `room.scd`.
-    let only_xml = vec![(ID.xml_entry(), edited.clone().into_bytes())];
+    let only_xml = vec![(rdt_file(ID, "room.xml"), edited.clone().into_bytes())];
     let (pack, dir) = layered("xml-mod", base.clone(), only_xml);
     assert_eq!(script_source(&pack, ID, false), ScriptSource::Room);
     assert!(!own_scripts(&pack, ID).unwrap().init.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 
     // An RDT mod over the XML room runs the scripts embedded in it.
-    let rdt = vec![(ID.rdt_entry(), synthetic_rdt())];
+    let rdt = vec![(rdt_file(ID, "room.rdt"), synthetic_rdt())];
     let (pack, dir) = layered("rdt-mod", base, rdt);
     assert_eq!(script_source(&pack, ID, false), ScriptSource::Rdt);
     assert_eq!(
@@ -359,15 +368,15 @@ fn original_scripts_skip_the_base_fixes_but_keep_a_mods() {
     use crate::engine::room_scripts;
     let parse = |container: &[u8]| crate::scd::reader::parse(container).unwrap().digest();
     let (_, mut base) = converted_entries();
-    let own = entry_of(&base, &ID.scd_entry());
+    let own = entry_of(&base, &rdt_file(ID, "room.scd"));
     let (fixed, modded) = (flag_container(1), flag_container(2));
     assert_ne!(parse(&own), parse(&fixed));
     assert_ne!(parse(&fixed), parse(&modded));
     // The converter's layout for a fixed room: the fixed build runs, the
     // original bytecode is kept beside it.
-    base.retain(|(path, _)| *path != ID.scd_entry());
-    base.push((ID.scd_entry(), fixed.clone()));
-    base.push((ID.original_scd_entry(), own.clone()));
+    base.retain(|(path, _)| *path != rdt_file(ID, "room.scd"));
+    base.push((rdt_file(ID, "room.scd"), fixed.clone()));
+    base.push((rdt_file(ID, "original.scd"), own.clone()));
 
     // A mod that ships nothing for the room: the fixed build runs unless the
     // original scripts are asked for.
@@ -385,7 +394,7 @@ fn original_scripts_skip_the_base_fixes_but_keep_a_mods() {
     let _ = std::fs::remove_dir_all(&dir);
 
     // A mod's own `room.scd` wins either way.
-    let with_scripts = vec![(ID.scd_entry(), modded.clone())];
+    let with_scripts = vec![(rdt_file(ID, "room.scd"), modded.clone())];
     let (pack, dir) = layered("original-mod", base, with_scripts);
     let loaded = load(&pack, ID).unwrap();
     for original in [false, true] {
@@ -393,42 +402,6 @@ fn original_scripts_skip_the_base_fixes_but_keep_a_mods() {
         let (scripts, _) = room_scripts(&pack, ID, &loaded, original).unwrap();
         assert_eq!(scripts.digest(), parse(&modded), "{original}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn a_mods_region_build_runs_on_its_region() {
-    use crate::scd::akscr::Region;
-    let parse = |container: &[u8]| crate::scd::reader::parse(container).unwrap().digest();
-    let (_, base) = converted_entries();
-    let (usa, jpn) = (flag_container(2), flag_container(3));
-    let layer = vec![
-        (ID.scd_entry(), usa.clone()),
-        (ID.region_scd_entry(Region::Jpn), jpn.clone()),
-    ];
-    // A JPN base runs the mod's JPN build; any other base, or one whose
-    // manifest names no region, the USA `room.scd`.
-    for (region, expected) in [
-        (Some(Region::Jpn), &jpn),
-        (Some(Region::Eur), &usa),
-        (Some(Region::Usa), &usa),
-        (None, &usa),
-    ] {
-        let (pack, dir) = layered_in("region-mod", region, base.clone(), layer.clone());
-        let loaded = load(&pack, ID).unwrap();
-        let (scripts, source) = loaded.scripts(&pack, false).unwrap();
-        assert_eq!(source, ScriptSource::Room);
-        assert_eq!(scripts.digest(), parse(expected), "{region:?}");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    // A region build only stands for the `room.scd` of its own layer: a
-    // higher layer's `room.scd` runs on every region.
-    let mut lower = base;
-    lower.push((ID.region_scd_entry(Region::Jpn), jpn));
-    let only_usa = vec![(ID.scd_entry(), usa.clone())];
-    let (pack, dir) = layered_in("region-shadowed", Some(Region::Jpn), lower, only_usa);
-    assert_eq!(room_scd_entry(&pack, ID), ID.scd_entry());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -555,7 +528,7 @@ fn every_shipped_room_loads_the_same_from_xml() {
             let effects = load_state(&pack, *id).unwrap().effects;
             !effects.is_empty()
                 && effects.sprites.iter().all(|sprite| sprite.tim.is_some())
-                && pack.contains(&format!("{}.bmp", id.effect_stem(0)))
+                && pack.contains(&format!("{}/effect/00.bmp", id.rdt_dir()))
         }));
         // Every room is a folder: nothing is shared by content.
         assert!(pack.paths().all(|path| path.starts_with("room/")));
@@ -565,13 +538,13 @@ fn every_shipped_room_loads_the_same_from_xml() {
 #[test]
 fn verify_fails_a_room_with_a_broken_model() {
     let (_, mut entries) = converted_entries();
-    let model = ID.object_stem(0);
+    let model = format!("{}/object/00", ID.rdt_dir());
     entries.push((format!("{model}.tmd"), b"not a tmd".to_vec()));
     let report = crate::verify::verify_pack(&pack_of(entries), false);
     let failure = report
         .failures
         .iter()
-        .find(|failure| failure.path == ID.xml_entry())
+        .find(|failure| failure.path == rdt_file(ID, "room.xml"))
         .expect("the room fails");
     assert!(failure.error.contains(&model), "{}", failure.error);
 }
@@ -698,44 +671,27 @@ fn a_room_s_strings_round_trip_and_become_room_keys() {
         ("ja-JP", "save_name", "館 {s}小部屋"),
     ]);
     let entries = convert_rdt(&synthetic_rdt(), ID, named.clone()).unwrap();
-    let text = String::from_utf8(entry_of(&entries, &ID.xml_entry())).unwrap();
+    let text = String::from_utf8(entry_of(&entries, &rdt_file(ID, "room.xml"))).unwrap();
     assert_eq!(xml::parse(&text).unwrap().strings, named);
-    assert_eq!(room_strings(text.as_bytes()).unwrap(), named);
+    let read: Vec<crate::language::XmlString> = room_strings(text.as_bytes())
+        .unwrap()
+        .into_iter()
+        .map(|(tag, key, value, _)| (tag, key, value))
+        .collect();
+    assert_eq!(read, named);
 
-    // The lowest player variant naming the room in a language wins; a raw
-    // RDT names nothing.
-    let other = RoomId {
-        player_flag: 0,
-        ..ID
-    };
-    let source = RoomSource {
-        strings: strings(&[("en-US", "name", "OTHER"), ("fr-FR", "name", "AUTRE")]),
-        ..RoomSource::default()
-    };
+    // The room's folder names it; a raw RDT names nothing.
     let mut files = entries;
-    files.push((other.xml_entry(), xml::write(&source).unwrap().into_bytes()));
     files.push(("room/1000/room.rdt".to_string(), synthetic_rdt()));
     let pack = pack_of(files);
     let layers = language_layers(&pack);
     let layer = |tag: &str| &layers.iter().find(|(t, _)| t == tag).unwrap().1;
     assert_eq!(layer("en-us").len(), 2);
-    assert!(layer("fr-fr").get("ROOM_205_NAME").is_some());
     assert!(layer("ja-jp").get("ROOM_205_NAME_SAVE").is_some());
     let text = crate::text::Text::load(&pack, Some("en-US"));
-    assert_eq!(text.decode(text.room_name("205").unwrap()), "OTHER");
+    assert_eq!(text.decode(text.room_name("205").unwrap()), "SAVE ROOM");
     assert_eq!(text.decode(text.room_label(2, 5).unwrap()), "M. Room 1F");
     assert_eq!(text.room_name("100"), None);
-}
-
-#[test]
-fn a_mod_s_raw_rdt_keeps_the_base_room_s_name() {
-    let named = strings(&[("en-US", "name", "SAVE ROOM")]);
-    let base = convert_rdt(&synthetic_rdt(), ID, named).unwrap();
-    let (pack, dir) = layered("rdt-name", base, vec![(ID.rdt_entry(), synthetic_rdt())]);
-    assert_eq!(format(&pack, ID), Some(Format::Rdt));
-    let text = crate::text::Text::load(&pack, Some("en-US"));
-    assert_eq!(text.decode(text.room_name("205").unwrap()), "SAVE ROOM");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -748,34 +704,24 @@ fn room_message_texts_become_text_keys_per_variant() {
         player_flag: 1,
         ..ID
     };
-    let room = |texts: &[(&str, &str, &str)]| RoomSource {
-        strings: strings(texts),
-        ..RoomSource::default()
-    };
-    let chris_room = room(&[
-        ("en-US", "0", "Same"),
-        ("en-US", "0_speaker", "Rebecca"),
-        ("en-US", "10", "Chris"),
-        ("en-US", "10_speaker_1", "Barry"),
-    ]);
-    let jill_room = room(&[
-        ("en-US", "0", "Same"),
-        ("en-US", "0_speaker", "Rebecca"),
-        ("en-US", "10", "Jill"),
-        ("en-US", "10_speaker_1", "Wesker"),
-    ]);
-    let written = xml::write(&chris_room).unwrap();
-    assert!(
-        written.contains(r#"<string key="10">Chris</string>"#),
-        "{written}"
-    );
-    let pack = pack_of(vec![
-        (chris.xml_entry(), written.into_bytes()),
-        (
-            jill.xml_entry(),
-            xml::write(&jill_room).unwrap().into_bytes(),
-        ),
-    ]);
+    // One room.xml for every variant: a string only some have carries
+    // `when`.
+    let written = r#"<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <strings>
+    <language lang="en-US">
+      <string key="0">Same</string>
+      <string key="0_speaker">Rebecca</string>
+      <string key="10">Chris</string>
+      <string key="10" when="JILL">Jill</string>
+      <string key="10_speaker_1">Barry</string>
+      <string key="10_speaker_1" when="JILL">Wesker</string>
+      <string key="11" when="JILL MANSION2">Again</string>
+    </language>
+  </strings>
+</room>
+"#;
+    let pack = pack_of(vec![(chris.xml_entry(), written.as_bytes().to_vec())]);
     let layers = language_layers(&pack);
     let english = &layers.iter().find(|(tag, _)| tag == "en-us").unwrap().1;
     let mut keys: Vec<&str> = english.iter().map(|(key, _)| key).collect();
@@ -783,22 +729,34 @@ fn room_message_texts_become_text_keys_per_variant() {
     assert_eq!(
         keys,
         [
-            "ROOM_2051_TEXT_0A",
-            "ROOM_2051_TEXT_0A_SPEAKER_1",
+            "ROOM_205_JILL_MANSION2_TEXT_0B",
+            "ROOM_205_JILL_TEXT_0A",
+            "ROOM_205_JILL_TEXT_0A_SPEAKER_1",
             "ROOM_205_TEXT_00",
             "ROOM_205_TEXT_00_SPEAKER",
             "ROOM_205_TEXT_0A",
             "ROOM_205_TEXT_0A_SPEAKER_1",
         ]
     );
+    // Read for one variant, the room's strings are that variant's.
+    let jill_strings = xml::parse_for(written, jill).unwrap().strings;
+    assert!(jill_strings.contains(&("en-US".into(), "10".into(), "Jill".into())));
+    assert!(!jill_strings.iter().any(|(_, key, _)| key == "11"));
+    assert!(xml::parse(written).is_err(), "a `when` needs a variant");
     // Each variant reads its own text and speakers.
     let text = crate::text::Text::load(&pack, Some("en-US"));
     let state = |id: RoomId| RoomState {
         stage: id.stage,
         room: id.room,
         player_flag: id.player_flag,
+        mansion2: id.mansion2,
         ..RoomState::default()
     };
+    assert_eq!(
+        text.message(&state(jill.with_visit(true)), 11)
+            .map(|bytes| text.decode(bytes)),
+        Some("Again".to_string())
+    );
     assert_eq!(text.speaker(&state(jill), 0, 0).as_deref(), Some("Rebecca"));
     assert_eq!(text.speaker(&state(chris), 10, 1).as_deref(), Some("Barry"));
     assert_eq!(text.speaker(&state(jill), 10, 1).as_deref(), Some("Wesker"));
@@ -824,30 +782,34 @@ fn bad_room_strings_are_refused() {
 
 #[test]
 fn every_checked_in_re1_room_builds() {
-    let ids: Vec<RoomId> = RE1_FILES
+    let rooms: Vec<RoomId> = RE1_FILES
         .iter()
         .filter_map(|(path, _)| RoomId::parse(path.strip_suffix("/room.xml")?).ok())
         .collect();
-    assert!(ids.len() > 300, "{} rooms", ids.len());
+    assert!(rooms.len() > 100, "{} rooms", rooms.len());
     // A pack of the definitions alone: the models and animations are the
     // install's, and a room builds without them.
-    let files = ids
+    let files = rooms
         .iter()
         .flat_map(|id| re1_definition(*id))
         .map(|(entry, text)| (entry, text.as_bytes().to_vec()))
         .collect();
     let pack = pack_of(files);
+    // Every variant of every room.
+    let ids = ids(&pack);
+    assert!(ids.len() > 300, "{} variants", ids.len());
     for id in &ids {
         load(&pack, *id).unwrap_or_else(|err| panic!("{}: {err:#}", id.xml_entry()));
     }
     // The display names and message texts are in the rooms themselves.
     let layers = language_layers(&pack);
     let english = &layers.iter().find(|(tag, _)| tag == "en-us").unwrap().1;
-    assert!(english.len() > 1_200, "{} strings", english.len());
+    assert!(english.len() > 1_100, "{} strings", english.len());
 
     // Each file is in the form the writer gives it, `<strings>` last.
     for (path, text) in RE1_FILES {
-        if path.ends_with("/room.xml") {
+        // A room whose variants differ is no one variant's writer output.
+        if path.ends_with("/room.xml") && !text.contains(" when=") {
             let written = xml::write(&xml::parse(text).unwrap()).unwrap();
             assert!(written == *text, "{path} is not in canonical form");
         }

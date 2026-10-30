@@ -643,12 +643,12 @@ zombie_dead_animation = function(e)
         e.angle = saved_angle
 
         -- The revival: not scripted, behaviour byte not 4, head intact, not
-        -- the 2F dining room, the plain fall clip, clear floor, a 1-in-4 roll
-        -- and no screen-intensity ramp.
+        -- the vacant room on the first visit, the plain fall clip, clear
+        -- floor, a 1-in-4 roll and no screen-intensity ramp.
         if (e.behavior_flags & 0x40) == 0
             and e.behavior_flags ~= 0x04
             and (e:joint_flag(2) & 0xCC) == 0
-            and not (e.stage == 1 and e.room == 2)
+            and not (e.stage == 1 and not e.mansion2 and e.room == 2)
             and e.animation_id == 8
             and blocked == 0
             and (e.rand_seed & 3) == 0
@@ -2084,7 +2084,7 @@ explode_leg_and_drop = function(e)
         e.pos_x, e.pos_y, e.pos_z = saved_x, saved_y, saved_z
 
         if e.behavior_flags ~= 4
-            and not (e.stage == 1 and e.room == 2)
+            and not (e.stage == 1 and not e.mansion2 and e.room == 2)
             and blocked == 0
             and e.health > 0 then
             e.behavior_flags = ((e.rand_seed & 3) == 0 and 1 or 0) + 2

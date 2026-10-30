@@ -1,0 +1,75 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_01_USEITEM 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define AOT_04_ITEM 0x04
+#define AOT_05_USEITEM 0x05
+#define ENEMY_00_ZOMBIE_LAB 0x00
+#define ENEMY_01_ZOMBIE_LAB 0x01
+#define ENEMY_02_ZOMBIE_LAB 0x02
+#define F_ROOM_18 0x18
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+#define IMDL_02 0x02
+#define MSG_THE_DOOR_IS_LOCKED 0x00
+#define SE_14 0x14
+
+proc init when (MANSION2)
+{
+    if (CHRIS)
+    {
+        door_aot_set(AOT_00_DOOR, 22800, 5200, 2900, 1600, 0, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_213_FRONT_ELEVATOR, 2500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        aot_set(AOT_01_USEITEM, 10100, 25300, 1700, 2400, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 24, 0, 1, 0);
+    }
+    else
+    {
+        door_aot_set(AOT_00_DOOR, 10100, 25300, 1700, 2400, 2, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_201_2F_LEFT_STAIRS, 15500, 0, 25400, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_01_DOOR, 22800, 5200, 2900, 1600, 0, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 1, 0, ROOM_213_FRONT_ELEVATOR, 2500, 0, 6600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    item_aot_set(AOT_02_ITEM, 17200, 2000, 1900, 1900, IT_44_HEAL_HERB_GREEN, 1, IMDL_00, SCA_NONE, 18300, 0, 2700, 0, F_ITEM_A9, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_03_ITEM, 21500, 2000, 1900, 1900, IT_45_HEAL_HERB_BLUE, 1, IMDL_01, SCA_NONE, 22500, 0, 2700, 0, F_ITEM_AA, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    item_aot_set(AOT_04_ITEM, 19500, 2000, 1900, 1900, IT_44_HEAL_HERB_GREEN, 1, IMDL_02, SCA_NONE, 20500, 0, 2700, 0, F_ITEM_AB, SAT_MANUAL | SAT_PLAYER, ITEM_REACH);
+    if (JILL)
+    {
+        aot_set(AOT_05_USEITEM, 10100, 25300, 1700, 2400, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 4, 0, 24, 0, 1, 0);
+    }
+    enemy(EM_11_ZOMBIE_LAB, EB_01, F_ENEMY_8B, SPAWN_FORCE, 2, 0, 3584, 0, 19100, 0, 3200, ENEMY_00_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+    enemy(EM_11_ZOMBIE_LAB, EB_07, F_ENEMY_8C, SPAWN_FORCE, 2, 0, 1656, 0, 15900, 0, 28000, ENEMY_01_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+    enemy(EM_11_ZOMBIE_LAB, EB_23, F_ENEMY_8D, SPAWN_FORCE, 2, 0, 768, 0, 15000, 0, 27600, ENEMY_02_ZOMBIE_LAB, ANIM_00, 0, EVAR_00);
+    if (JILL)
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_46, FALSE))
+        {
+            aot_delete(AOT_00_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        }
+        else
+        {
+            aot_delete(AOT_05_USEITEM, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        }
+    }
+    if (ck(FG_ENEMY, F_ENEMY_8D, TRUE))
+    {
+        eml_state(0, ENEMY_01_ZOMBIE_LAB, EML_BEHAVIOUR, EB_00);
+    }
+}
+
+proc main when (MANSION2)
+{
+    if (ck(FG_ROOM, F_ROOM_18, TRUE))
+    {
+        se_play_3d(SND_BANK_ROOM, SE_14, 0, SND_AT_POINT, 0, 11000, 25300);
+        message(MSG_THE_DOOR_IS_LOCKED | MSG_FAST, RUN_0080 | RUN_READY | RUN_0020 | RUN_0010 | RUN_EFFECTS | RUN_MONSTERS | RUN_ENTITIES | RUN_PLAYER); // "The door is locked."
+        set(FG_ROOM, F_ROOM_18, FALSE);
+    }
+}

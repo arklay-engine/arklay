@@ -1,0 +1,208 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_DOOR 0x02
+#define AOT_03_DOOR 0x03
+#define AOT_04_MESSAGE 0x04
+#define AOT_05_EVENT 0x05
+#define CAM_07 0x07
+#define ENEMY_00_HUNTER 0x00
+#define ENEMY_00_ZOMBIE_GROUNDSKEEPER 0x00
+#define ENEMY_01_HUNTER 0x01
+#define ENEMY_01_ZOMBIE_GROUNDSKEEPER 0x01
+#define ENEMY_02_ZOMBIE_GROUNDSKEEPER 0x02
+#define F_ROOM_3F 0x3F
+#define MSG_A_NUMERIC_KEY_PANEL 0x00
+#define MSG_YOU_DO_NOT_KNOW_THE_PASS 0x01
+#define MSG_YOU_HAVE_ENTERED_THE_PASS_NUMBER 0x02
+#define SE_17 0x17
+#define VO_A00_00 0x5D
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 17200, 900, 2000, 2000, 1, DOOR_SND_00_DR_WD, DOOR_03_DOOR03, 4, 0, ROOM_202_DINING_ROOM_2F, 6400, 0, 14000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (MANSION1)
+    {
+        door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_3F, ROOM_214_ROUGH_PASSAGE, 6400, 0, 14000, 3072, UNLOCKED, 0);
+        door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_0C, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    else if (CHRIS)
+    {
+        door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_3F, ROOM_214_ROUGH_PASSAGE, 11200, 0, 28000, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | F_LOCK_0C, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, MANSION2_STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        door_aot_set(AOT_01_DOOR, 14700, 25700, 1500, 1900, 1, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 1, 0, ROOM_214_ROUGH_PASSAGE, 11200, 0, 28000, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_02_DOOR, 12900, 16500, 2100, 1800, 0, DOOR_SND_00_DR_WD, DOOR_00_DOOR00, 4, DOOR_LOCKED | DOOR_LOCK_40 | F_LOCK_0C, ROOM_215_STUFFED_ROOM, 8100, 0, 3800, 2048, IT_36_KEY_MANSION_HELMET, SAT_MANUAL | SAT_PLAYER);
+        door_aot_set(AOT_03_DOOR, 11345, 10300, 2605, 2500, 1, DOOR_SND_05_ST_WD, DOOR_18_KAI02, 96, 0, STAGE_1 | ROOM_101_1F_LEFT_STAIRS, 4300, 0, 3100, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    aot_set(AOT_04_MESSAGE, 2000, 10300, 300, 1900, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+    aot_set(AOT_05_EVENT, 14700, 25700, 1500, 1900, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 9, 0, on_aot_05, 0, 0, 0);
+    if (MANSION1)
+    {
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            set(FG_COMMON, F_COMMON_2C, FALSE);
+        }
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_1D, SPAWN_FORCE, 2, 0, 0, 0, 9500, 0, 8600, ENEMY_00_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+        enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_1E, SPAWN_FORCE, 2, 0, 2039, 0, 9242, 0, 13969, ENEMY_01_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            enemy(EM_00_ZOMBIE_GROUNDSKEEPER, EB_04, F_ENEMY_1F, SPAWN_FORCE, 2, 0, 920, 0, 5213, 0, 10454, ENEMY_02_ZOMBIE_GROUNDSKEEPER, ANIM_00, 0, EVAR_00);
+        }
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            if (ck(FG_COMMON, F_COMMON_A0, TRUE))
+            {
+                if (ck(FG_COMMON, F_COMMON_A1, FALSE))
+                {
+                    set(FG_COMMON, F_COMMON_A1, TRUE);
+                    room_bgm_state_set(0, ROOM_104_TEA_ROOM, BGM_MAIN_ON | 2);
+                    room_bgm_state_set(0, ROOM_10F_BAR, BGM_RELOAD | 1);
+                }
+            }
+        }
+    }
+    else if (CHRIS)
+    {
+        enemy(EM_06_HUNTER, EB_00, F_ENEMY_3C, SPAWN_FORCE, 2, 0, 1976, 0, 15656, 0, 21372, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+        enemy(EM_06_HUNTER, EB_10, F_ENEMY_3D, SPAWN_FORCE, 2, 0, 1809, 0, 20872, 0, 4240, ENEMY_01_HUNTER, ANIM_00, 0, EVAR_00);
+        if (ck(FG_STATUS, F_STATUS_08, FALSE))
+        {
+            if (ck(FG_COMMON, F_COMMON_2F, TRUE))
+            {
+                set(FG_COMMON, F_COMMON_30, TRUE);
+                set(FG_COMMON, F_COMMON_C0, TRUE);
+                set(FG_COMMON, F_COMMON_2F, FALSE);
+                evt_exec(0, TASK_09, on_enter);
+            }
+        }
+        aot_delete(AOT_01_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        enemy(EM_06_HUNTER, EB_02, F_ENEMY_3C, SPAWN_FORCE, 2, 0, 1976, 0, 16012, 0, 20724, ENEMY_00_HUNTER, ANIM_00, 0, EVAR_00);
+        if (ck(FG_SCENARIO, F_SCENARIO_46, FALSE))
+        {
+            aot_delete(AOT_01_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        }
+        else
+        {
+            aot_delete(AOT_05_EVENT, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+        }
+    }
+}
+
+event on_enter when (CHRIS && MANSION2)
+{
+    set(FG_STATUS, F_STATUS_0F, TRUE);
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    set(FG_RUN, F_RUN_MONSTERS, FALSE);
+    voice_play(VOICE_PLAY, VO_A00_00);
+    wait_message();
+    evt_fork(TASK_09, on_enter_sub1, 0);
+    sleep(100);
+    run
+    {
+        cut_auto(CUT_FREE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        set(FG_RUN, F_RUN_MONSTERS, TRUE);
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+    }
+    evt_finish();
+}
+
+event on_enter_sub1 when (CHRIS && MANSION2)
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_2F, F_ROOM_3F, 0);
+    act_param_set(0, 2048);
+    sleep(42);
+    act_idle();
+    act_finish();
+}
+
+event on_aot_05
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        cutnext(CAM_07);
+        message(MSG_A_NUMERIC_KEY_PANEL | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "A numeric key panel."
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    if (MANSION1)
+    {
+        message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
+    }
+    else if (CHRIS)
+    {
+        message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
+    }
+    else
+    {
+        run
+        {
+            if (ck(FG_COMMON, F_COMMON_25, FALSE))
+            {
+                message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
+            }
+            else
+            {
+                se_play_3d(SND_BANK_ROOM, SE_17, 0, SND_AT_POINT, 0, 15500, 26000);
+                message(MSG_YOU_HAVE_ENTERED_THE_PASS_NUMBER | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You've entered the pass number."
+            }
+        }
+    }
+    do
+    {
+        evt_next();
+    }
+    while (cmpb(B_MENU_CHOICE, CMP_GE, 128));
+    run
+    {
+        if (MANSION1)
+        {
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        }
+        else if (CHRIS)
+        {
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_25, TRUE))
+            {
+                aot_delete(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+                aot_on(AOT_01_DOOR, SCE_DOOR, 0);
+                set(FG_SCENARIO, F_SCENARIO_46, TRUE);
+                set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            }
+        }
+        cutcurr(0);
+        cut_auto(CUT_FREE);
+        if (MANSION2 && JILL)
+        {
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        }
+    }
+    evt_finish();
+}

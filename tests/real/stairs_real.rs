@@ -758,6 +758,7 @@ fn room2031_jill_stair_door_fires_with_real_input() {
         stage: 2,
         room: 3,
         player_flag: 1,
+        mansion2: false,
     };
     let loaded = room::load(&pack, id).unwrap();
     let scripts = loaded.own_scripts(&pack).unwrap();
@@ -804,6 +805,7 @@ fn room2031_jill_stair_door_fires_with_real_input() {
             stage: 1,
             room: 6,
             player_flag: 1,
+            mansion2: false,
         }],
         "the Jill stair door never fired: pos={:?} state={}",
         run.player.pos,

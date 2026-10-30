@@ -24,10 +24,11 @@ Fields, in this exact order, separated by single spaces:
 
 - `t` — tick index. Starts at 0 on the first traced tick; increments by one
   per gameplay tick.
-- `room` — `stage:room`. `stage` is the 1-based RDT stage digit (arklay's
-  `RoomId.stage`; the reference's `g_stageId + 1`), `room` is the decimal room
-  byte (e.g. `1:6` for ROOM106; the same room's RDT file name is
-  `ROOM1060.RDT`).
+- `room` — `stage:room`. `stage` is the reference's `g_stageId + 1`, the
+  original's 1-based RDT stage digit, whose stages 6 and 7 are the second
+  mansion visit (arklay's `RoomId::table_row() + 1`: `RoomId.stage`, plus 5
+  on the second visit); `room` is the decimal room byte (e.g. `1:6` for
+  ROOM106; the same room's RDT file name is `ROOM1060.RDT`).
 - `rng` — u32 state of the platform `rand()` stream (`g_randState` in the
   reference, `GameState::rand_state` in arklay).
 - `rseed` — u16 value of `g_RandSeed` / `GameState::rand_seed` (the per-frame

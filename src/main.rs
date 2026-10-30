@@ -30,6 +30,10 @@ struct Cli {
     #[arg(long, default_value_t = 0, value_name = "N", requires = "pack", value_parser = clap::value_parser!(u8).range(0..=9))]
     player: u8,
 
+    /// Boot the `--room` (a mansion room, stage 1 or 2) on its second visit
+    #[arg(long, requires = "room")]
+    mansion2: bool,
+
     /// Attract-demo reel ordinal for `--ui demo`: the index into the pack's
     /// sorted `demo/<hex>.dat` entries (0 = first reel)
     #[arg(long, default_value_t = 0, value_name = "N", requires = "pack")]
@@ -601,7 +605,9 @@ enum ScdAction {
         #[arg(long, value_name = "PATH")]
         out: PathBuf,
 
-        /// RDT id (hex, e.g. 1030) to compile a merged `#if` script for
+        /// RDT id (hex, e.g. 1031) to compile one variant of a merged
+        /// script for: its `if (JILL)`-style tests fold away, giving that
+        /// RDT's own bytecode. Without it the runtime build keeps the tests
         #[arg(long, value_name = "ID", value_parser = parse_room_id)]
         room: Option<u16>,
 
@@ -610,21 +616,23 @@ enum ScdAction {
         #[arg(long)]
         authentic: bool,
 
-        /// Region to compile for: usa (English), jpn (Japanese, including
-        /// the original Mediakite release) or eur (French and German); it
-        /// picks the `#if USA` / `#if JPN` / `#if EUR` lines
+        /// Region to compile the `--room` variant for: usa (English), jpn
+        /// (Japanese, including the original Mediakite release) or eur
+        /// (French and German); it picks the `if (USA)` / `if (JPN)` /
+        /// `if (EUR)` lines
         #[arg(long, value_name = "REGION", value_parser = parse_region)]
         region: Option<arklay::scd::akscr::Region>,
     },
 
-    /// Export every room of a pack as one merged .akscr script per room
-    /// (both players, and both mansion visits for stages 1 and 2), naming
-    /// game data from the `inc/*.akinc` files beside the output directory
+    /// Export every room of a game install as one merged .akscr script per
+    /// room (both players, and both mansion visits for stages 1 and 2),
+    /// naming game data from the `inc/*.akinc` files beside the output
+    /// directory
     ExportRooms {
-        /// Game packs to read, each optionally prefixed by its region
-        /// (`jpn=jpn.akpak`; usa when not given); the lines the regions
-        /// differ in go under `#if USA` / `#if JPN` / `#if EUR`
-        #[arg(value_name = "[REGION=]PACK", required = true, value_parser = parse_region_pack)]
+        /// Game installs to read, each optionally prefixed by its region
+        /// (`jpn=path/to/japanese`; usa when not given); the lines the
+        /// regions differ in go under `if (USA)` / `if (JPN)` / `if (EUR)`
+        #[arg(value_name = "[REGION=]INSTALL", required = true, value_parser = parse_region_pack)]
         packs: Vec<(arklay::scd::akscr::Region, PathBuf)>,
 
         /// Directory to write each room's script into, in the folder of its
@@ -632,6 +640,15 @@ enum ScdAction {
         #[arg(long, short)]
         out: PathBuf,
     },
+}
+
+/// The room `--room`, `--player` and `--mansion2` name.
+fn room_id(room: &str, player: u8, mansion2: bool) -> Result<arklay::state::RoomId> {
+    let id = arklay::state::RoomId::from_room_and_player(room, player)?;
+    if mansion2 && !id.is_mansion() {
+        bail!("--mansion2 needs a mansion room (stage 1 or 2), not {room}");
+    }
+    Ok(id.with_visit(mansion2))
 }
 
 /// Parse a region name such as `jpn`.
@@ -709,17 +726,13 @@ fn build_scd(
     let script = input
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("akscr"));
-    if authentic && room.is_none() {
-        bail!("--authentic needs --room");
-    }
     if region.is_some() && room.is_none() {
         bail!("--region needs --room");
     }
     let assembled = if script {
         let dir = input.parent().unwrap_or(Path::new("."));
-        arklay::scd::akscr::compile_with(
-            &text,
-            room.map(|room| {
+        let build = match room {
+            Some(room) => {
                 let mut variant = arklay::scd::akscr::Variant::for_room(room);
                 if authentic {
                     variant = variant.authentic();
@@ -727,12 +740,16 @@ fn build_scd(
                 if let Some(region) = region {
                     variant = variant.in_region(region);
                 }
-                variant
-            }),
-            &arklay::scd::akscr::includes_from(dir),
-        )
-        .with_context(|| format!("failed to compile {}", input.display()))?
+                arklay::scd::akscr::Build::Variant(variant)
+            }
+            None => arklay::scd::akscr::Build::Runtime { authentic },
+        };
+        arklay::scd::akscr::compile_build(&text, build, &arklay::scd::akscr::includes_from(dir))
+            .with_context(|| format!("failed to compile {}", input.display()))?
     } else {
+        if authentic {
+            bail!("--authentic only applies to .akscr scripts");
+        }
         if room.is_some() {
             bail!("--room only applies to .akscr scripts");
         }
@@ -753,7 +770,7 @@ fn build_scd(
     Ok(())
 }
 
-/// Decompile every room RDT in each region's pack and write one merged
+/// Decompile every room RDT in each region's install and write one merged
 /// `.akscr` per room into `out`, as `<room>0/room.akscr`.
 fn export_rooms(packs: &[(arklay::scd::akscr::Region, PathBuf)], out: &Path) -> Result<()> {
     fs::create_dir_all(out).with_context(|| format!("failed to create {}", out.display()))?;
@@ -790,31 +807,17 @@ fn export_rooms(packs: &[(arklay::scd::akscr::Region, PathBuf)], out: &Path) -> 
     Ok(())
 }
 
-/// Decompile every room with scripts in `pack`, by RDT id.
+/// Decompile every room RDT with scripts in the install under `root`, by
+/// RDT id.
 fn decompile_rooms(
-    pack: &Path,
+    root: &Path,
     names: &arklay::scd::akscr::Names,
 ) -> Result<std::collections::BTreeMap<u16, String>> {
-    let pack = Pack::open(pack).with_context(|| format!("failed to open {}", pack.display()))?;
-    let mut rooms = std::collections::BTreeMap::new();
-    for room in arklay::room::ids(&pack) {
-        // The stub rooms of unused slots carry no scripts.
-        let Ok(loaded) = arklay::room::load(&pack, room) else {
-            continue;
-        };
-        if loaded.state.cuts.is_empty() {
-            continue;
-        }
-        let Ok(scripts) = loaded.own_scripts(&pack) else {
-            continue;
-        };
-        // The decompiler's room names are RE1's, whose RDT numbers fit 16 bits.
-        let Ok(id) = u16::try_from(room.rdt_number()) else {
-            continue;
-        };
-        rooms.insert(id, arklay::scd::akscr::decompile_with(&scripts, names, id));
-    }
-    Ok(rooms)
+    let rooms = arklay::convert::installed_room_scripts(root)?;
+    Ok(rooms
+        .iter()
+        .map(|(&id, scripts)| (id, arklay::scd::akscr::decompile_with(scripts, names, id)))
+        .collect())
 }
 
 /// Build a mod source directory and print its summary and aggregated warnings.
@@ -1419,7 +1422,7 @@ fn main() -> Result<()> {
                 let room = cli
                     .room
                     .as_deref()
-                    .map(|room| arklay::state::RoomId::from_room_and_player(room, cli.player))
+                    .map(|room| room_id(room, cli.player, cli.mansion2))
                     .transpose()?;
                 if room.is_some() && screen != "game" {
                     bail!("--room with --ui is only supported for `--ui game`");
@@ -1460,7 +1463,7 @@ fn main() -> Result<()> {
                 );
             }
             if let Some(room) = cli.room {
-                let id = arklay::state::RoomId::from_room_and_player(&room, cli.player)?;
+                let id = room_id(&room, cli.player, cli.mansion2)?;
                 return arklay::engine::run_with_options(
                     &pack,
                     id,

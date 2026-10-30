@@ -1,22 +1,21 @@
-//! `.akscr` preprocessor: `#if SYMBOL` / `#else` / `#endif` over whole lines.
-//!
-//! One script covers every variant of a room: the player digit (0 Chris,
-//! 1 Jill) and, for the mansion stages, the first visit (stages 1/2) and the
-//! second (stages 6/7). The symbols are `CHRIS`, `JILL`, `MANSION1` and
-//! `MANSION2`; blocks nest. A room outside the mansion defines neither
-//! mansion symbol.
+//! `.akscr` preprocessor: `#if AUTHENTIC` / `#else` / `#endif` over whole
+//! lines, `#define` and `#include`.
 //!
 //! `AUTHENTIC` selects the original game's exact bytecode where the shipped
 //! data has a quirk: `#if AUTHENTIC` keeps the original, its `#else` holds
-//! the fixed version a build uses by default.
+//! the fixed version a build uses by default. `#if !AUTHENTIC` takes the
+//! block when it is not defined. Blocks nest.
 //!
-//! `USA`, `JPN` and `EUR` pick the region, one defined per build. The PC
-//! releases ship three sets of room scripts: the English (USA) one, the
-//! Japanese one (the original Mediakite release and the Steam/GOG Japanese
-//! build) and the French and German one (EUR), and `#if` blocks on the
-//! region hold every difference between them.
+//! One script covers every variant of a room, but the variants are not
+//! preprocessor symbols: the player (`CHRIS`, `JILL`), the mansion visit
+//! (`MANSION1`, `MANSION2`) and the release (`USA`, `JPN`, `EUR`) are tested
+//! at run time by `if (JILL) { ... }` statements (see [`super::compile`]).
+//! A [`Build`] for one RDT variant folds those tests away, giving that RDT's
+//! own bytecode; the runtime build keeps them as variant jumps.
 //!
-//! `#if !SYMBOL` takes the block when `SYMBOL` is not defined.
+//! The older merged form, which picked the variants with `#if CHRIS`-style
+//! lines, is still read by [`Build::Legacy`]: the exporter writes it before
+//! [`super::lift`] turns it into `if` statements.
 //!
 //! `#define NAME value` names a number (or another name) for the arguments
 //! that follow, and `#include "inc/items.akinc"` reads defines from a file;
@@ -28,7 +27,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-/// The defined symbols.
+/// The symbols a [`Build::Legacy`] script's `#if` may test; any other build
+/// knows only `AUTHENTIC`.
 pub const SYMBOLS: [&str; 8] = [
     "CHRIS",
     "JILL",
@@ -94,6 +94,63 @@ impl std::fmt::Display for Region {
     }
 }
 
+/// What a script is compiled for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Build {
+    /// One RDT variant: every `if (JILL)`-style test folds to the branch the
+    /// variant takes, so the bytecode is that RDT's own.
+    Variant(Variant),
+    /// Every variant at once: the tests stay in the bytecode as variant
+    /// jumps the engine resolves for the room it runs. This is what ships.
+    Runtime {
+        /// Keep the original game's exact bytecode where it has a quirk.
+        authentic: bool,
+    },
+    /// One RDT variant of a script in the older merged form, whose `#if`
+    /// lines may also test the variant symbols ([`SYMBOLS`]).
+    Legacy(Variant),
+}
+
+impl Build {
+    /// The runtime build with the port's fixes.
+    pub const RUNTIME: Build = Build::Runtime { authentic: false };
+
+    /// The variant a build folds to, `None` for the runtime build.
+    pub fn variant(self) -> Option<Variant> {
+        match self {
+            Build::Variant(variant) | Build::Legacy(variant) => Some(variant),
+            Build::Runtime { .. } => None,
+        }
+    }
+
+    /// Whether the build keeps the original bytecode's quirks.
+    pub fn authentic(self) -> bool {
+        match self {
+            Build::Variant(variant) | Build::Legacy(variant) => variant.authentic,
+            Build::Runtime { authentic } => authentic,
+        }
+    }
+
+    /// This build with the original bytecode's quirks.
+    pub fn as_authentic(self) -> Self {
+        match self {
+            Build::Variant(variant) => Build::Variant(variant.authentic()),
+            Build::Legacy(variant) => Build::Legacy(variant.authentic()),
+            Build::Runtime { .. } => Build::Runtime { authentic: true },
+        }
+    }
+
+    /// Whether `#if symbol` holds, `None` for a symbol the build does not
+    /// know.
+    fn defines(self, symbol: &str) -> Option<bool> {
+        match (self, symbol) {
+            (_, "AUTHENTIC") => Some(self.authentic()),
+            (Build::Legacy(variant), _) => variant.defines(symbol),
+            _ => None,
+        }
+    }
+}
+
 impl Variant {
     /// The variant of RDT `id` (`0x1030` is stage 1, room 03, player 0), for
     /// the USA region.
@@ -122,6 +179,33 @@ impl Variant {
             authentic: true,
             ..self
         }
+    }
+
+    /// The variant's bits for a variant jump's mask
+    /// ([`crate::scd::opcode::variant_matches`]): one per dimension.
+    pub fn bits(self) -> u8 {
+        use crate::scd::opcode::variant;
+        let player = if self.jill {
+            variant::JILL
+        } else {
+            variant::CHRIS
+        };
+        let mansion = match self.mansion {
+            Some(1) => variant::MANSION1,
+            Some(_) => variant::MANSION2,
+            None => variant::OUTSIDE,
+        };
+        let region = match self.region {
+            Region::Usa => variant::USA,
+            Region::Jpn => variant::JPN,
+            Region::Eur => variant::EUR,
+        };
+        player | mansion | region
+    }
+
+    /// Whether a variant jump's `mask` takes this variant.
+    pub fn matches(self, mask: u8) -> bool {
+        crate::scd::opcode::variant_matches(mask, self.bits())
     }
 
     /// Whether `symbol` is defined, `None` for an unknown symbol.
@@ -157,10 +241,10 @@ pub fn room_variants(base: u16) -> Vec<u16> {
     ids
 }
 
-/// Where the checked-in merged script of room `base` (`0x103`) sits under
-/// `games/re1/room`: in the folder of its first RDT, `1030/room.akscr`.
+/// Where the checked-in script of room `base` (`0x103`) sits under
+/// `games/re1/room`: in the room's folder, `103/room.akscr`.
 pub fn room_script_file(base: u16) -> String {
-    format!("{base:03x}0/{ROOM_SCRIPT_FILE}")
+    format!("{base:03x}/{ROOM_SCRIPT_FILE}")
 }
 
 /// The file name of a checked-in room script inside its room folder.
@@ -198,17 +282,17 @@ fn directive(line: &str) -> Option<Directive<'_>> {
     }
 }
 
-/// The lines `variant` keeps, with their 1-based line numbers. Without a
-/// variant the script must not use any directive.
-pub(super) fn kept_lines(text: &str, variant: Option<Variant>) -> Result<Vec<(usize, &str)>> {
-    kept_lines_with(text, variant, None)
+/// The lines `build` keeps, with their 1-based line numbers. Without a
+/// build the script must not use any directive.
+pub(super) fn kept_lines(text: &str, build: Option<Build>) -> Result<Vec<(usize, &str)>> {
+    kept_lines_with(text, build, None)
 }
 
 /// [`kept_lines`], keeping the `#if keep` blocks as they are, directives
 /// and both branches.
 pub(super) fn kept_lines_with<'a>(
     text: &'a str,
-    variant: Option<Variant>,
+    build: Option<Build>,
     keep: Option<&str>,
 ) -> Result<Vec<(usize, &'a str)>> {
     // One entry per open `#if`: (taking the `#if` branch, now in `#else`),
@@ -235,21 +319,23 @@ pub(super) fn kept_lines_with<'a>(
                 }
             }
             Directive::If(symbol) => {
-                let Some(variant) = variant else {
-                    bail!(
-                        "line {line_no}: `#if {symbol}` needs a room variant to compile for \
-                         (e.g. `scd build --room 1030`)"
-                    );
-                };
                 let (negated, name) = match symbol.strip_prefix('!') {
                     Some(name) => (true, name),
                     None => (false, symbol),
                 };
-                let Some(defined) = variant.defines(name) else {
+                let Some(build) = build else {
+                    bail!("line {line_no}: this script may not use `#if {symbol}`");
+                };
+                let Some(defined) = build.defines(name) else {
+                    if SYMBOLS.contains(&name) {
+                        bail!(
+                            "line {line_no}: `#if {symbol}` picks a room variant, which is a \
+                             run-time test: write `if ({symbol}) {{ ... }}`"
+                        );
+                    }
                     bail!(
-                        "line {line_no}: unknown symbol `{symbol}` (expected one of {}, \
-                         or `!` before one)",
-                        SYMBOLS.join(", ")
+                        "line {line_no}: unknown symbol `{symbol}` (expected `AUTHENTIC`, \
+                         or `!` before it)"
                     );
                 };
                 stack.push(Some((defined != negated, false)));
@@ -322,16 +408,16 @@ pub struct Preprocessed {
     pub defines: HashMap<String, i64>,
 }
 
-/// Resolve the directives for `variant`. Dropped and directive lines become
+/// Resolve the directives for `build`. Dropped and directive lines become
 /// blank, so line numbers in later errors still point into the source.
-pub fn preprocess(text: &str, variant: Option<Variant>, load: Loader) -> Result<Preprocessed> {
+pub fn preprocess(text: &str, build: Build, load: Loader) -> Result<Preprocessed> {
     let mut state = State {
         defines: HashMap::new(),
         included: HashSet::new(),
-        variant,
+        build,
         load,
     };
-    let kept = kept_lines(text, variant)?;
+    let kept = kept_lines(text, Some(build))?;
     let mut out = String::with_capacity(text.len());
     let mut next = 1usize;
     for (line_no, line) in kept {
@@ -357,7 +443,7 @@ pub fn preprocess(text: &str, variant: Option<Variant>, load: Loader) -> Result<
 struct State<'a> {
     defines: HashMap<String, i64>,
     included: HashSet<String>,
-    variant: Option<Variant>,
+    build: Build,
     load: Loader<'a>,
 }
 
@@ -404,7 +490,7 @@ impl State<'_> {
 
     /// Read an include file's defines.
     fn include(&mut self, text: &str) -> Result<()> {
-        for (line_no, line) in kept_lines(text, self.variant)? {
+        for (line_no, line) in kept_lines(text, Some(self.build))? {
             let trimmed = line.trim();
             if trimmed.is_empty() || trimmed.starts_with("//") {
                 continue;

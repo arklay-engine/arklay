@@ -443,8 +443,8 @@ fn demo_pack_boots_room_1000_with_the_script_lua_and_background() {
 
     // The replacement background is the demo's own art.
     assert_ne!(
-        built.read("room/1000/cut/00.bmp").unwrap(),
-        base.read("room/1000/cut/00.bmp").unwrap()
+        built.read("room/100/cut/00.bmp").unwrap(),
+        base.read("room/100/cut/00.bmp").unwrap()
     );
 
     let layered = Pack::open_layered(&pack_path, std::slice::from_ref(&demo_pack)).unwrap();

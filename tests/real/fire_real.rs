@@ -155,7 +155,7 @@ struct FireOutcome {
 
 /// Drive the firing event and report the stall release.
 fn run_fire_scene(pack: &Pack, name: &str) -> FireOutcome {
-    let id = RoomId::parse(name).unwrap();
+    let id = common::original_room(name);
     let mut scene = FireScene::boot(pack, id, FIRE_EVENT);
     let mut outcome = FireOutcome::default();
     let mut fire_start = None;
@@ -229,7 +229,7 @@ fn real_room1051_scripted_gunshot_plays_at_barry_and_is_packed() {
     let pack = Pack::open(&pack_path).unwrap();
     let id = RoomId::parse("1051").unwrap();
     let mut scene = FireScene::boot(&pack, id, FIRE_EVENT);
-    let row = arklay::sfx::room_row(id.stage, id.room);
+    let row = arklay::sfx::room_row(id.table_row(), id.room);
     let mut shot = None;
     for _ in 0..300 {
         scene.tick(&pack);

@@ -98,9 +98,9 @@ impl Text {
     }
 
     /// The save screen's shorthand location label of the room a block was
-    /// saved in; `stage` is the block's 0-based stage byte.
+    /// saved in, by its 1-based stage.
     pub fn save_location(&self, stage: u8, room: u8) -> Option<&[u8]> {
-        self.room_label(stage.saturating_add(1), room)
+        self.room_label(stage, room)
     }
 
     /// Item-name entry for the `item_id`; `None` when the item has no name.
@@ -125,19 +125,16 @@ impl Text {
     /// The message selected by `id`: bit `0x40` picks the global table, and
     /// the low six bits are the index within either table.
     ///
-    /// Room messages resolve the RDT variant's key, then the shared room key,
-    /// then the RDT's own text, then the registry id.
+    /// Room messages resolve the room variant's keys, most specific first
+    /// (`ROOM_100_JILL_MANSION2_TEXT_0A`, then `ROOM_100_JILL_TEXT_0A`,
+    /// `ROOM_100_MANSION2_TEXT_0A`), then the shared room key, then the RDT's
+    /// own text, then the registry id.
     pub fn message<'a>(&'a self, room: &'a RoomState, id: u16) -> Option<&'a [u8]> {
         if id & 0x40 != 0 {
             return self.global(usize::from(id & 0x3F));
         }
-        let room3 = format!("{:X}{:02X}", room.stage, room.room);
-        let variant = format!("ROOM_{room3}{}_TEXT_{id:02X}", room.player_flag);
-        if let Some(bytes) = self.catalog.lookup(&variant) {
-            return Some(bytes);
-        }
-        let shared = format!("ROOM_{room3}_TEXT_{id:02X}");
-        if let Some(bytes) = self.catalog.lookup(&shared) {
+        let keys = room_text_keys(room, id);
+        if let Some(bytes) = keys.iter().find_map(|key| self.catalog.lookup(key)) {
             return Some(bytes);
         }
         // A raw RDT's own text is encoded in the pack's own script; use it
@@ -151,26 +148,20 @@ impl Text {
         {
             return Some(bytes);
         }
-        self.catalog
-            .key_display(&variant)
-            .or_else(|| self.catalog.key_display(&shared))
+        keys.iter().find_map(|key| self.catalog.key_display(key))
     }
 
     /// The speaker of page `page` of message `id`, for a subtitle: the
     /// message key with `_SPEAKER_<page>` (the page in decimal) appended, else
-    /// with `_SPEAKER`, resolved like [`Text::message`] (the RDT variant's
-    /// key, then the shared room key; `MESSAGE_<nn>` for a global message).
+    /// with `_SPEAKER`, resolved like [`Text::message`] (the room variant's
+    /// keys, then the shared room key; `MESSAGE_<nn>` for a global message).
     /// `None` when no language names one: the RE1 releases carry no speaker
     /// names, so they come only from a language file or a mod.
     pub fn speaker(&self, room: &RoomState, id: u16, page: usize) -> Option<String> {
         let keys = if id & 0x40 != 0 {
             vec![format!("MESSAGE_{:02X}", id & 0x3F)]
         } else {
-            let room3 = format!("{:X}{:02X}", room.stage, room.room);
-            vec![
-                format!("ROOM_{room3}{}_TEXT_{id:02X}", room.player_flag),
-                format!("ROOM_{room3}_TEXT_{id:02X}"),
-            ]
+            room_text_keys(room, id)
         };
         keys.iter()
             .find_map(|key| {
@@ -250,6 +241,25 @@ pub fn pack_script(pack: &Pack) -> Script {
         Some(_) => Script::Latin,
         None => Script::default(),
     }
+}
+
+/// The language keys of `room`'s message `id`, the room variant's first:
+/// `ROOM_100_JILL_MANSION2_TEXT_0A`, ..., `ROOM_100_TEXT_0A`.
+fn room_text_keys(room: &RoomState, id: u16) -> Vec<String> {
+    let room3 = format!("{:X}{:02X}", room.stage, room.room);
+    let variant = crate::state::RoomId {
+        stage: room.stage,
+        room: room.room,
+        player_flag: room.player_flag,
+        mansion2: room.mansion2,
+    };
+    crate::room::xml::string_variants(variant)
+        .into_iter()
+        .map(|tag| match tag.as_str() {
+            "" => format!("ROOM_{room3}_TEXT_{id:02X}"),
+            tag => format!("ROOM_{room3}_{tag}_TEXT_{id:02X}"),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -397,7 +407,7 @@ mod tests {
         // RDT can answer.
         let pack = pack_with(&[(
             "language/en-US.txt",
-            "ROOM_FFF_TEXT_00 = \"A\"\nROOM_FFF1_TEXT_00 = \"B\"\n",
+            "ROOM_FFF_TEXT_00 = \"A\"\nROOM_FFF_JILL_TEXT_00 = \"B\"\n",
         )]);
         let text = Text::load(&pack, Some("en-US"));
         let room = RoomState {
@@ -408,7 +418,7 @@ mod tests {
             messages: Some(vec![0x00, 0x00, 0x04, 0x00, 0xCC, 0x01, 0x00]),
             ..RoomState::default()
         };
-        // The RDT variant's key wins.
+        // The room variant's key wins.
         assert_eq!(text.message(&room, 0), Some([0x1E, 0x01, 0x00].as_slice()));
         // No language key: the RDT stream is used.
         assert_eq!(text.message(&room, 1), Some([0xCC, 0x01, 0x00].as_slice()));
@@ -421,7 +431,7 @@ mod tests {
             "ROOM_FFF_TEXT_00 = \"A{timed 9}\"\n\
              ROOM_FFF_TEXT_00_SPEAKER = \"Rebecca\"\n\
              ROOM_FFF_TEXT_00_SPEAKER_1 = \"Chris\"\n\
-             ROOM_FFF1_TEXT_01_SPEAKER = \"Jill\"\n",
+             ROOM_FFF_JILL_TEXT_01_SPEAKER = \"Jill\"\n",
         )]);
         let text = Text::load(&pack, Some("en-US"));
         let room = RoomState {
@@ -433,7 +443,7 @@ mod tests {
         assert_eq!(text.speaker(&room, 0, 0).as_deref(), Some("Rebecca"));
         assert_eq!(text.speaker(&room, 0, 1).as_deref(), Some("Chris"));
         assert_eq!(text.speaker(&room, 0, 2).as_deref(), Some("Rebecca"));
-        // The RDT variant's key, as for the message itself.
+        // The room variant's key, as for the message itself.
         assert_eq!(text.speaker(&room, 1, 0).as_deref(), Some("Jill"));
         assert_eq!(text.speaker(&room, 2, 0), None);
     }
@@ -470,15 +480,14 @@ mod tests {
     }
 
     #[test]
-    fn save_locations_use_the_blocks_zero_based_stage() {
+    fn save_locations_name_the_room_by_its_stage() {
         let pack = pack_with(&[(
             "language/en-US.txt",
             "ROOM_100_NAME_SAVE = \"M. Room 1F\"\n",
         )]);
         let text = Text::load(&pack, Some("en-US"));
-        // The block's stage byte is 0-based; the key is 1-based.
         assert_eq!(
-            text.save_location(0, 0x00).map(|bytes| text.decode(bytes)),
+            text.save_location(1, 0x00).map(|bytes| text.decode(bytes)),
             Some("M. Room 1F".to_string())
         );
         // A stage/room no language carries at all misses.

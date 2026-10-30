@@ -1,7 +1,9 @@
 //! The three-channel BGM state machine and its mixer handoff.
 //!
 //! The shipped game selects music from the per-stage/room state table
-//! ([`crate::game::GameState::room_bgm`]). On every room load or transition
+//! ([`crate::game::GameState::room_bgm`]), one row of 32 rooms per row of
+//! the original's per-room tables ([`crate::state::RoomId::table_row`]): a
+//! mansion room's second visit has a row of its own. On every room load or transition
 //! [`update_room_bgm`] resolves the target state, fades the outgoing banks when
 //! the group changes, loads the group's three tracks and starts the channels
 //! whose enable bits (`0x08`/`0x10`/`0x20`) are set. A door transition runs
@@ -227,7 +229,7 @@ impl BgmCache {
 /// runs it twice). `room_transition_load` only returns, and `game_loop` only
 /// arms the room-entry fade, once those sleeps are over.
 pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -> u8 {
-    let stage = usize::from(id.stage.saturating_sub(1));
+    let stage = id.table_row();
     let room = usize::from(id.room);
     let Some(&target) = game.room_bgm.get(stage * 32 + room) else {
         return 0;
@@ -329,7 +331,7 @@ pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -
 /// The port keeps the outgoing state across the load (its BGM handoff tears
 /// the old banks down itself), so only the timing follows `init_room` here.
 pub fn init_room_sleep(game: &GameState, id: RoomId) -> u8 {
-    let stage = usize::from(id.stage.saturating_sub(1));
+    let stage = id.table_row();
     let room = usize::from(id.room);
     match game.room_bgm.get(stage * 32 + room) {
         Some(&target) if target != 0xFF && matches!(target >> 6, 1 | 2) => FADE_OUT_ALL_FRAMES,
@@ -346,7 +348,7 @@ pub fn init_room_demo_override(game: &mut GameState, id: RoomId) {
     if !game.flags[5].bit(crate::game::MSF2_ATTRACT_DEMO) {
         return;
     }
-    let stage = usize::from(id.stage.saturating_sub(1));
+    let stage = id.table_row();
     if let Some(target) = game.room_bgm.get_mut(stage * 32 + usize::from(id.room)) {
         *target = 0xFF;
     }
@@ -366,7 +368,7 @@ fn load_and_start(game: &mut GameState, id: RoomId, state: u8) {
         slot_count = 2;
     }
 
-    let stage = usize::from(id.stage.saturating_sub(1));
+    let stage = id.table_row();
     let room = usize::from(id.room);
     let Some(group) = game
         .music
@@ -559,8 +561,7 @@ mod tests {
 
     /// Store `value` in the room's BGM row (the `room_bgm_state_set` write).
     fn set_row(game: &mut GameState, id: RoomId, value: u8) {
-        let stage = usize::from(id.stage - 1);
-        game.room_bgm[stage * 32 + usize::from(id.room)] = value;
+        game.room_bgm[id.table_row() * 32 + usize::from(id.room)] = value;
     }
 
     fn names(game: &GameState) -> Vec<Option<crate::music::TrackId>> {
@@ -833,6 +834,7 @@ mod tests {
             stage: 3,
             room: 0x07,
             player_flag: player,
+            mansion2: false,
         };
         let mut game = game_for(id);
         for &flag in flags {

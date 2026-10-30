@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="1024" g="1024" b="1024"/>
+  <lights>
+    <light x="5000" y="-3500" z="5555" r="255" g="255" b="255" kind="0" radius="10000"/>
+    <light x="1600" y="-3000" z="3500" r="180" g="180" b="180" kind="0" radius="20000"/>
+    <light x="6200" y="-3000" z="8700" r="180" g="180" b="180" kind="0" radius="20000"/>
+  </lights>
+  <cameras>
+    <camera x="3348" y="-10710" z="5778" lookX="5004" lookY="-1584" lookZ="4752" roll="0" fov="230"/>
+    <camera x="7848" y="-414" z="5688" lookX="4986" lookY="-1548" lookZ="5220" roll="0" fov="188">
+      <maskGroup originX="54" originY="-38" texBits="0x7800">
+        <sprite u="0" v="0" x="129" y="128" depthData="487" blend="3" colorMode="1" size="16"/>
+        <sprite u="16" v="0" x="145" y="128" depthData="475" blend="3" colorMode="1" size="16"/>
+        <sprite u="32" v="0" x="161" y="128" depthData="466" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="56" v="0" x="129" y="144" depthData="465" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="80" v="0" x="153" y="144" depthData="458" blend="3" colorMode="1" size="16"/>
+        <sprite u="96" v="0" x="169" y="144" depthData="450" blend="3" colorMode="1" size="16"/>
+        <sprite u="112" v="0" x="137" y="160" depthData="450" blend="3" colorMode="1" size="16"/>
+        <sprite u="0" v="16" x="153" y="160" depthData="443" blend="3" colorMode="1" size="16"/>
+        <sprite u="16" v="16" x="169" y="160" depthData="438" blend="3" colorMode="1" size="16"/>
+        <sprite u="32" v="16" x="137" y="176" depthData="439" blend="3" colorMode="1" size="16"/>
+        <sprite u="48" v="16" x="153" y="176" depthData="431" blend="3" colorMode="1" size="16"/>
+        <sprite u="64" v="16" x="169" y="176" depthData="423" blend="3" colorMode="1" size="16"/>
+        <sprite u="80" v="16" x="137" y="192" depthData="422" blend="3" colorMode="1" size="16"/>
+        <sprite u="96" v="16" x="153" y="192" depthData="418" blend="3" colorMode="1" size="16"/>
+        <sprite u="112" v="16" x="169" y="192" depthData="411" blend="3" colorMode="1" size="16"/>
+        <sprite u="8" v="32" x="137" y="208" depthData="411" blend="3" colorMode="1" size="16"/>
+        <sprite u="24" v="32" x="153" y="208" depthData="405" blend="3" colorMode="1" size="16"/>
+        <sprite u="40" v="32" x="169" y="208" depthData="398" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="64" v="32" x="137" y="224" depthData="398" blend="3" colorMode="1" size="16"/>
+        <sprite u="80" v="32" x="153" y="224" depthData="394" blend="3" colorMode="1" size="16"/>
+        <sprite u="96" v="32" x="169" y="224" depthData="386" blend="3" colorMode="1" width="24" height="16"/>
+        <sprite u="0" v="32" x="185" y="192" depthData="409" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="0" v="48" x="137" y="240" depthData="397" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="48" x="154" y="240" depthData="394" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="48" x="170" y="240" depthData="386" blend="3" colorMode="1" width="24" height="8"/>
+      </maskGroup>
+    </camera>
+    <camera x="1890" y="-648" z="5382" lookX="6912" lookY="-2484" lookZ="4554" roll="0" fov="188"/>
+    <camera x="6156" y="2124" z="6624" lookX="4860" lookY="-4662" lookZ="4518" roll="0" fov="207"/>
+    <camera x="5976" y="-6894" z="7092" lookX="4824" lookY="936" lookZ="10098" roll="0" fov="230"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="1100" z0="8565" x1="8500" z1="8565" x2="8700" z2="1078" x3="1100" z3="1078"/>
+      <switch zoneIndex="1" to="2" x0="4323" z0="2255" x1="9000" z1="4400" x2="8300" z2="1500" x3="5200" z3="1500"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="2" to="9" x0="0" z0="1178" x1="0" z1="8568" x2="8300" z2="8568" x3="8334" z3="1078"/>
+      <switch zoneIndex="3" to="2" x0="5000" z0="8214" x1="5500" z1="8200" x2="5300" z2="1700" x3="4600" z3="1700"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="4" to="9" x0="1235" z0="1179" x1="1100" z1="8568" x2="9100" z2="8553" x3="9100" z3="1174"/>
+      <switch zoneIndex="5" to="1" x0="3839" z0="1600" x1="3439" z1="8600" x2="4939" z2="8500" x3="4539" z3="1600"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="6" to="9" x0="8900" z0="8800" x1="9100" z1="1100" x2="600" z2="1100" x3="800" z3="8800"/>
+      <switch zoneIndex="7" to="1" x0="1400" z0="1300" x1="1100" z1="8600" x2="4400" z2="8600" x3="4500" z3="1300"/>
+      <switch zoneIndex="8" to="2" x0="4500" z0="1300" x1="4400" z1="8600" x2="8700" z2="8700" x3="8800" z3="1200"/>
+    </switches>
+    <switches from="4">
+      <view zoneIndex="9" to="9" x0="5300" z0="8100" x1="5300" z1="10600" x2="7800" z2="10600" x3="7800" z3="8100"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="3186" cellZ="6714">
+    <quadrant index="0">
+      <box xMax="8784" zMax="9528" xMin="837" zMin="7818" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9259" zMax="9158" xMin="7717" zMin="740" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="8784" zMax="9528" xMin="837" zMin="7818" shape="1" cf1="true" cf2="true"/>
+      <box xMax="1823" zMax="9162" xMin="788" zMin="758" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="9344" zMax="1885" xMin="832" zMin="779" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9259" zMax="9158" xMin="7717" zMin="740" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="1823" zMax="9162" xMin="788" zMin="758" shape="1" cf1="true" cf2="true"/>
+      <box xMax="9344" zMax="1885" xMin="832" zMin="779" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="9600" height="0x2904" sound="0x002D"/>
+  </footsteps>
+  <strings>
+    <language lang="en-US">
+      <string key="name">ALMOST A SANDWICH</string>
+      <string key="save_name">M. Room 1F</string>
+      <string key="0">{scroll 0}\n{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}\n{scroll 2}{timed 150}</string>
+      <string key="3">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="4">{scroll 0}\n{scroll 2}{timed 60}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
+      <string key="0">{scroll 0}\n  ちょっと どうなってるの‽{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}\n   ジルか‽ どうしたんだ?{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}    バリー‽ 助けて\n    ドアが開かないの!{scroll 2}{timed 150}</string>
+      <string key="3">{scroll 0}\n  下がってろ ドアを破るぞ!{scroll 2}{timed 110}</string>
+      <string key="4">{scroll 0}\n     急げ こっちだ!{scroll 2}{timed 60}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Chambre RdC</string>
+      <string key="0">{scroll 0}\nEh, que se passe-t'il?{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}Jill? C'est toi, Jill? \nQue s'est-il passé?{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}Barry! Aide-moi! La porte ne \nveux pas s'ouvrir. Vite!{scroll 2}{timed 150}</string>
+      <string key="3">{scroll 0}Éloigne-toi de la porte, Jill.\nJe vais défoncer cette porte!{scroll 2}{timed 110}</string>
+      <string when="MANSION2" key="3">{scroll 0}Eloigne-toi de la porte, Jill. \nJe vais défoncer cette porte!{scroll 2}{timed 110}</string>
+      <string key="4">{scroll 0}\nDépêche-toi! Par là!{scroll 2}{timed 60}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 0}\nHey, was ist hier los?{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}Jill? Bist du das, Jill?\nWas ist passiert?{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}Barry?\nHilf mir, bitte!{scroll 2}{clear 75}{scroll 0}Die Tür geht nicht auf.\nSchnell!{scroll 2}{timed 75}</string>
+      <string when="MANSION2" key="2">{scroll 0}Barry?\nHilf' mir, bitte!{scroll 2}{clear 75}{scroll 0}Die Tür läßt sich nicht\nöffnen. Schnell!{scroll 2}{timed 75}</string>
+      <string key="3">{scroll 0}\nGeh etwas zur Seite, Jill.{scroll 2}{clear 45}{scroll 0}\nIch werde die Tür eintreten!{scroll 2}{timed 65}</string>
+      <string when="MANSION2" key="3">{scroll 0}\nGeh' etwas zur Seite, Jill.{scroll 2}{clear 45}{scroll 0}\nIch werde diese Tür eintreten!{scroll 2}{timed 65}</string>
+      <string when="JILL MANSION1" key="3">{scroll 0}\nGeh etwas zur Seite, Jill.{scroll 2}{clear 55}{scroll 0}\nIch werde die Tür eintreten!{scroll 2}{timed 55}</string>
+      <string key="4">{scroll 0}Beeilung!\nHier lang!{scroll 2}{timed 60}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Villa 1P</string>
+      <string key="0">{scroll 0}\nEhi, ma che succede?{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}Jill? Sei tu, Jill!? \nChe è successo?{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}Barry! Aiutami! La porta non \nvuole aprirsi!{scroll 2}{timed 150}</string>
+      <string key="3">{scroll 0}Stai lontano dalla porta, Jill.\nLa butto giù!{scroll 2}{timed 110}</string>
+      <string key="4">{scroll 0}Sbrigati! \nDa questa parte!{scroll 2}{timed 60}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 0}\n¡Oye! ¿Qué pasa?{scroll 2}{timed 80}</string>
+      <string when="JILL" key="0">{scroll 0}\n¡Hey! ¿Qué pasa?{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}¿Jill? ¿Eres tú, Jill?\n¿Qué ha pasado?{scroll 2}{timed 110}</string>
+      <string when="JILL" key="1">{scroll 0}¿Jill? ¿Eres tú, Jill?\n¿Qué ocurre?{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}¡Barry! ¡Ayúdame, por favor!\nLa puerta no se abre. ¡Rápido!{scroll 2}{timed 150}</string>
+      <string key="3">{scroll 0}¡Jill, aléjate de la\npuerta!{scroll 2}{clear 45}{scroll 0}¡La voy a echar\nabajo!{scroll 2}{timed 65}</string>
+      <string key="4">{scroll 0}\n¡Rápido! ¡Por aquí!{scroll 2}{timed 60}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Мед. комната 1-эт.</string>
+      <string key="0">{scroll 0}\n{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}\n{scroll 2}{timed 150}</string>
+      <string key="3">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="4">{scroll 0}\n{scroll 2}{timed 60}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Lääkevarasto 1 krs</string>
+      <string key="0">{scroll 0}Hei! Mitä tapahtuu?{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}Jill? Sinäkö siellä?\nMitä siellä tapahtuu?{scroll 2}{timed 110}</string>
+      <string key="2">{scroll 0}Barry! Auta minua, ole kiltti!\nOvi ei aukea. Äkkiä!{scroll 2}{timed 150}</string>
+      <string key="3">{scroll 0}Siirry pois oven edestä!{scroll 2}{clear 45}{scroll 0}Aion potkaista sen auki!{scroll 2}{timed 65}</string>
+      <string key="4">{scroll 0}Tule! Pidä kiirettä!{scroll 2}{timed 60}</string>
+    </language>
+  </strings>
+</room>

@@ -1,0 +1,65 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define AOT_02_ITEM 0x02
+#define AOT_03_ITEM 0x03
+#define ENEMY_00_SPIDER_BLACK_TIGER 0x00
+#define ENEMY_01_PROP_COBWEB 0x01
+#define F_ROOM_18 0x18
+#define IMDL_00 0x00
+#define IMDL_01 0x01
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 9500, 13300, 2700, 2200, 12, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30B_ROCK_PASSAGE, 27700, 0, 3300, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 10300, 500, 2600, 2200, 12, DOOR_SND_01_DR_MTL, DOOR_08_DOOR08, 0, 0, ROOM_30D_STRAIGHT_PASSAGE, 14800, 0, 7100, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    item_aot_set(AOT_02_ITEM, 18400, 1400, 2000, 2000, IT_01_WEAPON_KNIFE, 1, IMDL_00, SCA_NONE, 19400, -1090, 2400, 0, F_ITEM_F6, SAT_MANUAL | SAT_PLAYER, ITEM_SPARKLE | ITEM_FX_7);
+    if (ck(FG_STATUS, F_STATUS_08, TRUE))
+    {
+        if (USA)
+        {
+            item_aot_set(AOT_03_ITEM, 19000, 12800, 2000, 2000, IT_2F_KEY_INK_RIBBON, 2, IMDL_01, SCA_NONE, 20000, -690, 13800, 0, F_ITEM_FA, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+        else
+        {
+            item_aot_set(AOT_03_ITEM, 19000, 12800, 2000, 2000, IT_2F_KEY_INK_RIBBON, 3, IMDL_01, SCA_NONE, 20000, -690, 13800, 0, F_ITEM_FA, SAT_MANUAL | SAT_PLAYER, 0);
+        }
+    }
+    set(FG_SCENARIO, F_SCENARIO_62, FALSE);
+    if (ck(FG_ENEMY, F_ENEMY_8A, FALSE))
+    {
+        aot_delete(AOT_01_DOOR, SCE_NONE, SAT_MANUAL | SAT_PLAYER);
+    }
+    if (ck(FG_ENEMY, F_ENEMY_89, FALSE))
+    {
+        set(FG_ROOM, F_ROOM_18, TRUE);
+    }
+    else
+    {
+        room_bgm_state_set(2, ROOM_30C_BLACK_TIGER_ROOM, BGM_OFF);
+    }
+    enemy(EM_04_SPIDER_BLACK_TIGER, EB_00, F_ENEMY_89, SPAWN_FORCE, 2, 0, 3800, 0, 4500, 0, 5700, ENEMY_00_SPIDER_BLACK_TIGER, ANIM_00, 0, EVAR_00);
+    enemy(EM_13_PROP_COBWEB, EB_00, F_ENEMY_8A, SPAWN_FORCE, 1, 0, 3072, 0, 11000, -2000, 2000, ENEMY_01_PROP_COBWEB, ANIM_00, 0, EVAR_00);
+}
+
+proc main
+{
+    if (ck(FG_ENEMY, F_ENEMY_8A, TRUE))
+    {
+        aot_delete(AOT_01_DOOR, SCE_DOOR, SAT_MANUAL | SAT_PLAYER);
+    }
+    if (ck(FG_ENEMY, F_ENEMY_89, TRUE) && ck(FG_ROOM, F_ROOM_18, TRUE))
+    {
+        set(FG_ROOM, F_ROOM_18, FALSE);
+        bgm_volume_ramp(BGM_MAIN, -95, 30);
+    }
+}

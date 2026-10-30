@@ -201,13 +201,19 @@ pub enum ModelTable {
 }
 
 impl ModelTable {
-    /// Pack stem of slot `slot`'s files in room `id`.
-    fn stem(self, id: RoomId, slot: usize) -> String {
+    /// The table's folder in a room folder.
+    fn kind(self) -> &'static str {
         match self {
-            Self::Object => id.object_stem(slot),
-            Self::Item => id.item_stem(slot),
+            Self::Object => "object",
+            Self::Item => "item",
         }
     }
+}
+
+/// Pack stem of slot `slot` in a room's `kind` folder `dir`
+/// (`room/100/item` -> `room/100/item/00`).
+fn slot_stem(dir: &str, slot: usize) -> String {
+    format!("{dir}/{slot:02x}")
 }
 
 /// A room converted out of an RDT: its definition and the other files of its
@@ -283,8 +289,16 @@ struct Embedded {
 }
 
 impl Embedded {
-    /// Read what RDT `data` of room `id`, parsed as `state`, embeds.
-    fn read(data: &[u8], id: RoomId, state: &RoomState) -> Self {
+    /// Read what RDT `data`, parsed as `state`, embeds, its files named in
+    /// room folder `dir` (`""` for paths relative to the folder).
+    fn read(data: &[u8], dir: &str, state: &RoomState) -> Self {
+        let kind = |kind: &str| {
+            if dir.is_empty() {
+                kind.to_string()
+            } else {
+                format!("{dir}/{kind}")
+            }
+        };
         let pointers = rdt::pointers(data);
         let mut files = Vec::new();
         let mut effects = Vec::new();
@@ -295,7 +309,7 @@ impl Embedded {
                 let Some((tmd, tim)) = model_pair(data, pointer, slot) else {
                     continue;
                 };
-                let stem = table.stem(id, slot);
+                let stem = slot_stem(&kind(table.kind()), slot);
                 files.push((format!("{stem}.tmd"), tmd.to_vec()));
                 if let Some(tim) = tim {
                     let (extension, data) = model_texture_file(tim);
@@ -320,7 +334,7 @@ impl Embedded {
             .into_iter()
             .enumerate()
         {
-            let stem = id.effect_stem(slot);
+            let stem = slot_stem(&kind("effect"), slot);
             effects.push((
                 format!("{stem}.xml"),
                 super::xml::write_effect(&effect).into_bytes(),
@@ -338,7 +352,7 @@ impl Embedded {
             })
             .filter(|(emr, edd)| emd::parse_room_anim_files(emr, edd).is_ok())
         {
-            let stem = id.anim_stem(PLAYER_ANIMATION);
+            let stem = slot_stem(&kind("anim"), PLAYER_ANIMATION);
             files.push((format!("{stem}.emr"), emr.to_vec()));
             files.push((format!("{stem}.edd"), edd.to_vec()));
         }
@@ -352,17 +366,18 @@ impl Embedded {
 }
 
 /// The game art RE1 RDT `data` of room `id` holds for the room's folder, as
-/// `(pack entry, bytes)`: the object and item model pairs, the effect sprite
-/// sheets and the player-animation pair. The room's definition (`room.xml`,
-/// the effect definitions, the scripts) is not read.
+/// `(path in the folder, bytes)` (`item/00.tmd`): the object and item model
+/// pairs, the effect sprite sheets and the player-animation pair. The room's
+/// definition (`room.xml`, the effect definitions, the scripts) is not read.
 pub fn rdt_assets(data: &[u8], id: RoomId) -> Result<Vec<(String, Vec<u8>)>> {
     let state = rdt::parse(data, id)?;
-    Ok(Embedded::read(data, id, &state).files)
+    Ok(Embedded::read(data, "", &state).files)
 }
 
 impl RoomSource {
-    /// Read an RDT into a room definition and the files of its folder: the
-    /// model pairs, effect sprites, player animation and scripts. The RDT's
+    /// Read an RDT into a room definition and the files of its folder (the
+    /// RDT's own, `room/1001/`, since an RDT is one variant's): the model
+    /// pairs, effect sprites, player animation and scripts. The RDT's
     /// message block is not kept: a room's text is its `<strings>`.
     pub fn from_rdt(data: &[u8], id: RoomId) -> Result<Converted> {
         let state = rdt::parse(data, id)?;
@@ -379,10 +394,12 @@ impl RoomSource {
             effects,
             object_slots,
             item_slots,
-        } = Embedded::read(data, id, &state);
+        } = Embedded::read(data, &id.rdt_dir(), &state);
         files.extend(effects);
         match crate::scd::reader::extract_container(data) {
-            Ok(Some(container)) => files.push((id.scd_entry(), container)),
+            Ok(Some(container)) => {
+                files.push((format!("{}/{}", id.rdt_dir(), super::SCD_FILE), container))
+            }
             Ok(None) => {}
             // A stub RDT carries no script pointers at all; a real room whose
             // scripts do not read is not one the XML can carry.
@@ -438,22 +455,23 @@ impl RoomSource {
         let records: usize = self.collision.quadrants.iter().map(Vec::len).sum();
         budget::check_len(records, budget::MAX_RECORDS, "collision record count")?;
 
+        let folder = super::Folder::of(pack, id);
         let mut model_warnings = Vec::new();
         let (omodel_slot_count, object_models) = build_models(
             ModelTable::Object,
             self.object_slots,
-            id,
+            &folder.kind(pack, "object", "00.tmd"),
             pack,
             &mut model_warnings,
         )?;
         let (item_count, item_models) = build_models(
             ModelTable::Item,
             self.item_slots,
-            id,
+            &folder.kind(pack, "item", "00.tmd"),
             pack,
             &mut model_warnings,
         )?;
-        let anim = id.anim_stem(PLAYER_ANIMATION);
+        let anim = slot_stem(&folder.kind(pack, "anim", "00.emr"), PLAYER_ANIMATION);
         let room_anim = pack
             .contains(&format!("{anim}.emr"))
             .then(|| {
@@ -465,6 +483,7 @@ impl RoomSource {
 
         Ok(RoomState {
             stage: id.stage,
+            mansion2: id.mansion2,
             room: id.room,
             player_flag: id.player_flag,
             omodel_slot_count,
@@ -681,12 +700,12 @@ fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
 fn build_models(
     table: ModelTable,
     slots: Option<usize>,
-    id: RoomId,
+    dir: &str,
     pack: &Pack,
     warnings: &mut Vec<String>,
 ) -> Result<(u8, Vec<ObjectAsset>)> {
     let present: Vec<usize> = (0..MAX_MODEL_SLOTS)
-        .filter(|&slot| pack.contains(&format!("{}.tmd", table.stem(id, slot))))
+        .filter(|&slot| pack.contains(&format!("{}.tmd", slot_stem(dir, slot))))
         .collect();
     let count = present
         .last()
@@ -697,7 +716,7 @@ fn build_models(
     })?;
     let mut assets = Vec::new();
     for slot in present {
-        let stem = table.stem(id, slot);
+        let stem = slot_stem(dir, slot);
         match load_model(&stem, pack) {
             Ok(Some((model, texture))) => assets.push(ObjectAsset {
                 pair_index: slot,
@@ -743,8 +762,9 @@ fn load_model(stem: &str, pack: &Pack) -> Result<Option<(crate::model::Tmd, Text
 /// `effect/<slot>` sheet (a CLUT sheet BMP or a 4bpp TIM).
 fn build_effects(id: RoomId, pack: &Pack) -> Result<RoomEffects> {
     let mut effects = RoomEffects::default();
+    let dir = super::Folder::of(pack, id).kind(pack, "effect", "00.xml");
     for slot in 0..crate::effects::room::EFFECT_SPRITE_SLOTS {
-        let stem = id.effect_stem(slot);
+        let stem = slot_stem(&dir, slot);
         let entry = format!("{stem}.xml");
         if !pack.contains(&entry) {
             break;

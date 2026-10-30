@@ -1,0 +1,133 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define ENEMY_00_NPC_BARRY 0x00
+#define ENEMY_00_NPC_REBECCA 0x00
+#define F_ROOM_18 0x18
+#define SE_17_ELV515 0x17
+
+proc init
+{
+    set(FG_STATUS, F_STATUS_3D, TRUE);
+    door_aot_set(AOT_00_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_12_ELE01A, 64, 0, ROOM_50C_FRONT_OF_ELEVATOR, 16000, 0, 27900, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    door_aot_set(AOT_01_DOOR, 0, 0, 1, 1, 1, DOOR_SND_0D_EV_LAB, DOOR_13_ELE01B, 64, 0, ROOM_514_FRONT_OF_TYRANT, 13300, 0, 10000, 2048, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (JILL)
+    {
+        dir_set(0, 0, 2048, 0, 4500, 0, 4200);
+    }
+    if (cmpb(B_PREV_ROOM, CMP_EQ, ROOM_50C_FRONT_OF_ELEVATOR))
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5A, FALSE))
+            {
+                dir_set(0, 0, 1500, 0, 5000, 0, 5500);
+                enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2000, 0, 4600, 0, 3500, ENEMY_00_NPC_REBECCA, ANIM_05, 19, EVAR_00);
+            }
+            else
+            {
+                dir_set(0, 0, 2048, 0, 4500, 0, 4200);
+            }
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_4D, FALSE) && ck(FG_SCENARIO, F_SCENARIO_37, FALSE))
+            {
+                dir_set(0, 0, 1500, 0, 5000, 0, 5500);
+                enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2000, 0, 4600, 0, 3500, ENEMY_00_NPC_BARRY, ANIM_05, 34, EVAR_00);
+            }
+            else
+            {
+                dir_set(0, 0, 2048, 0, 4500, 0, 4200);
+            }
+        }
+        evt_exec(0, TASK_09, on_enter);
+    }
+    else
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5A, FALSE))
+            {
+                dir_set(0, 0, 1500, 0, 5000, 0, 5500);
+                enemy(EM_23_NPC_REBECCA, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2500, 0, 4600, 0, 3500, ENEMY_00_NPC_REBECCA, ANIM_05, 19, EVAR_00);
+            }
+            else
+            {
+                dir_set(0, 0, 2048, 0, 4500, 0, 4200);
+            }
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_C0, FALSE) && ck(FG_COMMON, F_COMMON_5B, TRUE) && ck(FG_COMMON, F_COMMON_4D, FALSE))
+            {
+                dir_set(0, 0, 1500, 0, 5000, 0, 5500);
+                enemy(EM_22_NPC_BARRY, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 2500, 0, 4600, 0, 3500, ENEMY_00_NPC_BARRY, ANIM_05, 34, EVAR_00);
+            }
+            else
+            {
+                dir_set(0, 0, 2048, 0, 4500, 0, 4200);
+            }
+        }
+        evt_exec(0, TASK_09, on_enter_2);
+    }
+}
+
+event on_enter
+{
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    se_play_3d(SND_BANK_ROOM, SE_17_ELV515, 0, SND_AT_PLAYER, 0, 0, 0);
+    evt_fork(TASK_09, on_enter_sub1, 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_18, FALSE));
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        aot_on(AOT_01_DOOR, SCE_DOOR, 0);
+    }
+    evt_finish();
+}
+
+event on_enter_2
+{
+    sleep(1);
+    set(FG_RUN, F_RUN_CONTROLS, FALSE);
+    se_play_3d(SND_BANK_ROOM, SE_17_ELV515, 0, SND_AT_PLAYER, 0, 0, 0);
+    evt_fork(TASK_09, on_enter_sub1, 0);
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_18, FALSE));
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+    }
+    evt_finish();
+}
+
+event on_enter_sub1
+{
+    sleep(5);
+    set(FG_STATUS, F_STATUS_3E, TRUE);
+    sleep(10);
+    set(FG_STATUS, F_STATUS_3E, FALSE);
+    sleep(100);
+    sleep(60);
+    set(FG_ROOM, F_ROOM_18, TRUE);
+    evt_finish();
+}

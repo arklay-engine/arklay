@@ -314,9 +314,15 @@ fn errors_name_the_line() {
     assert!(
         compile_error("#version 1\nevent event_00\n{\n    return;\n}\n").contains("inside a `run`")
     );
-    assert!(
-        compile_error("#version 1\nevent event_01\n{\n    evt_finish();\n}\n").contains("event_00")
-    );
+    // A generic `event_XX` is event XX in an RDT variant's build; the
+    // runtime build numbers every variant's events, so there it is a name.
+    let error = compile_variant(
+        "#version 1\nevent event_01\n{\n    evt_finish();\n}\n",
+        Variant::for_room(0x1030),
+    )
+    .unwrap_err();
+    assert!(format!("{error:#}").contains("event_00"), "{error:#}");
+    assert!(compile("#version 1\nevent event_01\n{\n    evt_finish();\n}\n").is_ok());
     assert!(
         compile_error("#version 1\nproc init\n{\n    set(FG_COMMON, 1, 1)\n}\n").contains("`;`")
     );
@@ -359,69 +365,235 @@ event event_00
     );
 }
 
+/// The `nop` operands a command script's main blocks run, in order, for
+/// the room variant `bits`.
+fn main_nops(container: &[u8], bits: u8) -> Vec<i64> {
+    use crate::scd::host::{ScdHost, StepResult};
+    use crate::scd::ir::Operand;
+    use crate::scd::opcode::Op;
+    struct Host {
+        bits: u8,
+        nops: Vec<i64>,
+    }
+    impl ScdHost for Host {
+        fn on_flow(&mut self, op: &Op, operands: &[Operand]) -> StepResult {
+            if op.op == 0x0E {
+                self.nops.push(operands[0].value);
+            }
+            StepResult::Continue
+        }
+        fn room_variant(&mut self) -> u8 {
+            self.bits
+        }
+    }
+    let scripts = reader::parse(container).unwrap();
+    let mut host = Host {
+        bits,
+        nops: Vec::new(),
+    };
+    crate::scd::vm::CommandVm::new(&scripts).run_main(&mut host);
+    host.nops
+}
+
+/// `text` built for `variant` (its `nop`s, as the bytes run them) and its
+/// runtime build run as that variant give the same `nop`s.
+fn variant_nops(text: &str, variant: Variant) -> Vec<i64> {
+    let folded = compile_variant(text, variant)
+        .unwrap()
+        .to_container()
+        .unwrap();
+    let nops = main_nops(&folded, variant.bits());
+    let runtime = compile(text).unwrap().to_container().unwrap();
+    assert_eq!(main_nops(&runtime, variant.bits()), nops, "{variant:?}");
+    nops
+}
+
 #[test]
-fn preprocessor_selects_lines_per_variant() {
+fn variant_tests_pick_lines_per_variant() {
     let text = "#version 1
 proc main noreturn
 {
-#if MANSION1
-    nop(1);
-#if CHRIS
-    nop(2);
-#else
-    nop(3);
-#endif
-#else
-    nop(4);
-#endif
-#if JILL
-    nop(5);
-#endif
+    if (MANSION1)
+    {
+        nop(1);
+        if (CHRIS)
+        {
+            nop(2);
+        }
+        else
+        {
+            nop(3);
+        }
+    }
+    else
+    {
+        nop(4);
+    }
+    if (JILL)
+    {
+        nop(5);
+    }
 }
 ";
-    let nops = |id: u16| -> Vec<u8> {
-        let container = compile_variant(text, Variant::for_room(id))
-            .unwrap()
-            .to_container()
-            .unwrap();
-        block_bytes(&reader::parse(&container).unwrap().main[0])
-            .chunks(2)
-            .map(|insn| insn[1])
-            .collect()
-    };
+    let nops = |id: u16| variant_nops(text, Variant::for_room(id));
     assert_eq!(nops(0x1030), [1, 2]);
     assert_eq!(nops(0x1031), [1, 3, 5]);
     assert_eq!(nops(0x6030), [4]);
     assert_eq!(nops(0x7031), [4, 5]);
-    // Outside the mansion neither mansion symbol is defined.
+    // Outside the mansion neither visit holds.
     assert_eq!(nops(0x3001), [4, 5]);
-
-    assert!(compile_error(text).contains("--room"));
-    let unknown = format!(
-        "{:#}",
-        compile_variant(
-            "#version 1\n#if REBECCA\n#endif\n",
-            Variant::for_room(0x1030)
-        )
-        .unwrap_err()
+    // A variant's build holds only its own lines; the runtime build jumps.
+    let folded = compile_variant(text, Variant::for_room(0x1030))
+        .unwrap()
+        .to_container()
+        .unwrap();
+    assert_eq!(
+        block_bytes(&reader::parse(&folded).unwrap().main[0]),
+        [0x0E, 1, 0x0E, 2]
     );
+
+    // A variant test holds only variants, and some variant must take it.
+    let mixed = compile_error(
+        "#version 1\nproc main\n{\n    if (JILL && ck(FG_COMMON, 1, TRUE))\n    {\n    }\n}\n",
+    );
+    assert!(mixed.contains("cannot mix"), "{mixed}");
+    let never =
+        compile_error("#version 1\nproc main\n{\n    if (JILL && CHRIS)\n    {\n    }\n}\n");
+    assert!(never.contains("never holds"), "{never}");
+    // The variants are not preprocessor symbols.
+    let directive = compile_error("#version 1\n#if JILL\n#endif\n");
+    assert!(directive.contains("if (JILL)"), "{directive}");
+    let unknown = compile_error("#version 1\n#if REBECCA\n#endif\n");
     assert!(unknown.contains("REBECCA"), "{unknown}");
-    for broken in ["#endif\n", "#if JILL\n", "#if JILL\n#else\n#else\n#endif\n"] {
-        assert!(
-            compile_variant(broken, Variant::for_room(0x1030)).is_err(),
-            "{broken}"
-        );
+    for broken in [
+        "#endif\n",
+        "#if AUTHENTIC\n",
+        "#if AUTHENTIC\n#else\n#else\n#endif\n",
+    ] {
+        assert!(compile(broken).is_err(), "{broken}");
     }
     // Dropped lines keep their place, so errors name the source line.
-    let error = format!(
-        "{:#}",
-        compile_variant(
-            "#version 1\nproc init\n{\n#if CHRIS\n    nop(0);\n#endif\n    sleep(1);\n}\n",
-            Variant::for_room(0x1031)
-        )
-        .unwrap_err()
+    let error = compile_error(
+        "#version 1\nproc init\n{\n#if AUTHENTIC\n    nop(0);\n#endif\n    sleep(1);\n}\n",
     );
     assert!(error.contains("line 7"), "{error}");
+}
+
+#[test]
+fn variant_tests_fold_sections_and_return() {
+    // A section only some RDTs carry, and a `return` inside a variant test:
+    // the jump keeps the `if` nesting, so it still ends the block.
+    let text = "#version 1
+proc main when (CHRIS && MANSION2)
+{
+    nop(4);
+}
+proc main noreturn (MANSION2)
+{
+    nop(1);
+    if (JILL)
+    {
+        nop(2);
+        return;
+    }
+    nop(3);
+}
+proc main
+{
+    nop(5);
+}
+event on_enter when (JILL)
+{
+    evt_finish();
+}
+event on_aot
+{
+    evt_finish();
+}
+";
+    // Running off the end of a `noreturn` block ends the block list.
+    let nops = |id: u16| variant_nops(text, Variant::for_room(id));
+    assert_eq!(nops(0x1030), [1, 3, 5]);
+    assert_eq!(nops(0x1031), [1, 2, 5]);
+    assert_eq!(nops(0x6030), [4, 1, 3]);
+    assert_eq!(nops(0x6031), [1, 2, 5]);
+    let build = |id: u16| {
+        let container = compile_variant(text, Variant::for_room(id))
+            .unwrap()
+            .to_container()
+            .unwrap();
+        reader::parse(&container).unwrap()
+    };
+    // `on_aot` is Chris's event 0 and Jill's event 1.
+    assert_eq!(build(0x1030).events.len(), 1);
+    assert_eq!(build(0x1031).events.len(), 2);
+    assert_eq!(build(0x6030).main.len(), 3);
+    assert_eq!(build(0x1030).main.len(), 2);
+    // `noreturn (MANSION2)`: no final `end` on the second visit.
+    assert_eq!(
+        block_bytes(&build(0x6031).main[0]),
+        [0x0E, 1, 0x0E, 2, 0x00, 0x00, 0x0E, 3]
+    );
+    assert!(block_bytes(&build(0x1031).main[0]).ends_with(&[0x0E, 3, 0x00, 0x00]));
+    let runtime = reader::parse(&compile(text).unwrap().to_container().unwrap()).unwrap();
+    assert_eq!(runtime.events.len(), 2);
+    assert_eq!(runtime.main.len(), 3);
+}
+
+#[test]
+fn event_variant_tests_follow_each_variants_state() {
+    // Chris's branch leaves the actor sequence, Jill's stays in it: the
+    // instructions after the shared sleep decode in each one's own state.
+    let text = "#version 1
+event event_00
+{
+    evt_actor_begin();
+    if (CHRIS)
+    {
+        act_reset();
+        evt_nop();
+    }
+    else
+    {
+        act_anim_flags(1, 2, 0);
+    }
+    sleep(20);
+    if (CHRIS)
+    {
+        evt_finish();
+    }
+    else
+    {
+        act_anim_flags(3, 4, 0);
+        act_finish();
+    }
+}
+";
+    for id in [0x1030, 0x1031] {
+        let folded = compile_variant(text, Variant::for_room(id)).unwrap();
+        assert!(folded.to_container().is_ok());
+    }
+    let runtime = compile(text).unwrap().to_container().unwrap();
+    let scripts = reader::parse(&runtime).unwrap();
+    let decoded: Vec<_> = scripts.events[0]
+        .insns
+        .iter()
+        .map(|insn| insn.decoded)
+        .collect();
+    assert!(
+        decoded
+            .iter()
+            .filter(|decoded| matches!(decoded, crate::scd::ir::Decoded::Actor(_)))
+            .count()
+            >= 3,
+        "{decoded:?}"
+    );
+    // A state the variants do not share before an instruction that needs
+    // one is an error.
+    let error = compile_error(
+        "#version 1\nevent event_00\n{\n    if (CHRIS)\n    {\n        evt_actor_begin();\n    }\n    act_reset();\n    evt_finish();\n}\n",
+    );
+    assert!(error.contains("different event states"), "{error}");
 }
 
 #[test]
@@ -453,11 +625,12 @@ fn merged_scripts_reproduce_every_variant() {
          nop(9);\n#endif\n#if MANSION1\n    nop(3);\n#endif\n}\n"
     );
     for (variant, text) in variants {
-        let kept: Vec<&str> = preprocess::kept_lines(&merged, Some(variant))
-            .unwrap()
-            .into_iter()
-            .map(|(_, line)| line)
-            .collect();
+        let kept: Vec<&str> =
+            preprocess::kept_lines(&merged, Some(preprocess::Build::Legacy(variant)))
+                .unwrap()
+                .into_iter()
+                .map(|(_, line)| line)
+                .collect();
         assert_eq!(kept, text.lines().collect::<Vec<_>>());
     }
 
@@ -467,49 +640,47 @@ fn merged_scripts_reproduce_every_variant() {
 }
 
 #[test]
-fn region_symbols_pick_the_region() {
+fn region_tests_pick_the_region() {
     let text = "#version 1
 proc main noreturn
 {
-#if USA
-    nop(1);
-#else
-    nop(2);
+    if (USA)
+    {
+        nop(1);
+    }
+    else
+    {
+        nop(2);
+    }
+    if (!JPN)
+    {
+        nop(3);
+    }
+#if AUTHENTIC
+    if (EUR)
+    {
+        nop(4);
+    }
 #endif
-#if !JPN
-    nop(3);
-#endif
-#if EUR
-    nop(4);
-#endif
-#if !JILL
-    nop(5);
-#endif
+    if (!JILL)
+    {
+        nop(5);
+    }
 }
 ";
-    let nops = |variant: Variant| -> Vec<u8> {
-        let container = compile_variant(text, variant)
-            .unwrap()
-            .to_container()
-            .unwrap();
-        block_bytes(&reader::parse(&container).unwrap().main[0])
-            .chunks(2)
-            .map(|insn| insn[1])
-            .collect()
-    };
+    let nops = |variant: Variant| variant_nops(text, variant);
     assert_eq!(nops(Variant::for_room(0x1030)), [1, 3, 5]);
     assert_eq!(nops(Variant::for_room(0x1031).in_region(Region::Jpn)), [2]);
-    assert_eq!(
-        nops(Variant::for_room(0x1030).in_region(Region::Eur).authentic()),
-        [2, 3, 4, 5]
-    );
+    let authentic = Variant::for_room(0x1030).in_region(Region::Eur).authentic();
+    let container = compile_variant(text, authentic)
+        .unwrap()
+        .to_container()
+        .unwrap();
+    assert_eq!(main_nops(&container, authentic.bits()), [2, 3, 4, 5]);
     assert_eq!(Region::parse("eur"), Some(Region::Eur));
     assert_eq!(Region::parse("STEAM"), None);
-    let unknown = format!(
-        "{:#}",
-        compile_variant("#version 1\n#if !GOG\n#endif\n", Variant::for_room(0x1030)).unwrap_err()
-    );
-    assert!(unknown.contains("`!GOG`"), "{unknown}");
+    let unknown = compile_error("#version 1\nproc main\n{\n    if (!GOG)\n    {\n    }\n}\n");
+    assert!(unknown.contains("`GOG`"), "{unknown}");
 }
 
 #[test]
@@ -538,8 +709,8 @@ fn merged_regions_differ_under_their_symbols() {
     // so only Jill's USA line stands apart.
     assert_eq!(
         merged[&0x103],
-        "#version 1\n\nproc main\n{\n    nop(1);\n#if CHRIS\n    nop(2);\n#else\n\
-         #if USA\n    nop(3);\n#else\n    nop(4);\n#endif\n#endif\n}\n"
+        "#version 1\n\nproc main\n{\n    nop(1);\n    if (CHRIS)\n    {\n        nop(2);\n    }\n\
+         \x20   else if (USA)\n    {\n        nop(3);\n    }\n    else\n    {\n        nop(4);\n    }\n}\n"
     );
     // Regions with the same scripts merge as one.
     assert_eq!(
@@ -553,7 +724,7 @@ fn merged_regions_differ_under_their_symbols() {
         "#version 1\n\nproc main\n{\n    nop(5);\n}\n".to_string(),
     );
     let merged = merge_regions(&[(Region::Usa, &usa), (Region::Jpn, &extra)]).unwrap();
-    assert!(merged[&0x103].contains("#if MANSION"), "{}", merged[&0x103]);
+    assert!(merged[&0x103].contains("MANSION"), "{}", merged[&0x103]);
     let error = format!(
         "{:#}",
         merge_regions(&[(Region::Usa, &usa), (Region::Usa, &jpn)]).unwrap_err()
@@ -920,7 +1091,8 @@ off_A:
     assert!(!text.contains("asm"), "{text}");
 }
 
-/// Every checked-in room script compiles for each of its variants.
+/// Every checked-in room script compiles for each of its variants, and for
+/// all of them at once.
 #[test]
 fn checked_in_room_scripts_compile() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room");
@@ -944,21 +1116,96 @@ fn checked_in_room_scripts_compile() {
                     let text = std::fs::read_to_string(path).unwrap();
                     let folder = path.parent().unwrap().file_name().unwrap();
                     let folder = folder.to_string_lossy();
-                    let base = u16::from_str_radix(folder.strip_suffix('0').unwrap(), 16).unwrap();
-                    for id in room_variants(base) {
-                        for variant in Region::ALL.into_iter().flat_map(|region| {
-                            let variant = Variant::for_room(id).in_region(region);
-                            [variant, variant.authentic()]
-                        }) {
-                            if let Err(error) = compile_with(&text, Some(variant), &load)
-                                .and_then(|assembled| assembled.to_container())
-                            {
-                                panic!("{} as {variant:?}: {error:#}", path.display());
-                            }
+                    let base = u16::from_str_radix(&folder, 16).unwrap();
+                    let builds = room_variants(base)
+                        .into_iter()
+                        .flat_map(|id| {
+                            Region::ALL.into_iter().flat_map(move |region| {
+                                let variant = Variant::for_room(id).in_region(region);
+                                [Build::Variant(variant), Build::Variant(variant.authentic())]
+                            })
+                        })
+                        .chain([Build::RUNTIME, Build::Runtime { authentic: true }]);
+                    for build in builds {
+                        if let Err(error) = compile_build(&text, build, &load)
+                            .and_then(|assembled| assembled.to_container())
+                        {
+                            panic!("{} as {build:?}: {error:#}", path.display());
                         }
                     }
                 }
             });
         }
     });
+}
+
+/// Lifting the merged `#if` form gives a script whose every variant's build
+/// is the merged script's: shared and renamed events, a reference split by
+/// variant, an `evt_chain` by number and a header-only `nopad` block.
+#[test]
+fn lifted_scripts_build_each_variant_alike() {
+    let merged = "#version 1
+
+proc init
+{
+    nop(1);
+#if CHRIS
+    evt_exec(0, 9, on_enter);
+#else
+    evt_exec(0, 9, on_enter);
+    nop(2);
+#endif
+}
+
+#if CHRIS
+event on_enter
+{
+    evt_finish();
+}
+
+event on_enter_2
+#else
+event on_enter
+#endif
+{
+    evt_chain(1);
+    evt_finish();
+}
+
+#if MANSION1
+event on_aot nopad
+#else
+event on_aot
+#endif
+{
+#if USA
+    sleep(1);
+#endif
+    evt_finish();
+}
+";
+    let lifted = lift(merged, true).unwrap();
+    for variant in super::lift::variants(true) {
+        for variant in [variant, variant.authentic()] {
+            let old = compile_build(merged, preprocess::Build::Legacy(variant), &no_includes)
+                .unwrap()
+                .to_container()
+                .unwrap();
+            let new = compile_variant(&lifted, variant)
+                .unwrap()
+                .to_container()
+                .unwrap();
+            assert_eq!(old, new, "{variant:?}\n{lifted}");
+        }
+    }
+    assert!(compile(&lifted).is_ok(), "{lifted}");
+    // Jill's `on_enter` is Chris's `on_enter_2`: one event, one name.
+    assert!(lifted.contains("event on_enter when (CHRIS)\n"), "{lifted}");
+    assert!(lifted.contains("event on_enter_2\n"), "{lifted}");
+    assert!(lifted.contains("evt_chain(on_enter_2);"), "{lifted}");
+    assert!(
+        lifted.contains("event on_aot nopad (MANSION1)\n"),
+        "{lifted}"
+    );
+    assert!(lifted.contains("    if (USA)\n"), "{lifted}");
 }

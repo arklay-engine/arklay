@@ -30,9 +30,8 @@ const DEATH_FADE_OUT_COUNTER: i32 = 0x100;
 const STAGE_MANSION_2F: u8 = 2;
 /// The attic, where the first Yawn's death skips the delay.
 const ROOM_ATTIC: u8 = 0x10;
-/// Stage digit of the second mansion return.
-const STAGE_MANSION_RETURN_2F: u8 = 7;
-/// The lesson room, where the second Yawn's death skips the delay.
+/// The lesson room, where the second Yawn's death (on the second visit)
+/// skips the delay.
 const ROOM_LESSON: u8 = 0x0C;
 /// Stage digit of the guardhouse.
 const STAGE_GUARDHOUSE: u8 = 4;
@@ -50,8 +49,8 @@ const ROOM_MORGUE: u8 = 0x07;
 /// Whether this room's death fades immediately instead of running the
 /// 90-frame delay (the Yawn rooms and the Neptune water tank).
 pub fn immediate_fade(id: RoomId) -> bool {
-    (id.stage == STAGE_MANSION_2F && id.room == ROOM_ATTIC)
-        || (id.stage == STAGE_MANSION_RETURN_2F && id.room == ROOM_LESSON)
+    (id.stage == STAGE_MANSION_2F && !id.mansion2 && id.room == ROOM_ATTIC)
+        || (id.stage == STAGE_MANSION_2F && id.mansion2 && id.room == ROOM_LESSON)
         || (id.stage == STAGE_GUARDHOUSE && id.room == ROOM_WATER_TANK)
 }
 
@@ -59,7 +58,7 @@ pub fn immediate_fade(id: RoomId) -> bool {
 /// player straight to the blocked state (the armor room, the drug storehouse
 /// and the morgue).
 pub fn skips_blood_pool(id: RoomId) -> bool {
-    (id.stage == STAGE_MANSION_2F && id.room == ROOM_ARMOR)
+    (id.stage == STAGE_MANSION_2F && !id.mansion2 && id.room == ROOM_ARMOR)
         || (id.stage == STAGE_GUARDHOUSE && id.room == ROOM_DRUG_STOREHOUSE)
         || (id.stage == STAGE_LABORATORY && id.room == ROOM_MORGUE)
 }
@@ -228,8 +227,10 @@ mod tests {
     use super::*;
     use crate::transition::FadeColor;
 
+    /// Room `text` in the original's numbering: 6xx and 7xx are the second
+    /// mansion visit.
     fn room(text: &str) -> RoomId {
-        RoomId::parse(text).unwrap()
+        RoomId::from_original(u16::from_str_radix(&format!("{text}0"), 16).unwrap()).unwrap()
     }
 
     #[test]

@@ -316,7 +316,7 @@ end
     assert!(first.get::<bool>("loadable").unwrap());
     assert_eq!(first.get::<u8>("character").unwrap(), 1);
     assert_eq!(first.get::<u8>("saves").unwrap(), 7);
-    assert_eq!(first.get::<u8>("stage").unwrap(), 0);
+    assert_eq!(first.get::<u8>("stage").unwrap(), 1);
     assert_eq!(first.get::<String>("location").unwrap(), "M. Room 1F");
     assert!(first.get::<f64>("timestamp").unwrap() > 0.0);
     assert_eq!(first.get::<Option<usize>>("autosave").unwrap(), None);
@@ -1812,7 +1812,9 @@ end
     let pending: mlua::Table = screen.test_global("pending");
     assert_eq!(pending.get::<u8>("character").unwrap(), 1);
     assert_eq!(pending.get::<u8>("saves").unwrap(), 12);
-    assert_eq!(pending.get::<u8>("stage").unwrap(), 2);
+    // The block's 0-based stage 2 is stage 3.
+    assert_eq!(pending.get::<u8>("stage").unwrap(), 3);
+    assert!(!pending.get::<bool>("mansion2").unwrap());
     assert_eq!(pending.get::<u8>("room").unwrap(), 5);
     let time: Option<mlua::Table> = screen.test_global("time");
     if let Some(time) = time {

@@ -25,10 +25,12 @@ fn asset_root() -> Option<PathBuf> {
 /// Load `ROOM<name>.RDT` from the JPN install, run its init script and return
 /// the state plus the parsed scripts.
 fn load_room(root: &std::path::Path, name: &str) -> (RoomId, RoomState, Scripts, GameState) {
-    let id = RoomId::parse(name).expect("valid room id");
+    // The install's numbering: stages 6 and 7 are the second mansion visit.
+    let id = RoomId::from_original(u16::from_str_radix(name, 16).expect("valid room id"))
+        .expect("an RE1 room");
     let path = root
-        .join(format!("JPN/STAGE{}", id.stage))
-        .join(format!("ROOM{:04X}.RDT", id.rdt_number()));
+        .join(format!("JPN/STAGE{}", id.table_row() + 1))
+        .join(format!("ROOM{:04X}.RDT", id.original_number()));
     let data = std::fs::read(&path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
     let room = arklay::rdt::parse(&data, id).expect("parse RDT");
     let scripts = arklay::scd::reader::parse(&data).expect("parse scripts");
@@ -59,8 +61,11 @@ fn press(state: &mut GameState, slot: u8) -> Option<RoomTransition> {
 
 fn assert_destination_exists(root: &std::path::Path, transition: &RoomTransition) {
     let path = root
-        .join(format!("JPN/STAGE{}", transition.target.stage))
-        .join(format!("ROOM{:04X}.RDT", transition.target.rdt_number()));
+        .join(format!("JPN/STAGE{}", transition.target.table_row() + 1))
+        .join(format!(
+            "ROOM{:04X}.RDT",
+            transition.target.original_number()
+        ));
     assert!(
         path.is_file(),
         "transition target {} is missing",
@@ -94,7 +99,8 @@ fn save_room_door_survives_main_ticks_and_transitions() {
         RoomId {
             stage: 1,
             room: 1,
-            player_flag: 1
+            player_flag: 1,
+            mansion2: false,
         }
     );
     assert_eq!(transition.pos, [8700, 0, 7900]);
@@ -120,7 +126,8 @@ fn stairwell_doors_cross_stage_with_exact_placement() {
         RoomId {
             stage: 2,
             room: 3,
-            player_flag: 0
+            player_flag: 0,
+            mansion2: false,
         }
     );
     assert_eq!(transition.pos, [17100, 0, 25300]);
@@ -137,7 +144,8 @@ fn stairwell_doors_cross_stage_with_exact_placement() {
         RoomId {
             stage: 2,
             room: 1,
-            player_flag: 0
+            player_flag: 0,
+            mansion2: false,
         }
     );
     assert_eq!(transition.pos, [14100, 0, 11500]);
@@ -159,22 +167,24 @@ fn elevator_door_crosses_to_an_earlier_stage() {
     assert_eq!(
         transition.target,
         RoomId {
-            stage: 6,
+            stage: 1,
             room: 1,
-            player_flag: 0
+            player_flag: 0,
+            mansion2: true,
         }
     );
     assert_eq!(transition.pos, [4300, 0, 3100]);
     assert_eq!(transition.angle, 2048);
     assert_destination_exists(&root, &transition);
 
-    // With the stage-variant scenario flag, dest 0x20 remaps stage 1 to the
-    // return variant stage digit 6.
+    // With the second-visit scenario flag, dest 0x20 leads to room 100's
+    // second visit.
     let (_, _, _, mut state) = load_room(&root, "70E0");
     assert!(state.apply_flag(0, 0x00, 0));
     let transition = press(&mut state, 3).expect("variant transition");
-    assert_eq!(transition.target.stage, 6);
+    assert_eq!(transition.target.stage, 1);
     assert_eq!(transition.target.room, 0);
+    assert!(transition.target.mansion2);
     assert_destination_exists(&root, &transition);
 }
 

@@ -660,7 +660,7 @@ fn movie_on_sites_start_and_resume_the_room_with_its_bgm() {
         ("60a0", &[], 6),
     ];
     for (room, flags, film) in cases {
-        let id = RoomId::parse(room).unwrap();
+        let id = common::original_room(room);
         let sim =
             simulate_room_with_movie(&pack, id, flags, 900, |_| player::Input::default()).unwrap();
         assert_eq!(

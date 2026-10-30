@@ -310,7 +310,7 @@ fn a_missing_room_fails_before_any_display() {
         "1",
         "--stats",
     ]);
-    assert_failure(&output, "room/11c0/room.rdt");
+    assert_failure(&output, "room/11c/room.xml");
 }
 
 #[test]
@@ -1083,8 +1083,9 @@ fn extraction_writes_every_entry_and_rejects_a_layered_duplicate() {
         out.to_str().unwrap(),
     ]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(out.join("room/1000/room.rdt").exists());
-    assert!(out.join("room/1000/cut/00.bmp").exists());
+    let room = RoomId::parse("1000").unwrap();
+    assert!(out.join(room.rdt_entry()).exists());
+    assert!(out.join(room.cut_entry(0)).exists());
 
     let leftovers: Vec<_> = std::fs::read_dir(out.join("room"))
         .unwrap()

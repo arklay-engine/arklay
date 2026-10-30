@@ -272,19 +272,22 @@ cargo run -- pack info re1.akpak --mod demo.akpak
 
 # Disassemble/reassemble a room's scripts
 cargo run -- scd export ROOM1000.RDT --out 1000.s
-cargo run -- scd build 1000.s --out room/1000/room.scd
+cargo run -- scd build 1000.s --out room/100/room.scd
 
 # Decompile/recompile a room's scripts as structured code
 cargo run -- scd export ROOM1000.RDT --out 1000.akscr
-cargo run -- scd build 1000.akscr --out room/1000/room.scd
+cargo run -- scd build 1000.akscr --out room/100/room.scd
 
-# Export every room as one merged script (players and mansion visits under
-# #if CHRIS/JILL/MANSION1/MANSION2, and regions under #if USA/JPN/EUR) and
-# compile one variant of it
-cargo run -- scd export-rooms re1.akpak --out games/re1/room
-cargo run -- scd export-rooms usa=en.akpak jpn=ja.akpak eur=fr.akpak --out games/re1/room
-cargo run -- scd build games/re1/room/1030/room.akscr --room 6031 --out room/6031/room.scd
-cargo run -- scd build games/re1/room/1030/room.akscr --room 6031 --region jpn --out room/6031/room.scd
+# Export every room of the installs as one script per room (players, mansion
+# visits and regions as run-time tests: if (JILL), if (MANSION2), if (USA)),
+# build the runtime build, and build one RDT's own bytecode out of it
+cargo run -- scd export-rooms path/to/install --out games/re1/room
+cargo run -- scd export-rooms usa=english jpn=japanese eur=french --out games/re1/room
+cargo run -- scd build games/re1/room/103/room.akscr --out room/103/room.scd
+cargo run -- scd build games/re1/room/103/room.akscr --room 6031 --region jpn --out 6031.scd
+
+# Boot a mansion room on its second visit
+cargo run -- re1.akpak --room 106 --mansion2
 ```
 
 `docs/modding.md` documents the manifest grammar, the replacement formats and

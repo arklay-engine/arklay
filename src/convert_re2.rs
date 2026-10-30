@@ -428,12 +428,10 @@ pub(crate) fn convert(
         };
         // A room the XML cannot carry exactly stays a raw RDT, which the
         // engine still loads, without the name only a `room.xml` carries.
+        let rdt_entry = format!("{}/{}", id.rdt_dir(), crate::room::RDT_FILE);
         let files = crate::room::convert_rdt2(&room.bytes, id, strings).unwrap_or_else(|error| {
-            warnings.push(format!(
-                "{}: kept as an RDT{unnamed}: {error:#}",
-                id.rdt_entry()
-            ));
-            vec![(id.rdt_entry(), room.bytes.clone())]
+            warnings.push(format!("{rdt_entry}: kept as an RDT{unnamed}: {error:#}"));
+            vec![(rdt_entry.clone(), room.bytes.clone())]
         });
         for (entry, data) in files {
             tally.add(&mut writer, "room", &entry, data)?;
