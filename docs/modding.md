@@ -199,7 +199,7 @@ is exact.
 | voice | `voice/01_09` | ogg, wav | any |
 | RE2 sound bank slot | `sound/room/10a/01`, `sound/door/36/00`, `sound/step/35/00` | ogg, wav | any |
 | RE2 sound table | `sound/enemy/25/bank.edh`, `room/1000/sound.edh` | edh | — |
-| film | `movie/00`, `movie/17`, `movie/0f` (the film id); RE2 `movie/opn1stl`, `movie/staff` (the film name) | mp4, avi | any size up to 4096x4096, any frame rate |
+| film | `movie/00`, `movie/17`, `movie/0f` (the film id); RE2 `movie/opn1stl`, `movie/staff` (the film name) | mp4, avi, mpg | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' names without their extensions: a room's
 files sit in its folder `room/<id>` (the four-digit lower-case RDT number),

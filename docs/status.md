@@ -974,7 +974,7 @@ a program stream demuxer, an MPEG-1 video decoder ported from pl_mpeg
 references. A damaged slice is counted and its picture kept. Motion
 vectors that point outside the picture read clamped edge pixels. MP2
 requantisation and output scaling follow the standard, as ffmpeg does,
-not kjmp2's approximations, which played about 2% loud. Against ffmpeg's decode,
+not kjmp2's approximations, which played about 2% quiet. Against ffmpeg's decode,
 video is above 40 dB PSNR on the unit fixture and above 35 dB on a retail
 film, and audio is above 40 dB SNR. A film has one display frame per
 coded picture. Its audio starts at the PTS offset from the video (both

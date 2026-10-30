@@ -43,6 +43,10 @@ const COLOUR: Colour = Colour {
 /// The program stream clock.
 const PTS_RATE: i64 = 90_000;
 
+/// The furthest the soundtrack may start from the first picture (10 s): a
+/// larger gap is a damaged or wrapped stamp, not a line-up.
+const MAX_AUDIO_OFFSET: i64 = 10 * PTS_RATE;
+
 /// What [`VideoStream::next`] produced.
 enum Next<'a> {
     /// The next picture in display order.
@@ -170,6 +174,15 @@ impl AudioStream {
     fn new(data: Vec<u8>, offset_ticks: i64) -> Option<Self> {
         let frames: Vec<_> = mp2::frames(&data).collect();
         let rate = i64::from(frames.first()?.1.sample_rate);
+        let offset_ticks = if offset_ticks.abs() > MAX_AUDIO_OFFSET {
+            eprintln!(
+                "warning: film audio starts {:.1} s from the video; playing it unshifted",
+                offset_ticks as f64 / PTS_RATE as f64
+            );
+            0
+        } else {
+            offset_ticks
+        };
         Some(AudioStream {
             data,
             frames,

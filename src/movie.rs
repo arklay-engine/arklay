@@ -52,7 +52,7 @@ use crate::cinepak::Decoder;
 #[cfg(feature = "hd")]
 use crate::hdfilm::HdFilm;
 use crate::media::VideoFrame;
-use crate::pack::{AssetClass, Pack};
+use crate::pack::{AssetClass, Pack, PackAsset};
 
 /// Film ids and their lower-case basenames, in id order 0..=28. Id 10 is the
 /// original's null entry and has no file.
@@ -322,6 +322,12 @@ impl MovieSession {
         let asset = pack
             .read_asset(&stem(id), AssetClass::Movie)?
             .with_context(|| format!("missing film {}", pack_path(id)))?;
+        Self::from_asset(&asset, id, character)
+    }
+
+    /// Open the winning copy of a film, falling back with a warning to the
+    /// copy it shadows when it cannot be played.
+    fn from_asset(asset: &PackAsset<'_>, id: u8, character: u8) -> Result<Self> {
         let path = asset.path().to_owned();
         let err = match Self::from_bytes(asset.data(), id, character)
             .with_context(|| format!("failed to open film {path}"))
@@ -364,9 +370,7 @@ impl MovieSession {
         let asset = pack
             .read_asset(&stem, AssetClass::Movie)?
             .with_context(|| format!("missing film {stem}"))?;
-        let path = asset.path().to_owned();
-        let mut session = Self::from_bytes(asset.data(), NAMED_ID, 0)
-            .with_context(|| format!("failed to open film {path}"))?;
+        let mut session = Self::from_asset(&asset, NAMED_ID, 0)?;
         session.skip_mask = SKIPPABLE_MASK;
         Ok(session)
     }
@@ -1379,6 +1383,22 @@ mod tests {
         let pack = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
         assert!(MovieSession::open_named(&pack, "missing").is_err());
         assert!(MovieSession::open_named(&pack, "../tiny").is_err());
+        // A replacement that cannot be played falls back to the film.
+        let mut writer = PackWriter::new();
+        writer
+            .add(
+                "movie/tiny.mpg",
+                include_bytes!("mpeg/testdata/tiny.mpg").to_vec(),
+            )
+            .unwrap();
+        writer.add("movie/tiny.avi", b"RIFF....".to_vec()).unwrap();
+        let shadowing = Pack::from_bytes(writer.to_bytes().unwrap()).unwrap();
+        assert_eq!(
+            MovieSession::open_named(&shadowing, "tiny")
+                .unwrap()
+                .frame_count(),
+            9
+        );
         let mut session = MovieSession::open_reference(&pack, "TINY", 0).unwrap();
         assert_eq!(session.id(), NAMED_ID);
         assert_eq!(session.skip_mask(), SKIPPABLE_MASK);

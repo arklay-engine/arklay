@@ -123,7 +123,9 @@ fn take_packet(
         return Ok(());
     }
     let (payload, pts) = pes_payload(packet)?;
-    if first_pts.is_none() {
+    // The stream's first packet dates it; a stamp on a later packet
+    // belongs to a later picture or frame.
+    if out.is_empty() {
         *first_pts = pts;
     }
     out.extend_from_slice(payload);

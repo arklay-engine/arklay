@@ -386,13 +386,16 @@ impl Decoder {
         while code == STUFFING {
             code = Self::read_vlc(bits, &ADDRESS_INCREMENT, "macroblock address")?;
         }
+        let size = (self.mb_width * self.mb_height) as i32;
         while code == ESCAPE_33 {
+            if increment > size {
+                bail!("macroblock address increment past the picture");
+            }
             increment += 33;
             code = Self::read_vlc(bits, &ADDRESS_INCREMENT, "macroblock address")?;
         }
         increment += code;
 
-        let size = (self.mb_width * self.mb_height) as i32;
         if self.slice_begin {
             // A slice's first increment counts from the row start.
             self.slice_begin = false;
@@ -577,6 +580,9 @@ impl Decoder {
             } else {
                 predictor
             };
+            // The reconstructed DC (x8) lies in 0..=2047; a hostile stream
+            // could otherwise walk the predictor out of range.
+            let dc = dc.clamp(0, 255);
             self.dc_predictor[plane] = dc;
             // Dequantised (x8) and premultiplied (x32).
             self.block[0] = dc << 8;
