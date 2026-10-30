@@ -59,6 +59,7 @@ responsibility.
 | `rdt2` | Format | RE2 RDT room reader into a `RoomSource`: cameras (RID), camera switch zones (RVD), collision (SCA) and per-camera lights (LIT) |
 | `room` | Format | `room/<id>/` room folders: the `room.xml` reader/writer, the RE1 and RE2 RDT-to-folder conversions (models, effects, animation and scripts by slot), the checked-in RE1 definitions and the art `convert-game` takes from an RDT beside them, the room strings' language layers, and the loader that picks the XML or a raw RDT (`room.rdt`, or a variant's own `jill-mansion2.rdt`); `<slots>` names the files a variant's model, effect and animation slots read |
 | `scd` | Runtime/Format | SCD opcode tables, reader, IR, disassembler/decompiler, assembler, command and event VMs |
+| `scd2` | Format | RE2 SCD reader: init and main procedure lists, the RE2 opcode table, and `scd export` to `.s` and structured `.akscr` |
 | `door` | Format/Runtime | `.dor` container parser and the door-animation VM |
 | `door2` | Format/Runtime | RE2 `.do2` parser (VAB sounds, MD1 mesh, TIM) and its SCD door VM, framed like `door` |
 | `transition` | Runtime | The door-transition timeline (screen space, masks, camera, `.dor` stepper hand-off) |
@@ -108,6 +109,7 @@ responsibility.
 | `media` | Format | Container-independent H.264/AAC film description shared by MP4 and AVI |
 | `hdfilm` | Presentation | HD film decoding: H.264 through OpenH264 on a worker thread, AAC through Symphonia |
 | `cinepak` | Format | Cinepak (`cvid`) frame decoder |
+| `mpeg` | Format | MPEG-1 program stream demuxer, MPEG-1 video and MP2 audio decoders for the RE2 films |
 | `bmp` | Format | BMP encode/decode, including the black-key room-mask decode |
 | `assets` | Format | Replacement-format resolution (`webp > png > bmp > tim > pix`, `ogg > wav`) and the PNG/WebP/OGG decoders behind the default-on `hd` feature; an image page is an indexed `Texture8` or an RGBA `Image` |
 | `lzw` | Format | RE1 `.pak` LZW decoder |
@@ -423,6 +425,7 @@ claims about the original.
 | RDT room | `rdt::parse` | section counts bounded by remaining bytes; `MAX_RECORDS` | `rdt` unit tests, `tests/real/m16_game_real.rs`, `tests/soak_real.rs`, `tests/torture`, `fuzz/rdt` |
 | SCD scripts | `scd::reader::parse` | instructions per block, `MAX_SCD_EVENTS` event-table cap | `scd` unit tests, `fuzz/scd` |
 | SCD assembler | `scd::asm::assemble` | input size, line count, `MAX_ASM_OUTPUT` (64 MiB) | `scd` unit tests, `tests/cli.rs`, `fuzz/scd_asm` |
+| RE2 SCD scripts | `scd2::reader::parse` | `MAX_SCD_INSTRUCTIONS` per procedure list; decompiler nesting capped (`MAX_NESTING`, `MAX_PARSE_NESTING`) | `scd2` unit tests, `tests/real/re2_real.rs` |
 | `.dor` door | `door::parse` | bytecode bounded by input; `MAX_SCRIPTS` | `door` unit tests, `tests/torture`, `fuzz/dor`, `tests/real/doors_scan.rs` |
 | TIM | `tim::decode`, `decode_8bpp`, `decode_4bpp` | `MAX_PIXELS` (4096x4096), CLUT entry cap, `budget::alloc` | `tim` unit tests, `tests/torture`, `fuzz/tim` |
 | TMD | `tmd::parse` | objects/vertices/normals/primitives, `try_reserve_exact` | `tmd` unit tests, `fuzz/tmd` |
@@ -431,6 +434,7 @@ claims about the original.
 | IVM | `ivm::parse` | objects/vertices/texture caps | `ivm` unit tests, `fuzz/ivm` |
 | AVI | `avi::Avi::parse` | streams/chunks/frames bounded by the file size | `avi` unit tests, `fuzz/avi`, `tests/real/m14_real.rs` |
 | Cinepak | `cinepak::Decoder::decode` | canvas `MAX_PIXELS`, 32 strips | `cinepak` unit tests, `fuzz/cinepak`, `tests/real/m14_real.rs` |
+| MPEG-1 film | `mpeg::Film::open` | 4096 dimension cap, `MAX_PIXELS`, `budget::MAX_AVI_FRAMES` pictures | `mpeg` unit tests, `tests/real/re2_real.rs` |
 | LZW | `lzw::decode` | `MAX_LZW_OUTPUT` (64 MiB), reset-before-full guard | `lzw` unit tests, `fuzz/lzw` |
 | BMP | `bmp::decode`, `decode_mask` | dimensions bounded by input | `bmp` unit tests, `tests/torture`, `fuzz/bmp` |
 | Save block | `save::SaveFile::from_bytes` | fixed 0x800 layout | `save` unit tests, `tests/real/save_real.rs`, `tests/soak_real.rs`, `fuzz/save` |

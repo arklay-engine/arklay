@@ -5,7 +5,7 @@ A milestone-by-milestone feature table, the parser/format coverage a fresh
 missing, the known `TODO(parity)` sites and their dispositions, and the
 completed enemy milestone's closing state. RE1 numbers below were measured on
 2026-10-18 with the workspace install (`/path/to/re1`) and its converted pack;
-the RE2 rows were measured against the retail RE2 install on 2026-10-28.
+the RE2 rows were measured against the retail RE2 install on 2026-10-30.
 
 ## Milestones
 
