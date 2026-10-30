@@ -105,11 +105,12 @@ impl RoomId {
     }
 
     /// The room of table row `row` and `room`, the inverse of
-    /// [`RoomId::table_row`] for player 0.
+    /// [`RoomId::table_row`] for player 0. A row past the tables (a damaged
+    /// save's) wraps rather than panicking.
     pub fn from_table_row(row: usize, room: u8) -> Self {
         let (stage, mansion2) = match row {
             5 | 6 => (row as u8 - 4, true),
-            _ => (row as u8 + 1, false),
+            _ => ((row as u8).wrapping_add(1), false),
         };
         Self {
             stage,
