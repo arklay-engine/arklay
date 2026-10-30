@@ -175,6 +175,15 @@ pub fn index(stage: u8, room: u8) -> Option<usize> {
 }
 
 impl BgmTable {
+    /// The table's raw words, for a save.
+    pub fn words(&self) -> &[u16; ROOMS] {
+        &self.rooms
+    }
+
+    pub fn words_mut(&mut self) -> &mut [u16; ROOMS] {
+        &mut self.rooms
+    }
+
     /// The music of `stage` (0-based) and `room`.
     pub fn get(&self, stage: u8, room: u8) -> Option<RoomMusic> {
         Some(RoomMusic::from_word(self.rooms[index(stage, room)?]))

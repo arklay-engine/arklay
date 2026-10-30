@@ -476,6 +476,8 @@ pub(crate) fn convert(
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_demos(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
 
+    copy_text(&rooms, &mut writer, &mut tally, &mut warnings)?;
+
     progress.begin("manifest", 1);
     let text = base_manifest().render().into_bytes();
     tally.add(&mut writer, "manifest", manifest::ENTRY, text)?;
@@ -484,6 +486,74 @@ pub(crate) fn convert(
 
     let summary = if verbose { tally.summary() } else { Vec::new() };
     finish_pack(writer, out, jobs, progress, &warnings, &summary, verbose)
+}
+
+/// The language file, and the Western font it draws with: RE2's own sheets are
+/// not read yet.
+fn copy_text(
+    rooms: &[Room],
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let mut sources = Vec::new();
+    for room in rooms {
+        match RoomId::parse(&room.id.folder()) {
+            Ok(id) => sources.push((id, room.bytes.as_slice())),
+            Err(error) => warnings.push(format!("{}: no text: {error:#}", room.id.folder())),
+        }
+    }
+    let language = text::language_file(&sources);
+    crate::language::Language::parse(&language).context("invalid RE2 language file")?;
+    tally.add(writer, "text", "language/en-US.txt", language.into_bytes())?;
+    for (entry, source) in [
+        (
+            crate::lua::NEW_GAME_ENTRY,
+            include_str!("../games/re2/game/new_game.lua"),
+        ),
+        (
+            crate::music::INITIAL_STATE_ENTRY,
+            include_str!("../games/re2/game/initial_state.lua"),
+        ),
+        (
+            "ui/main_menu.lua",
+            include_str!("../games/re2/ui/main_menu.lua"),
+        ),
+        (
+            "ui/item_box.lua",
+            include_str!("../games/re2/ui/item_box.lua"),
+        ),
+        ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
+        (
+            "ui/char_select.lua",
+            include_str!("../games/re2/ui/char_select.lua"),
+        ),
+    ] {
+        tally.add(writer, "text", entry, source.as_bytes().to_vec())?;
+    }
+    for (item, xml) in text::item_definitions() {
+        tally.add(
+            writer,
+            "text",
+            &crate::item_catalog::entry(item),
+            xml.into_bytes(),
+        )?;
+    }
+    let id = crate::font::WESTERN_ID;
+    let stem = crate::font::xml::stem(id);
+    tally.add(
+        writer,
+        "text",
+        &format!("{stem}.bmp"),
+        crate::font::WESTERN_SHEET.to_vec(),
+    )?;
+    tally.add(
+        writer,
+        "text",
+        &crate::font::xml::entry(id),
+        crate::font::xml::WESTERN.as_bytes().to_vec(),
+    )?;
+    Ok(())
 }
 
 /// The RE2 pack's self-description.
@@ -1181,6 +1251,8 @@ fn copy_demos(
     progress.end_phase();
     Ok(())
 }
+
+mod text;
 
 #[cfg(test)]
 mod tests;

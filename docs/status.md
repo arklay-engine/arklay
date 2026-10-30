@@ -52,8 +52,9 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-30.
 | R5 RE2 audio | MS-ADPCM decoding (`adpcm`), matching ffmpeg up to its rounding, the door, arms, room, enemy and core `.sap` banks split into per-slot WAVs with their EDH sound tables, the RE2 SE dispatch (`se2`), and the room music table (`bgm2`) | done |
 | R6 RE2 FMV | The in-house MPEG-1 decoder (`mpeg`: program stream demux, MPEG-1 video, MP2 audio) behind the movie path, RE2 films played by name (`--fmv opn1stl`, `r109`, `staff`), and `verify` parsing MPEG; all 26 retail films play end to end with ffprobe's frame counts | done |
 | R7 RE2 player | A new RE2 game: Leon or Claire at the retail start of room 100 with RE2's health, the PLD and handgun PLW as the player's banks, SCA collision for every shape (`sca`), RVD camera zones with their signed corners, floors and enable bytes, the RE2 script VM (`scd2::vm`) running room init procedures from the pack's `room.akscr`, and doors with their DO2 animation, arrival camera and locks; `docs/re2-deviations.md` records the approximations. Every one of the 1037 doors of the 501 rooms reaches a loadable room, camera and animation (`tests/real/re2_real.rs`). | done |
+| R8 RE2 game flow | The RE2 script VM runs rooms' main procedures and events (`scd2::host`): doors and their keys, items, messages, flags, camera changes, scripted moves, the music table, the typewriter and saves (a trailer carrying the flag banks and script state). A new game goes from the title through Leon or Claire and Scenario A or B; the pack carries RE2's item definitions, language file and text-only screens (`games/re2`). `docs/re2-deviations.md` records the approximations. Scenario A's route from the street to the police station is checked on retail data by entering each door with the action key, with a test mod placing the player in front of it. | done |
 
-The other RE2 milestones (R8 onwards) are still open and tracked by the
+The other RE2 milestones (R9 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 
 Enemy behaviour now lives in the pack as `enemy/{id:02x}/enemy.lua` scripts (with
@@ -891,7 +892,7 @@ room (`100` for RE2). `F4`/`--render-mode collision-overlay` draws the
 collision over the background from the cut camera. All 501 rooms and 5040
 cameras load against the retail install (`tests/real/re2_real.rs`); the 12
 cameras without a background (above) log a warning instead of failing the
-room. R7 (#251) adds the player, collision, init scripts and doors; `docs/re2-deviations.md` lists its approximations. The TeamX RE2 HD pack converts with
+room. R7 (#251) adds the player, collision, init scripts and doors, and R8 (#252) the game flow; `docs/re2-deviations.md` lists their approximations. The TeamX RE2 HD pack converts with
 `convert-mod --base re2.akpak`; its backgrounds are named by the CRC of the
 camera's whole 256 x 256 main page (`bio2hd.asi`: the 240 picture rows with
 black clear, then 16 zero rows), which names 4740 of the 5028 cameras'
@@ -1019,8 +1020,8 @@ pQES sequence and a pBAV VAB): the PC executable has no sequencer and only
 reads them for a size check, so they are not packed and need no sequencer;
 the streamed `.sap` WAVs are the music. Not modelled yet: the `Snd_se_on` and
 `SsPlay` per-room special cases, 3D panning, the `SsLoadHack` dual-BGM
-speaker setup, and running the music table, which waits for the RE2 script VM
-(R8).
+speaker setup, and the scripts' `sce_bgm_control`. R8 sets each room's music from the
+table its script loads, an approximation of `Snd_bgm_set`.
 
 RE2 R6 (#250) plays the RE2 films. Conversion already packs each retail
 `.bin` raw as `movie/<name>.mpg`: an MPEG-1 program stream with 640x480

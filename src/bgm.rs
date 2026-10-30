@@ -218,6 +218,38 @@ impl BgmCache {
     }
 }
 
+/// `Snd_bgm_set`: an RE2 room's music comes from the table its scripts wrote.
+/// The same main music plays on across a door; another replaces all three
+/// channels, of which only the ones [`crate::bgm2::main_audible`] marks start
+/// audible.
+fn update_re2_room_bgm(game: &mut GameState, id: RoomId) -> u8 {
+    use crate::bgm2;
+    let main = id
+        .stage
+        .checked_sub(1)
+        .and_then(|stage| game.re2.bgm.get(stage, id.room))
+        .and_then(|music| music.main_id());
+    if game.re2.main_music == main {
+        return game.bgm.state as u8;
+    }
+    game.re2.main_music = main;
+    let mut state = 0;
+    for (index, channel) in game.bgm.channels.iter_mut().enumerate() {
+        let track = main
+            .and_then(|main| bgm2::main_tracks(main)[index])
+            .and_then(crate::convert_re2::bgm_track);
+        channel.track = track;
+        channel.looping = true;
+        channel.pending_load = track.is_some();
+        channel.stop = track.is_none();
+        if main.is_some_and(|main| bgm2::main_audible(main, index)) {
+            state |= 8 << index;
+        }
+    }
+    game.bgm.state = state;
+    state as u8
+}
+
 /// Apply the per-room BGM state machine for room `id`, entered from `from`.
 ///
 /// `from` is the room the player came from (the original's
@@ -229,6 +261,9 @@ impl BgmCache {
 /// runs it twice). `room_transition_load` only returns, and `game_loop` only
 /// arms the room-entry fade, once those sleeps are over.
 pub fn update_room_bgm(game: &mut GameState, id: RoomId, from: Option<RoomId>) -> u8 {
+    if game.is_re2_room {
+        return update_re2_room_bgm(game, id);
+    }
     let stage = id.table_row();
     let room = usize::from(id.room);
     let Some(&target) = game.room_bgm.get(stage * 32 + room) else {

@@ -108,6 +108,30 @@ fn offset(data: &[u8], slot: usize) -> Result<u32> {
     Ok(offset)
 }
 
+/// Section slot of the English message list (`MSG_EN`).
+const MESSAGE_SLOT: usize = 14;
+
+/// The room's message streams: a `u16` offset table, whose first entry is its
+/// own length, and the streams it points at. An absent section has none.
+pub fn messages(data: &[u8]) -> Result<Vec<&[u8]>> {
+    let start = offset(data, MESSAGE_SLOT)? as usize;
+    if start == 0 {
+        return Ok(Vec::new());
+    }
+    let list = &data[start..];
+    let first = usize::from(u16_at(list, 0)? as u16);
+    if first % 2 != 0 || first > list.len() {
+        bail!("message table length {first} does not fit the section");
+    }
+    (0..first / 2)
+        .map(|index| {
+            let at = usize::from(u16_at(list, index * 2)? as u16);
+            list.get(at..)
+                .with_context(|| format!("message {index} at {at} is past the section"))
+        })
+        .collect()
+}
+
 /// Section slot of the room's sound table (EDT); slot 1 is its VAB header.
 const EDT_SLOT: usize = 0;
 
@@ -284,7 +308,7 @@ fn parse_zones(data: &[u8], offset: u32) -> Result<(Vec<Zone>, Vec<ZoneGate>)> {
             corners,
         });
         gates.push(ZoneGate {
-            enabled: record[0] != 0,
+            flag: record[0],
             floor: record[1],
         });
         at += ZONE_SIZE;

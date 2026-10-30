@@ -58,6 +58,8 @@ pub struct SaveFile {
     /// Port-only player height ([`HEIGHT_TRAILER`]); `0` for an original
     /// block.
     pub pos_y: i16,
+    /// Port-only RE2 script state ([`super::RE2_TRAILER`]).
+    pub re2: Option<Vec<u8>>,
     /// Player facing angle (0x230).
     pub angle: i16,
     /// Health status flags (0x232).
@@ -87,6 +89,7 @@ pub struct SaveFile {
 impl Default for SaveFile {
     fn default() -> Self {
         Self {
+            re2: None,
             prefix: [0; PREFIX_LEN],
             state_bytes: [0; STATE_BYTES],
             stage: 0,

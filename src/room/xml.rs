@@ -619,7 +619,7 @@ fn write_zones(w: &mut Writer, zones: &[Zone], gates: &[ZoneGate]) {
                 attributes.push((z, dec(corner[1] as u16)));
             }
             if let Some(gate) = gates.get(index + offset) {
-                attributes.push(("enabled", dec(i64::from(gate.enabled))));
+                attributes.push(("flag", dec(gate.flag)));
                 attributes.push(("floor", dec(gate.floor)));
             }
             w.empty(if offset == 0 { "view" } else { "switch" }, &attributes);
@@ -1247,15 +1247,15 @@ fn parse_zones(node: Node<'_, '_>) -> Result<(Vec<Zone>, Vec<ZoneGate>)> {
                     "z2",
                     "x3",
                     "z3",
-                    "enabled",
+                    "flag",
                     "floor",
                 ],
             )?;
-            if record.has_attribute("enabled") {
+            if record.has_attribute("flag") {
                 gates.push((
                     attr::<usize>(record, "zoneIndex")?,
                     ZoneGate {
-                        enabled: attr::<u8>(record, "enabled")? != 0,
+                        flag: attr(record, "flag")?,
                         floor: attr_or(record, "floor", 0xFF)?,
                     },
                 ));

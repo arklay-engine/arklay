@@ -134,12 +134,13 @@ struct Cli {
 
     /// Character for the `--ui game`/`--ui death` boot, the `--fmv` prologue
     /// cut and the `--ending` chain
-    /// (0 Chris, 1 Jill)
+    /// (0 Chris, 1 Jill; an RE2 pack: 0 Leon, 1 Claire, and 2 and 3 are the
+    /// same two in Scenario B)
     #[arg(
         long,
         value_name = "N",
         default_value_t = 0,
-        value_parser = clap::value_parser!(u8).range(0..=1)
+        value_parser = clap::value_parser!(u8).range(0..=3)
     )]
     character: u8,
 

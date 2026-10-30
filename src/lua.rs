@@ -545,12 +545,20 @@ mod imp {
                 "set_player_pos",
                 |_lua, game, (x, y, z): (i32, i32, i32)| {
                     game.entities[0].pos = [x, y, z];
+                    // An RE2 room's player follows the same request as a
+                    // script's `pos_set`, so it holds during a session too.
+                    if game.is_re2_room {
+                        game.re2.pending_player.pos = Some([x, y, z]);
+                    }
                     Ok(())
                 },
             );
 
             methods.add_method_mut("set_player_angle", |_lua, game, degrees: i32| {
                 game.entities[0].angle = degrees as u16 & 0x0FFF;
+                if game.is_re2_room {
+                    game.re2.pending_player.angle = Some(degrees as u16 & 0x0FFF);
+                }
                 Ok(())
             });
 
