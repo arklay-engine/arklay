@@ -12,6 +12,7 @@ pub mod bgm2;
 pub mod bmp;
 pub mod budget;
 pub mod build_info;
+pub mod character2;
 pub mod charset;
 pub mod cinepak;
 pub mod combat;

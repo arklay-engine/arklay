@@ -57,6 +57,8 @@ the RE2 rows were measured against the retail RE2 install on 2026-10-30.
 
 R9 (#255) is in progress: `player2` ports `Player_move`, and `sca` every SCA shape handler, so the player's position, angle, clip, frame, blend and speed match the original tick for tick on random walks around room 100 for both characters, with the room's damage areas, and through room 100's door into room 101: the hold before it, the load, the animation's length and the handback, and on through room 101's first-visit scene, with its messages' timing, cuts and the room's own animations; and the starting handguns' stance, whose position comes from `Foot_set_pl` and RE2's own blend and matrix rounding, through a whole magazine, a reload and the empty click for both characters; and the climb up and down room 116's stairs for both characters, walking or at a run (`oracle/re2.md`).
 
+R10 (#256) has started: scripts' characters run in the enemy slots, so room 101's scene has Kendo in it, walking, turning and playing his room clips tick for tick with the original (`oracle/re2.md`), and the walk's end flags last one pass of the scripts as `fg_tick` does.
+
 The other RE2 milestones (R9 onwards) are still open and tracked by the
 milestone issue #244 and its sub-issues.
 

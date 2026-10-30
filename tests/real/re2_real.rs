@@ -98,7 +98,7 @@ fn the_retail_tree_converts_every_category() {
         ("player", 221),
         // Each room's definition and compiled script, and the 176 rooms'
         // own player animations.
-        ("room", 1354),
+        ("room", 1546),
         ("sound", 2768),
         ("ui", 4),
         ("voice", 599),
@@ -1273,6 +1273,7 @@ fn no_event_holds_the_player_for_good() {
         let (emd, emw) = &banks[usize::from(id.player_flag & 1)];
         let empty: (&[arklay::model::Clip], &[arklay::model::Keyframe]) = (&[], &[]);
         let room_anim = loaded.state.room_anim.as_ref();
+        let mut npc_models = arklay::enemy::EntityModelCache::default();
         let mut game = GameState::default();
         game.is_re2_room = true;
         game.id = id;
@@ -1289,7 +1290,9 @@ fn no_event_holds_the_player_for_good() {
                 game.dpad_pressed = 1;
                 game.dpad_held = 1;
                 vm.tick(&mut GameHost { game: &mut game });
+                game.re2.clear_tick_flags();
                 game.message.active = false;
+                arklay::character2::tick(&mut game, &loaded.state, pack, &mut npc_models);
                 if game.re2.player.kind & arklay::player2::KIND_NOT_MOVED == 0 {
                     let tick = arklay::player2::Tick {
                         room: &loaded.state,

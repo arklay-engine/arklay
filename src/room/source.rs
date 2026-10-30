@@ -36,6 +36,9 @@ const MAX_MODEL_SLOTS: usize = u8::MAX as usize;
 
 /// The index of the room's player-animation pair in `anim/`.
 const PLAYER_ANIMATION: usize = 0;
+/// RE2's enemy slots, whose room animations follow the player's.
+const CHARACTER_ANIMATIONS: usize = 1;
+const ENEMY_SLOTS: usize = 16;
 
 /// Free entry of the effect sprite index table.
 const FREE_SPRITE: u8 = 0xFF;
@@ -561,6 +564,20 @@ impl RoomSource {
                     .ok()
             });
 
+        let character_anims = if self.dialect == Dialect::Re2 {
+            (0..ENEMY_SLOTS)
+                .filter_map(|slot| {
+                    let stem = slot_stem(&kind("anim"), CHARACTER_ANIMATIONS + slot);
+                    pack.contains(&format!("{stem}.emr"))
+                        .then(|| build_anim(&stem, pack, self.dialect).ok())
+                        .flatten()
+                        .map(|anim| (slot as u8, anim))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         Ok(RoomState {
             stage: id.stage,
             mansion2: id.mansion2,
@@ -584,6 +601,7 @@ impl RoomSource {
             object_models,
             item_models,
             room_anim,
+            character_anims,
             model_warnings,
         })
     }
@@ -956,16 +974,25 @@ fn build_anim(stem: &str, pack: &Pack, dialect: Dialect) -> Result<crate::model:
 
 /// The pack entries of an RE2 room's own player animations, as `(entry, bytes)`.
 pub(super) fn re2_anim_files(data: &[u8], id: RoomId) -> Vec<(String, Vec<u8>)> {
-    let Some((emr, edd)) = crate::rdt2::room_anim(data)
-        .filter(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).is_ok())
-    else {
-        return Vec::new();
+    let dir = format!("{}/anim", id.rdt_dir());
+    let mut files = Vec::new();
+    let mut add = |pair: Option<(&[u8], &[u8])>, slot: usize| {
+        if let Some((emr, edd)) =
+            pair.filter(|(emr, edd)| crate::emd2::parse_room_anim(emr, edd).is_ok())
+        {
+            let stem = slot_stem(&dir, slot);
+            files.push((format!("{stem}.emr"), emr.to_vec()));
+            files.push((format!("{stem}.edd"), edd.to_vec()));
+        }
     };
-    let stem = slot_stem(&format!("{}/anim", id.rdt_dir()), PLAYER_ANIMATION);
-    vec![
-        (format!("{stem}.emr"), emr.to_vec()),
-        (format!("{stem}.edd"), edd.to_vec()),
-    ]
+    add(crate::rdt2::room_anim(data), PLAYER_ANIMATION);
+    for slot in 0..ENEMY_SLOTS {
+        add(
+            crate::rdt2::character_anim(data, slot as u8),
+            CHARACTER_ANIMATIONS + slot,
+        );
+    }
+    files
 }
 
 /// An animation frame from its raw 24-byte blocks.
