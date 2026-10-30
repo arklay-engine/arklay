@@ -144,6 +144,10 @@
     <footstep x="4301" z="9100" width="11199" height="0x0BB8" sound="0x002D"/>
     <footstep x="0" z="0" width="21200" height="0x3E1C" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="save_name">M. Room 1F</string>

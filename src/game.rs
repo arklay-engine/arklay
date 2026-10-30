@@ -6139,7 +6139,7 @@ impl GameState {
             }
             RoomActionKind::Message => {
                 let id = room_action.param_word(0);
-                self.show_message(id as u8, room_action.param_word(1));
+                self.show_message_word(id, room_action.param_word(1));
                 self.record_interaction(room_action.slot, room_action.kind, Some(id));
             }
             RoomActionKind::StairsHeight => {
@@ -7459,7 +7459,7 @@ impl GameState {
             HANDLER_DESK if action.kind == RoomActionKind::Desk => self.check_desk(slot),
             HANDLER_MESSAGE => {
                 let id = action.param_word(0);
-                self.show_message(id as u8, action.param_word(1));
+                self.show_message_word(id, action.param_word(1));
                 self.record_interaction(slot, RoomActionKind::Message, Some(id));
                 true
             }
@@ -7875,7 +7875,16 @@ impl GameState {
     /// [`GameState::update_message`], once the engine hands over the room and
     /// text tables.
     pub fn show_message(&mut self, id: u8, pause: u16) {
-        if self.begin_message(id, pause) {
+        self.show_message_word(u16::from(id), pause);
+    }
+
+    /// [`GameState::show_message`] for a message id word, whose high byte
+    /// reaches room messages past the 64 an id byte does
+    /// ([`crate::text::message_index`]).
+    pub fn show_message_word(&mut self, id: u16, pause: u16) {
+        let [low, high] = id.to_le_bytes();
+        if self.begin_message(low, pause) {
+            self.message.id_high = high;
             self.sync_message_choice();
         }
     }
@@ -8048,15 +8057,16 @@ impl GameState {
             && self.message.menu_choice_id() & 0x80 == 0
             && let Some(id) = self.message.id
         {
-            let pause = self.message.pause;
+            let (pause, id_high) = (self.message.pause, self.message.id_high);
             self.begin_message(id, pause);
+            self.message.id_high = id_high;
         }
         let was_active = self.message.active;
-        if let Some(id) = self.message.id
+        if let Some(id) = self.message.id_word()
             && self.message.active
             && !self.message.has_source()
         {
-            let bytes = text.message(room, u16::from(id)).unwrap_or(&[]).to_vec();
+            let bytes = text.message(room, id).unwrap_or(&[]).to_vec();
             self.message.feed_source(&bytes);
         }
         let selected = self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)];
@@ -8590,6 +8600,11 @@ impl ScdHost for ScdGameHost<'_> {
             0x0B => {
                 self.state
                     .show_message(operand_u8(operands, 0), operand_u16(operands, 1));
+                StepResult::Continue
+            }
+            0x53 => {
+                self.state
+                    .show_message_word(operand_u16(operands, 1), operand_u16(operands, 2));
                 StepResult::Continue
             }
             // `voice_play` (0x1E, the original's `xa_on`): type 1 queues a voice
@@ -9853,6 +9868,25 @@ mod tests {
             assert!(!host.state().camera.locked);
         }
         assert_eq!(state.camera.current_cut, 0);
+    }
+
+    #[test]
+    fn a_long_message_carries_the_high_byte_of_its_id_word() {
+        let mut state = game();
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            assert_eq!(
+                host.on_message(op(0x53), &operands(&[0, 0x186, 79])),
+                StepResult::Continue
+            );
+        }
+        assert_eq!(state.message.id, Some(0x86));
+        assert_eq!(state.message.id_word(), Some(0x186));
+        assert_eq!(state.message.pause, 79);
+        // A short message has none.
+        state.message = Default::default();
+        state.show_message(0x86, 0);
+        assert_eq!(state.message.id_word(), Some(0x86));
     }
 
     #[test]

@@ -87,6 +87,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="9600" height="0x2904" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ALMOST A SANDWICH</string>
@@ -119,9 +123,8 @@
       <string key="1">{scroll 0}Jill? Bist du das, Jill?\nWas ist passiert?{scroll 2}{timed 110}</string>
       <string key="2">{scroll 0}Barry?\nHilf mir, bitte!{scroll 2}{clear 75}{scroll 0}Die Tür geht nicht auf.\nSchnell!{scroll 2}{timed 75}</string>
       <string when="MANSION2" key="2">{scroll 0}Barry?\nHilf' mir, bitte!{scroll 2}{clear 75}{scroll 0}Die Tür läßt sich nicht\nöffnen. Schnell!{scroll 2}{timed 75}</string>
-      <string key="3">{scroll 0}\nGeh etwas zur Seite, Jill.{scroll 2}{clear 45}{scroll 0}\nIch werde die Tür eintreten!{scroll 2}{timed 65}</string>
+      <string key="3">{scroll 0}\nGeh etwas zur Seite, Jill.{scroll 2}{clear 55}{scroll 0}\nIch werde die Tür eintreten!{scroll 2}{timed 55}</string>
       <string when="MANSION2" key="3">{scroll 0}\nGeh' etwas zur Seite, Jill.{scroll 2}{clear 45}{scroll 0}\nIch werde diese Tür eintreten!{scroll 2}{timed 65}</string>
-      <string when="JILL MANSION1" key="3">{scroll 0}\nGeh etwas zur Seite, Jill.{scroll 2}{clear 55}{scroll 0}\nIch werde die Tür eintreten!{scroll 2}{timed 55}</string>
       <string key="4">{scroll 0}Beeilung!\nHier lang!{scroll 2}{timed 60}</string>
     </language>
     <language lang="it-IT">
@@ -133,10 +136,8 @@
       <string key="4">{scroll 0}Sbrigati! \nDa questa parte!{scroll 2}{timed 60}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 0}\n¡Oye! ¿Qué pasa?{scroll 2}{timed 80}</string>
-      <string when="JILL" key="0">{scroll 0}\n¡Hey! ¿Qué pasa?{scroll 2}{timed 80}</string>
-      <string key="1">{scroll 0}¿Jill? ¿Eres tú, Jill?\n¿Qué ha pasado?{scroll 2}{timed 110}</string>
-      <string when="JILL" key="1">{scroll 0}¿Jill? ¿Eres tú, Jill?\n¿Qué ocurre?{scroll 2}{timed 110}</string>
+      <string key="0">{scroll 0}\n¡Hey! ¿Qué pasa?{scroll 2}{timed 80}</string>
+      <string key="1">{scroll 0}¿Jill? ¿Eres tú, Jill?\n¿Qué ocurre?{scroll 2}{timed 110}</string>
       <string key="2">{scroll 0}¡Barry! ¡Ayúdame, por favor!\nLa puerta no se abre. ¡Rápido!{scroll 2}{timed 150}</string>
       <string key="3">{scroll 0}¡Jill, aléjate de la\npuerta!{scroll 2}{clear 45}{scroll 0}¡La voy a echar\nabajo!{scroll 2}{timed 65}</string>
       <string key="4">{scroll 0}\n¡Rápido! ¡Por aquí!{scroll 2}{timed 60}</string>

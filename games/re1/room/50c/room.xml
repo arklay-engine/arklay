@@ -238,6 +238,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="27400" height="0x7FBC" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">FRONT OF ELEVATOR</string>
@@ -262,7 +266,6 @@
       <string key="17">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}\n {scroll 1}{timed 95}</string>
       <string key="19">{scroll 0}\n {scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\n {scroll 1}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
@@ -286,7 +289,6 @@
       <string key="17">{scroll 0}\n  おまえもここに来てたのか!{scroll 1}{clear 70}{scroll 0}\n     ええ あなたこそ{scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}\n  少し迷子になっちまってたがな{scroll 1}{timed 95}</string>
       <string key="19">{scroll 0}\n     さあ行きましょう{scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\n      “動力室”{scroll 1}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Laboratoire SS3</string>
@@ -310,7 +312,6 @@
       <string key="17">{scroll 0}\nJill! Tu es là aussi! {scroll 1}{clear 70}{scroll 0}\nOui, et toi? {scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}\nEcoute, je me suis perdu. {scroll 1}{timed 95}</string>
       <string key="19">{scroll 0}\nContinuons. {scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\n {scroll 1}</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 2}Da ist ein Schalter.\nMöchten Sie draufdrücken?{scroll 1}{branch 0 6 0}</string>
@@ -320,23 +321,19 @@
       <string key="4">{scroll 0}\nWarte mal, Chris!{scroll 1}{timed 60}</string>
       <string key="5">{scroll 0}\nWas? Rebecca.{scroll 1}{timed 50}</string>
       <string key="6">{scroll 0}In einem Forschungsbericht\nin diesem Labor heißt es,{scroll 1}{clear 110}{scroll 0}dass es gerade hier\neine große Menge{scroll 1}{clear 50}{scroll 0}Untersuchungsmaterial über\nden Tyrant-Virus gibt...{scroll 1}{clear 45}{scroll 0}Wir sollten das alles hier\nin die Luft sprengen...{scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}In einem Forschungsbericht\nin diesem Labor heißt es,{scroll 1}{clear 100}{scroll 0}dass es gerade hier\neine große Menge{scroll 1}{clear 65}{scroll 0}Untersuchungsmaterial über\nden Tyrant-Virus gibt...{scroll 1}{clear 65}{scroll 0}Wir sollten das alles hier\nin die Luft sprengen...{scroll 1}{timed 80}</string>
       <string key="7">{scroll 0}Wir stecken hier bereits\nrein gedanklich schon viel{scroll 1}{clear 50}{scroll 0}\nzu tief drin.{scroll 1}{clear 40}{scroll 0}Rebecca,\nkannst du das übernehmen?{scroll 1}{timed 50}</string>
       <string key="8">{scroll 0}\nJa, Sir.{scroll 1}{clear 50}{scroll 0}Ich werde den Auslöser\nder Bombe in Gang setzen.{scroll 1}{timed 80}</string>
       <string key="9">{scroll 0}Okay! Jetzt haben wir\ndie Gelegenheit, zu entkommen!{scroll 1}{clear 102}{scroll 0}Ich treffe dich\naußerhalb des Hauses!{scroll 1}{timed 90}</string>
       <string key="10">{scroll 0}Rebecca!\nDu bist unversehrt!{scroll 1}{clear 85}{scroll 0}Ich hab dich im Garten\ngesehen,{scroll 1}{clear 50}{scroll 0}jetzt hab ich dich endlich\neingeholt.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="10">{scroll 0}Rebecca!\nDu bist unversehrt!{scroll 1}{clear 85}{scroll 0}Ich hab dich im Garten\ngesehen,{scroll 1}{clear 60}{scroll 0}jetzt hab ich dich endlich\neingeholt.{scroll 1}{timed 50}</string>
       <string key="11">{scroll 0}Rebecca!\nDu bist unversehrt!{scroll 1}{clear 80}{scroll 0}\nEs tut mir so Leid.{scroll 1}{timed 50}</string>
       <string key="12">{scroll 0}Gut... ich bin froh,\ndass es dir gut geht.{scroll 1}{clear 90}{scroll 0}\nGeh nicht mehr allein!{scroll 1}{clear 50}{scroll 0}\nJa, Sir.{scroll 1}{timed 40}</string>
       <string key="13">{scroll 0}\nHey, ich hab nach dir gesucht.{scroll 1}{timed 50}</string>
       <string key="14">{scroll 0}\nBarry!{scroll 1}{timed 50}</string>
       <string key="15">{scroll 0}\nJill, nun sei nicht ärgerlich!{scroll 1}{clear 70}{scroll 0}Ich wollte,\ndass du auf mich wartest.{scroll 1}{timed 70}</string>
-      <string key="16">{scroll 0}Barry, mach dich nicht\nwieder verrückt wie vorhin,{scroll 1}{clear 50}{scroll 0}als du das Seil losgelassen\nhattest!{scroll 1}{timed 100}</string>
-      <string when="JILL" key="16">{scroll 0}Barry, mach dich nicht\nwieder verrückt wie vorhin,{scroll 1}{clear 65}{scroll 0}als du das Seil losgelassen\nhattest!{scroll 1}{timed 100}</string>
+      <string key="16">{scroll 0}Barry, mach dich nicht\nwieder verrückt wie vorhin,{scroll 1}{clear 65}{scroll 0}als du das Seil losgelassen\nhattest!{scroll 1}{timed 100}</string>
       <string key="17">{scroll 0}Jill!\nDu bist auch hier!{scroll 1}{clear 70}{scroll 0}\nJa, und du auch?{scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}Wie das so ist, ich konnte\nmich nicht mehr orientieren.{scroll 1}{timed 95}</string>
       <string key="19">{scroll 0}\nLass uns weitergehen.{scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\n\"Energieraum\"{scroll 1}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Laboratorio S3</string>
@@ -360,7 +357,6 @@
       <string key="17">{scroll 0}\nJill! Ci sei anche tu! {scroll 1}{clear 70}{scroll 0}\nSi, e tu? {scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}\nMi sono perso. {scroll 1}{timed 95}</string>
       <string key="19">{scroll 0}\nContinuiamo. {scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\n {scroll 1}</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 2}Hay un interruptor... \n¿Quieres pulsarlo?{scroll 1}{branch 0 6 0}</string>
@@ -371,29 +367,19 @@
       <string key="4">{scroll 0}\nPerdona, Chris.{scroll 1}{timed 60}</string>
       <string key="5">{scroll 0}\n¿Qué, Rebecca?{scroll 1}{timed 50}</string>
       <string key="6">{scroll 0}He visto un archivo de\ninvestigación en el laboratorio.{scroll 1}{clear 110}{scroll 0}Dice que aquí está buena\nparte de la investigación{scroll 1}{clear 95}{scroll 0}sobre el virus Tyrant.\n¡Deberíamos volar este sitio!{scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}He visto un archivo de\ninvestigación en el labo.{scroll 1}{clear 100}{scroll 0}Dice que aquí está buena\nparte de la investigación{scroll 1}{clear 130}{scroll 0}del virus Tyrant.\n¡Deberíamos volar este sitio!{scroll 1}{timed 80}</string>
       <string key="7">{scroll 0}Ya estamos en ello,\nno pienso en otra cosa.{scroll 1}{clear 90}{scroll 0}\nRebecca, ¿puedes hacerlo?{scroll 1}{timed 50}</string>
-      <string when="JILL" key="7">{scroll 0}Ya estamos en ello,\nencima de nosotros. {scroll 1}{clear 90}{scroll 0}\nRebecca, ¿puedes hacerlo?{scroll 1}{timed 50}</string>
       <string key="8">{scroll 0}¡Sí, señor! Prepararé un\ndetonador para una bomba.{scroll 1}{timed 130}</string>
       <string key="9">{scroll 0}¡Vale! Ahora tenemos una\noportunidad de escapar.{scroll 1}{clear 102}{scroll 0}\nNos vemos fuera.{scroll 1}{timed 90}</string>
-      <string when="JILL" key="9">{scroll 0}¡Vale! ahora tenemos una\nopción de escapar.{scroll 1}{clear 102}{scroll 0}\nNos vamos fuera.{scroll 1}{timed 90}</string>
       <string key="10">{scroll 0}\n¡Rebecca, estás a salvo!{scroll 1}{clear 85}{scroll 0}Te vi en el jardín.\nPor fin te alcanzo.{scroll 1}{timed 110}</string>
-      <string when="JILL" key="10">{scroll 0}\n¡Rebecca, estás a salvo!{scroll 1}{clear 85}{scroll 0}Te vi en el jardín. Por fin\nte alcanzo.{scroll 1}{timed 110}</string>
       <string key="11">{scroll 0}\n¡Rebecca, estás a salvo!{scroll 1}{clear 80}{scroll 0}\nLo siento.{scroll 1}{timed 50}</string>
       <string key="12">{scroll 0}Bueno, me alegro de que estés\nbien. Pero no salgas sola.{scroll 1}{clear 140}{scroll 0}\n¡Sí, señor!{scroll 1}{timed 40}</string>
-      <string when="JILL" key="12">{scroll 0}Bueno, me alegro de que\nestés bien. Pero no salgas.{scroll 1}{clear 140}{scroll 0}\n¡Sí, señor!{scroll 1}{timed 40}</string>
-      <string key="13">{scroll 0}\nTe buscaba.{scroll 1}{timed 50}</string>
-      <string when="JILL" key="13">{scroll 0}\nTe estaba buscando.{scroll 1}{timed 50}</string>
+      <string key="13">{scroll 0}\nTe estaba buscando.{scroll 1}{timed 50}</string>
       <string key="14">{scroll 0}\n¡Barry!{scroll 1}{timed 50}</string>
       <string key="15">{scroll 0}Jill, no te enfades.\nQuería que me esperaras.{scroll 1}{timed 140}</string>
-      <string key="16">{scroll 0}Barry,\nno la vuelvas a cagar,{scroll 1}{clear 50}{scroll 0}como cuando soltaste\nla cuerda.{scroll 1}{timed 100}</string>
-      <string when="JILL" key="16">{scroll 0}Barry,\nno la vuelvas a fastidiar{scroll 1}{clear 65}{scroll 0}como antes, cuando soltaste\nla cuerda.{scroll 1}{timed 100}</string>
-      <string key="17">{scroll 0}\n¡Jill! ¡También estás aquí!{scroll 1}{clear 70}{scroll 0}\n¡Sí! ¿Tú también?{scroll 1}{timed 70}</string>
-      <string when="JILL" key="17">{scroll 0}\n¡Jill! ¡Tú también estás aquí!{scroll 1}{clear 70}{scroll 0}\n¡Sí! ¡Tú también!{scroll 1}{timed 70}</string>
+      <string key="16">{scroll 0}Barry,\nno la vuelvas a fastidiar{scroll 1}{clear 65}{scroll 0}como antes, cuando soltaste\nla cuerda.{scroll 1}{timed 100}</string>
+      <string key="17">{scroll 0}\n¡Jill! ¡Tú también estás aquí!{scroll 1}{clear 70}{scroll 0}\n¡Sí! ¡Tú también!{scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}\nMira... ehh, me he perdido.{scroll 1}{timed 95}</string>
-      <string key="19">{scroll 0}\n¡Vamos allá!{scroll 1}{timed 45}</string>
-      <string when="JILL" key="19">{scroll 0}\n¡En marcha!{scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\n\"Sala del generador\"{scroll 1}</string>
+      <string key="19">{scroll 0}\n¡En marcha!{scroll 1}{timed 45}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Лаборатория Б3</string>
@@ -417,7 +403,6 @@
       <string key="17">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}\n {scroll 1}{timed 95}</string>
       <string key="19">{scroll 0}\n {scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\n {scroll 1}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Laboratorion olohuone -2 krs</string>
@@ -428,7 +413,6 @@
       <string key="4">{scroll 0}Anteeksi, Chris.{scroll 1}{timed 60}</string>
       <string key="5">{scroll 0}Mitä, Rebecca?{scroll 1}{timed 50}</string>
       <string key="6">{scroll 0}Luin tutkimusraportin jonka löysin\ntäältä laboratoriosta. Sen mukaan{scroll 1}{clear 110}{scroll 0}suuri osa Tyranni-viruksen\ntutkimusdatasta sijaitsee täällä.{scroll 1}{clear 95}{scroll 0}Meidän tulisi räjäyttää tämä\npaikka taivaan tuuliin!{scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}Luin tutkimusraportin jonka löysin\ntäältä laboratoriosta. Sen mukaan{scroll 1}{clear 100}{scroll 0}suuri osa Tyranni-viruksen\ntutkimusdatasta sijaitsee täällä.{scroll 1}{clear 130}{scroll 0}Meidän tulisi räjäyttää tämä\npaikka taivaan tuuliin!{scroll 1}{timed 80}</string>
       <string key="7">{scroll 0}Meillä on riittänyt tehtävää\nkerrakseen.{scroll 1}{clear 90}{scroll 0}Pystytkö siihen?{scroll 1}{timed 50}</string>
       <string key="8">{scroll 0}Kyllä herra! Minä käynnistän\nlaitoksen itsetuhojärjestelmän.{scroll 1}{timed 130}</string>
       <string key="9">{scroll 0}Selvä! Nyt meillä on mahdollisuus\npaeta.{scroll 1}{clear 102}{scroll 0}Nähdään ulkona.{scroll 1}{timed 90}</string>
@@ -442,7 +426,6 @@
       <string key="17">{scroll 0}Jill! Sinäkin olet täällä!{scroll 1}{clear 70}{scroll 0}Kyllä! Sinä myös?{scroll 1}{timed 70}</string>
       <string key="18">{scroll 0}Minä onnistuin eksymään.{scroll 1}{timed 95}</string>
       <string key="19">{scroll 0}Tule, mennään!{scroll 1}{timed 45}</string>
-      <string key="20">{scroll 2}\"Sähkönjakohuone\"{scroll 1}</string>
     </language>
   </strings>
 </room>

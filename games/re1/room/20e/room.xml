@@ -240,6 +240,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="16401" height="0x4A38" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">FRONT OF ATTIC</string>
@@ -323,7 +327,6 @@
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}¿Estoy envenenado?\nMaldita sea, quiero suero.{scroll 1}{timed 145}</string>
-      <string when="JILL MANSION1" key="0">{scroll 0}¿Estoy envenenado?\nMaldita sea, ponme suero.{scroll 1}{timed 145}</string>
       <string key="1">{scroll 0}\n¡Chris!{scroll 1}{timed 40}</string>
       <string key="2">{scroll 0}Seguro que el suero\nestá allí, {scroll 1}{timed 50}</string>
       <string key="3">{scroll 0}\nno tardaré.{scroll 1}{timed 40}</string>
@@ -332,13 +335,10 @@
       <string key="6">{scroll 0}Te ha mordido una\nserpiente venenosa.{scroll 1}{timed 60}</string>
       <string key="7">{scroll 0}\n¿Estás bien?{scroll 1}{timed 45}</string>
       <string key="8">{scroll 0}Ahh, este dolor de cabeza\nme va a matar.{scroll 1}{timed 127}</string>
-      <string when="JILL MANSION1" key="8">{scroll 0}\nAhh, la cabeza, me mata.{scroll 1}{timed 127}</string>
       <string key="9">{scroll 0}Creo que te pondrás bien,\nte he inyectado una dosis.{scroll 1}{clear 90}{scroll 0}\nPero ten cuidado, por favor.{scroll 1}{timed 80}</string>
-      <string when="JILL MANSION1" key="9">{scroll 0}Creo que te pondrás bien,\nte he puesto una dosis.{scroll 1}{clear 90}{scroll 0}\nPero ten cuidado, por favor.{scroll 1}{timed 80}</string>
       <string key="10">{scroll 0}Me has salvado la vida.\nTe debo una.{scroll 1}{timed 130}</string>
       <string key="11">{scroll 0}\nMe alegro de haberte ayudado.{scroll 1}{timed 60}</string>
-      <string key="12">{scroll 0}¿Estoy envenenado?\nPonme el suero.{scroll 1}{timed 150}</string>
-      <string when="JILL MANSION1" key="12">{scroll 0}¿Estoy envenenada?\nNecesito el suero.{scroll 1}{timed 150}</string>
+      <string key="12">{scroll 0}¿Estoy envenenada?\nNecesito el suero.{scroll 1}{timed 150}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Зал 1-эт.</string>

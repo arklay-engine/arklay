@@ -405,6 +405,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="32760" height="0x7404" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">CRANK PASSAGE</string>
@@ -412,54 +416,46 @@
       <string key="0">{scroll 2}\nThere's a hexagonal hole.</string>
       <string key="1">{scroll 2}It's a map of UNDER GROUND.\nWill you take it?{branch 0 1 1}{scroll 2}You got the\nmap of UNDER GROUND.</string>
       <string key="2">{scroll 2}You got the\nmap of UNDER GROUND.</string>
-      <string key="3">{scroll 2}\nNothing unusual.</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
       <string key="0">{scroll 2}\n   六角形のさしこみ口がある</string>
       <string key="1">{scroll 2}    中庭地下の地図がある\n取りますか?{branch 0 1 1}{scroll 2}\n   中庭地下の地図を入手した</string>
       <string key="2">{scroll 2}\n   中庭地下の地図を入手した</string>
-      <string key="3">{scroll 2}\n   特に変わったところはない</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Salle de la cour SS1</string>
       <string key="0">{scroll 2}\nIl y a un trou hexagonal.</string>
       <string key="1">{scroll 2}C'est un plan du sous-sol.\nLe prendre?{branch 0 1 1}</string>
       <string key="2">{scroll 2}Vous avez le plan \ndu sous-sol.</string>
-      <string key="3">{scroll 2}\nRien d'utile.</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 2}\nDa ist ein sechseckiges Loch.</string>
       <string key="1">{scroll 2}Das ist ein Plan des \n{color 1}KELLERS{color 0}.{clear 0}{scroll 2}Möchten Sie ihn mitnehmen?{branch 0 6 1}</string>
       <string key="2">{scroll 2}Sie besitzen jetzt \nden Plan des {color 1}KELLERS{color 0}.</string>
-      <string key="3">{scroll 2}\nNichts von Interesse.</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Cortile S1</string>
       <string key="0">{scroll 2}\nC'è un foro esagonale.</string>
       <string key="1">{scroll 2}La piantina dei SOTTERRANEI.\nVuoi prenderla?{branch 0 1 1}</string>
       <string key="2">{scroll 2}Hai ottenuto la mappa \ndei SOTTERRANEI.</string>
-      <string key="3">{scroll 2}\nNiente di utile.</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 2}\nHay un agujero hexagonal...</string>
       <string key="1">{scroll 2}Es un mapa del SUBTERRÁNEO bajo el\njardín... ¿Te lo llevas?{branch 0 6 1}</string>
       <string key="2">{scroll 2}Ahora tienes el mapa\ndel SUBTERRÁNEO...</string>
-      <string key="3">{scroll 2}\nNada fuera de lo normal...</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната внутр. двора Б1</string>
       <string key="0">{scroll 2}\nЗдесь есть\nшестигранное отверстие.</string>
       <string key="1">{scroll 2}Это {color 1}карта подземелья{color 0}.\nВзять её?{branch 0 1 1}{scroll 2}Вы взяли\nкарту подземелья.</string>
       <string key="2">{scroll 2}Вы взяли\nкарту подземелья.</string>
-      <string key="3">{scroll 2}\nНичего необычного.</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Maanalainen varasto 0 krs</string>
       <string key="0">{scroll 2}Siinä on kuusikulmainen kolo...</string>
       <string key="1">{scroll 2}Se on maanalaisen alueen kartta...\nPoimitko sen?{branch 0 6 1}</string>
       <string key="2">{scroll 2}Pomit maanalaisen alueen kartan...</string>
-      <string key="3">{scroll 2}Ei mitään epätavallista...</string>
     </language>
   </strings>
 </room>

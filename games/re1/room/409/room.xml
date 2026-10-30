@@ -192,21 +192,22 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="11300" height="0x2B5C" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">DRUG STOREHOUSE</string>
       <string key="save_name">Guardhouse 1F</string>
       <string key="0">{scroll 2}Something is written on\nthe wall.{clear 0}Water=1, Red=2,\nPurple=3, Green=4{scroll 2}</string>
       <string key="1">{scroll 2}Something is written on\nthe wall.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
-      <string key="2">{scroll 2}\nThere's a UMB.No2.{scroll 2}</string>
-      <string key="3">{scroll 2}\nThere's a UMB.No4.{scroll 2}</string>
       <string key="4">{scroll 2}\nA faucet.{scroll 2}</string>
       <string key="5">{scroll 2}Will you put water in the\nempty bottle?{branch 0 1 1}{scroll 2}There's a UMB.No2.{clear 0}Will you put UMB No.2 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's a UMB.No4.{clear 0}Will you put UMB No.4 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
       <string key="6">{scroll 2}There's a UMB.No2.{clear 0}Will you put UMB No.2 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's a UMB.No4.{clear 0}Will you put UMB No.4 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
       <string key="7">{scroll 2}There's a UMB.No4.{clear 0}Will you put UMB No.4 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
       <string key="8">{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
       <string key="9">{scroll 2}There's UMB No.4. You need\na container to obtain it.{scroll 2}</string>
-      <string key="10">\nIt's poison gas!{scroll 2}Perhaps I should leave for\na moment.{scroll 2}</string>
       <string key="11">{scroll 2}Perhaps I should leave for\na moment.{scroll 2}</string>
       <string key="12">{scroll 0}\n{scroll 2}{clear 100}{scroll 0}\n{scroll 2}{timed 150}</string>
       <string key="13">Do you want me to heal\nyour wounds?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 130}</string>
@@ -228,15 +229,12 @@
       <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
       <string key="0">{scroll 2}\n     何か書いてある{clear 0}\n “水二1 赤二2 紫二3 緑二4”{scroll 2}</string>
       <string key="1">{scroll 2}\n    カベに何か書いてある{clear 0} 1十2二3、3十4二7、2十4二6\n 6十7二13、13十3二16{scroll 2}</string>
-      <string key="2">{scroll 2}\n    UMBNo.2がある{scroll 2}</string>
-      <string key="3">{scroll 2}\n    UMBNo.4がある{scroll 2}</string>
       <string key="4">{scroll 2}\n     蛇口がある・・・{scroll 2}</string>
       <string key="5">{scroll 2}   水を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}\n    UMBNo.2がある{clear 0}UMBNo.2を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}\n    UMBNo.4がある{clear 0}UMBNo.4を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
       <string key="6">{scroll 2}\n    UMBNo.2がある{clear 0}UMBNo.2を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}\n    UMBNo.4がある{clear 0}UMBNo.4を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
       <string key="7">{scroll 2}\n    UMBNo.4がある{clear 0}UMBNo.4を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
       <string key="8">{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
       <string key="9">{scroll 2}    UMBNo.4がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
-      <string key="10">{scroll 2}\n    毒ガスが発生した!{scroll 2}{timed 75}</string>
       <string key="11">{scroll 2}    いったんこの部屋から\n    出たほうがよさそうだ。{scroll 2}</string>
       <string key="12">{scroll 0}    この部屋 薬品が\n    充実してるんですよ{scroll 2}{clear 100}{scroll 0}\n  手当てできるんですけど…します?{scroll 2}{timed 150}</string>
       <string key="13">手当てしますか?{scroll 1}{branch 0 1 0}{scroll 0}\n     とりあえず頼むよ{scroll 2}{timed 130}</string>
@@ -258,15 +256,12 @@
       <string key="save_name">Poste de garde RdC</string>
       <string key="0">{scroll 2}Il y a quelque chose\nd'écrit sur le mur.{clear 0}Eau=1 Rouge=2\nViolet=3 Vert=4{scroll 2}</string>
       <string key="1">{scroll 2}Il y a quelque chose\nd'écrit sur le mur.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
-      <string key="2">{scroll 2}\nDu UMB No. 2{scroll 2}</string>
-      <string key="3">{scroll 2}\nDu UMB No. 4{scroll 2}</string>
       <string key="4">{scroll 2}\nUn robinet.{scroll 2}</string>
       <string key="5">{scroll 2}Mettre  L'EAU dans \nla bouteille vide?{branch 0 6 1}</string>
       <string key="6">{scroll 2}\nDu UMB No. 2{clear 0}Mettre UMB No. 2 dans \nla bouteille vide?{branch 0 6 1}</string>
       <string key="7">{scroll 2}\nDu UMB No. 4{clear 0}Mettre UMB No. 4 dans \nla bouteille vide?{branch 0 6 1}</string>
       <string key="8">{scroll 2}UMB No. 2 Vous avez\nbesoin d'un récipient.{scroll 2}</string>
       <string key="9">{scroll 2}UMB No. 4 Vous avez\nbesoin d'un récipient.{scroll 2}</string>
-      <string key="10">\nC'est un gaz nocif!{scroll 2}</string>
       <string key="11">{scroll 2}Peut-être devrais-je \nsortir un moment.{scroll 2}</string>
       <string key="12">{scroll 0}Cette pièce est un véritable \nhôpital. Je peux tout soigner {scroll 2}{clear 90}{scroll 0}sauf votre blessure principale.\nVoulez-vous que je le fasse?{scroll 2}{timed 150}</string>
       <string key="13">Voulez-vous que je vous \nsoigne?{scroll 1}{branch 0 6 0}</string>
@@ -287,15 +282,12 @@
     <language lang="de-DE">
       <string key="0">{scroll 2}Irgendwas steht dort\nauf der Wand.{clear 0}Wasser=1 Rot=2\nLila=3 Grün=4{scroll 2}</string>
       <string key="1">{scroll 2}Irgendwas steht dort\nauf der Wand.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
-      <string key="2">{scroll 2}\nDort ist ein UMB Nr. 2.{scroll 2}</string>
-      <string key="3">{scroll 2}\nDort ist ein UMB Nr. 4.{scroll 2}</string>
       <string key="4">{scroll 2}\nEin Wasserhahn.{scroll 2}</string>
       <string key="5">{scroll 2}Möchten Sie Wasser in die\nleere Flasche füllen?{branch 0 6 1}</string>
       <string key="6">{scroll 2}\nDort ist ein UMB Nr. 2.{clear 0}Möchten Sie UMB Nr. 2 in die\nleere Flasche füllen?{branch 0 6 1}</string>
       <string key="7">{scroll 2}\nDort ist ein UMB Nr. 4.{clear 0}Möchten Sie UMB Nr. 4 in die\nleere Flasche füllen?{branch 0 6 1}</string>
       <string key="8">{scroll 2}Dort gibt es UMB Nr. 2.\nIch benötige einen Behälter.{scroll 2}</string>
       <string key="9">{scroll 2}Dort gibt es UMB Nr. 4.\nIch benötige einen Behälter.{scroll 2}</string>
-      <string key="10">\nDas ist Giftgas!{scroll 2}</string>
       <string key="11">{scroll 2}Vielleicht sollte ich mal\neinen Augenblick verschwinden.{scroll 2}</string>
       <string key="12">{scroll 0}Dieser Raum verfügt über eine\nkomplette Medizinausrüstung.{scroll 2}{clear 90}{scroll 0}\nIch kann dich behandeln,{scroll 2}{clear 45}{scroll 0}mal abgesehen\nvon deiner großen Verletzung.{scroll 2}{clear 45}{scroll 0}\nSoll ich dich verarzten...?{scroll 2}{timed 60}</string>
       <string key="13">Möchtest du, dass ich\ndeine Wunden heile?{scroll 1}{branch 0 6 0}</string>
@@ -317,15 +309,12 @@
       <string key="save_name">Guardiola 1P</string>
       <string key="0">{scroll 2}C'è qualcosa scritto \nsul muro:{clear 0}Acqua=1 Rosso=2\nViola=3 Verde=4{scroll 2}</string>
       <string key="1">{scroll 2}C'è qualcosa scritto \nsul muro:{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
-      <string key="2">{scroll 2}\nL'UMB No. 2{scroll 2}</string>
-      <string key="3">{scroll 2}\nL'UMB No. 4{scroll 2}</string>
       <string key="4">{scroll 2}\nUn lavandino.{scroll 2}</string>
       <string key="5">{scroll 2}Vuoi mettere ACQUA \nnella bottiglia vuota?{branch 0 6 1}</string>
       <string key="6">{scroll 2}\nL'UMB No. 2{clear 0}Vuoi mettere l'UMB No. 2 \nnella bottiglia vuota?{branch 0 6 1}</string>
       <string key="7">{scroll 2}\nL'UMB No. 4{clear 0}Vuoi mettere l'UMB No. 4 \nnella bottiglia vuota?{branch 0 6 1}</string>
       <string key="8">{scroll 2}L'UMB No. 2. Hai bisogno \ndi un recipiente.{scroll 2}</string>
       <string key="9">{scroll 2}L'UMB No. 4. Hai bisogno \ndi un recipiente.{scroll 2}</string>
-      <string key="10">\nDel gas nocivo!{scroll 2}</string>
       <string key="11">{scroll 2}Forse dovrei uscire \nper ora.{scroll 2}</string>
       <string key="12">{scroll 0}Questa stanza è ben rifornita \ndi medicinali. {scroll 2}{clear 75}{scroll 0}Posso trattare le tue ferite, \ntranne quelle più gravi.{scroll 2}{clear 80}{scroll 0}\nVuoi che lo faccia?{scroll 2}{timed 70}</string>
       <string key="13">Vuoi essere curato?{scroll 1}{branch 0 6 0}</string>
@@ -346,51 +335,39 @@
     <language lang="es-ES">
       <string key="0">{scroll 2}Hay algo escrito en\nla pared...{clear 0}Agua=1, rojo=2,\npúrpura=3, verde=4.{scroll 2}</string>
       <string key="1">{scroll 2}Hay algo escrito en\nla pared...{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
-      <string key="2">{scroll 2}\nHay un UMB Nº... 2...{scroll 2}</string>
-      <string key="3">{scroll 2}\nHay un UMB Nº... 4...{scroll 2}</string>
       <string key="4">{scroll 2}\nUn grifo...{scroll 2}</string>
       <string key="5">{scroll 2}¿Quieres poner agua\nen la botella vacía?{branch 0 6 1}</string>
       <string key="6">{scroll 2}\nHay un UMB Nº... 2...{clear 0}¿Quieres poner UMB Nº2\nen la botella vacía?{branch 0 6 1}</string>
       <string key="7">{scroll 2}\nHay un UMB Nº... 4...{clear 0}¿Quieres poner UMB Nº4\nen la botella vacía?{branch 0 6 1}</string>
       <string key="8">{scroll 2}Hay UMB Nº...2...\nNecesitarás un recipiente...{scroll 2}</string>
       <string key="9">{scroll 2}Hay UMB Nº...4...\nNecesitarás un recipiente...{scroll 2}</string>
-      <string key="10">{scroll 2}\n¡Es gas venenoso!{scroll 2}</string>
       <string key="11">{scroll 2}Será mejor que salga de este cuarto\nhasta que se disipe el gas...{scroll 2}</string>
       <string key="12">{scroll 0}Esta sala está bien equipada\ncon suministros médicos.{scroll 2}{clear 90}{scroll 0}Te puedo curar, excepto\nsi es una herida grave.{scroll 2}{clear 90}{scroll 0}\n¿Quieres que lo haga?{scroll 2}{timed 60}</string>
       <string key="13">¿Quieres que te cure\nlas heridas?{scroll 1}{branch 0 6 0}</string>
       <string key="14">{scroll 0}Sí, por favor échame una mano\nde momento.{scroll 2}{timed 130}</string>
-      <string when="JILL" key="14">{scroll 0}Sí, échame una mano,\npara aguantar más tiempo.{scroll 2}{timed 130}</string>
       <string key="15">{scroll 0}La mayoría de las medicinas\nson de Umbrella.{scroll 2}{timed 110}</string>
       <string key="16">{scroll 0}\n¿Qué es Umbrella?{scroll 2}{timed 60}</string>
       <string key="17">{scroll 0}¿No lo sabes?\nEs una gran empresa{scroll 2}{clear 55}{scroll 0}farmacéutica con sede\nen Raccoon City.{scroll 2}{timed 115}</string>
-      <string when="JILL" key="17">{scroll 0}¿No lo sabes?\nEs una gran compañía{scroll 2}{clear 55}{scroll 0}farmacéutica\nde Raccoon City.{scroll 2}{timed 115}</string>
       <string key="18">{scroll 0}\nAh, ya veo.{scroll 2}{timed 70}</string>
       <string key="19">{scroll 0}\nEstoy bien,{scroll 2}{clear 50}{scroll 0}pero si me pasa algo,\ncúrame.{scroll 2}{timed 100}</string>
       <string key="20">{scroll 0}\n¿Estás bien?{scroll 2}{clear 60}{scroll 0}\n¿Quieres que te cure?{scroll 2}{timed 60}</string>
       <string key="21">{scroll 0}\n¡Chris! ¡Cuidado!{scroll 2}{timed 75}</string>
       <string key="22">\nRebecca cura a Chris...{scroll 2}</string>
       <string key="23">{scroll 0}\n¡Chris! ¡Ten cuidado!{timed 80}</string>
-      <string when="JILL" key="23">{scroll 0}\n{scroll 2}{timed 80}</string>
       <string key="24">{scroll 2}Hay UMB Nº2... Pero no sabe\nusar productos químicos...{scroll 2}</string>
-      <string when="JILL" key="24">{scroll 2}Hay UMB No...2... pero\nno sabe usar productos...{scroll 2}</string>
       <string key="25">{scroll 2}Hay UMB Nº4... Pero no sabe\nusar productos químicos...{scroll 2}</string>
-      <string when="JILL" key="25">{scroll 2}Hay UMB No...4... pero\nno sabe usar productos...{scroll 2}</string>
       <string key="26">{scroll 2}No sirve de nada... Chris\nno sabe usar productos químicos...{scroll 2}</string>
-      <string when="JILL" key="26">{scroll 2}No sirve de nada... Chris\nno sabe usar productos...{scroll 2}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната охраны 1-эт.</string>
       <string key="0">{scroll 2}На стене что-то\nнаписано.{clear 0}Вода=1, Красный=2,\nПурпурный=3, Зеленый=4{scroll 2}</string>
       <string key="1">{scroll 2}На стене что-то\nнаписано.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
-      <string key="2">{scroll 2}\nЭто УМБ 2.{scroll 2}</string>
-      <string key="3">{scroll 2}\nЭто УМБ 4.{scroll 2}</string>
       <string key="4">{scroll 2}\nКран.{scroll 2}</string>
       <string key="5">{scroll 2}Налить воду\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2.{clear 0}Налить УМБ 2\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 4.{clear 0}Налить УМБ 4\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
       <string key="6">{scroll 2}Это УМБ 2.{clear 0}Налить УМБ 2\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 4.{clear 0}Налить УМБ 4\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
       <string key="7">{scroll 2}Это УМБ 4.{clear 0}Налить УМБ 4\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
       <string key="8">{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
       <string key="9">{scroll 2}Это УМБ 4. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
-      <string key="10">\nЭто ядовитый газ!{scroll 2}\nНужно бежать отсюда.{scroll 2}</string>
       <string key="11">{scroll 2}\nНужно бежать отсюда.{scroll 2}</string>
       <string key="12">{scroll 0}\n{scroll 2}{clear 100}{scroll 0}\n{scroll 2}{timed 150}</string>
       <string key="13">Вы хотите, чтобы я подлатала\nваши раны?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 130}</string>
@@ -412,15 +389,12 @@
       <string key="save_name">Asuntolan varasto 1 krs</string>
       <string key="0">{scroll 2}Seinälle on kirjoitettu jotakin...{clear 0}vesi=1, punainen=2,\nvioletti=3, vihreä=4{scroll 2}</string>
       <string key="1">{scroll 2}Seinälle on kirjoitettu jotakin...{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
-      <string key="2">{scroll 2}Siinä on UMB Nro. 2...{scroll 2}</string>
-      <string key="3">{scroll 2}Siinä on UMB Nro. 4...{scroll 2}</string>
       <string key="4">{scroll 2}Vesihana...{scroll 2}</string>
       <string key="5">{scroll 2}Täytätkö tyhjän pullon vedellä?{branch 0 6 1}</string>
       <string key="6">{scroll 2}Siinä on UMB Nro. 2...{clear 0}Laitatko tyhjään pulloon\nUMB Nro. 2?{branch 0 6 1}</string>
       <string key="7">{scroll 2}Siinä on UMB Nro. 4...{clear 0}Laitatko tyhjään pulloon\nUMB No. 4?{branch 0 6 1}</string>
       <string key="8">{scroll 2}Siinä on UMB Nro. 2... Tarvitset\ntyhjän pullon ottaaksesi sitä...{scroll 2}</string>
       <string key="9">{scroll 2}Siinä on UMB Nro. 4... Tarvitset\ntyhjän pullon ottaaksesi sitä...{scroll 2}</string>
-      <string key="10">{scroll 2}Siitä syntyi myrkykaasua!{scroll 2}</string>
       <string key="11">{scroll 2}On parempi poistua hetkeksi...{scroll 2}</string>
       <string key="12">{scroll 0}Tämä huone on täynnä\nlääkintävarusteita.{scroll 2}{clear 90}{scroll 0}Voin hoitaa haavasi mutta\nen vakavia vammoja.{scroll 2}{clear 90}{scroll 0}Tarvitsetko hoitoa?{scroll 2}{timed 60}</string>
       <string key="13">Haluatko Rebecan hoitavan\nhaavasi?{scroll 1}{branch 0 6 0}</string>

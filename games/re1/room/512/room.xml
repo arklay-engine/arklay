@@ -165,6 +165,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="13100" height="0x3908" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">CELL</string>
@@ -181,7 +185,6 @@
       <string key="9">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 130}{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="10">{scroll 2}Nothing important around \nhere.{scroll 1}</string>
       <string key="11">{scroll 2}Nothing important around \nhere.{scroll 1}</string>
-      <string key="12">{scroll 2}Nothing important around \nhere.{scroll 1}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
@@ -197,7 +200,6 @@
       <string key="9">{scroll 0}\n        ジル{scroll 1}{clear 40}{scroll 0}\n   クリス 無事だったのね{scroll 1}{clear 70}{scroll 0}\n   そっちこそ ウェスカーは?{scroll 1}{clear 130}{scroll 0}\n   後よ とにかく出ましょう{scroll 1}{timed 80}</string>
       <string key="10">{scroll 2}\n       ベッドがある{scroll 1}</string>
       <string key="11">{scroll 2}\n    洗面台には何もない{scroll 1}</string>
-      <string key="12">{scroll 2}\n      洗面台のようだ{scroll 1}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Laboratoire SS3</string>
@@ -213,7 +215,6 @@
       <string key="9">{scroll 0}\nOh, Jill! {scroll 1}{clear 21}{scroll 0}\nOh, Chris! Tu vas bien!? {scroll 1}{clear 70}{scroll 0}Oui! Toi aussi! Qu'est-il \narrivé à Wesker? {scroll 1}{clear 130}{scroll 0}Nous en reparlerons plus\ntard! Sortons d'ici. {scroll 1}{timed 80}</string>
       <string key="10">{scroll 2}\nRien d'important par ici.{scroll 1}</string>
       <string key="11">{scroll 2}\nRien d'important par ici.{scroll 1}</string>
-      <string key="12">{scroll 2}\nRien d'important par ici.{scroll 1}</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 0}Jill! Tut mir leid,\ndass du warten musstest.{scroll 1}{clear 85}{scroll 0}\nChris...{scroll 1}{timed 50}</string>
@@ -224,13 +225,10 @@
       <string key="5">{scroll 0}\nJa, Wesker ist hier, er ist...{scroll 1}{timed 100}</string>
       <string key="6">{scroll 0}Oh, ich weiß. Egal,\nwir sollten endlich abhauen.{scroll 1}{timed 100}</string>
       <string key="7">{scroll 0}\nChris!{scroll 1}{timed 50}</string>
-      <string key="8">{scroll 0}\nOh, Jill!{scroll 1}{clear 40}{scroll 0}Tut mir Leid,\ndass ich dich warten ließ!{scroll 1}{clear 60}{scroll 0}\nDas heißt, alles ist erledigt?{scroll 1}{clear 65}{scroll 0}Nun, fast, ja.\nLass uns jetzt gehen!{scroll 1}{timed 90}</string>
-      <string when="JILL" key="8">{scroll 0}\nOh, Jill!{scroll 1}{clear 40}{scroll 0}Tut mir Leid,\ndass ich dich warten ließ!{scroll 1}{clear 60}{scroll 0}\nDas heißt, alles ist erledigt?{scroll 1}{clear 50}{scroll 0}Nun, fast, ja.\nLass uns jetzt gehen!{scroll 1}{timed 100}</string>
-      <string key="9">{scroll 0}\nOh, Jill!{scroll 1}{clear 40}{scroll 0}Oh, Chris!\nBist du auch okay?{scroll 1}{clear 70}{scroll 0}Ja! Du ja auch!\nWas ist mit Wesker passiert?{scroll 1}{clear 60}{scroll 0}Darüber können wir\nspäter sprechen!{scroll 1}{clear 70}{scroll 0}\nLass uns bloß abhauen.{scroll 1}{timed 80}</string>
-      <string when="JILL" key="9">{scroll 0}\nOh, Jill!{scroll 1}{clear 21}{scroll 0}Oh, Chris!\nBist du auch okay?{scroll 1}{clear 70}{scroll 0}Ja! Du ja auch!\nWas ist mit Wesker passiert?{scroll 1}{clear 130}{scroll 0}Darüber können wir\nspäter sprechen!{scroll 1}{clear 40}{scroll 0}\nLass uns bloß abhauen.{scroll 1}{timed 40}</string>
+      <string key="8">{scroll 0}\nOh, Jill!{scroll 1}{clear 40}{scroll 0}Tut mir Leid,\ndass ich dich warten ließ!{scroll 1}{clear 60}{scroll 0}\nDas heißt, alles ist erledigt?{scroll 1}{clear 50}{scroll 0}Nun, fast, ja.\nLass uns jetzt gehen!{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}\nOh, Jill!{scroll 1}{clear 21}{scroll 0}Oh, Chris!\nBist du auch okay?{scroll 1}{clear 70}{scroll 0}Ja! Du ja auch!\nWas ist mit Wesker passiert?{scroll 1}{clear 130}{scroll 0}Darüber können wir\nspäter sprechen!{scroll 1}{clear 40}{scroll 0}\nLass uns bloß abhauen.{scroll 1}{timed 40}</string>
       <string key="10">{scroll 2}\nHier gibt's nichts Wichtiges.{scroll 1}</string>
       <string key="11">{scroll 2}\nHier gibt's nichts Wichtiges.{scroll 1}</string>
-      <string key="12">{scroll 2}\nHier gibt's nichts Wichtiges.{scroll 1}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Laboratorio S3</string>
@@ -246,28 +244,20 @@
       <string key="9">{scroll 0}\nOh, Jill! {scroll 1}{clear 21}{scroll 0}\nChris! Stai bene? {scroll 1}{clear 70}{scroll 0}Si! Anche tu! \nCos'è successo a Wesker? {scroll 1}{clear 130}{scroll 0}Ne parleremo più tardi! \nUsciamo di qui! {scroll 1}{timed 80}</string>
       <string key="10">{scroll 2}\nNiente di importante.{scroll 1}</string>
       <string key="11">{scroll 2}\nNiente di importante.{scroll 1}</string>
-      <string key="12">{scroll 2}\nNiente di importante.{scroll 1}</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}Jill, siento haberte\nhecho esperar.{scroll 1}{clear 85}{scroll 0}\n¡Chris!{scroll 1}{timed 50}</string>
       <string key="1">{scroll 0}\nSabía que podía confiar en ti.{scroll 1}{timed 55}</string>
       <string key="2">{scroll 0}¡Vamos!\nNo tenemos nada que hacer aquí.{scroll 1}{timed 90}</string>
-      <string when="JILL" key="2">{scroll 0}¡Vamos!\nNo tenemos que quedarnos.{scroll 1}{timed 90}</string>
       <string key="3">{scroll 0}\n¿Jill? ¿Estás ahí?{scroll 1}{timed 60}</string>
       <string key="4">{scroll 0}\nJill, ¡estás bien!{scroll 1}{timed 55}</string>
-      <string when="JILL" key="4">{scroll 0}\nJill, tienes razón.{scroll 1}{timed 55}</string>
       <string key="5">{scroll 0}Ahh, sí.\nWesker está aquí, él...{scroll 1}{timed 100}</string>
-      <string when="JILL" key="5">{scroll 0}Ahh, sí.\nWesker está aquí, el...{scroll 1}{timed 100}</string>
       <string key="6">{scroll 0}Sí, lo sé. De todas formas,\ntenemos que salir de aquí.{scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}Oh, lo sé. De todas maneras,\ntenemos que salir de aquí.{scroll 1}{timed 100}</string>
       <string key="7">{scroll 0}\n¡Chris!{scroll 1}{timed 50}</string>
-      <string key="8">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 40}{scroll 0}Siento haberte hecho\nesperar.{scroll 1}{clear 60}{scroll 0}\n¿Está todo hecho?{scroll 1}{clear 65}{scroll 0}Bueno, casi todo.\nPues vamos.{scroll 1}{timed 90}</string>
-      <string when="JILL" key="8">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 40}{scroll 0}Siento haberte hecho\nesperar.{scroll 1}{clear 60}{scroll 0}\n¿Todo listo?{scroll 1}{clear 50}{scroll 0}Bueno, casi.\nPues vamos.{scroll 1}{timed 100}</string>
-      <string key="9">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 40}{scroll 0}\n¡Oh, Chris! ¿Estás bien?{scroll 1}{clear 70}{scroll 0}¡Sí, y tú también!\n¿Qué le ha pasado a Wesker?{scroll 1}{clear 130}{scroll 0}Ya hablaremos después,\n¡tenemos que salir de aquí!{scroll 1}{timed 80}</string>
-      <string when="JILL" key="9">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 21}{scroll 0}\n¡Oh, Chris! ¿Estás bien?{scroll 1}{clear 70}{scroll 0}¡Sí, y tú también!\n¿Qué le ha pasado a Wesker?{scroll 1}{clear 130}{scroll 0}Ya hablaremos después,\n¡tenemos que salir de aquí!{scroll 1}{timed 80}</string>
+      <string key="8">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 40}{scroll 0}Siento haberte hecho\nesperar.{scroll 1}{clear 60}{scroll 0}\n¿Todo listo?{scroll 1}{clear 50}{scroll 0}Bueno, casi.\nPues vamos.{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}\n¡Oh, Jill!{scroll 1}{clear 21}{scroll 0}\n¡Oh, Chris! ¿Estás bien?{scroll 1}{clear 70}{scroll 0}¡Sí, y tú también!\n¿Qué le ha pasado a Wesker?{scroll 1}{clear 130}{scroll 0}Ya hablaremos después,\n¡tenemos que salir de aquí!{scroll 1}{timed 80}</string>
       <string key="10">{scroll 2}Por aquí no hay nada \nimportante...{scroll 1}</string>
       <string key="11">{scroll 2}Por aquí no hay nada \nimportante...{scroll 1}</string>
-      <string key="12">{scroll 2}Por aquí no hay nada \nimportante...{scroll 1}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Лаборатория Б3</string>
@@ -283,7 +273,6 @@
       <string key="9">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 130}{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="10">{scroll 2}\nЗдесь нет ничего важного.{scroll 1}</string>
       <string key="11">{scroll 2}\nЗдесь нет ничего важного.{scroll 1}</string>
-      <string key="12">{scroll 2}\nЗдесь нет ничего важного.{scroll 1}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Laboratorion olohuone -2 krs</string>
@@ -295,13 +284,10 @@
       <string key="5">{scroll 0}Kyllä. Wesker on täällä,\nhän on...{scroll 1}{timed 100}</string>
       <string key="6">{scroll 0}Tiedän. Lähdetään pois täältä.{scroll 1}{timed 100}</string>
       <string key="7">{scroll 0}Chris!{scroll 1}{timed 50}</string>
-      <string key="8">{scroll 0}Jill!{scroll 1}{clear 40}{scroll 0}Anteeksi että jouduit\nodottamaan.{scroll 1}{clear 60}{scroll 0}Kaikki on hoidettu?{scroll 1}{clear 65}{scroll 0}Melkein, mennään.{scroll 1}{timed 90}</string>
-      <string when="JILL" key="8">{scroll 0}Jill!{scroll 1}{clear 40}{scroll 0}Anteeksi että jouduit\nodottamaan.{scroll 1}{clear 60}{scroll 0}Kaikki on hoidettu?{scroll 1}{clear 50}{scroll 0}Melkein, mennään.{scroll 1}{timed 100}</string>
-      <string key="9">{scroll 0}Jill!{scroll 1}{clear 40}{scroll 0}Chris! Olet kunnossa.{scroll 1}{clear 70}{scroll 0}Kyllä! Mitä Weskerille tapahtui?{scroll 1}{clear 130}{scroll 0}Puhutaan siitä myöhemmin.\nNyt meidän on häivyttävä täältä!{scroll 1}{timed 80}</string>
-      <string when="JILL" key="9">{scroll 0}Jill!{scroll 1}{clear 21}{scroll 0}Chris! Olet kunnossa.{scroll 1}{clear 70}{scroll 0}Kyllä! Mitä Weskerille tapahtui?{scroll 1}{clear 130}{scroll 0}Puhutaan siitä myöhemmin.\nNyt meidän on häivyttävä täältä!{scroll 1}{timed 80}</string>
+      <string key="8">{scroll 0}Jill!{scroll 1}{clear 40}{scroll 0}Anteeksi että jouduit\nodottamaan.{scroll 1}{clear 60}{scroll 0}Kaikki on hoidettu?{scroll 1}{clear 50}{scroll 0}Melkein, mennään.{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}Jill!{scroll 1}{clear 21}{scroll 0}Chris! Olet kunnossa.{scroll 1}{clear 70}{scroll 0}Kyllä! Mitä Weskerille tapahtui?{scroll 1}{clear 130}{scroll 0}Puhutaan siitä myöhemmin.\nNyt meidän on häivyttävä täältä!{scroll 1}{timed 80}</string>
       <string key="10">{scroll 2}Ei mitään tärkeää...{scroll 1}</string>
       <string key="11">{scroll 2}Ei mitään tärkeää...{scroll 1}</string>
-      <string key="12">{scroll 2}Ei mitään tärkeää...{scroll 1}</string>
     </language>
   </strings>
 </room>

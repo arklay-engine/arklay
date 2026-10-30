@@ -190,8 +190,7 @@ impl RoomId {
     }
 
     /// Pack directory of the room, every player and visit of it, e.g.
-    /// `room/100`. The files only some variants have are in the variant
-    /// folders inside it ([`RoomId::variant_dirs`]).
+    /// `room/100`.
     pub fn dir(self) -> String {
         format!("room/{}", self.room3().to_ascii_lowercase())
     }
@@ -202,7 +201,7 @@ impl RoomId {
         format!("room/{}", self.code())
     }
 
-    /// The name of the player variant folder, `chris` or `jill`.
+    /// The name of the player, `chris` or `jill`.
     pub fn player_tag(self) -> &'static str {
         if self.player_flag & 1 == 0 {
             "chris"
@@ -211,41 +210,8 @@ impl RoomId {
         }
     }
 
-    /// The folders this variant of the room reads its files from, most
-    /// specific first, ending with the room's own [`RoomId::dir`]: for a
-    /// mansion room `<player>-mansion<visit>`, `<player>` and
-    /// `mansion<visit>` (`room/100/jill-mansion2`, `room/100/jill`,
-    /// `room/100/mansion2`), for any other room `<player>`.
-    pub fn variant_dirs(self) -> Vec<String> {
-        let dir = self.dir();
-        let mut dirs: Vec<String> = self
-            .variant_tags()
-            .into_iter()
-            .map(|tag| format!("{dir}/{tag}"))
-            .collect();
-        dirs.push(dir);
-        dirs
-    }
-
-    /// The names of this variant's folders inside the room's, most specific
-    /// first ([`RoomId::variant_dirs`]): `jill-mansion2`, `jill`,
-    /// `mansion2`, or for a room outside the mansion `jill`.
-    pub fn variant_tags(self) -> Vec<String> {
-        let player = self.player_tag();
-        if self.is_mansion() {
-            let visit = if self.mansion2 { 2 } else { 1 };
-            vec![
-                format!("{player}-mansion{visit}"),
-                player.to_string(),
-                format!("mansion{visit}"),
-            ]
-        } else {
-            vec![player.to_string()]
-        }
-    }
-
-    /// The variant folder name the original's RDT of this room and variant
-    /// belongs in: `jill-mansion2` for a mansion room, `jill` for another.
+    /// The name of this variant of the room: `jill-mansion2` for a mansion
+    /// room, `jill` for another.
     pub fn variant_tag(self) -> String {
         if self.is_mansion() {
             format!(
@@ -259,22 +225,15 @@ impl RoomId {
     }
 
     /// Pack path of a raw RDT of this variant of the room: an RDT is one
-    /// variant's, so it goes in that variant's folder
-    /// ([`RoomId::variant_tag`]), e.g. `room/100/jill-mansion2/room.rdt`.
+    /// variant's, so it is named for it ([`RoomId::variant_tag`]), e.g.
+    /// `room/100/jill-mansion2.rdt`.
     pub fn rdt_entry(self) -> String {
-        format!("{}/{}/room.rdt", self.dir(), self.variant_tag())
+        format!("{}/{}.rdt", self.dir(), self.variant_tag())
     }
 
     /// Pack path of the room's scripts, e.g. `room/100/room.scd`.
     pub fn scd_entry(self) -> String {
         format!("{}/room.scd", self.dir())
-    }
-
-    /// Pack path of the room's original script bytecode, kept beside a
-    /// `room.scd` that holds the port's fixed build, e.g.
-    /// `room/100/original.scd`.
-    pub fn original_scd_entry(self) -> String {
-        format!("{}/original.scd", self.dir())
     }
 
     /// Three-digit room id, e.g. `100`, `11C`.
@@ -646,9 +605,8 @@ mod tests {
         assert_eq!(id.rdt_number(), 0x1000);
         assert_eq!(id.dir(), "room/100");
         assert_eq!(id.rdt_dir(), "room/1000");
-        assert_eq!(id.rdt_entry(), "room/100/chris-mansion1/room.rdt");
+        assert_eq!(id.rdt_entry(), "room/100/chris-mansion1.rdt");
         assert_eq!(id.scd_entry(), "room/100/room.scd");
-        assert_eq!(id.original_scd_entry(), "room/100/original.scd");
         assert_eq!(id.room3(), "100");
         assert_eq!(id.cut_entry(3), "room/100/cut/03.bmp");
         assert_eq!(id.mask_entry(12), "room/100/mask/0c.bmp");
@@ -669,16 +627,8 @@ mod tests {
             .with_visit(true);
         assert!(id.mansion2);
         assert_eq!(id.dir(), "room/10b");
-        assert_eq!(
-            id.variant_dirs(),
-            [
-                "room/10b/jill-mansion2",
-                "room/10b/jill",
-                "room/10b/mansion2",
-                "room/10b"
-            ]
-        );
         assert_eq!(id.variant_tag(), "jill-mansion2");
+        assert_eq!(id.rdt_entry(), "room/10b/jill-mansion2.rdt");
         // The original's tables give it the second visit's row.
         assert_eq!(id.table_row(), 5);
         assert_eq!(id.original_number(), 0x60B1);
@@ -696,7 +646,7 @@ mod tests {
         // Only a mansion room has a second visit.
         let id = RoomId::from_room_and_player("305", 0).unwrap();
         assert!(!id.with_visit(true).mansion2);
-        assert_eq!(id.variant_dirs(), ["room/305/chris", "room/305"]);
+        assert_eq!(id.rdt_entry(), "room/305/chris.rdt");
     }
 
     #[test]

@@ -219,12 +219,8 @@ cargo run -- re1.akpak --room 100 --no-tactical-reload
 # nothing is refused, such as the first-aid spray and the herbs at full health,
 # and a blue herb while the player is not poisoned. It is off by default, and
 # only the command line turns it on (for checking the port against the
-# reference). It also runs each room's original script bytecode (see
-# `room_script_fixes` below):
+# reference):
 cargo run -- re1.akpak --room 100 --authentic
-
-# Run the rooms' original script bytecode without the rest of authentic mode:
-cargo run -- re1.akpak --room 100 --no-room-script-fixes
 ```
 
 Captures, assembled scripts and converted packs are written to a sibling
@@ -336,7 +332,6 @@ blood = true           # blood billboards, spurts and pools
 chris_ink_ribbons = true # saving as Chris uses up an ink ribbon
 jill_ink_ribbons = false # saving as Jill uses up an ink ribbon
 autosave = true        # each door's room load writes autosave1.dat
-room_script_fixes = true # false runs the rooms' original script bytecode
 ui_font = "modern"     # the menus' face: "modern" or "retro"
 modern_save_screen = true # the full-screen save/load list, or false for the original's
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
@@ -368,21 +363,6 @@ playthrough. The defaults follow the Japanese release, where Jill saves without
 one. A character who needs no ink ribbons finds none either: their pickups are
 hidden and count as taken, so turning the option back on mid-game does not bring
 back ribbons from rooms already visited.
-
-`room_script_fixes` (Gameplay › Room Scripts in the menu) chooses which room
-scripts run. `convert-game` packs the checked-in room scripts
-(`games/re1/room/*/room.akscr`, which are not packed themselves) as
-`room/{id}/room.scd`, built with the port's fixes (the `#else` of each
-`#if AUTHENTIC` block), and keeps the original
-scripts (the `AUTHENTIC` build) beside it as `room/{id}/original.scd` where the
-fixes change them. Turned off, the engine runs
-`original.scd` (or the scripts in a raw `room/{id}/room.rdt`) instead. A mod
-layer's `room/{id}/room.scd` still applies either way. A
-change takes effect from the next room load. `--room-script-fixes` and
-`--no-room-script-fixes` override the file for one run, and `--authentic`
-implies `--no-room-script-fixes` unless `--room-script-fixes` is also given.
-A `--trace` or `--input` run keeps the fixes unless one of those flags says
-otherwise.
 
 The Language › Subtitles options (`subtitles`, `subtitle_size`,
 `subtitle_background`, `subtitle_color`, `speaker_names`, `speaker_name_color`)

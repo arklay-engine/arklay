@@ -459,15 +459,16 @@
     <footstep x="10000" z="10600" width="1800" height="0x3908" sound="0x002A"/>
     <footstep x="0" z="0" width="21200" height="0x7FBC" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">TYRANT ROOM</string>
       <string key="save_name">Laboratory B3</string>
-      <string key="0">{scroll 2}\n</string>
-      <string key="1">{scroll 2}There's a key on the\nfloor.</string>
       <string key="2">{scroll 2}\nWhat a miserable death...</string>
       <string key="3">{scroll 2}\nI can't leave Barry alone!</string>
-      <string key="4">{scroll 2}\n</string>
       <string key="5">{scroll 0}\n{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}\n{scroll 1}{clear 115}{scroll 0}\n{scroll 1}{timed 64}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}\n{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\n{scroll 1}{timed 59}</string>
@@ -503,11 +504,8 @@
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
-      <string key="0">{scroll 2}\n モニター用コンピュータのようだ</string>
-      <string key="1">{scroll 2}\n   何かのカギが落ちている</string>
       <string key="2">{scroll 2}\n     無残な死にざまだ</string>
       <string key="3">{scroll 2}\nバリーを残していくわけにはいかない!</string>
-      <string key="4">{scroll 2}\n    カギがかかっている‽</string>
       <string key="5">{scroll 0}\n      こいつが…{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}\n   そう 究極の生命体\xF8\x0E\xF8\x0F{scroll 1}{clear 115}{scroll 0}\n     “タイラント”だ{scroll 1}{timed 64}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}\n       クリス{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\n       やめろ{scroll 1}{timed 59}</string>
@@ -543,11 +541,8 @@
     </language>
     <language lang="fr-FR">
       <string key="save_name">Laboratoire SS3</string>
-      <string key="0">{scroll 2}\n</string>
-      <string key="1">{scroll 2}\nIl y a une clé par terre.</string>
       <string key="2">{scroll 2}\nQuelle mort pathétique...</string>
       <string key="3">{scroll 2}Je ne peux pas laisser \nBarry tout seul!</string>
-      <string key="4">{scroll 2}\n</string>
       <string key="5">{scroll 0}\nEst-ce...!?{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}C'est exact, voici la\nforme de vie suprême - {scroll 1}{clear 115}{scroll 0}\nTyran!{scroll 1}{timed 64}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}\nChris...{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\nArrêtes!{scroll 1}{timed 59}</string>
@@ -582,14 +577,10 @@
       <string key="36">{scroll 0}\nPartons!{scroll 1}{timed 90}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 2}Das sieht wie die Steuerzen-\ntraleinheit des Raums aus.</string>
-      <string key="1">{scroll 2}Da liegt ein Schlüssel\nauf dem Boden.</string>
       <string key="2">{scroll 2}\nWas für ein schrecklicher Tod...</string>
       <string key="3">{scroll 2}Ich kann Barry nicht\nallein lassen!</string>
-      <string key="4">{scroll 2}Alles ist elektrisch\nverriegelt?</string>
       <string key="5">{scroll 0}\nDas ist...?{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}\nVollkommen richtig,{scroll 1}{clear 35}{scroll 0}das ist die peferkte \nLebensform \"Tyrant\"!{scroll 1}{timed 114}</string>
-      <string when="JILL" key="6">{scroll 0}Vollkommen richtig, das ist\ndie peferkte Lebensform{scroll 1}{clear 115}{scroll 0}\n\"Tyrant\"!{scroll 1}{timed 64}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}\nChris...{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\nLass das!{scroll 1}{timed 59}</string>
       <string key="8">{scroll 0}\nWesker, du bist erbärmlich.{scroll 1}{timed 102}</string>
       <string key="9">{scroll 0}\nDas ist dein Erlöser?{scroll 1}{clear 75}{scroll 0}Du behauptest, dass diese\n\"PLEITE\" dein Erlöser ist?{scroll 1}{timed 168}</string>
@@ -598,15 +589,13 @@
       <string key="12">{scroll 0}\nWas?{scroll 1}{timed 48}</string>
       <string key="13">{scroll 0}\nGeh nicht da lang!{scroll 1}{timed 121}</string>
       <string key="14">{scroll 0}Du kannst mich nicht\numbringen!{scroll 1}{timed 87}</string>
-      <string key="15">{scroll 0}Der \"Tyrant-Virus\" ist ein\nSupervirus,{scroll 1}{clear 135}{scroll 0}\nder ein Monster hervorbringt,{scroll 1}{clear 50}{scroll 0}das wesentlich stärker ist\nals der Mensch.{scroll 1}{clear 50}{scroll 0}Tyrant ist die mächtigste\nbioologische Waffe der Welt.{scroll 1}{timed 153}</string>
-      <string when="JILL" key="15">{scroll 0}Der \"Tyrant-Virus\" ist ein\nSupervirus,{scroll 1}{clear 120}{scroll 0}\nder ein Monster hervorbringt,{scroll 1}{clear 110}{scroll 0}das wesentlich stärker ist\nals der Mensch.{scroll 1}{clear 65}{scroll 0}Tyrant ist die mächtigste\nbioologische Waffe der Welt.{scroll 1}{timed 85}</string>
+      <string key="15">{scroll 0}Der \"Tyrant-Virus\" ist ein\nSupervirus,{scroll 1}{clear 120}{scroll 0}\nder ein Monster hervorbringt,{scroll 1}{clear 110}{scroll 0}das wesentlich stärker ist\nals der Mensch.{scroll 1}{clear 65}{scroll 0}Tyrant ist die mächtigste\nbioologische Waffe der Welt.{scroll 1}{timed 85}</string>
       <string key="16">{scroll 0}Sie experimentieren doch nicht\netwa mit echten Menschen?{scroll 1}{timed 116}</string>
       <string key="17">{scroll 0}\nDas ist besonders schön.{scroll 1}{clear 95}{scroll 0}\nIch allein habe die Macht!{scroll 1}{timed 90}</string>
       <string key="18">{scroll 0}Wegen eines solch\ngrässlichen Ungeheuers...{scroll 1}{timed 100}</string>
       <string key="19">{scroll 0}\nStellt euch nicht so an.{scroll 1}{clear 45}{scroll 0}All die schwachen Geschöpfe\nexistieren,{scroll 1}{clear 58}{scroll 0}\num als Nahrung zu dienen.{scroll 1}{timed 50}</string>
       <string key="20">{scroll 0}Ich habe keinen Einfluss\ndarauf, was passiert.{scroll 1}{timed 76}</string>
-      <string key="21">{scroll 0}Kann eine Kreatur wie diese\ntatsächlich die endgültige{scroll 1}{clear 50}{scroll 0}\nbiologische Waffe sein?{scroll 1}{timed 80}</string>
-      <string when="JILL" key="21">{scroll 0}Kann eine Kreatur wie diese\ntatsächlich die endgültige{scroll 1}{clear 85}{scroll 0}\nbiologische Waffe sein?{scroll 1}{timed 45}</string>
+      <string key="21">{scroll 0}Kann eine Kreatur wie diese\ntatsächlich die endgültige{scroll 1}{clear 85}{scroll 0}\nbiologische Waffe sein?{scroll 1}{timed 45}</string>
       <string key="22">{scroll 0}Bestimmt.\nWesker ist echt verrückt.{scroll 1}{timed 130}</string>
       <string key="23">{scroll 0}Tyrant ist noch nicht\nvollständig entwickelt.{scroll 1}{timed 90}</string>
       <string key="24">{scroll 0}Aber wir können ihn nicht\nam Leben lassen.{scroll 1}{timed 70}</string>
@@ -625,11 +614,8 @@
     </language>
     <language lang="it-IT">
       <string key="save_name">Laboratorio S3</string>
-      <string key="0">{scroll 2}\n</string>
-      <string key="1">{scroll 2}\nC'è una chiave per terra.</string>
       <string key="2">{scroll 2}\nChe morte patetica...</string>
       <string key="3">{scroll 2}\nNon posso abbandonare Barry!</string>
-      <string key="4">{scroll 2}\n</string>
       <string key="5">{scroll 0}\nQuesto è...?{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}\nEsatto!{scroll 1}{clear 80}{scroll 0}Questa è la forma \ndi vita definitiva: Tyrant!{scroll 1}{timed 100}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}\nChris...{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\nSmettila!{scroll 1}{timed 59}</string>
@@ -664,46 +650,30 @@
       <string key="36">{scroll 0}\nFuggiamo da qui!{scroll 1}{timed 90}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 2}\n</string>
-      <string key="1">{scroll 2}Hay una llave en el\nsuelo...</string>
       <string key="2">{scroll 2}\nQué muerte tan triste...</string>
-      <string key="3">{scroll 2}\n¡No puedo dejar solo a Barry?</string>
-      <string when="JILL" key="3">{scroll 2}\n¡No puedo dejar solo a Barry!</string>
-      <string key="4">{scroll 2}\n</string>
+      <string key="3">{scroll 2}\n¡No puedo dejar solo a Barry!</string>
       <string key="5">{scroll 0}\n¿Es ésto?{scroll 1}{timed 58}</string>
-      <string when="JILL" key="5">{scroll 0}\n¿Es esto?{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}\n¡Así es!{scroll 1}{clear 80}{scroll 0}Es la forma de vida\ndefinitiva. ¡¡Tyrant!!{scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}\n¡Es verdad?{scroll 1}{clear 115}{scroll 0}Es la forma de vida\ndefinitiva. ¡¡Tyrant!!{scroll 1}{timed 64}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}\n¡Chris!{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\n¡Para!{scroll 1}{timed 59}</string>
-      <string when="JILL" key="7">{scroll 1}{clear 50}{scroll 0}\n¡Chris!{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\n¡Para ya!{scroll 1}{timed 59}</string>
       <string key="8">{scroll 0}\n¡Wesker, eres lamentable!{scroll 1}{timed 102}</string>
-      <string when="JILL" key="8">{scroll 0}\n¡Wesker, eres patético!{scroll 1}{timed 102}</string>
       <string key="9">{scroll 0}\n¿Éste es tu salvador?{scroll 1}{clear 75}{scroll 0}¿Dices que este fiasco\nes tu salvador?{scroll 1}{timed 168}</string>
-      <string when="JILL" key="9">{scroll 0}\n¿Éste es tu salvador?{scroll 1}{clear 75}{scroll 0}¿Dices que este error\nes tu salvador?{scroll 1}{timed 168}</string>
       <string key="10">{scroll 0}\nPuedes comprobar tú{scroll 1}{clear 75}{scroll 0}mismo si Tyrant es un\nfiasco o no.{scroll 1}{timed 100}</string>
-      <string when="JILL" key="10">{scroll 0}\nPuedes comprobar tú{scroll 1}{clear 75}{scroll 0}mismo si Tyrant es un\nerror o no.{scroll 1}{timed 100}</string>
       <string key="11">{scroll 0}¡Vete al infierno!\nPronto se te unirá Jill.{scroll 1}{timed 115}</string>
       <string key="12">{scroll 0}\n¿Qué?{scroll 1}{timed 48}</string>
       <string key="13">{scroll 0}\n¡No vengas hacia aquí!{scroll 1}{clear 50}{scroll 0}{scroll 1}{clear 5}{scroll 0}\n¡Noooo!{scroll 1}{timed 66}</string>
       <string key="14">{scroll 0}\n¡No puedes matarme!{scroll 1}{timed 87}</string>
-      <string key="15">{scroll 0}El Tyrant es un supervirus\nque crea monstruos{scroll 1}{clear 135}{scroll 0}mucho más fuertes que los\nseres humanos.{scroll 1}{clear 100}{scroll 0}Tyrant es el arma\nbiológica más poderosa{scroll 1}{clear 120}{scroll 0}\ndel mundo.{scroll 1}{timed 33}</string>
-      <string when="JILL" key="15">{scroll 0}El virus Tyrant es un super-\nvirus que crea monstruos{scroll 1}{clear 120}{scroll 0}mucho más fuertes que los\nseres humanos.{scroll 1}{clear 110}{scroll 0}Tyrant es el arma\nbiológica más poderosa{scroll 1}{clear 95}{scroll 0}\ndel mundo.{scroll 1}{timed 55}</string>
+      <string key="15">{scroll 0}El virus Tyrant es un super-\nvirus que crea monstruos{scroll 1}{clear 120}{scroll 0}mucho más fuertes que los\nseres humanos.{scroll 1}{clear 110}{scroll 0}Tyrant es el arma\nbiológica más poderosa{scroll 1}{clear 95}{scroll 0}\ndel mundo.{scroll 1}{timed 55}</string>
       <string key="16">{scroll 0}¿No querrás decir que\nexperimentáis con gente?{scroll 1}{timed 116}</string>
-      <string key="17">{scroll 0}\n¡Es hermoso de verdad!{scroll 1}{clear 95}{scroll 0}\n¡Todo ese poder será mío!{scroll 1}{timed 90}</string>
-      <string when="JILL" key="17">{scroll 0}\n¡Es hermoso de verdad!{scroll 1}{clear 95}{scroll 0}\n¡Todo este poder será mío!{scroll 1}{timed 90}</string>
+      <string key="17">{scroll 0}\n¡Es hermoso de verdad!{scroll 1}{clear 95}{scroll 0}\n¡Todo este poder será mío!{scroll 1}{timed 90}</string>
       <string key="18">{scroll 0}¿Y todo por una\ncriatura abominable?{scroll 1}{timed 100}</string>
       <string key="19">{scroll 0}\nNo te preocupes.{scroll 1}{clear 45}{scroll 0}Los débiles existen\npara ser devorados.{scroll 1}{timed 108}</string>
       <string key="20">{scroll 0}No puede controlar\nlo que hace.{scroll 1}{timed 76}</string>
-      <string key="21">{scroll 0}\n¿Puede ser una criatura{scroll 1}{clear 50}{scroll 0}así el arma biológica\ndefinitiva?{scroll 1}{timed 80}</string>
-      <string when="JILL" key="21">{scroll 0}\n¿Puede una criatura{scroll 1}{clear 45}{scroll 0}así ser el arma biológica\ndefinitiva?{scroll 1}{timed 85}</string>
-      <string key="22">{scroll 0}¿De verdad?\nWesker está loco.{scroll 1}{timed 130}</string>
-      <string when="JILL" key="22">{scroll 0}¿Verdad?\nWesker es un loco.{scroll 1}{timed 130}</string>
+      <string key="21">{scroll 0}\n¿Puede una criatura{scroll 1}{clear 45}{scroll 0}así ser el arma biológica\ndefinitiva?{scroll 1}{timed 85}</string>
+      <string key="22">{scroll 0}¿Verdad?\nWesker es un loco.{scroll 1}{timed 130}</string>
       <string key="23">{scroll 0}Tyrant no está completamente\ndesarrollado.{scroll 1}{timed 90}</string>
-      <string key="24">{scroll 0}\nPero no puede vivir.{scroll 1}{timed 70}</string>
-      <string when="JILL" key="24">{scroll 0}\nPero no podemos dejarlo vivir.{scroll 1}{timed 70}</string>
+      <string key="24">{scroll 0}\nPero no podemos dejarlo vivir.{scroll 1}{timed 70}</string>
       <string key="25">{scroll 0}Debe de ser el ordenador\nque controla la criatura.{scroll 1}{timed 115}</string>
-      <string key="26">{scroll 1}{clear 20}{scroll 0}\n¡Malditos seáis!{scroll 1}{timed 40}</string>
-      <string when="JILL" key="26">{scroll 1}{clear 20}{scroll 0}\n¡Maldito seas!{scroll 1}{timed 40}</string>
+      <string key="26">{scroll 1}{clear 20}{scroll 0}\n¡Maldito seas!{scroll 1}{timed 40}</string>
       <string key="27">{scroll 2}Parece el control\nde esta sala...{clear 0}{scroll 2}¡Pero no tenemos tiempo\npara usarlo!</string>
       <string key="28">{scroll 2}¡¿Está cerrado\nelectrónicamente?!</string>
       <string key="29">{scroll 2}Parece el control de esta sala...\nHay un interruptor{clear 0}{scroll 2}para abrir la puerta.\n¿Quieres abrirla?{branch 0 6 0}</string>
@@ -711,20 +681,14 @@
       <string key="31">{scroll 2}\nEstá cerrado electrónicamente...</string>
       <string key="32">{scroll 2}Parece el control\nde esta sala...</string>
       <string key="33">{scroll 0}\n¡Barry! ¡Barry!{scroll 1}{timed 88}</string>
-      <string key="34">{scroll 0}\n¡Estás bien!{scroll 1}{timed 60}</string>
-      <string when="JILL" key="34">{scroll 0}\n¡Estás vivo!{scroll 1}{timed 60}</string>
-      <string key="35">{scroll 0}Uhh, ahh,\nestoy muy avergonzando.{scroll 1}{clear 165}{scroll 0}\nHe sido torpe.{scroll 1}{timed 75}</string>
-      <string when="JILL" key="35">{scroll 0}Uhh, ahh,\nqué vergüenza.{scroll 1}{clear 165}{scroll 0}\nHe estado torpe.{scroll 1}{timed 75}</string>
-      <string key="36">{scroll 0}\nSigamos.{scroll 1}{timed 90}</string>
-      <string when="JILL" key="36">{scroll 0}\nPongámonos en movimiento.{scroll 1}{timed 90}</string>
+      <string key="34">{scroll 0}\n¡Estás vivo!{scroll 1}{timed 60}</string>
+      <string key="35">{scroll 0}Uhh, ahh,\nqué vergüenza.{scroll 1}{clear 165}{scroll 0}\nHe estado torpe.{scroll 1}{timed 75}</string>
+      <string key="36">{scroll 0}\nPongámonos en movimiento.{scroll 1}{timed 90}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Лаборатория Б3</string>
-      <string key="0">{scroll 2}\n</string>
-      <string key="1">{scroll 2}\nНа полу лежит ключ..</string>
       <string key="2">{scroll 2}\nКакая жалкая смерть...</string>
       <string key="3">{scroll 2}Я не могу оставить\nБарри одного!</string>
-      <string key="4">{scroll 2}\n</string>
       <string key="5">{scroll 0}\n{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}\n{scroll 1}{clear 115}{scroll 0}\n{scroll 1}{timed 64}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}\n{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}\n{scroll 1}{timed 59}</string>
@@ -760,33 +724,25 @@
     </language>
     <language lang="fi-FI">
       <string key="save_name">Laboratorion olohuone -2 krs</string>
-      <string key="0">{scroll 2}\n</string>
-      <string key="1">{scroll 2}Lattialla on avain...</string>
       <string key="2">{scroll 2}Kurja tapa kuolla...</string>
       <string key="3">{scroll 2}En voi jättää Barrya yksin!</string>
-      <string key="4">{scroll 2}\n</string>
       <string key="5">{scroll 0}Onko tämä..?{scroll 1}{timed 58}</string>
       <string key="6">{scroll 0}Kyllä vain!{scroll 1}{clear 35}{scroll 0}Tämä on ultimaattinen\nelämänmuoto. Tyranni!{scroll 1}{timed 114}</string>
-      <string when="JILL" key="6">{scroll 0}Kyllä vain!{scroll 1}{clear 115}{scroll 0}Tämä on ultimaattinen\nelämänmuoto. Tyranni!{scroll 1}{timed 64}</string>
       <string key="7">{scroll 1}{clear 50}{scroll 0}Chris?{scroll 1}{clear 40}{scroll 1}{clear 30}{scroll 0}Lopeta tuo!{scroll 1}{timed 59}</string>
       <string key="8">{scroll 0}Wesker, olet säälittävä!{scroll 1}{timed 102}</string>
       <string key="9">{scroll 0}Tämäkö on vapahtajasi?{scroll 1}{clear 75}{scroll 0}Tämä epäonnistunut sekasikiö?{scroll 1}{timed 168}</string>
       <string key="10">{scroll 0}Saat itse ottaa selvää{scroll 1}{clear 75}{scroll 0}onko Tyranni epäonnistunut\nvai ei.{scroll 1}{timed 100}</string>
-      <string when="JILL" key="10">{scroll 0}Saat itse ottaa selvää{scroll 1}{clear 75}{scroll 0}onko Tyranni epäonnistuma vai ei.{scroll 1}{timed 100}</string>
       <string key="11">{scroll 0}Painu helvettiin! Jill seuraa\nsinua pian perästä.{scroll 1}{timed 115}</string>
       <string key="12">{scroll 0}Mitä?{scroll 1}{timed 48}</string>
       <string key="13">{scroll 0}Älä tule lähemmäksi! Ei!{scroll 1}{timed 121}</string>
       <string key="14">{scroll 0}Minua et saa hengiltä!{scroll 1}{timed 87}</string>
-      <string key="15">{scroll 0}Tyranni-virus on supervirus\njoka tekee{scroll 1}{clear 135}{scroll 0}elävistä olennoista ihmisiä\nvahvempia hirviöitä.{scroll 1}{clear 100}{scroll 0}Tyranni on vahvin biologinen ase{scroll 1}{clear 120}{scroll 0}koko maailmassa.{scroll 1}{timed 33}</string>
-      <string when="JILL" key="15">{scroll 0}Tyranni-virus on supervirus\njoka tekee{scroll 1}{clear 120}{scroll 0}elävistä olennoista ihmisiä\nvahvempia hirviöitä.{scroll 1}{clear 110}{scroll 0}Tyranni on vahvin biologinen ase{scroll 1}{clear 95}{scroll 0}koko maailmassa.{scroll 1}{timed 55}</string>
+      <string key="15">{scroll 0}Tyranni-virus on supervirus\njoka tekee{scroll 1}{clear 120}{scroll 0}elävistä olennoista ihmisiä\nvahvempia hirviöitä.{scroll 1}{clear 110}{scroll 0}Tyranni on vahvin biologinen ase{scroll 1}{clear 95}{scroll 0}koko maailmassa.{scroll 1}{timed 55}</string>
       <string key="16">{scroll 0}Et kai tarkoita että teette\nkokeita oikeilla ihmisillä?{scroll 1}{timed 116}</string>
       <string key="17">{scroll 0}Tämä on todella kaunista!{scroll 1}{clear 95}{scroll 0}Kaikki tämä voima tulee olemaan\nminun!{scroll 1}{timed 90}</string>
       <string key="18">{scroll 0}Teit kaiken tämän vain tämän\nhirveän otuksen tähden?{scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}Älä ole noin järkyttynyt.{scroll 1}{clear 45}{scroll 0}Kaikki heikommat ihmiset on luotu syötäväksi.{scroll 1}{timed 108}</string>
-      <string when="JILL" key="19">{scroll 0}Älä ole noin järkyttynyt.{scroll 1}{clear 45}{scroll 0}Kaikki heikommat ihmiset on\nluotu syötäväksi.{scroll 1}{timed 108}</string>
+      <string key="19">{scroll 0}Älä ole noin järkyttynyt.{scroll 1}{clear 45}{scroll 0}Kaikki heikommat ihmiset on\nluotu syötäväksi.{scroll 1}{timed 108}</string>
       <string key="20">{scroll 0}Se toimii vaistomaisesti.{scroll 1}{timed 76}</string>
-      <string key="21">{scroll 0}\nCan a creature like this{scroll 1}{clear 50}{scroll 0}really be the ultimate\nbiological weapon?{scroll 1}{timed 80}</string>
-      <string when="JILL" key="21">{scroll 0}Voiko tuon kaltainen otus{scroll 1}{clear 45}{scroll 0}todella olla ultimaattinen\nbiologinen ase?{scroll 1}{timed 85}</string>
+      <string key="21">{scroll 0}Voiko tuon kaltainen otus{scroll 1}{clear 45}{scroll 0}todella olla ultimaattinen\nbiologinen ase?{scroll 1}{timed 85}</string>
       <string key="22">{scroll 0}Niinpä! Wesker on harhaluuloinen.{scroll 1}{timed 130}</string>
       <string key="23">{scroll 0}Näyttäisi että Tyranni ei ole\nvielä täysin kehittynyt.{scroll 1}{timed 90}</string>
       <string key="24">{scroll 0}Emme voi jättää sitä eloon.{scroll 1}{timed 70}</string>
@@ -798,8 +754,7 @@
       <string key="30">{scroll 2}Sillä ohjataan huoneen laitteita...{clear 0}{scroll 2}Huoneen lukitusjärjestelmä...\nAvaatko lukituksen?{branch 0 6 0}</string>
       <string key="31">{scroll 2}Se on elektronisesti lukittu...</string>
       <string key="32">{scroll 2}Sillä ohjataan huoneen laitteita...</string>
-      <string key="33">{scroll 0}Barry! Herää!{scroll 1}{timed 88}</string>
-      <string when="JILL" key="33">{scroll 0}Barry! Barry!{scroll 1}{timed 88}</string>
+      <string key="33">{scroll 0}Barry! Barry!{scroll 1}{timed 88}</string>
       <string key="34">{scroll 0}Olet elossa!{scroll 1}{timed 60}</string>
       <string key="35">{scroll 0}Nyt hävettää.{scroll 1}{clear 165}{scroll 0}Olin kömpelö.{scroll 1}{timed 75}</string>
       <string key="36">{scroll 0}Mennään.{scroll 1}{timed 90}</string>

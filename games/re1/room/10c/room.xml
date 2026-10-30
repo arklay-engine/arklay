@@ -453,6 +453,11 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="22200" height="0x5140" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="CHRIS MANSION1">01</anim>
+    <anim when="MANSION1">02</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">GREEN HOUSE</string>

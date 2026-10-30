@@ -31,7 +31,7 @@ pub fn compile_variant(text: &str, variant: Variant) -> Result<Assembled> {
 /// Compile a script for `variant`, or the runtime build for every variant
 /// when `None`, reading its `#include` files through `load`.
 pub fn compile_with(text: &str, variant: Option<Variant>, load: Loader) -> Result<Assembled> {
-    let build = variant.map_or(Build::RUNTIME, Build::Variant);
+    let build = variant.map_or(Build::Runtime, Build::Variant);
     compile_build(text, build, load)
 }
 
@@ -93,27 +93,16 @@ pub fn compile_build(text: &str, build: Build, load: Loader) -> Result<Assembled
 }
 
 /// Compile a single section (with or without the `#version` line), naming
-/// with `defines`, and return the bytes of its block or event stream. The
-/// section may use `#if AUTHENTIC`.
-pub(super) fn section_bytes(
-    text: &str,
-    defines: &HashMap<String, i64>,
-    authentic: bool,
-) -> Result<Vec<u8>> {
+/// with `defines`, and return the bytes of its block or event stream.
+pub(super) fn section_bytes(text: &str, defines: &HashMap<String, i64>) -> Result<Vec<u8>> {
     let build = Build::Variant(Variant {
         jill: false,
         mansion: None,
-        authentic,
         // The decompiler checks one RDT's section, which holds no region.
         region: Region::Usa,
     });
-    let kept: Vec<&str> = super::preprocess::kept_lines(text, Some(build))?
-        .into_iter()
-        .map(|(_, line)| line)
-        .collect();
-    let text = kept.join("\n");
     let text = if text.trim_start().starts_with("#version") {
-        text
+        text.to_string()
     } else {
         format!("#version 1\n{text}")
     };
@@ -1265,6 +1254,35 @@ impl Lowerer {
                 call.col,
                 call.name
             );
+        }
+        // A message id word past one byte (a room message past 63,
+        // `crate::text::message_index`) takes the long form.
+        if call.name == "message"
+            && let [id, pause] = call.args.as_slice()
+            && let Ok(word) = field_value(id, call)
+            && word > 0xFF
+        {
+            if word > 0xFFFF {
+                bail!(
+                    "line {}, column {}: message id {word:#X} does not fit 16 bits",
+                    call.line,
+                    call.col
+                );
+            }
+            if word & 0x40 != 0 {
+                bail!(
+                    "line {}, column {}: global message {word:#X} has no index past 63",
+                    call.line,
+                    call.col
+                );
+            }
+            self.push(
+                "message_long",
+                vec![Arg::Num(0), Arg::Num(word), pause.clone()],
+                call.line,
+                call.col,
+            );
+            return Ok(());
         }
         self.push_call(call)
     }

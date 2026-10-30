@@ -357,6 +357,12 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="27340" height="0x7EB8" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="JILL">02 01</item>
+    <item>00 01</item>
+    <anim when="JILL MANSION1">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">TERRACE</string>
@@ -364,14 +370,12 @@
       <string key="0">{scroll 0}\n {scroll 1}{timed 44}</string>
       <string key="1">{scroll 0}\n {scroll 1}{timed 95}</string>
       <string key="2">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 80}</string>
-      <string key="3">{scroll 0}{scroll 0}\n {scroll 1}{timed 150}</string>
       <string key="4">{scroll 0}\n {scroll 1}{timed 150}</string>
       <string key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="6">{scroll 0}\n {scroll 1}{timed 64}</string>
       <string key="7">{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="8">{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\n {scroll 1}{timed 84}</string>
-      <string key="10">{scroll 0}OK{scroll 1}{timed 80}</string>
       <string key="11">{scroll 0}\n {scroll 1}{timed 40}</string>
       <string key="12">{scroll 0}\n {scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}{scroll 1}{timed 70}</string>
@@ -383,14 +387,12 @@
       <string key="0">{scroll 0}\n        ジル{scroll 1}{timed 44}</string>
       <string key="1">{scroll 0}\n      おどかすなよ{scroll 1}{timed 95}</string>
       <string key="2">{scroll 0}\n     こっちのセリフよ{scroll 1}{clear 70}{scroll 0}\n  1階を調べるんじゃなかったの{scroll 1}{timed 80}</string>
-      <string key="3">{scroll 0}{scroll 0}\n    ああ だが見てくれ{scroll 1}{timed 150}</string>
       <string key="4">{scroll 0}\n    ああ だが見てくれ{scroll 1}{timed 150}</string>
       <string key="5">{scroll 0}\n     フォレストだ…{scroll 1}{timed 130}</string>
       <string key="6">{scroll 0}\n       ひどい{scroll 1}{timed 64}</string>
       <string key="7">{scroll 0}\n   俺はフォレストを調べる{scroll 1}{timed 120}</string>
       <string key="8">{scroll 0}    見たところカラスに\n    やられたようだが{scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\n   ジルは1階の方を頼む{scroll 1}{timed 84}</string>
-      <string key="10">{scroll 0}OK{scroll 1}{timed 80}</string>
       <string key="11">{scroll 0}\n   こいつはフォレストのだ{scroll 1}{timed 40}</string>
       <string key="12">{scroll 0}   何が起こるか分からない\n   持っていけ{scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}\n     信じられねぇな…{scroll 1}{timed 70}</string>
@@ -402,14 +404,12 @@
       <string key="0">{scroll 0}\nJill! {scroll 1}{timed 44}</string>
       <string key="1">{scroll 0}\nNe me fais pas peur! {scroll 1}{timed 95}</string>
       <string key="2">{scroll 0}J'allais te dire la\nmême chose.{scroll 1}{clear 60}{scroll 0}\nTu n'étais pas censé faire{scroll 1}{clear 40}{scroll 0}des recherches au\nrez-de-chaussée, Barry?{scroll 1}{timed 45}</string>
-      <string key="3">{scroll 0}</string>
       <string key="4">{scroll 0}Oui, tu as raison. Mais jette \ndonc un coup d'oeil à ça. {scroll 1}{timed 140}</string>
       <string key="5">{scroll 0}C'est Forest...\nOh, mon Dieu.{scroll 1}{timed 115}</string>
       <string key="6">{scroll 0}\nC'est affreux... {scroll 1}{timed 50}</string>
       <string key="7">{scroll 0}Je vais découvrir ce qui a \nprovoqué la mort de Forest.  {scroll 1}{timed 110}</string>
       <string key="8">{scroll 0}\nOn dirait qu'il a été tué par{scroll 1}{clear 40}{scroll 0}un corbeau ou quelque chose\ncomme ça.{scroll 1}{timed 55}</string>
       <string key="9">{scroll 0}Tu peux faire un tour au \nrez-de-chaussée, Jill? {scroll 1}{timed 70}</string>
-      <string key="10">{scroll 0}\n...OK.{scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}Eh, Jill. \nCa devait être à Forest.  {scroll 1}{timed 60}</string>
       <string key="12">{scroll 0}\nTu n'as pas d'arme, prends-la!{scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}\nJe n'arrive pas à y croire!{scroll 1}{timed 70}</string>
@@ -420,15 +420,12 @@
       <string key="0">{scroll 0}\nJill!{scroll 1}{timed 44}</string>
       <string key="1">{scroll 0}\nErschreck mich doch nicht so!{scroll 1}{timed 95}</string>
       <string key="2">{scroll 0}Das wollte ich\nauch gerade sagen.{scroll 1}{clear 60}{scroll 0}\nHatten wir nicht ausgemacht,{scroll 1}{clear 40}{scroll 0}dass du dir die erste Etage\nvornimmst, Barry?{scroll 1}{timed 45}</string>
-      <string key="3"></string>
       <string key="4">{scroll 0}Ja ja, stimmt.\nAber schau dir das mal an.{scroll 1}{timed 140}</string>
       <string key="5">{scroll 0}Das ist Forest...\nOh, mein Gott.{scroll 1}{timed 115}</string>
       <string key="6">{scroll 0}\nDas ist ja furchtbar...{scroll 1}{timed 50}</string>
-      <string key="7">{scroll 0}\nIch werde schon herausfinden,{scroll 1}{clear 55}{scroll 0}was die Ursache für Forests\nTod war.{scroll 1}{timed 55}</string>
-      <string when="JILL MANSION1" key="7">{scroll 0}\nIch werde schon herausfinden,{scroll 1}{clear 60}{scroll 0}was die Ursache für Forests\nTod war.{scroll 1}{timed 50}</string>
+      <string key="7">{scroll 0}\nIch werde schon herausfinden,{scroll 1}{clear 60}{scroll 0}was die Ursache für Forests\nTod war.{scroll 1}{timed 50}</string>
       <string key="8">{scroll 0}\nEs sieht aus,{scroll 1}{clear 35}{scroll 0}als ob er von einer Krähe\noder sowas getötet wurde.{scroll 1}{timed 60}</string>
       <string key="9">{scroll 0}Kannst du die erste Etage\ndurchsuchen, Jill?{scroll 1}{timed 70}</string>
-      <string key="10">{scroll 0}\nkay{scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}Hey, Jill.\nDas muss Forest gehört haben.{scroll 1}{timed 60}</string>
       <string key="12">{scroll 0}Du hast doch keine Waffen,\nalso nimm das mit!{scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}\nIch kann es nicht glauben!{scroll 1}{timed 70}</string>
@@ -440,14 +437,12 @@
       <string key="0">{scroll 0}\nJill! {scroll 1}{timed 44}</string>
       <string key="1">{scroll 0}\nMi hai spaventato! {scroll 1}{timed 95}</string>
       <string key="2">{scroll 0}Potrei dire la stessa cosa! {scroll 1}{clear 60}{scroll 0}\nNon avevi detto di dover \nandare al piano terra, Barry?{scroll 1}{timed 80}</string>
-      <string key="3">{scroll 0}</string>
       <string key="4">{scroll 0}Si, hai ragione. Ma da un'occhiata \n a questo... {scroll 1}{timed 140}</string>
       <string key="5">{scroll 0}È Forest! \nOh, mio Dio.{scroll 1}{timed 115}</string>
       <string key="6">{scroll 0}\nÈ orribile! {scroll 1}{timed 50}</string>
       <string key="7">{scroll 0}Scoprirò cosa ha ucciso \nForest. {scroll 1}{timed 110}</string>
       <string key="8">{scroll 0}\nSembra sia stato ucciso{scroll 1}{clear 40}{scroll 0}da una specie di corvo.{scroll 1}{timed 55}</string>
       <string key="9">{scroll 0}Puoi controllare tu il \nprimo terra, Jill? {scroll 1}{timed 70}</string>
-      <string key="10">{scroll 0}\n...OK.{scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}Jill... \nQuesta era di Forest.  {scroll 1}{timed 60}</string>
       <string key="12">{scroll 0}\nNon hai un'arma. \nPortala con te!{scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}\nNon riesco a crederci...{scroll 1}{timed 70}</string>
@@ -456,23 +451,16 @@
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\n¡Jill!{scroll 1}{timed 44}</string>
-      <string key="1">{scroll 0}\nNo, no, no me asusta.{scroll 1}{timed 95}</string>
-      <string when="JILL MANSION1" key="1">{scroll 0}\nNo, no, no me asustes.{scroll 1}{timed 95}</string>
-      <string key="2">{scroll 0}Eso es lo que iba a\ndecir.{scroll 1}{clear 60}{scroll 0}Barry, ¿no se suponía\nque tenías que estar{scroll 1}{clear 40}{scroll 0}\nen el primer piso?{scroll 1}{timed 45}</string>
-      <string when="JILL MANSION1" key="2">{scroll 0}Eso es lo que te\niba a decir.{scroll 1}{clear 60}{scroll 0}Barry, ¿no se suponía\nque tenías que estar{scroll 1}{clear 40}{scroll 0}\nen la planta baja?{scroll 1}{timed 45}</string>
-      <string key="3">{scroll 0}</string>
+      <string key="1">{scroll 0}\nNo, no, no me asustes.{scroll 1}{timed 95}</string>
+      <string key="2">{scroll 0}Eso es lo que te\niba a decir.{scroll 1}{clear 60}{scroll 0}Barry, ¿no se suponía\nque tenías que estar{scroll 1}{clear 40}{scroll 0}\nen la planta baja?{scroll 1}{timed 45}</string>
       <string key="4">{scroll 0}Sí, es verdad,\n¡¡pero mira esto!!{scroll 1}{timed 140}</string>
       <string key="5">{scroll 0}\n¡Es Forest! ¡Dios mío!{scroll 1}{timed 115}</string>
       <string key="6">{scroll 0}\n¡Es horrible!{scroll 1}{timed 50}</string>
       <string key="7">{scroll 0}Tengo que descubrir la\ncausa de su muerte.{scroll 1}{timed 110}</string>
       <string key="8">{scroll 0}Parece como si lo hubiera\nmatado un cuervo, o algo así.{scroll 1}{timed 95}</string>
-      <string key="9">{scroll 0}Jill, ¿puedes mirar en\nel primer piso?{scroll 1}{timed 70}</string>
-      <string when="JILL MANSION1" key="9">{scroll 0}Jill, ¿puedes mirar en\nla planta baja?{scroll 1}{timed 70}</string>
-      <string key="10">{scroll 0}\nVale.{scroll 1}{timed 60}</string>
-      <string key="11">{scroll 0}Oye, Jill, debía de ser\nde Forest.{scroll 1}{timed 60}</string>
-      <string when="JILL MANSION1" key="11">{scroll 0}Oye Jill, ésta debía \nde ser de Forest.{scroll 1}{timed 60}</string>
-      <string key="12">{scroll 0}No tienes arma,\nllévate ésta.{scroll 1}{timed 70}</string>
-      <string when="JILL MANSION1" key="12">{scroll 0}No tienes arma,\nllévatela.{scroll 1}{timed 70}</string>
+      <string key="9">{scroll 0}Jill, ¿puedes mirar en\nla planta baja?{scroll 1}{timed 70}</string>
+      <string key="11">{scroll 0}Oye Jill, ésta debía \nde ser de Forest.{scroll 1}{timed 60}</string>
+      <string key="12">{scroll 0}No tienes arma,\nllévatela.{scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}\nNo puedo creerlo.{scroll 1}{timed 70}</string>
       <string key="14">{scroll 2}\nForest...{scroll 1}</string>
       <string key="15">{scroll 2}¡Es Forest...! Ha muerto\npicoteado por los cuervos.{scroll 1}</string>
@@ -482,14 +470,12 @@
       <string key="0">{scroll 0}\n {scroll 1}{timed 44}</string>
       <string key="1">{scroll 0}\n {scroll 1}{timed 95}</string>
       <string key="2">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 80}</string>
-      <string key="3">{scroll 0}{scroll 0}\n {scroll 1}{timed 150}</string>
       <string key="4">{scroll 0}\n {scroll 1}{timed 150}</string>
       <string key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="6">{scroll 0}\n {scroll 1}{timed 64}</string>
       <string key="7">{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="8">{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\n {scroll 1}{timed 84}</string>
-      <string key="10">{scroll 0}ОК{scroll 1}{timed 80}</string>
       <string key="11">{scroll 0}\n {scroll 1}{timed 40}</string>
       <string key="12">{scroll 0}\n {scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}{scroll 1}{timed 70}</string>
@@ -501,14 +487,12 @@
       <string key="0">{scroll 0}Jill!{scroll 1}{timed 44}</string>
       <string key="1">{scroll 0}Älä säikytä minua noin.{scroll 1}{timed 95}</string>
       <string key="2">{scroll 0}Aioin sanoa samaa.{scroll 1}{clear 60}{scroll 0}Eikö sinun pitänyt käydä läpi{scroll 1}{clear 40}{scroll 0}ensimmäistä kerrosta?{scroll 1}{timed 45}</string>
-      <string key="3">{scroll 0}</string>
       <string key="4">{scroll 0}Olet oikeassa, mutta katso tätä!{scroll 1}{timed 140}</string>
       <string key="5">{scroll 0}Se on Forest! Herranjumala!{scroll 1}{timed 115}</string>
       <string key="6">{scroll 0}Kuinka hirveää!{scroll 1}{timed 50}</string>
       <string key="7">{scroll 0}Aion selvittää mihin Forest\nkuoli.{scroll 1}{timed 110}</string>
       <string key="8">{scroll 0}Näyttää siltä kuin hänet olisi\nnokittu hengiltä.{scroll 1}{timed 95}</string>
       <string key="9">{scroll 0}Voitko käydä läpi ensimmäistä\nkerrosta?{scroll 1}{timed 70}</string>
-      <string key="10">{scroll 0}Okei.{scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}Hei Jill! Tämä kuului Forestille.{scroll 1}{timed 60}</string>
       <string key="12">{scroll 0}Sinulla ei ole riittävästi\ntulivoimaa, ota se mukaasi.{scroll 1}{timed 70}</string>
       <string key="13">{scroll 0}En voi uskoa tätä.{scroll 1}{timed 70}</string>

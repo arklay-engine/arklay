@@ -76,10 +76,6 @@ autosave.description = "Tallenna automaattisesti aina, kun ovi lataa huoneen. Ka
 autosave.off = "Vain kirjoituskone tallentaa."
 autosave.on = "Jokainen huone, johon tulet ovesta, tallennetaan automaattisesti."
 
-room_script_fixes.label = "Skriptikorjaukset"
-room_script_fixes.description = "Ajetaanko huoneiden skriptit porttauksen korjauksilla. Pois päältä ajaa jokaisen huoneen alkuperäisen skriptitavukoodin erikoisuuksineen. Modien omat skriptit ovat käytössä kummassakin tapauksessa. Tulee voimaan seuraavasta huoneesta."
-room_script_fixes.off = "Jokainen huone ajaa alkuperäisen skriptitavukoodinsa."
-room_script_fixes.on = "Huoneiden skriptit ajetaan porttauksen korjauksilla."
 
 quick_turn.label = "Pikakäännös"
 quick_turn.description = "Käänny 180 astetta paikallaan painamalla juoksua peruuttaessa."

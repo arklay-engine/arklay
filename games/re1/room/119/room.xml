@@ -258,6 +258,10 @@
     <footstep x="3300" z="3500" width="3100" height="0x0BB8" sound="0x002A"/>
     <footstep x="500" z="900" width="8500" height="0x23F0" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="save_name">M. Room 1F</string>
@@ -269,7 +273,6 @@
       <string key="5">{scroll 0}\n{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}\n{scroll 2}{timed 110}</string>
-      <string key="8">\n{scroll 2}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
@@ -281,7 +284,6 @@
       <string key="5">{scroll 0}\n  レベッカはまだあの部屋に‽{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n       奴らは‽{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}\n    レベッカ! 上か!{scroll 2}{timed 110}</string>
-      <string key="8">\n      しゃれた棚だ{scroll 2}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Chambre RdC</string>
@@ -293,7 +295,6 @@
       <string key="5">{scroll 0}Rebecca! Est-elle encore \ndans la maison?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\nQu'est-ce que c'est?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}C'est Rebecca! \nElle doit être à l'étage!{scroll 2}{timed 110}</string>
-      <string key="8">\n{scroll 2}</string>
     </language>
     <language lang="de-DE">
       <string key="0">Da ist ein Schalter.\nMöchten Sie draufdrücken?{scroll 1}{branch 0 6 0}</string>
@@ -308,8 +309,6 @@
       <string key="6">{scroll 0}\nWas sind das für welche?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}Es ist Rebecca!\nSie muß oben sein!{scroll 2}{timed 110}</string>
       <string when="JILL" key="7">{scroll 0}Es ist Rebecca!\nSie muss oben sein!{scroll 2}{timed 110}</string>
-      <string key="8">\n {scroll 2}</string>
-      <string when="JILL" key="8">\n{scroll 2}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Villa 1P</string>
@@ -321,7 +320,6 @@
       <string key="5">{scroll 0}Rebecca! È ancora nella \nmagione?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\nChe cos'è?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}È Rebecca! Deve essere \ndi sopra!{scroll 2}{timed 110}</string>
-      <string key="8">\n{scroll 2}</string>
     </language>
     <language lang="es-ES">
       <string key="0">Hay un interruptor...\n¿Quieres pulsarlo?{scroll 1}{branch 0 6 0}</string>
@@ -333,7 +331,6 @@
       <string key="5">{scroll 0}¡Rebecca!\n¿Sigue estando en la casa?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n¿Qué son?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}Es Rebecca, \n¡debe estar arriba!{scroll 2}{timed 110}</string>
-      <string key="8">{scroll 2}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Мед. комната 1-эт.</string>
@@ -345,7 +342,6 @@
       <string key="5">{scroll 0}\n{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}\n{scroll 2}{timed 110}</string>
-      <string key="8">\n{scroll 2}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Lääkevarasto 1 krs</string>
@@ -357,7 +353,6 @@
       <string key="5">{scroll 0}Rebecca!\nOnko hän vielä kartanossa?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}Mitä nuo ovat?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}Tuo on Rebecca.\nHänen on oltava yläkerrassa!{scroll 2}{timed 110}</string>
-      <string key="8">{scroll 2}</string>
     </language>
   </strings>
 </room>

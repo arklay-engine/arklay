@@ -295,78 +295,54 @@
       <string key="0">{scroll 0}\n{scroll 1}{clear 48}{scroll 0}\n{scroll 1}{timed 58}</string>
       <string key="1">{scroll 0}\n{scroll 1}{clear 54}{scroll 0}\n{scroll 1}{timed 91}</string>
       <string key="2">{scroll 2}There's no need to go\ndownstairs now.</string>
-      <string key="3">{scroll 2}\n</string>
       <string key="4">{scroll 2}It's welded and does not\nopen.</string>
-      <string key="5">{scroll 2}\n</string>
-      <string key="6">{scroll 0}{color 1}\n{color 0}{scroll 1}{timed 108}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
       <string key="0">{scroll 0}\n   クリス そいつを使え!{scroll 1}{clear 48}{scroll 0}\n  バケモノにブチかますんだ!{scroll 1}{timed 58}</string>
       <string key="1">{scroll 0}\n     いったぞ ジル!{scroll 1}{clear 54}{scroll 0}\n  そいつをブチかましてやれ!{scroll 1}{timed 91}</string>
       <string key="2">{scroll 2}\n   いま下に戻る必要はない</string>
-      <string key="3">{scroll 2}\n    カギがかかっている</string>
       <string key="4">{scroll 2}\n   溶接されていて開かない</string>
-      <string key="5">{scroll 2}\n      特に何もない</string>
-      <string key="6">{scroll 0}{color 1}\n   情破まであと3分です{color 0}{scroll 1}{timed 108}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Salle de la cour SS1</string>
       <string key="0">{scroll 0}Chris, utilise-ça pour\ndétruire les monstres!{scroll 1}{timed 106}</string>
       <string key="1">{scroll 0}\nIl arrive, Jill! {scroll 1}{clear 50}{scroll 0}Tue ce monstre! \nTu es notre Amazone, Jill!{scroll 1}{timed 90}</string>
       <string key="2">{scroll 2}Inutile d'aller en bas\nmaintenant.</string>
-      <string key="3">{scroll 2}\n</string>
       <string key="4">{scroll 2}C'est soudé et ne peut\nêtre ouvert.</string>
-      <string key="5">{scroll 2}\n</string>
-      <string key="6">{scroll 0}{color 1}Il reste 3 minutes \navant l'explosion.{color 0}{scroll 1}{timed 108}</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 0}\nChris, setz das hier ein!{scroll 1}{clear 48}{scroll 0}\nZerstöre damit das Monster!{scroll 1}{timed 58}</string>
       <string key="1">{scroll 0}Es kommt jetzt, Jill!\nBring das Ungeheuer um!{scroll 1}{clear 90}{scroll 0}\nDu bist unsere Amazone, Jill!{scroll 1}{timed 50}</string>
       <string key="2">{scroll 2}Es gibt keinen Grund\njetzt nach unten zu gehen.</string>
-      <string key="3">{scroll 2}\nSie ist verschlossen.</string>
       <string key="4">{scroll 2}Sie ist zugeschweißt\nund läßt sich nicht öffnen.</string>
-      <string key="5">{scroll 2}\nNichts von Bedeutung.</string>
-      <string key="6">{scroll 0}{color 1}Es verbleiben noch 3 Minuten\nbis zur Detonation.{color 0}{scroll 1}{timed 108}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Cortile S1</string>
       <string key="0">{scroll 0}\nChris, usalo per uccidere il mostro!{scroll 1}{timed 106}</string>
       <string key="1">{scroll 0}\nSta arrivando, Jill! {scroll 1}{clear 50}{scroll 0}Uccidi quel mostro! \nSei la nostra amazzone, Jill!{scroll 1}{timed 90}</string>
       <string key="2">{scroll 2}Non c'è bisogno di \nscendere ora.</string>
-      <string key="3">{scroll 2}\n</string>
       <string key="4">{scroll 2}È saldata e \nnon si apre.</string>
-      <string key="5">{scroll 2}\n</string>
-      <string key="6">{scroll 0}{color 1}Restano 3 minuti \nprima dell'esplosione. {color 0}{scroll 1}{timed 108}</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\nChris, ¡úsalo!{scroll 1}{clear 48}{scroll 0}\nDestruye los monstruos. {scroll 1}{timed 58}</string>
       <string key="1">{scroll 0}¡Ahí tienes!\n¡Jill, revienta a ese monstruo!{scroll 1}{clear 90}{scroll 0}\n¡Eres nuestra amazona, Jill!{scroll 1}{timed 50}</string>
       <string key="2">{scroll 2}Ahora no hay\npor qué bajar.</string>
-      <string key="3">{scroll 2}\nLa puerta está cerrada.</string>
       <string key="4">{scroll 2}Está soldada, no\nse abre...</string>
-      <string key="5">{scroll 2}\nNada especial.</string>
-      <string key="6">{scroll 0}{color 1}Quedan 3 minutos antes\nde la explosión.{color 0}{scroll 1}{timed 108}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната внутр. двора Б1</string>
       <string key="0">{scroll 0}\n{scroll 1}{clear 48}{scroll 0}\n{scroll 1}{timed 58}</string>
       <string key="1">{scroll 0}\n{scroll 1}{clear 54}{scroll 0}\n{scroll 1}{timed 91}</string>
       <string key="2">{scroll 2}Теперь нет необходимости\nспускаться вниз.</string>
-      <string key="3">{scroll 2}\n</string>
       <string key="4">{scroll 2}Дверь заварена,\nоткрыть не получится.</string>
-      <string key="5">{scroll 2}\n</string>
-      <string key="6">{scroll 0}{color 1}\n{color 0}{scroll 1}{timed 108}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Maanalainen varasto 0 krs</string>
       <string key="0">{scroll 0}Chris, käytä sitä!{scroll 1}{clear 48}{scroll 0}Tuhoa tuo hirviö.{scroll 1}{timed 58}</string>
       <string key="1">{scroll 0}Jill, ota tämä!\nTapa tuo hirviö!{scroll 1}{clear 90}{scroll 0}Olet amazonimme!{scroll 1}{timed 50}</string>
       <string key="2">{scroll 2}Ei ole syytä palata alas...</string>
-      <string key="3">{scroll 2}Se on lukossa.</string>
       <string key="4">{scroll 2}Se on hitsattu kiinni...</string>
-      <string key="5">{scroll 2}Ei mitään erityistä.</string>
-      <string key="6">{scroll 0}{color 1}Kolme minuuttia räjähdykseen.{color 0}{scroll 1}{timed 108}</string>
     </language>
   </strings>
 </room>

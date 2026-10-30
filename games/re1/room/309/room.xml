@@ -431,6 +431,12 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="29300" height="0x78B4" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="JILL">02 00</item>
+    <item>00 01</item>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">DARKNESS PASSAGE</string>
@@ -449,8 +455,7 @@
       <string key="1">{scroll 2}C'est un transformateur. Il ne\nsemble pas fonctionner.{scroll 1}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 0}\nDas war ziemlich knapp!{scroll 1}{clear 140}{scroll 0}\nOkay, lass uns gehen!{scroll 1}{clear 60}{scroll 0}Dann gebe ich dir Deckung.\nWir sollten uns beeilen.{scroll 1}{timed 115}</string>
-      <string when="JILL" key="0">{scroll 0}\nDas war ziemlich knapp!{scroll 1}{clear 140}{scroll 0}\nOkay, lass uns gehen!{scroll 1}{clear 40}{scroll 0}Dann gebe ich dir Deckung.\nWir sollten uns beeilen.{scroll 1}{timed 115}</string>
+      <string key="0">{scroll 0}\nDas war ziemlich knapp!{scroll 1}{clear 140}{scroll 0}\nOkay, lass uns gehen!{scroll 1}{clear 40}{scroll 0}Dann gebe ich dir Deckung.\nWir sollten uns beeilen.{scroll 1}{timed 115}</string>
       <string key="1">{scroll 2}Ein Stromgenerator,\naber er funktioniert nicht.{scroll 1}</string>
     </language>
     <language lang="it-IT">
@@ -459,8 +464,7 @@
       <string key="1">{scroll 2}È un generatore di corrente, \nma sembra non funzioni.{scroll 1}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 0}Ha estado demasiado cerca. \nVayamos juntos.{scroll 1}{clear 140}{scroll 0}\nVale, vamos.{scroll 1}{clear 60}{scroll 0}De acuerdo, te cubro.\n¡Vamos!{scroll 1}{timed 115}</string>
-      <string when="JILL" key="0">{scroll 0}Ha faltado poco. \nVayamos juntos.{scroll 1}{clear 140}{scroll 0}\nVale, vamos.{scroll 1}{clear 60}{scroll 0}Te cubro entonces.\n¡Venga, rápido!{scroll 1}{timed 115}</string>
+      <string key="0">{scroll 0}Ha faltado poco. \nVayamos juntos.{scroll 1}{clear 140}{scroll 0}\nVale, vamos.{scroll 1}{clear 60}{scroll 0}Te cubro entonces.\n¡Venga, rápido!{scroll 1}{timed 115}</string>
       <string key="1">{scroll 2}Es un generador de electricidad, \npero parece que no funciona...{scroll 1}</string>
     </language>
     <language lang="ru-RU">
@@ -470,8 +474,7 @@
     </language>
     <language lang="fi-FI">
       <string key="save_name">Maanalainen varasto 0 krs</string>
-      <string key="0">{scroll 0}Tuo liippasi liian läheltä.\nPysytään yhdessä.{scroll 1}{clear 140}{scroll 0}Selvä, mennään.{scroll 1}{clear 60}{scroll 0}Okei, turvaan selustasi.\nPidetään kiirettä!{scroll 1}{timed 115}</string>
-      <string when="JILL" key="0">{scroll 0}Tuo liippasi liian läheltä.\nPysytään yhdessä.{scroll 1}{clear 140}{scroll 0}Selvä, mennään.{scroll 1}{clear 40}{scroll 0}Okei, turvaan selustasi.\nPidetään kiirettä!{scroll 1}{timed 115}</string>
+      <string key="0">{scroll 0}Tuo liippasi liian läheltä.\nPysytään yhdessä.{scroll 1}{clear 140}{scroll 0}Selvä, mennään.{scroll 1}{clear 40}{scroll 0}Okei, turvaan selustasi.\nPidetään kiirettä!{scroll 1}{timed 115}</string>
       <string key="1">{scroll 2}Se on sähkögeneraattori,\nmutta se ei näytä toimivan...{scroll 1}</string>
     </language>
   </strings>

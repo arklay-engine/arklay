@@ -1,10 +1,5 @@
-//! `.akscr` preprocessor: `#if AUTHENTIC` / `#else` / `#endif` over whole
-//! lines, `#define` and `#include`.
-//!
-//! `AUTHENTIC` selects the original game's exact bytecode where the shipped
-//! data has a quirk: `#if AUTHENTIC` keeps the original, its `#else` holds
-//! the fixed version a build uses by default. `#if !AUTHENTIC` takes the
-//! block when it is not defined. Blocks nest.
+//! `.akscr` preprocessor: `#define` and `#include`, and the older merged
+//! form's `#if` / `#else` / `#endif` lines.
 //!
 //! One script covers every variant of a room, but the variants are not
 //! preprocessor symbols: the player (`CHRIS`, `JILL`), the mansion visit
@@ -14,8 +9,10 @@
 //! own bytecode; the runtime build keeps them as variant jumps.
 //!
 //! The older merged form, which picked the variants with `#if CHRIS`-style
-//! lines, is still read by [`Build::Legacy`]: the exporter writes it before
-//! [`super::lift`] turns it into `if` statements.
+//! lines (`#if !JPN` takes the block when the symbol is not defined; blocks
+//! nest), is still read by [`Build::Legacy`]: the exporter writes it before
+//! [`super::lift`] turns it into `if` statements. Any other build has no
+//! `#if` lines.
 //!
 //! `#define NAME value` names a number (or another name) for the arguments
 //! that follow, and `#include "inc/items.akinc"` reads defines from a file;
@@ -27,18 +24,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-/// The symbols a [`Build::Legacy`] script's `#if` may test; any other build
-/// knows only `AUTHENTIC`.
-pub const SYMBOLS: [&str; 8] = [
-    "CHRIS",
-    "JILL",
-    "MANSION1",
-    "MANSION2",
-    "AUTHENTIC",
-    "USA",
-    "JPN",
-    "EUR",
-];
+/// The symbols a [`Build::Legacy`] script's `#if` may test.
+pub const SYMBOLS: [&str; 7] = ["CHRIS", "JILL", "MANSION1", "MANSION2", "USA", "JPN", "EUR"];
 
 /// The room variant a script is compiled for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -48,9 +35,6 @@ pub struct Variant {
     /// 1 for the first mansion visit (stages 1/2), 2 for the second (stages
     /// 6/7), `None` outside the mansion.
     pub mansion: Option<u8>,
-    /// Compile the original game's exact bytecode rather than the fixed
-    /// version of its quirks.
-    pub authentic: bool,
     /// The region whose scripts to compile.
     pub region: Region,
 }
@@ -102,50 +86,26 @@ pub enum Build {
     Variant(Variant),
     /// Every variant at once: the tests stay in the bytecode as variant
     /// jumps the engine resolves for the room it runs. This is what ships.
-    Runtime {
-        /// Keep the original game's exact bytecode where it has a quirk.
-        authentic: bool,
-    },
+    Runtime,
     /// One RDT variant of a script in the older merged form, whose `#if`
     /// lines may also test the variant symbols ([`SYMBOLS`]).
     Legacy(Variant),
 }
 
 impl Build {
-    /// The runtime build with the port's fixes.
-    pub const RUNTIME: Build = Build::Runtime { authentic: false };
-
     /// The variant a build folds to, `None` for the runtime build.
     pub fn variant(self) -> Option<Variant> {
         match self {
             Build::Variant(variant) | Build::Legacy(variant) => Some(variant),
-            Build::Runtime { .. } => None,
-        }
-    }
-
-    /// Whether the build keeps the original bytecode's quirks.
-    pub fn authentic(self) -> bool {
-        match self {
-            Build::Variant(variant) | Build::Legacy(variant) => variant.authentic,
-            Build::Runtime { authentic } => authentic,
-        }
-    }
-
-    /// This build with the original bytecode's quirks.
-    pub fn as_authentic(self) -> Self {
-        match self {
-            Build::Variant(variant) => Build::Variant(variant.authentic()),
-            Build::Legacy(variant) => Build::Legacy(variant.authentic()),
-            Build::Runtime { .. } => Build::Runtime { authentic: true },
+            Build::Runtime => None,
         }
     }
 
     /// Whether `#if symbol` holds, `None` for a symbol the build does not
     /// know.
     fn defines(self, symbol: &str) -> Option<bool> {
-        match (self, symbol) {
-            (_, "AUTHENTIC") => Some(self.authentic()),
-            (Build::Legacy(variant), _) => variant.defines(symbol),
+        match self {
+            Build::Legacy(variant) => variant.defines(symbol),
             _ => None,
         }
     }
@@ -163,7 +123,6 @@ impl Variant {
                 6 | 7 => Some(2),
                 _ => None,
             },
-            authentic: false,
             region: Region::Usa,
         }
     }
@@ -171,14 +130,6 @@ impl Variant {
     /// This variant for `region`.
     pub fn in_region(self, region: Region) -> Self {
         Self { region, ..self }
-    }
-
-    /// This variant compiled to the original game's exact bytecode.
-    pub fn authentic(self) -> Self {
-        Self {
-            authentic: true,
-            ..self
-        }
     }
 
     /// The variant's bits for a variant jump's mask
@@ -215,7 +166,6 @@ impl Variant {
             "JILL" => Some(self.jill),
             "MANSION1" => Some(self.mansion == Some(1)),
             "MANSION2" => Some(self.mansion == Some(2)),
-            "AUTHENTIC" => Some(self.authentic),
             "USA" => Some(self.region == Region::Usa),
             "JPN" => Some(self.region == Region::Jpn),
             "EUR" => Some(self.region == Region::Eur),
@@ -285,26 +235,12 @@ fn directive(line: &str) -> Option<Directive<'_>> {
 /// The lines `build` keeps, with their 1-based line numbers. Without a
 /// build the script must not use any directive.
 pub(super) fn kept_lines(text: &str, build: Option<Build>) -> Result<Vec<(usize, &str)>> {
-    kept_lines_with(text, build, None)
-}
-
-/// [`kept_lines`], keeping the `#if keep` blocks as they are, directives
-/// and both branches.
-pub(super) fn kept_lines_with<'a>(
-    text: &'a str,
-    build: Option<Build>,
-    keep: Option<&str>,
-) -> Result<Vec<(usize, &'a str)>> {
-    // One entry per open `#if`: (taking the `#if` branch, now in `#else`),
-    // or `None` for a kept block.
-    let mut stack: Vec<Option<(bool, bool)>> = Vec::new();
+    // One entry per open `#if`: (taking the `#if` branch, now in `#else`).
+    let mut stack: Vec<(bool, bool)> = Vec::new();
     let mut kept = Vec::new();
     for (index, line) in text.lines().enumerate() {
         let line_no = index + 1;
-        let live = stack
-            .iter()
-            .flatten()
-            .all(|&(taken, in_else)| taken != in_else);
+        let live = stack.iter().all(|&(taken, in_else)| taken != in_else);
         let Some(directive) = directive(line) else {
             if live {
                 kept.push((line_no, line));
@@ -312,12 +248,6 @@ pub(super) fn kept_lines_with<'a>(
             continue;
         };
         match directive {
-            Directive::If(symbol) if keep == Some(symbol) => {
-                stack.push(None);
-                if live {
-                    kept.push((line_no, line));
-                }
-            }
             Directive::If(symbol) => {
                 let (negated, name) = match symbol.strip_prefix('!') {
                     Some(name) => (true, name),
@@ -333,32 +263,20 @@ pub(super) fn kept_lines_with<'a>(
                              run-time test: write `if ({symbol}) {{ ... }}`"
                         );
                     }
-                    bail!(
-                        "line {line_no}: unknown symbol `{symbol}` (expected `AUTHENTIC`, \
-                         or `!` before it)"
-                    );
+                    bail!("line {line_no}: unknown symbol `{symbol}`");
                 };
-                stack.push(Some((defined != negated, false)));
+                stack.push((defined != negated, false));
             }
             Directive::Else => match stack.last_mut() {
-                Some(None) => {
-                    if live {
-                        kept.push((line_no, line));
-                    }
-                }
-                Some(Some((_, in_else @ false))) => *in_else = true,
-                Some(Some(_)) => bail!("line {line_no}: second `#else` for one `#if`"),
+                Some((_, in_else @ false)) => *in_else = true,
+                Some(_) => bail!("line {line_no}: second `#else` for one `#if`"),
                 None => bail!("line {line_no}: `#else` without `#if`"),
             },
-            Directive::Endif => match stack.pop() {
-                Some(None) => {
-                    if live {
-                        kept.push((line_no, line));
-                    }
+            Directive::Endif => {
+                if stack.pop().is_none() {
+                    bail!("line {line_no}: `#endif` without `#if`");
                 }
-                Some(Some(_)) => {}
-                None => bail!("line {line_no}: `#endif` without `#if`"),
-            },
+            }
         }
     }
     if !stack.is_empty() {

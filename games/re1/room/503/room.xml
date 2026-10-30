@@ -230,6 +230,10 @@
     <footstep x="17400" z="0" width="3700" height="0x1F40" sound="0x0027"/>
     <footstep x="0" z="0" width="32700" height="0x62D4" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">STAIRS</string>

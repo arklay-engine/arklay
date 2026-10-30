@@ -297,6 +297,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="30500" height="0x5C30" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">MORTUARY</string>
@@ -309,7 +313,6 @@
       <string key="5">{scroll 2}This place seems to be a\nmorgue.{scroll 10}</string>
       <string key="6">{scroll 2}It's a pass code output\nmachine.{scroll 10}{clear 0}{scroll 2}If I had a MO DISK,\nI could get the code...{scroll 10}</string>
       <string key="7">{scroll 2}I already have the pass\ncode.{scroll 10}</string>
-      <string key="8">{scroll 2}You've obtained the pass\ncode.{scroll 10}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
@@ -321,7 +324,6 @@
       <string key="5">{scroll 2}\n どうやらここは死体置場のようだ{scroll 10}</string>
       <string key="6">{scroll 2}\n   パスコードの出力装置だ{scroll 10}{clear 0}{scroll 2} MOディスクがあれば、\n コードを入手できるのだが・・・{scroll 10}</string>
       <string key="7">{scroll 2}\nここのパスコードはもう入手している{scroll 10}</string>
-      <string key="8">{scroll 2}\n    パスコードを入手した{scroll 10}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Laboratoire SS3</string>
@@ -333,7 +335,6 @@
       <string key="5">{scroll 2}\nOn dirait une morgue.{scroll 10}</string>
       <string key="6">{scroll 2}C'est une machine pour\ncodes d'accès.{scroll 10}{clear 0}{scroll 2}Si j'avais un disque M.O., je\npourrais avoir le code...{scroll 10}</string>
       <string key="7">{scroll 2}\nJ'ai déjà le code d'accès.{scroll 10}</string>
-      <string key="8">{scroll 2}Vous avez obtenu le code \nd'accès.{scroll 10}</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 2}\nDa ist ein Operationstisch.{scroll 10}</string>
@@ -344,7 +345,6 @@
       <string key="5">{scroll 2}Dieser Raum scheint\neine Leichenhalle zu sein.{scroll 10}</string>
       <string key="6">{scroll 2}Das ist ein Gerät,\ndas Passcodes ausgibt.{scroll 10}{clear 0}{scroll 2}Mit einer MO-DISKETTE könnte\nich den Code aufzeichnen...{scroll 10}</string>
       <string key="7">{scroll 2}\nIch habe schon einen Passcode.{scroll 10}</string>
-      <string key="8">{scroll 2}Sie haben einen Passcode\nerhalten.{scroll 10}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Laboratorio S3</string>
@@ -356,7 +356,6 @@
       <string key="5">{scroll 2}Questo posto sembra \nessere un obitorio.{scroll 10}</string>
       <string key="6">{scroll 2}È una macchina che \nemette codici d'accesso.{clear 0}Se avessi un DISCO MO\npotrei ottenerlo...{scroll 2}</string>
       <string key="7">{scroll 2}Ho già il codice di\naccesso.{scroll 10}</string>
-      <string key="8">{scroll 2}Hai ottenuto il codice \ndi accesso.{scroll 10}</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 2}Hay una mesa de\noperaciones...{scroll 10}</string>
@@ -367,7 +366,6 @@
       <string key="5">{scroll 2}Este sitio parece un\ndepósito de cadáveres...{scroll 10}</string>
       <string key="6">{scroll 2}Es una máquina de\ncontraseñas...{scroll 10}{clear 0}{scroll 2}Si tuviera un DISCO MO podría\nconseguir la contraseña...{scroll 10}</string>
       <string key="7">{scroll 2}Ya tengo el\npase...{scroll 10}</string>
-      <string key="8">{scroll 2}Has conseguido el\npase...{scroll 10}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Лаборатория Б3</string>
@@ -379,7 +377,6 @@
       <string key="5">{scroll 2}Это место похоже\nна морг.{scroll 10}</string>
       <string key="6">{scroll 2}Устройство\nдля печати паролей.{scroll 10}{clear 0}{scroll 2}Если бы у меня был МО ДИСК,\nя мог бы получить код...{scroll 10}</string>
       <string key="7">{scroll 2}У меня уже\nесть пароль.{scroll 10}</string>
-      <string key="8">{scroll 2}\nВы получили пароль.{scroll 10}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Laboratorion olohuone -2 krs</string>
@@ -391,7 +388,6 @@
       <string key="5">{scroll 2}Tämän on oltava ruumishuone...{scroll 10}</string>
       <string key="6">{scroll 2}Se on kulkukoodien tulostin...{scroll 10}{clear 0}{scroll 2}Jos minulla olisi MO-levyke,\nvoisin tulostaa sellaisen...{scroll 10}</string>
       <string key="7">{scroll 2}Olen jo saanut siitä\nkulkukoodin...{scroll 10}</string>
-      <string key="8">{scroll 2}Poimit kulkukoodin...{scroll 10}</string>
     </language>
   </strings>
 </room>

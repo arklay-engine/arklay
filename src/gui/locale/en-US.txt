@@ -77,10 +77,6 @@ autosave.description = "Save automatically each time a door loads a room. The tw
 autosave.off = "Only the typewriter saves."
 autosave.on = "Each room you enter through a door is autosaved."
 
-room_script_fixes.label = "Script Fixes"
-room_script_fixes.description = "Whether the room scripts run with the port's fixes. Off runs each room's original script bytecode, quirks included. Mods' own scripts apply either way. Takes effect from the next room."
-room_script_fixes.off = "Each room runs its original script bytecode."
-room_script_fixes.on = "The room scripts run with the port's fixes."
 
 quick_turn.label = "Quick Turn"
 quick_turn.description = "Turn 180 degrees in place by pressing Run while walking backwards."

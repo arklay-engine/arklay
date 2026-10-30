@@ -189,6 +189,10 @@
     <footstep x="8500" z="7000" width="3300" height="0x07D0" sound="0x002A"/>
     <footstep x="0" z="120" width="17600" height="0x44C0" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="JILL MANSION1">00 03 02</item>
+    <item>00 01 02</item>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">BEDROOM</string>

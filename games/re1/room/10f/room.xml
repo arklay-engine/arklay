@@ -450,6 +450,14 @@
     <footstep x="5780" z="13160" width="18380" height="0x20A8" sound="0x002A"/>
     <footstep x="1000" z="1220" width="23460" height="0x508C" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <object when="CHRIS MANSION1">02 01</object>
+    <object>00 01</object>
+    <item when="CHRIS MANSION1">00 01 03</item>
+    <item>00 01 02</item>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">BAR</string>
@@ -493,7 +501,6 @@
       <string key="4">{scroll 0}\n      レベッカか{scroll 2}{timed 55}</string>
       <string key="5">{scroll 0}   ええ いつまでも\n   落ちこんでいられません{scroll 2}{timed 115}</string>
       <string key="6">{scroll 0}\n     \x19月光\x19ですね{scroll 2}{timed 110}</string>
-      <string when="JILL MANSION1" key="6">{scroll 0}\n     “月光”ですね{scroll 2}{timed 110}</string>
       <string when="MANSION2" key="6">{scroll 0}\n     “月光”ですね{scroll 2}{timed 110}</string>
       <string key="7">{scroll 0}\n      弾けるか?{scroll 2}{timed 46}</string>
       <string key="8">{scroll 0}\n   待ってくれ 何だそりゃ?{scroll 2}{timed 64}</string>
@@ -511,9 +518,7 @@
       <string key="20">{scroll 0}\n      いいですか?{scroll 2}{timed 60}</string>
       <string key="21">{scroll 0}\n      やるもんだね{scroll 2}{timed 67}</string>
       <string key="22">{scroll 0}\n       何これ‽{scroll 2}{timed 55}</string>
-      <string key="23">\n  ベートーベンの\x19月光\x19だ</string>
-      <string when="JILL MANSION1" key="23">\n  ベートーベンの“月光”だ</string>
-      <string when="MANSION2" key="23">\n  ベートーベンの“月光”だ</string>
+      <string key="23">\n  ベートーベンの“月光”だ</string>
       <string key="24">\nエンブレムのはまっていたくぼみがある</string>
       <string key="25">\n    エンブレムがはまっている</string>
       <string key="26">{scroll 0}\n     気をつけてね{scroll 2}{timed 75}</string>
@@ -632,43 +637,32 @@
     <language lang="es-ES">
       <string key="0">\nUn magnífico piano de cola...</string>
       <string key="1">Por desgracia Chris\nno sabe leer partituras...</string>
-      <string when="JILL" key="1">Chris, por desgracia\nno sé leer música...</string>
       <string key="2">{scroll 0}\nSoy yo, Chris.{scroll 2}{timed 52}</string>
-      <string when="JILL" key="2">{scroll 0}\nChris, soy yo.{scroll 2}{timed 52}</string>
       <string key="3">{scroll 0}\n¿Estás bien?{scroll 2}{timed 43}</string>
       <string key="4">{scroll 0}\nRebecca, ¿eres tú?{scroll 2}{timed 55}</string>
       <string key="5">{scroll 0}Sí, he decidido no\nseguir afligida.{scroll 2}{timed 115}</string>
-      <string when="JILL" key="5">{scroll 0}Sí, he decidido no\nseguir sufriendo.{scroll 2}{timed 115}</string>
       <string key="6">{scroll 0}Ahh, es la Sonata \ndel claro de luna.{scroll 2}{timed 110}</string>
-      <string when="JILL" key="6">{scroll 0}Ahh, es\nMoonlight Sonata.{scroll 2}{timed 110}</string>
       <string key="7">{scroll 0}\n¿Sabes tocar?{scroll 2}{timed 46}</string>
       <string key="8">{scroll 0}\nEspera, ¿qué ha sido eso?{scroll 2}{timed 64}</string>
-      <string when="JILL" key="8">{scroll 0}\nEspera, ¿qué es eso?{scroll 2}{timed 64}</string>
       <string key="9">{scroll 0}Mi interpretación\nanda algo oxidada.{scroll 2}{timed 90}</string>
       <string key="10">{scroll 0}Chris, ¿puedo practicar\nalgo más?{scroll 2}{timed 85}</string>
       <string key="11">¿Quieres que Rebecca\npractique? {branch 0 6 0}</string>
       <string key="12">{scroll 0}\nMira, tú relájate y toca.{scroll 2}{timed 100}</string>
-      <string when="JILL" key="12">{scroll 0}\nMira, relájate y toca.{scroll 2}{timed 100}</string>
       <string key="13">{scroll 0}\nVale.{scroll 2}{timed 35}</string>
       <string key="14">{scroll 0}Volvamos ya \npara buscarlos.{scroll 2}{timed 80}</string>
       <string key="15">{scroll 0}\nVale.{scroll 2}{timed 40}</string>
       <string key="16">{scroll 0}\nRebecca.{scroll 2}{timed 55}</string>
       <string key="17">{scroll 0}Lo sé, lo sé,\nsólo un poco más.{scroll 2}{timed 116}</string>
-      <string when="JILL" key="17">{scroll 0}Lo sé, lo sé,\nsolo un poco más.{scroll 2}{timed 116}</string>
       <string key="18">Rebecca está tocando\nel piano...</string>
       <string key="19">{scroll 0}\n¡Chris! ¡Chris!{scroll 2}{timed 60}</string>
       <string key="20">{scroll 0}\n¿Quieres oírme?{scroll 2}{timed 60}</string>
-      <string when="JILL" key="20">{scroll 0}\n¿Te gusta?{scroll 2}{timed 60}</string>
       <string key="21">{scroll 0}\n¡Oh, ha sido genial!{scroll 2}{timed 67}</string>
       <string key="22">{scroll 0}\n¿Qué es eso?{scroll 2}{timed 55}</string>
-      <string key="23">\nEs Moonlight Sonata...</string>
-      <string when="JILL" key="23">\nEs la Sonata del claro de luna...</string>
+      <string key="23">\nEs la Sonata del claro de luna...</string>
       <string key="24">Es el hueco en el que\nhabía un emblema...</string>
       <string key="25">\nEl emblema está colocado.</string>
       <string key="26">\n¡Chris! ¡Ten cuidado!{scroll 0}{scroll 2}{timed 75}</string>
-      <string when="JILL" key="26">\n¡Chris! ¡Cuidado!{scroll 0}{scroll 2}{timed 75}</string>
       <string key="27">{scroll 0}\nChris, ¿estás bien?{scroll 2}{timed 85}</string>
-      <string when="JILL" key="27">{scroll 0}{scroll 2}{timed 85}</string>
       <string key="28">¡No tenemos tiempo\npara tocar el piano!</string>
     </language>
     <language lang="ru-RU">

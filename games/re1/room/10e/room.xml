@@ -348,11 +348,14 @@
     <footstep x="3660" z="2720" width="2700" height="0x0AF0" sound="0x002D"/>
     <footstep x="0" z="0" width="10500" height="0x3A34" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">EMPLOYEE ROOM</string>
       <string key="save_name">M. Room 1F</string>
-      <string key="0">{scroll 2}\n{scroll 2}It's a map of 1ST FLOOR.\nWill you take it? {branch 0 1 0}{scroll 2}\nNone of them looks useful.{scroll 10}</string>
       <string key="1">{scroll 2}It's a map of 1ST FLOOR.\nWill you take it? {branch 0 1 0}{scroll 2}\nNone of them looks useful.{scroll 10}</string>
       <string key="2">{scroll 2}\nNone of them looks useful.{scroll 10}</string>
       <string key="3">{scroll 2}\nNothing special.{scroll 10}</string>
@@ -360,7 +363,6 @@
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
-      <string key="0">{scroll 2}\n   カギがかかっているようだ{scroll 10}</string>
       <string key="1">{scroll 2}    館1階の地図がある\n取りますか?    {branch 0 1 0}{scroll 2}\n 役に立ちそうな本は見当たらない{scroll 10}</string>
       <string key="2">{scroll 2}\n 役に立ちそうな本は見当たらない{scroll 10}</string>
       <string key="3">{scroll 2}\n     特に何もない{scroll 10}</string>
@@ -368,7 +370,6 @@
     </language>
     <language lang="fr-FR">
       <string key="save_name">Chambre RdC</string>
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}C'est un plan du rez-de-chaussée.\nLe prendre?{branch 0 1 0}</string>
       <string key="2">{scroll 2}\nRien d'utile.{scroll 10}</string>
       <string key="3">{scroll 2}\nRien de spécial.{scroll 10}</string>
@@ -376,8 +377,6 @@
       <string when="MANSION2" key="4">{scroll 2}Vous avez le plan \ndu rez-de-chaussée.{scroll 10}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 2}</string>
-      <string when="JILL MANSION1" key="0">240~256</string>
       <string key="1">{scroll 2}Ein Plan des\n{color 1}ERDGESCHOSSES{color 0}.{clear 0}{scroll 2}Möchten Sie sie mitnehmen?\n{branch 0 6 0}</string>
       <string when="MANSION2" key="1">{scroll 2}Das ist eine Karte der\n{color 1}ERDGESCHOSSES{color 0}.{clear 0}{scroll 2}Möchten Sie sie mitnehmen?\n{branch 0 6 0}</string>
       <string key="2">{scroll 2}\nNichts von Nutzen.{scroll 10}</string>
@@ -387,7 +386,6 @@
     </language>
     <language lang="it-IT">
       <string key="save_name">Villa 1P</string>
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}È la mappa del PIANO TERRA.\nLa vuoi prendere?{branch 0 1 0}</string>
       <string when="MANSION2" key="1">{scroll 2}È la pianta del PIANO TERRA.\nLa vuoi prendere?{branch 0 1 0}</string>
       <string key="2">{scroll 2}\nNessuno di questi sembra utile.{scroll 10}</string>
@@ -395,7 +393,6 @@
       <string key="4">{scroll 2}\nHai la mappa del PIANO TERRA.{scroll 10}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 2}\nLa puerta está cerrada.</string>
       <string key="1">{scroll 2}Es un mapa de la planta baja...\n¿Te lo llevas? {branch 0 6 0}</string>
       <string key="2">{scroll 2}\nNada parece útil...{scroll 10}</string>
       <string key="3">{scroll 2}\nNada especial...{scroll 10}</string>
@@ -403,7 +400,6 @@
     </language>
     <language lang="ru-RU">
       <string key="save_name">Мед. комната 1-эт.</string>
-      <string key="0">{scroll 2}\n{scroll 2}{color 1}Карта 1-го этажа{color 0}.\nВзять её?{branch 0 1 0}{scroll 2}Ничего из этого\nне выглядит полезным.{scroll 10}</string>
       <string key="1">{scroll 2}{color 1}Карта 1-го этажа{color 0}.\nВзять её?{branch 0 1 0}{scroll 2}Ничего из этого\nне выглядит полезным.{scroll 10}</string>
       <string when="MANSION2" key="1">{scroll 2}It's a map of 1ST FLOOR.\nWill you take it? {branch 0 1 0}{scroll 2}Ничего из этого\nне выглядит полезным.{scroll 10}</string>
       <string key="2">{scroll 2}Всё это выглядит\nбесполезным.{scroll 10}</string>
@@ -412,13 +408,12 @@
     </language>
     <language lang="fi-FI">
       <string key="save_name">Lääkevarasto 1 krs</string>
-      <string key="0">{scroll 2}Ovi on lukossa.</string>
       <string key="1">{scroll 2}Ensimmäisen kerroksen kartta...\nPoimitko sen?{branch 0 6 0}</string>
       <string key="2">{scroll 2}Mikään näistä ei näytä hyödylliseltä...{scroll 10}</string>
       <string key="3">{scroll 2}Ei mitään erityistä...{scroll 10}</string>
       <string key="4">{scroll 2}Poimit {color 1}ensimmäisen kerroksen\nkartan{color 0}...{scroll 10}</string>
-      <string when="JILL MANSION1" key="4">{scroll 2}Poimit ensimmäisen kerroksen\nkartan...{scroll 10}</string>
-      <string when="MANSION2" key="4">{scroll 2}Poimit ensimmäisen kerroksen\nkartan...{scroll 10}</string>
+      <string when="JILL" key="4">{scroll 2}Poimit ensimmäisen kerroksen\nkartan...{scroll 10}</string>
+      <string when="CHRIS MANSION2" key="4">{scroll 2}Poimit ensimmäisen kerroksen\nkartan...{scroll 10}</string>
     </language>
   </strings>
 </room>

@@ -71,11 +71,67 @@ pub struct RoomSource {
     pub object_slots: Option<usize>,
     /// The item-model table's slot count, like [`RoomSource::object_slots`].
     pub item_slots: Option<usize>,
+    /// The files the slots of each kind read, where `room.xml` names them.
+    pub slots: Slots,
     /// The room's display strings, `(language tag, key, value)`: `name` (the
     /// debug menu and save list name) and `save_name` (the save screen's
     /// label). They reach the game as the `ROOM_<room3>_NAME` and
     /// `ROOM_<room3>_NAME_SAVE` language keys ([`super::language_layers`]).
     pub strings: Vec<crate::language::XmlString>,
+}
+
+/// The files one room variant's slots read from the room's `object`,
+/// `item`, `effect` and `anim` folders, as `room.xml`'s `<slots>` names them
+/// ([`SlotFiles`]). A kind with no list reads every file of its folder in
+/// order, slot `n` from file `n`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Slots {
+    pub object: Option<SlotFiles>,
+    pub item: Option<SlotFiles>,
+    pub effect: Option<SlotFiles>,
+    /// The player animation's one slot.
+    pub anim: Option<SlotFiles>,
+}
+
+/// The file each slot of a kind reads, by slot: `Some(3)` reads `03` in
+/// the kind's folder (`item/03.tmd`), `None` leaves the slot empty. The list
+/// is as long as the variant's table.
+pub type SlotFiles = Vec<Option<u8>>;
+
+impl Slots {
+    /// The kinds a room folder numbers its files by slot.
+    pub const KINDS: [&'static str; 4] = ["object", "item", "effect", "anim"];
+
+    /// The list of `kind`, one of [`Slots::KINDS`].
+    pub fn get(&self, kind: &str) -> Option<&SlotFiles> {
+        match kind {
+            "object" => self.object.as_ref(),
+            "item" => self.item.as_ref(),
+            "effect" => self.effect.as_ref(),
+            "anim" => self.anim.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// The list of `kind`, one of [`Slots::KINDS`], to set.
+    pub fn get_mut(&mut self, kind: &str) -> Option<&mut Option<SlotFiles>> {
+        match kind {
+            "object" => Some(&mut self.object),
+            "item" => Some(&mut self.item),
+            "effect" => Some(&mut self.effect),
+            "anim" => Some(&mut self.anim),
+            _ => None,
+        }
+    }
+
+    /// The file slot `slot` of `kind` reads: its listed file, else the
+    /// slot's own number when the kind has no list.
+    pub fn file(&self, kind: &str, slot: usize) -> Option<usize> {
+        match self.get(kind) {
+            Some(files) => files.get(slot).copied().flatten().map(usize::from),
+            None => Some(slot),
+        }
+    }
 }
 
 /// One camera cut.
@@ -420,6 +476,7 @@ impl RoomSource {
             footstep_zones: state.footstep_zones,
             object_slots,
             item_slots,
+            slots: Slots::default(),
             strings: Vec::new(),
         };
         Ok(Converted { source, files })
@@ -455,31 +512,36 @@ impl RoomSource {
         let records: usize = self.collision.quadrants.iter().map(Vec::len).sum();
         budget::check_len(records, budget::MAX_RECORDS, "collision record count")?;
 
-        let folder = super::Folder::of(pack, id);
+        let dir = super::Folder::of(pack, id).dir().to_string();
+        let kind = |kind: &str| format!("{dir}/{kind}");
         let mut model_warnings = Vec::new();
         let (omodel_slot_count, object_models) = build_models(
             ModelTable::Object,
             self.object_slots,
-            &folder.kind(pack, "object", "00.tmd"),
+            self.slots.object.as_deref(),
+            &kind("object"),
             pack,
             &mut model_warnings,
         )?;
         let (item_count, item_models) = build_models(
             ModelTable::Item,
             self.item_slots,
-            &folder.kind(pack, "item", "00.tmd"),
+            self.slots.item.as_deref(),
+            &kind("item"),
             pack,
             &mut model_warnings,
         )?;
-        let anim = slot_stem(&folder.kind(pack, "anim", "00.emr"), PLAYER_ANIMATION);
-        let room_anim = pack
-            .contains(&format!("{anim}.emr"))
-            .then(|| {
+        let anim = self
+            .slots
+            .file("anim", PLAYER_ANIMATION)
+            .map(|file| slot_stem(&kind("anim"), file));
+        let room_anim = anim
+            .filter(|anim| pack.contains(&format!("{anim}.emr")))
+            .and_then(|anim| {
                 build_anim(&anim, pack)
                     .map_err(|error| model_warnings.push(format!("animation {anim}: {error:#}")))
                     .ok()
-            })
-            .flatten();
+            });
 
         Ok(RoomState {
             stage: id.stage,
@@ -499,7 +561,7 @@ impl RoomSource {
             walk_zones: self.walk_zones.clone(),
             footstep_zones: self.footstep_zones.clone(),
             messages: None,
-            effects: build_effects(id, pack)?,
+            effects: build_effects(&kind("effect"), self.slots.effect.as_deref(), pack)?,
             object_models,
             item_models,
             room_anim,
@@ -700,23 +762,36 @@ fn build_cut(camera: &Camera, index: usize) -> Result<Cut> {
 fn build_models(
     table: ModelTable,
     slots: Option<usize>,
+    files: Option<&[Option<u8>]>,
     dir: &str,
     pack: &Pack,
     warnings: &mut Vec<String>,
 ) -> Result<(u8, Vec<ObjectAsset>)> {
-    let present: Vec<usize> = (0..MAX_MODEL_SLOTS)
-        .filter(|&slot| pack.contains(&format!("{}.tmd", slot_stem(dir, slot))))
-        .collect();
+    let has_model = |file: usize| pack.contains(&format!("{}.tmd", slot_stem(dir, file)));
+    // `(slot, file)` of each slot with a model.
+    let present: Vec<(usize, usize)> = match files {
+        Some(files) => files
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, file)| Some((slot, usize::from((*file)?))))
+            .filter(|&(_, file)| has_model(file))
+            .collect(),
+        None => (0..MAX_MODEL_SLOTS)
+            .filter(|&file| has_model(file))
+            .map(|file| (file, file))
+            .collect(),
+    };
     let count = present
         .last()
-        .map_or(0, |last| last + 1)
+        .map_or(0, |(last, _)| last + 1)
+        .max(files.map_or(0, <[_]>::len))
         .max(slots.unwrap_or(0));
     let count = u8::try_from(count).with_context(|| {
         format!("more than {MAX_MODEL_SLOTS} {table:?} model slots").to_lowercase()
     })?;
     let mut assets = Vec::new();
-    for slot in present {
-        let stem = slot_stem(dir, slot);
+    for (slot, file) in present {
+        let stem = slot_stem(dir, file);
         match load_model(&stem, pack) {
             Ok(Some((model, texture))) => assets.push(ObjectAsset {
                 pair_index: slot,
@@ -757,16 +832,30 @@ fn load_model(stem: &str, pack: &Pack) -> Result<Option<(crate::model::Tmd, Text
     Ok(Some((model, texture)))
 }
 
-/// Build the room's effect sprites from its folder: `effect/<slot>.xml` for
-/// each slot from 0 up to the first one missing, each drawn from its
-/// `effect/<slot>` sheet (a CLUT sheet BMP or a 4bpp TIM).
-fn build_effects(id: RoomId, pack: &Pack) -> Result<RoomEffects> {
+/// Build the room's effect sprites from its `effect` folder `dir`: for each
+/// slot of `files` (without a list, from 0 up to the first one missing), its
+/// file's `<file>.xml` definition, drawn from the `<file>` sheet (a CLUT
+/// sheet BMP or a 4bpp TIM).
+fn build_effects(dir: &str, files: Option<&[Option<u8>]>, pack: &Pack) -> Result<RoomEffects> {
     let mut effects = RoomEffects::default();
-    let dir = super::Folder::of(pack, id).kind(pack, "effect", "00.xml");
     for slot in 0..crate::effects::room::EFFECT_SPRITE_SLOTS {
-        let stem = slot_stem(&dir, slot);
+        let file = match files {
+            Some(files) => match files.get(slot) {
+                Some(Some(file)) => usize::from(*file),
+                Some(None) => continue,
+                None => break,
+            },
+            None => slot,
+        };
+        let stem = slot_stem(dir, file);
         let entry = format!("{stem}.xml");
         if !pack.contains(&entry) {
+            if files.is_some() {
+                effects
+                    .warnings
+                    .push(format!("effect slot {slot}: missing {entry}"));
+                continue;
+            }
             break;
         }
         let data = pack.read(&entry)?;

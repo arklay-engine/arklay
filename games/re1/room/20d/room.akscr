@@ -33,10 +33,10 @@
 #define IMDL_00 0x00
 #define IMDL_01 0x01
 #define IMDL_02 0x02
-#define MSG_RICHARD_FROM_BRAVO_TEAM_0C 0x0C
+#define MSG_RICHARD_FROM_BRAVO_TEAM_0C 0x24
 #define MSG_RICHARD_FROM_BRAVO_TEAM_13 0x13
-#define MSG_RICHARD_IS_DEAD_0E 0x0E
-#define MSG_RICHARD_IS_DEAD_10 0x10
+#define MSG_RICHARD_IS_DEAD_0E 0x26
+#define MSG_RICHARD_IS_DEAD_10 0x28
 #define MSG_RICHARD_IS_DEAD_17 0x17
 #define MSG_VO_005_00 0x00
 #define MSG_VO_005_01 0x01
@@ -58,19 +58,19 @@
 #define MSG_VO_005_12 0x12
 #define MSG_VO_005_13 0x15
 #define MSG_VO_005_14 0x16
-#define MSG_VO_A01_00 0x00
-#define MSG_VO_A01_01 0x01
-#define MSG_VO_A01_02 0x02
-#define MSG_VO_A01_03 0x03
-#define MSG_VO_A01_04 0x04
-#define MSG_VO_A01_05 0x05
-#define MSG_VO_A01_06 0x06
-#define MSG_VO_A01_07 0x07
-#define MSG_VO_A01_08 0x08
-#define MSG_VO_A01_09 0x09
-#define MSG_VO_A01_0A 0x0A
-#define MSG_VO_A01_0C 0x0B
-#define MSG_VO_A01_0D 0x0D
+#define MSG_VO_A01_00 0x18
+#define MSG_VO_A01_01 0x19
+#define MSG_VO_A01_02 0x1A
+#define MSG_VO_A01_03 0x1B
+#define MSG_VO_A01_04 0x1C
+#define MSG_VO_A01_05 0x1D
+#define MSG_VO_A01_06 0x1E
+#define MSG_VO_A01_07 0x1F
+#define MSG_VO_A01_08 0x20
+#define MSG_VO_A01_09 0x21
+#define MSG_VO_A01_0A 0x22
+#define MSG_VO_A01_0C 0x23
+#define MSG_VO_A01_0D 0x25
 #define VO_005_00 0x25
 #define VO_005_01 0x26
 #define VO_005_02 0x27
@@ -375,7 +375,7 @@ proc main when (JILL && MANSION1)
             }
             if (ck(FG_COMMON, F_COMMON_62, TRUE) && ck(FG_COMMON, F_COMMON_61, FALSE))
             {
-                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 143, 127, 0);
+                aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 167, 127, 0);
             }
         }
     }

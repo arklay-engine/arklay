@@ -492,6 +492,10 @@
     <footstep x="20400" z="4500" width="5100" height="0x1450" sound="0x0027"/>
     <footstep x="0" z="0" width="29900" height="0x7468" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">MAZE A</string>

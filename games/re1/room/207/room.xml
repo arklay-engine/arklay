@@ -446,45 +446,40 @@
     <footstep x="0" z="0" width="0" height="0x0000" sound="0x0000"/>
     <footstep x="0" z="0" width="0" height="0x0000" sound="0x0000"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">2F RIGHT STAIRS</string>
       <string key="save_name">Hall 1F</string>
-      <string key="0">{scroll 2}\nSomething is written on \nthe wall...{clear 0}I... can't breathe...\nSave me from this pain...</string>
       <string key="1">{scroll 2}\nThe door knob is broken.</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
-      <string key="0">{scroll 2}\n    何か書いてある・・・{clear 0} くるしい、息が・・・\n 誰かこのくるしみをとめて・・・</string>
       <string key="1">{scroll 2}\n     ノブが壊れている</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Hall RdC</string>
-      <string key="0">{scroll 2}Il y a quelque chose \nd'écrit sur le mur.{clear 0}Je ne...peux pas respirer...\nAu secours, j'ai mal...</string>
       <string key="1">{scroll 2}\nLa poignée est cassée.</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 2}Das steht etwas an der Wand\ngeschrieben...{clear 0}Ich... bekomme keine Luft...\nErlöse mich von dieser Qual...</string>
-      <string when="MANSION2" key="0">{scroll 2}Das steht etwas an der Wand\ngeschrieben...{clear 0}Ich... bekomme keine Luft... Erlöse\nmich doch von dieser Qual...</string>
       <string key="1">{scroll 2}\nDer Türknauf ist abgebrochen.</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Atrio 1P</string>
-      <string key="0">{scroll 2}C'è qualcosa scritto \nsul muro...{clear 0}Non... respiro...\nFermate questa sofferenza...</string>
       <string key="1">{scroll 2}\nLa maniglia è rotta.</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 2}Hay algo escrito en \nla pared...{clear 0}Yo... no puedo respirar...\nSálvame de este dolor...</string>
       <string key="1">{scroll 2}\nLa manija está rota...</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Зал 1-эт.</string>
-      <string key="0">{scroll 2}\nНа стене что-то\nнаписано...{clear 0}Я... не могу дышать...\nСпаси меня от этой боли...</string>
       <string key="1">{scroll 2}\nДверная ручка сломана.</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Pääaula 1 krs</string>
-      <string key="0">{scroll 2}Seinään on kirjoitettu jotakin...{clear 0}En... voi hengittää...\nLopettakaa kärsimykseni...</string>
       <string key="1">{scroll 2}Ovenkahva on rikki...</string>
     </language>
   </strings>

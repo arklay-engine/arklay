@@ -8,8 +8,9 @@
 //!
 //! - `on_room_load` runs after a room's state exists and before its first tick;
 //! - `on_tick` runs after every fixed room tick, with the completed tick count;
-//! - `on_message` runs when a message was raised during the tick and may return
-//!   a replacement message id (nothing/nil keeps the original).
+//! - `on_message` runs when a message was raised during the tick, with its id
+//!   word ([`crate::text::message_index`]), and may return a replacement id
+//!   word (nothing/nil keeps the original).
 //!
 //! The `api` argument is the live [`GameState`](crate::game::GameState) exposed as a scoped userdata
 //! through [`mlua::Lua::scope`]: the author-facing hook methods
@@ -710,8 +711,8 @@ mod imp {
                 Ok(())
             });
 
-            methods.add_method_mut("message", |_lua, game, id: u8| {
-                game.show_message(id, MESSAGE_PAUSE);
+            methods.add_method_mut("message", |_lua, game, id: u16| {
+                game.show_message_word(id, MESSAGE_PAUSE);
                 Ok(())
             });
 

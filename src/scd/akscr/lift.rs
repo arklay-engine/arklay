@@ -13,8 +13,8 @@
 //!   keeps a name one of its variants used where it can, and a reference
 //!   whose event differs per variant is split into a variant test.
 //!
-//! `#if AUTHENTIC` blocks stay as they are. Built for any one variant, the
-//! lifted script gives the same bytecode as the merged one.
+//! Built for any one variant, the lifted script gives the same bytecode as
+//! the merged one.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -37,17 +37,13 @@ enum Node {
     },
 }
 
-/// One open `#if` while reading the lines.
-enum Frame {
-    /// A variant test: its symbol, its branches and whether `#else` was seen.
-    Variant {
-        symbol: String,
-        then: Vec<Node>,
-        otherwise: Vec<Node>,
-        in_else: bool,
-    },
-    /// An `#if AUTHENTIC` block, whose directives stay lines.
-    Pass,
+/// One open variant `#if` while reading the lines: its symbol, its branches
+/// and whether `#else` was seen.
+struct Frame {
+    symbol: String,
+    then: Vec<Node>,
+    otherwise: Vec<Node>,
+    in_else: bool,
 }
 
 /// Read `text` into nodes.
@@ -55,18 +51,11 @@ fn parse(text: &str) -> Result<Vec<Node>> {
     let mut root = Vec::new();
     let mut stack: Vec<Frame> = Vec::new();
     fn current<'a>(root: &'a mut Vec<Node>, stack: &'a mut [Frame]) -> &'a mut Vec<Node> {
-        for frame in stack.iter_mut().rev() {
-            if let Frame::Variant {
-                then,
-                otherwise,
-                in_else,
-                ..
-            } = frame
-            {
-                return if *in_else { otherwise } else { then };
-            }
+        match stack.last_mut() {
+            Some(frame) if frame.in_else => &mut frame.otherwise,
+            Some(frame) => &mut frame.then,
+            None => root,
         }
-        root
     }
     for (index, line) in text.lines().enumerate() {
         let trimmed = line.trim();
@@ -74,29 +63,21 @@ fn parse(text: &str) -> Result<Vec<Node>> {
         if let Some(rest) = trimmed.strip_prefix("#if")
             && (rest.is_empty() || rest.starts_with(char::is_whitespace))
         {
-            let symbol = rest.trim();
-            if symbol.trim_start_matches('!') == "AUTHENTIC" {
-                current(&mut root, &mut stack).push(Node::Line(line.to_string()));
-                stack.push(Frame::Pass);
-            } else {
-                stack.push(Frame::Variant {
-                    symbol: symbol.to_string(),
-                    then: Vec::new(),
-                    otherwise: Vec::new(),
-                    in_else: false,
-                });
-            }
+            stack.push(Frame {
+                symbol: rest.trim().to_string(),
+                then: Vec::new(),
+                otherwise: Vec::new(),
+                in_else: false,
+            });
             continue;
         }
         match trimmed.split_whitespace().next() {
             Some("#else") => match stack.last_mut() {
-                Some(Frame::Pass) => current(&mut root, &mut stack).push(Node::Line(line.into())),
-                Some(Frame::Variant { in_else, .. }) => *in_else = true,
+                Some(frame) => frame.in_else = true,
                 None => bail!("line {line_no}: `#else` without `#if`"),
             },
             Some("#endif") => match stack.pop() {
-                Some(Frame::Pass) => current(&mut root, &mut stack).push(Node::Line(line.into())),
-                Some(Frame::Variant {
+                Some(Frame {
                     symbol,
                     then,
                     otherwise,
@@ -912,7 +893,6 @@ pub fn variants(mansion: bool) -> Vec<Variant> {
                 out.push(Variant {
                     jill,
                     mansion: visit,
-                    authentic: false,
                     region,
                 });
             }

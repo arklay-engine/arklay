@@ -113,40 +113,32 @@
       <string key="name">ARMS STOREHOUSE</string>
       <string key="save_name">Guardhouse 1F</string>
       <string key="0">They are all wet and \nuseless.{scroll 2}</string>
-      <string key="1">There is no time to check\nit.{scroll 2}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
       <string key="0">\n ぬれてしまって使い物にならない{scroll 2}</string>
-      <string key="1">\n   調べている時間はない!{scroll 2}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Poste de garde RdC</string>
       <string key="0">\nTout est mouillé et inutile.{scroll 2}</string>
-      <string key="1">\nPas de temps pour vérifier.{scroll 2}</string>
     </language>
     <language lang="de-DE">
       <string key="0">Sie sind alle nass\nund unbrauchbar.{scroll 2}</string>
-      <string key="1">Es ist keine Zeit,\ndas zu überprüfen.{scroll 2}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Guardiola 1P</string>
       <string key="0">Sono completamente bagnati \ne inutili.{scroll 2}</string>
-      <string key="1">\nNon c'è tempo per controllare.{scroll 2}</string>
     </language>
     <language lang="es-ES">
       <string key="0">Todo está mojado, \nya no sirve...{scroll 2}</string>
-      <string key="1">No hay tiempo para\nexaminarlo...{scroll 2}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната охраны 1-эт.</string>
       <string key="0">\nВсё мокрое и бесполезное.{scroll 2}</string>
-      <string key="1">\nНа это нет времени.{scroll 2}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Asuntolan varasto 1 krs</string>
       <string key="0">Ne kaikki ovat kastuneet.\nNyt ne ovat käyttökelvottomia...{scroll 2}</string>
-      <string key="1">Ei ole aikaa tutkia sitä...{scroll 2}</string>
     </language>
   </strings>
 </room>

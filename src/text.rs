@@ -122,20 +122,19 @@ impl Text {
             .lookup(&format!("ITEM_{item_id:02X}_DESCRIPTION"))
     }
 
-    /// The message selected by `id`: bit `0x40` picks the global table, and
-    /// the low six bits are the index within either table.
+    /// The message selected by `id` ([`message_index`]): bit `0x40` picks
+    /// the global table, bit `0x80` only speeds the reveal up, and the rest
+    /// is the index within either table.
     ///
-    /// Room messages resolve the room variant's keys, most specific first
-    /// (`ROOM_100_JILL_MANSION2_TEXT_0A`, then `ROOM_100_JILL_TEXT_0A`,
-    /// `ROOM_100_MANSION2_TEXT_0A`), then the shared room key, then the RDT's
-    /// own text, then the registry id.
+    /// A `room.xml` room's messages resolve the room variant's keys, most
+    /// specific first (`ROOM_100_JILL_MANSION2_TEXT_0A`, then
+    /// `ROOM_100_JILL_TEXT_0A`, `ROOM_100_MANSION2_TEXT_0A`), then the shared
+    /// room key, then the registry id. A raw RDT's room reads its own text
+    /// first, where the session draws the pack's script: an RDT numbers its
+    /// messages its own way, not as the room's `room.xml` does.
     pub fn message<'a>(&'a self, room: &'a RoomState, id: u16) -> Option<&'a [u8]> {
         if id & 0x40 != 0 {
             return self.global(usize::from(id & 0x3F));
-        }
-        let keys = room_text_keys(room, id);
-        if let Some(bytes) = keys.iter().find_map(|key| self.catalog.lookup(key)) {
-            return Some(bytes);
         }
         // A raw RDT's own text is encoded in the pack's own script; use it
         // only when the session draws that script, or its bytes would render
@@ -143,12 +142,16 @@ impl Text {
         // reads as its registry id, like a key no language carries at all.
         // (A `room.xml` room has no text of its own: its strings are
         // language keys.)
-        if self.script == self.pack_script
-            && let Some(bytes) = room.message(id)
-        {
+        let own = (self.script == self.pack_script && id >> 8 == 0)
+            .then(|| room.message(id))
+            .flatten();
+        if let Some(bytes) = own {
             return Some(bytes);
         }
-        keys.iter().find_map(|key| self.catalog.key_display(key))
+        let keys = room_text_keys(room, message_index(id));
+        keys.iter()
+            .find_map(|key| self.catalog.lookup(key))
+            .or_else(|| keys.iter().find_map(|key| self.catalog.key_display(key)))
     }
 
     /// The speaker of page `page` of message `id`, for a subtitle: the
@@ -161,7 +164,7 @@ impl Text {
         let keys = if id & 0x40 != 0 {
             vec![format!("MESSAGE_{:02X}", id & 0x3F)]
         } else {
-            room_text_keys(room, id)
+            room_text_keys(room, message_index(id))
         };
         keys.iter()
             .find_map(|key| {
@@ -241,6 +244,16 @@ pub fn pack_script(pack: &Pack) -> Script {
         Some(_) => Script::Latin,
         None => Script::default(),
     }
+}
+
+/// The index within its table of message `id`, a message id word: the low
+/// byte is the original's message id (bit `0x80` the reveal speed-up, bit
+/// `0x40` the global table, the low six bits the index) and the high byte
+/// carries the index's higher bits, so room message 70 is `0x106`. The
+/// original's ids, one byte, reach index 63; the port's long `message`
+/// opcode and an examine spot's data word reach further.
+pub fn message_index(id: u16) -> u16 {
+    (id & 0x3F) | ((id >> 8) << 6)
 }
 
 /// The language keys of `room`'s message `id`, the room variant's first:
@@ -402,12 +415,38 @@ mod tests {
     }
 
     #[test]
-    fn room_messages_prefer_the_variant_then_the_shared_key_then_the_rdt() {
+    fn a_message_id_word_selects_its_index_whatever_its_flags() {
+        assert_eq!(message_index(0x0C), 12);
+        // The reveal speed-up bit is not part of the index.
+        assert_eq!(message_index(0x8C), 12);
+        // The high byte carries the index past 63.
+        assert_eq!(message_index(0x106), 70);
+        assert_eq!(message_index(0x186), 70);
+
+        let pack = pack_with(&[(
+            "language/en-US.txt",
+            "ROOM_FFF_TEXT_0C = \"A\"\nROOM_FFF_TEXT_46 = \"B\"\nMESSAGE_06 = \"C\"\n",
+        )]);
+        let text = Text::load(&pack, Some("en-US"));
+        let room = RoomState {
+            stage: 0xF,
+            room: 0xFF,
+            ..RoomState::default()
+        };
+        let a = text.message(&room, 0x0C).unwrap().to_vec();
+        assert_eq!(text.message(&room, 0x8C), Some(a.as_slice()));
+        let b = text.message(&room, 0x106).unwrap().to_vec();
+        assert_ne!(a, b);
+        assert_eq!(text.message(&room, 0x186), Some(b.as_slice()));
+    }
+
+    #[test]
+    fn an_rdt_rooms_own_text_comes_before_the_variant_then_the_shared_key() {
         // A room no shipped language knows, so only the pack's keys and the
         // RDT can answer.
         let pack = pack_with(&[(
             "language/en-US.txt",
-            "ROOM_FFF_TEXT_00 = \"A\"\nROOM_FFF_JILL_TEXT_00 = \"B\"\n",
+            "ROOM_FFF_TEXT_00 = \"A\"\nROOM_FFF_JILL_TEXT_00 = \"B\"\nROOM_FFF_TEXT_01 = \"C\"\n",
         )]);
         let text = Text::load(&pack, Some("en-US"));
         let room = RoomState {
@@ -418,9 +457,9 @@ mod tests {
             messages: Some(vec![0x00, 0x00, 0x04, 0x00, 0xCC, 0x01, 0x00]),
             ..RoomState::default()
         };
-        // The room variant's key wins.
+        // No RDT stream: the room variant's key wins.
         assert_eq!(text.message(&room, 0), Some([0x1E, 0x01, 0x00].as_slice()));
-        // No language key: the RDT stream is used.
+        // The RDT numbers its messages its own way, so its stream wins.
         assert_eq!(text.message(&room, 1), Some([0xCC, 0x01, 0x00].as_slice()));
     }
 

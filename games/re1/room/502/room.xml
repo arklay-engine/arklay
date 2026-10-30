@@ -102,6 +102,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="11800" height="0x44C0" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">LADDER ROOM</string>
@@ -110,8 +114,6 @@
       <string key="1">{scroll 0}\n {scroll 1}{clear 60}{scroll 0}\n {scroll 1}{clear 230}{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="2">{scroll 0}\n {scroll 90} {scroll 1}{clear 250}{scroll 0}\n {scroll 1}{clear 220}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 200}</string>
       <string key="3">{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string key="4">{scroll 0}\n {scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}\n {scroll 1}{timed 30}</string>
       <string key="6">{scroll 0}\n {scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}\n {scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}\n {scroll 1}{timed 60}</string>
@@ -125,8 +127,6 @@
       <string key="1">{scroll 0}\n       バリー…{scroll 1}{clear 60}{scroll 0}  まったく会わせる額がないな\n  さっさと先に行ってくれ{scroll 1}{clear 230}{scroll 0}\nもう言わないで ウェスカーは死んだわ{scroll 1}{timed 130}</string>
       <string key="2">{scroll 0}\n そうか…ジル 最後に頼みがある{scroll 90} {scroll 1}{clear 250}{scroll 0}\n  この写真を家族にわたしてくれ{scroll 1}{clear 220}{scroll 0}\n      ええ 必ず{scroll 1}{clear 70}{scroll 0}\n      許してくれ…{scroll 1}{timed 200}</string>
       <string key="3">{scroll 0}  行きましょう\n  たちどまるわけにはいかないわ{scroll 1}{timed 100}</string>
-      <string key="4">{scroll 0}\n      さあ行こう!{scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}\n     行きましょう!{scroll 1}{timed 30}</string>
       <string key="6">{scroll 0}\n       ジル!{scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}\n       くそっ!{scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}\n      さあ 行こう{scroll 1}{timed 60}</string>
@@ -140,8 +140,6 @@
       <string key="1">{scroll 0}\nBarry... {scroll 1}{clear 60}{scroll 0}Je suis vraiment gêné de te \nvoir à présent. Laisse-moi.  {scroll 1}{clear 115}{scroll 0}\nVa-t-en vite. {scroll 1}{clear 81}{scroll 0}C'est fini Barry. \nWesker est mort. {scroll 1}{timed 130}</string>
       <string key="2">{scroll 0}C'est vrai? Jill, peux-tu me\nrendre un service?  {scroll 1}{clear 200}{scroll 0}\nC'est mon dernier souhait.{scroll 1}{clear 110}{scroll 0}S'il te plaît, donne cette\nphoto à ma famille, d'accord?{scroll 1}{clear 230}{scroll 0}\nPas de problème. {scroll 1}{clear 50}{scroll 0}\nPardonne-moi, Jill... {scroll 1}{timed 199}</string>
       <string key="3">{scroll 0}Continuons, Chris. Nous ne \npouvons pas nous arrêter. {scroll 1}{timed 100}</string>
-      <string key="4">{scroll 0}\nAllons-y. {scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}\nPartons! {scroll 1}{timed 30}</string>
       <string key="6">{scroll 0}\nJill! {scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}\nMon Dieu! {scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}\nAllons-y. {scroll 1}{timed 60}</string>
@@ -151,13 +149,9 @@
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 0}\nHallo, Jill, du bist es...{scroll 1}{timed 140}</string>
-      <string key="1">{scroll 0}\nBarry...{scroll 1}{clear 60}{scroll 0}Es macht mich jetzt richtig\nbetroffen, dich zu sehen.{scroll 1}{clear 115}{scroll 0}Lass mich lieber allein\nGeh schnell.{scroll 1}{clear 115}{scroll 0}Es ist jetzt vorbei, Barry.\nWesker ist tot.{scroll 1}{timed 130}</string>
-      <string when="JILL" key="1">{scroll 0}\nBarry...{scroll 1}{clear 60}{scroll 0}Es macht mich jetzt richtig\nbetroffen, dich zu sehen.{scroll 1}{clear 115}{scroll 0}Lass mich lieber allein\nGeh schnell.{scroll 1}{clear 81}{scroll 0}Es ist jetzt vorbei, Barry.\nWesker ist tot.{scroll 1}{timed 130}</string>
-      <string key="2">{scroll 0}Ist das wahr? Jill, würdest du\nmir einen Gefallen tun?{scroll 1}{clear 90}{scroll 0}\nDas ist mein letzter Wunsch.{scroll 1}{clear 249}{scroll 0}Bitte gib meiner Familie\ndieses Foto, machst du das?{scroll 1}{clear 220}{scroll 0}\nBestimmt.{scroll 1}{clear 70}{scroll 0}\nVergib mir, Jill...{scroll 1}{timed 199}</string>
-      <string when="JILL" key="2">{scroll 0}Ist das wahr? Jill, würdest du\nmir einen Gefallen tun?{scroll 1}{clear 200}{scroll 0}\nDas ist mein letzter Wunsch.{scroll 1}{clear 110}{scroll 0}Bitte gib meiner Familie\ndieses Foto, machst du das?{scroll 1}{clear 230}{scroll 0}\nBestimmt.{scroll 1}{clear 50}{scroll 0}\nVergib mir, Jill...{scroll 1}{timed 199}</string>
+      <string key="1">{scroll 0}\nBarry...{scroll 1}{clear 60}{scroll 0}Es macht mich jetzt richtig\nbetroffen, dich zu sehen.{scroll 1}{clear 115}{scroll 0}Lass mich lieber allein\nGeh schnell.{scroll 1}{clear 81}{scroll 0}Es ist jetzt vorbei, Barry.\nWesker ist tot.{scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}Ist das wahr? Jill, würdest du\nmir einen Gefallen tun?{scroll 1}{clear 200}{scroll 0}\nDas ist mein letzter Wunsch.{scroll 1}{clear 110}{scroll 0}Bitte gib meiner Familie\ndieses Foto, machst du das?{scroll 1}{clear 230}{scroll 0}\nBestimmt.{scroll 1}{clear 50}{scroll 0}\nVergib mir, Jill...{scroll 1}{timed 199}</string>
       <string key="3">{scroll 0}\nLass uns weitergehen, Chris.{scroll 1}{clear 50}{scroll 0}Wir dürfen uns nicht\naufhalten lassen.{scroll 1}{timed 50}</string>
-      <string key="4">{scroll 0}\nSchnell!{scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}\nAlso los!{scroll 1}{timed 30}</string>
       <string key="6">{scroll 0}\nJill!{scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}\nMein Gott!{scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}\nTempo!{scroll 1}{timed 60}</string>
@@ -171,8 +165,6 @@
       <string key="1">{scroll 0}\nBarry...? {scroll 1}{clear 60}{scroll 0}Mi imbarazza vederti, ora. \nLasciatemi qui.  {scroll 1}{clear 115}{scroll 0}\nVa via subito. {scroll 1}{clear 81}{scroll 0}È finita, Barry. \nWesker è morto. {scroll 1}{timed 130}</string>
       <string key="2">{scroll 0}È così? Jill, puoi farmi \nun favore?  {scroll 1}{clear 200}{scroll 0}\nÈ il mio ultimo desiderio.{scroll 1}{clear 110}{scroll 0}Ti prego, dai questa foto \nalla mia famiglia... lo farai?{scroll 1}{clear 230}{scroll 0}\nTe lo prometto. {scroll 1}{clear 50}{scroll 0}\nPerdonami, Jill... {scroll 1}{timed 199}</string>
       <string key="3">{scroll 0}Continuiamo, Chris. Non possiamo fermarci. {scroll 1}{timed 100}</string>
-      <string key="4">{scroll 0}\nAndiamo! {scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}\nMuoviamoci! {scroll 1}{timed 30}</string>
       <string key="6">{scroll 0}\nJill! {scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}\nMio Dio! {scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}\nAndiamo. {scroll 1}{timed 60}</string>
@@ -181,24 +173,16 @@
       <string key="11">{scroll 2}Deve essere stato attaccato \nda quei mostri.{scroll 1}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 0}\nYo... Jilll... Eres tú.{scroll 1}{timed 140}</string>
-      <string when="JILL" key="0">{scroll 0}\nYo... Jill... Eres tú.{scroll 1}{timed 140}</string>
-      <string key="1">{scroll 0}\n¡¿Barry?!{scroll 1}{clear 60}{scroll 0}Me avergüenza verte\nahora.{scroll 1}{clear 115}{scroll 0}Dé-Déjame,\nve-vete, rápido.{scroll 1}{clear 115}{scroll 0}Barry, ya ha terminado.\n¡Wesker ha muerto!{scroll 1}{timed 130}</string>
-      <string when="JILL" key="1">{scroll 0}\n¡¿Barry?!{scroll 1}{clear 60}{scroll 0}Me avergüenza verte\nahora.{scroll 1}{clear 115}{scroll 0}Dé-Déjame,\nve-vete, rápido.{scroll 1}{clear 81}{scroll 0}Barry, ya se acabó.\n¡Wesker ha muerto!{scroll 1}{timed 130}</string>
-      <string key="2">{scroll 0}¿De verdad? Jill,\n¿me puedes hacer un favor?{scroll 1}{clear 90}{scroll 0}\nEs mi última... voluntad.{scroll 1}{clear 249}{scroll 0}Lleva esta foto a mi\nfamilia... ¿Lo harás?{scroll 1}{clear 220}{scroll 0}\nClaro.{scroll 1}{clear 70}{scroll 0}\nPerdóname... Jill... uhh{scroll 1}{timed 199}</string>
-      <string when="JILL" key="2">{scroll 0}¿De verdad? Jill,\n¿me puedes hacer un favor?{scroll 1}{clear 200}{scroll 0}\nEs mi última... voluntad.{scroll 1}{clear 110}{scroll 0}Lleva esta foto a mi\nfamilia... ¿Lo harás?{scroll 1}{clear 230}{scroll 0}\nClaro.{scroll 1}{clear 50}{scroll 0}Perdóname... Jill...\nUhh.{scroll 1}{timed 199}</string>
-      <string key="3">{scroll 0}Chris, sigamos.\nNo podemos parar.{scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}Chris, sigamos.\nNo podemos pararnos.{scroll 1}{timed 100}</string>
-      <string key="4">{scroll 0}\n¡Vamos!{scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}\nSigamos.{scroll 1}{timed 30}</string>
+      <string key="0">{scroll 0}\nYo... Jill... Eres tú.{scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\n¡¿Barry?!{scroll 1}{clear 60}{scroll 0}Me avergüenza verte\nahora.{scroll 1}{clear 115}{scroll 0}Dé-Déjame,\nve-vete, rápido.{scroll 1}{clear 81}{scroll 0}Barry, ya se acabó.\n¡Wesker ha muerto!{scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}¿De verdad? Jill,\n¿me puedes hacer un favor?{scroll 1}{clear 200}{scroll 0}\nEs mi última... voluntad.{scroll 1}{clear 110}{scroll 0}Lleva esta foto a mi\nfamilia... ¿Lo harás?{scroll 1}{clear 230}{scroll 0}\nClaro.{scroll 1}{clear 50}{scroll 0}Perdóname... Jill...\nUhh.{scroll 1}{timed 199}</string>
+      <string key="3">{scroll 0}Chris, sigamos.\nNo podemos pararnos.{scroll 1}{timed 100}</string>
       <string key="6">{scroll 0}\n¡Jill!{scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}\n¡DIOS MÍO!{scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}\n¡Vamos!{scroll 1}{timed 60}</string>
       <string key="9">{scroll 0}\nVenga, sigamos.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\nSigamos.{scroll 1}{timed 60}</string>
       <string key="10">{scroll 2}Hay una escalera...\n¿quieres subir?{scroll 1}{branch 0 6 0}</string>
-      <string key="11">{scroll 2}Lo tienen que haber\natacado los monstruos.{scroll 1}</string>
-      <string when="JILL" key="11">{scroll 2}Le deben haber atacado\nlos monstruos.{scroll 1}</string>
+      <string key="11">{scroll 2}Le deben haber atacado\nlos monstruos.{scroll 1}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Лаборатория Б3</string>
@@ -206,8 +190,6 @@
       <string key="1">{scroll 0}\n {scroll 1}{clear 60}{scroll 0}\n {scroll 1}{clear 230}{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="2">{scroll 0}\n {scroll 90} {scroll 1}{clear 250}{scroll 0}\n {scroll 1}{clear 220}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 200}</string>
       <string key="3">{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string key="4">{scroll 0}\n {scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}\n {scroll 1}{timed 30}</string>
       <string key="6">{scroll 0}\n {scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}\n {scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}\n {scroll 1}{timed 60}</string>
@@ -218,13 +200,9 @@
     <language lang="fi-FI">
       <string key="save_name">Laboratorion olohuone -2 krs</string>
       <string key="0">{scroll 0}Minä.. Jill.. se olet sinä.{scroll 1}{timed 140}</string>
-      <string key="1">{scroll 0}Barry!?{scroll 1}{clear 60}{scroll 0}Minua hävettää nähdä sinua nyt.{scroll 1}{clear 115}{scroll 0}Jätä vain minut. Nopeasti nyt.{scroll 1}{clear 115}{scroll 0}Barry, se on ohi.\nWesker on kuollut!{scroll 1}{timed 130}</string>
-      <string when="JILL" key="1">{scroll 0}Barry!?{scroll 1}{clear 60}{scroll 0}Minua hävettää nähdä sinua nyt.{scroll 1}{clear 115}{scroll 0}Jätä vain minut. Nopeasti nyt.{scroll 1}{clear 81}{scroll 0}Barry, se on ohi.\nWesker on kuollut!{scroll 1}{timed 130}</string>
-      <string key="2">{scroll 0}Niinkö? Tekisitkö minulle\npalveluksen?{scroll 1}{clear 90}{scroll 0}Se olisi viimeinen toiveeni.{scroll 1}{clear 249}{scroll 0}Pyydän, anna tämä valokuva\nperheelleni. Olisitko kiltti?{scroll 1}{clear 220}{scroll 0}Toki.{scroll 1}{clear 70}{scroll 0}Jill, anna anteeksi.{scroll 1}{timed 199}</string>
-      <string when="JILL" key="2">{scroll 0}Niinkö? Tekisitkö minulle\npalveluksen?{scroll 1}{clear 200}{scroll 0}Se olisi viimeinen toiveeni.{scroll 1}{clear 110}{scroll 0}Pyydän, anna tämä valokuva\nperheelleni. Olisitko kiltti?{scroll 1}{clear 230}{scroll 0}Toki.{scroll 1}{clear 50}{scroll 0}Jill, anna anteeksi.{scroll 1}{timed 199}</string>
+      <string key="1">{scroll 0}Barry!?{scroll 1}{clear 60}{scroll 0}Minua hävettää nähdä sinua nyt.{scroll 1}{clear 115}{scroll 0}Jätä vain minut. Nopeasti nyt.{scroll 1}{clear 81}{scroll 0}Barry, se on ohi.\nWesker on kuollut!{scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}Niinkö? Tekisitkö minulle\npalveluksen?{scroll 1}{clear 200}{scroll 0}Se olisi viimeinen toiveeni.{scroll 1}{clear 110}{scroll 0}Pyydän, anna tämä valokuva\nperheelleni. Olisitko kiltti?{scroll 1}{clear 230}{scroll 0}Toki.{scroll 1}{clear 50}{scroll 0}Jill, anna anteeksi.{scroll 1}{timed 199}</string>
       <string key="3">{scroll 0}Chris, jatketaan matkaa.\nEmme voi pysähtyä.{scroll 1}{timed 100}</string>
-      <string key="4">{scroll 0}Mennään!{scroll 1}{timed 30}</string>
-      <string key="5">{scroll 0}Jatketaan matkaa.{scroll 1}{timed 30}</string>
       <string key="6">{scroll 0}Jill!{scroll 1}{timed 35}</string>
       <string key="7">{scroll 0}Herranjumala!{scroll 1}{timed 35}</string>
       <string key="8">{scroll 0}Mennään!{scroll 1}{timed 60}</string>

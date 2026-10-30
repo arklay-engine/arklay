@@ -352,44 +352,42 @@
   <footsteps count="1">
     <footstep x="0" z="700" width="27800" height="0x6D10" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <effect when="MANSION2">05</effect>
+    <effect>00 01 02 03 04</effect>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">L PASSAGE</string>
       <string key="save_name">M. Room 1F</string>
-      <string key="0">{scroll 2}There is no time to check it.{scroll 1}</string>
       <string key="1">{scroll 2}\nCreepy stuff.{scroll 1}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
-      <string key="0">{scroll 2}\n   調べている時間はない!{scroll 1}</string>
       <string key="1">{scroll 2}\n 中に気味の悪いものが並んでいる{scroll 1}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Chambre RdC</string>
-      <string key="0">{scroll 2}\nPas de temps pour vérifier.{scroll 1}</string>
       <string key="1">{scroll 2}\nTrucs dégoûtants.{scroll 1}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 2}Es ist keine Zeit,\ndas zu überprüfen.{scroll 1}</string>
       <string key="1">{scroll 2}\nUnheimliches Zeug.{scroll 1}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Villa 1P</string>
-      <string key="0">{scroll 2}\nNon c'è tempo per controllare.{scroll 1}</string>
       <string key="1">{scroll 2}\nRoba inquietante.{scroll 1}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 2}No hay tiempo para\ncomprobarlo...{scroll 1}</string>
       <string key="1">{scroll 2}\nQué decoración tan lúgubre...{scroll 1}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Мед. комната 1-эт.</string>
-      <string key="0">{scroll 2}\nНа это нет времени.{scroll 1}</string>
       <string key="1">{scroll 2}\nЖуткие вещи.{scroll 1}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Lääkevarasto 1 krs</string>
-      <string key="0">{scroll 2}Ei ole aikaa tutkia sitä...{scroll 1}</string>
       <string key="1">{scroll 2}Karmivaa...{scroll 1}</string>
     </language>
   </strings>

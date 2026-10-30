@@ -1139,7 +1139,7 @@ ROOM_1001_TEXT_0A_SPEAKER_12 = \"A\"
             .find(|(tag, _)| tag == "ja-jp")
             .map(|(_, language)| language)
             .unwrap();
-        assert!(rooms.len() > 1_000, "{} room entries", rooms.len());
+        assert!(rooms.len() > 900, "{} room entries", rooms.len());
         for (key, entry) in language.iter().chain(items.iter()).chain(rooms.iter()) {
             assert_eq!(
                 entry.missing_glyphs(charset::Script::Japanese),

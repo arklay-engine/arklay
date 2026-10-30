@@ -208,18 +208,6 @@ fn room_file(lower: &str) -> Option<&str> {
     if !matches!(id.len(), 3 | 4) || RoomId::parse(id).is_err() {
         return None;
     }
-    // A variant folder's file is the room's kind of file too.
-    let file = match file.split_once('/') {
-        Some((variant, rest))
-            if id.len() == 3
-                && (variant.starts_with("chris")
-                    || variant.starts_with("jill")
-                    || variant.starts_with("mansion")) =>
-        {
-            rest
-        }
-        _ => file,
-    };
     Some(file)
 }
 
@@ -242,7 +230,9 @@ pub fn classify(path: &str) -> Format {
     }
     if let Some(file) = room_file(&lower) {
         match file {
-            "room.rdt" => return Format::Rdt,
+            // A room folder's RDT is `room.rdt` or one variant's
+            // (`jill-mansion2.rdt`).
+            _ if file.ends_with(".rdt") && !file.contains('/') => return Format::Rdt,
             "room.xml" => return Format::RoomXml,
             _ if file.ends_with(".scd") => return Format::Scd,
             _ if file.starts_with("effect/") && file.ends_with(".xml") => {
@@ -670,14 +660,14 @@ fn verify_room(pack: &Pack, id: RoomId, loaded: &crate::room::Loaded) -> Result<
     }
     // The scripts the engine runs: a corrupt embedded table is not a failure
     // when the merged pack carries an override it prefers.
-    crate::engine::room_scripts(pack, id, loaded, false)?;
+    crate::engine::room_scripts(pack, id, loaded)?;
     Ok(())
 }
 
 /// The room variants a path inside a room folder names, whatever its case:
-/// every variant of the room for its folder (`room/100/room.xml`), the
-/// variants that read a variant folder (`room/100/jill/...`), or one RDT's
-/// for an RE2 folder (`room/1001/...`).
+/// every variant of the room for its folder (`room/100/room.xml`), one
+/// variant for its RDT (`room/100/jill-mansion2.rdt`), or one RDT's for an
+/// RE2 folder (`room/1001/...`).
 fn room_ids_from_path(path: &str) -> Result<Vec<RoomId>> {
     let mut parts = path
         .split_once('/')
@@ -690,7 +680,13 @@ fn room_ids_from_path(path: &str) -> Result<Vec<RoomId>> {
         4 => Ok(vec![id]),
         3 => {
             let rest: Vec<&str> = parts.collect();
-            let tag = (rest.len() > 1).then(|| rest[0].to_ascii_lowercase());
+            let tag = match rest[..] {
+                [file] => file
+                    .to_ascii_lowercase()
+                    .strip_suffix(".rdt")
+                    .map(str::to_string),
+                _ => None,
+            };
             let mut ids = Vec::new();
             for player_flag in 0..2 {
                 for mansion2 in [false, true] {
@@ -698,7 +694,7 @@ fn room_ids_from_path(path: &str) -> Result<Vec<RoomId>> {
                     if !ids.contains(&variant)
                         && tag
                             .as_ref()
-                            .is_none_or(|tag| variant.variant_tags().contains(tag))
+                            .is_none_or(|tag| tag == "room" || variant.variant_tag() == *tag)
                     {
                         ids.push(variant);
                     }
@@ -753,18 +749,19 @@ mod tests {
             room_ids_from_path("ROOM/1000/ROOM.RDT").unwrap(),
             [RoomId::parse("1000").unwrap()]
         );
-        // A room folder holds every variant; a variant folder its own.
+        // A room folder holds every variant; a variant's RDT is its own.
         assert_eq!(room_ids_from_path("room/100/room.xml").unwrap().len(), 4);
         assert_eq!(room_ids_from_path("room/305/room.xml").unwrap().len(), 2);
+        assert_eq!(room_ids_from_path("room/100/room.rdt").unwrap().len(), 4);
         assert_eq!(
-            room_ids_from_path("room/100/jill-mansion2/room.rdt").unwrap(),
+            room_ids_from_path("room/100/jill-mansion2.rdt").unwrap(),
             [RoomId::parse("1001").unwrap().with_visit(true)]
         );
-        assert_eq!(classify("room/100/jill/anim/00.emr"), Format::RoomAnimation);
+        assert_eq!(classify("room/100/jill-mansion2.rdt"), Format::Rdt);
+        assert_eq!(classify("room/100/anim/01.emr"), Format::RoomAnimation);
         assert_eq!(classify("room/100/room.xml"), Format::RoomXml);
         assert_eq!(classify("room/1000/room.xml"), Format::RoomXml);
         assert_eq!(classify("room/1000/room.scd"), Format::Scd);
-        assert_eq!(classify("room/1000/original.scd"), Format::Scd);
         assert_eq!(classify("room/notes.xml"), Format::Opaque);
         assert_eq!(classify("room/1000/notes.xml"), Format::Opaque);
         assert_eq!(classify("room/1000/anim/00.emr"), Format::RoomAnimation);

@@ -336,6 +336,10 @@
     <footstep x="10260" z="5220" width="3700" height="0x0E74" sound="0x002A"/>
     <footstep x="0" z="0" width="21400" height="0x4BC8" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ROOM 002</string>
@@ -380,13 +384,10 @@
     <language lang="de-DE">
       <string key="0">{scroll 0}\nHallo, Jill.{scroll 1}{timed 60}</string>
       <string key="1">{scroll 0}Hallo. Barry, ich habe\njemanden reden gehört...{scroll 1}{timed 90}</string>
-      <string key="2">{scroll 0}\nDann hast du es also gehört.{scroll 1}{clear 60}{scroll 0}\nIch glaube, ich werde alt.{scroll 1}{clear 50}{scroll 0}Selbstgespräche werden wohl\nbei mir zur Gewohnheit.{scroll 1}{timed 120}</string>
-      <string when="JILL" key="2">{scroll 0}\nDann hast du es also gehört.{scroll 1}{clear 60}{scroll 0}\nIch glaube, ich werde alt.{scroll 1}{clear 60}{scroll 0}Selbstgespräche werden wohl\nbei mir zur Gewohnheit.{scroll 1}{timed 110}</string>
-      <string key="3">{scroll 0}\nDu sprichst mit dir selbst?{scroll 1}{clear 70}{scroll 0}Barry, irgend etwas ist dir\nzugestoßen, oder irr ich mich?{scroll 1}{clear 90}{scroll 0}\nDu hörst dich komisch an.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="3">{scroll 0}\nDu sprichst mit dir selbst?{scroll 1}{clear 75}{scroll 0}Barry, irgend etwas ist dir\nzugestoßen, oder irr ich mich?{scroll 1}{clear 90}{scroll 0}\nDu hörst dich komisch an.{scroll 1}{timed 60}</string>
+      <string key="2">{scroll 0}\nDann hast du es also gehört.{scroll 1}{clear 60}{scroll 0}\nIch glaube, ich werde alt.{scroll 1}{clear 60}{scroll 0}Selbstgespräche werden wohl\nbei mir zur Gewohnheit.{scroll 1}{timed 110}</string>
+      <string key="3">{scroll 0}\nDu sprichst mit dir selbst?{scroll 1}{clear 75}{scroll 0}Barry, irgend etwas ist dir\nzugestoßen, oder irr ich mich?{scroll 1}{clear 90}{scroll 0}\nDu hörst dich komisch an.{scroll 1}{timed 60}</string>
       <string key="4">{scroll 0}Gut, es scheint, du\nbist meinetwegen beunruhigt.{scroll 1}{clear 90}{scroll 0}\nAber das brauchst du nicht.{scroll 1}{clear 40}{scroll 0}Vielleicht hab ich mich wie\nein nervöses Wrack aufgeführt,{scroll 1}{clear 40}{scroll 0}seit sich so viele seltsame\nDinge abspielen.{scroll 1}{clear 80}{scroll 0}Also, ich denke, ich werde\njetzt nach draußen gehen{scroll 1}{clear 50}{scroll 0}und zur Abwechslung mal\nfrische Luft atmen. {scroll 1}{timed 70}</string>
-      <string key="5">{scroll 0}Ich sagte doch,\nkein Grund zur Sorge.{scroll 1}{clear 60}{scroll 0}Ich gehe jetzt raus\nund schnappe frische Luft{scroll 1}{clear 70}{scroll 0}und werde von irgendeinem\nMonster gefressen!{scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}Ich sagte doch,\nkein Grund zur Sorge.{scroll 1}{clear 40}{scroll 0}Ich gehe jetzt raus\nund schnappe frische Luft{scroll 1}{clear 50}{scroll 0}und werde von irgendeinem\nMonster gefressen!{scroll 1}{timed 110}</string>
+      <string key="5">{scroll 0}Ich sagte doch,\nkein Grund zur Sorge.{scroll 1}{clear 40}{scroll 0}Ich gehe jetzt raus\nund schnappe frische Luft{scroll 1}{clear 50}{scroll 0}und werde von irgendeinem\nMonster gefressen!{scroll 1}{timed 110}</string>
       <string key="6">Das ist ein Plan\ndes {color 1}WACHHAUSES{color 0}.{scroll 2}{clear 0}Möchten Sie ihn mitnehmen?\n{scroll 1}{branch 0 6 0}</string>
       <string key="7">\nDa ist eine Leiter.{clear 0}Möchten Sie hinuntersteigen?{branch 0 6 0}</string>
       <string key="8">Es ist keine Zeit,\ndas zu überprüfen.</string>
@@ -408,8 +409,7 @@
     <language lang="es-ES">
       <string key="0">{scroll 0}\nHola, Jill.{scroll 1}{timed 60}</string>
       <string key="1">{scroll 0}Hola, Barry, he oído\nhablar a alguien.{scroll 1}{timed 90}</string>
-      <string key="2">{scroll 0}Así que me has oído.\nCreo que me hago viejo.{scroll 1}{clear 110}{scroll 0}Parece que hablar solo\nse convierte en costumbre.{scroll 1}{timed 120}</string>
-      <string when="JILL" key="2">{scroll 0}Así que me has oído.\nCreo que me estoy haciendo viejo.{scroll 1}{clear 110}{scroll 0}Parece que hablar solo\nse convierte en costumbre.{scroll 1}{timed 120}</string>
+      <string key="2">{scroll 0}Así que me has oído.\nCreo que me estoy haciendo viejo.{scroll 1}{clear 110}{scroll 0}Parece que hablar solo\nse convierte en costumbre.{scroll 1}{timed 120}</string>
       <string key="3">{scroll 0}¿Hablar solo?\nBarry, te ha pasado algo,{scroll 1}{clear 125}{scroll 0}¿verdad?\nEstás raro.{scroll 1}{timed 100}</string>
       <string key="4">{scroll 0}Bueno, parece que te he hecho\npreocuparte, pero no hace falta.{scroll 1}{clear 90}{scroll 0}Puede que haya estado algo\nnervioso desde que empezaron{scroll 1}{clear 80}{scroll 0}a pasar todas esas cosas\nraras.{scroll 1}{clear 80}{scroll 0}\nBueno, creo que voy a salir{scroll 1}{clear 50}{scroll 0}a tomar un poco el aire,\npara variar.{scroll 1}{timed 70}</string>
       <string key="5">{scroll 0}Hazme caso, no te preocupes.\nSólo voy a tomar{scroll 1}{clear 90}{scroll 0}un poco el fresco y a que me\ncoma un monstruo.{scroll 1}{timed 110}</string>

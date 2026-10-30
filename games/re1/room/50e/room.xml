@@ -172,6 +172,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="12800" height="0x3840" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="JILL">00 01 04 03</item>
+    <item>00 01 02 03</item>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">SAVE ROOM</string>

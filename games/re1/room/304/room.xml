@@ -104,6 +104,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="31600" height="0x7EF4" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">SECOND HOUSE GATE</string>
@@ -130,8 +134,7 @@
     <language lang="de-DE">
       <string key="0">{scroll 0}\nHier spricht Brad.{scroll 1}{clear 52}{scroll 0}Ich weiß,\nihr könnt mir nicht antworten!{scroll 1}{clear 55}{scroll 0}Aber gebt mir doch\nirgendein Zeichen...{scroll 1}{timed 148}</string>
       <string key="1">{scroll 0}\nHier spricht Chris.{scroll 1}{clear 45}{scroll 0}Brad, kannst du mich hören?\n...Mist!{scroll 1}{timed 85}</string>
-      <string key="2">{scroll 0}\nHier ist Brad.{scroll 1}{clear 51}{scroll 0}Ich weiß,\nihr könnt mir nicht antworten!{scroll 1}{clear 53}{scroll 0}Aber gebt mir doch\nirgendwie ein Zeichen...{scroll 1}{timed 152}</string>
-      <string when="JILL" key="2">{scroll 0}\nHier ist Brad.{scroll 1}{clear 51}{scroll 0}Ich weiß,\nihr könnt mir nicht antworten!{scroll 1}{clear 53}{scroll 0}Aber gebt mir doch\nirgendwie ein Zeichen...{scroll 1}{timed 82}</string>
+      <string key="2">{scroll 0}\nHier ist Brad.{scroll 1}{clear 51}{scroll 0}Ich weiß,\nihr könnt mir nicht antworten!{scroll 1}{clear 53}{scroll 0}Aber gebt mir doch\nirgendwie ein Zeichen...{scroll 1}{timed 82}</string>
       <string key="3">{scroll 0}Hier spricht Jill, Brad!\nOh... es ist hin!{scroll 1}{timed 170}</string>
     </language>
     <language lang="it-IT">
@@ -143,13 +146,9 @@
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\nAquí Brad,{scroll 1}{clear 52}{scroll 0}\nsé que no me podéis contestar,{scroll 1}{clear 55}{scroll 0}\npero hacedme una señal...{scroll 1}{timed 148}</string>
-      <string when="JILL" key="0">{scroll 0}\nSoy Brad,{scroll 1}{clear 52}{scroll 0}\nsé que no me podéis contestar{scroll 1}{clear 55}{scroll 0}\npero hacedme una señal...{scroll 1}{timed 148}</string>
       <string key="1">{scroll 0}\n¡Aquí Chris!{scroll 1}{clear 45}{scroll 0}\nBrad, ¿me oyes? ¡Maldita sea!{scroll 1}{timed 85}</string>
-      <string when="JILL" key="1">{scroll 0}\n¡Es Chris!{scroll 1}{clear 45}{scroll 0}\nBrad, ¿me oyes? ¡Maldita sea!{scroll 1}{timed 85}</string>
-      <string key="2">{scroll 0}\nSoy Brad,{scroll 1}{clear 51}{scroll 0}\nsé que no me podéis contestar{scroll 1}{clear 53}{scroll 0}\npero hacedme una señal...{scroll 1}{timed 152}</string>
-      <string when="JILL" key="2">{scroll 0}\nAquí Brad,{scroll 1}{clear 51}{scroll 0}\nsé que no me podéis contestar,{scroll 1}{clear 53}{scroll 0}\npero hacedme una señal...{scroll 1}{timed 82}</string>
-      <string key="3">{scroll 0}¡Soy Jill!\n¿Brad? ¡Ohh, está rota!{scroll 1}{timed 170}</string>
-      <string when="JILL" key="3">{scroll 0}¡Aquí Jill!\n¿Brad? ¡Ohh, está rota!{scroll 1}{timed 170}</string>
+      <string key="2">{scroll 0}\nAquí Brad,{scroll 1}{clear 51}{scroll 0}\nsé que no me podéis contestar,{scroll 1}{clear 53}{scroll 0}\npero hacedme una señal...{scroll 1}{timed 82}</string>
+      <string key="3">{scroll 0}¡Aquí Jill!\n¿Brad? ¡Ohh, está rota!{scroll 1}{timed 170}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната внутр. двора Б1</string>
@@ -162,8 +161,7 @@
       <string key="save_name">Maanalainen varasto 0 krs</string>
       <string key="0">{scroll 0}Tämä on Brad.{scroll 1}{clear 52}{scroll 0}Tiedän että ette voi vastata,{scroll 1}{clear 55}{scroll 0}mutta antakaa minulle jonkinlainen\nmerkki että olette siellä...{scroll 1}{timed 148}</string>
       <string key="1">{scroll 0}Tämä on Chris!{scroll 1}{clear 45}{scroll 0}Brad, kuuletko minua? Hemmetti!{scroll 1}{timed 85}</string>
-      <string key="2">{scroll 0}Tämä on Brad.{scroll 1}{clear 51}{scroll 0}Tiedän että ette voi vastata,{scroll 1}{clear 53}{scroll 0}mutta antakaa minulle jonkinlainen\nmerkki että olette siellä...{scroll 1}{timed 152}</string>
-      <string when="JILL" key="2">{scroll 0}Tämä on Brad.{scroll 1}{clear 51}{scroll 0}Tiedän että ette voi vastata,{scroll 1}{clear 53}{scroll 0}mutta antakaa minulle jonkinlainen\nmerkki että olette siellä...{scroll 1}{timed 82}</string>
+      <string key="2">{scroll 0}Tämä on Brad.{scroll 1}{clear 51}{scroll 0}Tiedän että ette voi vastata,{scroll 1}{clear 53}{scroll 0}mutta antakaa minulle jonkinlainen\nmerkki että olette siellä...{scroll 1}{timed 82}</string>
       <string key="3">{scroll 0}Tämä on Jill! Brad?\nSe on rikki!{scroll 1}{timed 170}</string>
     </language>
   </strings>

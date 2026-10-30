@@ -393,6 +393,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="32682" height="0x7210" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">HALL 2F</string>
@@ -444,19 +448,15 @@
       <string when="MANSION2" key="0">{scroll 2}Ich muß erst diese Halle\ndurchsuchen!</string>
       <string key="1">{scroll 0}\nBarry!{scroll 1}{timed 44}</string>
       <string key="2">{scroll 0}Jill! Wie sieht es aus?\nIrgendwelche Hinweise?{scroll 1}{clear 116}{scroll 0}Nein, aber... mit diesem Haus\nstimmt etwas nicht!{scroll 1}{timed 123}</string>
-      <string key="3">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 59}{scroll 0}zuerst einmal\nunseren Fluchtweg zu sichern.{scroll 1}{timed 50}</string>
+      <string key="3">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 50}{scroll 0}zuerst einmal\nunseren Fluchtweg zu sichern.{scroll 1}{timed 59}</string>
       <string when="MANSION2" key="3">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 59}{scroll 0}zuerst einmal unseren\nFluchtweg zu sichern.{scroll 1}{timed 50}</string>
-      <string when="JILL MANSION1" key="3">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 50}{scroll 0}zuerst einmal\nunseren Fluchtweg zu sichern.{scroll 1}{timed 59}</string>
       <string key="4">{scroll 0}Da muss es noch irgendwo\neine Hintertür geben...{scroll 1}{clear 100}{scroll 0}Die sollten wir erst mal\nfinden, was meinst du?{scroll 1}{timed 85}</string>
-      <string when="CHRIS MANSION2" key="4">{scroll 0}Da muß es noch irgendwo eine\nHintertür geben...{scroll 1}{clear 120}{scroll 0}Die sollten wir erstmal\nfinden, was meinst du dazu?{scroll 1}{timed 85}</string>
-      <string when="JILL MANSION2" key="4">{scroll 0}Da muß es noch irgendwo eine\nHintertür geben...{scroll 1}{clear 100}{scroll 0}Die sollten wir erstmal\nfinden, was meinst du dazu?{scroll 1}{timed 85}</string>
+      <string when="MANSION2" key="4">{scroll 0}Da muß es noch irgendwo eine\nHintertür geben...{scroll 1}{clear 100}{scroll 0}Die sollten wir erstmal\nfinden, was meinst du dazu?{scroll 1}{timed 85}</string>
       <string key="5">{scroll 0}Okay, dann sollten wir\nuns wieder trennen.{scroll 1}{clear 80}{scroll 0}Warte einen Moment.\nIch habe etwas gefunden.{scroll 1}{timed 85}</string>
-      <string when="CHRIS MANSION2" key="5">{scroll 0}OK, dann sollten wir uns\nwieder trennen.{scroll 1}{clear 96}{scroll 0}Warte einen Moment.\nIch habe etwas gefunden.{scroll 1}{timed 85}</string>
-      <string when="JILL MANSION2" key="5">{scroll 0}OK, dann sollten wir uns\nwieder trennen.{scroll 1}{clear 80}{scroll 0}Warte einen Moment.\nIch habe etwas gefunden.{scroll 1}{timed 85}</string>
+      <string when="MANSION2" key="5">{scroll 0}OK, dann sollten wir uns\nwieder trennen.{scroll 1}{clear 80}{scroll 0}Warte einen Moment.\nIch habe etwas gefunden.{scroll 1}{timed 85}</string>
       <string key="6">{scroll 0}\nWas ist das?{scroll 1}{timed 47}</string>
       <string key="7">{scroll 0}\nDas ist eine Waffe.{scroll 1}{clear 45}{scroll 0}Die ist bestimmt sehr wirksam\ngegen Lebewesen aller Art.{scroll 1}{clear 125}{scroll 0}\nNimm sie lieber mit.{scroll 1}{timed 60}</string>
-      <string when="CHRIS MANSION2" key="7">{scroll 0}\nDas ist eine Waffe.{scroll 1}{clear 65}{scroll 0}Die ist bestimmt besonders wirk-\nsam gegen Lebewesen aller Art.{scroll 1}{clear 70}{scroll 0}\nNimm' sie lieber mit.{scroll 1}{timed 60}</string>
-      <string when="JILL MANSION2" key="7">{scroll 0}\nDas ist eine Waffe.{scroll 1}{clear 45}{scroll 0}Die ist bestimmt besonders wirk-\nsam gegen Lebewesen aller Art.{scroll 1}{clear 125}{scroll 0}\nNimm' sie lieber mit.{scroll 1}{timed 60}</string>
+      <string when="MANSION2" key="7">{scroll 0}\nDas ist eine Waffe.{scroll 1}{clear 45}{scroll 0}Die ist bestimmt besonders wirk-\nsam gegen Lebewesen aller Art.{scroll 1}{clear 125}{scroll 0}\nNimm' sie lieber mit.{scroll 1}{timed 60}</string>
       <string key="8">{scroll 0}\nUnd was ist mit dir, Barry?{scroll 1}{timed 65}</string>
       <string key="9">{scroll 0}\nIch habe das hier.{scroll 1}{timed 67}</string>
       <string key="10">{scroll 0}Ich danke dir.\nIch werde es nehmen.{scroll 1}{timed 87}</string>
@@ -476,25 +476,18 @@
       <string key="10">{scroll 0}Grazie. Allora questa \nla prendo io.{scroll 1}{timed 87}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 2}¡Primero tengo que\nbuscar en el hall!</string>
-      <string when="JILL" key="0">{scroll 2}¡Primero tengo que\nbuscar en el pasillo!</string>
+      <string key="0">{scroll 2}¡Primero tengo que\nbuscar en el pasillo!</string>
       <string key="1">{scroll 0}\n¡Barry!{scroll 1}{timed 44}</string>
       <string key="2">{scroll 0}¡Jill! ¿Qué pasa?\n¿Alguna pista?{scroll 1}{clear 116}{scroll 0}No, pero en esta casa\nhay algo que no encaja.{scroll 1}{timed 123}</string>
-      <string key="3">{scroll 0}¡Vaya!\nEste hall es peligroso.{scroll 1}{clear 115}{scroll 0}Quizá lo mejor sea asegurar\nprimero una ruta de escape. {scroll 1}{timed 109}</string>
-      <string when="JILL MANSION1" key="3">{scroll 0}¡Vaya!\nEste pasillo es peligroso.{scroll 1}{clear 115}{scroll 0}Quizá lo mejor sea asegurar\nprimero una ruta de escape. {scroll 1}{timed 109}</string>
-      <string key="4">{scroll 0}Tiene que haber una puerta\ntrasera en alguna parte.{scroll 1}{clear 100}{scroll 0}Primero, busquémosla,\n¿vale?{scroll 1}{timed 85}</string>
-      <string when="CHRIS MANSION2" key="4">{scroll 0}Tiene que haber una puerta\ntrasera en alguna parte.{scroll 1}{clear 120}{scroll 0}Primero, busquémosla,\n¿vale?{scroll 1}{timed 85}</string>
-      <string when="JILL" key="4">{scroll 0}Tiene que haber una puerta\ntrasera en alguna parte.{scroll 1}{clear 100}{scroll 0}Primero, busquémosla,\n¿te parece?{scroll 1}{timed 85}</string>
-      <string key="5">{scroll 0}\nVale, separémonos.{scroll 1}{clear 96}{scroll 0}¡Solo un momento!\nHe encontrado algo.{scroll 1}{timed 85}</string>
-      <string when="JILL" key="5">{scroll 0}\nVale, separémonos.{scroll 1}{clear 80}{scroll 0}¡Espera un momento!\nHe encontrado algo.{scroll 1}{timed 85}</string>
+      <string key="3">{scroll 0}¡Vaya!\nEste pasillo es peligroso.{scroll 1}{clear 115}{scroll 0}Quizá lo mejor sea asegurar\nprimero una ruta de escape. {scroll 1}{timed 109}</string>
+      <string when="MANSION2" key="3">{scroll 0}¡Vaya!\nEste hall es peligroso.{scroll 1}{clear 115}{scroll 0}Quizá lo mejor sea asegurar\nprimero una ruta de escape. {scroll 1}{timed 109}</string>
+      <string key="4">{scroll 0}Tiene que haber una puerta\ntrasera en alguna parte.{scroll 1}{clear 100}{scroll 0}Primero, busquémosla,\n¿te parece?{scroll 1}{timed 85}</string>
+      <string key="5">{scroll 0}\nVale, separémonos.{scroll 1}{clear 80}{scroll 0}¡Espera un momento!\nHe encontrado algo.{scroll 1}{timed 85}</string>
       <string key="6">{scroll 0}\n¿Qué es eso?{scroll 1}{timed 47}</string>
-      <string key="7">{scroll 0}\nEs un arma.{scroll 1}{clear 45}{scroll 0}Es muy potente, \nsobre todo contra{scroll 1}{clear 125}{scroll 0}las cosas vivientes.\nSerá mejor que la lleves.{scroll 1}{timed 60}</string>
-      <string when="CHRIS MANSION2" key="7">{scroll 0}\nEs un arma.{scroll 1}{clear 65}{scroll 0}Es muy potente, \nsobre todo contra{scroll 1}{clear 70}{scroll 0}las cosas vivientes.\nSerá mejor que la lleves.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="7">{scroll 0}\nEs un arma.{scroll 1}{clear 45}{scroll 0}Es muy potente, \nsobre todo contra{scroll 1}{clear 125}{scroll 0}criaturas vivientes.\nSerá mejor que la lleves.{scroll 1}{timed 60}</string>
+      <string key="7">{scroll 0}\nEs un arma.{scroll 1}{clear 45}{scroll 0}Es muy potente, \nsobre todo contra{scroll 1}{clear 125}{scroll 0}criaturas vivientes.\nSerá mejor que la lleves.{scroll 1}{timed 60}</string>
       <string key="8">{scroll 0}\nPero, Barry, ¿y tú?{scroll 1}{timed 65}</string>
       <string key="9">{scroll 0}\n¡Tengo esto!{scroll 1}{timed 67}</string>
-      <string key="10">{scroll 0}Gracias,\nentonces me llevaré esto.{scroll 1}{timed 87}</string>
-      <string when="JILL" key="10">{scroll 0}Gracias,\nentonces me lo llevaré.{scroll 1}{timed 87}</string>
+      <string key="10">{scroll 0}Gracias,\nentonces me lo llevaré.{scroll 1}{timed 87}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Зал 1-эт.</string>
@@ -517,12 +510,9 @@
       <string key="2">{scroll 0}Jill! Mikä on?\nLöysitkö johtolankoja?{scroll 1}{clear 116}{scroll 0}En, tässä kartanossa on jokin\npielessä.{scroll 1}{timed 123}</string>
       <string key="3">{scroll 0}Tämä paikka on vaarallinen.{scroll 1}{clear 115}{scroll 0}Ehkä olisi parasta varmistaa\npakoreittimme ensin.{scroll 1}{timed 109}</string>
       <string key="4">{scroll 0}Täällä täytyy olla takaovi\njossain.{scroll 1}{clear 100}{scroll 0}Yritetäänkö löytää se ensin?{scroll 1}{timed 85}</string>
-      <string when="CHRIS MANSION2" key="4">{scroll 0}Täällä täytyy olla takaovi\njossain.{scroll 1}{clear 120}{scroll 0}Yritetäänkö löytää se ensin?{scroll 1}{timed 85}</string>
       <string key="5">{scroll 0}Selvä, eriydytään uudelleen.{scroll 1}{clear 80}{scroll 0}Odota hetki! Löysin jotain.{scroll 1}{timed 85}</string>
-      <string when="CHRIS MANSION2" key="5">{scroll 0}Selvä, eriydytään uudelleen.{scroll 1}{clear 96}{scroll 0}Odota hetki! Löysin jotain.{scroll 1}{timed 85}</string>
       <string key="6">{scroll 0}Niin mitä?{scroll 1}{timed 47}</string>
       <string key="7">{scroll 0}Kranaatteja kranaattikivääriin.{scroll 1}{clear 45}{scroll 0}Ne ovat erittäin tehokkaita,\nvarmasti myös hirviöitä vastaan.{scroll 1}{clear 125}{scroll 0}Ota ne mukaasi.{scroll 1}{timed 60}</string>
-      <string when="CHRIS MANSION2" key="7">{scroll 0}Kranaatteja kranaattikivääriin.{scroll 1}{clear 65}{scroll 0}Ne ovat erittäin tehokkaita,{scroll 1}{clear 70}{scroll 0}varmasti myös hirviöitä vastaan.\nOta ne mukaasi{scroll 1}{timed 60}</string>
       <string key="8">{scroll 0}Mutta entä sinä, Barry?{scroll 1}{timed 65}</string>
       <string key="9">{scroll 0}Minulla on tämä!{scroll 1}{timed 67}</string>
       <string key="10">{scroll 0}Kiitos, otan nämä sitten.{scroll 1}{timed 87}</string>

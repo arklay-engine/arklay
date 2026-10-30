@@ -78,10 +78,10 @@
 //! test the player, the mansion visit and the release as the room runs, in
 //! command code and at the top of an event; a section only some RDTs carry
 //! has `when (...)`, and `noreturn` / `nopad` may hold for some variants
-//! only (`noreturn (MANSION2)`). The runtime build ([`Build::RUNTIME`])
+//! only (`noreturn (MANSION2)`). The runtime build ([`Build::Runtime`])
 //! compiles the tests to variant jumps; a build for one RDT variant
-//! ([`Build::Variant`], [`compile_variant`]) folds them away into that RDT's
-//! own bytecode. `#if AUTHENTIC` lines are the only preprocessor choice.
+//! ([`Build::Variant`], [`compile_variant`]) folds them away. A script has no
+//! preprocessor choices of its own.
 //! The exporter writes the older `#if CHRIS` form ([`merge`]) and
 //! [`lift`]s it into tests ([`merge_rooms`], [`merge_regions`]).
 //!

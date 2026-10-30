@@ -61,6 +61,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="32600" height="0x26AC" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <object when="JILL"/>
+    <item when="JILL"/>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">STRAIGHT PASSAGE</string>

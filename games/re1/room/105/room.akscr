@@ -618,21 +618,6 @@ else
             {
                 evt_next();
                 evt_nop();
-    #if AUTHENTIC
-                run noreturn
-                {
-                    asm
-                    {
-                            if                      off_28672 + 1
-                            cmpb                    2, 0, 1
-                            set                     FG_ROOM, 2, 0
-
-                        off_28672:
-                            endif                   0
-                            end                     0
-                    }
-                }
-    #else
                 run
                 {
                     if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
@@ -640,7 +625,6 @@ else
                         set(FG_ROOM, F_ROOM_02, TRUE);
                     }
                 }
-    #endif
                 evt_nop();
             }
             while (ck(FG_ROOM, F_ROOM_02, FALSE));
@@ -652,21 +636,6 @@ else
         {
             evt_next();
             evt_nop();
-    #if AUTHENTIC
-            run noreturn
-            {
-                asm
-                {
-                        if                      off_28698 + 1
-                        cmpb                    2, 0, 2
-                        set                     FG_ROOM, 4, 0
-
-                    off_28698:
-                        endif                   0
-                        end                     0
-                }
-            }
-    #else
             run
             {
                 if (cmpb(B_CAMERA, CMP_EQ, CAM_02))
@@ -674,7 +643,6 @@ else
                     set(FG_ROOM, F_ROOM_04, TRUE);
                 }
             }
-    #endif
             evt_nop();
         }
         while (ck(FG_ROOM, F_ROOM_04, FALSE));

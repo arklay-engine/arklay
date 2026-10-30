@@ -165,12 +165,6 @@ event on_aot_04 when (MANSION1)
         aot_reset(AOT_05_EVENT, SCE_NONE, 0, 2561, 1028, 266);
         bgm_stop(BGM_MAIN);
         bgm_play(BGM_SUB_2);
-#if AUTHENTIC
-        asm
-        {
-                endif                   0
-        }
-#endif
         set(FG_ROOM, F_ROOM_09, TRUE);
     }
     sleep(1);

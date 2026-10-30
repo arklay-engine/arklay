@@ -433,6 +433,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="19300" height="0x4DBC" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="save_name">Hall 1F</string>

@@ -155,7 +155,7 @@ event on_aot_05
     }
     else if (CHRIS)
     {
-        message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
+        message(0x04 | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
     }
     else
     {
@@ -163,7 +163,7 @@ event on_aot_05
         {
             if (ck(FG_COMMON, F_COMMON_25, FALSE))
             {
-                message(MSG_YOU_DO_NOT_KNOW_THE_PASS | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
+                message(0x04 | MSG_FAST, RUN_MONSTERS | RUN_PLAYER); // "You don't know the pass number."
             }
             else
             {

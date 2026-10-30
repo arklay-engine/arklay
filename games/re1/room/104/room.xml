@@ -146,13 +146,16 @@
     <footstep x="2640" z="4940" width="2380" height="0x0BA4" sound="0x002D"/>
     <footstep x="0" z="0" width="32700" height="0x3714" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">TEA ROOM</string>
       <string key="save_name">M. Room 1F</string>
       <string key="0">He's Kenneth from\nthe ＳＴＡＲＳ Bravo team...!{clear 0}Now he's become a mere\nshadow of his former self.</string>
-      <string key="1">It's a ＳＴＡＲＳ\nemblem...</string>
-      <string key="2">There is no time to check\nit.</string>
+      <string key="1">It looks like a picture of\nthis mansion.</string>
       <string key="3">It looks like a picture of\nthis mansion.</string>
       <string key="4">\nNothing unusual.</string>
       <string key="5">It's ominously quiet\noutside.</string>
@@ -160,8 +163,7 @@
     <language lang="ja-JP">
       <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
       <string key="0">S.T.A.R.S.・ブラヴォーチームの\nケネスだ・・・!{clear 0}\n   いまはもう見るかげもない</string>
-      <string key="1">\n S.T.A.R.S.のエンブレムだ・・・</string>
-      <string key="2">\n   調べている時間はない!</string>
+      <string key="1">\n    この館の絵だろうか</string>
       <string key="3">\n    この館の絵だろうか</string>
       <string key="4">\n   別に変わったところはない</string>
       <string key="5">\n   外は不気味なほどしずかだ</string>
@@ -169,38 +171,29 @@
     <language lang="fr-FR">
       <string key="save_name">Chambre RdC</string>
       <string key="0">C'est Kenneth de l'Equipe\nBravo des ＳＴＡＲＳ.{clear 0}A présent, il n'est que \nl'ombre de lui-même.</string>
-      <string when="MANSION2" key="0">C'est Kenneth de l'Équipe\nBravo des ＳＴＡＲＳ.{clear 0}A présent, il n'est que \nl'ombre de lui-même.</string>
-      <string key="1">\nC'est le symbole des ＳＴＡＲＳ.</string>
-      <string key="2">\nPas de temps pour vérifier.</string>
+      <string key="1">On dirait une photo de la \nmaison.</string>
       <string key="3">On dirait une photo de la \nmaison.</string>
       <string key="4">\nRien d'extraordinaire.</string>
       <string key="5">Le silence qui règne dehors\nest de mauvais augure.</string>
     </language>
     <language lang="de-DE">
       <string key="0">Das ist Kenneth vom\nBravo-Team der ＳＴＡＲＳ!{clear 0}Er ist kaum noch zu\nerkennen.</string>
-      <string when="MANSION2" key="0">Das ist Kenneth vom Bravo-Team\nder ＳＴＡＲＳ...!{clear 0}\nEr ist kaum noch zu erkennen.</string>
-      <string key="1">\nDas ist ein Emblem von ＳＴＡＲＳ</string>
-      <string when="MANSION2" key="1">\nDas ist ein Emblem von ＳＴＡＲＳ...</string>
-      <string key="2">Es ist keine Zeit,\ndas zu überprüfen.</string>
+      <string key="1">Es sieht aus, wie ein Bild von\ndiesem Herrenhaus.</string>
       <string key="3">Es sieht aus, wie ein Bild\nvon diesem Herrenhaus.</string>
-      <string when="MANSION2" key="3">Es sieht aus, wie ein Bild von\ndiesem Herrenhaus.</string>
       <string key="4">\nNichts Ungewöhnliches.</string>
       <string key="5">Draußen ist es seltsam\nstill.</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Villa 1P</string>
       <string key="0">È Kenneth della Squadra\nBravo ＳＴＡＲＳ...!{clear 0}Ma di lui non è rimasta che \nun'ombra...</string>
-      <string key="1">\nC'è il simbolo della ＳＴＡＲＳ.</string>
-      <string key="2">\nNon c'è tempo per controllare.</string>
+      <string key="1">Sembra una foto della \nvilla.</string>
       <string key="3">Sembra una foto della \nvilla.</string>
       <string key="4">\nNiente di strano.</string>
       <string key="5">È sinistramente \nsilenzioso fuori.</string>
     </language>
     <language lang="es-ES">
       <string key="0">¡Es Kenneth, del\nequipo Bravo de ＳＴＡＲＳ...!{clear 0}Ahora sólo es una\nsombra de lo que fue...</string>
-      <string key="1">\nEs un emblema de ＳＴＡＲＳ</string>
-      <string when="MANSION2" key="1">Es un emblema de ＳＴＡＲＳ\n</string>
-      <string key="2">No hay tiempo para\ncomprobarlo...</string>
+      <string key="1">Parece un cuadro de\nla mansión...</string>
       <string key="3">Parece un cuadro de\nla mansión...</string>
       <string key="4">\nEl sofá no tiene nada especial...</string>
       <string key="5">Fuera hay un silencio\nominoso...</string>
@@ -208,9 +201,7 @@
     <language lang="ru-RU">
       <string key="save_name">Мед. комната 1-эт.</string>
       <string key="0">Это Кеннет из команды Браво,\nотряда ＳＴＡＲＳ..!{clear 0}Теперь он стал лишь\nтенью самого себя.</string>
-      <string key="1">Это эмблема ＳＴＡＲＳ..</string>
-      <string key="2">\nНет времени проверять это.</string>
-      <string when="MANSION2" key="2">\nНа это нет времени.</string>
+      <string key="1">Похоже на картину\nэтого особняка.</string>
       <string key="3">Похоже на картину\nэтого особняка.</string>
       <string key="4">\nНичего необычного.</string>
       <string key="5">Снаружи\nпугающая тишина.</string>
@@ -218,8 +209,7 @@
     <language lang="fi-FI">
       <string key="save_name">Lääkevarasto 1 krs</string>
       <string key="0">Se on Kenneth ＳＴＡＲＳ\nBravo-tiimistä...!{clear 0}Nyt hän on vain varjo\nentisestään...</string>
-      <string key="1">Se on ＳＴＡＲＳ embleemi...</string>
-      <string key="2">Ei ole aikaa tutkia sitä...</string>
+      <string key="1">Se näyttäisi olevan maalaus\ntästä kartanosta...</string>
       <string key="3">Se näyttäisi olevan maalaus\ntästä kartanosta...</string>
       <string key="4">Ei mitään epätavallista...</string>
       <string key="5">Ulkona on pahaenteisen hiljaista...</string>

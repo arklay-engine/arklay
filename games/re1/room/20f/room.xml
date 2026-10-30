@@ -524,6 +524,10 @@
     <footstep when="MANSION2" x="4240" z="6800" width="6360" height="0x0FB4" sound="0x002A"/>
     <footstep when="MANSION2" x="1000" z="1000" width="12100" height="0x2F44" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">DINING</string>

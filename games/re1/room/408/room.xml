@@ -283,6 +283,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="31800" height="0x7D64" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">HONEYCOMB PASSAGE</string>
@@ -301,7 +305,7 @@
       <string key="11">{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="12">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="13">\nIt won't move at all.{clear 0}It seems to be obstructed\nfrom the opposite side.</string>
-      <string key="14">There's a panel with\nnumber keys.{clear 0}Will you push the keys?\n {branch 0 1 0}\nIt's locked.</string>
+      <string key="14">\nIt won't move at all.{clear 0}It seems to be obstructed\nfrom the opposite side.</string>
       <string key="15">\nIt's locked.</string>
     </language>
     <language lang="ja-JP">
@@ -320,7 +324,7 @@
       <string key="11">{scroll 0}  そうか…\n  わかった、あずかっておく{scroll 1}{clear 100}{scroll 0}    何とか俺たちのことを\n    知らせないとな{scroll 1}{timed 100}</string>
       <string key="12">{scroll 0}    さっき見つけた製薬室で\n    まだ何か作れそうなので{scroll 1}{clear 80}{scroll 0}\n    そこに行ってますね{scroll 1}{timed 100}</string>
       <string key="13">\n 押そうがひこうがびくともしない{clear 0} ドアの向こうから、何か強い力で\n 押さえつけてあるようだ</string>
-      <string key="14">\n ナンバーキーのついたパネルがある{clear 0}キーを押しますか?\n {branch 0 1 0}\n     ロックされている</string>
+      <string key="14">\n 押そうがひこうがびくともしない{clear 0} ドアの向こうから、何か強い力で\n 押さえつけてあるようだ</string>
       <string key="15">\n     ロックされている</string>
     </language>
     <language lang="fr-FR">
@@ -339,7 +343,7 @@
       <string key="11">{scroll 0}Je vois...Compris. \nJe la garde.{scroll 1}{clear 80}{scroll 0}\nD'une manière ou d'une autre,{scroll 1}{clear 60}{scroll 0}nous allons faire savoir à\nBrad que nous sommes ici.{scroll 1}{timed 60}</string>
       <string key="12">{scroll 0}Je pense pouvoir faire quelque\nchose dans la salle des{scroll 1}{clear 100}{scroll 0}médicaments que j'ai\ndécouverte il y a un instant.{scroll 1}{timed 80}</string>
       <string key="13">\nÇa ne bouge pas du tout.{clear 0}Il semble que ça bloque\nde l'autre côté.</string>
-      <string key="14">{scroll 2}Je dois continuer\nd'avancer.{scroll 2}</string>
+      <string key="14">\nÇa ne bouge pas du tout.{clear 0}Il semble que ça bloque\nde l'autre côté.</string>
       <string key="15">\nC'est fermé.</string>
     </language>
     <language lang="de-DE">
@@ -357,7 +361,7 @@
       <string key="11">{scroll 0}Ach so... verstehe.\nIch werde es mitnehmen.{scroll 1}{clear 100}{scroll 0}Wir sollten Brad irgendwie\nmitteilen, dass wir hier sind.{scroll 1}{timed 100}</string>
       <string key="12">{scroll 0}Ich glaube, dass ich\nin dem Pharmazie-Raum,{scroll 1}{clear 100}{scroll 0}den ich vorhin entdeckt\nhabe, etwas herstellen kann.{scroll 1}{timed 80}</string>
       <string key="13">\nSie bewegt sich kein Stück.{clear 0}Scheinbar wird sie von der\nanderen Seite her blockiert.</string>
-      <string key="14">{scroll 2}\nIch muss wirklich weitergehen.{scroll 2}</string>
+      <string key="14">\nSie bewegt sich kein Stück.{clear 0}Scheinbar wird sie von der\nanderen Seite her blockiert.</string>
       <string key="15">\nSie ist verschlossen.</string>
     </language>
     <language lang="it-IT">
@@ -376,7 +380,7 @@
       <string key="11">{scroll 0}Certo, ho capito. \nLa terrò io.{scroll 1}{clear 80}{scroll 0}\nIn qualche maniera dobbiamo{scroll 1}{clear 60}{scroll 0}fare capire a Brad che \nsiamo ancora qui.{scroll 1}{timed 60}</string>
       <string key="12">{scroll 0}Nel locale farmaceutico \nche ho trovato poco fa{scroll 1}{clear 100}{scroll 0}dovrei riuscire a \ncreare qualcosa.{scroll 1}{timed 80}</string>
       <string key="13">\nNon vuole muoversi.{clear 0}Sembra sia bloccata \ndall'altro lato.</string>
-      <string key="14">{scroll 2}C'è un pannello con \ndei tasti numerati.{clear 0}{scroll 2}Vuoi premere i tasti?{branch 0 6 0}</string>
+      <string key="14">\nNon vuole muoversi.{clear 0}Sembra sia bloccata \ndall'altro lato.</string>
       <string key="15">\nÈ chiuso.</string>
     </language>
     <language lang="es-ES">
@@ -394,8 +398,7 @@
       <string key="11">{scroll 0}Ya veo. Entendido.\nMe lo quedaré, tenemos {scroll 1}{clear 100}{scroll 0}que conseguir que Brad\nsepa que estamos aquí.{scroll 1}{timed 100}</string>
       <string key="12">{scroll 0}Creo que en la sala\nfarmacéutica de antes{scroll 1}{clear 100}{scroll 0}podré hacer\nalgo.{scroll 1}{timed 80}</string>
       <string key="13">\nNo se puede mover...{clear 0}Parece atrancada desde\nel otro lado...</string>
-      <string when="JILL" key="13">\nNo se puede mover...{clear 0}Parece atrancado desde\nel otro lado...</string>
-      <string key="14">{scroll 2}\nDebería seguir moviéndome.{scroll 2}</string>
+      <string key="14">\nNo se puede mover...{clear 0}Parece atrancado desde\nel otro lado...</string>
       <string key="15">\nEstá cerrado...</string>
     </language>
     <language lang="ru-RU">
@@ -414,7 +417,7 @@
       <string key="11">{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="12">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="13">\nДверь не открыть.{clear 0}Кажется, она чем-то заблокирована\nс обратной стороны.</string>
-      <string key="14">Здесь панель\nс цифровыми кнопками.{clear 0}\nНажать на кнопки?\n{branch 0 1 0}\nЗаперто.</string>
+      <string key="14">\nДверь не открыть.{clear 0}Кажется, она чем-то заблокирована\nс обратной стороны.</string>
       <string key="15">\nЗаперто.</string>
     </language>
     <language lang="fi-FI">
@@ -433,7 +436,7 @@
       <string key="11">{scroll 0}Ymmärrän. Pidän sitä silmällä.{scroll 1}{clear 100}{scroll 0}Meidän pitää jotenkin antaa\nhänelle merkki että olemme täällä.{scroll 1}{timed 100}</string>
       <string key="12">{scroll 0}Taidan pystyä tekemään\nlääkintätarvikkeita{scroll 1}{clear 100}{scroll 0}aikaisemmin käymässäni\nlääkehuoneessa.{scroll 1}{timed 80}</string>
       <string key="13">Ovi ei liikahdakkaan...{clear 0}Aivan kuin sen taakse olisi\npinottu jotakin painavaa...</string>
-      <string key="14">Siinä on paneeli\nnumeronäppäimistöllä.{clear 0}Käytätkö näppäimistöä?\n {branch 0 1 0}Se on lukossa.</string>
+      <string key="14">Ovi ei liikahdakkaan...{clear 0}Aivan kuin sen taakse olisi\npinottu jotakin painavaa...</string>
       <string key="15">Se on lukossa...</string>
     </language>
   </strings>

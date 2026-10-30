@@ -175,6 +175,10 @@
     <footstep x="0" z="0" width="12700" height="0x5B04" sound="0x002A"/>
     <footstep x="12700" z="300" width="14100" height="0x1AF4" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="save_name">Hall 1F</string>
@@ -199,11 +203,7 @@
       <string key="18">{scroll 0}\n{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}\n{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}\n{scroll 2}{timed 90}</string>
-      <string key="21">{branch 2 9 22}«\x17</string>
-      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 22}«\x17</string>
       <string key="23">There's a switch below.\nWill you push it?{scroll 1}{branch 0 1 0}{branch 2 9 25}</string>
-      <string key="24">{branch 2 9 25}</string>
-      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 25}</string>
       <string key="26">There's a rope. Will you\nclimb it?{scroll 1}{branch 0 1 0}There's a ladder. Will\nyou descend it?{scroll 1}{branch 0 1 0}A hole opens in the\nfireplace.{scroll 2}</string>
       <string key="27">There's a ladder. Will\nyou descend it?{scroll 1}{branch 0 1 0}A hole opens in the\nfireplace.{scroll 2}</string>
       <string key="28">A hole opens in the\nfireplace.{scroll 2}</string>
@@ -231,11 +231,7 @@
       <string key="18">{scroll 0}\n     いや 心配無用だ{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}\n  そうだ これを見つけたんだ{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}\n  ありがとう もらっておくわ{scroll 2}{timed 90}</string>
-      <string key="21"> 何かが刻んである よみますか?{branch 2 9 22}\x09、</string>
-      <string key="22">わがよき\nそしてこの館を作りし者 トレヴァー{scroll 2}{clear 0}自らが生み出したものの手にかかり\nここの久のねむりにつく{scroll 2}{clear 0}1967年12月5日\n     オズウェル二E二スペンサー{scroll 2}{clear 0} もう一度よみますか?{branch 2 9 22}\x09、</string>
       <string key="23"> 下にスイッチのような物がある\n押しますか{scroll 1}{branch 0 1 0} 何かが刻んである よみますか?{branch 2 9 25}</string>
-      <string key="24"> 何かが刻んである よみますか?{branch 2 9 25}</string>
-      <string key="25">わがよき\nそしてこの館を作りし者 トレヴァー{scroll 2}{clear 0}自らが生み出したものの手にかかり\nここの久のねむりにつく{scroll 2}{clear 0}1967年12月5日\n     オズウェル二E二スペンサー{scroll 2}{clear 0} もう一度よみますか?{branch 2 9 25}</string>
       <string key="26">   ロープが下ろされている\n上りますか?{scroll 1}{branch 0 1 0}      ハシゴがある\n下りますか?{scroll 1}{branch 0 1 0}\n ぽっかりとダンロの穴が開いている{scroll 2}</string>
       <string key="27">      ハシゴがある\n下りますか?{scroll 1}{branch 0 1 0}\n ぽっかりとダンロの穴が開いている{scroll 2}</string>
       <string key="28">\n ぽっかりとダンロの穴が開いている{scroll 2}</string>
@@ -263,11 +259,7 @@
       <string key="18">{scroll 0}\nNon, ça va. Ne t'inquiète pas.{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}Jill... \nJ'ai trouvé quelque chose.{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}\nMerci. Je le prends alors.{scroll 2}{timed 90}</string>
-      <string key="21">{branch 2 8 22}\x08\x17</string>
-      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
       <string key="23">Il y a un bouton dessous.\nAppuyer dessus?{scroll 1}{branch 0 6 0}</string>
-      <string key="24">{branch 2 8 25}</string>
-      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
       <string key="26">Il y a une corde.\nMonter?{scroll 1}{branch 0 6 0}</string>
       <string key="27">Il y a une échelle.\nDescendre?{scroll 1}{branch 0 6 0}</string>
       <string key="28">Un trou s'ouvre dans la\ncheminée.{scroll 2}</string>
@@ -279,30 +271,22 @@
       <string key="3">\nDa hängt ein Seil.{clear 0}Möchten Sie hinunterklettern?{scroll 1}{branch 0 6 0}</string>
       <string key="4">{scroll 0}Jill! Hast du irgend etwas\nInteressantes gefunden?{scroll 2}{timed 95}</string>
       <string key="5">{scroll 0}Ja. Aber ich kann hier\nkaum etwas sehen...{scroll 2}{timed 90}</string>
-      <string key="6">{scroll 0}Warum gehst du nicht hinunter\nund überprüfst es selbst?{scroll 2}{clear 87}{scroll 0}\nIch habe hier ein Seil.{scroll 2}{timed 43}</string>
-      <string when="JILL" key="6">{scroll 0}Warum gehst du nicht hinunter\nund überprüfst es selbst?{scroll 2}{clear 70}{scroll 0}\nIch habe hier ein Seil.{scroll 2}{timed 61}</string>
+      <string key="6">{scroll 0}Warum gehst du nicht hinunter\nund überprüfst es selbst?{scroll 2}{clear 70}{scroll 0}\nIch habe hier ein Seil.{scroll 2}{timed 61}</string>
       <string key="7">{scroll 0}\nOh, hast du?{scroll 2}{clear 40}{scroll 0}Gut, dann werde ich am Seil\nden Abstieg versuchen.{scroll 2}{timed 80}</string>
       <string key="8">{scroll 0}\nWarte noch!{scroll 2}{timed 40}</string>
-      <string key="9">{scroll 0}Ach ja.\nRichard gab mir das hier.{scroll 2}{clear 55}{scroll 0}Dieses Funkgerät ist\nein Andenken von ihm.{scroll 2}{timed 105}</string>
-      <string when="JILL" key="9">{scroll 0}Ach ja.\nRichard gab mir das hier.{scroll 2}{clear 80}{scroll 0}Dieses Funkgerät ist\nein Andenken von ihm.{scroll 2}{timed 80}</string>
+      <string key="9">{scroll 0}Ach ja.\nRichard gab mir das hier.{scroll 2}{clear 80}{scroll 0}Dieses Funkgerät ist\nein Andenken von ihm.{scroll 2}{timed 80}</string>
       <string key="10">{scroll 0}\nRichard...{scroll 2}{timed 40}</string>
       <string key="11">{scroll 0}Das wird für dich viel\nnützlicher sein als für mich-{scroll 2}{clear 70}{scroll 0}\nbereit zu gehen?{scroll 2}{timed 40}</string>
       <string key="12">{scroll 0}Hey!\nWas ist jetzt los?{scroll 2}{timed 70}</string>
-      <string key="13">{scroll 0}Ach, ich hab's verpatzt!\nTut mir leid, Jill.{scroll 2}{clear 85}{scroll 0}Warte! Ich werde gehen\nund ein anderes Seil holen!{scroll 2}{timed 90}</string>
-      <string when="JILL" key="13">{scroll 0}Ach, ich hab's verpatzt!\nTut mir leid, Jill.{scroll 2}{clear 77}{scroll 0}Warte! Ich werde gehen\nund ein anderes Seil holen!{scroll 2}{timed 98}</string>
+      <string key="13">{scroll 0}Ach, ich hab's verpatzt!\nTut mir leid, Jill.{scroll 2}{clear 77}{scroll 0}Warte! Ich werde gehen\nund ein anderes Seil holen!{scroll 2}{timed 98}</string>
       <string key="14">{scroll 0}Hey!\nBist du da, Jill?{scroll 2}{clear 80}{scroll 0}\nSchnapp dir das Seil!{scroll 2}{timed 70}</string>
-      <string key="15">{scroll 0}\nTut mir Leid, Jill.{scroll 2}{timed 50}</string>
-      <string when="JILL" key="15">{scroll 0}\nTut mir Leid, Jill.{scroll 2}{timed 43}</string>
+      <string key="15">{scroll 0}\nTut mir Leid, Jill.{scroll 2}{timed 43}</string>
       <string key="16">{scroll 0}Ich habe nicht erwartet,\ndass das passieren würde!{scroll 2}{clear 95}{scroll 0}Pardon.\nIch hab nicht aufgepasst.{scroll 2}{timed 90}</string>
       <string key="17">{scroll 0}\nBist du okay, Barry?{scroll 2}{clear 65}{scroll 0}Vielleicht wirst du\nlangsam müde.{scroll 2}{timed 65}</string>
       <string key="18">{scroll 0}Nein, Ich bin schon okay.\nKeine Sorge.{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}Jill,\nIch habe etwas gefunden.{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}Ich danke dir.\nIch werde es nehmen.{scroll 2}{timed 90}</string>
-      <string key="21">{branch 2 8 22}\x08\x17</string>
-      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
       <string key="23">Darunter ist ein Schalter.\nMöchten Sie ihn betätigen?{scroll 1}{branch 0 6 0}</string>
-      <string key="24">{branch 2 8 25}</string>
-      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
       <string key="26">\nDa hängt ein Seil.{clear 0}Möchten Sie hinaufklettern?{scroll 1}{branch 0 6 0}</string>
       <string key="27">\nDa ist eine Leiter.{clear 0}Möchten Sie hinuntersteigen?{scroll 1}{branch 0 6 0}</string>
       <string key="28">\nIm Kamin ist eine Öffnung.{scroll 2}</string>
@@ -330,11 +314,7 @@
       <string key="18">{scroll 0}No, va tutto bene. \nNon preoccuparti.{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}Jill... \nHo trovato questo.{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}\nGrazie. Lo porto con me.{scroll 2}{timed 90}</string>
-      <string key="21">{branch 2 8 22}\x08\x17</string>
-      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
       <string key="23">C'è un bottone.\nVuoi premerlo?{scroll 1}{branch 0 6 0}</string>
-      <string key="24">{branch 2 8 25}</string>
-      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
       <string key="26">C'è una corda.\nVuoi salire?{scroll 1}{branch 0 6 0}</string>
       <string key="27">C'è una scala.\nVuoi scendere?{scroll 1}{branch 0 6 0}</string>
       <string key="28">C'è un buco nel \ncamino.{scroll 2}</string>
@@ -346,34 +326,22 @@
       <string key="3">Hay una cuerda... ¿Quieres\nbajar por ella?{scroll 1}{branch 0 6 0}</string>
       <string key="4">{scroll 0}Jill, ¿has encontrado\nalgo interesante?{scroll 2}{timed 95}</string>
       <string key="5">{scroll 0}Sí, pero no puedo\nver demasiado bien.{scroll 2}{timed 90}</string>
-      <string key="6">{scroll 0}¿Qué te parece si\nbajo a verlo yo?{scroll 2}{clear 87}{scroll 0}\nTengo una cuerda.{scroll 2}{timed 43}</string>
-      <string when="JILL" key="6">{scroll 0}¿Qué te parece bajar\na verlo tú misma?{scroll 2}{clear 70}{scroll 0}\nTengo una cuerda.{scroll 2}{timed 61}</string>
-      <string key="7">{scroll 0}¿De verdad? Bueno\nbajaré por la cuerda.{scroll 2}{timed 120}</string>
-      <string when="JILL" key="7">{scroll 0}¿De verdad? Bueno, intentaré\nbajar con la cuerda.{scroll 2}{timed 120}</string>
+      <string key="6">{scroll 0}¿Qué te parece bajar\na verlo tú misma?{scroll 2}{clear 70}{scroll 0}\nTengo una cuerda.{scroll 2}{timed 61}</string>
+      <string key="7">{scroll 0}¿De verdad? Bueno, intentaré\nbajar con la cuerda.{scroll 2}{timed 120}</string>
       <string key="8">{scroll 0}\nEspera.{scroll 2}{timed 40}</string>
-      <string key="9">{scroll 0}Sí, Richard me la\ndio.{scroll 2}{clear 55}{scroll 0}Es un recuerdo que\nme dejó.{scroll 2}{timed 105}</string>
-      <string when="JILL" key="9">{scroll 0}\nSí, Richard me dio ésto.{scroll 2}{clear 80}{scroll 0}\nLe estaba guardando su radio.{scroll 2}{timed 80}</string>
+      <string key="9">{scroll 0}\nSí, Richard me dio ésto.{scroll 2}{clear 80}{scroll 0}\nLe estaba guardando su radio.{scroll 2}{timed 80}</string>
       <string key="10">{scroll 0}\n¡Richard!{scroll 2}{timed 40}</string>
-      <string key="11">{scroll 0}Te será más útil a\nti que a mí.{scroll 2}{clear 70}{scroll 0}\n¿Listo?{scroll 2}{timed 40}</string>
-      <string when="JILL" key="11">{scroll 0}Te será más útil a\nti que a mí.{scroll 2}{clear 70}{scroll 0}\n¿Lista?{scroll 2}{timed 40}</string>
+      <string key="11">{scroll 0}Te será más útil a\nti que a mí.{scroll 2}{clear 70}{scroll 0}\n¿Lista?{scroll 2}{timed 40}</string>
       <string key="12">{scroll 0}\n¡Eh! ¿Qué pasa?{scroll 2}{timed 70}</string>
-      <string key="13">{scroll 0}Lo he conseguido.\nLo siento, Jill.{scroll 2}{clear 85}{scroll 0}Espera, iré a conseguir\notra cuerda.{scroll 2}{timed 90}</string>
-      <string when="JILL" key="13">{scroll 0}Ahora sí que la he liado.\nLo siento, Jill.{scroll 2}{clear 77}{scroll 0}Espera, iré a conseguir\notra cuerda.{scroll 2}{timed 98}</string>
+      <string key="13">{scroll 0}Ahora sí que la he liado.\nLo siento, Jill.{scroll 2}{clear 77}{scroll 0}Espera, iré a conseguir\notra cuerda.{scroll 2}{timed 98}</string>
       <string key="14">{scroll 0}\n¡Oye! Jill, ¿estás ahí?{scroll 2}{clear 80}{scroll 0}\n¡Coge la cuerda!{scroll 2}{timed 70}</string>
-      <string key="15">{scroll 0}\nLo siento, Jill.{scroll 2}{timed 50}</string>
-      <string when="JILL" key="15">{scroll 0}\nLo siento, Jill.{scroll 2}{timed 43}</string>
-      <string key="16">{scroll 0}No sabía que fuera\na pasar.{scroll 2}{clear 95}{scroll 0}Lo siento, he estado\ntorpe.{scroll 2}{timed 90}</string>
-      <string when="JILL" key="16">{scroll 0}No sabía que fuera\na pasar eso.{scroll 2}{clear 95}{scroll 0}Lo siento, he sido\nmuy descuidado.{scroll 2}{timed 90}</string>
-      <string key="17">{scroll 0}\nBarry, ¿estás bien?{scroll 2}{clear 65}{scroll 0}\nTe debes estar cansando.{scroll 2}{timed 65}</string>
-      <string when="JILL" key="17">{scroll 0}\nBarry, ¿estás bien?{scroll 2}{clear 65}{scroll 0}\nQuizás estas cansando.{scroll 2}{timed 65}</string>
+      <string key="15">{scroll 0}\nLo siento, Jill.{scroll 2}{timed 43}</string>
+      <string key="16">{scroll 0}No sabía que fuera\na pasar eso.{scroll 2}{clear 95}{scroll 0}Lo siento, he sido\nmuy descuidado.{scroll 2}{timed 90}</string>
+      <string key="17">{scroll 0}\nBarry, ¿estás bien?{scroll 2}{clear 65}{scroll 0}\nQuizás estas cansando.{scroll 2}{timed 65}</string>
       <string key="18">{scroll 0}No, estoy bien,\nno te preocupes.{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}\nJill, he encontrado algo.{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}Gracias,\nme lo llevaré.{scroll 2}{timed 90}</string>
-      <string key="21">{branch 2 8 22}\x08\x17</string>
-      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}\x08\x17</string>
       <string key="23">Abajo hay un interruptor...\n¿Lo aprietas?{scroll 1}{branch 0 6 0}</string>
-      <string key="24">{branch 2 8 25}</string>
-      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
       <string key="26">Hay una cuerda... ¿Quieres\nsubir por ella?{scroll 1}{branch 0 6 0}</string>
       <string key="27">Hay una escalera...\n¿quieres bajar?{scroll 1}{branch 0 6 0}</string>
       <string key="28">Se abre un agujero\nen la chimenea...{scroll 2}</string>
@@ -401,11 +369,7 @@
       <string key="18">{scroll 0}\n{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}\n{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}\n{scroll 2}{timed 90}</string>
-      <string key="21">{branch 2 9 22}«\x17</string>
-      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 22}«\x17</string>
       <string key="23">Здесь кнопка.\nНажать её?{scroll 1}{branch 0 1 0}{branch 2 9 25}</string>
-      <string key="24">{branch 2 9 25}</string>
-      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 9 25}</string>
       <string key="26">Здесь есть веревка.\nПодняться по ней?{scroll 1}{branch 0 1 0}Здесь лестница.\nСпуститься по ней?{scroll 1}{branch 0 1 0}В камине открывается\nуглубление.{scroll 2}</string>
       <string key="27">Здесь лестница.\nСпуститься по ней?{scroll 1}{branch 0 1 0}\n\nВ камине дыра.{scroll 2}</string>
       <string key="28">\nВ камине дыра.{scroll 2}</string>
@@ -418,30 +382,22 @@
       <string key="3">Siinä on köysi...\nLaskeudutko alas?{scroll 1}{branch 0 6 0}</string>
       <string key="4">{scroll 0}Jill, oletko löytänyt mitään\nmielenkiintoista?{scroll 2}{timed 95}</string>
       <string key="5">{scroll 0}Kyllä, mutta en nää tuonne kovin\nhyvin.{scroll 2}{timed 90}</string>
-      <string key="6">{scroll 0}Mitä jos menisit alas katsomaan\ntarkemmin?{scroll 2}{clear 87}{scroll 0}Minulla on köyttä mukanani.{scroll 2}{timed 43}</string>
-      <string when="JILL" key="6">{scroll 0}Mitä jos menisit alas katsomaan\ntarkemmin?{scroll 2}{clear 70}{scroll 0}Minulla on köyttä mukanani.{scroll 2}{timed 61}</string>
+      <string key="6">{scroll 0}Mitä jos menisit alas katsomaan\ntarkemmin?{scroll 2}{clear 70}{scroll 0}Minulla on köyttä mukanani.{scroll 2}{timed 61}</string>
       <string key="7">{scroll 0}Ai onko? Laskeudun sitten sen\navulla alas.{scroll 2}{timed 120}</string>
       <string key="8">{scroll 0}Odota.{scroll 2}{timed 40}</string>
-      <string key="9">{scroll 0}Richard antoi tämän minulle.{scroll 2}{clear 55}{scroll 0}Tämä radio on muisto hänestä.{scroll 2}{timed 105}</string>
-      <string when="JILL" key="9">{scroll 0}Richard antoi tämän minulle.{scroll 2}{clear 80}{scroll 0}Tämä radio on muisto hänestä.{scroll 2}{timed 80}</string>
+      <string key="9">{scroll 0}Richard antoi tämän minulle.{scroll 2}{clear 80}{scroll 0}Tämä radio on muisto hänestä.{scroll 2}{timed 80}</string>
       <string key="10">{scroll 0}Richard!{scroll 2}{timed 40}</string>
       <string key="11">{scroll 0}Tästä on enemmän hyötyä sinulle\nkuin minulle.{scroll 2}{clear 70}{scroll 0}Oleko valmis?{scroll 2}{timed 40}</string>
       <string key="12">{scroll 0}Hei! Mitä ihmettä?{scroll 2}{timed 70}</string>
-      <string key="13">{scroll 0}Nyt tyrin pahemman kerran.\nAnteeksi, Jill.{scroll 2}{clear 85}{scroll 0}Odota, käyn hakemassa toisen\nköyden.{scroll 2}{timed 90}</string>
-      <string when="JILL" key="13">{scroll 0}Nyt tyrin pahemman kerran.\nAnteeksi, Jill.{scroll 2}{clear 77}{scroll 0}Odota, käyn hakemassa toisen\nköyden.{scroll 2}{timed 98}</string>
+      <string key="13">{scroll 0}Nyt tyrin pahemman kerran.\nAnteeksi, Jill.{scroll 2}{clear 77}{scroll 0}Odota, käyn hakemassa toisen\nköyden.{scroll 2}{timed 98}</string>
       <string key="14">{scroll 0}Hei! Oletko siellä, Jill?{scroll 2}{clear 80}{scroll 0}Tartu köyteen!{scroll 2}{timed 70}</string>
-      <string key="15">{scroll 0}Olen pahoillani.{scroll 2}{timed 50}</string>
-      <string when="JILL" key="15">{scroll 0}Olen pahoillani.{scroll 2}{timed 43}</string>
+      <string key="15">{scroll 0}Olen pahoillani.{scroll 2}{timed 43}</string>
       <string key="16">{scroll 0}En odottanut että noin pääsisi\nkäymään.{scroll 2}{clear 95}{scroll 0}Olin todella huolimaton,\nanteeksi.{scroll 2}{timed 90}</string>
       <string key="17">{scroll 0}Barry, onko kaikki hyvin?{scroll 2}{clear 65}{scroll 0}Ehkä olet uupunut.{scroll 2}{timed 65}</string>
       <string key="18">{scroll 0}Olen kunnossa, älä huoli.{scroll 2}{timed 95}</string>
       <string key="19">{scroll 0}Jill, löysin jotakin.{scroll 2}{timed 80}</string>
       <string key="20">{scroll 0}Otan tämän, kiitos.{scroll 2}{timed 90}</string>
-      <string key="21">{branch 2 8 22}</string>
-      <string key="22">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 22}</string>
       <string key="23">Alla on painike...\nPainatko sitä?{scroll 1}{branch 0 6 0}</string>
-      <string key="24">{branch 2 8 25}</string>
-      <string key="25">\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}\n{scroll 2}{clear 0}{branch 2 8 25}</string>
       <string key="26">Siinä on köysi...\nKiipeätkö sitä?{scroll 1}{branch 0 6 0}</string>
       <string key="27">Siinä on tikkaat...\nLaskeudutko niitä?{scroll 1}{branch 0 6 0}</string>
       <string key="28">Takan perällä on aukko...{scroll 2}</string>

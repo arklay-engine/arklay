@@ -249,7 +249,6 @@
       <string key="0">This computer is used to\nopen the electronic locks.{scroll 2}{clear 0}Will you turn it on?{scroll 1}{branch 0 1 0}Various chemicals used for\nresearch.{scroll 2}{clear 0}\nNothing useful.{scroll 2}</string>
       <string key="1">Various chemicals used for\nresearch.{scroll 2}{clear 0}\nNothing useful.{scroll 2}</string>
       <string key="2">Various devices and\nchemicals.{scroll 2}{clear 0}\nNothing useful.{scroll 2}</string>
-      <string key="3">\nAn incubator.{scroll 2}{clear 0}\nNothing strange.{scroll 2}</string>
       <string key="4">\nNothing special.{scroll 2}</string>
     </language>
     <language lang="ja-JP">
@@ -257,7 +256,6 @@
       <string key="0">\n電子ロック解除用コンピューターがある{scroll 2}{clear 0}コンピューターを起動しますか?{scroll 1}{branch 0 1 0}\n  研究に使う薬が並べられている{scroll 2}{clear 0}\n 役に立ちそうなものは見当たらない{scroll 2}</string>
       <string key="1">\n  研究に使う薬が並べられている{scroll 2}{clear 0}\n 役に立ちそうなものは見当たらない{scroll 2}</string>
       <string key="2">\n   いろんな機器、薬剤がある{scroll 2}{clear 0}\n 役に立ちそうなものは見当たらない{scroll 2}</string>
-      <string key="3">\n    ふ化をうながす装置だ{scroll 2}{clear 0}\n  特におかしな所は見られない{scroll 2}</string>
       <string key="4">\n     何もないようだ{scroll 2}</string>
     </language>
     <language lang="fr-FR">
@@ -265,14 +263,12 @@
       <string key="0">Cet ordinateur sert à débloquer \nle verrou électronique.{scroll 2}{clear 0}L'allumer?{scroll 1}{branch 0 6 0}</string>
       <string key="1">Différents produits chimiques\nutilisés pour les recherches.{scroll 2}{clear 0}\nRien d'utile.{scroll 2}</string>
       <string key="2">Différents appareils et \nproduits chimiques.{scroll 2}{clear 0}\nRien d'utile.{scroll 2}</string>
-      <string key="3">\nUne couveuse.{scroll 2}{clear 0}\nRien d'étrange.{scroll 2}</string>
       <string key="4">\nRien de spécial.{scroll 2}</string>
     </language>
     <language lang="de-DE">
       <string key="0">Der Computer wird benötigt,\num das Schloss zu öffnen.{scroll 2}{clear 0}Möchten Sie ihn anschalten?{scroll 1}{branch 0 6 0}</string>
       <string key="1">Verschiedene Chemikalien\nfür Forschungszwecke.{scroll 2}{clear 0}\nNichts von Interesse.{scroll 2}</string>
       <string key="2">Verschiedene Gegenstände\nund Chemikalien.{scroll 2}{clear 0}\nNichts von Interesse.{scroll 2}</string>
-      <string key="3">\nEin Brutkasten.{scroll 2}{clear 0}\nNichts Auffälliges.{scroll 2}</string>
       <string key="4">\nNichts Besonderes.{scroll 2}</string>
     </language>
     <language lang="it-IT">
@@ -280,14 +276,12 @@
       <string key="0">Questo computer serve per \naprire le porte elettroniche.{scroll 2}{clear 0}Vuoi accenderlo?{scroll 1}{branch 0 6 0}</string>
       <string key="1">Vari prodotti chimici usati \nper le ricerce.{scroll 2}{clear 0}\nNiente di utile.{scroll 2}</string>
       <string key="2">Vari dispostivi e \nsostanze chimiche.{scroll 2}{clear 0}\nNiente di utile.{scroll 2}</string>
-      <string key="3">\nUn'incubatrice.{scroll 2}{clear 0}\nNiente di insolito.{scroll 2}</string>
       <string key="4">\nNiente di speciale.{scroll 2}</string>
     </language>
     <language lang="es-ES">
       <string key="0">Parece que este ordenador se usa\npara abrir cerraduras electrónicas.{scroll 2}{clear 0}\n¿Quieres encenderlo?{scroll 1}{branch 0 6 0}</string>
       <string key="1">Productos varios para\nla investigación...{scroll 2}{clear 0}\nNada útil...{scroll 2}</string>
       <string key="2">Productos químicos y\ndispositivos varios...{scroll 2}{clear 0}\nNada útil...{scroll 2}</string>
-      <string key="3">\nUna incubadora...{scroll 2}{clear 0}\nNada extraño...{scroll 2}</string>
       <string key="4">\nNada especial...{scroll 2}</string>
     </language>
     <language lang="ru-RU">
@@ -295,7 +289,6 @@
       <string key="0">Этот компьютер используется\nдля открытия электронных замков.{scroll 2}{clear 0}Включить его?{scroll 1}{branch 0 1 0}Различные химические вещества,\nиспользуемые для исследований.{scroll 2}{clear 0}\nНичего полезного.{scroll 2}</string>
       <string key="1">Различные химические вещества,\nиспользуемые для исследований.{scroll 2}{clear 0}\nНичего полезного.{scroll 2}</string>
       <string key="2">Различные приборы и химикаты.{scroll 2}{clear 0}\nНичего полезного.{scroll 2}</string>
-      <string key="3">\nИнкубатор.{scroll 2}{clear 0}\nничего необычного.{scroll 2}</string>
       <string key="4">\nНичего особенного.{scroll 2}</string>
     </language>
     <language lang="fi-FI">
@@ -303,7 +296,6 @@
       <string key="0">Tällä tietokoneella ohjataan\nlaitoksen elektronisia lukkoja...{scroll 2}{clear 0}Käynnistätkö sen?{scroll 1}{branch 0 6 0}</string>
       <string key="1">Monenlaisia kemikaaleja joita\nkäytetään tutkimuksissa...{scroll 2}{clear 0}Ei mitään hyödyllistä...{scroll 2}</string>
       <string key="2">Monenlaisia laitteita ja kemikaaleja...{scroll 2}{clear 0}Ei mitään hyödyllistä...{scroll 2}</string>
-      <string key="3">Inkubaattori...{scroll 2}{clear 0}Ei mitään omituista...{scroll 2}</string>
       <string key="4">Ei mitään erityistä...{scroll 2}</string>
     </language>
   </strings>

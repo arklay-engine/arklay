@@ -294,19 +294,20 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="9400" height="0x26AC" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">STUDY ROOM</string>
       <string key="save_name">Hall 1F</string>
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}\nIt's too heavy to move.</string>
       <string key="2">{scroll 2}\n</string>
       <string key="3">{scroll 2}It seems someone has\nsearched here already...{clear 0}{scroll 2}It appears to be a switch.\nWill you push it?{branch 0 1 0}{scroll 2}There's something at the\nback of the shelf.</string>
       <string key="4">{scroll 2}There's something at the\nback of the shelf.</string>
       <string key="5">{scroll 2}\nIt's well arranged.</string>
       <string key="6">{scroll 2}\nNothing special.</string>
-      <string key="7">{scroll 2}\n{clear 0}\n{branch 0 1 0}{scroll 2}\n{clear 0}\n?{branch 0 1 0}{scroll 0}\n{scroll 1}{timed 49}</string>
-      <string key="8">{scroll 2}\n{clear 0}\n?{branch 0 1 0}{scroll 0}\n{scroll 1}{timed 49}</string>
       <string key="9">{scroll 0}\n{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}\n{scroll 1}{clear 60}{scroll 0}\n{scroll 1}{timed 72}</string>
       <string key="11">{scroll 0}\n{scroll 1}{timed 56}</string>
@@ -315,19 +316,15 @@
       <string key="14">{scroll 0}\n{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}\n{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}\n{scroll 1}{clear 85}{scroll 0}\n{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}\n{scroll 1}{timed 94}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
-      <string key="0">{scroll 2}\n    大きな水槽がある</string>
       <string key="1">{scroll 2}\n   重くて動かせそうにない</string>
       <string key="2">{scroll 2}\n  あらされた形跡がある・・・</string>
       <string key="3">{scroll 2}\n  あらされた形跡がある・・・{clear 0}{scroll 2}  スイッチになっているようだ\n押してみますか?{branch 0 1 0}{scroll 2}\n     棚の奥に何かある</string>
       <string key="4">{scroll 2}\n     棚の奥に何かある</string>
       <string key="5">{scroll 2}\n   きれいに整理されている</string>
       <string key="6">{scroll 2}\n     特に何もない</string>
-      <string key="7">{scroll 2}  研究員の遺書らしきものが\n  置いてある{clear 0}\n  取りますか?{branch 0 1 0}{scroll 2}  研究員の遺書らしきものが\n  置いてある{clear 0}\n  取りますか?{branch 0 1 0}{scroll 0}\n       ジルか{scroll 1}{timed 49}</string>
-      <string key="8">{scroll 2}  研究員の遺書らしきものが\n  置いてある{clear 0}\n  取りますか?{branch 0 1 0}{scroll 0}\n       ジルか{scroll 1}{timed 49}</string>
       <string key="9">{scroll 0}\n       ジルか{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}\n      どうしたの?{scroll 1}{clear 60}{scroll 0}\n    そんなにびっくりして{scroll 1}{timed 72}</string>
       <string key="11">{scroll 0}\n     これを見てくれ{scroll 1}{timed 56}</string>
@@ -336,19 +333,15 @@
       <string key="14">{scroll 0}\n        ああ{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}\n   ねえ この破れた部分は?{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}\n      それなんだ{scroll 1}{clear 85}{scroll 0}  かなり重要な事が\n  書いてあったようなんだがな{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}\n   俺はもう少し調べてみるよ{scroll 1}{timed 94}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Hall RdC</string>
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}\nC'est trop lourd à déplacer.</string>
       <string key="2">{scroll 2}\n</string>
       <string key="3">{scroll 2}On dirait qu'on a déjà \nfouillé ici...{clear 0}{scroll 2}On dirait un bouton.\nAppuyer dessus?{branch 0 6 0}</string>
       <string key="4">{scroll 2}Il y a quelque chose au \ndos de l'étagère.</string>
       <string key="5">{scroll 2}\nC'est bien rangé.</string>
       <string key="6">{scroll 2}\nRien de spécial.</string>
-      <string key="7">{scroll 2}\n{clear 0}\n{branch 0 6 0}</string>
-      <string key="8">{scroll 2}\n{clear 0}\n?{branch 0 6 0}</string>
       <string key="9">{scroll 0}\nC'est toi, Jill...?{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}\nQue se passe-t'il? {scroll 1}{clear 60}{scroll 0}\nPourquoi fais-tu cette tête?{scroll 1}{timed 72}</string>
       <string key="11">{scroll 0}\nJette un coup d'oeil.{scroll 1}{timed 56}</string>
@@ -357,19 +350,14 @@
       <string key="14">{scroll 0}\nAbsolument.{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}Tiens, comment cela se\nfait-il, il manque une page!{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}Oui, je me posais la même \nquestion. Peut-être {scroll 1}{clear 85}{scroll 0}contenait-elle les informations \nles plus importantes...{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}\nJe crois que je vais rester{scroll 1}{clear 44}{scroll 0}ici et continuer à faire\ndes recherches.{scroll 1}{timed 50}</string>
-      <string when="MANSION2" key="17">{scroll 0}Je crois que je vais\nrester ici{scroll 1}{clear 44}{scroll 0}et continuer à faire des \nrecherches.{scroll 1}{timed 50}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 2}Das ist ein großer\nWasserbehälter.</string>
       <string key="1">{scroll 2}Er lässt sich\nüberhaupt nicht bewegen.</string>
       <string key="2">{scroll 2}Es sieht aus, als hätte hier\nschon mal jemand gesucht...</string>
       <string key="3">{scroll 2}Es sieht aus, als hätte hier\nschon mal jemand gesucht...{clear 0}{scroll 2}Das scheint ein Schalter zu\nsein.{clear 0}{scroll 2}Möchten Sie draufdrücken?\n{branch 0 6 0}</string>
       <string key="4">{scroll 2}Da ist irgendwas auf der\nRückseite des Regals.</string>
       <string key="5">{scroll 2}\nEs ist gut aufgeräumt hier.</string>
       <string key="6">{scroll 2}\nNichts Besonderes.</string>
-      <string key="7">{scroll 2}\n{clear 0}\n{branch 0 6 0}</string>
-      <string key="8">{scroll 2}\n{clear 0}\n?{branch 0 6 0}</string>
       <string key="9">{scroll 0}\nBist du das, Jill?{scroll 1}{timed 49}</string>
       <string when="MANSION2" key="9">{scroll 0}\nBist du das, Jill...?{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}\nWas ist jetzt schon wieder?{scroll 1}{clear 60}{scroll 0}Du siehst ja völlig verstört\naus.{scroll 1}{timed 72}</string>
@@ -377,27 +365,21 @@
       <string when="MANSION2" key="11">{scroll 0}\nSieh' dir das an.{scroll 1}{timed 56}</string>
       <string key="12">{scroll 0}\nWas denkst du darüber?{scroll 1}{timed 40}</string>
       <string when="MANSION2" key="12">{scroll 0}\n...Was denkst du darüber...?{scroll 1}{timed 40}</string>
-      <string key="13">{scroll 0}\nIch habe schon immer wusst,{scroll 1}{clear 45}{scroll 0}dass mit diesem Haus\nirgendwas nicht stimmt...{scroll 1}{timed 45}</string>
+      <string key="13">{scroll 0}\nIch habe schon immer wusst,{scroll 1}{clear 40}{scroll 0}dass mit diesem Haus\nirgendwas nicht stimmt...{scroll 1}{timed 50}</string>
       <string when="MANSION2" key="13">{scroll 0}Ich habe schon immer\ngedacht,{scroll 1}{clear 45}{scroll 0}daß mit diesem Haus irgend\netwas nicht stimmt...{scroll 1}{timed 45}</string>
-      <string when="JILL MANSION1" key="13">{scroll 0}\nIch habe schon immer wusst,{scroll 1}{clear 40}{scroll 0}dass mit diesem Haus\nirgendwas nicht stimmt...{scroll 1}{timed 50}</string>
       <string key="14">{scroll 0}\nRichtig.{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}Hey, es sieht so aus,\nals ob da eine Seite fehlt!{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}Hmm, das habe ich \nauch schon gedacht.{scroll 1}{clear 85}{scroll 0}Vielleicht war es genau die\nwichtigste Stelle...{scroll 1}{timed 82}</string>
       <string when="MANSION2" key="16">{scroll 0}Hmm, das habe ich auch\nschon gedacht.{scroll 1}{clear 85}{scroll 0}Viellelicht war es genau die\nwichtigste Stelle...{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}Ich möchte hier bleiben\nund mich intensiver umsehen.{scroll 1}{timed 94}</string>
-      <string when="MANSION2" key="17">{scroll 0}Ich möchte hierbleiben und\nmich intensiver umsehen.{scroll 1}{timed 94}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Atrio 1P</string>
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}È troppo pesante \nper essere spostato.</string>
       <string key="2">{scroll 2}\n</string>
       <string key="3">{scroll 2}Sembra che qualcuno \nabbia già cercato qui...{clear 0}{scroll 2}C'è un bottone.\nVuoi premerlo?{branch 0 6 0}</string>
       <string key="4">{scroll 2}C'è qualcosa dietro \nlo scaffale.</string>
       <string key="5">{scroll 2}\nÈ ben ordinato.</string>
       <string key="6">{scroll 2}\nNiente di speciale.</string>
-      <string key="7">{scroll 2}\n{clear 0}\n{branch 0 6 0}</string>
-      <string key="8">{scroll 2}\n{clear 0}\n?{branch 0 6 0}</string>
       <string key="9">{scroll 0}\nSei tu, Jill?{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}\nChe sta succedendo? {scroll 1}{clear 60}{scroll 0}\nPerché sei così spaventato?{scroll 1}{timed 72}</string>
       <string key="11">{scroll 0}\nDai un'occhiata.{scroll 1}{timed 56}</string>
@@ -406,18 +388,14 @@
       <string key="14">{scroll 0}\nConcordo.{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}Ehi, che significa? \nQui manca una pagina!{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}Si, l'ho notato anche io... {scroll 1}{clear 85}{scroll 0}Forse conteneva la parte \npiù importante.{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}\nCredo resterò qui{scroll 1}{clear 44}{scroll 0}e continuerò le indagini.{scroll 1}{timed 50}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}\nPesa demasiado para moverlo.</string>
       <string key="2">{scroll 2}\n</string>
       <string key="3">{scroll 2}Parece que alguien ha\nbuscado aquí...{clear 0}{scroll 2}Ésto debe ser un interruptor...\n¿Lo pulsas?{branch 0 6 0}</string>
       <string key="4">{scroll 2}Hay algo detrás\nde la estantería...</string>
       <string key="5">{scroll 2}\nEstán bien ordenados...</string>
       <string key="6">{scroll 2}\nNada especial...</string>
-      <string key="7">{scroll 2}\n{clear 0}\n{branch 0 6 0}</string>
-      <string key="8">{scroll 2}\n{clear 0}\n?{branch 0 6 0}</string>
       <string key="9">{scroll 0}\nJill, ¿eres tú?{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}\n¿Qué pasa?{scroll 1}{clear 60}{scroll 0}\n¿Por qué estás tan asustada?{scroll 1}{timed 72}</string>
       <string key="11">{scroll 0}\n¡Mira esto!{scroll 1}{timed 56}</string>
@@ -426,19 +404,15 @@
       <string key="14">{scroll 0}\nCierto.{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}¡Oye! ¿Qué es eso?\nFalta una página.{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}Sí, yo también me he \ndado cuenta.{scroll 1}{clear 85}{scroll 0}Puede que fuera la parte\nmás importante.{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}Creo que me quedaré para\nmirar más por aquí.{scroll 1}{timed 94}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Зал 1-эт.</string>
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}Слишком тяжело,\nчтобы подвинуть.</string>
       <string key="2">{scroll 2}\n</string>
       <string key="3">{scroll 2}Кажется, кто-то\nуже был здесь...{clear 0}{scroll 2}Похоже, это кнопка.\nНажать её?{branch 0 1 0}{scroll 2}Здесь что-то есть,\nв задней части полки.</string>
       <string key="4">{scroll 2}Здесь что-то есть,\nв задней части полки.</string>
       <string key="5">{scroll 2}\nНа столе порядок.</string>
       <string key="6">{scroll 2}\nНичего особенного.</string>
-      <string key="7">{scroll 2}\n{clear 0}\n{branch 0 1 0}{scroll 2}\n{clear 0}\n?{branch 0 1 0}{scroll 0}\n{scroll 1}{timed 49}</string>
-      <string key="8">{scroll 2}\n{clear 0}\n?{branch 0 1 0}{scroll 0}\n{scroll 1}{timed 49}</string>
       <string key="9">{scroll 0}\n{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}\n{scroll 1}{clear 60}{scroll 0}\n{scroll 1}{timed 72}</string>
       <string key="11">{scroll 0}\n{scroll 1}{timed 56}</string>
@@ -447,19 +421,15 @@
       <string key="14">{scroll 0}\n{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}\n{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}\n{scroll 1}{clear 85}{scroll 0}\n{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}\n{scroll 1}{timed 94}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Pääaula 1 krs</string>
-      <string key="0">{scroll 2}\n</string>
       <string key="1">{scroll 2}Se on liian painava liikutettavaksi...</string>
       <string key="2">{scroll 2}\n</string>
       <string key="3">{scroll 2}Näyttää siltä että joku on\netsinyt täältä jotakin...{clear 0}{scroll 2}Se vaikuttaisi olevan painike...\nPainatko sitä?{branch 0 6 0}</string>
       <string key="4">{scroll 2}Hyllyn takana on jotakin...</string>
       <string key="5">{scroll 2}Se on hyvin järjestelty...</string>
       <string key="6">{scroll 2}Ei mitään erityistä...</string>
-      <string key="7">{scroll 2}\n{clear 0}\n{branch 0 6 0}</string>
-      <string key="8">{scroll 2}\n{clear 0}\n?{branch 0 6 0}</string>
       <string key="9">{scroll 0}Jill, sinäkö siinä?{scroll 1}{timed 49}</string>
       <string key="10">{scroll 0}Mikä on?{scroll 1}{clear 60}{scroll 0}Miksi näytät noin järkyttyneeltä?{scroll 1}{timed 72}</string>
       <string key="11">{scroll 0}Katso tätä!{scroll 1}{timed 56}</string>
@@ -468,7 +438,6 @@
       <string key="14">{scroll 0}Niin.{scroll 1}{timed 33}</string>
       <string key="15">{scroll 0}Mitä ihmettä?\nTästä puuttuu sivu.{scroll 1}{timed 120}</string>
       <string key="16">{scroll 0}Huomasin sen myös.{scroll 1}{clear 85}{scroll 0}Luulen sen olleen kirjeen\ntärkein osa.{scroll 1}{timed 82}</string>
-      <string key="17">{scroll 0}Taidan vielä jäädä tänne ja\ntutkia hieman lisää.{scroll 1}{timed 94}</string>
     </language>
   </strings>
 </room>

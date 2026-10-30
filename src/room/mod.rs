@@ -5,26 +5,25 @@
 //! to another pack or renamed by renaming its folder. The folder holds every
 //! variant of the room: both players and, for the mansion's stages 1 and 2,
 //! both visits. `room.xml` marks what only some variants have with `when`
-//! ([`xml`]), and a file that differs per variant goes in a variant folder
-//! inside the room's ([`RoomId::variant_dirs`]: `jill-mansion2/`, `jill/`,
-//! `mansion2/`), the most specific of which wins. A variant folder's model,
-//! effect or animation slots replace the room folder's slots of that kind
-//! whole ([`Folder::kind`]). An RE2 pack keeps one folder per RDT
-//! (`room/1001/`), each player's room its own.
+//! ([`xml`]); where the variants' models, effects or player animation
+//! differ, each differing file has a number of its own in the kind's folder
+//! and `room.xml`'s `<slots>` names the files each variant's slots read
+//! ([`source::Slots`]). An RE2 pack keeps one folder per RDT (`room/1001/`),
+//! each player's room its own.
 //!
 //! | entry | content |
 //! |---|---|
 //! | `room.xml` | the room definition ([`xml`], modelled by [`RoomSource`]) |
 //! | `room.scd` | the room's init, per-frame and event scripts |
-//! | `original.scd` | the original scripts, beside a `room.scd` holding the port's fixes |
 //! | `cut/<camera>.bmp` | each camera's background |
 //! | `mask/<camera>.bmp` | each camera's mask page |
-//! | `anim/00.emr` + `.edd` | the room's player-animation pair |
-//! | `object/<slot>.tmd` + `.bmp` | an object-model slot's mesh and texture |
-//! | `item/<slot>.tmd` + `.bmp` | an item-model slot's mesh and texture |
-//! | `effect/<slot>.xml` + `.bmp` | an effect sprite slot's definition and sheet |
+//! | `anim/<file>.emr` + `.edd` | the room's player-animation pair |
+//! | `object/<file>.tmd` + `.bmp` | an object model's mesh and texture |
+//! | `item/<file>.tmd` + `.bmp` | an item model's mesh and texture |
+//! | `effect/<file>.xml` + `.bmp` | an effect sprite's definition and sheet |
 //!
-//! Camera and slot numbers are two lower-case hex digits (`cut/0a.bmp`).
+//! Camera and file numbers are two lower-case hex digits (`cut/0a.bmp`);
+//! slot `n` reads file `n` unless `<slots>` says otherwise.
 //!
 //! RE1's definitions are checked in ([`RE1_FILES`]); `convert-game` takes only
 //! the models, effect sheets and player animation from an install's RDTs
@@ -35,10 +34,11 @@
 //! `ROOM_<room3>_NAME_SAVE` and `ROOM_<room3>_TEXT_XX` language keys
 //! ([`language_layers`]); a language file's own key still wins.
 //!
-//! A raw `room.rdt` in the folder still loads in place of `room.xml`, so a
-//! mod that ships an RDT keeps working: when a pack holds both, the one from
-//! the higher layer wins, and the XML wins a tie. An RDT is one variant's,
-//! so a mod's RDT goes in that variant's folder ([`RoomId::variant_tag`]).
+//! A raw RDT in the folder still loads in place of `room.xml`, so a mod that
+//! ships an RDT keeps working: when a pack holds both, the one from the
+//! higher layer wins, and the XML wins a tie. An RDT is one variant's, so it
+//! is named for its variant ([`RoomId::rdt_entry`]: `jill-mansion2.rdt`); a
+//! `room.rdt` serves every variant without one.
 
 pub mod source;
 pub mod xml;
@@ -59,59 +59,58 @@ impl RoomId {
     }
 }
 
-/// The folders one variant of a room reads its files from in a pack, most
-/// specific first, ending with the room's own folder.
+/// The folder one variant of a room reads its files from in a pack: the
+/// room's own, or for a pack that keeps one folder per RDT (RE2) that RDT's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Folder {
-    dirs: Vec<String>,
+    dir: String,
+    /// The raw RDT the variant would read: its own, else the folder's
+    /// `room.rdt`, whether the pack has it or not.
+    rdt: String,
 }
 
 impl Folder {
-    /// The folders of room variant `id` in `pack`: the room folder and its
-    /// variant folders ([`RoomId::variant_dirs`]), or, for a pack that keeps
-    /// one folder per RDT (RE2), that RDT's folder alone.
+    /// The folder of room variant `id` in `pack`: the room folder
+    /// ([`RoomId::dir`]), or, for a pack that keeps one folder per RDT (RE2),
+    /// that RDT's folder.
     pub fn of(pack: &Pack, id: RoomId) -> Self {
+        let dir = id.dir();
+        let variant_rdt = id.rdt_entry();
+        let room_rdt = format!("{dir}/{RDT_FILE}");
         let defines = |dir: &str| {
             [source::XML_FILE, RDT_FILE]
                 .iter()
                 .any(|file| pack.contains(&format!("{dir}/{file}")))
         };
         let rdt_dir = id.rdt_dir();
-        if !defines(&id.dir()) && defines(&rdt_dir) {
+        if !defines(&dir) && !pack.contains(&variant_rdt) && defines(&rdt_dir) {
             return Self {
-                dirs: vec![rdt_dir],
+                rdt: format!("{rdt_dir}/{RDT_FILE}"),
+                dir: rdt_dir,
             };
         }
-        Self {
-            dirs: id.variant_dirs(),
-        }
+        let rdt = if pack.contains(&variant_rdt) {
+            variant_rdt
+        } else {
+            room_rdt
+        };
+        Self { dir, rdt }
     }
 
-    /// The room's own folder, `room/100`.
+    /// The room's folder, `room/100`.
     pub fn dir(&self) -> &str {
-        self.dirs.last().expect("a room has a folder")
+        &self.dir
     }
 
-    /// The path of `name` in the most specific folder that has it, else in
-    /// the room's own folder.
-    pub fn file(&self, pack: &Pack, name: &str) -> String {
-        self.dirs
-            .iter()
-            .map(|dir| format!("{dir}/{name}"))
-            .find(|path| pack.contains(path))
-            .unwrap_or_else(|| format!("{}/{name}", self.dir()))
+    /// The path of `name` in the folder.
+    pub fn file(&self, name: &str) -> String {
+        format!("{}/{name}", self.dir)
     }
 
-    /// The folder of the room's `kind` slots (`object`, `item`, `effect`,
-    /// `anim`), `room/100/mansion2/effect`: in the most specific folder
-    /// whose `kind/` has slot 0 (`first`, e.g. `00.tmd`), else the room
-    /// folder's. One variant folder's slots replace the room folder's whole.
-    pub fn kind(&self, pack: &Pack, kind: &str, first: &str) -> String {
-        self.dirs
-            .iter()
-            .map(|dir| format!("{dir}/{kind}"))
-            .find(|path| pack.contains(&format!("{path}/{first}")))
-            .unwrap_or_else(|| format!("{}/{kind}", self.dir()))
+    /// The raw RDT of the variant: its own (`room/100/jill.rdt`), else the
+    /// folder's `room.rdt`.
+    pub fn rdt(&self) -> &str {
+        &self.rdt
     }
 }
 
@@ -131,10 +130,9 @@ pub fn xml_entry(pack: &Pack, id: RoomId) -> String {
     format!("{}/{}", Folder::of(pack, id).dir(), source::XML_FILE)
 }
 
-/// The pack entry of the raw RDT room variant `id` takes, the most specific
-/// variant folder's.
+/// The pack entry of the raw RDT room variant `id` takes ([`Folder::rdt`]).
 pub fn rdt_entry(pack: &Pack, id: RoomId) -> String {
-    Folder::of(pack, id).file(pack, RDT_FILE)
+    Folder::of(pack, id).rdt().to_string()
 }
 
 /// The file `pack` defines room `id` with, or `None` when it has neither.
@@ -194,34 +192,23 @@ pub enum ScriptSource {
     Rdt,
     /// The folder's `room.scd` (none at all when it is missing).
     Room,
-    /// The folder's `original.scd`: the original bytecode `convert-game`
-    /// keeps beside a `room.scd` that holds the port's fixes.
-    Original,
 }
 
 /// Where room `id` takes its scripts from: of the RDT's own scripts (when
-/// the RDT defines the room), `room.scd` and, with `original_scripts` (the
-/// `room_script_fixes = false` option), `original.scd`, the one from the
-/// highest layer, the later of that list winning a tie.
+/// the RDT defines the room) and `room.scd`, the one from the highest layer,
+/// `room.scd` winning a tie.
 ///
 /// So a mod that ships its own `room.rdt` runs that RDT's scripts over the
-/// base pack's `room.scd`, one that ships a `room.scd` runs it whatever the
-/// option says, and one that only edits `room.xml` keeps the base scripts.
-pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptSource {
+/// base pack's `room.scd`, one that ships a `room.scd` runs it, and one that
+/// only edits `room.xml` keeps the base scripts.
+pub fn script_source(pack: &Pack, id: RoomId) -> ScriptSource {
     let folder = Folder::of(pack, id);
     let rdt = (format(pack, id) == Some(Format::Rdt))
-        .then(|| pack.depth_of(&folder.file(pack, RDT_FILE)))
-        .flatten();
-    let original = original_scripts
-        .then(|| pack.depth_of(&folder.file(pack, ORIGINAL_SCD_FILE)))
+        .then(|| pack.depth_of(folder.rdt()))
         .flatten();
     [
         (rdt, ScriptSource::Rdt),
-        (
-            pack.depth_of(&folder.file(pack, SCD_FILE)),
-            ScriptSource::Room,
-        ),
-        (original, ScriptSource::Original),
+        (pack.depth_of(&folder.file(SCD_FILE)), ScriptSource::Room),
     ]
     .into_iter()
     .filter_map(|(depth, source)| Some((depth?, source)))
@@ -232,9 +219,6 @@ pub fn script_source(pack: &Pack, id: RoomId, original_scripts: bool) -> ScriptS
 
 /// The file name of a room folder's scripts.
 pub const SCD_FILE: &str = "room.scd";
-/// The file name of a room folder's original scripts, kept beside a
-/// `room.scd` holding the port's fixes.
-pub const ORIGINAL_SCD_FILE: &str = "original.scd";
 
 /// The scripts embedded in RDT `data`: none for an RE2 RDT, whose script
 /// dialect the engine does not run yet.
@@ -306,12 +290,8 @@ impl Loaded {
     }
 
     /// The room's scripts and where they came from ([`script_source`]).
-    pub fn scripts(
-        &self,
-        pack: &Pack,
-        original_scripts: bool,
-    ) -> Result<(scd::ir::Scripts, ScriptSource)> {
-        let source = script_source(pack, self.id, original_scripts);
+    pub fn scripts(&self, pack: &Pack) -> Result<(scd::ir::Scripts, ScriptSource)> {
+        let source = script_source(pack, self.id);
         if self.dialect == Dialect::Re2 {
             return Ok((scd::ir::Scripts::default(), source));
         }
@@ -319,19 +299,16 @@ impl Loaded {
         let scripts = match source {
             ScriptSource::Rdt => match &self.rdt {
                 Some(data) => rdt_scripts(data)?,
-                None => rdt_scripts(&pack.read(&folder.file(pack, RDT_FILE))?)?,
+                None => rdt_scripts(&pack.read(folder.rdt())?)?,
             },
-            ScriptSource::Room => read_scripts(pack, &folder.file(pack, SCD_FILE))?,
-            ScriptSource::Original => read_scripts(pack, &folder.file(pack, ORIGINAL_SCD_FILE))?,
+            ScriptSource::Room => read_scripts(pack, &folder.file(SCD_FILE))?,
         };
         Ok((scripts, source))
     }
 
-    /// The room's own scripts, without the port's fixes: `original.scd`
-    /// when the pack keeps one beside a fixed `room.scd` (unless a later
-    /// layer ships its own `room.scd`), otherwise what the room runs.
+    /// The scripts the room runs, wherever they come from.
     pub fn own_scripts(&self, pack: &Pack) -> Result<scd::ir::Scripts> {
-        self.scripts(pack, true).map(|(scripts, _)| scripts)
+        self.scripts(pack).map(|(scripts, _)| scripts)
     }
 }
 
@@ -415,13 +392,16 @@ pub fn ids(pack: &Pack) -> Vec<RoomId> {
         let Some((stem, file)) = rest.split_once('/') else {
             continue;
         };
-        // A raw RDT may sit in one of the room's variant folders.
-        let file = match file.split_once('/') {
-            Some((_, file)) if stem.len() == 3 && !file.contains('/') => file,
-            Some(_) => continue,
-            None => file,
+        if file.contains('/') {
+            continue;
+        }
+        // A raw RDT may be one variant's (`jill-mansion2.rdt`).
+        let rdt = if stem.len() == 3 {
+            file.to_ascii_lowercase().ends_with(".rdt")
+        } else {
+            file.eq_ignore_ascii_case(RDT_FILE)
         };
-        if !(file.eq_ignore_ascii_case(source::XML_FILE) || file.eq_ignore_ascii_case(RDT_FILE)) {
+        if !(file.eq_ignore_ascii_case(source::XML_FILE) || rdt) {
             continue;
         }
         match stem.len() {
@@ -544,9 +524,8 @@ mod checked_in {
 pub use checked_in::ROOM_FILES as RE1_FILES;
 
 /// The checked-in definition of RE1 room `id` (any variant of it), as
-/// `(pack entry, text)`: its folder's `room.xml` and effect definitions,
-/// variant folders included. Empty when the repository does not define the
-/// room.
+/// `(pack entry, text)`: its folder's `room.xml` and effect definitions.
+/// Empty when the repository does not define the room.
 pub fn re1_definition(id: RoomId) -> Vec<(String, &'static str)> {
     let prefix = format!("{}/", id.room3().to_ascii_lowercase());
     RE1_FILES

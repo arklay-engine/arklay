@@ -158,6 +158,10 @@
     <footstep x="6660" z="8600" width="1000" height="0x0384" sound="0x002A"/>
     <footstep x="900" z="3700" width="8800" height="0x2774" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="JILL">01</item>
+    <item>00</item>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ROOM 003 BATHROOM</string>

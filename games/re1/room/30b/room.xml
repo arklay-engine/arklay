@@ -350,37 +350,31 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="34800" height="0x5C94" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="JILL">02 01</item>
+    <item>00 01</item>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ROCK PASSAGE</string>
       <string key="save_name">Courtyard Room B1</string>
-      <string key="0">{scroll 2}\nIt looks like a hook.</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
-      <string key="0">{scroll 2}\n  何かをかけるフックのようだ</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Salle de la cour SS1</string>
-      <string key="0">{scroll 2}\nOn dirait un crochet.</string>
-    </language>
-    <language lang="de-DE">
-      <string key="0">{scroll 2}\nDas sieht wie ein Haken aus.</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Cortile S1</string>
-      <string key="0">{scroll 2}\nSembra essere un gancio.</string>
-    </language>
-    <language lang="es-ES">
-      <string key="0">{scroll 2}\nParece un gancho...</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната внутр. двора Б1</string>
-      <string key="0">{scroll 2}\nЭто похоже на крючок.</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Maanalainen varasto 0 krs</string>
-      <string key="0">{scroll 2}Jonkinlainen teline...</string>
     </language>
   </strings>
 </room>

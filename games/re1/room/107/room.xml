@@ -596,6 +596,10 @@
     <footstep x="11800" z="11700" width="13800" height="0x1A90" sound="0x002D"/>
     <footstep x="0" z="0" width="26000" height="0x490C" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">GALLERY</string>

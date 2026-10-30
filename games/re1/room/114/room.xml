@@ -291,6 +291,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="30180" height="0x7954" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <effect when="MANSION2">01 00</effect>
+    <effect>00</effect>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">BOILER</string>

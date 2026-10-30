@@ -44,7 +44,7 @@ const fn op(
     }
 }
 
-/// The command-VM opcode table, indexed by opcode (0x00-0x52).
+/// The command-VM opcode table, indexed by opcode (0x00-0x53).
 ///
 /// 0x26 and 0x2E are dead slots: the original handler returns without
 /// consuming anything, so the interpreter spins. They are kept as zero-width
@@ -54,7 +54,12 @@ const fn op(
 /// variant does not match its mask ([`variant_matches`]) and `variant_jump`
 /// skips forward always. Neither touches the `if` branch stack, so `return`
 /// and a failed condition inside one behave exactly as they would without it.
-pub const COMMAND_OPS: [Op; 83] = [
+///
+/// 0x53 is the port's too: `message_long` requests a message by an id word
+/// (a zero byte, the word, the pause word), whose high byte reaches the room
+/// messages past the 64 that `message`'s id byte does
+/// ([`crate::text::message_index`]).
+pub const COMMAND_OPS: [Op; 84] = [
     op(0x00, "end", "u", false, Some(2)),
     op(0x01, "if", "l", false, Some(2)),
     op(0x02, "else", "l", false, Some(2)),
@@ -144,6 +149,7 @@ pub const COMMAND_OPS: [Op; 83] = [
     op(0x50, "costume_ck", "u", true, Some(2)),
     op(0x51, "variant_if", "uL", false, Some(4)),
     op(0x52, "variant_jump", "L", false, Some(3)),
+    op(0x53, "message_long", "uUU", false, Some(6)),
 ];
 
 /// Event-VM state-0 opcodes (0x00-0x09), indexed by opcode.
@@ -420,12 +426,12 @@ mod tests {
 
     #[test]
     fn command_table_indexes_every_opcode() {
-        assert_eq!(COMMAND_OPS.len(), 83);
+        assert_eq!(COMMAND_OPS.len(), 84);
         for (index, entry) in COMMAND_OPS.iter().enumerate() {
             assert_eq!(usize::from(entry.op), index);
             assert_eq!(command_op(entry.op), Some(entry));
         }
-        assert_eq!(command_op(0x53), None);
+        assert_eq!(command_op(0x54), None);
     }
 
     #[test]

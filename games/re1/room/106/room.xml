@@ -505,6 +505,10 @@
     <footstep x="13500" z="100" width="7100" height="0x5848" sound="0x002A"/>
     <footstep x="0" z="0" width="32740" height="0x7468" sound="0x0027"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">MAIN HALL</string>
@@ -539,7 +543,6 @@
       <string key="27">{scroll 0}\n{scroll 1}{clear 92}{scroll 0}\n{scroll 1}{clear 170}{scroll 0}\n{scroll 1}{timed 40}</string>
       <string key="28">{scroll 0}\n{scroll 1}{clear 75}{scroll 0}\n{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}\n{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}\n{scroll 1}{clear 75}{scroll 0}\n{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}\n{scroll 1}{timed 135}</string>
       <string key="32">{scroll 0}\n{scroll 1}{timed 48}</string>
       <string key="33">{scroll 2}It's too dangerous to go\noutside!</string>
@@ -589,7 +592,6 @@
       <string key="27">{scroll 0}\n    ずいぶんと大きな館だ{scroll 1}{clear 92}{scroll 0}\n  迷うなよ 先ずは1階からだ{scroll 1}{clear 170}{scroll 0}\n      それから\xF8\x0E\xF8\x0F{scroll 1}{timed 40}</string>
       <string key="28">{scroll 0}\n      キーピックだ{scroll 1}{clear 75}{scroll 0}   カギ開けの得意なおまえが\n   持ってろよ{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}\n     使わせてもらうわ{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}\n    そっちは俺に任せろ{scroll 1}{clear 75}{scroll 0}\n    ジルは反対をたのむ{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}   何かあったらこのホールで\n   落ち合うとしよう{scroll 1}{timed 135}</string>
       <string key="32">{scroll 0}\n       必ずだぞ{scroll 1}{timed 48}</string>
       <string key="33">{scroll 2}\n  外に出るのは危険だ・・・!</string>
@@ -646,7 +648,6 @@
       <string key="28">{scroll 0}Jill, j'ai trouvé un \nkit de crochetage. {scroll 1}{clear 62}{scroll 0}\nCa peut t'être utile,{scroll 1}{clear 85}{scroll 0}toi la reine des\ncrocheteuses. Prends-le.{scroll 1}{timed 137}</string>
       <string when="MANSION2" key="28">{scroll 0}Jill, j'ai trouvé \nun Passe-partout.{scroll 1}{clear 62}{scroll 0}\nCa peut t'être utile,{scroll 1}{clear 75}{scroll 0}toi la reine des crocheteuses.\nPrends-le.{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}Merci. \nJ'en aurai peut-être besoin.{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}\nNon, je m'occupe de ce côté. {scroll 1}{clear 75}{scroll 0}Je t'ai dit de commencer par \nl'autre côté, Jill!{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}Ecoute, \ns'il arrive quoi que ce soit, {scroll 1}{clear 85}{scroll 0}\non se retrouve dans le hall.{scroll 1}{timed 50}</string>
       <string when="MANSION2" key="31">{scroll 0}Ecoute, \ns'il arrive quoi que ce soit, {scroll 1}{clear 90}{scroll 0}\non se retrouve dans le hall.{scroll 1}{timed 45}</string>
       <string key="32">{scroll 0}\n...Cette fois, je serai là.{scroll 1}{timed 53}</string>
@@ -696,8 +697,7 @@
       <string key="15">{scroll 0}\nWas war denn das?{scroll 1}{clear 38}{scroll 0}\nVielleicht ist es Chris?{scroll 1}{timed 64}</string>
       <string when="MANSION2" key="15">{scroll 0}\n...Was war denn das?{scroll 1}{clear 38}{scroll 0}\n...Vielleicht ist es Chris?{scroll 1}{timed 64}</string>
       <string key="16">{scroll 0}Jill!\nKannst Du gehen?{scroll 1}{clear 72}{scroll 0}\nIch komme mit dir!{scroll 1}{clear 65}{scroll 0}Chris ist ein alter Partner\nvon uns, musst du wissen.{scroll 1}{timed 62}</string>
-      <string when="CHRIS MANSION2" key="16">{scroll 0}Jill!\nKanst Du gehen?{scroll 1}{clear 72}{scroll 0}\nIch komme mit dir!{scroll 1}{clear 60}{scroll 0}Chris ist ein alter Partner\nvon uns, mußt du wissen.{scroll 1}{timed 67}</string>
-      <string when="JILL MANSION2" key="16">{scroll 0}Jill!\nKanst Du gehen?{scroll 1}{clear 72}{scroll 0}\nIch komme mit dir!{scroll 1}{clear 47}{scroll 0}Chris ist ein alter Partner\nvon uns, mußt du wissen.{scroll 1}{timed 80}</string>
+      <string when="MANSION2" key="16">{scroll 0}Jill!\nKanst Du gehen?{scroll 1}{clear 72}{scroll 0}\nIch komme mit dir!{scroll 1}{clear 47}{scroll 0}Chris ist ein alter Partner\nvon uns, mußt du wissen.{scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}OK!\nLasst mich das übernehmen.{scroll 1}{timed 92}</string>
       <string when="MANSION2" key="17">{scroll 0}OK!\nLaßt mich das hier übernehmen.{scroll 1}{timed 92}</string>
       <string key="18">{scroll 0}\nHaltet die Augen offen!{scroll 1}{timed 44}</string>
@@ -707,20 +707,17 @@
       <string key="21">{scroll 0}Hast du irgendwas gefunden,\nJill?{scroll 1}{timed 56}</string>
       <string key="22">{scroll 0}\nNein, nichts.{scroll 1}{timed 44}</string>
       <string key="23">{scroll 0}\nWas bedeutet das hier alles?{scroll 1}{clear 55}{scroll 0}Ich kann damit\nüberhaupt nichts anfangen.{scroll 1}{timed 56}</string>
-      <string when="CHRIS MANSION2" key="23">{scroll 0}\nWas bedeutet das hier alles?{scroll 1}{clear 41}{scroll 0}Ich kann damit überhaupt\nnichts anfangen.{scroll 1}{timed 70}</string>
-      <string when="JILL MANSION2" key="23">{scroll 0}\nWas bedeutet das hier alles?{scroll 1}{clear 51}{scroll 0}Ich kann damit überhaupt\nnichts anfangen.{scroll 1}{timed 60}</string>
+      <string when="MANSION2" key="23">{scroll 0}\nWas bedeutet das hier alles?{scroll 1}{clear 51}{scroll 0}Ich kann damit überhaupt\nnichts anfangen.{scroll 1}{timed 60}</string>
       <string key="24">{scroll 0}\nIch bin genauso ratlos.{scroll 1}{timed 49}</string>
       <string key="25">{scroll 0}Diesmal ist Wesker einfach\nverschwunden.{scroll 1}{clear 56}{scroll 0}Ich hab' keine Ahnung,\nwas hier vor sich geht!{scroll 1}{clear 56}{scroll 0}Nun - wir können es nicht\nändern.{scroll 1}{clear 60}{scroll 0}Wir sollten ihn suchen,\njeder für sich.{scroll 1}{clear 52}{scroll 0}Ich werde das Esszimmer\nnoch mal durchstöbern.{scroll 1}{timed 60}</string>
       <string when="MANSION2" key="25">{scroll 0}Diesmal ist Wesker einfach\nverschwunden.{scroll 1}{clear 56}{scroll 0}...Ich hab' keine Ahnung,\nwas hier vor sich geht!{scroll 1}{clear 56}{scroll 0}Nun - wir können es nicht\nändern.{scroll 1}{clear 30}{scroll 0}Wir sollten ihn suchen,\njeder für sich.{scroll 1}{clear 32}{scroll 0}Ich werde das Eßzimmer noch\nmal durchstöbern.{scroll 1}{timed 60}</string>
       <string key="26">{scroll 0}\nOK!{scroll 1}{clear 30}{scroll 0}Und ich versuche es mit der Tür\nauf der gegenüberliegenden Seite.{scroll 1}{timed 79}</string>
-      <string when="JILL MANSION2" key="26">{scroll 0}\nOK!{scroll 1}{clear 20}{scroll 0}Und ich versuche es mit der Tür\nauf der gegenüberliegenden Seite.{scroll 1}{timed 89}</string>
+      <string when="MANSION2" key="26">{scroll 0}\nOK!{scroll 1}{clear 20}{scroll 0}Und ich versuche es mit der Tür\nauf der gegenüberliegenden Seite.{scroll 1}{timed 89}</string>
       <string key="27">{scroll 0}\nDieses Anwesen ist riesig!{scroll 1}{clear 82}{scroll 0}Wenn wir uns verlieren, könnten\nwir in Schwierigkeiten kommen.{scroll 1}{clear 75}{scroll 0}Wir sollten auf der ersten\nEtage{scroll 1}{clear 75}{scroll 0}anfangen, einverstanden?\nUnd...{scroll 1}{timed 35}</string>
       <string when="MANSION2" key="27">{scroll 0}\nDieses Anwesen ist gigantisch!{scroll 1}{clear 92}{scroll 0}Wenn wir uns verlieren, könnten\nwir in Schwierigkeiten kommen.{scroll 1}{clear 170}{scroll 0}Wir sollten auf der ersten\nEtage anfangen,{scroll 1}{clear 40}{scroll 0}einverstanden?\nUnd...{scroll 1}{timed 33}</string>
       <string key="28">{scroll 0}\nJill, hier ein Dietrich.{scroll 1}{clear 62}{scroll 0}Es wäre gut, wenn du\n- die Meisterin im Schlösser-{scroll 1}{clear 85}{scroll 0}\nknacken - ihn mitnimmst.{scroll 1}{timed 137}</string>
       <string when="MANSION2" key="28">{scroll 0}\nJill, hier ein Dietrich.{scroll 1}{clear 62}{scroll 0}Es wäre nicht schlecht, wenn du\n- die Meisterin im Schlösser{scroll 1}{clear 75}{scroll 0}\nknacken - ihn mitnimmst.{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}Danke.\nDen brauche ich bestimmt.{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}Nein, in dieser Richtung\nwerde ich es versuchen.{scroll 1}{clear 75}{scroll 0}Ich sagte doch, fang auf\nder anderen Seite an, Jill!{scroll 1}{timed 73}</string>
-      <string when="MANSION2" key="30">{scroll 0}Nein, in dieser Richtung werde\nich es versuchen.{scroll 1}{clear 75}{scroll 0}Ich sagte doch, du sollst auf\nder anderen Seite anfangen, Jill!{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}Und noch was, falls etwas\npassiert, treffen{scroll 1}{clear 75}{scroll 0}\nwir uns in dieser Halle.{scroll 1}{timed 60}</string>
       <string when="MANSION2" key="31">{scroll 0}Und noch was,\nfalls irgend etwas passiert,{scroll 1}{clear 65}{scroll 0}treffen wir uns in dieser\nHalle.{scroll 1}{timed 70}</string>
       <string key="32">{scroll 0}\nIch bin dann zur Stelle.{scroll 1}{timed 53}</string>
@@ -731,8 +728,7 @@
       <string key="35">{scroll 0}\nBarry!{scroll 1}{timed 44}</string>
       <string key="36">{scroll 0}Jill! Wie sieht es aus?\nIrgendwelche Hinweise?{scroll 1}{clear 116}{scroll 0}Nein, aber... mit diesem Haus\nstimmt etwas nicht!{scroll 1}{timed 123}</string>
       <string key="37">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 59}{scroll 0}zuerst einmal unseren\nFluchtweg zu sichern.{scroll 1}{timed 50}</string>
-      <string when="CHRIS MANSION2" key="37">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 50}{scroll 0}zuerst einmal unseren\nFluchtweg zu sichern.{scroll 1}{timed 59}</string>
-      <string when="JILL MANSION2" key="37">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 40}{scroll 0}zuerst einmal unseren\nFluchtweg zu sichern.{scroll 1}{timed 69}</string>
+      <string when="MANSION2" key="37">{scroll 0}Mann!\nDiese Halle ist gefährlich.{scroll 1}{clear 115}{scroll 0}\nVielleicht wäre es besser,{scroll 1}{clear 40}{scroll 0}zuerst einmal unseren\nFluchtweg zu sichern.{scroll 1}{timed 69}</string>
       <string key="38">{scroll 0}Da muss es noch irgendwo eine\nHintertür geben.{scroll 1}{clear 120}{scroll 0}Die sollten wir finden,\nwas meinst du dazu?{scroll 1}{timed 85}</string>
       <string when="MANSION2" key="38">{scroll 0}Da muß es noch irgendwo eine\nHintertür geben...{scroll 1}{clear 120}{scroll 0}Die sollten wir erstmal\nfinden, was meinst du dazu?{scroll 1}{timed 85}</string>
       <string key="39">{scroll 0}OK, dann sollten wir uns\nwieder trennen.{scroll 1}{clear 96}{scroll 0}Warte einen Moment.\nIch habe etwas gefunden.{scroll 1}{timed 85}</string>
@@ -743,7 +739,6 @@
       <string key="43">{scroll 0}\nIch habe das hier.{scroll 1}{timed 67}</string>
       <string key="44">{scroll 0}Ich danke dir.\nIch werde es nehmen.{scroll 1}{timed 87}</string>
       <string key="45">{scroll 2}\nDas ist Jills Waffe!{clear 0}{scroll 2}\n{timed 1}</string>
-      <string when="JILL MANSION2" key="45">{scroll 2}\nDas ist Jills Waffe...!{clear 0}{scroll 2}\n{timed 1}</string>
       <string key="46">{scroll 2}Es ist keine Zeit,\ndas zu überprüfen.</string>
     </language>
     <language lang="it-IT">
@@ -779,7 +774,6 @@
       <string when="MANSION2" key="27">{scroll 0}\nQuesta magione è enorme.{scroll 1}{clear 82}{scroll 0}Se ci perdessimo, \nfiniremmo nei guai.{scroll 1}{clear 70}{scroll 0}Secondo me dovremmo iniziare \ndal piano terra, sei d'accordo?{scroll 1}{clear 70}{scroll 0}\nE...{scroll 1}{timed 45}</string>
       <string key="28">{scroll 0}\nJill, ecco un grimaldello.{scroll 1}{clear 62}{scroll 0}Sarebbe comodo se tu, \nscassinatrice provetta,{scroll 1}{clear 85}{scroll 0}\nlo tenessi.{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}Grazie. \nPotrebbe servirmi.{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}\nNo, mi occuperò io di quella parte. {scroll 1}{clear 75}{scroll 0}Ti avevo detto dall'altra \nparte, Jill!{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}Ascolta: se succede qualcosa,\nritroviamoci in questa sala.{scroll 1}{timed 120}</string>
       <string key="32">{scroll 0}\nConta su di me!{scroll 1}{timed 53}</string>
       <string key="33">{scroll 2}Uscire all'aperto\nè troppo pericoloso!</string>
@@ -799,18 +793,13 @@
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\nNo entiendo qué ha pasado.{scroll 1}{timed 53}</string>
-      <string when="JILL MANSION2" key="0">{scroll 0}\nNo sé qué ha pasado.{scroll 1}{timed 53}</string>
       <string key="1">{scroll 0}\n¡Barry! ¿Dónde está Barry?{scroll 1}{timed 78}</string>
       <string key="2">{scroll 0}Bueno, lo siento pero \nprobablemente esté...{scroll 1}{timed 110}</string>
-      <string when="JILL MANSION2" key="2">{scroll 0}Bueno, lo siento pero \nprobablemente haya...{scroll 1}{timed 110}</string>
       <string key="3">{scroll 0}\n¡No!{scroll 1}{timed 29}</string>
       <string key="4">{scroll 0}\n¿Qué ha sido eso?{scroll 1}{clear 35}{scroll 0}\nIré a mirar.{scroll 1}{timed 40}</string>
-      <string when="JILL MANSION2" key="4">{scroll 0}\n¿Qué es eso?{scroll 1}{clear 35}{scroll 0}\nIré a mirar.{scroll 1}{timed 40}</string>
       <string key="5">{scroll 0}Vale, Jill y yo nos quedamos\nen el vestíbulo por si hay{scroll 1}{clear 85}{scroll 0}\nuna emergencia.{scroll 1}{timed 35}</string>
-      <string when="JILL MANSION2" key="5">{scroll 0}Vale, Jill y yo nos quedamos\nen el hall por si hay{scroll 1}{clear 95}{scroll 0}\nuna emergencia.{scroll 1}{timed 35}</string>
       <string key="6">{scroll 0}\nChris.{scroll 1}{timed 42}</string>
       <string key="7">{scroll 0}\nTen cuidado.{scroll 1}{timed 52}</string>
-      <string when="JILL MANSION2" key="7">{scroll 0}\nHazte cargo.{scroll 1}{timed 52}</string>
       <string key="8">{scroll 0}Si escuchas disparos,\ninvestiga en esa dirección.{scroll 1}{timed 73}</string>
       <string key="9">{scroll 0}\n¿Wesker? ¿Jill?{scroll 1}{timed 59}</string>
       <string key="10">{scroll 0}¿Qué les ha pasado a\nJill y Wesker?{scroll 1}{timed 83}</string>
@@ -820,51 +809,45 @@
       <string key="14">{scroll 0}\nPero Chris está...{scroll 1}{timed 47}</string>
       <string key="15">{scroll 0}\n¿Qué es eso?{scroll 1}{clear 38}{scroll 0}\nPuede que sea Chris.{scroll 1}{timed 64}</string>
       <string key="16">{scroll 0}\nBueno, Jill, ¿puedes ir?{scroll 1}{clear 72}{scroll 0}Voy contigo, Chris es un\nantiguo socio, ¿sabes?{scroll 1}{timed 127}</string>
-      <string when="JILL MANSION2" key="16">{scroll 0}\nBueno, Jill, ¿puedes ir?{scroll 1}{clear 65}{scroll 0}Voy contigo. Chris es nuestro\ncompañero desde hace mucho.{scroll 1}{timed 120}</string>
+      <string when="MANSION2" key="16">{scroll 0}\nBueno, Jill, ¿puedes ir?{scroll 1}{clear 65}{scroll 0}Voy contigo. Chris es nuestro\ncompañero desde hace mucho.{scroll 1}{timed 120}</string>
       <string key="17">{scroll 0}\nVale, déjame que me encargue.{scroll 1}{timed 92}</string>
-      <string when="JILL MANSION2" key="17">{scroll 0}\nVale, deja que me encargue.{scroll 1}{timed 92}</string>
+      <string when="MANSION2" key="17">{scroll 0}\nVale, deja que me encargue.{scroll 1}{timed 92}</string>
       <string key="18">{scroll 0}\n¡No te distraigas!{scroll 1}{timed 44}</string>
-      <string when="JILL MANSION2" key="18">{scroll 0}\n¡Permanece alerta!{scroll 1}{timed 44}</string>
+      <string when="MANSION2" key="18">{scroll 0}\n¡Permanece alerta!{scroll 1}{timed 44}</string>
       <string key="19">{scroll 0}\n¡Wesker!{scroll 1}{timed 60}</string>
       <string key="20">{scroll 0}\nJill, ayúdame a buscarlo y {scroll 1}{clear 37}{scroll 0}no te vayas del hall\npor ahora.{scroll 1}{timed 74}</string>
-      <string when="JILL MANSION2" key="20">{scroll 0}\nJill, ayúdame a buscarlo y {scroll 1}{clear 37}{scroll 0}no te vayas del vestíbulo\npor ahora.{scroll 1}{timed 74}</string>
+      <string when="MANSION2" key="20">{scroll 0}\nJill, ayúdame a buscarlo y {scroll 1}{clear 37}{scroll 0}no te vayas del vestíbulo\npor ahora.{scroll 1}{timed 74}</string>
       <string key="21">{scroll 0}\nJill, ¿has encontrado algo?{scroll 1}{timed 56}</string>
       <string key="22">{scroll 0}\nNada.{scroll 1}{timed 44}</string>
       <string key="23">{scroll 0}¿De qué va todo esto?\nYo no tengo ni idea.{scroll 1}{timed 111}</string>
       <string key="24">{scroll 0}\nYo tampoco lo sé.{scroll 1}{timed 49}</string>
       <string key="25">{scroll 0}Ahora le ha tocado\ndesaparecer a Wesker.{scroll 1}{clear 56}{scroll 0}No sé qué está\npasando.{scroll 1}{clear 56}{scroll 0}\nBueno, no se le puede ayudar.{scroll 1}{clear 60}{scroll 0}Vamos a buscarlo\nseparados.{scroll 1}{clear 52}{scroll 0}Yo volveré a mirar\nen el comedor.{scroll 1}{timed 60}</string>
-      <string when="CHRIS MANSION2" key="25">{scroll 0}Ahora le ha tocado\ndesaparecer a Wesker.{scroll 1}{clear 56}{scroll 0}No sé qué está\npasando.{scroll 1}{clear 56}{scroll 0}\nBueno, no se le puede ayudar.{scroll 1}{clear 30}{scroll 0}Vamos a buscarlo\nseparados.{scroll 1}{clear 32}{scroll 0}Yo volveré a mirar\nen el comedor.{scroll 1}{timed 60}</string>
-      <string when="JILL MANSION2" key="25">{scroll 0}Ahora le ha tocado\ndesaparecer a Wesker.{scroll 1}{clear 56}{scroll 0}No sé qué está\npasando.{scroll 1}{clear 56}{scroll 0}\nEn fin, qué remedio.{scroll 1}{clear 60}{scroll 0}Vamos a buscarlo\nseparados.{scroll 1}{clear 52}{scroll 0}Yo volveré a mirar\nen el comedor.{scroll 1}{timed 60}</string>
+      <string when="MANSION2" key="25">{scroll 0}Ahora le ha tocado\ndesaparecer a Wesker.{scroll 1}{clear 56}{scroll 0}No sé qué está\npasando.{scroll 1}{clear 56}{scroll 0}\nEn fin, qué remedio.{scroll 1}{clear 60}{scroll 0}Vamos a buscarlo\nseparados.{scroll 1}{clear 52}{scroll 0}Yo volveré a mirar\nen el comedor.{scroll 1}{timed 60}</string>
       <string key="26">{scroll 0}Vale, yo probaré en la puerta\ndel otro lado.{scroll 1}{timed 109}</string>
-      <string when="JILL MANSION2" key="26">{scroll 0}Vale, yo probaré por\nla puerta del otro lado.{scroll 1}{timed 109}</string>
+      <string when="MANSION2" key="26">{scroll 0}Vale, yo probaré por\nla puerta del otro lado.{scroll 1}{timed 109}</string>
       <string key="27">{scroll 0}\nEsta mansión es inmensa.{scroll 1}{clear 82}{scroll 0}Si nos perdemos, podríamos\ntener problemas.{scroll 1}{clear 75}{scroll 0}Deberíamos empezar por\nel primer piso, ¿no?{scroll 1}{clear 75}{scroll 0}\nY, Jill,{scroll 1}{timed 35}</string>
-      <string when="CHRIS MANSION2" key="27">{scroll 0}\nEsta mansión es inmensa.{scroll 1}{clear 92}{scroll 0}Si nos perdemos, podríamos\ntener problemas.{scroll 1}{clear 170}{scroll 0}Deberíamos empezar por\nel primer piso, ¿no?{scroll 1}{clear 40}{scroll 0}\nY, Jill,{scroll 1}{timed 33}</string>
-      <string when="JILL MANSION2" key="27">{scroll 0}\nEsta mansión es gigantesca.{scroll 1}{clear 82}{scroll 0}Si nos perdemos, podríamos\ntener problemas.{scroll 1}{clear 75}{scroll 0}Deberíamos empezar por\nla planta baja, ¿no?{scroll 1}{clear 75}{scroll 0}\nY, Jill,{scroll 1}{timed 35}</string>
+      <string when="MANSION2" key="27">{scroll 0}\nEsta mansión es gigantesca.{scroll 1}{clear 82}{scroll 0}Si nos perdemos, podríamos\ntener problemas.{scroll 1}{clear 75}{scroll 0}Deberíamos empezar por\nla planta baja, ¿no?{scroll 1}{clear 75}{scroll 0}\nY, Jill,{scroll 1}{timed 35}</string>
       <string key="28">{scroll 0}\ntoma una ganzúa.{scroll 1}{clear 62}{scroll 1}Te puede venir bien\npara abrir las cosas.{clear 85}{scroll 0}\nLlévatela.{scroll 1}{timed 137}</string>
-      <string when="CHRIS MANSION2" key="28">{scroll 0}\ntoma una ganzúa.{scroll 1}{clear 62}{scroll 1}Te puede venir bien\npara abrir las cosas.{clear 75}{scroll 0}\nLlévatela.{scroll 1}{timed 137}</string>
-      <string when="JILL MANSION2" key="28">{scroll 0}\ntoma una ganzúa.{scroll 1}{clear 62}{scroll 0}Te puede venir bien\nsi tú, la maestra de los cerrojos,{clear 85}{scroll 0}\nla llevas contigo.{scroll 1}{timed 137}</string>
+      <string when="MANSION2" key="28">{scroll 0}\ntoma una ganzúa.{scroll 1}{clear 62}{scroll 0}Te puede venir bien\nsi tú, la maestra de los cerrojos,{clear 85}{scroll 0}\nla llevas contigo.{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}¡Gracias!\nPuede que la necesite.{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}No, yo iré por\nahí.{scroll 1}{clear 75}{scroll 0}Jill, te dije que empezaras \npor el otro lado.{scroll 1}{timed 73}</string>
-      <string when="JILL MANSION2" key="30">{scroll 0}No, yo iré por\nahí.{scroll 1}{clear 75}{scroll 0}Jill, empieza \npor el otro lado.{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}Escucha, si pasa algo,\nnos encontraremos en el hall.{scroll 1}{timed 135}</string>
-      <string when="JILL MANSION2" key="31">{scroll 0}Escucha, si pasa algo,\nnos encontraremos en el vestíbulo.{scroll 1}{timed 135}</string>
+      <string when="MANSION2" key="31">{scroll 0}Escucha, si pasa algo,\nnos encontraremos en el vestíbulo.{scroll 1}{timed 135}</string>
       <string key="32">{scroll 0}\nEsta vez estaré allí.{scroll 1}{timed 53}</string>
-      <string when="CHRIS MANSION2" key="32">{scroll 0}\nEsta vez estaré allí.{scroll 1}{timed 48}</string>
-      <string when="JILL MANSION2" key="32">{scroll 0}\nYo sí que estaré aquí.{scroll 1}{timed 53}</string>
+      <string when="MANSION2" key="32">{scroll 0}\nYo sí que estaré aquí.{scroll 1}{timed 53}</string>
       <string key="33">{scroll 2}\n¡Salir fuera es demasiado peligroso!</string>
       <string key="34">{scroll 2}¡Primero tengo que\nbuscar en el hall!</string>
-      <string when="JILL MANSION2" key="34">{scroll 2}¡Primero tengo que\nbuscar en el vestíbulo!</string>
+      <string when="MANSION2" key="34">{scroll 2}¡Primero tengo que\nbuscar en el vestíbulo!</string>
       <string key="35">{scroll 0}\n¡Barry!{scroll 1}{timed 44}</string>
       <string key="36">{scroll 0}¡Jill! ¿Qué pasa?\n¿Alguna pista?{scroll 1}{clear 116}{scroll 0}No, pero en esta casa\nhay algo que no encaja.{scroll 1}{timed 123}</string>
       <string key="37">{scroll 0}¡Vaya!\nEste hall es peligroso.{scroll 1}{clear 115}{scroll 0}Quizá lo mejor sea asegurar\nprimero una ruta de escape. {scroll 1}{timed 109}</string>
-      <string when="JILL MANSION2" key="37">{scroll 0}¡Vaya!\nEste vestíbulo es peligroso.{scroll 1}{clear 115}{scroll 0}Quizá lo mejor sea asegurar\nprimero una ruta de escape. {scroll 1}{timed 109}</string>
+      <string when="MANSION2" key="37">{scroll 0}¡Vaya!\nEste vestíbulo es peligroso.{scroll 1}{clear 115}{scroll 0}Quizá lo mejor sea asegurar\nprimero una ruta de escape. {scroll 1}{timed 109}</string>
       <string key="38">{scroll 0}Tiene que haber una puerta\ntrasera en alguna parte.{scroll 1}{clear 120}{scroll 0}Primero, busquémosla,\n¿vale?{scroll 1}{timed 85}</string>
-      <string when="JILL MANSION2" key="38">{scroll 0}Tiene que haber una puerta\ntrasera en alguna parte.{scroll 1}{clear 100}{scroll 0}Primero, busquémosla,\n¿te parece?{scroll 1}{timed 85}</string>
+      <string when="MANSION2" key="38">{scroll 0}Tiene que haber una puerta\ntrasera en alguna parte.{scroll 1}{clear 100}{scroll 0}Primero, busquémosla,\n¿te parece?{scroll 1}{timed 85}</string>
       <string key="39">{scroll 0}\nVale, separémonos.{scroll 1}{clear 96}{scroll 0}¡Solo un momento!\nHe encontrado algo.{scroll 1}{timed 85}</string>
-      <string when="JILL MANSION2" key="39">{scroll 0}\nVale, separémonos.{scroll 1}{clear 80}{scroll 0}¡Espera un momento!\nHe encontrado algo.{scroll 1}{timed 85}</string>
+      <string when="MANSION2" key="39">{scroll 0}\nVale, separémonos.{scroll 1}{clear 80}{scroll 0}¡Espera un momento!\nHe encontrado algo.{scroll 1}{timed 85}</string>
       <string key="40">{scroll 0}\n¿Qué es eso?{scroll 1}{timed 47}</string>
       <string key="41">{scroll 0}\nEs un arma.{scroll 1}{clear 65}{scroll 0}Es muy potente, \nsobre todo contra{scroll 1}{clear 70}{scroll 0}las cosas vivientes.\nSerá mejor que la lleves.{scroll 1}{timed 60}</string>
-      <string when="JILL MANSION2" key="41">{scroll 0}\nEs un arma.{scroll 1}{clear 45}{scroll 0}Es muy potente, \nsobre todo contra{scroll 1}{clear 125}{scroll 0}criaturas vivientes.\nSerá mejor que la lleves.{scroll 1}{timed 60}</string>
+      <string when="MANSION2" key="41">{scroll 0}\nEs un arma.{scroll 1}{clear 45}{scroll 0}Es muy potente, \nsobre todo contra{scroll 1}{clear 125}{scroll 0}criaturas vivientes.\nSerá mejor que la lleves.{scroll 1}{timed 60}</string>
       <string key="42">{scroll 0}\nPero, Barry, ¿y tú?{scroll 1}{timed 65}</string>
       <string key="43">{scroll 0}\n¡Tengo esto!{scroll 1}{timed 67}</string>
       <string key="44">{scroll 0}Gracias,\nentonces me llevaré esto.{scroll 1}{timed 87}</string>
@@ -903,7 +886,6 @@
       <string key="27">{scroll 0}\n{scroll 1}{clear 92}{scroll 0}\n{scroll 1}{clear 170}{scroll 0}\n{scroll 1}{timed 40}</string>
       <string key="28">{scroll 0}\n{scroll 1}{clear 75}{scroll 0}\n{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}\n{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}\n{scroll 1}{clear 75}{scroll 0}\n{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}\n{scroll 1}{timed 135}</string>
       <string key="32">{scroll 0}\n{scroll 1}{timed 48}</string>
       <string key="33">{scroll 2}\nНа улице слишком опасно!</string>
@@ -957,7 +939,6 @@
       <string key="28">{scroll 0}Jill, tässä sinulle tiirikka.{scroll 1}{clear 62}{scroll 0}Olisi varmaan parasta jos sinä,\nmeidän lukkomestarimme,{clear 85}{scroll 0}otat sen mukaasi.{scroll 1}{timed 137}</string>
       <string when="MANSION2" key="28">{scroll 0}Jill, tässä sinulle tiirikka.{scroll 1}{clear 62}{scroll 1}Olisi varmaan parasta jos sinä,\nmeidän lukkomestarimme,{clear 75}{scroll 0}otat sen mukaasi.{scroll 1}{timed 137}</string>
       <string key="29">{scroll 0}Kiitos! Saatan tarvita sitä.{scroll 1}{timed 88}</string>
-      <string key="30">{scroll 0}Ei, minä pidän huolen tästä\npuolesta.{scroll 1}{clear 75}{scroll 0}Sinun piti aloittaa toiselta\npuolelta.{scroll 1}{timed 73}</string>
       <string key="31">{scroll 0}Kuule, jos jotain tapahtuu,\ntavataan tässä aulassa.{scroll 1}{timed 135}</string>
       <string key="32">{scroll 0}Tällä kertaa aion olla paikalla!{scroll 1}{timed 53}</string>
       <string when="MANSION2" key="32">{scroll 0}Tällä kertaa aion olla paikalla!{scroll 1}{timed 48}</string>

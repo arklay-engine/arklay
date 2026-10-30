@@ -163,6 +163,10 @@
     <footstep x="5900" z="6200" width="10100" height="0x2710" sound="0x002D"/>
     <footstep x="0" z="0" width="32500" height="0x7EF4" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">PLANT BOSS ROOM</string>
@@ -222,10 +226,8 @@
       <string key="5">{scroll 0}\nDu hast mich gerettet!{scroll 2}{timed 65}</string>
       <string key="6">{scroll 0}\nJa.{scroll 2}{timed 40}</string>
       <string key="7">{scroll 0}Das war knapp.\nDanke, Barry.{scroll 2}{timed 90}</string>
-      <string key="8">{scroll 0}Nicht der Rede wert.\nWar das ein Ungeheuer!{scroll 2}{clear 110}{scroll 0}\nIch kann es kaum glauben...{scroll 2}{clear 50}{scroll 0}Was zum Teufel ist das hier\nbloß für ein Ort...?{scroll 2}{timed 50}</string>
-      <string when="JILL" key="8">{scroll 0}\nNicht der Rede wert.{scroll 2}{clear 50}{scroll 0}War das ein Ungeheuer!\nIch kann es kaum glauben...{scroll 2}{clear 60}{scroll 0}Was zum Teufel ist das hier\nbloß für ein Ort...?{scroll 2}{timed 100}</string>
-      <string key="9">{scroll 0}Okay! Ich werde\nin den Wachbereich gehen{scroll 2}{clear 90}{scroll 0}\nund mich dort mal umsehen...{scroll 2}{clear 45}{scroll 0}obwohl ich sicher bin, dass es\nauch in dem Landhaus noch{scroll 2}{clear 45}{scroll 0}\nwichtige Dinge gibt.{scroll 2}{clear 65}{scroll 0}Wir sollten auf jeden Fall\nunsere Nachforschungen{scroll 2}{clear 50}{scroll 0}\neinzeln durchführen.{scroll 2}{timed 40}</string>
-      <string when="JILL" key="9">{scroll 0}Okay! Ich werde\nin den Wachbereich gehen{scroll 2}{clear 90}{scroll 0}\nund mich dort mal umsehen...{scroll 2}{clear 30}{scroll 0}obwohl ich sicher bin, dass es\nauch in dem Landhaus noch{scroll 2}{clear 60}{scroll 0}\nwichtige Dinge gibt.{scroll 2}{clear 65}{scroll 0}Wir sollten auf jeden Fall\nunsere Nachforschungen{scroll 2}{clear 50}{scroll 0}\neinzeln durchführen.{scroll 2}{timed 40}</string>
+      <string key="8">{scroll 0}\nNicht der Rede wert.{scroll 2}{clear 50}{scroll 0}War das ein Ungeheuer!\nIch kann es kaum glauben...{scroll 2}{clear 60}{scroll 0}Was zum Teufel ist das hier\nbloß für ein Ort...?{scroll 2}{timed 100}</string>
+      <string key="9">{scroll 0}Okay! Ich werde\nin den Wachbereich gehen{scroll 2}{clear 90}{scroll 0}\nund mich dort mal umsehen...{scroll 2}{clear 30}{scroll 0}obwohl ich sicher bin, dass es\nauch in dem Landhaus noch{scroll 2}{clear 60}{scroll 0}\nwichtige Dinge gibt.{scroll 2}{clear 65}{scroll 0}Wir sollten auf jeden Fall\nunsere Nachforschungen{scroll 2}{clear 50}{scroll 0}\neinzeln durchführen.{scroll 2}{timed 40}</string>
       <string key="10">{scroll 0}\nOkay!{scroll 2}{timed 40}</string>
       <string key="11">Da ist irgendwas Glänzendes,\naber ich komme nicht dran.{scroll 2}</string>
       <string key="12">Sie ist auch verschlossen.\nDie Tür geht nicht auf.{scroll 2}</string>
@@ -249,18 +251,14 @@
     <language lang="es-ES">
       <string key="0">{scroll 0}\n¡Chris!{scroll 2}{timed 40}</string>
       <string key="1">{scroll 0}Re-Rebecca...\nNo, no sirve de nada...{scroll 2}{clear 120}{scroll 0}Las raíces de esta cosa\nestán en el sótano...{scroll 2}{clear 80}{scroll 0}\nPuedes... ¡aah!{scroll 2}{timed 80}</string>
-      <string when="JILL" key="1">{scroll 0}Re-Rebecca...\nNo, no sirve...{scroll 2}{clear 120}{scroll 0}Las raíces están en\nel sótano...{scroll 2}{clear 80}{scroll 0}\nPuedes... ¡Vaya!{scroll 2}{timed 80}</string>
       <string key="2">{scroll 0}\nLlévate este archivo...{scroll 2}{clear 70}{scroll 0}\nUsa la información...{scroll 2}{clear 60}{scroll 0}para hacer una poción\ny matar la raíz.{scroll 2}{clear 95}{scroll 0}\n¡R-Rebecca, por favor!{scroll 2}{timed 60}</string>
       <string key="3">{scroll 0}\n¡Chris! ¡No te mueras!{scroll 2}{timed 95}</string>
       <string key="4">{scroll 0}\n¿Qué diablos es esto?{scroll 2}{clear 60}{scroll 0}\n¡Barry!{scroll 2}{clear 25}{scroll 0}\n¡Jill!{scroll 2}{timed 35}</string>
       <string key="5">{scroll 0}\n¡Me has salvado!{scroll 2}{timed 65}</string>
       <string key="6">{scroll 0}\nSí...{scroll 2}{timed 40}</string>
-      <string key="7">{scroll 0}¡Ha estado cerca!\nGracias, Barry.{scroll 2}{timed 90}</string>
-      <string when="JILL" key="7">{scroll 0}¡Ha faltado poco!\nGracias, Barry.{scroll 2}{timed 90}</string>
-      <string key="8">{scroll 0}No ha sido nada. \nQué monstruo.{scroll 2}{clear 110}{scroll 0}No puedo creerlo. ¿Pero\nqué es este sitio?{scroll 2}{timed 100}</string>
-      <string when="JILL" key="8">{scroll 0}No ha sido nada. \nQué monstruo.{scroll 2}{clear 110}{scroll 0}No puedo creerlo.\n¿Pero qué es este sitio?{scroll 2}{timed 100}</string>
-      <string key="9">{scroll 0}Vale, me quedaré en\nla zona del soldado{scroll 2}{clear 90}{scroll 0}y echaré un vistazo.\nAunque estoy seguro{scroll 2}\x02{scroll 0}de que aún quedan\ncosas en la otra mansión.{scroll 2}{clear 65}{scroll 0}Bueno, separémonos \npara buscar.{scroll 2}{timed 90}</string>
-      <string when="JILL" key="9">{scroll 0}Vale, me quedaré en\nla garita{scroll 2}{clear 90}{scroll 0}y echaré un vistazo.\nAunque estoy seguro{scroll 2}{clear 90}{scroll 0}de que aún quedan\ncosas en la mansión también.{scroll 2}{clear 65}{scroll 0}Bueno, empecemos a\nbuscar por separado.{scroll 2}{timed 90}</string>
+      <string key="7">{scroll 0}¡Ha faltado poco!\nGracias, Barry.{scroll 2}{timed 90}</string>
+      <string key="8">{scroll 0}No ha sido nada. \nQué monstruo.{scroll 2}{clear 110}{scroll 0}No puedo creerlo.\n¿Pero qué es este sitio?{scroll 2}{timed 100}</string>
+      <string key="9">{scroll 0}Vale, me quedaré en\nla garita{scroll 2}{clear 90}{scroll 0}y echaré un vistazo.\nAunque estoy seguro{scroll 2}{clear 90}{scroll 0}de que aún quedan\ncosas en la mansión también.{scroll 2}{clear 65}{scroll 0}Bueno, empecemos a\nbuscar por separado.{scroll 2}{timed 90}</string>
       <string key="10">{scroll 0}\nVale.{scroll 2}{timed 40}</string>
       <string key="11">Aquí hay algo brillante,\npero no lo alcanzo...{scroll 2}</string>
       <string when="JILL" key="11">Aquí hay algo brillante,\npero no puedo alcanzarlo...{scroll 2}</string>

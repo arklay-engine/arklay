@@ -3,8 +3,8 @@
 //! A mod source directory is convention over configuration: it must hold a
 //! `manifest.toml` declaring `kind = "mod"`, and every other file maps to a
 //! pack entry named after its directory-relative path with `/` separators.
-//! `room/<room>/<stem>.s` and `.akscr` sources (in a room folder or one of
-//! its variant folders) are built into `<stem>.scd` beside them, and a
+//! `room/<room>/<stem>.s` and `.akscr` sources are built into `<stem>.scd`
+//! beside them, and a
 //! `room/<room>.akscr` into `room/<room>/room.scd`; an `.akscr` builds the
 //! runtime build, which picks the variant's and the region's lines as it
 //! runs. The text source itself is not packed. Every other file, including
@@ -312,19 +312,16 @@ fn under_room(relative: &str) -> Option<&str> {
 
 /// The pack entry a room script source `room/<id>/<stem>.s` or
 /// `room/<id>/<stem>.akscr` builds into (`room/<id>/<stem>.scd`), if it is one:
-/// in a room folder (`room/103/`, or an RE2 RDT's `room/1031/`) or one of its
-/// variant folders (`room/103/jill-mansion2/`).
+/// in a room folder (`room/103/`, or an RE2 RDT's `room/1031/`).
 fn scd_source_output(relative: &str) -> Option<String> {
     let rest = under_room(relative)?;
     let (folder, name) = rest.split_once('/')?;
-    if !matches!(folder.len(), 3 | 4) || !folder.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !matches!(folder.len(), 3 | 4)
+        || !folder.bytes().all(|b| b.is_ascii_hexdigit())
+        || name.contains('/')
+    {
         return None;
     }
-    let name = match name.split_once('/') {
-        Some((variant, name)) if is_variant_folder(variant) => name,
-        Some(_) => return None,
-        None => name,
-    };
     let stem = [".s", ".akscr"].iter().find_map(|suffix| {
         name.get(..name.len().checked_sub(suffix.len())?)
             .filter(|stem| name[stem.len()..].eq_ignore_ascii_case(suffix))
@@ -336,18 +333,6 @@ fn scd_source_output(relative: &str) -> Option<String> {
         "{}{stem}.scd",
         &relative[..relative.len() - name.len()]
     ))
-}
-
-/// Whether `name` is a room's variant folder (`jill-mansion2`, `jill`,
-/// `mansion2`, ...).
-fn is_variant_folder(name: &str) -> bool {
-    let (player, visit) = match name.split_once('-') {
-        Some((player, visit)) => (Some(player), Some(visit)),
-        None if name.starts_with("mansion") => (None, Some(name)),
-        None => (Some(name), None),
-    };
-    player.is_none_or(|player| matches!(player, "chris" | "jill"))
-        && visit.is_none_or(|visit| matches!(visit, "mansion1" | "mansion2"))
 }
 
 /// A room script beside the room folders: the room id of
@@ -624,15 +609,12 @@ mod tests {
             scd_source_output("Room/1000/room.s").as_deref(),
             Some("Room/1000/room.scd")
         );
-        // A room folder, and one of its variant folders.
+        // A room folder; it has no folders of its own.
         assert_eq!(
             scd_source_output("room/100/room.akscr").as_deref(),
             Some("room/100/room.scd")
         );
-        assert_eq!(
-            scd_source_output("room/100/jill-mansion2/room.s").as_deref(),
-            Some("room/100/jill-mansion2/room.scd")
-        );
+        assert_eq!(scd_source_output("room/100/jill-mansion2/room.s"), None);
         assert_eq!(scd_source_output("lua/demo.s"), None);
         assert_eq!(scd_source_output("room/1000/sub/room.s"), None);
         assert_eq!(scd_source_output("room/10/room.s"), None);

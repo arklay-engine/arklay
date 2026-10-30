@@ -275,6 +275,11 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="23700" height="0x3DB8" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="JILL"/>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="save_name">Hall 1F</string>

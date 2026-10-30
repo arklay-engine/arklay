@@ -242,48 +242,40 @@
     <language lang="en-US">
       <string key="name">LIVING ROOM</string>
       <string key="save_name">M. Room 1F</string>
-      <string key="0">\nIt won't move at all.</string>
       <string key="1">An urn with a beautiful \npicture on it.{clear 0}{scroll 2}\nNothing unusual.</string>
       <string key="2">\nA tapestry.{clear 0}{scroll 2}\nNothing unusual.</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
-      <string key="0">\n   びくともしない・・・</string>
       <string key="1">\n   美しいもようのつぼがある</string>
       <string key="2">\n    タペストリーがある</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Chambre RdC</string>
-      <string key="0">\nÇa ne bouge pas.</string>
       <string key="1">Une urne ornée d'un \nbeau motif.{clear 0}{scroll 2}\nRien d'utile.</string>
       <string key="2">\nUne tapisserie.{clear 0}{scroll 2}\nRien d'utile.</string>
     </language>
     <language lang="de-DE">
-      <string key="0">\nEs bewegt sich kein Stück.</string>
       <string key="1">Eine Urne mit einem hübschen\nBild darauf.{clear 0}{scroll 2}\nNichts von Interesse.</string>
       <string key="2">\nEin Wandbehang.{clear 0}{scroll 2}\nNichts von Interesse.</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Villa 1P</string>
-      <string key="0">\nÈ chiuso.</string>
       <string key="1">Un'urna con un \nbellissimo motivo.{clear 0}{scroll 2}\nNiente di utile.</string>
       <string key="2">\nUn arazzo.{clear 0}{scroll 2}\nNiente di insolito.</string>
       <string when="MANSION2" key="2">\nUn arazzo{clear 0}{scroll 2}\nNiente di insolito.</string>
     </language>
     <language lang="es-ES">
-      <string key="0">\nNo hay forma de moverlo...</string>
       <string key="1">Una urna con una imagen \npreciosa...{clear 0}{scroll 2}\nNada fuera de lo normal...</string>
       <string key="2">\nUn tapiz...{clear 0}{scroll 2}\nNada fuera de lo normal...</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Мед. комната 1-эт.</string>
-      <string key="0">\nПодвинуть не получиться.</string>
       <string key="1">\nВаза, с красивым рисунком.{clear 0}{scroll 2}\nНичего необычного.</string>
       <string key="2">\nКовёр.{clear 0}{scroll 2}\nНичего необычного.</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Lääkevarasto 1 krs</string>
-      <string key="0">Se ei liiku lainkaan....</string>
       <string key="1">Uurna kauniilla kuvioinnilla...{clear 0}{scroll 2}Ei mitään epätavallista...</string>
       <string key="2">Seinävaate...{clear 0}{scroll 2}Ei mitään epätavallista...</string>
     </language>

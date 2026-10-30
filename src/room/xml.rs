@@ -11,6 +11,13 @@
 //! for the variant read ([`parse_for`]). A room read for no variant
 //! ([`parse`]) may not have any.
 //!
+//! `<slots>` names the file each model, effect and animation slot reads
+//! where the variants differ ([`Slots`]): `<item when="JILL">03 01 02</item>`
+//! gives Jill's item slots 0-2 the files `item/03`, `item/01` and `item/02`
+//! (`-` for an empty slot). The first `<item>` that holds for the variant
+//! wins, so one without `when` after the others is the room's default; a
+//! kind with none reads every file of its folder, slot `n` from file `n`.
+//!
 //! Every integer attribute is read as decimal or `0x` hex; the writer uses
 //! hex for the few raw words and decimal for everything else. The packed
 //! flag words of the RDT (collision boxes, walk zones, mask sprites) are
@@ -23,7 +30,9 @@ use std::fmt::Write as _;
 use anyhow::{Context, Result, bail};
 use roxmltree::{Document, Node};
 
-use super::source::{Camera, EffectSlot, EffectSprite, MaskGroup, MaskSprite, RoomSource};
+use super::source::{
+    Camera, EffectSlot, EffectSprite, MaskGroup, MaskSprite, RoomSource, SlotFiles, Slots,
+};
 use crate::budget;
 use crate::effects::room::{FrameEntry, UvRecord};
 use crate::format::Dialect;
@@ -217,9 +226,80 @@ pub fn write(room: &RoomSource) -> Result<String> {
     }
     w.close("footsteps");
 
+    write_slots(&mut w, &room.slots);
     write_strings(&mut w, &room.strings);
     w.close("room");
     Ok(w.out)
+}
+
+/// The slot lists the room names, as a `<slots>` block; nothing when it
+/// names none.
+fn write_slots(w: &mut Writer, slots: &Slots) {
+    if Slots::KINDS.iter().all(|kind| slots.get(kind).is_none()) {
+        return;
+    }
+    w.open("slots", &[]);
+    for kind in Slots::KINDS {
+        let Some(files) = slots.get(kind) else {
+            continue;
+        };
+        let list = slot_list(files);
+        let indent = w.depth * 2;
+        if list.is_empty() {
+            let _ = writeln!(w.out, "{:indent$}<{kind}/>", "");
+        } else {
+            let _ = writeln!(w.out, "{:indent$}<{kind}>{list}</{kind}>", "");
+        }
+    }
+    w.close("slots");
+}
+
+/// `files` spelled as a `<slots>` list: two hex digits per file, `-` for an
+/// empty slot.
+fn slot_list(files: &[Option<u8>]) -> String {
+    files
+        .iter()
+        .map(|file| file.map_or_else(|| "-".to_string(), |file| format!("{file:02x}")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A `<slots>` block: for each kind, the list of the first element that
+/// holds for the variant being read.
+fn parse_slots(node: Node<'_, '_>) -> Result<Slots> {
+    check_attributes(node, &[])?;
+    let mut slots = Slots::default();
+    for child in elements(node) {
+        let kind = child.tag_name().name();
+        let Some(list) = slots.get_mut(kind) else {
+            bail!("<slots> may only contain <object>, <item>, <effect> or <anim>, found <{kind}>");
+        };
+        check_attributes(child, &[])?;
+        if list.is_some() {
+            continue;
+        }
+        let text = child.text().unwrap_or("");
+        let files = text
+            .split_whitespace()
+            .map(|word| match word {
+                "-" => Ok(None),
+                word if word.len() == 2 => u8::from_str_radix(word, 16)
+                    .map(Some)
+                    .with_context(|| format!("<{kind}>: `{word}` is not two hex digits or `-`")),
+                word => bail!("<{kind}>: `{word}` is not two hex digits or `-`"),
+            })
+            .collect::<Result<SlotFiles>>()?;
+        let most = match kind {
+            "effect" => crate::effects::room::EFFECT_SPRITE_SLOTS,
+            "anim" => 1,
+            _ => usize::from(u8::MAX),
+        };
+        if files.len() > most {
+            bail!("<{kind}> lists {} slots, more than {most}", files.len());
+        }
+        *list = Some(files);
+    }
+    Ok(slots)
 }
 
 /// The room's display strings as a `<strings>` block, one `<language>` per
@@ -253,8 +333,9 @@ fn write_strings(w: &mut Writer, strings: &[XmlString]) {
 }
 
 /// The language-file key suffix a `room.xml` string key reads as: `name`
-/// and `save_name` are the room's labels, a decimal message id (`0` to `255`)
-/// is that room message's text, `TEXT_XX`, and `<id>_speaker` or
+/// and `save_name` are the room's labels, a decimal message index (`0` up to
+/// [`crate::text::message_index`]`(0xFFFF)`) is that room message's text,
+/// `TEXT_XX`, and `<id>_speaker` or
 /// `<id>_speaker_<page>` names the message's speaker for a subtitle,
 /// `TEXT_XX_SPEAKER[_<page>]`. Numbers have no leading zeros.
 pub fn string_suffix(key: &str) -> Option<String> {
@@ -271,7 +352,11 @@ pub fn string_suffix(key: &str) -> Option<String> {
                 Some((id, page)) => (id, Some(page)),
                 None => (key, None),
             };
-            let text = format!("TEXT_{:02X}", number::<u8>(id)?);
+            let index: u16 = number(id)?;
+            if index > crate::text::message_index(0xFFFF) {
+                return None;
+            }
+            let text = format!("TEXT_{index:02X}");
             match speaker {
                 None => Some(text),
                 Some("") => Some(format!("{text}_SPEAKER")),
@@ -735,6 +820,7 @@ fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
                     .collect::<Result<_>>()?;
                 room.footstep_count = attr_or(node, "count", room.footstep_zones.len() as u16)?;
             }
+            "slots" => room.slots = parse_slots(node)?,
             "strings" => room.strings = parse_strings(node)?,
             "messages" if format == FORMAT_WITH_MESSAGES => {}
             other => bail!("unknown room element <{other}>"),

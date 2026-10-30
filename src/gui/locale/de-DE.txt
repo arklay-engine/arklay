@@ -76,10 +76,6 @@ autosave.description = "Jedes Mal automatisch speichern, wenn eine Tür einen Ra
 autosave.off = "Nur die Schreibmaschine speichert."
 autosave.on = "Jeder Raum, den du durch eine Tür betrittst, wird automatisch gespeichert."
 
-room_script_fixes.label = "Skriptkorrekturen"
-room_script_fixes.description = "Ob die Raumskripte mit den Korrekturen der Portierung laufen. Aus führt den originalen Skript-Bytecode jedes Raums samt seinen Eigenheiten aus. Eigene Skripte von Mods gelten in beiden Fällen. Wirkt ab dem nächsten Raum."
-room_script_fixes.off = "Jeder Raum führt seinen originalen Skript-Bytecode aus."
-room_script_fixes.on = "Die Raumskripte laufen mit den Korrekturen der Portierung."
 
 quick_turn.label = "Schnelle Drehung"
 quick_turn.description = "Beim Rückwärtsgehen mit Rennen auf der Stelle um 180 Grad drehen."

@@ -256,6 +256,12 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="31000" height="0x7EF4" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <object when="JILL"/>
+    <item when="JILL"/>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">BRANCH PASSAGE</string>
@@ -279,7 +285,6 @@
       <string key="16">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}\n {scroll 1}{timed 40}</string>
       <string key="18">{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}\n {scroll 1}{timed 165}</string>
       <string key="20">{scroll 0}\n {scroll 1}{timed 95}</string>
       <string key="21">{scroll 0}\n {scroll 1}{timed 105}</string>
       <string key="22">{scroll 0}\n {scroll 1}{timed 60}</string>
@@ -310,7 +315,6 @@
       <string key="16">{scroll 0}\n   ここで待っているか?{scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}\n     ごめんなさい{scroll 1}{timed 40}</string>
       <string key="18">{scroll 0}\n    いいさ じゃあな{scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}\n    待ってろ すぐ戻る{scroll 1}{timed 165}</string>
       <string key="20">{scroll 0}\n   別の方から行ってみるわ{scroll 1}{timed 95}</string>
       <string key="21">{scroll 0}\n    そうか いいだろう{scroll 1}{timed 105}</string>
       <string key="22">{scroll 0}\n     気をつけろよ{scroll 1}{timed 60}</string>
@@ -341,7 +345,6 @@
       <string key="16">{scroll 0}\nTu m'attends ici, Jill? {scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}\nJe suis désolée. {scroll 1}{timed 40}</string>
       <string key="18">{scroll 0}Ce n'est pas grave. \nBon, j'y vais.{scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}Attends ici. \nJe reviens tout de suite! {scroll 1}{timed 165}</string>
       <string key="20">{scroll 0}Barry, je crois que je vais \nprendre un autre chemin. {scroll 1}{timed 95}</string>
       <string key="21">{scroll 0}Je vois... Tu as peut-être \nraison.  {scroll 1}{clear 75}{scroll 0}\nFais attention. {scroll 1}{timed 30}</string>
       <string key="22">{scroll 0}</string>
@@ -352,22 +355,17 @@
       <string key="27">{scroll 0}\nBarry? {scroll 1}{timed 55}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 0}Oh, Jill.\nWas für ein Timing.{scroll 1}{timed 95}</string>
-      <string when="JILL" key="0">{scroll 0}Oh, Jill.\nWas für ein Timing.{scroll 1}{timed 70}</string>
+      <string key="0">{scroll 0}Oh, Jill.\nWas für ein Timing.{scroll 1}{timed 70}</string>
       <string key="1">{scroll 0}Noch vor einem Augenblick\nhörte ich irgendeine Stimme{scroll 1}{clear 65}{scroll 0}\ndurch dieses Loch.{scroll 1}{timed 40}</string>
-      <string key="2">{scroll 0}Lass uns zusammen gehen,\ndenn es ist so dunkel,{scroll 1}\n{scroll 0}\nund wir können kaum was sehen.{scroll 1}{timed 45}</string>
-      <string when="JILL" key="2">{scroll 0}Lass uns zusammen gehen,\ndenn es ist so dunkel,{scroll 1}{clear 65}{scroll 0}\nund wir können kaum was sehen.{scroll 1}{timed 50}</string>
+      <string key="2">{scroll 0}Lass uns zusammen gehen,\ndenn es ist so dunkel,{scroll 1}{clear 65}{scroll 0}\nund wir können kaum was sehen.{scroll 1}{timed 50}</string>
       <string key="3">{scroll 0}</string>
       <string key="4">{scroll 0}\nOkay, dann los!{scroll 1}{timed 55}</string>
       <string key="5">{scroll 0}Okay, dann werde ich dir\nDeckung geben.{scroll 1}{clear 70}{scroll 0}\nWir sollten uns beeilen.{scroll 1}{timed 50}</string>
-      <string key="6">{scroll 0}\nHey, alles in Ordnung mit dir?{scroll 1}\n{scroll 0}Wenn du möchtest,\nkann ich auch zuerst gehen...{scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}\nHey, alles in Ordnung mit dir?{scroll 1}{clear 60}{scroll 0}Wenn du möchtest,\nkann ich auch zuerst gehen...{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\nHey, alles in Ordnung mit dir?{scroll 1}{clear 60}{scroll 0}Wenn du möchtest,\nkann ich auch zuerst gehen...{scroll 1}{timed 100}</string>
       <string key="7">{scroll 0}</string>
-      <string key="8">{scroll 0}Oh ja, bitte.\nIch bin etwas nervös.{scroll 1}{timed 80}</string>
-      <string when="JILL" key="8">{scroll 0}Oh ja, bitte.\nIch bin etwas nervös.{scroll 1}{timed 70}</string>
+      <string key="8">{scroll 0}Oh ja, bitte.\nIch bin etwas nervös.{scroll 1}{timed 70}</string>
       <string key="9">{scroll 0}\nSchon klar.{scroll 1}{timed 35}</string>
-      <string key="10">{scroll 0}Es könnte sogar\ngefährlicher sein,{scroll 1}{clear 60}{scroll 0}\nwenn du hinter mir herkommst...{scroll 1}{clear 54}{scroll 0}\nGib gut Acht!{scroll 1}{timed 50}</string>
-      <string when="JILL" key="10">{scroll 0}Es könnte sogar\ngefährlicher sein,{scroll 1}{clear 35}{scroll 0}\nwenn du hinter mir herkommst...{scroll 1}{clear 35}{scroll 0}\nGib gut Acht!{scroll 1}{timed 50}</string>
+      <string key="10">{scroll 0}Es könnte sogar\ngefährlicher sein,{scroll 1}{clear 35}{scroll 0}\nwenn du hinter mir herkommst...{scroll 1}{clear 35}{scroll 0}\nGib gut Acht!{scroll 1}{timed 50}</string>
       <string key="11">{scroll 0}Okay.\nLos geht's, Barry.{scroll 1}{timed 65}</string>
       <string key="12">{scroll 0}\nIch verlass mich auf dich.{scroll 1}{timed 65}</string>
       <string key="13">{scroll 0}\n...Barry... ich...{scroll 1}{timed 65}</string>
@@ -376,12 +374,9 @@
       <string key="16">{scroll 0}Willst du lieber hier warten,\nJill?{scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}\nEs tut mir so Leid.{scroll 1}{timed 40}</string>
       <string key="18">{scroll 0}Ist schon gut.\nIch gehe jetzt wirklich.{scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}Warte einfach hier.\nIch bin bald zurück!{scroll 1}{timed 165}</string>
       <string key="20">{scroll 0}Barry, ich denke, ich sollte\neinen anderen Weg versuchen.{scroll 1}{timed 95}</string>
-      <string key="21">{scroll 0}Ich verstehe...\nTja, vielleicht solltest du.{scroll 1}{timed 105}</string>
-      <string when="JILL" key="21">{scroll 0}Ich verstehe...\nTja, vielleicht solltest du.{scroll 1}{clear 55}{scroll 0}\nSei vorsichtig.{scroll 1}{timed 50}</string>
-      <string key="22">{scroll 0}\nSei vorsichtig.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="22">{scroll 0} {scroll 1}{timed 60}</string>
+      <string key="21">{scroll 0}Ich verstehe...\nTja, vielleicht solltest du.{scroll 1}{clear 55}{scroll 0}\nSei vorsichtig.{scroll 1}{timed 50}</string>
+      <string key="22">{scroll 0} {scroll 1}{timed 60}</string>
       <string key="23">{scroll 1}Möchten Sie mit ihm gehen?\n{scroll 1}{branch 0 6 0}</string>
       <string key="24">{scroll 1}Möchten Sie, dass er vorgeht?\n{scroll 1}{branch 0 6 0}</string>
       <string key="25">{scroll 1}Möchten Sie hier bleiben?\n{scroll 1}{branch 0 6 0}</string>
@@ -409,7 +404,6 @@
       <string key="16">{scroll 0}\nMi aspetti qui, Jill? {scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}\nScusami... {scroll 1}{timed 40}</string>
       <string key="18">{scroll 0}Va tutto bene. \nVado, ora.{scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}Aspettami qui. \nTorno subito! {scroll 1}{timed 165}</string>
       <string key="20">{scroll 0}Barry, credo prenderò \nun'altra strada. {scroll 1}{timed 95}</string>
       <string key="21">{scroll 0}\nGià... Forse dovresti.{scroll 1}{clear 75}{scroll 0}\nFa attenzione. {scroll 1}{timed 30}</string>
       <string key="22">{scroll 0}</string>
@@ -420,46 +414,32 @@
       <string key="27">{scroll 0}\nBarry? {scroll 1}{timed 55}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 0}\nOh, Jill, muy oportuna.{scroll 1}{timed 95}</string>
-      <string when="JILL" key="0">{scroll 0}\nOh, Jill, muy oportuna.{scroll 1}{timed 70}</string>
-      <string key="1">{scroll 0}Hace un momento oí\nla voz de alguien saliendo{scroll 1}{clear 75}{scroll 0}\nde ese agujero.{timed 30}</string>
-      <string when="JILL" key="1">{scroll 0}Hace un momento he oído\nla voz de alguien{scroll 1}{clear 75}{scroll 0}\nal fondo del pasillo.{timed 30}</string>
-      <string key="2">{scroll 0}\nVayamos juntos. Está{scroll 1}{clear 90}{scroll 0}oscuro y no se ve\nbien.{scroll 1}{timed 35}</string>
-      <string when="JILL" key="2">{scroll 0}\nVayamos juntos ya que{scroll 1}{clear 35}{scroll 0}está oscuro y\nno se ve bien.{scroll 1}{timed 80}</string>
+      <string key="0">{scroll 0}\nOh, Jill, muy oportuna.{scroll 1}{timed 70}</string>
+      <string key="1">{scroll 0}Hace un momento he oído\nla voz de alguien{scroll 1}{clear 75}{scroll 0}\nal fondo del pasillo.{timed 30}</string>
+      <string key="2">{scroll 0}\nVayamos juntos ya que{scroll 1}{clear 35}{scroll 0}está oscuro y\nno se ve bien.{scroll 1}{timed 80}</string>
       <string key="3">{scroll 0}</string>
       <string key="4">{scroll 0}\nVale, vamos.{scroll 1}{timed 55}</string>
       <string key="5">{scroll 0}De acuerdo, te cubro.\n¡Vamos!{scroll 1}{timed 120}</string>
-      <string key="6">{scroll 0}¡Oye! ¿Estás bien? Puedo\nir delante si quieres.{scroll 1}{timed 160}</string>
-      <string when="JILL" key="6">{scroll 0}¡Oye! ¿Estás bien?\nPuedo ir delante si quieres.{scroll 1}{timed 160}</string>
+      <string key="6">{scroll 0}¡Oye! ¿Estás bien?\nPuedo ir delante si quieres.{scroll 1}{timed 160}</string>
       <string key="7">{scroll 0}</string>
-      <string key="8">{scroll 0}¡Oh, sí, por favor!\nEstoy algo nerviosa.{scroll 1}{timed 80}</string>
-      <string when="JILL" key="8">{scroll 0}¡Oh sí, por favor!\nEstoy algo nerviosa.{scroll 1}{timed 70}</string>
+      <string key="8">{scroll 0}¡Oh sí, por favor!\nEstoy algo nerviosa.{scroll 1}{timed 70}</string>
       <string key="9">{scroll 0}\nLo entiendo.{scroll 1}{timed 35}</string>
-      <string key="10">{scroll 0}Puede ser más peligroso\nsi vas detrás de mí.{scroll 1}{clear 114}{scroll 0}\n¡Ten cuidado!{scroll 1}{timed 50}</string>
-      <string when="JILL" key="10">{scroll 0}Puede ser más peligroso\nsi vas detrás de mí.{scroll 1}{clear 70}{scroll 0}\n¡Ten cuidado!{scroll 1}{timed 50}</string>
-      <string key="11">{scroll 0}\nVale, vamos, Barry.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="11">{scroll 0}\nVale, vamos Barry.{scroll 1}{timed 65}</string>
-      <string key="12">{scroll 0}\nDependo de ti.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="12">{scroll 0}\nConfío en ti.{scroll 1}{timed 65}</string>
+      <string key="10">{scroll 0}Puede ser más peligroso\nsi vas detrás de mí.{scroll 1}{clear 70}{scroll 0}\n¡Ten cuidado!{scroll 1}{timed 50}</string>
+      <string key="11">{scroll 0}\nVale, vamos Barry.{scroll 1}{timed 65}</string>
+      <string key="12">{scroll 0}\nConfío en ti.{scroll 1}{timed 65}</string>
       <string key="13">{scroll 0}\nBarry, yo...{scroll 1}{timed 65}</string>
       <string key="14">{scroll 0}\nSeguro que es peligroso.{scroll 1}{timed 55}</string>
       <string key="15">{scroll 0}Iré incluso si tengo \nque ir solo.{scroll 1}{timed 75}</string>
-      <string key="16">{scroll 0}Jill, ¿quieres quedarte\naquí?{scroll 1}{timed 80}</string>
-      <string when="JILL" key="16">{scroll 0}¿Quieres quedarte aquí,\nJill?{scroll 1}{timed 80}</string>
+      <string key="16">{scroll 0}¿Quieres quedarte aquí,\nJill?{scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}\nLo siento.{scroll 1}{timed 40}</string>
-      <string key="18">{scroll 0}\nNo pasa nada. Ahora voy.{scroll 1}{timed 100}</string>
-      <string when="JILL" key="18">{scroll 0}No pasa nada.\nBueno, allá voy.{scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}\n{scroll 1}{timed 165}</string>
+      <string key="18">{scroll 0}No pasa nada.\nBueno, allá voy.{scroll 1}{timed 100}</string>
       <string key="20">{scroll 0}Barry, creo que iré\npor otro lado.{scroll 1}{timed 95}</string>
-      <string key="21">{scroll 0}Ya veo... Vale, puede\nser lo mejor.{scroll 1}{timed 105}</string>
-      <string when="JILL" key="21">{scroll 0}Entiendo... Vale, puede que\nsea lo mejor. ¡Ten cuidado!{scroll 1}{timed 105}</string>
-      <string key="22">{scroll 0}\n¡Ten cuidado!{scroll 1}{timed 60}</string>
-      <string when="JILL" key="22">{scroll 0}{scroll 1}{timed 60}</string>
+      <string key="21">{scroll 0}Entiendo... Vale, puede que\nsea lo mejor. ¡Ten cuidado!{scroll 1}{timed 105}</string>
+      <string key="22">{scroll 0}{scroll 1}{timed 60}</string>
       <string key="23">{scroll 1}¿Quieres ir con él?\n{scroll 1}{branch 0 6 0}</string>
       <string key="24">{scroll 1}¿Quieres que vaya delante?\n{scroll 1}{branch 0 6 0}</string>
       <string key="25">{scroll 1}¿Quieres quedarte aquí?\n{scroll 1}{branch 0 6 0}</string>
-      <string key="26">{scroll 0}¿Ya has perdido el valor?\nNo es propio de ti.{scroll 1}{timed 90}</string>
-      <string when="JILL" key="26">{scroll 0}¿Ya te has acobardado?\nNo es propio de ti.{scroll 1}{timed 90}</string>
+      <string key="26">{scroll 0}¿Ya te has acobardado?\nNo es propio de ti.{scroll 1}{timed 90}</string>
       <string key="27">{scroll 0}\n¡¿Barry?!{scroll 1}{timed 55}</string>
     </language>
     <language lang="ru-RU">
@@ -483,7 +463,6 @@
       <string key="16">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}\n {scroll 1}{timed 40}</string>
       <string key="18">{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}\n {scroll 1}{timed 165}</string>
       <string key="20">{scroll 0}\n {scroll 1}{timed 95}</string>
       <string key="21">{scroll 0}\n {scroll 1}{timed 105}</string>
       <string key="22">{scroll 0}\n {scroll 1}{timed 60}</string>
@@ -495,24 +474,17 @@
     </language>
     <language lang="fi-FI">
       <string key="save_name">Maanalainen varasto 0 krs</string>
-      <string key="0">{scroll 0}Jill, hyvä ajoitus.{scroll 1}{timed 95}</string>
-      <string when="JILL" key="0">{scroll 0}Jill, hyvä ajoitus.{scroll 1}{timed 70}</string>
-      <string key="1">{scroll 0}Hetki sitten kuulin jonkun äänen{scroll 1}{clear 75}{scroll 0}täältä alhaalta.{timed 30}</string>
-      <string when="JILL" key="1">{scroll 0}Hetki sitten kuulin jonkun äänen{scroll 1}{clear 75}{scroll 0}täältä alhaalta.{scroll 1}{clear 75}{scroll 0}Pysytellään yhdessä sillä{scroll 1}{clear 35}{scroll 0}täällä hämärässä on vaikea nähdä.{scroll 1}{timed 80}</string>
-      <string key="2">{scroll 0}Pysytellään yhdessä sillä{scroll 1}{clear 90}{scroll 0}täällä hämärässä on vaikea nähdä.{scroll 1}{timed 35}</string>
-      <string when="JILL" key="2">{scroll 0}Pysytellään yhdessä sillä{scroll 1}{clear 35}{scroll 0}täällä hämärässä on vaikea nähdä.{scroll 1}{timed 80}</string>
-      <string key="3">{scroll 0}</string>
-      <string when="JILL" key="3">{scroll 0}{scroll 0}\n{scroll 1}{timed 55}</string>
+      <string key="0">{scroll 0}Jill, hyvä ajoitus.{scroll 1}{timed 70}</string>
+      <string key="1">{scroll 0}Hetki sitten kuulin jonkun äänen{scroll 1}{clear 75}{scroll 0}täältä alhaalta.{scroll 1}{clear 75}{scroll 0}Pysytellään yhdessä sillä{scroll 1}{clear 35}{scroll 0}täällä hämärässä on vaikea nähdä.{scroll 1}{timed 80}</string>
+      <string key="2">{scroll 0}Pysytellään yhdessä sillä{scroll 1}{clear 35}{scroll 0}täällä hämärässä on vaikea nähdä.{scroll 1}{timed 80}</string>
+      <string key="3">{scroll 0}{scroll 0}\n{scroll 1}{timed 55}</string>
       <string key="4">{scroll 0}Selvä, mennään.{scroll 1}{timed 55}</string>
       <string key="5">{scroll 0}Okei, turvaan selustasi.\nPidetään kiirettä!{scroll 1}{timed 120}</string>
       <string key="6">{scroll 0}Hei, onko kaikki hyvin?\nVoin mennä edeltä jos haluat.{scroll 1}{timed 160}</string>
-      <string key="7">{scroll 0}</string>
-      <string when="JILL" key="7">{scroll 0}{scroll 0}\n{scroll 1}{timed 80}</string>
-      <string key="8">{scroll 0}Kiitos! Minua hieman jännittää.{scroll 1}{timed 80}</string>
-      <string when="JILL" key="8">{scroll 0}Kiitos! Minua hieman jännittää.{scroll 1}{timed 70}</string>
+      <string key="7">{scroll 0}{scroll 0}\n{scroll 1}{timed 80}</string>
+      <string key="8">{scroll 0}Kiitos! Minua hieman jännittää.{scroll 1}{timed 70}</string>
       <string key="9">{scroll 0}Ymmärrän.{scroll 1}{timed 35}</string>
-      <string key="10">{scroll 0}On vaarallista pitää toisistamme\nliian pitkää välimatkaa.{scroll 1}{clear 114}{scroll 0}Ole varovainen!{scroll 1}{timed 50}</string>
-      <string when="JILL" key="10">{scroll 0}On vaarallista pitää toisistamme\nliian pitkää välimatkaa.{scroll 1}{clear 70}{scroll 0}Ole varovainen!{scroll 1}{timed 50}</string>
+      <string key="10">{scroll 0}On vaarallista pitää toisistamme\nliian pitkää välimatkaa.{scroll 1}{clear 70}{scroll 0}Ole varovainen!{scroll 1}{timed 50}</string>
       <string key="11">{scroll 0}Selvä, mennään.{scroll 1}{timed 65}</string>
       <string key="12">{scroll 0}Luotan sinuun.{scroll 1}{timed 65}</string>
       <string key="13">{scroll 0}Barry, minä...{scroll 1}{timed 65}</string>
@@ -521,11 +493,9 @@
       <string key="16">{scroll 0}Odotatko minua täällä?{scroll 1}{timed 80}</string>
       <string key="17">{scroll 0}Kyllä, olen pahoillani.{scroll 1}{timed 40}</string>
       <string key="18">{scroll 0}Ei se mitään. Menen nyt.{scroll 1}{timed 100}</string>
-      <string key="19">{scroll 0}\n{scroll 1}{timed 165}</string>
       <string key="20">{scroll 0}Minä taidan mennä jotain toista\nreittiä.{scroll 1}{timed 95}</string>
       <string key="21">{scroll 0}Vai niin, ehkä niin on parasta.\nOle varovainen!{scroll 1}{timed 105}</string>
-      <string key="22">{scroll 0}Ole varovainen!{scroll 1}{timed 60}</string>
-      <string when="JILL" key="22">{scroll 0}{scroll 1}{timed 60}</string>
+      <string key="22">{scroll 0}{scroll 1}{timed 60}</string>
       <string key="23">{scroll 1}Menetkö Barryn kanssa?\n{scroll 1}{branch 0 6 0}</string>
       <string key="24">{scroll 1}Haluatko hänen menevän edeltä?\n{scroll 1}{branch 0 6 0}</string>
       <string key="25">{scroll 1}Pysytkö täällä?\n{scroll 1}{branch 0 6 0}</string>

@@ -509,6 +509,10 @@
     <footstep x="1100" z="18100" width="4300" height="0x1194" sound="0x002A"/>
     <footstep x="0" z="0" width="32600" height="0x7C38" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">WATER GATE</string>

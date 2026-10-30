@@ -390,6 +390,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="27300" height="0x4588" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">TRAP PASSAGE</string>
@@ -402,6 +406,7 @@
       <string key="5">{scroll 0}\n{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}\n{scroll 2}{timed 110}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
@@ -413,6 +418,7 @@
       <string key="5">{scroll 0}\n  レベッカはまだあの部屋に‽{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n       奴らは‽{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}\n    レベッカ! 上か!{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}\n    レベッカ! 上か!{scroll 2}{timed 110}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Chambre RdC</string>
@@ -427,21 +433,21 @@
       <string key="5">{scroll 0}Rebecca! Est-elle encore dans \nla maison?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\nQu'est-ce que c'est?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}C'est Rebecca! Elle doit être \nà l'étage!{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}C'est Rebecca! Elle doit être \nà l'étage!{scroll 2}{timed 110}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 0}\nDas war extrem knapp!{scroll 2}{clear 68}{scroll 0}Du wärst fast zum Sandwich\ngeworden, Jill!{scroll 2}{clear 70}{scroll 0}\nDa hast du recht, Barry.{scroll 2}{clear 45}{scroll 0}Danke, dass du mir das Leben\ngerettet hast!{scroll 2}{timed 70}</string>
+      <string key="0">{scroll 0}\nDas war extrem knapp!{scroll 2}{clear 68}{scroll 0}Du wärst fast zum Sandwich\ngeworden, Jill!{scroll 2}{clear 70}{scroll 0}\nDa hast du recht, Barry.{scroll 2}{clear 40}{scroll 0}Danke, dass du mir das Leben\ngerettet hast!{scroll 2}{timed 75}</string>
       <string when="MANSION2" key="0">{scroll 0}\nDas war extrem knapp!{scroll 2}{clear 68}{scroll 0}Du wärst fast zum Sandwich\ngeworden, Jill!{scroll 2}{clear 69}{scroll 0}\nDa hast du recht, Barry.{scroll 2}{clear 32}{scroll 0}Danke, daß du mir das Leben\ngerettet hast!{scroll 2}{timed 80}</string>
-      <string when="JILL MANSION1" key="0">{scroll 0}\nDas war extrem knapp!{scroll 2}{clear 68}{scroll 0}Du wärst fast zum Sandwich\ngeworden, Jill!{scroll 2}{clear 70}{scroll 0}\nDa hast du recht, Barry.{scroll 2}{clear 40}{scroll 0}Danke, dass du mir das Leben\ngerettet hast!{scroll 2}{timed 75}</string>
       <string key="1">{scroll 0}Also Barry.\nHast du nicht gesagt,{scroll 2}{clear 73}{scroll 0}du gehst ins Esszimmer zurück,\num etwas zu untersuchen?{scroll 2}{clear 70}{scroll 0}Warum in aller Welt\nbist du hier?{scroll 2}{timed 53}</string>
       <string when="MANSION2" key="1">{scroll 0}Also Barry.\nHast du nicht gesagt,{scroll 2}{clear 73}{scroll 0}du gehst ins Eßzimmer zurück,\num etwas zu untersuchen?{scroll 2}{clear 70}{scroll 0}Warum in aller Welt bist du\nhier?{scroll 2}{timed 48}</string>
-      <string key="2">{scroll 0}Äh, da war etwas, das ich\nunbedingt überprüfen wollte.{scroll 2}{clear 112}{scroll 0}Gut, Dann sollten wir jetzt\nzurückgehen und{scroll 2}{clear 60}{scroll 0}den verschwundenen Captain\nund Chris suchen, nicht wahr?{scroll 2}{timed 83}</string>
-      <string when="JILL MANSION1" key="2">{scroll 0}Äh, da war etwas, das ich\nunbedingt überprüfen wollte.{scroll 2}{clear 113}{scroll 0}Gut, Dann sollten wir jetzt\nzurückgehen und{scroll 2}{clear 65}{scroll 0}den verschwundenen Captain\nund Chris suchen, nicht wahr?{scroll 2}{timed 83}</string>
+      <string key="2">{scroll 0}Äh, da war etwas, das ich\nunbedingt überprüfen wollte.{scroll 2}{clear 113}{scroll 0}Gut, Dann sollten wir jetzt\nzurückgehen und{scroll 2}{clear 65}{scroll 0}den verschwundenen Captain\nund Chris suchen, nicht wahr?{scroll 2}{timed 83}</string>
+      <string when="MANSION2" key="2">{scroll 0}Äh, da war etwas, das ich\nunbedingt überprüfen wollte.{scroll 2}{clear 112}{scroll 0}Gut, Dann sollten wir jetzt\nzurückgehen und{scroll 2}{clear 60}{scroll 0}den verschwundenen Captain\nund Chris suchen, nicht wahr?{scroll 2}{timed 83}</string>
       <string key="3">{scroll 0}\nDanke, Barry!{scroll 2}{timed 40}</string>
       <string key="4">{scroll 0}Was sind das?\nMonster?{scroll 2}{timed 140}</string>
       <string key="5">{scroll 0}Rebecca!\nIst sie immer noch im Haus?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\nWas sind das für welche?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}Es ist Rebecca!\nSie muss oben sein!{scroll 2}{timed 110}</string>
-      <string when="MANSION2" key="7">{scroll 0}Es ist Rebecca!\nSie muß oben sein!{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}Es ist Rebecca!\nSie muß oben sein!{scroll 2}{timed 110}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Villa 1P</string>
@@ -453,23 +459,20 @@
       <string key="5">{scroll 0}Rebecca! È ancora nella \nmagione?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\nChe cos'è?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}È Rebecca! Deve essere \ndi sopra!{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}È Rebecca! Deve essere \ndi sopra!{scroll 2}{timed 110}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 0}\n¡Ha estado cerca!{scroll 2}{clear 68}{scroll 0}Casi te conviertes en\nun bocadillo, Jill.{scroll 2}{clear 70}{scroll 0}¡Tienes razón! Barry, gracias\npor salvarme la vida.{scroll 2}{timed 115}</string>
-      <string when="CHRIS MANSION2" key="0">{scroll 0}\n¡Ha estado cerca!{scroll 2}{clear 68}{scroll 0}Casi te conviertes en\nun bocadillo, Jill.{scroll 2}{clear 69}{scroll 0}¡Tienes razón! Barry, gracias\npor salvarme la vida.{scroll 2}{timed 112}</string>
-      <string when="JILL" key="0">{scroll 0}\n¡Ha faltado poco!{scroll 2}{clear 68}{scroll 0}Casi te conviertes en\nun sandwich, Jill.{scroll 2}{clear 70}{scroll 0}¡Tienes razón! Barry, gracias\npor salvarme la vida.{scroll 2}{timed 115}</string>
-      <string key="1">{scroll 0}Pero, Barry, ¿no decías\nque ibas a volver al{scroll 2}{clear 73}{scroll 0}comedor para\ninvestigar algo?{scroll 2}{clear 70}{scroll 0}\n¿Qué haces aquí?{scroll 2}{timed 53}</string>
-      <string when="CHRIS MANSION2" key="1">{scroll 0}Pero, Barry, ¿no decías\nque ibas a volver al{scroll 2}{clear 73}{scroll 0}comedor para\ninvestigar algo?{scroll 2}{clear 70}{scroll 0}\n¿Qué haces aquí?{scroll 2}{timed 48}</string>
-      <string when="JILL" key="1">{scroll 0}Pero Barry, ¿no decías\nque ibas a volver al{scroll 2}{clear 73}{scroll 0}comedor para\ninvestigar algo?{scroll 2}{clear 70}{scroll 0}\n¿Qué haces aquí?{scroll 2}{timed 53}</string>
-      <string key="2">{scroll 0}Ehh... Quería comprobar\nuna cosa. {scroll 2}{clear 112}{scroll 0}Ahora sigamos\nbuscando al capitán {scroll 2}{clear 60}{scroll 0}\ny a Chris, ¿vale?{scroll 2}{timed 83}</string>
-      <string when="JILL MANSION1" key="2">{scroll 0}Ehh... Quería comprobar\nuna cosa. {scroll 2}{clear 113}{scroll 0}Ahora sigamos\nbuscando al capitán {scroll 2}{clear 65}{scroll 0}\ny a Chris, ¿vale?{scroll 2}{timed 83}</string>
+      <string key="0">{scroll 0}\n¡Ha faltado poco!{scroll 2}{clear 68}{scroll 0}Casi te conviertes en\nun sandwich, Jill.{scroll 2}{clear 70}{scroll 0}¡Tienes razón! Barry, gracias\npor salvarme la vida.{scroll 2}{timed 115}</string>
+      <string key="1">{scroll 0}Pero Barry, ¿no decías\nque ibas a volver al{scroll 2}{clear 73}{scroll 0}comedor para\ninvestigar algo?{scroll 2}{clear 70}{scroll 0}\n¿Qué haces aquí?{scroll 2}{timed 53}</string>
+      <string key="2">{scroll 0}Ehh... Quería comprobar\nuna cosa. {scroll 2}{clear 113}{scroll 0}Ahora sigamos\nbuscando al capitán {scroll 2}{clear 65}{scroll 0}\ny a Chris, ¿vale?{scroll 2}{timed 83}</string>
+      <string when="MANSION2" key="2">{scroll 0}Ehh... Quería comprobar\nuna cosa. {scroll 2}{clear 112}{scroll 0}Ahora sigamos\nbuscando al capitán {scroll 2}{clear 60}{scroll 0}\ny a Chris, ¿vale?{scroll 2}{timed 83}</string>
       <string key="3">{scroll 0}\nGracias, Barry.{scroll 2}{timed 40}</string>
       <string key="4">{scroll 0}¿Q-Qué son?\n¿M-Monstruos?{scroll 2}{timed 140}</string>
-      <string when="CHRIS MANSION2" key="4">{scroll 0}¿Q-Qué son?\n¿Monstruos?{scroll 2}{timed 140}</string>
+      <string when="MANSION2" key="4">{scroll 0}¿Q-Qué son?\n¿Monstruos?{scroll 2}{timed 140}</string>
       <string key="5">{scroll 0}¡Rebecca! \n¿Sigue estando en la casa?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n¿Qué son?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}Es Rebecca,\n¡tiene que estar arriba!{scroll 2}{timed 110}</string>
-      <string when="CHRIS MANSION2" key="7">{scroll 0}Es Rebecca,\n¡debe estar arriba!{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}Es Rebecca,\n¡debe estar arriba!{scroll 2}{timed 110}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Мед. комната 1-эт.</string>
@@ -481,6 +484,7 @@
       <string key="5">{scroll 0}\n{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}\n{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}\n{scroll 2}{timed 110}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Lääkevarasto 1 krs</string>
@@ -488,8 +492,8 @@
       <string when="MANSION2" key="0">{scroll 0}Tuo liippasi liian läheltä!{scroll 2}{clear 68}{scroll 0}Sinusta miltein tuli Jill\nvoileipää.{scroll 2}{clear 69}{scroll 0}Niinpä! Kiitos, pelastit henkeni.{scroll 2}{timed 112}</string>
       <string key="1">{scroll 0}Mutta Barry, etkö sanonut\npalaavasi{scroll 2}{clear 73}{scroll 0}ruokasaliin jatkamaan tutkintaa?{scroll 2}{clear 70}{scroll 0}Mitä ihmettä teet täällä?{scroll 2}{timed 53}</string>
       <string when="MANSION2" key="1">{scroll 0}Mutta Barry, etkö sanonut\npalaavasi{scroll 2}{clear 73}{scroll 0}ruokasaliin jatkamaan tutkintaa?{scroll 2}{clear 70}{scroll 0}Mitä ihmettä teet täällä?{scroll 2}{timed 48}</string>
-      <string key="2">{scroll 0}Minulle tuli mieleen jotain\nmitä halusin tarkistaa.{scroll 2}{clear 112}{scroll 0}Eiköhän jatketa kadonneen{scroll 2}{clear 60}{scroll 0}Kapteenmimme ja Chrisin\netsintöjä?{scroll 2}{timed 83}</string>
-      <string when="JILL MANSION1" key="2">{scroll 0}Minulle tuli mieleen jotain\nmitä halusin tarkistaa.{scroll 2}{clear 113}{scroll 0}Eiköhän jatketa kadonneen{scroll 2}{clear 65}{scroll 0}Kapteenmimme ja Chrisin\netsintöjä?{scroll 2}{timed 83}</string>
+      <string key="2">{scroll 0}Minulle tuli mieleen jotain\nmitä halusin tarkistaa.{scroll 2}{clear 113}{scroll 0}Eiköhän jatketa kadonneen{scroll 2}{clear 65}{scroll 0}Kapteenmimme ja Chrisin\netsintöjä?{scroll 2}{timed 83}</string>
+      <string when="MANSION2" key="2">{scroll 0}Minulle tuli mieleen jotain\nmitä halusin tarkistaa.{scroll 2}{clear 112}{scroll 0}Eiköhän jatketa kadonneen{scroll 2}{clear 60}{scroll 0}Kapteenmimme ja Chrisin\netsintöjä?{scroll 2}{timed 83}</string>
       <string key="3">{scroll 0}Kiitos, Barry.{scroll 2}{timed 40}</string>
       <string key="4">{scroll 0}Mitä nuo ovat?\nHhirviöitä?{scroll 2}{timed 140}</string>
       <string when="MANSION2" key="4">{scroll 0}Mitä nuo ovat?\nHirviöitä?{scroll 2}{timed 140}</string>
@@ -497,6 +501,7 @@
       <string when="MANSION2" key="5">{scroll 0}Rebecca!\nOnko hän vielä kartanossa?{scroll 2}{timed 100}</string>
       <string key="6">{scroll 0}Mitä nuo ovat?{scroll 2}{timed 70}</string>
       <string key="7">{scroll 0}Tuo on Rebecca.\nHänen on oltava yläkerrassa!{scroll 2}{timed 110}</string>
+      <string key="8">{scroll 0}Tuo on Rebecca.\nHänen on oltava yläkerrassa!{scroll 2}{timed 110}</string>
     </language>
   </strings>
 </room>

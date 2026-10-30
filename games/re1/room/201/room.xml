@@ -470,6 +470,11 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="25500" height="0x742C" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <anim when="CHRIS MANSION1">01</anim>
+    <anim when="CHRIS">02</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">2F LEFT STAIRS</string>
@@ -478,6 +483,7 @@
       <string key="1">You don't know the pass\nnumber.</string>
       <string key="2">You've entered the pass\nnumber.</string>
       <string key="3">The howling of an animal\ncan be heard on and off.{scroll 2}</string>
+      <string key="4">You don't know the pass\nnumber.</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
@@ -485,6 +491,7 @@
       <string key="1">\n    ナンバーは分からない</string>
       <string key="2">\n   パスナンバーを入力した</string>
       <string key="3">   けものの声のようなものが\n   風にのって聞こえてくる{scroll 2}</string>
+      <string key="4">\n    ナンバーは分からない</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Hall RdC</string>
@@ -492,13 +499,14 @@
       <string key="1">Vous ne savez pas le\nnuméro d'accès.</string>
       <string key="2">\nVous avez entré le numéro d'accès.</string>
       <string key="3">De temps en temps, on entend \nle hurlement d'un animal.{scroll 2}</string>
+      <string key="4">Vous ne savez pas le\nnuméro d'accès.</string>
     </language>
     <language lang="de-DE">
       <string key="0">\nEin numerisches Codeschloss.</string>
       <string key="1">Sie kennen die Zahlen\ndes Passcodes nicht.</string>
-      <string when="MANSION2" key="1">Sie kennen die Zahlen des\nPasscodes nicht.</string>
       <string key="2">Sie haben die Zahlen des\nPasscodes eingegeben.</string>
       <string key="3">Ab und zu kann man ein Tier\nheulen hören.{scroll 2}</string>
+      <string key="4">Sie kennen die Zahlen des\nPasscodes nicht.</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Atrio 1P</string>
@@ -506,20 +514,22 @@
       <string key="1">Non conosci il \ncodice di accesso.</string>
       <string key="2">Hai inserito il \ncodice di accesso.</string>
       <string key="3">Ogni tanto si riesce a sentire \nl'ululato di un animale.{scroll 2}</string>
+      <string key="4">Non conosci il \ncodice di accesso.</string>
     </language>
     <language lang="es-ES">
       <string key="0">\nUn teclado numérico...</string>
       <string key="1">No conoces el\ncódigo...</string>
       <string key="2">Has introducido el\ncódigo...</string>
       <string key="3">El aullido de un animal se\nescucha intermitentemente...{scroll 2}</string>
+      <string key="4">No conoces el\ncódigo...</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Зал 1-эт.</string>
       <string key="0">\nЦифровая клавиатура.</string>
       <string key="1">\nВы не знаете код.</string>
-      <string key="2">\nВы ввели код.</string>
-      <string when="MANSION2" key="2">Вы ввели код.</string>
+      <string key="2">Вы ввели код.</string>
       <string key="3">Временами доносится вой\nкакого-то животного.{scroll 2}</string>
+      <string key="4">\nВы не знаете код.</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Pääaula 1 krs</string>
@@ -527,6 +537,7 @@
       <string key="1">Et tiedä pääsykoodia...</string>
       <string key="2">Syötit pääsykoodin...</string>
       <string key="3">Ulkoa kuuluu ajoittain eläimen\nulvontaa...{scroll 2}</string>
+      <string key="4">Et tiedä pääsykoodia...</string>
     </language>
   </strings>
 </room>

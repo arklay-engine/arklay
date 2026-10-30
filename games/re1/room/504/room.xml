@@ -386,13 +386,6 @@
     <language lang="en-US">
       <string key="name">CONFERENCE ROOM</string>
       <string key="save_name">Laboratory B3</string>
-      <string key="0">{scroll 0}“Umbrella Inc.\"\n“Bio-weapon Materials\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\n“MA-39 Cerberus\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\n“Fi-3 Neptune\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\n“MA-121 Hunter\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\n“T-002 Tyrant\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}“Bio-weapon research \ninstitute. R and D staff\"{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}Something has been dragged \naround the wall.{scroll 1}</string>
       <string key="8">{scroll 2}There's a panel. Will you \nopen it?{scroll 1}{branch 0 1 0}{scroll 2}There's a switch. Will \nyou push it?{scroll 1}{branch 0 1 0}{scroll 2}\nA projector.{scroll 1}</string>
       <string key="9">{scroll 2}There's a switch. Will \nyou push it?{scroll 1}{branch 0 1 0}{scroll 2}\nA projector.{scroll 1}</string>
@@ -403,13 +396,6 @@
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
-      <string key="0">{scroll 0}     “アンブレラ”\n   “生物兵器広報用資料”{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\n  “MAー39 ケルベロス”{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\n  “Fiー3 ネプチューン”{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\n  “MAー121 ハンター”{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\n  “Tー002 タイラント”{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}\n“生物兵器研究機関・開発スタッフ”{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}\n  カベにひきずったような跡がある{scroll 1}</string>
       <string key="8">{scroll 2}      パネルがある\n開けますか?{scroll 1}{branch 0 1 0}{scroll 2}     スイッチがある\n押しますか?{scroll 1}{branch 0 1 0}{scroll 2}\n  プロジェクターが置いてある{scroll 1}</string>
       <string key="9">{scroll 2}     スイッチがある\n押しますか?{scroll 1}{branch 0 1 0}{scroll 2}\n  プロジェクターが置いてある{scroll 1}</string>
@@ -420,13 +406,6 @@
     </language>
     <language lang="fr-FR">
       <string key="save_name">Laboratoire SS3</string>
-      <string key="0">{scroll 0}Umbrella Inc.\nMatériel Arme biologique.{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\n‟Ma-39 Cerbère\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\n‟Fi-3 Neptune\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\n‟Ma-121 Chasseur\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\n‟T-002 Tyran\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}Armes biologiques.\nPersonnel R&amp;D.{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}Quelque chose a été frotté \ncontre le mur.{scroll 1}</string>
       <string key="8">{scroll 2}Il y a un panneau. \nL'ouvrir?{scroll 1}{branch 0 6 0}</string>
       <string key="9">{scroll 2}Il y a un bouton.\nAppuyer dessus?{scroll 1}{branch 0 6 0}</string>
@@ -436,13 +415,6 @@
       <string key="13">{scroll 2}Des symboles de physique\nétranges sont inscrits.{scroll 1}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 0}Umbrella Inc.\nBiowaffen PR-Material{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\n\"Ma/39 Cerberus\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\n\"Fi/3 Neptune\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\n\"Ma/121 Hunter\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\n\"T-002 Tyrant\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}Institut für Biowaffen\nForschung &amp; Entwicklung{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}Irgendwas wurde\num diese Wand herumgezerrt.{scroll 1}</string>
       <string key="8">{scroll 2}Das ist ein Schaltschrank.\nMöchten Sie ihn öffnen?{scroll 1}{branch 0 6 0}</string>
       <string key="9">{scroll 2}Da ist ein Schalter.\nMöchten Sie ihn betätigen?{scroll 1}{branch 0 6 0}</string>
@@ -453,13 +425,6 @@
     </language>
     <language lang="it-IT">
       <string key="save_name">Laboratorio S3</string>
-      <string key="0">{scroll 0}\"Umbrella Inc.\"\n\"Materiale Armi Bio-Organiche\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\n‟MA-39 Cerberus\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\n‟Fi-3 Neptune\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\n‟MA-121 Hunter\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\n‟T-002 Tyrant\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}\"Istituto di ricerca Armi \nBio-Organiche. Personale R e D.\"{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}Quelque chose a été frotté \ncontre le mur.{scroll 1}</string>
       <string key="8">{scroll 2}Un pannello. \nVuoi aprirlo?{scroll 1}{branch 0 6 0}</string>
       <string key="9">{scroll 2}C'è un bottone.\nVuoi premerlo?{scroll 1}{branch 0 6 0}</string>
@@ -469,13 +434,6 @@
       <string key="13">{scroll 2}Ci sono scritti simboli \ndi fisica insoliti.{scroll 1}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 0}Umbrella Inc.\nInfo. de armas biológicas.{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\nMA-39 Cerberus{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\nFi-3 Neptune{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\nMA-121 Hunter{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\nT-002 Tyrant{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}Instituto de investigación de\narmas biológicas. I+D.{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}Algo ha sido arrastrado \ncontra el muro...{scroll 1}</string>
       <string key="8">{scroll 2}Hay un panel... \n¿Quieres abrirlo?{scroll 1}{branch 0 6 0}</string>
       <string key="9">{scroll 2}Hay un interruptor... \n¿Quieres pulsarlo?{scroll 1}{branch 0 6 0}</string>
@@ -486,13 +444,6 @@
     </language>
     <language lang="ru-RU">
       <string key="save_name">Лаборатория Б3</string>
-      <string key="0">{scroll 0}“Корпорация Umbrella.\"\n“Материалы по био-оружию\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\n“MA-39 Цербер\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\n“Fi-3 Нептун\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\n“MA-121 Охотник\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\n“T-002 Тиран\"{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}“Научно-исследовательский институт\n био-оружия. Сотрудники Р и Д.\"{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}По стене что-то\nтащили.{scroll 1}</string>
       <string key="8">{scroll 2}Здесь панель.\nОткрыть её?{scroll 1}{branch 0 1 0}{scroll 2}Здесь кнопка.\nНажать её??{scroll 1}{branch 0 1 0}{scroll 2}\nПроектор.{scroll 1}</string>
       <string key="9">{scroll 2}Здесь кнопка.\nНажать её?{scroll 1}{branch 0 1 0}{scroll 2}\nПроектор.{scroll 1}</string>
@@ -503,13 +454,6 @@
     </language>
     <language lang="fi-FI">
       <string key="save_name">Laboratorion olohuone -2 krs</string>
-      <string key="0">{scroll 0}Umbrella Oy.\nMateriaalia biologisista aseista{scroll 30} {clear 0}{timed 1}</string>
-      <string key="1">{scroll 0}\nMA-39 Kerberos{scroll 30} {clear 0}{timed 1}</string>
-      <string key="2">{scroll 0}\nFi-3 Neptunus{scroll 30} {clear 0}{timed 1}</string>
-      <string key="3">{scroll 0}\nMA-121 Metsästäjä{scroll 30} {clear 0}{timed 1}</string>
-      <string key="4">{scroll 0}\nT-002 Tyranni{scroll 30} {clear 0}{timed 1}</string>
-      <string key="5">{scroll 30} {clear 0}{timed 1}</string>
-      <string key="6">{scroll 0}Biologisten aseiden tutkimuslaitos.\nTutkimus ja tuotekehityksen henkilöstö.{scroll 30} {clear 0}{timed 1}</string>
       <string key="7">{scroll 2}Seinässä on raahausjälkiä...{scroll 1}</string>
       <string key="8">{scroll 2}Siinä on paneeli...\nAvaatko sen?{scroll 1}{branch 0 6 0}</string>
       <string key="9">{scroll 2}Siinä on painike...\nPainatko sitä?{scroll 1}{branch 0 6 0}</string>

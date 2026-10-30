@@ -355,6 +355,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="30800" height="0x7C9C" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">CENTER PASSAGE</string>
@@ -364,26 +368,26 @@
       <string key="1">{scroll 0}\n {scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}\n {scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="3">{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="4">{scroll 0}\n {scroll 1}{clear 45}{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{timed 60}</string>
-      <string when="JILL" key="4">{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{clear 130}{scroll 0}\n {scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="6">{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{timed 140}</string>
       <string key="7">{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{clear 85}{scroll 0}\n {scroll 1}{timed 75}</string>
-      <string when="JILL" key="7">{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="8">{scroll 0}\n {scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\n {scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\n {scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}\n {scroll 1}{clear 160}{scroll 0}\n {scroll 1}{timed 70}</string>
       <string key="11">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="12">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}\n {scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="14">Voices are heard from the\nother side of the door.</string>
+      <string key="15">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="16">{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="17">{scroll 0}\n {scroll 1}{timed 120}</string>
+      <string key="18">{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{timed 140}</string>
+      <string key="20">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="21">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="22">{scroll 0}\n {scroll 1}{timed 50}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
@@ -392,26 +396,26 @@
       <string key="1">{scroll 0}   クリス!\n   無事だったか!{scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}\n    ジル 無事だったか!{scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}\n   それはこっちのセリフだ{scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}\n   それはこっちのセリフよ{scroll 1}{clear 80}{scroll 0}     どこにいたの?\n     急にいなくなって{scroll 1}{timed 100}</string>
       <string key="3">{scroll 0}  ジルは?\n  一緒じゃないのか?{scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}    すまなかった\n    私にも事情があってね{scroll 1}{clear 90}{scroll 0}\n  君らも遭遇しただろうが{scroll 1}{clear 100}{scroll 0}  得体の知れない奴らから\n  身を守るのに必死だったんだ{scroll 1}{timed 100}</string>
       <string key="4">{scroll 0}\n    すまなかった…{scroll 1}{clear 45}{scroll 0}得体の知れない怪物どもにおそわれて\n逃げ回っているうちに{scroll 1}{clear 90}{scroll 0}\n    はぐれてしまったんだ{scroll 1}{clear 90}{scroll 0}\n     私とした事が…{scroll 1}{timed 60}</string>
-      <string when="JILL" key="4">{scroll 0}     そうなの まあ\n     無事で何よりね{scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}   そうか…\n   まぁ しかたないさ{scroll 1}{clear 80}{scroll 0}  ここはくるってるぜ!\n  このままじゃおれたちはみんな…{scroll 1}{clear 130}{scroll 0}\n    どうするウェスカー?{scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}  バリーにも会ったんだが\n  どうも様子がおかしかったな{scroll 1}{timed 130}</string>
       <string key="6">{scroll 0}\n    やるしかないだろう{scroll 1}{clear 100}{scroll 0} だが 弾も残り少なくなってきたし\n 脱出するにしろ ジルを捜すにしろ{scroll 1}{clear 100}{scroll 0} 今の状況では\n 自分の身を守ることすらままならん{scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}\n      そういえば…{scroll 1}{clear 40}{scroll 0}  確かにね 言われてみれば\n  様子がおかしかったわ{scroll 1}{timed 140}</string>
       <string key="7">{scroll 0}\n       クリス{scroll 1}{clear 30}{scroll 0} あの館 カギがかかっていて\n 入れない部屋がたくさんあったはずだ{scroll 1}{clear 90}{scroll 0}\n   もう一度調べてくれないか{scroll 1}{clear 80}{scroll 0}  しばらく身を守れそうな所が\n  あるかもしれん{scroll 1}{clear 85}{scroll 0}\n  私はここをもう少し調べる{scroll 1}{timed 75}</string>
-      <string when="JILL" key="7">{scroll 0}\n  この状況では無理もないがな{scroll 1}{timed 100}</string>
       <string key="8">{scroll 0}\n      わかった{scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}\n  だが とりあえず脱出が先だ{scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\n       頼んだぞ{scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\n       そうね{scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}   あの館にはカギがかかって\n   入れない部屋もある{scroll 1}{clear 160}{scroll 0}\n   手がかりを捜しているんだが…{scroll 1}{timed 70}</string>
       <string key="11">{scroll 0}     私も何かあったら\n     あの館へ戻るわ{scroll 1}{timed 130}</string>
       <string key="12">{scroll 0}    ああ そうしてくれ\n    じゃ頼んだぞ{scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}\n    …それでは話しが違う!{scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n  …だが…S.T.A.R.S.を壊滅…{scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n  …俺の家族はどうなるんだ!{scroll 1}{clear 110}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n      …俺しだい…{scroll 1}{timed 100}</string>
       <string key="14">\n ドアの向こうから何か聞こえてくる</string>
+      <string key="15">{scroll 0}\n   それはこっちのセリフよ{scroll 1}{clear 80}{scroll 0}     どこにいたの?\n     急にいなくなって{scroll 1}{timed 100}</string>
+      <string key="16">{scroll 0}    すまなかった\n    私にも事情があってね{scroll 1}{clear 90}{scroll 0}\n  君らも遭遇しただろうが{scroll 1}{clear 100}{scroll 0}  得体の知れない奴らから\n  身を守るのに必死だったんだ{scroll 1}{timed 100}</string>
+      <string key="17">{scroll 0}     そうなの まあ\n     無事で何よりね{scroll 1}{timed 120}</string>
+      <string key="18">{scroll 0}  バリーにも会ったんだが\n  どうも様子がおかしかったな{scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}\n      そういえば…{scroll 1}{clear 40}{scroll 0}  確かにね 言われてみれば\n  様子がおかしかったわ{scroll 1}{timed 140}</string>
+      <string key="20">{scroll 0}\n  この状況では無理もないがな{scroll 1}{timed 100}</string>
+      <string key="21">{scroll 0}\n  だが とりあえず脱出が先だ{scroll 1}{timed 100}</string>
+      <string key="22">{scroll 0}\n       そうね{scroll 1}{timed 50}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Poste de garde RdC</string>
@@ -420,26 +424,26 @@
       <string key="1">{scroll 0}\nChris! Tu es vivant! {scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}Jill!\nTu es saine et sauve.{scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}\nVous m'ôtez les mots de la bouche! {scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}J'allais vous dire la même \nchose!  {scroll 1}{clear 80}{scroll 0}Où est-ce que vous étiez \nbon sang?  {scroll 1}{clear 50}{scroll 0}Vous avez disparu du hall \ntout d'un coup. {scroll 1}{timed 49}</string>
       <string key="3">{scroll 0}Où est Jill? \nVous n'êtes pas avec Jill? {scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}Désolé, mais j'avais mes \nraisons.  {scroll 1}{clear 108}{scroll 0}Vous deux, vous les avez \npeut-être vus.  {scroll 1}{clear 50}{scroll 0}Je n'avais pas le choix si je voulais \nme protéger de ces créatures. {scroll 1}{timed 150}</string>
       <string key="4">{scroll 0}\nDésolé...{scroll 1}{clear 45}{scroll 0}Nous avons été attaqués\npar un monstre étrange...{scroll 1}{clear 65}{scroll 0}J'ai perdu sa trace pendant que \nnous reconnaissions le terrain.{scroll 1}{clear 90}{scroll 0}J'espère qu'elle va bien.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="4">{scroll 0}\nC'est bien vrai? Quoi qu'il en soit, {scroll 1}{clear 60}{scroll 0}je suis contente \nde vous voir sain et sauf. {scroll 1}{timed 60}</string>
       <string key="5">{scroll 0}...Je vois...eh bien, \nce n'est pas votre faute...{scroll 1}{clear 80}{scroll 0}\nCet endroit est dingue!{scroll 1}{clear 43}{scroll 0}Si nous restons ici, nous \nallons tous y rester... {scroll 1}{clear 86}{scroll 0}\nQu'allons-nous faire, Wesker? {scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}J'ai rencontré Barry tout à \nl'heure. J'ai l'impression{scroll 1}{clear 65}{scroll 0}que quelque chose ne tourne\npas rond chez lui. {scroll 1}{timed 65}</string>
       <string key="6">{scroll 0}Nous devons remplir notre \nmission.  {scroll 1}{clear 50}{scroll 0}Que nous partions ou que\nnous restions pour retrouver{scroll 1}{clear 60}{scroll 0}Jill, il ne nous reste plus\nbeaucoup de munitions et nous ne{scroll 1}{clear 125}{scroll 0}pouvons même pas nous défendre.\nNous sommes encore en danger.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="6">{scroll 0}\nOui, vous avez raison...{scroll 1}{clear 60}{scroll 0}Il est bizarre, n'est-ce pas?\nIl a l'air si fatigué.{scroll 1}{timed 120}</string>
       <string key="7">{scroll 0}\nChris, {scroll 1}{clear 30}{scroll 0}beaucoup de pièces doivent être\nfermées à clé dans cette maison.{scroll 1}{clear 75}{scroll 0}\nVérifions-les encore une fois.{scroll 1}{clear 70}{scroll 0}Il doit bien y avoir un endroit\noù nous pourrions être à l'abri. {scroll 1}{clear 75}{scroll 0}\nFaisons encore un tour. {scroll 1}{timed 70}</string>
-      <string when="JILL" key="7">{scroll 0}Et bien, peut-être est-ce normal\ncompte-tenu des circonstances. {scroll 1}{timed 100}</string>
       <string key="8">{scroll 0}\nOK. {scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}...Jill, notre objectif est \navant tout de sortir d'ici! {scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\nAllons-y. {scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\nOui, vous avez raison! {scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}Nombreuses sont les pièces dans \ncette maison auxquelles nous ne{scroll 1}{clear 80}{scroll 0}pouvons avoir accès parce \nqu'elles sont fermées à clé.  {scroll 1}{clear 79}{scroll 0}J'ai essayé de trouver des \nindices... {scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}\nOK, je vais aller voir dans  {scroll 1}{clear 50}{scroll 0}l'autre maison si je peux \ntrouver quelque chose. {scroll 1}{timed 80}</string>
       <string key="12">{scroll 0}Oui, tu ferais ça? \nJe compte sur toi! {scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}\nÇa ne peut pas être vrai.{scroll 1}{clear 33}{scroll 0}Ce qu'on m'a dit était tout\nà fait différent.{scroll 1}{clear 67}{scroll 0}\n {scroll 1}{clear 91}{scroll 0}Mais il n'est pas nécessaire\nde détruire les ＳＴＡＲＳ! {scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 145}{scroll 0}\nEt ma famille dans tout ça? {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 109}{scroll 0}Alors comme ça, tout dépend\nde moi, hein? {scroll 1}{timed 100}</string>
       <string key="14">On entend des voix de \nl'autre côté de la porte.</string>
+      <string key="15">{scroll 0}J'allais vous dire la même \nchose!  {scroll 1}{clear 80}{scroll 0}Où est-ce que vous étiez \nbon sang?  {scroll 1}{clear 50}{scroll 0}Vous avez disparu du hall \ntout d'un coup. {scroll 1}{timed 49}</string>
+      <string key="16">{scroll 0}Désolé, mais j'avais mes \nraisons.  {scroll 1}{clear 108}{scroll 0}Vous deux, vous les avez \npeut-être vus.  {scroll 1}{clear 50}{scroll 0}Je n'avais pas le choix si je voulais \nme protéger de ces créatures. {scroll 1}{timed 150}</string>
+      <string key="17">{scroll 0}\nC'est bien vrai? Quoi qu'il en soit, {scroll 1}{clear 60}{scroll 0}je suis contente \nde vous voir sain et sauf. {scroll 1}{timed 60}</string>
+      <string key="18">{scroll 0}J'ai rencontré Barry tout à \nl'heure. J'ai l'impression{scroll 1}{clear 65}{scroll 0}que quelque chose ne tourne\npas rond chez lui. {scroll 1}{timed 65}</string>
+      <string key="19">{scroll 0}\nOui, vous avez raison...{scroll 1}{clear 60}{scroll 0}Il est bizarre, n'est-ce pas?\nIl a l'air si fatigué.{scroll 1}{timed 120}</string>
+      <string key="20">{scroll 0}Et bien, peut-être est-ce normal\ncompte-tenu des circonstances. {scroll 1}{timed 100}</string>
+      <string key="21">{scroll 0}...Jill, notre objectif est \navant tout de sortir d'ici! {scroll 1}{timed 100}</string>
+      <string key="22">{scroll 0}\nOui, vous avez raison! {scroll 1}{timed 50}</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 0}\nWesker!{scroll 1}{timed 30}</string>
@@ -447,26 +451,26 @@
       <string key="1">{scroll 0}Chris!\nDu lebst noch!{scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}Jill!\nDu bist zum Glück wohlauf!{scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}\nHab ich ja gesagt!{scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}Das wollte ich auch\nvon dir sagen!{scroll 1}{clear 80}{scroll 0}Wo zur Hölle bist du\nbloß gewesen?{scroll 1}{clear 50}{scroll 0}Du bist so plötzlich\naus der Halle verschwunden.{scroll 1}{timed 49}</string>
       <string key="3">{scroll 0}Wo ist Jill?\nWar Jill nicht bei euch?{scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}Es tut mir Leid.\nAber ich habe meine Gründe.{scroll 1}{clear 108}{scroll 0}Vielleicht seid ihr ja auch\nauf sie getroffen - alles,{scroll 1}{clear 40}{scroll 0}\nwas ich tun konnte war,{scroll 1}{clear 40}{scroll 0}mich gegen diese seltsamen\nKreaturen zu verteidigen.{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}\nTut mir Leid...{scroll 1}{clear 45}{scroll 0}Wir wurden von einem\nseltsamenMonster angegriffen...{scroll 1}{clear 65}{scroll 0}Ich verlor ihre Spur, als\nwir die Gegend untersuchten.{scroll 1}{clear 90}{scroll 0}\nIch hoffe, dass sie okay ist...{scroll 1}{timed 60}</string>
-      <string when="JILL" key="4">{scroll 0}Ist das wahr? Egal, es ist gut\nzu wissen, dass du okay bist.{scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}Ich verstehe...\nDas ist nicht deine Schuld...{scroll 1}{clear 80}{scroll 0}Dieser ganze Ort ist verrückt!\nWenn wir hier bleiben,{scroll 1}{clear 43}{scroll 0}werden wir über kurz oder lang\nalle tot sein...{scroll 1}{clear 86}{scroll 0}\nWas sollen wir tun, Wesker?{scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}Ich hatte eben auch Barry\ngetroffen.{scroll 1}{clear 65}{scroll 0}Ich glaube, mit ihm ist etwas\nnicht in Ordnung.{scroll 1}{timed 65}</string>
       <string key="6">{scroll 0}Wir müssen unseren Auftrag\nerfüllen.{scroll 1}{clear 50}{scroll 0}Ganz gleich, ob wir weglaufen\noder bleiben und nach Jill{scroll 1}{clear 60}{scroll 0}suchen wir haben kaum noch\nMunition übrig und wir können{scroll 1}{clear 125}{scroll 0}uns kaum selbst schützen.\nWir stecken in der Klemme.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="6">{scroll 0}\nJa, das kann ich bestätigen...{scroll 1}{clear 65}{scroll 0}Er war schon sonderbar, nicht?\nEr sah so müde aus.{scroll 1}{timed 115}</string>
       <string key="7">{scroll 0}\nChris,{scroll 1}{clear 30}{scroll 0}es gibt anscheinend noch\nviele Räume in diesem Haus,{scroll 1}{clear 75}{scroll 0}\ndie aber verschlossen sind.{scroll 1}{clear 35}{scroll 0}Überprüfe sie doch bitte\nnoch einmal.{scroll 1}{clear 35}{scroll 0}\nEs muss doch eine Ecke geben,{scroll 1}{clear 35}{scroll 0}in der man sich ungefährdet\nverstecken kann.{scroll 1}{clear 40}{scroll 0}Ich werde mich noch etwas\nintensiver im Haus umsehen.{scroll 1}{timed 70}</string>
-      <string when="JILL" key="7">{scroll 0}Tja, vielleicht ist das normal\nunter diesen Umständen.{scroll 1}{timed 100}</string>
       <string key="8">{scroll 0}\nOkay.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}...Jill,\ndas Allerwichtigste ist,{scroll 1}{clear 50}{scroll 0}dass wir erst einmal hier\nherauskommen!{scroll 1}{timed 50}</string>
       <string key="9">{scroll 0}\nDann wollen wir mal.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\nJa, da hast du Recht!{scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}Es gibt in diesem Landhaus\nso viele Räume,{scroll 1}{clear 80}{scroll 0}in die wir nicht hineinkönnen,\nweil sie abgeschlossen sind.{scroll 1}{clear 79}{scroll 0}Ich habe mich bereits nach\nAnhaltspunkten umgesehen...{scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}Okay, ich gehe rüber zum\nanderen Haus und versuche,{scroll 1}{clear 60}{scroll 0}dort irgendeinen Hinweis\nzu finden.{scroll 1}{timed 70}</string>
       <string key="12">{scroll 0}Ja, willst du das tun?\nIch zähl auf dich!{scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}\nDas kann nicht wahr sein.{scroll 1}{clear 40}{scroll 0}Mir wurde eine ganz andere\nGeschichte erzählt.{scroll 1}{clear 67}{scroll 0}\n {scroll 1}{clear 109}{scroll 0}Darum ist es nicht nötig, dass\ndu die ＳＴＡＲＳ beseitigst!{scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 145}{scroll 0}\nWas ist mit meiner Familie?{scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 109}{scroll 0}Also hängt alles\nvon mir ab, was?{scroll 1}{timed 100}</string>
       <string key="14">Man kann Stimmen\nhinter der Tür hören.</string>
+      <string key="15">{scroll 0}Das wollte ich auch\nvon dir sagen!{scroll 1}{clear 80}{scroll 0}Wo zur Hölle bist du\nbloß gewesen?{scroll 1}{clear 50}{scroll 0}Du bist so plötzlich\naus der Halle verschwunden.{scroll 1}{timed 49}</string>
+      <string key="16">{scroll 0}Es tut mir Leid.\nAber ich habe meine Gründe.{scroll 1}{clear 108}{scroll 0}Vielleicht seid ihr ja auch\nauf sie getroffen - alles,{scroll 1}{clear 40}{scroll 0}\nwas ich tun konnte war,{scroll 1}{clear 40}{scroll 0}mich gegen diese seltsamen\nKreaturen zu verteidigen.{scroll 1}{timed 120}</string>
+      <string key="17">{scroll 0}Ist das wahr? Egal, es ist gut\nzu wissen, dass du okay bist.{scroll 1}{timed 120}</string>
+      <string key="18">{scroll 0}Ich hatte eben auch Barry\ngetroffen.{scroll 1}{clear 65}{scroll 0}Ich glaube, mit ihm ist etwas\nnicht in Ordnung.{scroll 1}{timed 65}</string>
+      <string key="19">{scroll 0}\nJa, das kann ich bestätigen...{scroll 1}{clear 65}{scroll 0}Er war schon sonderbar, nicht?\nEr sah so müde aus.{scroll 1}{timed 115}</string>
+      <string key="20">{scroll 0}Tja, vielleicht ist das normal\nunter diesen Umständen.{scroll 1}{timed 100}</string>
+      <string key="21">{scroll 0}...Jill,\ndas Allerwichtigste ist,{scroll 1}{clear 50}{scroll 0}dass wir erst einmal hier\nherauskommen!{scroll 1}{timed 50}</string>
+      <string key="22">{scroll 0}\nJa, da hast du Recht!{scroll 1}{timed 50}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Guardiola 1P</string>
@@ -475,26 +479,26 @@
       <string key="1">{scroll 0}\nChris! Sei vivo! {scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}Jill!\nQuindi sei salva.{scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}Mi hai tolto le parole \ndi bocca! {scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}\nLo stavo per dire io! {scroll 1}{clear 80}{scroll 0}\nDove eri finito?{scroll 1}{clear 50}{scroll 0}All'improvviso sei sparito \ndall'atrio.. {scroll 1}{timed 49}</string>
       <string key="3">{scroll 0}Dov'è Jill? \nNon sei con lei? {scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}Mi dispiace, avevo i miei \nmotivi.{scroll 1}{clear 108}{scroll 0}Forse li avete visti \nanche voi. {scroll 1}{clear 50}{scroll 0}Era l'unica scelta per proteggermi \nda quelle strane creature. {scroll 1}{timed 150}</string>
       <string key="4">{scroll 0}\nMi dispiace...{scroll 1}{clear 45}{scroll 0}Siamo stati assaliti da \nuno strano mostro.{scroll 1}{clear 65}{scroll 0}L'ho persa di vista mentre \nesploravamo la zona.{scroll 1}{clear 90}{scroll 0}\nSpero stia bene.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="4">{scroll 0}\nDavvero? In ogni caso, {scroll 1}{clear 60}{scroll 0}sono contenta di sapere \nche sei salvo. {scroll 1}{timed 60}</string>
       <string key="5">{scroll 0}Capisco...\nBeh, so che non è colpa tua...{scroll 1}{clear 80}{scroll 0}\nQuesto posto è folle!{scroll 1}{clear 43}{scroll 0}Finché restiamo qui, \nrischiamo di morire!{scroll 1}{clear 86}{scroll 0}\nChe cosa facciamo, Wesker? {scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}Ho incontrato Barry \npoco prima...{scroll 1}{clear 65}{scroll 0}c'è qualcosa che non \nva in lui. {scroll 1}{timed 65}</string>
       <string key="6">{scroll 0}Dobbiamo portare a termine \nla missione.{scroll 1}{clear 50}{scroll 0}Possiamo scappare o \ntrovare Jill.{scroll 1}{clear 60}{scroll 0}Non ci sono rimaste molte munizioni \ne non possiamo difenderci.{scroll 1}{clear 125}{scroll 0}\nSiamo ancora nei guai.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="6">{scroll 0}\nSi... sono d'accordo.{scroll 1}{clear 60}{scroll 0}Si comportava in modo strano, vero? \nSembrava così stremato.{scroll 1}{timed 120}</string>
       <string key="7">{scroll 0}\nChris, {scroll 1}{clear 30}{scroll 0}ci sono ancora molte porte \nchiuse nella magione.{scroll 1}{clear 75}{scroll 0}\nControllale ancora una volta.{scroll 1}{clear 70}{scroll 0}Deve esserci un luogo \ndove stare al sicuro.{scroll 1}{clear 75}{scroll 0}Andrò a dare un'altra \nocchiata alla casa {scroll 1}{timed 70}</string>
-      <string when="JILL" key="7">{scroll 0}Beh, forse è normale \nin questa circostanza. {scroll 1}{timed 100}</string>
       <string key="8">{scroll 0}\nOK. {scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}Jill, la priorità è andarcene \nda questo posto. {scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\nMuoviamoci. {scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\nSi, hai ragione! {scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}Ci sono ancora molte stanze \nnella magione,{scroll 1}{clear 80}{scroll 0}ma non possiamo entrarci \nessendo chiuse a chiave. {scroll 1}{clear 79}{scroll 0}Ho provato a trovare \ndegli indizi... {scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}\nOK, tornerò all'altro edificio{scroll 1}{clear 50}{scroll 0}\ne proverò a cercarli. {scroll 1}{timed 80}</string>
       <string key="12">{scroll 0}Puoi pensarci tu? \nConto su di te! {scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}\nNon può essere vero.{scroll 1}{clear 33}{scroll 0}Questo non era parte \ndel piano.{scroll 1}{clear 67}{scroll 0}\n {scroll 1}{clear 91}{scroll 0}Non è necessario \ndistruggere la ＳＴＡＲＳ! {scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 145}{scroll 0}\nCosa accadrà alla mia famiglia? {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 109}{scroll 0}Quindi dipende tutto \nda me, non è così? {scroll 1}{timed 100}</string>
       <string key="14">Si sente qualcuno parlare \ndietro la porta.</string>
+      <string key="15">{scroll 0}\nLo stavo per dire io! {scroll 1}{clear 80}{scroll 0}\nDove eri finito?{scroll 1}{clear 50}{scroll 0}All'improvviso sei sparito \ndall'atrio.. {scroll 1}{timed 49}</string>
+      <string key="16">{scroll 0}Mi dispiace, avevo i miei \nmotivi.{scroll 1}{clear 108}{scroll 0}Forse li avete visti \nanche voi. {scroll 1}{clear 50}{scroll 0}Era l'unica scelta per proteggermi \nda quelle strane creature. {scroll 1}{timed 150}</string>
+      <string key="17">{scroll 0}\nDavvero? In ogni caso, {scroll 1}{clear 60}{scroll 0}sono contenta di sapere \nche sei salvo. {scroll 1}{timed 60}</string>
+      <string key="18">{scroll 0}Ho incontrato Barry \npoco prima...{scroll 1}{clear 65}{scroll 0}c'è qualcosa che non \nva in lui. {scroll 1}{timed 65}</string>
+      <string key="19">{scroll 0}\nSi... sono d'accordo.{scroll 1}{clear 60}{scroll 0}Si comportava in modo strano, vero? \nSembrava così stremato.{scroll 1}{timed 120}</string>
+      <string key="20">{scroll 0}Beh, forse è normale \nin questa circostanza. {scroll 1}{timed 100}</string>
+      <string key="21">{scroll 0}Jill, la priorità è andarcene \nda questo posto. {scroll 1}{timed 100}</string>
+      <string key="22">{scroll 0}\nSi, hai ragione! {scroll 1}{timed 50}</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\n¡Wesker!{scroll 1}{timed 30}</string>
@@ -502,26 +506,26 @@
       <string key="1">{scroll 0}\n¡Chris! ¡Estás vivo!{scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}\nJill... Estás bien...{scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}\nLo mismo te iba a decir yo.{scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}\nEso te iba a decir yo.{scroll 1}{clear 80}{scroll 0}\n¿Dónde diablos has estado?{scroll 1}{clear 50}{scroll 0}Desapareciste del vestíbulo,\nde repente.{scroll 1}{timed 49}</string>
       <string key="3">{scroll 0}¿Dónde está Jill?\n¿No estás con Jill?{scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}Lo siento,\npero tenía mis razones.{scroll 1}{clear 108}{scroll 0}Quizá las hayáis conocido.\nEs todo lo que pude hacer {scroll 1}{clear 80}{scroll 0}para protegerme de esas\nextrañas criaturas.{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}Lo siento, nos atacó\nun extraño monstruo.{scroll 1}{clear 100}{scroll 0}Le perdí el rastro\ncuando huíamos.{scroll 1}{clear 80}{scroll 0}\nEspero que esté bien.{scroll 1}{timed 80}</string>
-      <string when="JILL" key="4">{scroll 0}\n¿De verdad?{scroll 1}{clear 40}{scroll 0}De todas maneras,\nme alegro de que estés bien.{scroll 1}{timed 80}</string>
       <string key="5">{scroll 0}Ya veo.\nBueno, no es culpa tuya.{scroll 1}{clear 80}{scroll 0}\n¡Este lugar es de locos!{scroll 1}{clear 43}{scroll 0}Si nos quedamos aquí,\n¡todos acabaremos muertos!{scroll 1}{clear 86}{scroll 0}\n¿Qué hacemos, Wesker?{scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}\nHace un rato he visto a Barry.{scroll 1}{clear 65}{scroll 0}\nCreo que le pasa algo.{scroll 1}{timed 65}</string>
       <string key="6">{scroll 0}Tenemos que completar\nla misión.{scroll 1}{clear 50}{scroll 0}Tanto si escapamos como\nsi nos quedamos buscando a Jill,{scroll 1}{clear 60}{scroll 0}no nos quedan muchas balas\ny no podemos ni {scroll 1}{clear 125}{scroll 0}protegernos nosotros mismos.\nSeguimos con problemas.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="6">{scroll 0}Sí, estoy de acuerdo.\nEstaba muy raro, ¿verdad?{scroll 1}{clear 135}{scroll 0}\nParecía muy cansado.{scroll 1}{timed 45}</string>
       <string key="7">{scroll 0}\nChris, en la{scroll 1}{clear 30}{scroll 0}mansión hay muchas\nhabitaciones cerradas.{scroll 1}{clear 75}{scroll 0}Comprobémoslas una\nvez más.{scroll 1}{clear 70}{scroll 0}Tiene que haber un lugar\nseguro donde esconderse.{scroll 1}{clear 75}{scroll 0}Miraré algo más\npor la casa.{scroll 1}{timed 70}</string>
-      <string when="JILL" key="7">{scroll 0}\nBueno, quizá es normal,{scroll 1}{clear 40}{scroll 0}teniendo en cuenta\nlas circunstancias.{scroll 1}{timed 60}</string>
       <string key="8">{scroll 0}\nVale.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}Jill, ¡nuestra prioridad\nes salir de aquí!{scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\nPongámonos en movimiento.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\nSí, ¡tienes razón!{scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}Hay muchas habitaciones\nen la mansión en las que{scroll 1}{clear 80}{scroll 0}no podemos entrar\nporque están cerradas.{scroll 1}{clear 79}{scroll 0}He estado investigando,\na ver si descubría algo.{scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}\nVale, volveré a la mansión{scroll 1}{clear 48}{scroll 0}\na ver si encuentro alguna pista.{scroll 1}{timed 82}</string>
       <string key="12">{scroll 0}¿Lo harás?\nCuento contigo.{scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}\nNo puede ser cierto.{scroll 1}{clear 40}{scroll 0}\nMe han contado otra cosa.{scroll 1}{clear 67}{scroll 0}\n{scroll 1}{clear 109}{scroll 0}Pero no es necesario\nque acabes con ＳＴＡＲＳ{scroll 1}{clear 120}{scroll 0}\n{scroll 1}{clear 145}{scroll 0}\n¡¿Qué pasa con mi familia?!{scroll 1}{clear 70}{scroll 0}\n{scroll 1}{clear 109}{scroll 0}\nAsí que todo depende de mí, ¿eh?{scroll 1}{timed 100}</string>
       <string key="14">Se oye una voz al otro\nlado de la puerta...</string>
+      <string key="15">{scroll 0}\nEso te iba a decir yo.{scroll 1}{clear 80}{scroll 0}\n¿Dónde diablos has estado?{scroll 1}{clear 50}{scroll 0}Desapareciste del vestíbulo,\nde repente.{scroll 1}{timed 49}</string>
+      <string key="16">{scroll 0}Lo siento,\npero tenía mis razones.{scroll 1}{clear 108}{scroll 0}Quizá las hayáis conocido.\nEs todo lo que pude hacer {scroll 1}{clear 80}{scroll 0}para protegerme de esas\nextrañas criaturas.{scroll 1}{timed 120}</string>
+      <string key="17">{scroll 0}\n¿De verdad?{scroll 1}{clear 40}{scroll 0}De todas maneras,\nme alegro de que estés bien.{scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}\nHace un rato he visto a Barry.{scroll 1}{clear 65}{scroll 0}\nCreo que le pasa algo.{scroll 1}{timed 65}</string>
+      <string key="19">{scroll 0}Sí, estoy de acuerdo.\nEstaba muy raro, ¿verdad?{scroll 1}{clear 135}{scroll 0}\nParecía muy cansado.{scroll 1}{timed 45}</string>
+      <string key="20">{scroll 0}\nBueno, quizá es normal,{scroll 1}{clear 40}{scroll 0}teniendo en cuenta\nlas circunstancias.{scroll 1}{timed 60}</string>
+      <string key="21">{scroll 0}Jill, ¡nuestra prioridad\nes salir de aquí!{scroll 1}{timed 100}</string>
+      <string key="22">{scroll 0}\nSí, ¡tienes razón!{scroll 1}{timed 50}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната охраны 1-эт.</string>
@@ -530,26 +534,26 @@
       <string key="1">{scroll 0}\n {scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}\n {scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="3">{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="4">{scroll 0}\n {scroll 1}{clear 45}{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{timed 60}</string>
-      <string when="JILL" key="4">{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{clear 130}{scroll 0}\n {scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="6">{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
-      <string when="JILL" key="6">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{timed 140}</string>
       <string key="7">{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{clear 85}{scroll 0}\n {scroll 1}{timed 75}</string>
-      <string when="JILL" key="7">{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="8">{scroll 0}\n {scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}\n {scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}\n {scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}\n {scroll 1}{clear 160}{scroll 0}\n {scroll 1}{timed 70}</string>
       <string key="11">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="12">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}\n {scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{clear 120}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{clear 110}{scroll 0}\n {scroll 1}{timed 100}</string>
       <string key="14">За дверью слышны\nкакие-то голоса.</string>
+      <string key="15">{scroll 0}\n {scroll 1}{clear 80}{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="16">{scroll 0}\n {scroll 1}{clear 90}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="17">{scroll 0}\n {scroll 1}{timed 120}</string>
+      <string key="18">{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{timed 140}</string>
+      <string key="20">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="21">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="22">{scroll 0}\n {scroll 1}{timed 50}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Asuntolan varasto 1 krs</string>
@@ -558,26 +562,26 @@
       <string key="1">{scroll 0}Chris! Olet elossa?{scroll 1}{timed 70}</string>
       <string when="JILL" key="1">{scroll 0}Jill, olet kunnossa.{scroll 1}{timed 80}</string>
       <string key="2">{scroll 0}Veit sanat suustani.{scroll 1}{timed 80}</string>
-      <string when="JILL" key="2">{scroll 0}Aioin sanoa samaa.{scroll 1}{clear 80}{scroll 0}Missä ihmeessä olet ollut?{scroll 1}{clear 50}{scroll 0}Sinä vain hävisit aulasta.{scroll 1}{timed 49}</string>
       <string key="3">{scroll 0}Missä Jill?\nEtkö ole hänen kanssaan?{scroll 1}{timed 100}</string>
-      <string when="JILL" key="3">{scroll 0}Olen pahoillani, mutta minulla\non syyni.{scroll 1}{clear 108}{scroll 0}Ehkä olette törmänneet niihin?\nMinun oli paettava{scroll 1}{clear 80}{scroll 0}suojellakseni itseäni noilta\nomituisilta olennoilta.{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}Olen pahoillani,{scroll 1}{clear 45}{scroll 0}meidän kimppuumme hyökkäsi\nomituinen hirviö.{scroll 1}{clear 65}{scroll 0}Eksyimme toisistamme tutkiessamme\npaikkoja.{scroll 1}{clear 90}{scroll 0}Toivon että hän on kunnossa.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="4">{scroll 0}Niinkö?{scroll 1}{clear 40}{scroll 0}Joka tapauksessa, on hyvä\nnähdä että olet kunnossa.{scroll 1}{timed 80}</string>
       <string key="5">{scroll 0}Ymmärrän, ei se ole syytäsi.{scroll 1}{clear 80}{scroll 0}Tämä on järjetön paikka!{scroll 1}{clear 43}{scroll 0}Jos jäämme tänne olemme pian\nkaikki kuolleita!{scroll 1}{clear 86}{scroll 0}Mitä meidän pitäisi tehdä?{scroll 1}{timed 70}</string>
-      <string when="JILL" key="5">{scroll 0}Tapasin myös Barryn jonkin\naika sitten.{scroll 1}{clear 65}{scroll 0}Luulen että hänellä on\njokin vialla.{scroll 1}{timed 65}</string>
       <string key="6">{scroll 0}Meidän on suoritettava tämä\ntehtävä loppuun.{scroll 1}{clear 50}{scroll 0}Jäimme sitten tänne tai\netsisimme Jilliä,{scroll 1}{clear 60}{scroll 0}meiltä pian loppuu luodit emmekä\nvoi suojella itseämme.{scroll 1}{clear 125}{scroll 0}Kummassakin tapauksessa olisimme\nvaikeuksissa.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="6">{scroll 0}Olen samaa mieltä. Vaikuttiko hän\nsinustakin jotekin omituiselta?{scroll 1}{clear 135}{scroll 0}Hän näytti kovin väsyneeltä.{scroll 1}{timed 45}</string>
       <string key="7">{scroll 0}Chris,{scroll 1}{clear 30}{scroll 0}kartanossa on vielä paljon\ntutkimattomia huoneita.{scroll 1}{clear 75}{scroll 0}Palaa vielä sinne.{scroll 1}{clear 70}{scroll 0}Siellä on oltava paikka jossa\nvoimme levähtää turvassa.{scroll 1}{clear 75}{scroll 0}Tutkin tätä taloa vielä hieman\npidempään.{scroll 1}{timed 70}</string>
-      <string when="JILL" key="7">{scroll 0}Se on ihan luonnollista{scroll 1}{clear 40}{scroll 0}ottaen huomioon olosuhteet.{scroll 1}{timed 60}</string>
       <string key="8">{scroll 0}Selvä.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="8">{scroll 0}Jill, prioriteettimme on päästä\npois täältä!{scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}Jatketaan.{scroll 1}{timed 60}</string>
-      <string when="JILL" key="9">{scroll 0}Olet oikeassa!{scroll 1}{timed 50}</string>
       <string key="10">{scroll 0}Kartanossa on vielä paljon\nlukittuja huoneita{scroll 1}{clear 80}{scroll 0}joita emme ole tutkineet.{scroll 1}{clear 79}{scroll 0}Muut paikat olen jo käynyt läpi.{scroll 1}{timed 60}</string>
       <string key="11">{scroll 0}Selvä, palaan sinne ja katson\nmitä löydän.{scroll 1}{timed 130}</string>
       <string key="12">{scroll 0}Tekisitkö sen?\nLuotan sinuun.{scroll 1}{timed 80}</string>
       <string key="13">{scroll 0}Ei se voi olla totta.{scroll 1}{clear 40}{scroll 0}Olen kuullut toista.{scroll 1}{clear 67}{scroll 0}\n{scroll 1}{clear 109}{scroll 0}Mutta ＳＴＡＲＳin tuhoaminen ei ole\nvälttämätöntä.{scroll 1}{clear 120}{scroll 0}\n{scroll 1}{clear 145}{scroll 0}Entä perheeni!?{scroll 1}{clear 70}{scroll 0}\n{scroll 1}{clear 109}{scroll 0}Eli kaikki on minusta kiinni,\nniinkö?{scroll 1}{timed 100}</string>
       <string key="14">Oven takaa kuuluu puhetta...</string>
+      <string key="15">{scroll 0}Aioin sanoa samaa.{scroll 1}{clear 80}{scroll 0}Missä ihmeessä olet ollut?{scroll 1}{clear 50}{scroll 0}Sinä vain hävisit aulasta.{scroll 1}{timed 49}</string>
+      <string key="16">{scroll 0}Olen pahoillani, mutta minulla\non syyni.{scroll 1}{clear 108}{scroll 0}Ehkä olette törmänneet niihin?\nMinun oli paettava{scroll 1}{clear 80}{scroll 0}suojellakseni itseäni noilta\nomituisilta olennoilta.{scroll 1}{timed 120}</string>
+      <string key="17">{scroll 0}Niinkö?{scroll 1}{clear 40}{scroll 0}Joka tapauksessa, on hyvä\nnähdä että olet kunnossa.{scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}Tapasin myös Barryn jonkin\naika sitten.{scroll 1}{clear 65}{scroll 0}Luulen että hänellä on\njokin vialla.{scroll 1}{timed 65}</string>
+      <string key="19">{scroll 0}Olen samaa mieltä. Vaikuttiko hän\nsinustakin jotekin omituiselta?{scroll 1}{clear 135}{scroll 0}Hän näytti kovin väsyneeltä.{scroll 1}{timed 45}</string>
+      <string key="20">{scroll 0}Se on ihan luonnollista{scroll 1}{clear 40}{scroll 0}ottaen huomioon olosuhteet.{scroll 1}{timed 60}</string>
+      <string key="21">{scroll 0}Jill, prioriteettimme on päästä\npois täältä!{scroll 1}{timed 100}</string>
+      <string key="22">{scroll 0}Olet oikeassa!{scroll 1}{timed 50}</string>
     </language>
   </strings>
 </room>

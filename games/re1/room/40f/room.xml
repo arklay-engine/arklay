@@ -304,7 +304,6 @@
       <string key="name">SECURITY ROOM</string>
       <string key="save_name">Guardhouse 1F</string>
       <string key="0">There is no time to check\nit.</string>
-      <string key="1">\n </string>
       <string key="2">It looks like a plant\nroot.</string>
       <string key="3">\nIt's withered.</string>
       <string key="4">There's a bag here.\nNothing useful inside.</string>
@@ -312,7 +311,6 @@
     <language lang="ja-JP">
       <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
       <string key="0">\n   調べている時間はない!</string>
-      <string key="1">\n       クリス…</string>
       <string key="2">\n   どうやら植物の根のようだ</string>
       <string key="3">\n    枯れてしまっている</string>
       <string key="4">  ふくろがぶら下げられているが\n  役に立ちそうなものは入っていない</string>
@@ -320,14 +318,12 @@
     <language lang="fr-FR">
       <string key="save_name">Poste de garde RdC</string>
       <string key="0">\nPas de temps pour vérifier.</string>
-      <string key="1">\nChris...</string>
       <string key="2">On dirait une racine \nde plante.</string>
       <string key="3">\nC'est fané.</string>
       <string key="4">Il y a un sac accroché.\nRien d'utile à l'intérieur.</string>
     </language>
     <language lang="de-DE">
       <string key="0">Es ist keine Zeit,\ndas zu überprüfen.</string>
-      <string key="1">\nChris...</string>
       <string key="2">Das sieht aus wie die Wurzel\neiner Pflanze.</string>
       <string key="3">\nSie ist verwittert.</string>
       <string key="4">Da hängt eine Tasche runter.\nSie enthält nichts Nützliches.</string>
@@ -335,15 +331,12 @@
     <language lang="it-IT">
       <string key="save_name">Guardiola 1P</string>
       <string key="0">\nNon c'è tempo per controllare.</string>
-      <string key="1">\nChris...</string>
       <string key="2">Sembrano le radici \ndi una pianta.</string>
       <string key="3">\nÈ appassita.</string>
       <string key="4">È appesa una sacca. Dentro non \nc'è niente di utile.</string>
     </language>
     <language lang="es-ES">
       <string key="0">No hay tiempo\npara examinarlo...</string>
-      <string when="JILL" key="0">No hay tiempo para\ncomprobarlo...</string>
-      <string key="1">\nChris...</string>
       <string key="2">Parece la raíz de\nuna planta...</string>
       <string key="3">\nEstá marchita...</string>
       <string key="4">Aquí hay una bolsa...\nDentro no hay nada útil...</string>
@@ -351,7 +344,6 @@
     <language lang="ru-RU">
       <string key="save_name">Комната охраны 1-эт.</string>
       <string key="0">\nНа это нет времени</string>
-      <string key="1">\n </string>
       <string key="2">Это похоже\nна корень растения.</string>
       <string key="3">\nОн засох.</string>
       <string key="4">Здесь есть сумка.\nВнутри ничего полезного.</string>
@@ -359,7 +351,6 @@
     <language lang="fi-FI">
       <string key="save_name">Asuntolan varasto 1 krs</string>
       <string key="0">Ei ole aikaa tutkia sitä...</string>
-      <string key="1">Chris...</string>
       <string key="2">Se näyttää kasvin juurelta...</string>
       <string key="3">Se on kuihtunut...</string>
       <string key="4">Laukku, sen sisällä ei ole mitään\nhyödyllistä...</string>

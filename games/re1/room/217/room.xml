@@ -516,13 +516,16 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="15500" height="0x4B64" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="save_name">Hall 1F</string>
       <string key="0">Most of them are on\nchemistry.{scroll 2}</string>
       <string key="1">\nMany books.{scroll 2}</string>
       <string key="2">It has not been used for a\nlong time.{scroll 2}</string>
-      <string key="3">\n{scroll 2}{clear 0}There's a switch. Will\nyou push it?{scroll 1}{branch 0 1 0}Something has been placed\nhere.{scroll 2}</string>
       <string key="4">Something has been placed\nhere.{scroll 2}</string>
       <string key="5">There's a switch.\nWill you push it?{scroll 1}{branch 0 1 0}</string>
     </language>
@@ -531,7 +534,6 @@
       <string key="0">\n   薬品関係の書物が目立つ{scroll 2}</string>
       <string key="1">\n    多くの本が並んでいる{scroll 2}</string>
       <string key="2">\n  長い間使われていないようだ{scroll 2}</string>
-      <string key="3">\n    人面像のようだ・・・{scroll 2}{clear 0}   むねの所にスイッチがある\n押しますか?{scroll 1}{branch 0 1 0}\n 何かを置いてあったような形跡がある{scroll 2}</string>
       <string key="4">\n 何かを置いてあったような形跡がある{scroll 2}</string>
       <string key="5">   むねの所にスイッチがある\n押しますか?{scroll 1}{branch 0 1 0}   </string>
     </language>
@@ -540,7 +542,6 @@
       <string key="0">Ils traitent presque \ntous de chimie.{scroll 2}</string>
       <string key="1">\nDe nombreux livres.{scroll 2}</string>
       <string key="2">Ca n'a pas été utilisé \ndepuis longtemps.{scroll 2}</string>
-      <string key="3">\n{scroll 2}{clear 0}Il y a un bouton.\nAppuyer dessus?{scroll 1}{branch 0 6 0}</string>
       <string key="4">\nOn a mis quelque chose ici.{scroll 2}</string>
       <string key="5">Il y a un bouton.\nAppuyer dessus?{scroll 1}{branch 0 6 0}</string>
     </language>
@@ -548,7 +549,6 @@
       <string key="0">\nDie meisten sind über Chemie.{scroll 2}</string>
       <string key="1">\nViele Bücher.{scroll 2}</string>
       <string key="2">Sie wurden schon lang\nnicht mehr benutzt.{scroll 2}</string>
-      <string key="3">Da ist ein Schalter.\nMöchten Sie ihn betätigen?{scroll 1}{branch 0 6 0}</string>
       <string key="4">\nHier hat was gelegen.{scroll 2}</string>
       <string key="5">Da ist ein Schalter.\nMöchten Sie ihn betätigen?{scroll 1}{branch 0 6 0}</string>
     </language>
@@ -557,7 +557,6 @@
       <string key="0">Molti sono libri di \nchimica.{scroll 2}</string>
       <string key="1">\nVari libri.{scroll 2}</string>
       <string key="2">Non viene usato da\ntanto tempo.{scroll 2}</string>
-      <string key="3">\n{scroll 2}{clear 0}C'è un bottone.\nVuoi premerlo?{scroll 1}{branch 0 6 0}</string>
       <string key="4">\nPrima qui c'era qualcosa.{scroll 2}</string>
       <string key="5">C'è un bottone.\nVuoi premerlo?{scroll 1}{branch 0 6 0}</string>
     </language>
@@ -565,7 +564,6 @@
       <string key="0">La mayoría son de\nquímica...{scroll 2}</string>
       <string key="1">\nMuchos libros...{scroll 2}</string>
       <string key="2">Llevan mucho tiempo\nsin usarse...{scroll 2}</string>
-      <string key="3">\nHay un interruptor...{scroll 2}{clear 0}\n¿Lo aprietas?{scroll 1}{branch 0 6 0}</string>
       <string key="4">Parece que había algo colocado\ndonde ahora está la marca...{scroll 2}</string>
       <string key="5">Hay un interruptor...\n¿Lo aprietas?{scroll 1}{branch 0 6 0}</string>
     </language>
@@ -574,7 +572,6 @@
       <string key="0">Большинство из них\nпо химии.{scroll 2}</string>
       <string key="1">\nРазличные книги.{scroll 2}</string>
       <string key="2">Всё в пыли. Книгами\nдавно не пользовались.{scroll 2}</string>
-      <string key="3">\n{scroll 2}{clear 0}Здесь кнопка.\nНажать её?{scroll 1}{branch 0 1 0}Здесь что-то\nнаходилось.{scroll 2}</string>
       <string key="4">Здесь что-то\nнаходилось.{scroll 2}</string>
       <string key="5">Здесь кнопка.\nНажать её?{scroll 1}{branch 0 1 0}  \xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE3\xE33333\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE36Ｒ0\x8D\x8D\x8D\x8D\x8D\x8D\x8D\x8D\x8D{branch 8 8 21}6666666667\xE4\xE4\xE4\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE36\x8D222222229«««ＲＲＲ3Ｒ3ＲＲＲ7\xE4\xE4\xE4\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE35{branch 10 141 141}\x8D\x8D\x8D\x8D\x8D\x8D\x8D9««035Ｒ22222\x8D7\xE4\xE4\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3622222\x8D{branch 21 21 21}««33ssＲ200027\xE4\xE4\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x8D\x8D««««03ss\x84wＲ22227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x0B\x0B\x0B\x0B\x0B{branch 9 9 9}«33s\x84\x84w\x8432227\xE4\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362«««05ss\x84w\x84Z-Ｒ227\xE4\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x0B\x0B\x0B\x0B\x0B{branch 9 9 9}33s\x84w\x84Z--\x84227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362««123\x5E\x84wZ--\x59\x59Ｒ27\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x0B\x0B\x0B\x0B\x0B{branch 9 9 14}332dw-\x59\x59\x59\x7B\x8427\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x8DＲ33232\x84-\x59\x7B\x7B\x7B\x7B27\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362ＴＴＴＴＴ\x8D\x8D22333322\x84Z\x7B\x7B\x7B\x7B\x7B27\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x59\x59\x59\x59\x59Z33232\x8D3223Z\x7B\x7B\x7B\x7B\x7B27\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x7B\x7B\x7B\x7B\x7BZ3223233223Z\x5E\x7B\x7B\x7B\x7B27\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x5E\x7B\x5E\x7B\x7B\x6D\x5E23233232\x5E\x84\x7B\x7B\x5E\x7B\x7B27\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE362\x84\x5E\x7B\x7B\x59\x59w32323323Z\x59\x59\x7B\x7B\x5E\x8427\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE3622\x7B\x59\x59---33522355---\x59\x59\x7B227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE4632Z----Zw33\x5E\x6D3swZZ---Z237\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE3\xE4622Ｒ---Zwws3333swwZ---3227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE4\xE46222Ｒ-ZwmwＲ3&amp;&amp;3Ｒmw\x84Z-m2227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE3\xE4\xE462222Ｒwwws33B«33swwwＲＲ2227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE4\xE4\xE46232223ＲwＲs33333Ｒww3222227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE3\xE4\xE4\xE462222222333355333322222227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE3\xE3\xE4\xE4\xE4\xE46222322222Ｒ444432222222227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE4\xE4\xE4\xE4\xE4\xE462222222222222222222222227\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE4\xE4\xE4\xE4\xE4\xE477777777777777777777777777\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE3\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6\xE6{clear 4}\xFF\xFF\xFF\xFF\xFF\xFF{branch 0 9 0}d“   {timed 16}</string>
     </language>
@@ -583,7 +580,6 @@
       <string key="0">Suurin osa niistä käsittelee\nkemiaa...{scroll 2}</string>
       <string key="1">Monia kirjoja...{scroll 2}</string>
       <string key="2">Sitä ei ole käytetty pitkään\naikaan...{scroll 2}</string>
-      <string key="3">Siinä on painike...{scroll 2}{clear 0}Painatko sitä?{scroll 1}{branch 0 6 0}</string>
       <string key="4">Tässä kohdassa on ollut\njotakin...{scroll 2}</string>
       <string key="5">Siinä on painike...\nPainatko sitä?{scroll 1}{branch 0 6 0}</string>
     </language>

@@ -1238,7 +1238,7 @@ impl Plan {
     /// in its RDT's own folder) where the base keeps them. RE1 has a folder
     /// per room (`room_folders`): a background or mask serves every variant
     /// from the room's folder, and an RDT is its variant's, in the variant's
-    /// folder (`room/103/jill-mansion2/room.rdt` for the original's
+    /// folder (`room/103/jill-mansion2.rdt` for the original's
     /// `ROOM6031.RDT`). RE2 keeps a folder per RDT, so a background or mask
     /// (planned for player 0) is copied to the other player's folder the base
     /// (or the mod itself) defines.
@@ -2055,9 +2055,9 @@ mod tests {
         assert_eq!(
             planned(&plan),
             [
-                "room/106/chris-mansion2/room.rdt",
+                "room/106/chris-mansion2.rdt",
                 "room/106/cut/00.bmp",
-                "room/106/jill-mansion1/room.rdt",
+                "room/106/jill-mansion1.rdt",
                 "room/203/mask/01.bmp"
             ]
         );
@@ -2176,10 +2176,10 @@ mod tests {
         let base = dir.join("base.akpak");
         let mut writer = crate::pack::PackWriter::new();
         writer
-            .add("room/100/chris-mansion1/room.rdt", b"same".to_vec())
+            .add("room/100/chris-mansion1.rdt", b"same".to_vec())
             .unwrap();
         writer
-            .add("room/101/chris-mansion1/room.rdt", b"original".to_vec())
+            .add("room/101/chris-mansion1.rdt", b"original".to_vec())
             .unwrap();
         writer.write(&base).unwrap();
 
@@ -2206,18 +2206,15 @@ mod tests {
             [
                 TEXT_ENTRY,
                 manifest::ENTRY,
-                "room/101/chris-mansion1/room.rdt",
-                "room/102/chris-mansion1/room.rdt"
+                "room/101/chris-mansion1.rdt",
+                "room/102/chris-mansion1.rdt"
             ]
         );
         assert_eq!(
-            *pack.read("room/101/chris-mansion1/room.rdt").unwrap(),
+            *pack.read("room/101/chris-mansion1.rdt").unwrap(),
             *b"changed"
         );
-        assert_eq!(
-            *pack.read("room/102/chris-mansion1/room.rdt").unwrap(),
-            *b"new"
-        );
+        assert_eq!(*pack.read("room/102/chris-mansion1.rdt").unwrap(), *b"new");
         let language = pack.read(TEXT_ENTRY).unwrap();
         assert!(String::from_utf8_lossy(&language).contains("Hello"));
         assert_eq!(

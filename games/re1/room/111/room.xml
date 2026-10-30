@@ -354,62 +354,46 @@
     <language lang="en-US">
       <string key="name">DRESSING ROOM</string>
       <string key="save_name">M. Room 1F</string>
-      <string key="0">{scroll 2}{branch 2 9 1}</string>
-      <string key="1">{scroll 2}{scroll 2}\nAn object of art.{scroll 2}</string>
       <string key="2">{scroll 2}\nAn object of art.{scroll 2}</string>
       <string key="3">{scroll 2}\nNothing special.{scroll 2}</string>
       <string key="4">{scroll 2}\nVarious things.{scroll 2}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s}小部屋/{s}1{s}F{s}</string>
-      <string key="0">{scroll 2} 本がある。よみますか?{branch 2 9 1}</string>
-      <string key="1">{scroll 2}\nわが家のしるし 天を治める3つのもの{clear 0}\n そして外へのみちは開かれる・・・{scroll 2}</string>
       <string key="2">{scroll 2}\n    美術品の一つのようだ{scroll 2}</string>
       <string key="3">{scroll 2}\n     何もないようだ{scroll 2}</string>
       <string key="4">{scroll 2}\n さまざまなものが並べられている{scroll 2}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Chambre RdC</string>
-      <string key="0">{scroll 2}{branch 2 8 1}</string>
-      <string key="1">{scroll 2}</string>
       <string key="2">{scroll 2}\nUne oeuvre d'art.{scroll 2}</string>
       <string key="3">{scroll 2}\nRien de spécial.{scroll 2}</string>
       <string key="4">{scroll 2}\nDifférentes choses.{scroll 2}</string>
     </language>
     <language lang="de-DE">
-      <string key="0">{scroll 2}{branch 2 8 1}</string>
-      <string key="1">{scroll 2}{scroll 2}\nEin Kunstgegenstand.{scroll 2}</string>
       <string key="2">{scroll 2}\nEin Kunstgegenstand.{scroll 2}</string>
       <string key="3">{scroll 2}\nNichts Besonderes.{scroll 2}</string>
       <string key="4">{scroll 2}\nVerschiedene Dinge.{scroll 2}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Villa 1P</string>
-      <string key="0">{scroll 2}{branch 2 8 1}</string>
-      <string key="1">{scroll 2}</string>
       <string key="2">{scroll 2}\nUn'opera d'arte.{scroll 2}</string>
       <string key="3">{scroll 2}\nNiente di speciale.{scroll 2}</string>
       <string key="4">{scroll 2}\nVari oggetti.{scroll 2}</string>
     </language>
     <language lang="es-ES">
-      <string key="0">{scroll 2}{branch 2 8 1}</string>
-      <string key="1">{scroll 2}</string>
       <string key="2">{scroll 2}\nUna obra de arte...{scroll 2}</string>
       <string key="3">{scroll 2}\nNada especial...{scroll 2}</string>
       <string key="4">{scroll 2}\nObjetos varios...{scroll 2}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Мед. комната 1-эт.</string>
-      <string key="0">{scroll 2}{branch 2 9 1}</string>
-      <string key="1">{scroll 2}{scroll 2}\nПредмет искусства.{scroll 2}</string>
       <string key="2">{scroll 2}\nПредмет искусства.{scroll 2}</string>
       <string key="3">{scroll 2}\nНичего особенного.{scroll 2}</string>
       <string key="4">{scroll 2}\nРазные вещи.{scroll 2}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Lääkevarasto 1 krs</string>
-      <string key="0">{scroll 2}{branch 2 8 1}</string>
-      <string key="1">{scroll 2}</string>
       <string key="2">{scroll 2}Taide-esine...{scroll 2}</string>
       <string key="3">{scroll 2}Ei mitään erityistä...{scroll 2}</string>
       <string key="4">{scroll 2}Monenlaisia esineitä...{scroll 2}</string>

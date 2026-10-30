@@ -71,7 +71,7 @@
 #define MSG_VO_007_0A 0x1B
 #define MSG_VO_007_0B 0x1C
 #define MSG_VO_007_0C 0x1D
-#define MSG_VO_007_0D_63 0x0A
+#define MSG_VO_007_0D_63 0x34
 #define MSG_VO_007_0D_74 0x1E
 #define MSG_VO_007_0E 0x1F
 #define MSG_VO_007_0F 0x20
@@ -82,15 +82,15 @@
 #define MSG_VO_008_04 0x26
 #define MSG_VO_008_05 0x27
 #define MSG_VO_008_06 0x28
-#define MSG_VO_00C_12 0x00
-#define MSG_VO_00C_13 0x01
-#define MSG_VO_00C_14 0x02
-#define MSG_VO_00C_15 0x03
-#define MSG_VO_00C_16 0x04
-#define MSG_VO_00C_18 0x05
-#define MSG_VO_00C_19 0x06
-#define MSG_VO_00C_1A 0x07
-#define MSG_VO_00C_1B 0x08
+#define MSG_VO_00C_12 0x19
+#define MSG_VO_00C_13 0x2B
+#define MSG_VO_00C_14 0x2D
+#define MSG_VO_00C_15 0x2E
+#define MSG_VO_00C_16 0x2F
+#define MSG_VO_00C_18 0x30
+#define MSG_VO_00C_19 0x31
+#define MSG_VO_00C_1A 0x32
+#define MSG_VO_00C_1B 0x33
 #define MSG_VO_00C_1C 0x09
 #define MSG_WILL_YOU_TAKE_REBECCA_WITH_YOU 0x10
 #define OBJ_00 0x00
@@ -184,7 +184,7 @@ proc init
         }
         else
         {
-            aot_set(AOT_08_MESSAGE, 7400, 3880, 600, 3370, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 140, 0, 79, 0, 0, 0);
+            aot_set(AOT_08_MESSAGE, 7400, 3880, 600, 3370, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 181, 0, 79, 0, 0, 0);
         }
     }
     else
@@ -206,7 +206,7 @@ proc init
         }
         else
         {
-            aot_set(AOT_05_MESSAGE, 7400, 3880, 600, 3370, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 140, 0, 79, 0, 0, 0);
+            aot_set(AOT_05_MESSAGE, 7400, 3880, 600, 3370, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 181, 0, 79, 0, 0, 0);
         }
         aot_set(AOT_07_TYPEWRITER, 2300, 8750, 1600, 2000, SCE_TYPEWRITER, SAT_MANUAL | SAT_PLAYER, 0, 0, 0, 0, 0, 0);
     }

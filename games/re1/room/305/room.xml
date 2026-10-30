@@ -519,6 +519,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="32600" height="0x639C" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">FOUNTAIN</string>
@@ -534,8 +538,6 @@
       <string key="1">{scroll 2}  丸いくぼみがあり、中に\n  オオワシの形が刻まれている{scroll 2}</string>
       <string key="2">{scroll 2}  丸いくぼみがあり、中に\n  オオカミの形が刻まれている{scroll 2}</string>
       <string key="3">{scroll 2}\n   溶接されていて開かない{scroll 2}</string>
-      <string key="4">{scroll 2}\n わしのメダルをはめた{scroll 2}{timed 60}</string>
-      <string key="5">{scroll 2}\n おおかみのメダルをはめた{scroll 2}{timed 60}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Salle de la cour SS1</string>
@@ -562,8 +564,6 @@
       <string key="1">{scroll 2}En un hueco redondo hay\nuna imagen de un águila...{scroll 2}</string>
       <string key="2">{scroll 2}En un hueco redondo hay\nuna imagen de un lobo...{scroll 2}</string>
       <string key="3">{scroll 2}Está soldada, no\nse abre...{scroll 2}</string>
-      <string key="4">{scroll 2}\n_Has insertado la MEDALLA ÁGUILA.{scroll 2}{timed 60}</string>
-      <string key="5">{scroll 2}\n_Has insertado la MEDALLA LOBO.{scroll 2}{timed 60}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната внутр. двора Б1</string>
@@ -578,8 +578,6 @@
       <string key="1">{scroll 2}Pyöreässä kolossa on kaiverrus\nkotkasta...{scroll 2}</string>
       <string key="2">{scroll 2}Pyöreässä kolossa on kaiverrus\nsudesta......{scroll 2}</string>
       <string key="3">{scroll 2}Se on hitsattu kiinni...{scroll 2}</string>
-      <string key="4">{scroll 2}Asetit kotka-mitalin.{scroll 2}{timed 60}</string>
-      <string key="5">{scroll 2}Asetit susi-mitalin.{scroll 2}{timed 60}</string>
     </language>
   </strings>
 </room>

@@ -186,7 +186,7 @@ is exact.
 | map pages | `map/00` … `map/0e`, `map/bg` (the full floor-plan view's backdrop) | webp, png, bmp, tim | the shipped page's; at most 255 opaque colours |
 | FILE pages | `item/<id>/file_bg` (the book backdrop), `item/<id>/file_fg_<page>_<language>` (`en-US`, `de-DE`, `fr-FR`, `ja-JP`), e.g. `item/6e/file_fg_03_en-US`, where `<id>` is the document's item (`5f` + the document number); `ui/file_book_0`, `ui/file_book_1`, `ui/file_arrows` | webp, png, bmp, tim | the shipped page's |
 | room effect sheets | `effect/00` … `effect/20` | webp, png, bmp, tim | the shipped page's (the room's own sprites composite onto it) |
-| room definition | `room/100/room.xml` | xml (see [Room definitions](#room-definitions)); a raw RDT in a variant folder, `room/100/jill-mansion1/room.rdt`, still loads | — |
+| room definition | `room/100/room.xml` | xml (see [Room definitions](#room-definitions)); a raw RDT named for its variant, `room/100/jill-mansion1.rdt`, still loads | — |
 | room scripts | `room/100/room.scd` | scd | — |
 | room object / item model | `room/100/object/00.tmd`, `room/100/item/00.tmd` | tmd | the shipped mesh |
 | room model texture | `room/100/object/00.bmp`; HD replacements use `htexture/room/100/object/00` | bmp (8-bit indexed, full 256-entry palette), tim | the shipped page's |
@@ -199,10 +199,10 @@ is exact.
 | film | `movie/00`, `movie/17`, `movie/0f` (the film id) | mp4, avi | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' names without their extensions: a room's
-files sit in its folder `room/<room>` (the three-digit lower-case room id;
-a file only some variants have sits in a variant folder inside it, see
-[Room definitions](#room-definitions)), with cameras and slots numbered by
-two lower-case hex digits (`RoomId::cut_stem`), `bgm` uses
+files sit in its folder `room/<room>` (the three-digit lower-case room id,
+see [Room definitions](#room-definitions)), with cameras and model, effect
+and animation files numbered by two lower-case hex digits
+(`RoomId::cut_stem`), `bgm` uses
 the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
 stage row and the lowercase hex id (`voice::entry_path`), `door`, `movie`,
 `effect`, `map`, `file` and `font` use two lower-case hex digits of the door
@@ -240,8 +240,8 @@ name, so nothing in a room refers to a path.
 
 For RE1 the repository owns the room definitions: `room.xml` and the effect
 definitions (`effect/<slot>.xml`) are checked in under
-`games/re1/room/<room>/`, and `room.scd` and `original.scd` are built from the
-room's script, `room.akscr` beside them (room 103's is
+`games/re1/room/<room>/`, and `room.scd` is built from the room's script,
+`room.akscr` beside them (room 103's is
 `games/re1/room/103/room.akscr`). The script itself is not packed. Every
 release takes the same definitions. Rooms 110, 119, 200, 20C and 213 to 21C
 only exist on the second visit: the original ships empty stubs for their
@@ -256,33 +256,21 @@ camera backgrounds and mask pages come from the install's `RC*.pak` and
 ```text
 room/100/room.xml        the room: lights, cameras and masks, zones, collision, strings
 room/100/room.scd        the scripts the room runs: init, per-frame and events
-room/100/original.scd    the original bytecode, when room.scd carries the port's fixes
 room/100/cut/00.bmp      camera 0's background
 room/100/mask/00.bmp     camera 0's mask page
-room/100/object/00.tmd   object model slot 0, with its texture object/00.bmp
-room/100/item/00.tmd     item model slot 0, with its texture item/00.bmp
-room/100/effect/00.xml   effect sprite slot 0, with its sheet effect/00.bmp
-room/100/anim/00.emr     the room's player animation, with anim/00.edd
-room/100/jill/anim/00.emr          Jill's player animation
-room/100/mansion1/effect/00.xml    the effects of the first visit only
+room/100/object/00.tmd   object model 00, with its texture object/00.bmp
+room/100/item/00.tmd     item model 00, with its texture item/00.bmp
+room/100/item/03.tmd     the item model Jill's slot 0 reads instead (see <slots>)
+room/100/effect/00.xml   effect sprite 00, with its sheet effect/00.bmp
+room/100/anim/00.emr     Chris's player animation, with anim/00.edd
+room/100/anim/01.emr     Jill's player animation
 ```
 
-Camera and slot numbers are two lower-case hex digits counting from zero
+Camera and file numbers are two lower-case hex digits counting from zero
 (`cut/0a.bmp` is camera 10). A room is self-contained: copying or renaming its
 folder moves the whole room to another id or another pack, and the definition
-carries no id of its own.
-
-A file that differs between variants sits in a variant folder inside the
-room's: `<player>-mansion<visit>` (`jill-mansion2`), `<player>` (`chris`,
-`jill`) or `mansion<visit>` (`mansion1`, `mansion2`); outside the mansion
-only the player folders exist. A variant reads each file from the most
-specific of its folders that has it, else from the room's folder. The model,
-effect and animation slots go by kind: the first of those folders whose
-`object/`, `item/`, `effect/` or `anim/` holds slot `00` supplies all of that
-kind's slots, so a variant folder replaces the room folder's slots of a kind
-whole (a room folder with no effects and a `mansion1/effect/` gives only the
-first visit effects). `convert-game` puts the files most variants share in
-the room's folder and the rest in the variant folders.
+carries no id of its own. The folder has no folders per player or visit: what
+differs between variants is said in `room.xml`.
 
 `room.xml` defines every variant at once. An element only some variants have
 carries `when`: space-separated terms that must all hold, each `CHRIS`,
@@ -306,6 +294,35 @@ A list (lights, walk zones, camera switches, footsteps) is the elements that
 hold, in order. The `objectSlots` and `itemSlots` attributes of `<room>`
 take no `when`: they are the largest slot count any variant declares.
 
+The object and item models, the effect sprites and the player animation are
+read by slot: the scripts name an item model by its slot, and the room's
+effects are its effect slots. Slot `n` reads file `n` of its kind's folder
+(`item/03.tmd` for slot 3), unless `<slots>` names other files for the
+variant. Where the variants' models, effects or animation differ, each
+differing file has a number of its own, and `<slots>` lists the file each
+slot of a variant reads, by slot, with `-` for an empty slot:
+
+```xml
+<room format="3">
+  ...
+  <slots>
+    <item when="JILL">03 01 02</item>
+    <item>00 01 02</item>
+    <effect when="MANSION2"/>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
+</room>
+```
+
+Jill's item slot 0 reads `item/03` where Chris's reads `item/00`, the second
+visit has no effects, and Jill's player animation is `anim/01`. The first
+`<object>`, `<item>`, `<effect>` or `<anim>` that holds for the variant
+gives the whole list of its kind, so one without `when` after the others is
+the room's default; a kind with none reads every file of its folder in
+order. `convert-game` places each variant's RDT art at the files its slots
+name, so variants share a file their slots name alike.
+
 The room's text sits last in `room.xml`, in the same `<strings>` shape as an
 item's: a `<language lang="…">` per language holding a `name` (the debug menu
 and save list name), a `save_name` (the save screen's shorthand label), and
@@ -320,7 +337,7 @@ language file syntax (`{scroll 0}`, `\n` for a line break):
       <string key="name">SAVE ROOM</string>
       <string key="save_name">M. Room 1F</string>
       <string key="0">{scroll 0}\n{scroll 2}{timed 70}</string>
-      <string key="0" when="MANSION2">{scroll 0}\n{scroll 2}{timed 105}</string>
+      <string key="1" when="JILL">{scroll 0}\n{scroll 2}{timed 105}</string>
       ...
       <string key="42">\nVitamins and serums.{scroll 2}</string>
     </language>
@@ -349,11 +366,11 @@ An RE2 room's `room.xml` carries `game="re2"`, its cameras' own lighting and
 its `<sca>` collision records; the RDT sections the engine does not read yet
 (scripts, masks, models) are not converted.
 
-Model slots are probed in order from `00`; a model texture that does not
-round-trip as an 8-bit BMP is kept as a `.tim`. When the room declares more
-object or item slots than it has files (trailing empty slots), the `<room>`
-element carries `objectSlots` or `itemSlots`. Effect slots are read from `00`
-up to the first missing `.xml`. An effect sheet is an 8-bit BMP with one
+Without `<slots>`, model slots are probed in order from `00`; a model
+texture that does not round-trip as an 8-bit BMP is kept as a `.tim`. When
+the room declares more object or item slots than it has files (trailing
+empty slots), the `<room>` element carries `objectSlots` or `itemSlots`.
+Effect slots are read from `00` up to the first missing `.xml`. An effect sheet is an 8-bit BMP with one
 16-colour palette row per CLUT row: texel indices `0`-`15`, magenta for
 palette entry 0 and each entry's reserved byte its STP bit.
 
@@ -372,13 +389,14 @@ stay contiguous from 0. Packed flag words are split into named attributes:
   `otherBits`, and a square `size` or explicit `width` and `height`;
 - a `<walk>` zone lists the zones it connects to as `links="1 7"`.
 
-A room runs `room.scd`. With `[game] room_script_fixes = false` it runs
-`original.scd` instead, unless a later layer ships its own `room.scd`: a mod's
-scripts win either way. A mod that only edits `room.xml` keeps the base
-scripts. A mod that ships `room/<id>/room.rdt` still loads: when both a `room.xml` and a `room.rdt`
-define a room, the one from the later layer wins, and the XML wins a tie. An
-RDT room runs its embedded scripts unless a `room.scd` comes from the same or
-a later layer.
+A room runs `room.scd`, a mod's own when it ships one. A mod that only edits
+`room.xml` keeps the base scripts. A mod that ships a raw RDT still loads: an
+RDT is one variant's, so it is named for it (`room/<id>/jill-mansion2.rdt`,
+`room/<id>/chris.rdt` outside the mansion), and a `room/<id>/room.rdt` serves
+every variant without one. When both a `room.xml` and an RDT define a room,
+the one from the later layer wins, and the XML wins a tie. An RDT room runs
+its embedded scripts unless a `room.scd` comes from the same or a later
+layer.
 
 An HD pack can name a model's page `htexture/room/<id>/object/<slot>` (or
 `item/<slot>`, covering the whole page) instead of by content hash. A page
@@ -687,14 +705,13 @@ arklay re1.akpak --mod fr.akpak --language fr-FR --room 100
 `arklay mod build <dir> --out <pack.akpak>` builds a mod from a directory:
 `manifest.toml` is required and packed, every other file maps to a pack entry
 equal to its directory-relative path, and a `<stem>.s` source in a room
-folder (`room/<room>/`, or one of its variant folders) is assembled into
+folder (`room/<room>/`) is assembled into
 `<stem>.scd` beside it (the `.s` itself is not packed), and a `<stem>.akscr`
 script is compiled the same way. A room script laid out like the checked-in
 ones (`room/103/room.akscr`) or named by three hex digits (`room/103.akscr`)
 builds the room's `room/103/room.scd`: one runtime build for every player,
 visit and region, which picks the variant's lines as it runs (see
-[`.akscr` room scripts](#akscr-room-scripts)). A script in a variant folder
-(`room/103/jill-mansion2/room.akscr`) is that variant's alone.
+[`.akscr` room scripts](#akscr-room-scripts)).
 `--base <base.akpak>`
 checks the declared base id and reports override paths the base does not hold
 as a warning, never an error; a replacement whose stem matches a base entry of
@@ -785,7 +802,7 @@ overrides, so each file is mapped by the folder it sits in onto the entry
 | --- | --- |
 | `hires/**` (HD backgrounds, masks, skins, `cache/ROOM####.dat`) | `htexture/**` |
 | `movie/*.mp4`, `movie/*.avi` | `movie/<film id>.<ext>`; an AVI beside an MP4 of the same film is dropped |
-| `STAGEn/ROOM####.RDT` | the RDT's variant folder, `room/<room>/<variant>/room.rdt` (`STAGE6/ROOM6031.RDT` is `room/103/jill-mansion2/room.rdt`, the original's stages 6 and 7 being the second mansion visit); the engine loads a raw RDT as well as the converted XML |
+| `STAGEn/ROOM####.RDT` | the room's folder, named for its variant: `room/<room>/<variant>.rdt` (`STAGE6/ROOM6031.RDT` is `room/103/jill-mansion2.rdt`, the original's stages 6 and 7 being the second mansion visit); the engine loads a raw RDT as well as the converted XML |
 | `STAGEn/RC*.pak`, `objspr/OSP*.pak` | `room/<room>/cut/*.bmp`, `room/<room>/mask/*.bmp`, which every variant of the room reads |
 | `ENEMY/*.EMD`, `PLAYERS/*.EMW` | `enemy/<id>/enemy*.emd`, `player/<id>/skin/*`, every `player/<id>/weapon/*` the original's weapon table plays the file for |
 | `PLAYERS/WS*.TMD` | every `enemy/<id>/weapon/<behavior>.tmd` holding the mesh |
@@ -895,7 +912,8 @@ event event_05 nopad (MANSION1)
 `arklay scd export-rooms usa=<install> jpn=<install> eur=<install> --out
 games/re1/room` decompiles each installation's RDTs and writes one script per
 room as `<room>/room.akscr` (a single install exports one region, USA unless
-named), lining up each variant's events by content. The original's stages 6
+named), lining up each variant's events by content. An export builds back to
+each RDT's bytecode exactly: what has no structured form stays `asm`. The original's stages 6
 and 7 are the second mansion visit, so `103/room.akscr` holds RDTs 1030,
 1031, 6030 and 6031. An event the variants number differently gets one name
 (a variant's own, or one tagged with its variants, `on_enter_jill`), and a
@@ -903,22 +921,19 @@ reference to it follows. The scripts are checked in under `games/re1/room/`
 and are maintained by hand from there.
 
 The engine runs one build of a script for every variant: the runtime build,
-which keeps the tests. A build for one RDT variant folds them away instead,
-giving that RDT's own bytecode: `arklay scd build 103/room.akscr --room
-6031 --out 6031.scd` (the original's numbering) builds Jill's second visit,
-for the USA release unless asked for another (`--region jpn`). The
-real-data tests build each script for every RDT and region it covers and
-compare it with the original RDT's bytecode, so a rename or restructure is
-safe as long as those builds still match.
+which keeps the tests. A build for one RDT variant folds them away instead:
+`arklay scd build 103/room.akscr --room 6031 --out 6031.scd` (the original's
+numbering) builds Jill's second visit, for the USA release unless asked for
+another (`--region jpn`). A script has no preprocessor choices: the
+variants are run-time tests.
 
-`AUTHENTIC` keeps the original game's exact bytecode where the shipped data
-has a quirk with no structured form: `#if AUTHENTIC` holds the original and
-its `#else` the fixed version, line by line before the script is parsed. A
-build uses the fixed version unless asked for the original (`scd build
---authentic`, with or without `--room`); built for an RDT as `AUTHENTIC`,
-every script compiles to that RDT's exact bytecode. `#if !AUTHENTIC` takes
-its block when it is not defined. `AUTHENTIC` is the only preprocessor
-symbol: the variants are run-time tests.
+The checked-in scripts are maintained as source, not as copies of the
+original bytecode: they keep the original game's behaviour, not its bytes.
+They differ from the RDTs where the original's quirks have a clean form that
+behaves the same, and where a room's message ids were renumbered so that all
+its variants share one table of texts. A change is checked by playing the rooms
+against the previous build (the traces and frames must not change), not by
+comparing bytecode.
 
 The regions ship different scripts: the English release (USA) gives two ink
 ribbons per pickup where JPN gives three, and adds `bgm_stop` calls to
@@ -928,51 +943,23 @@ ribbons, plus rooms 313 and 412 that only they use. The Steam/GOG Japanese
 release ships the same scripts as the original Mediakite PC release, so the
 differences are regional, not per store. Every such difference sits in an
 `if (USA)`, `if (JPN)` or `if (EUR)` test, so
-`grep -rnE 'if \(!?(USA|JPN|EUR)' games/re1/room` lists them all. To give
-another region one of the USA changes, keep that region's line under
-`#if AUTHENTIC` inside the `else` of `if (USA)`, with the USA line as its fix.
+`grep -rnE 'if \(!?(USA|JPN|EUR)' games/re1/room` lists them all.
 
 These scripts are what the game runs. The build compiles each one and
 carries the bytecode in the executable; `convert-game` packs it as the room's
-`room.scd`, with the `AUTHENTIC` runtime build as `original.scd` where the
-fixes change it, and names the install's release by matching each RDT's own
-scripts against the digests of the RDT's `AUTHENTIC` builds per region. An
-RDT whose scripts match no build (a modified RDT) still runs the room's
-script, with a warning. The region every matched RDT agrees on is recorded
-as the base manifest's `region`, which the scripts' region tests read. A
-script may use a region test only where the regions' own scripts differ: the
-build stops if two regions' `AUTHENTIC` builds of an RDT match but their
-fixed builds do not. A mod's `room/<room>/room.scd` overrides the packed one,
-and a mod that replaces an RDT without shipping a script keeps that RDT's
-scripts: a script only applies over an RDT from its own layer or a lower
-one.
+`room.scd`, and records the release its install's language names (Japanese
+for JPN, French or German for EUR, else USA) as the base manifest's
+`region`, which the scripts' region tests read. A mod's
+`room/<room>/room.scd` overrides the packed one, and a mod that replaces an
+RDT without shipping a script keeps that RDT's scripts: a script only
+applies over an RDT from its own layer or a lower one.
 
-```c
-#if AUTHENTIC
-    run noreturn
-    {
-        asm
-        {
-                if                      off_28672 + 1
-                ...
-        }
-    }
-#else
-    run
-    {
-        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))
-        {
-            set(FG_ROOM, F_ROOM_02, TRUE);
-        }
-    }
-#endif
-```
-
-The exporter fixes two quirks this way, each behaving as the original does:
-an `if` whose skip lands one byte past its `endif` (the original runs the
+The original's scripts have two quirks the exporter keeps as `asm`, and the
+checked-in scripts write in their clean form, which behaves the same: an
+`if` whose skip lands one byte past its `endif` (the original runs the
 `endif`'s zero operand byte as `end`, so it ends the block either way), and
 an `endif` that closes no `if` (the block's `end` resets the branch stack it
-unbalances, so the fixed version drops it).
+unbalances, so it does nothing).
 
 The exporter names what it can from the `*.akinc` files in the nearest `inc/`
 directory at or above `--out`, and from the English text beside it
@@ -1000,6 +987,14 @@ directory at or above `--out`, and from the English text beside it
   `MSG_.. | MSG_FAST` asks for the fast reveal, and the full text follows as
   a comment. A message without text that follows a voice line is named after
   the line (`MSG_VO_104_02`);
+
+  A message id is a word: its low byte is the original's id (bit `0x80` the
+  fast reveal, bit `0x40` the global table, the low six bits the index) and
+  its high byte carries the index's higher bits, so a room has room for more
+  than the original's 64 messages: room message 70 is `0x106`. `message`
+  takes the word and compiles to the port's long form (`message_long`) when
+  it does not fit a byte; an examine spot's message (`aot_set` with
+  `SCE_MESSAGE`) carries it in its data word, the high byte after the low;
 - each enemy slot the room fills, `#define ENEMY_02_CROW 0x02` after the type
   `enemy` puts there, for `evt_work_set(WK_ENEMY, ..)`, `eml_state` and the
   other commands on a slot; an AOT or enemy slot the room never sets up is
@@ -1169,8 +1164,7 @@ event on_enter
   statement gives any other trailing bytes.
 - `asm { }` (the braces on their own lines) embeds `.s` assembly verbatim. The
   decompiler uses it only where the shipped bytecode has no structured form,
-  such as an `if` that jumps into the middle of an instruction, and then
-  under `#if AUTHENTIC` beside a fixed version.
+  such as an `if` that jumps into the middle of an instruction.
 
 ## Lua hooks
 
@@ -1222,8 +1216,9 @@ The hook order is:
    player's position, exactly like the original's `room_set`.
 3. `on_tick(api, tick)` after every fixed 30 Hz room tick, before that tick's
    audio dispatch. `tick` is `game.frame`, the number of completed room ticks.
-4. `on_message(api, id)` when the tick raised a message; the returned id
-   replaces it (must fit a byte, else the original stays). The window's bytes
+4. `on_message(api, id)` when the tick raised a message, with its id word
+   (see [`.akscr` room scripts](#akscr-room-scripts)); the returned id word
+   replaces it. The window's bytes
    are resolved on the next tick, so the new id is the one displayed.
 
 The `api` is the live game state behind a scoped userdata. Only these methods
@@ -1261,7 +1256,7 @@ exist (Lua colon syntax):
 | `api:set_room_music(stage, room, { group, ... }[, { mansion2 = true }])` | Replace a room's up-to-four group variants (stage is the 1-based stage digit, 1-5); `mansion2` sets a mansion room's second visit's row. |
 | `api:set_room_music_state(stage, room, state[, { mansion2 = true }])` | Write the saved per-room music state byte (variant, mode and channel mask), of the second visit with `mansion2`. |
 | `api:kill_event(slot)` | Deactivate a running event slot. |
-| `api:message(id)` | Request a room/global message. |
+| `api:message(id)` | Request a room/global message by its id word (see [`.akscr` room scripts](#akscr-room-scripts)). |
 | `api:register_save_screen(entry)` | Run `entry` (a pack path) as the save/load screen instead of the ported original; `nil` restores the original. See [Screen scripts](#screen-scripts). |
 | `api:log(text)` | Write one `[lua]` line to stderr. |
 

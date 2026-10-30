@@ -324,7 +324,7 @@ event on_enter_2 when (JILL)
     sleep(20);
     run
     {
-        message(2, 0);
+        message(15, 0);
         voice_play(VOICE_PLAY, VO_10A_02);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -402,7 +402,7 @@ event on_enter_2 when (JILL)
     evt_nop();
     run
     {
-        message(3, 0);
+        message(16, 0);
         voice_play(VOICE_PLAY, VO_10A_03);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
@@ -453,7 +453,7 @@ event on_enter_2 when (JILL)
     sleep(20);
     run
     {
-        message(4, 0);
+        message(17, 0);
         voice_play(VOICE_PLAY, VO_10A_04);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
@@ -506,7 +506,7 @@ event on_enter_2 when (JILL)
     sleep(20);
     run
     {
-        message(8, 0);
+        message(21, 0);
         voice_play(VOICE_PLAY, VO_10A_08);
     }
     evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
@@ -545,7 +545,7 @@ event on_enter_2 when (JILL)
     sleep(20);
     run
     {
-        message(9, 0);
+        message(22, 0);
         voice_play(VOICE_PLAY, VO_10A_09);
     }
     evt_work_set(WK_PLAYER, 0);
@@ -1006,7 +1006,7 @@ event on_enter_3
     {
         run
         {
-            message(2, 0);
+            message(15, 0);
             voice_play(VOICE_PLAY, VO_10A_02);
         }
     }
@@ -1181,7 +1181,7 @@ event on_enter_3
         }
         else
         {
-            message(3, 0);
+            message(16, 0);
             voice_play(VOICE_PLAY, VO_10A_03);
         }
     }
@@ -1270,7 +1270,7 @@ event on_enter_3
         }
         else
         {
-            message(4, 0);
+            message(17, 0);
             voice_play(VOICE_PLAY, VO_10A_04);
         }
     }
@@ -1399,7 +1399,7 @@ event on_enter_3
         sleep(20);
         run
         {
-            message(5, 0);
+            message(18, 0);
             voice_play(VOICE_PLAY, VO_10A_05);
         }
         evt_work_set(WK_ENEMY, ENEMY_00_NPC_WESKER);
@@ -1455,7 +1455,7 @@ event on_enter_3
         wait_message();
         run
         {
-            message(6, 0);
+            message(19, 0);
             voice_play(VOICE_PLAY, VO_10A_06);
         }
     }
@@ -1564,7 +1564,7 @@ event on_enter_3
         }
         else
         {
-            message(7, 0);
+            message(20, 0);
             voice_play(VOICE_PLAY, VO_10A_07);
         }
     }
@@ -1591,7 +1591,7 @@ event on_enter_3
         wait_message();
         run
         {
-            message(8, 0);
+            message(21, 0);
             voice_play(VOICE_PLAY, VO_10A_08);
         }
     }
@@ -1659,7 +1659,7 @@ event on_enter_3
         sleep(20);
         run
         {
-            message(9, 0);
+            message(22, 0);
             voice_play(VOICE_PLAY, VO_10A_09);
         }
         evt_work_set(WK_PLAYER, 0);

@@ -76,10 +76,6 @@ autosave.description = "Guarda automáticamente cada vez que una puerta carga un
 autosave.off = "Solo guarda la máquina de escribir."
 autosave.on = "Cada sala a la que entras por una puerta se guarda automáticamente."
 
-room_script_fixes.label = "Correcciones de scripts"
-room_script_fixes.description = "Si los scripts de las salas se ejecutan con las correcciones del port. Desactivado ejecuta el bytecode original de cada sala, con sus peculiaridades. Los scripts propios de los mods se aplican en ambos casos. Surte efecto desde la siguiente sala."
-room_script_fixes.off = "Cada sala ejecuta su bytecode de script original."
-room_script_fixes.on = "Los scripts de las salas se ejecutan con las correcciones del port."
 
 quick_turn.label = "Giro rápido"
 quick_turn.description = "Gira 180 grados en el sitio pulsando Correr mientras caminas hacia atrás."

@@ -328,6 +328,12 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="26840" height="0x6720" sound="0x002A"/>
   </footsteps>
+  <slots>
+    <effect when="MANSION2">00 01</effect>
+    <anim when="CHRIS MANSION1">01</anim>
+    <anim when="CHRIS">02</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">1F LEFT STAIRS</string>

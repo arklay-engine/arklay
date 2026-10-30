@@ -175,27 +175,6 @@ struct Cli {
     #[arg(long, requires = "pack", conflicts_with = "fmv")]
     authentic: bool,
 
-    /// Run the room scripts with the port's fixes for this run, even with
-    /// `--authentic`. Overrides `[game] room_script_fixes` in arklay.toml
-    #[arg(
-        long,
-        requires = "pack",
-        overrides_with = "no_room_script_fixes",
-        conflicts_with = "fmv"
-    )]
-    room_script_fixes: bool,
-
-    /// Run each room's original script bytecode for this run: the converted
-    /// pack's fixed room scripts are ignored, while a mod's own still apply.
-    /// `--authentic` implies it. Overrides `[game] room_script_fixes`
-    #[arg(
-        long,
-        requires = "pack",
-        overrides_with = "room_script_fixes",
-        conflicts_with = "fmv"
-    )]
-    no_room_script_fixes: bool,
-
     /// Render one frame to a file and exit (headless testing)
     #[arg(long, value_name = "FILE", requires = "pack")]
     capture: Option<PathBuf>,
@@ -348,21 +327,6 @@ fn quick_turn_enabled(explicit: Option<bool>, configured: bool, scripted: bool) 
 /// is unchanged.
 fn tactical_reload_enabled(explicit: Option<bool>, configured: bool, scripted: bool) -> bool {
     explicit.unwrap_or(configured && !scripted)
-}
-
-/// The room-script-fixes setting for this run.
-///
-/// An explicit `--room-script-fixes` (or `--no-room-script-fixes`) wins.
-/// Otherwise `--authentic` runs the original bytecode, and the config's
-/// `[game] room_script_fixes` applies, except to a scripted oracle run
-/// (`--trace`/`--input`), which keeps the fixes so its output is unchanged.
-fn room_script_fixes_enabled(
-    explicit: Option<bool>,
-    configured: bool,
-    scripted: bool,
-    authentic: bool,
-) -> bool {
-    explicit.unwrap_or(!authentic && (configured || scripted))
 }
 
 /// Parse `--msaa`: one of [`arklay::video::MSAA_COUNTS`].
@@ -606,15 +570,10 @@ enum ScdAction {
         out: PathBuf,
 
         /// RDT id (hex, e.g. 1031) to compile one variant of a merged
-        /// script for: its `if (JILL)`-style tests fold away, giving that
-        /// RDT's own bytecode. Without it the runtime build keeps the tests
+        /// script for: its `if (JILL)`-style tests fold away. Without it the
+        /// runtime build keeps the tests
         #[arg(long, value_name = "ID", value_parser = parse_room_id)]
         room: Option<u16>,
-
-        /// Compile the original game's exact bytecode (`#if AUTHENTIC`)
-        /// rather than the fixed version of its quirks
-        #[arg(long)]
-        authentic: bool,
 
         /// Region to compile the `--room` variant for: usa (English), jpn
         /// (Japanese, including the original Mediakite release) or eur
@@ -718,7 +677,6 @@ fn build_scd(
     input: &Path,
     out: &Path,
     room: Option<u16>,
-    authentic: bool,
     region: Option<arklay::scd::akscr::Region>,
 ) -> Result<()> {
     let text =
@@ -734,22 +692,16 @@ fn build_scd(
         let build = match room {
             Some(room) => {
                 let mut variant = arklay::scd::akscr::Variant::for_room(room);
-                if authentic {
-                    variant = variant.authentic();
-                }
                 if let Some(region) = region {
                     variant = variant.in_region(region);
                 }
                 arklay::scd::akscr::Build::Variant(variant)
             }
-            None => arklay::scd::akscr::Build::Runtime { authentic },
+            None => arklay::scd::akscr::Build::Runtime,
         };
         arklay::scd::akscr::compile_build(&text, build, &arklay::scd::akscr::includes_from(dir))
             .with_context(|| format!("failed to compile {}", input.display()))?
     } else {
-        if authentic {
-            bail!("--authentic only applies to .akscr scripts");
-        }
         if room.is_some() {
             bail!("--room only applies to .akscr scripts");
         }
@@ -1210,9 +1162,8 @@ fn main() -> Result<()> {
                 input,
                 out,
                 room,
-                authentic,
                 region,
-            } => build_scd(&input, &out, room, authentic, region),
+            } => build_scd(&input, &out, room, region),
             ScdAction::ExportRooms { packs, out } => export_rooms(&packs, &out),
         },
         Some(Command::Mod { action }) => match action {
@@ -1241,10 +1192,6 @@ fn main() -> Result<()> {
                 .tactical_reload
                 .then_some(true)
                 .or_else(|| cli.no_tactical_reload.then_some(false));
-            let explicit_room_script_fixes = cli
-                .room_script_fixes
-                .then_some(true)
-                .or_else(|| cli.no_room_script_fixes.then_some(false));
             let player_options = arklay::player::Options {
                 quick_turn: quick_turn_enabled(
                     explicit_quick_turn,
@@ -1269,12 +1216,6 @@ fn main() -> Result<()> {
                 jill_ink_ribbons: config.game.jill_ink_ribbons && !(tracing || cli.input.is_some()),
                 // A scripted run never writes into the save directory.
                 no_autosave: !config.game.autosave || tracing || cli.input.is_some(),
-                no_room_script_fixes: !room_script_fixes_enabled(
-                    explicit_room_script_fixes,
-                    config.game.room_script_fixes,
-                    tracing || cli.input.is_some(),
-                    cli.authentic,
-                ),
                 authentic: cli.authentic,
             };
             let mut renderer = config.graphics;
@@ -1585,38 +1526,6 @@ mod tests {
     }
 
     #[test]
-    fn the_cli_accepts_the_room_script_fix_flags() {
-        let cli = Cli::try_parse_from(["arklay", "game.akpak"]).unwrap();
-        assert!(!cli.room_script_fixes && !cli.no_room_script_fixes);
-        let cli = Cli::try_parse_from(["arklay", "game.akpak", "--no-room-script-fixes"]).unwrap();
-        assert!(cli.no_room_script_fixes && !cli.room_script_fixes);
-        // The last of the pair wins.
-        let cli = Cli::try_parse_from([
-            "arklay",
-            "game.akpak",
-            "--no-room-script-fixes",
-            "--room-script-fixes",
-        ])
-        .unwrap();
-        assert!(cli.room_script_fixes && !cli.no_room_script_fixes);
-        assert!(Cli::try_parse_from(["arklay", "--no-room-script-fixes"]).is_err());
-    }
-
-    #[test]
-    fn the_room_script_fixes_follow_the_flags_then_authentic_then_the_config() {
-        // The config applies to gameplay runs; a scripted run keeps the fixes.
-        assert!(room_script_fixes_enabled(None, true, false, false));
-        assert!(!room_script_fixes_enabled(None, false, false, false));
-        assert!(room_script_fixes_enabled(None, false, true, false));
-        // `--authentic` runs the original bytecode, scripted or not.
-        assert!(!room_script_fixes_enabled(None, true, false, true));
-        assert!(!room_script_fixes_enabled(None, true, true, true));
-        // An explicit flag beats everything.
-        assert!(room_script_fixes_enabled(Some(true), false, true, true));
-        assert!(!room_script_fixes_enabled(Some(false), true, true, false));
-    }
-
-    #[test]
     fn the_tactical_reload_override_beats_the_config_but_not_a_trace() {
         // No explicit flag: the config applies to gameplay runs, while a
         // scripted oracle run keeps the reference default.
@@ -1760,7 +1669,7 @@ mod tests {
         )
         .unwrap();
 
-        build_scd(&input, &out, None, false, None).unwrap();
+        build_scd(&input, &out, None, None).unwrap();
 
         let bytes = fs::read(&out).unwrap();
         let scripts = arklay::scd::reader::parse(&bytes).unwrap();

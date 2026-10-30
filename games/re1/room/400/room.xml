@@ -227,6 +227,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="23100" height="0x4C90" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ENTER PASSAGE</string>

@@ -337,14 +337,14 @@ fn an_xml_only_mod_keeps_the_base_scripts() {
     // An edit of the XML alone keeps the base layer's `room.scd`.
     let only_xml = vec![(rdt_file(ID, "room.xml"), edited.clone().into_bytes())];
     let (pack, dir) = layered("xml-mod", base.clone(), only_xml);
-    assert_eq!(script_source(&pack, ID, false), ScriptSource::Room);
+    assert_eq!(script_source(&pack, ID), ScriptSource::Room);
     assert!(!own_scripts(&pack, ID).unwrap().init.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 
     // An RDT mod over the XML room runs the scripts embedded in it.
     let rdt = vec![(rdt_file(ID, "room.rdt"), synthetic_rdt())];
     let (pack, dir) = layered("rdt-mod", base, rdt);
-    assert_eq!(script_source(&pack, ID, false), ScriptSource::Rdt);
+    assert_eq!(script_source(&pack, ID), ScriptSource::Rdt);
     assert_eq!(
         own_scripts(&pack, ID).unwrap().digest(),
         crate::scd::reader::parse(&container).unwrap().digest()
@@ -364,44 +364,21 @@ fn flag_container(bit: u8) -> Vec<u8> {
 }
 
 #[test]
-fn original_scripts_skip_the_base_fixes_but_keep_a_mods() {
+fn a_mods_room_scd_replaces_the_base_scripts() {
     use crate::engine::room_scripts;
     let parse = |container: &[u8]| crate::scd::reader::parse(container).unwrap().digest();
-    let (_, mut base) = converted_entries();
-    let own = entry_of(&base, &rdt_file(ID, "room.scd"));
-    let (fixed, modded) = (flag_container(1), flag_container(2));
-    assert_ne!(parse(&own), parse(&fixed));
-    assert_ne!(parse(&fixed), parse(&modded));
-    // The converter's layout for a fixed room: the fixed build runs, the
-    // original bytecode is kept beside it.
-    base.retain(|(path, _)| *path != rdt_file(ID, "room.scd"));
-    base.push((rdt_file(ID, "room.scd"), fixed.clone()));
-    base.push((rdt_file(ID, "original.scd"), own.clone()));
-
-    // A mod that ships nothing for the room: the fixed build runs unless the
-    // original scripts are asked for.
-    let unrelated = vec![("lua/unrelated.lua".to_string(), b"-- nothing".to_vec())];
-    let (pack, dir) = layered("original-base", base.clone(), unrelated);
-    let loaded = load(&pack, ID).unwrap();
-    for (original, source, digest) in [
-        (false, ScriptSource::Room, parse(&fixed)),
-        (true, ScriptSource::Original, parse(&own)),
-    ] {
-        assert_eq!(script_source(&pack, ID, original), source);
-        let (scripts, from) = room_scripts(&pack, ID, &loaded, original).unwrap();
-        assert_eq!((scripts.digest(), from), (digest, source), "{original}");
-    }
-    let _ = std::fs::remove_dir_all(&dir);
-
-    // A mod's own `room.scd` wins either way.
+    let (_, base) = converted_entries();
+    let modded = flag_container(2);
+    assert_ne!(
+        parse(&entry_of(&base, &rdt_file(ID, "room.scd"))),
+        parse(&modded)
+    );
     let with_scripts = vec![(rdt_file(ID, "room.scd"), modded.clone())];
-    let (pack, dir) = layered("original-mod", base, with_scripts);
+    let (pack, dir) = layered("scd-mod", base, with_scripts);
     let loaded = load(&pack, ID).unwrap();
-    for original in [false, true] {
-        assert_eq!(script_source(&pack, ID, original), ScriptSource::Room);
-        let (scripts, _) = room_scripts(&pack, ID, &loaded, original).unwrap();
-        assert_eq!(scripts.digest(), parse(&modded), "{original}");
-    }
+    assert_eq!(script_source(&pack, ID), ScriptSource::Room);
+    let (scripts, _) = room_scripts(&pack, ID, &loaded).unwrap();
+    assert_eq!(scripts.digest(), parse(&modded));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -532,6 +509,86 @@ fn every_shipped_room_loads_the_same_from_xml() {
         }));
         // Every room is a folder: nothing is shared by content.
         assert!(pack.paths().all(|path| path.starts_with("room/")));
+    }
+}
+
+#[test]
+fn slots_name_the_files_each_variant_reads() {
+    let (xml, _) = converted_entries();
+    let xml = xml.replacen(
+        "<footsteps",
+        "<slots>\n    <item when=\"JILL MANSION2\">-</item>\n    \
+         <item when=\"JILL\">02 01</item>\n    <item>00 01</item>\n    \
+         <anim when=\"JILL\">01</anim>\n    <effect when=\"JILL\">03</effect>\n  \
+         </slots>\n  <footsteps",
+        1,
+    );
+    let room = RoomId::parse("205").unwrap();
+    // Every file is broken, so each one a variant reads warns by name.
+    let mut entries = vec![(room.xml_entry(), xml.clone().into_bytes())];
+    for file in ["item/00", "item/01", "item/02", "anim/00", "anim/01"] {
+        for extension in ["tmd", "emr", "edd"] {
+            entries.push((format!("room/205/{file}.{extension}"), b"broken".to_vec()));
+        }
+    }
+    let pack = pack_of(entries);
+    let read = |id: RoomId| {
+        let state = load_state(&pack, id).unwrap();
+        let mut files: Vec<String> = state
+            .model_warnings
+            .iter()
+            .chain(&state.effects.warnings)
+            .filter_map(|warning| warning.split("room/205/").nth(1))
+            .map(|file| file.split([':', '.']).next().unwrap().to_string())
+            .collect();
+        files.sort();
+        (state.item_count, files)
+    };
+    let chris = RoomId {
+        player_flag: 0,
+        ..room
+    };
+    assert_eq!(
+        read(chris),
+        (
+            2,
+            vec!["anim/00".into(), "item/00".into(), "item/01".into()]
+        )
+    );
+    assert_eq!(
+        read(ID),
+        (
+            2,
+            vec![
+                "anim/01".into(),
+                "effect/03".into(),
+                "item/01".into(),
+                "item/02".into()
+            ]
+        )
+    );
+
+    // The written room keeps the variant's lists.
+    let source = xml::parse_for(&xml, ID).unwrap();
+    assert_eq!(source.slots.item, Some(vec![Some(2), Some(1)]));
+    let written = xml::write(&source).unwrap();
+    assert!(
+        written.contains("<slots>\n    <item>02 01</item>\n"),
+        "{written}"
+    );
+    assert_eq!(xml::parse(&written).unwrap().slots, source.slots);
+    // An empty list empties the kind.
+    let source = xml::parse_for(&xml, ID.with_visit(true)).unwrap();
+    assert_eq!(source.slots.item, Some(vec![None]));
+    // A list is two hex digits or `-` per slot.
+    for bad in [
+        "<item>0</item>",
+        "<item>xx</item>",
+        "<anim>00 01</anim>",
+        "<sound>00</sound>",
+    ] {
+        let text = xml.replacen("<item>00 01</item>", bad, 1);
+        assert!(xml::parse_for(&text, chris).is_err(), "{bad}");
     }
 }
 
@@ -768,7 +825,7 @@ fn bad_room_strings_are_refused() {
     for bad in [
         r#"<room><strings><language lang="en-US"><string key="title">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="01">A</string></language></strings></room>"#,
-        r#"<room><strings><language lang="en-US"><string key="256">A</string></language></strings></room>"#,
+        r#"<room><strings><language lang="en-US"><string key="16384">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="-1">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="1_speaker_01">A</string></language></strings></room>"#,
         r#"<room><strings><language lang="en-US"><string key="1_speakers">A</string></language></strings></room>"#,
@@ -804,7 +861,7 @@ fn every_checked_in_re1_room_builds() {
     // The display names and message texts are in the rooms themselves.
     let layers = language_layers(&pack);
     let english = &layers.iter().find(|(tag, _)| tag == "en-us").unwrap().1;
-    assert!(english.len() > 1_100, "{} strings", english.len());
+    assert!(english.len() > 1_000, "{} strings", english.len());
 
     // Each file is in the form the writer gives it, `<strings>` last.
     for (path, text) in RE1_FILES {

@@ -32,13 +32,13 @@ const LST_ARGS_COLUMN: usize = 120;
 const DB_CHUNK: usize = 16;
 
 /// Original-tool display signatures for the command VM (0x00-0x50), then the
-/// port's own variant jumps (0x51-0x52).
+/// port's own variant jumps (0x51-0x52) and long message (0x53).
 ///
 /// A signature without a `:` means the operand bytes are printed raw; an empty
 /// entry is an undecodable dead slot. This table matches the operand split of
 /// the original tool, which differs from the decoder's own signature for some
 /// opcodes (e.g. `aot_set` splits its trailing words into bytes).
-pub(super) const COMMAND_SIG: [&str; 83] = [
+pub(super) const COMMAND_SIG: [&str; 84] = [
     "end:u",
     "if:l",
     "else:l",
@@ -122,6 +122,7 @@ pub(super) const COMMAND_SIG: [&str; 83] = [
     "costume_ck",
     "variant_if:uL",
     "variant_jump:L",
+    "message_long:uUU",
 ];
 
 /// Original-tool display signatures for event state 0 (0x00-0x09).

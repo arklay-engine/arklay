@@ -66,7 +66,7 @@ pub fn enemy_scripts_pack(pack_path: &Path) -> Pack {
 }
 
 /// RDT `id`'s own scripts: the checked-in room script built for that RDT
-/// variant, as `AUTHENTIC`, in the region `pack` was converted from. A pack
+/// variant, in the region `pack` was converted from. A pack
 /// carries each room's runtime build, which holds every variant's lines;
 /// this is the one RDT's. `None` for a room without a script.
 #[allow(dead_code)]
@@ -80,9 +80,7 @@ pub fn rdt_scripts(pack: &Pack, id: arklay::state::RoomId) -> Option<arklay::scd
         .manifest()
         .and_then(|manifest| manifest.region)
         .unwrap_or(akscr::Region::Usa);
-    let variant = akscr::Variant::for_room(number)
-        .in_region(region)
-        .authentic();
+    let variant = akscr::Variant::for_room(number).in_region(region);
     let container = akscr::compile_with(&text, Some(variant), &akscr::includes_from(&dir))
         .and_then(|assembled| assembled.to_container())
         .unwrap_or_else(|error| panic!("{id:?}: {error:#}"));

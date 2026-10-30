@@ -30,7 +30,7 @@
 #define MSG_VO_00C_01 0x05
 #define MSG_VO_00C_20 0x06
 #define MSG_VO_00C_21 0x07
-#define MSG_VO_00C_22 0x07
+#define MSG_VO_00C_22 0x08
 #define MSG_VO_105_06 0x00
 #define MSG_VO_105_07 0x01
 #define MSG_VO_105_08 0x02

@@ -480,6 +480,13 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="32767" height="0x4A38" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="CHRIS MANSION1">05 01 02 - 04</item>
+    <item when="CHRIS">06 01 02 07 04</item>
+    <item>- 01 02 - 04</item>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">DINING ROOM</string>
@@ -502,13 +509,9 @@
       <string key="15">I've got to report this to\nWesker...</string>
       <string key="16">It's the hollow that an\nemblem was in.</string>
       <string key="17">\nAn emblem is in place.</string>
-      <string key="18">\nBarry is investigating...</string>
       <string key="19">There is no time to check\nit.</string>
-      <string key="20">\n </string>
       <string key="21">\nA picture of a woman.</string>
       <string key="22">A picture of beautiful\nscenery.</string>
-      <string key="23">A dusty looking\nGrandfather Clock.</string>
-      <string key="24">It is not running any\nmore.</string>
       <string key="25">\nDinner utensils.</string>
       <string key="26">It's dark outside and I\ncan't see very far.</string>
       <string key="27">\nThere's nothing inside.</string>
@@ -533,13 +536,9 @@
       <string key="15">\n  ウェスカーに報告しなければ・・</string>
       <string key="16">\nエンブレムのはまっていたくぼみがある</string>
       <string key="17">\n   エンブレムがはまっている</string>
-      <string key="18">\n     バリーは調査している</string>
       <string key="19">\n   調べている時間はない!</string>
-      <string key="20">\n 役にたちそうなものは見当たらない</string>
       <string key="21">\n    女性がえがかれている{clear 0}\n    別に変わった所はない</string>
       <string key="22">\n  美しいけしきがえがかれている{clear 0}\n  特におかしな所は見られない</string>
-      <string key="23">\n    時計が時を刻んでいる</string>
-      <string key="24">\n      もう動かない</string>
       <string key="25">\n    食器が並べられている</string>
       <string key="26">\n    外は暗くて見通しが悪い</string>
       <string key="27">\n   中には何も入っていない</string>
@@ -566,14 +565,9 @@
       <string when="MANSION2" key="15">Il faut que j'en rende \ncompte à Wesker...</string>
       <string key="16">C'est la cavité où il y \navait un blason.</string>
       <string key="17">\nIl y a un blason.</string>
-      <string key="18">\nBarry enquête...</string>
       <string key="19">\nPas de temps pour vérifier.</string>
-      <string key="20">\nRien d'utile.</string>
-      <string when="MANSION2" key="20">\n </string>
       <string key="21">\nLe portrait d'une femme.</string>
       <string key="22">Une photo d'un superbe \npaysage.</string>
-      <string key="23">\nUne pendule poussièreuse.</string>
-      <string key="24">\nElle ne fonctionne plus.</string>
       <string key="25">\nDes couverts.</string>
       <string key="26">Il fait sombre dehors et \nje ne peux pas voir loin.</string>
       <string key="27">\nC'est vide.</string>
@@ -606,16 +600,10 @@
       <string key="16">Das ist der Hohlraum, in dem\nsich ein Emblem befand.</string>
       <string when="MANSION2" key="16">Das ist der Hohlraum,\nin dem sich ein Emblem befand.</string>
       <string key="17">\nEin Emblem sitzt drin.</string>
-      <string key="18">\nBarry untersucht etwas...</string>
-      <string when="MANSION2" key="18">\nBarry untersucht gerade etwas...</string>
       <string key="19">Es ist keine Zeit,\ndas zu überprüfen.</string>
-      <string key="20">\n </string>
       <string key="21">\nDas Bildnis einer Frau.</string>
       <string key="22">Ein hübsches\nLandschaftsbild.</string>
       <string when="MANSION2" key="22">\nEin hübsches Landschaftsbild.</string>
-      <string key="23">Eine verstaubt aussehende\nUhr aus Großvaters Zeiten.</string>
-      <string when="MANSION2" key="23">Eine verstaubt aussehende Uhr\naus Großvaters Zeiten.</string>
-      <string key="24">\nSie geht nicht mehr.</string>
       <string key="25">\nGeschirr und Besteck.</string>
       <string key="26">Draußen ist es dunkel und ich\nkann nicht sehr weit sehen.</string>
       <string key="27">\nDa ist nichts drin.</string>
@@ -640,47 +628,35 @@
       <string key="15">\nDevo fare rapporto a Wesker...</string>
       <string key="16">È la cavità in cui si \ntrovava l'emblema.</string>
       <string key="17">\nÈ posizionato un emblema.</string>
-      <string key="18">\nBarry sta investigando...</string>
       <string key="19">\nNon c'è tempo per controllare.</string>
-      <string key="20">\nNiente di utile.</string>
       <string key="21">\nIl ritratto di una donna.</string>
       <string key="22">Il dipinto di un panorama \nmeraviglioso.</string>
-      <string key="23">Un vecchio orologio dall'aria \npolverosa.</string>
-      <string key="24">\nNon funziona più.</string>
       <string key="25">\nPosate e stoviglie.</string>
       <string key="26">Fuori è buio, non riesco \na vedere molto lontano.</string>
       <string key="27">\nDentro non c'è niente.</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\nUn comedor.{scroll 1}{timed 48}</string>
-      <string key="1">{scroll 0}\n¿Qué? ¿Qué es eso?{scroll 1}{timed 90}</string>
-      <string when="JILL" key="1">{scroll 0}\n¿Qué? ¿Qué es esto?{scroll 1}{timed 90}</string>
+      <string key="1">{scroll 0}\n¿Qué? ¿Qué es esto?{scroll 1}{timed 90}</string>
       <string key="2">{scroll 0}\n¿Qué es eso?{scroll 1}{clear 51}{scroll 0}\nSangre.{scroll 1}{clear 62}{scroll 0}Jill, a ver si encuentras\nmás pistas.{scroll 1}{clear 96}{scroll 0}\nExaminaré esto.{scroll 1}{timed 45}</string>
       <string key="3">{scroll 0}Espero que no sea\nla sangre de Chris.{scroll 1}{timed 70}</string>
       <string key="4">{scroll 0}\n¿Ya has perdido el valor?{scroll 1}{clear 52}{scroll 0}\nNo es propio de ti.{scroll 1}{timed 55}</string>
-      <string key="5">{scroll 0}\n¿Quién es?{scroll 1}{timed 43}</string>
-      <string when="JILL" key="5">{scroll 0}\n¿Quién va?{scroll 1}{timed 43}</string>
+      <string key="5">{scroll 0}\n¿Quién va?{scroll 1}{timed 43}</string>
       <string key="6">{scroll 0}\n¡Eh, tú! ¡Alto!{scroll 1}{timed 81}</string>
       <string key="7">{scroll 0}\n¡Corre, Jill! ¡Está loco!{scroll 1}{timed 74}</string>
       <string key="8">{scroll 0}\n¿Pero qué diantres?{scroll 1}{clear 51}{scroll 0}\nVamos a informar a Wesker.{scroll 1}{timed 70}</string>
       <string key="9">{scroll 0}\n¡Barry!{scroll 1}{timed 36}</string>
-      <string key="10">{scroll 0}\n¿Qué es eso?{scroll 1}{clear 41}{scroll 0}\n¡Cuidado! ¡Un monstruo!{scroll 1}{clear 76}{scroll 0}\nDéjame que me encargue.{scroll 1}{timed 65}</string>
-      <string when="JILL" key="10">{scroll 0}\n¿Qué es eso?{scroll 1}{clear 41}{scroll 0}\n¡Cuidado! ¡Un monstruo!{scroll 1}{clear 76}{scroll 0}\nDéja que me encargue.{scroll 1}{timed 65}</string>
+      <string key="10">{scroll 0}\n¿Qué es eso?{scroll 1}{clear 41}{scroll 0}\n¡Cuidado! ¡Un monstruo!{scroll 1}{clear 76}{scroll 0}\nDéja que me encargue.{scroll 1}{timed 65}</string>
       <string key="11">{scroll 0}\n¿Qué es eso?{scroll 1}{timed 59}</string>
       <string key="12">{scroll 0}También han matado a Kenneth.\nPuede que haya sido la criatura.{scroll 1}{timed 135}</string>
-      <string key="13">{scroll 0}Da igual, informemos\na Wesker.{scroll 1}{timed 89}</string>
-      <string when="JILL" key="13">{scroll 0}De cualquier forma,\ninformemos a Wesker.{scroll 1}{timed 89}</string>
+      <string key="13">{scroll 0}De cualquier forma,\ninformemos a Wesker.{scroll 1}{timed 89}</string>
       <string key="14">Puede que aquí haya\nmás que investigar...</string>
       <string key="15">Tengo que informar a\nWesker...</string>
       <string key="16">Es el hueco en el que\nhabía un emblema...</string>
       <string key="17">\nAhí hay un emblema...</string>
-      <string key="18">\nBarry está investigando...</string>
       <string key="19">No hay tiempo para\nexaminarlo...</string>
-      <string key="20">\nNada útil...</string>
       <string key="21">\nUn cuadro de una mujer...</string>
       <string key="22">Un cuadro de un bonito\npaisaje...</string>
-      <string key="23">Un antiguo\nreloj de péndulo...</string>
-      <string key="24">\nYa no funciona...</string>
       <string key="25">\nPlatos y cubiertos.</string>
       <string key="26">Afuera está oscuro,\nno puedo ver demasiado lejos...</string>
       <string key="27">\nDentro no hay nada...</string>
@@ -706,13 +682,9 @@
       <string key="16">Углубление,в котором\nбыла эмблема.</string>
       <string when="MANSION2" key="16">Углубление, в котором\nбыла эмблема.</string>
       <string key="17">\nЭмблема на месте.</string>
-      <string key="18">\nБарри исследует...</string>
       <string key="19">\nНа это нет времени.</string>
-      <string key="20">\n </string>
       <string key="21">\nПортрет женщины.</string>
       <string key="22">Картина с природой.\nОчень красиво.</string>
-      <string key="23">Напольные часы\nпокрытые пылью.</string>
-      <string key="24">\nВторой раз не сработает.</string>
       <string key="25">На столе разложена\nпосуда.</string>
       <string when="MANSION2" key="25">\nНа столе посуда.</string>
       <string key="26">На улице темно,\nя ничего не вижу.</string>
@@ -739,13 +711,9 @@
       <string key="15">Minun täytyy raportoida\ntästä Weskerille...</string>
       <string key="16">Kolo jossa embleemi oli...</string>
       <string key="17">Embleemi on asetettu...</string>
-      <string key="18">Barry tutkii...</string>
       <string key="19">Ei ole aikaa tutkia sitä...</string>
-      <string key="20">Ei mitään hyödyllistä...</string>
       <string key="21">Maalaus naisesta...</string>
       <string key="22">Kaunis maisemamaalaus...</string>
-      <string key="23">Pölyinen kaappikello...</string>
-      <string key="24">Se ei käy enää...</string>
       <string key="25">Ruokailuvälineitä...</string>
       <string key="26">Ulkona on pimeää ja näkyvyys on\nheikko...</string>
       <string key="27">Sen sisällä ei ole mitään...</string>

@@ -180,6 +180,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="12800" height="0x3138" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ITEM PASSAGE</string>

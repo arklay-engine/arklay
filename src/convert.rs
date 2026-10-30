@@ -4,7 +4,7 @@
 //! `ITEM_M1`, `effspr`, `voice`, `movie` and `DATA` (case-insensitively, up to
 //! two levels below the root), writes every `ROOM####.RDT` as a room folder
 //! `room/<id>/` ([`crate::room`]), converts the camera backgrounds of every
-//! room into each player variant's folder, converts the room mask pages of
+//! room into its folder, converts the room mask pages of
 //! every camera that has sprite groups, copies the door animations named by the
 //! door type table, copies the numbered music tracks, the named sound
 //! effects, the four player models plus the two no-weapon locomotion clips,
@@ -612,26 +612,19 @@ fn convert_observed_as(
     progress.begin("room", rooms.len() as u64);
     let room_results = parallel_map(rooms.len(), jobs, &mut progress, |index| {
         let room = &rooms[index];
-        let converted = convert_room(room, region);
+        let converted = convert_room(room);
         Ok((room.id.xml_entry(), 1, converted))
     })?;
     let mut sidecar_count = 0usize;
     let mut sidecar_bytes = 0usize;
-    // The regions every room's own scripts fit; the install's release is the
-    // one left, else the one its language names.
-    let mut regions = Region::ALL.to_vec();
     for (_label, converted) in room_results {
         let ConvertedRoom {
             id,
             files,
             warnings: room_warnings,
-            matched,
         } = converted;
         stage_counts[id.stage_index() as usize].0 += 1;
         warnings.extend(room_warnings);
-        for matched in matched {
-            regions.retain(|region| matched.contains(region));
-        }
         let definition = id.xml_entry();
         for (entry, data) in files {
             if entry == definition {
@@ -771,10 +764,6 @@ fn convert_observed_as(
         &mut warnings,
         jobs,
     )?;
-    let region = match regions[..] {
-        [found] => found,
-        _ => region,
-    };
     let (manifest_count, manifest_bytes) = copy_manifest(&mut writer, &language, Some(region))?;
 
     // Voice and film land in the same pack as every other category, so a
@@ -885,37 +874,30 @@ fn convert_observed_as(
 /// One room's converted folder.
 struct ConvertedRoom {
     id: RoomId,
-    /// Every file of the room's folder and its variant folders, as `(pack
-    /// entry, bytes)`, besides the camera images.
+    /// Every file of the room's folder, as `(pack entry, bytes)`, besides
+    /// the camera images.
     files: Vec<(String, Vec<u8>)>,
     warnings: Vec<String>,
-    /// For each variant whose RDT's own scripts are one of the checked-in
-    /// script's builds, the regions of that build.
-    matched: Vec<&'static [Region]>,
 }
 
-/// One room variant's files of one kind, by their name in the kind's folder.
-type VariantFiles = (RoomId, BTreeMap<String, Vec<u8>>);
-
-/// The kinds of room files an RDT supplies, each in a folder of its own.
-const RDT_KINDS: [&str; 4] = ["object", "item", "effect", "anim"];
-
-/// Convert `room`: its checked-in `room.xml`, every variant's models,
-/// effects and animation, placed in the room folder or the variant folders
-/// that differ ([`place_variant_files`]), and the room's scripts.
-fn convert_room(room: &Room, region: Region) -> ConvertedRoom {
+/// Convert `room`: its checked-in `room.xml` and effect definitions, every
+/// variant's models, effect sheets and player animation, each at the file
+/// the variant's `<slots>` names for it ([`place_rdt_assets`]), and the
+/// room's scripts.
+fn convert_room(room: &Room) -> ConvertedRoom {
     let dir = room.id.dir();
     let mut files: Vec<(String, Vec<u8>)> = room
         .definition
         .iter()
-        .filter(|(entry, _)| *entry == room.id.xml_entry())
         .map(|(entry, text)| (entry.clone(), text.as_bytes().to_vec()))
         .collect();
     let mut warnings = Vec::new();
-    let mut matched = Vec::new();
-    let mut own_script = None;
-    // Each kind's files per variant, by their name in the kind's folder.
-    let mut kinds: BTreeMap<&str, Vec<VariantFiles>> = BTreeMap::new();
+    let xml = room
+        .definition
+        .iter()
+        .find(|(entry, _)| *entry == room.id.xml_entry())
+        .map(|(_, text)| *text);
+    let mut placed: BTreeMap<String, (RoomId, Vec<u8>)> = BTreeMap::new();
     for variant in &room.variants {
         let data = match fs::read(&variant.rdt) {
             Ok(data) => data,
@@ -927,70 +909,29 @@ fn convert_room(room: &Room, region: Region) -> ConvertedRoom {
                 continue;
             }
         };
-        let mut sets: BTreeMap<&str, BTreeMap<String, Vec<u8>>> = RDT_KINDS
-            .iter()
-            .map(|kind| (*kind, BTreeMap::new()))
-            .collect();
-        match crate::room::source::rdt_assets(&data, variant.id) {
-            Ok(assets) => {
-                for (path, bytes) in assets {
-                    if let Some((kind, file)) = path.split_once('/')
-                        && let Some(set) = sets.get_mut(kind)
-                    {
-                        set.insert(file.to_string(), bytes);
-                    }
-                }
+        let slots = match xml.map(|text| crate::room::xml::parse_for(text, variant.id)) {
+            Some(Ok(source)) => source.slots,
+            Some(Err(err)) => {
+                warnings.push(format!("{}: {err:#}", room.id.xml_entry()));
+                continue;
             }
-            Err(err) => warnings.push(format!(
-                "{}: its models and animation are missing: {err:#}",
-                variant.rdt.display()
-            )),
-        }
-        // The effect definitions this variant reads go with its sheets.
-        if let Some(effects) = sets.get_mut("effect") {
-            for (file, text) in checked_in_kind(&room.definition, variant.id, "effect") {
-                effects.insert(file, text.as_bytes().to_vec());
+            None => Default::default(),
+        };
+        let assets = match crate::room::source::rdt_assets(&data, variant.id) {
+            Ok(assets) => assets,
+            Err(err) => {
+                warnings.push(format!(
+                    "{}: its models and animation are missing: {err:#}",
+                    variant.rdt.display()
+                ));
+                continue;
             }
-        }
-        for (kind, set) in sets {
-            kinds.entry(kind).or_default().push((variant.id, set));
-        }
-        // The build the RDT's own scripts are names its releases.
-        match rdt_room_script(variant.id, &data) {
-            Some((script, regions)) => {
-                own_script = Some(script);
-                matched.push(regions);
-            }
-            None => warnings.push(format!(
-                "{}: its scripts are not the ones {} was written from, so the room \
-                 runs its {region} scripts",
-                variant.rdt.display(),
-                room_script_path(variant.id)
-            )),
-        }
+        };
+        place_rdt_assets(&dir, variant.id, &slots, assets, &mut placed, &mut warnings);
     }
-    for (kind, variants) in &kinds {
-        for (tag, set) in place_variant_files(variants) {
-            let folder = if tag.is_empty() {
-                format!("{dir}/{kind}")
-            } else {
-                format!("{dir}/{tag}/{kind}")
-            };
-            for (file, bytes) in set {
-                files.push((format!("{folder}/{file}"), bytes));
-            }
-        }
-    }
-    match own_script.or_else(|| room_script(room.id)) {
-        Some(script) => {
-            // The fixed build runs as `room.scd`; the original bytecode stays
-            // beside it for `room_script_fixes = false` where the fixes
-            // change it.
-            if let Some(authentic) = script.authentic {
-                files.push((room.id.original_scd_entry(), authentic.to_vec()));
-            }
-            files.push((room.id.scd_entry(), script.container.to_vec()));
-        }
+    files.extend(placed.into_iter().map(|(entry, (_, bytes))| (entry, bytes)));
+    match room_script(room.id) {
+        Some(script) => files.push((room.id.scd_entry(), script.container.to_vec())),
         None => warnings.push(format!(
             "{}: no build of {}, so the room has no scripts",
             room.id.xml_entry(),
@@ -1001,116 +942,54 @@ fn convert_room(room: &Room, region: Region) -> ConvertedRoom {
         id: room.id,
         files,
         warnings,
-        matched,
     }
 }
 
-/// The checked-in files of `kind` (`effect`) room variant `id` reads from
-/// `definition`, by their name in the kind's folder: the most specific of
-/// its folders whose `kind/` has slot 0 ([`crate::room::Folder::kind`]).
-fn checked_in_kind(
-    definition: &[(String, &'static str)],
+/// Place room variant `id`'s RDT art (`assets`, by path in the room folder:
+/// `item/00.tmd`) in room folder `dir`, at the file its `slots` name for
+/// each slot, into `placed`. Variants share a file their slots name alike;
+/// one whose art there differs from the first variant's warns, and the
+/// first's stays.
+pub(crate) fn place_rdt_assets(
+    dir: &str,
     id: RoomId,
-    kind: &str,
-) -> Vec<(String, &'static str)> {
-    for dir in id.variant_dirs() {
-        let prefix = format!("{dir}/{kind}/");
-        let found: Vec<(String, &'static str)> = definition
-            .iter()
-            .filter_map(|(entry, text)| {
-                let file = entry.strip_prefix(&prefix)?;
-                (!file.contains('/')).then(|| (file.to_string(), *text))
-            })
-            .collect();
-        if found.iter().any(|(file, _)| file.starts_with("00.")) {
-            return found;
-        }
-    }
-    Vec::new()
-}
-
-/// Place each room variant's files of one kind (`files` by name in the
-/// kind's folder) in the room folder or variant folders, as `(variant folder
-/// name, files)` with `""` for the room folder: each variant reads the first
-/// of its folders that has the kind ([`RoomId::variant_tags`]), else the room
-/// folder's.
-///
-/// The room folder gets the files most variants have (none when any variant
-/// has none, since a variant folder cannot take files away), then a player
-/// folder the files every variant of that player has, then a visit folder
-/// those of the variants still reading others' files, and a variant's own
-/// folder whatever is left.
-pub(crate) fn place_variant_files(
-    variants: &[(RoomId, BTreeMap<String, Vec<u8>>)],
-) -> Vec<(String, BTreeMap<String, Vec<u8>>)> {
-    let Some((first, _)) = variants.first() else {
-        return Vec::new();
-    };
-    let sets: Vec<&BTreeMap<String, Vec<u8>>> = variants.iter().map(|(_, set)| set).collect();
-    let base: &BTreeMap<String, Vec<u8>> = if sets.iter().any(|set| set.is_empty()) {
-        sets.iter()
-            .find(|set| set.is_empty())
-            .expect("an empty set")
-    } else {
-        let count =
-            |set: &BTreeMap<String, Vec<u8>>| sets.iter().filter(|other| **other == set).count();
-        let best = sets.iter().map(|set| count(set)).max().unwrap_or(0);
-        sets.iter().find(|set| count(set) == best).expect("a set")
-    };
-    type Files = BTreeMap<String, Vec<u8>>;
-    let mut dirs: BTreeMap<String, &Files> = BTreeMap::new();
-    fn resolve<'a>(dirs: &BTreeMap<String, &'a Files>, base: &'a Files, id: RoomId) -> &'a Files {
-        id.variant_tags()
-            .iter()
-            .find_map(|tag| dirs.get(tag).copied())
-            .unwrap_or(base)
-    }
-    // Per player, then per visit, then per variant.
-    for player in [0, 1] {
-        let members: Vec<&BTreeMap<String, Vec<u8>>> = variants
-            .iter()
-            .filter(|(id, _)| id.player_flag & 1 == player)
-            .map(|(_, set)| set)
-            .collect();
-        if let Some(&set) = members.first()
-            && members.iter().all(|other| *other == set)
-            && set != base
-        {
-            let tag = RoomId {
-                player_flag: player,
-                ..*first
-            }
-            .player_tag();
-            dirs.insert(tag.to_string(), set);
-        }
-    }
-    if first.is_mansion() {
-        for mansion2 in [false, true] {
-            let members: Vec<(RoomId, &BTreeMap<String, Vec<u8>>)> = variants
-                .iter()
-                .filter(|(id, _)| id.mansion2 == mansion2 && !dirs.contains_key(id.player_tag()))
-                .map(|(id, set)| (*id, set))
-                .collect();
-            let wrong = members
-                .iter()
-                .any(|(id, set)| resolve(&dirs, base, *id) != *set);
-            if let Some(&(_, set)) = members.first()
-                && wrong
-                && members.iter().all(|(_, other)| *other == set)
-            {
-                dirs.insert(format!("mansion{}", if mansion2 { 2 } else { 1 }), set);
+    slots: &crate::room::source::Slots,
+    assets: Vec<(String, Vec<u8>)>,
+    placed: &mut BTreeMap<String, (RoomId, Vec<u8>)>,
+    warnings: &mut Vec<String>,
+) {
+    for (path, bytes) in assets {
+        let Some((kind, name)) = path.split_once('/') else {
+            continue;
+        };
+        let Some((stem, extension)) = name.split_once('.') else {
+            continue;
+        };
+        let Ok(slot) = usize::from_str_radix(stem, 16) else {
+            continue;
+        };
+        let Some(file) = slots.file(kind, slot) else {
+            warnings.push(format!(
+                "{dir}/room.xml: {kind} slot {slot} of {} is empty, so its {path} is not kept",
+                id.variant_tag()
+            ));
+            continue;
+        };
+        let entry = format!("{dir}/{kind}/{file:02x}.{extension}");
+        match placed.get(&entry) {
+            Some((first, kept)) if *kept != bytes => warnings.push(format!(
+                "{entry}: the {} RDT's {kind} slot {slot} differs from the {} RDT's; \
+                 the {} one is kept",
+                id.variant_tag(),
+                first.variant_tag(),
+                first.variant_tag()
+            )),
+            Some(_) => {}
+            None => {
+                placed.insert(entry, (id, bytes));
             }
         }
     }
-    for (id, set) in variants {
-        if resolve(&dirs, base, *id) != set {
-            dirs.insert(id.variant_tag(), set);
-        }
-    }
-    let mut placed = vec![(String::new(), base.clone())];
-    placed.extend(dirs.into_iter().map(|(tag, set)| (tag, set.clone())));
-    placed.retain(|(_, set)| !set.is_empty());
-    placed
 }
 
 /// Compress, write and report a converted pack: the tail every game's
@@ -2797,11 +2676,6 @@ pub fn packed_source_hash() -> String {
     for script in crate::scd::ROOM_SCRIPTS {
         feed(&script.room.to_le_bytes());
         feed(script.container);
-        feed(script.authentic.unwrap_or_default());
-        for original in script.originals {
-            feed(&original.id.to_le_bytes());
-            feed(&original.digest.to_le_bytes());
-        }
     }
     format!("{hash:016x}")
 }
@@ -3373,9 +3247,8 @@ struct Plan {
     /// The pack's own room-text language, from the tree the fonts and data
     /// came from (the manifest's `language`).
     language: String,
-    /// The release the install's language names ([`install_region`]): the
-    /// script build for a room whose RDT matches none, and the manifest's
-    /// region when the RDTs do not name one.
+    /// The release the install's language names ([`install_region`]), the
+    /// manifest's region, which the room scripts' region tests read.
     region: Region,
     /// The referenced voice WAVs (the union of the name rows).
     voice: Vec<VoiceAsset>,
@@ -4033,22 +3906,6 @@ pub fn installed_room_scripts(root: &Path) -> Result<BTreeMap<u16, crate::scd::i
     Ok(rooms)
 }
 
-/// The checked-in script of RDT `id` and the regions whose build of the RDT
-/// has the `AUTHENTIC` digest of `data`'s scripts, the RDT itself: the
-/// releases the RDT can be from. `None` for an RDT without scripts or with
-/// scripts no build was written from (a modified RDT).
-fn rdt_room_script(id: RoomId, data: &[u8]) -> Option<(&'static RoomScript, &'static [Region])> {
-    let number = id.original_number();
-    let digest = crate::scd::reader::parse(data).ok()?.digest();
-    crate::scd::ROOM_SCRIPTS.iter().find_map(|script| {
-        script
-            .originals
-            .iter()
-            .find(|original| original.id == number && original.digest == digest)
-            .map(|original| (script, original.regions))
-    })
-}
-
 /// The checked-in script of the room RDT `id` is a variant of: the runtime
 /// build `games/re1/room/<room>0/room.akscr` compiles, for every variant and
 /// region. `None` for a room without a script.
@@ -4061,8 +3918,7 @@ fn room_script(id: RoomId) -> Option<&'static RoomScript> {
 
 /// The release an install whose own text is in `language` ([`install_language`])
 /// is: the Japanese tree is the Japanese release, the French and German
-/// trees the European one, and any other the English (USA) one. Only a
-/// fallback: a room's script build is the one its RDT's own scripts are.
+/// trees the European one, and any other the English (USA) one.
 fn install_region(language: &str) -> Region {
     if crate::language::is_japanese(language) {
         return Region::Jpn;
@@ -4218,7 +4074,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rooms_take_their_regions_script_build() {
+    fn every_room_variant_takes_the_rooms_script_build() {
         // Every variant of a room runs the room's one runtime build.
         let script = room_script(RoomId::parse("1000").unwrap()).unwrap();
         assert_eq!(script.room, 0x100);
@@ -4227,61 +4083,6 @@ mod tests {
                 script,
                 room_script(RoomId::from_original(number).unwrap()).unwrap()
             ));
-        }
-
-        // Jill's ink ribbons differ by region (`if (USA)`), so RDT 1001 has a
-        // USA build and one JPN and EUR share; each names its releases.
-        let id = RoomId::parse("1001").unwrap();
-        let originals: Vec<_> = script
-            .originals
-            .iter()
-            .filter(|original| original.id == 0x1001)
-            .collect();
-        assert_eq!(originals.len(), 2);
-        assert_eq!(originals[0].regions, [Region::Usa]);
-        assert_eq!(originals[1].regions, [Region::Jpn, Region::Eur]);
-        let chris = script
-            .originals
-            .iter()
-            .find(|original| original.id == 0x1000)
-            .unwrap();
-        assert_eq!(chris.regions, Region::ALL, "one build for all");
-
-        // An RDT's own scripts name the releases of its build. (A variant's
-        // `AUTHENTIC` build reads like an RDT's script sections.)
-        let rdt = |region: Region| {
-            let text = std::fs::read_to_string(
-                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("games/re1/room/100/room.akscr"),
-            )
-            .unwrap();
-            let load = crate::scd::akscr::includes_from(
-                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("games/re1/room"),
-            );
-            let variant = crate::scd::akscr::Variant::for_room(0x1001).in_region(region);
-            crate::scd::akscr::compile_with(&text, Some(variant.authentic()), &load)
-                .unwrap()
-                .to_container()
-                .unwrap()
-        };
-        let (found, regions) = rdt_room_script(id, &rdt(Region::Usa)).unwrap();
-        assert!(std::ptr::eq(found, script));
-        assert_eq!(regions, [Region::Usa]);
-        let (_, regions) = rdt_room_script(id, &rdt(Region::Eur)).unwrap();
-        assert_eq!(regions, [Region::Jpn, Region::Eur]);
-        // Another variant's scripts are not this RDT's.
-        assert!(rdt_room_script(RoomId::parse("1000").unwrap(), &rdt(Region::Usa)).is_none());
-        // The runtime build is no RDT's own scripts.
-        assert!(rdt_room_script(id, script.container).is_none());
-
-        // The original scripts ship only where the fixes change them.
-        let fixed: Vec<&RoomScript> = crate::scd::ROOM_SCRIPTS
-            .iter()
-            .filter(|script| script.authentic.is_some())
-            .collect();
-        assert!(!fixed.is_empty());
-        for script in fixed {
-            assert_ne!(script.authentic.unwrap(), script.container);
         }
     }
 
@@ -5015,37 +4816,75 @@ mod tests {
     }
 
     #[test]
-    fn variant_files_go_where_their_variants_read_them() {
-        let id = |text: &str, mansion2: bool| RoomId::parse(text).unwrap().with_visit(mansion2);
-        let set = |name: &str| -> BTreeMap<String, Vec<u8>> {
-            [("00.emr".to_string(), name.as_bytes().to_vec())].into()
+    fn rdt_art_goes_to_the_files_its_variants_slots_name() {
+        let id = |text: &str| RoomId::parse(text).unwrap();
+        let slots = |xml: &str, id: RoomId| {
+            crate::room::xml::parse_for(
+                &format!("<room format=\"3\"><slots>{xml}</slots></room>"),
+                id,
+            )
+            .unwrap()
+            .slots
         };
-        let none = BTreeMap::new;
-        // The player animation differs per player, and Chris's on the
-        // second visit too.
-        let placed = place_variant_files(&[
-            (id("1010", false), set("chris")),
-            (id("1011", false), set("jill")),
-            (id("1010", true), set("chris2")),
-            (id("1011", true), set("jill")),
-        ]);
-        let tags: Vec<&str> = placed.iter().map(|(tag, _)| tag.as_str()).collect();
-        assert_eq!(tags, ["", "chris-mansion1", "chris-mansion2"]);
-        assert_eq!(placed[0].1, set("jill"));
-        // Effects only the first visit has: the room folder has none.
-        let placed = place_variant_files(&[
-            (id("1000", false), set("fx")),
-            (id("1001", false), set("fx")),
-            (id("1000", true), none()),
-            (id("1001", true), none()),
-        ]);
-        let tags: Vec<&str> = placed.iter().map(|(tag, _)| tag.as_str()).collect();
-        assert_eq!(tags, ["mansion1"]);
-        // Outside the mansion only the players differ.
-        let placed =
-            place_variant_files(&[(id("3080", false), set("a")), (id("3081", false), set("b"))]);
-        let tags: Vec<&str> = placed.iter().map(|(tag, _)| tag.as_str()).collect();
-        assert_eq!(tags, ["", "jill"]);
+        let xml = "<item when=\"JILL\">02 01</item><item>00 01</item><anim when=\"JILL\">01</anim>";
+        let art = |name: &str| {
+            vec![
+                ("item/00.tmd".to_string(), name.as_bytes().to_vec()),
+                ("item/01.tmd".to_string(), b"shared".to_vec()),
+                ("anim/00.emr".to_string(), name.as_bytes().to_vec()),
+            ]
+        };
+        let mut placed = BTreeMap::new();
+        let mut warnings = Vec::new();
+        for (variant, name) in [(id("3080"), "chris"), (id("3081"), "jill")] {
+            place_rdt_assets(
+                "room/308",
+                variant,
+                &slots(xml, variant),
+                art(name),
+                &mut placed,
+                &mut warnings,
+            );
+        }
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let files: Vec<(&str, &[u8])> = placed
+            .iter()
+            .map(|(entry, (_, bytes))| (entry.as_str(), bytes.as_slice()))
+            .collect();
+        assert_eq!(
+            files,
+            [
+                ("room/308/anim/00.emr", &b"chris"[..]),
+                ("room/308/anim/01.emr", b"jill"),
+                ("room/308/item/00.tmd", b"chris"),
+                ("room/308/item/01.tmd", b"shared"),
+                ("room/308/item/02.tmd", b"jill"),
+            ]
+        );
+
+        // Art two variants' slots name alike but differ in: the first stays.
+        let mut warnings = Vec::new();
+        place_rdt_assets(
+            "room/308",
+            id("3081"),
+            &Default::default(),
+            vec![("item/01.tmd".to_string(), b"other".to_vec())],
+            &mut placed,
+            &mut warnings,
+        );
+        assert_eq!(placed["room/308/item/01.tmd"].1, b"shared");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        // An empty slot keeps nothing.
+        let mut warnings = Vec::new();
+        place_rdt_assets(
+            "room/308",
+            id("3081"),
+            &slots("<item>- 01</item>", id("3081")),
+            vec![("item/00.tmd".to_string(), b"dropped".to_vec())],
+            &mut placed,
+            &mut warnings,
+        );
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
     }
 
     #[test]
@@ -6893,33 +6732,34 @@ mod tests {
                 );
                 expected.object_slots = source.object_slots;
                 expected.item_slots = source.item_slots;
+                // An RDT's art is in its own slots; the room's names the
+                // files they read.
+                let slot_files = std::mem::take(&mut expected.slots);
                 assert!(
                     source == expected,
                     "{}: {} differs for {id:?}",
                     root.display(),
                     id.xml_entry()
                 );
-                // Its scripts are one of the checked-in builds.
-                assert!(
-                    rdt_room_script(id, &data).is_some(),
-                    "{}: {} has no script build for {id:?}",
-                    root.display(),
-                    room_script_path(id)
-                );
-                // Its effect definitions are the ones the variant reads.
-                let own: BTreeMap<String, Vec<u8>> = files
+                // Its effect definitions are the ones the variant's slots read.
+                let own: BTreeMap<usize, Vec<u8>> = files
                     .iter()
-                    .filter(|(entry, _)| entry.ends_with(".xml"))
-                    .map(|(entry, bytes)| {
-                        let file = entry.rsplit('/').next().unwrap().to_string();
-                        (file, bytes.clone())
+                    .filter_map(|(entry, bytes)| {
+                        let slot = entry.split("/effect/").nth(1)?.strip_suffix(".xml")?;
+                        Some((usize::from_str_radix(slot, 16).ok()?, bytes.clone()))
                     })
                     .collect();
-                let read: BTreeMap<String, Vec<u8>> =
-                    checked_in_kind(&room.definition, id, "effect")
-                        .into_iter()
-                        .map(|(file, text)| (file, text.as_bytes().to_vec()))
-                        .collect();
+                let mut read = BTreeMap::new();
+                for slot in 0..crate::effects::room::EFFECT_SPRITE_SLOTS {
+                    let Some(file) = slot_files.file("effect", slot) else {
+                        continue;
+                    };
+                    let entry = format!("{}/effect/{file:02x}.xml", id.dir());
+                    if let Some((_, text)) = room.definition.iter().find(|(path, _)| *path == entry)
+                    {
+                        read.insert(slot, text.as_bytes().to_vec());
+                    }
+                }
                 assert!(own == read, "{id:?}: effect definitions differ");
             }
         }
@@ -6944,19 +6784,17 @@ mod tests {
         // leave 28 unused room slots as stubs without scripts; the French and
         // German (EUR) installs fill most of them with leftover RDTs and add
         // rooms 313 and 412, which no room folder takes. Every variant of a
-        // room shares its folder's cuts. Only the rooms whose fixes change
-        // their bytecode keep an `original.scd`.
+        // room shares its folder's cuts.
         let files = |suffix: &str| pack.paths().filter(|path| path.ends_with(suffix)).count();
         let within = |dir: &str| pack.paths().filter(|path| path.contains(dir)).count();
         let counts = (
-            files("/room.xml") + files("/room.rdt"),
+            files("/room.xml") + files(".rdt"),
             files("/room.scd"),
-            files("/original.scd"),
             within("/cut/"),
         );
         assert!(
-            matches!(counts, (116, 116, 2, 620)),
-            "{counts:?} rooms, room scripts, original scripts and cuts"
+            matches!(counts, (116, 116, 620)),
+            "{counts:?} rooms, room scripts and cuts"
         );
         // One mask page per camera that carries sprite groups, shared by the
         // room's variants.

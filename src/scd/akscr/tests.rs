@@ -4,10 +4,10 @@ use crate::scd::ir::{Block, Scripts, Stream};
 use crate::scd::reader;
 use std::collections::BTreeMap;
 
-/// Compile `text` as the original game's bytecode (`AUTHENTIC`), lay it
-/// out as a container and decode it back.
+/// Compile `text` for RDT 1000, lay it out as a container and decode it
+/// back.
 fn round(text: &str) -> Scripts {
-    round_variant(text, Variant::for_room(0x1000).authentic())
+    round_variant(text, Variant::for_room(0x1000))
 }
 
 fn round_variant(text: &str, variant: Variant) -> Scripts {
@@ -239,7 +239,7 @@ off_C:
 }
 
 #[test]
-fn malformed_jumps_keep_asm_as_authentic() {
+fn malformed_jumps_keep_asm() {
     // The `if` skip lands one byte into its `endif`, as in ROOM1051.
     let text = decompiles_exactly(
         ".version 1
@@ -259,26 +259,16 @@ off_A:
 ",
     );
     assert!(text.contains("event event_00 nopad"), "{text}");
-    // The original as `asm`, and the fixed jump otherwise.
+    // The original, as `asm`.
     assert!(
-        text.contains("#if AUTHENTIC\n    run noreturn\n    {\n        asm"),
+        text.contains("    run noreturn\n    {\n        asm"),
         "{text}"
     );
-    assert!(
-        text.contains(
-            "#else\n    run\n    {\n        if (cmpb(B_CAMERA, CMP_EQ, CAM_01))\n        {\n            \
-             set(FG_ROOM, F_ROOM_02, TRUE);\n        }\n    }\n#endif"
-        ),
-        "{text}"
-    );
-    // The fixed `if` skips to its `endif`.
-    let fixed = round_variant(&text, Variant::for_room(0x1000));
-    let bytes = event_bytes(&fixed.events[0]);
-    assert_eq!(&bytes[4..6], [0x01, 0x0A], "{text}");
+    assert!(!text.contains("#if"), "{text}");
 }
 
 #[test]
-fn an_unpaired_endif_is_authentic_only() {
+fn an_unpaired_endif_stays_asm() {
     let text = decompiles_exactly(
         ".version 1
 
@@ -291,16 +281,28 @@ fn an_unpaired_endif_is_authentic_only() {
 ",
     );
     assert!(
-        text.contains(
-            "#if AUTHENTIC\n    asm\n    {\n            endif                   0\n    }\n#endif"
-        ),
+        text.contains("    asm\n    {\n            endif                   0\n    }\n"),
         "{text}"
     );
-    let fixed = round_variant(&text, Variant::for_room(0x1000));
-    assert_eq!(
-        block_bytes(&fixed.init[0]),
-        [0x05, 0x04, 0x02, 0x00, 0x05, 0x04, 0x03, 0x00, 0x00, 0x00]
+    assert!(!text.contains("#if"), "{text}");
+}
+
+#[test]
+fn a_message_id_past_one_byte_takes_the_long_form() {
+    let scripts = round(
+        "#version 1\nproc init\n{\n    message(0x0C | MSG_FAST, 255);\n    \
+         message(0x106 | MSG_FAST, 255);\n}\n",
     );
+    assert_eq!(
+        block_bytes(&scripts.init[0]),
+        [
+            0x0B, 0x8C, 0xFF, 0x00, 0x53, 0x00, 0x86, 0x01, 0xFF, 0x00, 0x00, 0x00
+        ]
+    );
+    let error = compile_error("#version 1\nproc init\n{\n    message(0x10000, 0);\n}\n");
+    assert!(error.contains("16 bits"), "{error}");
+    let error = compile_error("#version 1\nproc init\n{\n    message(0x140, 0);\n}\n");
+    assert!(error.contains("global"), "{error}");
 }
 
 #[test]
@@ -465,18 +467,9 @@ proc main noreturn
     assert!(directive.contains("if (JILL)"), "{directive}");
     let unknown = compile_error("#version 1\n#if REBECCA\n#endif\n");
     assert!(unknown.contains("REBECCA"), "{unknown}");
-    for broken in [
-        "#endif\n",
-        "#if AUTHENTIC\n",
-        "#if AUTHENTIC\n#else\n#else\n#endif\n",
-    ] {
+    for broken in ["#endif\n", "#else\n", "#if AUTHENTIC\n#endif\n"] {
         assert!(compile(broken).is_err(), "{broken}");
     }
-    // Dropped lines keep their place, so errors name the source line.
-    let error = compile_error(
-        "#version 1\nproc init\n{\n#if AUTHENTIC\n    nop(0);\n#endif\n    sleep(1);\n}\n",
-    );
-    assert!(error.contains("line 7"), "{error}");
 }
 
 #[test]
@@ -656,12 +649,10 @@ proc main noreturn
     {
         nop(3);
     }
-#if AUTHENTIC
     if (EUR)
     {
         nop(4);
     }
-#endif
     if (!JILL)
     {
         nop(5);
@@ -671,12 +662,9 @@ proc main noreturn
     let nops = |variant: Variant| variant_nops(text, variant);
     assert_eq!(nops(Variant::for_room(0x1030)), [1, 3, 5]);
     assert_eq!(nops(Variant::for_room(0x1031).in_region(Region::Jpn)), [2]);
-    let authentic = Variant::for_room(0x1030).in_region(Region::Eur).authentic();
-    let container = compile_variant(text, authentic)
-        .unwrap()
-        .to_container()
-        .unwrap();
-    assert_eq!(main_nops(&container, authentic.bits()), [2, 3, 4, 5]);
+    let eur = Variant::for_room(0x1030).in_region(Region::Eur);
+    let container = compile_variant(text, eur).unwrap().to_container().unwrap();
+    assert_eq!(main_nops(&container, eur.bits()), [2, 3, 4, 5]);
     assert_eq!(Region::parse("eur"), Some(Region::Eur));
     assert_eq!(Region::parse("STEAM"), None);
     let unknown = compile_error("#version 1\nproc main\n{\n    if (!GOG)\n    {\n    }\n}\n");
@@ -1120,12 +1108,11 @@ fn checked_in_room_scripts_compile() {
                     let builds = room_variants(base)
                         .into_iter()
                         .flat_map(|id| {
-                            Region::ALL.into_iter().flat_map(move |region| {
-                                let variant = Variant::for_room(id).in_region(region);
-                                [Build::Variant(variant), Build::Variant(variant.authentic())]
+                            Region::ALL.into_iter().map(move |region| {
+                                Build::Variant(Variant::for_room(id).in_region(region))
                             })
                         })
-                        .chain([Build::RUNTIME, Build::Runtime { authentic: true }]);
+                        .chain([Build::Runtime]);
                     for build in builds {
                         if let Err(error) = compile_build(&text, build, &load)
                             .and_then(|assembled| assembled.to_container())
@@ -1186,17 +1173,15 @@ event on_aot
 ";
     let lifted = lift(merged, true).unwrap();
     for variant in super::lift::variants(true) {
-        for variant in [variant, variant.authentic()] {
-            let old = compile_build(merged, preprocess::Build::Legacy(variant), &no_includes)
-                .unwrap()
-                .to_container()
-                .unwrap();
-            let new = compile_variant(&lifted, variant)
-                .unwrap()
-                .to_container()
-                .unwrap();
-            assert_eq!(old, new, "{variant:?}\n{lifted}");
-        }
+        let old = compile_build(merged, preprocess::Build::Legacy(variant), &no_includes)
+            .unwrap()
+            .to_container()
+            .unwrap();
+        let new = compile_variant(&lifted, variant)
+            .unwrap()
+            .to_container()
+            .unwrap();
+        assert_eq!(old, new, "{variant:?}\n{lifted}");
     }
     assert!(compile(&lifted).is_ok(), "{lifted}");
     // Jill's `on_enter` is Chris's `on_enter_2`: one event, one name.

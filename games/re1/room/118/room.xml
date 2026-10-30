@@ -52,38 +52,50 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="9700" height="0x2968" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <item when="CHRIS MANSION2">01 02 03</item>
+    <item when="MANSION2">01 02 04</item>
+    <item>00</item>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ROOM UNDER STAIRS</string>
       <string key="save_name">Storeroom 1F</string>
       <string key="0">\nGardening tools.{scroll 2}{clear 0}\nNothing useful.{scroll 2}</string>
+      <string key="1">\nGardening tools.{scroll 2}{clear 0}\nNothing useful.{scroll 2}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">館 {s} {s}物置/{s}1{s}F{s}</string>
       <string key="0">\n 庭の手入れに使う物が置いてある{scroll 2}{clear 0}\n 役に立ちそうな物は見当たらない{scroll 2}</string>
+      <string key="1">\n 庭の手入れに使う物が置いてある{scroll 2}{clear 0}\n 役に立ちそうな物は見当たらない{scroll 2}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Débarras RdC</string>
       <string key="0">\nDes outils de jardinage.{scroll 2}{clear 0}\nRien d'utile.{scroll 2}</string>
+      <string key="1">\nDes outils de jardinage.{scroll 2}{clear 0}\nRien d'utile.{scroll 2}</string>
     </language>
     <language lang="de-DE">
       <string key="0">\nEs sind Gartengeräte.{scroll 2}{clear 0}\nNichts Brauchbares.{scroll 2}</string>
+      <string key="1">\nEs sind Gartengeräte.{scroll 2}{clear 0}\nNichts Brauchbares.{scroll 2}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Magazzino 1P</string>
       <string key="0">\nAttrezzi per giardinaggio.{scroll 2}{clear 0}\nNiente di utile.{scroll 2}</string>
-      <string when="MANSION2" key="0">\nAttrezzi da giardinaggio.{scroll 2}{clear 0}\nNiente di utile.{scroll 2}</string>
+      <string key="1">\nAttrezzi da giardinaggio.{scroll 2}{clear 0}\nNiente di utile.{scroll 2}</string>
     </language>
     <language lang="es-ES">
       <string key="0">\nHerramientas de jardinería...{scroll 2}{clear 0}\nNada útil...{scroll 2}</string>
+      <string key="1">\nHerramientas de jardinería...{scroll 2}{clear 0}\nNada útil...{scroll 2}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Кладовая 1-эт.</string>
       <string key="0">\nСадовые инструменты.{scroll 2}{clear 0}\nНичего полезного.{scroll 2}</string>
+      <string key="1">\nСадовые инструменты.{scroll 2}{clear 0}\nНичего полезного.{scroll 2}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Itäsiiven varasto 1 krs</string>
       <string key="0">Puutarhanhoitovälineitä...{scroll 2}{clear 0}Ei mitään hyödyllistä...{scroll 2}</string>
+      <string key="1">Puutarhanhoitovälineitä...{scroll 2}{clear 0}Ei mitään hyödyllistä...{scroll 2}</string>
     </language>
   </strings>
 </room>

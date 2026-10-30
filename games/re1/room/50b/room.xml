@@ -148,6 +148,10 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="20600" height="0x6720" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">FRONT OF CELL</string>
@@ -159,10 +163,10 @@
       <string key="2">{scroll 0}\n {scroll 1}{clear 50}{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}\n {scroll 1}{timed 115}</string>
       <string key="3">The door is tightly\nlocked.</string>
-      <string when="JILL" key="3">{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="6">The door is tightly\nlocked.</string>
+      <string key="7">{scroll 0}\n {scroll 1}{timed 120}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
@@ -173,10 +177,10 @@
       <string key="2">{scroll 0}\n   クリス ウェスカーよ…{scroll 1}{clear 50}{scroll 0}\n      分かっている{scroll 1}{clear 40}{scroll 0}\n    ちくしょう 開かない{scroll 1}{clear 70}{scroll 0}     待っててくれ\n     必ず助けるからな{scroll 1}{clear 100}{scroll 0}\n      待ってるわ{scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}  当たり前だろ\n  とんでもないことになってるぜ{scroll 1}{timed 115}</string>
       <string key="3">\n  ドアは厳重にロックされている</string>
-      <string when="JILL" key="3">{scroll 0}\n   とにかくここを開けないと{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}\n       ダメだわ{scroll 1}{clear 70}{scroll 0}    すぐに助けに来るわ\n    待ってて{scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}\n       頼むぜ{scroll 1}{timed 80}</string>
       <string key="6">\n  ドアは厳重にロックされている</string>
+      <string key="7">{scroll 0}\n   とにかくここを開けないと{scroll 1}{timed 120}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Laboratoire SS3</string>
@@ -187,10 +191,10 @@
       <string key="2">{scroll 0}\nChris, Wesker, il est...{scroll 1}{clear 50}{scroll 0}\nJe sais. {scroll 1}{clear 35}{scroll 0}Zut! Ça ne s'ouvre pas!\nÉcoute,{scroll 1}{clear 70}{scroll 0}Jill. Attends-moi ici,\nje te sauverai!{scroll 1}{clear 100}{scroll 0}\nOK, je t'attends.{scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}Bien sûr! Bon sang, nous sommes\ndans de beaux draps, Jill!{scroll 1}{timed 115}</string>
       <string key="3">La porte est fermée \nhermétiquement.</string>
-      <string when="JILL" key="3">{scroll 0}Je sais Chris. De toute façon,\nil faut que j'ouvre cette porte.{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}\nOh, ça ne marche pas.{scroll 1}{clear 70}{scroll 0}Bon, Chris, je reviens t'aider\ntrès vite! Attends-moi ici!{scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}\nMerci, je t'attends. {scroll 1}{timed 80}</string>
       <string key="6">La porte est fermée \nhermétiquement.</string>
+      <string key="7">{scroll 0}Je sais Chris. De toute façon,\nil faut que j'ouvre cette porte.{scroll 1}{timed 120}</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 0}\nChris!{scroll 1}{timed 45}</string>
@@ -200,10 +204,10 @@
       <string key="2">{scroll 0}\nChris, Wesker, er ist...{scroll 1}{clear 50}{scroll 0}\nich weiß.{scroll 1}{clear 35}{scroll 0}Verdammter Mist!\nSie geht nicht auf!{scroll 1}{clear 70}{scroll 0}Also, Jill, warte hier,\nich werde dich herausholen!{scroll 1}{clear 100}{scroll 0}\nOkay, ich bleibe hier.{scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}Na klar! Wir stecken in einem\nechten Dilemma, Jill!{scroll 1}{timed 115}</string>
       <string key="3">\nDie Tür ist fest verschlossen.</string>
-      <string when="JILL" key="3">{scroll 0}\nIch weiß, Chris.{scroll 1}{clear 60}{scroll 0}Trotzdem muß ich diesen Raum\nirgendwie öffnen.{scroll 1}{timed 60}</string>
       <string key="4">{scroll 0}\nOh, so klappt es nicht.{scroll 1}{clear 70}{scroll 0}\nNun, Chris,{scroll 1}{clear 30}{scroll 0}ich verspreche, dass ich bald\nzurückkomme und dir helfe!{scroll 1}{clear 50}{scroll 0}\nWartest du hier auf mich?{scroll 1}{timed 40}</string>
       <string key="5">{scroll 0}Schon gut.\nIch warte hier auf dich.{scroll 1}{timed 80}</string>
       <string key="6">\nDie Tür ist fest verschlossen.</string>
+      <string key="7">{scroll 0}\nIch weiß, Chris.{scroll 1}{clear 60}{scroll 0}Trotzdem muß ich diesen Raum\nirgendwie öffnen.{scroll 1}{timed 60}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Laboratorio S3</string>
@@ -214,10 +218,10 @@
       <string key="2">{scroll 0}\nChris, Wesker è...{scroll 1}{clear 50}{scroll 0}\nLo so. {scroll 1}{clear 35}{scroll 0}Dannazione!\nNon si apre!{scroll 1}{clear 70}{scroll 0}Jill, aspettami qui. \nTi salverò!{scroll 1}{clear 100}{scroll 0}\nVa bene, ti aspetto.{scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}Puoi contarci! \nSiamo in guai grossi, Jill!{scroll 1}{timed 115}</string>
       <string key="3">\nÈ chiuso elettronicamente.</string>
-      <string when="JILL" key="3">{scroll 0}Lo so, Chris. Devo riuscire \nad aprire questa porta.{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}\nOh! Non funziona!{scroll 1}{clear 70}{scroll 0}Chris, tornerò presto a salvarti! \nAspettami qui!{scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}\nGrazie! Ti aspetto. {scroll 1}{timed 80}</string>
       <string key="6">\nÈ chiuso elettronicamente.</string>
+      <string key="7">{scroll 0}Lo so, Chris. Devo riuscire \nad aprire questa porta.{scroll 1}{timed 120}</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\n¡Chris!{scroll 1}{timed 45}</string>
@@ -227,10 +231,10 @@
       <string key="2">{scroll 0}\nChris, Wesker es...{scroll 1}{clear 50}{scroll 0}\nLo... Lo sé.{scroll 1}{clear 35}{scroll 0}\nMier... ¡no se abre!{scroll 1}{clear 70}{scroll 0}Mira Jill, espera aquí,\nte salvaré.{scroll 1}{clear 100}{scroll 0}\nVale, te espero.{scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}Pues claro. Maldición, estamos\nmetidos en un buen lío, Jill.{scroll 1}{timed 115}</string>
       <string key="3">La puerta está bien\ncerrada...</string>
-      <string when="JILL" key="3">{scroll 0}Lo sé, Chris. Sea como sea,\nTengo que abrir esta puerta.{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}\nAhh, ¡no hay forma!{scroll 1}{clear 70}{scroll 0}Bueno, Chris, volveré\npronto para ayudarte.{scroll 1}{clear 80}{scroll 0}\n¿Me esperas?{scroll 1}{timed 40}</string>
       <string key="5">{scroll 0}¡Gracias!\nTe esperaré aquí.{scroll 1}{timed 80}</string>
       <string key="6">La puerta está bien\ncerrada...</string>
+      <string key="7">{scroll 0}Lo sé, Chris. Sea como sea,\nTengo que abrir esta puerta.{scroll 1}{timed 120}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Лаборатория Б3</string>
@@ -241,10 +245,10 @@
       <string key="2">{scroll 0}\n {scroll 1}{clear 50}{scroll 0}\n {scroll 1}{clear 40}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 100}{scroll 0}\n {scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}\n {scroll 1}{timed 115}</string>
       <string key="3">\nДверь плотно закрыта.</string>
-      <string when="JILL" key="3">{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 120}</string>
       <string key="5">{scroll 0}\n {scroll 1}{timed 80}</string>
       <string key="6">\nДверь плотно закрыта.</string>
+      <string key="7">{scroll 0}\n {scroll 1}{timed 120}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Laboratorion olohuone -2 krs</string>
@@ -255,10 +259,10 @@
       <string key="2">{scroll 0}Wesker on..{scroll 1}{clear 50}{scroll 0}Tiedän.{scroll 1}{clear 35}{scroll 0}Rähmä, se ei aukea!{scroll 1}{clear 70}{scroll 0}Malta vielä hetki.\nMinä pelastan sinut.{scroll 1}{clear 100}{scroll 0}Selvä, minä odotan.{scroll 1}{timed 60}</string>
       <string when="JILL" key="2">{scroll 0}Totta kai. Hemmetti, olemme\npahassa pulassa..{scroll 1}{timed 115}</string>
       <string key="3">Ovi on vahvasti lukittu...</string>
-      <string when="JILL" key="3">{scroll 0}Tiedän. Minun on saatava tämä\novi auki.{scroll 1}{timed 120}</string>
       <string key="4">{scroll 0}Ei auta!{scroll 1}{clear 70}{scroll 0}Palaan pian takaisin.\nAutan sinut ulos sieltä.{scroll 1}{clear 80}{scroll 0}Malta vielä hetken aikaa.{scroll 1}{timed 40}</string>
       <string key="5">{scroll 0}Kiitos! Minä odotan.{scroll 1}{timed 80}</string>
       <string key="6">Ovi on vahvasti lukittu...</string>
+      <string key="7">{scroll 0}Tiedän. Minun on saatava tämä\novi auki.{scroll 1}{timed 120}</string>
     </language>
   </strings>
 </room>

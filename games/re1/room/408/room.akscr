@@ -72,7 +72,7 @@ proc init
         }
         else
         {
-            aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 13, 0, 255, 0, 0, 0);
+            aot_set(AOT_03_DOOR, 27800, 2100, 3000, 4000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 14, 0, 255, 0, 0, 0);
         }
     }
     aot_set(AOT_04_USEITEM, 7200, 11000, 800, 800, SCE_USEITEM, SAT_MANUAL | SAT_PLAYER, 0, 0, 32, 0, 1, 0);

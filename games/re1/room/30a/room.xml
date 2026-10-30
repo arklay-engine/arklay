@@ -178,13 +178,16 @@
   <footsteps count="1">
     <footstep x="0" z="0" width="19800" height="0x5D5C" sound="0x002D"/>
   </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
   <strings>
     <language lang="en-US">
       <string key="name">ENRICO ROOM</string>
       <string key="save_name">Courtyard Room B1</string>
       <string key="0">{scroll 0}\n {scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 65}{scroll 0}\n {scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}\n {scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}\n {scroll 1}{timed 110}</string>
       <string key="4">{scroll 40} {scroll 0}\n {scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
@@ -203,16 +206,12 @@
       <string key="18">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="19">{scroll 0}\n {scroll 1}{timed 240}</string>
       <string key="20">{scroll 0}\n {scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}\n{scroll 1}{branch 0 1 0}{scroll 1}\n {scroll 1}{timed 30}</string>
-      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}He couldn't have moved\nbecause of this injury...{scroll 1}{clear 0}{scroll 2}\nHe's holding something.{scroll 1}</string>
       <string key="24">{scroll 2}\nBarry is investigating...{scroll 1}</string>
     </language>
     <language lang="ja-JP">
       <string key="save_name">中庭 {s}部屋/{s}B{s}1{s}</string>
       <string key="0">{scroll 0}\n       エンリコ{scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}\n     来るな クリス{scroll 1}{clear 70}{scroll 0}\n      どうしたんだ{scroll 1}{clear 65}{scroll 0}\n      裏切り者め{scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}\n        よせ{scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}\n    誰だ 誰かいるのか!{scroll 1}{timed 110}</string>
       <string key="4">{scroll 40} {scroll 0}\n     アンブレラめ…{scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}\n  “裏切り者”? 一体何を…{scroll 1}{timed 130}</string>
@@ -231,16 +230,12 @@
       <string key="18">{scroll 0}   S.T.A.R.S.は もうだめだ\n   裏切り者がいる{scroll 1}{timed 130}</string>
       <string key="19">{scroll 0}     はめられたんだ\n     アンブレラに…{scroll 1}{timed 240}</string>
       <string key="20">{scroll 0}\n      エンリコ!{scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}  クランクを見つけた\n取りますか{scroll 1}{branch 0 1 0}{scroll 1}\n   アイテムがいっぱいです{scroll 1}{timed 30}</string>
-      <string key="22">{scroll 1}\n   アイテムがいっぱいです{scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}\n     エンリコ・・・{scroll 1}{clear 0}{scroll 2} ひどいキズだ・・・\n これで身動き出来なっかたのだろう{scroll 1}{clear 0}{scroll 2}\n     何か持っている{scroll 1}</string>
       <string key="24">{scroll 2}\n  バリーはエンリコを調べている{scroll 1}</string>
     </language>
     <language lang="fr-FR">
       <string key="save_name">Salle de la cour SS1</string>
       <string key="0">{scroll 0}\nEnrico!{scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}\nNe vous approchez pas, Chris.{scroll 1}{clear 70}{scroll 0}Attendez.\nQue s'est-il passé?{scroll 1}{clear 65}{scroll 0}\nTraître! {scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}\nNon! {scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}Qui est-ce...!\nIl y a quelqu'un? {scroll 1}{timed 110}</string>
       <string key="4">{scroll 40} {scroll 0}\nBon sang, Umbrella... {scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}Traître...? Qu'est-ce qu'il \nveut dire par là? {scroll 1}{timed 130}</string>
@@ -259,15 +254,11 @@
       <string key="18">{scroll 0}Les ＳＴＡＲＳ sont perdus... \nIl y a un traître... {scroll 1}{timed 130}</string>
       <string key="19">{scroll 0}Tout a été manigancé depuis\nle départ par Umbrella...{scroll 1}{timed 205}</string>
       <string key="20">{scroll 0}\nEnrico! {scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
-      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}Il n'aurait pas pu bouger\nà cause de sa blessure...{scroll 1}{clear 0}{scroll 2}\nIl tient quelque chose.{scroll 1}</string>
       <string key="24">{scroll 2}\nBarry enquête...{scroll 1}</string>
     </language>
     <language lang="de-DE">
       <string key="0">{scroll 0}\nEnrico!{scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}\nKomm nur nicht näher, Chris.{scroll 1}{clear 70}{scroll 0}Moment.\nWas ist passiert?{scroll 1}{clear 65}{scroll 0}\nFalschspieler!{scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}\nTu's nicht!{scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}Wer ist da?\nIst da jemand?{scroll 1}{timed 110}</string>
       <string key="4">{scroll 40} {scroll 0}\nVerdammt, Umbrella...{scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}Falschspieler?\nWas hat er damit gemeint?{scroll 1}{timed 130}</string>
@@ -275,10 +266,8 @@
       <string key="7">{scroll 0}\nIst das Jill?{scroll 1}{clear 45}{scroll 0}Ist das deine Stimme,\nEnrico?{scroll 1}{timed 85}</string>
       <string key="8">{scroll 0}\n {scroll 1}{clear 30}{scroll 0}\nBleib stehen!{scroll 1}{clear 30}{scroll 0}Bleib stehen!\nIst jemand bei dir, Jill?{scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}Wie? Oh, nein.\nIch bin allein hier...{scroll 1}{clear 80}{scroll 0}\naber warum fragst du das?{scroll 1}{timed 80}</string>
-      <string key="10">{scroll 0}Hür zu! Die ＳＴＡＲＳ sind\nsowieso bald erledigt.{scroll 1}{clear 144}{scroll 0}\nEs gibt einen Verräter.{scroll 1}{timed 72}</string>
-      <string when="JILL" key="10">{scroll 0}Hür zu! Die ＳＴＡＲＳ sind\nsowieso bald erledigt.{scroll 1}{clear 90}{scroll 0}\nEs gibt einen Verräter.{scroll 1}{timed 72}</string>
-      <string key="11">{scroll 0}Von Beginn an wurde alles\nvon Umbrella so geplant.{scroll 1}{timed 250}</string>
-      <string when="JILL" key="11">{scroll 0}Von Beginn an wurde alles\nvon Umbrella so geplant.{scroll 1}{timed 210}</string>
+      <string key="10">{scroll 0}Hür zu! Die ＳＴＡＲＳ sind\nsowieso bald erledigt.{scroll 1}{clear 90}{scroll 0}\nEs gibt einen Verräter.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}Von Beginn an wurde alles\nvon Umbrella so geplant.{scroll 1}{timed 210}</string>
       <string key="12">{scroll 0}\nEnrico!{scroll 1}{timed 60}</string>
       <string key="13">{scroll 0}Ich frage mich,\nwer ihn umgebracht hat.{scroll 1}{timed 60}</string>
       <string key="14">{scroll 0}\nWie? Oh, ja.{scroll 1}{timed 80}</string>
@@ -286,19 +275,14 @@
       <string key="16">{scroll 0}\nAha, Barry und Jill vereint...{scroll 1}{timed 110}</string>
       <string key="17">{scroll 0}\nIst alles in Ordnung, Enrico?{scroll 1}{timed 80}</string>
       <string key="18">{scroll 0}Die ＳＴＡＲＳ sind\ndem Untergang geweiht...{scroll 1}{clear 65}{scroll 0}Einer von uns ist ein\nVerräter...{scroll 1}{timed 65}</string>
-      <string key="19">{scroll 0}Von Anfang an war alles\n von Umbrella so geplant...{scroll 1}{timed 240}</string>
-      <string when="JILL" key="19">{scroll 0}Von Anfang an war alles\n von Umbrella so geplant...{scroll 1}{timed 205}</string>
+      <string key="19">{scroll 0}Von Anfang an war alles\n von Umbrella so geplant...{scroll 1}{timed 205}</string>
       <string key="20">{scroll 0}\nEnrico!{scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
-      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}Mit dieser Verletzung konnte\ner sich nicht mehr bewegen...{scroll 1}{clear 0}{scroll 2}\nEr hält irgendwas fest.{scroll 1}</string>
       <string key="24">{scroll 2}\nBarry untersucht gerade etwas...{scroll 1}</string>
     </language>
     <language lang="it-IT">
       <string key="save_name">Cortile S1</string>
       <string key="0">{scroll 0}\nEnrico!{scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}\nNon ti avvicinare, Chris.{scroll 1}{clear 70}{scroll 0}Aspetta,\nCosa è successo?{scroll 1}{clear 65}{scroll 0}\nTraditore! {scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}\nNon farlo! {scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}Chi va là?\nC'è qualcuno? {scroll 1}{timed 110}</string>
       <string key="4">{scroll 40} {scroll 0}\nMaledizione... Umbrella... {scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}Traditore...? Cosa avrà \nvoluto dire? {scroll 1}{timed 130}</string>
@@ -317,57 +301,36 @@
       <string key="18">{scroll 0}Per la ＳＴＡＲＳ è finita... \nQualcuno ci ha traditi! {scroll 1}{timed 130}</string>
       <string key="19">{scroll 0}È stato tutto architettato \ndalla Umbrella...{scroll 1}{timed 205}</string>
       <string key="20">{scroll 0}\nEnrico!!! {scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
-      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}Non poteva muoversi a causa \ndi questa ferita...{scroll 1}{clear 0}{scroll 2}\nQualcosa in mano.{scroll 1}</string>
       <string key="24">{scroll 2}\nBarry sta investigando...{scroll 1}</string>
     </language>
     <language lang="es-ES">
       <string key="0">{scroll 0}\n¡Enrico!{scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}\nNo te acerques más, Chris.{scroll 1}{clear 70}{scroll 0}\nEspera, ¿qué ha pasado?{scroll 1}{clear 65}{scroll 0}\n¡Traidor!{scroll 1}{timed 45}</string>
-      <string when="JILL" key="1">{scroll 0}\nChris, no te acerques más.{scroll 1}{clear 70}{scroll 0}\nEspera, ¿qué ha pasado?{scroll 1}{clear 65}{scroll 0}\n¡Traidor!{scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}\n¡NO LO HAGAS!{scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}¿Quién es?\n¿H-Hay alguien ahí?{scroll 1}{timed 110}</string>
       <string key="4">{scroll 0}\nUh... ahhh, demonios... Umbrella...{scroll 1}{timed 180}</string>
-      <string when="JILL" key="4">{scroll 0}\nUhhh-ahhh, demonios... Umbrella...{scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}¿Traidor?\n¿A qué se refería?{scroll 1}{timed 130}</string>
-      <string when="JILL" key="5">{scroll 0}¿Traidor?\n¿Qué ha querido decir con eso?{scroll 1}{timed 130}</string>
       <string key="6">{scroll 2}No podría moverse\ncon esta herida...{scroll 1}{clear 0}{scroll 2}\nEstá sujetando algo...{scroll 1}</string>
       <string when="JILL" key="6">{scroll 2}No podría moverse\ncon esa herida...{scroll 1}{clear 0}{scroll 2}\nEstá sujetando algo...{scroll 1}</string>
-      <string key="7">{scroll 0}\n¿Es Jill?{scroll 1}{clear 45}{scroll 0}\n¿Es la voz de Enrico?{scroll 1}{timed 85}</string>
-      <string when="JILL" key="7">{scroll 0}\n¿Eres Jill?{scroll 1}{clear 45}{scroll 0}\nEsa voz, ¿Enrico?{scroll 1}{timed 85}</string>
-      <string key="8">{scroll 0}\n¿Sí?{scroll 1}{clear 30}{scroll 0}\n¡Estás bien!{scroll 1}{clear 30}{scroll 0}¡Espera aquí!\nJill, ¿estás con alguien?{scroll 1}{timed 100}</string>
-      <string when="JILL" key="8">{scroll 0}\n¿Sí?{scroll 1}{clear 30}{scroll 0}\n¡Estás vivo!{scroll 1}{clear 30}{scroll 0}¡Quédate ahí!\n¿Estás con alguien, Jill?{scroll 1}{timed 100}</string>
-      <string key="9">{scroll 0}¿Qué? Oh, no, estoy sola pero,\n¿por qué lo preguntas?{scroll 1}{timed 160}</string>
-      <string when="JILL" key="9">{scroll 0}¿Qué? Oh no, estoy sola pero,\n¿por qué lo preguntas?{scroll 1}{timed 160}</string>
-      <string key="10">{scroll 0}¡Escucha! ＳＴＡＲＳ pronto\ndesaparecerá.{scroll 1}{clear 144}{scroll 0}\nAlguien es un traidor.{scroll 1}{timed 72}</string>
-      <string when="JILL" key="10">{scroll 0}¡Escucha! Los ＳＴＡＲＳ\nestamos acabados.{scroll 1}{clear 90}{scroll 0}\nHay un traidor.{scroll 1}{timed 72}</string>
-      <string key="11">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 180}{scroll 0}\nAHH.... Ohhhh... cough... uhh{scroll 1}{timed 70}</string>
-      <string when="JILL" key="11">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 80}{scroll 0}\nAhh.... Ohhhh... Cof... Uhh{scroll 1}{timed 130}</string>
+      <string key="7">{scroll 0}\n¿Eres Jill?{scroll 1}{clear 45}{scroll 0}\nEsa voz, ¿Enrico?{scroll 1}{timed 85}</string>
+      <string key="8">{scroll 0}\n¿Sí?{scroll 1}{clear 30}{scroll 0}\n¡Estás vivo!{scroll 1}{clear 30}{scroll 0}¡Quédate ahí!\n¿Estás con alguien, Jill?{scroll 1}{timed 100}</string>
+      <string key="9">{scroll 0}¿Qué? Oh no, estoy sola pero,\n¿por qué lo preguntas?{scroll 1}{timed 160}</string>
+      <string key="10">{scroll 0}¡Escucha! Los ＳＴＡＲＳ\nestamos acabados.{scroll 1}{clear 90}{scroll 0}\nHay un traidor.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 80}{scroll 0}\nAhh.... Ohhhh... Cof... Uhh{scroll 1}{timed 130}</string>
       <string key="12">{scroll 0}\n¡Enrico!{scroll 1}{timed 60}</string>
       <string key="13">{scroll 0}\n¿Qué lo habrá matado?{scroll 1}{timed 60}</string>
       <string key="14">{scroll 0}\n¿Qué? ¡Oh, sí!{scroll 1}{timed 80}</string>
       <string key="15">{scroll 0}\n¡Enrico!{scroll 1}{timed 50}</string>
-      <string key="16">{scroll 0}\nMira, Barry y Jill juntos.{scroll 1}{timed 110}</string>
-      <string when="JILL" key="16">{scroll 0}\nAsí que Barry y Jill juntos.{scroll 1}{timed 110}</string>
-      <string key="17">{scroll 0}\nEnrico, ¿estás bien?{scroll 1}{timed 80}</string>
-      <string when="JILL" key="17">{scroll 0}\n¿Estás bien, Enrico?{scroll 1}{timed 80}</string>
-      <string key="18">{scroll 0}ＳＴＡＲＳ está condenado. \nHay un traidor.{scroll 1}{timed 130}</string>
-      <string when="JILL" key="18">{scroll 0}Los ＳＴＡＲＳ estamos acabados. \nHay un traidor.{scroll 1}{timed 130}</string>
-      <string key="19">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 175}{scroll 0}\nAHH.... Ohhhh... cough... uhh{scroll 1}{timed 65}</string>
-      <string when="JILL" key="19">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 75}{scroll 0}\nAhh.... Ohhhh... Cof... Uhh.{scroll 1}{timed 130}</string>
+      <string key="16">{scroll 0}\nAsí que Barry y Jill juntos.{scroll 1}{timed 110}</string>
+      <string key="17">{scroll 0}\n¿Estás bien, Enrico?{scroll 1}{timed 80}</string>
+      <string key="18">{scroll 0}Los ＳＴＡＲＳ estamos acabados. \nHay un traidor.{scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}Umbrella lo planeó todo\ndesde el principio,{scroll 1}{clear 75}{scroll 0}\nAhh.... Ohhhh... Cof... Uhh.{scroll 1}{timed 130}</string>
       <string key="20">{scroll 0}\n¡Enrico!{scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
-      <string key="22">{scroll 1}\n{scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}No podría moverse\ncon esa herida...{scroll 1}{clear 0}{scroll 2}\nSujeta algo...{scroll 1}</string>
-      <string key="24">{scroll 2}\nBarry está investigando...{scroll 1}</string>
-      <string when="JILL" key="24">{scroll 2}\nBarry está examinandole...{scroll 1}</string>
+      <string key="24">{scroll 2}\nBarry está examinandole...{scroll 1}</string>
     </language>
     <language lang="ru-RU">
       <string key="save_name">Комната внутр. двора Б1</string>
       <string key="0">{scroll 0}\n {scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{clear 65}{scroll 0}\n {scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}\n {scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}\n {scroll 1}{timed 110}</string>
       <string key="4">{scroll 40} {scroll 0}\n {scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}\n {scroll 1}{timed 130}</string>
@@ -386,16 +349,12 @@
       <string key="18">{scroll 0}\n {scroll 1}{timed 130}</string>
       <string key="19">{scroll 0}\n {scroll 1}{timed 240}</string>
       <string key="20">{scroll 0}\n {scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}\n{scroll 1}{branch 0 1 0}{scroll 1}\n {scroll 1}{timed 30}</string>
-      <string key="22">{scroll 1}\n {scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}Из-за ранения он\nне мог двигаться...{scroll 1}{clear 0}{scroll 2}\nУ него что-то в руках.{scroll 1}</string>
       <string key="24">{scroll 2}\nБарри исследует...{scroll 1}</string>
     </language>
     <language lang="fi-FI">
       <string key="save_name">Maanalainen varasto 0 krs</string>
       <string key="0">{scroll 0}Enrico!{scroll 1}{timed 65}</string>
       <string key="1">{scroll 0}Chris, älä tule yhtään lähemmäksi.{scroll 1}{clear 70}{scroll 0}Odota, mitä tapahtui?{scroll 1}{clear 65}{scroll 0}Petturi!{scroll 1}{timed 45}</string>
-      <string key="2">{scroll 0}Älä!{scroll 1}{timed 60}</string>
       <string key="3">{scroll 0}Kuka siellä?\nOnko siellä joku?{scroll 1}{timed 110}</string>
       <string key="4">{scroll 0}Helvetti, Umbrella...{scroll 1}{timed 180}</string>
       <string key="5">{scroll 0}Petturi? Mitä hän tuolla\ntarkoitti?{scroll 1}{timed 130}</string>
@@ -403,10 +362,8 @@
       <string key="7">{scroll 0}Jill, sinäkö siellä?{scroll 1}{clear 45}{scroll 0}Enrico, sinäkö se olet?{scroll 1}{timed 85}</string>
       <string key="8">{scroll 0}Kyllä?{scroll 1}{clear 30}{scroll 0}Olet elossa!{scroll 1}{clear 30}{scroll 0}Odota siellä!\nOletko kenenkään kanssa?{scroll 1}{timed 100}</string>
       <string key="9">{scroll 0}Mitä? En, olen yksin.\nMiksi kysyt?{scroll 1}{timed 160}</string>
-      <string key="10">{scroll 0}Kuuntele! ＳＴＡＲＳ on pian mennyttä.{scroll 1}{clear 144}{scroll 0}Joukossamme on petturi.{scroll 1}{timed 72}</string>
-      <string when="JILL" key="10">{scroll 0}Kuuntele! ＳＴＡＲＳ on pian mennyttä.{scroll 1}{clear 90}{scroll 0}Joukossamme on petturi.{scroll 1}{timed 72}</string>
-      <string key="11">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 180}{scroll 0}\n{scroll 1}{timed 70}</string>
-      <string when="JILL" key="11">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 80}{scroll 0}\n{scroll 1}{timed 130}</string>
+      <string key="10">{scroll 0}Kuuntele! ＳＴＡＲＳ on pian mennyttä.{scroll 1}{clear 90}{scroll 0}Joukossamme on petturi.{scroll 1}{timed 72}</string>
+      <string key="11">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 80}{scroll 0}\n{scroll 1}{timed 130}</string>
       <string key="12">{scroll 0}Enrico!{scroll 1}{timed 60}</string>
       <string key="13">{scroll 0}Kuka olisi voinut tappaa hänet?{scroll 1}{timed 60}</string>
       <string key="14">{scroll 0}Mitä? Kyllä vain!{scroll 1}{timed 80}</string>
@@ -414,12 +371,8 @@
       <string key="16">{scroll 0}Vai niin, Barry ja Jill yhdessä.{scroll 1}{timed 110}</string>
       <string key="17">{scroll 0}Oletko kunnossa?{scroll 1}{timed 80}</string>
       <string key="18">{scroll 0}ＳＴＡＲＳ on mennyttä.\nJoukossamme on petturi.{scroll 1}{timed 130}</string>
-      <string key="19">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 175}{scroll 0}\n{scroll 1}{timed 65}</string>
-      <string when="JILL" key="19">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 75}{scroll 0}\n{scroll 1}{timed 130}</string>
+      <string key="19">{scroll 0}Umbrella on juoninut kaiken\nalusta saakka.{scroll 1}{clear 75}{scroll 0}\n{scroll 1}{timed 130}</string>
       <string key="20">{scroll 0}Enrico!{scroll 1}{timed 70}</string>
-      <string key="21">{scroll 1}\n{scroll 1}{branch 0 6 0}</string>
-      <string key="22">{scroll 1}\n{scroll 1}{timed 30}</string>
-      <string key="23">{scroll 2}Hän ei voinut liikkua vammojensa\ntakia...{scroll 1}{clear 0}{scroll 2}Hän pitelee jotakin...{scroll 1}</string>
       <string key="24">{scroll 2}Barry tutkii...{scroll 1}</string>
     </language>
   </strings>
