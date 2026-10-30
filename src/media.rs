@@ -5,10 +5,12 @@
 //! the file bytes, the byte range of every video access unit in decode order
 //! and of every AAC packet. This module also holds the decoder-independent
 //! pieces of playback: access-unit framing, the colour description read from
-//! the SPS, YUV to RGBA conversion and the box downscale to the 320x240
-//! canvas the software renderer draws.
+//! the SPS, YUV to RGBA conversion, the box downscale to the 320x240
+//! canvas the software renderer draws and the [`VideoFrame`] a film at its
+//! own resolution (an HD replacement or a shipped MPEG-1 film) presents.
 
 use std::ops::Range;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, bail};
 
@@ -501,6 +503,30 @@ impl Coefficients {
             blue_u: fixed(2.0 * (1.0 - kb) * chroma),
         }
     }
+}
+
+/// The source of [`VideoFrame::serial`].
+static NEXT_SERIAL: AtomicU64 = AtomicU64::new(1);
+
+/// A fresh [`VideoFrame::serial`].
+pub fn next_frame_serial() -> u64 {
+    NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
+}
+
+/// One decoded picture: the full-size RGBA and its 320x240 canvas.
+#[derive(Debug, Default)]
+pub struct VideoFrame {
+    /// Picture width in pixels.
+    pub width: u32,
+    /// Picture height in pixels.
+    pub height: u32,
+    /// The full-size picture, RGBA8.
+    pub rgba: Vec<u8>,
+    /// The picture letterboxed onto 320x240, RGBA8.
+    pub canvas: Vec<u8>,
+    /// Unique to each picture put on screen, so a renderer can skip
+    /// re-uploading one it already has.
+    pub serial: u64,
 }
 
 /// One decoded 4:2:0 picture's planes.
