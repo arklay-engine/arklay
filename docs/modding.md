@@ -196,6 +196,8 @@ is exact.
 | BGM | `bgm/013`, `bgm/100` | ogg, wav | any |
 | sound effect | `se/a_mcn03`, `se/ft_wda` | ogg, wav | any |
 | voice | `voice/01_09` | ogg, wav | any |
+| RE2 sound bank slot | `sound/room/10a/01`, `sound/door/36/00`, `sound/step/35/00` | ogg, wav | any |
+| RE2 sound table | `sound/enemy/25/bank.edh`, `room/1000/sound.edh` | edh | — |
 | film | `movie/00`, `movie/17`, `movie/0f` (the film id) | mp4, avi | any size up to 4096x4096, any frame rate |
 
 The stems are the shipped entries' names without their extensions: a room's
@@ -206,7 +208,8 @@ the numeric track id `{id:03x}` (`music::bgm_entry`), `voice` uses the 1-based
 stage row and the lowercase hex id (`voice::entry_path`), `door`, `movie`,
 `effect`, `map`, `file` and `font` use two lower-case hex digits of the door
 type, film id, room effect-sheet index, map number, document (item
-`0x5F + doc`) and page, and font id, and everything else is the literal name `arklay list` prints. Music tracks, including the former
+`0x5F + doc`) and page, and font id, RE2 sound banks use `sound/<kind>/<bank id>/<slot>`
+with two lower-case hex digits for the slot (`se2::slot_stem`), and everything else is the literal name `arklay list` prints. Music tracks, including the former
 `Se_*` group layers, are all `bgm/<track id>`; the converter owns the only
 name-to-id table.
 

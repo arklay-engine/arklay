@@ -97,6 +97,29 @@ fn offset(data: &[u8], slot: usize) -> Result<u32> {
     Ok(offset)
 }
 
+/// Section slot of the room's sound table (EDT); slot 1 is its VAB header.
+const EDT_SLOT: usize = 0;
+
+/// The room's sound table (EDT) and VAB header (VH), sections 0 and 1, each
+/// running to the next section; none when the room has no sound sections.
+pub fn sound_sections(data: &[u8]) -> Result<Option<(&[u8], &[u8])>> {
+    bytes(data, OFFSETS, OFFSET_COUNT * 4).context("section offset table")?;
+    let offsets: Vec<usize> = (0..OFFSET_COUNT)
+        .map(|slot| offset(data, slot).map(|offset| offset as usize))
+        .collect::<Result<_>>()?;
+    let section = |slot: usize| {
+        let start = offsets[slot];
+        let end = offsets
+            .iter()
+            .copied()
+            .filter(|&offset| offset > start)
+            .min()
+            .unwrap_or(data.len());
+        (start != 0).then(|| &data[start..end])
+    };
+    Ok(section(EDT_SLOT).zip(section(EDT_SLOT + 1)))
+}
+
 /// Read an RE2 RDT into a room definition.
 pub fn read(data: &[u8]) -> Result<RoomSource> {
     let Some(&camera_count) = data.get(1) else {

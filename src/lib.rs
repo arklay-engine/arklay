@@ -1,5 +1,6 @@
 //! Arklay engine library: game pack, asset formats and the SDL3 player.
 
+pub mod adpcm;
 pub mod adt;
 pub mod anim;
 pub mod assets;
@@ -7,6 +8,7 @@ pub mod atomic;
 pub mod audio;
 pub mod avi;
 pub mod bgm;
+pub mod bgm2;
 pub mod bmp;
 pub mod budget;
 pub mod build_info;
@@ -75,6 +77,7 @@ pub mod save;
 pub mod scd;
 pub mod scd2;
 pub mod screenshot;
+pub mod se2;
 pub mod sfx;
 pub mod shadow;
 pub mod speed;

@@ -9,6 +9,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use arklay::adpcm;
 use arklay::convert::{Game, convert_game_as};
 use arklay::format::{self, Detection, Dialect};
 use arklay::pack::Pack;
@@ -74,6 +75,7 @@ fn the_retail_tree_converts_every_category() {
     for path in pack.paths() {
         let category = match path.split('/').collect::<Vec<_>>().as_slice() {
             ["room", _, "cut", _] => "cut",
+            ["room", _, "sound.edh"] => "sound",
             [first, ..] => first.trim_end_matches(".toml"),
             [] => unreachable!(),
         };
@@ -89,6 +91,7 @@ fn the_retail_tree_converts_every_category() {
         ("movie", 26),
         ("player", 221),
         ("room", 501),
+        ("sound", 2768),
         ("voice", 599),
     ];
     assert_eq!(categories, BTreeMap::from(expected));
@@ -210,7 +213,9 @@ fn the_converted_pack_verifies() {
     assert_eq!(count(verify::Format::Re2Emd), 116);
     assert_eq!(count(verify::Format::Pld), 40);
     assert_eq!(count(verify::Format::Plw), 181);
-    assert_eq!(count(verify::Format::AdpcmWav), 717);
+    assert_eq!(count(verify::Format::AdpcmWav), 2893);
+    assert_eq!(count(verify::Format::Wav), 4);
+    assert_eq!(count(verify::Format::Edh), 588);
     assert_eq!(count(verify::Format::Mpeg), 26);
     // Strict mode fails exactly the formats nothing parses yet, plus the
     // opaque demo reels.
@@ -602,4 +607,251 @@ fn every_room_script_round_trips() {
     assert!(rooms > 0);
     // Every retail block decompiles to its structured form.
     assert_eq!(fallbacks, 0);
+}
+
+/// The packed WAVs: every voice line, BGM track and sound-bank slot.
+fn wav_entries(pack: &Pack) -> Vec<String> {
+    let mut entries: Vec<String> = pack
+        .paths()
+        .filter(|path| {
+            path.ends_with(".wav")
+                && ["voice/", "bgm/", "sound/"]
+                    .iter()
+                    .any(|prefix| path.starts_with(prefix))
+        })
+        .map(str::to_owned)
+        .collect();
+    entries.sort();
+    entries
+}
+
+/// ffmpeg's decode of `wav` as interleaved 16-bit samples.
+fn ffmpeg_decode(dir: &Path, name: &str, wav: &[u8]) -> Vec<i16> {
+    let input = dir.join(format!("{name}.wav"));
+    fs::write(&input, wav).unwrap();
+    let output = std::process::Command::new("ffmpeg")
+        .args(["-v", "error", "-i"])
+        .arg(&input)
+        .args(["-f", "s16le", "-acodec", "pcm_s16le", "pipe:1"])
+        .output()
+        .unwrap();
+    fs::remove_file(&input).unwrap();
+    assert!(
+        output.status.success(),
+        "{name}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output
+        .stdout
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&pair| i16::from_le_bytes(pair))
+        .collect()
+}
+
+/// A WAV's `fmt ` and `data` chunk bodies.
+fn wav_chunks(wav: &[u8]) -> (&[u8], &[u8]) {
+    let (mut fmt, mut data) = (None, None);
+    let mut at = 12;
+    while at + 8 <= wav.len() {
+        let size = u32::from_le_bytes(wav[at + 4..at + 8].try_into().unwrap()) as usize;
+        let body = &wav[at + 8..(at + 8 + size).min(wav.len())];
+        match &wav[at..at + 4] {
+            b"fmt " => fmt = Some(body),
+            b"data" => data = Some(body),
+            _ => {}
+        }
+        at += 8 + size + (size & 1);
+    }
+    (fmt.unwrap(), data.unwrap())
+}
+
+/// Every converted WAV decodes, and the MS-ADPCM decoder agrees with
+/// ffmpeg's `adpcm_ms` on every distinct one. With ffmpeg's rounding (a
+/// division) the samples are identical; with the port's (a shift, what the
+/// engine plays) they differ only where a negative prediction rounds the
+/// other way and the filter carries that through the block.
+#[test]
+#[ignore]
+fn every_wav_decodes_and_matches_ffmpeg() {
+    let Some(pack) = pack() else {
+        return;
+    };
+    let entries = wav_entries(pack);
+    let mut distinct = BTreeMap::new();
+    let mut adpcm = 0;
+    for entry in &entries {
+        let data = pack.read(entry).unwrap().to_vec();
+        let wav =
+            arklay::audio::parse_wav(&data).unwrap_or_else(|error| panic!("{entry}: {error:#}"));
+        assert!(!wav.data.is_empty(), "{entry}");
+        // The few PCM slots pass through undecoded.
+        if format::wav_codec(&data) != Some(format::WAV_MS_ADPCM) {
+            continue;
+        }
+        adpcm += 1;
+        let mut hasher = DefaultHasher::new();
+        data.hash(&mut hasher);
+        distinct
+            .entry(hasher.finish())
+            .or_insert((entry.clone(), data, wav));
+    }
+    eprintln!(
+        "{} WAVs ({adpcm} MS-ADPCM), {} distinct",
+        entries.len(),
+        distinct.len()
+    );
+    assert!(entries.len() > 2000);
+
+    if std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .output()
+        .is_err()
+    {
+        eprintln!("ffmpeg is not installed: skipping the cross-check");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("arklay-re2-ffmpeg-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let work: Vec<_> = distinct.values().collect();
+    let jobs = std::thread::available_parallelism().map_or(1, usize::from);
+    let results: Vec<(String, usize, u32, usize)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = work
+            .chunks(work.len().div_ceil(jobs))
+            .enumerate()
+            .map(|(job, chunk)| {
+                let dir = &dir;
+                scope.spawn(move || {
+                    chunk
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (entry, data, wav))| {
+                            let ours: Vec<i16> = wav
+                                .data
+                                .as_chunks::<2>()
+                                .0
+                                .iter()
+                                .map(|&pair| i16::from_le_bytes(pair))
+                                .collect();
+                            let theirs = ffmpeg_decode(dir, &format!("{job}_{index}"), data);
+                            assert_eq!(ours.len(), theirs.len(), "{entry}: sample count");
+                            let (fmt, body) = wav_chunks(data);
+                            let format = adpcm::Format::parse(fmt).unwrap();
+                            let divided =
+                                adpcm::decode_with(&format, body, adpcm::Rounding::Divide).unwrap();
+                            assert!(divided == theirs, "{entry}: differs from ffmpeg");
+                            let mut max = 0u32;
+                            let mut differing = 0;
+                            for (a, b) in ours.iter().zip(&theirs) {
+                                let diff = (i32::from(*a) - i32::from(*b)).unsigned_abs();
+                                max = max.max(diff);
+                                differing += usize::from(diff != 0);
+                            }
+                            (entry.clone(), ours.len(), max, differing)
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect()
+    });
+    let _ = fs::remove_dir_all(&dir);
+    let samples: usize = results.iter().map(|r| r.1).sum();
+    let differing: usize = results.iter().map(|r| r.3).sum();
+    let worst = results.iter().max_by_key(|r| r.2).unwrap();
+    eprintln!(
+        "{} files, {samples} samples: {differing} differ, worst {} by {}",
+        results.len(),
+        worst.0,
+        worst.2
+    );
+    assert!(worst.2 <= MAX_FFMPEG_DIFFERENCE, "{worst:?}");
+}
+
+/// The largest sample difference the shift's rounding makes against
+/// ffmpeg's (79 in the retail data).
+const MAX_FFMPEG_DIFFERENCE: u32 = 128;
+
+/// Every room's sound banks load through `se2` the way `SsLoadBanks` fills
+/// them, and every slot a room's table names has a sound.
+#[test]
+#[ignore]
+fn every_room_sound_bank_resolves() {
+    use arklay::se2::{Banks, Edh, Kind};
+    let Some(pack) = pack() else {
+        return;
+    };
+    let mut rooms = 0;
+    let mut sounds = 0;
+    let mut tables = 0;
+    let mut named_but_empty = Vec::new();
+    for path in pack.paths().filter(|path| path.ends_with("/room.xml")) {
+        let folder = path.split('/').nth(1).unwrap();
+        let (stage, room) = (folder.as_bytes()[0], &folder[1..3]);
+        // The letter stages are stages 1-7 by letter order.
+        let stage = match stage {
+            b'1'..=b'7' => stage - b'0',
+            b'a'..=b'g' => stage - b'a' + 1,
+            _ => panic!("{folder}"),
+        };
+        let room = u8::from_str_radix(room, 16).unwrap();
+        let table = pack
+            .read(&format!("room/{folder}/{}", arklay::se2::ROOM_EDH_NAME))
+            .ok()
+            .map(|data| Edh::parse(&data).unwrap());
+        tables += usize::from(table.is_some());
+        let mut banks = Banks::new();
+        banks.load_room(pack, stage - 1, room, table.clone());
+        rooms += 1;
+        for slot in 0..48 {
+            if banks.stem(Kind::Room, slot).is_some() {
+                sounds += 1;
+            } else if table
+                .as_ref()
+                .and_then(|table| table.volume(slot))
+                .is_some()
+            {
+                named_but_empty.push(format!("{folder}:{slot:02x}"));
+            }
+        }
+    }
+    eprintln!(
+        "{rooms} rooms, {tables} sound tables, {sounds} room sounds, {} table slots without a sound",
+        named_but_empty.len()
+    );
+    assert_eq!(rooms, 501);
+    assert!(sounds > 0);
+}
+
+/// Every BGM track the executable's music tables name is a packed track,
+/// apart from the names the retail install ships no `.sap` for.
+#[test]
+#[ignore]
+fn every_music_table_track_is_packed() {
+    use arklay::bgm2;
+    let Some(pack) = pack() else {
+        return;
+    };
+    let mut missing = std::collections::BTreeSet::new();
+    let mut found = 0;
+    let names = (0..bgm2::MAIN_TRACKS.len() as u8)
+        .flat_map(|id| bgm2::main_tracks(id).into_iter().flatten())
+        .chain(
+            (0..bgm2::SUB_TRACKS.len() as u8)
+                .flat_map(|id| bgm2::sub_tracks(id).into_iter().flatten()),
+        );
+    for name in names {
+        let stem = bgm2::track_stem(name).unwrap();
+        if pack.contains(&format!("{stem}.wav")) {
+            found += 1;
+        } else {
+            missing.insert(name);
+        }
+    }
+    eprintln!("{found} track references packed; no file for {missing:?}");
+    assert_eq!(missing, ["main26"].into_iter().collect());
 }
