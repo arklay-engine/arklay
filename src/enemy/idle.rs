@@ -427,6 +427,7 @@ mod tests {
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         }
     }
 
@@ -674,6 +675,7 @@ mod tests {
             stage: data::STAGE_LABORATORY_INDEX + 1,
             room: data::ROOM_POWER_ROOM,
             player_flag: 0,
+            mansion2: false,
         };
         let mut wesker = Entity {
             id: 0x24,

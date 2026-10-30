@@ -1,0 +1,410 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_DOOR 0x01
+#define CAM_02 0x02
+#define CAM_03 0x03
+#define ENEMY_00_NPC_CHRIS 0x00
+#define ENEMY_00_NPC_JILL 0x00
+#define ENEMY_01_NPC_CHRIS 0x01
+#define ENEMY_01_NPC_JILL 0x01
+#define F_ROOM_20 0x20
+#define F_ROOM_21 0x21
+#define MSG_THE_DOOR_IS_TIGHTLY_LOCKED_03 0x07
+#define SE_14_DM_GACHA 0x14
+#define VO_00F_10 0x11
+#define VO_00F_11 0x12
+#define VO_00F_12 0x13
+#define VO_112_11 0x9A
+#define VO_112_12 0x9B
+#define VO_112_13 0x9C
+#define VO_112_14 0x9D
+#define VO_112_15 0x9E
+#define VO_112_16 0x9F
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 5500, 2700, 2600, 2400, 12, DOOR_SND_01_DR_MTL, DOOR_0B_DOOR11, 3, 0, ROOM_508_DOUBLE_LOCK, 2500, 0, 3600, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+    {
+        door_aot_set(AOT_01_DOOR, 9000, 14000, 1700, 1800, 0, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, 0, ROOM_512_CELL, 5600, 0, 10000, 1024, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    else if (ck(FG_ENEMY, F_ENEMY_70, FALSE))
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_65, FALSE))
+        {
+            aot_set(AOT_01_DOOR, 9100, 15000, 1500, 1000, SCE_EVENT, SAT_MANUAL | SAT_PLAYER, 0, 0, on_aot_01_door, 0, 0, 0);
+        }
+        else
+        {
+            if (CHRIS)
+            {
+                aot_set(AOT_01_DOOR, 9100, 15000, 1500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 0, 255, 0, 0, 0);
+            }
+            else
+            {
+                aot_set(AOT_01_DOOR, 9100, 15000, 1500, 1000, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 0, 255, 0, 0, 0);
+            }
+        }
+    }
+    else
+    {
+        door_aot_set(AOT_01_DOOR, 9000, 14000, 1700, 1800, 0, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, DOOR_LOCKED | F_LOCK_2C, ROOM_512_CELL, 5600, 0, 10000, 1024, IT_37_KEY_LAB_MASTER, SAT_MANUAL | SAT_PLAYER);
+    }
+    evt_exec(0, TASK_09, on_enter);
+    if (ck(FG_SCENARIO, F_SCENARIO_2B, FALSE))
+    {
+        if (ck(FG_SCENARIO, F_SCENARIO_65, FALSE))
+        {
+            if (CHRIS)
+            {
+                enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 3072, 0, 10750, 0, 11000, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
+            }
+            else
+            {
+                enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 3072, 0, 10750, 0, 11000, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
+            }
+        }
+    }
+    if (CHRIS)
+    {
+        if (ck(FG_COMMON, F_COMMON_AC, FALSE))
+        {
+            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            {
+                enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_JILL, ANIM_00, 0, EVAR_00);
+            }
+        }
+    }
+    else
+    {
+        if (ck(FG_COMMON, F_COMMON_B3, FALSE))
+        {
+            if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+            {
+                enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 1, 0, 2048, 0, 9000, 0, 16100, ENEMY_01_NPC_CHRIS, ANIM_00, 0, EVAR_00);
+            }
+        }
+    }
+}
+
+event on_enter
+{
+    sleep(1);
+    run
+    {
+        if (CHRIS)
+        {
+            if (ck(FG_COMMON, F_COMMON_AC, FALSE))
+            {
+                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                {
+                    eml_state(0, ENEMY_01_NPC_JILL, EML_08);
+                }
+            }
+        }
+        else
+        {
+            if (ck(FG_COMMON, F_COMMON_B3, FALSE))
+            {
+                if (ck(FG_COMMON, F_COMMON_4B, TRUE))
+                {
+                    eml_state(0, ENEMY_01_NPC_CHRIS, EML_08);
+                }
+            }
+        }
+    }
+    evt_finish();
+}
+
+event on_aot_01_door
+{
+    run
+    {
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
+        set(FG_SCENARIO, F_SCENARIO_65, TRUE);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_seq(AB_06, 9750, 14000, F_ROOM_20);
+    act_reset();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    if (CHRIS)
+    {
+        se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_JILL, 10000, 15800);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(MOTION_32, 0, 310, 0, 30, 0);
+    act_reset();
+    evt_nop();
+    if (CHRIS)
+    {
+        sleep(30);
+    }
+    else
+    {
+        sleep(20);
+        se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_CHRIS, 10000, 15800);
+        sleep(10);
+    }
+    run
+    {
+        message(0, 0);
+        if (CHRIS)
+        {
+            voice_play(VOICE_PLAY, VO_00F_10);
+        }
+        else
+        {
+            voice_play(VOICE_PLAY, VO_112_11);
+        }
+    }
+    wait_message();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion(MOTION_10);
+    act_reset();
+    evt_nop();
+    run
+    {
+        dir_set(0, 0, 980, 0, 10300, 0, 15780);
+        cutnext(CAM_03);
+    }
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    if (CHRIS)
+    {
+        act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_JILL, 0, 100, 0);
+    }
+    else
+    {
+        act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_CHRIS, 0, 100, 0);
+    }
+    act_reset();
+    evt_nop();
+    run
+    {
+        message(1, 0);
+        if (CHRIS)
+        {
+            voice_play(VOICE_PLAY, VO_00F_11);
+        }
+        else
+        {
+            voice_play(VOICE_PLAY, VO_112_12);
+        }
+    }
+    wait_message();
+    if (CHRIS)
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+    }
+    else
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    }
+    evt_actor_begin();
+    act_anim_seq(AB_02, 10750, 13900, F_ROOM_21);
+    act_reset();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    run
+    {
+        message(2, 0);
+        if (CHRIS)
+        {
+            voice_play(VOICE_PLAY, VO_00F_12);
+        }
+        else
+        {
+            voice_play(VOICE_PLAY, VO_112_13);
+        }
+    }
+    if (CHRIS)
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+    }
+    else
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    }
+    evt_actor_begin();
+    act_anim_flags(ANIM_21, F_ROOM_21, 0);
+    act_motion_path(MOTION_TARGET, LOOK_AT_PLAYER, 0, 0, 100, 0);
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    if (CHRIS)
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+    }
+    else
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    }
+    evt_actor_begin();
+    act_anim_flags(ANIM_27, F_ROOM_21, 0);
+    act_reset();
+    evt_nop();
+    if (CHRIS)
+    {
+        sleep(50);
+    }
+    else
+    {
+        wait_message();
+        run
+        {
+            message(MSG_THE_DOOR_IS_TIGHTLY_LOCKED_03, 0); // "The door is tightly locked."
+            voice_play(VOICE_PLAY, VO_112_14);
+        }
+        wait_message();
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(MOTION_33, 400, 310, 0, 80, 60);
+    act_reset();
+    evt_nop();
+    if (JILL)
+    {
+        sleep(20);
+        se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_CHRIS, 10000, 15800);
+    }
+    sleep(10);
+    if (CHRIS)
+    {
+        se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_JILL, 10000, 15800);
+        sleep(5);
+        se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_JILL, 10000, 15800);
+        sleep(5);
+    }
+    else
+    {
+        se_play_3d(SND_BANK_ROOM, SE_14_DM_GACHA, 0, SND_AT_ENEMY, ENEMY_00_NPC_CHRIS, 10000, 15800);
+        sleep(10);
+        run
+        {
+            message(4, 0);
+            voice_play(VOICE_PLAY, VO_112_15);
+        }
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_21, F_ROOM_20, 0);
+    act_motion_path(MOTION_71, 350, 0, 2, 100, 0);
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    if (CHRIS)
+    {
+        act_anim_flags(ANIM_22, F_ROOM_20, 0);
+        act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_JILL, 0, 100, 0);
+        act_reset();
+        evt_nop();
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_ROOM, F_ROOM_20, FALSE));
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+    }
+    act_anim_flags(ANIM_25, F_ROOM_20, 0);
+    if (JILL)
+    {
+        act_motion_path(MOTION_TARGET, LOOK_AT_ENEMY, ENEMY_00_NPC_CHRIS, 0, 100, 0);
+    }
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_20, FALSE));
+    sleep(10);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_27, F_ROOM_20, 0);
+    act_reset();
+    evt_nop();
+    if (CHRIS)
+    {
+        sleep(60);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+    }
+    else
+    {
+        wait_message();
+        run
+        {
+            message(5, 0);
+            voice_play(VOICE_PLAY, VO_112_16);
+        }
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    }
+    evt_actor_begin();
+    act_anim_flags(ANIM_23, F_ROOM_21, 0);
+    act_reset();
+    evt_nop();
+    do
+    {
+        evt_next();
+    }
+    while (ck(FG_ROOM, F_ROOM_21, FALSE));
+    wait_message();
+    cutnext(CAM_02);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion(MOTION_10);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    run
+    {
+        if (CHRIS)
+        {
+            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 131, 255, 0);
+        }
+        else
+        {
+            aot_reset(AOT_01_DOOR, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 134, 255, 0);
+        }
+        set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        cut_auto(CUT_FREE);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_idle();
+    act_reset();
+    evt_finish();
+}

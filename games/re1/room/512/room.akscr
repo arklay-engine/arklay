@@ -1,0 +1,968 @@
+#version 1
+
+#include "inc/doors.akinc"
+#include "inc/enemies.akinc"
+#include "inc/flags.akinc"
+#include "inc/items.akinc"
+#include "inc/messages.akinc"
+#include "inc/movies.akinc"
+#include "inc/rooms.akinc"
+
+#define AOT_00_DOOR 0x00
+#define AOT_01_MESSAGE 0x01
+#define AOT_02_MESSAGE 0x02
+#define CAM_00 0x00
+#define CAM_01 0x01
+#define CAM_02 0x02
+#define ENEMY_00_NPC_CHRIS 0x00
+#define ENEMY_00_NPC_JILL 0x00
+#define F_ROOM_14 0x14
+#define F_ROOM_16 0x16
+#define MSG_VO_015_00 0x00
+#define MSG_VO_015_01 0x01
+#define MSG_VO_015_02 0x02
+#define MSG_VO_015_03 0x03
+#define MSG_VO_015_04 0x07
+#define MSG_VO_015_05 0x04
+#define MSG_VO_015_06 0x05
+#define MSG_VO_015_07 0x06
+#define MSG_VO_119_00 0x08
+#define MSG_VO_119_01 0x09
+#define VO_015_00 0x3A
+#define VO_015_01 0x3B
+#define VO_015_02 0x3C
+#define VO_015_03 0x3D
+#define VO_015_04 0x3E
+#define VO_015_05 0x3F
+#define VO_015_06 0x40
+#define VO_015_07 0x41
+#define VO_119_00 0x42
+#define VO_119_01 0x43
+
+proc init
+{
+    door_aot_set(AOT_00_DOOR, 4800, 10400, 1300, 1200, 3, DOOR_SND_01_DR_MTL, DOOR_0E_DOOR14, 3, 0, ROOM_50B_FRONT_OF_CELL, 9800, 0, 15800, 3072, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    room_bgm_state_set(4, ROOM_512_CELL, BGM_OFF);
+    if (ck(FG_SCENARIO, F_SCENARIO_2B, TRUE))
+    {
+        room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_2_ON | BGM_SUB_1_ON | BGM_MAIN_ON | 1);
+    }
+    if (ck(FG_COMMON, F_COMMON_4B, FALSE))
+    {
+        if (CHRIS)
+        {
+            enemy(EM_21_NPC_JILL, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_NPC_JILL, ANIM_00, 0, EVAR_00);
+            sys_multi(SYS_UNEQUIP);
+            plw_anim(PLW_00, ANIM_00, 0);
+            eml_state(0, ENEMY_00_NPC_JILL, EML_STATUS, EML_STATUS_OR | 2);
+            dir_set(0, 0, 1024, 0, 5670, 0, 9100);
+        }
+        else
+        {
+            enemy(EM_20_NPC_CHRIS, EB_00, NO_FLAG, SPAWN_FORCE, 2, 0, 3000, 0, 5680, 0, 2930, ENEMY_00_NPC_CHRIS, ANIM_00, 0, EVAR_00);
+        }
+        evt_exec(0, TASK_09, on_enter);
+        set(FG_COMMON, F_COMMON_4B, TRUE);
+        room_bgm_state_set(4, ROOM_512_CELL, BGM_SUB_1_ON);
+    }
+    aot_set(AOT_01_MESSAGE, 1800, 3100, 900, 1400, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 139, 0, 255, 0, 0, 0);
+    aot_set(AOT_02_MESSAGE, 7000, 2000, 1800, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 138, 0, 255, 0, 0, 0);
+}
+
+event on_enter
+{
+    sleep(1);
+    if (CHRIS)
+    {
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 0, 0, 5680, 0, 2930);
+            set(FG_RUN, F_RUN_CONTROLS, FALSE);
+            set(FG_STATUS, F_STATUS_0F, TRUE);
+            if (ck(FG_SCENARIO, F_SCENARIO_65, TRUE))
+            {
+                evt_exec(0, TASK_09, on_enter_sub1);
+            }
+            else
+            {
+                evt_exec(0, TASK_09, on_enter_sub2);
+            }
+        }
+    }
+    else
+    {
+        run
+        {
+            dir_set(0, 0, 1024, 0, 5670, 0, 9200);
+        }
+        set(FG_RUN, F_RUN_CONTROLS, FALSE);
+        set(FG_STATUS, F_STATUS_0F, TRUE);
+        sleep(20);
+        run
+        {
+            if (ck(FG_SCENARIO, F_SCENARIO_65, TRUE))
+            {
+                evt_exec(0, TASK_09, on_enter_sub1);
+            }
+            else
+            {
+                evt_exec(0, TASK_09, on_enter_sub2);
+            }
+        }
+    }
+    evt_finish();
+}
+
+event on_enter_sub1
+{
+    if (CHRIS)
+    {
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_00);
+            message(MSG_VO_015_00, 0);
+        }
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_21, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        sleep(25);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_25, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        sleep(50);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_20, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+    }
+    else
+    {
+        evt_fork(TASK_09, on_enter_sub1_sub1, 0);
+    }
+    sleep(30);
+    if (CHRIS)
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_anim_seq(AB_03, 5460, 8400, F_ROOM_16);
+        act_nop();
+        act_reset();
+        evt_nop();
+        wait_message();
+        run
+        {
+            dir_set(0, 0, 1024, 0, 5700, 0, 9100);
+            cutnext(CAM_02);
+        }
+        sleep(10);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_21, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_ROOM, F_ROOM_16, FALSE));
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8580);
+        }
+        sleep(1);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_action_a(20);
+        act_flag_op(EF_OR, EF_0020);
+        act_reset();
+        evt_nop();
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_action_a(20);
+        act_flag_op(EF_SET, EF_0020);
+        act_reset();
+        evt_nop();
+        sleep(20);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_flag_op(EF_SET, EF_0008 | EF_0004);
+        act_reset();
+        evt_nop();
+        sleep(10);
+        run
+        {
+            sys_multi(SYS_FORCE_ACTION);
+        }
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_idle();
+        act_nop();
+        act_reset();
+        evt_nop();
+        sleep(50);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_action_a(40);
+        act_reset();
+        evt_nop();
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_motion(MOTION_10);
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_action_a(40);
+        act_flag_op(EF_SET, 0);
+        act_reset();
+        evt_nop();
+        sleep(20);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8560);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8550);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8540);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8530);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8520);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8500);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8480);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8460);
+        }
+        sleep(6);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8440);
+        }
+    }
+    else
+    {
+        cutnext(CAM_02);
+        evt_fork(TASK_09, on_enter_sub1_sub2, 0);
+        voice_play(VOICE_PLAY, VO_119_00);
+        sleep(15);
+        message(MSG_VO_119_00, 0);
+    }
+    sleep(20);
+    if (CHRIS)
+    {
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_motion_path(MOTION_32, 0, 80, 0, 0, 10);
+        act_reset();
+        evt_nop();
+        sleep(30);
+        run
+        {
+            sys_multi(SYS_FORCE_ACTION);
+        }
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_01);
+            message(MSG_VO_015_01, 0);
+        }
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_motion_path(MOTION_32, 0, -120, 0, 0, 10);
+        act_reset();
+        evt_nop();
+        wait_message();
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_motion(MOTION_10);
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_reset();
+        evt_nop();
+        sleep(1);
+        run
+        {
+            cutnext(CAM_00);
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8000);
+        }
+        sleep(1);
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_02);
+            message(MSG_VO_015_02, 0);
+        }
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_21, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        sleep(25);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_23, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        sleep(25);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_26, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+    }
+    else
+    {
+        evt_fork(TASK_09, on_enter_sub1_sub3, 0);
+        sleep(70);
+        evt_fork(TASK_09, on_enter_sub1_sub4, 0);
+        sleep(60);
+        evt_fork(TASK_09, on_enter_sub1_sub5, 0);
+    }
+    wait_message();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_2F, F_ROOM_14, 0);
+    act_param_set(0, 2048);
+    act_reset();
+    evt_nop();
+    if (CHRIS)
+    {
+        sleep(45);
+    }
+    run
+    {
+        if (CHRIS)
+        {
+            cut_auto(CUT_FREE);
+        }
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        if (CHRIS)
+        {
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        }
+        else
+        {
+            pos_set(ENEMY_00_NPC_CHRIS, 0, 3072, 0, 5700, 0, 6800);
+            cutnext(CAM_00);
+            cut_auto(CUT_FREE);
+        }
+    }
+    if (JILL)
+    {
+        sleep(45);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion(MOTION_10);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    if (JILL)
+    {
+        run
+        {
+            eml_state(0, ENEMY_00_NPC_CHRIS, EML_08);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        }
+    }
+    evt_finish();
+}
+
+event on_enter_sub2
+{
+    if (CHRIS)
+    {
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_03);
+            message(MSG_VO_015_03, 0);
+        }
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_21, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        sleep(25);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_24, F_ROOM_14, AFL_01);
+        act_motion_path(MOTION_71, 300, 0, 1, 50, 0);
+        act_reset();
+        evt_nop();
+        sleep(50);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_20, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        wait_message();
+        run
+        {
+            cutnext(CAM_01);
+        }
+        sleep(1);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_anim_flags(ANIM_2D, F_ROOM_14, 0);
+        act_param_set(0, 3072);
+        act_reset();
+        evt_nop();
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_04);
+            message(MSG_VO_015_04, 0);
+        }
+        wait_message();
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_anim_seq(AB_03, 5460, 8400, F_ROOM_16);
+        act_nop();
+        act_reset();
+        evt_nop();
+        sleep(10);
+        run
+        {
+            dir_set(0, 0, 1024, 0, 5700, 0, 9100);
+            cutnext(CAM_02);
+        }
+        sleep(10);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_21, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        do
+        {
+            evt_next();
+        }
+        while (ck(FG_ROOM, F_ROOM_16, FALSE));
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8580);
+        }
+        sleep(1);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_action_a(20);
+        act_flag_op(EF_OR, EF_0020);
+        act_reset();
+        evt_nop();
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_action_a(20);
+        act_flag_op(EF_SET, EF_0020);
+        act_reset();
+        evt_nop();
+        sleep(20);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_flag_op(EF_SET, EF_0008 | EF_0004);
+        act_reset();
+        evt_nop();
+        sleep(10);
+        run
+        {
+            sys_multi(SYS_FORCE_ACTION);
+        }
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_idle();
+        act_nop();
+        act_reset();
+        evt_nop();
+        sleep(50);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_action_a(40);
+        act_reset();
+        evt_nop();
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_anim_flags(ANIM_30, F_ROOM_14, AFL_01);
+        act_action_a(40);
+        act_flag_op(EF_SET, 0);
+        act_reset();
+        evt_nop();
+        sleep(20);
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_05);
+            message(MSG_VO_015_05, 0);
+        }
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_motion_path(MOTION_71, 200, 0, 1, 10, 0);
+        act_reset();
+        evt_nop();
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8560);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8550);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8540);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8530);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8520);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8500);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8480);
+        }
+        sleep(5);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8460);
+        }
+        sleep(6);
+        run
+        {
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8440);
+        }
+        sleep(50);
+        wait_message();
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_06);
+            message(MSG_VO_015_06, 0);
+        }
+        sleep(10);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_motion_path(MOTION_32, 0, 80, 0, 0, 10);
+        act_reset();
+        evt_nop();
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_motion_path(MOTION_72, 0, 200, 1, 0, 20);
+        act_reset();
+        evt_nop();
+        sleep(60);
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_motion_path(MOTION_32, 0, 200, 0, 0, 10);
+        act_anim_flags(ANIM_23, F_ROOM_14, 0);
+        act_reset();
+        evt_nop();
+        wait_message();
+    }
+    else
+    {
+        evt_fork(TASK_09, on_enter_sub1_sub1, 0);
+        sleep(30);
+        cutnext(CAM_02);
+        evt_fork(TASK_09, on_enter_sub1_sub2, 0);
+        voice_play(VOICE_PLAY, VO_119_01);
+        sleep(15);
+        message(MSG_VO_119_01, 0);
+    }
+    sleep(20);
+    if (CHRIS)
+    {
+        evt_work_set(WK_ENEMY, ENEMY_00_NPC_JILL);
+        evt_actor_begin();
+        act_motion(MOTION_10);
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_nop();
+        act_reset();
+        evt_nop();
+        sleep(2);
+        run
+        {
+            cutnext(CAM_00);
+            pos_set(ENEMY_00_NPC_JILL, 0, 3072, 0, 5460, 0, 8000);
+        }
+        sleep(2);
+        run
+        {
+            voice_play(VOICE_PLAY, VO_015_07);
+            message(MSG_VO_015_07, 0);
+        }
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_21, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        sleep(25);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_23, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+        sleep(25);
+        evt_work_set(WK_PLAYER, 0);
+        evt_actor_begin();
+        act_anim_flags(ANIM_26, F_ROOM_14, AFL_01);
+        act_reset();
+        evt_nop();
+    }
+    else
+    {
+        evt_fork(TASK_09, on_enter_sub2_sub1, 0);
+        sleep(70);
+        evt_fork(TASK_09, on_enter_sub2_sub2, 0);
+        sleep(130);
+        evt_fork(TASK_09, on_enter_sub2_sub3, 0);
+    }
+    wait_message();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_2F, F_ROOM_14, 0);
+    act_param_set(0, 2048);
+    act_reset();
+    evt_nop();
+    if (CHRIS)
+    {
+        sleep(45);
+    }
+    run
+    {
+        set(FG_STATUS, F_STATUS_0F, FALSE);
+        if (CHRIS)
+        {
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+        }
+        else
+        {
+            cutnext(CAM_00);
+        }
+        cut_auto(CUT_FREE);
+        if (CHRIS)
+        {
+            aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        }
+        else
+        {
+            pos_set(ENEMY_00_NPC_CHRIS, 0, 3072, 0, 5700, 0, 6800);
+        }
+    }
+    if (JILL)
+    {
+        sleep(45);
+    }
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion(MOTION_10);
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_nop();
+    act_idle();
+    act_nop();
+    act_reset();
+    evt_nop();
+    if (JILL)
+    {
+        run
+        {
+            eml_state(0, ENEMY_00_NPC_CHRIS, EML_08);
+            set(FG_RUN, F_RUN_CONTROLS, TRUE);
+            aot_on(AOT_00_DOOR, SCE_DOOR, 0);
+        }
+    }
+    evt_finish();
+}
+
+event on_enter_sub1_sub1 when (JILL)
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_26, F_ROOM_14, AFL_02 | AFL_01);
+    act_flag_op(EF_OR, EF_0002);
+    act_reset();
+    evt_nop();
+    sleep(30);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event on_enter_sub1_sub2 when (JILL)
+{
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_seq(AB_02, 5500, 7600, F_ROOM_14);
+    act_nop();
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event on_enter_sub1_sub3 when (JILL)
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_21, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_26, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(15);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_27, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event on_enter_sub1_sub4 when (JILL)
+{
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_21, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_25, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_22, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event on_enter_sub1_sub5 when (JILL)
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_21, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_22, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_25, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_27, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event on_enter_sub2_sub1 when (JILL)
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_21, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_2A, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event on_enter_sub2_sub2 when (JILL)
+{
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_21, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_22, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(40);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_25, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_2A, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_20, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(40);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_29, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_ENEMY, ENEMY_00_NPC_CHRIS);
+    evt_actor_begin();
+    act_anim_flags(ANIM_2A, F_ROOM_14, AFL_02 | AFL_01);
+    act_flag_op(EF_OR, EF_0010);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}
+
+event on_enter_sub2_sub3 when (JILL)
+{
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_motion_path(MOTION_72, 0, 200, 1, 0, 30);
+    act_reset();
+    evt_nop();
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_23, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(40);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_22, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_25, F_ROOM_14, AFL_02 | AFL_01);
+    act_reset();
+    evt_nop();
+    sleep(20);
+    evt_work_set(WK_PLAYER, 0);
+    evt_actor_begin();
+    act_anim_flags(ANIM_25, F_ROOM_14, AFL_02 | AFL_01);
+    act_flag_op(EF_OR, EF_0001);
+    act_reset();
+    evt_nop();
+    evt_finish();
+}

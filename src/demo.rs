@@ -122,15 +122,22 @@ impl DemoReel {
         } else {
             0
         };
-        if room > RoomId::MAX_ROOM || stage > RoomId::MAX_STAGE {
+        // The original's stage digit: 6 and 7 are the second mansion visit.
+        let id = (room <= RoomId::MAX_ROOM)
+            .then(|| {
+                RoomId::from_original(
+                    (u16::from(stage) << 12) | (u16::from(room) << 4) | u16::from(character & 1),
+                )
+            })
+            .flatten();
+        let Some(id) = id else {
             bail!("demo reel {entry} names an invalid room {stage}:{room:#04X}");
-        }
+        };
         Ok(Self {
             entry,
             room: RoomId {
-                stage,
-                room,
                 player_flag: character,
+                ..id
             },
             character,
             total_held_items: data[2],

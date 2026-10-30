@@ -119,7 +119,7 @@ impl SaveFile {
     fn sync_state_image(&mut self) {
         // The state image keeps the port's 1-based stage digit; the block's
         // own 0x200 byte (`self.stage`) is the original's 0-based g_stageId.
-        self.state_bytes[0] = self.stage.saturating_add(1);
+        self.state_bytes[0] = self.room_id().stage;
         self.state_bytes[1] = self.room;
         self.state_bytes[usize::from(STATE_BYTE_ROOM_CAMERA)] = self.camera;
         self.state_bytes[usize::from(STATE_BYTE_CUT)] = self.cut;
@@ -166,9 +166,10 @@ impl SaveFile {
         let mut file = Self {
             prefix: BIOCARD_PREFIX,
             state_bytes: state.state_bytes,
-            // The block stores the original's 0-based `g_stageId`; the port's
+            // The block stores the original's 0-based `g_stageId`, whose
+            // stages 6 and 7 are the second mansion visit; the port's
             // `RoomId.stage` is the 1-based RDT digit.
-            stage: state.id.stage.saturating_sub(1),
+            stage: state.id.table_row() as u8,
             room: state.id.room,
             camera: state.camera.current_cut.min(0xFF) as u8,
             cut: state.state_bytes[usize::from(STATE_BYTE_CUT)],
@@ -245,11 +246,7 @@ impl SaveFile {
     pub fn apply_to(&self, state: &mut GameState) {
         // The block's stage byte is the original's 0-based `g_stageId`; the
         // port's `RoomId.stage` is the 1-based RDT digit.
-        state.id = RoomId {
-            stage: self.stage.saturating_add(1),
-            room: self.room,
-            player_flag: self.character & 1,
-        };
+        state.id = self.room_id();
         state.flags = [FlagBank::new(); FLAG_BANK_COUNT];
         state.flags[0].bytes_mut()[..16].copy_from_slice(&self.scenario);
         state.flags[1].bytes_mut().copy_from_slice(&self.scenario2);
@@ -309,7 +306,7 @@ impl SaveFile {
         // bytes the port owns, exactly like the original's prefix-then-fields
         // memcpy. The state image's stage byte is the port's own 1-based digit.
         state.state_bytes = self.state_bytes;
-        state.state_bytes[0] = self.stage.saturating_add(1);
+        state.state_bytes[0] = state.id.stage;
         state.state_bytes[1] = self.room;
         state.state_bytes[usize::from(STATE_BYTE_ROOM_CAMERA)] = self.camera;
         state.state_bytes[usize::from(STATE_BYTE_CUT)] = self.cut;
@@ -452,7 +449,7 @@ impl SaveFile {
             .copy_from_slice(&bytes[0x33C..SAVE_LAYOUT_SIZE]);
         // The state image keeps the port's 1-based stage digit; the block's
         // own 0x200 byte read above is the original's 0-based `g_stageId`.
-        file.state_bytes[0] = file.stage.saturating_add(1);
+        file.state_bytes[0] = file.room_id().stage;
         Ok(file)
     }
 }
@@ -613,20 +610,35 @@ pub struct SaveSlotInfo {
     pub character: u8,
     /// Save counter.
     pub saves: u8,
-    /// Stage id.
+    /// The 1-based stage of the room the block was saved in.
     pub stage: u8,
     /// Room id.
     pub room: u8,
+    /// Whether the room was on its second mansion visit.
+    pub mansion2: bool,
 }
 
 impl SaveSlotInfo {
     /// Read the header fields out of a parsed block.
     pub fn from_file(file: &SaveFile) -> Self {
+        let id = file.room_id();
         Self {
             character: file.character,
             saves: file.saves,
-            stage: file.stage,
+            stage: id.stage,
             room: file.room,
+            mansion2: id.mansion2,
+        }
+    }
+}
+
+impl SaveFile {
+    /// The room the block was saved in: its 0-based `g_stageId` is the
+    /// original's, whose stages 6 and 7 are the second mansion visit.
+    pub fn room_id(&self) -> RoomId {
+        RoomId {
+            player_flag: self.character & 1,
+            ..RoomId::from_table_row(usize::from(self.stage), self.room)
         }
     }
 }

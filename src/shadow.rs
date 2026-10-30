@@ -130,12 +130,10 @@ pub fn billboard_tint(rgb: u32) -> [u8; 3] {
 ///
 /// The original keeps 20 records selected by a `(room + stage * 0x20) * 8 +
 /// camera` index table; only the records below shift the quad in view space,
-/// the rest only bias its queue tie-break. Stages above the laboratory reuse
-/// the first two rows.
+/// the rest only bias its queue tie-break. The second mansion visit reuses
+/// the first visit's rows.
 pub fn offset_y(id: RoomId, camera: usize) -> i32 {
-    let stage = usize::from(id.stage_index());
-    let folded = if stage > 4 { stage - 5 } else { stage };
-    match (folded, id.room, camera) {
+    match (usize::from(id.stage_index()), id.room, camera) {
         (0, 0x0A, _) => -200,
         (2, 0x01, 0..=6) | (2, 0x02, _) => -40,
         (2, 0x05, 0) | (2, 0x0F, 1) => 100,
@@ -299,7 +297,11 @@ mod tests {
 
     #[test]
     fn placement_offsets_follow_the_room_table() {
-        let room = |id: &str, camera: usize| offset_y(RoomId::parse(id).unwrap(), camera);
+        let room = |id: &str, camera: usize| {
+            // The original's numbering: 6xx and 7xx are the second visit.
+            let number = u16::from_str_radix(id, 16).unwrap();
+            offset_y(RoomId::from_original(number).unwrap(), camera)
+        };
         assert_eq!(room("1000", 0), 0);
         // Stage 1 room 0A: every camera carries the -200 offset.
         assert_eq!(room("10A0", 0), -200);
@@ -317,7 +319,7 @@ mod tests {
         // The laboratory has its own row (only room 7 carries an offset), so
         // its room 0A keeps the default placement.
         assert_eq!(room("50A0", 0), 0);
-        // Return-mansion stages fold onto the mansion rows.
+        // The second mansion visit reads the mansion's rows.
         assert_eq!(room("60A0", 0), -200);
         assert_eq!(room("7010", 0), 0);
     }
@@ -339,6 +341,7 @@ mod tests {
                 stage: 1,
                 room: 0,
                 player_flag: 0,
+                mansion2: false,
             },
             &RoomState::default(),
         );

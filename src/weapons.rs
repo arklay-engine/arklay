@@ -3076,6 +3076,7 @@ mod tests {
             stage: 1,
             room: 0x30,
             player_flag: 0,
+            mansion2: false,
         };
         game.inventory.push(InventoryItem {
             id: weapon,

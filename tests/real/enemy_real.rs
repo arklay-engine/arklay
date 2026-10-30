@@ -913,7 +913,7 @@ fn real_room70c_rematch_yawn_initialises() {
         return;
     };
     let pack = Pack::open(&pack_path).unwrap();
-    let id = RoomId::parse("70c").unwrap();
+    let id = common::original_room("70c");
     let model = pack
         .read(&format!("enemy/12/enemy_{}.emd", id.player_flag & 1))
         .unwrap();

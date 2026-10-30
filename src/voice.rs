@@ -3,17 +3,18 @@
 //! `voice_play` (0x1E, the original's `xa_on`) requests a line by id; the
 //! engine reads it from `voice/{row}_{id}.wav`, where `row` is the 1-based
 //! table row the stage reads and `id` is the request id in two lowercase hex
-//! digits. The 0-based stage selects its row through [`row_for_stage`]: rooms
-//! in stages 6 and 7 reuse the stage 1 and 2 rows, so a stage-6 request for
-//! id 9 reads `voice/01_09.wav`.
+//! digits. The room's table row ([`crate::state::RoomId::table_row`])
+//! selects its voice row through [`row_for_stage`]: the second mansion
+//! visit reuses the stage 1 and 2 rows, so its request for id 9 in stage 1
+//! reads `voice/01_09.wav`.
 //!
 //! The name tables themselves live in [`crate::voice_table`] and are read
 //! only by `convert-game`. A request whose record is empty or past the row
 //! end formats a path no entry matches, and the engine's missing-line
 //! handling counts the miss without ever stalling the F7 wait.
 
-/// Stage (0-based) to its table row. Stages 5 and 6 (rooms 6xxx/7xxx) reuse
-/// rows 0 and 1; no shipped stage past 6 has a table.
+/// A room's table row to its voice row. The second mansion visit's rows (5
+/// and 6) reuse rows 0 and 1; no row past 6 has a table.
 static ROW_FOR_STAGE: [Option<usize>; 7] = [
     Some(0),
     Some(1),
@@ -66,8 +67,16 @@ mod tests {
         assert_eq!(pack_path(1, 0), "voice/02_00.wav");
         assert_eq!(pack_path(2, 46), "voice/03_2e.wav");
         assert_eq!(pack_path(4, 186), "voice/05_ba.wav");
-        assert_eq!(pack_path(5, 9), "voice/01_09.wav", "stage 6 reads row 0");
-        assert_eq!(pack_path(6, 0), "voice/02_00.wav", "stage 7 reads row 1");
+        assert_eq!(
+            pack_path(5, 9),
+            "voice/01_09.wav",
+            "the second visit of stage 1 reads row 0"
+        );
+        assert_eq!(
+            pack_path(6, 0),
+            "voice/02_00.wav",
+            "the second visit of stage 2 reads row 1"
+        );
     }
 
     #[test]

@@ -430,20 +430,22 @@ fn corpus_desks_run_the_full_flow_and_items_stay_in_bounds() {
         desk_rooms.len()
     );
     assert!(simulated > 300, "only {simulated} rooms simulated");
+    // The first visit of a room only the second visit has loads that room
+    // too (110 and 119 build items).
     assert_eq!(
-        item_rooms, 226,
-        "the shipped seed must build items in 226 room variants"
+        item_rooms, 228,
+        "the shipped seed must build items in 228 room variants"
     );
     assert_eq!(
-        built_items, 519,
-        "the shipped seed must build all 519 item declarations"
+        built_items, 523,
+        "the shipped seed must build all 523 item declarations"
     );
     assert_eq!(
         hidden_items, 4,
         "the four off-map sentinels are the known set"
     );
-    assert_eq!(desks, 16, "the corpus must register all 16 desk sites");
-    assert_eq!(desk_rooms.len(), 8, "the desks span eight room variants");
+    assert_eq!(desks, 18, "the corpus must register all 18 desk sites");
+    assert_eq!(desk_rooms.len(), 6, "the desks span six rooms");
 }
 
 /// Run the CLI capture for one room and return the written bytes.

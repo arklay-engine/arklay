@@ -227,6 +227,10 @@ pub struct MessageWindow {
     /// Message table id, or `None` when no message was requested. Public so
     /// the engine's door-animation adapter can write it directly.
     pub id: Option<u8>,
+    /// The higher bits of the message's index, past the six the id holds:
+    /// the high byte of its id word ([`crate::text::message_index`]). Zero
+    /// for every original message.
+    pub id_high: u8,
     /// The pause word passed with the message.
     pub pause: u16,
     /// Whether a message is being displayed. Public for the engine adapter.
@@ -264,6 +268,7 @@ impl Default for MessageWindow {
     fn default() -> Self {
         Self {
             id: None,
+            id_high: 0,
             pause: 0,
             active: false,
             examined: [0; 4],
@@ -356,6 +361,7 @@ impl MessageWindow {
         }
         self.menu_choice = 0x80;
         self.id = Some(id);
+        self.id_high = 0;
         self.pause = pause;
         self.active = true;
         self.menu = menu;
@@ -466,6 +472,11 @@ impl MessageWindow {
         true
     }
 
+    /// The requested message's id word ([`crate::text::message_index`]).
+    pub fn id_word(&self) -> Option<u16> {
+        self.id.map(|id| u16::from_le_bytes([id, self.id_high]))
+    }
+
     /// Turn the reveal's speed-up on whatever the id says: the item
     /// descriptions force `g_MessageSpeedUpFlag = 0x80`.
     pub fn force_speed_up(&mut self) {
@@ -493,9 +504,9 @@ impl MessageWindow {
             && self.menu_choice & 0x80 == 0
             && let Some(id) = self.id
         {
-            let pause = self.pause;
-            let menu = self.menu;
+            let (pause, menu, id_high) = (self.pause, self.menu, self.id_high);
             self.request(id, pause, menu);
+            self.id_high = id_high;
         }
         if !self.active || !self.source_ready {
             self.previous = input;

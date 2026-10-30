@@ -108,6 +108,7 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
 
     Ok(RoomState {
         stage: id.stage,
+        mansion2: id.mansion2,
         room: id.room,
         player_flag: id.player_flag,
         omodel_slot_count,
@@ -624,6 +625,7 @@ mod tests {
         stage: 2,
         room: 5,
         player_flag: 3,
+        mansion2: false,
     };
     const RDT_HEADER_LEN: usize = 0x94;
 

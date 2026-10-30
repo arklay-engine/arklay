@@ -58,7 +58,7 @@ fn simulate_with_flags(pack: &Pack, room: &str, extra: &[(u8, u8)]) -> Simulated
     flags.extend_from_slice(extra);
     simulate_room_seeded(
         pack,
-        RoomId::parse(room).unwrap(),
+        common::original_room(room),
         &flags,
         60,
         player::Input::default(),

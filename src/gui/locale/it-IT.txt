@@ -76,10 +76,6 @@ autosave.description = "Salva automaticamente ogni volta che una porta carica un
 autosave.off = "Salva solo la macchina da scrivere."
 autosave.on = "Ogni stanza in cui entri da una porta viene salvata automaticamente."
 
-room_script_fixes.label = "Correzioni degli script"
-room_script_fixes.description = "Se gli script delle stanze vengono eseguiti con le correzioni del port. Disattivato esegue il bytecode originale di ogni stanza, stranezze comprese. Gli script propri delle mod si applicano in entrambi i casi. Ha effetto dalla stanza successiva."
-room_script_fixes.off = "Ogni stanza esegue il suo bytecode di script originale."
-room_script_fixes.on = "Gli script delle stanze vengono eseguiti con le correzioni del port."
 
 quick_turn.label = "Giravolta rapida"
 quick_turn.description = "Girarsi di 180 gradi sul posto premendo Corsa mentre si cammina all'indietro."

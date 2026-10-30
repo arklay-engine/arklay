@@ -11,25 +11,42 @@ use crate::mask::MaskSprite;
 /// the room in hex, and the last is the player/flag digit. This matches the
 /// shipped `ROOM####.RDT` names and the `RC` background names.
 ///
+/// RE1's mansion (stages 1 and 2) has two visits: the second, after the
+/// guardhouse sets scenario flag 0, plays the same rooms with their own
+/// lines, lights and items. The visit is part of the identity
+/// ([`RoomId::mansion2`]); the room is still stage 1 or 2. (The original
+/// game numbered the second visit's rooms as stages 6 and 7, and its data
+/// tables still do; [`RoomId::from_original`] and [`RoomId::table_row`] are
+/// that numbering.)
+///
 /// RE2 also ships letter stages `A`-`G` (`ROOMG010.RDT`), which are stages
 /// 10-16 here: `A`-`F` are their own hex digits and `G` continues the run.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RoomId {
-    /// 1-based stage number: 1-7, or 10-16 for the letter stages `A`-`G`.
+    /// 1-based stage number: 1-5 for RE1, 1-7 or 10-16 (the letter stages
+    /// `A`-`G`) for RE2.
     pub stage: u8,
     /// Room number within the stage (0x00-0x1F).
     pub room: u8,
     /// Player/flag digit (0 = Chris, 1 = Jill).
     pub player_flag: u8,
+    /// The second visit of an RE1 mansion room (stage 1 or 2).
+    pub mansion2: bool,
 }
 
 impl RoomId {
-    /// Highest RE1 stage digit, the stage count of RE1's per-stage tables.
+    /// RE1's stage count: the mansion (1 and 2), the guardhouse (3), the
+    /// caves (4) and the laboratory (5).
+    pub const RE1_STAGES: u8 = 5;
+    /// Highest numeric stage digit an identity can name (RE2's last).
     pub const MAX_STAGE: u8 = 7;
     /// Highest stage an identity can name: the letter stage `G`.
     pub const MAX_STAGE_ID: u8 = 16;
     /// Highest valid room number.
     pub const MAX_ROOM: u8 = 0x1F;
+    /// The rows of the original game's per-room tables: one per stage, then
+    /// one per mansion stage for the second visit ([`RoomId::table_row`]).
+    pub const TABLE_ROWS: usize = 7;
 
     /// Parse a three- or four-digit RDT identity, e.g. `100`, `1001`, `11C1`,
     /// `G010`.
@@ -51,6 +68,71 @@ impl RoomId {
             [stage, hi, lo] => Self::from_digits(*stage, (*hi << 4) | *lo, player, room),
             _ => anyhow::bail!("`{room}` must be exactly three hex digits, e.g. 100 or 11C"),
         }
+    }
+
+    /// The RE1 room the original game names RDT `number` (`0x6031`): its
+    /// stages 6 and 7 are the second visit of the mansion's stages 1 and 2.
+    /// `None` for a stage RE1 does not have.
+    pub fn from_original(number: u16) -> Option<Self> {
+        let stage = (number >> 12) as u8;
+        let (stage, mansion2) = match stage {
+            1..=5 => (stage, false),
+            6 | 7 => (stage - 5, true),
+            _ => return None,
+        };
+        Some(Self {
+            stage,
+            room: ((number >> 4) & 0xFF) as u8,
+            player_flag: (number & 0xF) as u8,
+            mansion2,
+        })
+    }
+
+    /// The RDT number the original game gives this RE1 room, `0x6031` for
+    /// room 103 played by Jill on the second mansion visit: the inverse of
+    /// [`RoomId::from_original`], for the original's own files and traces.
+    pub fn original_number(self) -> u16 {
+        let stage = u16::from(self.stage) + if self.mansion2 { 5 } else { 0 };
+        (stage << 12) | (u16::from(self.room) << 4) | u16::from(self.player_flag)
+    }
+
+    /// The row of the original game's per-room tables (music, effect
+    /// sheets, camera lights, shadow and mask records) this room reads, 0-6:
+    /// its 0-based stage, or for the second mansion visit the mansion
+    /// stage's second-visit row (the original's stages 6 and 7).
+    pub fn table_row(self) -> usize {
+        usize::from(self.stage_index()) + if self.mansion2 { 5 } else { 0 }
+    }
+
+    /// The room of table row `row` and `room`, the inverse of
+    /// [`RoomId::table_row`] for player 0. A row past the tables (a damaged
+    /// save's) wraps rather than panicking.
+    pub fn from_table_row(row: usize, room: u8) -> Self {
+        let (stage, mansion2) = match row {
+            5 | 6 => (row as u8 - 4, true),
+            _ => ((row as u8).wrapping_add(1), false),
+        };
+        Self {
+            stage,
+            room,
+            player_flag: 0,
+            mansion2,
+        }
+    }
+
+    /// This room on the second mansion visit when `mansion2` and it is a
+    /// mansion room (stage 1 or 2); any other room has one visit.
+    pub fn with_visit(self, mansion2: bool) -> Self {
+        Self {
+            mansion2: mansion2 && self.is_mansion(),
+            ..self
+        }
+    }
+
+    /// Whether this is an RE1 mansion room (stage 1 or 2), which has two
+    /// visits.
+    pub fn is_mansion(self) -> bool {
+        matches!(self.stage, 1 | 2)
     }
 
     /// The digit values of `text`: hex, plus `G` (16) as the first one.
@@ -78,10 +160,12 @@ impl RoomId {
             stage,
             room,
             player_flag,
+            mansion2: false,
         })
     }
 
     /// Packed RDT number, e.g. 0x1001; the letter stage `G` is 0x10000 up.
+    /// The visit is not part of it.
     pub fn rdt_number(self) -> u32 {
         (u32::from(self.stage) << 12) | (u32::from(self.room) << 4) | u32::from(self.player_flag)
     }
@@ -95,8 +179,8 @@ impl RoomId {
         }
     }
 
-    /// Four-character RDT identity as the pack folders spell it, e.g. `1001`
-    /// or `g010`.
+    /// Four-character RDT identity as a per-RDT folder spells it, e.g.
+    /// `1001` or `g010`.
     pub fn code(self) -> String {
         format!(
             "{}{:02x}{:x}",
@@ -106,38 +190,51 @@ impl RoomId {
         )
     }
 
-    /// Pack directory holding everything room `self` is made of, e.g.
-    /// `room/1001`.
+    /// Pack directory of the room, every player and visit of it, e.g.
+    /// `room/100`.
     pub fn dir(self) -> String {
+        format!("room/{}", self.room3().to_ascii_lowercase())
+    }
+
+    /// Pack directory of one RDT, e.g. `room/1001`: the layout of an RE2
+    /// pack, whose players' rooms are each their own.
+    pub fn rdt_dir(self) -> String {
         format!("room/{}", self.code())
     }
 
-    /// Pack path of the raw RDT, e.g. `room/1001/room.rdt`.
-    pub fn rdt_entry(self) -> String {
-        format!("{}/room.rdt", self.dir())
+    /// The name of the player, `chris` or `jill`.
+    pub fn player_tag(self) -> &'static str {
+        if self.player_flag & 1 == 0 {
+            "chris"
+        } else {
+            "jill"
+        }
     }
 
-    /// Pack path of the room's scripts, e.g. `room/1001/room.scd`.
+    /// The name of this variant of the room: `jill-mansion2` for a mansion
+    /// room, `jill` for another.
+    pub fn variant_tag(self) -> String {
+        if self.is_mansion() {
+            format!(
+                "{}-mansion{}",
+                self.player_tag(),
+                if self.mansion2 { 2 } else { 1 }
+            )
+        } else {
+            self.player_tag().to_string()
+        }
+    }
+
+    /// Pack path of a raw RDT of this variant of the room: an RDT is one
+    /// variant's, so it is named for it ([`RoomId::variant_tag`]), e.g.
+    /// `room/100/jill-mansion2.rdt`.
+    pub fn rdt_entry(self) -> String {
+        format!("{}/{}.rdt", self.dir(), self.variant_tag())
+    }
+
+    /// Pack path of the room's scripts, e.g. `room/100/room.scd`.
     pub fn scd_entry(self) -> String {
         format!("{}/room.scd", self.dir())
-    }
-
-    /// Pack path of a mod's build of the room's scripts for `region`, kept
-    /// beside its `room.scd` (the USA build) where the region's build
-    /// differs, e.g. `room/1001/room-jpn.scd`.
-    pub fn region_scd_entry(self, region: crate::scd::akscr::Region) -> String {
-        format!(
-            "{}/room-{}.scd",
-            self.dir(),
-            region.symbol().to_ascii_lowercase()
-        )
-    }
-
-    /// Pack path of the room's original script bytecode, kept beside a
-    /// `room.scd` that holds the port's fixed build, e.g.
-    /// `room/1001/original.scd`.
-    pub fn original_scd_entry(self) -> String {
-        format!("{}/original.scd", self.dir())
     }
 
     /// Three-digit room id, e.g. `100`, `11C`.
@@ -150,17 +247,18 @@ impl RoomId {
     }
 
     /// Pack stem of file `index` in the room's `kind` subdirectory, e.g.
-    /// `room/1001/cut/03`.
+    /// `room/100/cut/03`.
     fn file_stem(self, kind: &str, index: usize) -> String {
         format!("{}/{kind}/{index:02x}", self.dir())
     }
 
-    /// Pack path of a camera background, e.g. `room/1000/cut/00.bmp`.
+    /// Pack path of a camera background, e.g. `room/100/cut/00.bmp`.
     pub fn cut_entry(self, camera: usize) -> String {
         format!("{}.bmp", self.cut_stem(camera))
     }
 
-    /// Pack stem of a camera background, e.g. `room/1000/cut/00`.
+    /// Pack stem of a camera background, e.g. `room/100/cut/00`. Every
+    /// variant of a room shares its backgrounds.
     ///
     /// [`crate::pack::Pack::read_asset`] resolves the stem across replacement
     /// formats; the shipped entry name is [`RoomId::cut_entry`].
@@ -168,54 +266,20 @@ impl RoomId {
         self.file_stem("cut", camera)
     }
 
-    /// Pack path of a camera's mask page, e.g. `room/1000/mask/00.bmp`.
+    /// Pack path of a camera's mask page, e.g. `room/100/mask/00.bmp`.
     pub fn mask_entry(self, camera: usize) -> String {
         format!("{}.bmp", self.mask_stem(camera))
     }
 
-    /// Pack stem of a camera's mask page, e.g. `room/1000/mask/00`.
+    /// Pack stem of a camera's mask page, e.g. `room/100/mask/00`.
     pub fn mask_stem(self, camera: usize) -> String {
         self.file_stem("mask", camera)
     }
 
-    /// Pack stem of an object-model slot's `.tmd` and texture, e.g.
-    /// `room/1000/object/02`.
-    pub fn object_stem(self, slot: usize) -> String {
-        self.file_stem("object", slot)
-    }
-
-    /// Pack stem of an item-model slot's `.tmd` and texture, e.g.
-    /// `room/1000/item/00`.
-    pub fn item_stem(self, slot: usize) -> String {
-        self.file_stem("item", slot)
-    }
-
-    /// Pack stem of an effect sprite slot's `.xml` and sheet, e.g.
-    /// `room/1000/effect/00`.
-    pub fn effect_stem(self, slot: usize) -> String {
-        self.file_stem("effect", slot)
-    }
-
-    /// Pack stem of a player-animation pair (`.emr` + `.edd`), e.g.
-    /// `room/1000/anim/00`.
-    pub fn anim_stem(self, index: usize) -> String {
-        self.file_stem("anim", index)
-    }
-
-    /// Zero-based stage index for stage-indexed tables.
+    /// Zero-based stage index for stage-indexed tables; stage 0 (no room yet,
+    /// as in a fresh default state) reads as the first.
     pub fn stage_index(self) -> u8 {
-        self.stage - 1
-    }
-
-    /// Stage digit used by the background files. Stages 6 and 7 reuse the
-    /// STAGE1/STAGE2 backgrounds with the digit reduced by 5; RE2's letter
-    /// stages are their own.
-    pub fn fold_stage_digit(self) -> u8 {
-        if (6..=Self::MAX_STAGE).contains(&self.stage) {
-            self.stage - 5
-        } else {
-            self.stage
-        }
+        self.stage.saturating_sub(1)
     }
 }
 
@@ -458,6 +522,8 @@ pub struct RoomState {
     pub stage: u8,
     pub room: u8,
     pub player_flag: u8,
+    /// The second visit of a mansion room ([`RoomId::mansion2`]).
+    pub mansion2: bool,
     /// Declared omodel pair count from header byte `0x02`; also the number of
     /// runtime object records the room's init script may build.
     pub omodel_slot_count: u8,
@@ -507,6 +573,12 @@ pub struct RoomState {
 }
 
 impl RoomState {
+    /// The row of the original's per-room tables the room reads
+    /// ([`RoomId::table_row`]).
+    pub fn table_row(&self) -> usize {
+        usize::from(self.stage.saturating_sub(1)) + if self.mansion2 { 5 } else { 0 }
+    }
+
     /// The packed footstep zone value for `(x, z)`: the surface type in the
     /// high byte and the sound offset for that surface in the low byte.
     ///
@@ -541,28 +613,50 @@ mod tests {
         assert_eq!(id.stage, 1);
         assert_eq!(id.room, 0x00);
         assert_eq!(id.rdt_number(), 0x1000);
-        assert_eq!(id.rdt_entry(), "room/1000/room.rdt");
-        assert_eq!(id.scd_entry(), "room/1000/room.scd");
-        assert_eq!(id.original_scd_entry(), "room/1000/original.scd");
-        assert_eq!(
-            id.region_scd_entry(crate::scd::akscr::Region::Eur),
-            "room/1000/room-eur.scd"
-        );
+        assert_eq!(id.dir(), "room/100");
+        assert_eq!(id.rdt_dir(), "room/1000");
+        assert_eq!(id.rdt_entry(), "room/100/chris-mansion1.rdt");
+        assert_eq!(id.scd_entry(), "room/100/room.scd");
         assert_eq!(id.room3(), "100");
-        assert_eq!(id.cut_entry(3), "room/1000/cut/03.bmp");
-        assert_eq!(id.mask_entry(12), "room/1000/mask/0c.bmp");
-        assert_eq!(id.object_stem(1), "room/1000/object/01");
-        assert_eq!(id.item_stem(0), "room/1000/item/00");
-        assert_eq!(id.effect_stem(2), "room/1000/effect/02");
-        assert_eq!(id.anim_stem(0), "room/1000/anim/00");
+        assert_eq!(id.cut_entry(3), "room/100/cut/03.bmp");
+        assert_eq!(id.mask_entry(12), "room/100/mask/0c.bmp");
         assert_eq!(id.stage_index(), 0);
-        assert_eq!(id.fold_stage_digit(), 1);
+        assert_eq!(id.table_row(), 0);
 
         let id = RoomId::from_room_and_player("205", 3).unwrap();
         assert_eq!(id.stage, 2);
         assert_eq!(id.room, 0x05);
         assert_eq!(id.rdt_number(), 0x2053);
         assert_eq!(id.room3(), "205");
+    }
+
+    #[test]
+    fn the_second_mansion_visit_is_the_rooms_own_variant() {
+        let id = RoomId::from_room_and_player("10b", 1)
+            .unwrap()
+            .with_visit(true);
+        assert!(id.mansion2);
+        assert_eq!(id.dir(), "room/10b");
+        assert_eq!(id.variant_tag(), "jill-mansion2");
+        assert_eq!(id.rdt_entry(), "room/10b/jill-mansion2.rdt");
+        // The original's tables give it the second visit's row.
+        assert_eq!(id.table_row(), 5);
+        assert_eq!(id.original_number(), 0x60B1);
+        assert_eq!(RoomId::from_original(0x60B1), Some(id));
+        assert_eq!(RoomId::from_original(0x7031).unwrap().table_row(), 6);
+        assert_eq!(
+            RoomId::from_table_row(6, 3),
+            RoomId::from_original(0x7030).unwrap()
+        );
+        assert_eq!(
+            RoomId::from_table_row(2, 3),
+            RoomId::from_original(0x3030).unwrap()
+        );
+        assert_eq!(RoomId::from_original(0x8000), None);
+        // Only a mansion room has a second visit.
+        let id = RoomId::from_room_and_player("305", 0).unwrap();
+        assert!(!id.with_visit(true).mansion2);
+        assert_eq!(id.rdt_entry(), "room/305/chris.rdt");
     }
 
     #[test]
@@ -573,10 +667,11 @@ mod tests {
             RoomId {
                 stage: 1,
                 room: 0x00,
-                player_flag: 1
+                player_flag: 1,
+                mansion2: false,
             }
         );
-        assert_eq!(id.rdt_entry(), "room/1001/room.rdt");
+        assert_eq!(id.rdt_dir(), "room/1001");
         assert_eq!(id.room3(), "100");
 
         let id = RoomId::parse("11C0").unwrap();
@@ -585,21 +680,24 @@ mod tests {
             RoomId {
                 stage: 1,
                 room: 0x1C,
-                player_flag: 0
+                player_flag: 0,
+                mansion2: false,
             }
         );
         assert_eq!(id.room3(), "11C");
 
+        // A stage 7 room is RE2's own.
         let id = RoomId::parse("71A1").unwrap();
         assert_eq!(
             id,
             RoomId {
                 stage: 7,
                 room: 0x1A,
-                player_flag: 1
+                player_flag: 1,
+                mansion2: false,
             }
         );
-        assert_eq!(id.rdt_entry(), "room/71a1/room.rdt");
+        assert_eq!(id.rdt_dir(), "room/71a1");
         assert_eq!(id.room3(), "71A");
     }
 
@@ -607,26 +705,23 @@ mod tests {
     fn parses_letter_stages() {
         let id = RoomId::parse("G010").unwrap();
         assert_eq!((id.stage, id.room, id.player_flag), (16, 0x01, 0));
-        assert_eq!(id.dir(), "room/g010");
+        assert_eq!(id.rdt_dir(), "room/g010");
+        assert_eq!(id.dir(), "room/g01");
         assert_eq!(id.room3(), "G01");
         assert_eq!(id.code(), "g010");
         let id = RoomId::from_room_and_player("a1d", 1).unwrap();
         assert_eq!((id.stage, id.room, id.player_flag), (10, 0x1D, 1));
-        assert_eq!(id.rdt_entry(), "room/a1d1/room.rdt");
+        assert_eq!(id.rdt_dir(), "room/a1d1");
         assert_eq!(RoomId::parse("G010").unwrap().rdt_number(), 0x1_0010);
-        assert_eq!(
-            id.fold_stage_digit(),
-            10,
-            "a letter stage folds to no RE1 stage"
-        );
-        // RE1's folders keep their packed-number names.
+        // Per-RDT folders keep their packed-number names.
         for stage in 1..=RoomId::MAX_STAGE {
             let id = RoomId {
                 stage,
                 room: 0x1C,
                 player_flag: 1,
+                mansion2: false,
             };
-            assert_eq!(id.dir(), format!("room/{:04x}", id.rdt_number()));
+            assert_eq!(id.rdt_dir(), format!("room/{:04x}", id.rdt_number()));
             assert_eq!(id.code(), format!("{:04x}", id.rdt_number()));
         }
         // `G` is only a stage digit, and no stage lies past it.
@@ -644,6 +739,7 @@ mod tests {
                         stage,
                         room,
                         player_flag: player,
+                        mansion2: false,
                     };
                     let text = id.code().to_ascii_uppercase();
                     assert_eq!(RoomId::parse(&text).unwrap(), id);
@@ -653,19 +749,6 @@ mod tests {
                     );
                 }
             }
-        }
-    }
-
-    #[test]
-    fn folds_return_stages() {
-        let cases = [(1, 1), (5, 5), (6, 1), (7, 2)];
-        for (stage, folded) in cases {
-            let id = RoomId {
-                stage,
-                room: 0,
-                player_flag: 0,
-            };
-            assert_eq!(id.fold_stage_digit(), folded);
         }
     }
 

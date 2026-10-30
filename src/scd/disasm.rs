@@ -31,13 +31,14 @@ const LST_ARGS_COLUMN: usize = 120;
 /// Trailing data is emitted in chunks of this many bytes.
 const DB_CHUNK: usize = 16;
 
-/// Original-tool display signatures for the command VM (0x00-0x50).
+/// Original-tool display signatures for the command VM (0x00-0x50), then the
+/// port's own variant jumps (0x51-0x52) and long message (0x53).
 ///
 /// A signature without a `:` means the operand bytes are printed raw; an empty
 /// entry is an undecodable dead slot. This table matches the operand split of
 /// the original tool, which differs from the decoder's own signature for some
 /// opcodes (e.g. `aot_set` splits its trailing words into bytes).
-pub(super) const COMMAND_SIG: [&str; 81] = [
+pub(super) const COMMAND_SIG: [&str; 84] = [
     "end:u",
     "if:l",
     "else:l",
@@ -119,6 +120,9 @@ pub(super) const COMMAND_SIG: [&str; 81] = [
     "mass_mask",
     "costume_set:u",
     "costume_ck",
+    "variant_if:uL",
+    "variant_jump:L",
+    "message_long:uUU",
 ];
 
 /// Original-tool display signatures for event state 0 (0x00-0x09).
@@ -135,8 +139,11 @@ pub(super) const EVENT_TOP_SIG: [&str; 10] = [
     "evt_disable:u",
 ];
 
-/// Original-tool display signatures for control opcodes (0xF6-0xFF).
-pub(super) const CONTROL_SIG: [&str; 10] = [
+/// Display signatures for control opcodes (0xF4-0xFF): the port's variant
+/// jumps, then the original tool's.
+pub(super) const CONTROL_SIG: [&str; 12] = [
+    "evt_variant_if:uL",
+    "evt_jump:L",
     "evt_push_cond",
     "evt_skip_if",
     "evt_sleep",
@@ -485,7 +492,7 @@ fn decoded_operand_bytes(signature: &str, width: usize) -> usize {
     let mut pos = 1usize;
     for byte in signature.bytes() {
         let size = match byte {
-            b'U' | b'I' => 2,
+            b'U' | b'I' | b'L' => 2,
             _ => 1,
         };
         if pos + size > width {
@@ -503,7 +510,7 @@ fn display_signature(insn: &Insn) -> Option<&'static str> {
         Decoded::Event(op) => EVENT_TOP_SIG.get(usize::from(op.op)).copied(),
         Decoded::Control(op) => op
             .op
-            .checked_sub(0xF6)
+            .checked_sub(crate::scd::opcode::EVENT_CONTROL_BASE)
             .and_then(|index| CONTROL_SIG.get(usize::from(index)))
             .copied(),
         Decoded::Actor(op) => match op.op {
@@ -536,7 +543,7 @@ fn parse_params(
             args.push(match param {
                 b'l' => label_or_value(insn.op, insn, position, labels),
                 b'u' => value.to_string(),
-                b'U' => u16_at(insn, position).to_string(),
+                b'U' | b'L' => u16_at(insn, position).to_string(),
                 b'I' => i16_at(insn, position).to_string(),
                 b'b' => format!("{} | {}", (value >> 5) << 5, value & 0x1F),
                 b'f' => named_or_decimal(constants::flag_group(value), value),
@@ -550,7 +557,7 @@ fn parse_params(
             });
         }
         position += match param {
-            b'U' | b'I' => 2,
+            b'U' | b'I' | b'L' => 2,
             _ => 1,
         };
     }

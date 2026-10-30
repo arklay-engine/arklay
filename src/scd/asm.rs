@@ -29,7 +29,7 @@ use crate::scd::decomp::constants;
 use crate::scd::disasm::{self, EventState};
 use crate::scd::ir::{Block, Decoded, Insn, Stream, StreamKind};
 use crate::scd::opcode::{
-    COMMAND_OPS, Op, actor_op, command_width, event_control_op, event_top_op, tween_op,
+    COMMAND_OPS, EventFlow, Op, actor_op, command_width, event_control_op, event_top_op, tween_op,
 };
 use crate::scd::reader;
 
@@ -992,12 +992,71 @@ fn plan_command_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
 /// payload structures from the surrounding items.
 fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
     let mut planned: Vec<PlannedItem> = Vec::new();
-    let mut state = EventState::Top;
+    // The state each room variant is in, split by the variant jumps and
+    // gathered again at their targets ([`EventFlow`]).
+    let mut flow = EventFlow::new(state_code(EventState::Top));
+    let mut targets: HashMap<String, EventFlow> = HashMap::new();
     let mut index = 0usize;
     let mut saw_db = false;
 
     while index < items.len() {
         let item = &items[index];
+        for label in &item.labels {
+            if let Some(incoming) = targets.remove(label) {
+                flow.merge(&incoming);
+            }
+        }
+        if let ItemKind::Insn(src) = &item.kind
+            && matches!(src.mnemonic.as_str(), "evt_variant_if" | "evt_jump")
+        {
+            let (label, mask) = match (src.mnemonic.as_str(), src.args.as_slice()) {
+                ("evt_variant_if", [mask, target]) => {
+                    let op = event_control_op(0xF4).expect("evt_variant_if exists");
+                    (target, Some(argument_int(mask, op, src)?))
+                }
+                ("evt_jump", [target]) => (target, None),
+                _ => bail!(
+                    "line {}, column {}: `{}` takes {} arguments",
+                    src.line,
+                    src.col,
+                    src.mnemonic,
+                    if src.mnemonic == "evt_jump" {
+                        "a label"
+                    } else {
+                        "a mask and a label"
+                    }
+                ),
+            };
+            let skipped = match mask {
+                Some(mask) => {
+                    let (taken, skipped) = flow.split(range_u8(mask, src.line, src.col)?);
+                    flow = taken;
+                    skipped
+                }
+                None => std::mem::replace(&mut flow, EventFlow::unreachable()),
+            };
+            if let Arg::Symbol(name) | Arg::Label(name, 0) = label {
+                targets
+                    .entry(name.clone())
+                    .or_insert_with(EventFlow::unreachable)
+                    .merge(&skipped);
+            }
+        }
+        // A control op is valid in any state; every other instruction needs
+        // the one state all the variants reaching it share.
+        let control =
+            matches!(&item.kind, ItemKind::Insn(src) if is_control_mnemonic(&src.mnemonic));
+        let state = match flow.state() {
+            Some(code) => state_of(code),
+            None if control || !flow.is_reachable() => EventState::Top,
+            None => bail!(
+                "line {}, column {}: the room variants reaching this instruction are in \
+                 different event states (a variant branch before it begins or ends an actor \
+                 or tween sequence the other does not); give each branch its own tail",
+                item.line,
+                item.col
+            ),
+        };
         match &item.kind {
             ItemKind::Db(bytes) => {
                 saw_db = true;
@@ -1026,6 +1085,13 @@ fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
                             src.mnemonic
                         )
                     })?;
+                // Only an instruction that moves to another state moves
+                // every variant: a control op keeps each variant's own.
+                let advance = |flow: &mut EventFlow| {
+                    if !control || next_state != state {
+                        flow.set(state_code(next_state));
+                    }
+                };
                 match (&decoded, byte) {
                     (Decoded::Event(op), 0x06) => {
                         index = plan_evt_block(items, index, src, op, &mut planned)?;
@@ -1033,11 +1099,11 @@ fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
                     }
                     (Decoded::Event(_), 0x07) => {
                         index = plan_evt_single(items, index, src, &mut planned)?;
-                        state = next_state;
+                        advance(&mut flow);
                     }
                     (Decoded::Control(_), 0xFC) => {
                         index = plan_evt_do(items, index, src, &mut planned)?;
-                        state = next_state;
+                        advance(&mut flow);
                     }
                     _ => {
                         let bytes = encode_insn(
@@ -1057,7 +1123,7 @@ fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
                                 size: bytes.len(),
                             },
                         });
-                        state = next_state;
+                        advance(&mut flow);
                         index += 1;
                     }
                 }
@@ -1065,6 +1131,33 @@ fn plan_event_items(items: &[Item]) -> Result<Vec<PlannedItem>> {
         }
     }
     Ok(planned)
+}
+
+/// The [`EventFlow`] code of an event state.
+fn state_code(state: EventState) -> u8 {
+    match state {
+        EventState::Top => 0,
+        EventState::Actor => 1,
+        EventState::Tween => 2,
+    }
+}
+
+/// The event state of an [`EventFlow`] code.
+fn state_of(code: u8) -> EventState {
+    match code {
+        1 => EventState::Actor,
+        2 => EventState::Tween,
+        _ => EventState::Top,
+    }
+}
+
+/// Whether `mnemonic` is an event-VM control op, valid in every state
+/// (bar the per-state spellings of `evt_finish`).
+fn is_control_mnemonic(mnemonic: &str) -> bool {
+    mnemonic != "evt_finish"
+        && disasm::CONTROL_SIG
+            .iter()
+            .any(|signature| signature.split(':').next() == Some(mnemonic))
 }
 
 /// Plan an `evt_block` header and its inner `u16` size chain.
@@ -1765,7 +1858,7 @@ fn signature_for(table: Table, op: &'static Op, mnemonic: &str) -> &'static str 
             .unwrap_or(""),
         Table::Control => op
             .op
-            .checked_sub(0xF6)
+            .checked_sub(crate::scd::opcode::EVENT_CONTROL_BASE)
             .and_then(|index| disasm::CONTROL_SIG.get(usize::from(index)).copied())
             .unwrap_or(""),
         Table::Actor => {
@@ -1935,6 +2028,7 @@ fn encode_parameters(
             b'p' => bytes.push(constant_value('p', arg)?),
             b'r' => bytes.push(constant_value('r', arg)?),
             b'l' => bytes.push(encode_label(arg, context, src)?),
+            b'L' => bytes.extend_from_slice(&encode_long_label(arg, context, src)?.to_le_bytes()),
             other => bail!(
                 "line {}, column {}: unsupported operand `{}` in `{}`",
                 src.line,
@@ -1987,6 +2081,47 @@ fn encode_label(arg: &Arg, context: &OperandContext, src: &InsnSrc) -> Result<u8
             src.mnemonic
         ),
     }
+}
+
+/// Encode a variant jump's operand as a forward `u16` delta from the start
+/// of the instruction.
+fn encode_long_label(arg: &Arg, context: &OperandContext, src: &InsnSrc) -> Result<u16> {
+    let (name, delta) = match arg {
+        Arg::Num(value) => return range_u16(*value, src.line, src.col),
+        Arg::Label(name, delta) => (name, *delta),
+        Arg::Symbol(name) => (name, 0),
+        _ => bail!(
+            "line {}, column {}: invalid jump operand in `{}`",
+            src.line,
+            src.col,
+            src.mnemonic
+        ),
+    };
+    let Some(labels) = context.labels else {
+        return Ok(0);
+    };
+    let base = labels.get(name).copied().ok_or_else(|| {
+        anyhow::anyhow!(
+            "line {}, column {}: label `{name}` is not defined",
+            src.line,
+            src.col
+        )
+    })?;
+    let value = base as i128 + delta as i128 - context.offset as i128;
+    if value <= 0 {
+        bail!(
+            "line {}, column {}: jump to `{name}` points backwards",
+            src.line,
+            src.col
+        );
+    }
+    u16::try_from(value).map_err(|_| {
+        anyhow::anyhow!(
+            "line {}, column {}: jump to `{name}` is {value} bytes and does not fit 16 bits",
+            src.line,
+            src.col
+        )
+    })
 }
 
 /// Resolve one label reference to a forward byte delta.
@@ -2519,7 +2654,7 @@ off_0002:
             let footprint: usize = params
                 .bytes()
                 .map(|kind| match kind {
-                    b'U' | b'I' => 2,
+                    b'U' | b'I' | b'L' => 2,
                     _ => 1,
                 })
                 .sum();

@@ -76,10 +76,6 @@ autosave.description = "ドアで部屋を読み込むたびに自動でセー�
 autosave.off = "タイプライターでのみセーブします。"
 autosave.on = "ドアから入った部屋ごとに自動でセーブします。"
 
-room_script_fixes.label = "スクリプト修正"
-room_script_fixes.description = "ルームスクリプトを移植版の修正込みで実行するかどうか。オフにすると各部屋のオリジナルのスクリプトバイトコードを、その癖も含めて実行します。MOD独自のスクリプトはどちらの場合も適用されます。次の部屋から反映されます。"
-room_script_fixes.off = "各部屋がオリジナルのスクリプトバイトコードを実行します。"
-room_script_fixes.on = "ルームスクリプトを移植版の修正込みで実行します。"
 
 quick_turn.label = "クイックターン"
 quick_turn.description = "後退中にダッシュボタンを押すと、その場で180度振り向きます。"

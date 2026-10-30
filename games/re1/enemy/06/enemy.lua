@@ -80,16 +80,17 @@ local INTRO_ANGLE = {
 local INTRO_MOVE = {
     { 24, 25 },      -- [0] default
     { -1024, 1024 }, -- [1]
-    { 0, -486 },     -- [2] the courtyard room (stage 3 room 0A)
-    { -396, 0 },     -- [3] the return-mansion west passage (stage 6 room 3)
-    { 275, 0 },      -- [4] the return-mansion winding corridor (stage 6 room 9)
+    { 0, -486 },     -- [2] the courtyard room (room 30A)
+    { -396, 0 },     -- [3] the F passage on the second visit (room 103)
+    { 275, 0 },      -- [4] the trap passage on the second visit (room 109)
     { -384, 0 },     -- [5] the same room, attract cameras 10/21
 }
 
--- The stage|room<<8 words the intro selects on (0-based stage digits).
-local STAGE_ROOM_F_PASSAGE = 0x0305
-local STAGE_ROOM_TRAP_PASSAGE = 0x0905
-local STAGE_ROOM_ENRICO = 0x0A02
+-- The rooms the intro selects on: the second visit's F and trap passages
+-- and Enrico's room.
+local function intro_room(e, stage, room, mansion2)
+    return e.stage == stage and e.room == room and e.mansion2 == mansion2
+end
 
 -- The counter-swipe reach records, walked backwards (rows 2 then 1):
 -- start_frame, frame_window, joint_idx, billboard_x, reach_radius.
@@ -701,15 +702,14 @@ end
 -- row; the spawn's behavior_flags byte picks the animation and the entry yaw.
 local function intro(e)
     if e.action_state == 0 then
-        local stage_room = (e.room << 8) | e.stage_id
-        if stage_room == STAGE_ROOM_F_PASSAGE then
+        if intro_room(e, 1, 0x03, true) then
             e.hunter_intro_jump_kind = 3
-        elseif stage_room == STAGE_ROOM_TRAP_PASSAGE then
+        elseif intro_room(e, 1, 0x09, true) then
             e.hunter_intro_jump_kind = 4
             if e.attract_room_camera_id == 10 or e.attract_room_camera_id == 21 then
                 e.hunter_intro_jump_kind = 5
             end
-        elseif stage_room == STAGE_ROOM_ENRICO then
+        elseif intro_room(e, 3, 0x0A, false) then
             e.hunter_intro_jump_kind = 2
         end
         e.action_state = 1
@@ -2043,7 +2043,7 @@ local function init(e)
     e.health = HEALTH[(e:random() & 0xF) + 1]
 
     e:set_sca(900, 180, 0, -180, 0)
-    if (e.behavior_flags & 0x20) ~= 0 or e.stage_id > 4 then
+    if (e.behavior_flags & 0x20) ~= 0 or e.mansion2 then
         e:set_sca(500, 180, 0, -180, 0)
     end
 

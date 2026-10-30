@@ -8,8 +8,9 @@
 //!
 //! - `on_room_load` runs after a room's state exists and before its first tick;
 //! - `on_tick` runs after every fixed room tick, with the completed tick count;
-//! - `on_message` runs when a message was raised during the tick and may return
-//!   a replacement message id (nothing/nil keeps the original).
+//! - `on_message` runs when a message was raised during the tick, with its id
+//!   word ([`crate::text::message_index`]), and may return a replacement id
+//!   word (nothing/nil keeps the original).
 //!
 //! The `api` argument is the live [`GameState`](crate::game::GameState) exposed as a scoped userdata
 //! through [`mlua::Lua::scope`]: the author-facing hook methods
@@ -357,6 +358,38 @@ mod imp {
         paths
     }
 
+    /// The music table row of `stage` and `room` (1-based stage, a mansion
+    /// room's second visit when the options say `mansion2 = true`).
+    fn music_row(stage: u8, room: u8, options: Option<&Table>) -> mlua::Result<usize> {
+        let mansion2 = match options {
+            Some(options) => options.get::<Option<bool>>("mansion2")?.unwrap_or(false),
+            None => false,
+        };
+        if !(1..=crate::state::RoomId::RE1_STAGES).contains(&stage) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "music stage {stage} is out of range (1-{})",
+                crate::state::RoomId::RE1_STAGES
+            )));
+        }
+        if room > crate::state::RoomId::MAX_ROOM {
+            return Err(mlua::Error::RuntimeError(format!(
+                "music room {room:#04x} is out of range"
+            )));
+        }
+        let id = crate::state::RoomId {
+            stage,
+            room,
+            player_flag: 0,
+            mansion2: false,
+        };
+        if mansion2 && !id.is_mansion() {
+            return Err(mlua::Error::RuntimeError(format!(
+                "stage {stage} has no second visit"
+            )));
+        }
+        Ok(id.with_visit(mansion2).table_row())
+    }
+
     /// The author-facing API: the live game state with a fixed method set.
     impl UserData for GameState {
         fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
@@ -533,16 +566,21 @@ mod imp {
                 Ok(())
             });
 
-            // `set_room(stage, room)`: authoring-only. It retargets the room
-            // identity the save block records; the session keeps running the
-            // room it booted, like a save written while the block is edited.
-            methods.add_method_mut("set_room", |_lua, game, (stage, room): (u8, u8)| {
-                game.id.stage = stage;
-                game.id.room = room;
-                game.state_bytes[0] = stage;
-                game.state_bytes[1] = room;
-                Ok(())
-            });
+            // `set_room(stage, room[, mansion2])`: authoring-only. It
+            // retargets the room identity the save block records; the
+            // session keeps running the room it booted, like a save written
+            // while the block is edited.
+            methods.add_method_mut(
+                "set_room",
+                |_lua, game, (stage, room, mansion2): (u8, u8, Option<bool>)| {
+                    game.id.stage = stage;
+                    game.id.room = room;
+                    game.id = game.id.with_visit(mansion2.unwrap_or(false));
+                    game.state_bytes[0] = stage;
+                    game.state_bytes[1] = room;
+                    Ok(())
+                },
+            );
 
             methods.add_method_mut("set_room_camera", |_lua, game, cut: usize| {
                 game.set_camera_cut(cut);
@@ -624,46 +662,31 @@ mod imp {
                 },
             );
 
-            // `set_room_music(stage, room, { group, ... })` replaces a room's
-            // up-to-four group variants. Stage is the 1-based RDT digit.
+            // `set_room_music(stage, room, { group, ... }[, { mansion2 = true }])`
+            // replaces a room's up-to-four group variants. Stage is the
+            // 1-based stage digit; `mansion2` names a mansion room's second
+            // visit, which has a row of its own.
             methods.add_method_mut(
                 "set_room_music",
-                |_lua, game, (stage, room, groups): (u8, u8, Table)| {
-                    if !(1..=crate::state::RoomId::MAX_STAGE).contains(&stage) {
-                        return Err(mlua::Error::RuntimeError(format!(
-                            "music stage {stage} is out of range"
-                        )));
-                    }
-                    if room > crate::state::RoomId::MAX_ROOM {
-                        return Err(mlua::Error::RuntimeError(format!(
-                            "music room {room:#04x} is out of range"
-                        )));
-                    }
+                |_lua, game, (stage, room, groups, options): (u8, u8, Table, Option<Table>)| {
+                    let row = music_row(stage, room, options.as_ref())?;
                     let groups = groups
                         .sequence_values::<u8>()
                         .collect::<mlua::Result<Vec<_>>>()?;
                     game.music
-                        .set_room(usize::from(stage - 1), usize::from(room), &groups)
+                        .set_room(row, usize::from(room), &groups)
                         .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
                 },
             );
 
-            // `set_room_music_state(stage, room, state)` writes the saved
-            // per-room byte (group variant, mode and channel mask).
+            // `set_room_music_state(stage, room, state[, { mansion2 = true }])`
+            // writes the saved per-room byte (group variant, mode and channel
+            // mask).
             methods.add_method_mut(
                 "set_room_music_state",
-                |_lua, game, (stage, room, state): (u8, u8, u8)| {
-                    if !(1..=crate::state::RoomId::MAX_STAGE).contains(&stage) {
-                        return Err(mlua::Error::RuntimeError(format!(
-                            "music stage {stage} is out of range"
-                        )));
-                    }
-                    if room > crate::state::RoomId::MAX_ROOM {
-                        return Err(mlua::Error::RuntimeError(format!(
-                            "music room {room:#04x} is out of range"
-                        )));
-                    }
-                    game.room_bgm[usize::from(stage - 1) * 32 + usize::from(room)] = state;
+                |_lua, game, (stage, room, state, options): (u8, u8, u8, Option<Table>)| {
+                    let row = music_row(stage, room, options.as_ref())?;
+                    game.room_bgm[row * 32 + usize::from(room)] = state;
                     Ok(())
                 },
             );
@@ -688,8 +711,8 @@ mod imp {
                 Ok(())
             });
 
-            methods.add_method_mut("message", |_lua, game, id: u8| {
-                game.show_message(id, MESSAGE_PAUSE);
+            methods.add_method_mut("message", |_lua, game, id: u16| {
+                game.show_message_word(id, MESSAGE_PAUSE);
                 Ok(())
             });
 

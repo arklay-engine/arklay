@@ -41,7 +41,7 @@ pub enum Decoded {
     Command(&'static Op),
     /// Event VM state-0 opcode (0x00-0x09).
     Event(&'static Op),
-    /// Event VM control opcode (0xF6-0xFF), valid in every state.
+    /// Event VM control opcode (0xF4-0xFF), valid in every state.
     Control(&'static Op),
     /// Event VM actor sub-ISA opcode (state 1).
     Actor(&'static Op),

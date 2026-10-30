@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::scd::host::{EventRequest, ScdHost, StepResult};
 use crate::scd::ir::{Block, Decoded, Insn, Operand, Scripts};
-use crate::scd::opcode::Op;
+use crate::scd::opcode::{Op, variant_matches};
 
 /// Resume-address stack depth of the command VM.
 const BRANCH_STACK_SIZE: usize = 16;
@@ -105,6 +105,14 @@ impl CommandVm {
                             self.pop_branch();
                             self.pc = next;
                         }
+                        0x51 => {
+                            self.pc = if variant_matches(operand_u8(insn, 0), host.room_variant()) {
+                                next
+                            } else {
+                                jump_target(insn, 1)
+                            };
+                        }
+                        0x52 => self.pc = jump_target(insn, 0),
                         _ if op.condition => {
                             if eval_condition(host, insn, op) {
                                 self.pc = next;
@@ -377,6 +385,19 @@ impl EventVm {
         let next = insn.offset + insn.bytes.len();
         match &insn.decoded {
             Decoded::Control(op) => match op.op {
+                0xF4 => {
+                    self.slots[index].pc =
+                        if variant_matches(operand_u8(insn, 0), host.room_variant()) {
+                            next
+                        } else {
+                            jump_target(insn, 1)
+                        };
+                    true
+                }
+                0xF5 => {
+                    self.slots[index].pc = jump_target(insn, 0);
+                    true
+                }
                 0xF6 => {
                     self.push_depth(index);
                     self.slots[index].pc = next;
@@ -673,6 +694,17 @@ impl EventVm {
                     branch_stack.pop();
                     pc = next;
                 }
+                0x51 if !variant_matches(operand_u8(insn, 0), host.room_variant()) => {
+                    pc = self
+                        .index_of(insns, jump_target(insn, 1))
+                        .unwrap_or(insns.len());
+                }
+                0x51 => pc = next,
+                0x52 => {
+                    pc = self
+                        .index_of(insns, jump_target(insn, 0))
+                        .unwrap_or(insns.len());
+                }
                 _ if op.condition => {
                     if eval_condition(host, insn, op) {
                         pc = next;
@@ -804,7 +836,7 @@ fn dispatch_command(host: &mut impl ScdHost, op: &'static Op, operands: &[Operan
     match op.op {
         0x04..=0x08 | 0x31 => host.on_flags(op, operands),
         0x09 | 0x0A | 0x1C | 0x23 | 0x3A | 0x40 | 0x46 => host.on_camera(op, operands),
-        0x0B | 0x1E | 0x29 => host.on_message(op, operands),
+        0x0B | 0x1E | 0x29 | 0x53 => host.on_message(op, operands),
         0x0C | 0x0D | 0x12 | 0x13 | 0x14 | 0x24 | 0x2D | 0x44 => host.on_room_action(op, operands),
         0x18 | 0x19 | 0x2C | 0x4C => host.on_item(op, operands),
         0x1B | 0x21 | 0x28 | 0x39 | 0x41 => host.on_enemy(op, operands),
@@ -839,6 +871,16 @@ fn else_target(insn: &Insn) -> usize {
         return target;
     }
     branch_target(insn)
+}
+
+/// The target of a variant jump's `u16` operand `index`, from the start of
+/// the instruction.
+fn jump_target(insn: &Insn, index: usize) -> usize {
+    let operand = insn.operands.get(index);
+    if let Some(target) = operand.and_then(|operand| operand.target) {
+        return target;
+    }
+    insn.offset + operand.map_or(insn.bytes.len(), |operand| operand.value as usize)
 }
 
 fn branch_target(insn: &Insn) -> usize {

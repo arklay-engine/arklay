@@ -238,15 +238,11 @@ fn emit_language_files() {
 }
 
 /// Compile the checked-in room scripts under `games/re1/room/` into the SCD
-/// bytecode `convert-game` packs as `room/<id>/room.scd`, one container per RDT
-/// variant and region, each beside the digest of its `AUTHENTIC` build: a
-/// container only replaces an RDT's own scripts when that digest proves they
-/// are the ones the script was written from. Where regions build the same
-/// `AUTHENTIC` bytecode the first one's container stands for them all.
+/// bytecode `convert-game` packs as each room's `room.scd`: one runtime build
+/// per room, which carries every RDT variant and region and picks between
+/// them as it runs.
 fn emit_room_scripts() {
-    use scd::akscr::preprocess::{
-        ROOM_SCRIPT_FILE, Region, Variant, includes_from, room_script_file, room_variants,
-    };
+    use scd::akscr::preprocess::{Build, ROOM_SCRIPT_FILE, includes_from, room_script_file};
 
     let root = manifest_dir().join("games/re1/room");
     for watched in [
@@ -259,8 +255,7 @@ fn emit_room_scripts() {
         println!("cargo:rerun-if-changed={watched}");
     }
 
-    // Each room's merged script sits in the folder of its first RDT
-    // (`1030/room.akscr` for room 103).
+    // Each room's script sits in its room's folder (`103/room.akscr`).
     let mut scripts: Vec<(u16, PathBuf)> = Vec::new();
     let read = std::fs::read_dir(&root).unwrap_or_else(|err| {
         panic!(
@@ -276,13 +271,13 @@ fn emit_room_scripts() {
         let name = entry.file_name();
         let base = name
             .to_str()
-            .and_then(|name| name.strip_suffix('0'))
-            .and_then(|stem| u16::from_str_radix(stem, 16).ok())
-            .unwrap_or_else(|| panic!("{} is not in its room's first folder", path.display()));
+            .filter(|name| name.len() == 3)
+            .and_then(|name| u16::from_str_radix(name, 16).ok())
+            .unwrap_or_else(|| panic!("{} is not in a room's folder", path.display()));
         assert_eq!(
             root.join(room_script_file(base)),
             path,
-            "{} is not in its room's first folder",
+            "{} is not in its room's folder",
             path.display()
         );
         scripts.push((base, path));
@@ -298,99 +293,25 @@ fn emit_room_scripts() {
     let scd_dir = out_dir.join("room_scd");
     std::fs::create_dir_all(&scd_dir).expect("failed to create the room bytecode directory");
     let load = includes_from(&root);
-    let compile = |text: &str, variant: Variant, path: &PathBuf| {
-        scd::akscr::compile::compile_with(text, Some(variant), &load)
+    let compile = |text: &str, build: Build, path: &PathBuf| {
+        scd::akscr::compile::compile_build(text, build, &load)
             .and_then(|assembled| assembled.to_container())
-            .unwrap_or_else(|err| panic!("{}: {err:#}", path.display()))
+            .unwrap_or_else(|err| panic!("{} ({build:?}): {err:#}", path.display()))
     };
 
-    // One room's table lines. Compiling every room in every variant and
-    // region is a few seconds of work on one core, and every lib build waits
-    // for it, so the rooms are spread over the cores below (#266).
+    // One room's table line. Compiling every room is a few seconds of work on
+    // one core, and every lib build waits for it, so the rooms are spread
+    // over the cores below (#266).
     let emit = |base: u16, path: &PathBuf| {
-        let mut out = String::new();
         let text = std::fs::read_to_string(path)
             .unwrap_or_else(|err| panic!("cannot read {}: {err}", path.display()));
-        for id in room_variants(base) {
-            // The digest of a variant's `AUTHENTIC` build, that build, and
-            // its fixed build.
-            let build = |variant: Variant| {
-                let authentic = compile(&text, variant.authentic(), path);
-                let original = scd::reader::parse(&authentic)
-                    .unwrap_or_else(|err| panic!("{} as {id:04X}: {err:#}", path.display()))
-                    .digest();
-                (original, authentic, compile(&text, variant, path))
-            };
-            // One build per distinct `AUTHENTIC` digest, named after the first
-            // of the regions it stands for.
-            struct Build {
-                regions: Vec<Region>,
-                original: u64,
-                authentic: Vec<u8>,
-                container: Vec<u8>,
-            }
-            let mut builds: Vec<Build> = Vec::new();
-            for region in Region::ALL {
-                let (original, authentic, container) =
-                    build(Variant::for_room(id).in_region(region));
-                if let Some(Build {
-                    regions,
-                    container: first_container,
-                    ..
-                }) = builds.iter_mut().find(|build| build.original == original)
-                {
-                    assert!(
-                        *first_container == container,
-                        "{} as {id:04X}: regions {} and {region} build the same \
-                         `AUTHENTIC` bytecode but different fixed bytecode; a region's \
-                         `#if` may only hold lines where the regions' own scripts differ",
-                        path.display(),
-                        regions[0]
-                    );
-                    regions.push(region);
-                    continue;
-                }
-                builds.push(Build {
-                    regions: vec![region],
-                    original,
-                    authentic,
-                    container,
-                });
-            }
-            for Build {
-                regions,
-                original,
-                authentic,
-                container,
-            } in builds
-            {
-                let stem = format!("{id:04x}-{}", regions[0].symbol().to_lowercase());
-                let file = scd_dir.join(format!("{stem}.scd"));
-                // The `AUTHENTIC` build only ships where the fixes change it.
-                let authentic = if authentic == container {
-                    "None".to_string()
-                } else {
-                    let file = scd_dir.join(format!("{stem}-authentic.scd"));
-                    std::fs::write(&file, authentic).expect("failed to write room bytecode");
-                    format!("Some(include_bytes!({:?}))", file.to_string_lossy())
-                };
-                std::fs::write(&file, container).expect("failed to write room bytecode");
-                let regions: Vec<String> = regions
-                    .iter()
-                    .map(|region| format!("Region::{region:?}"))
-                    .collect();
-                writeln!(
-                    out,
-                    "    RoomScript {{ id: 0x{id:04X}, regions: &[{}], \
-                     original: 0x{original:016X}, authentic: {authentic}, \
-                     container: include_bytes!({:?}) }},",
-                    regions.join(", "),
-                    file.to_string_lossy()
-                )
-                .expect("writing to a String cannot fail");
-            }
-        }
-        out
+        let container = compile(&text, Build::Runtime, path);
+        let file = scd_dir.join(format!("{base:03x}.scd"));
+        std::fs::write(&file, &container).expect("failed to write room bytecode");
+        format!(
+            "    RoomScript {{ room: 0x{base:03X}, container: include_bytes!({:?}) }},\n",
+            file.to_string_lossy()
+        )
     };
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
     let rooms: Vec<String> = std::thread::scope(|scope| {
@@ -417,7 +338,7 @@ fn emit_room_scripts() {
     });
 
     let mut out = String::from(
-        "// @generated by build.rs from games/re1/room: each RDT's compiled scripts.\n&[\n",
+        "// @generated by build.rs from games/re1/room: each room's compiled scripts.\n&[\n",
     );
     out.extend(rooms);
     out.push_str("]\n");

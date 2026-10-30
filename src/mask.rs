@@ -261,12 +261,10 @@ pub fn set_group_active(bits: &mut u32, group: u8, active: bool) {
     }
 }
 
-/// The folded room index used by the mask ordering tables.
-///
-/// Stages 6 and 7 reuse the STAGE1/STAGE2 rows, exactly like the backgrounds.
+/// The room index used by the mask ordering tables. Both mansion visits
+/// share their rows, exactly like the backgrounds.
 pub fn room_table_index(id: RoomId) -> usize {
-    let stage = usize::from(id.fold_stage_digit()) - 1;
-    usize::from(id.room) + stage * 0x20
+    usize::from(id.room) + usize::from(id.stage_index()) * 0x20
 }
 
 /// A per-(room, camera) sort and brightness bias.
@@ -718,11 +716,8 @@ mod tests {
     use super::*;
 
     fn room(stage: u8, room: u8) -> RoomId {
-        RoomId {
-            stage,
-            room,
-            player_flag: 0,
-        }
+        // The original's numbering: stages 6 and 7 are the second mansion visit.
+        RoomId::from_original((u16::from(stage) << 12) | (u16::from(room) << 4)).unwrap()
     }
 
     fn sprite(pos_data: u16) -> MaskSprite {
@@ -869,7 +864,7 @@ mod tests {
     }
 
     #[test]
-    fn room_index_folds_return_stages() {
+    fn room_index_shares_the_mansion_visits() {
         assert_eq!(room_table_index(room(1, 0)), 0);
         assert_eq!(room_table_index(room(2, 6)), 38);
         assert_eq!(room_table_index(room(3, 0x0B)), 75);

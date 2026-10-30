@@ -5,6 +5,19 @@
 //! animation and scripts sit in its folder under conventional names, and the
 //! room's id is its folder's name.
 //!
+//! One `room.xml` defines every variant of a room. An element only some
+//! variants have carries `when="..."`: space-separated terms, each `CHRIS`,
+//! `JILL`, `MANSION1` or `MANSION2` with an optional `!`, that must all hold
+//! for the variant read ([`parse_for`]). A room read for no variant
+//! ([`parse`]) may not have any.
+//!
+//! `<slots>` names the file each model, effect and animation slot reads
+//! where the variants differ ([`Slots`]): `<item when="JILL">03 01 02</item>`
+//! gives Jill's item slots 0-2 the files `item/03`, `item/01` and `item/02`
+//! (`-` for an empty slot). The first `<item>` that holds for the variant
+//! wins, so one without `when` after the others is the room's default; a
+//! kind with none reads every file of its folder, slot `n` from file `n`.
+//!
 //! Every integer attribute is read as decimal or `0x` hex; the writer uses
 //! hex for the few raw words and decimal for everything else. The packed
 //! flag words of the RDT (collision boxes, walk zones, mask sprites) are
@@ -17,13 +30,16 @@ use std::fmt::Write as _;
 use anyhow::{Context, Result, bail};
 use roxmltree::{Document, Node};
 
-use super::source::{Camera, EffectSlot, EffectSprite, MaskGroup, MaskSprite, RoomSource};
+use super::source::{
+    Camera, EffectSlot, EffectSprite, MaskGroup, MaskSprite, RoomSource, SlotFiles, Slots,
+};
 use crate::budget;
 use crate::effects::room::{FrameEntry, UvRecord};
 use crate::format::Dialect;
 use crate::language::XmlString;
 use crate::state::{
-    CameraLight, Collision, CollisionRect, FootstepZone, Light, Sca, ScaRect, WalkZone, Zone,
+    CameraLight, Collision, CollisionRect, FootstepZone, Light, RoomId, Sca, ScaRect, WalkZone,
+    Zone,
 };
 
 /// The format version `<room format="...">` declares.
@@ -212,9 +228,80 @@ pub fn write(room: &RoomSource) -> Result<String> {
     }
     w.close("footsteps");
 
+    write_slots(&mut w, &room.slots);
     write_strings(&mut w, &room.strings);
     w.close("room");
     Ok(w.out)
+}
+
+/// The slot lists the room names, as a `<slots>` block; nothing when it
+/// names none.
+fn write_slots(w: &mut Writer, slots: &Slots) {
+    if Slots::KINDS.iter().all(|kind| slots.get(kind).is_none()) {
+        return;
+    }
+    w.open("slots", &[]);
+    for kind in Slots::KINDS {
+        let Some(files) = slots.get(kind) else {
+            continue;
+        };
+        let list = slot_list(files);
+        let indent = w.depth * 2;
+        if list.is_empty() {
+            let _ = writeln!(w.out, "{:indent$}<{kind}/>", "");
+        } else {
+            let _ = writeln!(w.out, "{:indent$}<{kind}>{list}</{kind}>", "");
+        }
+    }
+    w.close("slots");
+}
+
+/// `files` spelled as a `<slots>` list: two hex digits per file, `-` for an
+/// empty slot.
+fn slot_list(files: &[Option<u8>]) -> String {
+    files
+        .iter()
+        .map(|file| file.map_or_else(|| "-".to_string(), |file| format!("{file:02x}")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A `<slots>` block: for each kind, the list of the first element that
+/// holds for the variant being read.
+fn parse_slots(node: Node<'_, '_>) -> Result<Slots> {
+    check_attributes(node, &[])?;
+    let mut slots = Slots::default();
+    for child in elements(node) {
+        let kind = child.tag_name().name();
+        let Some(list) = slots.get_mut(kind) else {
+            bail!("<slots> may only contain <object>, <item>, <effect> or <anim>, found <{kind}>");
+        };
+        check_attributes(child, &[])?;
+        if list.is_some() {
+            continue;
+        }
+        let text = child.text().unwrap_or("");
+        let files = text
+            .split_whitespace()
+            .map(|word| match word {
+                "-" => Ok(None),
+                word if word.len() == 2 => u8::from_str_radix(word, 16)
+                    .map(Some)
+                    .with_context(|| format!("<{kind}>: `{word}` is not two hex digits or `-`")),
+                word => bail!("<{kind}>: `{word}` is not two hex digits or `-`"),
+            })
+            .collect::<Result<SlotFiles>>()?;
+        let most = match kind {
+            "effect" => crate::effects::room::EFFECT_SPRITE_SLOTS,
+            "anim" => 1,
+            _ => usize::from(u8::MAX),
+        };
+        if files.len() > most {
+            bail!("<{kind}> lists {} slots, more than {most}", files.len());
+        }
+        *list = Some(files);
+    }
+    Ok(slots)
 }
 
 /// The room's display strings as a `<strings>` block, one `<language>` per
@@ -248,8 +335,9 @@ fn write_strings(w: &mut Writer, strings: &[XmlString]) {
 }
 
 /// The language-file key suffix a `room.xml` string key reads as: `name`
-/// and `save_name` are the room's labels, a decimal message id (`0` to `255`)
-/// is that room message's text, `TEXT_XX`, and `<id>_speaker` or
+/// and `save_name` are the room's labels, a decimal message index (`0` up to
+/// [`crate::text::message_index`]`(0xFFFF)`) is that room message's text,
+/// `TEXT_XX`, and `<id>_speaker` or
 /// `<id>_speaker_<page>` names the message's speaker for a subtitle,
 /// `TEXT_XX_SPEAKER[_<page>]`. Numbers have no leading zeros.
 pub fn string_suffix(key: &str) -> Option<String> {
@@ -266,7 +354,11 @@ pub fn string_suffix(key: &str) -> Option<String> {
                 Some((id, page)) => (id, Some(page)),
                 None => (key, None),
             };
-            let text = format!("TEXT_{:02X}", number::<u8>(id)?);
+            let index: u16 = number(id)?;
+            if index > crate::text::message_index(0xFFFF) {
+                return None;
+            }
+            let text = format!("TEXT_{index:02X}");
             match speaker {
                 None => Some(text),
                 Some("") => Some(format!("{text}_SPEAKER")),
@@ -588,11 +680,88 @@ fn write_effect_element(w: &mut Writer, effect: &EffectSlot) {
 /// The largest room XML read. The shipped rooms are well under 1 MiB.
 const MAX_XML_BYTES: usize = 4 << 20;
 
-/// Parse `room.xml`, a room definition.
+thread_local! {
+    /// The room variant a `when` condition is tested against while one
+    /// room XML is read ([`parse_for`]).
+    static VARIANT: std::cell::Cell<Option<RoomId>> = const { std::cell::Cell::new(None) };
+}
+
+/// Whether the terms of a `when` condition all hold for room variant `id`;
+/// an error names a term that is not a variant.
+pub fn condition_holds(condition: &str, id: RoomId) -> Result<bool> {
+    let mut holds = true;
+    for term in condition.split_whitespace() {
+        let (negated, name) = match term.strip_prefix('!') {
+            Some(name) => (true, name),
+            None => (false, term),
+        };
+        let value = match name {
+            "CHRIS" => id.player_flag & 1 == 0,
+            "JILL" => id.player_flag & 1 == 1,
+            "MANSION1" => id.is_mansion() && !id.mansion2,
+            "MANSION2" => id.is_mansion() && id.mansion2,
+            _ => bail!(
+                "`when` term `{term}` is not CHRIS, JILL, MANSION1 or MANSION2 (or `!` before one)"
+            ),
+        };
+        holds &= value != negated;
+    }
+    Ok(holds)
+}
+
+/// Whether `node` is in the variant being read: it has no `when`, or its
+/// condition holds. (The conditions are checked before reading.)
+fn active(node: &Node<'_, '_>) -> bool {
+    match (node.attribute("when"), VARIANT.with(std::cell::Cell::get)) {
+        (None, _) => true,
+        (Some(condition), Some(id)) => condition_holds(condition, id).unwrap_or(false),
+        (Some(_), None) => false,
+    }
+}
+
+/// Check every `when` of `document`: a valid condition, and only where the
+/// room is read for a variant.
+fn check_conditions(document: &Document<'_>, id: Option<RoomId>) -> Result<()> {
+    for node in document.descendants().filter(Node::is_element) {
+        let Some(condition) = node.attribute("when") else {
+            continue;
+        };
+        let name = node.tag_name().name();
+        let Some(id) = id else {
+            bail!("<{name} when=\"{condition}\"> needs a room variant to read for");
+        };
+        condition_holds(condition, id).with_context(|| format!("<{name}>"))?;
+    }
+    Ok(())
+}
+
+/// Parse `room.xml`, a room definition, for no particular variant: it may
+/// not hold `when` conditions.
 pub fn parse(text: &str) -> Result<RoomSource> {
+    parse_variant(text, None)
+}
+
+/// Parse `room.xml`, a room definition, for room variant `id`: an element
+/// whose `when` does not hold for it is left out.
+pub fn parse_for(text: &str, id: RoomId) -> Result<RoomSource> {
+    parse_variant(text, Some(id))
+}
+
+fn parse_variant(text: &str, id: Option<RoomId>) -> Result<RoomSource> {
     budget::check_len(text.len(), MAX_XML_BYTES, "room XML size")?;
     let document = Document::parse(text).context("room XML is not well-formed")?;
+    check_conditions(&document, id)?;
+    let previous = VARIANT.with(|variant| variant.replace(id));
+    let parsed = parse_document(&document);
+    VARIANT.with(|variant| variant.set(previous));
+    parsed
+}
+
+fn parse_document(document: &Document<'_>) -> Result<RoomSource> {
     let root = document.root_element();
+    if root.attribute("when").is_some() {
+        bail!("<room> may not have a `when`");
+    }
     if root.tag_name().name() != "room" {
         bail!(
             "room XML root is <{}>, expected <room>",
@@ -678,6 +847,7 @@ pub fn parse(text: &str) -> Result<RoomSource> {
                     .collect::<Result<_>>()?;
                 room.footstep_count = attr_or(node, "count", room.footstep_zones.len() as u16)?;
             }
+            "slots" => room.slots = parse_slots(node)?,
             "strings" => room.strings = parse_strings(node)?,
             "messages" if format == FORMAT_WITH_MESSAGES => {}
             other => bail!("unknown room element <{other}>"),
@@ -687,17 +857,93 @@ pub fn parse(text: &str) -> Result<RoomSource> {
 }
 
 /// A `<strings>` block: the room's `name`, `save_name`, message texts and
-/// speaker names per language.
+/// speaker names per language, for the variant being read: a string whose
+/// `when` holds replaces the room's own.
 pub(crate) fn parse_strings(node: Node<'_, '_>) -> Result<Vec<XmlString>> {
-    crate::language::parse_xml_strings(node, |key| {
-        string_suffix(key).map(|suffix| format!("ROOM_100_{suffix}"))
+    let variant = VARIANT.with(std::cell::Cell::get);
+    let strings = conditional_strings(node)?;
+    // The most specific string of each key whose condition holds.
+    let mut chosen: Vec<(XmlString, usize)> = Vec::new();
+    for (tag, key, value, condition) in strings {
+        let rank = match (&condition, variant) {
+            (None, _) => 0,
+            (Some(condition), Some(id)) if condition_holds(condition, id)? => {
+                condition.split_whitespace().count()
+            }
+            _ => continue,
+        };
+        match chosen
+            .iter_mut()
+            .find(|((t, k, _), _)| *t == tag && *k == key)
+        {
+            Some(entry) if entry.1 <= rank => *entry = ((tag, key, value), rank),
+            Some(_) => {}
+            None => chosen.push(((tag, key, value), rank)),
+        }
+    }
+    Ok(chosen.into_iter().map(|(string, _)| string).collect())
+}
+
+/// One `<string>` of a room, with its `when` condition if it has one.
+pub type ConditionalString = crate::language::ConditionalXmlString;
+
+/// Every `<string>` of a `<strings>` block, with its `when` condition.
+pub(crate) fn conditional_strings(node: Node<'_, '_>) -> Result<Vec<ConditionalString>> {
+    crate::language::parse_xml_strings_when(node, |key, condition| {
+        let tag = match condition {
+            None => String::new(),
+            Some(condition) => format!("{}_", string_variant(condition)?),
+        };
+        Ok(string_suffix(key).map(|suffix| format!("ROOM_100_{tag}{suffix}")))
     })
     .context("<strings>")
 }
 
-/// The element children of `node`.
+/// The key tag a string's `when` gives its language key: the variant terms
+/// in order, player first, joined by `_` (`JILL_MANSION2`). Only plain
+/// terms name a string's variant.
+pub fn string_variant(condition: &str) -> Result<String> {
+    let mut terms: Vec<&str> = condition.split_whitespace().collect();
+    for term in &terms {
+        if !matches!(*term, "CHRIS" | "JILL" | "MANSION1" | "MANSION2") {
+            bail!("a string's `when` term must be CHRIS, JILL, MANSION1 or MANSION2, not `{term}`");
+        }
+    }
+    terms.sort_by_key(|term| term.starts_with("MANSION"));
+    terms.dedup();
+    if terms.is_empty() || terms.len() > 2 || (terms.len() == 2 && terms[0] == terms[1]) {
+        bail!("a string's `when` names one player and one visit at most, not `{condition}`");
+    }
+    Ok(terms.join("_"))
+}
+
+/// The key tags of the strings room variant `id` reads, most specific
+/// first, then the room's own (`""`): for a mansion room `JILL_MANSION2`,
+/// `JILL`, `MANSION2`, for any other room `JILL`.
+pub fn string_variants(id: RoomId) -> Vec<String> {
+    let player = if id.player_flag & 1 == 0 {
+        "CHRIS"
+    } else {
+        "JILL"
+    };
+    let mut tags = Vec::new();
+    if id.is_mansion() {
+        let visit = if id.mansion2 { "MANSION2" } else { "MANSION1" };
+        tags.push(format!("{player}_{visit}"));
+        tags.push(player.to_string());
+        tags.push(visit.to_string());
+    } else {
+        tags.push(player.to_string());
+    }
+    tags.push(String::new());
+    tags
+}
+
+/// The element children of `node` in the variant being read.
 fn elements<'a, 'input>(node: Node<'a, 'input>) -> impl Iterator<Item = Node<'a, 'input>> {
-    node.children().filter(Node::is_element)
+    node.children()
+        .filter(Node::is_element)
+        .filter(|node| active(node))
 }
 
 /// The element children of `node`, all of which must be `<name>`.
@@ -717,10 +963,10 @@ fn children<'a, 'input>(
     Ok(elements(node))
 }
 
-/// Refuse any attribute of `node` not in `known`.
+/// Refuse any attribute of `node` not in `known` (or its `when`).
 fn check_attributes(node: Node<'_, '_>, known: &[&str]) -> Result<()> {
     for attribute in node.attributes() {
-        if !known.contains(&attribute.name()) {
+        if !known.contains(&attribute.name()) && attribute.name() != "when" {
             bail!(
                 "<{}> has an unknown attribute `{}`",
                 node.tag_name().name(),

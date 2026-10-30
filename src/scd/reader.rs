@@ -11,12 +11,14 @@
 //! overrunning block size) return an error, while unknown opcodes simply end
 //! the surrounding stream and the remaining bytes become trailing data.
 
+use std::collections::HashMap;
+
 use anyhow::{Context, Result, bail};
 
 use crate::budget;
 use crate::scd::ir::{Block, Decoded, Insn, Operand, Scripts, Stream, StreamKind};
 use crate::scd::opcode::{
-    Op, actor_op, command_op, command_width, event_control_op, event_top_op, tween_op,
+    EventFlow, Op, actor_op, command_op, command_width, event_control_op, event_top_op, tween_op,
 };
 
 /// Offset of the data pointer table in an RDT.
@@ -140,15 +142,22 @@ pub fn decode_command_block(data: &[u8], start: usize, end: usize) -> (Vec<Insn>
 /// Decode one event stream `[start, end)`.
 ///
 /// State 0 uses the top-level table, state 1 the actor table and state 2 the
-/// tween table; control opcodes 0xF6-0xFF are recognised in every state. An
+/// tween table; control opcodes 0xF4-0xFF are recognised in every state. An
 /// unknown opcode ends the stream and the remaining bytes become trailing.
 pub fn decode_event_stream(data: &[u8], start: usize, end: usize) -> (Vec<Insn>, Vec<u8>) {
     let end = end.min(data.len());
     let mut insns = Vec::new();
     let mut pc = start;
-    let mut state = 0u8;
+    // The state each room variant is in: one linear state unless the port's
+    // variant jumps send the variants down branches that leave them in
+    // different states.
+    let mut flow = EventFlow::new(0);
+    let mut targets: HashMap<usize, EventFlow> = HashMap::new();
 
     while pc < end && insns.len() < budget::MAX_SCD_INSTRUCTIONS {
+        if let Some(incoming) = targets.remove(&pc) {
+            flow.merge(&incoming);
+        }
         let op_byte = data[pc];
 
         if let Some(control) = event_control_op(op_byte) {
@@ -164,25 +173,50 @@ pub fn decode_event_stream(data: &[u8], start: usize, end: usize) -> (Vec<Insn>,
                 break;
             }
             let finish = op_byte == 0xFF;
-            insns.push(make_insn(
-                data,
-                pc,
-                width,
-                control,
-                Decoded::Control(control),
-            ));
+            let insn = make_insn(data, pc, width, control, Decoded::Control(control));
+            match op_byte {
+                // A variant jump: the variants it skips continue at its
+                // target.
+                0xF4 | 0xF5 => {
+                    let operand = if op_byte == 0xF4 { 1 } else { 0 };
+                    let Some(target) = insn.operands.get(operand).and_then(|o| o.target) else {
+                        break;
+                    };
+                    if target <= pc || target > end {
+                        break;
+                    }
+                    let skipped = if op_byte == 0xF4 {
+                        let mask = insn.operands[0].value as u8;
+                        let (taken, skipped) = flow.split(mask);
+                        flow = taken;
+                        skipped
+                    } else {
+                        std::mem::replace(&mut flow, EventFlow::unreachable())
+                    };
+                    targets
+                        .entry(target)
+                        .or_insert_with(EventFlow::unreachable)
+                        .merge(&skipped);
+                }
+                _ => {}
+            }
+            insns.push(insn);
             pc += width;
             // Control ops are valid in every state and keep the current
             // actor/tween sub-ISA; only `finish` returns to state 0.
             if finish {
-                state = 0;
-                if data[pc..end].iter().all(|&byte| byte == 0) {
+                flow.set(0);
+                if targets.is_empty() && data[pc..end].iter().all(|&byte| byte == 0) {
                     return (insns, data[pc..end].to_vec());
                 }
             }
             continue;
         }
 
+        // Any other instruction decodes in the one state its variants share.
+        let Some(state) = flow.state() else {
+            break;
+        };
         let table = match state {
             0 => event_top_op(op_byte),
             1 => actor_op(op_byte),
@@ -190,7 +224,7 @@ pub fn decode_event_stream(data: &[u8], start: usize, end: usize) -> (Vec<Insn>,
         };
         let Some(op) = table else {
             if state != 0 {
-                state = 0;
+                flow.set(0);
                 continue;
             }
             break;
@@ -234,10 +268,10 @@ pub fn decode_event_stream(data: &[u8], start: usize, end: usize) -> (Vec<Insn>,
         insns.push(make_insn(data, pc, width, op, decoded));
         pc += width;
         match (state, op_byte) {
-            (0, 0x01) => state = 1,
-            (0, 0x02 | 0x03) => state = 2,
-            (1, 0x80 | 0x8B) => state = 0,
-            (2, 0x01) => state = 0,
+            (0, 0x01) => flow.set(1),
+            (0, 0x02 | 0x03) => flow.set(2),
+            (1, 0x80 | 0x8B) => flow.set(0),
+            (2, 0x01) => flow.set(0),
             _ => {}
         }
     }
@@ -439,7 +473,7 @@ fn decode_operands(bytes: &[u8], pc: usize, width: usize, signature: &str) -> Ve
     for byte in signature.bytes() {
         let size = match byte {
             b'u' | b'b' | b'l' | b'j' | b'p' => 1,
-            b'U' | b'I' => 2,
+            b'U' | b'I' | b'L' => 2,
             b'r' => break,
             _ => break,
         };
@@ -449,7 +483,7 @@ fn decode_operands(bytes: &[u8], pc: usize, width: usize, signature: &str) -> Ve
         let value = match byte {
             b'u' | b'p' => i64::from(bytes[pos]),
             b'b' => i64::from(bytes[pos] as i8),
-            b'U' => i64::from(u16::from_le_bytes([bytes[pos], bytes[pos + 1]])),
+            b'U' | b'L' => i64::from(u16::from_le_bytes([bytes[pos], bytes[pos + 1]])),
             b'I' => i64::from(i16::from_le_bytes([bytes[pos], bytes[pos + 1]])),
             b'l' | b'j' => i64::from(bytes[pos]),
             _ => break,
@@ -460,7 +494,7 @@ fn decode_operands(bytes: &[u8], pc: usize, width: usize, signature: &str) -> Ve
             } else {
                 pc + usize::try_from(value).unwrap_or(0)
             }),
-            b'j' => Some(pc + usize::try_from(value).unwrap_or(0)),
+            b'j' | b'L' => Some(pc + usize::try_from(value).unwrap_or(0)),
             _ => None,
         };
         operands.push(Operand { value, target });

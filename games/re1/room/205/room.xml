@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3">
+  <ambient r="600" g="620" b="600"/>
+  <lights>
+    <light x="14718" y="-3900" z="7517" r="240" g="240" b="240" kind="0" radius="26081"/>
+    <light x="4798" y="-3900" z="7517" r="240" g="240" b="240" kind="0" radius="16081"/>
+    <light x="9548" y="0" z="7417" r="50" g="50" b="50" kind="0" radius="10000"/>
+  </lights>
+  <cameras>
+    <camera x="7920" y="-5508" z="8496" lookX="17496" lookY="36" lookZ="7002" roll="0" fov="230"/>
+    <camera x="16632" y="-4896" z="8316" lookX="9162" lookY="-1602" lookZ="7434" roll="0" fov="207"/>
+    <camera x="9810" y="-6138" z="8964" lookX="4374" lookY="-1818" lookZ="7470" roll="0" fov="230">
+      <maskGroup originX="-1" originY="-58" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="495" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="0" v="8" x="128" y="136" depthData="503" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="0" v="16" x="128" y="144" depthData="535" blend="1" colorMode="1" width="8" height="48"/>
+        <sprite u="8" v="16" x="136" y="144" depthData="527" blend="1" colorMode="1" width="8" height="48"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="514" blend="1" colorMode="1" width="16" height="48"/>
+      </maskGroup>
+      <maskGroup originX="37" originY="-54" texBits="0x7800">
+        <sprite u="32" v="0" x="128" y="128" depthData="463" blend="1" colorMode="1" width="48" height="8"/>
+        <sprite u="32" v="8" x="128" y="136" depthData="474" blend="1" colorMode="1" width="48" height="8"/>
+        <sprite u="32" v="16" x="128" y="144" depthData="517" blend="1" colorMode="1" width="16" height="48"/>
+        <sprite u="48" v="16" x="144" y="144" depthData="499" blend="1" colorMode="1" width="16" height="48"/>
+        <sprite u="64" v="16" x="160" y="144" depthData="491" blend="1" colorMode="1" width="16" height="48"/>
+      </maskGroup>
+      <maskGroup originX="-30" originY="-4" texBits="0x7800">
+        <sprite u="16" v="64" x="144" y="128" depthData="575" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="8" v="72" x="136" y="136" depthData="591" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="0" v="80" x="128" y="144" depthData="614" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="0" v="88" x="128" y="152" depthData="647" blend="1" colorMode="1" size="24"/>
+        <sprite u="48" v="64" x="168" y="128" depthData="551" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="40" v="72" x="168" y="136" depthData="563" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="72" v="72" x="200" y="136" depthData="519" blend="1" colorMode="1" width="48" height="8"/>
+        <sprite u="32" v="80" x="160" y="144" depthData="587" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="64" v="80" x="192" y="144" depthData="563" blend="1" colorMode="1" width="24" height="8"/>
+        <sprite u="88" v="80" x="216" y="144" depthData="538" blend="1" colorMode="1" width="32" height="8"/>
+        <sprite u="24" v="88" x="152" y="152" depthData="611" blend="1" colorMode="1" width="32" height="16"/>
+        <sprite u="56" v="88" x="184" y="152" depthData="587" blend="1" colorMode="1" width="24" height="16"/>
+        <sprite u="80" v="88" x="208" y="152" depthData="546" blend="1" colorMode="1" width="40" height="16"/>
+        <sprite u="24" v="104" x="152" y="168" depthData="646" blend="1" colorMode="1" width="32" height="16"/>
+        <sprite u="80" v="104" x="208" y="168" depthData="587" blend="1" colorMode="1" width="32" height="24"/>
+        <sprite u="56" v="104" x="184" y="168" depthData="623" blend="1" colorMode="1" width="24" height="16"/>
+      </maskGroup>
+    </camera>
+    <camera x="10404" y="-2448" z="7524" lookX="9594" lookY="36" lookZ="7200" roll="0" fov="230"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="1000" z0="1405" x1="1000" z1="13500" x2="18400" z2="13500" x3="18400" z3="1400"/>
+      <switch zoneIndex="1" to="1" x0="8906" z0="300" x1="9600" z1="13500" x2="12600" z2="14000" x3="11100" z3="500"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="2" to="9" x0="0" z0="900" x1="0" z1="14100" x2="19000" z2="13800" x3="18500" z3="700"/>
+      <switch zoneIndex="3" to="0" x0="11300" z0="700" x1="13000" z1="14200" x2="15293" z2="14100" x3="12821" z3="412"/>
+      <switch zoneIndex="4" to="2" x0="4100" z0="600" x1="4099" z1="7700" x2="7100" z2="7400" x3="6800" z3="400"/>
+      <switch zoneIndex="5" to="2" x0="4300" z0="6500" x1="2700" z1="14000" x2="3699" z2="14000" x3="7100" z3="7300"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="6" to="9" x0="100" z0="1000" x1="100" z1="14004" x2="18700" z2="14000" x3="18400" z3="900"/>
+      <switch zoneIndex="7" to="1" x0="7001" z0="300" x1="7301" z1="7600" x2="10202" z2="7600" x3="10801" z3="400"/>
+      <switch zoneIndex="8" to="1" x0="7400" z0="7400" x1="3800" z1="14100" x2="10400" z2="13300" x3="10500" z3="7400"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="9" to="9" x0="1000" z0="2600" x1="0" z1="2600" x2="0" z2="5900" x3="1300" z3="5801"/>
+      <switch zoneIndex="10" to="0" x0="0" z0="400" x1="0" z1="4400" x2="800" z2="4400" x3="700" z3="800"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="6588" cellZ="8460">
+    <quadrant index="0">
+      <box xMax="18828" zMax="11106" xMin="90" zMin="9774" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18882" zMax="14238" xMin="16920" zMin="486" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="2236" zMax="14381" xMin="234" zMin="517" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18828" zMax="11106" xMin="90" zMin="9774" shape="1" cf1="true" cf2="true"/>
+      <box xMax="3222" zMax="8766" xMin="234" zMin="5868" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="18846" zMax="4878" xMin="288" zMin="3654" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18882" zMax="14238" xMin="16920" zMin="486" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="2236" zMax="14381" xMin="234" zMin="517" shape="1" cf1="true" cf2="true"/>
+      <box xMax="18846" zMax="4878" xMin="288" zMin="3654" shape="1" cf1="true" cf2="true"/>
+      <box xMax="3222" zMax="8766" xMin="234" zMin="5868" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="19100" height="0x37DC" sound="0x002D"/>
+  </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
+  <strings>
+    <language lang="en-US">
+      <string key="name">ARMOR ROOM</string>
+      <string key="save_name">Hall 1F</string>
+      <string key="0">There's a switch. Will\nyou push it? {branch 1 1 0}\nA weird hole opens.{scroll 2}</string>
+      <string key="1">\nA weird hole opens.{scroll 2}</string>
+      <string key="2">Something can be seen in \nthe showcase.{scroll 2}</string>
+      <string key="3">Heavy-looking suits of \narmor.{scroll 2}</string>
+      <string key="4">\nPoison gas is escaping...!{scroll 2}{timed 1}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name">館 {s}ホ{s}ー{s}ル{s}/{s}1{s}F{s}</string>
+      <string key="0">     スイッチがある\n押しますか?{branch 1 1 0}\n   不気味な穴が開いている{scroll 2}</string>
+      <string key="1">\n   不気味な穴が開いている{scroll 2}</string>
+      <string key="2">\n ショーケースの中に何か見える{scroll 2}</string>
+      <string key="3">\n   重そうな鎧が並んでいる{scroll 2}</string>
+      <string key="4">\n  毒ガスがもれている・・・!{scroll 2}{timed 1}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Hall RdC</string>
+      <string key="0">Il y a un bouton.\nAppuyer dessus?{branch 1 6 0}</string>
+      <string key="1">\nUn trou bizarre s'ouvre.{scroll 2}</string>
+      <string key="2">Il y a quelque chose dans \nla vitrine.{scroll 2}</string>
+      <string key="3">Une rangée d'armures très \nlourdes.{scroll 2}</string>
+      <string key="4">\nUn gaz nocif s'échappe...!{scroll 2}{timed 1}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">Da ist ein Schalter.\nMöchten Sie draufdrücken?{branch 1 6 0}</string>
+      <string when="MANSION2" key="0">Da ist ein Schalter. Möchten\nSie draufdrücken?{branch 1 6 0}</string>
+      <string key="1">\nEin unheimliches Loch.{scroll 2}</string>
+      <string key="2">Irgend etwas ist dort\nin der Vitrine zu sehen.{scroll 2}</string>
+      <string when="MANSION2" key="2">Irgend etwas ist dort in der\nVitrine zu sehen.{scroll 2}</string>
+      <string key="3">\nRobust aussehende Rüstungen.{scroll 2}</string>
+      <string key="4">\nEs entweicht Giftgas!{scroll 2}{timed 1}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Atrio 1P</string>
+      <string key="0">C'è un interruttore. \nVuoi premerlo?{branch 1 6 0}</string>
+      <string key="1">\nÈ presente uno strano buco.{scroll 2}</string>
+      <string when="MANSION2" key="1">\nÈ aperto uno strano buco.{scroll 2}</string>
+      <string key="2">Si riesce a vedere \nqualcosa nella teca.{scroll 2}</string>
+      <string key="3">Armature dall'aspetto \npesante.{scroll 2}</string>
+      <string key="4">\nFuoriesce del gas velenoso...{scroll 2}{timed 1}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">Hay un interruptor...\n¿Quieres pulsarlo? {branch 1 6 0}</string>
+      <string key="1">\nSe abre un extraño agujero...{scroll 2}</string>
+      <string key="2">Parece que hay algo\nen la estantería...{scroll 2}</string>
+      <string key="3">Son armaduras.\nParecen pesadas...{scroll 2}</string>
+      <string key="4">\n¡Sale gas venenoso...!{scroll 2}{timed 1}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Зал 1-эт.</string>
+      <string key="0">Тут есть кнопка.\nХотите нажать её?{branch 1 1 0}\nОткрывается таинственный тоннель.{scroll 2}</string>
+      <string when="MANSION2" key="0">Тут есть кнопка.\nХотите нажать её? {branch 1 1 0}\nОткрывается таинственный тоннель.{scroll 2}</string>
+      <string key="1">\nОткрывается таинственный тоннель.{scroll 2}</string>
+      <string key="2">\nВ витрине что-то есть.{scroll 2}</string>
+      <string key="3">\nТяжёлые доспехи.{scroll 2}</string>
+      <string key="4">\nПошёл ядовитый газ...!{scroll 2}{timed 1}</string>
+      <string when="MANSION2" key="4">\nЯдовитый газ уходит...!{scroll 2}{timed 1}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Pääaula 1 krs</string>
+      <string key="0">Siinä on painike...\nPainatko sitä? {branch 1 6 0}</string>
+      <string key="1">Omituinen ritilöity aukko...{scroll 2}</string>
+      <string key="2">Näytekaapissa on jotakin...{scroll 2}</string>
+      <string key="3">Painavan näköisiä haarniskoja...{scroll 2}</string>
+      <string key="4">Ritilöydystä aukosta tulee\nmyrkkykaasua...!{scroll 2}{timed 1}</string>
+    </language>
+  </strings>
+</room>

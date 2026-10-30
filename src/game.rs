@@ -286,8 +286,10 @@ fn message_bank_selector(sel: u8) -> Option<(bool, u16)> {
     }
     Some((sel >= 16, 0x8000 >> (sel & 0x0F)))
 }
-/// Scenario flag selecting the second-visit stage variants.
-const SCENARIO_FLAG_STAGE_VARIANT: u8 = 0x00;
+/// Scenario flag marking the second mansion visit: a door into stage 1 or 2
+/// while it is set leads to the room's second visit
+/// ([`GameState::door_destination`]).
+pub const SCENARIO_FLAG_MANSION2: u8 = 0x00;
 /// Scenario/state flag bank index.
 pub const BANK_SCENARIO: u8 = 0;
 /// Second scenario flag bank index (`g_ScenarioFlags2`).
@@ -3262,6 +3264,9 @@ pub struct GameState {
     /// model, and the session's room entry does the same through
     /// [`crate::convert::costume_entry`].
     pub costume_variant: u8,
+    /// The release whose room scripts this run plays: the base pack's
+    /// `region`. A room script's `if (USA)`-style variant jumps test it.
+    pub region: crate::scd::akscr::Region,
     /// The F1 debug tools' session state; never saved.
     pub debug: DebugTools,
     /// The item the inventory cursor last selected.
@@ -3480,6 +3485,7 @@ impl Default for GameState {
         state_bytes[3] = 0x1F;
         Self {
             id: RoomId::default(),
+            region: crate::scd::akscr::Region::Usa,
             flags: [FlagBank::default(); FLAG_BANK_COUNT],
             state_bytes,
             state_words: [0; STATE_WORDS],
@@ -3660,6 +3666,29 @@ impl GameState {
         state.objects.reset(usize::from(room.omodel_slot_count));
         state.items.reset(usize::from(room.item_count));
         state
+    }
+
+    /// The room variant the scripts' variant jumps test
+    /// ([`crate::scd::opcode::variant`]): the room's player, its mansion
+    /// visit and the release.
+    pub fn room_variant(&self) -> u8 {
+        use crate::scd::opcode::variant;
+        let player = if self.id.player_flag & 1 == 0 {
+            variant::CHRIS
+        } else {
+            variant::JILL
+        };
+        let mansion = match (self.id.is_mansion(), self.id.mansion2) {
+            (true, false) => variant::MANSION1,
+            (true, true) => variant::MANSION2,
+            (false, _) => variant::OUTSIDE,
+        };
+        let region = match self.region {
+            crate::scd::akscr::Region::Usa => variant::USA,
+            crate::scd::akscr::Region::Jpn => variant::JPN,
+            crate::scd::akscr::Region::Eur => variant::EUR,
+        };
+        player | mansion | region
     }
 
     /// Re-resolve the room's effect sprite metadata, re-running the two-pass
@@ -6110,7 +6139,7 @@ impl GameState {
             }
             RoomActionKind::Message => {
                 let id = room_action.param_word(0);
-                self.show_message(id as u8, room_action.param_word(1));
+                self.show_message_word(id, room_action.param_word(1));
                 self.record_interaction(room_action.slot, room_action.kind, Some(id));
             }
             RoomActionKind::StairsHeight => {
@@ -7430,7 +7459,7 @@ impl GameState {
             HANDLER_DESK if action.kind == RoomActionKind::Desk => self.check_desk(slot),
             HANDLER_MESSAGE => {
                 let id = action.param_word(0);
-                self.show_message(id as u8, action.param_word(1));
+                self.show_message_word(id, action.param_word(1));
                 self.record_interaction(slot, RoomActionKind::Message, Some(id));
                 true
             }
@@ -7742,9 +7771,12 @@ impl GameState {
     /// Decode a door record's destination byte relative to the room the record
     /// was read in.
     ///
-    /// Values below `0x20` name a room in `from`'s stage; higher values also
-    /// change stage as `(dest >> 5) - 1`, remapped by `+5` for the two mansion
-    /// stages once `SCENARIO_FLAG_STAGE_VARIANT` is set. `0xFF` names no room.
+    /// Values below `0x20` name a room in `from`'s stage, on `from`'s visit;
+    /// higher values also change stage as `(dest >> 5) - 1`. A door into a
+    /// mansion stage leads to its second visit once
+    /// [`SCENARIO_FLAG_MANSION2`] is set. The original's own door data also
+    /// names the second visit directly, as its stages 6 and 7 (`0xC0`,
+    /// `0xE0`). `0xFF` names no room.
     pub fn door_destination(&self, from: RoomId, dest: u8) -> Option<RoomId> {
         if dest == 0xFF {
             return None;
@@ -7754,17 +7786,20 @@ impl GameState {
                 stage: from.stage,
                 room: dest,
                 player_flag: from.player_flag,
+                mansion2: from.mansion2,
             })
         } else {
-            let mut stage = (dest >> 5) - 1;
-            if stage < 2 && self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_STAGE_VARIANT, false) {
-                stage += 5;
-            }
-            Some(RoomId {
-                stage: stage + 1,
-                room: dest & 0x1F,
-                player_flag: from.player_flag,
-            })
+            let row = usize::from((dest >> 5) - 1);
+            let target = RoomId::from_table_row(row, dest & 0x1F);
+            let mansion2 =
+                target.mansion2 || self.flag_test(BANK_SCENARIO, SCENARIO_FLAG_MANSION2, false);
+            Some(
+                RoomId {
+                    player_flag: from.player_flag,
+                    ..target
+                }
+                .with_visit(mansion2),
+            )
         }
     }
 
@@ -7840,7 +7875,16 @@ impl GameState {
     /// [`GameState::update_message`], once the engine hands over the room and
     /// text tables.
     pub fn show_message(&mut self, id: u8, pause: u16) {
-        if self.begin_message(id, pause) {
+        self.show_message_word(u16::from(id), pause);
+    }
+
+    /// [`GameState::show_message`] for a message id word, whose high byte
+    /// reaches room messages past the 64 an id byte does
+    /// ([`crate::text::message_index`]).
+    pub fn show_message_word(&mut self, id: u16, pause: u16) {
+        let [low, high] = id.to_le_bytes();
+        if self.begin_message(low, pause) {
+            self.message.id_high = high;
             self.sync_message_choice();
         }
     }
@@ -8013,15 +8057,16 @@ impl GameState {
             && self.message.menu_choice_id() & 0x80 == 0
             && let Some(id) = self.message.id
         {
-            let pause = self.message.pause;
+            let (pause, id_high) = (self.message.pause, self.message.id_high);
             self.begin_message(id, pause);
+            self.message.id_high = id_high;
         }
         let was_active = self.message.active;
-        if let Some(id) = self.message.id
+        if let Some(id) = self.message.id_word()
             && self.message.active
             && !self.message.has_source()
         {
-            let bytes = text.message(room, u16::from(id)).unwrap_or(&[]).to_vec();
+            let bytes = text.message(room, id).unwrap_or(&[]).to_vec();
             self.message.feed_source(&bytes);
         }
         let selected = self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)];
@@ -8390,6 +8435,10 @@ fn action_params(handler: u8, flags: u8, operands: &[Operand], word_start: usize
 }
 
 impl ScdHost for ScdGameHost<'_> {
+    fn room_variant(&mut self) -> u8 {
+        self.state.room_variant()
+    }
+
     fn on_flow(&mut self, op: &Op, operands: &[Operand]) -> StepResult {
         match op.op {
             0x0E | 0x32 => StepResult::Continue,
@@ -8553,6 +8602,11 @@ impl ScdHost for ScdGameHost<'_> {
                     .show_message(operand_u8(operands, 0), operand_u16(operands, 1));
                 StepResult::Continue
             }
+            0x53 => {
+                self.state
+                    .show_message_word(operand_u16(operands, 1), operand_u16(operands, 2));
+                StepResult::Continue
+            }
             // `voice_play` (0x1E, the original's `xa_on`): type 1 queues a voice
             // line, type 2
             // stops the active one. Every shipped site is type 1; the type-2
@@ -8562,14 +8616,14 @@ impl ScdHost for ScdGameHost<'_> {
                 let id = operand_u16(operands, 1);
                 match kind {
                     1 => {
-                        // The stage tables are 0-based; the request formats
-                        // the row's pack entry directly.
-                        let stage = self.state.id.stage.saturating_sub(1);
-                        // The one mixed-well-down line: stage 1 (the
-                        // 1F/2F mansion tables' stage 0) id 0x33.
-                        let volume = if stage == 0 && id == 0x33 { -300 } else { 0 };
+                        // The original's tables are per stage row; the
+                        // request formats the row's pack entry directly.
+                        let row = self.state.id.table_row() as u8;
+                        // The one mixed-well-down line: stage 1's id 0x33,
+                        // on the first visit.
+                        let volume = if row == 0 && id == 0x33 { -300 } else { 0 };
                         self.state.voice.request = Some(VoiceRequest {
-                            path: voice::pack_path(stage, id),
+                            path: voice::pack_path(row, id),
                             volume,
                             pan: 0,
                         });
@@ -9817,6 +9871,25 @@ mod tests {
     }
 
     #[test]
+    fn a_long_message_carries_the_high_byte_of_its_id_word() {
+        let mut state = game();
+        {
+            let mut host = ScdGameHost::new(&mut state);
+            assert_eq!(
+                host.on_message(op(0x53), &operands(&[0, 0x186, 79])),
+                StepResult::Continue
+            );
+        }
+        assert_eq!(state.message.id, Some(0x86));
+        assert_eq!(state.message.id_word(), Some(0x186));
+        assert_eq!(state.message.pause, 79);
+        // A short message has none.
+        state.message = Default::default();
+        state.show_message(0x86, 0);
+        assert_eq!(state.message.id_word(), Some(0x86));
+    }
+
+    #[test]
     fn message_sets_id_pause_and_active() {
         let mut state = game();
         {
@@ -10496,6 +10569,7 @@ mod tests {
             stage: 5,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         let mut state = GameState::new(id, &RoomState::default());
         {
@@ -13979,6 +14053,7 @@ mod tests {
             stage: GUARDHOUSE_STAGE,
             room: ROOM_GUARDHOUSE_SAVE,
             player_flag: 1,
+            mansion2: false,
         };
         state.desk.state = 35;
         state.check_desk_state();
@@ -14879,6 +14954,7 @@ mod tests {
                     stage: 1,
                     room: 1,
                     player_flag: 1,
+                    mansion2: false,
                 },
                 pos: [555, 0, 666],
                 angle: 1024,
@@ -15093,16 +15169,27 @@ mod tests {
         assert_eq!(target.stage, 2);
         assert_eq!(target.room, 1);
 
-        // With the stage-variant scenario flag, a stage 0/1 destination maps to
-        // the +5 return variants: 0x20 -> stage index 5 -> stage digit 6.
+        // With the second-visit scenario flag, a door into the mansion leads
+        // to the room's second visit: 0x20 -> stage 1, room 0, mansion2.
         let mut state = game();
-        assert!(state.apply_flag(0, SCENARIO_FLAG_STAGE_VARIANT, 0));
+        assert!(state.apply_flag(0, SCENARIO_FLAG_MANSION2, 0));
         state.room_actions[0] = Some(door_action(door(0x20, 0)));
         state.doors[0] = Some(door(0x20, 0));
         state.interact([-550, 0, 50], 0, true);
         let target = state.transition.expect("transition").target;
-        assert_eq!(target.stage, 6);
-        assert_eq!(target.room, 0);
+        assert_eq!((target.stage, target.room, target.mansion2), (1, 0, true));
+        // ... but not a door out of it.
+        let to = state.door_destination(target, 0x60).unwrap();
+        assert_eq!((to.stage, to.mansion2), (3, false));
+        // A door inside the second visit stays on it, flag or not, and the
+        // original's own data names the second visit as stages 6 and 7.
+        let state = game();
+        let inside = state.door_destination(target, 0x05).unwrap();
+        assert_eq!((inside.stage, inside.room, inside.mansion2), (1, 5, true));
+        let named = state.door_destination(target, 0xE7).unwrap();
+        assert_eq!((named.stage, named.room, named.mansion2), (2, 7, true));
+        let first = state.door_destination(state.id, 0x41).unwrap();
+        assert_eq!((first.stage, first.mansion2), (2, false));
     }
 
     #[test]
@@ -15591,6 +15678,7 @@ mod tests {
             stage: 2,
             room: 3,
             player_flag: 1,
+            mansion2: false,
         };
         state.enter_room(next, &RoomState::default());
 
@@ -15624,6 +15712,7 @@ mod tests {
                 stage: 1,
                 room: 5,
                 player_flag: 0,
+                mansion2: false,
             },
             &RoomState::default(),
         );
@@ -15641,6 +15730,7 @@ mod tests {
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         state.enter_room(id, &RoomState::default());
         assert!(state.room_visited(id));
@@ -15650,15 +15740,17 @@ mod tests {
             stage: 3,
             room: 0x10,
             player_flag: 0,
+            mansion2: false,
         };
         state.enter_room(id, &RoomState::default());
         assert!(state.room_visited(id));
         assert!(state.flags[usize::from(BANK_ROOM_FLAGS)].bit(63 + 0x10));
         // Stage 6 wraps to group 0 like the original's `stageId % 5`.
         let id = RoomId {
-            stage: 6,
+            stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: true,
         };
         state.enter_room(id, &RoomState::default());
         assert!(state.room_visited(id));

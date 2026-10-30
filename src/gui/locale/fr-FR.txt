@@ -76,10 +76,6 @@ autosave.description = "Sauvegarder automatiquement chaque fois qu'une porte cha
 autosave.off = "Seule la machine à écrire sauvegarde."
 autosave.on = "Chaque pièce où vous entrez par une porte est sauvegardée automatiquement."
 
-room_script_fixes.label = "Corrections des scripts"
-room_script_fixes.description = "Indique si les scripts des pièces s'exécutent avec les corrections du portage. Désactivé exécute le bytecode d'origine de chaque pièce, bizarreries comprises. Les scripts propres aux mods s'appliquent dans les deux cas. Prend effet à la pièce suivante."
-room_script_fixes.off = "Chaque pièce exécute son bytecode de script d'origine."
-room_script_fixes.on = "Les scripts des pièces s'exécutent avec les corrections du portage."
 
 quick_turn.label = "Demi-tour rapide"
 quick_turn.description = "Faire demi-tour sur place en appuyant sur Courir en reculant."

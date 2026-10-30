@@ -180,12 +180,6 @@ pub struct Options {
     /// Port-only: a door's room load does not write an autosave. Off by
     /// default; only the interactive window autosaves either way.
     pub no_autosave: bool,
-    /// Rooms run their original script bytecode: a room's `original.scd` runs
-    /// in place of the fixed `room.scd` (the checked-in room script built with
-    /// the port's fixes) from the same or a lower layer, while a mod layer's
-    /// own `room.scd` still applies. Off by default
-    /// (`[game] room_script_fixes = true`).
-    pub no_room_script_fixes: bool,
     /// The `--authentic` run mode: the original's item rules where the port
     /// is more lenient. A healing item that would do nothing is refused: the
     /// first-aid spray and the herbs at full health, and a blue herb while the
@@ -4729,6 +4723,7 @@ mod tests {
                 stage: 1,
                 room: 0,
                 player_flag: 0,
+                mansion2: false,
             },
             &room,
         );
@@ -4743,6 +4738,7 @@ mod tests {
                 stage: 1,
                 room: 0,
                 player_flag: 1,
+                mansion2: false,
             },
             &RoomState::default(),
         );

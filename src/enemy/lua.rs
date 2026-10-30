@@ -1322,11 +1322,8 @@ mod imp {
             fields.add_field_method_get("attract_room_camera_id", |_lua, api| {
                 Ok(api.game_ref().attract_room_camera_id())
             });
-            // `get_stage_id()`: the original's 0-based stage digit (the room
-            // id's stage is 1-based).
-            fields.add_field_method_get("stage_id", |_lua, api| {
-                Ok(api.game_ref().id.stage.saturating_sub(1))
-            });
+            // Whether the room is on its second mansion visit.
+            fields.add_field_method_get("mansion2", |_lua, api| Ok(api.game_ref().id.mansion2));
 
             // The zombie's state-word aliases and scratch views. The four
             // bytes at +0x84 and their mirror at +0x184 are read and written
@@ -3101,11 +3098,11 @@ mod imp {
             // caller owns the playing bit; an id with no line in the package
             // simply misses at load.
             methods.add_method_mut("play_voice", |_lua, api, id: i64| {
-                let stage = api.game_ref().id.stage.saturating_sub(1);
-                let volume = if stage == 0 && id == 0x33 { -300 } else { 0 };
+                let row = api.game_ref().id.table_row() as u8;
+                let volume = if row == 0 && id == 0x33 { -300 } else { 0 };
                 let game = api.game();
                 game.voice.request = Some(crate::game::VoiceRequest {
-                    path: crate::voice::pack_path(stage, id as u16),
+                    path: crate::voice::pack_path(row, id as u16),
                     volume,
                     pan: 0,
                 });
@@ -5104,7 +5101,7 @@ mod tests {
         let pack = pack(crate::enemy::ENEMY_SCRIPTS);
         let mut host = LuaEnemyHost::new();
         for &(id, room, group) in SHIPPED_SPAWNS {
-            let row = room_row((room >> 8) as u8, room as u8);
+            let row = room_row(usize::from(room >> 8) - 1, room as u8);
             for slot in 0..10u8 {
                 let shipped = room_sound(row, usize::from(group * 10 + slot));
                 let resolved = host
@@ -5394,6 +5391,7 @@ end
                             stage,
                             room: room_id,
                             player_flag: 0,
+                            mansion2: false,
                         };
                         if set_flags {
                             game.flags[1].apply(0xC0, 0);
@@ -6995,6 +6993,7 @@ end
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         game.entity_anims[1].keyframes = Some(keyframes.clone());
         game.entity_anims[1].skeleton = Some(skeleton.clone());
@@ -7019,6 +7018,7 @@ end
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         game.entities[0].pos = [6000, 0, 1000];
         game.entities[1].angle = 0;
@@ -7093,6 +7093,7 @@ end
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         game.entities[0].pos = [3000, 0, 1000];
         let mut host = LuaEnemyHost::new();
@@ -7149,6 +7150,7 @@ end
             stage: 1,
             room: 1,
             player_flag: 0,
+            mansion2: false,
         };
         game.entity_anims[1].keyframes = Some(keyframes);
         game.entity_anims[1].skeleton = Some(skeleton);
@@ -7364,6 +7366,7 @@ end
                 stage: 1,
                 room: room_number,
                 player_flag: 0,
+                mansion2: false,
             };
             game.entity_anims[1].keyframes = Some(keyframes.clone());
             game.entity_anims[1].skeleton = Some(skeleton.clone());
@@ -7458,6 +7461,7 @@ end
             stage: 1,
             room: 0,
             player_flag: 0,
+            mansion2: false,
         };
         game.entity_anims[1].keyframes = Some(keyframes);
         game.entity_anims[1].skeleton = Some(skeleton);
@@ -7513,6 +7517,7 @@ end
                 stage: 1,
                 room: 1,
                 player_flag: 0,
+                mansion2: false,
             };
             game.entity_anims[1].keyframes = Some(keyframes.clone());
             game.entity_anims[1].skeleton = Some(skeleton.clone());
@@ -14100,7 +14105,7 @@ mod hunter_tests {
         let pack = pack();
         let clips = clips_long();
         let mut game = hunter(0x0A);
-        game.id = RoomId::parse("6090").unwrap();
+        game.id = RoomId::from_original(0x6090).unwrap();
         game.set_attract_room_camera_id(21);
         game.entities[2].status_flags = 1;
         let mut host = LuaEnemyHost::new();
@@ -14149,7 +14154,7 @@ mod hunter_tests {
 
         // The west passage selects row 3.
         let mut game = hunter(0x08);
-        game.id = RoomId::parse("6030").unwrap();
+        game.id = RoomId::from_original(0x6030).unwrap();
         game.entities[2].status_flags = 1;
         let mut host = LuaEnemyHost::new();
         game.entities[1].set_state(1);
@@ -14328,7 +14333,7 @@ mod hunter_tests {
         let mut cached_game = hunter(0x0A);
         let mut reset_game = hunter(0x0A);
         for game in [&mut cached_game, &mut reset_game] {
-            game.id = RoomId::parse("6090").unwrap();
+            game.id = RoomId::from_original(0x6090).unwrap();
             game.entities[2].status_flags = 1;
             game.entities[2].health = 100;
             game.entities[0].pos = [450, 0, 100];
@@ -14492,7 +14497,7 @@ function update(e)
     e.hunter_grab_one_shot = true
     assert(e.hunter_grab_one_shot == true)
     assert(e.attract_room_camera_id == 0x1F)
-    assert(e.stage_id == 0)
+    assert(e.mansion2 == false)
     -- The line-of-sight helper writes its result byte into the shared
     -- distance scratch, the original's mid-frame overwrite.
     e.player_distance_z = -1

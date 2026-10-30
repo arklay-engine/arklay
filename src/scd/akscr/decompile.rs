@@ -157,7 +157,8 @@ fn fx_at_enemy(slot: u8) -> String {
 fn sound_names(room: u16) -> BTreeMap<(u8, u8), String> {
     let rows: Vec<usize> = room_variants(merged_id(room))
         .into_iter()
-        .map(|variant| sfx::room_row((variant >> 12) as u8, ((variant >> 4) & 0xFF) as u8))
+        .filter_map(crate::state::RoomId::from_original)
+        .map(|variant| sfx::room_row(variant.table_row(), variant.room))
         .collect();
     let mut names = BTreeMap::new();
     for id in 0..=u8::MAX {
@@ -628,14 +629,9 @@ fn event_section(ctx: &Ctx, stream: &Stream) -> String {
     writer.finish()
 }
 
-/// Whether section `text` compiles back to `original` as `AUTHENTIC`, and
-/// its fixed version (the `#else` of any `#if AUTHENTIC`) compiles too.
+/// Whether section `text` compiles back to `original`.
 fn verified(ctx: &Ctx, text: &str, original: &[u8]) -> bool {
-    compile::section_bytes(text, &ctx.defines, true)
-        .ok()
-        .as_deref()
-        == Some(original)
-        && compile::section_bytes(text, &ctx.defines, false).is_ok()
+    compile::section_bytes(text, &ctx.defines).ok().as_deref() == Some(original)
 }
 
 /// The exact bytes of one stream: every instruction plus the trailing data.
@@ -691,8 +687,7 @@ enum Cmd<'a> {
     /// `end 0`.
     Return,
     /// An `endif` that closes no `if`. The original's `end` resets the
-    /// branch stack it unbalances, so it does nothing: kept as `asm` under
-    /// `#if AUTHENTIC` alone.
+    /// branch stack it unbalances, so it does nothing: kept as `asm`.
     StrayEndif(&'a Insn),
     /// `if`/`else`/`endif`.
     If {
@@ -711,14 +706,6 @@ struct CommandBody<'a> {
 /// Structure one command block. The final top-level `end 0` is implicit; a
 /// block without one is marked `noreturn`.
 fn structure_block(insns: &[Insn]) -> Option<CommandBody<'_>> {
-    structure_block_with(insns, false)
-}
-
-/// [`structure_block`], with `repair` reading an `if` that skips one byte
-/// past its `endif` as skipping to it. The original lands on the `endif`'s
-/// zero operand byte and runs it as `end`, so this holds only where an
-/// `end 0` follows the `endif`: either way the block ends.
-fn structure_block_with(insns: &[Insn], repair: bool) -> Option<CommandBody<'_>> {
     let last = insns.last();
     let implicit_end = last.is_some_and(|insn| is_command(insn, 0x00) && insn.bytes[1] == 0);
     let (end, count) = match last {
@@ -727,7 +714,7 @@ fn structure_block_with(insns: &[Insn], repair: bool) -> Option<CommandBody<'_>>
         None => (0, 0),
     };
     let mut index = 0usize;
-    let body = structure_commands(insns, &mut index, end, repair)?;
+    let body = structure_commands(insns, &mut index, end)?;
     (index == count).then_some(CommandBody {
         noreturn: !implicit_end,
         body,
@@ -739,7 +726,6 @@ fn structure_commands<'a>(
     insns: &'a [Insn],
     index: &mut usize,
     end: usize,
-    repair: bool,
 ) -> Option<Vec<Cmd<'a>>> {
     let mut body = Vec::new();
     while let Some(insn) = insns.get(*index)
@@ -756,7 +742,7 @@ fn structure_commands<'a>(
                 body.push(Cmd::Return);
                 *index += 1;
             }
-            0x01 => body.push(structure_if(insns, index, end, repair)?),
+            0x01 => body.push(structure_if(insns, index, end)?),
             // The original data pops the branch stack with an unpaired
             // `endif`; it carries no jump, so it can sit in place.
             0x03 => {
@@ -779,23 +765,9 @@ fn structure_commands<'a>(
 
 /// Structure the `if` at `*index`: its conditions, its body up to the
 /// `endif`/`else` its skip lands on, and the `else` body up to its target.
-fn structure_if<'a>(
-    insns: &'a [Insn],
-    index: &mut usize,
-    end: usize,
-    repair: bool,
-) -> Option<Cmd<'a>> {
+fn structure_if<'a>(insns: &'a [Insn], index: &mut usize, end: usize) -> Option<Cmd<'a>> {
     let head = &insns[*index];
-    let mut label = head.operands.first()?.target?.checked_sub(2)?;
-    if repair
-        && let Some(at) = insns.iter().position(|insn| insn.offset + 1 == label)
-        && is_command(&insns[at], 0x03)
-        && insns
-            .get(at + 1)
-            .is_some_and(|next| is_command(next, 0x00) && next.bytes[1] == 0)
-    {
-        label = insns[at].offset;
-    }
+    let label = head.operands.first()?.target?.checked_sub(2)?;
     if label <= head.offset || label >= end {
         return None;
     }
@@ -811,7 +783,7 @@ fn structure_if<'a>(
     if conditions.is_empty() {
         return None;
     }
-    let then = structure_commands(insns, index, label, repair)?;
+    let then = structure_commands(insns, index, label)?;
     let tail = insns.get(*index).filter(|insn| insn.offset == label)?;
     *index += 1;
     if is_command(tail, 0x03) {
@@ -831,7 +803,7 @@ fn structure_if<'a>(
     if target > end {
         return None;
     }
-    let otherwise = structure_commands(insns, index, target, repair)?;
+    let otherwise = structure_commands(insns, index, target)?;
     // The compiler labels the instruction after the `else` body, so one must
     // start exactly at the target.
     insns.get(*index).filter(|insn| insn.offset == target)?;
@@ -858,8 +830,6 @@ enum Evt<'a> {
     Run {
         insns: &'a [Insn],
         body: Option<CommandBody<'a>>,
-        /// The block with its quirks fixed, when only that structures.
-        repaired: Option<CommandBody<'a>>,
         start: usize,
     },
     /// `evt_for 0, N` ... `evt_fornext`.
@@ -995,15 +965,9 @@ impl<'a> EventParser<'a> {
         }
         let insns = &self.insns[start..end];
         self.index = end + 2;
-        let body = structure_block(insns);
-        let repaired = match body {
-            Some(_) => None,
-            None => structure_block_with(insns, true),
-        };
         Some(Evt::Run {
             insns,
-            body,
-            repaired,
+            body: structure_block(insns),
             start: header.offset + 2,
         })
     }
@@ -1553,11 +1517,6 @@ impl<'a> Writer<'a> {
         }
     }
 
-    /// A preprocessor line, which starts the line.
-    fn directive(&mut self, text: &str) {
-        self.lines.push(text.to_string());
-    }
-
     fn open(&mut self) {
         self.line("{");
         self.indent += 1;
@@ -1632,11 +1591,7 @@ impl<'a> Writer<'a> {
                     call_text(self.ctx, insn, EventState::Top)
                 )),
                 Cmd::Return => self.line("return;"),
-                Cmd::StrayEndif(insn) => {
-                    self.directive("#if AUTHENTIC");
-                    self.asm(std::slice::from_ref(*insn), &[], insn.offset);
-                    self.directive("#endif");
-                }
+                Cmd::StrayEndif(insn) => self.asm(std::slice::from_ref(*insn), &[], insn.offset),
                 Cmd::If { .. } => self.if_chain(cmd, "if"),
             }
         }
@@ -1678,21 +1633,9 @@ impl<'a> Writer<'a> {
         for evt in body {
             match evt {
                 Evt::Line(text) => self.line(text),
-                Evt::Run {
-                    insns,
-                    body,
-                    repaired,
-                    start,
-                } => match (body, repaired) {
-                    (Some(body), _) => self.command_block("run", body),
-                    (None, Some(repaired)) => {
-                        self.directive("#if AUTHENTIC");
-                        self.asm_block("run", insns, &[], *start);
-                        self.directive("#else");
-                        self.command_block("run", repaired);
-                        self.directive("#endif");
-                    }
-                    (None, None) => self.asm_block("run", insns, &[], *start),
+                Evt::Run { insns, body, start } => match body {
+                    Some(body) => self.command_block("run", body),
+                    None => self.asm_block("run", insns, &[], *start),
                 },
                 Evt::For { count, body } => {
                     self.line(&format!("for ({count})"));

@@ -224,12 +224,8 @@ cargo run -- re1.akpak --room 100 --no-tactical-reload
 # nothing is refused, such as the first-aid spray and the herbs at full health,
 # and a blue herb while the player is not poisoned. It is off by default, and
 # only the command line turns it on (for checking the port against the
-# reference). It also runs each room's original script bytecode (see
-# `room_script_fixes` below):
+# reference):
 cargo run -- re1.akpak --room 100 --authentic
-
-# Run the rooms' original script bytecode without the rest of authentic mode:
-cargo run -- re1.akpak --room 100 --no-room-script-fixes
 ```
 
 Captures, assembled scripts and converted packs are written to a sibling
@@ -277,19 +273,22 @@ cargo run -- pack info re1.akpak --mod demo.akpak
 
 # Disassemble/reassemble a room's scripts
 cargo run -- scd export ROOM1000.RDT --out 1000.s
-cargo run -- scd build 1000.s --out room/1000/room.scd
+cargo run -- scd build 1000.s --out room/100/room.scd
 
 # Decompile/recompile a room's scripts as structured code
 cargo run -- scd export ROOM1000.RDT --out 1000.akscr
-cargo run -- scd build 1000.akscr --out room/1000/room.scd
+cargo run -- scd build 1000.akscr --out room/100/room.scd
 
-# Export every room as one merged script (players and mansion visits under
-# #if CHRIS/JILL/MANSION1/MANSION2, and regions under #if USA/JPN/EUR) and
-# compile one variant of it
-cargo run -- scd export-rooms re1.akpak --out games/re1/room
-cargo run -- scd export-rooms usa=en.akpak jpn=ja.akpak eur=fr.akpak --out games/re1/room
-cargo run -- scd build games/re1/room/1030/room.akscr --room 6031 --out room/6031/room.scd
-cargo run -- scd build games/re1/room/1030/room.akscr --room 6031 --region jpn --out room/6031/room.scd
+# Export every room of the installs as one script per room (players, mansion
+# visits and regions as run-time tests: if (JILL), if (MANSION2), if (USA)),
+# build the runtime build, and build one RDT's own bytecode out of it
+cargo run -- scd export-rooms path/to/install --out games/re1/room
+cargo run -- scd export-rooms usa=english jpn=japanese eur=french --out games/re1/room
+cargo run -- scd build games/re1/room/103/room.akscr --out room/103/room.scd
+cargo run -- scd build games/re1/room/103/room.akscr --room 6031 --region jpn --out 6031.scd
+
+# Boot a mansion room on its second visit
+cargo run -- re1.akpak --room 106 --mansion2
 ```
 
 `docs/modding.md` documents the manifest grammar, the replacement formats and
@@ -338,7 +337,6 @@ blood = true           # blood billboards, spurts and pools
 chris_ink_ribbons = true # saving as Chris uses up an ink ribbon
 jill_ink_ribbons = false # saving as Jill uses up an ink ribbon
 autosave = true        # each door's room load writes autosave1.dat
-room_script_fixes = true # false runs the rooms' original script bytecode
 ui_font = "modern"     # the menus' face: "modern" or "retro"
 modern_save_screen = true # the full-screen save/load list, or false for the original's
 menu_sounds = true     # the in-game menu's cursor/confirm/cancel sounds
@@ -370,21 +368,6 @@ playthrough. The defaults follow the Japanese release, where Jill saves without
 one. A character who needs no ink ribbons finds none either: their pickups are
 hidden and count as taken, so turning the option back on mid-game does not bring
 back ribbons from rooms already visited.
-
-`room_script_fixes` (Gameplay › Room Scripts in the menu) chooses which room
-scripts run. `convert-game` packs the checked-in room scripts
-(`games/re1/room/*/room.akscr`, which are not packed themselves) as
-`room/{id}/room.scd`, built with the port's fixes (the `#else` of each
-`#if AUTHENTIC` block), and keeps the original
-scripts (the `AUTHENTIC` build) beside it as `room/{id}/original.scd` where the
-fixes change them. Turned off, the engine runs
-`original.scd` (or the scripts in a raw `room/{id}/room.rdt`) instead. A mod
-layer's `room/{id}/room.scd` still applies either way. A
-change takes effect from the next room load. `--room-script-fixes` and
-`--no-room-script-fixes` override the file for one run, and `--authentic`
-implies `--no-room-script-fixes` unless `--room-script-fixes` is also given.
-A `--trace` or `--input` run keeps the fixes unless one of those flags says
-otherwise.
 
 The Language › Subtitles options (`subtitles`, `subtitle_size`,
 `subtitle_background`, `subtitle_color`, `speaker_names`, `speaker_name_color`)

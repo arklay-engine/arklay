@@ -73,11 +73,17 @@
 //!   its header says `nopad` (`event event_05 nopad`); `raw(0x.., ...);` as
 //!   the last statement gives any other trailing bytes.
 //!
-//! One merged script covers every variant of a room: `#if CHRIS`, `#if JILL`,
-//! `#if MANSION1` and `#if MANSION2` (with `#else` / `#endif`, nestable) keep
-//! or drop whole lines per variant before the script is parsed, and
-//! `#if USA`, `#if JPN` and `#if EUR` per region; see [`compile_variant`],
-//! [`merge`] and [`merge_regions`].
+//! One merged script covers every variant of a room. `if (JILL)`,
+//! `if (MANSION2)`, `if (!JPN)` (variant names joined by `&&`, with `else`)
+//! test the player, the mansion visit and the release as the room runs, in
+//! command code and at the top of an event; a section only some RDTs carry
+//! has `when (...)`, and `noreturn` / `nopad` may hold for some variants
+//! only (`noreturn (MANSION2)`). The runtime build ([`Build::Runtime`])
+//! compiles the tests to variant jumps; a build for one RDT variant
+//! ([`Build::Variant`], [`compile_variant`]) folds them away. A script has no
+//! preprocessor choices of its own.
+//! The exporter writes the older `#if CHRIS` form ([`merge`]) and
+//! [`lift`]s it into tests ([`merge_rooms`], [`merge_regions`]).
 //!
 //! Anywhere a statement is allowed, `asm { ... }` embeds `.s` assembly lines
 //! verbatim (closed by a line holding only `}`); the decompiler uses it for
@@ -87,17 +93,19 @@ mod compile;
 mod decompile;
 mod engine;
 mod layout;
+mod lift;
 mod merge;
 mod names;
 mod preprocess;
 
-pub use compile::{compile, compile_variant, compile_with};
+pub use compile::{compile, compile_build, compile_variant, compile_with};
 pub use decompile::{decompile, decompile_with};
+pub use lift::lift;
 pub use merge::{merge, merge_regions, merge_rooms};
 pub use names::{Names, load_names};
 pub use preprocess::{
-    Loader, Preprocessed, ROOM_SCRIPT_FILE, Region, SYMBOLS, Variant, includes_from, merged_id,
-    no_includes, preprocess, room_script_file, room_variants,
+    Build, Loader, Preprocessed, ROOM_SCRIPT_FILE, Region, SYMBOLS, Variant, includes_from,
+    merged_id, no_includes, preprocess, room_script_file, room_variants,
 };
 
 #[cfg(test)]

@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3" itemSlots="7">
+  <ambient r="1244" g="1148" b="1020"/>
+  <lights>
+    <light x="4200" y="-2000" z="4637" r="70" g="70" b="70" kind="0" radius="5040"/>
+    <light x="5840" y="-2000" z="4587" r="70" g="70" b="70" kind="0" radius="7400"/>
+    <light x="7300" y="-2000" z="4547" r="70" g="70" b="70" kind="0" radius="5080"/>
+  </lights>
+  <cameras>
+    <camera x="2286" y="-4824" z="2466" lookX="8784" lookY="-2232" lookZ="5166" roll="0" fov="230">
+      <maskGroup originX="90" originY="49" texBits="0x7800">
+        <sprite u="8" v="0" x="136" y="128" depthData="323" blend="3" colorMode="1" size="8"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="331" blend="3" colorMode="1" size="8"/>
+        <sprite u="24" v="0" x="152" y="128" depthData="327" blend="3" colorMode="1" size="8"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="326" blend="3" colorMode="1" size="8"/>
+        <sprite u="40" v="0" x="168" y="128" depthData="327" blend="3" colorMode="1" size="8"/>
+        <sprite u="48" v="0" x="176" y="128" depthData="327" blend="3" colorMode="1" size="8"/>
+        <sprite u="8" v="8" x="136" y="136" depthData="314" blend="3" colorMode="1" size="8"/>
+        <sprite u="16" v="8" x="144" y="136" depthData="307" blend="3" colorMode="1" size="8"/>
+        <sprite u="24" v="8" x="152" y="136" depthData="307" blend="3" colorMode="1" size="8"/>
+        <sprite u="32" v="8" x="160" y="136" depthData="306" blend="3" colorMode="1" size="8"/>
+        <sprite u="40" v="8" x="168" y="136" depthData="311" blend="3" colorMode="1" size="8"/>
+        <sprite u="48" v="8" x="176" y="136" depthData="311" blend="3" colorMode="1" size="8"/>
+        <sprite u="0" v="24" x="128" y="152" depthData="278" blend="3" colorMode="1" size="8"/>
+        <sprite u="8" v="16" x="136" y="144" depthData="279" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="283" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="24" v="16" x="152" y="144" depthData="278" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="32" v="16" x="160" y="144" depthData="279" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="16" x="168" y="144" depthData="279" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="16" x="176" y="144" depthData="278" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="56" v="0" x="128" y="160" depthData="259" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="0" x="136" y="160" depthData="259" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="0" x="144" y="160" depthData="255" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="0" x="152" y="160" depthData="255" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="88" v="0" x="160" y="160" depthData="258" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="96" v="0" x="168" y="160" depthData="255" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="104" v="0" x="176" y="160" depthData="255" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="56" v="16" x="128" y="176" depthData="238" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="16" x="136" y="176" depthData="238" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="16" x="144" y="176" depthData="234" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="16" x="152" y="176" depthData="242" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="88" v="16" x="160" y="176" depthData="239" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="96" v="16" x="168" y="176" depthData="243" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="104" v="16" x="176" y="176" depthData="246" blend="3" colorMode="1" width="8" height="16"/>
+      </maskGroup>
+    </camera>
+    <camera x="9360" y="-3438" z="3600" lookX="4230" lookY="-1980" lookZ="3330" roll="0" fov="230">
+      <maskGroup originX="-99" originY="-1" texBits="0x7800">
+        <sprite u="56" v="0" x="184" y="128" depthData="275" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="0" x="192" y="128" depthData="271" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="64" v="8" x="192" y="136" depthData="279" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="88" v="8" x="216" y="136" depthData="311" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="64" v="16" x="192" y="144" depthData="279" blend="0" colorMode="1" size="16"/>
+        <sprite u="80" v="16" x="208" y="144" depthData="279" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="80" v="24" x="208" y="152" depthData="279" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="48" v="24" x="176" y="152" depthData="283" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="16" x="152" y="144" depthData="287" blend="0" colorMode="1" width="8" height="32"/>
+        <sprite u="32" v="16" x="160" y="144" depthData="282" blend="0" colorMode="1" size="16"/>
+        <sprite u="48" v="16" x="176" y="144" depthData="278" blend="0" colorMode="1" size="8"/>
+        <sprite u="48" v="32" x="176" y="160" depthData="287" blend="0" colorMode="1" width="40" height="8"/>
+        <sprite u="40" v="32" x="168" y="160" depthData="287" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="40" x="176" y="168" depthData="287" blend="0" colorMode="1" width="40" height="8"/>
+        <sprite u="88" v="32" x="216" y="160" depthData="287" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="96" v="32" x="224" y="160" depthData="283" blend="0" colorMode="1" width="8" height="48"/>
+        <sprite u="8" v="40" x="136" y="168" depthData="295" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="24" v="48" x="152" y="176" depthData="295" blend="0" colorMode="1" size="16"/>
+        <sprite u="32" v="32" x="160" y="160" depthData="287" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="48" x="168" y="176" depthData="291" blend="0" colorMode="1" width="40" height="8"/>
+        <sprite u="40" v="56" x="168" y="184" depthData="295" blend="0" colorMode="1" width="40" height="8"/>
+        <sprite u="80" v="48" x="208" y="176" depthData="291" blend="0" colorMode="1" width="8" height="32"/>
+        <sprite u="0" v="64" x="128" y="192" depthData="299" blend="0" colorMode="1" width="80" height="16"/>
+        <sprite u="88" v="56" x="216" y="184" depthData="295" blend="0" colorMode="1" width="8" height="24"/>
+      </maskGroup>
+      <maskGroup originX="175" originY="-42" texBits="0x7800">
+        <sprite u="8" v="80" x="136" y="128" depthData="254" blend="0" colorMode="1" width="16" height="48"/>
+        <sprite u="0" v="96" x="128" y="144" depthData="264" blend="0" colorMode="1" width="8" height="32"/>
+      </maskGroup>
+      <maskGroup originX="167" originY="6" texBits="0x7800">
+        <sprite u="24" v="80" x="128" y="128" depthData="267" blend="0" colorMode="1" width="16" height="48"/>
+        <sprite u="40" v="80" x="144" y="128" depthData="267" blend="0" colorMode="1" width="16" height="48"/>
+      </maskGroup>
+      <maskGroup originX="167" originY="54" texBits="0x7800">
+        <sprite u="56" v="80" x="128" y="128" depthData="283" blend="0" colorMode="1" width="8" height="48"/>
+        <sprite u="64" v="80" x="136" y="128" depthData="283" blend="0" colorMode="1" width="8" height="56"/>
+        <sprite u="72" v="80" x="144" y="128" depthData="283" blend="0" colorMode="1" width="16" height="64"/>
+      </maskGroup>
+    </camera>
+    <camera x="6606" y="-4158" z="4266" lookX="6318" lookY="-1260" lookZ="1584" roll="0" fov="207">
+      <maskGroup originX="-41" originY="-29" texBits="0x7800">
+        <sprite u="8" v="16" x="136" y="144" depthData="1420" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="8" v="24" x="136" y="152" depthData="1440" blend="0" colorMode="1" size="16"/>
+        <sprite u="8" v="40" x="136" y="168" depthData="1420" blend="0" colorMode="1" size="16"/>
+        <sprite u="0" v="56" x="128" y="184" depthData="1420" blend="0" colorMode="1" width="32" height="8"/>
+        <sprite u="0" v="64" x="128" y="192" depthData="1420" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="8" v="80" x="136" y="208" depthData="1420" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="24" v="96" x="152" y="224" depthData="1420" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="104" x="152" y="232" depthData="1420" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="24" v="16" x="152" y="144" depthData="1420" blend="0" colorMode="1" width="32" height="8"/>
+        <sprite u="24" v="24" x="152" y="152" depthData="1420" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="24" v="40" x="152" y="168" depthData="1420" blend="0" colorMode="1" width="32" height="16"/>
+        <sprite u="32" v="56" x="160" y="184" depthData="1440" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="32" v="64" x="160" y="192" depthData="1440" blend="0" colorMode="1" width="32" height="24"/>
+        <sprite u="64" v="0" x="192" y="128" depthData="1440" blend="0" colorMode="1" size="8"/>
+        <sprite u="56" v="8" x="184" y="136" depthData="1440" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="56" v="16" x="184" y="144" depthData="1440" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="56" v="24" x="184" y="152" depthData="1440" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="56" v="40" x="184" y="168" depthData="1440" blend="0" colorMode="1" width="24" height="16"/>
+        <sprite u="56" v="56" x="184" y="184" depthData="1440" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="64" v="64" x="192" y="192" depthData="1440" blend="0" colorMode="1" size="16"/>
+      </maskGroup>
+      <maskGroup originX="102" originY="-28" texBits="0x7800">
+        <sprite u="0" v="112" x="128" y="128" depthData="1440" blend="0" colorMode="1" size="8"/>
+        <sprite u="0" v="120" x="128" y="136" depthData="1440" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="112" x="136" y="128" depthData="1440" blend="0" colorMode="1" size="16"/>
+        <sprite u="24" v="112" x="152" y="128" depthData="1440" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="32" v="112" x="160" y="128" depthData="1440" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="128" x="136" y="144" depthData="1440" blend="0" colorMode="1" size="8"/>
+        <sprite u="0" v="136" x="128" y="152" depthData="1440" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="0" v="144" x="128" y="160" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="128" x="144" y="144" depthData="1440" blend="0" colorMode="1" width="32" height="8"/>
+        <sprite u="24" v="136" x="152" y="152" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="40" v="136" x="168" y="152" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="144" x="144" y="160" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="32" v="136" x="160" y="160" depthData="1440" blend="0" colorMode="1" size="8"/>
+        <sprite u="40" v="144" x="168" y="160" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="0" v="152" x="128" y="168" depthData="1440" blend="0" colorMode="1" width="32" height="8"/>
+        <sprite u="32" v="152" x="160" y="168" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="48" v="152" x="176" y="168" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="0" v="160" x="128" y="176" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="0" v="168" x="128" y="184" depthData="1440" blend="0" colorMode="1" size="16"/>
+        <sprite u="16" v="160" x="144" y="176" depthData="1440" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="24" v="160" x="152" y="176" depthData="1440" blend="0" colorMode="1" size="16"/>
+        <sprite u="24" v="176" x="152" y="192" depthData="1440" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="24" v="184" x="152" y="200" depthData="1440" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="192" x="144" y="208" depthData="1420" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="24" v="192" x="152" y="208" depthData="1420" blend="0" colorMode="1" size="8"/>
+        <sprite u="40" v="160" x="168" y="176" depthData="1420" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="160" x="176" y="176" depthData="1420" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="48" v="168" x="176" y="184" depthData="1420" blend="0" colorMode="1" size="8"/>
+      </maskGroup>
+    </camera>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="200" x1="0" z1="9701" x2="15900" z2="9700" x3="15900" z3="200"/>
+      <switch zoneIndex="1" to="1" x0="4700" z0="7001" x1="5199" z1="7100" x2="5400" z2="2745" x3="4900" z3="2700"/>
+      <switch zoneIndex="2" to="2" x0="5299" z0="1657" x1="5200" z1="3587" x2="7635" z2="3577" x3="7745" z3="1649"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="3" to="9" x0="0" z0="500" x1="0" z1="10900" x2="19300" z2="10900" x3="19500" z3="500"/>
+      <switch zoneIndex="4" to="2" x0="4400" z0="1703" x1="4400" z1="3604" x2="6200" z2="3703" x3="6300" z3="1603"/>
+      <switch zoneIndex="5" to="0" x0="6020" z0="2700" x1="6002" z1="7206" x2="6601" z2="7235" x3="6601" z3="2700"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="6" to="9" x0="0" z0="0" x1="0" z1="11101" x2="19200" z2="11100" x3="19400" z3="0"/>
+      <switch zoneIndex="7" to="1" x0="3900" z0="4300" x1="5401" z1="4300" x2="5400" z2="3700" x3="3900" z3="3700"/>
+      <switch zoneIndex="8" to="0" x0="7900" z0="3700" x1="5300" z1="3700" x2="5300" z2="4300" x3="7900" z3="4300"/>
+      <switch zoneIndex="9" to="0" x0="7898" z0="4300" x1="10100" z1="4301" x2="10101" z2="1700" x3="7901" z3="1700"/>
+      <switch zoneIndex="10" to="1" x0="2200" z0="4400" x1="4252" z1="4300" x2="4300" z2="1800" x3="2100" z3="1700"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="5976" cellZ="4608">
+    <quadrant index="0">
+      <box xMax="11106" zMax="7938" xMin="1656" zMin="6786" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10548" zMax="8082" xMin="4554" zMin="6264" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11286" zMax="7920" xMin="10044" zMin="1008" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="2736" zMax="7794" xMin="1224" zMin="3546" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11106" zMax="7938" xMin="1656" zMin="6786" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10548" zMax="8082" xMin="4554" zMin="6264" shape="1" cf1="true" cf2="true"/>
+      <box xMax="3024" zMax="7308" xMin="1098" zMin="1098" shape="1" cf2="true"/>
+      <box xMax="1800" zMax="4734" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="10890" zMax="1944" xMin="126" zMin="144" shape="1" cf1="true" cf2="true"/>
+      <box xMax="11286" zMax="7920" xMin="10044" zMin="1008" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7542" zMax="2862" xMin="4302" zMin="1188" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="834" zMax="2320" xMin="400" zMin="2000" shape="1" cf1="true" cf2="true"/>
+      <box xMax="2736" zMax="7794" xMin="1224" zMin="3546" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10890" zMax="1944" xMin="126" zMin="144" shape="1" cf1="true" cf2="true"/>
+      <box xMax="7542" zMax="2862" xMin="4302" zMin="1188" shape="1" cf2="true"/>
+      <box xMax="3024" zMax="7308" xMin="1098" zMin="1098" shape="1" cf2="true"/>
+      <box xMax="1800" zMax="4734" xMin="0" zMin="0" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="1700" z1="1800" x2="8000" z2="8100" field8="0x03FF" links=""/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="11300" height="0x2B5C" sound="0x002D"/>
+  </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
+  <strings>
+    <language lang="en-US">
+      <string key="name">DRUG STOREHOUSE</string>
+      <string key="save_name">Guardhouse 1F</string>
+      <string key="0">{scroll 2}Something is written on\nthe wall.{clear 0}Water=1, Red=2,\nPurple=3, Green=4{scroll 2}</string>
+      <string key="1">{scroll 2}Something is written on\nthe wall.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
+      <string key="4">{scroll 2}\nA faucet.{scroll 2}</string>
+      <string key="5">{scroll 2}Will you put water in the\nempty bottle?{branch 0 1 1}{scroll 2}There's a UMB.No2.{clear 0}Will you put UMB No.2 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's a UMB.No4.{clear 0}Will you put UMB No.4 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
+      <string key="6">{scroll 2}There's a UMB.No2.{clear 0}Will you put UMB No.2 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's a UMB.No4.{clear 0}Will you put UMB No.4 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
+      <string key="7">{scroll 2}There's a UMB.No4.{clear 0}Will you put UMB No.4 in the\nempty bottle?{branch 0 1 1}{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
+      <string key="8">{scroll 2}There's UMB No.2. You need\na container to obtain it.{scroll 2}</string>
+      <string key="9">{scroll 2}There's UMB No.4. You need\na container to obtain it.{scroll 2}</string>
+      <string key="11">{scroll 2}Perhaps I should leave for\na moment.{scroll 2}</string>
+      <string key="12">{scroll 0}\n{scroll 2}{clear 100}{scroll 0}\n{scroll 2}{timed 150}</string>
+      <string key="13">Do you want me to heal\nyour wounds?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 130}</string>
+      <string key="14">{scroll 0}\n{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}\n{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}\n{scroll 2}{clear 50}{scroll 0}\n{scroll 2}{timed 120}</string>
+      <string key="18">{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}\n{scroll 2}{clear 50}{scroll 0}\n{scroll 2}{timed 100}</string>
+      <string key="20">{scroll 0}\n{scroll 2}{clear 60}{scroll 0}\n{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}\n{scroll 2}{timed 75}</string>
+      <string key="22">\nRebecca treats Chris.{scroll 2}</string>
+      <string key="23">{scroll 0}\n{scroll 2}{timed 80}</string>
+      <string key="24">{scroll 2}There's UMB No.2. But he\ncan't handle chemicals.{scroll 2}</string>
+      <string key="25">{scroll 2}There's UMB No.4. But he\ncan't handle chemicals.{scroll 2}</string>
+      <string key="26">{scroll 2}It's useless. Chris can't\nhandle chemicals.{scroll 2}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name"> {s}寄宿舎 {s}/{s}1{s}F{s}</string>
+      <string key="0">{scroll 2}\n     何か書いてある{clear 0}\n “水二1 赤二2 紫二3 緑二4”{scroll 2}</string>
+      <string key="1">{scroll 2}\n    カベに何か書いてある{clear 0} 1十2二3、3十4二7、2十4二6\n 6十7二13、13十3二16{scroll 2}</string>
+      <string key="4">{scroll 2}\n     蛇口がある・・・{scroll 2}</string>
+      <string key="5">{scroll 2}   水を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}\n    UMBNo.2がある{clear 0}UMBNo.2を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}\n    UMBNo.4がある{clear 0}UMBNo.4を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
+      <string key="6">{scroll 2}\n    UMBNo.2がある{clear 0}UMBNo.2を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}\n    UMBNo.4がある{clear 0}UMBNo.4を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
+      <string key="7">{scroll 2}\n    UMBNo.4がある{clear 0}UMBNo.4を空ビンに入れますか?\n{branch 0 1 1}{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
+      <string key="8">{scroll 2}    UMBNo.2がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
+      <string key="9">{scroll 2}    UMBNo.4がある\n  取るには、何か入れ物が必要だ{scroll 2}</string>
+      <string key="11">{scroll 2}    いったんこの部屋から\n    出たほうがよさそうだ。{scroll 2}</string>
+      <string key="12">{scroll 0}    この部屋 薬品が\n    充実してるんですよ{scroll 2}{clear 100}{scroll 0}\n  手当てできるんですけど…します?{scroll 2}{timed 150}</string>
+      <string key="13">手当てしますか?{scroll 1}{branch 0 1 0}{scroll 0}\n     とりあえず頼むよ{scroll 2}{timed 130}</string>
+      <string key="14">{scroll 0}\n     とりあえず頼むよ{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}    それにしても ほとんど\n    アンブレラの薬ですね{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}\n      アンブレラ?{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}\n      知りませんか{scroll 2}{clear 50}{scroll 0}    ラクーンシティにある\n    大手の製薬会社ですよ{scroll 2}{timed 120}</string>
+      <string key="18">{scroll 0}\n      なるほど{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}\n       大丈夫だ{scroll 2}{clear 50}{scroll 0}\n   もしもの時はよろしくな{scroll 2}{timed 100}</string>
+      <string key="20">{scroll 0}\n       大丈夫?{scroll 2}{clear 60}{scroll 0}\n     手当てします?{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}\n      気をつけてね{scroll 2}{timed 75}</string>
+      <string key="22">\n  レベッカはクリスの治療をした{scroll 2}</string>
+      <string key="23">{scroll 0}\n      気をつけてね{scroll 2}{timed 80}</string>
+      <string key="24">{scroll 2} UMBNo.2があるが\n クリスは薬品の事がよくわからない{scroll 2}</string>
+      <string key="25">{scroll 2} UMBNo.4があるが\n クリスは薬品の事がよくわからない{scroll 2}</string>
+      <string key="26">{scroll 2} クリスは薬の調合が出来ないので\n この空きビンを取っても意味が無い{scroll 2}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Poste de garde RdC</string>
+      <string key="0">{scroll 2}Il y a quelque chose\nd'écrit sur le mur.{clear 0}Eau=1 Rouge=2\nViolet=3 Vert=4{scroll 2}</string>
+      <string key="1">{scroll 2}Il y a quelque chose\nd'écrit sur le mur.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
+      <string key="4">{scroll 2}\nUn robinet.{scroll 2}</string>
+      <string key="5">{scroll 2}Mettre  L'EAU dans \nla bouteille vide?{branch 0 6 1}</string>
+      <string key="6">{scroll 2}\nDu UMB No. 2{clear 0}Mettre UMB No. 2 dans \nla bouteille vide?{branch 0 6 1}</string>
+      <string key="7">{scroll 2}\nDu UMB No. 4{clear 0}Mettre UMB No. 4 dans \nla bouteille vide?{branch 0 6 1}</string>
+      <string key="8">{scroll 2}UMB No. 2 Vous avez\nbesoin d'un récipient.{scroll 2}</string>
+      <string key="9">{scroll 2}UMB No. 4 Vous avez\nbesoin d'un récipient.{scroll 2}</string>
+      <string key="11">{scroll 2}Peut-être devrais-je \nsortir un moment.{scroll 2}</string>
+      <string key="12">{scroll 0}Cette pièce est un véritable \nhôpital. Je peux tout soigner {scroll 2}{clear 90}{scroll 0}sauf votre blessure principale.\nVoulez-vous que je le fasse?{scroll 2}{timed 150}</string>
+      <string key="13">Voulez-vous que je vous \nsoigne?{scroll 1}{branch 0 6 0}</string>
+      <string key="14">{scroll 0}S'il vous plaît, faites \nquelque chose en attendant.{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}La plupart de ces médicaments \nproviennent d'Umbrella.{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}\nUmbrella?{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}\nÇa ne vous dit rien?{scroll 2}{clear 55}{scroll 0}\nC'est un énorme laboratoire {scroll 2}{clear 45}{scroll 0}pharmaceutique basé à \nRacoon City.{scroll 2}{timed 70}</string>
+      <string key="18">{scroll 0}\nOh, je vois.{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}\nTout va bien. {scroll 2}{clear 50}{scroll 0}Mais s'il m'arrive quelque \nchose, prenez soin de moi.{scroll 2}{timed 100}</string>
+      <string key="20">{scroll 0}\nEst-ce que ça va? {scroll 2}{clear 60}{scroll 0}Vous voulez que je\nm'en occupe?{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}\nChris, faites attention!{scroll 2}{timed 75}</string>
+      <string key="22">\nRebecca soigne Chris.{scroll 2}</string>
+      <string key="23">{scroll 0}\nChris, faites attention!{scroll 2}{timed 80}</string>
+      <string key="24">{scroll 2}Du UMB No. 2... Mais il ne connait\npas les produits chimiques.{scroll 2}</string>
+      <string key="25">{scroll 2}Du UMB No. 4... Mais il ne connait\npas les produits chimiques.{scroll 2}</string>
+      <string key="26">{scroll 2}C'est inutile. Chris ne connait \npas les produits chimiques.{scroll 2}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 2}Irgendwas steht dort\nauf der Wand.{clear 0}Wasser=1 Rot=2\nLila=3 Grün=4{scroll 2}</string>
+      <string key="1">{scroll 2}Irgendwas steht dort\nauf der Wand.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
+      <string key="4">{scroll 2}\nEin Wasserhahn.{scroll 2}</string>
+      <string key="5">{scroll 2}Möchten Sie Wasser in die\nleere Flasche füllen?{branch 0 6 1}</string>
+      <string key="6">{scroll 2}\nDort ist ein UMB Nr. 2.{clear 0}Möchten Sie UMB Nr. 2 in die\nleere Flasche füllen?{branch 0 6 1}</string>
+      <string key="7">{scroll 2}\nDort ist ein UMB Nr. 4.{clear 0}Möchten Sie UMB Nr. 4 in die\nleere Flasche füllen?{branch 0 6 1}</string>
+      <string key="8">{scroll 2}Dort gibt es UMB Nr. 2.\nIch benötige einen Behälter.{scroll 2}</string>
+      <string key="9">{scroll 2}Dort gibt es UMB Nr. 4.\nIch benötige einen Behälter.{scroll 2}</string>
+      <string key="11">{scroll 2}Vielleicht sollte ich mal\neinen Augenblick verschwinden.{scroll 2}</string>
+      <string key="12">{scroll 0}Dieser Raum verfügt über eine\nkomplette Medizinausrüstung.{scroll 2}{clear 90}{scroll 0}\nIch kann dich behandeln,{scroll 2}{clear 45}{scroll 0}mal abgesehen\nvon deiner großen Verletzung.{scroll 2}{clear 45}{scroll 0}\nSoll ich dich verarzten...?{scroll 2}{timed 60}</string>
+      <string key="13">Möchtest du, dass ich\ndeine Wunden heile?{scroll 1}{branch 0 6 0}</string>
+      <string key="14">{scroll 0}Ja, bitte, hilf mir\n-wenigstens für eine Zeitlang.{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}Die meisten dieser Medikamente\nsind von Umbrella.{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}\nWas ist Umbrella?{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}\nWeißt du das nicht?{scroll 2}{clear 55}{scroll 0}Das ist ein großes\nPharma-Unternehmen,{scroll 2}{clear 60}{scroll 0}das in Raccoon City\nseinen Sitz hat.{scroll 2}{timed 55}</string>
+      <string key="18">{scroll 0}\n...Oh, ich verstehe.{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}\nIch bin okay.{scroll 2}{clear 50}{scroll 0}Aber wenn mir irgend etwas\nzustößt, dann{scroll 2}{clear 50}{scroll 0}\nkümmer dich bitte um mich.{scroll 2}{timed 50}</string>
+      <string key="20">{scroll 0}\nBist du in Ordnung?{scroll 2}{clear 60}{scroll 0}Möchtest du,\ndass ich das behandle?{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}\nChris, pass auf!{scroll 2}{timed 75}</string>
+      <string key="22">\nRebecca versorgt Chris.{scroll 2}</string>
+      <string key="23">{scroll 0}\nChris, pass auf!{scroll 2}{timed 80}</string>
+      <string key="24">{scroll 2}\nDa steht UMB Nr. 2.{scroll 2}{clear 0}{scroll 2}Aber von Chemie hat er\nüberhaupt keine Ahnung.{scroll 2}</string>
+      <string key="25">{scroll 2}\nDa steht UMB Nr. 4.{scroll 2}{clear 0}{scroll 2}Aber von Chemie hat er\nüberhaupt keine Ahnung.{scroll 2}</string>
+      <string key="26">{scroll 2}Es ist sinnlos. Chris kann\nnicht mit Chemikalien umgehen.{scroll 2}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Guardiola 1P</string>
+      <string key="0">{scroll 2}C'è qualcosa scritto \nsul muro:{clear 0}Acqua=1 Rosso=2\nViola=3 Verde=4{scroll 2}</string>
+      <string key="1">{scroll 2}C'è qualcosa scritto \nsul muro:{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
+      <string key="4">{scroll 2}\nUn lavandino.{scroll 2}</string>
+      <string key="5">{scroll 2}Vuoi mettere ACQUA \nnella bottiglia vuota?{branch 0 6 1}</string>
+      <string key="6">{scroll 2}\nL'UMB No. 2{clear 0}Vuoi mettere l'UMB No. 2 \nnella bottiglia vuota?{branch 0 6 1}</string>
+      <string key="7">{scroll 2}\nL'UMB No. 4{clear 0}Vuoi mettere l'UMB No. 4 \nnella bottiglia vuota?{branch 0 6 1}</string>
+      <string key="8">{scroll 2}L'UMB No. 2. Hai bisogno \ndi un recipiente.{scroll 2}</string>
+      <string key="9">{scroll 2}L'UMB No. 4. Hai bisogno \ndi un recipiente.{scroll 2}</string>
+      <string key="11">{scroll 2}Forse dovrei uscire \nper ora.{scroll 2}</string>
+      <string key="12">{scroll 0}Questa stanza è ben rifornita \ndi medicinali. {scroll 2}{clear 75}{scroll 0}Posso trattare le tue ferite, \ntranne quelle più gravi.{scroll 2}{clear 80}{scroll 0}\nVuoi che lo faccia?{scroll 2}{timed 70}</string>
+      <string key="13">Vuoi essere curato?{scroll 1}{branch 0 6 0}</string>
+      <string key="14">{scroll 0}Si, fa qualcosa di \nprovvisorio.{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}Gran parte di queste medicine \nprovengono dalla Umbrella.{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}\nCos'è la Umbrella?{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}\nNon la conosci?{scroll 2}{clear 40}{scroll 0}È una grande azienda farmaceutica \ncon sede a Raccoon City.{scroll 2}{timed 90}</string>
+      <string key="18">{scroll 0}\nOh, capisco.{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}Sto bene, ma se dovesse \naccadere qualcosa {scroll 2}{clear 50}{scroll 0}prenditi cura di me, \nper favore.{scroll 2}{timed 100}</string>
+      <string key="20">{scroll 0}\nStai bene? {scroll 2}{clear 60}{scroll 0}\nVuoi che ti curi?{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}\nChris, fa attenzione!{scroll 2}{timed 75}</string>
+      <string key="22">\nRebecca ha curato Chris.{scroll 2}</string>
+      <string key="23">{scroll 0}\nChris, fa attenzione!{scroll 2}{timed 80}</string>
+      <string key="24">{scroll 2}L'UMB No. 2... Ma non conosco \nquesti prodotti chimici.{scroll 2}</string>
+      <string key="25">{scroll 2}L'UMB No. 4... Ma non conosco \nquesti prodotti chimici.{scroll 2}</string>
+      <string key="26">{scroll 2}È inutile. Chris non conosce \ni prodotti chimici.{scroll 2}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 2}Hay algo escrito en\nla pared...{clear 0}Agua=1, rojo=2,\npúrpura=3, verde=4.{scroll 2}</string>
+      <string key="1">{scroll 2}Hay algo escrito en\nla pared...{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
+      <string key="4">{scroll 2}\nUn grifo...{scroll 2}</string>
+      <string key="5">{scroll 2}¿Quieres poner agua\nen la botella vacía?{branch 0 6 1}</string>
+      <string key="6">{scroll 2}\nHay un UMB Nº... 2...{clear 0}¿Quieres poner UMB Nº2\nen la botella vacía?{branch 0 6 1}</string>
+      <string key="7">{scroll 2}\nHay un UMB Nº... 4...{clear 0}¿Quieres poner UMB Nº4\nen la botella vacía?{branch 0 6 1}</string>
+      <string key="8">{scroll 2}Hay UMB Nº...2...\nNecesitarás un recipiente...{scroll 2}</string>
+      <string key="9">{scroll 2}Hay UMB Nº...4...\nNecesitarás un recipiente...{scroll 2}</string>
+      <string key="11">{scroll 2}Será mejor que salga de este cuarto\nhasta que se disipe el gas...{scroll 2}</string>
+      <string key="12">{scroll 0}Esta sala está bien equipada\ncon suministros médicos.{scroll 2}{clear 90}{scroll 0}Te puedo curar, excepto\nsi es una herida grave.{scroll 2}{clear 90}{scroll 0}\n¿Quieres que lo haga?{scroll 2}{timed 60}</string>
+      <string key="13">¿Quieres que te cure\nlas heridas?{scroll 1}{branch 0 6 0}</string>
+      <string key="14">{scroll 0}Sí, por favor échame una mano\nde momento.{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}La mayoría de las medicinas\nson de Umbrella.{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}\n¿Qué es Umbrella?{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}¿No lo sabes?\nEs una gran empresa{scroll 2}{clear 55}{scroll 0}farmacéutica con sede\nen Raccoon City.{scroll 2}{timed 115}</string>
+      <string key="18">{scroll 0}\nAh, ya veo.{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}\nEstoy bien,{scroll 2}{clear 50}{scroll 0}pero si me pasa algo,\ncúrame.{scroll 2}{timed 100}</string>
+      <string key="20">{scroll 0}\n¿Estás bien?{scroll 2}{clear 60}{scroll 0}\n¿Quieres que te cure?{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}\n¡Chris! ¡Cuidado!{scroll 2}{timed 75}</string>
+      <string key="22">\nRebecca cura a Chris...{scroll 2}</string>
+      <string key="23">{scroll 0}\n¡Chris! ¡Ten cuidado!{timed 80}</string>
+      <string key="24">{scroll 2}Hay UMB Nº2... Pero no sabe\nusar productos químicos...{scroll 2}</string>
+      <string key="25">{scroll 2}Hay UMB Nº4... Pero no sabe\nusar productos químicos...{scroll 2}</string>
+      <string key="26">{scroll 2}No sirve de nada... Chris\nno sabe usar productos químicos...{scroll 2}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Комната охраны 1-эт.</string>
+      <string key="0">{scroll 2}На стене что-то\nнаписано.{clear 0}Вода=1, Красный=2,\nПурпурный=3, Зеленый=4{scroll 2}</string>
+      <string key="1">{scroll 2}На стене что-то\nнаписано.{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
+      <string key="4">{scroll 2}\nКран.{scroll 2}</string>
+      <string key="5">{scroll 2}Налить воду\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2.{clear 0}Налить УМБ 2\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 4.{clear 0}Налить УМБ 4\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
+      <string key="6">{scroll 2}Это УМБ 2.{clear 0}Налить УМБ 2\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 4.{clear 0}Налить УМБ 4\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
+      <string key="7">{scroll 2}Это УМБ 4.{clear 0}Налить УМБ 4\nв пустую бутылку?{branch 0 1 1}{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
+      <string key="8">{scroll 2}Это УМБ 2. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
+      <string key="9">{scroll 2}Это УМБ 4. Вам нужна бутылка,\nчтобы налить её.{scroll 2}</string>
+      <string key="11">{scroll 2}\nНужно бежать отсюда.{scroll 2}</string>
+      <string key="12">{scroll 0}\n{scroll 2}{clear 100}{scroll 0}\n{scroll 2}{timed 150}</string>
+      <string key="13">Вы хотите, чтобы я подлатала\nваши раны?{scroll 1}{branch 0 1 0}{scroll 0}\n{scroll 2}{timed 130}</string>
+      <string key="14">{scroll 0}\n{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}\n{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}\n{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}\n{scroll 2}{clear 50}{scroll 0}\n{scroll 2}{timed 120}</string>
+      <string key="18">{scroll 0}\n{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}\n{scroll 2}{clear 50}{scroll 0}\n{scroll 2}{timed 100}</string>
+      <string key="20">{scroll 0}\n{scroll 2}{clear 60}{scroll 0}\n{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}\n{scroll 2}{timed 75}</string>
+      <string key="22">\nРебекка лечит Криса.{scroll 2}</string>
+      <string key="23">{scroll 0}\n{scroll 2}{timed 80}</string>
+      <string key="24">{scroll 2}Это УМБ 2. Крис не умеет\nработать с химикатами.{scroll 2}</string>
+      <string key="25">{scroll 2}Это УМБ 4. Крис не умеет\nработать с химикатами.{scroll 2}</string>
+      <string key="26">{scroll 2}Это бесполезно. Крис не умеет\nработать с химикатами.{scroll 2}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Asuntolan varasto 1 krs</string>
+      <string key="0">{scroll 2}Seinälle on kirjoitettu jotakin...{clear 0}vesi=1, punainen=2,\nvioletti=3, vihreä=4{scroll 2}</string>
+      <string key="1">{scroll 2}Seinälle on kirjoitettu jotakin...{clear 0}1+2=3, 3+4=7, 2+4=6\n6+7=13, 13+3=16{scroll 2}</string>
+      <string key="4">{scroll 2}Vesihana...{scroll 2}</string>
+      <string key="5">{scroll 2}Täytätkö tyhjän pullon vedellä?{branch 0 6 1}</string>
+      <string key="6">{scroll 2}Siinä on UMB Nro. 2...{clear 0}Laitatko tyhjään pulloon\nUMB Nro. 2?{branch 0 6 1}</string>
+      <string key="7">{scroll 2}Siinä on UMB Nro. 4...{clear 0}Laitatko tyhjään pulloon\nUMB No. 4?{branch 0 6 1}</string>
+      <string key="8">{scroll 2}Siinä on UMB Nro. 2... Tarvitset\ntyhjän pullon ottaaksesi sitä...{scroll 2}</string>
+      <string key="9">{scroll 2}Siinä on UMB Nro. 4... Tarvitset\ntyhjän pullon ottaaksesi sitä...{scroll 2}</string>
+      <string key="11">{scroll 2}On parempi poistua hetkeksi...{scroll 2}</string>
+      <string key="12">{scroll 0}Tämä huone on täynnä\nlääkintävarusteita.{scroll 2}{clear 90}{scroll 0}Voin hoitaa haavasi mutta\nen vakavia vammoja.{scroll 2}{clear 90}{scroll 0}Tarvitsetko hoitoa?{scroll 2}{timed 60}</string>
+      <string key="13">Haluatko Rebecan hoitavan\nhaavasi?{scroll 1}{branch 0 6 0}</string>
+      <string key="14">{scroll 0}Kyllä, se tulisi tarpeeseen.{scroll 2}{timed 130}</string>
+      <string key="15">{scroll 0}Suurin osa näistä lääkkeistä\non Umbrellan valmistamia.{scroll 2}{timed 110}</string>
+      <string key="16">{scroll 0}Mikä Umbrella on?{scroll 2}{timed 60}</string>
+      <string key="17">{scroll 0}Etkö tiedä?{scroll 2}{clear 55}{scroll 0}Se on suuri Raccoon Cityssä\ntoimiva lääkeyhtiö.{scroll 2}{timed 115}</string>
+      <string key="18">{scroll 0}Aivan.{scroll 2}{timed 70}</string>
+      <string key="19">{scroll 0}Olen kunnossa.{scroll 2}{clear 50}{scroll 0}Jos minulle käy jotakin\nluotan että huolehdit minusta.{scroll 2}{timed 100}</string>
+      <string key="20">{scroll 0}Oletko kunnossa?{scroll 2}{clear 60}{scroll 0}Tarvitsetko hoitoa?{scroll 2}{timed 60}</string>
+      <string key="21">{scroll 0}Chris! Ole varovainen!{scroll 2}{timed 75}</string>
+      <string key="22">Rebecca hoitaa Chrisiä...{scroll 2}</string>
+      <string key="23">{scroll 0}Chris! Pidä huolta itsestäsi!{scroll 2}{timed 80}</string>
+      <string key="24">{scroll 2}Siinä on UMB Nro. 2, mutta Chris\nei osaa käsitellä kemikaaleja...{scroll 2}</string>
+      <string key="25">{scroll 2}Siinä on UMB No. 4, mutta Chris\nei osaa käsitellä kemikaaleja...{scroll 2}</string>
+      <string key="26">{scroll 2}Chris ei osaa käsitellä\nkemikaaleja...{scroll 2}</string>
+    </language>
+  </strings>
+</room>

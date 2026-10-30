@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<room format="3" itemSlots="1">
+  <ambient r="720" g="720" b="720"/>
+  <lights>
+    <light x="7218" y="-1400" z="10460" r="255" g="255" b="255" kind="0" radius="7000"/>
+    <light x="6960" y="-1000" z="4540" r="255" g="255" b="255" kind="0" radius="5080"/>
+    <light x="4000" y="-1250" z="4110" r="255" g="255" b="255" kind="0" radius="5080"/>
+  </lights>
+  <cameras>
+    <camera x="8208" y="-1080" z="2178" lookX="4950" lookY="-3582" lookZ="12150" roll="0" fov="207">
+      <maskGroup originX="-122" originY="28" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="407" blend="3" colorMode="1" size="16"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="395" blend="3" colorMode="1" size="16"/>
+        <sprite u="32" v="0" x="160" y="128" depthData="380" blend="3" colorMode="1" size="16"/>
+        <sprite u="48" v="0" x="176" y="128" depthData="439" blend="3" colorMode="1" size="16"/>
+        <sprite u="64" v="0" x="192" y="128" depthData="479" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="0" x="200" y="128" depthData="470" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="0" x="208" y="128" depthData="467" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="88" v="0" x="216" y="128" depthData="458" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="88" v="16" x="216" y="144" depthData="450" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="16" x="208" y="144" depthData="459" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="16" x="200" y="144" depthData="467" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="64" v="16" x="192" y="144" depthData="471" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="56" v="16" x="184" y="144" depthData="479" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="16" x="176" y="144" depthData="483" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="24" x="168" y="152" depthData="487" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="40" v="40" x="168" y="168" depthData="474" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="48" v="48" x="176" y="176" depthData="467" blend="3" colorMode="1" width="16" height="8"/>
+        <sprite u="48" v="32" x="176" y="160" depthData="467" blend="3" colorMode="1" size="16"/>
+        <sprite u="64" v="32" x="192" y="160" depthData="463" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="72" v="32" x="200" y="160" depthData="455" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="80" v="32" x="208" y="160" depthData="449" blend="3" colorMode="1" width="8" height="16"/>
+        <sprite u="88" v="32" x="216" y="160" depthData="447" blend="3" colorMode="1" size="8"/>
+      </maskGroup>
+    </camera>
+    <camera x="7848" y="-1080" z="12258" lookX="5130" lookY="-3582" lookZ="1980" roll="0" fov="207">
+      <maskGroup originX="122" originY="23" texBits="0x7800">
+        <sprite u="0" v="0" x="128" y="128" depthData="363" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="0" x="144" y="128" depthData="326" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="40" v="0" x="168" y="128" depthData="287" blend="0" colorMode="1" width="32" height="8"/>
+        <sprite u="0" v="8" x="128" y="136" depthData="393" blend="0" colorMode="1" width="16" height="8"/>
+        <sprite u="16" v="8" x="144" y="136" depthData="322" blend="0" colorMode="1" width="24" height="8"/>
+        <sprite u="40" v="8" x="168" y="136" depthData="287" blend="0" colorMode="1" width="32" height="8"/>
+        <sprite u="0" v="16" x="128" y="144" depthData="374" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="0" v="40" x="128" y="168" depthData="366" blend="0" colorMode="1" width="8" height="16"/>
+        <sprite u="8" v="16" x="136" y="144" depthData="379" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="8" v="40" x="136" y="168" depthData="355" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="16" v="16" x="144" y="144" depthData="383" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="16" v="40" x="144" y="168" depthData="357" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="32" v="16" x="160" y="144" depthData="390" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="32" v="40" x="160" y="168" depthData="363" blend="0" colorMode="1" width="16" height="32"/>
+        <sprite u="48" v="16" x="176" y="144" depthData="401" blend="0" colorMode="1" width="16" height="24"/>
+        <sprite u="48" v="40" x="176" y="168" depthData="377" blend="0" colorMode="1" width="16" height="32"/>
+        <sprite u="64" v="16" x="192" y="144" depthData="410" blend="0" colorMode="1" width="8" height="24"/>
+        <sprite u="64" v="40" x="192" y="168" depthData="394" blend="0" colorMode="1" width="8" height="32"/>
+      </maskGroup>
+    </camera>
+    <camera x="7398" y="-5256" z="8298" lookX="2376" lookY="-882" lookZ="10872" roll="0" fov="230"/>
+    <camera x="3960" y="-3078" z="8082" lookX="2682" lookY="-972" lookZ="11106" roll="0" fov="230"/>
+  </cameras>
+  <cameraSwitches>
+    <switches from="0">
+      <view zoneIndex="0" to="9" x0="0" z0="1235" x1="0" z1="13157" x2="11770" z2="13157" x3="11790" z3="1214"/>
+      <switch zoneIndex="1" to="1" x0="1300" z0="6397" x1="9900" z1="5700" x2="9900" z2="1600" x3="1100" z3="1600"/>
+    </switches>
+    <switches from="1">
+      <view zoneIndex="2" to="9" x0="0" z0="800" x1="0" z1="13800" x2="10400" z2="14500" x3="10400" z3="800"/>
+      <switch zoneIndex="3" to="0" x0="1500" z0="9200" x1="9600" z1="10400" x2="9600" z2="8200" x3="1500" z3="6800"/>
+    </switches>
+    <switches from="2">
+      <view zoneIndex="4" to="9" x0="0" z0="600" x1="0" z1="13800" x2="9600" z2="13800" x3="9700" z3="600"/>
+    </switches>
+    <switches from="3">
+      <view zoneIndex="5" to="9" x0="0" z0="13802" x1="9901" z1="13501" x2="10302" z2="500" x3="0" z3="100"/>
+    </switches>
+  </cameraSwitches>
+  <collision cellX="5418" cellZ="7182">
+    <quadrant index="0">
+      <box xMax="10404" zMax="14130" xMin="8586" zMin="36" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10602" zMax="14238" xMin="396" zMin="12438" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="1">
+      <box xMax="2436" zMax="14164" xMin="670" zMin="434" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10602" zMax="14238" xMin="396" zMin="12438" shape="1" cf1="true" cf2="true"/>
+      <box xMax="3780" zMax="9162" xMin="666" zMin="6516" shape="1" cf2="true"/>
+    </quadrant>
+    <quadrant index="2">
+      <box xMax="10692" zMax="2340" xMin="216" zMin="540" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10404" zMax="14130" xMin="8586" zMin="36" shape="1" cf1="true" cf2="true"/>
+    </quadrant>
+    <quadrant index="3">
+      <box xMax="2436" zMax="14164" xMin="670" zMin="434" shape="1" cf1="true" cf2="true"/>
+      <box xMax="10692" zMax="2340" xMin="216" zMin="540" shape="1" cf1="true" cf2="true"/>
+      <box xMax="3780" zMax="9162" xMin="666" zMin="6516" shape="1" cf2="true"/>
+    </quadrant>
+  </collision>
+  <walkZones>
+    <walk x1="2100" z1="2000" x2="8900" z2="7100" field8="0x00FF" links="1"/>
+    <walk x1="3500" z1="7100" x2="8900" z2="8400" field8="0x00FF" links="0 2"/>
+    <walk x1="2100" z1="8400" x2="8900" z2="12700" field8="0x00FF" links="1"/>
+  </walkZones>
+  <footsteps count="1">
+    <footstep x="0" z="0" width="11800" height="0x44C0" sound="0x002D"/>
+  </footsteps>
+  <slots>
+    <anim when="JILL">01</anim>
+    <anim>00</anim>
+  </slots>
+  <strings>
+    <language lang="en-US">
+      <string key="name">LADDER ROOM</string>
+      <string key="save_name">Laboratory B3</string>
+      <string key="0">{scroll 0} {scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\n {scroll 1}{clear 60}{scroll 0}\n {scroll 1}{clear 230}{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}\n {scroll 90} {scroll 1}{clear 250}{scroll 0}\n {scroll 1}{clear 220}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 200}</string>
+      <string key="3">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\n {scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}\n {scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="10">{scroll 2}There's a ladder. Will\nyou climb it?{scroll 1}{branch 0 1 0}{scroll 2}He must have been attacked\nby those monsters.{scroll 1}</string>
+      <string key="11">{scroll 2}He must have been attacked\nby those monsters.{scroll 1}</string>
+    </language>
+    <language lang="ja-JP">
+      <string key="save_name"> {s}研究所 {s}/{s}B{s}3{s}</string>
+      <string key="0">{scroll 0}     ああ ジルか…{scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\n       バリー…{scroll 1}{clear 60}{scroll 0}  まったく会わせる額がないな\n  さっさと先に行ってくれ{scroll 1}{clear 230}{scroll 0}\nもう言わないで ウェスカーは死んだわ{scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}\n そうか…ジル 最後に頼みがある{scroll 90} {scroll 1}{clear 250}{scroll 0}\n  この写真を家族にわたしてくれ{scroll 1}{clear 220}{scroll 0}\n      ええ 必ず{scroll 1}{clear 70}{scroll 0}\n      許してくれ…{scroll 1}{timed 200}</string>
+      <string key="3">{scroll 0}  行きましょう\n  たちどまるわけにはいかないわ{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\n       ジル!{scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}\n       くそっ!{scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}\n      さあ 行こう{scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}\n      行きましょう{scroll 1}{timed 60}</string>
+      <string key="10">{scroll 2}      ハシゴがある\n上りますか{branch 0 4 1}</string>
+      <string key="11">{scroll 2} あの化け物たちにやられたのだろう\n バリーはもう目を覚まさない・・・{scroll 1}</string>
+    </language>
+    <language lang="fr-FR">
+      <string key="save_name">Laboratoire SS3</string>
+      <string key="0">{scroll 0}\nSalut, Jill, c'est toi... {scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\nBarry... {scroll 1}{clear 60}{scroll 0}Je suis vraiment gêné de te \nvoir à présent. Laisse-moi.  {scroll 1}{clear 115}{scroll 0}\nVa-t-en vite. {scroll 1}{clear 81}{scroll 0}C'est fini Barry. \nWesker est mort. {scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}C'est vrai? Jill, peux-tu me\nrendre un service?  {scroll 1}{clear 200}{scroll 0}\nC'est mon dernier souhait.{scroll 1}{clear 110}{scroll 0}S'il te plaît, donne cette\nphoto à ma famille, d'accord?{scroll 1}{clear 230}{scroll 0}\nPas de problème. {scroll 1}{clear 50}{scroll 0}\nPardonne-moi, Jill... {scroll 1}{timed 199}</string>
+      <string key="3">{scroll 0}Continuons, Chris. Nous ne \npouvons pas nous arrêter. {scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\nJill! {scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}\nMon Dieu! {scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}\nAllons-y. {scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}\nPartons! {scroll 1}{timed 60}</string>
+      <string key="10">{scroll 2}Il y a une échelle.\nMonter?{scroll 1}{branch 0 6 0}</string>
+      <string key="11">{scroll 2}Il a dû être attaqué par\nces monstres.{scroll 1}</string>
+    </language>
+    <language lang="de-DE">
+      <string key="0">{scroll 0}\nHallo, Jill, du bist es...{scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\nBarry...{scroll 1}{clear 60}{scroll 0}Es macht mich jetzt richtig\nbetroffen, dich zu sehen.{scroll 1}{clear 115}{scroll 0}Lass mich lieber allein\nGeh schnell.{scroll 1}{clear 81}{scroll 0}Es ist jetzt vorbei, Barry.\nWesker ist tot.{scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}Ist das wahr? Jill, würdest du\nmir einen Gefallen tun?{scroll 1}{clear 200}{scroll 0}\nDas ist mein letzter Wunsch.{scroll 1}{clear 110}{scroll 0}Bitte gib meiner Familie\ndieses Foto, machst du das?{scroll 1}{clear 230}{scroll 0}\nBestimmt.{scroll 1}{clear 50}{scroll 0}\nVergib mir, Jill...{scroll 1}{timed 199}</string>
+      <string key="3">{scroll 0}\nLass uns weitergehen, Chris.{scroll 1}{clear 50}{scroll 0}Wir dürfen uns nicht\naufhalten lassen.{scroll 1}{timed 50}</string>
+      <string key="6">{scroll 0}\nJill!{scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}\nMein Gott!{scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}\nTempo!{scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}\nSchnell!{scroll 1}{timed 60}</string>
+      <string key="10">\n{scroll 2}Da ist eine Leiter.{clear 0}Möchten Sie hinaufklettern?{scroll 1}{branch 0 6 0}</string>
+      <string key="11">{scroll 2}Er muss von diesen Monstern\nangegriffen worden sein.{scroll 1}</string>
+    </language>
+    <language lang="it-IT">
+      <string key="save_name">Laboratorio S3</string>
+      <string key="0">{scroll 0}\nCiao, Jill, sei tu... {scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\nBarry...? {scroll 1}{clear 60}{scroll 0}Mi imbarazza vederti, ora. \nLasciatemi qui.  {scroll 1}{clear 115}{scroll 0}\nVa via subito. {scroll 1}{clear 81}{scroll 0}È finita, Barry. \nWesker è morto. {scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}È così? Jill, puoi farmi \nun favore?  {scroll 1}{clear 200}{scroll 0}\nÈ il mio ultimo desiderio.{scroll 1}{clear 110}{scroll 0}Ti prego, dai questa foto \nalla mia famiglia... lo farai?{scroll 1}{clear 230}{scroll 0}\nTe lo prometto. {scroll 1}{clear 50}{scroll 0}\nPerdonami, Jill... {scroll 1}{timed 199}</string>
+      <string key="3">{scroll 0}Continuiamo, Chris. Non possiamo fermarci. {scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\nJill! {scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}\nMio Dio! {scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}\nAndiamo. {scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}\nMuoviamoci! {scroll 1}{timed 60}</string>
+      <string key="10">{scroll 2}C'è una scala.\nVuoi salire?{scroll 1}{branch 0 6 0}</string>
+      <string key="11">{scroll 2}Deve essere stato attaccato \nda quei mostri.{scroll 1}</string>
+    </language>
+    <language lang="es-ES">
+      <string key="0">{scroll 0}\nYo... Jill... Eres tú.{scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\n¡¿Barry?!{scroll 1}{clear 60}{scroll 0}Me avergüenza verte\nahora.{scroll 1}{clear 115}{scroll 0}Dé-Déjame,\nve-vete, rápido.{scroll 1}{clear 81}{scroll 0}Barry, ya se acabó.\n¡Wesker ha muerto!{scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}¿De verdad? Jill,\n¿me puedes hacer un favor?{scroll 1}{clear 200}{scroll 0}\nEs mi última... voluntad.{scroll 1}{clear 110}{scroll 0}Lleva esta foto a mi\nfamilia... ¿Lo harás?{scroll 1}{clear 230}{scroll 0}\nClaro.{scroll 1}{clear 50}{scroll 0}Perdóname... Jill...\nUhh.{scroll 1}{timed 199}</string>
+      <string key="3">{scroll 0}Chris, sigamos.\nNo podemos pararnos.{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\n¡Jill!{scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}\n¡DIOS MÍO!{scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}\n¡Vamos!{scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}\nVenga, sigamos.{scroll 1}{timed 60}</string>
+      <string key="10">{scroll 2}Hay una escalera...\n¿quieres subir?{scroll 1}{branch 0 6 0}</string>
+      <string key="11">{scroll 2}Le deben haber atacado\nlos monstruos.{scroll 1}</string>
+    </language>
+    <language lang="ru-RU">
+      <string key="save_name">Лаборатория Б3</string>
+      <string key="0">{scroll 0} {scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}\n {scroll 1}{clear 60}{scroll 0}\n {scroll 1}{clear 230}{scroll 0}\n {scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}\n {scroll 90} {scroll 1}{clear 250}{scroll 0}\n {scroll 1}{clear 220}{scroll 0}\n {scroll 1}{clear 70}{scroll 0}\n {scroll 1}{timed 200}</string>
+      <string key="3">{scroll 0}\n {scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}\n {scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}\n {scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}\n {scroll 1}{timed 60}</string>
+      <string key="10">{scroll 2}Здесь лестница.\nПодняться по ней?{scroll 1}{branch 0 1 0}{scroll 2}Похоже, на него\nнапали эти монстры.{scroll 1}</string>
+      <string key="11">{scroll 2}Похоже, на него\nнапали эти монстры.{scroll 1}</string>
+    </language>
+    <language lang="fi-FI">
+      <string key="save_name">Laboratorion olohuone -2 krs</string>
+      <string key="0">{scroll 0}Minä.. Jill.. se olet sinä.{scroll 1}{timed 140}</string>
+      <string key="1">{scroll 0}Barry!?{scroll 1}{clear 60}{scroll 0}Minua hävettää nähdä sinua nyt.{scroll 1}{clear 115}{scroll 0}Jätä vain minut. Nopeasti nyt.{scroll 1}{clear 81}{scroll 0}Barry, se on ohi.\nWesker on kuollut!{scroll 1}{timed 130}</string>
+      <string key="2">{scroll 0}Niinkö? Tekisitkö minulle\npalveluksen?{scroll 1}{clear 200}{scroll 0}Se olisi viimeinen toiveeni.{scroll 1}{clear 110}{scroll 0}Pyydän, anna tämä valokuva\nperheelleni. Olisitko kiltti?{scroll 1}{clear 230}{scroll 0}Toki.{scroll 1}{clear 50}{scroll 0}Jill, anna anteeksi.{scroll 1}{timed 199}</string>
+      <string key="3">{scroll 0}Chris, jatketaan matkaa.\nEmme voi pysähtyä.{scroll 1}{timed 100}</string>
+      <string key="6">{scroll 0}Jill!{scroll 1}{timed 35}</string>
+      <string key="7">{scroll 0}Herranjumala!{scroll 1}{timed 35}</string>
+      <string key="8">{scroll 0}Mennään!{scroll 1}{timed 60}</string>
+      <string key="9">{scroll 0}Jatketaan matkaa.{scroll 1}{timed 60}</string>
+      <string key="10">{scroll 2}Siinä on tikkaat...\nKiipeätkö niitä?{scroll 1}{branch 0 6 0}</string>
+      <string key="11">{scroll 2}Hän on joutunut hirviöiden\nhyökkäämäksi...{scroll 1}</string>
+    </language>
+  </strings>
+</room>
