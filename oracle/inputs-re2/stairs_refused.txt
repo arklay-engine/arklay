@@ -1,0 +1,16 @@
+# climb, turn to the second stairs, whose range refuses the press, walk off and climb again running
+0 
+360 confirm
+362 
+420 left
+540 
+550 confirm
+552 
+630 up run
+660 
+700 down
+760 
+780 up run
+795 confirm up run
+797 up run
+830 
