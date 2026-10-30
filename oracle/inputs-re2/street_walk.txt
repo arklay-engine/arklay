@@ -1,0 +1,6 @@
+# Leon's first control in room 100: walk away from the bus, turn, run, stop.
+120 up
+240 up run
+300 right
+330 up
+420
