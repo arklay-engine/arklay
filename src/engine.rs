@@ -2672,7 +2672,10 @@ impl GameSession {
         call_lua_room_load(self.lua.as_ref(), &mut self.game, self.loaded.id);
         self.game.sync_player(&mut self.player);
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
-        reset_room_camera_id(&mut self.game);
+        // An RE2 room's first script pass has run, and may have picked a cut.
+        if !self.game.is_re2_room {
+            reset_room_camera_id(&mut self.game);
+        }
         apply_camera(&mut self.loaded.room, &mut self.game, Some(self.player.pos));
         // The original runs `update_room_bgm` after the destination's init
         // script (so a `room_bgm_state_set` it performs is visible) and after
@@ -5511,6 +5514,9 @@ impl GameSession {
         let frame = session.transition.tick(skip);
         session.frame = frame;
         session.door_yield = None;
+        if frame.room_veil.is_some() {
+            self.room_fade_draw = frame.room_veil;
+        }
         for effect in session.transition.stepper_mut().take_sfx() {
             play_door_animation_sfx(
                 &mut self.music,
@@ -5531,9 +5537,16 @@ impl GameSession {
         if frame.place {
             place_transition_player(&mut session, &mut self.game, &mut self.loaded);
         }
+        // A door's `Pl_init` keeps the speed the last room left.
+        let carried =
+            (frame.load && session.door.re2.is_some()).then_some(self.game.re2.player.spd);
         self.transition = Some(session);
         if frame.load {
             self.enter_transition_destination(pack);
+        }
+        if let Some(spd) = carried {
+            self.game.re2.player = self.game.re2.player.clone().after_pl_init();
+            self.game.re2.player.spd = spd;
         }
         if frame.finished {
             self.end_transition(pack);
@@ -5545,6 +5558,14 @@ impl GameSession {
         // frame or the bars would still be fading when the destination's
         // first traced tick is drawn.
         self.tick_screen_intensity();
+    }
+
+    /// Whether a door has the screen: not yet during RE2's hold, which keeps
+    /// the room up under its veil.
+    fn door_on_screen(&self) -> bool {
+        self.transition
+            .as_ref()
+            .is_some_and(|session| session.frame.room_veil.is_none())
     }
 
     /// Drop the finished transition's timeline once its last frame was
@@ -5568,6 +5589,7 @@ impl GameSession {
         let Some(mut session) = self.transition.take() else {
             return;
         };
+        self.game.re2.door_settling = session.door.re2.is_some();
         if session.camera_only {
             finish_transition(
                 &mut session,
@@ -6254,7 +6276,7 @@ impl GameSession {
         // out for 240 rows, so while one is up the whole 4:3 frame is
         // presented, pillarboxed, instead of cropped.
         if canvas.is_none() {
-            self.framebuffer.view = if self.transition.is_some() || self.screen_on_black(|_| true) {
+            self.framebuffer.view = if self.door_on_screen() || self.screen_on_black(|_| true) {
                 video::View::default()
             } else if self.boot_message.is_some()
                 || self.movie.is_some()
@@ -6298,7 +6320,7 @@ impl GameSession {
         // The screens below replace the whole frame, scene included.
         if self.boot_message.is_some()
             || self.movie.is_some()
-            || self.transition.is_some()
+            || self.door_on_screen()
             || self.death_screen.is_some()
         {
             self.gpu_scene_visible = false;
@@ -6339,7 +6361,7 @@ impl GameSession {
                 .blit_rgba(WIDTH as u32, HEIGHT as u32, rgba);
             return Ok(());
         }
-        if let Some(transition) = &self.transition {
+        if let Some(transition) = self.transition.as_ref().filter(|_| self.door_on_screen()) {
             self.gpu_scene_visible =
                 render_transition_on(&mut self.framebuffer, pass, pack, transition)?;
             return Ok(());
@@ -10603,9 +10625,10 @@ fn start_transition(
         Some(re2) => re2.stage != source.stage,
         None => record.next_room >= 0x20,
     };
+    // RE2's `Set_door` places the player, and `Set_room` runs from the next tick.
     let mut timeline = transition::Transition::new(animation)
         .with_fade(fade.fade_type(), fade.counter(), fade.state())
-        .with_load(camera_only, stage_change);
+        .with_load(camera_only, stage_change || record.re2.is_some());
     if record.re2.is_some() {
         timeline = timeline.with_timing(transition::Timing::Re2);
     }
@@ -10623,6 +10646,10 @@ fn start_transition(
         entered: false,
         frame: transition::TransitionFrame {
             black: true,
+            room_veil: record.re2.map(|_| transition::Overlay {
+                alpha: 0,
+                color: transition::FadeColor::Black,
+            }),
             ..transition::TransitionFrame::default()
         },
         bgm_sleep: 0,
@@ -10817,7 +10844,13 @@ fn place_transition_player(
     let source_cut = loaded.room.current_cut;
     *loaded = destination;
     loaded.room.room_sfx = session.door.sfx;
-    loaded.room.current_cut = source_cut;
+    // `Set_door` writes an RE2 door's cut straight away.
+    loaded.room.current_cut = session
+        .door
+        .re2
+        .map(|re2| usize::from(re2.cut))
+        .filter(|&cut| cut < loaded.room.cuts.len())
+        .unwrap_or(source_cut);
     // The original snapshots the outgoing room's live enemies and tears the
     // list down before the destination's `room_set` wipes the slots. The
     // snapshot ages only when the destination room differs from the source.
@@ -13396,6 +13429,8 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
     let mut host = crate::scd2::host::GameHost { game };
     vm.run_init(&mut host);
     vm.start_main();
+    // `Sce_scheduler_set` ends in a pass of `Sce_scheduler_main`.
+    vm.tick(&mut host);
     game.re2.vm = Some(Box::new(vm));
 }
 
@@ -13403,6 +13438,10 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
 /// start, every task runs, then what they asked of the room and the player
 /// applies.
 fn tick_re2_scripts(context: &mut RoomContext<'_>) {
+    // `Sce_scheduler` skips the first tick after a door: `fg_stop` is still up.
+    if std::mem::take(&mut context.game.re2.door_settling) {
+        return;
+    }
     let Some(mut vm) = context.game.re2.vm.take() else {
         return;
     };
@@ -13668,7 +13707,9 @@ fn tick_room_timed(
 ) -> Option<game::RoomTransition> {
     let update_start = Instant::now();
     // A cutscene holds the player's input (`FG_STOP_DISABLE_INPUT`).
-    let input = if context.game.re2.input_stopped() {
+    let input = if context.game.re2.input_stopped()
+        || (context.game.is_re2_room && context.game.message.active)
+    {
         player::Input::default()
     } else {
         input
@@ -13767,7 +13808,9 @@ fn tick_room_timed(
     // that ignores the pad. The frozen and scripted paths still publish the
     // direction pad so the object probe sees it; only the action edge, which
     // belongs to the skipped input state, is withheld.
-    let frozen = context.game.message_flags & game::MESSAGE_FLAG_PLAYER_STATE == 0
+    // RE2's `Player_move` runs on under a message, with the keys cut.
+    let frozen = (!context.game.is_re2_room
+        && context.game.message_flags & game::MESSAGE_FLAG_PLAYER_STATE == 0)
         // The itembox settle frame: `check_itembox_state` restores the whole
         // message word and raises the box-menu flag, and the menu takes the
         // next frame. The original's player machine still stays frozen on the

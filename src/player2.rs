@@ -182,6 +182,14 @@ impl Work {
         }
     }
 
+    /// `Pl_init`, which leaves the routines' first tick to the room's first
+    /// `Player_move`.
+    pub fn after_pl_init(mut self) -> Self {
+        self.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+        self.hokan = 0;
+        self
+    }
+
     /// The trace's `beh` and `as`, and its `mot` field: `Routine_2`, `Routine_3`,
     /// `Move_no`, `Move_cnt`, `Hokan_flg`, `D_life_u` and the speed.
     pub fn trace_fields(&self) -> ([u8; 2], [i32; 9]) {

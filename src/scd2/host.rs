@@ -32,6 +32,8 @@ pub struct Re2State {
     pub pending_damage: Vec<([i16; 4], u8, i16)>,
     /// Camera-table edits waiting for the room (`cut_be_set`, `cut_replace`).
     pub pending_cuts: Vec<CutEdit>,
+    /// A door has just handed back, and `fg_stop` hasn't come down yet.
+    pub door_settling: bool,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// A scripted move of the player, applied at the next tick.
@@ -132,6 +134,7 @@ impl Default for Re2State {
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
             pending_cuts: Vec::new(),
+            door_settling: false,
             work: [Work::Player; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
             player: crate::player2::Work::default(),
