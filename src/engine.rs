@@ -13215,12 +13215,18 @@ struct ShadowCache {
 
 impl ShadowCache {
     /// The baked shadow page, loading the `shadow/kage` stem on first use.
-    fn page_for(&mut self, pack: &Pack) -> Option<&Image> {
+    fn page_for(&mut self, pack: &Pack, re2: bool) -> Option<&Image> {
         if !self.attempted {
             self.attempted = true;
             if let Ok(Some(asset)) = pack.read_asset(shadow::KAGE_STEM, AssetClass::Image) {
                 match assets::decode_page(&asset, assets::Geometry::Shipped)
-                    .and_then(|art| shadow::bake(&art))
+                    .and_then(|art| {
+                        if re2 {
+                            shadow::bake_re2(&art)
+                        } else {
+                            shadow::bake(&art)
+                        }
+                    })
                 {
                     Ok(image) => self.page = Some(image),
                     Err(err) => {
@@ -15838,7 +15844,7 @@ fn render_frame_on(
     // (or the room forces it on),
     // and one per active character that has entered the camera's switch zone,
     // using `character_init`'s tint, half extents and local offset.
-    let shadow_texture = shadows.page_for(pack);
+    let shadow_texture = shadows.page_for(pack, game.is_re2_room);
     let mut shadow_list: Vec<render::Shadow<'_>> = Vec::new();
     if let Some(texture) = shadow_texture
         && game.is_re2_room
