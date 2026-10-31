@@ -37,6 +37,8 @@ pub const KEYS_IN_A_STOP: u16 = KEY_SIDE_LEFT | KEY_SIDE_RIGHT | KEY_CONFIRM | K
 const MODE_MOVE: u8 = 1;
 const MODE_DAMAGE: u8 = 2;
 const MODE_DEAD: u8 = 3;
+/// `Pl_dead`.
+const MODE_DEAD_BODY: u8 = 7;
 const MODE_SCENARIO: u8 = 4;
 /// `Pl_Em_damage` and `Pl_Em_die`: an enemy has hold of the player.
 pub(crate) const MODE_HELD: u8 = 5;
@@ -150,6 +152,8 @@ const DAMAGE_BLEND: u8 = 3;
 const DAMAGE_CLIP: u8 = 5;
 const STAGGER_CLIPS: [u8; 2] = [3, 4];
 const FALL_CLIP: u8 = 2;
+/// How long `Pl_dead` grows the shadow.
+const DEAD_POOL_TICKS: u16 = 0x3C;
 /// How far `Pl_damage` knocks the player in a stagger.
 const STAGGER_SPEED: i16 = 200;
 /// `Damage_cnt`'s top bit: the player can't be damaged. The rest counts down.
@@ -698,6 +702,8 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     match mover.work.routine[0] {
         MODE_MOVE => mover.pl_move(),
         MODE_DAMAGE => mover.pl_damage(),
+        MODE_DEAD => mover.pl_die(),
+        MODE_DEAD_BODY => mover.pl_dead(),
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
@@ -2059,7 +2065,8 @@ impl Mover<'_, '_> {
                     i16::from(back) - 1,
                     0,
                 ];
-                if !self.damage_step(STAGGER_CLIPS[usize::from(back)], speed) {
+                let sound = (u32::from(back) + 1) << 16 | 0x400_0001;
+                if !self.damage_step(STAGGER_CLIPS[usize::from(back)], speed, sound) {
                     return;
                 }
                 if self.work.hokan != 0 {
@@ -2067,35 +2074,65 @@ impl Mover<'_, '_> {
                 }
                 self.damage_joint(DAMAGE_BLEND_STEP);
             }
-            6 => {
-                if self.work.routine[2] == 0 {
-                    self.work.routine[2] = 1;
-                    self.work.bank = Bank::Pld;
-                    self.work.move_no = FALL_CLIP;
-                    self.work.move_cnt = 0;
-                    self.work.hokan = FULL_BLEND;
-                    self.work.damage_cnt |= DAMAGE_LOCK;
-                    self.work.spd = [0; 3];
-                    self.work.neck.flags |= 0x12;
-                } else if self.work.routine[2] != 1 {
-                    if self.work.routine[2] == 2 {
-                        self.work.routine[0] = 7;
-                    }
-                    return;
-                }
-                self.damage_joint(BLEND_STEP);
-            }
+            6 => self.pl_die(),
             _ => {
-                if self.damage_step(DAMAGE_CLIP, [0; 3]) {
+                let sound = if self.work.routine[1] == 0 {
+                    0x400_0001
+                } else {
+                    0x401_0001
+                };
+                if self.damage_step(DAMAGE_CLIP, [0; 3], sound) {
                     self.damage_joint(DAMAGE_BLEND_STEP);
                 }
             }
         }
     }
 
+    /// `Pl_die`, and `pl_die00` for `Pl_damage`'s `Routine_1` 6: the cry and the
+    /// fall, then `Pl_dead`, which only grows the shadow into a pool of blood
+    /// that the game over's `Die_vcut_set` culls.
+    fn pl_die(&mut self) {
+        // `Foot_set_pl` reads last tick's world matrix from the parts.
+        let planted = self.foot_position();
+        match self.work.routine[2] {
+            0 => {
+                self.work.routine[2] = 1;
+                self.work.bank = Bank::Pld;
+                self.work.move_no = FALL_CLIP;
+                self.work.move_cnt = 0;
+                self.work.hokan = FULL_BLEND;
+                self.work.damage_cnt |= DAMAGE_LOCK;
+                self.work.spd = [0; 3];
+                self.work.neck.flags = 1;
+                self.work.sounds.push(0x403_0001);
+                self.damage_joint(BLEND_STEP);
+            }
+            1 => self.damage_joint(BLEND_STEP),
+            2 => self.work.routine = [MODE_DEAD_BODY, 0, 0, 0],
+            _ => {}
+        }
+        if self.work.hokan == 0 {
+            self.foot_set(planted);
+        }
+    }
+
+    /// `Pl_dead`, without the shadow's pool (see [`Self::pl_die`]).
+    fn pl_dead(&mut self) {
+        if self.work.routine[1] == 0 {
+            self.work.routine[1] = 1;
+            self.work.timer0 = DEAD_POOL_TICKS;
+        } else if self.work.routine[1] != 1 {
+            return;
+        }
+        if self.work.timer0 == 0 {
+            self.work.routine[1] = 2;
+        }
+        self.work.timer0 = self.work.timer0.wrapping_sub(1);
+    }
+
     /// The opening of `Pl_damage`'s plain cases: start `clip`, or at the end
     /// of it hand back to the pad. False when no frame plays this tick.
-    fn damage_step(&mut self, clip: u8, speed: [i16; 3]) -> bool {
+    fn damage_step(&mut self, clip: u8, speed: [i16; 3], sound: u32) -> bool {
         match self.work.routine[2] {
             0 => {
                 self.work.routine[2] = 1;
@@ -2106,6 +2143,8 @@ impl Mover<'_, '_> {
                 self.work.spd = speed;
                 self.work.damage_cnt |= DAMAGE_LOCK;
                 self.work.neck.flags |= 0x12;
+                self.work.be_flg &= !4;
+                self.work.sounds.push(sound);
                 true
             }
             1 => true,
@@ -3591,6 +3630,38 @@ mod tests {
         assert_eq!((setup.work.routine[0], life), (MODE_MOVE, 190));
         hit(&mut setup, &mut life);
         assert_eq!((setup.work.routine[0], life), (MODE_DAMAGE, 180));
+    }
+
+    #[test]
+    fn each_hit_plays_its_own_cry() {
+        for (kind, cry) in [
+            (0, 0x400_0001),
+            (1, 0x401_0001),
+            (2, 0x401_0001),
+            (3, 0x402_0001),
+            (6, 0x403_0001),
+        ] {
+            let mut setup = Setup::new(0);
+            setup.work.routine = [MODE_DAMAGE, kind, 0, 0];
+            setup.tick(Input::default(), 190);
+            assert_eq!(setup.work.sounds, [cry], "kind {kind}");
+            assert_eq!(setup.work.be_flg & 4, 0);
+        }
+    }
+
+    #[test]
+    fn dying_cries_falls_and_lies_still() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_DEAD, 0, 0, 0];
+        setup.tick(Input::default(), 0);
+        assert_eq!(setup.work.sounds, [0x403_0001]);
+        assert_eq!(setup.work.move_no, FALL_CLIP);
+        assert_eq!(setup.work.neck.flags & 0x12, 0);
+        for _ in 0..200 {
+            setup.tick(Input::default(), 0);
+        }
+        assert_eq!(setup.work.routine[..2], [MODE_DEAD_BODY, 2]);
+        assert_eq!(setup.work.sounds.len(), 1);
     }
 
     #[test]
