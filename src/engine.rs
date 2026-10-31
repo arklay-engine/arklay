@@ -2840,7 +2840,7 @@ impl GameSession {
         self.skips_enabled
             && self.cutscene_skip.is_none()
             && self.attract.is_none()
-            && self.game.flags[5].bit(game::MSF_SCREEN_INTENSITY)
+            && self.game.scene_bars()
             && !self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO)
             && !self.game.fmv_requested()
             && !self.room_boot_gate
@@ -2987,7 +2987,7 @@ impl GameSession {
                 self.end_cutscene_skip(!self.cutscene_skip_taken_over());
                 break;
             }
-            if !self.game.flags[5].bit(game::MSF_SCREEN_INTENSITY) {
+            if !self.game.scene_bars() {
                 // The scene is over. A line it raised on its last tick stays
                 // up for the player. The letterbox ramp has not seen the flag
                 // drop yet; settle the bars so the frame fades in on the
@@ -5765,7 +5765,7 @@ impl GameSession {
             && !self.cutscene_skip_taken_over()
             && !self.return_title_requested
             && self.clear_game_requested.is_none()
-            && !flags.bit(game::MSF_SCREEN_INTENSITY)
+            && !self.game.scene_bars()
             && !flags.bit(game::MSF2_ATTRACT_DEMO)
             && !self.timed_sequence_running()
             && !self.game.fmv_requested()
@@ -6127,7 +6127,7 @@ impl GameSession {
     /// climbs 16 a frame to `0xF0`, and while it is clear it falls 16 a frame
     /// back to zero.
     fn tick_screen_intensity(&mut self) {
-        let ramping = self.game.flags[5].bit(game::MSF_SCREEN_INTENSITY);
+        let ramping = self.game.scene_bars();
         let byte = self.sprite_anim_intensity as u8;
         if ramping {
             if byte < 0xF0 {
@@ -6159,10 +6159,14 @@ impl GameSession {
             return;
         }
         let alpha = if byte == 0xF0 { 255 } else { byte };
-        self.framebuffer
-            .blend_black_rect_weighted([-4, -10, 328, 38], alpha);
-        self.framebuffer
-            .blend_black_rect_weighted([-4, 212, 328, 38], alpha);
+        // RE2's `Curtain` tiles are 24 rows each, as its frames show.
+        let (top, bottom) = if self.game.is_re2_room {
+            ([0, 0, 320, 24], [0, 216, 320, 24])
+        } else {
+            ([-4, -10, 328, 38], [-4, 212, 328, 38])
+        };
+        self.framebuffer.blend_black_rect_weighted(top, alpha);
+        self.framebuffer.blend_black_rect_weighted(bottom, alpha);
     }
 
     /// The room-entry fade's current alpha, for the deterministic tests.

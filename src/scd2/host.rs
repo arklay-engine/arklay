@@ -155,7 +155,7 @@ const CHARACTER_SIZES: [u16; 28] = [
     450, 350, 450, 350, 450, 350, 450, 450,
 ];
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
-const STATUS_BANK: u8 = 1;
+pub const STATUS_BANK: u8 = 1;
 const STATUS_ENEMY_FLAGS: u8 = 6;
 /// `fg_status`'s bit for the character whose voices play: 1 is Claire.
 pub const STATUS_PLAYER: u8 = 0;
