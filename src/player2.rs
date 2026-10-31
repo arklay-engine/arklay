@@ -281,6 +281,22 @@ pub struct Work {
     pub hidden_parts: u32,
     /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
     parts0_y: i32,
+    /// How far a hit has the body leaning: the extra turn `Em10Dm00` gives the
+    /// first part, and takes from the second.
+    pub lean: i16,
+    /// `pEnemy_ptr`: the enemy slot the aim turns to.
+    pub aim_target: Option<usize>,
+    /// `Timer3` of the raise: it has been aimed again already.
+    aimed_again: bool,
+    /// Last tick's `Key`, for `Key_trg`.
+    last_key: u16,
+    /// What `Weapon_at_ck` found this tick, for the enemy to take.
+    pub hit: Option<crate::weapon2::Hit>,
+    /// `WORD_00989eee`'s low bits: what the player did this tick, for enemies to
+    /// hear. A shot is 1, a step 2, a running step 4, and aiming 0x18.
+    pub noise: u8,
+    /// `Esp_call`s this tick made, in order.
+    pub effects: Vec<EffectCall>,
 }
 
 /// `Spl_Init`'s `Parts0_pos_y`, by id from 0x40.
@@ -302,6 +318,30 @@ pub const fn character_shadow(id: u8) -> (i32, i32) {
         _ => (500, 600),
     }
 }
+
+fn sca_records<'a>(tick: &Tick<'a>) -> &'a [ScaRect] {
+    tick.room
+        .sca
+        .as_ref()
+        .map_or(&[], |sca| sca.records.as_slice())
+}
+
+/// An `Esp_call` for the tick's owner to make, at a point worked out already.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EffectCall {
+    pub kind: u8,
+    pub row: u8,
+    pub size: u16,
+    pub dir: i16,
+    pub at: [i16; 3],
+}
+
+/// `pl_mv05_w1_t0`'s `Goto00` to who it's aiming at.
+const AIM_ENEMY_TURN: i32 = 0xD8;
+/// The part `pl_mv05_w1_t2` gives `hit_scan_ck`: the gun's hand.
+const HAND_PART: usize = 14;
+/// The part `pl_w02_t2_move` works from.
+const SHOT_PART: usize = 11;
 
 /// `Neck_no`: the head's joint, the same for every player.
 pub const NECK_JOINT: usize = 8;
@@ -337,6 +377,10 @@ impl Work {
     pub fn apply_to_pose(&self, pose: &mut Keyframe) {
         pose.offset[1] = self.scaled_height(pose.offset[1]);
         self.neck.apply(pose);
+        if let [first, second, ..] = pose.rotations.as_mut_slice() {
+            first[2] = first[2].wrapping_add(self.lean);
+            second[2] = second[2].wrapping_sub(self.lean);
+        }
     }
 
     fn scaled_height(&self, height: i16) -> i16 {
@@ -424,6 +468,13 @@ impl Default for Work {
             bank: Bank::Weapon,
             hidden_parts: 0,
             parts0_y: 0x1000,
+            lean: 0,
+            aim_target: None,
+            aimed_again: false,
+            last_key: 0,
+            hit: None,
+            noise: 0,
+            effects: Vec::new(),
             d_life_u: 0,
             spd: [0; 3],
             spd_base: [0; 3],
@@ -531,6 +582,8 @@ pub struct Tick<'a> {
     /// `player_work`'s table of necks a `plc_neck` can aim at: the player, the
     /// second player, then the enemy slots.
     pub necks: Necks,
+    /// What the shots and the aim see of the enemy slots.
+    pub targets: &'a [crate::weapon2::Target],
 }
 
 /// The necks of [`Tick::necks`].
@@ -564,6 +617,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     if work.damage_cnt & !DAMAGE_LOCK != 0 {
         work.damage_cnt -= 1;
     }
+    work.noise &= 0xE0;
     let mut mover = Mover {
         work,
         player,
@@ -1194,6 +1248,59 @@ impl Mover<'_, '_> {
 
     /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
     /// its pose. `Pl_neck`'s aim at the nearest enemy waits for enemies.
+    /// `Rot_neck_em`: the head turns toward `target`, within its limit, and only
+    /// that way.
+    pub(crate) fn rot_neck_em(&mut self, target: Option<[i32; 3]>) {
+        if self.work.neck.flags & 1 != 0 {
+            return;
+        }
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let Some(pose) = self.player.anim.pose_keyframe(clips, keyframes) else {
+            return;
+        };
+        let (Some(bone), Some(root)) = (
+            pose.rotations.get(NECK_JOINT).copied(),
+            pose.rotations.first().copied(),
+        ) else {
+            return;
+        };
+        let from = self.chain_position(&[0, NECK_JOINT]);
+        let bone = i32::from(bone[1]);
+        let facing = i32::from(self.player.angle as i16) + i32::from(root[1]);
+        let neck = &mut self.work.neck;
+        neck.position = from;
+        let mut aim = match (from, target) {
+            (Some(from), Some(target)) => neck_direction(from, target)[0],
+            _ => 0,
+        };
+        if neck.flags & 2 != 0 {
+            aim = bone + facing;
+        }
+        let rate = if neck.flags & 0x80 != 0 {
+            i32::from(neck.rates[0])
+        } else {
+            NECK_RATES[0]
+        };
+        let limit = NECK_LIMITS[0];
+        if limit * 2 < (aim - facing + limit) & 0xFFF {
+            aim = if (aim - facing) & 0x800 == 0 {
+                limit + facing
+            } else {
+                facing - limit
+            };
+        }
+        let old = i32::from(neck.turn[0]);
+        let error = rate - old - bone - facing + aim;
+        let mut turn = old - rate;
+        if error & 0x800 == 0 {
+            turn += rate * 2;
+        }
+        if error & 0xFFF < rate * 2 {
+            turn = aim - bone - facing;
+        }
+        neck.turn[0] = turn as i16;
+    }
+
     pub(crate) fn rot_neck(&mut self) {
         if self.work.neck.flags & 1 != 0 {
             return;
@@ -1423,6 +1530,8 @@ impl Mover<'_, '_> {
             0 => {
                 self.aim_clip(AIM_RAISE_CLIP);
                 self.set_tilt(TILT_LEVEL);
+                self.em_ck(0);
+                self.work.aimed_again = false;
                 self.work.spd[0] = 0;
             }
             1 => {}
@@ -1432,6 +1541,25 @@ impl Mover<'_, '_> {
             }
             _ => return,
         }
+        if let Some(target) = self
+            .work
+            .aim_target
+            .and_then(|slot| self.tick.targets.iter().find(|target| target.slot == slot))
+        {
+            let to = direction_ck(
+                self.player.pos[0],
+                self.player.pos[2],
+                target.at[0],
+                target.at[1],
+            );
+            self.player.angle = goto(self.player.angle, to, AIM_ENEMY_TURN);
+        }
+        if key & KEY_TILT_UP != 0 && self.work.last_key & KEY_TILT_UP == 0 && !self.work.aimed_again
+        {
+            self.em_ck(3000);
+            self.work.aimed_again = true;
+        }
+        self.work.last_key = key;
         self.aim_turn(key, AIM_RAISE_TURN);
         if self.joint_move() {
             self.work.routine[3] += 1;
@@ -1447,6 +1575,37 @@ impl Mover<'_, '_> {
         }
     }
 
+    /// `Em_ck`, from the neck.
+    fn em_ck(&mut self, range: u32) {
+        let neck = self.work.neck.position.unwrap_or(self.player.pos);
+        let sca = sca_records(self.tick);
+        self.work.aim_target =
+            crate::weapon2::em_ck(self.tick.targets, sca, self.player.pos, neck, range);
+    }
+
+    /// `hit_scan_ck` and `Weapon_at_ck`. A handgun's shot has only its first frame.
+    fn shoot(&mut self) {
+        let weapon = self.tick.weapon.id;
+        let hand = self
+            .part_point(HAND_PART, [0; 3])
+            .unwrap_or(self.player.pos);
+        let level = crate::weapon2::hit_scan_ck(
+            self.tick.id,
+            self.player.pos[1],
+            self.work.parts0_y,
+            hand[1],
+        );
+        let shooter = crate::weapon2::Shooter {
+            pos: self.player.pos,
+            neck: self.work.neck.position.unwrap_or(self.player.pos),
+            angle: self.player.angle,
+            weapon,
+            level,
+        };
+        let sca = sca_records(self.tick);
+        self.work.hit = crate::weapon2::weapon_at_ck(&shooter, self.tick.targets, sca);
+    }
+
     /// `pl_mv05_w1_t1`.
     fn aim_hold(&mut self, key: u16) {
         if self.work.routine[3] == 0 {
@@ -1457,6 +1616,7 @@ impl Mover<'_, '_> {
                 _ => 0,
             };
             self.aim_clip(clip);
+            self.work.noise |= 0x18;
         }
         if key & KEY_AIM == 0 {
             self.aim_stage(3);
@@ -1494,7 +1654,7 @@ impl Mover<'_, '_> {
         self.joint_move();
     }
 
-    /// `pl_mv05_w1_t2`. Nothing to hit yet: the shot only spends a round.
+    /// `pl_mv05_w1_t2`.
     fn aim_fire(&mut self, key: u16) {
         if self.work.routine[3] == 0 {
             let clip = match self.work.status_flg >> 13 {
@@ -1504,6 +1664,8 @@ impl Mover<'_, '_> {
                 _ => 0,
             };
             self.aim_clip(clip);
+            self.work.noise |= 1;
+            self.shoot();
             self.work.fired = true;
             self.player.queue_sound(SOUND_SHOT);
             self.work.spd = [0; 3];
@@ -1514,9 +1676,38 @@ impl Mover<'_, '_> {
             self.work.spd = [0; 3];
             return;
         }
+        self.shot_effects();
         if self.joint_move() {
             self.aim_stage(1);
             self.work.spd = [0; 3];
+        }
+    }
+
+    /// `pl_w02_t2_move` and `pl_w03_t2_move`: the flash, then the smoke and the
+    /// case thrown out, off the hand. These run after `Joint_move` on the frame
+    /// it reached, but the hand's matrix is still last tick's, which this is
+    /// called early to see.
+    fn shot_effects(&mut self) {
+        let frame = self.work.move_cnt.wrapping_add(1);
+        let (kind_rows, size, point): (&[(u8, u8)], u16, [i32; 3]) = match frame {
+            1 => (&[(3, 0xA), (1, 0)], 0xE00, [0x8A, 0x267, 8]),
+            3 if self.tick.weapon.id == 3 => (&[(3, 8), (3, 8), (2, 0)], 0x900, [0xA0, 200, 0x3C]),
+            3 => (&[(3, 8), (3, 8), (2, 0)], 0x900, [0x15E, 0x28, -15]),
+            _ => return,
+        };
+        let Some(at) = self.part_point(SHOT_PART, point) else {
+            return;
+        };
+        let angle = self.player.angle as i16;
+        for &(kind, row) in kind_rows {
+            let case = kind == 2;
+            self.work.effects.push(EffectCall {
+                kind,
+                row,
+                size: if case { 0x700 } else { size },
+                dir: if case { angle.wrapping_add(0x514) } else { 0 },
+                at: at.map(|axis| axis as i16),
+            });
         }
     }
 
@@ -1574,9 +1765,13 @@ impl Mover<'_, '_> {
     fn pl_mv_forward(&mut self) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Weapon, self.life_clip(&WALK_CLIPS));
+            self.work.noise |= 2;
         }
         self.spd_get();
         self.joint_move();
+        if self.work.now_seq & FRAME_FOOTSTEP != 0 {
+            self.work.noise |= 2;
+        }
         self.footstep(0);
         self.add_speed_xz();
     }
@@ -1584,9 +1779,13 @@ impl Mover<'_, '_> {
     fn pl_mv_run(&mut self) {
         if self.work.routine[2] == 0 {
             self.start_motion(Bank::Weapon, self.life_clip(&RUN_CLIPS));
+            self.work.noise |= 4;
         }
         self.spd_get();
         self.joint_move();
+        if self.work.now_seq & FRAME_FOOTSTEP != 0 {
+            self.work.noise |= 4;
+        }
         self.footstep(1);
         if self.work.d_life_u < 2 {
             self.work.spd[0] = self.work.spd[0].wrapping_sub(RUN_SLOWDOWN);
@@ -2511,6 +2710,7 @@ mod tests {
                 stopped: false,
                 weapon: self.weapon,
                 necks: Default::default(),
+                targets: &[],
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
@@ -2857,6 +3057,7 @@ mod tests {
             stopped: true,
             weapon: Weapon::default(),
             necks: Default::default(),
+            targets: &[],
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         assert_eq!(setup.work, before);

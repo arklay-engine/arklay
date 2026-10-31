@@ -17,7 +17,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::model::Texture8;
 use crate::render::{Camera, EffectBlend, EffectQuad};
-use crate::state::Image;
+use crate::state::{Image, Sca};
 
 /// `Esp_`'s slots.
 pub const POOL_SIZE: usize = 0x60;
@@ -323,6 +323,8 @@ struct Slot {
     size: u16,
     /// `+0x78`: this slot's group of blocks, in the motion table.
     blocks: usize,
+    /// `+0x14` while it falls: `Sca_ck_hit`'s height, under it at the last look.
+    ground: i32,
 }
 
 impl Slot {
@@ -363,6 +365,8 @@ pub struct Effects {
     /// `Rnd`, for the length of a tick.
     random: crate::zombie2::Rnd,
     unported: u128,
+    /// `Snd_se_on`s since the last tick was taken.
+    pub sounds: Vec<(u32, [i16; 3])>,
 }
 
 impl Effects {
@@ -478,7 +482,7 @@ impl Effects {
     }
 
     /// `Esp_tbl[id]`.
-    fn behave(&mut self, index: usize, id: u8) {
+    fn behave(&mut self, index: usize, id: u8, sca: Option<&Sca>) {
         let slot = self.slots[index];
         match id {
             0 => {}
@@ -530,6 +534,77 @@ impl Effects {
                 slot.flags = FLAGS_NEW;
                 slot.anim = 0;
             }
+            0x0a => {
+                let frame = slot.next_flags as u8;
+                let delay = self
+                    .bank
+                    .sprites
+                    .get(&slot.kind)
+                    .map_or(0, |s| s.frame(frame)[2]);
+                let this = &mut self.slots[index];
+                this.flags = FLAG_LIVE | FLAG_ANIMATE | FLAG_INTEGRATE;
+                this.frame = frame;
+                this.delay = delay;
+                if slot.row != 6 {
+                    self.slots[index].velocity[2] = i16::from(self.rnd() & 3) * 5;
+                    let down = i16::from(self.rnd() % 3) * -10;
+                    let velocity = &mut self.slots[index].velocity[1];
+                    *velocity = velocity.wrapping_add(down);
+                }
+            }
+            // `Esp_07`: on to a further row of colours, with a sound.
+            7 => {
+                let this = &mut self.slots[index];
+                this.row = this.row.wrapping_add(this.count);
+                let id = if slot.generation == 0 {
+                    u32::from(slot.range) << 16 | 1
+                } else {
+                    0x31F_0001
+                };
+                self.sounds.push((id, slot.pos));
+                self.next_block(index, false);
+            }
+            // `Esp_05`, without `Water_ck`'s splash: what's falling reaches the
+            // ground, or something it was above.
+            5 => {
+                let ground = Self::ground(sca, slot.pos);
+                let y = i32::from(slot.pos[1]);
+                if ground.height < y {
+                    self.behave(index, slot.start, sca);
+                } else if ground.blocked {
+                    let id = if ground.height == slot.ground {
+                        slot.count
+                    } else {
+                        slot.start
+                    };
+                    self.behave(index, id, sca);
+                } else {
+                    self.slots[index].ground = ground.height;
+                }
+            }
+            // `Esp_10`: start falling, on the ground below.
+            0x10 => {
+                let ground = Self::ground(sca, slot.pos).height;
+                let this = &mut self.slots[index];
+                this.ground = ground;
+                this.anim = this.step;
+                this.update = 5;
+            }
+            0x23 => self.slots[index].kill(),
+            // A falling case's first and second bounce.
+            0x2c => {
+                let this = &mut self.slots[index];
+                this.start = 0x23;
+                this.velocity[0] = (i32::from(this.velocity[0]) * 0x3C / 100) as i16;
+                this.velocity[1] = (i32::from(this.velocity[1]) * -0x28 / 100) as i16;
+                self.bounce(index);
+            }
+            0x2d => {
+                let this = &mut self.slots[index];
+                this.count = 0x23;
+                this.velocity[0] = this.velocity[0].wrapping_neg();
+                self.bounce(index);
+            }
             // `Esp_19` puts out a fire in water, which isn't ported.
             0x19 => {}
             _ => {
@@ -539,6 +614,26 @@ impl Effects {
                 }
             }
         }
+    }
+
+    /// `Sca_ck_hit`, at what's being tested for a landing.
+    fn ground(sca: Option<&Sca>, pos: [i16; 3]) -> crate::sca::Ground {
+        let pos = pos.map(i32::from);
+        sca.map_or_else(
+            || crate::sca::Ground {
+                blocked: pos[1] > 0,
+                ..Default::default()
+            },
+            |sca| crate::sca::ground_at(sca, pos, 2, 0x2000),
+        )
+    }
+
+    /// The end of `Esp_2C` and `Esp_2D`: a little sideways, and the sound of it.
+    fn bounce(&mut self, index: usize) {
+        self.slots[index].velocity[2] = i16::from(self.rnd() & 3) * 3;
+        let slot = &self.slots[index];
+        self.sounds
+            .push((u32::from(slot.next_flags) << 16 | 1, slot.pos));
     }
 
     /// `Esp_0C`: leave more of the same behind at one frame, up to ten times,
@@ -602,10 +697,10 @@ impl Effects {
     }
 
     /// The second half of a slot's tick (`FUN_004b9590`).
-    fn advance(&mut self, index: usize) {
+    fn advance(&mut self, index: usize, sca: Option<&Sca>) {
         Self::place(&mut self.slots[index]);
         let update = self.slots[index].update;
-        self.behave(index, update);
+        self.behave(index, update, sca);
         let bank = Arc::clone(&self.bank);
         let slot = &mut self.slots[index];
         if slot.flags & FLAG_INTEGRATE != 0 {
@@ -638,13 +733,13 @@ impl Effects {
     }
 
     /// `Esp_move`: one tick, drawing on the game's `Rnd`.
-    pub fn tick(&mut self, rnd: &mut crate::zombie2::Rnd) {
+    pub fn tick(&mut self, rnd: &mut crate::zombie2::Rnd, sca: Option<&Sca>) {
         self.random = *rnd;
-        self.move_slots();
+        self.move_slots(sca);
         *rnd = self.random;
     }
 
-    fn move_slots(&mut self) {
+    fn move_slots(&mut self, sca: Option<&Sca>) {
         for index in 0..self.slots.len() {
             let slot = self.slots[index];
             if !slot.live() {
@@ -654,16 +749,16 @@ impl Effects {
                 self.slots[index].kill();
             }
             let anim = self.slots[index].anim;
-            self.behave(index, anim);
+            self.behave(index, anim, sca);
         }
         for index in 0..self.slots.len() {
             if self.slots[index].flags & FLAG_DEFERRED != 0 {
                 self.slots[index].flags = FLAGS_NEW;
                 let anim = self.slots[index].anim;
-                self.behave(index, anim);
+                self.behave(index, anim, sca);
             }
             if self.slots[index].live() {
-                self.advance(index);
+                self.advance(index, sca);
             }
         }
     }
@@ -984,7 +1079,7 @@ mod tests {
         effects.enter_room(bank(&[fire_block(), held]));
         let slot = effects.call(7, 0, 0x1000, 0, [100, 0, 0], false).unwrap();
         assert_eq!(slot, POOL_SIZE - 1);
-        effects.tick(&mut Default::default());
+        effects.tick(&mut Default::default(), None);
         let slot = effects.slots[slot];
         assert_eq!(slot.flags, 0xb003);
         assert_eq!(slot.tpage & 0x60, 0x20);
@@ -998,10 +1093,45 @@ mod tests {
         effects.enter_room(bank(&[fire_block(), [0; BLOCK_LEN]]));
         let slot = effects.call(7, 0, 0x1000, 0, [0, 0, 0], false).unwrap();
         for _ in 0..20 {
-            effects.tick(&mut Default::default());
+            effects.tick(&mut Default::default(), None);
             assert!(effects.slots[slot].frame < 2);
             assert!(effects.slots[slot].live());
         }
+    }
+
+    #[test]
+    fn a_falling_case_bounces_off_the_ground_with_a_sound_then_goes() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[0] = 0x0A;
+        block[1] = 0x10;
+        block[2] = 0x2C;
+        block[3] = 0x2D;
+        block[11] = 0x0D;
+        block[14..16].copy_from_slice(&40i16.to_le_bytes());
+        block[18..20].copy_from_slice(&0x0102u16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[block]));
+        let slot = effects.call(7, 0, 0x700, 0, [0, -100, 0], false).unwrap();
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[slot].anim, 0x0D);
+        assert_eq!(effects.slots[slot].update, 5);
+        assert!(effects.sounds.is_empty());
+        let mut rising = false;
+        for _ in 0..20 {
+            effects.tick(&mut Default::default(), None);
+            rising |= effects.slots[slot].velocity[1] < 0;
+            if rising {
+                break;
+            }
+        }
+        assert!(rising);
+        assert_eq!(effects.slots[slot].start, 0x23);
+        assert_eq!(effects.sounds.len(), 1);
+        assert_eq!(effects.sounds[0].0, 0x0102_0001);
+        for _ in 0..40 {
+            effects.tick(&mut Default::default(), None);
+        }
+        assert!(!effects.slots[slot].live());
     }
 
     #[test]

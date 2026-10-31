@@ -706,9 +706,7 @@ pub struct Ground {
     pub ceiling: i32,
 }
 
-/// `Sca_ck_hit`, without the object models. Every shape counts as its whole
-/// box, where the original tests the diagonals and curves' outlines and takes a
-/// slope's or stairs' height at the point.
+/// `Sca_ck_hit`, without the object models.
 pub fn ground_at(sca: &Sca, pos: [i32; 3], radius: i32, mask: u16) -> Ground {
     let mut ground = Ground {
         blocked: pos[1] > 0,
@@ -720,12 +718,12 @@ pub fn ground_at(sca: &Sca, pos: [i32; 3], radius: i32, mask: u16) -> Ground {
             || record.id & mask == 0
             || record.shape() == 10
             || !inside_grown(record, pos[0], pos[2], radius)
+            || !inside_shape(record, pos[0], pos[2], radius)
         {
             continue;
         }
         let top_floor = record.floor.trailing_zeros().min(32) as i32 * -FLOOR_HEIGHT;
-        let height = i32::from((record.kind & 0x7C0) >> 6) * -FLOOR_HEIGHT
-            + i32::from(record.kind >> 11) * -100;
+        let height = height_at(record, pos, top_floor);
         if pos[1] <= top_floor {
             if height < pos[1] {
                 ground.blocked = true;
@@ -736,6 +734,97 @@ pub fn ground_at(sca: &Sca, pos: [i32; 3], radius: i32, mask: u16) -> Ground {
         }
     }
     ground
+}
+
+/// Within a record's own shape, given it's within its outline: `Sca_ck_naname_a`
+/// to `Sca_ck_circle`, and `FUN_004e2250` and `FUN_004e23e0`.
+fn inside_shape(record: &ScaRect, x: i32, z: i32, r: i32) -> bool {
+    let (left, near, width, depth) = outline(record);
+    let (dx, dz) = (x - left, z - near);
+    let (across, along) = (width + r * 2, depth + r * 2);
+    let circle = |left: i32, near: i32, size: i32| {
+        let half = size / 2;
+        let (dx, dz) = (x - left - half, z - near - half);
+        let distance = square_root0(mul(dz, dz).wrapping_add(mul(dx, dx)));
+        half + r - distance > 0
+    };
+    match record.shape() {
+        1 => div(mul(-along, dx + r), across) < dz - depth - r,
+        2 => div(mul(dx - width - r, along), across) < dz - depth - r,
+        3 => dz + r < div(mul(dx + r, along), across),
+        4 => dz + r < div(mul(-along, dx - width - r), across),
+        5 => {
+            let (right, far) = (left + width, near + depth);
+            let (middle_x, middle_z) = (left + width / 2, near + depth / 2);
+            let (from_x, from_z) = (x - middle_x, z - middle_z);
+            match (from_z < 0, from_x < 0) {
+                (false, false) => {
+                    z - far - r < div(mul(middle_z - far - r, from_x), right - middle_x + r)
+                }
+                (false, true) => {
+                    from_z < div(mul(far - middle_z + r, x - left + r), middle_x - left + r)
+                }
+                (true, false) => {
+                    div(mul(middle_z - near + r, from_x), right - middle_x + r) < z - near + r
+                }
+                (true, true) => {
+                    div(mul(near - middle_z - r, x - left + r), middle_x - left + r) < from_z
+                }
+            }
+        }
+        6 => circle(left, near, width),
+        7 => {
+            let half = depth / 2;
+            if x < left + half {
+                circle(left, near, depth)
+            } else if x < left - half + width {
+                true
+            } else {
+                circle(left + width - depth, near, depth)
+            }
+        }
+        8 => {
+            let half = width / 2;
+            if z < near + half {
+                circle(left, near, width)
+            } else if z < near - half + depth {
+                true
+            } else {
+                circle(left, near + depth - width, width)
+            }
+        }
+        _ => true,
+    }
+}
+
+/// The height `Sca_ck_hit` takes from a record at a point: flat with a raised
+/// top, or a slope's, stairs' or half pipe's there.
+fn height_at(record: &ScaRect, pos: [i32; 3], top_floor: i32) -> i32 {
+    let base = i32::from((record.kind & 0x7C0) >> 6) * -FLOOR_HEIGHT;
+    let (left, near, width, depth) = outline(record);
+    let [x, _, z] = pos;
+    match record.shape() {
+        0xB => slope_height(record, x, z),
+        // `FUN_004e29f0`.
+        0xC => {
+            let run = match (record.kind & 0x30) >> 4 {
+                0 => width - x + left,
+                1 => x - left,
+                2 => depth - z + near,
+                _ => z - near,
+            };
+            let rise = (run / 0x21C * STAIRS_REACH).min(top_floor - base).max(0);
+            base + rise
+        }
+        // `FUN_004e2aa0`.
+        0xD => {
+            let half = depth / 2;
+            let from_middle = near - z + half;
+            let across = mul(half, half).wrapping_sub(mul(from_middle, from_middle));
+            square_root0(across) + top_floor - half
+        }
+        _ => base + i32::from(record.kind >> 11) * -100,
+    }
 }
 
 /// The floor heights at `stairs`' two ends: `FUN_004E3910` and `FUN_004E3940`.
@@ -898,6 +987,27 @@ mod tests {
             assert!(!again.hit, "shape {shape} should leave the body clear");
             let free = resolve(&sca, [0, 0, 0], [clear[0], 0, clear[1]], PLAYER_RADIUS);
             assert!(!free.hit, "shape {shape} should not block {clear:?}");
+        }
+    }
+
+    #[test]
+    fn the_ground_is_only_within_a_records_own_shape() {
+        let near = 1000 + 10;
+        let far = 2000 - 10;
+        for (shape, solid, clear) in [
+            (1, [far, far], [near, near]),
+            (2, [near, far], [far, near]),
+            (3, [far, near], [near, far]),
+            (4, [near, near], [far, far]),
+            (5, [1500, 1500], [near, near]),
+            (6, [1500, 1500], [near, near]),
+        ] {
+            let mut raised = record(shape);
+            raised.kind |= 1 << 6;
+            let sca = room(vec![raised]);
+            let at = |[x, z]: [i32; 2]| ground_at(&sca, [x, 0, z], 2, PLAYER_MASK);
+            assert!(at(solid).blocked, "shape {shape} at {solid:?}");
+            assert!(!at(clear).blocked, "shape {shape} at {clear:?}");
         }
     }
 

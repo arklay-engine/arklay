@@ -6,7 +6,7 @@ use crate::game::GameState;
 use crate::model::{Clip, Emd, Keyframe};
 use crate::pack::Pack;
 use crate::player2::{self, Banks, Tick};
-use crate::scd2::host::{Character, SPLAYER_SLOT};
+use crate::scd2::host::{Character, NO_ENEMY_FLAG, SPLAYER_SLOT};
 use crate::state::RoomState;
 
 /// `Game_loop`'s pass over the enemy slots, for the characters `_Spl` runs.
@@ -52,6 +52,59 @@ pub fn tick(
             }
         }
         game.re2.characters.0[slot] = Some(character);
+    }
+}
+
+/// What the player's routine sees of the slots, in `enemy_work`'s order.
+pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
+    let characters = game.re2.characters.0.iter().enumerate();
+    characters
+        .filter(|(slot, _)| *slot != SPLAYER_SLOT)
+        .filter_map(|(slot, character)| {
+            let character = character.as_deref()?;
+            let zombie = character.zombie.as_ref()?;
+            let pos = character.body.pos;
+            Some(crate::weapon2::Target {
+                slot,
+                id: character.id,
+                be_flg: character.be_flg,
+                kind: character.work.kind,
+                life: zombie.life,
+                damage_cnt: zombie.damage_cnt,
+                pos,
+                at: [zombie.atd.at[0], zombie.atd.at[2]],
+                at_w: zombie.atd.at_w,
+                at_w1: 0,
+                neck_y: character.work.neck.position.map_or(pos[1], |neck| neck[1]),
+            })
+        })
+        .collect()
+}
+
+/// What the player's tick asked of the effects and the slots: the shot's
+/// `Esp_call`s, and what it found goes to who it hit.
+pub fn take_hit(game: &mut GameState) {
+    for call in std::mem::take(&mut game.re2.player.effects) {
+        game.re2
+            .effects
+            .call(call.kind, call.row, call.size, call.dir, call.at, false);
+    }
+    let Some(hit) = game.re2.player.hit.take() else {
+        return;
+    };
+    let from = game.entities[0].pos;
+    let Some(character) = game
+        .re2
+        .characters
+        .0
+        .get_mut(hit.slot)
+        .and_then(Option::as_mut)
+    else {
+        return;
+    };
+    if let Some(mut zombie) = character.zombie.take() {
+        crate::zombie2::take_hit(character, &mut zombie, &hit, from);
+        character.zombie = Some(zombie);
     }
 }
 
@@ -105,11 +158,19 @@ fn run_zombie(
         .sca
         .as_ref()
         .map_or(&[][..], |sca| sca.records.as_slice());
+    let partner = game
+        .re2
+        .characters
+        .0
+        .get(SPLAYER_SLOT)
+        .is_some_and(|other| other.as_deref().is_some_and(|other| other.be_flg & 1 != 0));
     let stopped = game.re2.character_stopped(slot);
     let easy = game.re2.flag(0, FG_SYSTEM_EASY);
     let enemies = game.re2.enemies;
     let player_clip = game.re2.player.move_no;
+    let noise = game.re2.player.noise;
     let player_neck = game.re2.player.neck.position;
+    let stage = game.id.stage;
     let re2 = &mut game.re2;
     let effects = &mut re2.effects;
     let mut world = crate::zombie2::World {
@@ -118,8 +179,9 @@ fn run_zombie(
         player_floor: crate::sca::floor_of(player[1]),
         player_clip,
         lock: &mut re2.player_lock,
-        noise: 0,
+        noise: u16::from(noise),
         rnd: &mut re2.rnd,
+        partner,
         easy,
         enemies,
         stopped,
@@ -130,6 +192,10 @@ fn run_zombie(
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let pos = character.body.pos;
+    if std::mem::take(&mut zombie.died) && zombie.dead_flag != NO_ENEMY_FLAG {
+        let bank = re2.enemy_flag_bank(stage);
+        re2.set_flag(bank, zombie.dead_flag, 1);
+    }
     for sound in zombie.sounds.drain(..) {
         let id = 3 << 24 | u32::from(sound) << 16;
         if let Some(id) = crate::se2::SoundId::decode(id) {
@@ -202,8 +268,7 @@ pub fn init(
     }
     // The pass of `Game_loop` that ends a load runs `Esp_move`, and little else.
     if std::mem::take(&mut game.re2.load_pass) {
-        let re2 = &mut game.re2;
-        re2.effects.tick(&mut re2.rnd);
+        game.re2.tick_effects(room.sca.as_ref());
     }
 }
 
@@ -276,6 +341,7 @@ pub fn tick_of<'a>(
         stopped: false,
         weapon: Default::default(),
         necks: game.re2.necks(),
+        targets: &[],
     }
 }
 

@@ -1,0 +1,6 @@
+# Leon aims from where he starts and fires until the magazine runs out, at the zombies that come
+0 
+20 aim
+40 aim fire
+700 aim
+720
