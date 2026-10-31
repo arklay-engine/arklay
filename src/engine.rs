@@ -2747,10 +2747,14 @@ impl GameSession {
         if self.game.is_re2_room && !self.game.camera.locked {
             // RE2's zones only lead out of the cut they're listed under, so a
             // scan from cut 0 can't reach a placement several cuts away. A door
-            // names its arrival's cut (`Door_load`); without one, the zone
-            // holding the player does.
+            // names its arrival's cut (`Door_load`) and otherwise the zone
+            // holding the player does, if the player is in that cut's view.
             let room = &mut self.loaded.room;
-            let cut = door_cut.or_else(|| player::cut_holding(room, self.player.pos));
+            let preferred: Vec<usize> = door_cut
+                .into_iter()
+                .chain(player::cut_holding(room, self.player.pos))
+                .collect();
+            let cut = cut_showing_player(room, self.player.pos, &preferred);
             if let Some(cut) = cut.filter(|&cut| cut < room.cuts.len()) {
                 room.current_cut = cut;
                 self.game.set_camera_cut(cut);
@@ -7058,19 +7062,27 @@ pub fn room_entry_placement(
     target: RoomId,
 ) -> Option<([i32; 3], u16, Option<usize>)> {
     let door = entry_door(&game.doors);
-    if let Some(re2) = door.and_then(|door| door.re2) {
+    if let Some((door, re2)) = door.and_then(|door| Some((door, door.re2?))) {
         let dest = RoomId {
             stage: re2.stage,
             room: re2.room,
             ..target
         };
-        let neighbour = room_door_state(pack, dest).ok()?;
-        let back = neighbour.doors.iter().flatten().find(|back| {
-            back.re2
-                .is_some_and(|re2| re2.stage == target.stage && re2.room == target.room)
-        })?;
-        let cut = back.re2.map(|re2| usize::from(re2.cut));
-        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, cut));
+        let neighbour = room_door_state(pack, dest).ok();
+        let back = neighbour
+            .iter()
+            .flat_map(|state| state.doors.iter().flatten())
+            .find(|back| {
+                back.re2
+                    .is_some_and(|re2| re2.stage == target.stage && re2.room == target.room)
+            });
+        if let Some(back) = back {
+            let cut = back.re2.map(|re2| usize::from(re2.cut));
+            return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, cut));
+        }
+        // No door leads back, as into the street: stand in this one.
+        let [x, z, width, depth] = door.zone.map(i32::from);
+        return Some(([x + width / 2, 0, z + depth / 2], 0, None));
     }
     if let Some(door) = door
         && let Some(dest) = game.door_destination(target, door.next_room)
@@ -7084,7 +7096,35 @@ pub fn room_entry_placement(
     {
         return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, None));
     }
+    if door.is_none()
+        && room.sca.is_some()
+        && let Some(cut) = room.cuts.first()
+    {
+        // No door to arrive by: stand where the first camera looks.
+        return Some(([cut.look_at[0], 0, cut.look_at[2]], 0, Some(0)));
+    }
     fallback_room_entry(room, door).map(|(pos, angle)| (pos, angle, None))
+}
+
+/// The cut for an RE2 placement that wasn't made by walking there: the first
+/// of `preferred`, then of all the room's cuts, that shows the player, or
+/// the first of `preferred` when none does.
+fn cut_showing_player(room: &RoomState, pos: [i32; 3], preferred: &[usize]) -> Option<usize> {
+    // About the middle of the body.
+    let body = [pos[0], pos[1] - 900, pos[2]];
+    let shows = |&index: &usize| {
+        room.cuts.get(index).is_some_and(|cut| {
+            Camera::from_cut(cut).project(body).is_some_and(|[x, y]| {
+                (0..render::WIDTH as i32).contains(&x) && (0..render::HEIGHT as i32).contains(&y)
+            })
+        })
+    };
+    preferred
+        .iter()
+        .copied()
+        .chain(0..room.cuts.len())
+        .find(|index| shows(index))
+        .or_else(|| preferred.first().copied())
 }
 
 /// The door the arbitrary start treats as the room's entry.
@@ -30508,6 +30548,82 @@ off_0010:
         let (pos, angle, _) = room_entry_placement(&pack, &room, &game, target).unwrap();
         assert_eq!(pos, [500, 0, 500], "the zone centre");
         assert_eq!(angle, 0);
+    }
+
+    /// A debug jump's cut has to show the player, whatever the door names.
+    #[test]
+    fn a_placements_cut_is_one_that_shows_the_player() {
+        let cut = |index: usize, x: i32| crate::state::Cut {
+            index,
+            pos: [x, -2000, -6000],
+            look_at: [x, -1000, 0],
+            fov: 300,
+            ..crate::state::Cut::default()
+        };
+        let room = RoomState {
+            cuts: vec![cut(0, 50_000), cut(1, 0), cut(2, 0)],
+            ..RoomState::default()
+        };
+        let at = [0, 0, 0];
+        assert_eq!(
+            cut_showing_player(&room, at, &[2, 1]),
+            Some(2),
+            "the door's"
+        );
+        assert_eq!(
+            cut_showing_player(&room, at, &[0, 2]),
+            Some(2),
+            "the zone's"
+        );
+        assert_eq!(
+            cut_showing_player(&room, at, &[0]),
+            Some(1),
+            "any that does"
+        );
+        let away = [500_000, 0, 0];
+        assert_eq!(cut_showing_player(&room, away, &[2]), Some(2), "none does");
+        assert_eq!(cut_showing_player(&room, away, &[]), None);
+    }
+
+    /// An RE2 room has no walk zones to fall back on: a door with no way back
+    /// stands the player in the door, and a room with none under the camera.
+    #[test]
+    fn an_re2_entry_without_a_paired_door_stays_in_the_room() {
+        let dir = TempDir::new();
+        let pack_path = dir.0.join("empty.akpak");
+        PackWriter::new().write(&pack_path).unwrap();
+        let pack = Pack::open(&pack_path).unwrap();
+        let target = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let room = RoomState {
+            sca: Some(Default::default()),
+            cuts: vec![crate::state::Cut {
+                look_at: [700, -1000, 800],
+                ..crate::state::Cut::default()
+            }],
+            ..RoomState::default()
+        };
+        let mut game = game::GameState::new(target, &room);
+        assert_eq!(
+            room_entry_placement(&pack, &room, &game, target),
+            Some(([700, 0, 800], 0, Some(0))),
+            "no door: under the first camera"
+        );
+
+        game.doors[0] = Some(game::Door {
+            zone: [100, 200, 40, 60],
+            re2: Some(crate::scd2::host::Re2Door::default()),
+            ..game::Door::default()
+        });
+        assert_eq!(
+            room_entry_placement(&pack, &room, &game, target),
+            Some(([120, 0, 230], 0, None)),
+            "no door back: in the door"
+        );
     }
 
     /// The real pack's `--room` boot places the two reported stairwell rooms
