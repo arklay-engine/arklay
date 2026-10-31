@@ -31,8 +31,8 @@
 //! `BufferArms`, `BufferRoom`, `BufferEnemy`, `BufferCore`) as `SsLoadBanks`
 //! fills them, and [`Banks::play`] resolves a `Snd_se_on` sound id to the
 //! slot's pack stem and gain. The per-room special cases in `Snd_se_on` and
-//! `SsPlay` (room 70A's slot shift, the forced volumes of a few rooms) and the
-//! 3D panning are not modelled yet.
+//! `SsPlay` (room 70A's slot shift, the forced volumes of a few rooms) are not
+//! modelled yet.
 
 use anyhow::{Result, ensure};
 
@@ -64,6 +64,11 @@ const SOLO_CORE: u8 = 0x15;
 /// `id + 0x3d` (`Snd_load_em`).
 const ECHO_ENEMIES: [u8; 2] = [0x25, 0x26];
 
+/// `Snd_load_core`'s table: the bank of each id it's given.
+const CORE_BANKS: [u8; 32] = [
+    0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14,
+    0x15, 0, 0, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0,
+];
 /// The offset of an echoing enemy bank.
 const ECHO_OFFSET: u8 = 0x3d;
 
@@ -291,6 +296,9 @@ pub struct SoundId {
     pub kind: Kind,
     pub slot: u8,
     pub positional: bool,
+    /// A wall between it and the camera lowers it (`Snd_se_3D`, unless its
+    /// flag is 2).
+    pub muffled: bool,
 }
 
 impl SoundId {
@@ -300,7 +308,114 @@ impl SoundId {
             kind: Kind::from_type((id >> 24) as u8)?,
             slot: (id >> 16) as u8,
             positional: id & 0xff != 0,
+            muffled: id & 0xff != 2,
         })
+    }
+}
+
+/// `BYTE_0053ad48`: the two sound types of each enemy bank. A room's first two
+/// enemies' types choose its bank, whatever their order.
+const ENEMY_BANKS: [(u8, u8); 0x49] = [
+    (3, 0),
+    (5, 0),
+    (6, 0),
+    (36, 0),
+    (46, 0),
+    (47, 0),
+    (12, 0),
+    (13, 0),
+    (14, 0),
+    (51, 0),
+    (15, 0),
+    (16, 0),
+    (18, 0),
+    (19, 0),
+    (48, 0),
+    (50, 0),
+    (20, 0),
+    (22, 0),
+    (23, 0),
+    (24, 0),
+    (28, 0),
+    (33, 0),
+    (35, 0),
+    (34, 0),
+    (38, 0),
+    (39, 0),
+    (26, 0),
+    (40, 0),
+    (0, 29),
+    (0, 30),
+    (0, 31),
+    (0, 32),
+    (1, 2),
+    (3, 4),
+    (3, 6),
+    (3, 42),
+    (3, 10),
+    (3, 31),
+    (3, 32),
+    (4, 6),
+    (5, 6),
+    (5, 10),
+    (5, 17),
+    (5, 31),
+    (5, 32),
+    (6, 43),
+    (6, 31),
+    (6, 32),
+    (7, 8),
+    (7, 41),
+    (9, 41),
+    (9, 11),
+    (9, 45),
+    (37, 31),
+    (37, 32),
+    (42, 43),
+    (42, 44),
+    (46, 32),
+    (47, 32),
+    (20, 21),
+    (18, 32),
+    (28, 32),
+    (35, 31),
+    (35, 32),
+    (49, 40),
+    (16, 31),
+    (16, 32),
+    (22, 31),
+    (22, 32),
+    (23, 40),
+    (19, 31),
+    (19, 32),
+    (52, 0),
+];
+
+/// `Sce_se_set`: the enemy bank for a room's two sound types, and whether the
+/// first type is the second of the bank's pair.
+pub fn enemy_bank(types: [u8; 2]) -> Option<(u8, bool)> {
+    let [low, high] = types;
+    if low == 0 && high == 0 {
+        return None;
+    }
+    ENEMY_BANKS.iter().zip(0u8..).find_map(|(&(a, b), bank)| {
+        if a == low && (high == 0 || high == b) {
+            Some((bank, false))
+        } else if b == low && (high == 0 || high == a) {
+            Some((bank, true))
+        } else {
+            None
+        }
+    })
+}
+
+/// `Sce_se_set`: whether an enemy of sound type `kind` plays the bank's second
+/// half (`Be_flg`'s `0x2000`, which `Snd_se_enem` adds `0x10` for).
+pub fn second_half(kind: u8, types: [u8; 2], swapped: bool) -> bool {
+    if kind == types[0] {
+        swapped
+    } else {
+        kind == types[1] && !swapped
     }
 }
 
@@ -414,11 +529,12 @@ impl Banks {
         self.load_table(pack, Kind::Enemy, &bank_dir("enemy", &format!("{id:02x}")));
     }
 
-    /// Load core bank `id` (`core%02d.sap`, `CORE%02X.EDH`) and, for every
-    /// bank but `15`, the shared bank `16` over it, replacing the core
-    /// sounds.
+    /// Load the core bank of `id` (`Snd_load_core`'s table: `core%02d.sap`,
+    /// `CORE%02X.EDH`) and, for every bank but `15`, the shared bank `16` over
+    /// it, replacing the core sounds.
     pub fn load_core(&mut self, pack: &Pack, id: u8) {
         self.unload(Kind::Core);
+        let id = CORE_BANKS.get(usize::from(id)).copied().unwrap_or(id);
         let dir = bank_dir("core", &format!("{id:02x}"));
         self.load_dir(pack, Kind::Core, &dir, 0, 48);
         if id != SOLO_CORE {
@@ -495,13 +611,14 @@ impl Banks {
 /// looking at `to`: its volume (0-127) and `SsSetPan`'s argument. It is the
 /// stereo case: the distance leaves out the x axis.
 pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, i32) {
-    let dy = from[1] - sound[1];
-    let dz = from[2] - sound[2];
-    let distance = (crate::sfx::integer_sqrt(dz * dz + dy * dy) / 250).min(127);
+    let dy = (from[1] - sound[1]).abs();
+    let dz = (from[2] - sound[2]).abs();
+    let squared = dz.wrapping_mul(dz).wrapping_add(dy.wrapping_mul(dy));
+    let distance = (crate::sca::square_root0(squared) / 250).min(127);
     let volume = 127 - distance * 77 / 127;
-    let to_sound = crate::sfx::angle_between_xz(from[0], from[2], sound[0], sound[2]);
-    let to_look = crate::sfx::angle_between_xz(from[0], from[2], to[0], to[2]);
-    let turn = i32::from(to_sound.wrapping_sub(to_look) & 0xfff);
+    let to_sound = se_dir_ck(from[0], from[2], sound[0], sound[2]);
+    let to_look = se_dir_ck(from[0], from[2], to[0], to[2]);
+    let turn = (to_sound - to_look) & 0xfff;
     let pan = if matches!(turn, 0 | 0x800) {
         0
     } else {
@@ -509,11 +626,23 @@ pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, i32) {
         if side & 0x400 != 0 {
             side = 0x800 - side;
         }
-        let angle = f64::from(128 - side / 8) * 0.703125 * 0.017444445;
+        // The executable's own single-precision constants.
+        let angle = f64::from(128 - side / 8) * 0.703125 * f64::from(0.017444445f32);
         let sign = if turn & 0x800 != 0 { -1.0 } else { 1.0 };
         (f64::from(distance) * angle.cos() * sign) as i32
     };
     (volume as u8, pan)
+}
+
+/// `Snd_se_dir_ck`: the 12-bit yaw from one point to another.
+fn se_dir_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> i32 {
+    let dx = to_x - from_x;
+    let dz = to_z - from_z;
+    if dx == 0 {
+        return if dz > 0 { 0xC00 } else { 0x400 };
+    }
+    let half_turn = if dx < 0 { 0x800 } else { 0 };
+    -(crate::player2::catan(dz.wrapping_mul(0x1000) / dx) + half_turn) & 0xFFF
 }
 
 /// `Floor_check`: the low byte of the last footstep zone on floor `floor`
@@ -611,6 +740,25 @@ const FOOTSTEPS: [[i8; 3]; 7 * FOOTSTEP_ROOMS] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enemy_bank_follows_the_pairs_in_either_order() {
+        assert_eq!(enemy_bank([0, 0]), None);
+        assert_eq!(enemy_bank([3, 0]), Some((0, false)));
+        assert_eq!(enemy_bank([3, 31]), Some((0x25, false)));
+        assert_eq!(enemy_bank([31, 3]), Some((0x25, true)));
+        assert_eq!(enemy_bank([29, 0]), Some((0x1C, true)));
+        assert_eq!(enemy_bank([60, 0]), None);
+    }
+
+    #[test]
+    fn the_second_type_of_a_pair_plays_the_second_half() {
+        assert!(!second_half(3, [3, 31], false));
+        assert!(second_half(31, [3, 31], false));
+        assert!(second_half(31, [31, 3], true));
+        assert!(!second_half(3, [31, 3], true));
+        assert!(!second_half(7, [3, 31], false));
+    }
 
     #[test]
     fn a_sound_fades_with_distance_and_pans_to_its_side() {
@@ -714,7 +862,8 @@ mod tests {
             Some(SoundId {
                 kind: Kind::Room,
                 slot: 0x14,
-                positional: true
+                positional: true,
+                muffled: true
             })
         );
         assert_eq!(SoundId::decode(0x0403_0000).unwrap().kind, Kind::Core);
@@ -786,6 +935,7 @@ mod tests {
         writer.add("sound/core/0b/01.wav", wav()).unwrap();
         writer.add("sound/core/16/01.wav", wav()).unwrap();
         writer.add("sound/core/15/02.wav", wav()).unwrap();
+        writer.add("sound/core/20/05.wav", wav()).unwrap();
         writer.add("sound/enemy/25/03.wav", wav()).unwrap();
         writer.add("sound/enemy/62/04.wav", wav()).unwrap();
         writer
@@ -803,6 +953,8 @@ mod tests {
         banks.load_core(&pack, 0x0b);
         assert_eq!(banks.stem(Kind::Core, 0), Some("sound/core/0b/00"));
         assert_eq!(banks.stem(Kind::Core, 1), Some("sound/core/16/01"));
+        banks.load_core(&pack, 0x18);
+        assert_eq!(banks.stem(Kind::Core, 5), Some("sound/core/20/05"));
         banks.load_core(&pack, 0x15);
         assert_eq!(banks.stem(Kind::Core, 0), None);
         assert_eq!(banks.stem(Kind::Core, 2), Some("sound/core/15/02"));

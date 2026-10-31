@@ -75,6 +75,10 @@ pub struct Re2State {
     pub rnd: crate::zombie2::Rnd,
     /// `BYTE_00989eeb`: the room's enemies so far.
     pub enemies: u8,
+    /// `Se_tmp0`: the sound types of the room's enemies, as `sce_em_set` saw them.
+    pub sound_types: [u8; 2],
+    /// `BYTE_0098e543`: the enemy sound bank `Sce_se_set` chose for the room.
+    pub enemy_bank: Option<u8>,
     /// The player's `+0x1d3`: an enemy has hold of them, or is about to.
     pub player_lock: u8,
     /// The room's load has yet to finish: its last pass runs `Esp_move`.
@@ -125,6 +129,8 @@ pub struct Character {
     pub kind: u16,
     /// `sce_em_set`'s last two words: `Em_init_move`'s second `_Spl`.
     pub start: (u16, u16),
+    /// `+0x1fa`: its sound type, which chooses the room's enemy bank.
+    pub sound_type: u8,
     /// The room's load places it, rather than a script during play.
     pub with_room: bool,
     /// What it needs if `Em_Zombie` runs it.
@@ -263,6 +269,8 @@ impl Default for Re2State {
             scroll: 0,
             rnd: Default::default(),
             enemies: 0,
+            sound_types: [0; 2],
+            enemy_bank: None,
             player_lock: 0,
             load_pass: false,
         }
@@ -432,6 +440,23 @@ impl Re2State {
 
     /// `Sce_work_clr`'s `fg_tick`, which is the room bank's second word: the
     /// flags a walk's end raises for one pass of the scripts.
+    /// `Sce_se_set`: choose the room's enemy bank from its enemies' sound types,
+    /// and mark who plays the bank's second half.
+    pub fn sce_se_set(&mut self) {
+        let chosen = crate::se2::enemy_bank(self.sound_types);
+        self.enemy_bank = chosen.map(|(bank, _)| bank);
+        let Some((_, swapped)) = chosen else {
+            return;
+        };
+        for character in self.characters.0.iter_mut().flatten() {
+            if character.be_flg & 1 != 0
+                && crate::se2::second_half(character.sound_type, self.sound_types, swapped)
+            {
+                character.be_flg |= 0x2000;
+            }
+        }
+    }
+
     pub fn clear_tick_flags(&mut self) {
         if let Some(words) = self.banks.get_mut(usize::from(ROOM_BANK)) {
             words[1] = 0;
@@ -777,6 +802,13 @@ impl GameHost<'_> {
         if slot != SPLAYER_SLOT {
             self.game.re2.enemies = self.game.re2.enemies.wrapping_add(1);
         }
+        let sound_type = at(6) as u8;
+        let types = &mut self.game.re2.sound_types;
+        if types[0] == 0 {
+            types[0] = sound_type;
+        } else if types[0] != sound_type {
+            types[1] = sound_type;
+        }
         let zombie = (0x10..0x20).contains(&id);
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
@@ -809,6 +841,7 @@ impl GameHost<'_> {
             body,
             kind,
             start: (at(13) as u16, at(14) as u16),
+            sound_type,
             with_room: self.game.re2.room_loading,
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);

@@ -107,18 +107,19 @@ pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState)
 }
 
 /// `Em10` throws a zombie back (`Routine` `0x901`), if it can be.
-fn knock(game: &mut GameState, slot: usize, back: bool) {
+fn knock(game: &mut GameState, slot: usize, back: bool) -> bool {
     let Some(Some(other)) = game.re2.characters.0.get_mut(slot) else {
-        return;
+        return false;
     };
     let Some(zombie) = other.zombie.as_mut() else {
-        return;
+        return false;
     };
     if other.id & 0x10 != 0x10 || !zombie.can_be_knocked(other.work.kind) {
-        return;
+        return false;
     }
     other.work.routine = [1, 9, 0, 0];
     zombie.knocked(back);
+    true
 }
 
 /// `Player_move` while an enemy holds the player. `FUN_0045a880`'s shove throws
@@ -313,9 +314,16 @@ fn run_zombie(
         let bank = re2.enemy_flag_bank(stage);
         re2.set_flag(bank, zombie.dead_flag, 1);
     }
+    // `Snd_se_enem`, always in 3D.
+    let second = if character.be_flg & 0x2000 != 0 {
+        0x10
+    } else {
+        0
+    };
+    let enemy_sound =
+        |slot: u8| crate::se2::SoundId::decode(3 << 24 | u32::from(slot + second) << 16 | 1);
     for sound in zombie.sounds.drain(..) {
-        let id = 3 << 24 | u32::from(sound) << 16;
-        if let Some(id) = crate::se2::SoundId::decode(id) {
+        if let Some(id) = enemy_sound(sound) {
             re2.sounds.push(crate::scd2::host::SoundRequest { id, pos });
         }
     }
@@ -327,7 +335,13 @@ fn run_zombie(
                 target.body.angle.wrapping_sub(mine).wrapping_add(0x400) & 0xFFF < 0x800
             })
         });
-        knock(game, other, behind);
+        if knock(game, other, behind)
+            && let Some(id) = enemy_sound(4)
+        {
+            game.re2
+                .sounds
+                .push(crate::scd2::host::SoundRequest { id, pos });
+        }
     }
 }
 
@@ -487,6 +501,7 @@ mod tests {
             body: crate::player::spawn(RoomId::parse("1140").unwrap(), &RoomState::default()),
             kind: 0,
             start: (0, 0),
+            sound_type: 0,
             with_room: false,
             zombie: None,
         };

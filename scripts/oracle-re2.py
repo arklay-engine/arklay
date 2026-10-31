@@ -42,6 +42,12 @@ BREAK_PAD = 0x004D0F58
 # Classic Rebirth doesn't patch this code. Refuse to run if it isn't what we expect.
 BREAK_PAD_BYTES = bytes.fromhex("8B0D6C9E9800")  # MOV ECX,[fg_system]
 
+# `SsPlay`: traced for the sound effects each tick plays (`snd=`).
+BREAK_SOUND = 0x004338F0
+VOL_3D_L = 0x00693C44
+VOL_3D_R = 0x00693C46
+VOL_3D_PAN = 0x00689DE4
+
 # Addresses and offsets in bio2 1.10, named as in the IDA database and openre.
 PL = 0x00989EF0  # the player's work
 ENEMIES = 0x0098A114  # EnemyEntity*[16]
@@ -299,6 +305,25 @@ class Game:
         self.pid = pid
         self.mem = os.open(f"/proc/{pid}/mem", os.O_RDWR)
         self.traced: set[int] = set()
+        self.sound_byte: int | None = None  # What `watch_sounds` overwrote.
+        self.sounds: list[str] = []  # What's played since `trace_line` last took them.
+
+    def watch_sounds(self) -> None:
+        """Note every sound effect `SsPlay` starts in `self.sounds`."""
+        self.sound_byte = self.u8(BREAK_SOUND)
+        self.write(BREAK_SOUND, b"\xcc")
+
+    def note_sound(self, tid: int, regs: Regs) -> None:
+        """Record a stop on `SsPlay`, and run the instruction under it."""
+        kind, index = struct.unpack("<2i", self.read((regs.rsp & 0xFFFFFFFF) + 4, 8))
+        if kind < 5:
+            volume = max(self.u16(VOL_3D_L), self.u16(VOL_3D_R))
+            pan = struct.unpack("<i", self.read(VOL_3D_PAN, 4))[0]
+            self.sounds.append(f"{kind}:{index:x}:{volume}:{pan}")
+        regs.rip = BREAK_SOUND
+        ptrace(PTRACE_SETREGS, tid, 0, ctypes.addressof(regs))
+        self.step_over(tid, BREAK_SOUND, self.sound_byte)
+        ptrace(PTRACE_CONT, tid)
 
     def seize_threads(self) -> None:
         # Threads can start while we walk the list; TRACECLONE covers those
@@ -355,13 +380,21 @@ class Game:
                 ptrace(PTRACE_GETREGS, tid, 0, ctypes.addressof(regs))
                 if regs.rip - 1 == BREAK_PAD:
                     return tid, regs
+                if self.sound_byte is not None and regs.rip - 1 == BREAK_SOUND:
+                    self.note_sound(tid, regs)
+                    continue
             ptrace(PTRACE_CONT, tid, 0, sig)
 
     def resume_from_break(self, tid: int, regs: Regs, original: int) -> None:
         """Run the instruction under the breakpoint, put the breakpoint back, go on."""
         regs.rip = BREAK_PAD
         ptrace(PTRACE_SETREGS, tid, 0, ctypes.addressof(regs))
-        self.write(BREAK_PAD, bytes([original]))
+        self.step_over(tid, BREAK_PAD, original)
+        ptrace(PTRACE_CONT, tid)
+
+    def step_over(self, tid: int, address: int, original: int) -> None:
+        """Run the instruction under the breakpoint at `address`, and put it back."""
+        self.write(address, bytes([original]))
         ptrace(PTRACE_SINGLESTEP, tid)
         while True:
             stopped, status = os.waitpid(tid, WALL)
@@ -372,8 +405,7 @@ class Game:
                 raise SystemExit("the game exited")
             # Another signal arrived first: deliver it and step again.
             ptrace(PTRACE_SINGLESTEP, tid, 0, os.WSTOPSIG(status) if status >> 16 == 0 else 0)
-        self.write(BREAK_PAD, b"\xcc")
-        ptrace(PTRACE_CONT, tid)
+        self.write(address, b"\xcc")
 
 
 ITEM_WORK = 0x98ED34
@@ -489,6 +521,8 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         # The game over's end frees the player's parts.
         fields.append("neck=-")
     fields.append(music_trace(game))
+    fields.append("snd=" + ("/".join(game.sounds) or "-"))
+    game.sounds.clear()
     if game.u32(FG_SYSTEM) & 0x100000:
         fields.append(die_trace(game))
     return " ".join(fields)
@@ -602,6 +636,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             game.seize_threads()
             original = game.u8(BREAK_PAD)
             game.write(BREAK_PAD, b"\xcc")
+            game.watch_sounds()
 
             started = time.monotonic()
             boot_tick = 0
@@ -619,6 +654,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                     if game.i16(PL + ENTITY_LIFE) != 0:
                         settled += 1
                     if settled > SETTLE_TICKS:
+                        game.sounds.clear()
                         tick = 0
                         cursor = 0
                         pad = 0

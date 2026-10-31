@@ -623,6 +623,7 @@ pub fn run_with_options(
                         re2_zombies: None,
                         re2_music: None,
                         re2_die: None,
+                        re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
                     })?;
@@ -3586,6 +3587,7 @@ impl GameSession {
         if self.game.is_re2_room {
             let re2 = &mut self.game.re2;
             re2.tick_effects(self.loaded.room.sca.as_ref());
+            self.re2_sounds.played.clear();
             play_re2_sounds(
                 &mut self.music,
                 &mut self.sfx_cache,
@@ -3680,6 +3682,18 @@ impl GameSession {
         // The death machine runs at the end of the gameplay frame, after the
         // room tick noticed the health drop, exactly like the original.
         self.tick_death(pack);
+        // `Die`'s cry, this tick.
+        if self.game.is_re2_room && !self.game.re2.sounds.is_empty() {
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+            );
+        }
         // The attract watchdog runs after the gameplay tick: it advances the
         // playback counter and, once the reel is within ten frames of its
         // recorded end or a live button is held, raises the dead flag. The
@@ -6416,6 +6430,14 @@ impl GameSession {
                 .re2_die
                 .as_ref()
                 .and_then(crate::die2::Die::trace_field),
+            re2_sounds: self.game.is_re2_room.then(|| {
+                self.re2_sounds
+                    .played
+                    .iter()
+                    .map(|(kind, slot, volume, pan)| format!("{kind}:{slot:x}:{volume}:{pan}"))
+                    .collect::<Vec<_>>()
+                    .join("/")
+            }),
             entities,
             frame_hash: trace::frame_hash(frame),
         }
@@ -12430,25 +12452,26 @@ fn play_footsteps(
     }
 }
 
-/// An RE2 room's sound banks (`Snd_room_load`, `Snd_load_core`,
-/// `Snd_load_arms`), loaded when play in the room first asks for a sound. The
-/// enemy bank isn't loaded: there are no enemies to play it.
+/// An RE2 room's sound banks (`Snd_room_load`, `Snd_load_em`, `Snd_load_core`,
+/// `Snd_load_arms`), loaded when play in the room first asks for a sound.
 #[derive(Default)]
 struct Re2Sounds {
-    /// The room, player and weapon they were loaded for.
-    loaded: Option<(RoomId, u8, u8)>,
+    /// The room, player, weapon and enemy bank they were loaded for.
+    loaded: Option<(RoomId, u8, u8, Option<u8>)>,
     banks: crate::se2::Banks,
     /// The room's PlayStation VAB, for a room without a PC bank.
     vab: Option<door2::vab::Vab>,
+    /// This tick's `SsPlay`s, for the trace: `(type, index, volume, pan)`.
+    played: Vec<(u8, u8, u8, i32)>,
 }
 
 impl Re2Sounds {
-    fn load(&mut self, pack: &Pack, id: RoomId, player: u8, weapon: u8) {
+    fn load(&mut self, pack: &Pack, id: RoomId, player: u8, weapon: u8, enemy: Option<u8>) {
         use crate::se2;
-        if self.loaded == Some((id, player, weapon)) {
+        if self.loaded == Some((id, player, weapon, enemy)) {
             return;
         }
-        self.loaded = Some((id, player, weapon));
+        self.loaded = Some((id, player, weapon, enemy));
         let folder = format!("room/{}{:02x}{}", id.stage, id.room, player);
         let edh = pack
             .read(&format!("{folder}/{}", se2::ROOM_EDH_NAME))
@@ -12465,6 +12488,15 @@ impl Re2Sounds {
         self.banks.load_core(pack, player);
         // `Snd_load_arms`: bare hands use the first bank.
         self.banks.load_arms(pack, weapon.max(1));
+        self.banks.unload(se2::Kind::Enemy);
+        if let Some(enemy) = enemy {
+            let reverb = pack
+                .read(&id.rdt_entry())
+                .ok()
+                .and_then(|rdt| rdt.get(6).copied())
+                .unwrap_or(0);
+            self.banks.load_enemy(pack, enemy, reverb);
+        }
     }
 
     /// The sound in `kind`'s `slot`: the PC bank's WAV, or for a room with none
@@ -12504,23 +12536,32 @@ fn play_re2_sounds(
     let requests = std::mem::take(&mut game.re2.sounds);
     let footsteps = player.take_footsteps();
     let weapon = player.take_sounds();
-    let Some(mixer) = music.as_mut() else {
-        return;
-    };
     let character = u8::from(game.re2.flag(1, crate::scd2::host::STATUS_PLAYER));
-    sounds.load(pack, game.id, character, game.re2_weapon().id);
+    sounds.load(
+        pack,
+        game.id,
+        character,
+        game.re2_weapon().id,
+        game.re2.enemy_bank,
+    );
     let Some(cut) = room.cuts.get(room.current_cut) else {
         return;
     };
+    let mut played = std::mem::take(&mut sounds.played);
     let mut play = |id: SoundId, pos: [i32; 3]| {
         let Some(tone_volume) = sounds.banks.volume(id.kind, id.slot) else {
             return;
         };
-        let Some(wav) = sounds.wav(cache, pack, id.kind, id.slot) else {
-            return;
-        };
         let (volume, pan) = if id.positional {
-            let (volume, pan) = se2::place(cut.pos, cut.look_at, pos);
+            let (mut volume, pan) = se2::place(cut.pos, cut.look_at, pos);
+            let ear = [pos[0], pos[1] - 0x5DC, pos[2]];
+            if id.muffled
+                && room.sca.as_ref().is_some_and(|sca| {
+                    crate::zombie2::sca_ck_line(&sca.records, cut.pos, ear, 0x8400)
+                })
+            {
+                volume = (u32::from(volume) * 0x55 / 100) as u8;
+            }
             // The weapon's own sounds, of its first program, are louder.
             let louder = id.kind == Kind::Arms
                 && sounds
@@ -12535,6 +12576,13 @@ fn play_re2_sounds(
             (0x6e, 0)
         } else {
             (tone_volume, 0)
+        };
+        played.push((id.kind.index() as u8, id.slot, volume, pan));
+        let Some(mixer) = music.as_mut() else {
+            return;
+        };
+        let Some(wav) = sounds.wav(cache, pack, id.kind, id.slot) else {
+            return;
         };
         mixer.play_sfx_on_bank(
             sfx_bank_key(id.kind.index() as u8, id.slot),
@@ -12558,6 +12606,7 @@ fn play_re2_sounds(
             kind: Kind::Room,
             slot: footstep.sound_type + (zone & 0x7f),
             positional: true,
+            muffled: true,
         };
         play(id, footstep.pos);
     }
@@ -12566,9 +12615,11 @@ fn play_re2_sounds(
             kind: Kind::Arms,
             slot: sound.id as u8,
             positional: true,
+            muffled: true,
         };
         play(id, sound.pos);
     }
+    sounds.played = played;
 }
 
 /// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`.
@@ -14007,6 +14058,7 @@ fn run_re2_init(
     game.re2.characters = Default::default();
     game.re2.rnd = Default::default();
     game.re2.enemies = 0;
+    game.re2.sound_types = [0; 2];
     game.re2.player_lock = 0;
     game.re2.room_loading = true;
     game.re2.load_pass = true;
@@ -14016,6 +14068,7 @@ fn run_re2_init(
     vm.start_main();
     // `Sce_scheduler_set` ends in a pass of `Sce_scheduler_main`.
     vm.tick(&mut host);
+    game.re2.sce_se_set();
     game.re2.clear_tick_flags();
     game.re2.room_loading = false;
     game.re2.vm = Some(Box::new(vm));
