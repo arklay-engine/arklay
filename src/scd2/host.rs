@@ -1067,6 +1067,14 @@ impl Host for GameHost<'_> {
                     self.game.re2.unmodelled_arrivals.push(flag);
                 }
             }
+            "plc_neck" if self.work_is_player(task) => {
+                crate::player2::plc_neck(
+                    &mut self.game.re2.player,
+                    at(0) as u8,
+                    [at(1) as i16, at(2) as i16, at(3) as i16],
+                    [at(4) as u8, at(5) as u8],
+                );
+            }
             "plc_ret" if self.work_is_player(task) => {
                 crate::player2::plc_ret(&mut self.game.re2.player);
             }

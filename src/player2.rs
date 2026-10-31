@@ -275,6 +275,87 @@ pub struct Work {
     pub fired: bool,
     /// The magazine was filled this tick (`Tama_reload`), for the inventory.
     pub reloaded: bool,
+    /// The head's `Rot_neck` state.
+    pub neck: Neck,
+}
+
+/// `Neck_no`: the head's joint, the same for every player.
+pub const NECK_JOINT: usize = 8;
+/// `Pl_init`'s turn rates and limits of [`NECK_JOINT`], yaw then pitch.
+const NECK_RATES: [i32; 2] = [0x60, 0x60];
+const NECK_LIMITS: [i32; 2] = [0x200, 0x138];
+/// `plc_neck`'s `0x8000` in its second word: aim at another work's neck.
+const NECK_AT_WORK: i16 = -0x8000;
+
+/// The state `Plc_neck` leaves for `Rot_neck`, and the turn that adds to the
+/// head's pose.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Neck {
+    /// `Neck_flg`.
+    pub flags: u8,
+    /// The script's three words, at `+0x170`, and what a sweep keeps in them.
+    pub words: [i16; 3],
+    /// `plc_neck`'s rates, used while `flags`' top bit is set.
+    pub rates: [u8; 2],
+    /// The head's yaw and pitch on top of its pose (the joint's `+0x98`).
+    pub turn: [i16; 2],
+}
+
+impl Neck {
+    /// Add the turn to `pose`, as `Rot_neck` does around its `RotMatrix`.
+    pub fn apply(&self, pose: &mut Keyframe) {
+        if let Some(rotation) = pose.rotations.get_mut(NECK_JOINT) {
+            rotation[1] = rotation[1].wrapping_add(self.turn[0]);
+            rotation[2] = rotation[2].wrapping_add(self.turn[1]);
+        }
+    }
+}
+
+/// `Plc_neck` on `work`: what to do with the head from now on.
+pub fn plc_neck(work: &mut Work, mode: u8, words: [i16; 3], rates: [u8; 2]) {
+    let neck = &mut work.neck;
+    neck.flags = match mode {
+        0 => 0x92,
+        1 | 5 => 0x84,
+        2 => 0x88,
+        3 => 0xAA,
+        4 => 0xD8,
+        6 => 0,
+        _ => 0x80,
+    };
+    neck.words = [words[0], words[1], words[2]];
+    if mode == 5 {
+        neck.words[0] = match words[0] {
+            1 => 0,
+            2 => 1,
+            _ => words[1].wrapping_add(2),
+        };
+        neck.words[1] = NECK_AT_WORK;
+    }
+    neck.rates = rates;
+}
+
+/// `Neck_Dir_ZY`: the yaw and pitch from `from` to `to`.
+fn neck_direction(from: [i32; 3], to: [i32; 3]) -> [i32; 2] {
+    let (x, z) = (to[0] - from[0], to[2] - from[2]);
+    let y = from[1] - to[1];
+    let level = i64::from(z).pow(2) + i64::from(x).pow(2);
+    let level = level.isqrt() as i32;
+    let mut direction = [0; 2];
+    if z != 0 {
+        direction[0] = if z < 0 { 0x400 } else { 0xC00 };
+    }
+    if x != 0 {
+        let half = if x < 0 { 0x800 } else { 0 };
+        direction[0] = -(catan(z.wrapping_mul(0x1000) / x) + half) & 0xFFF;
+    }
+    if y != 0 {
+        direction[1] = if y < 0 { 0xC00 } else { 0x1400 };
+    }
+    if level != 0 {
+        direction[1] = -catan(y.wrapping_mul(0x1000) / level) & 0xFFF;
+    }
+    direction
 }
 
 impl Default for Work {
@@ -303,6 +384,7 @@ impl Default for Work {
             status_flg: 0,
             fired: false,
             reloaded: false,
+            neck: Neck::default(),
         }
     }
 }
@@ -430,6 +512,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
+    mover.rot_neck();
     mover.arrived
 }
 
@@ -1029,13 +1112,140 @@ impl Mover<'_, '_> {
     /// The handguns' foot in the world, on the current pose: `Foot_set_pl`'s
     /// chain, the root, the hips and that leg's three parts.
     fn foot_position(&self) -> Option<[i32; 3]> {
+        self.chain_position(&AIM_FOOT_CHAIN)
+    }
+
+    /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
+    /// its pose. A character's neck isn't modelled, so `plc_neck`'s aim at
+    /// another work (`Pl_neck`'s nearest enemy too) falls to the player's own.
+    fn rot_neck(&mut self) {
+        if self.work.neck.flags & 1 != 0 {
+            return;
+        }
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let Some(pose) = self.player.anim.pose_keyframe(clips, keyframes) else {
+            return;
+        };
+        let (Some(bone), Some(root)) = (
+            pose.rotations.get(NECK_JOINT).copied(),
+            pose.rotations.first().copied(),
+        ) else {
+            return;
+        };
+        let from = self.chain_position(&[0, NECK_JOINT]);
+        let cdir = i32::from(self.player.angle as i16);
+        let root = i32::from(root[1]);
+        let facing = cdir + root;
+        let bone = [i32::from(bone[1]), i32::from(bone[2])];
+        let neck = &mut self.work.neck;
+        let flags = neck.flags;
+        let mut aim = [0; 2];
+        if flags & 4 != 0
+            && neck.words[1] != NECK_AT_WORK
+            && let Some(from) = from
+        {
+            let to = [neck.words[0], neck.words[1], neck.words[2]].map(i32::from);
+            aim = neck_direction(from, to);
+        }
+        if flags & 8 != 0 {
+            aim = [i32::from(neck.words[1]) + facing, i32::from(neck.words[2])];
+        }
+        if flags & 0x40 != 0 {
+            if neck.words[2] == 0 {
+                neck.words[2] = 1;
+                neck.words[1] = (NECK_LIMITS[0] + facing - 0x80) as i16;
+            }
+            aim[0] = i32::from(neck.words[1]);
+        }
+        if flags & 2 != 0 {
+            aim[0] = bone[0] + facing;
+        }
+        if flags & 0x10 != 0 {
+            aim[1] = bone[1];
+        }
+        if flags & 0x80 == 0 {
+            aim = [bone[0] + facing, bone[1]];
+        }
+
+        let rate = if flags & 0x80 != 0 {
+            i32::from(neck.rates[0])
+        } else {
+            NECK_RATES[0]
+        };
+        let limit = NECK_LIMITS[0];
+        if limit * 2 < (aim[0] - facing + limit) & 0xFFF {
+            aim[0] = if (aim[0] - facing) & 0x800 == 0 {
+                limit + facing
+            } else {
+                facing - limit
+            };
+        }
+        let old = i32::from(neck.turn[0]);
+        let error = rate - old - bone[0] - facing + aim[0];
+        let mut turn = old - rate;
+        if error & 0x800 == 0 {
+            turn += rate * 2;
+        }
+        if error & 0xFFF < rate * 2 {
+            turn = aim[0] - bone[0] - facing;
+            if neck.flags & 0x40 != 0 {
+                neck.words[0] = neck.words[0].wrapping_sub(1);
+                if neck.words[0] == 0 {
+                    neck.flags = 0x12;
+                }
+                neck.words[1] = (facing * 2 + 0x80 - i32::from(neck.words[1])) as i16;
+            }
+        }
+        neck.turn[0] = turn as i16;
+
+        if neck.flags & 0x20 != 0 {
+            if neck.words[2] == 0 {
+                neck.words[2] = 1;
+                neck.words[1] = NECK_LIMITS[1] as i16;
+            }
+            aim[1] = i32::from(neck.words[1]);
+        }
+        let rate = if neck.flags & 0x80 != 0 {
+            i32::from(neck.rates[1])
+        } else {
+            NECK_RATES[1]
+        };
+        let limit = NECK_LIMITS[1];
+        if limit * 2 < (aim[1] + limit) & 0xFFF {
+            aim[1] = if aim[1] & 0x800 == 0 { limit } else { -limit };
+        }
+        let old = i32::from(neck.turn[1]);
+        let error = rate - old - bone[1] + aim[1];
+        let mut turn = old - rate;
+        if error & 0x800 == 0 {
+            turn += rate * 2;
+        }
+        if error & 0xFFF < rate * 2 {
+            turn = aim[1] - bone[1];
+            if neck.flags & 0x20 != 0 {
+                if aim[1] != 0 {
+                    neck.words[0] = neck.words[0].wrapping_sub(1);
+                    if neck.words[0] == 0 {
+                        neck.flags = 0x12;
+                    }
+                    neck.words[1] = 0;
+                } else {
+                    neck.words[1] = NECK_LIMITS[1] as i16;
+                }
+            }
+        }
+        neck.turn[1] = turn as i16;
+    }
+
+    /// Where the last of `chain`'s joints is in the world, on the current pose.
+    fn chain_position(&self, chain: &[usize]) -> Option<[i32; 3]> {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         let mut world = Matrix {
             m: rot_matrix([0, self.player.angle as i16, 0]),
             t: self.player.pos,
         };
-        for part in AIM_FOOT_CHAIN {
+        for &part in chain {
             let t = if part == 0 {
                 pose.offset
             } else {
@@ -1941,6 +2151,7 @@ pub fn spl_start(work: &mut Work, start: u16, flags: u16) {
 /// `Plc_ret`: back to the pad.
 pub fn plc_ret(work: &mut Work) {
     work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
+    work.neck.flags = 0;
 }
 
 /// `Plc_stop`: hold the routine, or give it back.
@@ -2030,6 +2241,47 @@ mod tests {
         weapon: Weapon,
         clips: Vec<Clip>,
         keyframes: Vec<Keyframe>,
+    }
+
+    #[test]
+    fn the_neck_turns_to_plc_necks_aim_and_back() {
+        let mut setup = Setup::new(0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; NECK_JOINT + 1];
+        }
+        plc_neck(&mut setup.work, 2, [0, 0, -200], [50, 50]);
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.neck.turn, [0, -50]);
+        for _ in 0..4 {
+            setup.tick(Input::default(), 200);
+        }
+        assert_eq!(setup.work.neck.turn, [0, -200]);
+
+        let mut pose = setup.keyframes[0].clone();
+        setup.work.neck.apply(&mut pose);
+        assert_eq!(pose.rotations[NECK_JOINT], [0, 0, -200]);
+
+        // With nothing to look at it goes back at the joint's own rate.
+        plc_ret(&mut setup.work);
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.neck.turn, [0, -104]);
+        for _ in 0..2 {
+            setup.tick(Input::default(), 200);
+        }
+        assert_eq!(setup.work.neck.turn, [0, 0]);
+    }
+
+    #[test]
+    fn the_neck_stays_within_its_limits() {
+        let mut setup = Setup::new(0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; NECK_JOINT + 1];
+        }
+        plc_neck(&mut setup.work, 2, [0, 0x7ff, -0x7ff], [0xff, 0xff]);
+        for _ in 0..10 {
+            setup.tick(Input::default(), 200);
+        }
+        assert_eq!(setup.work.neck.turn, [NECK_LIMITS[0] as i16, -NECK_LIMITS[1] as i16]);
     }
 
     impl Setup {

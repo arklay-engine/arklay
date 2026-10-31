@@ -15955,7 +15955,10 @@ fn render_frame_on(
         };
         // The blended pose the clock shows for the applied frame, then the
         // tracking joint's aim composed onto it.
-        let keyframe = player_state.anim.pose_keyframe(clips, keyframes)?;
+        let mut keyframe = player_state.anim.pose_keyframe(clips, keyframes)?;
+        if game.is_re2_room {
+            game.re2.player.neck.apply(&mut keyframe);
+        }
         let entity = anim::entity_matrix(player_state.pos, player_state.angle);
         let mut joints = anim::joint_matrices(skeleton, &keyframe, &entity);
         apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
