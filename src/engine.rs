@@ -619,6 +619,7 @@ pub fn run_with_options(
                         player_flags: game.player_flags,
                         re2_player: None,
                         re2_character: None,
+                        re2_splayer: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
                     })?;
@@ -5045,7 +5046,14 @@ impl GameSession {
     /// authored state. This is the CLI's oracle seam, not a mod-facing hook:
     /// the path comes from `--setup-script`, never from the sandbox.
     fn run_setup_script(&mut self, script: Option<&Path>) -> Result<()> {
+        let flags = self.game.re2.banks;
         run_setup_chunk(self.lua.as_ref(), &mut self.game, script)?;
+        // A room's scripts read the flags as they start.
+        if self.game.re2.banks != flags {
+            let placed = std::mem::take(&mut self.game.re2.pending_player);
+            run_re2_init(self.loaded.re2_vm.as_mut(), &mut self.game);
+            self.game.re2.pending_player = placed;
+        }
         if script.is_some() {
             self.game.sync_player(&mut self.player);
         }
@@ -6193,7 +6201,11 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2.player.trace_fields()),
-            re2_character: self.game.re2.character_trace(),
+            re2_character: self.game.re2.character_trace(0),
+            re2_splayer: self
+                .game
+                .re2
+                .character_trace(crate::scd2::host::SPLAYER_SLOT),
             entities,
             frame_hash: trace::frame_hash(frame),
         }

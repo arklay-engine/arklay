@@ -39,6 +39,8 @@ const PLAYER_ANIMATION: usize = 0;
 /// RE2's enemy slots, whose room animations follow the player's.
 const CHARACTER_ANIMATIONS: usize = 1;
 const ENEMY_SLOTS: usize = 16;
+/// `splayer_work`'s, after the enemy slots' ([`crate::scd2::host::SPLAYER_SLOT`]).
+const SPLAYER_ANIMATION: usize = ENEMY_SLOTS;
 
 /// Free entry of the effect sprite index table.
 const FREE_SPRITE: u8 = 0xFF;
@@ -565,7 +567,7 @@ impl RoomSource {
             });
 
         let character_anims = if self.dialect == Dialect::Re2 {
-            (0..ENEMY_SLOTS)
+            (0..=SPLAYER_ANIMATION)
                 .filter_map(|slot| {
                     let stem = slot_stem(&kind("anim"), CHARACTER_ANIMATIONS + slot);
                     pack.contains(&format!("{stem}.emr"))
@@ -992,6 +994,10 @@ pub(super) fn re2_anim_files(data: &[u8], id: RoomId) -> Vec<(String, Vec<u8>)> 
             CHARACTER_ANIMATIONS + slot,
         );
     }
+    add(
+        crate::rdt2::splayer_anim(data),
+        CHARACTER_ANIMATIONS + SPLAYER_ANIMATION,
+    );
     files
 }
 

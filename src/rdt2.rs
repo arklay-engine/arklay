@@ -152,6 +152,11 @@ pub fn character_anim(data: &[u8], slot: u8) -> Option<(&[u8], &[u8])> {
     room_anim_of(data, RBJ_PLAYER << (u32::from(slot) + 2))
 }
 
+/// The room animations of `splayer_work`, the bit above the player's.
+pub fn splayer_anim(data: &[u8]) -> Option<(&[u8], &[u8])> {
+    room_anim_of(data, RBJ_PLAYER << 1)
+}
+
 fn room_anim_of(data: &[u8], wanted: u32) -> Option<(&[u8], &[u8])> {
     let start = offset(data, RBJ_SLOT).ok()? as usize;
     if start == 0 {

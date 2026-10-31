@@ -1258,6 +1258,7 @@ exist (Lua colon syntax):
 | `api:set_max_health(hp)` | Set the player's maximum health. |
 | `api:set_health_status(byte)` | Set the health-status flags (poison bits included). |
 | `api:set_player_pos(x, y, z)` | Set the player entity's position. |
+| `api:set_re2_flag(bank, index, value)` | Set one bit of RE2's flag banks (`ck` and `set`'s numbering). `value` defaults to true. In a `--setup-script`, the room's scripts start again if any bit changed. |
 | `api:set_player_angle(degrees)` | Set the player's 12-bit yaw. |
 | `api:set_character(id)` | Select Chris (`0`) or Jill (`1`): identity, model and entity id. |
 | `api:set_room(stage, room[, mansion2])` | Rewrite the room identity the save block records (authoring only); `mansion2` names a mansion room's second visit. |
