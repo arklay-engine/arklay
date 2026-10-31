@@ -61,6 +61,8 @@ pub struct TraceTick<'a> {
     pub re2_player: Option<([u8; 2], [i32; 9])>,
     /// RE2's character in enemy slot 0: the `em` field's values.
     pub re2_character: Option<[i32; 16]>,
+    /// RE2's `splayer_work`: the `es` field's values.
+    pub re2_splayer: Option<[i32; 16]>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
     /// aim direction bits. The reference reads the player's status byte at
     /// entity +0x00, which the player entity shares with this flags byte, so
@@ -191,6 +193,10 @@ impl TraceWriter {
             let values = character.map(|value| value.to_string()).join(",");
             write!(self.out, " em={values}")?;
         }
+        if let Some(character) = tick.re2_splayer {
+            let values = character.map(|value| value.to_string()).join(",");
+            write!(self.out, " es={values}")?;
+        }
         writeln!(self.out)?;
         self.ticks += 1;
         Ok(())
@@ -290,6 +296,7 @@ mod tests {
             entities: &*game.entities,
             re2_player: None,
             re2_character: None,
+            re2_splayer: None,
             frame_hash: 0xDEAD_BEEF,
         };
         writer.write_tick(&tick).unwrap();
@@ -328,6 +335,7 @@ mod tests {
             entities: &*game.entities,
             re2_player: None,
             re2_character: None,
+            re2_splayer: None,
             frame_hash: 0,
         };
         for index in 0..3 {

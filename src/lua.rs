@@ -618,6 +618,17 @@ mod imp {
                 },
             );
 
+            // `set_re2_flag(bank, index, value)`: one bit of RE2's flag banks;
+            // the room's scripts start again from it after a setup script.
+            methods.add_method_mut(
+                "set_re2_flag",
+                |_lua, game, (bank, index, value): (u8, u8, Option<bool>)| {
+                    game.re2
+                        .set_flag(bank, index, u8::from(value.unwrap_or(true)));
+                    Ok(())
+                },
+            );
+
             // `set_flag_bank(bank, bytes)`: the raw bytes of one bank, from a
             // Lua string or a sequence table of byte values, for state the
             // named methods do not reach.

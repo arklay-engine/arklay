@@ -44,6 +44,8 @@ BREAK_PAD_BYTES = bytes.fromhex("8B0D6C9E9800")  # MOV ECX,[fg_system]
 # Addresses and offsets in bio2 1.10, named as in the IDA database and openre.
 PL = 0x00989EF0  # the player's work
 ENEMIES = 0x0098A114  # EnemyEntity*[16]
+SPLAYER = 0x0098A110  # splayer_work
+FLG_ADDR = 0x0053B218  # the flag banks
 FG_SYSTEM = 0x00989E6C
 FG_STATUS = 0x00989ED0
 FG_STOP = 0x00989ED4
@@ -337,6 +339,13 @@ def warp(game: Game, target: str) -> None:
     game.write(FG_STOP, struct.pack("<I", game.u32(FG_STOP) | 0xFF000000))
 
 
+def set_flag(game: Game, target: str) -> None:
+    """Raise a bit of a flag bank, in the numbering of `ck` and `set`."""
+    bank, index = (int(part, 0) for part in target.split(":"))
+    address = game.u32(FLG_ADDR + bank * 4) + (index >> 5 & 7) * 4
+    game.write(address, struct.pack("<I", game.u32(address) | 0x80000000 >> (index & 31)))
+
+
 def remove_enemies(game: Game, keep: set[int]) -> None:
     """Switch off live enemies but `keep`: nothing runs or touches an entity whose first bit is clear."""
     for slot, pointer in enumerate(struct.unpack("<16I", game.read(ENEMIES, 64))):
@@ -379,18 +388,19 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
     fields.append(f"fgscn={game.read(FG_SCENARIO, 32).hex()}")
     fields.append(f"fgcom={game.read(FG_COMMON, 32).hex()}")
     fields.append(f"fgroom={game.u32(FG_ROOM):08x}")
-    first = game.u32(ENEMIES)
-    if first != 0 and game.u8(first + ENTITY_ID) >= 0x40:
-        ex, ey, ez = game.i32s(first + ENTITY_POS, 3)
-        routine = game.read(first + ENTITY_ROUTINES, 4)
-        motion = game.read(first + ENTITY_MOTION, 4)
-        speed = struct.unpack("<3h", game.read(first + ENTITY_SPD, 6))
-        fields.append(
-            f"em={game.u8(first + ENTITY_ID)},{ex},{ey},{ez},"
-            f"{game.u16(first + ENTITY_CDIR_Y) & 0x0FFF},{routine[0]},{routine[1]},{routine[2]},"
-            f"{routine[3]},{motion[0]},{motion[1]},{motion[2]},{game.u8(first + ENTITY_D_LIFE_U)},"
-            f"{speed[0]},{speed[1]},{speed[2]}"
-        )
+    for name, table in (("em", ENEMIES), ("es", SPLAYER)):
+        work = game.u32(table)
+        if work != 0 and game.u8(work + ENTITY_ID) >= 0x40:
+            ex, ey, ez = game.i32s(work + ENTITY_POS, 3)
+            routine = game.read(work + ENTITY_ROUTINES, 4)
+            motion = game.read(work + ENTITY_MOTION, 4)
+            speed = struct.unpack("<3h", game.read(work + ENTITY_SPD, 6))
+            fields.append(
+                f"{name}={game.u8(work + ENTITY_ID)},{ex},{ey},{ez},"
+                f"{game.u16(work + ENTITY_CDIR_Y) & 0x0FFF},{routine[0]},{routine[1]},{routine[2]},"
+                f"{routine[3]},{motion[0]},{motion[1]},{motion[2]},{game.u8(work + ENTITY_D_LIFE_U)},"
+                f"{speed[0]},{speed[1]},{speed[2]}"
+            )
     spd = struct.unpack("<3h", game.read(PL + ENTITY_SPD, 6))
     motion = game.read(PL + ENTITY_MOTION, 4)
     fields.append(
@@ -473,6 +483,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         cursor = 0
                         pad = 0
                         print(f"play begins {boot_tick} ticks after boot")
+                        for flag in args.flag:
+                            set_flag(game, flag)
                         if args.warp:
                             warp(game, args.warp)
                         for item in args.give:
@@ -608,6 +620,7 @@ def main() -> int:
         command.add_argument("--shot-every", type=int, default=0)
         command.add_argument("--no-enemies", action="store_true")
         command.add_argument("--keep-enemy", action="append", type=int, default=[])
+        command.add_argument("--flag", action="append", default=[], metavar="BANK:INDEX")
         command.add_argument(
             "--warp", default=None, metavar="ROOM:X:Y:Z:ANGLE",
             help="when play begins, go through a door to a room (three hex digits) and a position",

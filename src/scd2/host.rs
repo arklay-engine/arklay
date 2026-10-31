@@ -137,8 +137,11 @@ const ENEMY_BANK: u8 = 6;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
 /// `Sce_em_set`'s flag of someone who can't die.
 const NO_ENEMY_FLAG: u8 = 0xFF;
-/// `enemy_work`'s size.
-const CHARACTER_SLOTS: usize = 16;
+/// `splayer_work`'s place among the characters, after `enemy_work`'s 16.
+pub const SPLAYER_SLOT: usize = 16;
+const CHARACTER_SLOTS: usize = SPLAYER_SLOT + 1;
+/// `sce_em_set`'s slot for `splayer_work`.
+const SPLAYER_OPERAND: i64 = 255;
 /// `FlagGroup::Message`, `fg_message`: bit 31 is a question's answer, `no`.
 const MESSAGE_BANK: u8 = 11;
 /// The item-collected flag bank (`FlagGroup::Item`).
@@ -267,9 +270,10 @@ impl Re2State {
         self.flag(STOP_BANK, STOP_INPUT)
     }
 
-    /// The `em` trace field: slot 0's position, facing and motion.
-    pub fn character_trace(&self) -> Option<[i32; 16]> {
-        let character = self.characters.0.first()?.as_deref()?;
+    /// The `em` and `es` trace fields: a character's position, facing and
+    /// motion.
+    pub fn character_trace(&self, slot: usize) -> Option<[i32; 16]> {
+        let character = self.characters.0.get(slot)?.as_deref()?;
         let (routine, motion) = character.work.trace_fields();
         let [x, y, z] = character.body.pos;
         Some([
@@ -292,9 +296,10 @@ impl Re2State {
         ])
     }
 
-    /// `fg_stop`'s third bit, which keeps the enemy slots from running.
-    pub fn characters_stopped(&self) -> bool {
-        self.flag(STOP_BANK, 2)
+    /// `fg_stop`'s second bit keeps `splayer_work` from running, and its third
+    /// the enemy slots.
+    pub fn character_stopped(&self, slot: usize) -> bool {
+        self.flag(STOP_BANK, if slot == SPLAYER_SLOT { 1 } else { 2 })
     }
 
     /// `fg_stop`'s top bit, which keeps `Player_move` from running.
@@ -416,6 +421,7 @@ fn probe_flags(sat: u8) -> u8 {
 
 /// `work_set`'s kind byte for the player (`WK_PLAYER`).
 const WK_PLAYER: i64 = 1;
+const WK_SPLAYER: i64 = 2;
 const WK_ENEMY: i64 = 3;
 
 /// The work members holding the position (`Member_set_branch`).
@@ -614,7 +620,11 @@ impl GameHost<'_> {
 
     /// `Sce_em_set`, for the characters `_Spl` runs.
     fn sce_em_set(&mut self, at: impl Fn(usize) -> i64) {
-        let (slot, id) = (at(1) as usize, at(2) as u8);
+        let id = at(2) as u8;
+        let slot = match at(1) {
+            SPLAYER_OPERAND => SPLAYER_SLOT,
+            slot => slot as usize,
+        };
         if slot >= CHARACTER_SLOTS {
             return;
         }
@@ -852,6 +862,8 @@ impl Host for GameHost<'_> {
             "work_set" => {
                 let work = if at(0) == WK_PLAYER {
                     Work::Player
+                } else if at(0) == WK_SPLAYER && self.character_mut(SPLAYER_SLOT as u8).is_some() {
+                    Work::Character(SPLAYER_SLOT as u8)
                 } else if at(0) == WK_ENEMY && self.character_mut(at(1) as u8).is_some() {
                     Work::Character(at(1) as u8)
                 } else {
@@ -1123,6 +1135,35 @@ mod tests {
         assert_eq!(character.body.pos, [5, 6, 7]);
         assert_eq!(character.be_flg, 5);
         assert!(!game.re2.flag(ROOM_BANK, 33));
+    }
+
+    #[test]
+    fn the_second_player_has_its_own_slot_and_stop_bit() {
+        let mut game = GameState::default();
+        exec(
+            &mut game,
+            "sce_em_set",
+            &[
+                0, 255, 69, 0, 72, 0, 0, 0, 255, -26700, 0, -22840, 2800, 0, 0,
+            ],
+        );
+        let character = game.re2.characters.0[SPLAYER_SLOT].as_deref().unwrap();
+        assert_eq!(character.id, 69);
+        assert_eq!(character.kind, 0x4800);
+        assert_eq!(character.body.radius, 250);
+        exec(&mut game, "work_set", &[WK_SPLAYER, 0]);
+        assert!(matches!(
+            game.re2.work[0],
+            Work::Character(slot) if usize::from(slot) == SPLAYER_SLOT
+        ));
+
+        game.re2.set_flag(STOP_BANK, 1, 1);
+        assert!(game.re2.character_stopped(SPLAYER_SLOT));
+        assert!(!game.re2.character_stopped(0));
+        game.re2.set_flag(STOP_BANK, 1, 0);
+        game.re2.set_flag(STOP_BANK, 2, 1);
+        assert!(!game.re2.character_stopped(SPLAYER_SLOT));
+        assert!(game.re2.character_stopped(0));
     }
 
     #[test]

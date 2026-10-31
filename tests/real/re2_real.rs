@@ -98,7 +98,7 @@ fn the_retail_tree_converts_every_category() {
         ("player", 221),
         // Each room's definition and compiled script, and the 176 rooms'
         // own player animations.
-        ("room", 1546),
+        ("room", 1710),
         ("sound", 2768),
         ("ui", 4),
         ("voice", 599),

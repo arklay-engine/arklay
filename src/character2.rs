@@ -6,7 +6,7 @@ use crate::game::GameState;
 use crate::model::{Clip, Emd, Keyframe};
 use crate::pack::Pack;
 use crate::player2::{self, Banks, Tick};
-use crate::scd2::host::Character;
+use crate::scd2::host::{Character, SPLAYER_SLOT};
 use crate::state::RoomState;
 
 /// `Game_loop`'s pass over the enemy slots, for the characters `_Spl` runs.
@@ -17,16 +17,16 @@ pub fn tick(
     npc_models: &mut EntityModelCache,
 ) {
     init(game, room, pack, npc_models);
-    if game.re2.characters_stopped() {
-        return;
-    }
     let scenario = game.id.player_flag & 1;
-    for slot in 0..game.re2.characters.0.len() {
-        let Some(mut character) = game.re2.characters.0[slot].take() else {
+    for slot in run_order() {
+        if game.re2.character_stopped(slot) {
+            continue;
+        }
+        let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
             continue;
         };
         let model = npc_models.get(pack, character.id, scenario);
-        if let Some(model) = model.filter(|_| character.be_flg & 1 != 0) {
+        if let Some(model) = model.filter(|_| moves(&character)) {
             let tick = tick_of(room, game, &character, slot, &model);
             let arrived = spl(&mut character, &tick);
             if let Some(flag) = arrived {
@@ -51,6 +51,12 @@ pub fn tick(
     }
 }
 
+/// `Game_loop` runs what's in play, unless its `Type` says not to: how a script
+/// sends a character away for good.
+fn moves(character: &Character) -> bool {
+    character.be_flg & 1 != 0 && character.work.kind & player2::KIND_NOT_MOVED == 0
+}
+
 /// `Em_init_move`, the room load's first run of the characters it placed. It
 /// waits for the room and the pack, which the scripts' first pass hasn't got,
 /// so it's here for whatever needs a pose or a position first.
@@ -61,8 +67,8 @@ pub fn init(
     npc_models: &mut EntityModelCache,
 ) {
     let scenario = game.id.player_flag & 1;
-    for slot in 0..game.re2.characters.0.len() {
-        let Some(mut character) = game.re2.characters.0[slot].take() else {
+    for slot in run_order() {
+        let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
             continue;
         };
         if character.with_room
@@ -76,6 +82,11 @@ pub fn init(
         }
         game.re2.characters.0[slot] = Some(character);
     }
+}
+
+/// `Game_loop` and `Em_init_move` start at `splayer_work`.
+fn run_order() -> impl Iterator<Item = usize> {
+    std::iter::once(SPLAYER_SLOT).chain(0..SPLAYER_SLOT)
 }
 
 /// `_Spl`'s routine: `Spl_Init` for one no script has given a routine, and
@@ -141,5 +152,30 @@ pub fn tick_of<'a>(
         poisoned: false,
         stopped: false,
         weapon: Default::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::RoomId;
+
+    #[test]
+    fn a_character_stops_when_out_of_play_or_told_not_to_move() {
+        let mut character = Character {
+            id: 0x45,
+            be_flg: 1,
+            work: player2::Work::default(),
+            body: crate::player::spawn(RoomId::parse("1140").unwrap(), &RoomState::default()),
+            kind: 0,
+            start: (0, 0),
+            with_room: false,
+        };
+        assert!(moves(&character));
+        character.work.kind = player2::KIND_NOT_MOVED;
+        assert!(!moves(&character));
+        character.work.kind = 0;
+        character.be_flg = 0;
+        assert!(!moves(&character));
     }
 }
