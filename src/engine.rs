@@ -1874,6 +1874,7 @@ struct GameSession {
     shadows: ShadowCache,
     effect_pages: EffectPageCache,
     sfx_cache: SfxCache,
+    re2_sounds: Re2Sounds,
     /// Decoded BGM wav cache, one entry per group track.
     bgm_cache: bgm::BgmCache,
     /// Decoded voice-line cache plus the one-slot pending request.
@@ -2539,6 +2540,7 @@ impl GameSession {
             shadows: ShadowCache::default(),
             effect_pages: EffectPageCache::default(),
             sfx_cache: SfxCache::default(),
+            re2_sounds: Re2Sounds::default(),
             bgm_cache: bgm::BgmCache::default(),
             voice_cache: VoiceCache::default(),
             movie: None,
@@ -2895,7 +2897,11 @@ impl GameSession {
             return;
         };
         mixer.stop_voice();
+        let re2 = self.game.is_re2_room;
         for (index, channel) in self.game.bgm.channels.iter_mut().enumerate() {
+            if re2 {
+                break;
+            }
             if channel.track.is_none() {
                 mixer.stop_bgm_channel(index);
             } else if channel.restart && !channel.pending_load && mixer.bgm_channel_playing(index) {
@@ -3558,6 +3564,17 @@ impl GameSession {
         }
         tick_voice(&mut self.music, &mut self.voice_cache, &mut self.game, pack);
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
+        if self.game.is_re2_room {
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+            );
+        }
         // `MSF2_EFFECT_ZONE` (the second dword of main-state flag bank 5) is
         // the original's slippery/effect-zone bit: it shifts every footstep
         // column by -3.
@@ -12198,6 +12215,128 @@ fn play_footsteps(
     }
 }
 
+/// An RE2 room's sound banks (`Snd_room_load`, `Snd_load_core`,
+/// `Snd_load_arms`), loaded when play in the room first asks for a sound. The
+/// enemy bank isn't loaded: there are no enemies to play it.
+#[derive(Default)]
+struct Re2Sounds {
+    /// The room, player and weapon they were loaded for.
+    loaded: Option<(RoomId, u8, u8)>,
+    banks: crate::se2::Banks,
+    /// The room's PlayStation VAB, for a room without a PC bank.
+    vab: Option<door2::vab::Vab>,
+}
+
+impl Re2Sounds {
+    fn load(&mut self, pack: &Pack, id: RoomId, player: u8, weapon: u8) {
+        use crate::se2;
+        if self.loaded == Some((id, player, weapon)) {
+            return;
+        }
+        self.loaded = Some((id, player, weapon));
+        let folder = format!("room/{}{:02x}{}", id.stage, id.room, player);
+        let edh = pack
+            .read(&format!("{folder}/{}", se2::ROOM_EDH_NAME))
+            .ok()
+            .and_then(|data| se2::Edh::parse(&data).ok());
+        self.vab = edh.as_ref().and_then(|edh| {
+            let body = pack.read(&format!("{folder}/{}", se2::ROOM_VB_NAME)).ok()?;
+            let mut vab = edh.vab_header().to_vec();
+            vab.extend_from_slice(&body);
+            door2::vab::Vab::parse(&vab).ok()
+        });
+        self.banks.load_room(pack, id.stage.saturating_sub(1), id.room, edh);
+        self.banks.load_core(pack, player);
+        // `Snd_load_arms`: bare hands use the first bank.
+        self.banks.load_arms(pack, weapon.max(1));
+    }
+
+    /// The sound in `kind`'s `slot`: the PC bank's WAV, or for a room with none
+    /// the tone of its VAB.
+    fn wav(&self, cache: &mut SfxCache, pack: &Pack, kind: crate::se2::Kind, slot: u8) -> Option<audio::Wav> {
+        if let Some(stem) = self.banks.stem(kind, slot) {
+            return cache.load_stem(pack, stem.to_string());
+        }
+        if kind != crate::se2::Kind::Room {
+            return None;
+        }
+        let (program, tone) = self.banks.tone(kind, slot)?;
+        let vab = self.vab.as_ref()?;
+        let samples = door2::vab::decode_adpcm(vab.vag(vab.tone(program, tone)?.vag)?);
+        Some(audio::Wav::from_s16(&samples, 1, door2::vab::SAMPLE_RATE))
+    }
+}
+
+/// One tick's sounds of an RE2 room: `se_on`'s, the player's footsteps
+/// (`Snd_se_walk`) and the weapon's.
+fn play_re2_sounds(
+    music: &mut Option<Mixer>,
+    cache: &mut SfxCache,
+    sounds: &mut Re2Sounds,
+    pack: &Pack,
+    room: &RoomState,
+    game: &mut game::GameState,
+    player: &mut player::PlayerState,
+) {
+    use crate::se2::{self, Kind, SoundId};
+    let requests = std::mem::take(&mut game.re2.sounds);
+    let footsteps = player.take_footsteps();
+    let weapon = player.take_sounds();
+    let Some(mixer) = music.as_mut() else {
+        return;
+    };
+    let character = u8::from(game.re2.flag(1, crate::scd2::host::STATUS_PLAYER));
+    sounds.load(pack, game.id, character, game.re2_weapon().id);
+    let Some(cut) = room.cuts.get(room.current_cut) else {
+        return;
+    };
+    let mut play = |id: SoundId, pos: [i32; 3]| {
+        let Some(tone_volume) = sounds.banks.volume(id.kind, id.slot) else {
+            return;
+        };
+        let Some(wav) = sounds.wav(cache, pack, id.kind, id.slot) else {
+            return;
+        };
+        let (volume, pan) = if id.positional {
+            let (volume, pan) = se2::place(cut.pos, cut.look_at, pos);
+            // The weapon's own sounds, of its first program, are louder.
+            let louder = id.kind == Kind::Arms && sounds.banks.tone(id.kind, id.slot).is_some_and(|tone| tone.0 == 0);
+            (volume.saturating_add(if louder { 10 } else { 0 }).min(0x7f), pan)
+        } else if id.kind == Kind::Room && id.slot == 0x14 {
+            (0x6e, 0)
+        } else {
+            (tone_volume, 0)
+        };
+        mixer.play_sfx_on_bank(
+            sfx_bank_key(id.kind.index() as u8, id.slot),
+            wav,
+            se2::volume_gain(volume),
+            sfx::pan_from_raw(pan * 0x17),
+        );
+    };
+    for request in requests {
+        play(request.id, request.pos);
+    }
+    for footstep in footsteps {
+        let floor = crate::sca::floor_of(footstep.pos[1]);
+        let zone = se2::floor_sound(&room.footstep_zones, footstep.pos[0], footstep.pos[2], floor);
+        let id = SoundId {
+            kind: Kind::Room,
+            slot: footstep.sound_type + (zone & 0x7f),
+            positional: true,
+        };
+        play(id, footstep.pos);
+    }
+    for sound in weapon {
+        let id = SoundId {
+            kind: Kind::Arms,
+            slot: sound.id as u8,
+            positional: true,
+        };
+        play(id, sound.pos);
+    }
+}
+
 /// The bank and id one queued player cue resolves through.
 ///
 /// The push and ladder cues are room-table columns exactly like the original's
@@ -13487,6 +13626,15 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
     game.camera.locked = false;
+    // `Set_room` runs `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
+    let word = game
+        .id
+        .stage
+        .checked_sub(1)
+        .and_then(|stage| game.re2.bgm.get(stage, game.id.room))
+        .unwrap_or(crate::bgm2::RoomMusic::from_word(0xffff));
+    let place = game.re2_music_place();
+    game.re2.music.enter_room(word, place);
     // `FG_STATUS_PLAYER` and `FG_STATUS_SCENARIO`.
     let character = game.id.player_flag & 1;
     let scenario = u8::from(game.re2.scenario_b);

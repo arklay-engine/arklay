@@ -419,6 +419,12 @@ pub(crate) fn convert(
     let mut tally = Tally::default();
 
     progress.begin("room", rooms.len() as u64);
+    let room_banks: std::collections::HashSet<String> = files_in(layout.common(&["Sound", "room"]))?
+        .iter()
+        .filter_map(|path| upper_parts(path))
+        .filter(|(_, extension)| extension == "SAP")
+        .map(|(stem, _)| stem.to_ascii_lowercase())
+        .collect();
     for room in &rooms {
         let folder = room.id.folder();
         let id = RoomId::parse(&folder)?;
@@ -447,6 +453,14 @@ pub(crate) fn convert(
             Ok(Some(edh)) => {
                 let entry = format!("room/{folder}/{}", se2::ROOM_EDH_NAME);
                 tally.add(&mut writer, "sound", &entry, edh.to_bytes())?;
+                // Room 11D has sounds its script plays, and no PC bank holds
+                // them: only the PlayStation's samples in its RDT do.
+                if !room_banks.contains(&format!("room{}", &folder[..3]))
+                    && let Ok(Some(body)) = crate::rdt2::sound_body(&room.bytes)
+                {
+                    let entry = format!("room/{folder}/{}", se2::ROOM_VB_NAME);
+                    tally.add(&mut writer, "sound", &entry, body.to_vec())?;
+                }
             }
             Ok(None) => {}
             Err(error) => warnings.push(format!(

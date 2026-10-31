@@ -234,14 +234,7 @@ fn update_re2_room_bgm(game: &mut GameState, id: RoomId) -> u8 {
     }
     game.re2.main_music = main;
     let mut state = 0;
-    for (index, channel) in game.bgm.channels.iter_mut().enumerate() {
-        let track = main
-            .and_then(|main| bgm2::main_tracks(main)[index])
-            .and_then(crate::convert_re2::bgm_track);
-        channel.track = track;
-        channel.looping = true;
-        channel.pending_load = track.is_some();
-        channel.stop = track.is_none();
+    for index in 0..BGM_CHANNELS {
         if main.is_some_and(|main| bgm2::main_audible(main, index)) {
             state |= 8 << index;
         }
@@ -516,6 +509,9 @@ pub fn apply_live(
     // tests observe the same counters.
     advance_fade(game);
     advance_ramp(game);
+    if game.is_re2_room {
+        game.re2.music.tick();
+    }
 
     // Consume the fade-out edge even without a device so it cannot leak into a
     // later session.
@@ -529,6 +525,10 @@ pub fn apply_live(
         // channel records are already cleared, so the loop below would leave
         // the old mixer buffers sounding (a 0xFF room would loop forever).
         mixer.stop_all_bgm();
+    }
+    if game.is_re2_room {
+        apply_re2_music(mixer, game, cache, pack);
+        return;
     }
     for index in 0..BGM_CHANNELS {
         let enabled = game.bgm.state & (8 << index) != 0;
@@ -570,8 +570,55 @@ pub fn apply_live(
 /// else: a cutscene skip's parked mixer keeps streaming the music while the
 /// scene's loads, stops and restarts stay queued for [`apply_live`].
 pub fn apply_levels(mixer: &mut Mixer, game: &GameState) {
+    if game.is_re2_room {
+        apply_re2_levels(mixer, game);
+        return;
+    }
     for index in 0..BGM_CHANNELS {
         apply_channel_levels(mixer, game, index);
+    }
+}
+
+/// Catch the mixer up with [`crate::bgm2::Music`]. The main is music, whatever
+/// its track's number, and the sub ambience.
+fn apply_re2_music(mixer: &mut Mixer, game: &mut GameState, cache: &mut BgmCache, pack: &Pack) {
+    for (index, channel) in game.re2.music.channels.iter_mut().enumerate() {
+        if std::mem::take(&mut channel.load) {
+            mixer.stop_bgm_channel(index);
+            if let Some(wav) = channel.track.and_then(|track| cache.load(pack, track)) {
+                mixer.load_bgm_channel(index, wav, true);
+                mixer.set_bgm_channel_kind(
+                    index,
+                    if index < BGM_CHANNELS {
+                        music::TrackKind::Music
+                    } else {
+                        music::TrackKind::Ambient
+                    },
+                );
+            }
+        }
+        if std::mem::take(&mut channel.stop) {
+            mixer.stop_bgm_channel(index);
+        }
+        if let Some(looping) = channel.play.take()
+            && channel.track.is_some()
+        {
+            mixer.set_bgm_channel_looping(index, looping);
+            if !mixer.bgm_channel_playing(index) {
+                mixer.restart_bgm_channel(index);
+            }
+        }
+    }
+    apply_re2_levels(mixer, game);
+}
+
+fn apply_re2_levels(mixer: &mut Mixer, game: &GameState) {
+    // `Bgm_ck_room115` takes this off every volume in that room.
+    let quieter = game.id.stage == 1 && game.id.room == 0x15;
+    for (index, channel) in game.re2.music.channels.iter().enumerate() {
+        let volume = channel.volume.saturating_sub(if quieter { 0xf } else { 0 });
+        mixer.set_bgm_channel_volume(index, crate::se2::volume_gain(volume));
+        mixer.set_bgm_channel_pan(index, sfx::pan_from_raw(i32::from(channel.pan) * 0x17));
     }
 }
 

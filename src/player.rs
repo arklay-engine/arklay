@@ -1539,7 +1539,7 @@ impl PlayerState {
     }
 
     /// Queue a one-shot sound at the player's current position.
-    fn queue_sound(&mut self, id: u16) {
+    pub(crate) fn queue_sound(&mut self, id: u16) {
         self.sounds.push(PlayerSound { id, pos: self.pos });
     }
 

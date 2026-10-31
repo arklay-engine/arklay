@@ -129,6 +129,12 @@ const AIM_LOWER_BLEND: u8 = 0x0F;
 /// The parts from the root to the foot the handguns' stance plants.
 const AIM_FOOT_CHAIN: [usize; 5] = [0, 1, 5, 6, 7];
 const AIM_LOWER_STEP: u16 = 0x100;
+/// The weapon bank's slot of a shot (`Snd_se_on(0x1010001)`).
+const SOUND_SHOT: u16 = 1;
+/// The frame flag `pl_mv05_w1_t4` plays a sound of the weapon bank on; the
+/// slot is the frame's [`FRAME_SOUND_SLOT`] bits.
+const FRAME_SOUND: u32 = 0x10_0000;
+const FRAME_SOUND_SLOT: u32 = 0xf_0000;
 /// The frame flag `pl_mv05_w1_t4` fills the magazine on.
 const FRAME_RELOAD: u32 = 0x40_0000;
 /// The blend step of `Pl_damage`'s `Joint_move`s.
@@ -1162,6 +1168,7 @@ impl Mover<'_, '_> {
             };
             self.aim_clip(clip);
             self.work.fired = true;
+            self.player.queue_sound(SOUND_SHOT);
             self.work.spd = [0; 3];
         }
         self.aim_turn(key, AIM_FIRE_TURN);
@@ -1196,6 +1203,10 @@ impl Mover<'_, '_> {
         }
         if self.joint_move() {
             self.aim_stage(1);
+        }
+        if self.work.now_seq & FRAME_SOUND != 0 {
+            self.player
+                .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
         }
         if self.work.now_seq & FRAME_RELOAD != 0 {
             self.work.reloaded = true;
