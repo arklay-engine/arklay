@@ -47,13 +47,18 @@ use sdl3_sys::gamepad::{
 use sdl3_sys::keycode::{SDL_KMOD_ALT, SDL_KMOD_CTRL, SDL_Keymod};
 use sdl3_sys::mouse::{SDL_BUTTON_LEFT, SDL_MOUSEWHEEL_FLIPPED};
 use sdl3_sys::scancode::{
-    SDL_SCANCODE_1, SDL_SCANCODE_3, SDL_SCANCODE_A, SDL_SCANCODE_B, SDL_SCANCODE_D,
-    SDL_SCANCODE_DOWN, SDL_SCANCODE_E, SDL_SCANCODE_EQUALS, SDL_SCANCODE_ESCAPE,
-    SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_LEFT, SDL_SCANCODE_MINUS, SDL_SCANCODE_O, SDL_SCANCODE_Q,
-    SDL_SCANCODE_R, SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE,
-    SDL_SCANCODE_TAB, SDL_SCANCODE_UP, SDL_SCANCODE_W, SDL_Scancode,
+    SDL_SCANCODE_0, SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4, SDL_SCANCODE_5,
+    SDL_SCANCODE_6, SDL_SCANCODE_7, SDL_SCANCODE_8, SDL_SCANCODE_9, SDL_SCANCODE_A, SDL_SCANCODE_B,
+    SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_D, SDL_SCANCODE_DOWN, SDL_SCANCODE_E, SDL_SCANCODE_EQUALS,
+    SDL_SCANCODE_ESCAPE, SDL_SCANCODE_KP_0, SDL_SCANCODE_KP_1, SDL_SCANCODE_KP_2,
+    SDL_SCANCODE_KP_3, SDL_SCANCODE_KP_4, SDL_SCANCODE_KP_5, SDL_SCANCODE_KP_6, SDL_SCANCODE_KP_7,
+    SDL_SCANCODE_KP_8, SDL_SCANCODE_KP_9, SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_LEFT,
+    SDL_SCANCODE_MINUS, SDL_SCANCODE_O, SDL_SCANCODE_Q, SDL_SCANCODE_R, SDL_SCANCODE_RETURN,
+    SDL_SCANCODE_RIGHT, SDL_SCANCODE_S, SDL_SCANCODE_SPACE, SDL_SCANCODE_TAB, SDL_SCANCODE_UP,
+    SDL_SCANCODE_W, SDL_Scancode,
 };
 
+use crate::biorand;
 use crate::build_info;
 use crate::config::{Config, Mods, UpdateChannel};
 use crate::controls::{self, Source as Input};
@@ -153,6 +158,23 @@ fn format_count(value: u64) -> String {
     out
 }
 
+/// The digit a key types, on the number row or the keypad.
+fn typed_digit(scancode: SDL_Scancode) -> Option<char> {
+    Some(match scancode {
+        SDL_SCANCODE_0 | SDL_SCANCODE_KP_0 => '0',
+        SDL_SCANCODE_1 | SDL_SCANCODE_KP_1 => '1',
+        SDL_SCANCODE_2 | SDL_SCANCODE_KP_2 => '2',
+        SDL_SCANCODE_3 | SDL_SCANCODE_KP_3 => '3',
+        SDL_SCANCODE_4 | SDL_SCANCODE_KP_4 => '4',
+        SDL_SCANCODE_5 | SDL_SCANCODE_KP_5 => '5',
+        SDL_SCANCODE_6 | SDL_SCANCODE_KP_6 => '6',
+        SDL_SCANCODE_7 | SDL_SCANCODE_KP_7 => '7',
+        SDL_SCANCODE_8 | SDL_SCANCODE_KP_8 => '8',
+        SDL_SCANCODE_9 | SDL_SCANCODE_KP_9 => '9',
+        _ => return None,
+    })
+}
+
 /// `mm:ss` for the progress screen.
 fn format_elapsed(elapsed: Duration) -> String {
     let seconds = elapsed.as_secs();
@@ -164,6 +186,8 @@ fn format_elapsed(elapsed: Duration) -> String {
 enum Screen {
     Main,
     Play,
+    /// A generated game from a seed.
+    Biorand,
     /// The games Install / Rebuild offers.
     Games,
     /// One game's install.
@@ -175,9 +199,10 @@ enum Screen {
 }
 
 impl Screen {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::Main,
         Self::Play,
+        Self::Biorand,
         Self::Games,
         Self::Install,
         Self::Update,
@@ -191,6 +216,7 @@ impl Screen {
         match self {
             Self::Main => "launcher_main",
             Self::Play => "launcher_play",
+            Self::Biorand => "launcher_biorand",
             Self::Games => "launcher_games",
             Self::Install => "launcher_install",
             Self::Update => "launcher_update",
@@ -214,7 +240,7 @@ impl Screen {
 }
 
 /// The launcher's screens and components.
-const DOCUMENTS: [(&str, &str); 9] = [
+const DOCUMENTS: [(&str, &str); 10] = [
     (
         "launcher_components",
         include_str!("../../assets/ui/launcher_components.xml"),
@@ -226,6 +252,10 @@ const DOCUMENTS: [(&str, &str); 9] = [
     (
         "launcher_play",
         include_str!("../../assets/ui/launcher_play.xml"),
+    ),
+    (
+        "launcher_biorand",
+        include_str!("../../assets/ui/launcher_biorand.xml"),
     ),
     (
         "launcher_games",
@@ -291,6 +321,8 @@ struct PackRow {
     path: PathBuf,
     stale: bool,
     error: Option<String>,
+    /// The seed of a generated pack.
+    seed: Option<u32>,
 }
 
 /// The remembered game installation.
@@ -353,6 +385,13 @@ struct Job {
     rebuild: bool,
     /// The screen it was started from, which a failure returns to.
     back: Screen,
+}
+
+/// A background generation of a seed's game, played when it ends.
+struct BiorandJob {
+    receiver: mpsc::Receiver<Result<PathBuf, String>>,
+    state: Arc<Mutex<ProgressState>>,
+    seed: u32,
 }
 
 /// A background engine download.
@@ -460,6 +499,9 @@ struct Launcher {
     /// Each game's remembered or detected installation.
     sources: HashMap<Game, Source>,
     job: Option<Job>,
+    biorand_job: Option<BiorandJob>,
+    /// The digits of the seed the BioRand screen shows.
+    biorand_seed: String,
     update_job: Option<UpdateJob>,
     checking: bool,
     check_rx: Option<mpsc::Receiver<Result<Option<UpdateInfo>, String>>>,
@@ -517,6 +559,8 @@ impl Launcher {
             game,
             sources,
             job: None,
+            biorand_job: None,
+            biorand_seed: String::new(),
             update_job: None,
             checking: false,
             check_rx: None,
@@ -724,6 +768,7 @@ impl Launcher {
         match screen {
             Screen::Main | Screen::Message => {}
             Screen::Play => self.publish_play(),
+            Screen::Biorand => self.publish_biorand(),
             Screen::Games => self.publish_games(),
             Screen::Install => self.publish_install(),
             Screen::Update => self.publish_update(),
@@ -760,6 +805,11 @@ impl Launcher {
             (false, None) => String::new(),
         };
         self.ui.set("main.play", plural(self.packs.len(), "pack"));
+        let biorand_ready = pack_for(&self.packs, Game::Re1).is_some();
+        self.ui.set(
+            "main.biorand",
+            if biorand_ready { "" } else { "Needs a game" },
+        );
         self.ui.set("main.install", install);
         self.ui.set("main.update", update);
         self.ui.set("main.mods", plural(self.mods.len(), "mod"));
@@ -804,6 +854,31 @@ impl Launcher {
             .collect();
         self.ui.set("play.rows", Value::list(rows));
         self.ui.set("play.empty", self.packs.is_empty());
+    }
+
+    fn publish_biorand(&mut self) {
+        let base = pack_for(&self.packs, Game::Re1);
+        let (base_text, warn) = match base {
+            None => (format!("Install {} first", Game::Re1.title()), true),
+            Some(pack) if pack.error.is_some() || pack.stale => {
+                (format!("Rebuild {} first", Game::Re1.title()), true)
+            }
+            Some(pack) => (pack.name.clone(), false),
+        };
+        let seed = self.biorand_seed.parse::<u32>().ok();
+        let pack = seed.map_or_else(String::new, biorand::pack_id);
+        let exists = seed.is_some_and(|seed| {
+            let id = biorand::pack_id(seed);
+            self.packs.iter().any(|row| row.id == id && !row.stale)
+        });
+        self.ui.set("biorand.seed", self.biorand_seed.clone());
+        self.ui.set("biorand.base", base_text);
+        self.ui.set("biorand.base_tone", tone(warn));
+        self.ui.set("biorand.pack", pack);
+        self.ui.set(
+            "biorand.action",
+            if exists { "Already generated" } else { "" },
+        );
     }
 
     /// A game's pack state for the game lists, and whether it needs
@@ -1015,6 +1090,11 @@ impl Launcher {
                 .lock()
                 .map(|state| state.clone())
                 .unwrap_or_default()
+        } else if let Some(job) = &self.biorand_job {
+            job.state
+                .lock()
+                .map(|state| state.clone())
+                .unwrap_or_default()
         } else {
             self.capture_progress.clone().unwrap_or_default()
         };
@@ -1023,6 +1103,8 @@ impl Launcher {
         let game_title = game.title().to_uppercase();
         let title = if self.update_job.is_some() {
             "UPDATING ENGINE".to_string()
+        } else if let Some(job) = &self.biorand_job {
+            format!("GENERATING SEED {:06}", job.seed)
         } else if rebuild {
             format!("REBUILDING {game_title}")
         } else {
@@ -1071,10 +1153,14 @@ impl Launcher {
             format!("Elapsed {}", format_elapsed(state.elapsed)),
         );
         self.ui.set("progress.step", step);
-        self.ui.set("progress.running", !cancelling);
+        // A generation takes seconds and has no way to stop.
+        let generating = self.biorand_job.is_some();
+        self.ui.set("progress.running", !cancelling && !generating);
         self.ui.set(
             "progress.cancel_hint",
-            if cancelling {
+            if generating {
+                "Generating..."
+            } else if cancelling {
                 "Cancelling..."
             } else {
                 "Cancel"
@@ -1251,12 +1337,28 @@ impl Launcher {
         match name {
             "exit" => return true,
             "play_screen" => self.enter(Screen::Play),
+            "biorand_screen" => {
+                self.new_biorand_seed();
+                self.enter(Screen::Biorand);
+            }
+            "biorand_new_seed" => self.new_biorand_seed(),
+            "biorand_generate" => self.start_biorand(self.biorand_seed.parse().ok()),
             "install_screen" => self.enter(Screen::Games),
             "update_screen" => self.enter(Screen::Update),
             "mods_screen" => self.enter(Screen::Mods),
             "options_screen" => self.open_options(display),
             "play" => {
                 self.play_index = index;
+                // A seed's pack is rebuilt from its seed rather than from a game.
+                let stale_seed = self
+                    .packs
+                    .get(index)
+                    .filter(|pack| pack.stale)
+                    .and_then(|pack| pack.seed);
+                if let Some(seed) = stale_seed {
+                    self.start_biorand(Some(seed));
+                    return false;
+                }
                 return self.play(display);
             }
             "install_game" => {
@@ -1815,6 +1917,120 @@ impl Launcher {
     }
 
     /// Start (or restart) the conversion for the current source and target.
+    fn new_biorand_seed(&mut self) {
+        self.biorand_seed = format!("{:06}", biorand::random_seed());
+    }
+
+    /// Apply a digit or backspace key on the BioRand screen; returns whether
+    /// the key was one.
+    fn biorand_key(&mut self, scancode: SDL_Scancode) -> bool {
+        if self.options.is_some() || self.screen() != Screen::Biorand {
+            return false;
+        }
+        if scancode == SDL_SCANCODE_BACKSPACE {
+            self.biorand_seed.pop();
+        } else if let Some(digit) = typed_digit(scancode) {
+            if self.biorand_seed.len() >= biorand::SEED_DIGITS {
+                self.biorand_seed.clear();
+            }
+            self.biorand_seed.push(digit);
+        } else {
+            return false;
+        }
+        self.publish();
+        true
+    }
+
+    /// Generate `seed`'s game in the background, to be played when it is done.
+    fn start_biorand(&mut self, seed: Option<u32>) {
+        if self.biorand_job.is_some() || self.job.is_some() {
+            return;
+        }
+        let Some(seed) = seed else {
+            self.show_message(
+                "NO SEED",
+                &["Type a seed of up to six digits."],
+                Screen::Biorand,
+            );
+            return;
+        };
+        let base = match pack_for(&self.packs, Game::Re1) {
+            Some(pack) if pack.error.is_none() && !pack.stale => pack.path.clone(),
+            Some(_) => {
+                let line = format!("Rebuild {} from Install / Rebuild.", Game::Re1.title());
+                self.show_message("GAME NEEDS A REBUILD", &[&line], Screen::Biorand);
+                return;
+            }
+            None => {
+                let line = format!("Install {} from Install / Rebuild.", Game::Re1.title());
+                self.show_message("NO GAME TO GENERATE FROM", &[&line], Screen::Biorand);
+                return;
+            }
+        };
+        let games = paths::games_dir(&paths::primary_data_dir());
+        let state = Arc::new(Mutex::new(ProgressState::default()));
+        let (sender, receiver) = mpsc::channel();
+        let thread_state = Arc::clone(&state);
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            let report = |done: u64, total: u64| {
+                if let Ok(mut state) = thread_state.lock() {
+                    state.label = "generating".to_string();
+                    state.done = done;
+                    state.total = total;
+                    state.overall = done as f64 / total.max(1) as f64;
+                    state.elapsed = started.elapsed();
+                }
+            };
+            let result = biorand::generate(&base, seed, &games, 0, &report);
+            let _ = sender.send(result.map_err(|err| format!("{err:#}")));
+        });
+        logging::write(&format!("biorand: generating seed {seed:06}"));
+        self.biorand_job = Some(BiorandJob {
+            receiver,
+            state,
+            seed,
+        });
+        self.publish_screen(Screen::Progress);
+        self.open(Screen::Progress);
+    }
+
+    /// Finish a generation; returns whether the game was played and the process
+    /// should exit.
+    fn poll_biorand_job(&mut self, display: &mut Display) -> (bool, bool) {
+        let Some(job) = &self.biorand_job else {
+            return (false, false);
+        };
+        let result = match job.receiver.try_recv() {
+            Ok(result) => result,
+            Err(TryRecvError::Empty) => return (false, false),
+            Err(TryRecvError::Disconnected) => {
+                Err("the generation thread stopped unexpectedly".to_string())
+            }
+        };
+        let seed = job.seed;
+        self.biorand_job = None;
+        self.packs = scan_packs();
+        self.refresh_mods();
+        self.goto(Screen::Biorand);
+        let path = match result {
+            Ok(path) => path,
+            Err(err) => {
+                logging::write(&format!("biorand failed: {err}"));
+                let title = format!("SEED {seed:06} FAILED");
+                self.show_message(&title, &[&err, "See the log for details."], Screen::Biorand);
+                return (true, false);
+            }
+        };
+        let Some(index) = self.packs.iter().position(|pack| pack.path == path) else {
+            let line = path.display().to_string();
+            self.show_message("PACK NOT FOUND", &[&line], Screen::Biorand);
+            return (true, false);
+        };
+        self.play_index = index;
+        (true, self.play(display))
+    }
+
     fn install(&mut self) {
         if self.job.is_some() {
             return;
@@ -2124,6 +2340,10 @@ impl Launcher {
     fn set_capture_screen(&mut self, name: &str, display: &mut Display) {
         let screen = match name {
             "play" => Screen::Play,
+            "biorand" => {
+                self.new_biorand_seed();
+                Screen::Biorand
+            }
             "games" => Screen::Games,
             "install" => Screen::Install,
             "update" => Screen::Update,
@@ -2188,6 +2408,11 @@ impl Launcher {
         loop {
             let dialog_changed = self.poll_dialog();
             let job_changed = self.poll_job();
+            let (biorand_changed, biorand_played) = self.poll_biorand_job(display);
+            if biorand_played {
+                self.save_window(display);
+                return Ok(());
+            }
             let update_changed = self.poll_update_job();
             let check_changed = self.poll_check();
             if self.auto_update
@@ -2199,7 +2424,7 @@ impl Launcher {
                 self.auto_update = false;
                 self.start_update();
             }
-            if dialog_changed || job_changed || update_changed || check_changed {
+            if dialog_changed || job_changed || biorand_changed || update_changed || check_changed {
                 self.ui.invalidate();
             }
             let (width, height) = display.drawable_size();
@@ -2259,6 +2484,8 @@ impl Launcher {
                             && matches!(scancode, SDL_SCANCODE_RETURN | SDL_SCANCODE_KP_ENTER)
                         {
                             display.toggle_fullscreen();
+                        } else if self.biorand_key(scancode) {
+                            self.ui.invalidate();
                         } else if let Some(key) = self.keyboard_key(scancode, modifiers) {
                             close = self.handle(GuiEvent::Key(key, Device::Keyboard), display);
                         }
@@ -2507,6 +2734,7 @@ fn scan_packs() -> Vec<PackRow> {
                 path,
                 stale,
                 error,
+                seed: manifest.as_ref().and_then(|manifest| manifest.seed),
             });
         }
     }
@@ -2526,6 +2754,11 @@ fn scan_packs() -> Vec<PackRow> {
 fn is_stale(manifest: &manifest::Manifest, source_hash: &str) -> bool {
     if manifest.convert_version != Some(CONVERT_VERSION) {
         return true;
+    }
+    // A seed's pack is built from another pack, and keeps being the same game
+    // when the scripts it was built from change, until the generator does.
+    if manifest.seed.is_some() {
+        return manifest.generator_version != Some(biorand::GENERATOR_VERSION);
     }
     Game::from_id(&manifest.id) != Some(Game::Re2)
         && manifest.source_hash.as_deref() != Some(source_hash)
@@ -2818,6 +3051,13 @@ pub fn run() -> Result<()> {
         launcher.goto(Screen::Install);
         launcher.install();
     }
+    if capture.is_none()
+        && let Ok(seed) = env::var("ARKLAY_LAUNCHER_AUTOBIORAND")
+    {
+        launcher.goto(Screen::Biorand);
+        launcher.biorand_seed = seed;
+        launcher.start_biorand(launcher.biorand_seed.parse().ok());
+    }
     if capture.is_none() && env::var_os("ARKLAY_LAUNCHER_AUTOUPDATE").is_some() {
         launcher.auto_update = true;
         launcher.goto(Screen::Update);
@@ -2992,6 +3232,7 @@ mod tests {
             path: base,
             stale: false,
             error: None,
+            seed: None,
         };
         let config = Config::default();
         let packs = std::slice::from_ref(&pack);
@@ -3065,7 +3306,85 @@ mod tests {
             path: PathBuf::from(format!("/packs/{id}.akpak")),
             stale: false,
             error: None,
+            seed: None,
         }
+    }
+
+    #[test]
+    fn digit_keys_edit_the_seed_on_the_biorand_screen_only() {
+        let mut launcher = Launcher::with(
+            &Config::default(),
+            vec![pack_row("re1")],
+            HashMap::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        assert!(
+            !launcher.biorand_key(SDL_SCANCODE_1),
+            "not on the main menu"
+        );
+        launcher.enter(Screen::Biorand);
+        launcher.biorand_seed.clear();
+        for key in [SDL_SCANCODE_1, SDL_SCANCODE_KP_2, SDL_SCANCODE_3] {
+            assert!(launcher.biorand_key(key));
+        }
+        assert_eq!(launcher.biorand_seed, "123");
+        assert!(launcher.biorand_key(SDL_SCANCODE_BACKSPACE));
+        assert_eq!(launcher.biorand_seed, "12");
+        assert!(
+            !launcher.biorand_key(SDL_SCANCODE_A),
+            "letters are not digits"
+        );
+
+        // A seventh digit starts over rather than overflowing the seed.
+        launcher.biorand_seed = "999999".to_string();
+        assert!(launcher.biorand_key(SDL_SCANCODE_0));
+        assert_eq!(launcher.biorand_seed, "0");
+    }
+
+    #[test]
+    fn biorand_says_what_is_missing_instead_of_generating() {
+        let mut launcher =
+            Launcher::with(&Config::default(), Vec::new(), HashMap::new(), Vec::new()).unwrap();
+        launcher.enter(Screen::Biorand);
+        launcher.start_biorand(Some(1));
+        assert_eq!(launcher.screen(), Screen::Message);
+        assert!(launcher.biorand_job.is_none());
+
+        let mut stale = pack_row("re1");
+        stale.stale = true;
+        let mut launcher =
+            Launcher::with(&Config::default(), vec![stale], HashMap::new(), Vec::new()).unwrap();
+        launcher.enter(Screen::Biorand);
+        launcher.start_biorand(Some(1));
+        assert_eq!(launcher.screen(), Screen::Message);
+
+        let mut launcher = Launcher::with(
+            &Config::default(),
+            vec![pack_row("re1")],
+            HashMap::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        launcher.enter(Screen::Biorand);
+        launcher.start_biorand(None);
+        assert_eq!(
+            launcher.screen(),
+            Screen::Message,
+            "an empty seed is not a seed"
+        );
+    }
+
+    #[test]
+    fn a_seeds_pack_goes_stale_with_the_generator_not_the_scripts() {
+        let mut manifest = manifest::Manifest::base("biorand-000001");
+        manifest.convert_version = Some(CONVERT_VERSION);
+        manifest.seed = Some(1);
+        manifest.generator_version = Some(biorand::GENERATOR_VERSION);
+        manifest.source_hash = Some("older scripts".to_string());
+        assert!(!is_stale(&manifest, "current scripts"));
+        manifest.generator_version = Some(biorand::GENERATOR_VERSION + 1);
+        assert!(is_stale(&manifest, "current scripts"));
     }
 
     #[test]

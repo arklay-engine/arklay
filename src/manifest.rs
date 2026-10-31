@@ -105,6 +105,14 @@ pub struct Manifest {
     /// ships (`convert-game` records it), which picks a mod's per-region
     /// script builds. Absent, a mod's scripts run their USA build.
     pub region: Option<Region>,
+    /// Base packs: the randomizer seed that generated the pack. Its presence
+    /// raises the randomizer system flags for scripts.
+    pub seed: Option<u32>,
+    /// Base packs: the revision of the randomizer that generated the pack.
+    pub generator_version: Option<u32>,
+    /// Base packs: the character a new game plays (`0` Chris, `1` Jill),
+    /// without the character select screen or the prologue film.
+    pub character: Option<u8>,
 }
 
 impl Manifest {
@@ -128,6 +136,9 @@ impl Manifest {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            character: None,
             region: None,
         }
     }
@@ -160,6 +171,9 @@ impl Manifest {
         let mut start_room = None;
         let mut start_pos = None;
         let mut start_angle = None;
+        let mut seed = None;
+        let mut generator_version = None;
+        let mut character = None;
         let mut start_health = None;
         let mut region = None;
         let mut seen: HashSet<String> = HashSet::new();
@@ -269,6 +283,17 @@ impl Manifest {
                     };
                     start_pos = Some([x, y, z]);
                 }
+                "seed" => seed = Some(parsed_field(item, "seed")?),
+                "generator_version" => {
+                    generator_version = Some(parsed_field(item, "generator_version")?)
+                }
+                "character" => {
+                    let value: u8 = parsed_field(item, "character")?;
+                    if value > 1 {
+                        bail!("manifest.toml line {line}: bad `character`: {value}");
+                    }
+                    character = Some(value);
+                }
                 "start_angle" => {
                     let text = non_empty_string(item, "start_angle")?;
                     start_angle = Some(text.parse().map_err(|error| {
@@ -304,7 +329,10 @@ impl Manifest {
             && (start_room.is_some()
                 || start_pos.is_some()
                 || start_angle.is_some()
-                || start_health.is_some())
+                || start_health.is_some()
+                || seed.is_some()
+                || generator_version.is_some()
+                || character.is_some())
         {
             bail!("manifest.toml: `start_room` belongs to a base pack, not a mod");
         }
@@ -331,6 +359,9 @@ impl Manifest {
             start_angle,
             start_health,
             region,
+            seed,
+            generator_version,
+            character,
         })
     }
 
@@ -391,8 +422,29 @@ impl Manifest {
         if let Some(region) = self.region {
             write_pair(&mut out, "region", &quote(region.symbol()));
         }
+        if let Some(seed) = self.seed {
+            write_pair(&mut out, "seed", &quote(&seed.to_string()));
+        }
+        if let Some(version) = self.generator_version {
+            write_pair(&mut out, "generator_version", &quote(&version.to_string()));
+        }
+        if let Some(character) = self.character {
+            write_pair(&mut out, "character", &quote(&character.to_string()));
+        }
         out
     }
+}
+
+/// A string field holding a number, like `start_angle`.
+fn parsed_field<T>(item: Item, name: &str) -> Result<T>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    let line = item.line;
+    non_empty_string(item, name)?
+        .parse()
+        .map_err(|error| anyhow!("manifest.toml line {line}: bad `{name}`: {error}"))
 }
 
 /// The value kinds the subset grammar can represent.
@@ -701,6 +753,9 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            character: None,
             region: None,
         }
     }
@@ -724,6 +779,9 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            character: None,
             region: None,
         }
     }
@@ -746,6 +804,18 @@ mod tests {
         };
         let error = Manifest::parse(&on_mod.render()).unwrap_err().to_string();
         assert!(error.contains("`region` belongs to a base pack"), "{error}");
+    }
+
+    #[test]
+    fn a_generated_packs_fields_round_trip() {
+        let mut manifest = Manifest::base("biorand-000042");
+        manifest.seed = Some(42);
+        manifest.generator_version = Some(3);
+        manifest.character = Some(1);
+        let parsed = Manifest::parse(&manifest.render()).unwrap();
+        assert_eq!(parsed.seed, Some(42));
+        assert_eq!(parsed.generator_version, Some(3));
+        assert_eq!(parsed.character, Some(1));
     }
 
     #[test]
@@ -881,6 +951,9 @@ lua = [\"lua/a.lua\", \"lua/b.lua\"]
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            character: None,
             region: None,
         }
     }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="B1 WEST" tags="visit2"/>
+  <doors>
+    <door id="0" target="21A:1" kind="normal">
+      <entrance x="27500" y="0" z="12600" d="2048" cut="7"/>
+    </door>
+    <door id="1" target="21C:1" kind="normal">
+      <entrance x="4800" y="0" z="4600" d="0" cut="0"/>
+    </door>
+  </doors>
+  <items>
+    <item id="2" name="GREEN HERB/1"/>
+    <item id="3" name="GREEN HERB/2"/>
+  </items>
+  <enemies exclude="4">
+    <spot x="12869" y="0" z="4204" d="87"/>
+    <spot x="15035" y="0" z="3521" d="79"/>
+    <spot x="19543" y="0" z="3215" d="1919"/>
+    <spot x="20803" y="0" z="7628" d="879"/>
+    <spot x="21609" y="0" z="5047" d="3055"/>
+    <spot x="21634" y="0" z="12889" d="1127"/>
+    <spot x="21652" y="0" z="10036" d="3127"/>
+    <spot x="24092" y="0" z="3728" d="3991"/>
+    <spot x="24977" y="0" z="12902" d="1719"/>
+    <spot x="27199" y="0" z="3374" d="1703"/>
+    <spot x="6760" y="0" z="2835" d="4095"/>
+    <spot x="9766" y="0" z="2778" d="119"/>
+  </enemies>
+</random>

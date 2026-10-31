@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="HELIPAD" tags="goal"/>
+  <doors>
+    <door id="8" kind="normal">
+      <entrance x="29130" y="0" z="5700" d="2048" cut="4"/>
+    </door>
+  </doors>
+  <items>
+    <item id="2" name="FLARE"/>
+  </items>
+  <enemies fixed="true"/>
+</random>

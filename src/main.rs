@@ -387,6 +387,11 @@ impl GameArg {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Generate and check small randomized games
+    Biorand {
+        #[command(subcommand)]
+        action: BiorandAction,
+    },
     /// Convert a game installation into an .akpak game pack
     ConvertGame {
         /// Root of the game installation or data directory
@@ -550,6 +555,31 @@ enum ModAction {
         /// Base pack checking the declared base id and the override paths
         #[arg(long, value_name = "PATH")]
         base: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BiorandAction {
+    /// Generate a seed's game pack from a base pack
+    Generate {
+        /// The base game pack, such as re1.akpak
+        #[arg(value_name = "PACK")]
+        base: PathBuf,
+
+        /// The seed: up to six digits
+        #[arg(long)]
+        seed: u32,
+
+        /// Directory the pack goes in (default: the base pack's directory)
+        #[arg(long, value_name = "DIR")]
+        out_dir: Option<PathBuf>,
+    },
+    /// Check a generated pack: every room reachable, every key before its
+    /// lock, the flare and the goal room reachable
+    Verify {
+        /// The generated pack
+        #[arg(value_name = "PACK")]
+        pack: PathBuf,
     },
 }
 
@@ -1098,6 +1128,15 @@ fn write_pack_info(pack_path: &Path, pack: &Pack, out: &mut impl Write) -> Resul
             if let Some(hash) = &manifest.source_hash {
                 writeln!(out, "  source_hash: {hash}")?;
             }
+            if let Some(seed) = manifest.seed {
+                writeln!(out, "  seed: {seed}")?;
+            }
+            if let Some(version) = manifest.generator_version {
+                writeln!(out, "  generator_version: {version}")?;
+            }
+            if let Some(character) = manifest.character {
+                writeln!(out, "  character: {character}")?;
+            }
             if !manifest.lua.is_empty() {
                 writeln!(out, "  lua: {}", manifest.lua.join(", "))?;
             }
@@ -1177,6 +1216,25 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Some(Command::Biorand { action }) => match action {
+            BiorandAction::Generate {
+                base,
+                seed,
+                out_dir,
+            } => {
+                let dir = out_dir
+                    .or_else(|| base.parent().map(Path::to_path_buf))
+                    .unwrap_or_default();
+                let out = arklay::biorand::generate(&base, seed, &dir, 0, &|_, _| {})?;
+                println!("{}", out.display());
+                Ok(())
+            }
+            BiorandAction::Verify { pack } => {
+                arklay::biorand::verify_pack(&pack)?;
+                println!("{}: ok", pack.display());
+                Ok(())
+            }
+        },
         Some(Command::ConvertGame {
             root,
             out,

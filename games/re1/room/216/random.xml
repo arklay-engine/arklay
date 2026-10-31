@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="2F WEST LIBRARY"/>
+  <doors>
+    <door id="0" target="213:0" kind="normal">
+      <entrance x="13600" y="0" z="10300" d="2048" cut="4"/>
+    </door>
+    <door id="1" target="217:0" kind="normal">
+      <entrance x="3000" y="0" z="3600" d="0" cut="5"/>
+    </door>
+    <door id="2" target="218:0" kind="hidden"/>
+  </doors>
+  <items>
+  </items>
+  <enemies exclude="4">
+    <spot x="10274" y="0" z="9408" d="2895"/>
+    <spot x="4375" y="0" z="7311" d="3695"/>
+    <spot x="5096" y="0" z="9641" d="1087"/>
+    <spot x="5306" y="0" z="3608" d="3295"/>
+    <spot x="5454" y="0" z="12925" d="1135"/>
+    <spot x="7788" y="0" z="3296" d="4063"/>
+    <spot x="8805" y="0" z="9662" d="3063"/>
+    <spot x="9332" y="0" z="5417" d="3231"/>
+    <spot x="9366" y="0" z="13694" d="1103"/>
+    <spot x="9368" y="0" z="9316" d="1335"/>
+  </enemies>
+</random>

@@ -6,6 +6,7 @@
   <command key="cancel" label="Quit" action="exit"/>
   <list width="1100" height="auto">
     <menu-entry label="Play Game" action="play_screen" hint="Open" status="{main.play}" tone="value-dim"/>
+    <menu-entry label="BioRand" action="biorand_screen" hint="Open" status="{main.biorand}" tone="warn"/>
     <menu-entry label="Install / Rebuild" action="install_screen" hint="Open" status="{main.install}" tone="warn"/>
     <menu-entry label="Update" action="update_screen" hint="Open" status="{main.update}" tone="warn"/>
     <menu-entry label="Mods" action="mods_screen" hint="Open" status="{main.mods}" tone="value-dim"/>

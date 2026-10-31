@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="2F EAST BEDROOM"/>
+  <doors>
+    <door id="0" target="208:0" kind="normal">
+      <entrance x="9100" y="0" z="7700" d="2048" cut="9"/>
+    </door>
+  </doors>
+  <items>
+    <item id="1" name="LIGHTER ON DISPLAY CASE"/>
+    <item id="2" name="BEHIND BED"/>
+    <item id="3" name="RED HERB"/>
+  </items>
+  <enemies exclude="4">
+    <spot x="3633" y="0" z="8143" d="56"/>
+    <spot x="4223" y="0" z="6615" d="4064"/>
+    <spot x="7075" y="0" z="8796" d="2240"/>
+    <spot x="7191" y="0" z="6768" d="2008"/>
+    <spot x="9016" y="0" z="3352" d="3152"/>
+  </enemies>
+</random>

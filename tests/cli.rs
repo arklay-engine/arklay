@@ -1026,10 +1026,11 @@ fn the_config_save_dir_drives_a_registered_lua_screen() {
     assert!(capture.is_file());
     assert!(stderr(&output).contains("saves=0"), "{}", stderr(&output));
 
-    // A save written there is what the screen lists.
+    // A save in the pack's folder there is what the screen lists.
     let file = arklay::save::SaveFile::from_state(&arklay::game::GameState::default());
-    std::fs::create_dir_all(&saves).unwrap();
-    arklay::save::save_to_path(&saves.join("savedat1.dat"), &file).unwrap();
+    let pack_saves = saves.join("probe");
+    std::fs::create_dir_all(&pack_saves).unwrap();
+    arklay::save::save_to_path(&pack_saves.join("savedat1.dat"), &file).unwrap();
     let output = load();
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stderr(&output).contains("saves=1"), "{}", stderr(&output));

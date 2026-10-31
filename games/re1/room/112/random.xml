@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="1F EAST BIG MIRROR"/>
+  <doors>
+    <door id="0" target="111:1" kind="normal">
+      <entrance x="2900" y="0" z="15300" d="0" cut="7"/>
+    </door>
+    <door id="1" target="11C:0" kind="normal">
+      <entrance x="3500" y="0" z="7500" d="0" cut="7"/>
+    </door>
+  </doors>
+  <items>
+    <item id="2" name="GREEN HERB/1"/>
+    <item id="3" name="GREEN HERB/2"/>
+    <item id="4" name="INK"/>
+  </items>
+  <enemies>
+    <spot x="10083" y="0" z="8463" d="2384"/>
+    <spot x="10734" y="0" z="14807" d="2040"/>
+    <spot x="5281" y="0" z="10465" d="152"/>
+    <spot x="5699" y="0" z="12462" d="1008"/>
+    <spot x="5772" y="0" z="9221" d="1008"/>
+    <spot x="6384" y="0" z="11751" d="416"/>
+    <spot x="6845" y="0" z="7748" d="3952"/>
+    <spot x="7147" y="0" z="9909" d="3488"/>
+    <spot x="7760" y="0" z="9390" d="3072"/>
+    <spot x="7765" y="0" z="12212" d="800"/>
+    <spot x="8368" y="0" z="14702" d="1144"/>
+    <spot x="9410" y="0" z="7543" d="3040"/>
+    <spot x="9870" y="0" z="11116" d="2024"/>
+  </enemies>
+</random>
