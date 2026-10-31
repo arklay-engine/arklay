@@ -134,8 +134,8 @@ const AIM_LOWER_BLEND: u8 = 0x0F;
 /// The parts from the root to the foot the handguns' stance plants.
 const AIM_FOOT_CHAIN: [usize; 5] = [0, 1, 5, 6, 7];
 const AIM_LOWER_STEP: u16 = 0x100;
-/// The weapon bank's slot of a shot (`Snd_se_on(0x1010001)`).
-const SOUND_SHOT: u16 = 1;
+/// The weapon bank's slot of an empty gun's click (`Snd_se_on(0x1010001)`).
+const SOUND_EMPTY: u16 = 1;
 /// The frame flag `pl_mv05_w1_t4` plays a sound of the weapon bank on; the
 /// slot is the frame's [`FRAME_SOUND_SLOT`] bits.
 const FRAME_SOUND: u32 = 0x10_0000;
@@ -1713,9 +1713,12 @@ impl Mover<'_, '_> {
                 self.aim_stage(2);
                 return;
             }
-            if self.tick.input.fire_pressed && self.tick.weapon.spare {
-                self.aim_stage(4);
-                return;
+            if self.tick.input.fire_pressed {
+                if self.tick.weapon.spare {
+                    self.aim_stage(4);
+                    return;
+                }
+                self.player.queue_sound(SOUND_EMPTY);
             }
         }
         self.aim_turn(key, AIM_HOLD_TURN);
@@ -1735,7 +1738,6 @@ impl Mover<'_, '_> {
             self.work.noise |= 1;
             self.shoot();
             self.work.fired = true;
-            self.player.queue_sound(SOUND_SHOT);
             self.work.spd = [0; 3];
         }
         self.aim_turn(key, AIM_FIRE_TURN);
@@ -2740,7 +2742,7 @@ pub(crate) fn rotate(angle: u16, x: i32, z: i32) -> (i32, i32) {
 
 /// `catan`, on the original's x87: `atan(v / 4096) * 2048 / 3.14`, truncated.
 /// The divisor is the executable's own constant, not a full-precision pi.
-fn catan(value: i32) -> i32 {
+pub(crate) fn catan(value: i32) -> i32 {
     const ONE_OVER_PI: f64 = 0.318_471_337_579_617_8;
     ((f64::from(value) * 0.000_244_140_625).atan() * 2048.0 * ONE_OVER_PI) as i32
 }
@@ -3294,6 +3296,10 @@ mod tests {
         setup.tick(aiming(true, false), 200);
         assert_eq!(setup.work.move_no, AIM_FIRE_CLIPS[1]);
         assert!(setup.work.fired);
+        assert!(
+            setup.player.take_sounds().is_empty(),
+            "a shot doesn't click"
+        );
 
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
         setup.tick(Input::default(), 200);
@@ -3311,6 +3317,9 @@ mod tests {
         setup.work.status_flg = TILT_LEVEL;
         setup.tick(aiming(true, true), 200);
         assert_eq!(setup.work.routine[2], 1, "nothing to reload with");
+        let clicks = setup.player.take_sounds();
+        assert_eq!(clicks.len(), 1, "an empty gun clicks");
+        assert_eq!(clicks[0].id, SOUND_EMPTY);
 
         let mut setup = armed(false, true);
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];

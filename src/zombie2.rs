@@ -3041,6 +3041,7 @@ mod tests {
             ),
             kind: 0,
             start: (0, 0),
+            sound_type: 0,
             with_room: false,
             zombie: None,
         };
