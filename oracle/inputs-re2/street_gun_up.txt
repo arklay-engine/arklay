@@ -1,0 +1,7 @@
+# aim up and fire
+0 
+40 aim
+60 aim up
+80 aim up fire
+1400 aim
+1420 

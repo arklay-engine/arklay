@@ -1,0 +1,6 @@
+# aim level and fire at what comes
+0 
+40 aim
+70 aim fire
+1400 aim
+1420 

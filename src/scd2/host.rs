@@ -79,8 +79,6 @@ pub struct Re2State {
     pub sound_types: [u8; 2],
     /// `BYTE_0098e543`: the enemy sound bank `Sce_se_set` chose for the room.
     pub enemy_bank: Option<u8>,
-    /// The player's `+0x1d3`: an enemy has hold of them, or is about to.
-    pub player_lock: u8,
     /// The room's load has yet to finish: its last pass runs `Esp_move`.
     pub load_pass: bool,
 }
@@ -273,7 +271,6 @@ impl Default for Re2State {
             enemies: 0,
             sound_types: [0; 2],
             enemy_bank: None,
-            player_lock: 0,
             load_pass: false,
         }
     }
@@ -475,6 +472,23 @@ impl Re2State {
 
     /// `Esp_move`: its draws come from the game's stream, and its sounds join the rest.
     pub fn tick_effects(&mut self, sca: Option<&crate::state::Sca>) {
+        // `Joint_trans2` comes just before `Esp_move`, and makes `Parts_down`'s calls.
+        for character in self.characters.0.iter_mut().flatten() {
+            let Some(zombie) = character.zombie.as_mut() else {
+                continue;
+            };
+            let (rnd, effects) = (&mut self.rnd, &mut self.effects);
+            zombie.thrown.retain_mut(|thrown| {
+                let falling = thrown.fall(rnd, effects, sca);
+                if !falling {
+                    // Its children go with it, up to the arm's last.
+                    for part in thrown.part..=thrown.part / 3 * 3 + 2 {
+                        crate::player2::set_part_flags(&mut character.work, part, 0);
+                    }
+                }
+                falling
+            });
+        }
         self.effects.tick(&mut self.rnd, sca);
         for (id, pos) in std::mem::take(&mut self.effects.sounds) {
             if let Some(id) = crate::se2::SoundId::decode(id) {
