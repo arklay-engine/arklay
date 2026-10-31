@@ -439,7 +439,23 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         f"mot={routines[2]},{routines[3]},{motion[0]},{motion[1]},{motion[2]},"
         f"{game.u8(PL + ENTITY_D_LIFE_U)},{spd[0]},{spd[1]},{spd[2]}"
     )
+    fields.append(neck_state(game))
     return " ".join(fields)
+
+
+def neck_state(game: Game) -> str:
+    """The player's neck: flags, joint, whether it has a target, the joint's turn and limits."""
+    flags, joint = game.read(PL + 0x1C0, 2)
+    target = game.u32(PL + 0x1B8)
+    work = game.u32(PL + 0x198) + joint * 0xAC
+    turn = struct.unpack("<2h", game.read(work + 0x98, 4))
+    rate = struct.unpack("<2h", game.read(work + 0x9C, 4))
+    limit = struct.unpack("<2h", game.read(work + 0xA0, 4))
+    rot = struct.unpack("<3h", game.read(work + 0x68, 6))
+    return (
+        f"neck={flags},{joint},{target != 0 and target != PL:d},{turn[0]},{turn[1]},"
+        f"{rate[0]},{rate[1]},{limit[0]},{limit[1]},{rot[0]},{rot[1]},{rot[2]}"
+    )
 
 
 def screenshot(display: str, path: Path) -> None:
