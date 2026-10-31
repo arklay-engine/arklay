@@ -13741,6 +13741,8 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     let Some(mut vm) = context.game.re2.vm.take() else {
         return;
     };
+    // `Sce_scheduler` starts the room's second main procedure every tick.
+    vm.exec_event(0, 1);
     for (task, event) in std::mem::take(&mut context.game.re2.pending_events) {
         vm.exec_event(usize::from(task), usize::from(event));
     }
