@@ -141,6 +141,20 @@ def ptrace(request: int, pid: int, addr: int = 0, data: int | ctypes.Array | Non
     return result
 
 
+# Where the game's 640x480 frame starts on the virtual display, its window's
+# border being left and above it.
+FRAME_ORIGIN = (3, 29)
+SOUND_SINK = "arklay_oracle"
+SCD_VAR_STAGE = 0x0098EB14
+SCD_VAR_ROOM = 0x0098EB16
+BGM_TBL = 0x0098E9C8
+BGM_STAGE_START = 0x0053C790
+BGM_CURRENT = 0x00693498
+SS_NAME_BGM = 0x006934E0
+SS_NAME_SBGM = 0x00693EA0
+SEQ_CTR = 0x00693800
+
+
 def parse_input(path: Path | None) -> list[tuple[int, int]]:
     """An `oracle/inputs` script as ascending `(tick, raw pad)` entries."""
     if path is None:
@@ -159,7 +173,7 @@ def parse_input(path: Path | None) -> list[tuple[int, int]]:
     return sorted(entries, key=lambda entry: entry[0])
 
 
-def prepare_game(game: Path, work: Path) -> Path:
+def prepare_game(game: Path, work: Path, sound: bool = False) -> Path:
     """A writable copy of the install's settings, with links to its read-only data."""
     tree = work / "game"
     (tree / "savedata").mkdir(parents=True, exist_ok=True)
@@ -172,7 +186,7 @@ def prepare_game(game: Path, work: Path) -> Path:
     # A fixed config: no dialogs or sound device to wait on, none of Classic
     # Rebirth's optional gameplay changes, no optional art.
     fixed = {
-        "BootConfig": "0", "MovieEnable": "0", "DirectSoundEnable": "0",
+        "BootConfig": "0", "MovieEnable": "0", "DirectSoundEnable": "1" if sound else "0",
         "QuickturnEnable": "0", "TacticalReloadEnable": "0", "AutoAimEnable": "0",
         "CutsceneSkip": "0", "DebugMode": "0", "FocusIgnore": "1",
     }
@@ -182,6 +196,24 @@ def prepare_game(game: Path, work: Path) -> Path:
         lines.append(f"{key} = {fixed[key]}" if key in fixed else line)
     (tree / "config.ini").write_text("\n".join(lines) + "\n")
     return tree
+
+
+def music_state(game: Game) -> str:
+    """What the music has loaded, a line for `--sound`'s log."""
+    def names(address: int, count: int) -> list[str]:
+        stems = []
+        for index in range(count):
+            raw = game.read(address + index * 0x104, 0x104).split(b"\0", 1)[0].decode(errors="replace")
+            stems.append(raw.rsplit("\\", 1)[-1])
+        return stems
+    stage, room = game.i16(SCD_VAR_STAGE), game.i16(SCD_VAR_ROOM)
+    table = game.u16(BGM_TBL + 2 * (game.u8(BGM_STAGE_START + stage) + room))
+    return (
+        f"room={stage + 1}{room:02x} table={table:04x} current={game.u16(BGM_CURRENT):04x} "
+        f"main={names(SS_NAME_BGM, 3)} sub={names(SS_NAME_SBGM, 2)} "
+        f"seq={game.read(SEQ_CTR, 3).hex()},{game.read(SEQ_CTR + 8, 3).hex()},"
+        f"{game.read(SEQ_CTR + 16, 3).hex()}"
+    )
 
 
 def wine_env(work: Path, display: str) -> dict[str, str]:
@@ -194,13 +226,13 @@ def wine_env(work: Path, display: str) -> dict[str, str]:
     )
 
 
-def prepare_prefix(work: Path, env: dict[str, str]) -> None:
+def prepare_prefix(work: Path, env: dict[str, str], sound: bool = False) -> None:
     if (work / "prefix" / "system.reg").exists():
         return
     subprocess.run(["wineboot", "-i"], env=env, check=True, capture_output=True)
     subprocess.run(
         ["wine", "reg", "add", r"HKCU\Software\Wine\Drivers", "/v", "Audio", "/t", "REG_SZ",
-         "/d", "", "/f"],
+         "/d", "pulse" if sound else "", "/f"],
         env=env, check=True, capture_output=True,
     )
 
@@ -411,8 +443,9 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
 
 
 def screenshot(display: str, path: Path) -> None:
+    """The display as an image; the game's frame starts at `FRAME_ORIGIN`."""
     subprocess.run(
-        ["import", "-window", "root", "-crop", "640x480+0+0", str(path)],
+        ["import", "-window", "root", str(path)],
         env=dict(os.environ, DISPLAY=display), check=False, capture_output=True,
     )
 
@@ -420,7 +453,7 @@ def screenshot(display: str, path: Path) -> None:
 class Session:
     """The game running under Wine on its own virtual display, traced."""
 
-    def __init__(self, game_dir: Path, work: Path) -> None:
+    def __init__(self, game_dir: Path, work: Path, sound_out: str | None = None) -> None:
         if not (game_dir / "bio2 1.10.exe").is_file():
             raise SystemExit("--game (or ARKLAY_RE2_ROOT) must be a retail RE2 install")
         work.mkdir(parents=True, exist_ok=True)
@@ -429,8 +462,21 @@ class Session:
         libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
         self.display_server, self.display = start_display()
         self.env = wine_env(work, self.display)
-        prepare_prefix(work, self.env)
-        tree = prepare_game(game_dir, work)
+        self.sink_module = None
+        self.sound_capture = None
+        sound = sound_out is not None
+        if sound:
+            # A sink of its own: the game is heard by nothing but the recording.
+            self.sink_module = subprocess.run(
+                ["pactl", "load-module", "module-null-sink", f"sink_name={SOUND_SINK}"],
+                check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            self.env["PULSE_SINK"] = SOUND_SINK
+            self.sound_capture = subprocess.Popen(
+                ["parec", f"--device={SOUND_SINK}.monitor", "--file-format=wav", sound_out],
+            )
+        prepare_prefix(work, self.env, sound)
+        tree = prepare_game(game_dir, work, sound)
         self.launcher = subprocess.Popen(
             ["wine", str(tree / "bio2 1.10.exe")], cwd=tree, env=self.env,
             stdout=open(work / "game.log", "w"), stderr=subprocess.STDOUT,
@@ -449,6 +495,11 @@ class Session:
         subprocess.run(["wineserver", "-k"], env=self.env, check=False)
         self.launcher.kill()
         self.display_server.kill()
+        if self.sound_capture:
+            self.sound_capture.terminate()
+            self.sound_capture.wait()
+        if self.sink_module:
+            subprocess.run(["pactl", "unload-module", self.sink_module], check=False)
 
 
 def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: float = 0.0) -> None:
@@ -457,8 +508,11 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
     entries = parse_input(Path(args.input) if args.input else None)
     if args.shot_dir:
         Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
-    session = Session(game_root(args), work)
+    sound_out = str(trace_path.with_suffix(".wav")) if args.sound else None
     trace_path.parent.mkdir(parents=True, exist_ok=True)
+    session = Session(game_root(args), work, sound_out)
+    music_log = open(trace_path.with_suffix(".music"), "w") if args.sound else None
+    last_music = ""
     try:
         with open(trace_path, "w") as trace:
             trace.write("oracle-trace v1 engine=ref\n")
@@ -475,6 +529,10 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
             tick = -1  # The trace's tick, once play has begun.
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
+                if music_log and music_state(game) != last_music:
+                    last_music = music_state(game)
+                    music_log.write(f"t={tick} boot={boot_tick} {last_music}\n")
+                    music_log.flush()
                 if tick < 0:
                     if game.i16(PL + ENTITY_LIFE) != 0:
                         settled += 1
@@ -483,6 +541,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         cursor = 0
                         pad = 0
                         print(f"play begins {boot_tick} ticks after boot")
+                        if music_log:
+                            music_log.write(f"bgm_tbl {game.read(BGM_TBL, 284).hex()}\n")
                         for flag in args.flag:
                             set_flag(game, flag)
                         if args.warp:
@@ -575,6 +635,72 @@ def scenario_command(args: argparse.Namespace) -> int:
     ).returncode
 
 
+def pixels_command(args: argparse.Namespace) -> int:
+    """Record the original and arklay on the same input and compare their frames."""
+    from PIL import Image, ImageChops, ImageStat
+
+    out = Path(args.out).resolve()
+    ref_dir = out / "ref"
+    ark_dir = out / "ark"
+    cmp_dir = out / "cmp"
+    for directory in (ark_dir, cmp_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    args.shot_dir = str(ref_dir)
+    args.shot_every = args.every
+    if not args.reuse_ref:
+        record(args, out / "ref.trace", Path(args.work).resolve())
+    command = [
+        str(Path(args.arklay).resolve()), str(Path(args.pack).resolve()), "--ui", "game",
+        "--character", str(CHARACTERS[args.start]),
+        "--ticks", str(args.ticks), "--no-mods", "--trace", str(out / "ark.trace"),
+        "--capture-every", str(args.every), "--capture-dir", str(ark_dir),
+    ]
+    if args.input:
+        command += ["--input", str(Path(args.input).resolve())]
+    command += args.arklay_arg
+    subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+
+    def regions(diff: "Image.Image") -> str:
+        """The worst of a 4x3 grid, which says where to look."""
+        cells = []
+        for row in range(3):
+            for column in range(4):
+                box = (column * 80, row * 80, (column + 1) * 80, (row + 1) * 80)
+                cells.append((sum(ImageStat.Stat(diff.crop(box)).mean) / 3, column, row))
+        error, column, row = max(cells)
+        return f"cell {column},{row} at {error:.1f}"
+
+    scores = []
+    for ref_path in sorted(ref_dir.glob("t*.png")):
+        tick = int(ref_path.stem[1:]) + args.offset
+        ark_path = ark_dir / f"f{tick // args.every * args.every:05d}.bmp"
+        if not ark_path.exists():
+            ark_path = ark_dir / f"f{tick // args.every:05d}.bmp"
+        if not ark_path.exists():
+            continue
+        left, top = FRAME_ORIGIN
+        ref = Image.open(ref_path).convert("RGB").crop((left, top, left + 640, top + 480))
+        ref = ref.resize((320, 240), Image.BOX)
+        ark = Image.open(ark_path).convert("RGB")
+        diff = ImageChops.difference(ref, ark)
+        error = sum(ImageStat.Stat(diff).mean) / 3
+        scores.append((error, tick, regions(diff)))
+        sheet = Image.new("RGB", (960, 240))
+        sheet.paste(ref, (0, 0))
+        sheet.paste(ark, (320, 0))
+        sheet.paste(diff.point(lambda value: min(255, value * 4)), (640, 0))
+        sheet.save(cmp_dir / f"t{tick:06d}.png")
+    if not scores:
+        print("no frames to compare")
+        return 1
+    scores.sort(reverse=True)
+    mean = sum(score[0] for score in scores) / len(scores)
+    print(f"{len(scores)} frames, mean error {mean:.2f}, worst:")
+    for error, tick, where in scores[:args.show]:
+        print(f"  t={tick} error {error:.2f}, {where}: {cmp_dir / f't{tick:06d}.png'}")
+    return 0 if scores[0][0] <= args.max_error else 1
+
+
 def patches_command(args: argparse.Namespace) -> int:
     """List the code Classic Rebirth changes, with the function each change is in."""
     game_dir = game_root(args)
@@ -618,6 +744,10 @@ def main() -> int:
         command.add_argument("--input", default=None)
         command.add_argument("--shot-dir", default=None)
         command.add_argument("--shot-every", type=int, default=0)
+        command.add_argument(
+            "--sound", action="store_true",
+            help="run with sound into a private sink: writes the audio and the music's log beside the trace",
+        )
         command.add_argument("--no-enemies", action="store_true")
         command.add_argument("--keep-enemy", action="append", type=int, default=[])
         command.add_argument("--flag", action="append", default=[], metavar="BANK:INDEX")
@@ -645,6 +775,23 @@ def main() -> int:
     command.add_argument("--pack", default="re2.akpak")
     command.add_argument("--fields", default=RE2_FIELDS)
     command.set_defaults(func=scenario_command)
+
+    command = commands.add_parser("pixels", help="compare the original's and arklay's frames")
+    common(command)
+    command.add_argument("--ticks", type=int, required=True)
+    command.add_argument("--out", required=True)
+    command.add_argument("--every", type=int, default=30)
+    command.add_argument("--offset", type=int, default=0, help="arklay's tick for a reference tick")
+    command.add_argument("--max-error", type=float, default=20.0)
+    command.add_argument("--show", type=int, default=8)
+    command.add_argument("--reuse-ref", action="store_true", help="keep the recorded reference frames")
+    command.add_argument("--arklay", default="target/test-release/arklay")
+    command.add_argument("--pack", default="re2.akpak")
+    command.add_argument(
+        "--arklay-arg", action="append", default=[], metavar="ARG",
+        help="one more argument for arklay, such as --room",
+    )
+    command.set_defaults(func=pixels_command)
 
     command = commands.add_parser("determinism", help="check two recordings are identical")
     common(command)
