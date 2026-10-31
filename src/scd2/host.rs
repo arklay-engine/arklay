@@ -68,6 +68,8 @@ pub struct Re2State {
     pub effects: crate::esp2::Effects,
     /// `se_on`'s sounds, not yet played.
     pub sounds: Vec<SoundRequest>,
+    /// `sce_scr_move`: how far the background has scrolled down.
+    pub scroll: i16,
 }
 
 /// One sound `se_on` asked for, and where.
@@ -161,6 +163,8 @@ const STATUS_ENEMY_FLAGS: u8 = 6;
 pub const STATUS_PLAYER: u8 = 0;
 /// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
 pub const STATUS_VOICE: u8 = 26;
+/// A scene is running: the bars come down and the menus stay shut.
+pub const STATUS_SCENE: u8 = 27;
 /// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
 const ENEMY_BANK: u8 = 6;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
@@ -243,6 +247,7 @@ impl Default for Re2State {
             music: Default::default(),
             effects: Default::default(),
             sounds: Vec::new(),
+            scroll: 0,
         }
     }
 }
@@ -916,6 +921,7 @@ impl Host for GameHost<'_> {
                 self.game.set_camera_cut(usize::from(cut));
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
+            "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
             "cut_be_set" => self.game.re2.pending_cuts.push(CutEdit::SetGate {
                 cut: at(0) as u8,
                 index: at(1) as u8,

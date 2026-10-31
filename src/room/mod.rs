@@ -117,6 +117,12 @@ impl Folder {
         format!("{}/cut/{camera:02x}", self.dir)
     }
 
+    /// Pack stem of the picture above a camera's background (RE2),
+    /// `room/2000/scroll/0b`.
+    pub fn scroll_stem(&self, camera: usize) -> String {
+        format!("{}/scroll/{camera:02x}", self.dir)
+    }
+
     /// Pack stem of a camera's mask page, `room/100/mask/03`.
     pub fn mask_stem(&self, camera: usize) -> String {
         format!("{}/mask/{camera:02x}", self.dir)

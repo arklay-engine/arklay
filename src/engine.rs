@@ -13706,6 +13706,14 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
             assets::decode_picture(&asset, assets::Geometry::Free, None)
                 .with_context(|| format!("invalid {}", asset.path()))?,
         );
+        if dialect == crate::format::Dialect::Re2
+            && let Some(asset) = pack.read_asset(&folder.scroll_stem(cut.index), AssetClass::Image)?
+        {
+            cut.scroll = Some(
+                assets::decode_picture(&asset, assets::Geometry::Free, None)
+                    .with_context(|| format!("invalid {}", asset.path()))?,
+            );
+        }
     }
     let player_assets = load_player_assets(pack, id);
     Ok(LoadedRoom {
@@ -13809,6 +13817,7 @@ fn run_re2_init(
     game.re2.pending_events.clear();
     game.re2.pending_damage.clear();
     game.re2.pending_cuts.clear();
+    game.re2.scroll = 0;
     game.re2.pending_player = Default::default();
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
@@ -16780,8 +16789,12 @@ fn render_frame_on(
         }
         None => Vec::new(),
     };
+    let scrolled = (game.re2.scroll != 0)
+        .then(|| cut.background.as_ref())
+        .flatten()
+        .map(|background| background.scrolled(cut.scroll.as_ref(), game.re2.scroll));
     let background = if render_mode.background() {
-        cut.background.as_ref()
+        scrolled.as_ref().or(cut.background.as_ref())
     } else if render_mode.collision().is_some() {
         Some(debug_view::collision_backdrop())
     } else {
