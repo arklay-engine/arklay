@@ -324,9 +324,150 @@ pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> O
     })
 }
 
+/// `Shoot_camera` does nothing with this many enemies in the room.
+pub const SHOOT_CAMERA_ENEMIES: usize = 3;
+
+/// `Shoot_camera`'s table at 0x53A878: each weapon's row, plus one, of
+/// [`SHOOT_CAMERA_ROWS`], or none.
+const SHOOT_CAMERA_ROW: [u8; 20] = [0, 0, 1, 1, 1, 1, 1, 2, 3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1];
+
+/// The table at 0x53A88C: half the width of the target around the camera, the
+/// gun's axis in its hand, and how far below the camera the target's centre is.
+const SHOOT_CAMERA_ROWS: [(i32, [i32; 2], i32); 3] = [
+    (100, [0, 4096], 120),
+    (400, [0, 4096], 150),
+    (400, [3120, 5320], 0),
+];
+
+/// The part of the hand's matrix `Shoot_camera` works from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShotLine {
+    pub from: [i32; 3],
+    pub matrix: [[i16; 3]; 3],
+}
+
+fn outer_product0(a: [i32; 3], b: [i32; 3]) -> [i32; 3] {
+    [
+        b[2].wrapping_mul(a[1])
+            .wrapping_sub(b[1].wrapping_mul(a[2])),
+        b[0].wrapping_mul(a[2])
+            .wrapping_sub(a[0].wrapping_mul(b[2])),
+        a[0].wrapping_mul(b[1])
+            .wrapping_sub(b[0].wrapping_mul(a[1])),
+    ]
+}
+
+/// `VectorNormal`, which works in floating point and truncates.
+fn vector_normal(v: [i32; 3]) -> [i32; 3] {
+    let square: f64 = v
+        .iter()
+        .map(|&axis| f64::from(axis) * f64::from(axis))
+        .sum();
+    let scale = 1.0 / square.sqrt();
+    v.map(|axis| (f64::from(axis) * 4096.0 * scale) as i32)
+}
+
+/// `Shoot_camera`: if the gun's line passes between two points beside the
+/// camera, where its effects go, drawing `Rnd` for each. The original calls
+/// `Esp_call` as it goes, which the caller does with these in turn.
+pub fn shoot_camera(
+    weapon: u8,
+    line: ShotLine,
+    eye: [i32; 3],
+    look: [i32; 3],
+    rnd: &mut crate::zombie2::Rnd,
+) -> Vec<[i16; 3]> {
+    let row = SHOOT_CAMERA_ROW
+        .get(usize::from(weapon))
+        .copied()
+        .unwrap_or(0);
+    if row == 0 {
+        return Vec::new();
+    }
+    let row = usize::from(row - 1);
+    let (width, axis, below) = SHOOT_CAMERA_ROWS[row];
+    let dir = crate::player2::direction_ck(
+        i32::from(eye[0] as i16),
+        i32::from(eye[2] as i16),
+        i32::from(look[0] as i16),
+        i32::from(look[2] as i16),
+    );
+    let turn = crate::player2::rot_matrix([0, dir.wrapping_add(0x400) as i16, 0]);
+    let side_x = (i32::from(turn[0][0]) * width) >> 12;
+    let side_z = (i32::from(turn[2][0]) * width) >> 12;
+    let [x, y, z] = line.from;
+    let near = [
+        (eye[0] - x + side_x) >> 4,
+        (width - below - y + eye[1]) >> 4,
+        (side_z - z + eye[2]) >> 4,
+    ];
+    let far = [
+        (eye[0] - side_x - x) >> 4,
+        (eye[1] - width - below - y) >> 4,
+        (eye[2] - side_z - z) >> 4,
+    ];
+    let along = line
+        .matrix
+        .map(|row| (i32::from(row[0]) * axis[0] + i32::from(row[1]) * axis[1]) >> 12);
+    let near = outer_product0(along, near);
+    let far = outer_product0(along, far);
+    let between = near[1] < 0 && far[1] >= 0 && (far[0] ^ near[0]) < 0 && (far[2] ^ near[2]) < 0;
+    if !between {
+        return Vec::new();
+    }
+    let toward = vector_normal([look[0] - eye[0], look[1] - eye[1], look[2] - eye[2]])
+        .map(|axis| (axis >> 3) as i16);
+    let base: [i16; 3] = std::array::from_fn(|axis| toward[axis].wrapping_add(eye[axis] as i16));
+    let mut calls = vec![std::array::from_fn(|axis| {
+        base[axis]
+            .wrapping_sub(i16::from(rnd.draw()))
+            .wrapping_add(0x80)
+    })];
+    if row != 0 {
+        for _ in 0..5 {
+            calls.push(std::array::from_fn(|axis| {
+                base[axis]
+                    .wrapping_add(i16::from(rnd.draw()).wrapping_mul(-2))
+                    .wrapping_add(0x100)
+            }));
+        }
+    }
+    calls
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shoot_camera_only_throws_when_the_gun_lines_up() {
+        // Leon's hand firing from the street's start, along -X.
+        let line = ShotLine {
+            from: [18162, -2505, -2675],
+            matrix: [[1, -4094, 11], [-4097, -4, 8], [-10, -10, -4094]],
+        };
+        let look = [22356, -2466, 522];
+        let mut rnd = crate::zombie2::Rnd::default();
+        let before = rnd;
+
+        // The cut's own camera: the gun passes well beside it.
+        let beside = shoot_camera(2, line, [11268, -2664, -3600], look, &mut rnd);
+        assert!(beside.is_empty());
+        assert_eq!(rnd, before);
+
+        // A camera on the gun's line: a handgun throws one, three draws.
+        let eye = [15164, -2388, -2682];
+        assert_eq!(shoot_camera(2, line, eye, look, &mut rnd).len(), 1);
+        let mut drawn = before;
+        for _ in 0..3 {
+            drawn.draw();
+        }
+        assert_eq!(rnd, drawn);
+
+        // The shotgun throws six, and a knife none.
+        assert_eq!(shoot_camera(7, line, eye, look, &mut rnd).len(), 6);
+        assert!(shoot_camera(1, line, eye, look, &mut rnd).is_empty());
+    }
 
     fn zombie(slot: usize, x: i32, z: i32) -> Target {
         Target {

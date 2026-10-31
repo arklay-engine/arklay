@@ -318,6 +318,8 @@ pub struct Work {
     pub noise: u8,
     /// `Esp_call`s this tick made, in order.
     pub effects: Vec<EffectCall>,
+    /// The gun's line, for `Shoot_camera` to look along.
+    pub shot_line: Option<crate::weapon2::ShotLine>,
 }
 
 /// `Spl_Init`'s `Parts0_pos_y`, by id from 0x40.
@@ -496,6 +498,7 @@ impl Default for Work {
     fn default() -> Self {
         Self {
             // `Pl_init`, then the first tick of `pl_mv_00`.
+            shot_line: None,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
             move_cnt: 1,
@@ -1594,6 +1597,16 @@ impl Mover<'_, '_> {
     /// Where a part's matrix puts a point of its own: what `Esp_call` is given
     /// a part's matrix and a vector for.
     pub(crate) fn part_point(&self, part: usize, point: [i32; 3]) -> Option<[i32; 3]> {
+        let world = self.part_matrix(part)?;
+        Some(std::array::from_fn(|axis| {
+            let turned: i32 = (0..3)
+                .map(|index| i32::from(world.m[axis][index]) * point[index])
+                .sum();
+            world.t[axis] + (turned >> 12)
+        }))
+    }
+
+    fn part_matrix(&self, part: usize) -> Option<Matrix> {
         fn chain_to(
             children: &[Vec<u8>],
             from: usize,
@@ -1617,13 +1630,7 @@ impl Mover<'_, '_> {
         if !chain_to(&self.tick.skeleton.children, 0, part, &mut chain) {
             return None;
         }
-        let world = self.chain_matrix(&chain)?;
-        Some(std::array::from_fn(|axis| {
-            let turned: i32 = (0..3)
-                .map(|index| i32::from(world.m[axis][index]) * point[index])
-                .sum();
-            world.t[axis] + (turned >> 12)
-        }))
+        self.chain_matrix(&chain)
     }
 
     fn chain_matrix(&self, chain: &[usize]) -> Option<Matrix> {
@@ -1820,6 +1827,14 @@ impl Mover<'_, '_> {
     /// `pl_mv05_w1_t2`.
     fn aim_fire(&mut self, key: u16) {
         if self.work.routine[3] == 0 {
+            // The matrix `Shoot_camera` reads is the last tick's, so the new
+            // clip mustn't be set yet.
+            self.work.shot_line =
+                self.part_matrix(SHOT_PART)
+                    .map(|hand| crate::weapon2::ShotLine {
+                        from: hand.t,
+                        matrix: hand.m,
+                    });
             let clip = match self.work.status_flg >> 13 {
                 1 => AIM_FIRE_CLIPS[0],
                 2 => AIM_FIRE_CLIPS[1],
@@ -2791,7 +2806,7 @@ fn mul_matrix(a: &[[i16; 3]; 3], b: &[[i16; 3]; 3]) -> [[i16; 3]; 3] {
 }
 
 /// `RotMatrix`: Z, then Y, then X, onto the identity.
-fn rot_matrix(angle: [i16; 3]) -> [[i16; 3]; 3] {
+pub(crate) fn rot_matrix(angle: [i16; 3]) -> [[i16; 3]; 3] {
     let (sin, cos) = (
         |a: i16| rsin(i32::from(a)) as i16,
         |a: i16| rcos(i32::from(a)) as i16,
