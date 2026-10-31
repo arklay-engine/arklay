@@ -37,17 +37,22 @@ pub fn tick(
                 let body = &mut character.body;
                 let [old_x, old_z] = body.collision_mirror;
                 let prev = [old_x, body.pos[1], old_z];
-                let mask = if matches!(character.id, 0x45 | 0x4F) {
-                    crate::sca::CHARACTER_MASK_LOW
-                } else {
-                    crate::sca::CHARACTER_MASK
-                };
+                let mask = sca_mask(character.id);
                 let resolved = crate::sca::resolve_masked(sca, mask, prev, body.pos, body.radius);
                 body.pos = resolved.pos;
                 body.collision_mirror = [body.pos[0], body.pos[2]];
             }
         }
         game.re2.characters.0[slot] = Some(character);
+    }
+}
+
+/// `_Spl`'s mask for `Sca_ck_em`: the children's is lower.
+pub fn sca_mask(id: u8) -> u16 {
+    if matches!(id, 0x45 | 0x4F) {
+        crate::sca::CHARACTER_MASK_LOW
+    } else {
+        crate::sca::CHARACTER_MASK
     }
 }
 

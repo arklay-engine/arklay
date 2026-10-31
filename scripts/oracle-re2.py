@@ -674,6 +674,10 @@ def pixels_command(args: argparse.Namespace) -> int:
     """Record the original and arklay on the same input and compare their frames."""
     from PIL import Image, ImageChops, ImageStat
 
+    if args.offset % args.every:
+        print(f"--offset {args.offset} isn't a multiple of --every {args.every}: "
+              "arklay's frames wouldn't be the reference's", file=sys.stderr)
+        return 2
     out = Path(args.out).resolve()
     ref_dir = out / "ref"
     ark_dir = out / "ark"

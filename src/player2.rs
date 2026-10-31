@@ -277,6 +277,8 @@ pub struct Work {
     pub reloaded: bool,
     /// The head's `Rot_neck` state.
     pub neck: Neck,
+    /// The parts whose `Be_flg` `parts_set` cleared, by bit: they aren't drawn.
+    pub hidden_parts: u32,
     /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
     parts0_y: i32,
 }
@@ -287,6 +289,17 @@ const CHARACTER_PARTS0_Y: [u16; 28] = [
     0, 0, 0, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000,
     0x1000, 0x1000, 0x1000,
 ];
+
+/// `Spl_Init`'s `Kage_work_set` half sizes for id `id`: odd ids are smaller,
+/// and the children 0x45 and 0x4F smaller still.
+pub const fn character_shadow(id: u8) -> (i32, i32) {
+    match id {
+        0x45 | 0x4F => (0x172, 0x1CC),
+        0x4D => (500, 600),
+        id if id & 1 != 0 => (0x1A4, 0x208),
+        _ => (500, 600),
+    }
+}
 
 /// `Neck_no`: the head's joint, the same for every player.
 pub const NECK_JOINT: usize = 8;
@@ -331,6 +344,18 @@ impl Neck {
         if let Some(rotation) = pose.rotations.get_mut(NECK_JOINT) {
             rotation[1] = rotation[1].wrapping_add(self.turn[0]);
             rotation[2] = rotation[2].wrapping_add(self.turn[1]);
+        }
+    }
+}
+
+/// `Parts_set`'s case 2 on `work`: `Be_flg`, whose first bit draws the part.
+pub fn set_part_flags(work: &mut Work, part: u8, flags: u16) {
+    if part < 32 {
+        let bit = 1 << part;
+        if flags & 1 == 0 {
+            work.hidden_parts |= bit;
+        } else {
+            work.hidden_parts &= !bit;
         }
     }
 }
@@ -391,6 +416,7 @@ impl Default for Work {
             move_cnt: 1,
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
+            hidden_parts: 0,
             parts0_y: 0x1000,
             d_life_u: 0,
             spd: [0; 3],
@@ -2315,6 +2341,22 @@ mod tests {
             setup.tick(Input::default(), 200);
         }
         assert_eq!(setup.work.neck.turn, [0, 0]);
+    }
+
+    #[test]
+    fn parts_set_hides_and_shows_a_part() {
+        let mut work = Work::default();
+        set_part_flags(&mut work, 11, 0);
+        assert_eq!(work.hidden_parts, 1 << 11);
+        set_part_flags(&mut work, 11, 1);
+        assert_eq!(work.hidden_parts, 0);
+    }
+
+    #[test]
+    fn a_characters_shadow_follows_spl_inits_table() {
+        assert_eq!(character_shadow(0x48), (500, 600));
+        assert_eq!(character_shadow(0x41), (0x1A4, 0x208));
+        assert_eq!(character_shadow(0x4F), (0x172, 0x1CC));
     }
 
     #[test]

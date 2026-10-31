@@ -12431,9 +12431,7 @@ fn play_re2_sounds(
     }
 }
 
-/// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`,
-/// at the ground under them (`MulKage`), if `Kage_work9_sort` finds them in the
-/// camera's zone.
+/// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`.
 fn re2_player_shadow<'a>(
     game: &game::GameState,
     room: &RoomState,
@@ -12441,21 +12439,42 @@ fn re2_player_shadow<'a>(
     tween: &mut tween::Tween,
     texture: &'a Image,
 ) -> Option<render::Shadow<'a>> {
-    let pos = player_state.pos;
+    // Leon, then Claire's smaller one.
+    let claire = game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
+    re2_shadow(
+        room,
+        player_state,
+        if claire { (0x1a4, 0x208) } else { (500, 600) },
+        crate::sca::PLAYER_MASK,
+        tween::Key::Player,
+        tween,
+        texture,
+    )
+}
+
+/// A body's shadow in an RE2 room, at the ground under it (`MulKage`), if
+/// `Kage_work_sort` finds it in the camera's zone.
+fn re2_shadow<'a>(
+    room: &RoomState,
+    body: &player::PlayerState,
+    (half_x, half_z): (i32, i32),
+    mask: u16,
+    key: tween::Key,
+    tween: &mut tween::Tween,
+    texture: &'a Image,
+) -> Option<render::Shadow<'a>> {
+    let pos = body.pos;
     let cut = room.current_cut as i32;
     room.zones
         .iter()
         .find(|zone| i32::from(zone.cam_from) == cut)
         .filter(|zone| zone.contains_signed(pos[0], pos[2]))?;
-    // Leon, then Claire's smaller one.
-    let claire = game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
-    let (half_x, half_z) = if claire { (0x1a4, 0x208) } else { (500, 600) };
     let ground = room.sca.as_ref().map_or(pos[1], |sca| {
-        crate::sca::ground_at(sca, pos, player_state.radius, crate::sca::PLAYER_MASK).height
+        crate::sca::ground_at(sca, pos, body.radius, mask).height
     });
     let mut shadow_pos = [pos[0], ground, pos[2]];
-    let mut shadow_angle = player_state.angle;
-    tween.shadow(tween::Key::Player, &mut shadow_pos, &mut shadow_angle);
+    let mut shadow_angle = body.angle;
+    tween.shadow(key, &mut shadow_pos, &mut shadow_angle);
     Some(render::Shadow {
         texture,
         pos: shadow_pos,
@@ -15871,6 +15890,21 @@ fn render_frame_on(
         if let Some(shadow) = re2_player_shadow(game, room, player_state, tween, texture) {
             shadow_list.push(shadow);
         }
+        for (slot, character) in game.re2.characters.0.iter().enumerate() {
+            let Some(character) = character.as_deref().filter(|c| c.be_flg & 1 != 0) else {
+                continue;
+            };
+            let shadow = re2_shadow(
+                room,
+                &character.body,
+                crate::player2::character_shadow(character.id),
+                crate::character2::sca_mask(character.id),
+                tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
+                tween,
+                texture,
+            );
+            shadow_list.extend(shadow);
+        }
     } else if let Some(texture) = shadow_texture
         && game.entities[0].shadow_quad
         && shadow::visible(
@@ -16144,7 +16178,7 @@ fn render_frame_on(
         ));
         models.push(model);
         npc_joints.push(joints);
-        npc_hidden.push(0);
+        npc_hidden.push(character.work.hidden_parts);
         npc_tints.push([255; 3]);
         npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
         npc_weapons.push(None);
@@ -16391,7 +16425,7 @@ fn render_frame_on(
             joints,
             tint: game.player_tint,
             blend_weight: None,
-            hidden_joints: hidden,
+            hidden_joints: hidden | game.re2.player.hidden_parts,
             light_pos: Some(game.entities[0].pos),
             per_joint_light: false,
             complex_object: None,

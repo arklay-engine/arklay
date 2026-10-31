@@ -156,6 +156,8 @@ const CHARACTER_SIZES: [u16; 28] = [
     500, 350, 500, 350, 86, 250, 86, 350, 450, 350, 450, 350, 0, 0, 0, 250, 450, 350, 450, 350,
     450, 350, 450, 350, 450, 350, 450, 450,
 ];
+/// `parts_set`'s case for a part's `Be_flg`.
+const PARTS_SET_FLAGS: i64 = 2;
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
 pub const STATUS_BANK: u8 = 1;
 const STATUS_ENEMY_FLAGS: u8 = 6;
@@ -1078,6 +1080,14 @@ impl Host for GameHost<'_> {
                 let flag = at(2) as u8;
                 if flag != 0 {
                     self.game.re2.unmodelled_arrivals.push(flag);
+                }
+            }
+            "parts_set" if at(2) == PARTS_SET_FLAGS => {
+                let (part, flags) = (at(1) as u8, at(3) as u16);
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::set_part_flags(&mut character.work, part, flags);
+                } else if self.work_is_player(task) {
+                    crate::player2::set_part_flags(&mut self.game.re2.player, part, flags);
                 }
             }
             "plc_neck" if self.task_character(task).is_some() => {
