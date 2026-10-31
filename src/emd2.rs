@@ -293,6 +293,9 @@ pub fn with_weapon(pld: &Emd, plw: &Plw) -> Emd {
     {
         *hand = weapon.clone();
     }
+    // Its second part, the magazine, lies past the skeleton's: it only draws
+    // once a dropped one gives it a joint of its own.
+    mesh.objects.extend(plw.mesh.objects.get(1).cloned());
     let own = AnimBank {
         keyframes: pld.keyframes.clone(),
         clips: pld.clips.clone(),

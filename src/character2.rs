@@ -198,6 +198,17 @@ pub fn player_held(
     }
 }
 
+/// `Player_move`'s last call: the dropped magazine falls, and sounds as it bounces.
+pub fn mag_down(game: &mut GameState, player: &mut crate::player::PlayerState) {
+    let re2 = &mut game.re2;
+    if let Some(at) = re2.player.mag_down(&mut re2.rnd) {
+        player.queue_sound_at(MAGAZINE_SOUND, at);
+    }
+}
+
+/// `Snd_se_on(0x10e0001)`.
+const MAGAZINE_SOUND: u16 = 0xE;
+
 /// What the player's routine sees of the slots, in `enemy_work`'s order.
 pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
     let characters = game.re2.characters.0.iter().enumerate();

@@ -1543,6 +1543,11 @@ impl PlayerState {
         self.sounds.push(PlayerSound { id, pos: self.pos });
     }
 
+    /// [`Self::queue_sound`] from somewhere other than the player.
+    pub(crate) fn queue_sound_at(&mut self, id: u16, pos: [i32; 3]) {
+        self.sounds.push(PlayerSound { id, pos });
+    }
+
     /// Move the locked behaviour's forward step with the room collision pass.
     fn locked_step(&mut self, room: &RoomState, speed: i32) {
         let (dx, dz) = rotate_speed(self.angle, 0, speed);
