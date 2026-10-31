@@ -1292,6 +1292,7 @@ fn no_event_holds_the_player_for_good() {
                 vm.tick(&mut GameHost { game: &mut game });
                 game.re2.clear_tick_flags();
                 game.message.active = false;
+                game.re2.set_flag(1, arklay::scd2::host::STATUS_VOICE, 0);
                 arklay::character2::tick(&mut game, &loaded.state, pack, &mut npc_models);
                 if game.re2.player.kind & arklay::player2::KIND_NOT_MOVED == 0 {
                     let tick = arklay::player2::Tick {

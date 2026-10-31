@@ -23,6 +23,8 @@ pub struct Re2State {
     pub door_locks: [u32; 2],
     /// `sce_rnd`'s state.
     pub random: u32,
+    /// `Xa_control`'s voice line.
+    pub voice: VoiceLine,
     /// The camera `cut_old` returns to.
     pub cut_old: u8,
     /// Interaction-area events waiting for the VM (`Sce_event`): task, event.
@@ -103,6 +105,16 @@ pub struct Character {
     pub with_room: bool,
 }
 
+/// `xa_on`'s line, which `wsleep` waits out. A save doesn't hold it, so a line
+/// doesn't outlast the load.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VoiceLine {
+    /// The pack entry `xa_on` asked for, until the engine has its length.
+    pub request: Option<String>,
+    /// Ticks of `Xa_control` left: its two steps either side of the count.
+    pub ticks: u32,
+}
+
 /// The enemy slots' characters. A save doesn't hold them: the room's scripts
 /// make them again.
 #[derive(Debug, Clone, Default)]
@@ -132,6 +144,10 @@ const CHARACTER_SIZES: [u16; 28] = [
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
 const STATUS_BANK: u8 = 1;
 const STATUS_ENEMY_FLAGS: u8 = 6;
+/// `fg_status`'s bit for the character whose voices play: 1 is Claire.
+const STATUS_PLAYER: u8 = 0;
+/// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
+pub const STATUS_VOICE: u8 = 26;
 /// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
 const ENEMY_BANK: u8 = 6;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
@@ -193,6 +209,7 @@ impl Default for Re2State {
             door_locks: [0; 2],
             random: 0x1382_01C3,
             cut_old: 0,
+            voice: VoiceLine::default(),
             pending_events: Vec::new(),
             pending_damage: Vec::new(),
             pending_cuts: Vec::new(),
@@ -816,7 +833,7 @@ impl Host for GameHost<'_> {
     }
 
     fn waiting(&self) -> bool {
-        self.game.message.active
+        self.game.message.active || self.game.re2.flag(STATUS_BANK, STATUS_VOICE)
     }
 
     fn random(&mut self) -> u16 {
@@ -874,6 +891,13 @@ impl Host for GameHost<'_> {
                 }
             }
             "sce_em_set" => self.sce_em_set(at),
+            "xa_on" => {
+                let stage = if at(0) == 0 { self.game.id.stage } else { 0 };
+                let player = u8::from(self.game.re2.flag(STATUS_BANK, STATUS_PLAYER));
+                self.game.re2.voice.request =
+                    Some(format!("voice/{player}/{stage:02}_{:02x}.wav", at(1)));
+                self.game.re2.set_flag(STATUS_BANK, STATUS_VOICE, 1);
+            }
             "pos_set" if self.task_character(task).is_some() => {
                 let pos = [at(1) as i32, at(2) as i32, at(3) as i32];
                 if let Some(character) = self.task_character(task) {
@@ -1135,6 +1159,20 @@ mod tests {
         assert_eq!(character.body.pos, [5, 6, 7]);
         assert_eq!(character.be_flg, 5);
         assert!(!game.re2.flag(ROOM_BANK, 33));
+    }
+
+    #[test]
+    fn a_voice_line_holds_wsleep_until_its_bit_clears() {
+        let mut game = GameState::default();
+        game.id.stage = 1;
+        game.re2.set_flag(STATUS_BANK, STATUS_PLAYER, 1);
+        exec(&mut game, "xa_on", &[0, 41]);
+        assert_eq!(game.re2.voice.request.as_deref(), Some("voice/1/01_29.wav"));
+        assert!(GameHost { game: &mut game }.waiting());
+        game.re2.set_flag(STATUS_BANK, STATUS_VOICE, 0);
+        assert!(!GameHost { game: &mut game }.waiting());
+        exec(&mut game, "xa_on", &[1, 6]);
+        assert_eq!(game.re2.voice.request.as_deref(), Some("voice/1/00_06.wav"));
     }
 
     #[test]

@@ -140,6 +140,15 @@ pub struct Wav {
 }
 
 impl Wav {
+    /// How many sample frames it holds.
+    pub fn frame_count(&self) -> usize {
+        let sample = match self.format {
+            WavFormat::U8 => 1,
+            WavFormat::S16Le => 2,
+        };
+        self.data.len() / (sample * usize::from(self.channels.max(1)))
+    }
+
     /// Build the WAV form from already-decoded interleaved 16-bit samples.
     ///
     /// The OGG Vorbis decoder hands back PCM rather than a container, so a
