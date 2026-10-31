@@ -310,7 +310,7 @@ fn a_weapon_replaces_the_hand_and_pastes_its_texels_with_their_colours() {
     };
     // The player machine's two banks share one merged keyframe table.
     let moving = Plw {
-        clips: vec![weapon.clips[0].clone(); 3],
+        clips: vec![weapon.clips[0].clone(); LOCOMOTION_CLIPS],
         ..weapon.clone()
     };
     let (body, locomotion) = player_banks(&player, &moving).unwrap();
@@ -341,7 +341,7 @@ fn a_weapon_replaces_the_hand_and_pastes_its_texels_with_their_colours() {
         player_banks(
             &player,
             &Plw {
-                clips: Vec::new(),
+                clips: vec![Clip::default()],
                 ..weapon.clone()
             }
         )

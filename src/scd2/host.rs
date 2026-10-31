@@ -1097,6 +1097,10 @@ impl Host for GameHost<'_> {
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
             "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
+            // `Weapon_chg`: `Pl_weapon_ch` follows when the tick next looks.
+            "weapon_chg" => self
+                .game
+                .set_equipped(Some(at(0) as u8).filter(|&id| id != 0)),
             "cut_be_set" => self.game.re2.pending_cuts.push(CutEdit::SetGate {
                 cut: at(0) as u8,
                 index: at(1) as u8,
@@ -1456,6 +1460,15 @@ mod tests {
         assert!(!GameHost { game: &mut game }.waiting());
         exec(&mut game, "xa_on", &[1, 6]);
         assert_eq!(game.re2.voice.request.as_deref(), Some("voice/1/00_06.wav"));
+    }
+
+    #[test]
+    fn a_script_changes_the_players_weapon() {
+        let mut game = GameState::default();
+        exec(&mut game, "weapon_chg", &[7]);
+        assert_eq!(game.equipped_weapon_id, 7);
+        exec(&mut game, "weapon_chg", &[0]);
+        assert_eq!(game.equipped_weapon_id, 0);
     }
 
     #[test]

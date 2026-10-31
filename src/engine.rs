@@ -3586,6 +3586,7 @@ impl GameSession {
         tick_voice(&mut self.music, &mut self.voice_cache, &mut self.game, pack);
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         if self.game.is_re2_room {
+            self.tick_re2_weapon(pack);
             let re2 = &mut self.game.re2;
             re2.tick_effects(self.loaded.room.sca.as_ref());
             self.re2_sounds.played.clear();
@@ -3758,6 +3759,24 @@ impl GameSession {
             ui::death::DeathTick::OpenScreen => self.open_death_screen(pack),
             ui::death::DeathTick::Finished => self.finish_death(),
             ui::death::DeathTick::None => {}
+        }
+    }
+
+    /// `Pl_weapon_ch`: the player's hand and clips follow what's equipped, from
+    /// the inventory or the script's `weapon_chg`. A character with no such
+    /// weapon's clips, whose files are stubs, keeps what it has.
+    fn tick_re2_weapon(&mut self, pack: &Pack) {
+        let weapon = self.game.equipped_weapon_id;
+        let character = self.loaded.id.player_flag & 3;
+        let Some(assets) = self.loaded.player_assets.as_mut() else {
+            return;
+        };
+        if assets.re2_weapon.is_none_or(|held| held == weapon) {
+            return;
+        }
+        assets.re2_weapon = Some(weapon);
+        if let Some(changed) = load_re2_player_with(pack, character, weapon) {
+            *assets = changed;
         }
     }
 
@@ -15669,6 +15688,8 @@ struct PlayerAssets {
     /// The character's weapon animations by weapon id. A missing file is
     /// absent.
     weapons: std::collections::HashMap<u8, crate::model::Emw>,
+    /// RE2: the weapon `emd` and `emw` hold (`Pl_weapon_ch`).
+    re2_weapon: Option<u8>,
 }
 
 impl PlayerAssets {
@@ -17491,19 +17512,24 @@ fn load_player_assets(pack: &Pack, id: RoomId) -> Option<PlayerAssets> {
     load_character_assets(pack, id.player_flag & 3)
 }
 
-/// The weapon RE2's player carries until weapon changes arrive with the
-/// inventory: each character's starting handgun (Leon's 02, Claire's 03),
-/// whose bank has the locomotion the other character's stub files lack.
+/// The weapon RE2's player loads holding, until [`Engine::tick_re2_weapon`]
+/// sees what's equipped: each character's starting handgun (Leon's 02,
+/// Claire's 03).
 const RE2_DEFAULT_WEAPONS: [u8; 2] = [0x02, 0x03];
 
 /// RE2's character `character` holding the default weapon, from either disc's
 /// files. `None` when the pack has no RE2 player, as an RE1 pack doesn't.
 fn load_re2_player_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
+    let weapon = RE2_DEFAULT_WEAPONS[usize::from(character & 1)];
+    load_re2_player_with(pack, character, weapon)
+}
+
+/// RE2's character `character` holding `weapon`: `Pl_weapon_ch`'s PLW.
+fn load_re2_player_with(pack: &Pack, character: u8, weapon: u8) -> Option<PlayerAssets> {
     let pld_bytes = (0..2).find_map(|disc| {
         pack.read(&format!("player/{character:02x}/model_{disc}.pld"))
             .ok()
     })?;
-    let weapon = RE2_DEFAULT_WEAPONS[usize::from(character & 1)];
     let plw_bytes = (0..2).find_map(|disc| {
         pack.read(&format!(
             "player/{character:02x}/weapon/{weapon:02x}_{disc}.plw"
@@ -17519,6 +17545,7 @@ fn load_re2_player_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
             emd,
             emw,
             weapons: std::collections::HashMap::new(),
+            re2_weapon: Some(weapon),
         }),
         Err(err) => {
             eprintln!("warning: invalid RE2 player {character}: {err:#}");
@@ -17585,7 +17612,12 @@ fn load_character_assets(pack: &Pack, character: u8) -> Option<PlayerAssets> {
             Err(err) => eprintln!("warning: missing weapon clips {entry}: {err:#}"),
         }
     }
-    Some(PlayerAssets { emd, emw, weapons })
+    Some(PlayerAssets {
+        emd,
+        emw,
+        weapons,
+        re2_weapon: None,
+    })
 }
 
 /// Load the room's shipped primary track from the pack, if the table names
@@ -25955,6 +25987,7 @@ return M
                 mesh: Tmd::default(),
             },
             weapons: std::collections::HashMap::new(),
+            re2_weapon: None,
         }
     }
 
