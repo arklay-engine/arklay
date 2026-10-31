@@ -133,6 +133,8 @@ pub struct Character {
     pub sound_type: u8,
     /// The room's load places it, rather than a script during play.
     pub with_room: bool,
+    /// `+0x1F0`: how far it was from the player when it last ran.
+    pub distance: u32,
     /// What it needs if `Em_Zombie` runs it.
     pub zombie: Option<crate::zombie2::Zombie>,
 }
@@ -495,6 +497,32 @@ impl Re2State {
     }
 
     /// `player_work`'s table of necks, by `plc_neck`'s number.
+    /// Who `Pl_neck` can look at: the second player, then the enemy slots.
+    pub fn neck_targets(&self) -> Vec<crate::player2::NeckTarget> {
+        // `fg_status`'s `0x10000000`.
+        if self.enemies == 0 && !self.flag(1, 3) {
+            return Vec::new();
+        }
+        let slots = std::iter::once(SPLAYER_SLOT).chain(0..SPLAYER_SLOT);
+        slots
+            .filter_map(|slot| {
+                let character = self.characters.0.get(slot)?.as_deref()?;
+                (character.be_flg & 1 != 0).then(|| crate::player2::NeckTarget {
+                    index: if slot == SPLAYER_SLOT { 1 } else { slot + 2 },
+                    // A zombie's changes as it falls.
+                    kind: if character.zombie.is_some() {
+                        character.work.kind
+                    } else {
+                        character.kind
+                    },
+                    pos: character.body.pos,
+                    neck: character.work.neck.position.unwrap_or(character.body.pos),
+                    distance: character.distance,
+                })
+            })
+            .collect()
+    }
+
     pub fn necks(&self) -> crate::player2::Necks {
         let character = |slot: usize| {
             let character = self.characters.0.get(slot)?.as_deref()?;
@@ -842,6 +870,7 @@ impl GameHost<'_> {
             kind,
             start: (at(13) as u16, at(14) as u16),
             sound_type,
+            distance: 0,
             with_room: self.game.re2.room_loading,
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);

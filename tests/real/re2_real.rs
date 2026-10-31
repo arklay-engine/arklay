@@ -1313,6 +1313,7 @@ fn no_event_holds_the_player_for_good() {
                         weapon: Default::default(),
                         necks: Default::default(),
                         targets: &[],
+                        neck_targets: &[],
                     };
                     let arrived =
                         arklay::player2::player_move(&mut game.re2.player, &mut player, &tick);

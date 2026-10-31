@@ -369,6 +369,15 @@ pub const NECK_JOINT: usize = 8;
 /// `Pl_init`'s turn rates and limits of [`NECK_JOINT`], yaw then pitch.
 const NECK_RATES: [i32; 2] = [0x60, 0x60];
 const NECK_LIMITS: [i32; 2] = [0x200, 0x138];
+/// What `Pl_neck` counts down from.
+const NECK_WAIT: u8 = 0x2D;
+/// Its count when play begins, three `Player_move`s after the static's `0x2D`.
+const NECK_WAIT_AT_START: u8 = NECK_WAIT - 3;
+/// `Player_move`'s `Pl_neck`: how far it looks, and half its field of view.
+const NECK_REACH: u32 = 7000;
+const NECK_VIEW: u16 = 0x5DC;
+/// `Sca_ck_line`'s mask between `Pl_neck`'s two heads.
+const NECK_LINE_MASK: u16 = 0x2080;
 /// `plc_neck`'s `0x8000` in its second word: aim at another work's neck.
 pub(crate) const NECK_AT_WORK: i16 = -0x8000;
 
@@ -387,6 +396,12 @@ pub struct Neck {
     /// Where the head was last, in the world (the joint's `+0x5C`), for
     /// another's aim at it.
     pub position: Option<[i32; 3]>,
+    /// `+0x1B8`: whose head, in [`Necks`], `Pl_neck` has it look at. `None` is
+    /// its own, so it follows its pose.
+    pub target: Option<usize>,
+    /// `BYTE_0053a7d8`: the ticks until `Pl_neck` looks again. It's a static,
+    /// so a new room doesn't restart it.
+    pub wait: u8,
 }
 
 impl Work {
@@ -459,8 +474,7 @@ pub fn plc_neck(work: &mut Work, mode: u8, words: [i16; 3], rates: [u8; 2]) {
 fn neck_direction(from: [i32; 3], to: [i32; 3]) -> [i32; 2] {
     let (x, z) = (to[0] - from[0], to[2] - from[2]);
     let y = from[1] - to[1];
-    let level = i64::from(z).pow(2) + i64::from(x).pow(2);
-    let level = level.isqrt() as i32;
+    let level = crate::sca::square_root0(z.wrapping_mul(z).wrapping_add(x.wrapping_mul(x)));
     let mut direction = [0; 2];
     if z != 0 {
         direction[0] = if z < 0 { 0x400 } else { 0xC00 };
@@ -520,7 +534,10 @@ impl Default for Work {
             status_flg: 0,
             fired: false,
             reloaded: false,
-            neck: Neck::default(),
+            neck: Neck {
+                wait: NECK_WAIT_AT_START,
+                ..Neck::default()
+            },
         }
     }
 }
@@ -531,6 +548,10 @@ impl Work {
         Self {
             d_life_u: self.d_life_u,
             kind: self.kind,
+            neck: Neck {
+                wait: self.neck.wait,
+                ..Neck::default()
+            },
             ..Self::default()
         }
     }
@@ -614,6 +635,22 @@ pub struct Tick<'a> {
     pub necks: Necks,
     /// What the shots and the aim see of the enemy slots.
     pub targets: &'a [crate::weapon2::Target],
+    /// Who `Pl_neck` can look at, in its order: none while the room has no
+    /// enemies.
+    pub neck_targets: &'a [NeckTarget],
+}
+
+/// A body `Pl_neck` considers.
+#[derive(Debug, Clone, Copy)]
+pub struct NeckTarget {
+    /// Its place in [`Necks`].
+    pub index: usize,
+    /// `Type`.
+    pub kind: u16,
+    pub pos: [i32; 3],
+    pub neck: [i32; 3],
+    /// `+0x1F0`: how far it was from the player when it last ran.
+    pub distance: u32,
 }
 
 /// The necks of [`Tick::necks`].
@@ -661,6 +698,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
         MODE_SCENARIO => mover.scenario(),
         _ => {}
     }
+    mover.pl_neck();
     mover.rot_neck();
     mover.arrived
 }
@@ -683,6 +721,7 @@ pub fn player_held(
     work.be_flg &= !4;
     let mut mover = Mover::new(work, player, tick);
     mover.em10_held(held);
+    mover.pl_neck();
     mover.rot_neck();
 }
 
@@ -1315,11 +1354,13 @@ impl Mover<'_, '_> {
     }
 
     /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
-    /// its pose. `Pl_neck`'s aim at the nearest enemy waits for enemies.
+    /// its pose.
     /// `Rot_neck_em`: the head turns toward `target`, within its limit, and only
     /// that way.
     pub(crate) fn rot_neck_em(&mut self, target: Option<[i32; 3]>) {
         if self.work.neck.flags & 1 != 0 {
+            // The head still moves with the body, for another's aim at it.
+            self.work.neck.position = self.chain_position(&[0, NECK_JOINT]);
             return;
         }
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
@@ -1369,8 +1410,54 @@ impl Mover<'_, '_> {
         neck.turn[0] = turn as i16;
     }
 
+    /// `Pl_neck`: every so often, choose the nearest body the head can see in
+    /// front of it, standing bodies before those on the floor.
+    fn pl_neck(&mut self) {
+        if self.work.neck.flags & 1 != 0 {
+            return;
+        }
+        if self.work.neck.wait != 0 {
+            self.work.neck.wait -= 1;
+            return;
+        }
+        self.work.neck.wait = NECK_WAIT;
+        let sca = self.tick.room.sca.as_ref();
+        let from = self.work.neck.position.unwrap_or(self.player.pos);
+        let [x, _, z] = self.player.pos;
+        let angle = self.player.angle;
+        let mut nearest = None;
+        let mut nearest_down = None;
+        let mut reach = NECK_REACH;
+        let mut reach_down = i32::MAX as u32;
+        for target in self.tick.neck_targets {
+            if target.kind & 0xC000 != 0
+                || sca.is_some_and(|sca| {
+                    crate::zombie2::sca_ck_line(&sca.records, from, target.neck, NECK_LINE_MASK)
+                })
+                || direction_ck(x, z, target.pos[0], target.pos[2])
+                    .wrapping_sub(angle)
+                    .wrapping_add(NECK_VIEW)
+                    & 0xFFF
+                    >= NECK_VIEW * 2
+            {
+                continue;
+            }
+            if target.kind & 0x2000 == 0 {
+                if target.distance < reach {
+                    reach = target.distance;
+                    nearest = Some(target.index);
+                }
+            } else if target.distance < reach_down {
+                reach_down = target.distance;
+                nearest_down = Some(target.index);
+            }
+        }
+        self.work.neck.target = nearest.or(nearest_down);
+    }
+
     pub(crate) fn rot_neck(&mut self) {
         if self.work.neck.flags & 1 != 0 {
+            self.work.neck.position = self.chain_position(&[0, NECK_JOINT]);
             return;
         }
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
@@ -1392,6 +1479,10 @@ impl Mover<'_, '_> {
         let flags = neck.flags;
         let mut aim = [0; 2];
         neck.position = from;
+        let looked_at = neck.target.and_then(|index| *self.tick.necks.get(index)?);
+        if let (Some(from), Some(to)) = (from, looked_at) {
+            aim = neck_direction(from, to);
+        }
         if flags & 4 != 0
             && let Some(from) = from
         {
@@ -1421,7 +1512,7 @@ impl Mover<'_, '_> {
         if flags & 0x10 != 0 {
             aim[1] = bone[1];
         }
-        if flags & 0x80 == 0 {
+        if neck.target.is_none() && flags & 0x80 == 0 {
             aim = [bone[0] + facing, bone[1]];
         }
 
@@ -1600,6 +1691,7 @@ impl Mover<'_, '_> {
                 self.set_tilt(TILT_LEVEL);
                 self.em_ck(0);
                 self.work.aimed_again = false;
+                self.work.neck.flags |= 0x12;
                 self.work.spd[0] = 0;
             }
             1 => {}
@@ -1791,6 +1883,7 @@ impl Mover<'_, '_> {
         self.aim_turn(key, AIM_HOLD_TURN);
         if self.joint_move_late_reversed(AIM_LOWER_STEP, true) {
             self.set_routine(MOVE_IDLE);
+            self.work.neck.flags &= 0xED;
         }
     }
 
@@ -1968,6 +2061,7 @@ impl Mover<'_, '_> {
                     self.work.hokan = FULL_BLEND;
                     self.work.damage_cnt |= DAMAGE_LOCK;
                     self.work.spd = [0; 3];
+                    self.work.neck.flags |= 0x12;
                 } else if self.work.routine[2] != 1 {
                     if self.work.routine[2] == 2 {
                         self.work.routine[0] = 7;
@@ -1996,6 +2090,7 @@ impl Mover<'_, '_> {
                 self.work.hokan = DAMAGE_BLEND;
                 self.work.spd = speed;
                 self.work.damage_cnt |= DAMAGE_LOCK;
+                self.work.neck.flags |= 0x12;
                 true
             }
             1 => true,
@@ -2003,6 +2098,7 @@ impl Mover<'_, '_> {
                 self.work.routine = [MODE_MOVE, MOVE_IDLE, 0, 0];
                 self.work.status_flg |= STATUS_RECOVERED;
                 self.work.damage_cnt = 0;
+                self.work.neck.flags &= 0xED;
                 false
             }
             _ => false,
@@ -2965,6 +3061,58 @@ mod tests {
         weapon: Weapon,
         clips: Vec<Clip>,
         keyframes: Vec<Keyframe>,
+        neck_targets: Vec<NeckTarget>,
+    }
+
+    /// `angle` from the player, as far as `distance`.
+    fn neck_target(index: usize, kind: u16, angle: f64, distance: u32) -> NeckTarget {
+        let pos = [
+            (angle.cos() * f64::from(distance)) as i32,
+            0,
+            (-angle.sin() * f64::from(distance)) as i32,
+        ];
+        NeckTarget {
+            index,
+            kind,
+            pos,
+            neck: pos,
+            distance,
+        }
+    }
+
+    #[test]
+    fn pl_neck_looks_every_so_often_at_the_nearest_it_can_see() {
+        let mut setup = Setup::new(0);
+        setup.player.pos = [0; 3];
+        setup.player.angle = 0;
+        let ahead = 0.0;
+        let behind = std::f64::consts::PI;
+        setup.neck_targets = vec![
+            neck_target(2, 0, behind, 500),
+            neck_target(3, 0, ahead, 3000),
+            neck_target(4, 0, ahead, 2000),
+            neck_target(5, 0xC000, ahead, 100),
+            neck_target(6, 0x2000, ahead, 100),
+            neck_target(7, 0, ahead, 8000),
+        ];
+        setup.work.neck.wait = 1;
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.neck.target, None, "not time to look yet");
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.neck.target, Some(4), "the nearest standing");
+        assert_eq!(setup.work.neck.wait, NECK_WAIT);
+
+        setup
+            .neck_targets
+            .retain(|target| target.index != 3 && target.index != 4);
+        setup.work.neck.wait = 0;
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.neck.target, Some(6), "else someone on the floor");
+
+        setup.neck_targets.clear();
+        setup.work.neck.wait = 0;
+        setup.tick(Input::default(), 200);
+        assert_eq!(setup.work.neck.target, None, "else its own");
     }
 
     #[test]
@@ -3054,6 +3202,7 @@ mod tests {
                 weapon: Weapon::default(),
                 clips,
                 keyframes,
+                neck_targets: Vec::new(),
             }
         }
 
@@ -3077,6 +3226,7 @@ mod tests {
                 weapon: self.weapon,
                 necks: Default::default(),
                 targets: &[],
+                neck_targets: &self.neck_targets,
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
@@ -3103,6 +3253,7 @@ mod tests {
             weapon: setup.weapon,
             necks: Default::default(),
             targets: &[],
+            neck_targets: &[],
         };
         let mut rnd = crate::zombie2::Rnd::default();
         let mut lock = 0;
@@ -3497,6 +3648,7 @@ mod tests {
             weapon: Weapon::default(),
             necks: Default::default(),
             targets: &[],
+            neck_targets: &[],
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         assert_eq!(setup.work, before);

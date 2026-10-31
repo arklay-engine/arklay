@@ -623,6 +623,7 @@ pub fn run_with_options(
                         re2_zombies: None,
                         re2_music: None,
                         re2_die: None,
+                        re2_neck: None,
                         re2_sounds: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -6430,6 +6431,17 @@ impl GameSession {
                 .re2_die
                 .as_ref()
                 .and_then(crate::die2::Die::trace_field),
+            re2_neck: self.game.is_re2_room.then(|| {
+                let neck = &self.game.re2.player.neck;
+                format!(
+                    "{},{},{},{},{}",
+                    neck.flags,
+                    crate::player2::NECK_JOINT,
+                    u8::from(neck.target.is_some()),
+                    neck.turn[0],
+                    neck.turn[1],
+                )
+            }),
             re2_sounds: self.game.is_re2_room.then(|| {
                 self.re2_sounds
                     .played
@@ -14224,6 +14236,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
     let room_anim = context.room.room_anim.as_ref();
     let targets = crate::character2::targets(context.game);
+    let neck_targets = context.game.re2.neck_targets();
     let held_bank = context.game.player_damage.clone();
     let tick = crate::player2::Tick {
         room: context.room,
@@ -14245,6 +14258,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         weapon: context.game.re2_weapon(),
         necks: context.game.re2.necks(),
         targets: &targets,
+        neck_targets: &neck_targets,
     };
     let arrived = if crate::player2::is_held(&context.game.re2.player) {
         crate::character2::player_held(context.game, context.player, &tick);

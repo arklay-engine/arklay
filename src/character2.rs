@@ -25,6 +25,15 @@ pub fn tick(
         let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
             continue;
         };
+        if moves(&character) {
+            let (dx, dz) = (
+                character.body.pos[0] - game.entities[0].pos[0],
+                character.body.pos[2] - game.entities[0].pos[2],
+            );
+            character.distance =
+                crate::sca::square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx)))
+                    as u32;
+        }
         let model = npc_models.get(pack, character.id, scenario);
         if let Some(mut zombie) = character.zombie.take() {
             if let Some(model) = model.filter(|_| moves(&character)) {
@@ -484,6 +493,7 @@ pub fn tick_of<'a>(
         weapon: Default::default(),
         necks: game.re2.necks(),
         targets: &[],
+        neck_targets: &[],
     }
 }
 
@@ -502,6 +512,7 @@ mod tests {
             kind: 0,
             start: (0, 0),
             sound_type: 0,
+            distance: 0,
             with_room: false,
             zombie: None,
         };
