@@ -14085,6 +14085,8 @@ fn run_re2_init(
     let place = game.re2_music_place();
     game.re2.music.enter_room(word, place);
     game.re2.effects.enter_room(std::sync::Arc::clone(effects));
+    let loaded = game.re2_weapon().loaded;
+    game.re2.player.enter_room(loaded);
     // `FG_STATUS_PLAYER` and `FG_STATUS_SCENARIO`.
     let character = game.id.player_flag & 1;
     let scenario = u8::from(game.re2.scenario_b);
@@ -14288,6 +14290,9 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     } else {
         crate::player2::player_move(&mut context.game.re2.player, context.player, &tick)
     };
+    if !tick.stopped {
+        crate::character2::mag_down(context.game, context.player);
+    }
     crate::character2::oba_ck_em2(context.game, context.player);
     context.game.re2_settle_ammo();
     crate::character2::shoot_camera(
@@ -16298,6 +16303,13 @@ fn render_frame_on(
     let mut player_joints = player_joints;
     if let Some(joints) = player_joints.as_mut() {
         tween.joints(tween::Key::Player, joints);
+        // `with_weapon` keeps the magazine's mesh just past the skeleton's parts.
+        if let Some(magazine) = game.re2.player.magazine {
+            joints.push(anim::Mat4x3 {
+                r: magazine.matrix.m.map(|row| row.map(i32::from)),
+                t: magazine.matrix.t,
+            });
+        }
     }
 
     // The parsed NPC models are held in `models` so the mesh references built

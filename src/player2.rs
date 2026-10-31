@@ -143,6 +143,8 @@ const FRAME_SOUND: u32 = 0x10_0000;
 const FRAME_SOUND_SLOT: u32 = 0xf_0000;
 /// The frame flag `pl_mv05_w1_t4` fills the magazine on.
 const FRAME_RELOAD: u32 = 0x40_0000;
+/// `pNow_seq`: the hand lets the magazine go.
+const FRAME_MAGAZINE: u32 = 0x20_0000;
 /// The blend step of `Pl_damage`'s `Joint_move`s.
 const DAMAGE_BLEND_STEP: u16 = 0x400;
 /// The blend `Pl_damage` starts its clips with (`0x30000` in `Move_no`'s word).
@@ -284,6 +286,8 @@ pub struct Work {
     /// enemies: its top bit is also an enemy having hold of them.
     pub(crate) damage_cnt: u8,
     status_flg: u16,
+    /// The part `Mag_set` drops.
+    pub(crate) magazine: Option<Magazine>,
     /// A round was spent this tick (`Tama_decrease_i`), for the inventory.
     pub fired: bool,
     /// The magazine was filled this tick (`Tama_reload`), for the inventory.
@@ -507,6 +511,69 @@ fn neck_direction(from: [i32; 3], to: [i32; 3]) -> [i32; 2] {
     direction
 }
 
+/// The part `Mag_set` starts the magazine under.
+const MAGAZINE_HAND: usize = 11;
+/// `M.t` of the magazine's part under the hand.
+const MAGAZINE_OFFSET: i32 = 150;
+/// `BYTE_0053a422`.
+const MAGAZINE_SPEED: i32 = 0x1E;
+/// `Status_flg`: there's a magazine in the gun to drop.
+const STATUS_MAGAZINE: u16 = 1;
+
+/// The magazine a reload drops: `Mag_down` keeps it falling straight down to
+/// its first bounce, sends it spinning along the ground after that, and takes
+/// it away at its second landing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Magazine {
+    /// `Workm`.
+    pub(crate) matrix: Matrix,
+    /// `+0x3a` and `+0x3c`.
+    speed: [i16; 2],
+    /// `+0x38`: `Ground` as it left the hand.
+    ground: i16,
+    /// `+0x84`.
+    fall: i16,
+    /// `+0x79`.
+    bounces: u8,
+}
+
+impl Work {
+    /// `Player_set`: the magazine is gone, and the next reload drops one if
+    /// there's a round in the gun.
+    pub(crate) fn enter_room(&mut self, loaded: bool) {
+        self.status_flg = if loaded { STATUS_MAGAZINE } else { 0 };
+        self.magazine = None;
+    }
+
+    /// `Mag_down`, and where the magazine bounced this tick, for its sound.
+    pub(crate) fn mag_down(&mut self, rnd: &mut crate::zombie2::Rnd) -> Option<[i32; 3]> {
+        let magazine = self.magazine.as_mut()?;
+        magazine.fall = magazine.fall.wrapping_add(0x14);
+        magazine.matrix.t[1] += i32::from(magazine.fall);
+        let ground = i32::from(magazine.ground);
+        let mut bounced = None;
+        if ground < magazine.matrix.t[1] {
+            if magazine.bounces == 0 {
+                self.magazine = None;
+                return None;
+            }
+            magazine.matrix.t[1] = ground;
+            magazine.bounces -= 1;
+            magazine.fall = -(magazine.fall / 2);
+            if rnd.draw() & 1 != 0 {
+                magazine.speed = magazine.speed.map(|speed| -speed);
+            }
+            bounced = Some(magazine.matrix.t);
+        }
+        if magazine.bounces == 0 {
+            magazine.matrix.m = mul_matrix(&rot_matrix([0x100, 0, 0]), &magazine.matrix.m);
+            magazine.matrix.t[0] += i32::from(magazine.speed[0]);
+            magazine.matrix.t[2] += i32::from(magazine.speed[1]);
+        }
+        bounced
+    }
+}
+
 impl Default for Work {
     fn default() -> Self {
         Self {
@@ -552,6 +619,7 @@ impl Default for Work {
             root: None,
             damage_cnt: 0,
             status_flg: 0,
+            magazine: None,
             fired: false,
             reloaded: false,
             neck: Neck {
@@ -2119,6 +2187,8 @@ impl Mover<'_, '_> {
         if self.work.routine[3] == 0 {
             self.aim_clip(AIM_RELOAD_CLIP);
         }
+        // `Workm` is the last `Joint_trans2`'s, from before this tick's frame.
+        let hand = self.part_matrix(MAGAZINE_HAND);
         if self.joint_move() {
             self.aim_stage(1);
         }
@@ -2126,9 +2196,36 @@ impl Mover<'_, '_> {
             self.player
                 .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
         }
+        if self.work.now_seq & FRAME_MAGAZINE != 0 && self.work.status_flg & STATUS_MAGAZINE != 0 {
+            self.mag_set(hand);
+            self.work.status_flg &= !STATUS_MAGAZINE;
+        }
         if self.work.now_seq & FRAME_RELOAD != 0 {
             self.work.reloaded = true;
+            self.work.status_flg |= STATUS_MAGAZINE;
         }
+    }
+
+    /// `Mag_set`: a gun with a magazine lets it go from the hand. The weapons
+    /// that have one all share a row of `BYTE_0053a420`.
+    fn mag_set(&mut self, hand: Option<Matrix>) {
+        let Some(hand) = hand else {
+            return;
+        };
+        if !matches!(self.tick.weapon.id, 2..=6 | 0xF | 0x10 | 0x13) {
+            return;
+        }
+        let (x, z) = rotate(self.player.angle.wrapping_add(0x400), MAGAZINE_SPEED, 0);
+        self.work.magazine = Some(Magazine {
+            matrix: hand.comp(&Matrix {
+                m: rot_matrix([0; 3]),
+                t: [0, MAGAZINE_OFFSET, 0],
+            }),
+            speed: [x as i16, z as i16],
+            ground: self.ground() as i16,
+            fall: 0,
+            bounces: 1,
+        });
     }
 
     /// The first tick of a motion: its clip, from the first frame, blended in.
@@ -3869,6 +3966,69 @@ mod tests {
         assert!(!setup.work.reloaded);
         setup.tick(aiming(false, false), 200);
         assert!(setup.work.reloaded);
+    }
+
+    fn dropped(y: i32, bounces: u8) -> Work {
+        Work {
+            magazine: Some(Magazine {
+                matrix: Matrix {
+                    m: rot_matrix([0; 3]),
+                    t: [100, y, 200],
+                },
+                speed: [3, 30],
+                ground: 0,
+                fall: 0,
+                bounces,
+            }),
+            ..Work::default()
+        }
+    }
+
+    #[test]
+    fn a_magazine_falls_straight_down_until_it_bounces() {
+        let mut work = dropped(-1000, 1);
+        let mut rnd = crate::zombie2::Rnd::default();
+        let start = rnd;
+        assert_eq!(work.mag_down(&mut rnd), None);
+        let magazine = work.magazine.unwrap();
+        assert_eq!(magazine.fall, 0x14);
+        assert_eq!(magazine.matrix.t, [100, -980, 200]);
+        assert_eq!(rnd, start, "only a bounce draws");
+    }
+
+    #[test]
+    fn a_magazines_bounce_draws_sounds_and_sends_it_spinning() {
+        let mut work = dropped(-10, 1);
+        let mut rnd = crate::zombie2::Rnd::default();
+        let start = rnd;
+        assert_eq!(work.mag_down(&mut rnd), Some([100, 0, 200]));
+        assert_ne!(rnd, start);
+        let magazine = work.magazine.unwrap();
+        assert_eq!(magazine.fall, -10);
+        assert_eq!(magazine.bounces, 0);
+        // Either way along the floor, and turned about its own x.
+        assert!(matches!(magazine.matrix.t, [103, 0, 230] | [97, 0, 170]));
+        assert_eq!(magazine.matrix.m, rot_matrix([0x100, 0, 0]));
+    }
+
+    #[test]
+    fn a_magazine_goes_at_its_second_landing_with_no_draw() {
+        let mut work = dropped(-10, 0);
+        let mut rnd = crate::zombie2::Rnd::default();
+        let start = rnd;
+        assert_eq!(work.mag_down(&mut rnd), None);
+        assert_eq!(work.magazine, None);
+        assert_eq!(rnd, start);
+    }
+
+    #[test]
+    fn a_new_room_takes_the_magazine_and_arms_the_next_by_the_gun() {
+        let mut work = dropped(-1000, 1);
+        work.enter_room(true);
+        assert_eq!(work.magazine, None);
+        assert_eq!(work.status_flg, STATUS_MAGAZINE);
+        work.enter_room(false);
+        assert_eq!(work.status_flg, 0);
     }
 
     #[test]
