@@ -97,8 +97,8 @@ pub fn bake(art: &crate::assets::Artwork) -> Result<Image> {
 /// the page, in both directions).
 const RE2_TEXELS: std::ops::Range<u32> = 0x10..0x2d;
 
-/// Bake RE2's page: only [`RE2_TEXELS`], so the quad's corners are the grid's,
-/// and [`re2_alpha`]'s darker ramp. An RGBA replacement is the whole quad's
+/// Bake RE2's page: only `RE2_TEXELS`, so the quad's corners are the grid's,
+/// and `re2_alpha`'s darker ramp. An RGBA replacement is the whole quad's
 /// picture already.
 pub fn bake_re2(art: &crate::assets::Artwork) -> Result<Image> {
     let crate::assets::Artwork::Indexed(texture) = art else {
