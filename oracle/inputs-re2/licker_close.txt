@@ -1,0 +1,8 @@
+# room 211: a fight at close quarters with one licker, weapon 2 (oracle/re2.md)
+384 up run
+494 aim
+514 aim fire
+519 aim
+654 aim fire
+659 aim
+1644

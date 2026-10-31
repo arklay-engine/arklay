@@ -12,7 +12,8 @@ use crate::state::{Guide, ScaRect};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rnd(pub u16);
 
-/// The low word of what `Player_set` seeds it with at every room's load.
+/// The low word of what `Player_set` seeds it with: at a new game, and at a door
+/// only when the player's model changes.
 pub const RND_SEED: u16 = 0x6CA4;
 
 impl Default for Rnd {
@@ -94,6 +95,8 @@ const STATUS_IN_SIGHT: u16 = 0x800;
 /// `Now_seq`'s bits.
 const SEQ_SOUND: u32 = 0x800_0000;
 const SEQ_BLOOD: u32 = 0x1_0000;
+
+pub mod licker;
 
 /// A collision body, `AT_DATA`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -282,6 +285,8 @@ const PARTS_MASK: u16 = 0x2000;
 /// What a zombie keeps beyond a character's [`Work`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Zombie {
+    /// `Em_22`'s state: this isn't a zombie but a licker.
+    pub licker: Option<Box<licker::Licker>>,
     /// Parts it has thrown that are still falling.
     pub thrown: Vec<ThrownPart>,
     pulled: Option<PulledArm>,
@@ -461,6 +466,12 @@ pub struct World<'a> {
     pub guides: &'a [Guide],
     pub sca: &'a [ScaRect],
     pub effects: &'a mut crate::esp2::Effects,
+    /// `DAT_00989ffe`: the player's weapon.
+    pub weapon: u8,
+    /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
+    pub tongue_owner: &'a mut u8,
+    /// `fg_common`'s `0xa4`, which takes some life off a licker.
+    pub common_a4: bool,
 }
 
 /// One tick's zombie: the state the original keeps in the work and globals.
@@ -494,6 +505,11 @@ pub fn em_zombie(
         world,
         distance,
     };
+    if let Some(mut body) = em.z.licker.take() {
+        licker::run(&mut em, &mut body);
+        em.z.licker = Some(body);
+        return;
+    }
     em.run();
 }
 

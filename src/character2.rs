@@ -19,7 +19,16 @@ pub fn tick(
     init(game, room, pack, npc_models);
     let scenario = game.id.player_flag & 1;
     for slot in run_order() {
-        if game.re2.character_stopped(slot) {
+        // `Game_loop` still calls a stopped enemy, which does its `Root_ck` first.
+        let stopped = game.re2.character_stopped(slot);
+        if stopped
+            && !game
+                .re2
+                .characters
+                .0
+                .get(slot)
+                .is_some_and(|character| character.as_deref().is_some_and(|c| c.zombie.is_some()))
+        {
             continue;
         }
         let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
@@ -81,10 +90,8 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
     in_play
         .filter_map(|(slot, other)| Some((slot, other.as_deref()?)))
         .filter(|(_, other)| other.be_flg & 1 != 0)
-        .map(|(slot, other)| crate::zombie2::Oba {
-            slot: slot as u8,
-            be_flg: other.be_flg,
-            atd: other.zombie.as_ref().map_or_else(
+        .flat_map(|(slot, other)| {
+            let atd = other.zombie.as_ref().map_or_else(
                 || crate::zombie2::Atd {
                     ofs_y: -0x5FA,
                     at_w: other.body.radius as u16,
@@ -97,7 +104,19 @@ fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
                     ],
                 },
                 |zombie| zombie.atd,
-            ),
+            );
+            // A licker has a second box, for its head.
+            let head = other.zombie.as_ref().and_then(|zombie| {
+                let licker = zombie.licker.as_ref()?;
+                Some(licker.head)
+            });
+            std::iter::once(atd)
+                .chain(head)
+                .map(move |atd| crate::zombie2::Oba {
+                    slot: slot as u8,
+                    be_flg: other.be_flg,
+                    atd,
+                })
         })
         .collect()
 }
@@ -198,7 +217,10 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                 pos,
                 at: [zombie.atd.at[0], zombie.atd.at[2]],
                 at_w: zombie.atd.at_w,
-                at_w1: 500,
+                at_w1: zombie
+                    .licker
+                    .as_ref()
+                    .map_or(500, |licker| licker.head.at_w),
                 neck_y: character.work.neck.position.map_or(pos[1], |neck| neck[1]),
             })
         })
@@ -294,6 +316,8 @@ fn run_zombie(
     let stage = game.id.stage;
     let player_angle = game.entities[0].angle;
     let player_id = game.id.player_flag;
+    let weapon = game.re2_weapon().id;
+    let common_a4 = game.re2.flag(FG_COMMON, FG_COMMON_LICKER);
     let re2 = &mut game.re2;
     let gacha = re2.key_trg & 0x34F != 0;
     let effects = &mut re2.effects;
@@ -319,6 +343,9 @@ fn run_zombie(
         guides: &room.guides,
         sca,
         effects,
+        weapon,
+        tongue_owner: &mut re2.tongue_owner,
+        common_a4,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let knocks = std::mem::take(&mut world.knocks);
@@ -373,10 +400,13 @@ fn run_zombie(
 const PLAYER_WIDTH: u16 = 450;
 /// `fg_system`'s `0x20`, easy mode's bit.
 const FG_SYSTEM_EASY: u8 = 26;
+/// `fg_common`'s `0xa4`, which `Em22_Init` reads.
+const FG_COMMON: u8 = 4;
+const FG_COMMON_LICKER: u8 = 0xA4;
 
 /// `Sca_ck_em`'s mask: the children's is lower, and a zombie's its own.
 pub fn sca_mask(id: u8) -> u16 {
-    if (0x10..0x20).contains(&id) {
+    if (0x10..0x20).contains(&id) || id == 0x22 {
         crate::zombie2::MASK
     } else if matches!(id, 0x45 | 0x4F) {
         crate::sca::CHARACTER_MASK_LOW
@@ -431,10 +461,40 @@ pub fn init(
         }
         game.re2.characters.0[slot] = Some(character);
     }
-    // The pass of `Game_loop` that ends a load runs `Esp_move`, and little else.
+    // The pass of `Game_loop` that ends a load runs `pTbefore_func` and `Esp_move`,
+    // and little else.
     if std::mem::take(&mut game.re2.load_pass) {
+        game.re2.tick_before();
         game.re2.tick_effects(room.sca.as_ref());
+        run_load_stop(game, room, pack, npc_models);
     }
+}
+
+/// The tick the load's `fg_stop` ends: the enemies do no more than a `Root_ck`.
+fn run_load_stop(
+    game: &mut GameState,
+    room: &RoomState,
+    pack: &Pack,
+    npc_models: &mut EntityModelCache,
+) {
+    let scenario = game.id.player_flag & 1;
+    let was_stopped = game.re2.enemies_stopped();
+    game.re2.set_enemies_stopped(true);
+    for slot in run_order() {
+        let Some(mut character) = game.re2.characters.0.get_mut(slot).and_then(Option::take) else {
+            continue;
+        };
+        if moves(&character)
+            && let Some(mut zombie) = character.zombie.take()
+        {
+            if let Some(model) = npc_models.get(pack, character.id, scenario) {
+                run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+            }
+            character.zombie = Some(zombie);
+        }
+        game.re2.characters.0[slot] = Some(character);
+    }
+    game.re2.set_enemies_stopped(was_stopped);
 }
 
 /// `Game_loop` and `Em_init_move` start at `splayer_work`.

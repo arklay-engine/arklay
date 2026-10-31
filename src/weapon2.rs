@@ -247,7 +247,7 @@ const CUSTOM_SHOTGUN: [Record; 3] = [
 ];
 
 /// What a weapon's shot is: its rectangles, and what it does to a zombie.
-fn shot_tables(weapon: u8) -> Option<(&'static [Record; 3], &'static Damage)> {
+fn shot_records(weapon: u8) -> Option<&'static [Record; 3]> {
     let records = match weapon {
         2..=4 => &HANDGUN,
         5 | 6 => &MAGNUM,
@@ -255,7 +255,17 @@ fn shot_tables(weapon: u8) -> Option<(&'static [Record; 3], &'static Damage)> {
         8 => &CUSTOM_SHOTGUN,
         _ => return None,
     };
-    Some((records, DAMAGE.get(usize::from(weapon) - 2)?))
+    Some(records)
+}
+
+/// `Wp_dmg_tbl`'s entry for the target.
+fn damage_table(id: u8, weapon: u8) -> Option<&'static Damage> {
+    let table = if id == LICKER_ID {
+        &LICKER_DAMAGE
+    } else {
+        &DAMAGE
+    };
+    table.get(usize::from(weapon).checked_sub(2)?)
 }
 
 /// `Wp_dmg_tbl`'s entry for a weapon on a zombie: the damages by band, in ten
@@ -305,6 +315,47 @@ const DAMAGE: [Damage; 7] = [
         damage: 0x03C1_412C,
         stun: 0x078F_1E0A,
         heights: SHOTGUN_HEIGHTS,
+    },
+];
+
+const LICKER_ID: u8 = 0x22;
+const LICKER_HEIGHTS: [i32; 6] = [-5000, -2000, -3500, 500, -500, 2000];
+/// The same rows for `Em_22`.
+const LICKER_DAMAGE: [Damage; 7] = [
+    Damage {
+        damage: 0x00C0_340E,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00C0_340E,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x00C0_340E,
+        stun: 0x0000_000A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0C83_20C8,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x12C4_B12C,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0280_B432,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0501_7C6E,
+        stun: 0x078F_1E0A,
+        heights: LICKER_HEIGHTS,
     },
 ];
 
@@ -377,7 +428,7 @@ pub struct Shooter {
 /// reaches. Its three rectangles run out from the gun and take in a body by
 /// its width, once the height of the body picks a line of `W_AT_CK`.
 pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> Option<Hit> {
-    let (records, table) = shot_tables(shooter.weapon)?;
+    let records = shot_records(shooter.weapon)?;
     let record = records.get(shooter.level)?;
     let mut nearest = i32::MAX as u32;
     let mut found = None;
@@ -386,6 +437,9 @@ pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> O
         if target.damage_cnt != 0 || target.life < 0 || target.kind & TYPE_UNTARGETED != 0 {
             continue;
         }
+        let Some(table) = damage_table(target.id, shooter.weapon) else {
+            continue;
+        };
         let to = [target.at[0], target.neck_y, target.at[1]];
         if sca_ck_line(sca, shooter.neck, to, LINE_MASK) {
             continue;
@@ -434,11 +488,11 @@ pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> O
                 square_root0(dz.wrapping_mul(dz).wrapping_add(dx.wrapping_mul(dx))) as u32;
             if distance < nearest {
                 nearest = distance;
-                found = Some((target.slot, result, region));
+                found = Some((target.slot, table, result, region));
             }
         }
     }
-    let (slot, result, region) = found?;
+    let (slot, table, result, region) = found?;
     let band = if result & 4 != 0 {
         2
     } else {
@@ -614,6 +668,15 @@ mod tests {
             neck_y: -1500,
             ..Target::default()
         }
+    }
+
+    #[test]
+    fn a_licker_takes_its_own_damage_from_a_gun() {
+        let licker = damage_table(LICKER_ID, 6).unwrap();
+        let zombie = damage_table(0x10, 6).unwrap();
+        assert_eq!(licker.damage, 0x12C4_B12C);
+        assert_ne!(licker.damage, zombie.damage);
+        assert!(damage_table(LICKER_ID, 1).is_none());
     }
 
     #[test]

@@ -73,6 +73,8 @@ pub struct Re2State {
     /// `Rnd`, for what's ported to its stream. A save doesn't hold it: the
     /// room's load seeds it.
     pub rnd: crate::zombie2::Rnd,
+    /// `DWORD_006894f8`: the `Work_no` of the licker whose tongue is out.
+    pub tongue_owner: u8,
     /// `BYTE_00989eeb`: the room's enemies so far.
     pub enemies: u8,
     /// `Se_tmp0`: the sound types of the room's enemies, as `sce_em_set` saw them.
@@ -268,6 +270,7 @@ impl Default for Re2State {
             sounds: Vec::new(),
             scroll: 0,
             rnd: Default::default(),
+            tongue_owner: 0,
             enemies: 0,
             sound_types: [0; 2],
             enemy_bank: None,
@@ -408,6 +411,14 @@ impl Re2State {
         self.flag(STOP_BANK, if slot == SPLAYER_SLOT { 1 } else { 2 })
     }
 
+    pub fn enemies_stopped(&self) -> bool {
+        self.flag(STOP_BANK, 2)
+    }
+
+    pub fn set_enemies_stopped(&mut self, stopped: bool) {
+        self.set_flag(STOP_BANK, 2, u8::from(stopped));
+    }
+
     /// `fg_stop`'s top bit, which keeps `Player_move` from running.
     /// The end of `Pad_set`: a stop leaves only some of the keys, and the
     /// tick it ends on raises none of them.
@@ -468,6 +479,27 @@ impl Re2State {
     /// `Flg_on(&fg_room, ...)`, a finished scripted walk's.
     pub fn raise_room_flag(&mut self, flag: u8) {
         self.set_flag(ROOM_BANK, flag, 1);
+    }
+
+    /// `pTbefore_func`, which `Game_loop` calls just before each `Joint_trans2`.
+    pub fn tick_before(&mut self) {
+        for character in self.characters.0.iter_mut().flatten() {
+            if character.be_flg & 1 == 0 {
+                continue;
+            }
+            let Some(zombie) = character.zombie.as_mut() else {
+                continue;
+            };
+            if let Some(licker) = zombie.licker.as_mut() {
+                crate::zombie2::licker::before(
+                    licker,
+                    zombie.life,
+                    &mut character.be_flg,
+                    &mut self.rnd,
+                    &mut self.effects,
+                );
+            }
+        }
     }
 
     /// `Esp_move`: its draws come from the game's stream, and its sounds join the rest.
@@ -851,7 +883,11 @@ impl GameHost<'_> {
         } else if types[0] != sound_type {
             types[1] = sound_type;
         }
-        let zombie = (0x10..0x20).contains(&id);
+        // A licker on the floor: one that starts on a wall or the ceiling isn't
+        // ported.
+        let type_word = (at(3) as u16) | (at(4) as u16) << 8;
+        let licker = id == 0x22 && type_word & 0x4F0F == 0;
+        let zombie = (0x10..0x20).contains(&id) || licker;
         // Any other enemy takes the slot, and isn't modelled yet.
         if !zombie && !(0x40..0x5C).contains(&id) {
             if let Some(character) = self.game.re2.characters.0.get_mut(slot) {
@@ -889,6 +925,9 @@ impl GameHost<'_> {
             zombie: zombie.then(|| {
                 let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
                 zombie.dead_flag = dead;
+                if licker {
+                    zombie.licker = Some(Box::default());
+                }
                 zombie
             }),
         }));
@@ -1520,8 +1559,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        // A licker, which isn't modelled.
-        spawn_character(&mut game, 0x22, 255);
+        // A dog, which isn't modelled.
+        spawn_character(&mut game, 0x20, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.
