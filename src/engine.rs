@@ -12529,7 +12529,7 @@ fn re2_shadow<'a>(
         half_z,
         shift: [0, 0],
         lift: 0,
-        tint: shadow::billboard_tint(color),
+        tint: shadow::kage_tint(color),
     })
 }
 
