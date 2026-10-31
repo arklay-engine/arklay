@@ -14268,6 +14268,10 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     };
     crate::character2::oba_ck_em2(context.game, context.player);
     context.game.re2_settle_ammo();
+    crate::character2::shoot_camera(
+        context.game,
+        context.room.cuts.get(context.room.current_cut),
+    );
     crate::character2::take_hit(context.game);
     if let Some(flag) = arrived {
         context.game.re2.raise_room_flag(flag);

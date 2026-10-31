@@ -206,6 +206,25 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
         .collect()
 }
 
+/// `pl_mv05_w1_t2`'s call of `Shoot_camera`: with few enemies about, a gun
+/// fired along the camera's view throws sparks at the lens.
+pub fn shoot_camera(game: &mut GameState, cut: Option<&crate::state::Cut>) {
+    let Some(line) = game.re2.player.shot_line.take() else {
+        return;
+    };
+    let Some(cut) = cut else {
+        return;
+    };
+    let weapon = game.re2_weapon();
+    if usize::from(game.re2.enemies) >= crate::weapon2::SHOOT_CAMERA_ENEMIES {
+        return;
+    }
+    let at = crate::weapon2::shoot_camera(weapon.id, line, cut.pos, cut.look_at, &mut game.re2.rnd);
+    for at in at {
+        game.re2.effects.call(7, 0, 0x2C8, 0, at, false);
+    }
+}
+
 /// What the player's tick asked of the effects and the slots: the shot's
 /// `Esp_call`s, and what it found goes to who it hit.
 pub fn take_hit(game: &mut GameState) {
