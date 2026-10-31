@@ -12789,6 +12789,36 @@ impl VoiceCache {
     }
 }
 
+/// `Cd_system_control`, once a line's `xa_on` has run. `Xa_control` holds
+/// `fg_status`'s voice bit for the line's length, plus a step to start and one
+/// to end. Without sound the executable measures that as half what the line
+/// plays for; with sound it asks DirectSound, so it's the whole of it.
+fn tick_re2_voice(sound: bool, cache: &mut VoiceCache, game: &mut game::GameState, pack: &Pack) {
+    use crate::scd2::host::{STATUS_VOICE, VoiceLine};
+    const STATUS_BANK: u8 = 1;
+    const TICKS_A_SECOND: usize = 30;
+    if let Some(path) = game.re2.voice.request.take() {
+        let line = cache.load(pack, &path).map_or(0, |wav| {
+            let frames = wav.frame_count();
+            let ticks = frames * TICKS_A_SECOND / wav.sample_rate.max(1) as usize;
+            if sound { ticks } else { ticks / 2 }
+        });
+        game.re2.voice = VoiceLine {
+            request: None,
+            ticks: line as u32 + 3,
+        };
+        game.voice.request = Some(game::VoiceRequest {
+            path,
+            volume: 0,
+            pan: 0,
+        });
+    }
+    game.re2.voice.ticks = game.re2.voice.ticks.saturating_sub(1);
+    if game.re2.voice.ticks == 0 {
+        game.re2.set_flag(STATUS_BANK, STATUS_VOICE, 0);
+    }
+}
+
 /// One tick's voice handshake: queue the script's request, clear the wait flag
 /// when the active line ends, and start a pending line when the channel frees
 /// up.
@@ -12803,6 +12833,7 @@ fn tick_voice(
     game: &mut game::GameState,
     pack: &Pack,
 ) {
+    tick_re2_voice(music.is_some(), cache, game, pack);
     let Some(mixer) = music.as_mut() else {
         game.voice.request = None;
         cache.pending = None;
