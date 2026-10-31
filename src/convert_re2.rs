@@ -486,6 +486,7 @@ pub(crate) fn convert(
     copy_voice(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_bgm(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_sound_banks(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
+    copy_shadow(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_doors(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_demos(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
@@ -1139,6 +1140,27 @@ fn copy_sound_banks(
         progress.advance(&dir);
     }
     progress.end_phase();
+    Ok(())
+}
+
+/// `Common/Data/Kage.adt`, the shadows' texture, as [`crate::shadow::KAGE_ENTRY`].
+fn copy_shadow(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let path = files_in(layout.common(&["Data"]))?
+        .into_iter()
+        .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == "KAGE"));
+    let Some(path) = path else {
+        if layout.common.is_some() {
+            warnings.push("no Common/Data/Kage.adt; there will be no shadows".into());
+        }
+        return Ok(());
+    };
+    let tim = adt::decode(&read(&path)?).with_context(|| format!("{}", path.display()))?;
+    tally.add(writer, "shadow", crate::shadow::KAGE_ENTRY, tim)?;
     Ok(())
 }
 

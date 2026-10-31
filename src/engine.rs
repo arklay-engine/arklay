@@ -12337,6 +12337,43 @@ fn play_re2_sounds(
     }
 }
 
+/// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`,
+/// at the ground under them (`MulKage`), if `Kage_work9_sort` finds them in the
+/// camera's zone.
+fn re2_player_shadow<'a>(
+    game: &game::GameState,
+    room: &RoomState,
+    player_state: &player::PlayerState,
+    tween: &mut tween::Tween,
+    texture: &'a Image,
+) -> Option<render::Shadow<'a>> {
+    let pos = player_state.pos;
+    let cut = room.current_cut as i32;
+    room.zones
+        .iter()
+        .find(|zone| i32::from(zone.cam_from) == cut)
+        .filter(|zone| zone.contains_signed(pos[0], pos[2]))?;
+    // Leon, then Claire's smaller one.
+    let claire = game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
+    let (half_x, half_z) = if claire { (0x1a4, 0x208) } else { (500, 600) };
+    let ground = room.sca.as_ref().map_or(pos[1], |sca| {
+        crate::sca::ground_at(sca, pos, player_state.radius, crate::sca::PLAYER_MASK).height
+    });
+    let mut shadow_pos = [pos[0], ground, pos[2]];
+    let mut shadow_angle = player_state.angle;
+    tween.shadow(tween::Key::Player, &mut shadow_pos, &mut shadow_angle);
+    Some(render::Shadow {
+        texture,
+        pos: shadow_pos,
+        angle: shadow_angle,
+        half_x,
+        half_z,
+        shift: [0, 0],
+        lift: 0,
+        tint: shadow::billboard_tint(shadow::PLAYER_COLOR),
+    })
+}
+
 /// The bank and id one queued player cue resolves through.
 ///
 /// The push and ladder cues are room-table columns exactly like the original's
@@ -15661,6 +15698,12 @@ fn render_frame_on(
     let shadow_texture = shadows.page_for(pack);
     let mut shadow_list: Vec<render::Shadow<'_>> = Vec::new();
     if let Some(texture) = shadow_texture
+        && game.is_re2_room
+    {
+        if let Some(shadow) = re2_player_shadow(game, room, player_state, tween, texture) {
+            shadow_list.push(shadow);
+        }
+    } else if let Some(texture) = shadow_texture
         && game.entities[0].shadow_quad
         && shadow::visible(
             id,
