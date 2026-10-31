@@ -12,7 +12,8 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **Stairs.** `pl_mv_07` climbs and descends them, but its shadow's path isn't ported, and whether stairs are in reach goes by the floor the player's height is on rather than by `nFloor`, which nothing ports yet.
 - **Falls and death.** `Pl_damage`'s falls (`Routine_1` 4 and 5) play as the plain hit, without their `pSub1` clips or getting up, and `Pl_dead` leaves the player standing with no game over.
 - **Sounds of hits.** `Pl_damage` plays none of its sounds.
-- **What the player's routine leaves out.** The neck, `Oma_*updown`, water and `Lim_dir_ck`'s clip swap aren't ported.
+- **What the player's routine leaves out.** The neck, water and `Lim_dir_ck`'s clip swap aren't ported.
+- **Climbing.** `Oma_pl_updown_ck` reads only the room's SCA records, not object models, and treats every shape as its box.
 
 ## Collision
 

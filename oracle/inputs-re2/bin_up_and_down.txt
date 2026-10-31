@@ -1,0 +1,8 @@
+# room 118: climb the bin, walk across its top, jump down the far side
+0 
+360 confirm
+362 
+480 up
+505 
+540 confirm
+542 

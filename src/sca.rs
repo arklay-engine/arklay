@@ -675,6 +675,69 @@ pub fn stairs_ahead(sca: &Sca, pos: [i32; 3], angle: u16, radius: i32) -> Option
     })
 }
 
+/// `Sca_ck_info`'s bit for a record the player can climb onto (shape 9).
+pub const INFO_UP: u16 = 2;
+/// `Sca_ck_info`'s bit for a record the player can jump down from (shape 10).
+pub const INFO_DOWN: u16 = 4;
+
+/// `Sca_ck_info` at a point, with no reach: the climb bits of the records
+/// holding it.
+pub fn info_at(sca: &Sca, mask: u16, pos: [i32; 3], floor: u8) -> u16 {
+    let area = area(sca, pos[0], pos[2]);
+    sca.records
+        .iter()
+        .filter(|record| applies(record, mask, area, pos, 0, floor))
+        .fold(0, |info, record| match record.shape() {
+            9 => info | 3,
+            10 => info | INFO_DOWN,
+            _ => info,
+        })
+}
+
+/// What `Sca_ck_hit` finds at a body's position.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ground {
+    /// The highest top the body stands at or above: its return value.
+    pub height: i32,
+    /// A record rises past the body's height, or the body is under the floor
+    /// (`DWORD_00695E84`'s bit 0).
+    pub blocked: bool,
+    /// The lowest top rising past the body (`DWORD_00695E74`).
+    pub ceiling: i32,
+}
+
+/// `Sca_ck_hit`, without the object models. Every shape counts as its whole
+/// box, where the original tests the diagonals and curves' outlines and takes a
+/// slope's or stairs' height at the point.
+pub fn ground_at(sca: &Sca, pos: [i32; 3], radius: i32, mask: u16) -> Ground {
+    let mut ground = Ground {
+        blocked: pos[1] > 0,
+        ..Ground::default()
+    };
+    let area = area(sca, pos[0], pos[2]);
+    for record in &sca.records {
+        if record.kind & area == 0
+            || record.id & mask == 0
+            || record.shape() == 10
+            || !inside_grown(record, pos[0], pos[2], radius)
+        {
+            continue;
+        }
+        let top_floor = record.floor.trailing_zeros().min(32) as i32 * -FLOOR_HEIGHT;
+        let height = i32::from((record.kind & 0x7C0) >> 6) * -FLOOR_HEIGHT
+            + i32::from(record.kind >> 11) * -100;
+        if pos[1] <= top_floor {
+            if height < pos[1] {
+                ground.blocked = true;
+                ground.ceiling = ground.ceiling.min(height);
+            } else {
+                ground.height = ground.height.min(height);
+            }
+        }
+    }
+    ground
+}
+
 /// The floor heights at `stairs`' two ends: `FUN_004E3910` and `FUN_004E3940`.
 pub fn stairs_ends(stairs: &ScaRect) -> (i32, i32) {
     let low = (-i32::from((stairs.kind >> 6) & 0x1F) * 0x12 - i32::from(stairs.kind >> 11)) * 100;
@@ -690,6 +753,41 @@ pub fn stairs_ends(stairs: &ScaRect) -> (i32, i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_climbable_box_answers_its_height_and_bits() {
+        // Room 118's bin and the edge of its top.
+        let sca = room(vec![
+            ScaRect {
+                x: -23361,
+                z: -7975,
+                width: 1930,
+                depth: 3088,
+                id: 0xFC09,
+                kind: 0x900F,
+                floor: 1,
+            },
+            ScaRect {
+                x: -25131,
+                z: -7975,
+                width: 1769,
+                depth: 2798,
+                id: 0xFC0A,
+                kind: 0x904F,
+                floor: 2,
+            },
+        ]);
+        let on_bin = [-22500, -FLOOR_HEIGHT, -6000];
+        let ground = ground_at(&sca, on_bin, 450, PLAYER_MASK);
+        assert_eq!(ground.height, -FLOOR_HEIGHT);
+        assert!(!ground.blocked);
+        assert_eq!(info_at(&sca, PLAYER_MASK, [-22500, 0, -6000], 0), 3);
+        assert_eq!(info_at(&sca, PLAYER_MASK, [-22500, 0, -6000], 1), 0);
+        // Off the top, the ground is the street again.
+        let beside = [-24000, -FLOOR_HEIGHT, -6000];
+        assert_eq!(info_at(&sca, PLAYER_MASK, beside, 1), INFO_DOWN);
+        assert_eq!(ground_at(&sca, beside, 450, PLAYER_MASK).height, 0);
+    }
 
     fn room(records: Vec<ScaRect>) -> Sca {
         Sca {

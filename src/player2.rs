@@ -46,6 +46,8 @@ const MOVE_BACKWARD: u8 = 3;
 const MOVE_ROTATE: u8 = 4;
 const MOVE_AIM: u8 = 5;
 const MOVE_STAIRS: u8 = 7;
+const MOVE_CLIMB: u8 = 8;
+const MOVE_JUMP_DOWN: u8 = 9;
 /// The port's optional quick turn, past the original's table.
 const MOVE_QUICK_TURN: u8 = 0x40;
 /// `Plc_stop`'s routine, which no table entry animates.
@@ -86,6 +88,25 @@ const STAIRS_TURN_CLOSE: i32 = 0x28;
 const STAIRS_WALK_OFF_FRAME: u8 = 9;
 const STAIRS_FIRST_BLEND: u8 = 3;
 const STAIRS_FIRST_STEP: u16 = 0x400;
+/// `Oma_pl_updown_ck`'s reach to a box to climb and to a drop, by `Id + 4`
+/// (`0x533370`, `0x533398`).
+const CLIMB_REACH: [i32; 20] = [
+    884, 1251, 581, 971, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800,
+    600,
+];
+const DROP_REACH: [i32; 20] = [
+    884, 653, 854, 581, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
+    1000, 1000, 1000, 600,
+];
+/// `Routine_2`'s bit for a jump down, in `pl_mv_08`'s turn to the edge.
+const CLIMB_IS_DROP: u8 = 2;
+/// The room bank's clips: the climb, the jump down and its fall and landing.
+const CLIMB_CLIP: u8 = 6;
+const JUMP_CLIP: u8 = 7;
+const JUMP_FALL_CLIP: u8 = 8;
+const LAND_CLIP: u8 = 9;
+/// The small character (id 0xF) has its own timing, on the same clips.
+const SMALL_ID: u8 = 0xF;
 /// `pl_mv05_w1`'s clips: raising; holding, then firing, at each tilt.
 const AIM_RAISE_CLIP: u8 = 9;
 const AIM_HOLD_CLIPS: [u8; 3] = [0x0F, 0x0B, 0x0D];
@@ -298,9 +319,16 @@ impl Work {
         self
     }
 
-    /// `Be_flg`'s bit 8: on the stairs, nothing collides.
+    /// `Be_flg`'s bits 4 and 8: on the stairs, or going up or down a box and
+    /// off the ground, nothing collides.
     pub fn climbing(&self) -> bool {
-        self.routine[0] == MODE_MOVE && self.routine[1] == MOVE_STAIRS
+        self.routine[0] == MODE_MOVE
+            && match self.routine[1] {
+                MOVE_STAIRS => true,
+                MOVE_CLIMB => matches!(self.routine[3], 1..=3),
+                MOVE_JUMP_DOWN => self.routine[3] < 5,
+                _ => false,
+            }
     }
 
     /// The trace's `beh` and `as`, and its `mot` field: `Routine_2`, `Routine_3`,
@@ -488,6 +516,7 @@ impl Mover<'_, '_> {
             MOVE_RUN => self.pl_br_run(key),
             MOVE_BACKWARD => self.pl_br_backward(key),
             MOVE_ROTATE => self.pl_br_rotate(key),
+            MOVE_JUMP_DOWN => self.pl_br_jump_down(key),
             _ => {}
         }
         // `pl_mv_05` reads the keys itself.
@@ -502,6 +531,8 @@ impl Mover<'_, '_> {
             MOVE_ROTATE => self.pl_mv_rotate(),
             MOVE_AIM => self.pl_mv_aim(key),
             MOVE_STAIRS => self.pl_mv_stairs(),
+            MOVE_CLIMB => self.pl_mv_climb(),
+            MOVE_JUMP_DOWN => self.pl_mv_jump_down(),
             MOVE_QUICK_TURN => self.mv_quick_turn(),
             _ => {}
         }
@@ -527,10 +558,227 @@ impl Mover<'_, '_> {
             return false;
         }
         let Some(stairs) = self.stairs else {
-            return false;
+            return self.updown_ck();
         };
         self.sca_hit_stairs(stairs);
         true
+    }
+
+    /// `Oma_pl_updown_ck`, without the object models: a box to climb in front
+    /// of the player, or a drop.
+    fn updown_ck(&mut self) -> bool {
+        use crate::sca::{FLOOR_HEIGHT, INFO_DOWN, INFO_UP, PLAYER_MASK};
+        let Some(sca) = self.tick.room.sca.as_ref() else {
+            return false;
+        };
+        // A quarter turn, the nearest to the player's facing.
+        let facing = self.player.angle.wrapping_add(0x200) & 0xFC00;
+        let [x, y, z] = self.player.pos;
+        let radius = self.player.radius;
+        let floor = crate::sca::floor_of(y);
+        let reach = |table: &[i32; 20]| table[(usize::from(self.tick.id) + 4) % table.len()];
+        let (dx, dz) = rotate(facing, reach(&CLIMB_REACH), 0);
+        let up = [x + dx, y - FLOOR_HEIGHT, z + dz];
+        if floor < 31 && crate::sca::info_at(sca, PLAYER_MASK, up, floor) & INFO_UP != 0 {
+            let ground = crate::sca::ground_at(sca, up, radius, PLAYER_MASK);
+            if ground.height <= up[1] && !ground.blocked {
+                self.work.routine = [MODE_MOVE, MOVE_CLIMB, 0, 0];
+                return true;
+            }
+        }
+        let (dx, dz) = rotate(facing, reach(&DROP_REACH), 0);
+        let down = [x + dx, y, z + dz];
+        let ground = crate::sca::ground_at(sca, down, radius, PLAYER_MASK);
+        let landing = ground.height.min(ground.ceiling);
+        if landing > y && crate::sca::info_at(sca, PLAYER_MASK, down, floor) & INFO_DOWN != 0 {
+            self.work.routine = [MODE_MOVE, MOVE_CLIMB, CLIMB_IS_DROP, 0];
+            return true;
+        }
+        false
+    }
+
+    /// The first steps of `pl_mv_08`: turn square to the box. It answers
+    /// whether the turn has finished.
+    fn square_up(&mut self) -> bool {
+        self.joint_move();
+        let angle = self.player.angle;
+        let step = (angle >> 2) & 0xFF;
+        let angle = if angle & 0x200 == 0 {
+            angle.wrapping_sub(step)
+        } else {
+            angle.wrapping_add(step)
+        };
+        self.player.angle = angle;
+        if angle & 0x3E0 != 0 {
+            return false;
+        }
+        self.player.angle = angle & 0xFF00;
+        true
+    }
+
+    /// The landing's turn back to the pad.
+    fn pl_br_jump_down(&mut self, key: u16) {
+        if self.work.routine[3] <= 4 {
+            return;
+        }
+        if key & KEY_FORWARD != 0 {
+            self.set_routine(if key & KEY_RUN != 0 {
+                MOVE_RUN
+            } else {
+                MOVE_FORWARD
+            });
+        }
+        if key & KEY_BACKWARD != 0 {
+            self.set_routine(MOVE_BACKWARD);
+        }
+        if key & KEY_TURN != 0 {
+            self.set_routine(MOVE_ROTATE);
+        }
+        self.aim_branch(key);
+    }
+
+    /// `pl_mv_08`: turn square to a box, then climb it, or hand over to the
+    /// jump down.
+    fn pl_mv_climb(&mut self) {
+        if self.work.routine[3] == 0 {
+            self.work.routine[3] = 1;
+            self.work.bank = Bank::Weapon;
+            self.work.move_no = 0;
+            self.work.move_cnt = 0;
+            self.work.hokan = FULL_BLEND;
+            self.work.spd[0] = 0x32;
+        }
+        match self.work.routine[3] {
+            1 => {
+                if self.square_up() {
+                    if self.work.routine[2] & CLIMB_IS_DROP != 0 {
+                        self.work.routine = [MODE_MOVE, MOVE_JUMP_DOWN, self.work.routine[2], 0];
+                    } else {
+                        self.work.routine[3] = 2;
+                    }
+                }
+                return;
+            }
+            2 => {
+                self.work.routine[3] = 3;
+                self.work.bank = Bank::Room;
+                self.work.move_no = CLIMB_CLIP;
+                self.work.hokan = STAIRS_FIRST_BLEND;
+            }
+            3 => {}
+            _ => {
+                self.set_routine(MOVE_IDLE);
+                return;
+            }
+        }
+        // The body lifts on the clip's frame: the move and the height together.
+        let small = self.tick.id == SMALL_ID;
+        let (lift, reach, end) = if small {
+            (99, 0x224, 0x77)
+        } else {
+            (0x1D, 1000, 0x31)
+        };
+        let frame = self.work.move_cnt;
+        if frame == 0x11 {
+            self.work.damage_cnt |= DAMAGE_LOCK;
+        }
+        if frame == lift {
+            self.work.spd[0] = reach;
+            self.add_speed_xz();
+            self.player.pos[1] -= crate::sca::FLOOR_HEIGHT;
+        }
+        if frame == end {
+            self.work.damage_cnt &= !DAMAGE_LOCK;
+        }
+        if self.joint_move_late(STAIRS_FIRST_STEP) {
+            self.work.routine[3] = 4;
+        }
+        if self.work.now_seq & FRAME_FOOTSTEP != 0 {
+            self.player.emit_footstep(self.work.move_cnt, 1);
+        }
+    }
+
+    /// `pl_mv_09`: jump off the edge, fall and land.
+    fn pl_mv_jump_down(&mut self) {
+        match self.work.routine[3] {
+            0 => {
+                self.work.routine[3] = 1;
+                self.work.bank = Bank::Room;
+                self.work.move_no = JUMP_CLIP;
+                self.work.move_cnt = 0;
+                self.work.hokan = FULL_BLEND;
+                self.jump_step();
+            }
+            1 => self.jump_step(),
+            2 => {
+                self.work.damage_cnt |= DAMAGE_LOCK;
+                self.work.routine[3] = 3;
+                self.work.move_no = JUMP_FALL_CLIP;
+                self.work.move_cnt = 0;
+                self.work.hokan = 0;
+                let small = self.tick.id == SMALL_ID;
+                let (speed, drop, timer) = if small { (600, 0x96, 3) } else { (1000, 0x226, 5) };
+                self.work.spd[0] = speed;
+                self.player.pos[1] += drop;
+                self.work.timer0 = timer;
+                self.work.spd[2] = 0;
+                self.add_speed_xz();
+                self.fall();
+            }
+            3 => self.fall(),
+            4 => {
+                self.work.routine[3] = 5;
+                self.work.move_no = LAND_CLIP;
+                self.work.move_cnt = 4;
+                self.work.hokan = FULL_BLEND;
+                self.player.pos[1] = self.ground();
+                self.work.damage_cnt &= !DAMAGE_LOCK;
+                self.player.emit_footstep(self.work.move_cnt, 1);
+                self.land();
+            }
+            5 => self.land(),
+            _ => self.set_routine(MOVE_IDLE),
+        }
+    }
+
+    /// The ground under the player.
+    fn ground(&self) -> i32 {
+        self.tick.room.sca.as_ref().map_or(0, |sca| {
+            crate::sca::ground_at(
+                sca,
+                self.player.pos,
+                self.player.radius,
+                crate::sca::PLAYER_MASK,
+            )
+            .height
+        })
+    }
+
+    fn jump_step(&mut self) {
+        let ended = self.joint_move();
+        let last = if self.tick.id == SMALL_ID { 0x1A } else { 0xE };
+        self.work.routine[3] = if ended { 2 } else { self.work.routine[3] };
+        if self.work.move_cnt == last {
+            self.work.routine[3] = 2;
+        }
+    }
+
+    fn fall(&mut self) {
+        self.player.pos[1] += i32::from(self.work.timer0 as i16) * 0x1E;
+        self.work.timer0 += 1;
+        self.joint_move();
+        if self.ground() - 300 < self.player.pos[1] {
+            self.work.routine[3] = 4;
+        }
+    }
+
+    fn land(&mut self) {
+        if self.work.move_cnt == 6 {
+            self.player.emit_footstep(self.work.move_cnt, 1);
+        }
+        if self.joint_move() {
+            self.work.routine[3] = 6;
+        }
     }
 
     /// `Sca_hit_stairs`: from either end, in reach of the middle of its width.
