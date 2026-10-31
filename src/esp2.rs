@@ -56,8 +56,8 @@ pub fn ported(id: u8) -> bool {
 pub enum Sheet {
     /// A TIM of the room's, by its position in the room's table.
     Room(u8),
-    /// `espcore.bin`.
-    Core,
+    /// The n-th TIM of `espcore.bin`, the original's texture page `10 + n`.
+    Core(u8),
 }
 
 /// One effect type: `pEspdt` and `pEspmv` of an id.
@@ -191,10 +191,13 @@ impl Bank {
                 tims.push((slot, tim));
             }
             // In the room's data the n-th TIM is texture `n`. The shared set
-            // names its page 0x1e, the one `espcore.bin` fills.
+            // names one of the pages `espcore.bin` fills, and each tile says
+            // which TIM of them (`core_tile`).
             let sheet = if is_core {
-                let page = record.get(6).copied().unwrap_or(0);
-                (page == CORE_PAGE).then_some(Sheet::Core)
+                let page = record.get(6).copied().unwrap_or(0) & 0x1f;
+                CORE_PAGES
+                    .contains(&page)
+                    .then_some(Sheet::Core(page - CORE_PAGES.start()))
             } else {
                 Some(Sheet::Room(slot))
             };
@@ -205,18 +208,28 @@ impl Bank {
             }
             self.sprites.insert(id, sprite);
         }
-        for (slot, tim) in tims {
-            let sheet = if is_core {
-                Sheet::Core
-            } else {
-                Sheet::Room(slot)
-            };
-            match crate::tim::decode_4bpp(tim) {
-                Ok(texture) => self.sheets.push((sheet, texture)),
-                Err(error) => eprintln!("warning: invalid effect texture: {error:#}"),
+        for (slot, mut tim) in tims {
+            if !is_core {
+                self.add_sheet(Sheet::Room(slot), tim);
+                continue;
+            }
+            // `Init_main` uploads `espcore.bin`'s TIMs one after another.
+            let mut index = 0;
+            while let Some(len) = tim_len(tim).filter(|&len| len <= tim.len()) {
+                let (this, rest) = tim.split_at(len);
+                self.add_sheet(Sheet::Core(index), this);
+                tim = rest;
+                index += 1;
             }
         }
         Ok(())
+    }
+
+    fn add_sheet(&mut self, sheet: Sheet, tim: &[u8]) {
+        match crate::tim::decode_4bpp(tim) {
+            Ok(texture) => self.sheets.push((sheet, texture)),
+            Err(error) => eprintln!("warning: invalid effect texture: {error:#}"),
+        }
     }
 
     fn sheet(&self, sheet: Sheet) -> Option<&Texture8> {
@@ -248,10 +261,9 @@ impl Bank {
     }
 }
 
-/// The tpage `espcore.bin` is drawn from. Its other shared pages, `0x1f` and
-/// the part of this one past [`CORE_HEIGHT`], are other files.
-const CORE_PAGE: u8 = 0x1e;
-const CORE_HEIGHT: u32 = 168;
+/// The tpages `espcore.bin` is drawn from, which on the PlayStation hold all its
+/// TIMs.
+const CORE_PAGES: std::ops::RangeInclusive<u8> = 0x1e..=0x1f;
 
 /// A texture a billboard samples.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -260,13 +272,31 @@ pub struct Page {
     pub row: u8,
 }
 
-/// The clut row of a slot's clut word, `Esp_trans_main`'s `>> 6` and, for the
-/// shared sheet, less the row its colours were uploaded to.
-fn page_row(sheet: Sheet, clut: u16) -> u8 {
-    match sheet {
-        Sheet::Room(_) => (clut >> 6) as u8,
-        Sheet::Core => (clut >> 6).wrapping_sub(0x1e0) as u8,
-    }
+/// `Esp_trans_main`'s choice of texture for a tile (its `Graphicsprdata == 0`
+/// case): the page, the clut row and the `v` in that TIM. `sheet` carries over
+/// from one of a frame's tiles to the next, as the original's page does: what's
+/// past the first TIM makes the frame's later tiles look in the second page.
+fn core_tile(sheet: &mut Sheet, clut: u16, v: u8) -> (u8, u8) {
+    let Sheet::Core(page) = *sheet else {
+        return ((clut >> 6) as u8, v);
+    };
+    let clut = clut >> 6;
+    let row = |first: u16| clut.wrapping_sub(first) as u8;
+    let (next, row, v) = match (page, v) {
+        (0, 0xa8..) => (1, row(0x1e4), v.wrapping_add(0x58)),
+        (0, _) => (0, row(0x1e0), v),
+        (_, ..0x58) => (2, row(0x1e8), v),
+        (_, ..0xa8) => (3, row(0x1ec), v.wrapping_add(0xa8)),
+        (_, ..0xd0) => (4, 0, v.wrapping_add(0x58)),
+        _ => (5, 0, v.wrapping_add(0x30)),
+    };
+    *sheet = Sheet::Core(next);
+    let row = match (page, row) {
+        (0, 10) => 0,
+        (1.., 5) if next == 3 => 4,
+        _ => row,
+    };
+    (row, v)
 }
 
 /// A live slot of the pool.
@@ -770,20 +800,20 @@ impl Effects {
             if slot.flags & FLAG_VISIBLE == 0 {
                 continue;
             }
-            let Some(sheet) = self
-                .bank
-                .sprites
-                .get(&slot.kind)
-                .and_then(|sprite| sprite.sheet)
-            else {
+            let Some(sprite) = self.bank.sprites.get(&slot.kind) else {
                 continue;
             };
-            let page = Page {
-                sheet,
-                row: page_row(sheet, slot.clut),
+            let Some(mut sheet) = sprite.sheet else {
+                continue;
             };
-            if !pages.contains(&page) {
-                pages.push(page);
+            let frame = sprite.frame(slot.frame);
+            let (first, count) = (usize::from(frame[0]), usize::from(frame[1]));
+            for tile in sprite.tiles.iter().skip(first).take(count) {
+                let (row, _) = core_tile(&mut sheet, slot.clut, tile[1]);
+                let page = Page { sheet, row };
+                if !pages.contains(&page) {
+                    pages.push(page);
+                }
             }
         }
         pages
@@ -812,7 +842,7 @@ impl Effects {
             let Some(sprite) = self.bank.sprites.get(&slot.kind) else {
                 continue;
             };
-            let Some(sheet) = sprite.sheet else {
+            let Some(mut sheet) = sprite.sheet else {
                 continue;
             };
             let frame = sprite.frame(slot.frame);
@@ -840,17 +870,6 @@ impl Effects {
                 size - u32::from(texel[0] > 0x1ffff),
                 size - u32::from(texel[1] > 0x1ffff),
             ];
-            let page = Page {
-                sheet,
-                row: page_row(sheet, slot.clut),
-            };
-            let page_index = pages
-                .iter()
-                .position(|known| *known == page)
-                .unwrap_or_else(|| {
-                    pages.push(page);
-                    pages.len() - 1
-                });
             let (blend, op) = if slot.flags & FLAG_SEMI == 0 {
                 (0, EffectBlend::Normal)
             } else {
@@ -861,9 +880,15 @@ impl Effects {
                 }
             };
             for tile in sprite.tiles.iter().skip(first).take(count) {
-                if sheet == Sheet::Core && u32::from(tile[1]) + size > CORE_HEIGHT {
-                    continue;
-                }
+                let (row, v) = core_tile(&mut sheet, slot.clut, tile[1]);
+                let page = Page { sheet, row };
+                let page_index = pages
+                    .iter()
+                    .position(|known| *known == page)
+                    .unwrap_or_else(|| {
+                        pages.push(page);
+                        pages.len() - 1
+                    });
                 let left = (i64::from(screen_x) << 16) + i64::from(tile[2] as i8) * texel[0];
                 let top = (i64::from(screen_y) << 16) + i64::from(tile[3] as i8) * texel[1];
                 let (x0, y0) = ((left >> 16) as i32, (top >> 16) as i32);
@@ -871,7 +896,7 @@ impl Effects {
                 quads.push(EffectQuad {
                     key: ((depth.min(0x7fff) as u32) >> 5) << 5,
                     page: page_index,
-                    uv: [tile[0], tile[1], 0, 0],
+                    uv: [tile[0], v, 0, 0],
                     source: [source[0] as u8, source[1] as u8],
                     pos: [x0, y0],
                     size: [x1 - x0, y1 - y0],
@@ -1185,6 +1210,31 @@ mod tests {
         assert_eq!(colour(0)[2], 0);
         assert_eq!(colour(1)[0], 0);
         assert_ne!(colour(1)[2], 0);
+    }
+
+    #[test]
+    fn a_shared_tile_finds_its_tim_in_espcore() {
+        let tile = |page, clut: u16, v| {
+            let mut sheet = Sheet::Core(page);
+            let (row, v) = core_tile(&mut sheet, clut << 6, v);
+            (sheet, row, v)
+        };
+        // Page 0x1e: its first TIM, and past that its second.
+        assert_eq!(tile(0, 0x1e1, 0xa7), (Sheet::Core(0), 1, 0xa7));
+        assert_eq!(tile(0, 0x1e4, 0xa8), (Sheet::Core(1), 0, 0));
+        assert_eq!(tile(0, 0x1ea, 0), (Sheet::Core(0), 0, 0));
+        // Page 0x1f: the rest.
+        assert_eq!(tile(1, 0x1e9, 0x57), (Sheet::Core(2), 1, 0x57));
+        assert_eq!(tile(1, 0x1f1, 0x58), (Sheet::Core(3), 4, 0));
+        assert_eq!(tile(1, 0x1ec, 0xa8), (Sheet::Core(4), 0, 0));
+        assert_eq!(tile(1, 0x1ec, 0xd0), (Sheet::Core(5), 0, 0));
+    }
+
+    #[test]
+    fn a_rooms_tile_keeps_its_row_and_position() {
+        let mut sheet = Sheet::Room(2);
+        assert_eq!(core_tile(&mut sheet, 3 << 6, 0xb0), (3, 0xb0));
+        assert_eq!(sheet, Sheet::Room(2));
     }
 
     #[test]

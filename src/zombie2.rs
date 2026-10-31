@@ -58,7 +58,9 @@ const FLOOR_HOLDS: [u16; 16] = [
 ];
 
 /// The colour `Em10_Scenario` gives the shadow under a body.
-pub const POOL_COLOR: u32 = 0x0010_BFBF;
+pub const POOL_COLOR: u32 = 0x00BF_BF10;
+/// `FUN_00456780`'s first part starts at `0x40`, and goes down to `0x10`.
+const CHARRED_MAX: u8 = 0x30;
 /// `Em10Dm00`'s `funcs_458795 + 0xb`: what a hit takes from `At_sce_no`, by weapon.
 const STAGGER: [i8; 5] = [0, 9, 15, 15, 35];
 
@@ -215,13 +217,18 @@ pub struct Zombie {
     /// and where on that part.
     flames: Vec<(usize, u8, [i32; 3])>,
     burnt: bool,
+    /// How far `Em10_Scenario` has taken a burnt body's colours down.
+    charred: u8,
 }
 
 impl Zombie {
     /// `FUN_00456780`'s colours scale what lights the parts, around a half for
-    /// most. They're a tint of the whole model here.
+    /// most, and `Em10_Scenario` takes them all down together until the first
+    /// part's reach `0x10`. They're a tint of the whole model here.
     pub fn tint(&self) -> [u8; 3] {
-        [if self.burnt { 0xA0 } else { 0xFF }; 3]
+        const PARTS_MEAN: u32 = 0x4E;
+        let burnt = 0xA0 * (PARTS_MEAN - u32::from(self.charred)) / PARTS_MEAN;
+        [if self.burnt { burnt as u8 } else { 0xFF }; 3]
     }
 }
 
@@ -1082,6 +1089,10 @@ impl Em<'_, '_, '_> {
             self.work().routine[1] += u8::from(ended);
         }
         self.z.timers.1 = self.z.timers.1.wrapping_add(1);
+        if self.kind() & TYPE_BURNT != 0 && self.z.charred < CHARRED_MAX && self.z.timers.1 & 3 == 0
+        {
+            self.z.charred += 1;
+        }
     }
 
     fn corpse_wait(&mut self) {
@@ -3062,6 +3073,19 @@ mod tests {
         assert_eq!(character.work.routine, [3, 2, 0, 0]);
         // A count below nothing stays at its floor.
         assert_eq!(zombie.d_life, [0xFF, 9, 9]);
+    }
+
+    #[test]
+    fn a_burnt_body_chars_and_an_unburnt_one_doesnt() {
+        let mut zombie = Zombie {
+            burnt: true,
+            ..Zombie::default()
+        };
+        assert_eq!(zombie.tint(), [0xA0; 3]);
+        zombie.charred = CHARRED_MAX;
+        assert_eq!(zombie.tint(), [0x3D; 3]);
+        zombie.burnt = false;
+        assert_eq!(zombie.tint(), [0xFF; 3]);
     }
 
     #[test]

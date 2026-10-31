@@ -142,6 +142,13 @@ fn coverage_alpha(red: u8) -> u8 {
     (coverage * 16 / 31) as u8
 }
 
+/// `Marni_kage_disp`'s vertex colour for an RE2 shadow's `rgb`, whose low byte
+/// is red: what's above `0x80` goes to nothing. It reaches the screen at half,
+/// as measured against the original's pool of blood.
+pub fn kage_tint(rgb: u32) -> [u8; 3] {
+    [rgb as u8, (rgb >> 8) as u8, (rgb >> 16) as u8].map(|byte| 0x80u8.saturating_sub(byte) / 2)
+}
+
 /// The tint the fade-sprite primitive blends towards, as the vertex colour
 /// bytes the reference's sprite flush hands the GPU.
 ///
@@ -331,6 +338,12 @@ mod tests {
             alphas.into_iter().collect::<Vec<_>>(),
             vec![0, 17, 25, 41, 58, 74, 91, 99]
         );
+    }
+
+    #[test]
+    fn an_re2_pool_of_blood_is_red_and_a_shadow_black() {
+        assert_eq!(kage_tint(0x00BF_BF10), [0x38, 0, 0]);
+        assert_eq!(kage_tint(0x0080_8080), [0, 0, 0]);
     }
 
     #[test]
