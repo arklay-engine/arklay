@@ -237,9 +237,9 @@ pub fn parse_plw(data: &[u8]) -> Result<Plw> {
 /// reads: its own clips (`pKan_t_ptr`), and the weapon's, which hold the walk,
 /// run and idle (`pSub0_kan_t_ptr`). The keyframes are one table, so both
 /// banks' frames index it. `None` when the weapon's bank has no locomotion, as
-/// the knife's doesn't.
+/// a stub's doesn't.
 pub fn player_banks(pld: &Emd, plw: &Plw) -> Option<(Emd, Emw)> {
-    if plw.clips.is_empty() {
+    if plw.clips.len() < LOCOMOTION_CLIPS {
         return None;
     }
     let base = pld.keyframes.len() as u16;
@@ -275,6 +275,10 @@ pub fn player_banks(pld: &Emd, plw: &Plw) -> Option<(Emd, Emw)> {
     };
     Some((body, weapon))
 }
+
+/// The clips every real PLW starts with; a stub for a weapon the character
+/// never holds has one.
+const LOCOMOTION_CLIPS: usize = 9;
 
 /// The character `pld` holding `plw`: the weapon's first part replaces the
 /// right hand ([`WEAPON_PART`]), its texels are pasted into the hand's

@@ -6,7 +6,7 @@ RE2 play is being ported to exactness (Phase C of #244), checked tick by tick ag
 
 The pad's walking, running, backing, turning, hurt clips and scripted motions (`player2`, a port of `Player_move`), collision and `Sce_Damage` areas match the original on random walks around room 100 for both characters.
 
-- **The held weapon.** The player always holds the starting handgun, whose bank has the locomotion the knife's lacks.
+- **The held weapon.** Equipping from the inventory or the script's `weapon_chg` changes the hand and the walk's clips (`Pl_weapon_ch`), but `Plw_init_tbl`'s per-weapon set-up and `Weapon_cls` aren't ported.
 - **The handguns' stance only.** `Pl_move`'s routine 5 is `pl_mv05_w1` for Leon's and Claire's starting handguns: raising, tilting, firing, reloading and lowering, with their ammunition. The other weapons don't raise. Firing is the original's, with its flash, smoke, shell and `Shoot_camera`'s sparks when the gun lines up with the camera (checked by moving the camera on to the gun's line in both, since a real cut hardly ever lines up).
 - **The pose before play.** The first tick's blend starts from the clip's own frame rather than the pose `Pl_init` leaves, so raising the gun within the first few ticks of a game lands a few units off.
 - **Stairs.** `pl_mv_07` climbs and descends them, but the shadow lies flat at the ground under the player rather than following the steps, and whether stairs are in reach goes by the floor the player's height is on rather than by `nFloor`, which nothing ports yet.
@@ -64,7 +64,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **Messages.** The ones the executable draws itself are written from memory, and every message uses RE1's Western font. A room's text is its RDT's English list (`rdt + 0x40`), where the executable reads the list before it (`rdt + 0x3C`), so a line with text reveals at the English length; a voiced line has none in either list, so its timing is the original's. `xa_on` plays its line and `wsleep` waits for it, for as long as the line plays with sound, and for `Xa_control`'s count without (half that), so a trace matches the reference, which runs without sound.
 - **Start items.** `games/re2/game/new_game.lua` copies `Stage_init_item`'s table for Leon and Claire, with the lighter or lockpick in slot 2 rather than slot 10, and no other character's or mode's row.
 - **Text screens.** The title, new-game choice, inventory and item box are plain text stand-ins (`games/re2/ui`), and the save screen has no background: RE2's own art is not converted.
-- **The inventory.** Confirm equips a weapon or uses a healing item. There is no CHECK, MOVE, combining, map or file tab, and equipping changes nothing about the weapon the player holds.
+- **The inventory.** Confirm equips a weapon or uses a healing item. There is no CHECK, MOVE, combining, map or file tab, and equipping can't yet fire any weapon but the starting handguns.
 - **Healing.** Herbs and first aid heal in RE1's thirds of the maximum, not RE2's amounts (`item_definitions`).
 - **Item definitions.** Only weapons, ammo and healing items have a kind; everything else can't be used from the inventory. Key items work from the door or script that wants them.
 - **Save labels.** The save screen names the room by its number, not its place.
