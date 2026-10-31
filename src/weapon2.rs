@@ -1,8 +1,9 @@
-//! RE2's handgun shots: `Em_ck`, `hit_scan_ck` and `Weapon_at_ck`.
+//! RE2's shots: `Em_ck`, `hit_scan_ck` and `Weapon_at_ck`.
 //!
 //! The player's routine finds its target here, from a view of the enemy slots
 //! taken before it ran, and leaves a [`Hit`] for `zombie2` to take. The other
-//! weapons aren't ported: `player2` has only the starting handguns.
+//! weapons aren't ported: `player2` fires only the handguns, magnums and
+//! shotguns.
 
 use crate::player2::rotate;
 use crate::sca::square_root0;
@@ -92,20 +93,25 @@ pub fn em_ck(
     standing.1.or(floored.1)
 }
 
-/// `hit_scan_data` for the handguns: how far under and over the shoulder the
-/// hand is, which picks the level of the shot.
-const HIT_SCAN: (i32, i32) = (-200, 300);
-/// `DAT_0053a35c` for the handguns, by `pld_to_player_map`.
-const SHOULDER: [i32; 2] = [-2427, -2120];
+/// `hit_scan_data` of a weapon: how far above and below the shoulder a shot is
+/// level, and the shoulder's height by `pld_to_player_map`.
+const fn hit_scan_data(weapon: u8) -> (i32, i32, [i32; 2]) {
+    match weapon {
+        5 | 6 => (-200, 300, [-2427, 0]),
+        7 => (-500, 150, [-1813, 0]),
+        8 => (-500, 200, [-1813, 0]),
+        _ => (-200, 300, [-2427, -2120]),
+    }
+}
 
 /// `hit_scan_ck`: `Be_flg`'s level of the shot, as `BYTE_0053a520` has it: 0 for
 /// low, 1 level and 2 up. `y` is the hand's.
-pub fn hit_scan_ck(id: u8, pos_y: i32, parts0_y: i32, y: i32) -> usize {
-    let map = usize::from(id & 1);
-    let shoulder = ((SHOULDER[map] + pos_y) * parts0_y) >> 12;
-    if y < HIT_SCAN.0 + shoulder {
+pub fn hit_scan_ck(id: u8, weapon: u8, pos_y: i32, parts0_y: i32, y: i32) -> usize {
+    let (low, high, shoulders) = hit_scan_data(weapon);
+    let shoulder = ((shoulders[usize::from(id & 1)] + pos_y) * parts0_y) >> 12;
+    if y < low + shoulder {
         2
-    } else if HIT_SCAN.1 + shoulder < y {
+    } else if high + shoulder < y {
         0
     } else {
         1
@@ -119,33 +125,136 @@ struct Record {
     rects: [[i16; 4]; 3],
 }
 
+/// A record's three rectangles, from the reaches of each level below.
+const fn record(reach: [u8; 3], rects: [[i16; 4]; 3]) -> Record {
+    Record { reach, rects }
+}
+
+const REACH: [[u8; 3]; 3] = [[0x4, 0x2, 0x1], [0x8, 0x8, 0x8], [0x10, 0x20, 0x40]];
+
 /// `At_tbl_top`'s handguns, by the shot's level.
 const HANDGUN: [Record; 3] = [
-    Record {
-        reach: [0x4, 0x2, 0x1],
-        rects: [
+    record(
+        REACH[0],
+        [
             [100, 0, 1000, 375],
             [4100, 0, 1000, 500],
             [8100, 0, 2500, 625],
         ],
-    },
-    Record {
-        reach: [0x8, 0x8, 0x8],
-        rects: [
+    ),
+    record(
+        REACH[1],
+        [
             [200, 0, 1000, 375],
             [4200, 0, 1000, 500],
             [8200, 0, 7500, 625],
         ],
-    },
-    Record {
-        reach: [0x10, 0x20, 0x40],
-        rects: [
+    ),
+    record(
+        REACH[2],
+        [
             [100, 0, 1000, 375],
             [4100, 0, 1000, 500],
             [8200, 0, 2500, 625],
         ],
-    },
+    ),
 ];
+
+/// The magnums'.
+const MAGNUM: [Record; 3] = [
+    record(
+        REACH[0],
+        [
+            [100, 0, 1000, 125],
+            [4100, 0, 1000, 150],
+            [8100, 0, 2500, 175],
+        ],
+    ),
+    record(
+        REACH[1],
+        [
+            [200, 0, 1000, 125],
+            [4200, 0, 1000, 150],
+            [7200, 0, 7500, 175],
+        ],
+    ),
+    record(
+        REACH[2],
+        [
+            [100, 0, 1000, 125],
+            [4100, 0, 1000, 150],
+            [8100, 0, 2500, 175],
+        ],
+    ),
+];
+
+/// The shotgun's.
+const SHOTGUN: [Record; 3] = [
+    record(
+        REACH[0],
+        [
+            [100, 0, 1000, 500],
+            [4100, 0, 1000, 750],
+            [8100, 0, 2500, 1000],
+        ],
+    ),
+    record(
+        REACH[1],
+        [
+            [200, 0, 1000, 625],
+            [4200, 0, 1000, 875],
+            [8200, 0, 7500, 1125],
+        ],
+    ),
+    record(
+        REACH[2],
+        [
+            [100, 0, 750, 500],
+            [3100, 0, 1500, 750],
+            [9100, 0, 2500, 1000],
+        ],
+    ),
+];
+
+/// The custom shotgun's.
+const CUSTOM_SHOTGUN: [Record; 3] = [
+    record(
+        REACH[0],
+        [
+            [100, 0, 1000, 500],
+            [4100, 0, 1000, 875],
+            [8100, 0, 2500, 1125],
+        ],
+    ),
+    record(
+        REACH[1],
+        [
+            [200, 0, 1000, 625],
+            [4200, 0, 1000, 1000],
+            [8200, 0, 7500, 1250],
+        ],
+    ),
+    record(
+        REACH[2],
+        [
+            [100, 0, 750, 500],
+            [3100, 0, 1000, 875],
+            [7100, 0, 2500, 1125],
+        ],
+    ),
+];
+
+/// What a weapon's shot is: its rectangles, and what it does to a zombie.
+fn shot_tables(weapon: u8) -> Option<(&'static [Record; 3], &'static Damage)> {
+    let records = match weapon {
+        2..=4 => &HANDGUN,
+        5 | 6 => &MAGNUM,
+        7 => &SHOTGUN,
+        8 => &CUSTOM_SHOTGUN,
+        _ => return None,
+    };
+    Some((records, DAMAGE.get(usize::from(weapon) - 2)?))
+}
 
 /// `Wp_dmg_tbl`'s entry for a weapon on a zombie: the damages by band, in ten
 /// bits each; what the region loses in three bits each from the bottom, and
@@ -157,8 +266,9 @@ struct Damage {
 }
 
 const HANDGUN_HEIGHTS: [i32; 6] = [-5000, -2000, -3000, 2000, -500, 3000];
-/// `Type & 0xFFF` of 2, 3 and 4.
-const DAMAGE: [Damage; 3] = [
+const SHOTGUN_HEIGHTS: [i32; 6] = [-5000, 500, -3000, 2000, -500, 3000];
+/// `Type & 0xFFF` of 2 to 8.
+const DAMAGE: [Damage; 7] = [
     Damage {
         damage: 0x00E0_3C10,
         stun: 0x0285_0A14,
@@ -173,6 +283,26 @@ const DAMAGE: [Damage; 3] = [
         damage: 0x00E0_3C10,
         stun: 0x0081_0214,
         heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x384E_1384,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x384E_1384,
+        stun: 0x078F_1E0A,
+        heights: HANDGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x0280_F0C8,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
+    },
+    Damage {
+        damage: 0x03C1_412C,
+        stun: 0x078F_1E0A,
+        heights: SHOTGUN_HEIGHTS,
     },
 ];
 
@@ -241,12 +371,12 @@ pub struct Shooter {
     pub level: usize,
 }
 
-/// `Weapon_at_ck`, for a handgun's one frame: the nearest enemy the shot
+/// `Weapon_at_ck`, for one frame of a shot: the nearest enemy the shot
 /// reaches. Its three rectangles run out from the gun and take in a body by
 /// its width, once the height of the body picks a line of `W_AT_CK`.
 pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> Option<Hit> {
-    let table = DAMAGE.get(usize::from(shooter.weapon).checked_sub(2)?)?;
-    let record = HANDGUN.get(shooter.level)?;
+    let (records, table) = shot_tables(shooter.weapon)?;
+    let record = records.get(shooter.level)?;
     let mut nearest = i32::MAX as u32;
     let mut found = None;
     let mut region = 0;
@@ -485,10 +615,13 @@ mod tests {
 
     #[test]
     fn the_hand_picks_the_shots_level() {
-        assert_eq!(hit_scan_ck(0, 0, 0x1000, -2427), 1);
-        assert_eq!(hit_scan_ck(0, 0, 0x1000, -2700), 2);
-        assert_eq!(hit_scan_ck(0, 0, 0x1000, -2000), 0);
-        assert_eq!(hit_scan_ck(1, 0, 0x1000, -2120), 1);
+        assert_eq!(hit_scan_ck(0, 2, 0, 0x1000, -2427), 1);
+        assert_eq!(hit_scan_ck(0, 2, 0, 0x1000, -2700), 2);
+        assert_eq!(hit_scan_ck(0, 2, 0, 0x1000, -2000), 0);
+        assert_eq!(hit_scan_ck(1, 2, 0, 0x1000, -2120), 1);
+        // The shotguns aim from their own height.
+        assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -1813), 1);
+        assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -2400), 2);
     }
 
     #[test]
@@ -524,5 +657,26 @@ mod tests {
         targets[0].pos[0] = -1600;
         targets[0].at[0] = -1600;
         assert_eq!(weapon_at_ck(&shooter, &targets, &[]), None);
+    }
+
+    #[test]
+    fn a_shotgun_spreads_wider_than_a_magnum() {
+        let hits = |weapon: u8, side: i32| {
+            let shooter = Shooter {
+                pos: [0; 3],
+                neck: [0, -2000, 0],
+                angle: 0,
+                weapon,
+                level: 1,
+            };
+            weapon_at_ck(&shooter, &[zombie(0, 1600, side)], &[]).is_some()
+        };
+        for weapon in [2, 5, 6, 7, 8] {
+            assert!(hits(weapon, 0), "weapon {weapon} misses straight ahead");
+        }
+        assert!(!hits(5, 1500));
+        assert!(hits(7, 1500));
+        // The rest aren't ported.
+        assert!(!hits(9, 0));
     }
 }

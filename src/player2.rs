@@ -129,12 +129,11 @@ const AIM_HOLD_TURN: u16 = 0x40;
 const AIM_FIRE_TURN: u16 = 8;
 /// The handguns' row of the table at `0x53A305`: the frame from which the
 /// raise can tilt, and from which a released shot is cut short.
-const AIM_TILT_DOWN_FRAME: u8 = 5;
-const AIM_TILT_UP_FRAME: u8 = 7;
-const AIM_FIRE_CANCEL_FRAME: u8 = 8;
 const AIM_LOWER_BLEND: u8 = 0x0F;
 /// The parts from the root to the foot the handguns' stance plants.
 const AIM_FOOT_CHAIN: [usize; 5] = [0, 1, 5, 6, 7];
+/// `Foot_set_pl`'s other leg, for the shotgun's stance.
+const AIM_OTHER_FOOT_CHAIN: [usize; 5] = [0, 1, 2, 3, 4];
 const AIM_LOWER_STEP: u16 = 0x100;
 /// The weapon bank's slot of an empty gun's click (`Snd_se_on(0x1010001)`).
 const SOUND_EMPTY: u16 = 1;
@@ -322,6 +321,9 @@ pub struct Work {
     pub noise: u8,
     /// `Esp_call`s this tick made, in order.
     pub effects: Vec<EffectCall>,
+    /// `Be_flg`'s level of the shot, and the ticks it still looks for a body.
+    shot_level: usize,
+    shot_ticks: u8,
     /// The gun's line, for `Shoot_camera` to look along.
     pub shot_line: Option<crate::weapon2::ShotLine>,
 }
@@ -502,6 +504,8 @@ impl Default for Work {
     fn default() -> Self {
         Self {
             // `Pl_init`, then the first tick of `pl_mv_00`.
+            shot_level: 0,
+            shot_ticks: 0,
             shot_line: None,
             routine: [MODE_MOVE, MOVE_IDLE, 1, 0],
             move_no: IDLE_CLIPS[0],
@@ -677,11 +681,159 @@ pub struct Weapon {
 }
 
 impl Weapon {
-    /// Whether [`Mover::pl_mv_aim`] handles it: the starting handguns.
+    /// Whether [`Mover::pl_mv_aim`] handles it: the starting handguns, the
+    /// magnums and the shotguns.
     fn aims(&self) -> bool {
-        matches!(self.id, 2 | 3)
+        matches!(self.id, 2 | 3 | 5..=8)
+    }
+
+    /// `DAT_0053A305`'s row of its three, each frame past which something is
+    /// allowed: tilting down, tilting up, and stopping a shot. The first two
+    /// keep a bit that chooses `Foot_set_pl`'s leg.
+    fn frames(&self) -> [u8; 3] {
+        match self.id {
+            5 => [0x85, 0x87, 25],
+            6 => [0x85, 0x87, 35],
+            7 => [7, 10, 28],
+            8 => [0x88, 0x8A, 35],
+            _ => [0x85, 0x87, 8],
+        }
+    }
+
+    fn tilt_down_frame(&self) -> u8 {
+        self.frames()[0] & 0x7F
+    }
+
+    fn tilt_up_frame(&self) -> u8 {
+        self.frames()[1] & 0x7F
+    }
+
+    fn fire_cancel_frame(&self) -> u8 {
+        self.frames()[2]
+    }
+
+    /// `Foot_set_pl`'s chain for this weapon, for a character of id `id`.
+    fn foot_chain(&self, id: u8) -> &'static [usize; 5] {
+        if self.frames()[usize::from(id & 1)] & 0x80 != 0 {
+            &AIM_FOOT_CHAIN
+        } else {
+            &AIM_OTHER_FOOT_CHAIN
+        }
+    }
+
+    /// `At_tbl_top`'s sequence: how many ticks its shot looks for a body.
+    fn shot_ticks(&self) -> u8 {
+        if self.id == 6 { 3 } else { 1 }
+    }
+
+    /// The hand's point and calls of `pl_wNN_t2_move` on a frame of its clip.
+    fn shot_effects(&self, frame: u8) -> &'static [ShotEffect] {
+        const CASE: [ShotCall; 3] = [
+            (0x308_0900, None),
+            (0x308_0900, None),
+            (0x200_0900, Some(0x694)),
+        ];
+        const MAGNUM_CASE: &[ShotEffect] = &[ShotEffect {
+            point: [0x14A, 0x32, 0],
+            calls: &CASE,
+        }];
+        const SHOTGUN_CASE: &[ShotEffect] = &[ShotEffect {
+            point: [0xB8, 0x22E, -0x50],
+            calls: &[(0x308_0D00, None), (0x202_0900, Some(0x514))],
+        }];
+        const SHOTGUN_SMOKE: &[ShotEffect] = &[ShotEffect {
+            point: [0xB8, 0x21A, -0x50],
+            calls: &[(0x308_0D00, None)],
+        }];
+        match (self.id, frame) {
+            (2 | 3, 1) => &[ShotEffect {
+                point: [0x8A, 0x267, 8],
+                calls: &[(0x30A_0E00, None), (0x100_0E00, None)],
+            }],
+            (2, 3) => &[ShotEffect {
+                point: [0x15E, 0x28, -15],
+                calls: &[
+                    (0x308_0900, None),
+                    (0x308_0900, None),
+                    (0x200_0700, Some(0x514)),
+                ],
+            }],
+            (3, 3) => &[ShotEffect {
+                point: [0xA0, 200, 0x3C],
+                calls: &[
+                    (0x308_0900, None),
+                    (0x308_0900, None),
+                    (0x200_0700, Some(0x514)),
+                ],
+            }],
+            (5, 1) => &[ShotEffect {
+                point: [0x6E, 0x29E, -10],
+                calls: &[(0x30A_1400, None), (0x100_1D00, None)],
+            }],
+            (6, 1) => &[
+                ShotEffect {
+                    point: [0x82, 900, -10],
+                    calls: &[(0x30A_1800, None), (0x100_2000, None)],
+                },
+                ShotEffect {
+                    point: [0x82, 0x44C, -10],
+                    calls: &[(0x102_3000, None)],
+                },
+            ],
+            (5 | 6, 4) => MAGNUM_CASE,
+            (7, 1) => &[
+                ShotEffect {
+                    point: [0x96, 0x514, 0],
+                    calls: &[(0x100_1D00, None), (0x104_1000, None), (0x30C_1800, None)],
+                },
+                ShotEffect {
+                    point: [0x96, 0x708, 0],
+                    calls: &[(0x30E_1000, None), (0x102_5000, None)],
+                },
+                ShotEffect {
+                    point: [0x96, 0x8FC, 0],
+                    calls: &[(0x30E_1D00, None)],
+                },
+            ],
+            (7, 0x1A) | (8, 5) => SHOTGUN_CASE,
+            (7, 0x1B) | (8, 6) => SHOTGUN_SMOKE,
+            (8, 1) => &[
+                ShotEffect {
+                    point: [0x30C, 0x532, 0],
+                    calls: &[
+                        (0x100_2900, None),
+                        (0x104_1600, None),
+                        (0x105_4000, None),
+                        (0x30C_1600, None),
+                    ],
+                },
+                ShotEffect {
+                    point: [0x3BF, 0x65E, 0],
+                    calls: &[(0x30E_0E00, None), (0x104_1800, None)],
+                },
+                ShotEffect {
+                    point: [0x4E5, 0x852, 0],
+                    calls: &[(0x30E_1600, None), (0x103_5900, None), (0x104_1A00, None)],
+                },
+                ShotEffect {
+                    point: [0x646, 0xAAA, 0],
+                    calls: &[(0x30E_2000, None)],
+                },
+            ],
+            _ => &[],
+        }
     }
 }
+
+/// One point of a `pl_wNN_t2_move`, and the `Esp_call`s made at it.
+struct ShotEffect {
+    point: [i32; 3],
+    calls: &'static [ShotCall],
+}
+
+/// An `Esp_call`'s word of kind, row and size, and what to add to the player's
+/// facing for its direction.
+type ShotCall = (u32, Option<i16>);
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
 pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {
@@ -1337,7 +1489,8 @@ impl Mover<'_, '_> {
     /// `pl_mv05_w1`: the handguns' stance. `Status_flg`'s top bits hold the tilt.
     fn pl_mv_aim(&mut self, key: u16) {
         // `Foot_set_pl` reads last tick's world matrix from the parts.
-        let planted = self.foot_position();
+        let chain = self.tick.weapon.foot_chain(self.tick.id);
+        let planted = self.chain_position(chain);
         match self.work.routine[2] {
             0 => self.aim_raise(key),
             1 => self.aim_hold(key),
@@ -1351,8 +1504,12 @@ impl Mover<'_, '_> {
             }
             _ => {}
         }
-        if self.work.spd[0] == 0 && (self.work.routine[2] != 0 || self.work.hokan == 0) {
-            self.foot_set(planted);
+        if self.work.spd[0] == 0
+            && (self.work.routine[2] != 0 || self.work.hokan == 0)
+            && let (Some(planted), Some(foot)) = (planted, self.chain_position(chain))
+        {
+            self.player.pos[0] += planted[0] - foot[0];
+            self.player.pos[2] += planted[2] - foot[2];
         }
     }
 
@@ -1737,12 +1894,12 @@ impl Mover<'_, '_> {
         if self.joint_move() {
             self.work.routine[3] += 1;
         }
-        if self.work.move_cnt > AIM_TILT_DOWN_FRAME && key & KEY_TILT_DOWN != 0 {
+        if self.work.move_cnt > self.tick.weapon.tilt_down_frame() && key & KEY_TILT_DOWN != 0 {
             self.aim_stage(1);
             self.set_tilt(TILT_DOWN);
             return;
         }
-        if self.work.move_cnt > AIM_TILT_UP_FRAME && key & KEY_TILT_UP != 0 {
+        if self.work.move_cnt > self.tick.weapon.tilt_up_frame() && key & KEY_TILT_UP != 0 {
             self.aim_stage(1);
             self.set_tilt(TILT_UP);
         }
@@ -1759,15 +1916,7 @@ impl Mover<'_, '_> {
     /// `hit_scan_ck` and `Weapon_at_ck`. A handgun's shot has only its first frame.
     fn shoot(&mut self) {
         let weapon = self.tick.weapon.id;
-        let hand = self
-            .part_point(HAND_PART, [0; 3])
-            .unwrap_or(self.player.pos);
-        let level = crate::weapon2::hit_scan_ck(
-            self.tick.id,
-            self.player.pos[1],
-            self.work.parts0_y,
-            hand[1],
-        );
+        let level = self.work.shot_level;
         let shooter = crate::weapon2::Shooter {
             pos: self.player.pos,
             neck: self.work.neck.position.unwrap_or(self.player.pos),
@@ -1849,20 +1998,46 @@ impl Mover<'_, '_> {
             };
             self.aim_clip(clip);
             self.work.noise |= 1;
-            self.shoot();
+            let hand = self
+                .part_point(HAND_PART, [0; 3])
+                .unwrap_or(self.player.pos);
+            self.work.shot_level = crate::weapon2::hit_scan_ck(
+                self.tick.id,
+                self.tick.weapon.id,
+                self.player.pos[1],
+                self.work.parts0_y,
+                hand[1],
+            );
+            self.work.shot_ticks = self.tick.weapon.shot_ticks();
             self.work.fired = true;
             self.work.spd = [0; 3];
         }
+        if self.work.shot_ticks > 0 {
+            self.work.shot_ticks -= 1;
+            self.shoot();
+        }
         self.aim_turn(key, AIM_FIRE_TURN);
-        if key & KEY_AIM == 0 && self.work.move_cnt > AIM_FIRE_CANCEL_FRAME {
+        if key & KEY_AIM == 0 && self.work.move_cnt > self.tick.weapon.fire_cancel_frame() {
             self.aim_stage(1);
             self.work.spd = [0; 3];
             return;
         }
         self.shot_effects();
-        if self.joint_move() {
+        let kicks = matches!(self.tick.weapon.id, 6 | 8) && self.tick.id != 0xB;
+        if kicks {
+            self.spd_get();
+        }
+        let ended = self.joint_move();
+        if self.tick.weapon.id == 7 && self.work.now_seq & FRAME_SOUND != 0 {
+            self.player
+                .queue_sound(((self.work.now_seq & FRAME_SOUND_SLOT) >> 16) as u16);
+        }
+        if ended {
             self.aim_stage(1);
             self.work.spd = [0; 3];
+        }
+        if kicks {
+            self.add_speed_xz();
         }
     }
 
@@ -1872,25 +2047,20 @@ impl Mover<'_, '_> {
     /// called early to see.
     fn shot_effects(&mut self) {
         let frame = self.work.move_cnt.wrapping_add(1);
-        let (kind_rows, size, point): (&[(u8, u8)], u16, [i32; 3]) = match frame {
-            1 => (&[(3, 0xA), (1, 0)], 0xE00, [0x8A, 0x267, 8]),
-            3 if self.tick.weapon.id == 3 => (&[(3, 8), (3, 8), (2, 0)], 0x900, [0xA0, 200, 0x3C]),
-            3 => (&[(3, 8), (3, 8), (2, 0)], 0x900, [0x15E, 0x28, -15]),
-            _ => return,
-        };
-        let Some(at) = self.part_point(SHOT_PART, point) else {
-            return;
-        };
         let angle = self.player.angle as i16;
-        for &(kind, row) in kind_rows {
-            let case = kind == 2;
-            self.work.effects.push(EffectCall {
-                kind,
-                row,
-                size: if case { 0x700 } else { size },
-                dir: if case { angle.wrapping_add(0x514) } else { 0 },
-                at: at.map(|axis| axis as i16),
-            });
+        for effect in self.tick.weapon.shot_effects(frame) {
+            let Some(at) = self.part_point(SHOT_PART, effect.point) else {
+                continue;
+            };
+            for &(word, dir) in effect.calls {
+                self.work.effects.push(EffectCall {
+                    kind: (word >> 24) as u8,
+                    row: (word >> 16) as u8,
+                    size: word as u16,
+                    dir: dir.map_or(0, |dir| angle.wrapping_add(dir)),
+                    at: at.map(|axis| axis as i16),
+                });
+            }
         }
     }
 
@@ -3079,6 +3249,55 @@ pub fn set_member(work: &mut Work, member: u8, value: i32) -> bool {
 
 /// `Type`'s bit that keeps `Game_loop` from calling `Player_move` at all.
 pub const KIND_NOT_MOVED: u16 = 0x8000;
+
+#[cfg(test)]
+mod weapon_tests {
+    use super::*;
+
+    fn weapon(id: u8) -> Weapon {
+        Weapon {
+            id,
+            loaded: true,
+            spare: true,
+        }
+    }
+
+    #[test]
+    fn each_gun_has_its_own_timing_and_leg() {
+        assert!([2, 3, 5, 6, 7, 8].iter().all(|&id| weapon(id).aims()));
+        assert!(![0, 1, 4, 9, 13].iter().any(|&id| weapon(id).aims()));
+        assert_eq!(weapon(2).fire_cancel_frame(), 8);
+        assert_eq!(weapon(7).fire_cancel_frame(), 28);
+        assert_eq!(weapon(8).tilt_down_frame(), 8);
+        assert_eq!(weapon(5).foot_chain(0), &AIM_FOOT_CHAIN);
+        assert_eq!(weapon(7).foot_chain(0), &AIM_OTHER_FOOT_CHAIN);
+    }
+
+    #[test]
+    fn the_big_magnum_looks_for_a_body_longer() {
+        assert_eq!(weapon(5).shot_ticks(), 1);
+        assert_eq!(weapon(6).shot_ticks(), 3);
+    }
+
+    #[test]
+    fn each_gun_has_its_own_flash_and_case() {
+        let calls = |id: u8, frame: u8| -> usize {
+            weapon(id)
+                .shot_effects(frame)
+                .iter()
+                .map(|effect| effect.calls.len())
+                .sum()
+        };
+        assert_eq!(calls(2, 1), 2);
+        assert_eq!(calls(5, 1), 2);
+        assert_eq!(calls(6, 1), 3);
+        assert_eq!(calls(7, 1), 6);
+        assert_eq!(calls(8, 1), 10);
+        assert_eq!(calls(7, 0x1A), 2);
+        assert_eq!(calls(8, 5), 2);
+        assert_eq!(calls(2, 5), 0);
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -635,6 +635,39 @@ impl Effects {
                 this.velocity[0] = this.velocity[0].wrapping_neg();
                 self.bounce(index);
             }
+            // `Esp_08`: the next block, scattered. `+0x44` and `+0x46` aren't
+            // used by anything drawn, but drawing them moves the stream.
+            8 => {
+                self.next_block(index, false);
+                let wider = u16::from(self.rnd() % 5) << 9;
+                let on = self.rnd() & 1;
+                self.rnd();
+                self.rnd();
+                let this = self.slots[index];
+                let frame = this.frame.wrapping_add(on);
+                let delay = self
+                    .bank
+                    .sprites
+                    .get(&this.kind)
+                    .map_or(0, |s| s.frame(frame)[2]);
+                let this = &mut self.slots[index];
+                this.scale[0] = this.scale[0].wrapping_add(wider);
+                this.frame = frame;
+                this.delay = delay;
+                for (base, by) in this
+                    .base
+                    .iter_mut()
+                    .zip([this.start, this.count, this.step])
+                {
+                    *base = base.wrapping_add(i16::from(by as i8));
+                }
+            }
+            // `Esp_14`: gone on touching the ground.
+            0x14 => {
+                if Self::ground(sca, slot.pos).blocked {
+                    self.slots[index].kill();
+                }
+            }
             // `Esp_19` puts out a fire in water, which isn't ported.
             0x19 => {}
             _ => {
