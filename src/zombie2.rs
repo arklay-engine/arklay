@@ -58,7 +58,7 @@ const FLOOR_HOLDS: [u16; 16] = [
 ];
 
 /// The colour `Em10_Scenario` gives the shadow under a body.
-pub const POOL_COLOR: u32 = 0x00BF_BF10;
+pub const POOL_COLOR: u32 = 0x0010_BFBF;
 /// `Em10Dm00`'s `funcs_458795 + 0xb`: what a hit takes from `At_sce_no`, by weapon.
 const STAGGER: [i8; 5] = [0, 9, 15, 15, 35];
 
@@ -72,6 +72,9 @@ pub const BE_LOW: u32 = 0x400_0000;
 pub const BE_HIGH: u32 = 0x800_0000;
 const BE_NO_SCA: u32 = 8;
 /// The word at `+0x21a`.
+/// `At_em_no` when nothing's touching, and the player's number.
+pub const NO_BODY: u8 = 0xFF;
+pub const PLAYER_BODY: u8 = 0xFE;
 const FLAG_DOWN: u16 = 2;
 const FLAG_FACE_DOWN: u16 = 4;
 const FLAG_THROWN: u16 = 8;
@@ -82,6 +85,8 @@ const FLAG_NECK_STILL: u16 = 0x200;
 const FLAG_GUIDED: u16 = 0x400;
 const FLAG_BURNING: u16 = 0x1000;
 const FLAG_SMOKING: u16 = 0x8000;
+/// `FUN_00453510`'s `|= 0x80` when the crawler keeps its head.
+const FLAG_HEAD_LEFT: u16 = 0x80;
 /// `Status_flg`'s bit: `Root_ck`'s line to the player is clear.
 const STATUS_IN_SIGHT: u16 = 0x800;
 /// `Now_seq`'s bits.
@@ -158,6 +163,7 @@ fn square_root0(value: i32) -> i32 {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Zombie {
     pub life: i16,
+    at_em_no: u8,
     /// The first byte at `+0x218`: the walks' clip.
     walk: u8,
     /// `+0x21a`.
@@ -261,6 +267,20 @@ pub fn spawned(slot: u8, floor: u8, model_type: u8) -> Zombie {
     }
 }
 
+impl Zombie {
+    /// What `FUN_00453510` and `FUN_0045a880` check of a zombie before they throw
+    /// it back: alive, standing, not thrown already. `Type`'s `0x2000` is a
+    /// zombie on the floor.
+    pub fn can_be_knocked(&self, kind: u16) -> bool {
+        self.life >= 0 && kind & 1 == 0 && kind & 0x2000 == 0 && self.flags & FLAG_THROWN == 0
+    }
+
+    /// `+0x16b`: which way the zombie goes.
+    pub fn knocked(&mut self, back: bool) {
+        self.timers.3 = i8::from(back);
+    }
+}
+
 /// The rest of the game, as a zombie sees it.
 pub struct World<'a> {
     pub player: [i32; 3],
@@ -270,6 +290,16 @@ pub struct World<'a> {
     pub player_clip: u8,
     /// The player's `+0x1d3`: an enemy has hold of them, or is about to.
     pub lock: &'a mut u8,
+    pub slot: usize,
+    pub pl: &'a mut Work,
+    pub player_angle: u16,
+    pub player_life: &'a mut i16,
+    /// `Gacha_ch`: a button mashed this tick.
+    pub gacha: bool,
+    /// `Id`, which picks how a crawler's end looks.
+    pub player_id: u8,
+    /// The slots this zombie's stumble ran into.
+    pub knocks: Vec<u8>,
     /// `WORD_00989eee`: the noises the player made.
     pub noise: u16,
     pub rnd: &'a mut Rnd,
@@ -442,6 +472,7 @@ impl Em<'_, '_, '_> {
     /// `Em10_Damage`. Only the handguns reach here: the other weapons' branches,
     /// which light and freeze it, aren't ported.
     fn em10_damage(&mut self) {
+        self.let_go();
         if self.kind() & 1 != 0 {
             self.dm_crawling();
             return;
@@ -806,6 +837,7 @@ impl Em<'_, '_, '_> {
 
     /// `Em10_Die`.
     fn em10_die(&mut self) {
+        self.let_go();
         self.z.flags &= !FLAG_NECK_STILL;
         if self.kind() & 1 != 0 {
             self.die_crawling();
@@ -1073,9 +1105,12 @@ impl Em<'_, '_, '_> {
     fn oba_ck_em(&mut self) {
         let pos = self.mover.player.pos;
         self.z.atd.at = [pos[0], pos[1] + i32::from(self.z.atd.ofs_y), pos[2]];
+        self.z.at_em_no = NO_BODY;
         for other in self.world.bodies {
             let body = &mut self.mover.player.pos;
-            oba_hit(other, *self.be_flg, &mut self.z.atd, body);
+            if oba_hit(other, *self.be_flg, &mut self.z.atd, body) {
+                self.z.at_em_no = other.slot;
+            }
         }
     }
 
@@ -1091,6 +1126,14 @@ impl Em<'_, '_, '_> {
             let [old_x, old_z] = body.collision_mirror;
             let prev = [old_x, body.pos[1], old_z];
             let resolved = crate::sca::resolve_masked(sca, MASK, prev, body.pos, radius);
+            // `Sca_ck_info`'s push moves what `Null_pos_set` adds to as well.
+            let (dx, dz) = (resolved.pos[0] - body.pos[0], resolved.pos[2] - body.pos[2]);
+            let base = &mut self.mover.work.base;
+            base[0] = base[0].wrapping_add(dx as i16);
+            base[2] = base[2].wrapping_add(dz as i16);
+            // It moves the body through `Atd`, which others then push against.
+            self.z.atd.at[0] += dx;
+            self.z.atd.at[2] += dz;
             body.pos = resolved.pos;
             self.z.sca_info = u32::from(resolved.hit);
         }
@@ -1346,6 +1389,7 @@ impl Em<'_, '_, '_> {
                 2 => self.look_flat(),
                 _ => {}
             }
+            let state = self.work().routine[1];
             match state {
                 0 => self.mv_crawl(),
                 1 => self.mv_grab(),
@@ -1361,12 +1405,14 @@ impl Em<'_, '_, '_> {
             0xC => self.look_lunge(),
             _ => {}
         }
+        let state = self.work().routine[1];
         match state {
             0 => self.mv_stand(),
             1 => self.mv_walk(),
             2 => self.mv_chase(),
             3 => self.mv_grab(),
             5 => self.mv_floor(),
+            6 => self.mv_drop_body(),
             7 => self.mv_lying(),
             8 => self.mv_eat(),
             9 => self.mv_thrown(),
@@ -1502,6 +1548,11 @@ impl Em<'_, '_, '_> {
             && self.z.floor == self.world.player_floor
         {
             self.reach_for_player(3);
+        }
+        // The player's body, once `Life` holds its `FUN_0045b070` mark.
+        if *self.world.player_life == i16::MIN && narrow == 0 && distance < 1000 {
+            self.work().kind |= TYPE_HELD;
+            self.state(8, 6);
         }
     }
 
@@ -1747,12 +1798,229 @@ impl Em<'_, '_, '_> {
         }
     }
 
-    /// `FUN_00453510`, the grab. It waits for the player's side, so for now the
-    /// zombie lets go at once.
+    /// `FUN_00453510`: the zombie takes hold of the player and bites.
     fn mv_grab(&mut self) {
-        *self.world.lock &= !0x80;
-        let next = if self.kind() & 1 != 0 { 0 } else { 1 };
-        self.state(next, 0);
+        const CLIP: [u8; 2] = [0xB, 0xE];
+        // The bite's frame and damage: standing, crawling; the second two rows
+        // are ids 0x11 and 0x17.
+        const BITE: [[(u8, i32); 2]; 2] = [[(0x10, 0x14), (1, 5)], [(0x10, 0x1E), (1, 10)]];
+        let low = usize::from(self.kind() & 1 != 0);
+        let tough = usize::from(matches!(self.mover.tick.id, 0x11 | 0x17));
+        let (bite_frame, damage) = BITE[tough][low];
+        let clip = CLIP[low];
+        if self.work().routine[2] == 0 {
+            self.work().routine[2] = 1;
+            self.clip(clip, 0, 0xF);
+            self.goto_player(0x800);
+            self.work().bank = Bank::Weapon;
+            self.world.pl.base = self.mover.set_base_pos();
+            let behind = self.cdir_player();
+            self.world.pl.routine = [player2::MODE_HELD, u8::from(behind) + 2 * low as u8, 0, 0];
+            self.world.pl.held_by = Some(self.world.slot);
+            *self.world.lock |= 0x80;
+            self.z.damage_cnt = 0xF;
+            *self.be_flg |= 0x1000;
+            self.world.pl.be_flg |= 0x1000;
+            if self.z.voice == 0 {
+                let slot = if self.rnd() & 1 == 0 { 0xB } else { 0xA };
+                self.moan(slot);
+            }
+        }
+        match self.work().routine[2] {
+            1 => {
+                self.mover.null_pos_set(0);
+                let ended = self.joint(Bank::Weapon, 0x100);
+                self.step(ended);
+            }
+            2 | 3 => {
+                if self.work().routine[2] == 2 {
+                    self.work().routine[2] = 3;
+                    self.z.timers.0 = 0x94;
+                    self.clip(clip + 1, 0, 0);
+                }
+                self.mover.null_pos_set(0);
+                self.joint(Bank::Weapon, 0x100);
+                let shaken = if self.world.gacha { 5 } else { 0 };
+                self.z.timers.0 = self.z.timers.0.wrapping_sub(shaken + 2);
+                if (self.z.timers.0 as i16) < 0 {
+                    self.work().routine[2] = 4;
+                    self.world.pl.routine[2] = 4;
+                }
+                if self.work().move_cnt == bite_frame {
+                    self.z.sounds.push(3);
+                    match self.pl_life_down(damage, low != 0) {
+                        1 => {
+                            self.work().routine[2] = 4;
+                            self.world.pl.routine[2] = 4;
+                            // The player's `Timer2`: one more blood as they go.
+                            self.world.pl.timers[2] = 1;
+                        }
+                        2 => {
+                            self.state(6, 0);
+                            let behind = self.cdir_player();
+                            self.world.pl.routine =
+                                [player2::MODE_HELD_DIE, u8::from(behind), 0, 0];
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            4 | 5 => {
+                if self.work().routine[2] == 4 {
+                    self.work().routine[2] = 5;
+                    self.z.timers.0 = 0;
+                    self.z.timers.2 = 0;
+                    self.clip(clip + 2, 0, 7);
+                }
+                if self.z.flags & (FLAG_LOST_ARM | FLAG_LOST_OTHER_ARM) == 0
+                    && self.work().move_cnt == 3
+                    && low == 0
+                {
+                    self.maybe_lose_arm();
+                }
+                self.mover.null_pos_set(0);
+                let ended = self.joint(Bank::Weapon, 0x200);
+                self.step(ended);
+                if low != 0 {
+                    self.stomped();
+                } else if self.work().move_cnt == 7 {
+                    self.work().routine[2] = 7;
+                }
+            }
+            6 => {
+                self.z.flags &= !FLAG_FACE_DOWN;
+                self.work().routine = [7, 0, 0, 0];
+                self.z.life = -1;
+                *self.be_flg = (*self.be_flg & !0x800_0000) | 0x400_0000;
+                self.z.damage_cnt |= 0x80;
+            }
+            7 | 8 => {
+                if self.work().routine[2] == 7 {
+                    self.spd(Bank::Weapon);
+                    self.spd(Bank::Weapon);
+                    self.work().routine[2] = 8;
+                }
+                self.spd(Bank::Weapon);
+                let ended = self.joint(Bank::Weapon, 0x200);
+                self.work().spd[0] = self.work().spd[0].wrapping_sub(0x1E);
+                self.step(ended);
+                self.mover.add_speed_xz();
+                if self.work().move_cnt == 0x16 {
+                    let shift = self.rnd() & 3;
+                    let draw = self.rnd();
+                    if (draw >> shift) & 0xF != 2 {
+                        self.falls_after_shove();
+                        return;
+                    }
+                }
+                let count = self.work().move_cnt;
+                if count > 6 && count < 0x19 && self.z.at_em_no != NO_BODY {
+                    self.world.knocks.push(self.z.at_em_no);
+                }
+            }
+            9 => self.state(0, 0),
+            _ => {}
+        }
+    }
+
+    /// `Cdir_ck` on the player: they face the same way as this body.
+    fn cdir_player(&mut self) -> bool {
+        let mine = self.mover.player.angle;
+        self.world
+            .player_angle
+            .wrapping_sub(mine)
+            .wrapping_add(0x400)
+            & 0xFFF
+            < 0x800
+    }
+
+    /// `Pl_life_down`. `hard_mode` and `censorship_off` are the title menu's,
+    /// which leaves them 0.
+    fn pl_life_down(&mut self, down: i32, low: bool) -> u8 {
+        let (left, near_death, result) =
+            life_down(*self.world.player_life, down, low, self.world.pl.near_death);
+        *self.world.player_life = left;
+        self.world.pl.near_death = near_death;
+        if result == 2 {
+            *self.world.lock |= 0x80;
+        }
+        result
+    }
+
+    /// `FUN_00453510`'s arm coming off in the shove: `Rnd`'s roll, and the side.
+    fn maybe_lose_arm(&mut self) {
+        let shift = self.rnd() & 3;
+        let draw = self.rnd();
+        if (draw >> shift) & 0xF != 0 {
+            return;
+        }
+        let behind = self.cdir_player();
+        let draw = self.rnd();
+        let (flag, part) = if behind || draw & 2 != 0 {
+            (FLAG_LOST_ARM, 9)
+        } else {
+            (FLAG_LOST_OTHER_ARM, 12)
+        };
+        self.z.flags |= flag;
+        for hidden in part..part + 3 {
+            player2::set_part_flags(self.work(), hidden as u8, 0);
+        }
+    }
+
+    /// The shove's end for a crawler: which of two ends it gets goes by the
+    /// player's `Id`, and it bleeds on odd frames either way.
+    fn stomped(&mut self) {
+        const LEFT_ITS_HEAD: u8 = 0x1B;
+        let count = self.work().move_cnt;
+        let id = self.world.player_id;
+        if (id & 1 == 0 && id < 0xC) || matches!(id, 0xC | 0xD) {
+            if count == 0x16 {
+                player2::set_part_flags(self.work(), 8, 0);
+                let dir = self.angle();
+                self.blood(0, 0x1000, dir, 8, [0, -600, 0]);
+                self.z.sounds.push(2);
+            }
+        } else if count == LEFT_ITS_HEAD {
+            self.z.flags |= FLAG_HEAD_LEFT;
+            self.z.sounds.push(8);
+        }
+        if count > 0x16 && count < 0x2A && count & 1 != 0 {
+            let rnd = i32::from(self.rnd());
+            let dir = (rnd * 4 - 0x200 + i32::from(self.angle())) as i16;
+            self.blood(0, 0x1000, dir, 8, [0, 100, 0]);
+        }
+    }
+
+    /// `FUN_00453510`'s stumble ending on the floor.
+    fn falls_after_shove(&mut self) {
+        self.work().routine = [1, 5, 1, 0];
+        let sce = self.rnd() & 0xF;
+        self.work().kind |= 0x2000;
+        self.z.at_sce_no = sce as i8 + 0x10;
+        self.z.timers.2 = 1;
+        self.clip(2, 0x14, 10);
+        self.z.flags = (self.z.flags & !FLAG_THROWN) | 0x206;
+        *self.be_flg = (*self.be_flg & !0x800_0000) | 0x400_0000;
+        self.z.damage_cnt |= 0x80;
+        self.z.at_obj_no = 0;
+        self.z.timers.3 = 0;
+        let slot = if self.rnd() & 1 == 0 { 0xD } else { 0xC };
+        self.z.sounds.push(slot);
+        self.z.timers.0 = 1;
+    }
+
+    /// `Em10_Damage` and `Em10_Die`'s start: a shot lets go of the player.
+    fn let_go(&mut self) {
+        if self.world.pl.routine[0] == player2::MODE_HELD
+            && self.world.pl.held_by == Some(self.world.slot)
+        {
+            *self.world.lock &= 0x7F;
+            self.world.pl.neck.flags &= 0xED;
+            self.world.pl.routine = [1, 0, 0, 0];
+            self.world.pl.bank = Bank::Weapon;
+            self.world.pl.be_flg &= !0x1004;
+            *self.be_flg &= !0x1004;
+        }
     }
 
     /// `FUN_00453c50`.
@@ -2015,6 +2283,30 @@ impl Em<'_, '_, '_> {
         if self.kind() & TYPE_HELD == 0 {
             self.work().routine[2] = 2;
         }
+    }
+
+    /// `FUN_00454520`: lets the dead player's body down, then eats it.
+    fn mv_drop_body(&mut self) {
+        match self.work().routine[2] {
+            0 => {
+                self.clip(0x18, 0, 0xF);
+                self.work().routine[2] = 1;
+                self.world.pl.base = self.mover.set_base_pos();
+                let slot = if self.rnd() & 1 == 0 { 0xB } else { 0xA };
+                self.moan(slot);
+                self.z.damage_cnt |= 0x80;
+            }
+            1 => {}
+            2 => {
+                self.work().kind |= TYPE_HELD;
+                self.state(8, 0);
+                return;
+            }
+            _ => return,
+        }
+        self.mover.null_pos_set(0);
+        let ended = self.joint(Bank::Weapon, 0x100);
+        self.step(ended);
     }
 
     /// `FUN_00454670`: eating, or over the player's body.
@@ -2681,9 +2973,50 @@ fn crosses_height(
     !(first & second >= 0 && third & fourth >= 0)
 }
 
+/// `Pl_life_down` with `hard_mode` and `censorship_off` at 0: the life left,
+/// the near-death bit, and 1 for the bite that leaves the player on their last
+/// legs or 2 for the one that kills.
+fn life_down(life: i16, down: i32, low: bool, near_death: bool) -> (i16, bool, u8) {
+    let mut down = down;
+    if life > 0x78 && down < 0x29 {
+        down += down >> 1;
+    }
+    let left = life.wrapping_sub(down as i16);
+    if left >= 0 {
+        return (left, near_death, 0);
+    }
+    if low || (left >= -0xE && !near_death) {
+        // Setting the bit writes `+0x154` as a whole word, over the life.
+        return (0, true, 1);
+    }
+    (left, near_death, 2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_bite_takes_half_again_from_a_healthy_player() {
+        assert_eq!(life_down(200, 20, false, false), (170, false, 0));
+        assert_eq!(life_down(120, 20, false, false), (100, false, 0));
+    }
+
+    #[test]
+    fn the_first_lethal_bite_leaves_the_player_at_nothing() {
+        assert_eq!(life_down(10, 20, false, false), (0, true, 1));
+    }
+
+    #[test]
+    fn a_bite_kills_once_the_player_is_near_death_or_it_goes_deep() {
+        assert_eq!(life_down(0, 20, false, true), (-20, true, 2));
+        assert_eq!(life_down(10, 30, false, false), (-20, false, 2));
+    }
+
+    #[test]
+    fn a_crawlers_bite_never_kills() {
+        assert_eq!(life_down(0, 30, true, true), (0, true, 1));
+    }
 
     #[test]
     fn a_shot_takes_life_and_starts_the_damage_or_the_dying_state() {

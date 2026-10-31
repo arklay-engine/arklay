@@ -54,7 +54,7 @@ and `street_wander.txt` is a random walk through room 100.
 
 `--keep-enemy SLOT` leaves that slot running, for a character arklay has. Room 101's scene wants `--no-enemies --keep-enemy 0`: the input `first_door.txt` over 4500 ticks, compared with `--fields room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,em`, matches from the room's first line. The zombies can't touch the player in arklay yet, and the street's would attack the route, so this doesn't show the scene with them.
 
-`street_shoot.txt` aims the handgun in room 100 and fires until it's empty, with the zombies running. Over 470 ticks, compared with `--fields rng,zm1`, one zombie's whole fight matches: damage, death and corpse. Slots 0, 2 and 3 drift from about tick 430, when the player's first pushed against them, and `rng` from 464, the first grab. Both are `Oba_ck_em2` and the grab, not ported yet.
+`street_shoot.txt` aims the handgun in room 100 and fires until it's empty, with the zombies running. Over 2000 ticks, with the input long since ended, the zombies come for the player and kill them: damage, death and corpses, six grabs with bites and shove-offs, the player dying in a zombie's hands, the others eating the body and `Die`'s stops. Everything matches through tick 1764 (`--fields rng,p.x,p.z,p.angle,p.beh,p.as,p.hp,zm0,zm1,zm2,zm3,zm4,zm5`), apart from slot 1's one angle on the first tick. At 1765 `Die_blood_move_main` starts drawing `Rnd` for its sprites, which aren't ported yet.
 
 `--fields rng,zm0,zm1,zm2,zm3,zm4,zm5` compares `Rnd` and each zombie's position, angle, routine, motion, `Type` and life, from the trace's `zm` field. With no input, room 100 matches from t=1 to t=193, when one reaches Leon.
 

@@ -22,6 +22,7 @@ pub mod convert;
 pub mod convert_mod;
 pub mod convert_re2;
 pub mod demo;
+pub mod die2;
 pub mod door;
 pub mod door2;
 pub mod draw2d;

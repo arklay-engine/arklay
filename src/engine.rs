@@ -2046,6 +2046,8 @@ struct GameSession {
     /// The room-entry fade the original arms on every gameplay (re)entry after
     /// a room load: type 2, accumulator `0x7FFF` and a negative counter that
     /// steps the alpha down once per fixed tick.
+    /// RE2's game over, once it has started.
+    re2_die: Option<crate::die2::Die>,
     room_fade: transition::Fade,
     /// The alpha the room fade draws this frame: the accumulator *before* the
     /// tick's step, since the original draws and only then adds the counter
@@ -2580,6 +2582,7 @@ impl GameSession {
             cutscene_skip: None,
             cutscene_skip_music: None,
             cutscene_skip_burst: CUTSCENE_SKIP_BURST,
+            re2_die: None,
             room_fade: transition::Fade::inactive(),
             room_fade_draw: None,
             tween: Tween::default(),
@@ -3702,6 +3705,10 @@ impl GameSession {
         if self.death.finished || self.death_screen.is_some() {
             return;
         }
+        if self.game.is_re2_room {
+            self.tick_re2_die();
+            return;
+        }
         // The INVINCIBLE cheat never enters the game-over machine.
         if self.game.debug.invincible
             && self.death.is_idle()
@@ -3732,6 +3739,35 @@ impl GameSession {
             ui::death::DeathTick::OpenScreen => self.open_death_screen(pack),
             ui::death::DeathTick::Finished => self.finish_death(),
             ui::death::DeathTick::None => {}
+        }
+    }
+
+    /// RE2's game over, after the tick's routines: `Game_loop` starts `Die`
+    /// on the tick the player's life falls below zero.
+    fn tick_re2_die(&mut self) {
+        if self.re2_die.is_none() && self.game.entities[0].health < 0 && !self.game.debug.invincible
+        {
+            let held = self.game.re2.player.routine[0] == crate::player2::MODE_HELD_DIE;
+            self.re2_die = Some(crate::die2::Die::new(held));
+        }
+        let Some(die) = self.re2_die.as_mut() else {
+            return;
+        };
+        let out = die.tick(&mut self.game.re2);
+        match out.fade {
+            Some(crate::die2::DieFade::White(level)) => self.room_fade.set(1, 0, level),
+            Some(crate::die2::DieFade::WhiteClear) => self.room_fade.set(1, -0xBBC, 0x7444),
+            Some(crate::die2::DieFade::Black) => self.room_fade.set(2, 0x200, 0),
+            None => {}
+        }
+        if out.stop_music {
+            let place = self.game.re2_music_place();
+            for sequence in 0..3 {
+                self.game.re2.music.control([sequence, 2, 0, 0, 0], place);
+            }
+        }
+        if out.finished {
+            self.finish_death();
         }
     }
 
@@ -5946,7 +5982,7 @@ impl GameSession {
     /// original draws (the pre-step accumulator value).
     fn draw_room_fade(&mut self) {
         if let Some(overlay) = self.tween.fade(self.room_fade_draw) {
-            self.framebuffer.fade_to_black(overlay.alpha);
+            self.framebuffer.fade_to_color(overlay.color, overlay.alpha);
         }
     }
 
@@ -14038,6 +14074,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
     let room_anim = context.room.room_anim.as_ref();
     let targets = crate::character2::targets(context.game);
+    let held_bank = context.game.player_damage.clone();
     let tick = crate::player2::Tick {
         room: context.room,
         skeleton: &assets.emd.skeleton,
@@ -14045,6 +14082,9 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
             pld: (&assets.emd.clips, &assets.emd.keyframes),
             weapon: (&assets.emw.clips, &assets.emw.keyframes),
             room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
+            held: held_bank.as_ref().map_or(empty, |bank| {
+                (bank.clips.as_slice(), bank.keyframes.as_slice())
+            }),
         },
         input: pad,
         options: context.game.player_options,
@@ -14056,7 +14096,13 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         necks: context.game.re2.necks(),
         targets: &targets,
     };
-    let arrived = crate::player2::player_move(&mut context.game.re2.player, context.player, &tick);
+    let arrived = if crate::player2::is_held(&context.game.re2.player) {
+        crate::character2::player_held(context.game, context.player, &tick);
+        None
+    } else {
+        crate::player2::player_move(&mut context.game.re2.player, context.player, &tick)
+    };
+    crate::character2::oba_ck_em2(context.game, context.player);
     context.game.re2_settle_ammo();
     crate::character2::take_hit(context.game);
     if let Some(flag) = arrived {
@@ -14431,6 +14477,12 @@ fn tick_room_timed(
         );
         if resolution.code != 2 {
             context.player.collision_mirror = [resolution.pos[0], resolution.pos[2]];
+        }
+        if context.game.is_re2_room {
+            let moved = context.game.entities[0].pos;
+            let base = &mut context.game.re2.player.base;
+            base[0] = base[0].wrapping_add((resolution.pos[0] - moved[0]) as i16);
+            base[2] = base[2].wrapping_add((resolution.pos[2] - moved[2]) as i16);
         }
         context.player.pos = resolution.pos;
         context.game.entities[0].pos = context.player.pos;
