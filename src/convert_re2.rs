@@ -497,6 +497,7 @@ pub(crate) fn convert(
     copy_sound_banks(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_shadow(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_core_effects(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_init_table(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_doors(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_demos(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
@@ -1196,6 +1197,27 @@ fn copy_core_effects(
     let body = crate::esp2::core_container(&read(esp)?, &read(sheet)?)
         .with_context(|| format!("{}", esp.display()))?;
     tally.add(writer, "effect", crate::esp2::CORE_ENTRY, body)?;
+    Ok(())
+}
+
+/// `Common/Data/INIT_TBL.DAT`, the state a new game starts from.
+fn copy_init_table(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let files = files_in(layout.common(&["Data"]))?;
+    let Some(path) = files
+        .iter()
+        .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == "INIT_TBL"))
+    else {
+        if layout.common.is_some() {
+            warnings.push("no Common/Data/INIT_TBL.DAT; a new game has no room music".into());
+        }
+        return Ok(());
+    };
+    tally.add(writer, "game", crate::bgm2::INIT_TABLE_ENTRY, read(path)?)?;
     Ok(())
 }
 

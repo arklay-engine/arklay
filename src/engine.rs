@@ -2261,6 +2261,7 @@ impl GameSession {
         let mut game = new_game_state(pack, id, &loaded.room, options);
         game.is_re2_room = loaded.re2_vm.is_some();
         game.re2.scenario_b = scenario_b;
+        seed_re2_music_table(pack, &mut game, scenario_b);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
@@ -3637,6 +3638,16 @@ impl GameSession {
             let record = self.game.transition_door.take().unwrap_or_default();
             let door_yield = self.game.door_yield.take();
             if self.transition.is_none() {
+                if record.re2.is_some()
+                    && let Some(word) = transition
+                        .target
+                        .stage
+                        .checked_sub(1)
+                        .and_then(|stage| self.game.re2.bgm.get(stage, transition.target.room))
+                {
+                    let system = self.game.re2_music_place().system;
+                    self.game.re2.music.leave_room(word, system);
+                }
                 self.transition = Some(start_transition(
                     pack,
                     &record,
@@ -5550,6 +5561,10 @@ impl GameSession {
     /// the timeline after the frame was presented.
     fn tick_transition(&mut self, pack: &Pack, skip: bool) {
         self.tween.advance();
+        // `Snd_se_call` goes on through a door, so the music fades.
+        if self.game.is_re2_room {
+            bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+        }
         let Some(mut session) = self.transition.take() else {
             return;
         };
@@ -13723,6 +13738,7 @@ fn new_game_state(
         game.max_health = health;
         game.set_health_copy(health);
     }
+    seed_re2_music_table(pack, &mut game, false);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -13743,6 +13759,18 @@ fn new_game_state(
     // tab highlights it.
     game.mark_room_visited(id);
     game
+}
+
+/// A new RE2 game's room music, from `INIT_TBL.DAT`.
+fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: bool) {
+    let row = usize::from(game.id.player_flag & 1) * 2 + usize::from(scenario_b);
+    if let Some(table) = pack
+        .read(crate::bgm2::INIT_TABLE_ENTRY)
+        .ok()
+        .and_then(|data| crate::bgm2::BgmTable::from_init_table(&data, row))
+    {
+        game.re2.bgm = table;
+    }
 }
 
 /// Run a room's init script against `game`, then apply the room edits it
