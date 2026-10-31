@@ -10,6 +10,8 @@ MESSAGE_05 = "You can't carry any more."
 
 UI_SAVE_CHARACTER_0_NAME = "Leon"
 UI_SAVE_CHARACTER_1_NAME = "Claire"
+UI_SAVE_CHARACTER_0_FULL_NAME = "Leon S. Kennedy"
+UI_SAVE_CHARACTER_1_FULL_NAME = "Claire Redfield"
 ITEM_00_NAME = "None"
 ITEM_01_NAME = "Knife"
 ITEM_02_NAME = "Handgun Leon"

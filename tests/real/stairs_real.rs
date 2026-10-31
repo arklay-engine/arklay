@@ -505,7 +505,7 @@ fn main_hall_stairwell_door_runs_the_climb_and_lands_in_106() {
 
     // Start where the arbitrary room entry places the player (106's stair
     // arrival), not on a hand-picked point in front of the staircase.
-    let (entry, _) =
+    let (entry, _, _) =
         arklay::engine::room_entry_placement(&pack, &room, &game, id).expect("203 room entry");
     assert_eq!(entry, [17100, 0, 25300]);
     let mut player = player::spawn(id, &room);
@@ -571,7 +571,7 @@ fn arbitrary_start_lands_on_the_stair_landing_and_the_door_fires() {
     ] {
         let id = RoomId::parse(room).unwrap();
         let (room_state, mut game) = load(&pack, id);
-        let (pos, facing) = arklay::engine::room_entry_placement(&pack, &room_state, &game, id)
+        let (pos, facing, _) = arklay::engine::room_entry_placement(&pack, &room_state, &game, id)
             .unwrap_or_else(|| panic!("{room} has no room entry"));
         assert_eq!(pos, arrival, "{room} start position");
         assert_eq!(facing, angle, "{room} start angle");

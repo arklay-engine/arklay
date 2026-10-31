@@ -2733,12 +2733,27 @@ impl GameSession {
     /// already set. Runs after the room boot has built the door table and
     /// re-runs the camera switch-zone scan from the final position.
     fn place_room_entry(&mut self, pack: &Pack, id: RoomId) {
-        if let Some((pos, angle)) = room_entry_placement(pack, &self.loaded.room, &self.game, id) {
+        let mut door_cut = None;
+        if let Some((pos, angle, cut)) = room_entry_placement(pack, &self.loaded.room, &self.game, id)
+        {
             self.player.pos = pos;
             self.player.angle = angle;
+            door_cut = cut;
             self.game.sync_entity_from_player(&self.player);
         }
         self.rescan_room_camera();
+        if self.game.is_re2_room && !self.game.camera.locked {
+            // RE2's zones only lead out of the cut they're listed under, so a
+            // scan from cut 0 can't reach a placement several cuts away. A door
+            // names its arrival's cut (`Door_load`); without one, the zone
+            // holding the player does.
+            let room = &mut self.loaded.room;
+            let cut = door_cut.or_else(|| player::cut_holding(room, self.player.pos));
+            if let Some(cut) = cut.filter(|&cut| cut < room.cuts.len()) {
+                room.current_cut = cut;
+                self.game.set_camera_cut(cut);
+            }
+        }
     }
 
     /// Select the cut for the player's placement, as a room load does.
@@ -7024,7 +7039,7 @@ pub fn room_entry_placement(
     room: &RoomState,
     game: &game::GameState,
     target: RoomId,
-) -> Option<([i32; 3], u16)> {
+) -> Option<([i32; 3], u16, Option<usize>)> {
     let door = entry_door(&game.doors);
     if let Some(re2) = door.and_then(|door| door.re2) {
         let dest = RoomId {
@@ -7037,7 +7052,8 @@ pub fn room_entry_placement(
             back.re2
                 .is_some_and(|re2| re2.stage == target.stage && re2.room == target.room)
         })?;
-        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF));
+        let cut = back.re2.map(|re2| usize::from(re2.cut));
+        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, cut));
     }
     if let Some(door) = door
         && let Some(dest) = game.door_destination(target, door.next_room)
@@ -7049,9 +7065,9 @@ pub fn room_entry_placement(
             .flatten()
             .find(|back| game.door_destination(dest, back.next_room) == Some(target))
     {
-        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF));
+        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, None));
     }
-    fallback_room_entry(room, door)
+    fallback_room_entry(room, door).map(|(pos, angle)| (pos, angle, None))
 }
 
 /// The door the arbitrary start treats as the room's entry.
@@ -11517,9 +11533,9 @@ pub fn simulate_new_game(
     let placement = if pack_start_room(pack, character).is_some() {
         room_entry_placement(pack, &loaded.room, &game, id)
     } else {
-        Some(([NEW_GAME_POS_X, 0, NEW_GAME_POS_Z], NEW_GAME_ANGLE))
+        Some(([NEW_GAME_POS_X, 0, NEW_GAME_POS_Z], NEW_GAME_ANGLE, None))
     };
-    if let Some((pos, angle)) = placement {
+    if let Some((pos, angle, _)) = placement {
         player_state.pos = pos;
         player_state.angle = angle;
     }
@@ -30284,7 +30300,7 @@ off_0010:
             ..game::Door::default()
         });
 
-        let (pos, angle) = room_entry_placement(&pack, &room, &game, target).unwrap();
+        let (pos, angle, _) = room_entry_placement(&pack, &room, &game, target).unwrap();
         assert_eq!(pos, [500, 0, 1300], "dir 0: south of the first zone");
         assert_eq!(angle, 0xC00);
 
@@ -30298,7 +30314,7 @@ off_0010:
             kind: 1,
             flags: 0x300,
         });
-        let (pos, angle) = room_entry_placement(&pack, &room, &game, target).unwrap();
+        let (pos, angle, _) = room_entry_placement(&pack, &room, &game, target).unwrap();
         assert_eq!(pos, [500, 0, 500], "the zone centre");
         assert_eq!(angle, 0);
     }
