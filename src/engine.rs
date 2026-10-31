@@ -622,6 +622,7 @@ pub fn run_with_options(
                         re2_splayer: None,
                         re2_zombies: None,
                         re2_music: None,
+                        re2_die: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
                     })?;
@@ -2048,6 +2049,8 @@ struct GameSession {
     /// steps the alpha down once per fixed tick.
     /// RE2's game over, once it has started.
     re2_die: Option<crate::die2::Die>,
+    /// `Die_sprt_load`'s texture.
+    re2_die_sheet: Option<Image>,
     room_fade: transition::Fade,
     /// The alpha the room fade draws this frame: the accumulator *before* the
     /// tick's step, since the original draws and only then adds the counter
@@ -2583,6 +2586,7 @@ impl GameSession {
             cutscene_skip_music: None,
             cutscene_skip_burst: CUTSCENE_SKIP_BURST,
             re2_die: None,
+            re2_die_sheet: None,
             room_fade: transition::Fade::inactive(),
             room_fade_draw: None,
             tween: Tween::default(),
@@ -3706,7 +3710,7 @@ impl GameSession {
             return;
         }
         if self.game.is_re2_room {
-            self.tick_re2_die();
+            self.tick_re2_die(pack);
             return;
         }
         // The INVINCIBLE cheat never enters the game-over machine.
@@ -3744,7 +3748,7 @@ impl GameSession {
 
     /// RE2's game over, after the tick's routines: `Game_loop` starts `Die`
     /// on the tick the player's life falls below zero.
-    fn tick_re2_die(&mut self) {
+    fn tick_re2_die(&mut self, pack: &Pack) {
         if self.re2_die.is_none() && self.game.entities[0].health < 0 && !self.game.debug.invincible
         {
             let held = self.game.re2.player.routine[0] == crate::player2::MODE_HELD_DIE;
@@ -3759,6 +3763,43 @@ impl GameSession {
             Some(crate::die2::DieFade::WhiteClear) => self.room_fade.set(1, -0xBBC, 0x7444),
             Some(crate::die2::DieFade::Black) => self.room_fade.set(2, 0x200, 0),
             None => {}
+        }
+        // `Die` runs before the frame draws, so a fade it sets shows this tick.
+        if out.fade.is_some() {
+            self.room_fade_draw = self.room_fade.overlay();
+            self.room_fade.tick();
+        }
+        if out.set_enemies {
+            let player = self.game.entities[0].pos;
+            crate::die2::enemy_set(
+                self.game
+                    .re2
+                    .characters
+                    .0
+                    .iter_mut()
+                    .flatten()
+                    .map(|c| &mut **c),
+                player,
+            );
+        }
+        if out.load_sounds {
+            let player = u8::from(self.game.re2.flag(1, crate::scd2::host::STATUS_PLAYER));
+            self.re2_sounds
+                .banks
+                .load_core(pack, crate::die2::sound_bank(player));
+            self.re2_die_sheet = pack
+                .read(crate::die2::text_entry(player))
+                .and_then(|data| crate::die2::text_sheet(&data))
+                .inspect_err(|error| eprintln!("warning: no game over text: {error:#}"))
+                .ok();
+        }
+        if out.cry
+            && let Some(id) = crate::se2::SoundId::decode(crate::die2::CRY)
+        {
+            self.game
+                .re2
+                .sounds
+                .push(crate::scd2::host::SoundRequest { id, pos: [0; 3] });
         }
         if out.stop_music {
             let place = self.game.re2_music_place();
@@ -5980,8 +6021,59 @@ impl GameSession {
 
     /// Blend the room-entry fade over the frame just rendered, at the alpha the
     /// original draws (the pre-step accumulator value).
+    /// RE2's game over hides the room (`Bg_set_mode`, `Die_vcut_set`) for the
+    /// `Die_spr_*` text.
+    fn draw_re2_die(&mut self) {
+        let Some(die) = self.re2_die.as_ref().filter(|die| die.blackout()) else {
+            return;
+        };
+        let (width, height) = (
+            self.framebuffer.width as i32,
+            self.framebuffer.height as i32,
+        );
+        self.framebuffer
+            .fill_rect([0, 0, width, height], [0, 0, 0, 255]);
+        let (Some(text), Some(sheet)) = (die.text(), self.re2_die_sheet.as_ref()) else {
+            return;
+        };
+        let mut image = Image {
+            width: 320,
+            height: 240,
+            rgba: vec![0; 320 * 240 * 4],
+        };
+        text.draw(sheet, &mut image);
+        let left = (width - 320) / 2;
+        self.framebuffer.draw_rgba_sprite_blended(
+            &image,
+            [0, 0, 320, 240],
+            [left, 0, 320, 240],
+            0,
+            render::SpriteBlend::Add,
+        );
+    }
+
     fn draw_room_fade(&mut self) {
         if let Some(overlay) = self.tween.fade(self.room_fade_draw) {
+            // `Die_move_wait`'s `Fade_set` is in its adding mode.
+            if self.re2_die.is_some() && overlay.color == transition::FadeColor::White {
+                let (width, height) = (
+                    self.framebuffer.width as i32,
+                    self.framebuffer.height as i32,
+                );
+                let white = Image {
+                    width: 1,
+                    height: 1,
+                    rgba: vec![overlay.alpha, overlay.alpha, overlay.alpha, 0xFF],
+                };
+                self.framebuffer.draw_rgba_sprite_blended(
+                    &white,
+                    [0, 0, 1, 1],
+                    [0, 0, width, height],
+                    0,
+                    render::SpriteBlend::Add,
+                );
+                return;
+            }
             self.framebuffer.fade_to_color(overlay.color, overlay.alpha);
         }
     }
@@ -6320,6 +6412,10 @@ impl GameSession {
                 .game
                 .is_re2_room
                 .then(|| self.game.re2.music.trace_field()),
+            re2_die: self
+                .re2_die
+                .as_ref()
+                .and_then(crate::die2::Die::trace_field),
             entities,
             frame_hash: trace::frame_hash(frame),
         }
@@ -6556,6 +6652,7 @@ impl GameSession {
             // letterbox bars, so an overlapping fade and bar ramp composite
             // bars-over-fade. The death fade overlays the falling room last,
             // and the menu/message overlays stay above all of it.
+            self.draw_re2_die();
             self.draw_room_fade();
             self.draw_screen_intensity_bars();
             self.draw_death_fade();
