@@ -278,8 +278,11 @@ pub struct Work {
     pub dest: [i16; 2],
     /// `Plc_stop`'s saved routine.
     stopped: [u8; 4],
-    /// `Damage_cnt` and `Status_flg`, for `Pl_damage` and `Sce_Damage`.
-    damage_cnt: u8,
+    /// Part 0's `Workm`, as the last tick left it, for what an enemy has handed over.
+    pub(crate) root: Option<Matrix>,
+    /// `Damage_cnt`, and `Status_flg`, for `Pl_damage`, `Sce_Damage` and the
+    /// enemies: its top bit is also an enemy having hold of them.
+    pub(crate) damage_cnt: u8,
     status_flg: u16,
     /// A round was spent this tick (`Tama_decrease_i`), for the inventory.
     pub fired: bool,
@@ -298,8 +301,9 @@ pub struct Work {
     pub aim_target: Option<usize>,
     /// `Timer3` of the raise: it has been aimed again already.
     aimed_again: bool,
-    /// Last tick's `Key`, for `Key_trg`.
+    /// Last tick's `Key`, and `Key_trg`: what this tick's added to it.
     last_key: u16,
+    key_trg: u16,
     /// `Be_flg`'s bits that `Oba_ck_hit` reads.
     pub be_flg: u32,
     /// `DAT_0098a0a4`: the slot of the enemy that has hold of the player.
@@ -321,7 +325,8 @@ pub struct Work {
     pub noise: u8,
     /// `Esp_call`s this tick made, in order.
     pub effects: Vec<EffectCall>,
-    /// `Be_flg`'s level of the shot, and the ticks it still looks for a body.
+    /// `Be_flg`'s level of the shot, and a bit for each tick left of it that
+    /// looks for a body.
     shot_level: usize,
     shot_ticks: u8,
     /// The gun's line, for `Shoot_camera` to look along.
@@ -518,6 +523,7 @@ impl Default for Work {
             aim_target: None,
             aimed_again: false,
             last_key: 0,
+            key_trg: 0,
             be_flg: 1,
             held_by: None,
             base: [0; 3],
@@ -541,6 +547,7 @@ impl Default for Work {
             sce_free: [0; 2],
             dest: [0; 2],
             stopped: [0; 4],
+            root: None,
             damage_cnt: 0,
             status_flg: 0,
             fired: false,
@@ -721,9 +728,15 @@ impl Weapon {
         }
     }
 
-    /// `At_tbl_top`'s sequence: how many ticks its shot looks for a body.
+    /// `At_tbl_top`'s sequence: a bit for each tick of a shot, the lowest first,
+    /// on which it looks for a body.
     fn shot_ticks(&self) -> u8 {
-        if self.id == 6 { 3 } else { 1 }
+        match self.id {
+            6 => 0b111,
+            7 => 0b1_0101,
+            8 => 0b101_0101,
+            _ => 1,
+        }
     }
 
     /// The hand's point and calls of `pl_wNN_t2_move` on a frame of its clip.
@@ -837,6 +850,9 @@ type ShotCall = (u32, Option<i16>);
 
 /// `Player_move`. The result is the room flag a finished scripted walk raises.
 pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -> Option<u8> {
+    let key = key_word(&tick.input);
+    work.key_trg = key & !work.last_key;
+    work.last_key = key;
     if tick.stopped {
         return None;
     }
@@ -861,6 +877,7 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     }
     mover.pl_neck();
     mover.rot_neck();
+    mover.work.root = mover.part_matrix(0);
     mover.arrived
 }
 
@@ -884,6 +901,7 @@ pub fn player_held(
     mover.em10_held(held);
     mover.pl_neck();
     mover.rot_neck();
+    mover.work.root = mover.part_matrix(0);
 }
 
 /// Whether [`player_held`] runs the player, not [`player_move`].
@@ -895,7 +913,6 @@ pub fn is_held(work: &Work) -> bool {
 pub struct Held<'a> {
     pub holder: [i32; 3],
     pub rnd: &'a mut crate::zombie2::Rnd,
-    pub lock: &'a mut u8,
     pub life: &'a mut i16,
     /// `Be_flg`'s bits to clear from the holder: the hold has ended.
     pub released: bool,
@@ -1519,6 +1536,15 @@ impl Mover<'_, '_> {
         self.chain_position(&AIM_FOOT_CHAIN)
     }
 
+    /// `pSin_parts_ptr[0].Pos_y`: how far the pose has the root off the ground.
+    pub(crate) fn root_y(&self) -> i32 {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        self.player
+            .anim
+            .pose_keyframe(clips, keyframes)
+            .map_or(0, |pose| i32::from(pose.offset[1]))
+    }
+
     /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
     /// its pose.
     /// `Rot_neck_em`: the head turns toward `target`, within its limit, and only
@@ -1769,7 +1795,7 @@ impl Mover<'_, '_> {
         }))
     }
 
-    fn part_matrix(&self, part: usize) -> Option<Matrix> {
+    pub(crate) fn part_matrix(&self, part: usize) -> Option<Matrix> {
         fn chain_to(
             children: &[Vec<u8>],
             from: usize,
@@ -1794,6 +1820,16 @@ impl Mover<'_, '_> {
             return None;
         }
         self.chain_matrix(&chain)
+    }
+
+    /// A part's `M`: its own rotation and its place under its parent.
+    pub(crate) fn part_local(&self, part: usize) -> Option<Matrix> {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
+        Some(Matrix {
+            m: rot_matrix(*pose.rotations.get(part)?),
+            t: self.tick.skeleton.relative.get(part)?.map(i32::from),
+        })
     }
 
     fn chain_matrix(&self, chain: &[usize]) -> Option<Matrix> {
@@ -1884,12 +1920,10 @@ impl Mover<'_, '_> {
             );
             self.player.angle = goto(self.player.angle, to, AIM_ENEMY_TURN);
         }
-        if key & KEY_TILT_UP != 0 && self.work.last_key & KEY_TILT_UP == 0 && !self.work.aimed_again
-        {
+        if self.work.key_trg & KEY_TILT_UP != 0 && !self.work.aimed_again {
             self.em_ck(3000);
             self.work.aimed_again = true;
         }
-        self.work.last_key = key;
         self.aim_turn(key, AIM_RAISE_TURN);
         if self.joint_move() {
             self.work.routine[3] += 1;
@@ -1913,7 +1947,7 @@ impl Mover<'_, '_> {
             crate::weapon2::em_ck(self.tick.targets, sca, self.player.pos, neck, range);
     }
 
-    /// `hit_scan_ck` and `Weapon_at_ck`. A handgun's shot has only its first frame.
+    /// `hit_scan_ck` and `Weapon_at_ck`, on a tick the shot looks for a body.
     fn shoot(&mut self) {
         let weapon = self.tick.weapon.id;
         let level = self.work.shot_level;
@@ -2012,10 +2046,10 @@ impl Mover<'_, '_> {
             self.work.fired = true;
             self.work.spd = [0; 3];
         }
-        if self.work.shot_ticks > 0 {
-            self.work.shot_ticks -= 1;
+        if self.work.shot_ticks & 1 != 0 {
             self.shoot();
         }
+        self.work.shot_ticks >>= 1;
         self.aim_turn(key, AIM_FIRE_TURN);
         if key & KEY_AIM == 0 && self.work.move_cnt > self.tick.weapon.fire_cancel_frame() {
             self.aim_stage(1);
@@ -2483,7 +2517,7 @@ impl Mover<'_, '_> {
     /// [`released`].
     fn held_end(&mut self, held: &mut Held<'_>) {
         self.work.routine = [MODE_MOVE, 0, 0, 0];
-        *held.lock &= 0x7F;
+        self.work.damage_cnt &= 0x7F;
         self.work.neck.flags &= 0xED;
         self.work.be_flg &= !0x1004;
         self.work.bank = Bank::Weapon;
@@ -3030,14 +3064,39 @@ pub(crate) fn rot_matrix(angle: [i16; 3]) -> [[i16; 3]; 3] {
 }
 
 /// A `MATRIX`.
-struct Matrix {
-    m: [[i16; 3]; 3],
-    t: [i32; 3],
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Matrix {
+    pub(crate) m: [[i16; 3]; 3],
+    pub(crate) t: [i32; 3],
 }
 
 impl Matrix {
+    /// `MulLMatrix`: `self` as seen from `root`.
+    pub(crate) fn relative_to(&self, root: &Matrix) -> Matrix {
+        let transposed: [[i16; 3]; 3] =
+            std::array::from_fn(|row| std::array::from_fn(|column| root.m[column][row]));
+        let by: [i32; 3] = std::array::from_fn(|axis| self.t[axis] - root.t[axis]);
+        Matrix {
+            m: mul_matrix(&transposed, &self.m),
+            t: std::array::from_fn(|row| {
+                let sum: i32 = (0..3)
+                    .map(|k| i32::from(transposed[row][k]).wrapping_mul(by[k]))
+                    .fold(0, i32::wrapping_add);
+                sum >> 12
+            }),
+        }
+    }
+
+    /// `RotMatrix`, then `MulMatrix`.
+    pub(crate) fn turned(&self, angle: [i16; 3]) -> Matrix {
+        Matrix {
+            m: mul_matrix(&self.m, &rot_matrix(angle)),
+            t: self.t,
+        }
+    }
+
     /// `CompMatrix`, whose `ApplyMatrixLV` floors.
-    fn comp(&self, child: &Matrix) -> Matrix {
+    pub(crate) fn comp(&self, child: &Matrix) -> Matrix {
         Matrix {
             m: mul_matrix(&self.m, &child.m),
             t: std::array::from_fn(|row| {
@@ -3048,6 +3107,35 @@ impl Matrix {
             }),
         }
     }
+}
+
+/// `HMatrix` and its `NormalMatrix_0`: `from`, `weight` of 0x1000 of the way to
+/// `to`.
+pub(crate) fn blend_matrix(from: &[[i16; 3]; 3], to: &[[i16; 3]; 3], weight: i32) -> [[i16; 3]; 3] {
+    let mut out = [[0f64; 3]; 3];
+    for (row, line) in out.iter_mut().enumerate() {
+        for (column, cell) in line.iter_mut().enumerate() {
+            *cell = f64::from(
+                ((i32::from(from[row][column]) * (0x1000 - weight)) >> 12)
+                    + ((i32::from(to[row][column]) * weight) >> 12),
+            );
+        }
+    }
+    let unit = |v: [f64; 3]| {
+        let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1.0);
+        v.map(|axis| axis / length)
+    };
+    let cross = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let first = unit(out[0]);
+    let third = unit(cross(first, unit(out[1])));
+    let second = cross(third, first);
+    [first, second, third].map(|line| line.map(|axis| (axis * 4096.0) as i16))
 }
 
 /// `RotMatrix(0, angle, 0)` then `ApplyMatrixSV`: its products floor rather
@@ -3274,9 +3362,28 @@ mod weapon_tests {
     }
 
     #[test]
+    fn a_matrix_comes_back_from_under_another() {
+        let parent = Matrix {
+            m: rot_matrix([0x123, 0x456, 0x789]),
+            t: [1000, -2000, 3000],
+        };
+        let child = Matrix {
+            m: rot_matrix([0x321, 0x654, 0x87]),
+            t: [100, 569, -40],
+        };
+        let back = parent.comp(&child).relative_to(&parent);
+        for axis in 0..3 {
+            assert!((back.t[axis] - child.t[axis]).abs() <= 3, "{back:?}");
+        }
+        assert_eq!(child.turned([0, 0, 0]).m, child.m);
+    }
+
+    #[test]
     fn the_big_magnum_looks_for_a_body_longer() {
         assert_eq!(weapon(5).shot_ticks(), 1);
-        assert_eq!(weapon(6).shot_ticks(), 3);
+        assert_eq!(weapon(6).shot_ticks(), 0b111);
+        assert_eq!(weapon(7).shot_ticks(), 0b1_0101);
+        assert_eq!(weapon(8).shot_ticks(), 0b101_0101);
     }
 
     #[test]
@@ -3529,12 +3636,10 @@ mod tests {
             neck_targets: &[],
         };
         let mut rnd = crate::zombie2::Rnd::default();
-        let mut lock = 0;
         for _ in 0..200 {
             let mut held = Held {
                 holder: [0; 3],
                 rnd: &mut rnd,
-                lock: &mut lock,
                 life,
                 released: false,
                 knocks: 0,
@@ -3956,6 +4061,11 @@ mod tests {
             neck_targets: &[],
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
+        // `Key_trg` comes from the pad, which goes on being read.
+        assert_eq!(setup.work.key_trg & KEY_TILT_UP, KEY_TILT_UP);
+        player_move(&mut setup.work, &mut setup.player, &tick);
+        assert_eq!(setup.work.key_trg, 0);
+        setup.work.last_key = before.last_key;
         assert_eq!(setup.work, before);
     }
 

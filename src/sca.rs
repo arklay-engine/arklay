@@ -85,8 +85,19 @@ pub fn resolve_masked(
     proposed: [i32; 3],
     radius: i32,
 ) -> Resolved {
+    resolve_on_floor(sca, mask, prev, proposed, radius, floor_of(proposed[1]))
+}
+
+/// [`resolve_masked`] for a caller that says which floor to look at.
+pub fn resolve_on_floor(
+    sca: &Sca,
+    mask: u16,
+    prev: [i32; 3],
+    proposed: [i32; 3],
+    radius: i32,
+    floor: u8,
+) -> Resolved {
     let mut pos = proposed;
-    let floor = floor_of(pos[1]);
     // `Sca_ck_info` picks the quadrant once, before anything pushes the body.
     let area = area(sca, pos[0], pos[2]);
     let mut hit = false;

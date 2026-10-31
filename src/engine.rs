@@ -14090,7 +14090,7 @@ fn run_re2_init(
     game.re2.rnd = Default::default();
     game.re2.enemies = 0;
     game.re2.sound_types = [0; 2];
-    game.re2.player_lock = 0;
+    game.re2.player.damage_cnt = 0;
     game.re2.room_loading = true;
     game.re2.load_pass = true;
     let mut vm = vm.clone();
@@ -16444,6 +16444,17 @@ fn render_frame_on(
         let matrix =
             anim::entity_matrix_rotated_scaled(character.body.pos, 0, character.body.angle, 0, 0);
         let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
+        let mut hidden_parts = character.work.hidden_parts;
+        for (part, matrix) in character.zombie.iter().flat_map(|zombie| zombie.detached()) {
+            let moved = anim::detach_joint(
+                &model.skeleton,
+                &keyframe,
+                &mut joints,
+                usize::from(part),
+                matrix,
+            );
+            hidden_parts &= !moved;
+        }
         tween.joints(
             tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
             &mut joints,
@@ -16455,7 +16466,7 @@ fn render_frame_on(
         ));
         models.push(model);
         npc_joints.push(joints);
-        npc_hidden.push(character.work.hidden_parts);
+        npc_hidden.push(hidden_parts);
         npc_tints.push(
             character
                 .zombie

@@ -47,6 +47,8 @@ pub struct Hit {
     pub slot: usize,
     /// `Routine_1`: the player's `Type`.
     pub weapon: u8,
+    /// The player's `Be_flg` sign: the shot was aimed up.
+    pub high: bool,
     /// Which record of the shot's three: the damage word's field.
     pub band: u8,
     /// Which of `D_life_d`, `D_life_c` and `D_life_u`.
@@ -365,7 +367,7 @@ pub struct Shooter {
     pub pos: [i32; 3],
     pub neck: [i32; 3],
     pub angle: u16,
-    /// `Type & 0xFFF`, from 2 to 4.
+    /// `Type & 0xFFF`, from 2 to 8.
     pub weapon: u8,
     /// [`hit_scan_ck`]'s level.
     pub level: usize,
@@ -445,6 +447,7 @@ pub fn weapon_at_ck(shooter: &Shooter, targets: &[Target], sca: &[ScaRect]) -> O
     Some(Hit {
         slot,
         weapon: shooter.weapon,
+        high: shooter.level == 2,
         band,
         region,
         damage: (table.damage >> (u32::from(band) * 10) & 0x3FF) as i16,
@@ -657,6 +660,31 @@ mod tests {
         targets[0].pos[0] = -1600;
         targets[0].at[0] = -1600;
         assert_eq!(weapon_at_ck(&shooter, &targets, &[]), None);
+    }
+
+    #[test]
+    fn the_first_box_of_a_shot_is_wider_by_a_bodys_at_w1() {
+        let shooter = Shooter {
+            pos: [0; 3],
+            neck: [0, -2000, 0],
+            angle: 0,
+            weapon: 5,
+            level: 0,
+        };
+        let hits = |at_w1: u16| {
+            (0..8000)
+                .step_by(100)
+                .flat_map(|x| (-4000..4000).step_by(50).map(move |z| (x, z)))
+                .filter(|&(x, z)| {
+                    let target = Target {
+                        at_w1,
+                        ..zombie(0, x, z)
+                    };
+                    weapon_at_ck(&shooter, &[target], &[]).is_some()
+                })
+                .count()
+        };
+        assert!(hits(500) > hits(0));
     }
 
     #[test]

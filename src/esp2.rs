@@ -662,6 +662,58 @@ impl Effects {
                     *base = base.wrapping_add(i16::from(by as i8));
                 }
             }
+            // `Esp_09`: wider as it falls, gone on touching the ground.
+            9 => {
+                self.slots[index].scale[0] = slot.scale[0].wrapping_add(0x100);
+                if Self::ground(sca, slot.pos).blocked {
+                    self.slots[index].kill();
+                }
+            }
+            // `Esp_25`: stopped on its last frame.
+            0x25 => {
+                let delay = self
+                    .bank
+                    .sprites
+                    .get(&slot.kind)
+                    .map_or(0, |s| s.frame(6)[2]);
+                let this = &mut self.slots[index];
+                this.anim = 0;
+                this.update = 0;
+                this.start = 0;
+                this.count = 0;
+                this.accel[0] = 0;
+                this.accel[1] = 0;
+                this.velocity[0] = 0;
+                this.velocity[1] = 0;
+                this.frame = 6;
+                this.delay = delay;
+                this.flags &= 0xA001;
+            }
+            // `Esp_26`.
+            0x26 => {
+                let this = &mut self.slots[index];
+                this.count = 0;
+                this.velocity[0] = 0;
+                this.accel[0] = 0;
+            }
+            // `Esp_2A`: then two more.
+            0x2A => {
+                for (step, size) in [(3, 0xC00u16), (4, 0xA00)] {
+                    let dir = u16::from(self.rnd()) << 4;
+                    let row = slot.start.wrapping_add(step);
+                    self.call(9, row, size, dir as i16, slot.base, true);
+                }
+                self.slots[index].anim = 0;
+            }
+            // `Esp_29`: bursts into three puffs of the next rows.
+            0x29 => {
+                for (step, size) in [0x800u16, 0x1000, 0xC00].into_iter().enumerate() {
+                    let dir = u16::from(self.rnd()) << 4;
+                    let row = slot.start.wrapping_add(step as u8);
+                    self.call(9, row, size, dir as i16, slot.base, true);
+                }
+                self.slots[index].anim = 0x2A;
+            }
             // `Esp_14`: gone on touching the ground.
             0x14 => {
                 if Self::ground(sca, slot.pos).blocked {
@@ -1187,6 +1239,24 @@ mod tests {
         assert_eq!(effects.sounds.len(), 1);
         assert_eq!(effects.sounds[0].0, 0x0102_0001);
         for _ in 0..40 {
+            effects.tick(&mut Default::default(), None);
+        }
+        assert!(!effects.slots[slot].live());
+    }
+
+    #[test]
+    fn a_puff_widens_as_it_falls_and_goes_on_the_ground() {
+        let mut block = [0u8; BLOCK_LEN];
+        block[0] = 9;
+        block[14..16].copy_from_slice(&40i16.to_le_bytes());
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[block]));
+        let slot = effects.call(7, 0, 0x1000, 0, [0, -1000, 0], false).unwrap();
+        effects.tick(&mut Default::default(), None);
+        let scale = effects.slots[slot].scale[0];
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[slot].scale[0], scale.wrapping_add(0x100));
+        for _ in 0..100 {
             effects.tick(&mut Default::default(), None);
         }
         assert!(!effects.slots[slot].live());

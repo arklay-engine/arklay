@@ -150,7 +150,6 @@ pub fn player_held(
     let mut held = player2::Held {
         holder,
         rnd: &mut re2.rnd,
-        lock: &mut re2.player_lock,
         life: &mut game.entities[0].health,
         released: false,
         knocks: 0,
@@ -199,7 +198,7 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
                 pos,
                 at: [zombie.atd.at[0], zombie.atd.at[2]],
                 at_w: zombie.atd.at_w,
-                at_w1: 0,
+                at_w1: 500,
                 neck_y: character.work.neck.position.map_or(pos[1], |neck| neck[1]),
             })
         })
@@ -290,7 +289,6 @@ fn run_zombie(
     let stopped = game.re2.character_stopped(slot);
     let easy = game.re2.flag(0, FG_SYSTEM_EASY);
     let enemies = game.re2.enemies;
-    let player_clip = game.re2.player.move_no;
     let noise = game.re2.player.noise;
     let player_neck = game.re2.player.neck.position;
     let stage = game.id.stage;
@@ -311,8 +309,6 @@ fn run_zombie(
         player,
         player_neck,
         player_floor: crate::sca::floor_of(player[1]),
-        player_clip,
-        lock: &mut re2.player_lock,
         noise: u16::from(noise),
         rnd: &mut re2.rnd,
         partner,

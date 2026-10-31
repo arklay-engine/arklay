@@ -1,0 +1,7 @@
+# aim down and fire at what comes, near
+0 
+40 aim
+60 aim down
+80 aim down fire
+1400 aim
+1420 

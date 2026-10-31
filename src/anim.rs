@@ -207,6 +207,35 @@ pub fn joint_matrices(
     world
 }
 
+/// Move joint `part` to `matrix`, off its parent, taking the joints under it
+/// along. Returns a bit for each joint it moved.
+pub fn detach_joint(
+    skeleton: &model::Skeleton,
+    keyframe: &model::Keyframe,
+    world: &mut [Mat4x3],
+    part: usize,
+    matrix: Mat4x3,
+) -> u32 {
+    let local = joint_local_transforms(skeleton, keyframe);
+    let Some(joint) = world.get_mut(part) else {
+        return 0;
+    };
+    *joint = matrix;
+    let mut moved = 1u32 << part.min(31);
+    let mut pending = vec![part];
+    while let Some(parent) = pending.pop() {
+        for &child in skeleton.children.get(parent).map_or(&[][..], Vec::as_slice) {
+            let child = usize::from(child);
+            if child != parent && child < world.len() && child < local.len() {
+                world[child] = compose(&world[parent], &local[child]);
+                moved |= 1u32 << child.min(31);
+                pending.push(child);
+            }
+        }
+    }
+    moved
+}
+
 /// Angular step of the game's trig tables: `2*pi / 4096`.
 const ANGLE_STEP: f64 = 0.0015339807880859375;
 
