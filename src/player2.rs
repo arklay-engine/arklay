@@ -346,6 +346,8 @@ pub const fn character_shadow(id: u8) -> (i32, i32) {
     match id {
         // `Em10_Init`'s.
         0x10..0x20 => (0x190, 0x258),
+        // `Em22_Init`'s.
+        0x22 => (0x44C, 0x352),
         0x45 | 0x4F => (0x172, 0x1CC),
         0x4D => (500, 600),
         id if id & 1 != 0 => (0x1A4, 0x208),
@@ -2218,6 +2220,10 @@ impl Mover<'_, '_> {
     /// `Spd_get`: this tick's speed, the root motion since the previous frame.
     pub(crate) fn spd_get(&mut self) {
         let reverse = self.work.sce_flg & 0x80 != 0 && self.work.routine[0] == MODE_SCENARIO;
+        self.spd_get_reversed(reverse);
+    }
+
+    pub(crate) fn spd_get_reversed(&mut self, reverse: bool) {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
             return;
@@ -2759,7 +2765,7 @@ impl Mover<'_, '_> {
     }
 
     /// `Add_speedXYZ` for a body that doesn't lean.
-    fn add_speed_xyz(&mut self) {
+    pub(crate) fn add_speed_xyz(&mut self) {
         self.add_speed_xz();
         self.player.pos[1] += i32::from(self.work.spd[1]);
     }

@@ -3588,6 +3588,7 @@ impl GameSession {
         if self.game.is_re2_room {
             self.tick_re2_weapon(pack);
             let re2 = &mut self.game.re2;
+            re2.tick_before();
             re2.tick_effects(self.loaded.room.sca.as_ref());
             self.re2_sounds.played.clear();
             play_re2_sounds(
@@ -5204,9 +5205,10 @@ impl GameSession {
     /// the path comes from `--setup-script`, never from the sandbox.
     fn run_setup_script(&mut self, script: Option<&Path>) -> Result<()> {
         let flags = self.game.re2.banks;
+        let rnd = self.game.re2.rnd;
         run_setup_chunk(self.lua.as_ref(), &mut self.game, script)?;
-        // A room's scripts read the flags as they start.
-        if self.game.re2.banks != flags {
+        // A room's scripts read the flags and the stream as they start.
+        if self.game.re2.banks != flags || self.game.re2.rnd != rnd {
             let placed = std::mem::take(&mut self.game.re2.pending_player);
             run_re2_init(
                 self.loaded.re2_vm.as_mut(),
@@ -12666,6 +12668,7 @@ fn re2_player_shadow<'a>(
     re2_shadow(
         room,
         player_state,
+        player_state.pos,
         if claire { (0x1a4, 0x208) } else { (500, 600) },
         crate::sca::PLAYER_MASK,
         shadow::PLAYER_COLOR,
@@ -12681,6 +12684,7 @@ fn re2_player_shadow<'a>(
 fn re2_shadow<'a>(
     room: &RoomState,
     body: &player::PlayerState,
+    at: [i32; 3],
     (half_x, half_z): (i32, i32),
     mask: u16,
     color: u32,
@@ -12688,14 +12692,14 @@ fn re2_shadow<'a>(
     tween: &mut tween::Tween,
     texture: &'a Image,
 ) -> Option<render::Shadow<'a>> {
-    let pos = body.pos;
+    let pos = at;
     let cut = room.current_cut as i32;
     room.zones
         .iter()
         .find(|zone| i32::from(zone.cam_from) == cut)
-        .filter(|zone| zone.contains_signed(pos[0], pos[2]))?;
+        .filter(|zone| zone.contains_signed(body.pos[0], body.pos[2]))?;
     let ground = room.sca.as_ref().map_or(pos[1], |sca| {
-        crate::sca::ground_at(sca, pos, body.radius, mask).height
+        crate::sca::ground_at(sca, body.pos, body.radius, mask).height
     });
     let mut shadow_pos = [pos[0], ground, pos[2]];
     let mut shadow_angle = body.angle;
@@ -14087,7 +14091,6 @@ fn run_re2_init(
     game.re2.set_flag(1, 0, character);
     game.re2.set_flag(1, 1, scenario);
     game.re2.characters = Default::default();
-    game.re2.rnd = Default::default();
     game.re2.enemies = 0;
     game.re2.sound_types = [0; 2];
     game.re2.player.damage_cnt = 0;
@@ -16165,9 +16168,17 @@ fn render_frame_on(
                 .map(|zombie| i32::from(zombie.pool));
             let (half_x, half_z) = crate::player2::character_shadow(character.id);
             let grown = pool.unwrap_or(0);
+            let at = character
+                .zombie
+                .as_ref()
+                .and_then(|zombie| zombie.licker.as_ref())
+                .map_or(character.body.pos, |licker| {
+                    licker.shadow_at(character.body.angle)
+                });
             let shadow = re2_shadow(
                 room,
                 &character.body,
+                at,
                 (half_x + grown, half_z + grown),
                 crate::character2::sca_mask(character.id),
                 pool.map_or(shadow::PLAYER_COLOR, |_| crate::zombie2::POOL_COLOR),

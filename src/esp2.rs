@@ -48,7 +48,7 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19)
+    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19 | 0x2B)
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -714,6 +714,21 @@ impl Effects {
                 }
                 self.slots[index].anim = 0x2A;
             }
+            // `Esp_2B`: a drip's splash, flat on the ground, to the end of its frames.
+            0x2B => {
+                let delay = self
+                    .bank
+                    .sprites
+                    .get(&slot.kind)
+                    .map_or(0, |s| s.frame(0x1E)[2]);
+                let this = &mut self.slots[index];
+                this.anim = 0;
+                this.update = 0;
+                this.pos[1] = this.ground as i16;
+                this.frame = 0x1E;
+                this.delay = delay;
+                this.flags &= !FLAG_INTEGRATE;
+            }
             // `Esp_14`: gone on touching the ground.
             0x14 => {
                 if Self::ground(sca, slot.pos).blocked {
@@ -1260,6 +1275,20 @@ mod tests {
             effects.tick(&mut Default::default(), None);
         }
         assert!(!effects.slots[slot].live());
+    }
+
+    #[test]
+    fn a_drips_splash_stops_falling_and_moving() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[fire_block(), [0; BLOCK_LEN]]));
+        let slot = effects.call(7, 0, 0x1000, 0, [0, -100, 0], false).unwrap();
+        effects.slots[slot].anim = 0x2B;
+        effects.slots[slot].update = 5;
+        effects.slots[slot].ground = -20;
+        effects.tick(&mut Default::default(), None);
+        let slot = effects.slots[slot];
+        assert_eq!((slot.anim, slot.update), (0, 0));
+        assert_eq!(slot.flags & FLAG_INTEGRATE, 0);
     }
 
     #[test]

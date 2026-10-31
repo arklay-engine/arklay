@@ -629,6 +629,14 @@ mod imp {
                 },
             );
 
+            // `set_re2_rnd(value)`: where RE2's `Rnd` stream stands, which only
+            // a new game seeds and a door doesn't: for a room reached any other
+            // way than the original was.
+            methods.add_method_mut("set_re2_rnd", |_lua, game, value: u16| {
+                game.re2.rnd = crate::zombie2::Rnd(value);
+                Ok(())
+            });
+
             // `set_flag_bank(bank, bytes)`: the raw bytes of one bank, from a
             // Lua string or a sequence table of byte values, for state the
             // named methods do not reach.

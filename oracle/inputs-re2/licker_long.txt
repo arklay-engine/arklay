@@ -1,0 +1,95 @@
+# room 211: a long fight at range with one licker, weapon 2 (oracle/re2.md)
+494 aim
+534 aim fire
+540 aim
+604 aim fire
+610 aim
+674 aim fire
+680 aim
+744 aim fire
+750 aim
+814 aim fire
+820 aim
+884 aim fire
+890 aim
+954 aim fire
+960 aim
+1024 aim fire
+1030 aim
+1094 aim fire
+1100 aim
+1164 aim fire
+1170 aim
+1234 aim fire
+1240 aim
+1304 aim fire
+1310 aim
+1374 aim fire
+1380 aim
+1444 aim fire
+1450 aim
+1514 aim fire
+1520 aim
+1584 aim fire
+1590 aim
+1654 aim fire
+1660 aim
+1724 aim fire
+1730 aim
+1794 aim fire
+1800 aim
+1864 aim fire
+1870 aim
+1934 aim fire
+1940 aim
+2004 aim fire
+2010 aim
+2074 aim fire
+2080 aim
+2144 aim fire
+2150 aim
+2214 aim fire
+2220 aim
+2284 aim fire
+2290 aim
+2354 aim fire
+2360 aim
+2424 aim fire
+2430 aim
+2494 aim fire
+2500 aim
+2564 aim fire
+2570 aim
+2634 aim fire
+2640 aim
+2704 aim fire
+2710 aim
+2774 aim fire
+2780 aim
+2844 aim fire
+2850 aim
+2914 aim fire
+2920 aim
+2984 aim fire
+2990 aim
+3054 aim fire
+3060 aim
+3124 aim fire
+3130 aim
+3194 aim fire
+3200 aim
+3264 aim fire
+3270 aim
+3334 aim fire
+3340 aim
+3404 aim fire
+3410 aim
+3474 aim fire
+3480 aim
+3544 aim fire
+3550 aim
+3614 aim fire
+3620 aim
+3684 aim fire
+3690 aim
+3744

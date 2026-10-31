@@ -417,10 +417,10 @@ SCRATCH = 0x99EF00  # the unused end of the last page of `.data`
 def warp(game: Game, target: str) -> None:
     """Do what `Sce_Door` does, with a door record of our own."""
     room, *place = target.split(":")
-    x, y, z, angle = (int(part, 0) for part in place)
+    x, y, z, angle, *cut = (int(part, 0) for part in place)
     stage, number = int(room[0], 16) - 1, int(room[1:], 16)
     floor = max(0, -y // 1800)
-    game.write(SCRATCH, struct.pack("<hhhH4B8x", x, y, z, angle, stage, number, 0, floor))
+    game.write(SCRATCH, struct.pack("<hhhH4B8x", x, y, z, angle, stage, number, cut[0] if cut else 0, floor))
     game.write(DOOR_RECORD, struct.pack("<I", SCRATCH))
     game.write(GAME_STATE, b"\x01")
     game.write(FG_STOP, struct.pack("<I", game.u32(FG_STOP) | 0xFF000000))
@@ -443,10 +443,10 @@ def remove_enemies(game: Game, keep: set[int]) -> None:
 
 
 def zombie_trace(game: Game) -> str:
-    """The zombies in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
+    """The zombies and lickers in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
     rows = []
     for slot, pointer in enumerate(struct.unpack("<16I", game.read(ENEMIES, 64))):
-        if pointer == 0 or game.u32(pointer) & 1 == 0 or not 0x10 <= game.u8(pointer + ENTITY_ID) < 0x20:
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not (0x10 <= game.u8(pointer + ENTITY_ID) < 0x20 or game.u8(pointer + ENTITY_ID) == 0x22):
             continue
         x, y, z = game.i32s(pointer + ENTITY_POS, 3)
         routine = game.read(pointer + ENTITY_ROUTINES, 4)
@@ -874,8 +874,8 @@ def main() -> int:
         command.add_argument("--keep-enemy", action="append", type=int, default=[])
         command.add_argument("--flag", action="append", default=[], metavar="BANK:INDEX")
         command.add_argument(
-            "--warp", default=None, metavar="ROOM:X:Y:Z:ANGLE",
-            help="when play begins, go through a door to a room (three hex digits) and a position",
+            "--warp", default=None, metavar="ROOM:X:Y:Z:ANGLE[:CUT]",
+            help="when play begins, go through a door to a room (three hex digits), a position and a cut",
         )
         command.add_argument(
             "--give", action="append", default=[], metavar="SLOT:ID:COUNT",

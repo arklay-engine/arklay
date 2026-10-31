@@ -72,6 +72,15 @@ fn inside_grown(record: &ScaRect, x: i32, z: i32, radius: i32) -> bool {
         && (0..i32::from(record.depth) + radius * 2).contains(&dz)
 }
 
+/// `Sca_ck_info` with no push: the first record whose outline, grown by `radius`,
+/// holds `pos`. A diagonal counts by its outline too.
+pub fn first_hit(sca: &Sca, mask: u16, pos: [i32; 3], radius: i32, floor: u8) -> Option<&ScaRect> {
+    let area = area(sca, pos[0], pos[2]);
+    sca.records
+        .iter()
+        .find(|record| applies(record, mask, area, pos, radius, floor))
+}
+
 /// Move a body from `prev` to `proposed`, pushing it out of the records.
 pub fn resolve(sca: &Sca, prev: [i32; 3], proposed: [i32; 3], radius: i32) -> Resolved {
     resolve_masked(sca, PLAYER_MASK, prev, proposed, radius)
@@ -1083,6 +1092,28 @@ mod tests {
         let far = resolve(&sca, [0, 0, 0], [2000, 0, 2000], PLAYER_RADIUS);
         assert!(far.hit);
         assert_eq!(far.pos, [0, 0, 0]);
+    }
+
+    #[test]
+    fn the_first_hit_is_the_first_record_whose_grown_outline_holds_the_point() {
+        let mut no_push = record(0);
+        no_push.id |= NO_PUSH;
+        let mut second = record(0);
+        second.x = 1500;
+        let sca = room(vec![no_push, second]);
+        // Records that don't push count, as `Sca_ck_info` looks only at the outline.
+        let hit = first_hit(&sca, PLAYER_MASK, [1600, 0, 1500], 0, 0).unwrap();
+        assert_eq!(hit.x, 1000);
+        assert_eq!(
+            first_hit(&sca, PLAYER_MASK, [900, 0, 1500], 200, 0)
+                .unwrap()
+                .x,
+            1000
+        );
+        assert!(first_hit(&sca, PLAYER_MASK, [900, 0, 1500], 0, 0).is_none());
+        // The record's own floor and mask still rule it out.
+        assert!(first_hit(&sca, PLAYER_MASK, [1600, 0, 1500], 0, 1).is_none());
+        assert!(first_hit(&sca, 0x4000, [1600, 0, 1500], 0, 0).is_none());
     }
 
     #[test]
