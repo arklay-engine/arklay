@@ -620,6 +620,7 @@ pub fn run_with_options(
                         re2_player: None,
                         re2_character: None,
                         re2_splayer: None,
+                        re2_music: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
                     })?;
@@ -3638,16 +3639,6 @@ impl GameSession {
             let record = self.game.transition_door.take().unwrap_or_default();
             let door_yield = self.game.door_yield.take();
             if self.transition.is_none() {
-                if record.re2.is_some()
-                    && let Some(word) = transition
-                        .target
-                        .stage
-                        .checked_sub(1)
-                        .and_then(|stage| self.game.re2.bgm.get(stage, transition.target.room))
-                {
-                    let system = self.game.re2_music_place().system;
-                    self.game.re2.music.leave_room(word, system);
-                }
                 self.transition = Some(start_transition(
                     pack,
                     &record,
@@ -5606,6 +5597,17 @@ impl GameSession {
         self.transition_finished = frame.finished;
         if frame.place {
             place_transition_player(&mut session, &mut self.game, &mut self.loaded);
+            // `Set_door`'s `Snd_bgm_ck`.
+            if session.door.re2.is_some()
+                && let Some(word) = session
+                    .target
+                    .stage
+                    .checked_sub(1)
+                    .and_then(|stage| self.game.re2.bgm.get(stage, session.target.room))
+            {
+                let system = self.game.re2_music_place().system;
+                self.game.re2.music.leave_room(word, system);
+            }
         }
         // A door's `Pl_init` keeps the speed the last room left.
         let carried =
@@ -6271,6 +6273,10 @@ impl GameSession {
                 .game
                 .re2
                 .character_trace(crate::scd2::host::SPLAYER_SLOT),
+            re2_music: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.music.trace_field()),
             entities,
             frame_hash: trace::frame_hash(frame),
         }

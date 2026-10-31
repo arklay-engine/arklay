@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import os
+import re
 import signal
 import struct
 import subprocess
@@ -214,6 +215,22 @@ def music_state(game: Game) -> str:
         f"seq={game.read(SEQ_CTR, 3).hex()},{game.read(SEQ_CTR + 8, 3).hex()},"
         f"{game.read(SEQ_CTR + 16, 3).hex()}"
     )
+
+
+def music_trace(game: Game) -> str:
+    """The `bgm` field: the room's word, each sequence's state and hold, the channels' tracks."""
+    def track(raw: bytes) -> str:
+        stem = raw.split(b"\0", 1)[0].decode(errors="replace").rsplit("\\", 1)[-1].lower()
+        stem = stem.removesuffix(".sap")
+        match = re.fullmatch(r"(main|sub)([0-9a-f]{2})(?:_([1-7]))?", stem)
+        if not match:
+            return "-"
+        take = int(match[3] or 0)
+        return f"{take * 0x200 + (0x100 if match[1] == 'sub' else 0) + int(match[2], 16):03x}"
+    sequences = ",".join(game.read(SEQ_CTR + index * 8, 2).hex() for index in range(3))
+    tracks = [track(game.read(SS_NAME_BGM + index * 0x104, 0x104)) for index in range(3)]
+    tracks += [track(game.read(SS_NAME_SBGM + index * 0x104, 0x104)) for index in range(2)]
+    return f"bgm={game.u16(BGM_CURRENT):04x},{sequences},{','.join(tracks)}"
 
 
 def wine_env(work: Path, display: str) -> dict[str, str]:
@@ -440,6 +457,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         f"{game.u8(PL + ENTITY_D_LIFE_U)},{spd[0]},{spd[1]},{spd[2]}"
     )
     fields.append(neck_state(game))
+    fields.append(music_trace(game))
     return " ".join(fields)
 
 
@@ -526,7 +544,8 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
         Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
     sound_out = str(trace_path.with_suffix(".wav")) if args.sound else None
     trace_path.parent.mkdir(parents=True, exist_ok=True)
-    session = Session(game_root(args), work, sound_out)
+    # A prefix keeps the audio driver it was made with.
+    session = Session(game_root(args), work.with_name(work.name + "-sound") if args.sound else work, sound_out)
     music_log = open(trace_path.with_suffix(".music"), "w") if args.sound else None
     last_music = ""
     try:
