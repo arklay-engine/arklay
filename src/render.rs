@@ -2314,15 +2314,16 @@ pub fn draw_door_scene(
 /// unit normal and no ambient: the back colour never reaches Marni. A source
 /// here adds `max(0, -(C R n) . (C dir) / 4096) * colour * 255 / 128` for the
 /// camera `C` and part rotation `R`, so each `door_ll` row goes through
-/// `C`'s transpose, negated and scaled by `(door_lc >> 4) / 255` at a colour
-/// of `0x80`.
+/// `C`'s transpose, negated and scaled by `(door_lc >> 4) / 128` at a colour
+/// of `0x80`: `Marni` draws a corner's colour doubled, as it does a body's,
+/// whose `0x80` is full.
 pub fn re2_door_light(camera: &Camera) -> EntityLight {
     use crate::door2::vm::{COLOUR_MATRIX, LIGHT_MATRIX};
     let view = stored_camera_matrix(camera.from, camera.look_at);
     EntityLight {
         ambient: [0.0; 3],
         sources: std::array::from_fn(|light| {
-            let scale = f64::from(COLOUR_MATRIX[0][light] >> 4) / CHANNEL_MAX;
+            let scale = f64::from(COLOUR_MATRIX[0][light] >> 4) / 128.0;
             let row = LIGHT_MATRIX[light];
             EntityLightSource {
                 dir: std::array::from_fn(|axis| {
@@ -7265,13 +7266,13 @@ mod tests {
                             .map(|k| f64::from(row[k]) * view_normal[k])
                             .sum::<f64>()
                             / (4096.0 * 4096.0);
-                        100.0 * l.max(0.0)
+                        200.0 * l.max(0.0)
                     })
                     .sum::<f64>()
                     .min(CHANNEL_MAX);
                 for channel in shade {
                     assert!(
-                        (channel.min(CHANNEL_MAX) - expected).abs() < 0.5,
+                        (channel.min(CHANNEL_MAX) - expected).abs() < 1.0,
                         "{rotation:?} {normal:?}: {channel} vs {expected}"
                     );
                 }

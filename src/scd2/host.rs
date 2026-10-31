@@ -380,6 +380,19 @@ impl Re2State {
         self.set_flag(ROOM_BANK, flag, 1);
     }
 
+    /// `player_work`'s table of necks, by `plc_neck`'s number.
+    pub fn necks(&self) -> crate::player2::Necks {
+        let character = |slot: usize| {
+            let character = self.characters.0.get(slot)?.as_deref()?;
+            character.work.neck.position
+        };
+        std::array::from_fn(|index| match index {
+            0 => self.player.neck.position,
+            1 => character(SPLAYER_SLOT),
+            n => character(n - 2),
+        })
+    }
+
     pub fn flag(&self, bank: u8, index: u8) -> bool {
         let Some(words) = self.banks.get(usize::from(bank)) else {
             return false;
@@ -1065,6 +1078,13 @@ impl Host for GameHost<'_> {
                 let flag = at(2) as u8;
                 if flag != 0 {
                     self.game.re2.unmodelled_arrivals.push(flag);
+                }
+            }
+            "plc_neck" if self.task_character(task).is_some() => {
+                let words = [at(1) as i16, at(2) as i16, at(3) as i16];
+                let rates = [at(4) as u8, at(5) as u8];
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::plc_neck(&mut character.work, at(0) as u8, words, rates);
                 }
             }
             "plc_neck" if self.work_is_player(task) => {

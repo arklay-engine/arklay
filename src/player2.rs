@@ -277,7 +277,16 @@ pub struct Work {
     pub reloaded: bool,
     /// The head's `Rot_neck` state.
     pub neck: Neck,
+    /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
+    parts0_y: i32,
 }
+
+/// `Spl_Init`'s `Parts0_pos_y`, by id from 0x40.
+const CHARACTER_PARTS0_Y: [u16; 28] = [
+    0x107B, 0x1052, 0x107B, 0x1052, 0x119A, 0x1000, 0x119A, 0x1000, 0x10F6, 0x1000, 0xF57, 0x1000,
+    0, 0, 0, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000, 0x1000,
+    0x1000, 0x1000, 0x1000,
+];
 
 /// `Neck_no`: the head's joint, the same for every player.
 pub const NECK_JOINT: usize = 8;
@@ -299,6 +308,21 @@ pub struct Neck {
     pub rates: [u8; 2],
     /// The head's yaw and pitch on top of its pose (the joint's `+0x98`).
     pub turn: [i16; 2],
+    /// Where the head was last, in the world (the joint's `+0x5C`), for
+    /// another's aim at it.
+    pub position: Option<[i32; 3]>,
+}
+
+impl Work {
+    /// What the work adds to a body's `pose`: its height and its head.
+    pub fn apply_to_pose(&self, pose: &mut Keyframe) {
+        pose.offset[1] = self.scaled_height(pose.offset[1]);
+        self.neck.apply(pose);
+    }
+
+    fn scaled_height(&self, height: i16) -> i16 {
+        ((i32::from(height) * self.parts0_y) >> 12) as i16
+    }
 }
 
 impl Neck {
@@ -367,6 +391,7 @@ impl Default for Work {
             move_cnt: 1,
             hokan: FULL_BLEND - 1,
             bank: Bank::Weapon,
+            parts0_y: 0x1000,
             d_life_u: 0,
             spd: [0; 3],
             spd_base: [0; 3],
@@ -471,7 +496,15 @@ pub struct Tick<'a> {
     /// `fg_stop`'s top bit, which freezes the player's whole routine.
     pub stopped: bool,
     pub weapon: Weapon,
+    /// `player_work`'s table of necks a `plc_neck` can aim at: the player, the
+    /// second player, then the enemy slots.
+    pub necks: Necks,
 }
+
+/// The necks of [`Tick::necks`].
+pub type Necks = [Option<[i32; 3]>; NECK_WORKS];
+/// `player_work`, `splayer_work` and `enemy_work`'s 16.
+pub const NECK_WORKS: usize = 18;
 
 /// What the player's `Type` and the inventory say about the held weapon.
 #[derive(Debug, Default, Clone, Copy)]
@@ -1116,8 +1149,7 @@ impl Mover<'_, '_> {
     }
 
     /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
-    /// its pose. A character's neck isn't modelled, so `plc_neck`'s aim at
-    /// another work (`Pl_neck`'s nearest enemy too) falls to the player's own.
+    /// its pose. `Pl_neck`'s aim at the nearest enemy waits for enemies.
     fn rot_neck(&mut self) {
         if self.work.neck.flags & 1 != 0 {
             return;
@@ -1140,12 +1172,19 @@ impl Mover<'_, '_> {
         let neck = &mut self.work.neck;
         let flags = neck.flags;
         let mut aim = [0; 2];
+        neck.position = from;
         if flags & 4 != 0
-            && neck.words[1] != NECK_AT_WORK
             && let Some(from) = from
         {
-            let to = [neck.words[0], neck.words[1], neck.words[2]].map(i32::from);
-            aim = neck_direction(from, to);
+            let to = if neck.words[1] == NECK_AT_WORK {
+                let necks = &self.tick.necks;
+                necks.get(neck.words[0] as usize).copied().flatten()
+            } else {
+                Some([neck.words[0], neck.words[1], neck.words[2]].map(i32::from))
+            };
+            if let Some(to) = to {
+                aim = neck_direction(from, to);
+            }
         }
         if flags & 8 != 0 {
             aim = [i32::from(neck.words[1]) + facing, i32::from(neck.words[2])];
@@ -1247,7 +1286,8 @@ impl Mover<'_, '_> {
         };
         for &part in chain {
             let t = if part == 0 {
-                pose.offset
+                let [x, y, z] = pose.offset;
+                [x, self.work.scaled_height(y), z]
             } else {
                 *self.tick.skeleton.relative.get(part)?
             };
@@ -2114,6 +2154,12 @@ pub fn spl_init(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>, kind
     work.move_no = 0;
     work.move_cnt = 0;
     work.hokan = 0;
+    work.neck.flags = 0x92;
+    work.parts0_y = tick
+        .id
+        .checked_sub(0x40)
+        .and_then(|index| CHARACTER_PARTS0_Y.get(usize::from(index)))
+        .map_or(0x1000, |&scale| i32::from(scale));
     let mut mover = Mover {
         work,
         player,
@@ -2272,6 +2318,21 @@ mod tests {
     }
 
     #[test]
+    fn a_bodys_height_scales_its_first_part_rounding_down() {
+        let mut work = Work {
+            parts0_y: i32::from(CHARACTER_PARTS0_Y[0x48 - 0x40]),
+            ..Work::default()
+        };
+        let mut pose = Keyframe {
+            offset: [7, -1681, 9],
+            ..Keyframe::default()
+        };
+        work.neck.turn = [0; 2];
+        work.apply_to_pose(&mut pose);
+        assert_eq!(pose.offset, [7, -1782, 9]);
+    }
+
+    #[test]
     fn the_neck_stays_within_its_limits() {
         let mut setup = Setup::new(0);
         for keyframe in &mut setup.keyframes {
@@ -2281,7 +2342,10 @@ mod tests {
         for _ in 0..10 {
             setup.tick(Input::default(), 200);
         }
-        assert_eq!(setup.work.neck.turn, [NECK_LIMITS[0] as i16, -NECK_LIMITS[1] as i16]);
+        assert_eq!(
+            setup.work.neck.turn,
+            [NECK_LIMITS[0] as i16, -NECK_LIMITS[1] as i16]
+        );
     }
 
     impl Setup {
@@ -2316,6 +2380,7 @@ mod tests {
                 poisoned: false,
                 stopped: false,
                 weapon: self.weapon,
+                necks: Default::default(),
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
@@ -2661,6 +2726,7 @@ mod tests {
             poisoned: false,
             stopped: true,
             weapon: Weapon::default(),
+            necks: Default::default(),
         };
         player_move(&mut setup.work, &mut setup.player, &tick);
         assert_eq!(setup.work, before);

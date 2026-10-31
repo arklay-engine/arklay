@@ -812,7 +812,10 @@ mod tests {
         for _ in 0..DOOR_WAIT_TICKS {
             music.tick();
         }
-        assert_eq!(music.channels[0].track, crate::convert_re2::bgm_track("main01"));
+        assert_eq!(
+            music.channels[0].track,
+            crate::convert_re2::bgm_track("main01")
+        );
         assert_eq!(music.channels[0].volume, 50);
     }
 
@@ -837,7 +840,10 @@ mod tests {
         data[INIT_RECORD_LEN + INIT_RECORD_TABLE + 1] = 0x01;
         let table = BgmTable::from_init_table(&data, 1).unwrap();
         assert_eq!(table.get(0, 0), Some(RoomMusic::from_word(0x010b)));
-        assert_eq!(BgmTable::from_init_table(&data, 0).unwrap().get(0, 0), Some(RoomMusic::from_word(0)));
+        assert_eq!(
+            BgmTable::from_init_table(&data, 0).unwrap().get(0, 0),
+            Some(RoomMusic::from_word(0))
+        );
         assert!(BgmTable::from_init_table(&data, 2).is_none());
     }
 

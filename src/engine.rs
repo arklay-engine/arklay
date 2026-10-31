@@ -5575,7 +5575,7 @@ impl GameSession {
         let frame = session.transition.tick(skip);
         session.frame = frame;
         session.door_yield = None;
-        if frame.room_veil.is_some() {
+        if session.door.re2.is_some() {
             self.room_fade_draw = frame.room_veil;
         }
         for effect in session.transition.stepper_mut().take_sfx() {
@@ -13229,15 +13229,13 @@ impl ShadowCache {
         if !self.attempted {
             self.attempted = true;
             if let Ok(Some(asset)) = pack.read_asset(shadow::KAGE_STEM, AssetClass::Image) {
-                match assets::decode_page(&asset, assets::Geometry::Shipped)
-                    .and_then(|art| {
-                        if re2 {
-                            shadow::bake_re2(&art)
-                        } else {
-                            shadow::bake(&art)
-                        }
-                    })
-                {
+                match assets::decode_page(&asset, assets::Geometry::Shipped).and_then(|art| {
+                    if re2 {
+                        shadow::bake_re2(&art)
+                    } else {
+                        shadow::bake(&art)
+                    }
+                }) {
                     Ok(image) => self.page = Some(image),
                     Err(err) => {
                         eprintln!("warning: invalid {}: {err:#}", asset.path());
@@ -13713,7 +13711,8 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
                 .with_context(|| format!("invalid {}", asset.path()))?,
         );
         if dialect == crate::format::Dialect::Re2
-            && let Some(asset) = pack.read_asset(&folder.scroll_stem(cut.index), AssetClass::Image)?
+            && let Some(asset) =
+                pack.read_asset(&folder.scroll_stem(cut.index), AssetClass::Image)?
         {
             cut.scroll = Some(
                 assets::decode_picture(&asset, assets::Geometry::Free, None)
@@ -14019,6 +14018,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         poisoned: false,
         stopped: context.game.re2.player_stopped(),
         weapon: context.game.re2_weapon(),
+        necks: context.game.re2.necks(),
     };
     let arrived = crate::player2::player_move(&mut context.game.re2.player, context.player, &tick);
     context.game.re2_settle_ammo();
@@ -16126,9 +16126,10 @@ fn render_frame_on(
         };
         let tick = crate::character2::tick_of(room, game, character, slot, &model);
         let (clips, keyframes) = tick.banks.get(character.work.bank);
-        let Some(keyframe) = character.body.anim.pose_keyframe(clips, keyframes) else {
+        let Some(mut keyframe) = character.body.anim.pose_keyframe(clips, keyframes) else {
             continue;
         };
+        character.work.apply_to_pose(&mut keyframe);
         let matrix =
             anim::entity_matrix_rotated_scaled(character.body.pos, 0, character.body.angle, 0, 0);
         let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
@@ -16136,6 +16137,11 @@ fn render_frame_on(
             tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
             &mut joints,
         );
+        // `Joint_trans2` lights from its first part, not its feet.
+        npc_lights.push((
+            joints.first().map_or(character.body.pos, |root| root.t),
+            false,
+        ));
         models.push(model);
         npc_joints.push(joints);
         npc_hidden.push(0);
@@ -16143,7 +16149,6 @@ fn render_frame_on(
         npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
         npc_weapons.push(None);
         npc_zone_gate.push(true);
-        npc_lights.push((character.body.pos, false));
     }
 
     // The `--model` viewer's model, stood in front of the current camera.
@@ -16799,7 +16804,7 @@ fn render_frame_on(
         None => Vec::new(),
     };
     let scrolled = (game.re2.scroll != 0)
-        .then(|| cut.background.as_ref())
+        .then_some(cut.background.as_ref())
         .flatten()
         .map(|background| background.scrolled(cut.scroll.as_ref(), game.re2.scroll));
     let background = if render_mode.background() {
