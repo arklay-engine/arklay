@@ -69,6 +69,8 @@ pub struct TraceTick<'a> {
     pub re2_music: Option<String>,
     /// RE2's game over ([`crate::die2::Die::trace_field`]).
     pub re2_die: Option<String>,
+    /// An RE2 player's neck: flags, joint, whether it has a target, its turn.
+    pub re2_neck: Option<String>,
     /// An RE2 room's sounds this tick: `type:index:volume:pan`, by `/`.
     pub re2_sounds: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -214,6 +216,9 @@ impl TraceWriter {
         if let Some(die) = &tick.re2_die {
             write!(self.out, " die={die}")?;
         }
+        if let Some(neck) = &tick.re2_neck {
+            write!(self.out, " neck={neck}")?;
+        }
         if let Some(sounds) = &tick.re2_sounds {
             write!(
                 self.out,
@@ -324,6 +329,7 @@ mod tests {
             re2_zombies: None,
             re2_music: None,
             re2_die: None,
+            re2_neck: None,
             re2_sounds: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -367,6 +373,7 @@ mod tests {
             re2_zombies: None,
             re2_music: None,
             re2_die: None,
+            re2_neck: None,
             re2_sounds: None,
             frame_hash: 0,
         };
