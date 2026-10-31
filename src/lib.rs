@@ -103,5 +103,6 @@ pub mod verify;
 pub mod video;
 pub mod voice;
 pub mod voice_table;
+pub mod weapon2;
 pub mod weapons;
 pub mod zombie2;

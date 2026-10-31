@@ -1,7 +1,8 @@
 //! RE2's zombies: `Em_Zombie`, which runs ids 0x10 to 0x1F in the enemy slots.
 //!
-//! This holds `Em10_Init`, `Em10_Move`'s states and the checks around them.
-//! Damage, death and the grab aren't ported yet (`docs/re2-deviations.md`).
+//! This holds `Em10_Init`, `Em10_Move`'s states and the checks around them,
+//! and `Em10_Damage` and `Em10_Die` for the handguns. The grab isn't ported yet
+//! (`docs/re2-deviations.md`).
 
 use crate::player2::{self, Bank, Mover, Tick, Work, direction_ck, goto};
 use crate::scd2::host::Character;
@@ -56,6 +57,11 @@ const FLOOR_HOLDS: [u16; 16] = [
     0x5A, 0x1E, 0xAA, 0xA0, 10, 0x28, 100, 0x32, 0x6E, 0x14, 0x23, 0x46, 0x1E, 0xB4, 0x1E, 0x3C,
 ];
 
+/// The colour `Em10_Scenario` gives the shadow under a body.
+pub const POOL_COLOR: u32 = 0x00BF_BF10;
+/// `Em10Dm00`'s `funcs_458795 + 0xb`: what a hit takes from `At_sce_no`, by weapon.
+const STAGGER: [i8; 5] = [0, 9, 15, 15, 35];
+
 /// `Type`'s bits.
 const TYPE_BURNT: u16 = 0x80;
 const TYPE_STRAIGHT: u16 = 0x1000;
@@ -70,6 +76,8 @@ const FLAG_DOWN: u16 = 2;
 const FLAG_FACE_DOWN: u16 = 4;
 const FLAG_THROWN: u16 = 8;
 const FLAG_RISING: u16 = 0x10;
+const FLAG_LOST_ARM: u16 = 0x20;
+const FLAG_LOST_OTHER_ARM: u16 = 0x40;
 const FLAG_NECK_STILL: u16 = 0x200;
 const FLAG_GUIDED: u16 = 0x400;
 const FLAG_BURNING: u16 = 0x1000;
@@ -159,7 +167,29 @@ pub struct Zombie {
     /// `+0x23b`-ish countdowns: between moans, and between lunges.
     voice: u8,
     bite: u8,
-    damage_cnt: u8,
+    pub damage_cnt: u8,
+    /// `D_life_u`, `D_life_c` and `D_life_d`: how much more each region takes.
+    d_life: [u8; 3],
+    /// `At_obj_no`: it has been staggered, and hits now knock it back.
+    at_obj_no: u8,
+    /// `At_sce_no`: what's left before it next staggers.
+    at_sce_no: i8,
+    /// `Damage_no`: the shot's band times three and its region.
+    damage_no: u8,
+    /// `Damage_flg`: the shot's record and side.
+    damage_flg: u16,
+    /// `+0x228` and `+0x22c`: last tick's routine, and what a hit while rising
+    /// goes back to.
+    last_routine: [u8; 4],
+    rising_from: [u8; 4],
+    /// `+0x230`: which way up it's lying, for the clip that gets it up.
+    rise_side: u8,
+    /// `Em_set_flg`: the flag that stops it coming back.
+    pub dead_flag: u8,
+    /// `Em_dead_flg_on` ran this tick.
+    pub died: bool,
+    /// How far the blood pool's `Half_x` and `Half_z` have grown.
+    pub pool: u16,
     /// `+0x150`: `Root_ck`'s turn, one tick in eight.
     sight_turn: u8,
     /// `Status_flg`.
@@ -189,6 +219,38 @@ impl Zombie {
     }
 }
 
+/// `Weapon_at_ck`'s end: what a shot does to the zombie it found. `from` is the
+/// shooter's position.
+pub fn take_hit(
+    character: &mut Character,
+    zombie: &mut Zombie,
+    hit: &crate::weapon2::Hit,
+    from: [i32; 3],
+) {
+    zombie.life = zombie.life.wrapping_sub(hit.damage);
+    let dead = zombie.life < 0;
+    character.work.routine = [if dead { 3 } else { 2 }, hit.weapon, 0, 0];
+    let region = usize::from(2 - hit.region.min(2));
+    let left = zombie.d_life[region].wrapping_sub(hit.stun);
+    zombie.d_life[region] = if (left as i8) < 0 { 0xFF } else { left };
+    let body = &character.body;
+    let direction = i32::from(direction_ck(from[0], from[2], body.pos[0], body.pos[2]));
+    let side = direction - i32::from(body.angle as i16);
+    let mut flags = hit.flags;
+    if (side + 0x400) & 0xFFF < 0x800 {
+        flags |= 0x20;
+    }
+    if (side + 0x600) & 0xFFF < 0x400 {
+        flags |= 0x40;
+    }
+    if (side - 0x200) & 0xFFF < 0x400 {
+        flags |= 0x80;
+    }
+    zombie.damage_flg = flags;
+    zombie.damage_no = hit.band * 3 + hit.region;
+    zombie.damage_cnt = (zombie.damage_cnt & 0x80) | hit.count;
+}
+
 /// The slot's first state: what `Sce_em_set` leaves.
 pub fn spawned(slot: u8, floor: u8, model_type: u8) -> Zombie {
     Zombie {
@@ -211,6 +273,8 @@ pub struct World<'a> {
     /// `WORD_00989eee`: the noises the player made.
     pub noise: u16,
     pub rnd: &'a mut Rnd,
+    /// `splayer_work` is in play.
+    pub partner: bool,
     /// `fg_system`'s easy bit.
     pub easy: bool,
     /// `BYTE_00989eeb`: how many enemies the room has.
@@ -275,9 +339,13 @@ impl Em<'_, '_, '_> {
         if self.z.damage_cnt & 0x7F != 0 {
             self.z.damage_cnt -= 1;
         }
+        self.work().lean = 0;
         match self.work().routine[0] {
             0 => self.init(),
             1 => self.mv(),
+            2 => self.em10_damage(),
+            3 => self.em10_die(),
+            7 => self.em10_corpse(),
             // `Spl_Scenario`, on the model's own bank.
             4 => {
                 self.work().bank = Bank::Pld;
@@ -288,7 +356,8 @@ impl Em<'_, '_, '_> {
         let held = self.kind() & TYPE_HELD != 0 || self.z.flags & FLAG_NECK_STILL != 0;
         let neck = &mut self.work().neck;
         neck.flags = (neck.flags & !2) | if held { 2 } else { 0 };
-        self.mover.rot_neck();
+        self.mover.rot_neck_em(self.world.player_neck);
+        self.z.last_routine = self.work().routine;
         let seq = self.mover.now_seq();
         if seq & SEQ_SOUND != 0 {
             self.z.sounds.push((seq >> 28) as u8);
@@ -325,6 +394,679 @@ impl Em<'_, '_, '_> {
 
     fn kind(&mut self) -> u16 {
         self.work().kind
+    }
+
+    /// `Esp_call` of the blood's type. The original's follows the part's matrix;
+    /// here it stays where it starts.
+    fn blood(&mut self, row: u8, size: u16, dir: i16, part: usize, point: [i32; 3]) {
+        let at = self
+            .mover
+            .part_point(part, point)
+            .unwrap_or(self.mover.player.pos);
+        self.world
+            .effects
+            .call(0, row, size, dir, at.map(|axis| axis as i16), false);
+    }
+
+    /// A point on `pSin_parts_ptr[8]`, the head, for the blood it starts with.
+    fn head_point(&self, x: i32, y: i32) -> [i32; 3] {
+        let [hx, hy, hz] = self
+            .mover
+            .tick
+            .skeleton
+            .relative
+            .get(8)
+            .map_or([0; 3], |at| at.map(i32::from));
+        [hx + x, hy + y, hz]
+    }
+
+    /// The first blood of `Em10Dm00`, `Em10Dm01` and `FUN_004587b0`: a shot at the
+    /// head or the body, on the side it came from.
+    fn hit_blood(&mut self, size: u16, offset: i32, dir: i16) {
+        if self.z.damage_no.is_multiple_of(3) {
+            self.blood(0, 0x17D0, dir, 1, [0, 800, 0]);
+        } else {
+            let point = self.head_point(offset, 300);
+            self.blood(0, size, dir, 0, point);
+        }
+    }
+
+    fn angle(&self) -> i16 {
+        self.mover.player.angle as i16
+    }
+
+    fn player_held(&self) -> bool {
+        (*self.world.lock as i8) < 0
+    }
+
+    /// `Em10_Damage`. Only the handguns reach here: the other weapons' branches,
+    /// which light and freeze it, aren't ported.
+    fn em10_damage(&mut self) {
+        if self.kind() & 1 != 0 {
+            self.dm_crawling();
+            return;
+        }
+        if self.z.flags & FLAG_RISING != 0 {
+            self.dm_rising();
+            return;
+        }
+        let weapon = self.work().routine[1];
+        let threshold = if self.kind() & 0x40 != 0 && weapon != 1 {
+            0x17
+        } else {
+            0
+        };
+        if self.work().routine[2] == 0 && self.z.at_sce_no <= threshold {
+            if self.z.at_obj_no == 1 || weapon == 1 {
+                self.z.at_obj_no = 1;
+                self.state(5, 0);
+                self.z.at_sce_no = (self.rnd() & 0xF) as i8 + 0x10;
+                let dir = self.angle();
+                if !self.z.damage_no.is_multiple_of(3) {
+                    let point = self.head_point(0, 500);
+                    self.blood(0, 0x1000, dir, 0, point);
+                } else {
+                    self.blood(0, 0x17D0, dir, 1, [0, 800, 0]);
+                }
+                return;
+            }
+            self.z.at_obj_no = 1;
+        }
+        if self.z.flags & FLAG_DOWN != 0 {
+            self.state(5, 6);
+            self.z.timers.3 = 1;
+            return;
+        }
+        if self.z.flags & (FLAG_LOST_ARM | FLAG_LOST_OTHER_ARM) == 0
+            && (self.z.d_life[1] as i8) < 0
+            && self.z.damage_flg & 0xC0 != 0
+        {
+            self.lose_arm();
+        }
+        self.dm00();
+    }
+
+    /// `Em10_Damage`'s arm coming off: which of them, by the side of the shot.
+    /// What the original throws away as a part of its own is just no longer drawn.
+    fn lose_arm(&mut self) {
+        self.z.sounds.push(9);
+        let part = if self.z.damage_flg & 0x80 != 0 {
+            self.z.flags |= FLAG_LOST_OTHER_ARM;
+            12
+        } else {
+            self.z.flags |= FLAG_LOST_ARM;
+            9
+        };
+        // `Rnd() & 1` swaps which of the two ends bleed.
+        self.rnd();
+        let dir = u16::from(self.rnd()) << 4;
+        self.blood(0, 8000, dir as i16, part, [0; 3]);
+        let dir = u16::from(self.rnd()) << 4;
+        self.blood(0, 7000, dir as i16, part + 1, [0; 3]);
+        for hidden in part..part + 3 {
+            player2::set_part_flags(self.work(), hidden as u8, 0);
+        }
+    }
+
+    /// `Em10Dm00`.
+    fn dm00(&mut self) {
+        if self.z.at_obj_no == 1 {
+            self.dm01();
+            return;
+        }
+        let weapon = usize::from(self.work().routine[1]);
+        let walk = self.z.walk;
+        if self.work().routine[2] == 0 {
+            if self.work().move_no != walk {
+                self.clip(walk, 0, 0xF);
+            }
+            if self.z.voice == 0 {
+                let slot = if self.rnd() & 1 == 0 { 0xC } else { 0xB };
+                self.moan(slot);
+            }
+            self.z.timers.3 = 0x18;
+            let count = self.work().move_cnt;
+            self.work().move_cnt = 0;
+            self.spd(Bank::Pld);
+            self.work().move_cnt = count;
+            self.spd(Bank::Pld);
+            self.work().routine[2] = 1;
+            self.z.timers.0 = 0;
+            self.z.timers.1 = 1;
+            let stagger = STAGGER.get(weapon).copied().unwrap_or(0);
+            self.z.at_sce_no = self.z.at_sce_no.wrapping_sub(stagger);
+            if self.kind() & 0x40 == 0 && self.z.at_sce_no < 1 && self.z.life > 0x50 {
+                self.z.at_sce_no = (self.rnd() & 0xF) as i8 + 0x10;
+            }
+            let mut turn = 0;
+            if self.z.damage_flg & 0x20 != 0 {
+                self.z.timers.1 = 0xFFFF;
+                turn = 0x800;
+            }
+            let dir = self.angle().wrapping_sub(turn);
+            let side = self.z.timers.1 as i16;
+            self.hit_blood(0x17D0, i32::from(side) * -100, dir);
+            self.goto_dest(0x10);
+        }
+        match self.work().routine[2] {
+            1 => {
+                self.goto_dest(0x10);
+                self.spd(Bank::Pld);
+                let work = self.work();
+                work.spd[0] >>= 1;
+                work.spd[2] >>= 1;
+                self.joint(Bank::Pld, 0x100);
+                let lean = self.lean_now();
+                self.work().lean = lean.wrapping_mul(-8);
+                let old = self.z.timers.0 as i16;
+                self.z.timers.0 = self.z.timers.0.wrapping_add(1);
+                if old > 2 {
+                    self.work().routine[2] = 2;
+                    self.z.timers.0 = 0x10;
+                }
+            }
+            2 => {
+                self.goto_dest(0x10);
+                self.spd(Bank::Pld);
+                self.joint(Bank::Pld, 0x100);
+                let lean = self.lean_now();
+                self.work().lean = lean.wrapping_neg();
+                let old = self.z.timers.0;
+                self.z.timers.0 = old.wrapping_sub(1);
+                if old == 0 {
+                    self.work().routine[2] = 3;
+                }
+                if self.distance < 0x514
+                    && !self.player_held()
+                    && self.z.floor == self.world.player_floor
+                    && !self.world.partner
+                {
+                    let angle = self.mover.player.angle;
+                    let flags = self.z.flags;
+                    if flags & FLAG_LOST_ARM == 0
+                        && self.player_within(angle.wrapping_add(0x100), 0x120)
+                    {
+                        self.state(3, 0);
+                    }
+                    if flags & FLAG_LOST_OTHER_ARM == 0
+                        && self.player_within(angle.wrapping_sub(0x100), 0x120)
+                    {
+                        self.state(3, 0);
+                    }
+                }
+            }
+            3 => {
+                if self.turn_to_player(0x200) == 0
+                    && self.distance < 4000
+                    && !self.player_held()
+                    && self.rnd() & 0xF == 0
+                {
+                    self.state(0xB, 0);
+                    return;
+                }
+                if self.turn_to_player(0x400) != 0 && self.rnd() & 1 != 0 {
+                    self.state(0xC, 0);
+                    return;
+                }
+                if self.rnd() & 1 != 0 {
+                    self.state(2, 0);
+                    return;
+                }
+                self.state(1, 0);
+                if self.work().move_no == walk {
+                    self.state(1, 1);
+                    let next = self.rnd();
+                    self.z.timers.0 = 0x1E;
+                    self.z.timers.3 = ((next & 0xF) * 2) as i8;
+                    let next = self.rnd();
+                    self.z.timers.2 = (next & 0x1F) + 0x1E;
+                    let next = self.rnd();
+                    self.z.timers.1 = u16::from(next) + 300;
+                }
+            }
+            _ => {}
+        }
+        if self.work().move_no == walk {
+            self.mover.add_speed_xz();
+        }
+    }
+
+    /// `Timer3 * Timer1 * Timer0`: how far a hit has it leaning.
+    fn lean_now(&self) -> i16 {
+        i16::from(self.z.timers.3)
+            .wrapping_mul(self.z.timers.1 as i16)
+            .wrapping_mul(self.z.timers.0 as i16)
+    }
+
+    /// `Em10Dm01`: knocked back.
+    fn dm01(&mut self) {
+        match self.work().routine[2] {
+            0 => {
+                let back = u8::from(self.z.damage_flg & 0x20 != 0);
+                self.clip(4 - back, 0, 3);
+                self.work().routine[2] = 1;
+                self.z.timers.1 = 10;
+                self.work().spd = [if back == 0 { -450 } else { 0 }, 0, 0];
+                self.mover.add_speed_xz();
+                self.goto_dest(0x10);
+                if self.z.voice == 0 {
+                    let slot = if self.rnd() & 1 == 0 { 0xD } else { 0xC };
+                    self.moan(slot);
+                }
+                let mut turn = 0;
+                self.z.timers.2 = 1;
+                if self.z.damage_flg & 0x20 != 0 {
+                    turn = 0x800;
+                    self.z.timers.2 = 0xFF;
+                }
+                let dir = self.angle().wrapping_sub(turn);
+                let side = i32::from(self.z.timers.2 as i8);
+                self.hit_blood(0x17D0, side * -100, dir);
+                if self.z.damage_no.is_multiple_of(3) {
+                    self.z.timers.2 = 0;
+                }
+            }
+            1 => {}
+            2 => {
+                let at_sce = self.z.at_sce_no;
+                self.state(1, 0);
+                if at_sce < 1 {
+                    let next = self.rnd();
+                    self.z.at_obj_no = 0;
+                    self.z.at_sce_no = (next & 0x10) as i8 + 0xF;
+                }
+                if self.turn_to_player(0x200) == 0
+                    && self.distance < 4000
+                    && !self.player_held()
+                    && self.rnd() & 3 == 0
+                {
+                    self.state(0xB, 0);
+                    return;
+                }
+                if self.distance < 3000 && self.turn_to_player(900) != 0 && self.rnd() & 1 != 0 {
+                    self.state(0xC, 0);
+                    return;
+                }
+                if self.rnd() & 1 != 0 {
+                    self.state(2, 0);
+                }
+                return;
+            }
+            _ => return,
+        }
+        self.spd(Bank::Weapon);
+        let ended = self.joint(Bank::Weapon, 0x400);
+        self.step(ended);
+        self.mover.add_speed_xz();
+        if self.z.timers.1 != 0 && self.z.timers.2 != 0 {
+            if self.z.timers.1 & 1 == 0 {
+                let size = if self.z.at_obj_no == 0 {
+                    8000
+                } else {
+                    self.work().spd[1] -= 500;
+                    0x13E8
+                };
+                let (first, second) = (self.rnd(), self.rnd());
+                let turn = (i16::from(first) - i16::from(second)).wrapping_mul(0x10);
+                let dir = self.angle().wrapping_add(turn);
+                self.blood(0, size, dir, 0, [0; 3]);
+            }
+            self.z.timers.1 -= 1;
+        }
+    }
+
+    /// `FUN_00457d10`: a hit while crawling.
+    fn dm_crawling(&mut self) {
+        match self.work().routine[2] {
+            0 => {
+                let count = self.rnd() & 7;
+                self.work().routine[2] = 1;
+                self.clip(6, count, 3);
+                self.blood(0, 6000, 0, 0, [0; 3]);
+                if self.z.voice == 0 {
+                    self.moan(0xC);
+                }
+            }
+            1 => {}
+            2 => {
+                self.work().kind = 1;
+                self.work().routine = [1, 0, 0, 0];
+                return;
+            }
+            _ => return,
+        }
+        let ended = self.joint(Bank::Weapon, 0x400);
+        self.step(ended);
+    }
+
+    /// `FUN_00457e60`: a hit while getting up, which only rocks it.
+    fn dm_rising(&mut self) {
+        if self.work().routine[2] == 0 {
+            self.work().routine[2] = 1;
+            self.z.timers.0 = 0;
+            self.z.timers.1 = 1;
+            self.z.timers.2 = 0;
+            if self.z.damage_flg & 0x20 != 0 {
+                self.z.timers.1 = 0xFFFF;
+            }
+            let dir = self.angle();
+            self.blood(0, 0x17D0, dir, 8, [0, 300, 0]);
+            if self.z.last_routine[0] == 1 {
+                self.z.rising_from = self.z.last_routine;
+            }
+            self.work().hokan = 0xF;
+            if self.z.voice == 0 {
+                self.moan(0xC);
+            }
+            self.z.timers.3 = 0x18;
+        }
+        let ended = match self.work().routine[2] {
+            1 => {
+                let ended = self.joint(Bank::Weapon, 0x100);
+                if !ended {
+                    let lean = self.lean_now();
+                    self.work().lean = lean.wrapping_mul(-8);
+                    let old = self.z.timers.0 as i16;
+                    self.z.timers.0 = self.z.timers.0.wrapping_add(1);
+                    if old >= 3 {
+                        self.work().routine[2] = 2;
+                        self.z.timers.0 = 0x10;
+                    }
+                }
+                ended
+            }
+            2 => {
+                let ended = self.joint(Bank::Weapon, 0x100);
+                if !ended {
+                    let lean = self.lean_now();
+                    self.work().lean = lean.wrapping_neg();
+                    let old = self.z.timers.0;
+                    self.z.timers.0 = old.wrapping_sub(1);
+                    if old == 0 {
+                        self.work().routine[2] = 3;
+                    }
+                }
+                ended
+            }
+            3 => self.joint(Bank::Weapon, 0x100),
+            _ => false,
+        };
+        if ended {
+            self.z.flags &= !(FLAG_RISING | FLAG_DOWN);
+            self.work().routine = self.z.rising_from;
+            self.work().routine[2] = self.work().routine[2].wrapping_add(1);
+            self.work().kind &= !TYPE_ON_FLOOR;
+            *self.be_flg |= BE_LOW | BE_HIGH;
+            self.z.atd.at_w = 500;
+            self.z.atd.w = 500;
+            self.z.atd.ofs_y = -0x5DC;
+            self.z.atd.at_h = 0x5DC;
+        }
+    }
+
+    /// `Em10_Die`.
+    fn em10_die(&mut self) {
+        self.z.flags &= !FLAG_NECK_STILL;
+        if self.kind() & 1 != 0 {
+            self.die_crawling();
+        } else if self.z.flags & FLAG_RISING != 0 {
+            self.die_rising();
+        } else if self.z.flags & FLAG_DOWN == 0 {
+            self.die_standing();
+        } else {
+            self.blood(0, 8000, 0, 0, [0; 3]);
+            let slot = if self.rnd() & 1 == 0 { 0xB } else { 0xD };
+            self.z.sounds.push(slot);
+            self.work().routine = [7, 9, 0, 0];
+        }
+    }
+
+    /// The end of a dying state's first tick: `Em_dead_flg_on` and the last moan.
+    fn death_cry(&mut self) {
+        let slot = if self.rnd() & 1 == 0 { 0xB } else { 0xD };
+        self.z.sounds.push(slot);
+        self.z.died = true;
+    }
+
+    /// `FUN_004587b0`.
+    fn die_standing(&mut self) {
+        if self.work().routine[2] == 0 {
+            let fall = self.rnd() & 1;
+            let fall = if self.z.flags & 0x2000 != 0 { 0 } else { fall };
+            self.z.timers.2 = fall;
+            self.z.flags &= !FLAG_FACE_DOWN;
+            if fall != 0 {
+                self.z.flags |= FLAG_FACE_DOWN;
+            }
+            self.work().routine[2] = 1;
+            self.clip(1 + fall, fall * 10, 0xF);
+            self.work().neck.flags |= 1;
+            self.z.damage_cnt |= 0x80;
+            let dir = self.angle();
+            self.hit_blood(0x1FA0, 0, dir);
+            self.death_cry();
+            self.z.timers.3 = 0;
+            self.work().spd[0] = 0xB;
+        } else if self.work().routine[2] == 2 {
+            self.work().routine = [7, 0, 0, 0];
+            if self.rnd() & 3 != 0
+                || self.z.flags & FLAG_FACE_DOWN != 0
+                || self.z.timers.3 != 0
+                || self.world.partner
+            {
+                return;
+            }
+            self.z.life = 1;
+            self.z.atd.ofs_y = -0x15E;
+            self.z.atd.at_h = 0x15E;
+            self.z.atd.at_w = 200;
+            self.z.atd.w = 200;
+            *self.be_flg = (*self.be_flg & !BE_HIGH) | BE_LOW;
+            self.work().kind = 0x2001;
+            let next = self.rnd();
+            self.work().routine = [1, if next & 7 != 0 { 2 } else { 0 }, 0, 0];
+            self.z.damage_cnt &= 0x7F;
+            return;
+        } else if self.work().routine[2] != 1 {
+            return;
+        }
+        if !self.z.damage_no.is_multiple_of(3) {
+            let count = i32::from(self.work().move_cnt);
+            let start = i32::from(self.z.timers.2) * 10;
+            if start + 4 <= count && count <= start + 0x10 && count & 1 != 0 {
+                let size = u16::from(self.rnd()) * 8 + 0xFD0;
+                let dir = u16::from(self.rnd()) << 4;
+                let point = self.head_point(0, 500);
+                self.blood(0, size, dir as i16, 0, point);
+            }
+        }
+        let planted = self.mover.foot_position();
+        let ended = self.joint(Bank::Weapon, 0x100);
+        self.step(ended);
+        if self.work().hokan == 0 {
+            self.mover.foot_set(planted);
+        }
+    }
+
+    /// `FUN_00458bf0`.
+    fn die_crawling(&mut self) {
+        match self.work().routine[2] {
+            0 => {
+                self.z.flags &= !FLAG_FACE_DOWN;
+                self.z.damage_cnt |= 0x80;
+                self.clip(7, 0, 0xF);
+                self.work().routine[2] = 1;
+                self.work().neck.flags |= 1;
+                let dir = self.angle();
+                self.blood(0, 0x1FA0, dir, 0, [0, 300, 0]);
+                self.death_cry();
+            }
+            1 => {}
+            2 => {
+                self.work().routine = [7, 0, 0, 0];
+                return;
+            }
+            _ => return,
+        }
+        let ended = self.joint(Bank::Weapon, 0x100);
+        self.step(ended);
+    }
+
+    /// `FUN_00459b60`: shot dead while getting up. The clip carries on from the
+    /// rise's if it's early enough, by which way up it is.
+    fn die_rising(&mut self) {
+        /// The frame it's too late by, then the clips either side of it.
+        const FALLS: [[u8; 3]; 3] = [[0x37, 0x16, 0x01], [0x28, 0x17, 0x01], [0x00, 0x01, 0x01]];
+        match self.work().routine[2] {
+            0 => {
+                let side = usize::from(self.z.rise_side);
+                self.z.flags |= FLAG_FACE_DOWN;
+                if side == 1 {
+                    self.z.flags &= !FLAG_FACE_DOWN;
+                }
+                let [limit, early, late] = FALLS[side.min(2)];
+                if self.work().move_cnt < limit {
+                    self.z.timers.3 = 0;
+                    self.clip(early, 0, 0x1F);
+                } else {
+                    self.z.flags &= !FLAG_FACE_DOWN;
+                    self.z.timers.3 = 1;
+                    self.clip(late, 0x1E, 0x1F);
+                }
+                self.z.damage_cnt |= 0x80;
+                self.work().routine[2] = 1;
+                self.work().neck.flags |= 1;
+                let dir = self.angle();
+                let point = self.head_point(0, 300);
+                self.blood(0, 0x1FA0, dir, 0, point);
+                self.death_cry();
+                self.work().spd[0] = 0xB;
+            }
+            1 => {}
+            2 => {
+                self.joint(Bank::Weapon, 0x80);
+                if self.work().hokan == 0 {
+                    self.work().routine[2] = 3;
+                }
+                return;
+            }
+            3 => {
+                self.work().routine = [7, 0, 0, 0];
+                return;
+            }
+            _ => return,
+        }
+        if self.joint(Bank::Weapon, 0x80) {
+            self.work().routine[2] = 2 + u8::from(self.z.timers.3 != 0);
+        }
+    }
+
+    /// `Em10_Scenario`, the state a body stays in: the pool under it spreads and
+    /// a few of them keep twitching.
+    fn em10_corpse(&mut self) {
+        let mut joint = false;
+        match self.work().routine[1] {
+            0 => {
+                let clip = if self.z.flags & FLAG_FACE_DOWN != 0 {
+                    0x16
+                } else {
+                    0x17
+                };
+                self.clip(clip, 0, 7);
+                self.work().neck.flags |= 1;
+                self.z.life = -1;
+                self.work().routine[1] = 1;
+                *self.be_flg |= 2;
+                self.z.timers.2 = 0x78;
+                self.z.timers.0 = 0x28;
+                self.work().spd[0] = 0;
+                self.z.died = true;
+                let next = self.rnd();
+                if !next.is_multiple_of(3) {
+                    self.work().routine[1] = 8;
+                    return;
+                }
+                self.z.timers.1 = 0;
+                self.spread_pool();
+                joint = true;
+            }
+            1 => {
+                self.spread_pool();
+                joint = true;
+            }
+            5 | 10 => joint = true,
+            2 => {
+                let next = self.rnd();
+                self.work().routine[1] = 3;
+                self.z.timers.3 = (next & 0xF) as i8 + 1;
+                let old = self.z.timers.0;
+                self.z.timers.0 = old.wrapping_sub(1);
+                if old != 0 {
+                    self.corpse_wait();
+                } else {
+                    self.work().routine[1] = 4;
+                    self.z.timers.0 = 0x1E;
+                }
+            }
+            3 => self.corpse_wait(),
+            4 => {
+                let old = self.z.timers.3;
+                self.z.timers.3 = old.wrapping_sub(1);
+                if old == 0 {
+                    self.work().routine[1] = 5;
+                }
+            }
+            6 => {
+                let next = self.rnd();
+                self.work().routine[1] = 4;
+                self.z.timers.3 = (next & 0x3F) as i8 + 0x3C;
+                let old = self.z.timers.0;
+                self.z.timers.0 = old.wrapping_sub(1);
+                if old == 0 {
+                    self.work().routine[1] = 7;
+                }
+            }
+            8 => {
+                self.spread_pool();
+                if self.z.timers.2 == 0 {
+                    self.work().routine[1] = 7;
+                }
+            }
+            9 => {
+                let clip = if self.z.flags & FLAG_FACE_DOWN != 0 {
+                    0x16
+                } else {
+                    7
+                };
+                self.clip(clip, 0, 7);
+                self.work().routine[1] = 10;
+                joint = true;
+            }
+            0xB => self.work().routine[1] = 0,
+            _ => {}
+        }
+        if joint {
+            let ended = self.joint(Bank::Weapon, 0x200);
+            self.work().routine[1] += u8::from(ended);
+        }
+        self.z.timers.1 = self.z.timers.1.wrapping_add(1);
+    }
+
+    fn corpse_wait(&mut self) {
+        self.spread_pool();
+        let old = self.z.timers.3;
+        self.z.timers.3 = old.wrapping_sub(1);
+        if old == 0 {
+            self.work().routine[1] = 1;
+        }
+    }
+
+    /// `Half_x` and `Half_z` grow while `Timer2` counts down.
+    fn spread_pool(&mut self) {
+        if self.z.timers.2 != 0 {
+            self.z.timers.2 -= 1;
+            self.z.pool += 5;
+        }
     }
 
     /// `Oba_ck_em`.
@@ -464,16 +1206,21 @@ impl Em<'_, '_, '_> {
 
     /// `Dir_pos_ck`: the player lies within `0x100` of `angle`.
     fn player_at(&mut self, angle: u16) -> bool {
+        self.player_within(angle, 0x100)
+    }
+
+    fn player_within(&self, angle: u16, within: i32) -> bool {
         let body = &*self.mover.player;
         let [x, _, z] = self.world.player;
         let direction = direction_ck(body.pos[0], body.pos[2], x, z);
-        (i32::from(direction) + 0x100 - i32::from(angle)) & 0xFFF < 0x200
+        (i32::from(direction) + within - i32::from(angle)) & 0xFFF < within * 2
     }
 
     /// `Em10_Init`.
     fn init(&mut self) {
         self.work().routine = [1, 0, 0, 0];
         self.z.damage_cnt = 0;
+        self.z.d_life = [0xD; 3];
         self.work().sce_flg = 0;
         let life = usize::from(self.world.rnd.shifted() & 0xF);
         self.z.life = LIFE[life];
@@ -483,13 +1230,12 @@ impl Em<'_, '_, '_> {
         } else if self.world.enemies < 4 {
             self.z.life += 0xF;
         }
-        let neck = &mut self.work().neck;
-        neck.flags = 4;
-        neck.words = [0, player2::NECK_AT_WORK, 0];
+        self.work().neck.flags = 0;
         let walk = self.world.rnd.shifted() & 7;
         self.z.walk = WALKS[usize::from(walk)];
         self.z.flags = 0;
-        self.rnd();
+        self.z.at_obj_no = 0;
+        self.z.at_sce_no = (self.rnd() & 0xF) as i8 + 0x10;
         let id = self.mover.tick.id;
         if id == 0x11 {
             self.z.flags |= FLAG_SMOKING;
@@ -1155,6 +1901,7 @@ impl Em<'_, '_, '_> {
             6 | 7 => {
                 if self.work().routine[2] == 6 {
                     self.z.flags |= FLAG_RISING;
+                    self.z.rise_side = u8::from(self.z.flags & FLAG_FACE_DOWN == 0);
                     self.clip(rise[side], 0, 0xF);
                     self.work().routine[2] = 7;
                     if self.z.voice == 0 && self.rnd() & 3 == 0 {
@@ -1303,6 +2050,7 @@ impl Em<'_, '_, '_> {
             3 | 4 => {
                 if self.work().routine[2] == 3 {
                     self.z.flags |= FLAG_RISING;
+                    self.z.rise_side = 2;
                     self.work().routine[2] = 4;
                     self.clip(0x15, 0, 0xF);
                     self.z.damage_cnt &= 0x7F;
@@ -1936,6 +2684,52 @@ fn crosses_height(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_shot_takes_life_and_starts_the_damage_or_the_dying_state() {
+        let mut character = Character {
+            id: 0x10,
+            be_flg: 1,
+            work: Work::default(),
+            body: crate::player::spawn(
+                crate::state::RoomId::parse("1140").unwrap(),
+                &Default::default(),
+            ),
+            kind: 0,
+            start: (0, 0),
+            with_room: false,
+            zombie: None,
+        };
+        let mut zombie = Zombie {
+            life: 20,
+            d_life: [5, 9, 9],
+            damage_cnt: 0x80,
+            ..Zombie::default()
+        };
+        let hit = crate::weapon2::Hit {
+            slot: 0,
+            weapon: 2,
+            band: 1,
+            region: 2,
+            damage: 15,
+            stun: 3,
+            count: 5,
+            flags: 0,
+        };
+        let from = character.body.pos;
+        take_hit(&mut character, &mut zombie, &hit, from);
+        assert_eq!(zombie.life, 5);
+        assert_eq!(character.work.routine, [2, 2, 0, 0]);
+        assert_eq!(zombie.d_life, [2, 9, 9]);
+        assert_eq!(zombie.damage_no, 5);
+        assert_eq!(zombie.damage_cnt, 0x85);
+
+        take_hit(&mut character, &mut zombie, &hit, from);
+        assert_eq!(zombie.life, -10);
+        assert_eq!(character.work.routine, [3, 2, 0, 0]);
+        // A count below nothing stays at its floor.
+        assert_eq!(zombie.d_life, [0xFF, 9, 9]);
+    }
 
     #[test]
     fn rnd_follows_the_originals_stream() {

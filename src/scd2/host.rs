@@ -182,7 +182,7 @@ pub const STATUS_SCENE: u8 = 27;
 const ENEMY_BANK: u8 = 6;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
 /// `Sce_em_set`'s flag of someone who can't die.
-const NO_ENEMY_FLAG: u8 = 0xFF;
+pub const NO_ENEMY_FLAG: u8 = 0xFF;
 /// `splayer_work`'s place among the characters, after `enemy_work`'s 16.
 pub const SPLAYER_SLOT: usize = 16;
 const CHARACTER_SLOTS: usize = SPLAYER_SLOT + 1;
@@ -439,6 +439,29 @@ impl Re2State {
     /// `Flg_on(&fg_room, ...)`, a finished scripted walk's.
     pub fn raise_room_flag(&mut self, flag: u8) {
         self.set_flag(ROOM_BANK, flag, 1);
+    }
+
+    /// `Esp_move`: its draws come from the game's stream, and its sounds join the rest.
+    pub fn tick_effects(&mut self, sca: Option<&crate::state::Sca>) {
+        self.effects.tick(&mut self.rnd, sca);
+        for (id, pos) in std::mem::take(&mut self.effects.sounds) {
+            if let Some(id) = crate::se2::SoundId::decode(id) {
+                let pos = pos.map(i32::from);
+                self.sounds.push(SoundRequest { id, pos });
+            }
+        }
+    }
+
+    /// The bank `Em_dead_flg_on` raises a dead enemy's flag in, the one
+    /// `sce_em_set` checks: by the stage and `fg_status`.
+    pub fn enemy_flag_bank(&self, stage: u8) -> u8 {
+        if stage.saturating_sub(1) < CAMPAIGN_ENEMY_STAGES
+            && !self.flag(STATUS_BANK, STATUS_ENEMY_FLAGS)
+        {
+            ENEMY_BANK
+        } else {
+            ENEMY_BANK + 1
+        }
     }
 
     /// `player_work`'s table of necks, by `plc_neck`'s number.
@@ -742,13 +765,7 @@ impl GameHost<'_> {
         }
         // Someone already dead stays so.
         let dead = at(8) as u8;
-        let bank = if self.game.id.stage.saturating_sub(1) < CAMPAIGN_ENEMY_STAGES
-            && !self.game.re2.flag(STATUS_BANK, STATUS_ENEMY_FLAGS)
-        {
-            ENEMY_BANK
-        } else {
-            ENEMY_BANK + 1
-        };
+        let bank = self.game.re2.enemy_flag_bank(self.game.id.stage);
         if dead != NO_ENEMY_FLAG && self.game.re2.flag(bank, dead) {
             return;
         }
@@ -788,7 +805,11 @@ impl GameHost<'_> {
             kind,
             start: (at(13) as u16, at(14) as u16),
             with_room: self.game.re2.room_loading,
-            zombie: zombie.then(|| crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8)),
+            zombie: zombie.then(|| {
+                let mut zombie = crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8);
+                zombie.dead_flag = dead;
+                zombie
+            }),
         }));
     }
 

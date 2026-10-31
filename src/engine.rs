@@ -3578,7 +3578,7 @@ impl GameSession {
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         if self.game.is_re2_room {
             let re2 = &mut self.game.re2;
-            re2.effects.tick(&mut re2.rnd);
+            re2.tick_effects(self.loaded.room.sca.as_ref());
             play_re2_sounds(
                 &mut self.music,
                 &mut self.sfx_cache,
@@ -12453,6 +12453,7 @@ fn re2_player_shadow<'a>(
         player_state,
         if claire { (0x1a4, 0x208) } else { (500, 600) },
         crate::sca::PLAYER_MASK,
+        shadow::PLAYER_COLOR,
         tween::Key::Player,
         tween,
         texture,
@@ -12461,11 +12462,13 @@ fn re2_player_shadow<'a>(
 
 /// A body's shadow in an RE2 room, at the ground under it (`MulKage`), if
 /// `Kage_work_sort` finds it in the camera's zone.
+#[allow(clippy::too_many_arguments)]
 fn re2_shadow<'a>(
     room: &RoomState,
     body: &player::PlayerState,
     (half_x, half_z): (i32, i32),
     mask: u16,
+    color: u32,
     key: tween::Key,
     tween: &mut tween::Tween,
     texture: &'a Image,
@@ -12490,7 +12493,7 @@ fn re2_shadow<'a>(
         half_z,
         shift: [0, 0],
         lift: 0,
-        tint: shadow::billboard_tint(shadow::PLAYER_COLOR),
+        tint: shadow::billboard_tint(color),
     })
 }
 
@@ -14034,6 +14037,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     }
     let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
     let room_anim = context.room.room_anim.as_ref();
+    let targets = crate::character2::targets(context.game);
     let tick = crate::player2::Tick {
         room: context.room,
         skeleton: &assets.emd.skeleton,
@@ -14050,9 +14054,11 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         stopped: context.game.re2.player_stopped(),
         weapon: context.game.re2_weapon(),
         necks: context.game.re2.necks(),
+        targets: &targets,
     };
     let arrived = crate::player2::player_move(&mut context.game.re2.player, context.player, &tick);
     context.game.re2_settle_ammo();
+    crate::character2::take_hit(context.game);
     if let Some(flag) = arrived {
         context.game.re2.raise_room_flag(flag);
     }
@@ -15910,11 +15916,20 @@ fn render_frame_on(
             let Some(character) = character.as_deref().filter(|c| c.be_flg & 1 != 0) else {
                 continue;
             };
+            // `Em10_Scenario` turns a body's shadow into its pool of blood.
+            let pool = character
+                .zombie
+                .as_ref()
+                .filter(|_| character.work.routine[0] == 7)
+                .map(|zombie| i32::from(zombie.pool));
+            let (half_x, half_z) = crate::player2::character_shadow(character.id);
+            let grown = pool.unwrap_or(0);
             let shadow = re2_shadow(
                 room,
                 &character.body,
-                crate::player2::character_shadow(character.id),
+                (half_x + grown, half_z + grown),
                 crate::character2::sca_mask(character.id),
+                pool.map_or(shadow::PLAYER_COLOR, |_| crate::zombie2::POOL_COLOR),
                 tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
                 tween,
                 texture,
