@@ -38,6 +38,9 @@ const MODE_MOVE: u8 = 1;
 const MODE_DAMAGE: u8 = 2;
 const MODE_DEAD: u8 = 3;
 const MODE_SCENARIO: u8 = 4;
+/// `Pl_Em_damage` and `Pl_Em_die`: an enemy has hold of the player.
+pub(crate) const MODE_HELD: u8 = 5;
+pub(crate) const MODE_HELD_DIE: u8 = 6;
 /// `routine[1]` under [`MODE_MOVE`]: the `pl_br_*` and `pl_mv_*` tables.
 const MOVE_IDLE: u8 = 0;
 const MOVE_FORWARD: u8 = 1;
@@ -56,6 +59,8 @@ const SPL_AUTO: u16 = 0x400;
 /// `Spl_Init`'s `Joint_move` late step.
 const SPL_INIT_STEP: u16 = 0x100;
 const STOPPED_ROUTINE: [u8; 4] = [MODE_SCENARIO, 0x14, 0, 0];
+/// A frame word's top bit, which `get_null_pos` passes over.
+const FRAME_SKIPPED: u32 = 0x8000;
 
 /// A clip by health (`D_life_u`), `pl_mv_00`..`04`.
 const IDLE_CLIPS: [u8; 3] = [2, 5, 8];
@@ -237,6 +242,8 @@ pub enum Bank {
     #[default]
     Weapon,
     Room,
+    /// `pSub1_kan_t_ptr`, which an enemy's grab points at its own model's.
+    Held,
 }
 
 /// The player's part of `PLAYER_WORK`.
@@ -290,6 +297,20 @@ pub struct Work {
     aimed_again: bool,
     /// Last tick's `Key`, for `Key_trg`.
     last_key: u16,
+    /// `Be_flg`'s bits that `Oba_ck_hit` reads.
+    pub be_flg: u32,
+    /// `DAT_0098a0a4`: the slot of the enemy that has hold of the player.
+    pub held_by: Option<usize>,
+    /// `+0x164`, which `Null_pos_set` adds a clip's movement to.
+    pub base: [i16; 3],
+    /// `Timer0`, `Timer1` and `Timer2` of the held states.
+    pub timers: [u16; 3],
+    /// `At_em_flg`: the slots `Oba_ck_em2` found the player touching.
+    pub at_em_flg: u32,
+    /// `+0x154`'s `0x1000`: `Pl_life_down` has already let the player live once.
+    pub near_death: bool,
+    /// `Snd_se_on`s of the held states, for the caller.
+    pub sounds: Vec<u32>,
     /// What `Weapon_at_ck` found this tick, for the enemy to take.
     pub hit: Option<crate::weapon2::Hit>,
     /// `WORD_00989eee`'s low bits: what the player did this tick, for enemies to
@@ -472,6 +493,13 @@ impl Default for Work {
             aim_target: None,
             aimed_again: false,
             last_key: 0,
+            be_flg: 1,
+            held_by: None,
+            base: [0; 3],
+            timers: [0; 3],
+            at_em_flg: 0,
+            near_death: false,
+            sounds: Vec::new(),
             hit: None,
             noise: 0,
             effects: Vec::new(),
@@ -553,6 +581,7 @@ pub struct Banks<'a> {
     pub pld: (&'a [Clip], &'a [Keyframe]),
     pub weapon: (&'a [Clip], &'a [Keyframe]),
     pub room: (&'a [Clip], &'a [Keyframe]),
+    pub held: (&'a [Clip], &'a [Keyframe]),
 }
 
 impl<'a> Banks<'a> {
@@ -561,6 +590,7 @@ impl<'a> Banks<'a> {
             Bank::Pld => self.pld,
             Bank::Weapon => self.weapon,
             Bank::Room => self.room,
+            Bank::Held => self.held,
         }
     }
 }
@@ -633,6 +663,44 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
     }
     mover.rot_neck();
     mover.arrived
+}
+
+/// `Player_move` while an enemy has hold of the player (`Pl_Em_damage`,
+/// `Pl_Em_die`), whose states draw `Rnd`.
+pub fn player_held(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    held: &mut Held<'_>,
+) {
+    if tick.stopped {
+        return;
+    }
+    if work.damage_cnt & !DAMAGE_LOCK != 0 {
+        work.damage_cnt -= 1;
+    }
+    work.noise &= 0xE0;
+    work.be_flg &= !4;
+    let mut mover = Mover::new(work, player, tick);
+    mover.em10_held(held);
+    mover.rot_neck();
+}
+
+/// Whether [`player_held`] runs the player, not [`player_move`].
+pub fn is_held(work: &Work) -> bool {
+    matches!(work.routine[0], MODE_HELD | MODE_HELD_DIE)
+}
+
+/// What [`player_held`] sees of the rest of the game.
+pub struct Held<'a> {
+    pub holder: [i32; 3],
+    pub rnd: &'a mut crate::zombie2::Rnd,
+    pub lock: &'a mut u8,
+    pub life: &'a mut i16,
+    /// `Be_flg`'s bits to clear from the holder: the hold has ended.
+    pub released: bool,
+    /// The slots a shove threw back.
+    pub knocks: u32,
 }
 
 /// A tick of [`player_move`]: the state the original keeps in globals.
@@ -1975,6 +2043,7 @@ impl Mover<'_, '_> {
             Bank::Pld => ClipSource::Emd,
             Bank::Weapon => ClipSource::Emw,
             Bank::Room => ClipSource::Room,
+            Bank::Held => ClipSource::Damage,
         };
         let anim = &mut self.player.anim;
         anim.clip = usize::from(self.work.move_no);
@@ -1988,6 +2057,300 @@ impl Mover<'_, '_> {
         self.work.move_cnt = anim.frame as u8;
         self.work.hokan = anim.blend_counter as u8;
         ended
+    }
+
+    /// `Set_base_pos`: where this body's clip must start for it to be here now.
+    pub(crate) fn set_base_pos(&mut self) -> [i16; 3] {
+        let [x, y, z] = self.null_pos(0);
+        let pos = self.player.pos;
+        self.work.base = [
+            pos[0].wrapping_sub(x) as i16,
+            pos[1].wrapping_sub(y) as i16,
+            pos[2].wrapping_sub(z) as i16,
+        ];
+        self.work.base
+    }
+
+    /// `Null_pos_set`: the body stands where the clip's frame puts it from its
+    /// base, turned by `turn` more than it faces.
+    pub(crate) fn null_pos_set(&mut self, turn: u16) {
+        let [x, y, z] = self.null_pos(turn);
+        let base = self.work.base.map(i32::from);
+        self.player.pos = [base[0] + x, base[1] + y, base[2] + z];
+    }
+
+    /// `get_null_pos`, turned by `RotMatrixY`.
+    fn null_pos(&self, turn: u16) -> [i32; 3] {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let frames = clips
+            .get(usize::from(self.work.move_no))
+            .map_or(&[][..], |clip| clip.frames.as_slice());
+        let frame = frames
+            .iter()
+            .skip(usize::from(self.work.move_cnt))
+            .find(|frame| frame.flags & FRAME_SKIPPED == 0);
+        let Some(keyframe) = frame.and_then(|frame| keyframes.get(usize::from(frame.keyframe)))
+        else {
+            return [0; 3];
+        };
+        let [x, y, z] = keyframe.vertex.map(i32::from);
+        let (x, z) = rotate(self.player.angle.wrapping_add(turn), x, z);
+        [x, y, z]
+    }
+
+    /// `FUN_0045a820`, `FUN_0045b000`: the zombie's table of what it does to the
+    /// player it holds.
+    fn em10_held(&mut self, held: &mut Held<'_>) {
+        if self.work.routine[0] == MODE_HELD_DIE {
+            self.held_dying(held);
+            return;
+        }
+        match self.work.routine[1] {
+            0 | 1 => self.held_standing(held),
+            2 | 3 => self.held_low(held),
+            _ => self.held_dying(held),
+        }
+    }
+
+    /// `Esp_call`'s blood from a body part, on a turned offset.
+    fn held_blood(&mut self, size: u16, part: usize, point: [i32; 3], rnd: u8) {
+        let back = u16::from(self.work.routine[1] & 1);
+        let dir = (u16::from(rnd).wrapping_add(back * 0x400) * 2)
+            .wrapping_sub(0x100)
+            .wrapping_add(self.player.angle);
+        let at = self.part_point(part, point).unwrap_or(self.player.pos);
+        self.work.effects.push(EffectCall {
+            kind: 0,
+            row: 0,
+            size,
+            dir: dir as i16,
+            at: at.map(|axis| axis as i16),
+        });
+    }
+
+    /// The held states' first tick: the clip, facing the enemy, and the turn
+    /// that the clip's movement takes if it comes from behind.
+    fn held_start(&mut self, held: &Held<'_>, clip: u8) {
+        self.work.routine[2] = 1;
+        self.work.timers[0] = 0x800;
+        self.work.bank = Bank::Held;
+        self.work.move_no = clip;
+        self.work.move_cnt = 0;
+        self.work.hokan = 0xF;
+        let [x, _, z] = held.holder;
+        let target = direction_ck(self.player.pos[0], self.player.pos[2], x, z);
+        self.player.angle = goto(self.player.angle, target, 0x800);
+        if self.work.routine[1] & 1 != 0 {
+            self.player.angle = self.player.angle.wrapping_add(0x800) & 0xFFF;
+            self.work.timers[0] = 0;
+        }
+    }
+
+    fn held_clip(&mut self, clip: u8, hokan: u8) {
+        self.work.move_no = clip;
+        self.work.move_cnt = 0;
+        self.work.hokan = hokan;
+    }
+
+    fn held_null_pos(&mut self) {
+        let turn = self.work.timers[0];
+        self.null_pos_set(turn);
+    }
+
+    /// The hold ending: `Be_flg`'s bits on the enemy go with the caller's
+    /// [`released`].
+    fn held_end(&mut self, held: &mut Held<'_>) {
+        self.work.routine = [MODE_MOVE, 0, 0, 0];
+        *held.lock &= 0x7F;
+        self.work.neck.flags &= 0xED;
+        self.work.be_flg &= !0x1004;
+        self.work.bank = Bank::Weapon;
+        held.released = true;
+    }
+
+    /// `FUN_0045a880`: held from the front or the back, standing.
+    fn held_standing(&mut self, held: &mut Held<'_>) {
+        const CLIPS: [u8; 2] = [0, 3];
+        const POINTS: [[i32; 3]; 2] = [[0, 200, 100], [100, -100, -200]];
+        let back = usize::from(self.work.routine[1] & 1);
+        let clip = CLIPS[back];
+        if self.work.routine[2] == 0 {
+            self.held_start(held, clip);
+            self.work.timers[2] = 0;
+            let rnd = held.rnd.draw();
+            self.work.sounds.push(u32::from(rnd & 1) << 17 | 0x400_0001);
+            self.work.timers[1] = 0;
+            self.work.neck.flags |= 0x12;
+        }
+        match self.work.routine[2] {
+            1 => {
+                self.held_null_pos();
+                let ended = self.joint_move_late(0x100);
+                self.work.routine[2] += u8::from(ended);
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.routine[2] = 3;
+                    self.held_clip(clip + 1, 0);
+                }
+                if self.work.move_cnt == 0xF {
+                    let rnd = held.rnd.draw();
+                    self.held_blood(0x17D0, 8, POINTS[back], rnd);
+                    self.work.timers[2] = 0;
+                }
+                self.held_null_pos();
+                self.joint_move_late(0x100);
+            }
+            4 | 5 => {
+                if self.work.routine[2] == 4 {
+                    self.work.routine[2] = 5;
+                    self.held_clip(clip + 2, 7);
+                    if self.work.timers[2] != 0 {
+                        let rnd = held.rnd.draw();
+                        self.held_blood(0x17D0, 8, POINTS[back], rnd);
+                    }
+                }
+                self.held_null_pos();
+                let ended = self.joint_move_late(0x200);
+                self.work.routine[2] += u8::from(ended);
+                if (9..0xE).contains(&self.work.move_cnt) {
+                    let flags = self.work.at_em_flg;
+                    held.knocks |= flags & !u32::from(self.work.timers[1]);
+                    self.work.timers[1] |= flags as u16;
+                }
+            }
+            6 => self.held_end(held),
+            _ => {}
+        }
+    }
+
+    /// `FUN_0045aca0`: a crawling zombie has hold of the player's legs.
+    fn held_low(&mut self, held: &mut Held<'_>) {
+        const CLIPS: [u8; 2] = [6, 10];
+        const POINTS: [[i32; 3]; 2] = [[-400, -100, 0], [200, -100, 0]];
+        let back = usize::from(self.work.routine[1] & 1);
+        let clip = CLIPS[back];
+        self.work.be_flg |= 4;
+        if self.work.routine[2] == 0 {
+            self.held_start(held, clip);
+            self.work.sounds.push(0x400_0001);
+            self.work.neck.flags |= 0x12;
+        }
+        match self.work.routine[2] {
+            1 => {
+                self.held_null_pos();
+                let ended = self.joint_move_late(0x100);
+                self.work.routine[2] += u8::from(ended);
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.routine[2] = 3;
+                    self.held_clip(clip + 1, 0);
+                }
+                if self.work.move_cnt == 0 {
+                    let rnd = held.rnd.draw();
+                    self.held_blood(0xFD0, 3, POINTS[back], rnd);
+                }
+                if self.work.move_cnt == 3 {
+                    let rnd = held.rnd.draw();
+                    self.held_blood(0x17D0, 3, POINTS[back], rnd);
+                }
+                self.held_null_pos();
+                self.joint_move_late(0x100);
+            }
+            4 | 5 => {
+                if self.work.routine[2] == 4 {
+                    self.work.routine[2] = 5;
+                    self.held_clip(clip + 2, 7);
+                }
+                self.held_null_pos();
+                let ended = self.joint_move_late(0x200);
+                self.work.routine[2] += u8::from(ended);
+            }
+            6 | 7 => {
+                if self.work.routine[2] == 6 {
+                    self.held_clip(9, 0);
+                    self.work.routine[2] = 7;
+                    if back != 0 {
+                        self.player.angle = self.player.angle.wrapping_add(0x800) & 0xFFF;
+                        self.work.timers[0] = 0x800;
+                    }
+                }
+                self.held_null_pos();
+                let ended = self.joint_move_late(0x200);
+                self.work.routine[2] += u8::from(ended);
+            }
+            8 => self.held_end(held),
+            _ => {}
+        }
+    }
+
+    /// `FUN_0045b070`: the player dies in the enemy's hands.
+    fn held_dying(&mut self, held: &mut Held<'_>) {
+        const CLIPS: [u8; 2] = [0xD, 0xF];
+        match self.work.routine[2] {
+            0 | 1 => {
+                if self.work.routine[2] == 0 {
+                    let back = usize::from(self.work.routine[1] & 1);
+                    self.work.routine[2] = 1;
+                    self.work.timers[0] = if back != 0 { 0 } else { 0x800 };
+                    self.work.bank = Bank::Held;
+                    self.held_clip(CLIPS[back], 0xF);
+                    self.work.sounds.push(0x403_0001);
+                    self.work.neck.flags |= 0x13;
+                }
+                self.held_null_pos();
+                let ended = self.joint_move_late(0x100);
+                let count = self.work.move_cnt;
+                self.work.routine[2] += u8::from(ended);
+                if count > 0x28 && count < 99 && count & 1 == 0 {
+                    let dir = u16::from(held.rnd.draw()) << 4;
+                    let size = u16::from(held.rnd.draw()) * 8 + 0xBD0;
+                    self.held_part_blood(size, dir);
+                }
+                if count > 99 && count < 0x69 {
+                    let dir = u16::from(held.rnd.draw()) << 4;
+                    self.held_part_blood(0x17D0, dir);
+                    let dir = u16::from(held.rnd.draw()) << 4;
+                    self.held_part_blood(0x1BD0, dir);
+                }
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.routine[2] = 3;
+                    self.work.move_cnt = 0;
+                    self.work.move_no += 1;
+                    *held.life = i16::MIN;
+                }
+                self.work.hokan = 10;
+                let ended = self.joint_move_late(0x100);
+                self.work.routine[2] += u8::from(ended);
+            }
+            4 | 5 => {
+                if self.work.routine[2] == 4 {
+                    self.work.routine[2] = 5;
+                    self.work.timers[2] = u16::from(held.rnd.draw() & 0x1F) + 3;
+                }
+                let left = self.work.timers[2];
+                self.work.timers[2] = left.wrapping_sub(1);
+                if left == 0 {
+                    self.work.routine[2] = 3;
+                }
+            }
+            6 => self.work.routine = [7, 0, 0, 0],
+            _ => {}
+        }
+    }
+
+    fn held_part_blood(&mut self, size: u16, dir: u16) {
+        let at = self.part_point(8, [0; 3]).unwrap_or(self.player.pos);
+        self.work.effects.push(EffectCall {
+            kind: 0,
+            row: 0,
+            size,
+            dir: dir as i16,
+            at: at.map(|axis| axis as i16),
+        });
     }
 
     /// `Snd_se_walk` on a frame marked as a footfall.
@@ -2701,6 +3064,7 @@ mod tests {
                     pld: bank,
                     weapon: bank,
                     room: bank,
+                    held: bank,
                 },
                 input,
                 options: Options::default(),
@@ -2714,6 +3078,71 @@ mod tests {
             };
             player_move(&mut self.work, &mut self.player, &tick)
         }
+    }
+
+    /// Runs a dead player's hold until `done`, or panics.
+    fn run_held(setup: &mut Setup, life: &mut i16, done: impl Fn(&Work) -> bool) {
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 0,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: Default::default(),
+            targets: &[],
+        };
+        let mut rnd = crate::zombie2::Rnd::default();
+        let mut lock = 0;
+        for _ in 0..200 {
+            let mut held = Held {
+                holder: [0; 3],
+                rnd: &mut rnd,
+                lock: &mut lock,
+                life,
+                released: false,
+                knocks: 0,
+            };
+            player_held(&mut setup.work, &mut setup.player, &tick, &mut held);
+            if done(&setup.work) {
+                return;
+            }
+        }
+        panic!("never got there: {:?}", setup.work.routine);
+    }
+
+    #[test]
+    fn a_player_dying_in_a_zombies_hands_ends_with_lifes_mark() {
+        let mut setup = Setup::new(0);
+        (setup.clips, setup.keyframes) = bank(0x11, 4, 0);
+        setup.work.routine = [MODE_HELD_DIE, 1, 0, 0];
+        let mut life = -20;
+        run_held(&mut setup, &mut life, |work| work.routine[2] == 1);
+        assert_eq!(setup.work.move_no, 0xF);
+        assert_eq!(life, -20);
+        run_held(&mut setup, &mut life, |work| work.routine[2] == 3);
+        assert_eq!(setup.work.move_no, 0x10);
+        assert_eq!(life, i16::MIN);
+    }
+
+    #[test]
+    fn a_dead_players_wait_starts_counting_on_the_tick_it_draws() {
+        let mut setup = Setup::new(0);
+        setup.work.routine = [MODE_HELD_DIE, 0, 4, 0];
+        let mut life = i16::MIN;
+        run_held(&mut setup, &mut life, |work| work.routine[2] == 5);
+        // `Rnd`'s first draw, 0x7D, gives 0x1D + 3, less the tick just run.
+        assert_eq!(setup.work.timers[2], 0x1F);
     }
 
     fn input(up: bool, right: bool, run: bool) -> Input {
@@ -3048,6 +3477,7 @@ mod tests {
                 pld: bank,
                 weapon: bank,
                 room: bank,
+                held: bank,
             },
             input: input(true, false, false),
             options: Options::default(),

@@ -253,8 +253,9 @@ pub fn update_banks(
 /// the message gate clear, exactly where the original's `player_state_01`
 /// control handler runs.
 pub fn control_gate(game: &mut GameState, player: &mut PlayerState) -> bool {
-    // 0x00495180: dead - fall into the death animation and stop.
-    if game.entities[0].health < 0 {
+    // 0x00495180: dead - fall into the death animation and stop. RE2's player
+    // dies in `player2`.
+    if game.entities[0].health < 0 && !game.is_re2_room {
         // A back-shot death plays turned around: attackDirection 0x7FFF
         // flips the facing 180 degrees. The spin has to go through
         // `player.angle`: the engine mirrors it onto entity 0 every tick, so

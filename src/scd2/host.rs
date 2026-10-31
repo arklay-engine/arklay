@@ -425,6 +425,11 @@ impl Re2State {
         self.flag(STOP_BANK, 0)
     }
 
+    /// `fg_stop`, for `Die`.
+    pub(crate) fn fg_stop_mut(&mut self) -> &mut u32 {
+        &mut self.banks[usize::from(STOP_BANK)][0]
+    }
+
     /// `Sce_work_clr`'s `fg_tick`, which is the room bank's second word: the
     /// flags a walk's end raises for one pass of the scripts.
     pub fn clear_tick_flags(&mut self) {

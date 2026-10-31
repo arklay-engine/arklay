@@ -1302,6 +1302,7 @@ fn no_event_holds_the_player_for_good() {
                             pld: (&emd.clips, &emd.keyframes),
                             weapon: (&emw.clips, &emw.keyframes),
                             room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
+                            held: empty,
                         },
                         input: Default::default(),
                         options: Default::default(),

@@ -55,6 +55,121 @@ pub fn tick(
     }
 }
 
+/// The player's `Atd[0]` at `pos`, as `Oba_set_ofs` leaves it.
+fn player_atd(pos: [i32; 3]) -> crate::zombie2::Atd {
+    crate::zombie2::Atd {
+        ofs_y: -0x5FA,
+        at_w: PLAYER_WIDTH,
+        at_h: 0x5FA,
+        w: PLAYER_WIDTH,
+        at: [pos[0], pos[1] - 0x5FA, pos[2]],
+    }
+}
+
+/// What the slots in play show `Oba_ck_hit`, in `player_work`'s order.
+fn slot_bodies(game: &GameState) -> Vec<crate::zombie2::Oba> {
+    let in_play = game.re2.characters.0.iter().enumerate();
+    in_play
+        .filter_map(|(slot, other)| Some((slot, other.as_deref()?)))
+        .filter(|(_, other)| other.be_flg & 1 != 0)
+        .map(|(slot, other)| crate::zombie2::Oba {
+            slot: slot as u8,
+            be_flg: other.be_flg,
+            atd: other.zombie.as_ref().map_or_else(
+                || crate::zombie2::Atd {
+                    ofs_y: -0x5FA,
+                    at_w: other.body.radius as u16,
+                    at_h: 0x5FA,
+                    w: other.body.radius as u16,
+                    at: [
+                        other.body.pos[0],
+                        other.body.pos[1] - 0x5FA,
+                        other.body.pos[2],
+                    ],
+                },
+                |zombie| zombie.atd,
+            ),
+        })
+        .collect()
+}
+
+/// `Oba_ck_em2`: the player's push out of the bodies in play, after `Player_move`.
+pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState) {
+    let mut atd = player_atd(player.pos);
+    let be_flg = game.re2.player.be_flg;
+    let mut touching = 0;
+    for other in slot_bodies(game) {
+        if crate::zombie2::oba_hit(&other, be_flg, &mut atd, &mut player.pos) {
+            touching |= 1 << other.slot;
+        }
+    }
+    game.re2.player.at_em_flg = touching;
+}
+
+/// `Em10` throws a zombie back (`Routine` `0x901`), if it can be.
+fn knock(game: &mut GameState, slot: usize, back: bool) {
+    let Some(Some(other)) = game.re2.characters.0.get_mut(slot) else {
+        return;
+    };
+    let Some(zombie) = other.zombie.as_mut() else {
+        return;
+    };
+    if other.id & 0x10 != 0x10 || !zombie.can_be_knocked(other.work.kind) {
+        return;
+    }
+    other.work.routine = [1, 9, 0, 0];
+    zombie.knocked(back);
+}
+
+/// `Player_move` while an enemy holds the player. `FUN_0045a880`'s shove throws
+/// back the slots the player touched.
+pub fn player_held(
+    game: &mut GameState,
+    player: &mut crate::player::PlayerState,
+    tick: &player2::Tick<'_>,
+) {
+    let slot = game.re2.player.held_by.unwrap_or(usize::MAX);
+    let holder = game
+        .re2
+        .characters
+        .0
+        .get(slot)
+        .and_then(|character| character.as_deref())
+        .map_or(player.pos, |character| character.body.pos);
+    let re2 = &mut game.re2;
+    let mut held = player2::Held {
+        holder,
+        rnd: &mut re2.rnd,
+        lock: &mut re2.player_lock,
+        life: &mut game.entities[0].health,
+        released: false,
+        knocks: 0,
+    };
+    player2::player_held(&mut re2.player, player, tick, &mut held);
+    let (released, knocks) = (held.released, held.knocks);
+    if released && let Some(Some(character)) = game.re2.characters.0.get_mut(slot) {
+        character.be_flg &= !0x1004;
+    }
+    for other in 0..game.re2.characters.0.len().min(32) {
+        if knocks & (1 << other) == 0 {
+            continue;
+        }
+        // `~Cdir_ck2`: the shove comes from in front of it, or behind.
+        let front = game.re2.characters.0[other]
+            .as_deref()
+            .is_some_and(|other| {
+                let to = player2::direction_ck(
+                    player.pos[0],
+                    player.pos[2],
+                    other.body.pos[0],
+                    other.body.pos[2],
+                );
+                other.body.angle.wrapping_sub(to).wrapping_add(0x400) & 0xFFF < 0x800
+            });
+        knock(game, other, !front);
+    }
+}
+
 /// What the player's routine sees of the slots, in `enemy_work`'s order.
 pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
     let characters = game.re2.characters.0.iter().enumerate();
@@ -84,6 +199,14 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
 /// What the player's tick asked of the effects and the slots: the shot's
 /// `Esp_call`s, and what it found goes to who it hit.
 pub fn take_hit(game: &mut GameState) {
+    let pos = game.entities[0].pos;
+    for sound in std::mem::take(&mut game.re2.player.sounds) {
+        if let Some(id) = crate::se2::SoundId::decode(sound) {
+            game.re2
+                .sounds
+                .push(crate::scd2::host::SoundRequest { id, pos });
+        }
+    }
     for call in std::mem::take(&mut game.re2.player.effects) {
         game.re2
             .effects
@@ -119,41 +242,12 @@ fn run_zombie(
 ) {
     let tick = tick_of(room, game, character, slot, model);
     let player = game.entities[0].pos;
-    // `player_work`'s bodies: the player, then the slots.
     let mut bodies = vec![crate::zombie2::Oba {
-        slot: 0,
-        be_flg: 1,
-        atd: crate::zombie2::Atd {
-            ofs_y: -0x5FA,
-            at_w: PLAYER_WIDTH,
-            at_h: 0x5FA,
-            w: PLAYER_WIDTH,
-            at: [player[0], player[1] - 0x5FA, player[2]],
-        },
+        slot: crate::zombie2::PLAYER_BODY,
+        be_flg: game.re2.player.be_flg,
+        atd: player_atd(player),
     }];
-    let in_play = game.re2.characters.0.iter().flatten();
-    bodies.extend(
-        in_play
-            .filter(|other| other.be_flg & 1 != 0)
-            .map(|other| crate::zombie2::Oba {
-                slot: 0,
-                be_flg: other.be_flg,
-                atd: other.zombie.as_ref().map_or_else(
-                    || crate::zombie2::Atd {
-                        ofs_y: -0x5FA,
-                        at_w: other.body.radius as u16,
-                        at_h: 0x5FA,
-                        w: other.body.radius as u16,
-                        at: [
-                            other.body.pos[0],
-                            other.body.pos[1] - 0x5FA,
-                            other.body.pos[2],
-                        ],
-                    },
-                    |zombie| zombie.atd,
-                ),
-            }),
-    );
+    bodies.extend(slot_bodies(game));
     let sca = room
         .sca
         .as_ref()
@@ -171,9 +265,20 @@ fn run_zombie(
     let noise = game.re2.player.noise;
     let player_neck = game.re2.player.neck.position;
     let stage = game.id.stage;
+    let player_angle = game.entities[0].angle;
+    let player_id = game.id.player_flag;
     let re2 = &mut game.re2;
+    let gacha = re2.key_trg & 0x34F != 0;
     let effects = &mut re2.effects;
+    let player_life = &mut game.entities[0].health;
     let mut world = crate::zombie2::World {
+        slot,
+        pl: &mut re2.player,
+        player_angle,
+        player_life,
+        gacha,
+        player_id,
+        knocks: Vec::new(),
         player,
         player_neck,
         player_floor: crate::sca::floor_of(player[1]),
@@ -191,7 +296,19 @@ fn run_zombie(
         effects,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
+    let knocks = std::mem::take(&mut world.knocks);
     let pos = character.body.pos;
+    if player2::is_held(&re2.player)
+        && re2.player.held_by == Some(slot)
+        && re2.player.routine[2] == 0
+        && let Some(bank) = model.banks.get(1)
+    {
+        game.player_damage = Some(std::sync::Arc::new(crate::game::PlayerDamageBank {
+            keyframes: std::sync::Arc::new(bank.keyframes.clone()),
+            clips: std::sync::Arc::new(bank.clips.clone()),
+        }));
+    }
+    let re2 = &mut game.re2;
     if std::mem::take(&mut zombie.died) && zombie.dead_flag != NO_ENEMY_FLAG {
         let bank = re2.enemy_flag_bank(stage);
         re2.set_flag(bank, zombie.dead_flag, 1);
@@ -201,6 +318,16 @@ fn run_zombie(
         if let Some(id) = crate::se2::SoundId::decode(id) {
             re2.sounds.push(crate::scd2::host::SoundRequest { id, pos });
         }
+    }
+    let mine = character.body.angle;
+    for other in knocks.into_iter().map(usize::from) {
+        // `Cdir_ck`.
+        let behind = game.re2.characters.0.get(other).is_some_and(|target| {
+            target.as_deref().is_some_and(|target| {
+                target.body.angle.wrapping_sub(mine).wrapping_add(0x400) & 0xFFF < 0x800
+            })
+        });
+        knock(game, other, behind);
     }
 }
 
@@ -332,6 +459,7 @@ pub fn tick_of<'a>(
                 .first()
                 .map_or(empty, |bank| (&bank.clips, &bank.keyframes)),
             room: room_anim.map_or(empty, |anim| (&anim.clips, &anim.keyframes)),
+            held: empty,
         },
         input: Default::default(),
         options: game.player_options,
