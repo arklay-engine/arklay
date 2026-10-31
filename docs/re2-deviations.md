@@ -44,7 +44,19 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **Footsteps.** `Floor_check`'s zones choose the sound. Water, `+0x1e4`'s case and the core slots aren't ported, and `flr_set` does nothing.
 - **Room 11D.** The retail PC data has no `room11d.sap`, though its script plays slot 33, so the conversion takes the PlayStation samples in the room file, at a fixed 22050 Hz.
 
+## Effects
+
+- **Which effects move.** `Esp_call`'s behaviours 0 to 4, 6, 0xB, 0xC and 0xD are ported, which covers room 100's fire and smoke. The others only play their frames in place and log once.
+- **3D effects.** `Esp_trans_3d`'s sprites aren't drawn.
+- **Attached effects.** An effect on a body's matrix is placed as if on the world's.
+- **The sheets.** A room's effects use the low-resolution TIMs in its RDT, not `espdat1` and `espdat2`. Of the shared sheets only page 0x1E's top 168 rows are converted.
+- **Randomness.** Effects draw from their own stream, not `Rnd`.
+- **Collisions and pauses.** Effects don't hit water or SCA records, and `fg_stop` doesn't stop them.
+- **Smoothing.** Effect quads aren't tweened at high frame rates.
+
 ## Game flow
+
+- **Debug jumps.** The player arrives through the door back from a neighbour room. With no such door the player stands in the room's own first door, and with no door at all under the first camera. The cut is the first of the door's, the zone's and the rest that shows the player. The original has no such jump. In rooms 200 and 500 no cut shows the placement.
 
 - **Pick-ups.** The item goes straight into the inventory with a "You picked up" message. There is no pick-up screen or item model.
 - **Messages.** The ones the executable draws itself are written from memory, and every message uses RE1's Western font. A room's text is its RDT's English list (`rdt + 0x40`), where the executable reads the list before it (`rdt + 0x3C`), so a line with text reveals at the English length; a voiced line has none in either list, so its timing is the original's. `xa_on` plays its line and `wsleep` waits for it, for as long as the line plays with sound, and for `Xa_control`'s count without (half that), so a trace matches the reference, which runs without sound.

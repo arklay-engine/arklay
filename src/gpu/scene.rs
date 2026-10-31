@@ -487,6 +487,8 @@ pub struct SpriteRun<'a> {
     /// mask's HD replacement when its own hash doesn't
     /// ([`crate::htexture::HdTable::paired_masks`]).
     pub background: Option<&'a Image>,
+    /// How an effect billboard meets the frame.
+    pub op: render::EffectBlend,
 }
 
 /// The frame's sprites: `before` draws ahead of the meshes (background,
@@ -557,6 +559,7 @@ impl<'a> Sprites<'a> {
             first: first as u32,
             count: count as u32,
             background: None,
+            op: render::EffectBlend::Normal,
         })
     }
 }
@@ -682,7 +685,11 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                 // mask only covers one strictly behind it.
                 quad.key as f32 - 1.0,
             );
-            sprites.after.extend(sprites.run(page, first));
+            sprites.after.extend(
+                sprites
+                    .run(page, first)
+                    .map(|run| SpriteRun { op: quad.op, ..run }),
+            );
         }
     }
 

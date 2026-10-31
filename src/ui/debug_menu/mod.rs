@@ -405,7 +405,12 @@ impl DebugMenu {
                 ("label", text("UI_DEBUG_PLAYER_CHARACTER")),
                 (
                     "choices",
-                    Value::list(character_names(game).iter().map(|&n| Value::from(n)).collect()),
+                    Value::list(
+                        character_names(game)
+                            .iter()
+                            .map(|&n| Value::from(n))
+                            .collect(),
+                    ),
                 ),
                 ("value", Value::from(i64::from(character))),
             ]),
@@ -1332,7 +1337,10 @@ mod tests {
         game.is_re2_room = true;
         assert_eq!(character_names(&game), ["Leon", "Claire"]);
         apply_change("debug.character.value", 3, &mut game);
-        assert_eq!(game.debug.pending_player.map(|choice| choice.character), Some(1));
+        assert_eq!(
+            game.debug.pending_player.map(|choice| choice.character),
+            Some(1)
+        );
     }
 
     fn key(key: GuiKey) -> GuiEvent {

@@ -2254,8 +2254,13 @@ impl Framebuffer {
                     slot[..3].iter_mut().zip(&texel[..3]).zip(&color)
                 {
                     let source = unorm(f32::from(source) / 255.0 * color);
-                    let blended =
-                        unorm_mul(source, alpha) + unorm_mul(u32::from(*channel), 255 - alpha);
+                    let frame = u32::from(*channel);
+                    let blended = match quad.op {
+                        EffectBlend::Normal => {
+                            unorm_mul(source, alpha) + unorm_mul(frame, 255 - alpha)
+                        }
+                        EffectBlend::Add => frame + unorm_mul(source, alpha),
+                    };
                     *channel = blended.min(255) as u8;
                 }
                 slot[3] = 255;
@@ -3710,6 +3715,18 @@ pub struct EffectQuad {
     /// `top`, so its UVs normalise against that height; anything else samples
     /// the whole page.
     pub sheet: [u16; 2],
+    /// How the texels meet the frame.
+    pub op: EffectBlend,
+}
+
+/// How an effect billboard's texels meet the frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EffectBlend {
+    #[default]
+    /// By [`EffectQuad::blend`].
+    Normal,
+    /// The frame plus the texel: fire.
+    Add,
 }
 
 impl EffectQuad {
@@ -6415,6 +6432,7 @@ mod tests {
         blend: u8,
     ) -> EffectQuad {
         EffectQuad {
+            op: EffectBlend::Normal,
             key: 500,
             page,
             uv: [0, 0, 0, 0],

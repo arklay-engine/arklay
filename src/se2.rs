@@ -635,7 +635,12 @@ mod tests {
             sound_data,
             flags,
         };
-        let zones = [zone(0, 0x17, 0), zone(0, 0x1a, 0), zone(0, 0x20, 1), zone(0, 0x23, 0x80)];
+        let zones = [
+            zone(0, 0x17, 0),
+            zone(0, 0x1a, 0),
+            zone(0, 0x20, 1),
+            zone(0, 0x23, 0x80),
+        ];
         assert_eq!(floor_sound(&zones, 500, 500, 0), 0x1a);
         assert_eq!(floor_sound(&zones, 500, 500, 1), 0x20);
         assert_eq!(floor_sound(&zones, 5000, 500, 0), 0x1d);

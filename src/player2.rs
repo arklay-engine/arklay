@@ -723,7 +723,11 @@ impl Mover<'_, '_> {
                 self.work.move_cnt = 0;
                 self.work.hokan = 0;
                 let small = self.tick.id == SMALL_ID;
-                let (speed, drop, timer) = if small { (600, 0x96, 3) } else { (1000, 0x226, 5) };
+                let (speed, drop, timer) = if small {
+                    (600, 0x96, 3)
+                } else {
+                    (1000, 0x226, 5)
+                };
                 self.work.spd[0] = speed;
                 self.player.pos[1] += drop;
                 self.work.timer0 = timer;
@@ -1737,7 +1741,7 @@ pub fn sce_damage(
 
 /// `rsin`: this executable's sine table, `4096 * sin` rounded to the nearest
 /// unit. It reaches a full 4096, which RE1's table doesn't.
-fn rsin(angle: i32) -> i32 {
+pub(crate) fn rsin(angle: i32) -> i32 {
     let step = angle & 0x7FF;
     let step = if step < 0x400 { step } else { 0x800 - step };
     let value = (f64::from(step) * std::f64::consts::PI / 2048.0).sin() * 4096.0;
@@ -1746,7 +1750,7 @@ fn rsin(angle: i32) -> i32 {
 }
 
 /// `rcos`.
-fn rcos(angle: i32) -> i32 {
+pub(crate) fn rcos(angle: i32) -> i32 {
     rsin(angle + 0x400)
 }
 

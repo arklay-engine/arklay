@@ -229,6 +229,20 @@ pub fn sound_body(data: &[u8]) -> Result<Option<&[u8]>> {
     Ok(data.get(start..start + size.saturating_sub(header.len())))
 }
 
+/// The room's effects, as `convert-game` writes them ([`crate::esp2`]).
+pub fn effect_container(data: &[u8]) -> Result<Option<Vec<u8>>> {
+    const ESP_SLOT: usize = 18;
+    crate::esp2::room_container(
+        data,
+        [
+            offset(data, ESP_SLOT)?,
+            offset(data, ESP_SLOT + 1)?,
+            offset(data, ESP_SLOT + 2)?,
+            offset(data, ESP_SLOT + 3)?,
+        ],
+    )
+}
+
 /// Read an RE2 RDT into a room definition.
 pub fn read(data: &[u8]) -> Result<RoomSource> {
     let Some(&camera_count) = data.get(1) else {

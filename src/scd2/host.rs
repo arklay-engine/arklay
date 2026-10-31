@@ -64,6 +64,8 @@ pub struct Re2State {
     pub main_music: Option<u8>,
     /// The music and ambience's channels.
     pub music: crate::bgm2::Music,
+    /// `Esp_`: the effect sprites.
+    pub effects: crate::esp2::Effects,
     /// `se_on`'s sounds, not yet played.
     pub sounds: Vec<SoundRequest>,
 }
@@ -239,6 +241,7 @@ impl Default for Re2State {
             bgm: Default::default(),
             main_music: None,
             music: Default::default(),
+            effects: Default::default(),
             sounds: Vec::new(),
         }
     }
@@ -708,7 +711,13 @@ impl GameHost<'_> {
         };
         let player = self.game.entities[0].pos;
         let character = |slot: usize| {
-            self.game.re2.characters.0.get(slot)?.as_deref().map(|character| character.body.pos)
+            self.game
+                .re2
+                .characters
+                .0
+                .get(slot)?
+                .as_deref()
+                .map(|character| character.body.pos)
         };
         let origin = match work & 0xff {
             0 => [0; 3],
@@ -987,6 +996,22 @@ impl Host for GameHost<'_> {
             }
             "dir_set" if self.work_is_player(task) => {
                 self.game.re2.pending_player.angle = Some(at(2) as u16);
+            }
+            // `Sce_espr_on`, on the world's matrix: the id's low byte is the
+            // type and its high byte the row.
+            "sce_espr_on" => {
+                let [kind, row] = (at(1) as u16).to_le_bytes();
+                self.game.re2.effects.call(
+                    kind,
+                    row,
+                    at(3) as u16,
+                    at(7) as i16,
+                    [at(4) as i16, at(5) as i16, at(6) as i16],
+                    false,
+                );
+            }
+            "sce_espr_kill" => {
+                self.game.re2.effects.kill(at(0) as u8, at(1) as u8);
             }
             "sce_bgm_control" => {
                 let place = self.game.re2_music_place();

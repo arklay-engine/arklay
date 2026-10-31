@@ -620,7 +620,11 @@ mod tests {
         for index in 0..3 {
             assert_eq!(music.channels[index].play, Some(true));
         }
-        assert!(music.channels[..3].iter().any(|channel| channel.track.is_some()));
+        assert!(
+            music.channels[..3]
+                .iter()
+                .any(|channel| channel.track.is_some())
+        );
         assert!(!main_audible(0, 0));
         assert_eq!(music.channels[0].volume, 0);
         music.control([0, 0, 1, 120, 51], street());

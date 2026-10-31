@@ -328,7 +328,11 @@ fn title_case(text: &str) -> String {
 fn character_name(cx: &UiContext<'_>, character: u8) -> String {
     let text = |key: String| cx.text.and_then(|text| text.text(&key));
     text(format!("UI_SAVE_CHARACTER_{character}_FULL_NAME"))
-        .or_else(|| CHARACTERS.get(usize::from(character)).map(|name| name.to_string()))
+        .or_else(|| {
+            CHARACTERS
+                .get(usize::from(character))
+                .map(|name| name.to_string())
+        })
         .or_else(|| text(format!("UI_SAVE_CHARACTER_{character}_NAME")))
         .unwrap_or_else(|| format!("#{character}"))
 }

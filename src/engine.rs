@@ -2664,7 +2664,11 @@ impl GameSession {
         {
             let mut host = game::ScdGameHost::new(&mut self.game);
             self.command_vm.run_init(&mut host);
-            run_re2_init(self.loaded.re2_vm.as_mut(), &mut self.game);
+            run_re2_init(
+                self.loaded.re2_vm.as_mut(),
+                &self.loaded.re2_effects,
+                &mut self.game,
+            );
         }
         self.apply_screen_border();
         // The init script's starts and kills apply in program order before the
@@ -2736,7 +2740,8 @@ impl GameSession {
     /// re-runs the camera switch-zone scan from the final position.
     fn place_room_entry(&mut self, pack: &Pack, id: RoomId) {
         let mut door_cut = None;
-        if let Some((pos, angle, cut)) = room_entry_placement(pack, &self.loaded.room, &self.game, id)
+        if let Some((pos, angle, cut)) =
+            room_entry_placement(pack, &self.loaded.room, &self.game, id)
         {
             self.player.pos = pos;
             self.player.angle = angle;
@@ -3569,6 +3574,7 @@ impl GameSession {
         tick_voice(&mut self.music, &mut self.voice_cache, &mut self.game, pack);
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         if self.game.is_re2_room {
+            self.game.re2.effects.tick();
             play_re2_sounds(
                 &mut self.music,
                 &mut self.sfx_cache,
@@ -5087,7 +5093,11 @@ impl GameSession {
         // A room's scripts read the flags as they start.
         if self.game.re2.banks != flags {
             let placed = std::mem::take(&mut self.game.re2.pending_player);
-            run_re2_init(self.loaded.re2_vm.as_mut(), &mut self.game);
+            run_re2_init(
+                self.loaded.re2_vm.as_mut(),
+                &self.loaded.re2_effects,
+                &mut self.game,
+            );
             self.game.re2.pending_player = placed;
         }
         if script.is_some() {
@@ -7154,7 +7164,7 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let mut re2_vm = loaded
         .re2_scripts(pack)?
         .map(|scripts| crate::scd2::vm::Vm::new(&scripts));
-    run_re2_init(re2_vm.as_mut(), &mut game);
+    run_re2_init(re2_vm.as_mut(), &Default::default(), &mut game);
     Ok(game)
 }
 
@@ -12285,7 +12295,8 @@ impl Re2Sounds {
             vab.extend_from_slice(&body);
             door2::vab::Vab::parse(&vab).ok()
         });
-        self.banks.load_room(pack, id.stage.saturating_sub(1), id.room, edh);
+        self.banks
+            .load_room(pack, id.stage.saturating_sub(1), id.room, edh);
         self.banks.load_core(pack, player);
         // `Snd_load_arms`: bare hands use the first bank.
         self.banks.load_arms(pack, weapon.max(1));
@@ -12293,7 +12304,13 @@ impl Re2Sounds {
 
     /// The sound in `kind`'s `slot`: the PC bank's WAV, or for a room with none
     /// the tone of its VAB.
-    fn wav(&self, cache: &mut SfxCache, pack: &Pack, kind: crate::se2::Kind, slot: u8) -> Option<audio::Wav> {
+    fn wav(
+        &self,
+        cache: &mut SfxCache,
+        pack: &Pack,
+        kind: crate::se2::Kind,
+        slot: u8,
+    ) -> Option<audio::Wav> {
         if let Some(stem) = self.banks.stem(kind, slot) {
             return cache.load_stem(pack, stem.to_string());
         }
@@ -12340,8 +12357,15 @@ fn play_re2_sounds(
         let (volume, pan) = if id.positional {
             let (volume, pan) = se2::place(cut.pos, cut.look_at, pos);
             // The weapon's own sounds, of its first program, are louder.
-            let louder = id.kind == Kind::Arms && sounds.banks.tone(id.kind, id.slot).is_some_and(|tone| tone.0 == 0);
-            (volume.saturating_add(if louder { 10 } else { 0 }).min(0x7f), pan)
+            let louder = id.kind == Kind::Arms
+                && sounds
+                    .banks
+                    .tone(id.kind, id.slot)
+                    .is_some_and(|tone| tone.0 == 0);
+            (
+                volume.saturating_add(if louder { 10 } else { 0 }).min(0x7f),
+                pan,
+            )
         } else if id.kind == Kind::Room && id.slot == 0x14 {
             (0x6e, 0)
         } else {
@@ -12359,7 +12383,12 @@ fn play_re2_sounds(
     }
     for footstep in footsteps {
         let floor = crate::sca::floor_of(footstep.pos[1]);
-        let zone = se2::floor_sound(&room.footstep_zones, footstep.pos[0], footstep.pos[2], floor);
+        let zone = se2::floor_sound(
+            &room.footstep_zones,
+            footstep.pos[0],
+            footstep.pos[2],
+            floor,
+        );
         let id = SoundId {
             kind: Kind::Room,
             slot: footstep.sound_type + (zone & 0x7f),
@@ -13189,6 +13218,29 @@ impl ShadowCache {
     }
 }
 
+/// The sheets RE2's effects have drawn from, by clut row, baked on first use.
+#[derive(Default)]
+struct Re2EffectPages {
+    bank: std::sync::Weak<crate::esp2::Bank>,
+    images: HashMap<crate::esp2::Page, Image>,
+}
+
+impl Re2EffectPages {
+    fn prepare(&mut self, effects: &crate::esp2::Effects, pages: &[crate::esp2::Page]) {
+        if !std::ptr::eq(self.bank.as_ptr(), std::sync::Arc::as_ptr(effects.bank())) {
+            self.bank = std::sync::Arc::downgrade(effects.bank());
+            self.images.clear();
+        }
+        for &page in pages {
+            if !self.images.contains_key(&page)
+                && let Some(image) = effects.bank().page(page)
+            {
+                self.images.insert(page, image);
+            }
+        }
+    }
+}
+
 /// The decoded effect texture pages of one room.
 ///
 /// `base` holds the four sheet files (`esp000` plus the room's up to three
@@ -13211,6 +13263,7 @@ struct EffectPages {
 struct EffectPageCache {
     room: Option<RoomId>,
     pages: EffectPages,
+    re2: Re2EffectPages,
 }
 
 impl EffectPageCache {
@@ -13522,6 +13575,7 @@ fn build_effect_quads(
             tint,
             blend,
             sheet: sheet_rows,
+            op: render::EffectBlend::Normal,
         });
     }
     quads
@@ -13576,6 +13630,8 @@ struct LoadedRoom {
     script_source: ScriptSource,
     /// An RE2 room's script run, in place of `scripts`.
     re2_vm: Option<crate::scd2::vm::Vm>,
+    /// The effects an RE2 room's scripts can spawn.
+    re2_effects: std::sync::Arc<crate::esp2::Bank>,
     player_assets: Option<PlayerAssets>,
 }
 
@@ -13589,6 +13645,17 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
     let re2_vm = loaded
         .re2_scripts(pack)?
         .map(|scripts| crate::scd2::vm::Vm::new(&scripts));
+    let re2_effects = std::sync::Arc::new(if re2_vm.is_some() {
+        let folder = crate::room::Folder::of(pack, id);
+        crate::esp2::Bank::load(
+            pack.read(crate::esp2::CORE_ENTRY).ok().as_deref(),
+            pack.read(&folder.entry(crate::esp2::ROOM_ENTRY))
+                .ok()
+                .as_deref(),
+        )
+    } else {
+        Default::default()
+    });
     let dialect = loaded.dialect;
     let mut room = loaded.state;
     for warning in &room.model_warnings {
@@ -13622,6 +13689,7 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
         scripts,
         script_source,
         re2_vm,
+        re2_effects,
         player_assets,
     })
 }
@@ -13684,13 +13752,17 @@ fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     let mut command_vm = scd::vm::CommandVm::new(&loaded.scripts);
     let mut host = game::ScdGameHost::new(game);
     command_vm.run_init(&mut host);
-    run_re2_init(loaded.re2_vm.as_mut(), game);
+    run_re2_init(loaded.re2_vm.as_mut(), &loaded.re2_effects, game);
     game.apply_room_edits(&mut loaded.room);
     apply_screen_border(game, &mut loaded.room);
 }
 
 /// An RE2 room's init procedure.
-fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState) {
+fn run_re2_init(
+    vm: Option<&mut crate::scd2::vm::Vm>,
+    effects: &std::sync::Arc<crate::esp2::Bank>,
+    game: &mut game::GameState,
+) {
     game.is_re2_room = vm.is_some();
     let Some(vm) = vm else {
         return;
@@ -13703,7 +13775,7 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
     game.camera.locked = false;
-    // `Set_room` runs `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
+    // `Set_room` runs `Esp_init_R` and `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
     let word = game
         .id
         .stage
@@ -13712,6 +13784,7 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
         .unwrap_or(crate::bgm2::RoomMusic::from_word(0xffff));
     let place = game.re2_music_place();
     game.re2.music.enter_room(word, place);
+    game.re2.effects.enter_room(std::sync::Arc::clone(effects));
     // `FG_STATUS_PLAYER` and `FG_STATUS_SCENARIO`.
     let character = game.id.player_flag & 1;
     let scenario = u8::from(game.re2.scenario_b);
@@ -16591,11 +16664,32 @@ fn render_frame_on(
         });
     }
 
-    let pages = effect_cache.pages_for(pack, id, &game.room_effects);
-    let quads = build_effect_quads(game, room, id, &camera, pages, tween);
+    effect_cache
+        .re2
+        .prepare(&game.re2.effects, &game.re2.effects.pages());
+    effect_cache.pages_for(pack, id, &game.room_effects);
+    let pages = &effect_cache.pages;
+    let re2_images = &effect_cache.re2;
+    let mut quads = build_effect_quads(game, room, id, &camera, pages, tween);
     let mut page_refs: Vec<Option<&Image>> = Vec::with_capacity(16);
     page_refs.extend(pages.base.iter().map(Option::as_ref));
     page_refs.extend(pages.variants.iter().map(Option::as_ref));
+    if game.is_re2_room {
+        let (re2_quads, re2_pages) = game.re2.effects.quads(&camera, |x, z| {
+            debug_view::unculled()
+                || room
+                    .zones
+                    .iter()
+                    .find(|zone| i32::from(zone.cam_from) == room.current_cut as i32)
+                    .is_some_and(|zone| zone.contains_signed(x, z))
+        });
+        let first = page_refs.len();
+        page_refs.extend(re2_pages.iter().map(|page| re2_images.images.get(page)));
+        quads.extend(re2_quads.into_iter().map(|quad| EffectQuad {
+            page: quad.page + first,
+            ..quad
+        }));
+    }
     let effect_layer = EffectLayer {
         pages: &page_refs,
         quads: &quads,
@@ -21650,6 +21744,7 @@ mod tests {
             },
             scripts: Default::default(),
             re2_vm: None,
+            re2_effects: Default::default(),
             script_source: ScriptSource::Rdt,
             player_assets: None,
         };
@@ -21710,6 +21805,7 @@ mod tests {
                 },
                 scripts: Default::default(),
                 re2_vm: None,
+                re2_effects: Default::default(),
                 script_source: ScriptSource::Rdt,
                 player_assets: None,
             }),

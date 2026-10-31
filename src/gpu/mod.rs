@@ -125,6 +125,8 @@ enum Blend {
     /// By the fragment's alpha. The target's alpha keeps the coverage, so a
     /// target cleared to transparent ends up premultiplied.
     Alpha,
+    /// The fragment by its alpha, added to the target.
+    Add,
     /// A premultiplied fragment over the target.
     Premultiplied,
 }
@@ -307,6 +309,8 @@ struct Pipelines {
     sprite: *mut SDL_GPUGraphicsPipeline,
     /// [`Pipelines::sprite`] writing depth: the F4 debug geometry.
     sprite_depth: *mut SDL_GPUGraphicsPipeline,
+    /// [`Pipelines::sprite`] for the billboards that add to the frame.
+    sprite_add: *mut SDL_GPUGraphicsPipeline,
     /// The 2D pass's items into `overlay_target` or `ui_texture`.
     draw2d: *mut SDL_GPUGraphicsPipeline,
     /// The 2D pass's projected models into their [`ModelTarget`]s.
@@ -630,6 +634,7 @@ impl GpuRenderer {
                 mask_keys: std::ptr::null_mut(),
                 sprite: std::ptr::null_mut(),
                 sprite_depth: std::ptr::null_mut(),
+                sprite_add: std::ptr::null_mut(),
                 draw2d: std::ptr::null_mut(),
                 model_opaque: std::ptr::null_mut(),
                 model_blend: std::ptr::null_mut(),
@@ -1021,6 +1026,16 @@ impl GpuRenderer {
         };
         let blend_state = match blend {
             Blend::None => SDL_GPUColorTargetBlendState::default(),
+            Blend::Add => SDL_GPUColorTargetBlendState {
+                src_color_blendfactor: SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+                dst_color_blendfactor: SDL_GPU_BLENDFACTOR_ONE,
+                color_blend_op: SDL_GPU_BLENDOP_ADD,
+                src_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ZERO,
+                dst_alpha_blendfactor: SDL_GPU_BLENDFACTOR_ONE,
+                alpha_blend_op: SDL_GPU_BLENDOP_ADD,
+                enable_blend: true,
+                ..Default::default()
+            },
             Blend::Alpha | Blend::Premultiplied => SDL_GPUColorTargetBlendState {
                 src_color_blendfactor: if blend == Blend::Alpha {
                     SDL_GPU_BLENDFACTOR_SRC_ALPHA
@@ -1151,6 +1166,19 @@ impl GpuRenderer {
                 this.samples,
             )
         };
+        let sprite_as = |this: &Self, depth, colour, samples, blend| {
+            this.pipeline(
+                sprite_vert.shader,
+                sprite_frag.shader,
+                sprite_stride,
+                &sprite_attributes,
+                SDL_GPU_CULLMODE_NONE,
+                blend,
+                Some(depth),
+                Some(colour),
+                samples,
+            )
+        };
         let sprite = |this: &Self, depth, colour: Option<SDL_GPUTextureFormat>, samples| {
             this.pipeline(
                 sprite_vert.shader,
@@ -1182,6 +1210,13 @@ impl GpuRenderer {
         self.pipelines.sprite = sprite(self, (depth_format, false), Some(colour), self.samples)?;
         self.pipelines.sprite_depth =
             sprite(self, (depth_format, true), Some(colour), self.samples)?;
+        self.pipelines.sprite_add = sprite_as(
+            self,
+            (depth_format, false),
+            colour,
+            self.samples,
+            Blend::Add,
+        )?;
         let model_attributes = [
             attribute(0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, 0),
             attribute(1, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, 16),
@@ -2253,7 +2288,13 @@ impl GpuRenderer {
             }
         }
 
-        draw_sprites(pass, self.pipelines.sprite, self.mask_keys, &sprites.after);
+        for run in &sprites.after {
+            let pipeline = match run.op {
+                crate::render::EffectBlend::Normal => self.pipelines.sprite,
+                crate::render::EffectBlend::Add => self.pipelines.sprite_add,
+            };
+            draw_sprites(pass, pipeline, self.mask_keys, std::slice::from_ref(run));
+        }
         for (run, write) in &sprites.debug {
             let pipeline = if *write {
                 self.pipelines.sprite_depth
@@ -3558,6 +3599,7 @@ impl Drop for GpuRenderer {
                 self.pipelines.mask_keys,
                 self.pipelines.sprite,
                 self.pipelines.sprite_depth,
+                self.pipelines.sprite_add,
                 self.pipelines.draw2d,
                 self.pipelines.model_opaque,
                 self.pipelines.model_blend,
