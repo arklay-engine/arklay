@@ -68,6 +68,7 @@ class Tick:
     character: str | None = None
     splayer: str | None = None
     music: str | None = None
+    zombies: str | None = None
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -140,6 +141,7 @@ def parse_trace(path: str) -> list[Tick]:
                     character=fields.get("em"),
                     splayer=fields.get("es"),
                     music=fields.get("bgm"),
+                    zombies=fields.get("zm"),
                 )
             )
     return ticks
@@ -165,6 +167,11 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("es", ",".join(tick.splayer.split(",")[:13])))
     if tick.music is not None:
         items.append(("bgm", tick.music))
+    if tick.zombies not in (None, "-"):
+        # Without the speed, which a zombie that's standing leaves stale.
+        for row in tick.zombies.split(";"):
+            slot, _, values = row.partition(":")
+            items.append((f"zm{slot}", ",".join(values.split(",")[:14])))
     for slot in sorted(tick.entities):
         entity = tick.entities[slot]
         for name in ENTITY_FIELDS:

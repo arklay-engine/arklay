@@ -126,6 +126,7 @@ pub fn parse(data: &[u8], id: RoomId) -> Result<RoomState> {
         zones,
         walk_zones,
         footstep_zones,
+        guides: Vec::new(),
         messages,
         effects,
         object_models,

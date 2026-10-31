@@ -294,6 +294,8 @@ const CHARACTER_PARTS0_Y: [u16; 28] = [
 /// and the children 0x45 and 0x4F smaller still.
 pub const fn character_shadow(id: u8) -> (i32, i32) {
     match id {
+        // `Em10_Init`'s.
+        0x10..0x20 => (0x190, 0x258),
         0x45 | 0x4F => (0x172, 0x1CC),
         0x4D => (500, 600),
         id if id & 1 != 0 => (0x1A4, 0x208),
@@ -307,7 +309,7 @@ pub const NECK_JOINT: usize = 8;
 const NECK_RATES: [i32; 2] = [0x60, 0x60];
 const NECK_LIMITS: [i32; 2] = [0x200, 0x138];
 /// `plc_neck`'s `0x8000` in its second word: aim at another work's neck.
-const NECK_AT_WORK: i16 = -0x8000;
+pub(crate) const NECK_AT_WORK: i16 = -0x8000;
 
 /// The state `Plc_neck` leaves for `Rot_neck`, and the turn that adds to the
 /// head's pose.
@@ -328,6 +330,10 @@ pub struct Neck {
 
 impl Work {
     /// What the work adds to a body's `pose`: its height and its head.
+    pub fn set_parts0_y(&mut self, scale: i32) {
+        self.parts0_y = scale;
+    }
+
     pub fn apply_to_pose(&self, pose: &mut Keyframe) {
         pose.offset[1] = self.scaled_height(pose.offset[1]);
         self.neck.apply(pose);
@@ -576,10 +582,10 @@ pub fn player_move(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) -
 }
 
 /// A tick of [`player_move`]: the state the original keeps in globals.
-struct Mover<'a, 'b> {
-    work: &'a mut Work,
-    player: &'a mut PlayerState,
-    tick: &'a Tick<'b>,
+pub(crate) struct Mover<'a, 'b> {
+    pub(crate) work: &'a mut Work,
+    pub(crate) player: &'a mut PlayerState,
+    pub(crate) tick: &'a Tick<'b>,
     arrived: Option<u8>,
     /// `Sca_info`'s stairs: those last tick's end left in front of the player.
     stairs: Option<&'b ScaRect>,
@@ -599,6 +605,18 @@ pub fn key_word(input: &Input) -> u16 {
         | bit(input.aim, KEY_AIM)
         | bit(input.fire, KEY_FIRE)
         | bit(action, KEY_ACTION)
+}
+
+impl<'a, 'b> Mover<'a, 'b> {
+    pub(crate) fn new(work: &'a mut Work, player: &'a mut PlayerState, tick: &'a Tick<'b>) -> Self {
+        Self {
+            work,
+            player,
+            tick,
+            arrived: None,
+            stairs: None,
+        }
+    }
 }
 
 impl Mover<'_, '_> {
@@ -1170,13 +1188,13 @@ impl Mover<'_, '_> {
 
     /// The handguns' foot in the world, on the current pose: `Foot_set_pl`'s
     /// chain, the root, the hips and that leg's three parts.
-    fn foot_position(&self) -> Option<[i32; 3]> {
+    pub(crate) fn foot_position(&self) -> Option<[i32; 3]> {
         self.chain_position(&AIM_FOOT_CHAIN)
     }
 
     /// `Rot_neck`: turn the head toward what `Plc_neck` asked for, or back to
     /// its pose. `Pl_neck`'s aim at the nearest enemy waits for enemies.
-    fn rot_neck(&mut self) {
+    pub(crate) fn rot_neck(&mut self) {
         if self.work.neck.flags & 1 != 0 {
             return;
         }
@@ -1304,6 +1322,45 @@ impl Mover<'_, '_> {
 
     /// Where the last of `chain`'s joints is in the world, on the current pose.
     fn chain_position(&self, chain: &[usize]) -> Option<[i32; 3]> {
+        Some(self.chain_matrix(chain)?.t)
+    }
+
+    /// Where a part's matrix puts a point of its own: what `Esp_call` is given
+    /// a part's matrix and a vector for.
+    pub(crate) fn part_point(&self, part: usize, point: [i32; 3]) -> Option<[i32; 3]> {
+        fn chain_to(
+            children: &[Vec<u8>],
+            from: usize,
+            part: usize,
+            chain: &mut Vec<usize>,
+        ) -> bool {
+            chain.push(from);
+            if from == part {
+                return true;
+            }
+            let found = children.get(from).is_some_and(|next| {
+                next.iter()
+                    .any(|&child| chain_to(children, usize::from(child), part, chain))
+            });
+            if !found {
+                chain.pop();
+            }
+            found
+        }
+        let mut chain = Vec::new();
+        if !chain_to(&self.tick.skeleton.children, 0, part, &mut chain) {
+            return None;
+        }
+        let world = self.chain_matrix(&chain)?;
+        Some(std::array::from_fn(|axis| {
+            let turned: i32 = (0..3)
+                .map(|index| i32::from(world.m[axis][index]) * point[index])
+                .sum();
+            world.t[axis] + (turned >> 12)
+        }))
+    }
+
+    fn chain_matrix(&self, chain: &[usize]) -> Option<Matrix> {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         let mut world = Matrix {
@@ -1322,11 +1379,11 @@ impl Mover<'_, '_> {
                 t: t.map(i32::from),
             });
         }
-        Some(world.t)
+        Some(world)
     }
 
     /// `Foot_set_pl`: move the player so the foot stays where it was planted.
-    fn foot_set(&mut self, planted: Option<[i32; 3]>) {
+    pub(crate) fn foot_set(&mut self, planted: Option<[i32; 3]>) {
         if let (Some(planted), Some(foot)) = (planted, self.foot_position()) {
             self.player.pos[0] += planted[0] - foot[0];
             self.player.pos[2] += planted[2] - foot[2];
@@ -1572,7 +1629,7 @@ impl Mover<'_, '_> {
     }
 
     /// `Spd_get`: this tick's speed, the root motion since the previous frame.
-    fn spd_get(&mut self) {
+    pub(crate) fn spd_get(&mut self) {
         let reverse = self.work.sce_flg & 0x80 != 0 && self.work.routine[0] == MODE_SCENARIO;
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
@@ -1695,12 +1752,12 @@ impl Mover<'_, '_> {
         self.joint_move_late(BLEND_STEP)
     }
 
-    fn joint_move_late(&mut self, late: u16) -> bool {
+    pub(crate) fn joint_move_late(&mut self, late: u16) -> bool {
         let reverse = self.work.routine[0] == MODE_SCENARIO && self.work.sce_flg & 0x80 != 0;
         self.joint_move_late_reversed(late, reverse)
     }
 
-    fn joint_move_late_reversed(&mut self, late: u16, reverse: bool) -> bool {
+    pub(crate) fn joint_move_late_reversed(&mut self, late: u16, reverse: bool) -> bool {
         let (clips, _) = self.tick.banks.get(self.work.bank);
         let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
             return true;
@@ -1742,7 +1799,38 @@ impl Mover<'_, '_> {
     }
 
     /// `Add_speedXZ`.
-    fn add_speed_xz(&mut self) {
+    /// `FUN_004c2bc0`: the clip's next frame, without posing it.
+    pub(crate) fn skip_frame(&mut self) {
+        let (clips, _) = self.tick.banks.get(self.work.bank);
+        let Some(clip) = clips.get(usize::from(self.work.move_no)) else {
+            return;
+        };
+        if let Some(frame) = clip.frames.get(usize::from(self.work.move_cnt)) {
+            self.work.now_seq = frame.flags;
+        }
+        self.work.move_cnt = self.work.move_cnt.wrapping_add(1);
+        if usize::from(self.work.move_cnt) >= clip.frames.len() {
+            self.work.move_cnt = 0;
+        }
+    }
+
+    /// The flags of the frame `Joint_move` played last.
+    pub(crate) fn now_seq(&self) -> u32 {
+        self.work.now_seq
+    }
+
+    /// `Add_speedXZ` with its `Add_dir`.
+    pub(crate) fn add_speed_xz_at(&mut self, dir: u16) {
+        let (dx, dz) = rotate(
+            self.player.angle.wrapping_add(dir),
+            i32::from(self.work.spd[0]),
+            i32::from(self.work.spd[2]),
+        );
+        self.player.pos[0] += dx;
+        self.player.pos[2] += dz;
+    }
+
+    pub(crate) fn add_speed_xz(&mut self) {
         let (dx, dz) = rotate(
             self.player.angle,
             i32::from(self.work.spd[0]),
@@ -1760,7 +1848,7 @@ impl Mover<'_, '_> {
 
     /// `Spl_Scenario`: a script's motion. A motion with `Sce_flg` bit `0x10`
     /// plays every other tick, which bit `0x20` counts.
-    fn scenario(&mut self) {
+    pub(crate) fn scenario(&mut self) {
         if self.work.sce_flg & 0x30 != 0x30 {
             self.spl_sce();
         }
@@ -2096,7 +2184,7 @@ fn catan(value: i32) -> i32 {
 }
 
 /// `Direction_ck`: the 12-bit yaw from one point to another, as `i16`s.
-fn direction_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> u16 {
+pub(crate) fn direction_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> u16 {
     let dx = i32::from(to_x as i16) - i32::from(from_x as i16);
     let dz = i32::from(to_z as i16) - i32::from(from_z as i16);
     if dx == 0 {
@@ -2108,7 +2196,7 @@ fn direction_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> u16 {
 
 /// The turn in `Goto00` and `Goto01`: step `rate` toward `target`, landing on
 /// it when close. A negative rate faces away from it.
-fn goto(angle: u16, target: u16, rate: i32) -> u16 {
+pub(crate) fn goto(angle: u16, target: u16, rate: i32) -> u16 {
     let (target, rate) = if rate < 0 {
         (target.wrapping_sub(0x800) & 0x0FFF, -rate)
     } else {

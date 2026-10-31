@@ -63,6 +63,8 @@ pub struct TraceTick<'a> {
     pub re2_character: Option<[i32; 16]>,
     /// RE2's `splayer_work`: the `es` field's values.
     pub re2_splayer: Option<[i32; 16]>,
+    /// The zombies in play, as the oracle's `zm` field writes them.
+    pub re2_zombies: Option<String>,
     /// RE2's music: the `bgm` field.
     pub re2_music: Option<String>,
     /// The player's `PlayerEntity.flags` byte (`GameState::player_flags`): the
@@ -199,6 +201,9 @@ impl TraceWriter {
             let values = character.map(|value| value.to_string()).join(",");
             write!(self.out, " es={values}")?;
         }
+        if let Some(zombies) = &tick.re2_zombies {
+            write!(self.out, " zm={zombies}")?;
+        }
         if let Some(music) = &tick.re2_music {
             write!(self.out, " bgm={music}")?;
         }
@@ -302,6 +307,7 @@ mod tests {
             re2_player: None,
             re2_character: None,
             re2_splayer: None,
+            re2_zombies: None,
             re2_music: None,
             frame_hash: 0xDEAD_BEEF,
         };
@@ -342,6 +348,7 @@ mod tests {
             re2_player: None,
             re2_character: None,
             re2_splayer: None,
+            re2_zombies: None,
             re2_music: None,
             frame_hash: 0,
         };

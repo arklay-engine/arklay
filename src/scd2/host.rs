@@ -70,6 +70,15 @@ pub struct Re2State {
     pub sounds: Vec<SoundRequest>,
     /// `sce_scr_move`: how far the background has scrolled down.
     pub scroll: i16,
+    /// `Rnd`, for what's ported to its stream. A save doesn't hold it: the
+    /// room's load seeds it.
+    pub rnd: crate::zombie2::Rnd,
+    /// `BYTE_00989eeb`: the room's enemies so far.
+    pub enemies: u8,
+    /// The player's `+0x1d3`: an enemy has hold of them, or is about to.
+    pub player_lock: u8,
+    /// The room's load has yet to finish: its last pass runs `Esp_move`.
+    pub load_pass: bool,
 }
 
 /// One sound `se_on` asked for, and where.
@@ -109,7 +118,7 @@ pub enum Work {
 pub struct Character {
     pub id: u8,
     /// `Be_flg`, whose first bit is whether it's in play.
-    pub be_flg: u16,
+    pub be_flg: u32,
     pub work: crate::player2::Work,
     pub body: crate::player::PlayerState,
     /// `Type`, whose `0x400` gives it to `Spl_Auto` rather than the scripts.
@@ -118,6 +127,8 @@ pub struct Character {
     pub start: (u16, u16),
     /// The room's load places it, rather than a script during play.
     pub with_room: bool,
+    /// What it needs if `Em_Zombie` runs it.
+    pub zombie: Option<crate::zombie2::Zombie>,
 }
 
 /// `xa_on`'s line, which `wsleep` waits out. A save doesn't hold it, so a line
@@ -250,6 +261,10 @@ impl Default for Re2State {
             effects: Default::default(),
             sounds: Vec::new(),
             scroll: 0,
+            rnd: Default::default(),
+            enemies: 0,
+            player_lock: 0,
+            load_pass: false,
         }
     }
 }
@@ -312,8 +327,52 @@ impl Re2State {
 
     /// The `em` and `es` trace fields: a character's position, facing and
     /// motion.
+    /// The zombies in play: the oracle's `zm` field.
+    pub fn zombie_trace(&self) -> String {
+        let rows: Vec<String> = self
+            .characters
+            .0
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, character)| {
+                let character = character.as_deref()?;
+                let zombie = character.zombie.as_ref()?;
+                if character.be_flg & 1 == 0 {
+                    return None;
+                }
+                let (routine, motion) = character.work.trace_fields();
+                let [x, y, z] = character.body.pos;
+                Some(format!(
+                    "{slot}:{},{x},{y},{z},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    character.id,
+                    character.body.angle & 0x0FFF,
+                    routine[0],
+                    routine[1],
+                    motion[0],
+                    motion[1],
+                    motion[2],
+                    motion[3],
+                    motion[4],
+                    character.work.kind,
+                    zombie.life,
+                    motion[6],
+                    motion[7],
+                    motion[8],
+                ))
+            })
+            .collect();
+        if rows.is_empty() {
+            "-".to_string()
+        } else {
+            rows.join(";")
+        }
+    }
+
     pub fn character_trace(&self, slot: usize) -> Option<[i32; 16]> {
         let character = self.characters.0.get(slot)?.as_deref()?;
+        if character.zombie.is_some() {
+            return None;
+        }
         let (routine, motion) = character.work.trace_fields();
         let [x, y, z] = character.body.pos;
         Some([
@@ -693,8 +752,12 @@ impl GameHost<'_> {
         if dead != NO_ENEMY_FLAG && self.game.re2.flag(bank, dead) {
             return;
         }
+        if slot != SPLAYER_SLOT {
+            self.game.re2.enemies = self.game.re2.enemies.wrapping_add(1);
+        }
+        let zombie = (0x10..0x20).contains(&id);
         // Any other enemy takes the slot, and isn't modelled yet.
-        if !(0x40..0x5C).contains(&id) {
+        if !zombie && !(0x40..0x5C).contains(&id) {
             if let Some(character) = self.game.re2.characters.0.get_mut(slot) {
                 *character = None;
             }
@@ -704,9 +767,17 @@ impl GameHost<'_> {
         body.pos = [at(9) as i32, at(10) as i32, at(11) as i32];
         body.angle = at(12) as u16;
         body.collision_mirror = [body.pos[0], body.pos[2]];
-        body.radius = i32::from(CHARACTER_SIZES[usize::from(id - 0x40)]);
+        body.radius = if zombie {
+            0x1C2
+        } else {
+            i32::from(CHARACTER_SIZES[usize::from(id - 0x40)])
+        };
         let mut work = crate::player2::Work::default();
         work.routine = [0; 4];
+        let kind = (at(3) as u16) | (at(4) as u16) << 8;
+        if zombie {
+            work.kind = kind;
+        }
         let characters = &mut self.game.re2.characters.0;
         characters.resize_with(CHARACTER_SLOTS, || None);
         characters[slot] = Some(Box::new(Character {
@@ -714,9 +785,10 @@ impl GameHost<'_> {
             be_flg: 1,
             work,
             body,
-            kind: (at(3) as u16) | (at(4) as u16) << 8,
+            kind,
             start: (at(13) as u16, at(14) as u16),
             with_room: self.game.re2.room_loading,
+            zombie: zombie.then(|| crate::zombie2::spawned(slot as u8, at(5) as u8, at(7) as u8)),
         }));
     }
 
@@ -1214,7 +1286,7 @@ fn character_member(character: &Character, member: u8) -> Option<i32> {
         return Some(character.body.pos[axis]);
     }
     match member {
-        0 => Some(i32::from(character.be_flg)),
+        0 => Some(character.be_flg as i32),
         MEMBER_ANGLE => Some(i32::from(character.body.angle & 0x0FFF)),
         _ => crate::player2::member(&character.work, member),
     }
@@ -1230,7 +1302,7 @@ fn set_character_member(character: &mut Character, member: u8, value: i32) {
         return;
     }
     match member {
-        0 => character.be_flg = value as u16,
+        0 => character.be_flg = value as u32,
         MEMBER_ANGLE => character.body.angle = value as u16,
         _ => {
             crate::player2::set_member(&mut character.work, member, value);
@@ -1333,7 +1405,8 @@ mod tests {
         game.re2.set_flag(ENEMY_BANK, 28, 1);
         spawn_character(&mut game, 74, 28);
         assert!(game.re2.characters.0.is_empty());
-        spawn_character(&mut game, 31, 255);
+        // A licker, which isn't modelled.
+        spawn_character(&mut game, 0x22, 255);
         assert!(game.re2.characters.0.is_empty());
         assert!(matches!(game.re2.work[0], Work::Other));
         // One that isn't modelled is there as soon as it's told to go.

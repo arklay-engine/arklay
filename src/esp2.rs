@@ -48,7 +48,7 @@ const FLAGS_NEW: u16 = 0xa003;
 
 /// `Esp_tbl`'s entries with a port here.
 pub fn ported(id: u8) -> bool {
-    matches!(id, 0..=4 | 6 | 0x0b..=0x0d)
+    matches!(id, 0..=4 | 6 | 0x0b..=0x0d | 0x19)
 }
 
 /// The `kind`s of texture a type's sprites sample.
@@ -360,7 +360,8 @@ pub struct Effects {
     slots: Vec<Slot>,
     /// `Rnd`'s stand-in. The original shares its stream with the rest of the
     /// game; effects here don't disturb any stream that's compared.
-    random: u32,
+    /// `Rnd`, for the length of a tick.
+    random: crate::zombie2::Rnd,
     unported: u128,
 }
 
@@ -376,8 +377,7 @@ impl Effects {
     }
 
     fn rnd(&mut self) -> u8 {
-        self.random = self.random.wrapping_mul(0x41c6_4e6d).wrapping_add(12345);
-        (self.random >> 16) as u8
+        self.random.draw()
     }
 
     /// `Esp_call`, or `Esp_call3` if `deferred`. The pool is searched from the
@@ -431,6 +431,15 @@ impl Effects {
         Some(first)
     }
 
+    /// A slot and those that die with it follow a matrix `Esp_call` was given.
+    pub fn move_to(&mut self, index: usize, at: [i16; 3]) {
+        for (other, slot) in self.slots.iter_mut().enumerate() {
+            if other == index || usize::from(slot.parent) == index && slot.parent != 0 {
+                slot.base = at;
+            }
+        }
+    }
+
     fn free_below(&self, top: usize) -> Option<usize> {
         (0..top).rev().find(|&index| self.slots[index].flags == 0)
     }
@@ -452,7 +461,7 @@ impl Effects {
             return;
         };
         let frame = if random_frame {
-            let range = u32::from(slot.range).max(1);
+            let range = u32::from(slot.range) + 1;
             (u32::from(self.rnd()) % range) as u8
         } else {
             0
@@ -521,6 +530,8 @@ impl Effects {
                 slot.flags = FLAGS_NEW;
                 slot.anim = 0;
             }
+            // `Esp_19` puts out a fire in water, which isn't ported.
+            0x19 => {}
             _ => {
                 if id < 128 && self.unported & 1 << id == 0 {
                     self.unported |= 1 << id;
@@ -626,8 +637,14 @@ impl Effects {
         slot.delay = slot.delay.wrapping_sub(1);
     }
 
-    /// `Esp_move`: one tick.
-    pub fn tick(&mut self) {
+    /// `Esp_move`: one tick, drawing on the game's `Rnd`.
+    pub fn tick(&mut self, rnd: &mut crate::zombie2::Rnd) {
+        self.random = *rnd;
+        self.move_slots();
+        *rnd = self.random;
+    }
+
+    fn move_slots(&mut self) {
         for index in 0..self.slots.len() {
             let slot = self.slots[index];
             if !slot.live() {
@@ -967,7 +984,7 @@ mod tests {
         effects.enter_room(bank(&[fire_block(), held]));
         let slot = effects.call(7, 0, 0x1000, 0, [100, 0, 0], false).unwrap();
         assert_eq!(slot, POOL_SIZE - 1);
-        effects.tick();
+        effects.tick(&mut Default::default());
         let slot = effects.slots[slot];
         assert_eq!(slot.flags, 0xb003);
         assert_eq!(slot.tpage & 0x60, 0x20);
@@ -981,7 +998,7 @@ mod tests {
         effects.enter_room(bank(&[fire_block(), [0; BLOCK_LEN]]));
         let slot = effects.call(7, 0, 0x1000, 0, [0, 0, 0], false).unwrap();
         for _ in 0..20 {
-            effects.tick();
+            effects.tick(&mut Default::default());
             assert!(effects.slots[slot].frame < 2);
             assert!(effects.slots[slot].live());
         }
