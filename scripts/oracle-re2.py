@@ -62,6 +62,7 @@ ENTITY_ROUTINES = 0x04
 ENTITY_ID = 0x08
 ENTITY_POS = 0x38  # m.t: x, y, z as i32
 ENTITY_CDIR_Y = 0x76
+ENTITY_TYPE = 0x10E
 ENTITY_LIFE = 0x156
 ENTITY_BE_FLG = 0x00
 ENTITY_SPD = 0x144  # x, y, z as i16
@@ -404,6 +405,26 @@ def remove_enemies(game: Game, keep: set[int]) -> None:
                 game.write(pointer + ENTITY_BE_FLG, struct.pack("<I", flags & ~1))
 
 
+def zombie_trace(game: Game) -> str:
+    """The zombies in play: slot, id, position, facing, routines, motion, `Type`, life and speed."""
+    rows = []
+    for slot, pointer in enumerate(struct.unpack("<16I", game.read(ENEMIES, 64))):
+        if pointer == 0 or game.u32(pointer) & 1 == 0 or not 0x10 <= game.u8(pointer + ENTITY_ID) < 0x20:
+            continue
+        x, y, z = game.i32s(pointer + ENTITY_POS, 3)
+        routine = game.read(pointer + ENTITY_ROUTINES, 4)
+        motion = game.read(pointer + ENTITY_MOTION, 3)
+        speed = struct.unpack("<3h", game.read(pointer + ENTITY_SPD, 6))
+        rows.append(
+            f"{slot}:{game.u8(pointer + ENTITY_ID)},{x},{y},{z},"
+            f"{game.u16(pointer + ENTITY_CDIR_Y) & 0x0FFF},"
+            f"{routine[0]},{routine[1]},{routine[2]},{routine[3]},"
+            f"{motion[0]},{motion[1]},{motion[2]},{game.u16(pointer + ENTITY_TYPE)},"
+            f"{game.i16(pointer + ENTITY_LIFE)},{speed[0]},{speed[1]},{speed[2]}"
+        )
+    return "zm=" + (";".join(rows) or "-")
+
+
 def trace_line(game: Game, tick: int, pad: int) -> str:
     """One tick's state: the `oracle-trace v1` fields RE2 has, then RE2's own."""
     x, y, z = game.i32s(PL + ENTITY_POS, 3)
@@ -450,6 +471,7 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
                 f"{routine[3]},{motion[0]},{motion[1]},{motion[2]},{game.u8(work + ENTITY_D_LIFE_U)},"
                 f"{speed[0]},{speed[1]},{speed[2]}"
             )
+    fields.append(zombie_trace(game))
     spd = struct.unpack("<3h", game.read(PL + ENTITY_SPD, 6))
     motion = game.read(PL + ENTITY_MOTION, 4)
     fields.append(

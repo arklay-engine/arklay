@@ -620,6 +620,7 @@ pub fn run_with_options(
                         re2_player: None,
                         re2_character: None,
                         re2_splayer: None,
+                        re2_zombies: None,
                         re2_music: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
@@ -3576,7 +3577,8 @@ impl GameSession {
         tick_voice(&mut self.music, &mut self.voice_cache, &mut self.game, pack);
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
         if self.game.is_re2_room {
-            self.game.re2.effects.tick();
+            let re2 = &mut self.game.re2;
+            re2.effects.tick(&mut re2.rnd);
             play_re2_sounds(
                 &mut self.music,
                 &mut self.sfx_cache,
@@ -6251,7 +6253,11 @@ impl GameSession {
         let (rng, rseed, entities) = match door_yield {
             Some(view) => (view.rand_state, view.rand_seed, &view.entities[..]),
             None => (
-                self.game.rand_state,
+                if self.game.is_re2_room {
+                    u32::from(self.game.re2.rnd.0)
+                } else {
+                    self.game.rand_state
+                },
                 self.game.rand_seed,
                 &self.game.entities[..],
             ),
@@ -6273,6 +6279,7 @@ impl GameSession {
                 .game
                 .re2
                 .character_trace(crate::scd2::host::SPLAYER_SLOT),
+            re2_zombies: self.game.is_re2_room.then(|| self.game.re2.zombie_trace()),
             re2_music: self
                 .game
                 .is_re2_room
@@ -13862,7 +13869,11 @@ fn run_re2_init(
     game.re2.set_flag(1, 0, character);
     game.re2.set_flag(1, 1, scenario);
     game.re2.characters = Default::default();
+    game.re2.rnd = Default::default();
+    game.re2.enemies = 0;
+    game.re2.player_lock = 0;
     game.re2.room_loading = true;
+    game.re2.load_pass = true;
     let mut vm = vm.clone();
     let mut host = crate::scd2::host::GameHost { game };
     vm.run_init(&mut host);
@@ -13878,6 +13889,8 @@ fn run_re2_init(
 /// start, every task runs, then what they asked of the room and the player
 /// applies.
 fn tick_re2_scripts(context: &mut RoomContext<'_>) {
+    // The load's `Em_init_move` comes first: its fires are the pool's top slots.
+    crate::character2::init(context.game, context.room, context.pack, context.npc_models);
     // `Sce_scheduler` skips the first tick after a door: `fg_stop` is still up.
     if std::mem::take(&mut context.game.re2.door_settling) {
         return;
@@ -14019,7 +14032,6 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
     if context.game.re2.player.kind & crate::player2::KIND_NOT_MOVED != 0 {
         return;
     }
-    crate::character2::tick(context.game, context.room, context.pack, context.npc_models);
     let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
     let room_anim = context.room.room_anim.as_ref();
     let tick = crate::player2::Tick {
@@ -14297,6 +14309,10 @@ fn tick_room_timed(
     context.player.detached_clip.spawn_hand = context.game.joint_worlds[0]
         .get(crate::weapons::WEAPON_JOINT)
         .copied();
+    // `Game_loop` runs the enemy slots whether or not the player may move.
+    if context.game.is_re2_room {
+        crate::character2::tick(context.game, context.room, context.pack, context.npc_models);
+    }
     if state != 1 || frozen {
         // The pad-driven idle did not run this tick, so its reference scratch
         // is stale: the trace mirror must not reapply it.
@@ -16155,7 +16171,12 @@ fn render_frame_on(
         let Some(character) = character.as_deref().filter(|c| c.be_flg & 1 != 0) else {
             continue;
         };
-        let Some(model) = npc_models.get(pack, character.id, id.player_flag & 1) else {
+        let skin = character
+            .zombie
+            .as_ref()
+            .map_or(0, |zombie| zombie.skin.saturating_sub(1));
+        let Some(model) = npc_models.get_skinned(pack, character.id, id.player_flag & 1, skin)
+        else {
             continue;
         };
         let tick = crate::character2::tick_of(room, game, character, slot, &model);
@@ -16179,7 +16200,12 @@ fn render_frame_on(
         models.push(model);
         npc_joints.push(joints);
         npc_hidden.push(character.work.hidden_parts);
-        npc_tints.push([255; 3]);
+        npc_tints.push(
+            character
+                .zombie
+                .as_ref()
+                .map_or([255; 3], crate::zombie2::Zombie::tint),
+        );
         npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
         npc_weapons.push(None);
         npc_zone_gate.push(true);

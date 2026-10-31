@@ -112,6 +112,8 @@ const IDLE_BLEND_STEP: u16 = 0x400;
 #[derive(Default)]
 pub struct EntityModelCache {
     pub(crate) models: HashMap<(u8, u8), Arc<Emd>>,
+    /// RE2's zombies in the skins `Em10_Init` chose: id, scenario and skin.
+    pub(crate) skins: HashMap<(u8, u8, u8), Arc<Emd>>,
     pub(crate) missing: HashSet<(u8, u8)>,
     /// Keyframe-only views of the loaded models, so every entity's animation
     /// clock can share one table without cloning it each tick.
@@ -180,6 +182,32 @@ impl EntityModelCache {
     /// The parsed model for entity `(id, player)`, loading it from the pack on
     /// first use. Ids outside the dispatchable range yield `None` without a
     /// warning.
+    /// [`Self::get`] with `Em10_Init`'s `Texture_Move`.
+    pub fn get_skinned(&mut self, pack: &Pack, id: u8, player: u8, skin: u8) -> Option<Arc<Emd>> {
+        let model = self.get(pack, id, player)?;
+        if skin == 0 {
+            return Some(model);
+        }
+        if let Some(skinned) = self.skins.get(&(id, player & 1, skin)) {
+            return Some(Arc::clone(skinned));
+        }
+        let mut skinned = (*model).clone();
+        for object in &mut skinned.mesh.objects {
+            for prim in &mut object.prims {
+                // The texture's columns are the clothes, each on its own palette;
+                // the first is the head that all of them share.
+                if prim.tsb & 0xF != 0 {
+                    prim.tsb += u16::from(skin);
+                    prim.clut += u16::from(skin) << 6;
+                }
+            }
+        }
+        let skinned = Arc::new(skinned);
+        self.skins
+            .insert((id, player & 1, skin), Arc::clone(&skinned));
+        Some(skinned)
+    }
+
     pub fn get(&mut self, pack: &Pack, id: u8, player: u8) -> Option<Arc<Emd>> {
         let key = (id, player & 1);
         if let Some(model) = self.models.get(&key) {

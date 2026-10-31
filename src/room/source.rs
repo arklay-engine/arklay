@@ -73,6 +73,8 @@ pub struct RoomSource {
     pub footstep_count: u16,
     /// Footstep zones in table order; the last is the catch-all.
     pub footstep_zones: Vec<FootstepZone>,
+    /// RE2's guide areas.
+    pub guides: Vec<crate::state::Guide>,
     /// The object-model table's slot count when it is longer than its last
     /// slot with a model (`object/<slot>.tmd`): trailing null slots the SCD
     /// still sees. `None` when the files give the count.
@@ -497,6 +499,7 @@ impl RoomSource {
             walk_zones: state.walk_zones,
             footstep_count: footstep_count(data, pointers[FOOTSTEP_SLOT]),
             footstep_zones: state.footstep_zones,
+            guides: state.guides,
             object_slots,
             item_slots,
             slots: Slots::default(),
@@ -598,6 +601,7 @@ impl RoomSource {
             zone_gates: self.zone_gates.clone(),
             walk_zones: self.walk_zones.clone(),
             footstep_zones: self.footstep_zones.clone(),
+            guides: self.guides.clone(),
             messages: None,
             effects: build_effects(&kind("effect"), self.slots.effect.as_deref(), pack)?,
             object_models,

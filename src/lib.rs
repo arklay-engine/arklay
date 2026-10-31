@@ -104,3 +104,4 @@ pub mod video;
 pub mod voice;
 pub mod voice_table;
 pub mod weapons;
+pub mod zombie2;

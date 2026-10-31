@@ -439,6 +439,16 @@ impl ScaRect {
     }
 }
 
+/// One of RE2's guide areas: a rectangle, and by bit those it opens onto.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Guide {
+    pub x0: i16,
+    pub z0: i16,
+    pub x1: i16,
+    pub z1: i16,
+    pub links: u16,
+}
+
 /// One camera switch zone record. Every record is a zone; the first record of
 /// each `cam_from` group is that group's header.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -626,6 +636,8 @@ pub struct RoomState {
     pub walk_zones: Vec<WalkZone>,
     /// Footstep sound zones, in file order.
     pub footstep_zones: Vec<FootstepZone>,
+    /// RE2's guide areas, `Root_ck`'s map of the room.
+    pub guides: Vec<Guide>,
     /// Raw RDT message block: a `u16` offset table followed by the encoded
     /// message streams. Absent when the RDT has no message pointer.
     pub messages: Option<Vec<u8>>,

@@ -52,7 +52,9 @@ runs them or collides with them. That leaves the player alone to compare with
 arklay until enemies are ported. `oracle/inputs-re2/` holds the scripts in use,
 and `street_wander.txt` is a random walk through room 100.
 
-`--keep-enemy SLOT` leaves that slot running, for a character arklay has. Room 101's scene wants `--no-enemies --keep-enemy 0`: the input `first_door.txt` over 4500 ticks, compared with `--fields room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,em`, matches from the room's first line. Its zombies have no state in arklay yet, and the street's would attack the route, so this doesn't show the scene with them.
+`--keep-enemy SLOT` leaves that slot running, for a character arklay has. Room 101's scene wants `--no-enemies --keep-enemy 0`: the input `first_door.txt` over 4500 ticks, compared with `--fields room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,em`, matches from the room's first line. The zombies can't touch the player in arklay yet, and the street's would attack the route, so this doesn't show the scene with them.
+
+`--fields rng,zm0,zm1,zm2,zm3,zm4,zm5` compares `Rnd` and each zombie's position, angle, routine, motion, `Type` and life, from the trace's `zm` field. With no input, room 100 matches from t=1 to t=193, when one reaches Leon.
 
 `--sound` runs the game with `DirectSoundEnable` on, in a prefix of its own with Wine's audio going to a private PulseAudio sink: the audio is written beside the trace as a `.wav` and what the music loaded as a `.music` log. Only then does the original's `bgm` field say anything, so compare it with `--sound --fields room,bgm`: the word for the room, each sequence's state and hold, and the channels' tracks. The original's door takes the same ticks either way, but its room load comes 91 ticks later with sound, so the other fields of a `--sound` trace differ during a door. `first_door.txt` over 4500 ticks matches for Leon, and over 1200 for Claire, but for the one tick the original has unloaded the tracks.
 

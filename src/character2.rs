@@ -26,6 +26,14 @@ pub fn tick(
             continue;
         };
         let model = npc_models.get(pack, character.id, scenario);
+        if let Some(mut zombie) = character.zombie.take() {
+            if let Some(model) = model.filter(|_| moves(&character)) {
+                run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+            }
+            character.zombie = Some(zombie);
+            game.re2.characters.0[slot] = Some(character);
+            continue;
+        }
         if let Some(model) = model.filter(|_| moves(&character)) {
             let tick = tick_of(room, game, &character, slot, &model);
             let arrived = spl(&mut character, &tick);
@@ -47,9 +55,99 @@ pub fn tick(
     }
 }
 
-/// `_Spl`'s mask for `Sca_ck_em`: the children's is lower.
+/// `Game_loop`'s call of `Em_Zombie`, with its view of the rest of the game.
+fn run_zombie(
+    game: &mut GameState,
+    room: &RoomState,
+    character: &mut Character,
+    zombie: &mut crate::zombie2::Zombie,
+    slot: usize,
+    model: &Emd,
+) {
+    let tick = tick_of(room, game, character, slot, model);
+    let player = game.entities[0].pos;
+    // `player_work`'s bodies: the player, then the slots.
+    let mut bodies = vec![crate::zombie2::Oba {
+        slot: 0,
+        be_flg: 1,
+        atd: crate::zombie2::Atd {
+            ofs_y: -0x5FA,
+            at_w: PLAYER_WIDTH,
+            at_h: 0x5FA,
+            w: PLAYER_WIDTH,
+            at: [player[0], player[1] - 0x5FA, player[2]],
+        },
+    }];
+    let in_play = game.re2.characters.0.iter().flatten();
+    bodies.extend(
+        in_play
+            .filter(|other| other.be_flg & 1 != 0)
+            .map(|other| crate::zombie2::Oba {
+                slot: 0,
+                be_flg: other.be_flg,
+                atd: other.zombie.as_ref().map_or_else(
+                    || crate::zombie2::Atd {
+                        ofs_y: -0x5FA,
+                        at_w: other.body.radius as u16,
+                        at_h: 0x5FA,
+                        w: other.body.radius as u16,
+                        at: [
+                            other.body.pos[0],
+                            other.body.pos[1] - 0x5FA,
+                            other.body.pos[2],
+                        ],
+                    },
+                    |zombie| zombie.atd,
+                ),
+            }),
+    );
+    let sca = room
+        .sca
+        .as_ref()
+        .map_or(&[][..], |sca| sca.records.as_slice());
+    let stopped = game.re2.character_stopped(slot);
+    let easy = game.re2.flag(0, FG_SYSTEM_EASY);
+    let enemies = game.re2.enemies;
+    let player_clip = game.re2.player.move_no;
+    let player_neck = game.re2.player.neck.position;
+    let re2 = &mut game.re2;
+    let effects = &mut re2.effects;
+    let mut world = crate::zombie2::World {
+        player,
+        player_neck,
+        player_floor: crate::sca::floor_of(player[1]),
+        player_clip,
+        lock: &mut re2.player_lock,
+        noise: 0,
+        rnd: &mut re2.rnd,
+        easy,
+        enemies,
+        stopped,
+        bodies: &bodies,
+        guides: &room.guides,
+        sca,
+        effects,
+    };
+    crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
+    let pos = character.body.pos;
+    for sound in zombie.sounds.drain(..) {
+        let id = 3 << 24 | u32::from(sound) << 16;
+        if let Some(id) = crate::se2::SoundId::decode(id) {
+            re2.sounds.push(crate::scd2::host::SoundRequest { id, pos });
+        }
+    }
+}
+
+/// `Player_set`'s `At_w`.
+const PLAYER_WIDTH: u16 = 450;
+/// `fg_system`'s `0x20`, easy mode's bit.
+const FG_SYSTEM_EASY: u8 = 26;
+
+/// `Sca_ck_em`'s mask: the children's is lower, and a zombie's its own.
 pub fn sca_mask(id: u8) -> u16 {
-    if matches!(id, 0x45 | 0x4F) {
+    if (0x10..0x20).contains(&id) {
+        crate::zombie2::MASK
+    } else if matches!(id, 0x45 | 0x4F) {
         crate::sca::CHARACTER_MASK_LOW
     } else {
         crate::sca::CHARACTER_MASK
@@ -79,6 +177,21 @@ pub fn init(
         if character.with_room
             && let Some(model) = npc_models.get(pack, character.id, scenario)
         {
+            if let Some(mut zombie) = character.zombie.take() {
+                character.with_room = false;
+                let held = character.work.kind & player2::KIND_NOT_MOVED;
+                character.work.kind &= !player2::KIND_NOT_MOVED;
+                run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+                let (start, flags) = character.start;
+                if start != 0 {
+                    player2::spl_start(&mut character.work, start, flags);
+                    run_zombie(game, room, &mut character, &mut zombie, slot, &model);
+                }
+                character.work.kind |= held;
+                character.zombie = Some(zombie);
+                game.re2.characters.0[slot] = Some(character);
+                continue;
+            }
             let tick = tick_of(room, game, &character, slot, &model);
             let arrived = em_init_move(&mut character, &tick);
             if let Some(flag) = arrived {
@@ -86,6 +199,11 @@ pub fn init(
             }
         }
         game.re2.characters.0[slot] = Some(character);
+    }
+    // The pass of `Game_loop` that ends a load runs `Esp_move`, and little else.
+    if std::mem::take(&mut game.re2.load_pass) {
+        let re2 = &mut game.re2;
+        re2.effects.tick(&mut re2.rnd);
     }
 }
 
@@ -176,6 +294,7 @@ mod tests {
             kind: 0,
             start: (0, 0),
             with_room: false,
+            zombie: None,
         };
         assert!(moves(&character));
         character.work.kind = player2::KIND_NOT_MOVED;

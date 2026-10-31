@@ -47,6 +47,9 @@ const RVD_SLOT: usize = 8;
 const LIT_SLOT: usize = 9;
 /// Section slot of the footstep zones (FLR, `rdt + 0x34`).
 const FLR_SLOT: usize = 11;
+/// The guide areas `Guide_check` reads: `rdt + 0x38`.
+const GUIDE_SLOT: usize = 12;
+const GUIDE_SIZE: usize = 12;
 /// Size of one footstep zone record.
 const FLR_RECORD_SIZE: usize = 12;
 /// Size of one camera's light record.
@@ -262,6 +265,7 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
     let sca = parse_sca(data, offset(data, SCA_SLOT)?)?;
     let footstep_zones =
         parse_footsteps(data, offset(data, FLR_SLOT)?).context("footstep zones")?;
+    let guides = parse_guides(data, offset(data, GUIDE_SLOT)?).context("guide areas")?;
     Ok(RoomSource {
         cameras,
         zones,
@@ -269,9 +273,30 @@ pub fn read(data: &[u8]) -> Result<RoomSource> {
         sca,
         footstep_count: footstep_zones.len() as u16,
         footstep_zones,
+        guides,
         dialect: Dialect::Re2,
         ..RoomSource::default()
     })
+}
+
+/// The guide areas at `offset`: a count, then rectangles and their links.
+fn parse_guides(data: &[u8], offset: u32) -> Result<Vec<crate::state::Guide>> {
+    if offset == 0 {
+        return Ok(Vec::new());
+    }
+    let base = offset as usize;
+    (0..usize::from(u16_at(data, base)?))
+        .map(|index| {
+            let at = base + 4 + index * GUIDE_SIZE;
+            Ok(crate::state::Guide {
+                x0: i16_at(data, at)?,
+                z0: i16_at(data, at + 2)?,
+                x1: i16_at(data, at + 4)?,
+                z1: i16_at(data, at + 6)?,
+                links: u16_at(data, at + 10)?,
+            })
+        })
+        .collect()
 }
 
 /// The footstep zones at `offset` (none when it is 0). The table is read by

@@ -236,7 +236,7 @@ fn div(a: i32, b: i32) -> i32 {
 
 /// `SquareRoot0`: a table of `sqrt(i) * 512` for the value's top bits, scaled
 /// back by its exponent, so it rounds down coarsely for big values.
-fn square_root0(value: i32) -> i32 {
+pub(crate) fn square_root0(value: i32) -> i32 {
     if value == 0 || value == -1 {
         return 0;
     }
