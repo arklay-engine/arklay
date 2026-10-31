@@ -529,7 +529,7 @@ impl Banks {
         self.load_table(pack, Kind::Enemy, &bank_dir("enemy", &format!("{id:02x}")));
     }
 
-    /// Load the core bank of `id` ([`CORE_BANKS`]: `core%02d.sap`,
+    /// Load the core bank of `id` (`Snd_load_core`'s table: `core%02d.sap`,
     /// `CORE%02X.EDH`) and, for every bank but `15`, the shared bank `16` over
     /// it, replacing the core sounds.
     pub fn load_core(&mut self, pack: &Pack, id: u8) {
