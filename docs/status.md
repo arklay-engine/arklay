@@ -861,9 +861,9 @@ Still open, by design:
   model.
 - The documented render contracts: per-joint colour tints and joint-object
   gore chunks/trails, the ribbon rasterisation, the Plant 42 DIED-screen
-  joint-hide pose, and the flamethrower/acid/rocket per-frame projectile
-  damage. Each is catalogued in the module docs and
-  `docs/m18-deviations.md`.
+  joint-hide pose, and the flamethrower/acid per-frame projectile
+  damage (the rocket's hit lands at the fire frame, with no flight). Each is
+  catalogued in the module docs and `docs/m18-deviations.md`.
 
 RE2 work is tracked by the milestone issue #244 and its sub-issues. R0
 (#15) adds conversion only: `convert-game` detects an RE2 PC install (or takes

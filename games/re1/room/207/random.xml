@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="2F EAST STAIRS"/>
+  <doors>
+    <door id="0" target="204:3" kind="normal">
+      <entrance x="3000" y="0" z="3600" d="3072" cut="7"/>
+    </door>
+    <door id="1" target="208:1" kind="normal">
+      <entrance x="17000" y="0" z="11300" d="3072" cut="5"/>
+    </door>
+    <door id="2" target="20B:0" kind="normal">
+      <entrance x="30400" y="0" z="5000" d="3072" cut="4"/>
+    </door>
+    <door id="3" target="10B:1" kind="stairs"/>
+  </doors>
+  <items>
+  </items>
+  <enemies exclude="4">
+    <spot x="11764" y="0" z="11442" d="2014"/>
+    <spot x="14960" y="0" z="12039" d="2054"/>
+    <spot x="20203" y="0" z="12129" d="134"/>
+    <spot x="23257" y="0" z="11512" d="4070"/>
+    <spot x="27170" y="0" z="12084" d="2070"/>
+    <spot x="2836" y="0" z="8963" d="1078"/>
+    <spot x="2939" y="0" z="6527" d="3014"/>
+    <spot x="30221" y="0" z="8143" d="3110"/>
+    <spot x="30410" y="0" z="11701" d="2150"/>
+    <spot x="4236" y="0" z="11507" d="2014"/>
+    <spot x="7720" y="0" z="11485" d="2094"/>
+  </enemies>
+</random>

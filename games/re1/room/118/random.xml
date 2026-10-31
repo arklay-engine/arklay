@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="1F EAST SAVE" tags="start"/>
+  <doors>
+    <door id="0" target="10B:2" kind="normal">
+      <entrance x="6000" y="0" z="8000" d="1024" cut="1"/>
+    </door>
+  </doors>
+  <items>
+    <item id="1" name="CHEMICAL"/>
+  </items>
+  <enemies/>
+</random>

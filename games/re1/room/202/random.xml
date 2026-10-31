@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="2F WEST DINING ROOM"/>
+  <doors>
+    <door id="0" target="201:0" kind="normal">
+      <entrance x="6400" y="0" z="14000" d="1024" cut="4"/>
+    </door>
+    <door id="1" target="203:3" kind="normal">
+      <entrance x="30900" y="0" z="8300" d="2048" cut="1"/>
+    </door>
+  </doors>
+  <items>
+  </items>
+  <enemies exclude="4">
+    <spot x="12522" y="0" z="14166" d="1840"/>
+    <spot x="14731" y="0" z="2712" d="3992"/>
+    <spot x="17151" y="0" z="14128" d="3936"/>
+    <spot x="19711" y="0" z="14381" d="2104"/>
+    <spot x="2172" y="0" z="11003" d="1136"/>
+    <spot x="2172" y="0" z="7397" d="3056"/>
+    <spot x="22737" y="0" z="14108" d="4008"/>
+    <spot x="2290" y="0" z="4133" d="3056"/>
+    <spot x="25179" y="0" z="2887" d="3944"/>
+    <spot x="2702" y="0" z="13828" d="960"/>
+    <spot x="27024" y="0" z="14112" d="1840"/>
+    <spot x="28456" y="0" z="2734" d="4040"/>
+    <spot x="31270" y="0" z="13398" d="2272"/>
+    <spot x="31546" y="0" z="4132" d="1336"/>
+    <spot x="9410" y="0" z="2795" d="2072"/>
+  </enemies>
+</random>

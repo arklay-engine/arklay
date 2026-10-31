@@ -55,8 +55,9 @@
 //!   GL explosive round among them, measured from the player). Every grenade
 //!   round's real reach is its bullet effect (behaviour 43), which flies from
 //!   the muzzle and runs the same pipeline from its own position; the
-//!   flamethrower and rocket damage ride their projectile effect behaviours,
-//!   which stay in the effect pool's placeholder set.
+//!   flamethrower's damage rides its projectile effect behaviour, which stays
+//!   in the effect pool's placeholder set. The rocket's behaviour does too, so
+//!   [`rocket_strike`] applies its hit at the fire frame without a flight.
 //! - **The player character sounds.** The original's `PlayEntitySnd` aim/cloth
 //!   cues are a no-op, like the engine's other player-side cue sites.
 
@@ -1643,6 +1644,28 @@ fn autoaim_raise(
     autoaim_fire(game, player, room, clips, player.input);
 }
 
+/// The rocket launcher's row of the fire tables.
+const ROCKET_INDEX: usize = 8;
+/// How many reach steps a rocket flies before it is spent.
+const ROCKET_STEPS: u32 = 48;
+
+/// The rocket's damage, at once rather than along a flight: walk the player's
+/// facing from the player until the projectile pipeline hits something or a
+/// wall stops the sight line. See the module's note on the projectile damage.
+fn rocket_strike(game: &mut GameState, room: &RoomState, from: [i32; 3], angle: u16) {
+    let (step_x, step_z) = crate::player::reach_offset(angle);
+    let flags = (game.player_flags & 0x1F) | 0x40;
+    for step in 1..=ROCKET_STEPS as i32 {
+        let origin = [from[0] + step_x * step, from[1], from[2] + step_z * step];
+        if crate::combat::check_weapon_line_of_sight(game, room, origin) != 0 {
+            return;
+        }
+        if game.apply_weapon_damage_with(room, 10, origin, flags) != 0 {
+            return;
+        }
+    }
+}
+
 /// The fire frame: the damage, the ammo decrement and the flash spawns.
 fn autoaim_fire(
     game: &mut GameState,
@@ -1691,6 +1714,8 @@ fn autoaim_fire(
             let flags = game.player_flags;
             let origin = player.pos;
             game.apply_weapon_damage_with(room, weapon_id, origin, flags);
+        } else if index == ROCKET_INDEX {
+            rocket_strike(game, room, player.pos, player.angle);
         }
         play_fire_sounds(game, weapon, index);
     }
@@ -3174,6 +3199,34 @@ mod tests {
         assert_eq!(weapon_ammo_item_id(2), 0x0B, "handgun -> 9mm clip");
         assert_eq!(weapon_ammo_item_id(3), 0x0C, "shotgun -> shells");
         assert_eq!(weapon_ammo_item_id(10), 0x13, "rocket launcher -> rockets");
+    }
+
+    #[test]
+    fn a_rocket_reaches_the_enemy_it_faces_and_no_other() {
+        let room = RoomState::default();
+        let mut game = GameState::default();
+        game.player_flags = 0x40;
+        let (step_x, step_z) = crate::player::reach_offset(1024);
+        let ahead = [step_x * 20, 0, step_z * 20];
+        let enemy = &mut game.entities[1];
+        enemy.id = 0x10;
+        enemy.pos = ahead;
+        enemy.set_active(true);
+        enemy.status_flags |= 0x40;
+        enemy.health = 600;
+        game.enemy_count = 1;
+
+        rocket_strike(&mut game, &room, [0, 0, 0], 3072);
+        assert_eq!(
+            game.entities[1].health, 600,
+            "the rocket flew the other way"
+        );
+
+        rocket_strike(&mut game, &room, [0, 0, 0], 1024);
+        assert!(
+            game.entities[1].health < 600,
+            "the rocket hit what the player faces"
+        );
     }
 
     #[test]

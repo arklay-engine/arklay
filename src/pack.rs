@@ -3043,6 +3043,9 @@ mod tests {
             start_pos: None,
             start_angle: None,
             start_health: None,
+            seed: None,
+            generator_version: None,
+            character: None,
             region: None,
         }
         .render()

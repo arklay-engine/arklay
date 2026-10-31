@@ -115,6 +115,15 @@ cargo run -- convert-game /path/to/re2
 # docs/modding.md for the mapping
 cargo run -- convert-mod RE-ENHANCE_RE1_v2.0_GOG.zip
 
+# Generate a small randomized game from the RE1 pack (also on the launcher's
+# BioRand screen); the same seed and generator version give the same bytes.
+# See docs/modding.md
+cargo run -- biorand generate re1.akpak --seed 123456
+
+# Check a generated pack: every room, every key before its lock, and the finale
+# can be reached
+cargo run -- biorand verify biorand-123456.akpak
+
 # List every pack entry with its size, then the entry count and total bytes
 cargo run -- list re1.akpak
 

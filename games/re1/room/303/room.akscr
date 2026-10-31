@@ -15,6 +15,7 @@
 #define AOT_05_USEITEM 0x05
 #define AOT_06_USEITEM 0x06
 #define AOT_07_USEITEM 0x07
+#define AOT_08_DOOR 0x08
 #define AOT_08_MESSAGE 0x08
 #define CAM_00 0x00
 #define CAM_01 0x01
@@ -97,7 +98,15 @@ proc init
     aot_set(AOT_05_USEITEM, 8500, 22500, 9000, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 34, 0, 1, 0);
     aot_set(AOT_06_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | SAT_PLAYER, 4, 0, 35, 0, 1, 0);
     aot_set(AOT_07_USEITEM, 15900, 11200, 9500, 10000, SCE_USEITEM, SAT_UNDER | SAT_02, 4, 0, 36, 0, 1, 0);
-    aot_set(AOT_08_MESSAGE, 29000, 3600, 1000, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    if (RANDOMIZER)
+    {
+        // The welded door is the way in and back: the lift has nowhere to go.
+        door_aot_set(AOT_08_DOOR, 29000, 3600, 1000, 3600, 0, DOOR_SND_00_DR_WD, DOOR_0B_DOOR11, 0, 0, ROOM_305_FOUNTAIN, 3130, 0, 16900, 0, UNLOCKED, SAT_MANUAL | SAT_PLAYER);
+    }
+    else
+    {
+        aot_set(AOT_08_MESSAGE, 29000, 3600, 1000, 3600, SCE_MESSAGE, SAT_MANUAL | SAT_PLAYER, 132, 0, 255, 0, 0, 0);
+    }
     obj(OBJ_00, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, SCA_NONE, 22260, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_01, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 0, 24, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     obj(OBJ_02, OF_10 | OF_NO_COLLISION | OF_NO_FLOOR_PROBE | OF_INTANGIBLE | OF_ACTIVE, OBJ_00, 0, 24, 2000, 32, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -114,7 +123,16 @@ proc init
     obj(OBJ_07, OF_NOT_PUSHABLE | OF_ACTIVE, SCA_NONE, 9000, 0, 2310, 0, 0, 0, 0, 0, 0, 300, 200, 250);
     enemy(EM_10_TYRANT_2, EB_80, F_ENEMY_59, SPAWN_FORCE, 2, 0, 800, 0, 0, -32000, 32000, ENEMY_00_TYRANT_2, ANIM_00, 0, EVAR_00);
     cut_auto(CUT_LOCKED);
-    setb(B_CAMERA, CAM_07, 0);
+    if (RANDOMIZER)
+    {
+        setb(B_CAMERA, CAM_04, 0);
+        // The lab's self-destruct, without which the helicopter leaves at once.
+        set(FG_SCENARIO, F_SCENARIO_2B, TRUE);
+    }
+    else
+    {
+        setb(B_CAMERA, CAM_07, 0);
+    }
     if (item_ck(IT_0A_WEAPON_ROCKET_LAUNCHER))
     {
         set(FG_ROOM, F_ROOM_0C, TRUE);

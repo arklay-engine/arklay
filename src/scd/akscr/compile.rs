@@ -206,6 +206,33 @@ fn variant_condition(tokens: &[Token]) -> Result<(u8, usize)> {
     Ok((mask, pos))
 }
 
+/// The port's system flags a script may test by name, as their bits in
+/// `FG_STATUS`. The engine raises them for a randomizer's pack.
+const SYSTEM_ATOMS: [(&str, u8); 3] = {
+    use crate::scd::opcode::system::*;
+    [
+        ("RANDOMIZER", RANDOMIZER),
+        ("DOOR_RANDOMIZER", DOOR_RANDOMIZER),
+        ("ENEMY_RANDOMIZER", ENEMY_RANDOMIZER),
+    ]
+};
+
+/// The system flag and expected state of an `if` condition that tests one
+/// (`RANDOMIZER`, `!ENEMY_RANDOMIZER`), with the tokens it used.
+fn system_condition(tokens: &[Token]) -> Option<(u8, bool, usize)> {
+    let negated = matches!(tokens.first().map(|t| &t.tok), Some(Tok::Punct("!")));
+    let at = usize::from(negated);
+    let Some(Tok::Ident(name)) = tokens.get(at).map(|t| &t.tok) else {
+        return None;
+    };
+    let (_, flag) = SYSTEM_ATOMS.iter().find(|(atom, _)| atom == name)?;
+    matches!(tokens.get(at + 1).map(|t| &t.tok), Some(Tok::Punct(")"))).then_some((
+        *flag,
+        !negated,
+        at + 1,
+    ))
+}
+
 /// Whether the tokens at the start of an `if` condition are a variant test.
 fn starts_variant_condition(tokens: &[Token]) -> bool {
     match tokens.first().map(|token| &token.tok) {
@@ -458,6 +485,17 @@ enum Stmt {
         line: usize,
         col: usize,
     },
+    /// `if (RANDOMIZER) { ... } else { ... }`: a test of a port system flag,
+    /// which is a flag test at run time. A variant's build folds to the flag
+    /// being clear, so it stays the original's bytecode.
+    System {
+        flag: u8,
+        expected: bool,
+        then: Vec<Stmt>,
+        otherwise: Option<Vec<Stmt>>,
+        line: usize,
+        col: usize,
+    },
     Asm(Vec<(usize, String)>),
     Run {
         noreturn: bool,
@@ -497,6 +535,7 @@ impl Stmt {
             Stmt::Return { line, col }
             | Stmt::If { line, col, .. }
             | Stmt::Variant { line, col, .. }
+            | Stmt::System { line, col, .. }
             | Stmt::Run { line, col, .. }
             | Stmt::For { line, col, .. }
             | Stmt::DoWhile { line, col, .. }
@@ -885,6 +924,20 @@ impl Parser {
 
     fn if_statement(&mut self, line: usize, col: usize) -> Result<Stmt> {
         self.expect_punct("(")?;
+        if let Some((flag, expected, used)) = system_condition(&self.tokens[self.pos..]) {
+            self.pos += used;
+            self.expect_punct(")")?;
+            let then = self.block()?;
+            let otherwise = self.else_branch()?;
+            return Ok(Stmt::System {
+                flag,
+                expected,
+                then,
+                otherwise,
+                line,
+                col,
+            });
+        }
         if starts_variant_condition(&self.tokens[self.pos..]) {
             let mask = self.condition_mask()?;
             let then = self.block()?;
@@ -1178,6 +1231,14 @@ impl Lowerer {
                     line,
                     col,
                 } => self.variant(*mask, then, otherwise.as_deref(), false, *line, *col)?,
+                Stmt::System {
+                    flag,
+                    expected,
+                    then,
+                    otherwise,
+                    line,
+                    col,
+                } => self.system(*flag, *expected, then, otherwise.as_deref(), *line, *col)?,
                 _ => {
                     let (line, col) = stmt.position();
                     bail!(
@@ -1236,6 +1297,52 @@ impl Lowerer {
                 self.push(jump, vec![Arg::Symbol(end.clone())], line, col);
                 self.pending.push(skip);
                 lower(self, otherwise)?;
+                self.pending.push(end);
+            }
+        }
+        Ok(())
+    }
+
+    /// A command-script test of a port system flag: the same `if` a flag test
+    /// lowers to, or the clear flag's branch in a variant's build.
+    fn system(
+        &mut self,
+        flag: u8,
+        expected: bool,
+        then: &[Stmt],
+        otherwise: Option<&[Stmt]>,
+        line: usize,
+        col: usize,
+    ) -> Result<()> {
+        if self.build.variant().is_some() {
+            return match (expected, otherwise) {
+                (false, _) => self.commands(then),
+                (true, Some(otherwise)) => self.commands(otherwise),
+                (true, None) => Ok(()),
+            };
+        }
+        const FG_STATUS: i64 = 5;
+        let condition = Call {
+            name: "ck".to_string(),
+            args: vec![
+                Arg::Num(FG_STATUS),
+                Arg::Num(i64::from(flag)),
+                Arg::Num(i64::from(!expected)),
+            ],
+            line,
+            col,
+        };
+        let skip = self.label();
+        self.push("if", vec![Arg::Symbol(skip.clone())], line, col);
+        self.push_call(&condition)?;
+        self.commands(then)?;
+        self.pending.push(skip);
+        match otherwise {
+            None => self.push("endif", vec![Arg::Num(0)], line, col),
+            Some(otherwise) => {
+                let end = self.label();
+                self.push("else", vec![Arg::Symbol(end.clone())], line, col);
+                self.commands(otherwise)?;
                 self.pending.push(end);
             }
         }
@@ -1369,7 +1476,7 @@ impl Lowerer {
                     line,
                     col,
                 } => self.variant(*mask, then, otherwise.as_deref(), true, *line, *col)?,
-                Stmt::Return { .. } | Stmt::Require(_) | Stmt::If { .. } => {
+                Stmt::Return { .. } | Stmt::Require(_) | Stmt::If { .. } | Stmt::System { .. } => {
                     let (line, col) = stmt.position();
                     bail!(
                         "line {line}, column {col}: command flow is only valid inside a `run` \

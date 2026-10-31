@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="B1 EAST" tags="visit2"/>
+  <doors>
+    <door id="0" target="20C/GRAVE:1" kind="ladder"/>
+    <door id="1" target="21B:0" kind="normal">
+      <entrance x="2500" y="0" z="3500" d="0" cut="7"/>
+    </door>
+  </doors>
+  <items>
+    <item id="3" name="SHELLS"/>
+  </items>
+  <enemies exclude="4">
+    <spot x="10010" y="0" z="3289" d="65"/>
+    <spot x="14487" y="0" z="2871" d="2673"/>
+    <spot x="17624" y="0" z="4088" d="1601"/>
+    <spot x="20884" y="0" z="8540" d="3409"/>
+    <spot x="21236" y="0" z="12852" d="1073"/>
+    <spot x="21674" y="0" z="6337" d="1121"/>
+    <spot x="23091" y="0" z="12232" d="2425"/>
+    <spot x="24630" y="0" z="3328" d="2097"/>
+    <spot x="25795" y="0" z="13119" d="2121"/>
+  </enemies>
+</random>

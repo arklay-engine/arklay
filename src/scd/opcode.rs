@@ -312,6 +312,18 @@ pub mod variant {
     pub const DIMENSIONS: [u8; 3] = [PLAYER, MANSION, REGION];
 }
 
+/// Flag bank 5 bits the port adds, the same in every game and never used by
+/// the originals. A randomizer's pack raises them, so a room's script can turn
+/// off what only makes sense in the game's own order (`if (RANDOMIZER)`).
+pub mod system {
+    /// The pack is a randomizer's.
+    pub const RANDOMIZER: u8 = 0xF0;
+    /// The doors lead somewhere other than the original's rooms.
+    pub const DOOR_RANDOMIZER: u8 = 0xF1;
+    /// The enemies are not the ones the room's script places.
+    pub const ENEMY_RANDOMIZER: u8 = 0xF2;
+}
+
 /// Whether the room variant `current` (one bit of each dimension) matches
 /// `mask`: in every dimension where the mask sets any bit, `current`'s bit
 /// is one of them. A dimension the mask leaves clear always matches.
