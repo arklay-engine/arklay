@@ -1001,6 +1001,17 @@ const RE2_MESSAGE_PAUSE: u16 = 0xFFFF;
 /// The handguns' ammunition item.
 const RE2_HANDGUN_BULLETS: u8 = 0x14;
 
+/// `Mix_null`'s ammunition of a weapon and `Item_data_tbl`'s magazine for it.
+fn re2_ammo(weapon: u8) -> (u8, u8) {
+    match weapon {
+        3 => (RE2_HANDGUN_BULLETS, 13),
+        5 | 6 => (0x16, 8),
+        7 => (0x15, 5),
+        8 => (0x15, 7),
+        _ => (RE2_HANDGUN_BULLETS, 18),
+    }
+}
+
 /// The typewriter save flow, the part of the original's `g_typewriter_state`
 /// the engine observes: idle, or a yes/no save prompt awaiting its answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -8053,7 +8064,7 @@ impl GameState {
         crate::player2::Weapon {
             id,
             loaded: self.item_count(id) != 0,
-            spare: self.item_count(RE2_HANDGUN_BULLETS) != 0,
+            spare: self.item_count(re2_ammo(id).0) != 0,
         }
     }
 
@@ -8066,13 +8077,8 @@ impl GameState {
             slot.quantity = slot.quantity.saturating_sub(1);
         }
         if std::mem::take(&mut self.re2.player.reloaded) {
-            // `Item_data_tbl`'s magazines.
-            let magazine = if weapon == 3 { 13 } else { 18 };
-            let Some(index) = self
-                .inventory
-                .iter()
-                .position(|slot| slot.id == RE2_HANDGUN_BULLETS)
-            else {
+            let (ammo, magazine) = re2_ammo(weapon);
+            let Some(index) = self.inventory.iter().position(|slot| slot.id == ammo) else {
                 return;
             };
             let spare = &mut self.inventory[index];
@@ -9826,6 +9832,31 @@ mod tests {
         assert_eq!(game.item_count(3), 20);
         assert_eq!(game.inventory.len(), 1, "the empty stack is gone");
         assert!(!game.re2_weapon().spare);
+    }
+
+    #[test]
+    fn a_re2_shotgun_reloads_from_its_own_shells() {
+        let mut game = GameState {
+            equipped_weapon_id: 7,
+            inventory: vec![
+                InventoryItem { id: 7, quantity: 0 },
+                InventoryItem {
+                    id: RE2_HANDGUN_BULLETS,
+                    quantity: 20,
+                },
+                InventoryItem {
+                    id: 0x15,
+                    quantity: 7,
+                },
+            ],
+            ..Default::default()
+        };
+        assert!(game.re2_weapon().spare);
+        game.re2.player.reloaded = true;
+        game.re2_settle_ammo();
+        assert_eq!(game.item_count(7), 5);
+        assert_eq!(game.item_count(0x15), 2);
+        assert_eq!(game.item_count(RE2_HANDGUN_BULLETS), 20);
     }
 
     #[test]

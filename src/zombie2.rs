@@ -476,7 +476,8 @@ impl Em<'_, '_, '_> {
         (*self.world.lock as i8) < 0
     }
 
-    /// `Em10_Damage`. Only the handguns reach here: the other weapons' branches,
+    /// `Em10_Damage`. The handguns' reactions, which the magnums and shotguns
+    /// take too for now: the other weapons' branches,
     /// which light and freeze it, aren't ported.
     fn em10_damage(&mut self) {
         self.let_go();
