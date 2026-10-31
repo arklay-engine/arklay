@@ -68,6 +68,8 @@ pub struct Re2State {
     pub effects: crate::esp2::Effects,
     /// `se_on`'s sounds, not yet played.
     pub sounds: Vec<SoundRequest>,
+    /// `sce_scr_move`: how far the background has scrolled down.
+    pub scroll: i16,
 }
 
 /// One sound `se_on` asked for, and where.
@@ -155,12 +157,14 @@ const CHARACTER_SIZES: [u16; 28] = [
     450, 350, 450, 350, 450, 350, 450, 450,
 ];
 /// `fg_status`'s bank, whose bit picks the second `fg_enemy`.
-const STATUS_BANK: u8 = 1;
+pub const STATUS_BANK: u8 = 1;
 const STATUS_ENEMY_FLAGS: u8 = 6;
 /// `fg_status`'s bit for the character whose voices play: 1 is Claire.
 pub const STATUS_PLAYER: u8 = 0;
 /// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
 pub const STATUS_VOICE: u8 = 26;
+/// A scene is running: the bars come down and the menus stay shut.
+pub const STATUS_SCENE: u8 = 27;
 /// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
 const ENEMY_BANK: u8 = 6;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
@@ -243,6 +247,7 @@ impl Default for Re2State {
             music: Default::default(),
             effects: Default::default(),
             sounds: Vec::new(),
+            scroll: 0,
         }
     }
 }
@@ -373,6 +378,19 @@ impl Re2State {
     /// `Flg_on(&fg_room, ...)`, a finished scripted walk's.
     pub fn raise_room_flag(&mut self, flag: u8) {
         self.set_flag(ROOM_BANK, flag, 1);
+    }
+
+    /// `player_work`'s table of necks, by `plc_neck`'s number.
+    pub fn necks(&self) -> crate::player2::Necks {
+        let character = |slot: usize| {
+            let character = self.characters.0.get(slot)?.as_deref()?;
+            character.work.neck.position
+        };
+        std::array::from_fn(|index| match index {
+            0 => self.player.neck.position,
+            1 => character(SPLAYER_SLOT),
+            n => character(n - 2),
+        })
     }
 
     pub fn flag(&self, bank: u8, index: u8) -> bool {
@@ -916,6 +934,7 @@ impl Host for GameHost<'_> {
                 self.game.set_camera_cut(usize::from(cut));
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
+            "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
             "cut_be_set" => self.game.re2.pending_cuts.push(CutEdit::SetGate {
                 cut: at(0) as u8,
                 index: at(1) as u8,
@@ -1060,6 +1079,21 @@ impl Host for GameHost<'_> {
                 if flag != 0 {
                     self.game.re2.unmodelled_arrivals.push(flag);
                 }
+            }
+            "plc_neck" if self.task_character(task).is_some() => {
+                let words = [at(1) as i16, at(2) as i16, at(3) as i16];
+                let rates = [at(4) as u8, at(5) as u8];
+                if let Some(character) = self.task_character(task) {
+                    crate::player2::plc_neck(&mut character.work, at(0) as u8, words, rates);
+                }
+            }
+            "plc_neck" if self.work_is_player(task) => {
+                crate::player2::plc_neck(
+                    &mut self.game.re2.player,
+                    at(0) as u8,
+                    [at(1) as i16, at(2) as i16, at(3) as i16],
+                    [at(4) as u8, at(5) as u8],
+                );
             }
             "plc_ret" if self.work_is_player(task) => {
                 crate::player2::plc_ret(&mut self.game.re2.player);

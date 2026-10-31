@@ -12,7 +12,7 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 - **Stairs.** `pl_mv_07` climbs and descends them, but the shadow lies flat at the ground under the player rather than following the steps, and whether stairs are in reach goes by the floor the player's height is on rather than by `nFloor`, which nothing ports yet.
 - **Falls and death.** `Pl_damage`'s falls (`Routine_1` 4 and 5) play as the plain hit, without their `pSub1` clips or getting up, and `Pl_dead` leaves the player standing with no game over.
 - **Sounds of hits.** `Pl_damage` plays none of its sounds.
-- **What the player's routine leaves out.** The neck, water and `Lim_dir_ck`'s clip swap aren't ported.
+- **What the player's routine leaves out.** Water and `Lim_dir_ck`'s clip swap aren't ported. The neck follows `plc_neck`, but `Pl_neck`'s aim at the nearest enemy waits for enemies.
 - **Climbing.** `Oma_pl_updown_ck` reads only the room's SCA records, not object models, and treats every shape as its box.
 
 ## Collision
@@ -32,13 +32,13 @@ The pad's walking, running, backing, turning, hurt clips and scripted motions (`
 ## Scripts
 
 - **Sleeps in an init procedure.** They don't wait: a room's init runs to its end inside the load.
-- **Script characters.** The characters `_Spl` runs (ids 0x40 to 0x5B, from `sce_em_set`) take `work_set 3`, move on `Spl_Scenario` with their own speeds, turns and banks and stop on the records of `Sca_ck_em`'s mask, and room 101's scene with Kendo matches the original tick for tick. They have no `Spl_Auto` yet, so a character outside a script's `plc_*` stands still, and no neck (`plc_neck`), `Oba_ck_em`, footsteps, `parts_set`, shadow or room lighting of their own. Their `Spd` isn't compared: `Spl_Init`'s `Joint_move` leaves values in it that nothing reads before `Spl_sce*` sets them. `splayer_work` (`sce_em_set` slot 255, `work_set 2`) is one of them, with its own slot and stop bit: Sherry's scene in room 114 matches too. The other enemies aren't modelled: their `plc_dest` arrives at once, `member_cmp` on one always answers false and any `member_set` of one is dropped, so a script waiting on one's motion moves on. `tests/real/re2_real.rs` runs every main procedure and names those still holding (113, none in the rooms from the start to the police station).
+- **Script characters.** The characters `_Spl` runs (ids 0x40 to 0x5B, from `sce_em_set`) take `work_set 3`, move on `Spl_Scenario` with their own speeds, turns and banks and stop on the records of `Sca_ck_em`'s mask, and room 101's scene with Kendo matches the original tick for tick. They have no `Spl_Auto` yet, so a character outside a script's `plc_*` stands still, and no `Oba_ck_em`, footsteps, `parts_set` or shadow of their own. A `plc_neck` aimed at someone not modelled, such as a zombie, leaves the head where it was. Their `Spd` isn't compared: `Spl_Init`'s `Joint_move` leaves values in it that nothing reads before `Spl_sce*` sets them. `splayer_work` (`sce_em_set` slot 255, `work_set 2`) is one of them, with its own slot and stop bit: Sherry's scene in room 114 matches too. The other enemies aren't modelled: their `plc_dest` arrives at once, `member_cmp` on one always answers false and any `member_set` of one is dropped, so a script waiting on one's motion moves on. `tests/real/re2_real.rs` runs every main procedure and names those still holding (113, none in the rooms from the start to the police station).
 - **Unmodelled instructions.** They do nothing and log once. That includes enemies and NPCs (`sce_em_set`) and water and movement areas (`sce_at`'s other kinds).
 - **Scenario B.** It starts in room 104 with the scenario flag set. Nothing ties it to a finished Scenario A, and there is no zapping.
 
 ## Sound
 
-- **Music across a door.** The room's music changes when the room loads. `Snd_bgm_ck`'s 90-tick fade through the door isn't modelled.
+- **The door's room load.** The original with sound holds `Set_room` for `Snd_bgm_ck`'s 91 ticks. Here the room loads when it does without sound, and only the music waits, so nothing else in the door moves. `Door_snd_trans`, which rewrites the table once seven of the item flags 0xF8 to 0xFF are set in a game with `fg_system`'s `0x1000000`, isn't ported: nothing sets that bit yet.
 - **Music's stereo.** Tracks are mixed to mono and placed with the script's pan.
 - **Sound effects.** `Snd_se_on`'s room-specific rules and loops aren't ported, nor `Sca_ck_line`'s muffling through walls, and enemies' banks aren't loaded. `se_on` from an object's work uses the player's position.
 - **Footsteps.** `Floor_check`'s zones choose the sound. Water, `+0x1e4`'s case and the core slots aren't ported, and `flr_set` does nothing.

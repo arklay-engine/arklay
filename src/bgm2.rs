@@ -3,10 +3,10 @@
 //! Every room has one `u16` in the save's `bgm_tbl` (142 rooms: stage `s`'s
 //! rooms start at [`STAGE_START`]`[s]`). The low byte picks the main music
 //! and the high byte the sub music, each a 6-bit id plus two flag bits; an id
-//! of `0x3f` (the `0xff` the scripts write) is none. Nothing in the
-//! executable fills the table: the room scripts' `sce_bgmtbl_set` (opcode
-//! 0x57) writes it ([`BgmTable::set`]), and `Snd_bgm_set` reads the current
-//! room's entry when the room loads.
+//! of `0x3f` (the `0xff` the scripts write) is none. A new game copies the
+//! table from `INIT_TBL.DAT` ([`BgmTable::from_init_table`]), the room scripts'
+//! `sce_bgmtbl_set` (opcode 0x57) rewrites words of it ([`BgmTable::set`]), and
+//! `Snd_bgm_set` reads the current room's entry when the room loads.
 //!
 //! A main id loads up to three tracks at once (`bgm_lut`), played together
 //! as BGM channels 0-2; a channel starts silent unless [`MAIN_AUDIBLE`] marks
@@ -30,6 +30,14 @@ pub const ROOMS: usize = 142;
 /// The first table entry of each stage, 0-based (`0x53c790` in
 /// `bio2 1.10.exe`); stage 7 runs to [`ROOMS`].
 pub const STAGE_START: [u8; 7] = [0, 31, 61, 77, 96, 108, 134];
+
+/// `Common/Data/INIT_TBL.DAT` in the pack: the save block a new game starts
+/// from (`Memcpy` to `0x98e79c`), one record per character and scenario.
+pub const INIT_TABLE_ENTRY: &str = "game/init_tbl.bin";
+/// The length of an `INIT_TBL.DAT` record.
+const INIT_RECORD_LEN: usize = 0x798;
+/// Where `bgm_tbl` lies in a record.
+const INIT_RECORD_TABLE: usize = 0x22c;
 
 /// The id that means no music.
 pub const NONE: u8 = 0x3f;
@@ -168,8 +176,12 @@ const STATE_MUTED: u8 = 4;
 const STATE_ROOM_FADE: u8 = 0xf;
 /// `Seq_ctr[0]`, counting down `sce_bgm_control`'s fade to its stop at 5.
 const STATE_SCRIPT_FADE: u8 = 0x32;
+/// `Snd_bgm_ck`'s `Fade_time`, the tick the fade to a new main stops at 1.
+const DOOR_FADE_TICKS: u8 = 0x5a;
 /// The ticks `SsSeqSetDecrescendo` lowers a sequence for, a step of 1 a tick.
 const FADE_TICKS: u8 = 0x5a;
+/// The ticks from `Snd_bgm_ck` to the door's `Snd_bgm_set`.
+const DOOR_WAIT_TICKS: u8 = 0x5b;
 /// `Seq_ctr[1]`, a sequence with nothing loaded to play.
 const HOLD_NOTHING: u8 = 0xff;
 /// `fg_system`'s bit that stops the game touching the music.
@@ -214,7 +226,7 @@ struct Sequence {
 }
 
 /// Where `sce_bgm_control` runs, which some of its cases ask.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Place {
     /// `scd_var_stage`, from 0.
     pub stage: u8,
@@ -226,6 +238,13 @@ pub struct Place {
     pub player: u8,
 }
 
+/// What a room asked of the music while a door still waited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Deferred {
+    Enter(RoomMusic, Place),
+    Control([u8; 5], Place),
+}
+
 /// The state of RE2's music, the `Seq_ctr` table and what it asks of the
 /// channels (`Snd_bgm_set`, `Snd_bgm_play_ck`, `Snd_bgm_ctr` and the fades of
 /// `Snd_se_call`). A save doesn't hold it: the load enters the room again.
@@ -234,6 +253,12 @@ pub struct Music {
     /// `Bgm`: the table's word for the room entered last.
     current: RoomMusic,
     sequences: [Sequence; SEQUENCES],
+    /// `Fade_time`, while `Snd_bgm_fade_ON`'s fade to a new main runs.
+    door_fade: u8,
+    /// `Snd_bgm_ck`'s wait: the door holds the room's load this long, so what
+    /// the room asks of the music waits for it here.
+    door_wait: u8,
+    deferred: Vec<Deferred>,
     pub channels: [Channel; CHANNELS],
 }
 
@@ -251,6 +276,9 @@ impl Default for Music {
                 fade: 0,
                 volume: SEQUENCE_VOLUME,
             }; SEQUENCES],
+            door_fade: 0,
+            door_wait: 0,
+            deferred: Vec::new(),
             channels: Default::default(),
         }
     }
@@ -265,6 +293,21 @@ fn sequence_channels(sequence: usize) -> std::ops::Range<usize> {
 }
 
 impl Music {
+    /// The trace's `bgm` field: the room's word, each sequence's state and
+    /// hold, and the channels' tracks.
+    pub fn trace_field(&self) -> String {
+        let word = u16::from(self.current.sub) << 8 | u16::from(self.current.main);
+        let sequences = self
+            .sequences
+            .map(|sequence| format!("{:02x}{:02x}", sequence.state, sequence.hold))
+            .join(",");
+        let tracks = self.channels.each_ref().map(|channel| match channel.track {
+            Some(track) => format!("{track:03x}"),
+            None => "-".to_string(),
+        });
+        format!("{word:04x},{sequences},{}", tracks.join(","))
+    }
+
     fn set_volume(&mut self, sequence: usize, volume: u8) {
         for index in sequence_channels(sequence) {
             self.channels[index].volume = volume;
@@ -339,9 +382,37 @@ impl Music {
         self.sequences[sequence].fade = FADE_TICKS;
     }
 
+    /// `Snd_bgm_ck`, as a door starts: `word` is the table's word for the room
+    /// behind it. Music that won't play on there fades out through the door.
+    pub fn leave_room(&mut self, word: RoomMusic, system: u32) {
+        if system & SYSTEM_NO_MUSIC != 0 {
+            return;
+        }
+        self.door_wait = DOOR_WAIT_TICKS;
+        if (word.main ^ self.current.main) & 0x3f != 0 {
+            self.door_fade = DOOR_FADE_TICKS;
+            for sequence in 0..SEQUENCES {
+                if self.sequences[sequence].state == STATE_PLAYING {
+                    self.fade(sequence);
+                }
+            }
+        } else if (word.sub ^ self.current.sub) & 0x3f != 0 {
+            for sequence in 1..SEQUENCES {
+                if self.sequences[sequence].state == STATE_PLAYING {
+                    self.fade(sequence);
+                    self.sequences[sequence].state = STATE_SCRIPT_FADE;
+                }
+            }
+        }
+    }
+
     /// `Snd_bgm_set` and `Snd_bgm_play_ck`, as a room loads: `word` is the
     /// table's word for it.
     pub fn enter_room(&mut self, word: RoomMusic, place: Place) {
+        if self.door_wait > 0 {
+            self.deferred.push(Deferred::Enter(word, place));
+            return;
+        }
         if place.system & SYSTEM_NO_MUSIC != 0 {
             return;
         }
@@ -377,8 +448,10 @@ impl Music {
         }
         self.current = word;
         for sequence in 0..SEQUENCES {
-            if self.sequences[sequence].hold == 0 && self.sequences[sequence].loaded {
-                self.play(sequence, true);
+            if self.sequences[sequence].hold == 0 {
+                if self.sequences[sequence].loaded {
+                    self.play(sequence, true);
+                }
                 self.sequences[sequence].state = STATE_PLAYING;
             }
         }
@@ -386,7 +459,12 @@ impl Music {
 
     /// `Snd_bgm_ctr`, `sce_bgm_control`'s operands. The volume and pan count
     /// from 1, 0 leaving them be.
-    pub fn control(&mut self, [target, op, channel, volume, pan]: [u8; 5], place: Place) {
+    pub fn control(&mut self, operands: [u8; 5], place: Place) {
+        if self.door_wait > 0 {
+            self.deferred.push(Deferred::Control(operands, place));
+            return;
+        }
+        let [target, op, channel, volume, pan] = operands;
         let sequence = usize::from(target);
         if place.system & SYSTEM_NO_MUSIC != 0 || sequence >= SEQUENCES {
             return;
@@ -464,11 +542,34 @@ impl Music {
                     self.channels[index].volume = self.channels[index].volume.saturating_sub(1);
                 }
             }
-            if self.sequences[sequence].state > 5 {
+            if self.door_fade == 0 && self.sequences[sequence].state > 5 {
                 self.sequences[sequence].state -= 1;
                 if self.sequences[sequence].state == 5 {
                     self.sequences[sequence].state = 0;
                     self.stop(sequence);
+                }
+            }
+        }
+        if self.door_fade > 0 {
+            self.door_fade -= 1;
+            if self.door_fade == 1 {
+                self.door_fade = 0;
+                for sequence in 0..SEQUENCES {
+                    if self.sequences[sequence].state != 0 {
+                        self.sequences[sequence].state = 0;
+                        self.stop(sequence);
+                    }
+                }
+            }
+        }
+        if self.door_wait > 0 {
+            self.door_wait -= 1;
+            if self.door_wait == 0 {
+                for deferred in std::mem::take(&mut self.deferred) {
+                    match deferred {
+                        Deferred::Enter(word, place) => self.enter_room(word, place),
+                        Deferred::Control(operands, place) => self.control(operands, place),
+                    }
                 }
             }
         }
@@ -539,6 +640,18 @@ pub fn index(stage: u8, room: u8) -> Option<usize> {
 }
 
 impl BgmTable {
+    /// A new game's table: `row` of `INIT_TBL.DAT`, which is `BYTE_00989e7e`
+    /// (the character times two, plus one for Scenario B).
+    pub fn from_init_table(data: &[u8], row: usize) -> Option<Self> {
+        let start = row * INIT_RECORD_LEN + INIT_RECORD_TABLE;
+        let words = data.get(start..start + ROOMS * 2)?;
+        let mut table = Self::default();
+        for (room, raw) in table.rooms.iter_mut().zip(words.as_chunks::<2>().0) {
+            *room = u16::from_le_bytes(*raw);
+        }
+        Some(table)
+    }
+
     /// The table's raw words, for a save.
     pub fn words(&self) -> &[u16; ROOMS] {
         &self.rooms
@@ -669,6 +782,69 @@ mod tests {
         assert_eq!(music.channels[0].play, None);
         music.control([0, 1, 0, 0, 0], street());
         assert_eq!(music.channels[0].play, Some(true));
+    }
+
+    #[test]
+    fn a_new_main_fades_through_the_door_and_stops() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.control([0, 0, 0, 101, 0], street());
+        music.channels[0].stop = false;
+        music.leave_room(word(1, 0xff), 0);
+        for _ in 0..88 {
+            music.tick();
+        }
+        assert_eq!(music.channels[0].volume, 12);
+        assert!(!music.channels[0].stop);
+        music.tick();
+        assert!(music.channels[0].stop);
+    }
+
+    #[test]
+    fn the_next_rooms_music_waits_for_the_door() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.leave_room(word(1, 0xff), 0);
+        music.enter_room(word(1, 0xff), street());
+        music.control([0, 0, 0, 51, 0], street());
+        let main = crate::convert_re2::bgm_track("main00_1");
+        assert_eq!(music.channels[0].track, main);
+        for _ in 0..DOOR_WAIT_TICKS {
+            music.tick();
+        }
+        assert_eq!(
+            music.channels[0].track,
+            crate::convert_re2::bgm_track("main01")
+        );
+        assert_eq!(music.channels[0].volume, 50);
+    }
+
+    #[test]
+    fn the_same_main_plays_on_through_a_door() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.control([0, 0, 0, 101, 0], street());
+        music.channels[0].stop = false;
+        music.leave_room(word(0, 0xff), 0);
+        for _ in 0..200 {
+            music.tick();
+        }
+        assert_eq!(music.channels[0].volume, 100);
+        assert!(!music.channels[0].stop);
+    }
+
+    #[test]
+    fn a_new_games_table_is_its_row_of_the_init_table() {
+        let mut data = vec![0; INIT_RECORD_LEN * 2];
+        data[INIT_RECORD_LEN + INIT_RECORD_TABLE] = 0x0b;
+        data[INIT_RECORD_LEN + INIT_RECORD_TABLE + 1] = 0x01;
+        let table = BgmTable::from_init_table(&data, 1).unwrap();
+        assert_eq!(table.get(0, 0), Some(RoomMusic::from_word(0x010b)));
+        assert_eq!(
+            BgmTable::from_init_table(&data, 0).unwrap().get(0, 0),
+            Some(RoomMusic::from_word(0))
+        );
+        assert!(BgmTable::from_init_table(&data, 2).is_none());
     }
 
     #[test]

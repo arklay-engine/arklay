@@ -10,6 +10,7 @@
 //! |---|---|
 //! | `Pl{0,1}/Rdt/ROOM####.RDT` | `room/<id>/room.xml` |
 //! | ADT streams in `Common/bin/roomcut.bin` | `room/<id>/cut/<nn>.bmp`, `room/<id>/mask/<nn>.bmp` |
+//! | `Common/bin/rc2000_.adt`, `rc2168_.adt` | `room/<id>/scroll/<nn>.bmp` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.EMD` | `enemy/<id>/enemy_<s>.emd` |
 //! | `Pl0/emd0`, `Pl1/emd1` `EM<s><id>.TIM` | `enemy/<id>/enemy_<s>.bmp`, `enemy_<s>_clut_<nn>.bmp` |
 //! | `Pl{0,1}/PLD/PL<id>.PLD` | `player/<id>/model_<s>.pld` |
@@ -496,7 +497,9 @@ pub(crate) fn convert(
     copy_bgm(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_sound_banks(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_shadow(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_scroll_pictures(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_core_effects(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_init_table(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_doors(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_demos(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
@@ -1153,6 +1156,41 @@ fn copy_sound_banks(
     Ok(())
 }
 
+/// The pictures `Bg_loadPC` loads above a camera's background: the file's stem
+/// and the rooms and camera it belongs to, for both characters.
+const SCROLL_PICTURES: [(&str, [&str; 2], usize); 2] = [
+    ("RC2000_", ["2000", "2001"], 0x0b),
+    ("RC2168_", ["2160", "2161"], 0x08),
+];
+
+/// `Common/bin/rc*_.adt`, for the rooms whose background scrolls.
+fn copy_scroll_pictures(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let files = files_in(layout.common(&["bin"]))?;
+    for (stem, rooms, cut) in SCROLL_PICTURES {
+        let Some(path) = files
+            .iter()
+            .find(|path| upper_parts(path).is_some_and(|(name, _)| name == stem))
+        else {
+            if layout.common.is_some() {
+                warnings.push(format!("no Common/bin/{stem}.adt; its room won't scroll"));
+            }
+            continue;
+        };
+        let decoded = adt::decode(&read(path)?).with_context(|| format!("{}", path.display()))?;
+        let picture = bmp::encode_to_vec(&adt::frame_image(&decoded)?)?;
+        for room in rooms {
+            let entry = format!("room/{room}/scroll/{cut:02x}.bmp");
+            tally.add(writer, "scroll", &entry, picture.clone())?;
+        }
+    }
+    Ok(())
+}
+
 /// `Common/Data/Kage.adt`, the shadows' texture, as [`crate::shadow::KAGE_ENTRY`].
 fn copy_shadow(
     layout: &Layout,
@@ -1196,6 +1234,27 @@ fn copy_core_effects(
     let body = crate::esp2::core_container(&read(esp)?, &read(sheet)?)
         .with_context(|| format!("{}", esp.display()))?;
     tally.add(writer, "effect", crate::esp2::CORE_ENTRY, body)?;
+    Ok(())
+}
+
+/// `Common/Data/INIT_TBL.DAT`, the state a new game starts from.
+fn copy_init_table(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let files = files_in(layout.common(&["Data"]))?;
+    let Some(path) = files
+        .iter()
+        .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == "INIT_TBL"))
+    else {
+        if layout.common.is_some() {
+            warnings.push("no Common/Data/INIT_TBL.DAT; a new game has no room music".into());
+        }
+        return Ok(());
+    };
+    tally.add(writer, "game", crate::bgm2::INIT_TABLE_ENTRY, read(path)?)?;
     Ok(())
 }
 

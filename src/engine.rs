@@ -620,6 +620,7 @@ pub fn run_with_options(
                         re2_player: None,
                         re2_character: None,
                         re2_splayer: None,
+                        re2_music: None,
                         entities: &*game.entities,
                         frame_hash: trace::frame_hash(&framebuffer),
                     })?;
@@ -2261,6 +2262,7 @@ impl GameSession {
         let mut game = new_game_state(pack, id, &loaded.room, options);
         game.is_re2_room = loaded.re2_vm.is_some();
         game.re2.scenario_b = scenario_b;
+        seed_re2_music_table(pack, &mut game, scenario_b);
         seed_new_game(pack, &mut game, character);
         let mut player_state = player::spawn(id, &loaded.room);
         let own_start = pack_start_room(pack, character).is_some();
@@ -2839,7 +2841,7 @@ impl GameSession {
         self.skips_enabled
             && self.cutscene_skip.is_none()
             && self.attract.is_none()
-            && self.game.flags[5].bit(game::MSF_SCREEN_INTENSITY)
+            && self.game.scene_bars()
             && !self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO)
             && !self.game.fmv_requested()
             && !self.room_boot_gate
@@ -2986,7 +2988,7 @@ impl GameSession {
                 self.end_cutscene_skip(!self.cutscene_skip_taken_over());
                 break;
             }
-            if !self.game.flags[5].bit(game::MSF_SCREEN_INTENSITY) {
+            if !self.game.scene_bars() {
                 // The scene is over. A line it raised on its last tick stays
                 // up for the player. The letterbox ramp has not seen the flag
                 // drop yet; settle the bars so the frame fades in on the
@@ -5550,6 +5552,10 @@ impl GameSession {
     /// the timeline after the frame was presented.
     fn tick_transition(&mut self, pack: &Pack, skip: bool) {
         self.tween.advance();
+        // `Snd_se_call` goes on through a door, so the music fades.
+        if self.game.is_re2_room {
+            bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
+        }
         let Some(mut session) = self.transition.take() else {
             return;
         };
@@ -5569,7 +5575,7 @@ impl GameSession {
         let frame = session.transition.tick(skip);
         session.frame = frame;
         session.door_yield = None;
-        if frame.room_veil.is_some() {
+        if session.door.re2.is_some() {
             self.room_fade_draw = frame.room_veil;
         }
         for effect in session.transition.stepper_mut().take_sfx() {
@@ -5591,6 +5597,17 @@ impl GameSession {
         self.transition_finished = frame.finished;
         if frame.place {
             place_transition_player(&mut session, &mut self.game, &mut self.loaded);
+            // `Set_door`'s `Snd_bgm_ck`.
+            if session.door.re2.is_some()
+                && let Some(word) = session
+                    .target
+                    .stage
+                    .checked_sub(1)
+                    .and_then(|stage| self.game.re2.bgm.get(stage, session.target.room))
+            {
+                let system = self.game.re2_music_place().system;
+                self.game.re2.music.leave_room(word, system);
+            }
         }
         // A door's `Pl_init` keeps the speed the last room left.
         let carried =
@@ -5750,7 +5767,7 @@ impl GameSession {
             && !self.cutscene_skip_taken_over()
             && !self.return_title_requested
             && self.clear_game_requested.is_none()
-            && !flags.bit(game::MSF_SCREEN_INTENSITY)
+            && !self.game.scene_bars()
             && !flags.bit(game::MSF2_ATTRACT_DEMO)
             && !self.timed_sequence_running()
             && !self.game.fmv_requested()
@@ -6112,7 +6129,7 @@ impl GameSession {
     /// climbs 16 a frame to `0xF0`, and while it is clear it falls 16 a frame
     /// back to zero.
     fn tick_screen_intensity(&mut self) {
-        let ramping = self.game.flags[5].bit(game::MSF_SCREEN_INTENSITY);
+        let ramping = self.game.scene_bars();
         let byte = self.sprite_anim_intensity as u8;
         if ramping {
             if byte < 0xF0 {
@@ -6144,10 +6161,14 @@ impl GameSession {
             return;
         }
         let alpha = if byte == 0xF0 { 255 } else { byte };
-        self.framebuffer
-            .blend_black_rect_weighted([-4, -10, 328, 38], alpha);
-        self.framebuffer
-            .blend_black_rect_weighted([-4, 212, 328, 38], alpha);
+        // RE2's `Curtain` tiles are 24 rows each, as its frames show.
+        let (top, bottom) = if self.game.is_re2_room {
+            ([0, 0, 320, 24], [0, 216, 320, 24])
+        } else {
+            ([-4, -10, 328, 38], [-4, 212, 328, 38])
+        };
+        self.framebuffer.blend_black_rect_weighted(top, alpha);
+        self.framebuffer.blend_black_rect_weighted(bottom, alpha);
     }
 
     /// The room-entry fade's current alpha, for the deterministic tests.
@@ -6252,6 +6273,10 @@ impl GameSession {
                 .game
                 .re2
                 .character_trace(crate::scd2::host::SPLAYER_SLOT),
+            re2_music: self
+                .game
+                .is_re2_room
+                .then(|| self.game.re2.music.trace_field()),
             entities,
             frame_hash: trace::frame_hash(frame),
         }
@@ -13200,13 +13225,17 @@ struct ShadowCache {
 
 impl ShadowCache {
     /// The baked shadow page, loading the `shadow/kage` stem on first use.
-    fn page_for(&mut self, pack: &Pack) -> Option<&Image> {
+    fn page_for(&mut self, pack: &Pack, re2: bool) -> Option<&Image> {
         if !self.attempted {
             self.attempted = true;
             if let Ok(Some(asset)) = pack.read_asset(shadow::KAGE_STEM, AssetClass::Image) {
-                match assets::decode_page(&asset, assets::Geometry::Shipped)
-                    .and_then(|art| shadow::bake(&art))
-                {
+                match assets::decode_page(&asset, assets::Geometry::Shipped).and_then(|art| {
+                    if re2 {
+                        shadow::bake_re2(&art)
+                    } else {
+                        shadow::bake(&art)
+                    }
+                }) {
                     Ok(image) => self.page = Some(image),
                     Err(err) => {
                         eprintln!("warning: invalid {}: {err:#}", asset.path());
@@ -13681,6 +13710,15 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
             assets::decode_picture(&asset, assets::Geometry::Free, None)
                 .with_context(|| format!("invalid {}", asset.path()))?,
         );
+        if dialect == crate::format::Dialect::Re2
+            && let Some(asset) =
+                pack.read_asset(&folder.scroll_stem(cut.index), AssetClass::Image)?
+        {
+            cut.scroll = Some(
+                assets::decode_picture(&asset, assets::Geometry::Free, None)
+                    .with_context(|| format!("invalid {}", asset.path()))?,
+            );
+        }
     }
     let player_assets = load_player_assets(pack, id);
     Ok(LoadedRoom {
@@ -13723,6 +13761,7 @@ fn new_game_state(
         game.max_health = health;
         game.set_health_copy(health);
     }
+    seed_re2_music_table(pack, &mut game, false);
     game.set_combat_tables(crate::combat::CombatTables::load(pack));
     game.item_defs = std::sync::Arc::new(crate::item_catalog::ItemCatalog::load(pack));
     let weapon = effects::WeaponEffects::load(pack);
@@ -13743,6 +13782,18 @@ fn new_game_state(
     // tab highlights it.
     game.mark_room_visited(id);
     game
+}
+
+/// A new RE2 game's room music, from `INIT_TBL.DAT`.
+fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: bool) {
+    let row = usize::from(game.id.player_flag & 1) * 2 + usize::from(scenario_b);
+    if let Some(table) = pack
+        .read(crate::bgm2::INIT_TABLE_ENTRY)
+        .ok()
+        .and_then(|data| crate::bgm2::BgmTable::from_init_table(&data, row))
+    {
+        game.re2.bgm = table;
+    }
 }
 
 /// Run a room's init script against `game`, then apply the room edits it
@@ -13771,6 +13822,7 @@ fn run_re2_init(
     game.re2.pending_events.clear();
     game.re2.pending_damage.clear();
     game.re2.pending_cuts.clear();
+    game.re2.scroll = 0;
     game.re2.pending_player = Default::default();
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
@@ -13966,6 +14018,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         poisoned: false,
         stopped: context.game.re2.player_stopped(),
         weapon: context.game.re2_weapon(),
+        necks: context.game.re2.necks(),
     };
     let arrived = crate::player2::player_move(&mut context.game.re2.player, context.player, &tick);
     context.game.re2_settle_ammo();
@@ -15810,7 +15863,7 @@ fn render_frame_on(
     // (or the room forces it on),
     // and one per active character that has entered the camera's switch zone,
     // using `character_init`'s tint, half extents and local offset.
-    let shadow_texture = shadows.page_for(pack);
+    let shadow_texture = shadows.page_for(pack, game.is_re2_room);
     let mut shadow_list: Vec<render::Shadow<'_>> = Vec::new();
     if let Some(texture) = shadow_texture
         && game.is_re2_room
@@ -15908,7 +15961,10 @@ fn render_frame_on(
         };
         // The blended pose the clock shows for the applied frame, then the
         // tracking joint's aim composed onto it.
-        let keyframe = player_state.anim.pose_keyframe(clips, keyframes)?;
+        let mut keyframe = player_state.anim.pose_keyframe(clips, keyframes)?;
+        if game.is_re2_room {
+            game.re2.player.neck.apply(&mut keyframe);
+        }
         let entity = anim::entity_matrix(player_state.pos, player_state.angle);
         let mut joints = anim::joint_matrices(skeleton, &keyframe, &entity);
         apply_look_at(&mut joints, &game.entities[0], &game.entity_anims[0]);
@@ -16070,9 +16126,10 @@ fn render_frame_on(
         };
         let tick = crate::character2::tick_of(room, game, character, slot, &model);
         let (clips, keyframes) = tick.banks.get(character.work.bank);
-        let Some(keyframe) = character.body.anim.pose_keyframe(clips, keyframes) else {
+        let Some(mut keyframe) = character.body.anim.pose_keyframe(clips, keyframes) else {
             continue;
         };
+        character.work.apply_to_pose(&mut keyframe);
         let matrix =
             anim::entity_matrix_rotated_scaled(character.body.pos, 0, character.body.angle, 0, 0);
         let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &matrix);
@@ -16080,6 +16137,11 @@ fn render_frame_on(
             tween::Key::Npc(RE2_CHARACTER_TWEEN_SLOT + slot, character.id),
             &mut joints,
         );
+        // `Joint_trans2` lights from its first part, not its feet.
+        npc_lights.push((
+            joints.first().map_or(character.body.pos, |root| root.t),
+            false,
+        ));
         models.push(model);
         npc_joints.push(joints);
         npc_hidden.push(0);
@@ -16087,7 +16149,6 @@ fn render_frame_on(
         npc_joint_colours.push(crate::render::NO_JOINT_COLOURS);
         npc_weapons.push(None);
         npc_zone_gate.push(true);
-        npc_lights.push((character.body.pos, false));
     }
 
     // The `--model` viewer's model, stood in front of the current camera.
@@ -16742,8 +16803,12 @@ fn render_frame_on(
         }
         None => Vec::new(),
     };
+    let scrolled = (game.re2.scroll != 0)
+        .then_some(cut.background.as_ref())
+        .flatten()
+        .map(|background| background.scrolled(cut.scroll.as_ref(), game.re2.scroll));
     let background = if render_mode.background() {
-        cut.background.as_ref()
+        scrolled.as_ref().or(cut.background.as_ref())
     } else if render_mode.collision().is_some() {
         Some(debug_view::collision_backdrop())
     } else {

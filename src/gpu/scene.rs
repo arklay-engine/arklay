@@ -247,7 +247,7 @@ fn camera_terms(camera: &Camera) -> [f32; 4] {
         fov,
         camera.screen[0] as f32,
         camera.screen[1] as f32,
-        (2.0 * fov).max(1.0),
+        (2.0_f32 * fov).max(1.0),
     ]
 }
 

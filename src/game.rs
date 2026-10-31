@@ -6251,6 +6251,19 @@ impl GameState {
         self.flags[5].apply(MSF_MIRROR_PLANE_X, if flags & 2 != 0 { 0 } else { 1 });
     }
 
+    /// Whether a scene's letterbox bars are up, or on their way: RE2's
+    /// `fg_status` bit, RE1's `MSF_SCREEN_INTENSITY`.
+    pub fn scene_bars(&self) -> bool {
+        if self.is_re2_room {
+            self.re2.flag(
+                crate::scd2::host::STATUS_BANK,
+                crate::scd2::host::STATUS_SCENE,
+            )
+        } else {
+            self.flags[5].bit(MSF_SCREEN_INTENSITY)
+        }
+    }
+
     /// Whether the mirror pass runs (flag bank 5 bit 0).
     pub fn mirror_enabled(&self) -> bool {
         self.mirror.enabled(&self.flags)
@@ -6530,6 +6543,7 @@ impl GameState {
             ],
             kind: u16::from(operand_u8(operands, base + 6)),
             radius: operand_u16(operands, base + 7),
+            re2_gain: None,
         };
         self.room_light_edits.push(RoomLightsEdit {
             lights: [light(1), light(9), light(17)],

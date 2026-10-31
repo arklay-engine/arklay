@@ -795,6 +795,7 @@ fn build_cut(camera: &Camera, index: usize, dialect: Dialect) -> Result<Cut> {
         roll: camera.roll,
         fov: camera.fov,
         background: None,
+        scroll: None,
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,

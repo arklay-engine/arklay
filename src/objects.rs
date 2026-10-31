@@ -1763,6 +1763,7 @@ mod tests {
             color: [4, 5, 6],
             kind: 7,
             radius: 8,
+            re2_gain: None,
         };
         let edit = light_edit(&operands(&[1, 100, -200, 300, 0x44, 0x55, 0x66, 0x77]));
         assert_eq!(

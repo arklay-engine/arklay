@@ -93,6 +93,47 @@ pub fn bake(art: &crate::assets::Artwork) -> Result<Image> {
     }
 }
 
+/// The texels RE2's quads map (`Kage_set`'s grids run from 0x10 to 0x2d of
+/// the page, in both directions).
+const RE2_TEXELS: std::ops::Range<u32> = 0x10..0x2d;
+
+/// Bake RE2's page: only `RE2_TEXELS`, so the quad's corners are the grid's,
+/// and `re2_alpha`'s darker ramp. An RGBA replacement is the whole quad's
+/// picture already.
+pub fn bake_re2(art: &crate::assets::Artwork) -> Result<Image> {
+    let crate::assets::Artwork::Indexed(texture) = art else {
+        return bake(art);
+    };
+    let mut rgba = Vec::with_capacity(RE2_TEXELS.len() * RE2_TEXELS.len() * 4);
+    for y in RE2_TEXELS {
+        for x in RE2_TEXELS {
+            let index = texture
+                .indices
+                .get((y * texture.width + x) as usize)
+                .copied()
+                .unwrap_or(0);
+            let red = texture.palette(0, index)[0];
+            rgba.extend_from_slice(&[255, 255, 255, re2_alpha(red)]);
+        }
+    }
+    Ok(Image {
+        width: RE2_TEXELS.len() as u32,
+        height: RE2_TEXELS.len() as u32,
+        rgba,
+    })
+}
+
+/// `Kage_set`'s alpha, `red * 2 + 0x35` of the surface's red, `r5 << 3 | 7`
+/// (which the original's frames confirm: the ramp's top, 9, leaves 17% of the
+/// floor); a texel with no red is a hole.
+fn re2_alpha(red: u8) -> u8 {
+    let r5 = (u32::from(red) * 31 + 127) / 255;
+    if r5 == 0 {
+        return 0;
+    }
+    ((r5 << 3 | 7) * 2 + 0x35).min(255) as u8
+}
+
 /// The baked alpha of one palette entry, from its expanded 8-bit red.
 fn coverage_alpha(red: u8) -> u8 {
     let r5 = (u32::from(red) * 31 + 127) / 255;
@@ -189,6 +230,14 @@ mod tests {
 
     fn palette_red(r5: u32) -> u8 {
         (r5 * 255 / 31) as u8
+    }
+
+    #[test]
+    fn re2_alpha_leaves_a_sixth_of_the_floor_under_the_ramps_top() {
+        assert_eq!(re2_alpha(palette_red(0)), 0);
+        assert_eq!(re2_alpha(palette_red(1)), 83);
+        assert_eq!(re2_alpha(palette_red(9)), 211);
+        assert_eq!(re2_alpha(palette_red(31)), 255);
     }
 
     fn texture(indices: Vec<u8>, reds: &[u32]) -> Texture8 {

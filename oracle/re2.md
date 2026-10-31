@@ -54,6 +54,10 @@ and `street_wander.txt` is a random walk through room 100.
 
 `--keep-enemy SLOT` leaves that slot running, for a character arklay has. Room 101's scene wants `--no-enemies --keep-enemy 0`: the input `first_door.txt` over 4500 ticks, compared with `--fields room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,em`, matches from the room's first line. Its zombies have no state in arklay yet, and the street's would attack the route, so this doesn't show the scene with them.
 
+`--sound` runs the game with `DirectSoundEnable` on, in a prefix of its own with Wine's audio going to a private PulseAudio sink: the audio is written beside the trace as a `.wav` and what the music loaded as a `.music` log. Only then does the original's `bgm` field say anything, so compare it with `--sound --fields room,bgm`: the word for the room, each sequence's state and hold, and the channels' tracks. The original's door takes the same ticks either way, but its room load comes 91 ticks later with sound, so the other fields of a `--sound` trace differ during a door. `first_door.txt` over 4500 ticks matches for Leon, and over 1200 for Claire, but for the one tick the original has unloaded the tracks.
+
+`pixels` runs a scenario with screenshots and writes `cmp/tNNNNNN.png` for every `--every` ticks: the original, arklay and their difference times four. It prints the mean error and the worst frames. The original's screenshot can lag a tick, which shows as a large error on the tick of a cut and nothing after it.
+
 `--flag BANK:INDEX` raises a bit of a flag bank (`ck` and `set`'s numbering) when play begins, before `--warp`; a `--setup-script`'s `api:set_re2_flag(bank, index)` is the same on arklay's side, and starts the room's scripts again. Claire's room 114 scene with Sherry wants `--start claire --no-enemies --flag 8:93 --warp 114:-26100:0:-24800:0xc00` with no input, and `--room 114 --player 1` with the flag, position, angle and health in a setup script. Over 1500 ticks, `p`, `cam`, `mot` and `es` match at `--offset 344`. The reference runs with `DirectSoundEnable` off, so a voice line's hold is `Xa_control`'s count, not wall-clock time.
 
 `--give SLOT:ID:COUNT` puts an item in the inventory when play begins, for what
@@ -88,6 +92,8 @@ game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`
 | `mot` | the player's `routine_2`, `routine_3`, `Move_no`, `Move_cnt`, `Hokan_flg`, `D_life_u` and speed x, y, z |
 | `em` | enemy slot 0 when it's a character (id 0x40 up): id, x, y, z, `cdir.y & 0xFFF`, `routine_0`-`routine_3`, `Move_no`, `Move_cnt`, `Hokan_flg`, `D_life_u` and speed x, y, z; `scripts/oracle.py` compares all but the speed |
 | `es` | `splayer_work`, Sherry and the other second players, with `em`'s fields |
+| `neck` | the player's `Neck_flg`, `Neck_no`, whether it aims at another work, and the joint's turn, rates, limits and rotation; arklay doesn't write it |
+| `bgm` | `Bgm`, each of the three `Seq_ctr`'s state and hold, and the tracks of the five channels (`bgm/<track>`), `-` for none; it says something only with `--sound` |
 
 `rseed`, `fade` and `f` are placeholders so the line parses: `rseed` and the fade
 have no RE2 equivalent recorded yet, and the frame isn't hashed. A screenshot of

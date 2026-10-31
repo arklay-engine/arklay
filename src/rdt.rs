@@ -213,6 +213,7 @@ fn parse_light(data: &[u8], offset: usize) -> Result<Light> {
         color: [color[0], color[1], color[2]],
         kind: u16_at(data, offset + 0x10)?,
         radius: u16_at(data, offset + 0x12)?,
+        re2_gain: None,
     })
 }
 
@@ -518,6 +519,7 @@ fn parse_cut(data: &[u8], start: usize, index: usize) -> Result<Cut> {
         roll: fields[8],
         fov: fields[10],
         background: None,
+        scroll: None,
         mask_group_count: table.groups.len() as u8,
         mask_active: table.active_bits(),
         masks: table.sprites,

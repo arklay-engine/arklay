@@ -292,6 +292,34 @@ pub struct Image {
 }
 
 impl Image {
+    /// The frame `Bg_draw_2` draws: this picture moved down `offset` rows and
+    /// `above` in the rows that leaves, ending on the row before this
+    /// picture's first. A row neither covers is black.
+    pub fn scrolled(&self, above: Option<&Image>, offset: i16) -> Image {
+        let row_len = self.width as usize * 4;
+        let height = self.height as i32;
+        let mut rgba = vec![0; row_len * self.height as usize];
+        for (row, out) in rgba.chunks_exact_mut(row_len).enumerate() {
+            let from = row as i32 - i32::from(offset);
+            let source = if from >= 0 { Some(self) } else { above };
+            let from = if from >= 0 { from } else { from + height };
+            if let Some(source) = source.filter(|_| (0..height).contains(&from)) {
+                let start = from as usize * row_len;
+                if let Some(pixels) = source.rgba.get(start..start + row_len) {
+                    out.copy_from_slice(pixels);
+                }
+            }
+            for alpha in out.iter_mut().skip(3).step_by(4) {
+                *alpha = 255;
+            }
+        }
+        Image {
+            width: self.width,
+            height: self.height,
+            rgba,
+        }
+    }
+
     /// Re-interpret the linear pixel stream at a new width and height.
     ///
     /// The decoded background is a linear run of pixels; the TIM header's
@@ -321,6 +349,9 @@ pub struct Light {
     /// Falloff radius, used by point lights. The original consumes it as an
     /// unsigned 16-bit value, so `0xFFFF` is the widest radius, not -1.
     pub radius: u16,
+    /// An RE2 light's factor on its direction (`Set_Light_data`), and that its
+    /// point falloff is taken at `Set_light`'s sixteenth of the units.
+    pub re2_gain: Option<u8>,
 }
 
 /// One camera's own lighting: an RE2 room lights each camera from its LIT
@@ -543,6 +574,9 @@ pub struct Cut {
     pub roll: i32,
     pub fov: i32,
     pub background: Option<Image>,
+    /// RE2: the picture above the background, which `sce_scr_move` scrolls
+    /// into view (`Bg_loadPC`'s `rc2000_` and `rc2168_`).
+    pub scroll: Option<Image>,
     /// Number of groups in the camera's mask table.
     pub mask_group_count: u8,
     /// One bit per one-based group id: set while the group is visible.
@@ -650,6 +684,29 @@ impl RoomState {
 
 #[cfg(test)]
 mod tests {
+    fn column(rows: &[u8]) -> Image {
+        Image {
+            width: 1,
+            height: rows.len() as u32,
+            rgba: rows.iter().flat_map(|&row| [row, 0, 0, 255]).collect(),
+        }
+    }
+
+    fn reds(image: &Image) -> Vec<u8> {
+        image.rgba.iter().step_by(4).copied().collect()
+    }
+
+    #[test]
+    fn a_scrolled_background_shows_the_picture_above_it() {
+        let background = column(&[1, 2, 3]);
+        let above = column(&[7, 8, 9]);
+        assert_eq!(reds(&background.scrolled(Some(&above), 1)), [9, 1, 2]);
+        assert_eq!(reds(&background.scrolled(Some(&above), 3)), [7, 8, 9]);
+        // Nothing covers these rows.
+        assert_eq!(reds(&background.scrolled(None, 2)), [0, 0, 1]);
+        assert_eq!(reds(&background.scrolled(Some(&above), 5)), [0, 0, 7]);
+    }
+
     use super::*;
 
     #[test]

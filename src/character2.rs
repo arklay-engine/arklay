@@ -152,6 +152,7 @@ pub fn tick_of<'a>(
         poisoned: false,
         stopped: false,
         weapon: Default::default(),
+        necks: game.re2.necks(),
     }
 }
 

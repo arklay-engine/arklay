@@ -757,7 +757,7 @@ impl Effects {
                 let (x0, y0) = ((left >> 16) as i32, (top >> 16) as i32);
                 let (x1, y1) = (((left + width) >> 16) as i32, ((top + height) >> 16) as i32);
                 quads.push(EffectQuad {
-                    key: ((depth as u32) >> 4).wrapping_mul(0x40),
+                    key: ((depth.min(0x7fff) as u32) >> 5) << 5,
                     page: page_index,
                     uv: [tile[0], tile[1], 0, 0],
                     source: [source[0] as u8, source[1] as u8],

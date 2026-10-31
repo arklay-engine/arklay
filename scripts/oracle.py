@@ -67,6 +67,7 @@ class Tick:
     motion: str | None = None
     character: str | None = None
     splayer: str | None = None
+    music: str | None = None
 
     def entity_str(self, slot: int) -> str:
         entity = self.entities.get(slot)
@@ -138,6 +139,7 @@ def parse_trace(path: str) -> list[Tick]:
                     motion=fields.get("mot"),
                     character=fields.get("em"),
                     splayer=fields.get("es"),
+                    music=fields.get("bgm"),
                 )
             )
     return ticks
@@ -161,6 +163,8 @@ def tick_fields(tick: Tick) -> list[tuple[str, str]]:
         items.append(("em", ",".join(tick.character.split(",")[:13])))
     if tick.splayer is not None:
         items.append(("es", ",".join(tick.splayer.split(",")[:13])))
+    if tick.music is not None:
+        items.append(("bgm", tick.music))
     for slot in sorted(tick.entities):
         entity = tick.entities[slot]
         for name in ENTITY_FIELDS:
