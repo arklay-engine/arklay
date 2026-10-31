@@ -456,6 +456,9 @@ fn light_attributes(light: &Light) -> Vec<(&'static str, Value)> {
         // Read unsigned: 65535 is the widest radius.
         ("radius", dec(light.radius)),
     ]
+    .into_iter()
+    .chain(light.re2_gain.map(|gain| ("gain", dec(gain))))
+    .collect()
 }
 
 fn write_camera(w: &mut Writer, camera: &Camera, dialect: Dialect) {
@@ -1054,7 +1057,10 @@ fn parse_bit_list(node: Node<'_, '_>, name: &str) -> Result<u16> {
 }
 
 fn parse_light(node: Node<'_, '_>) -> Result<Light> {
-    check_attributes(node, &["x", "y", "z", "r", "g", "b", "kind", "radius"])?;
+    check_attributes(
+        node,
+        &["x", "y", "z", "r", "g", "b", "kind", "radius", "gain"],
+    )?;
     let radius: i64 = attr(node, "radius")?;
     if !(i64::from(i16::MIN)..=i64::from(u16::MAX)).contains(&radius) {
         bail!("<light> radius {radius} does not fit 16 bits");
@@ -1064,6 +1070,7 @@ fn parse_light(node: Node<'_, '_>) -> Result<Light> {
         color: [attr(node, "r")?, attr(node, "g")?, attr(node, "b")?],
         kind: attr(node, "kind")?,
         radius: radius as u16,
+        re2_gain: optional_attr(node, "gain")?,
     })
 }
 

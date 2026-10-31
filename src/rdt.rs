@@ -213,6 +213,7 @@ fn parse_light(data: &[u8], offset: usize) -> Result<Light> {
         color: [color[0], color[1], color[2]],
         kind: u16_at(data, offset + 0x10)?,
         radius: u16_at(data, offset + 0x12)?,
+        re2_gain: None,
     })
 }
 

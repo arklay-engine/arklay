@@ -14,15 +14,12 @@
 //! 7 switches it off. A walker on no zone gets sound `0x1D`.
 //!
 //! An RE2 room lights each camera on its own: the LIT section holds one
-//! 40-byte record per camera (Patrice Mandin's `rdt2_light_t`): two `u16`
-//! light type words, three `r, g, b` light colours, the `r, g, b` ambient,
-//! three `i16` light positions and three `u16` brightnesses. The record is
-//! mapped onto the RE1 room's light model, whose lighting the renderer
-//! already does. The mapping is an approximation until the executable's
-//! lighting is read: the brightness is the point-light falloff radius (the
-//! RE1 room's light record has the same field) and every light is a point
-//! light, whatever the type words say; the 8-bit colours are rescaled to
-//! RE1's (a 12-bit ambient, and light colours where `0x80` is full).
+//! 40-byte record per camera (`Set_light`): a `u8` gain on the light vectors,
+//! three `u8` light kinds (0 a point light, else directional), three `r, g, b`
+//! light colours, the `r, g, b` ambient, three `i16` light positions and three
+//! `u16` falloff radii. The 8-bit colours are rescaled to the RE1 room's light
+//! model (a 12-bit ambient, and light colours where `0x80` is full), whose
+//! lighting the renderer does.
 //!
 //! The header is eight `u8` counts (byte 1 is the camera count) followed by
 //! 23 `u32` section offsets; the section order follows biohazard-utils'
@@ -352,8 +349,9 @@ fn parse_light(data: &[u8], at: usize) -> Result<CameraLight> {
             ]))
         }),
         color: colour(index),
-        kind: 0,
+        kind: u16::from(record[1 + index]),
         radius: u16::from_le_bytes([record[34 + index * 2], record[35 + index * 2]]),
+        re2_gain: Some(record[0]),
     });
     Ok(CameraLight { ambient, lights })
 }

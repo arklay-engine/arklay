@@ -321,6 +321,9 @@ pub struct Light {
     /// Falloff radius, used by point lights. The original consumes it as an
     /// unsigned 16-bit value, so `0xFFFF` is the widest radius, not -1.
     pub radius: u16,
+    /// An RE2 light's factor on its direction (`Set_Light_data`), and that its
+    /// point falloff is taken at `Set_light`'s sixteenth of the units.
+    pub re2_gain: Option<u8>,
 }
 
 /// One camera's own lighting: an RE2 room lights each camera from its LIT

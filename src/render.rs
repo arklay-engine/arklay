@@ -3490,18 +3490,19 @@ impl Lighting {
                 // The original reads the radius as unsigned: 0xFFFF is the
                 // widest falloff, and only an exact zero disables the light.
                 let radius = i64::from(light.radius);
+                let shift = if light.re2_gain.is_some() { 4 } else { 0 };
                 let attenuation = if radius == 0 {
                     0
                 } else {
-                    let dx = i64::from(offset[0]);
-                    let dz = i64::from(offset[2]);
-                    (radius - integer_sqrt(dx * dx + dz * dz)).max(0)
+                    let dx = i64::from(offset[0] >> shift);
+                    let dz = i64::from(offset[2] >> shift);
+                    ((radius >> shift) - integer_sqrt(dx * dx + dz * dz)).max(0)
                 };
-                let color = if radius == 0 {
+                let color = if radius >> shift == 0 {
                     [0; 3]
                 } else {
                     light.color.map(|channel| {
-                        ((u64::from(channel) * attenuation as u64) / radius as u64) as u8
+                        ((u64::from(channel) * attenuation as u64) / (radius >> shift) as u64) as u8
                     })
                 };
                 (offset, color)
@@ -3516,11 +3517,12 @@ impl Lighting {
                 + f64::from(offset[2]).powi(2))
             .sqrt()
             .max(1.0);
+            let gain = light.re2_gain.map_or(1.0, f64::from);
             EntityLightSource {
                 dir: [
-                    (f64::from(offset[0]) / length * 4096.0) as i32,
-                    (-f64::from(offset[1]) / length * 4096.0) as i32,
-                    (f64::from(offset[2]) / length * 4096.0) as i32,
+                    (f64::from(offset[0]) / length * 4096.0 * gain) as i32,
+                    (-f64::from(offset[1]) / length * 4096.0 * gain) as i32,
+                    (f64::from(offset[2]) / length * 4096.0 * gain) as i32,
                 ],
                 color: color.map(|channel| channel.min(0x80)),
             }
@@ -5233,6 +5235,7 @@ mod tests {
                 color: [7, 8, 9],
                 kind: 1,
                 radius: 10,
+                re2_gain: None,
             }; 3],
             ..RoomState::default()
         };
@@ -7646,6 +7649,7 @@ mod tests {
                     color: [255, 255, 255],
                     kind: 0,
                     radius: 1000,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),
@@ -7668,6 +7672,7 @@ mod tests {
                     color: [201, 101, 3],
                     kind: 0,
                     radius: 1000,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),
@@ -7694,6 +7699,7 @@ mod tests {
                     color: [255, 0, 0],
                     kind: 0,
                     radius: 0,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),
@@ -7713,6 +7719,7 @@ mod tests {
                     color: [255, 255, 255],
                     kind: 0,
                     radius: 0xFFFF,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),
@@ -7732,6 +7739,7 @@ mod tests {
                     color: [200, 200, 200],
                     kind: 1,
                     radius: 0,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),
@@ -7780,6 +7788,7 @@ mod tests {
                     color: [64, 64, 64],
                     kind: 1,
                     radius: 0,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),
@@ -7803,6 +7812,7 @@ mod tests {
                     color: [64, 64, 64],
                     kind: 0,
                     radius: 1000,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),
@@ -7822,6 +7832,7 @@ mod tests {
                     color: [64, 64, 64],
                     kind: 1,
                     radius: 0,
+                    re2_gain: None,
                 },
                 Light::default(),
                 Light::default(),

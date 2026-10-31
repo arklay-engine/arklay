@@ -647,6 +647,7 @@ fn a_camera_s_own_lighting_round_trips_beside_its_mask_groups() {
                 color: [0x80, 0x41, 0],
                 kind: 0,
                 radius: 0x2000,
+                re2_gain: None,
             },
             Light::default(),
             Light {
@@ -654,6 +655,7 @@ fn a_camera_s_own_lighting_round_trips_beside_its_mask_groups() {
                 color: [6, 11, 16],
                 kind: 0,
                 radius: 7,
+                re2_gain: None,
             },
         ],
     };
