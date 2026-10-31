@@ -120,6 +120,8 @@ impl Tool {
 
 /// The PLAYER tool's character names, by character.
 const CHARACTER_NAMES: [&str; 4] = ["Chris", "Jill", "Barry", "Rebecca"];
+/// The same, in an RE2 room. Each has one outfit here.
+const CHARACTER_NAMES_RE2: [&str; 2] = ["Leon", "Claire"];
 /// The PLAYER tool's outfit names, by [`PlayerChoice::costume`].
 const COSTUME_NAMES: [&str; 3] = [
     "UI_DEBUG_COSTUME_NORMAL",
@@ -403,7 +405,12 @@ impl DebugMenu {
                 ("label", text("UI_DEBUG_PLAYER_CHARACTER")),
                 (
                     "choices",
-                    Value::list(CHARACTER_NAMES.iter().map(|&n| Value::from(n)).collect()),
+                    Value::list(
+                        character_names(game)
+                            .iter()
+                            .map(|&n| Value::from(n))
+                            .collect(),
+                    ),
                 ),
                 ("value", Value::from(i64::from(character))),
             ]),
@@ -411,7 +418,7 @@ impl DebugMenu {
         // Barry and Rebecca wear their one outfit: no OUTFIT row.
         ui.set(
             "debug.costume",
-            if character < 2 {
+            if character < 2 && !game.is_re2_room {
                 Value::map([
                     ("label", text("UI_DEBUG_PLAYER_COSTUME")),
                     (
@@ -525,10 +532,14 @@ impl DebugMenu {
             })
             .unwrap_or_default();
         let choice = game.player_choice();
+        let names = character_names(game);
         let who = |c: game::PlayerChoice| {
+            let name = names[usize::from(c.character) % names.len()];
+            if game.is_re2_room {
+                return name.to_string();
+            }
             format!(
-                "{}  ·  {}",
-                CHARACTER_NAMES[usize::from(c.character & 3)],
+                "{name}  ·  {}",
                 self.label(COSTUME_NAMES[usize::from(c.costume.min(2))])
             )
         };
@@ -1119,6 +1130,15 @@ impl DebugMenu {
 }
 
 /// Apply a change a debug screen made to the live state.
+/// The PLAYER tool's choices for the game being played.
+fn character_names(game: &GameState) -> &'static [&'static str] {
+    if game.is_re2_room {
+        &CHARACTER_NAMES_RE2
+    } else {
+        &CHARACTER_NAMES
+    }
+}
+
 fn apply_change(path: &str, value: i64, game: &mut GameState) {
     let Some(path) = path.strip_prefix("debug.") else {
         return;
@@ -1129,7 +1149,7 @@ fn apply_change(path: &str, value: i64, game: &mut GameState) {
             let current = game.player_choice();
             let mut choice = game.debug.pending_player.unwrap_or(current);
             if path == "character.value" {
-                choice.character = value.clamp(0, 3) as u8;
+                choice.character = value.clamp(0, character_names(game).len() as i64 - 1) as u8;
             } else {
                 choice.costume = value.clamp(0, 2) as u8;
             }
@@ -1309,6 +1329,19 @@ fn fit(p: &mut Painter<'_>, role: Role, text: &str, max_width: f32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_re2_room_names_its_own_characters() {
+        let mut game = GameState::new(RoomId::default(), &crate::state::RoomState::default());
+        assert_eq!(character_names(&game)[0], "Chris");
+        game.is_re2_room = true;
+        assert_eq!(character_names(&game), ["Leon", "Claire"]);
+        apply_change("debug.character.value", 3, &mut game);
+        assert_eq!(
+            game.debug.pending_player.map(|choice| choice.character),
+            Some(1)
+        );
+    }
 
     fn key(key: GuiKey) -> GuiEvent {
         GuiEvent::Key(key, Device::Keyboard)

@@ -62,6 +62,19 @@ pub struct Re2State {
     pub bgm: crate::bgm2::BgmTable,
     /// The main music playing.
     pub main_music: Option<u8>,
+    /// The music and ambience's channels.
+    pub music: crate::bgm2::Music,
+    /// `Esp_`: the effect sprites.
+    pub effects: crate::esp2::Effects,
+    /// `se_on`'s sounds, not yet played.
+    pub sounds: Vec<SoundRequest>,
+}
+
+/// One sound `se_on` asked for, and where.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoundRequest {
+    pub id: crate::se2::SoundId,
+    pub pos: [i32; 3],
 }
 
 /// `pos_set` and `dir_set` on the player.
@@ -145,7 +158,7 @@ const CHARACTER_SIZES: [u16; 28] = [
 const STATUS_BANK: u8 = 1;
 const STATUS_ENEMY_FLAGS: u8 = 6;
 /// `fg_status`'s bit for the character whose voices play: 1 is Claire.
-const STATUS_PLAYER: u8 = 0;
+pub const STATUS_PLAYER: u8 = 0;
 /// `fg_status`'s `0x20`: a voice line is playing, and `wsleep` waits.
 pub const STATUS_VOICE: u8 = 26;
 /// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
@@ -227,6 +240,9 @@ impl Default for Re2State {
             scenario_b: false,
             bgm: Default::default(),
             main_music: None,
+            music: Default::default(),
+            effects: Default::default(),
+            sounds: Vec::new(),
         }
     }
 }
@@ -685,6 +701,39 @@ impl GameHost<'_> {
     }
 
     /// Set the player's position or facing for `pos_set` and `dir_set`.
+    /// `Sce_se_on`: its position is its offset from the body it names.
+    fn se_on(&mut self, at: impl Fn(usize) -> i64) {
+        let (slot, positional) = (at(1) as u16 & 0xff, at(1) as u16 >> 8);
+        let work = at(2) as u16;
+        let id = (at(0) as u32 & 0xff) << 24 | u32::from(slot) << 16 | u32::from(positional);
+        let Some(id) = crate::se2::SoundId::decode(id) else {
+            return;
+        };
+        let player = self.game.entities[0].pos;
+        let character = |slot: usize| {
+            self.game
+                .re2
+                .characters
+                .0
+                .get(slot)?
+                .as_deref()
+                .map(|character| character.body.pos)
+        };
+        let origin = match work & 0xff {
+            0 => [0; 3],
+            1 => player,
+            2 => character(SPLAYER_SLOT).unwrap_or(player),
+            3 => character(usize::from(work >> 8)).unwrap_or(player),
+            // Objects have no position here yet.
+            _ => player,
+        };
+        let offset = [at(3) as i32, at(4) as i32, at(5) as i32];
+        self.game.re2.sounds.push(SoundRequest {
+            id,
+            pos: std::array::from_fn(|axis| origin[axis] + offset[axis]),
+        });
+    }
+
     fn work_is_player(&self, task: usize) -> bool {
         self.game.re2.work.get(task) == Some(&Work::Player)
     }
@@ -948,6 +997,36 @@ impl Host for GameHost<'_> {
             "dir_set" if self.work_is_player(task) => {
                 self.game.re2.pending_player.angle = Some(at(2) as u16);
             }
+            // `Sce_espr_on`, on the world's matrix: the id's low byte is the
+            // type and its high byte the row.
+            "sce_espr_on" => {
+                let [kind, row] = (at(1) as u16).to_le_bytes();
+                self.game.re2.effects.call(
+                    kind,
+                    row,
+                    at(3) as u16,
+                    at(7) as i16,
+                    [at(4) as i16, at(5) as i16, at(6) as i16],
+                    false,
+                );
+            }
+            "sce_espr_kill" => {
+                self.game.re2.effects.kill(at(0) as u8, at(1) as u8);
+            }
+            "sce_bgm_control" => {
+                let place = self.game.re2_music_place();
+                self.game.re2.music.control(
+                    [
+                        at(0) as u8,
+                        at(1) as u8,
+                        at(2) as u8,
+                        at(3) as u8,
+                        at(4) as u8,
+                    ],
+                    place,
+                );
+            }
+            "se_on" => self.se_on(at),
             "sce_bgmtbl_set" => {
                 self.game
                     .re2

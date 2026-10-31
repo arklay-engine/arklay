@@ -70,6 +70,11 @@ pub struct Folder {
 }
 
 impl Folder {
+    /// The file `name` beside the room's other files.
+    pub fn entry(&self, name: &str) -> String {
+        format!("{}/{name}", self.dir)
+    }
+
     /// The folder of room variant `id` in `pack`: the room folder
     /// ([`RoomId::dir`]), or, for a pack that keeps one folder per RDT (RE2),
     /// that RDT's folder.

@@ -31,6 +31,7 @@ pub mod emd2;
 pub mod ending;
 pub mod enemy;
 pub mod engine;
+pub mod esp2;
 pub mod examine;
 pub mod font;
 pub mod format;

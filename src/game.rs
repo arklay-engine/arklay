@@ -9668,6 +9668,19 @@ impl ScdHost for ScdGameHost<'_> {
     }
 }
 
+impl GameState {
+    /// What `sce_bgm_control` and a room's music ask about where they run.
+    pub fn re2_music_place(&self) -> crate::bgm2::Place {
+        crate::bgm2::Place {
+            stage: self.id.stage.saturating_sub(1),
+            room: self.id.room,
+            cut: self.camera.current_cut,
+            system: self.re2.banks[0][0],
+            player: u8::from(self.re2.flag(1, crate::scd2::host::STATUS_PLAYER)),
+        }
+    }
+}
+
 /// The original's three BGM channel banks (`g_SndBank`).
 pub const BGM_CHANNELS: usize = 3;
 

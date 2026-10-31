@@ -500,7 +500,7 @@ struct MovieAudio {
 /// device. Every one-shot start appends a voice, so the same source may be
 /// sounding many times over.
 pub(crate) struct MixState {
-    bgm_channels: [Option<BgmChannel>; 3],
+    bgm_channels: [Option<BgmChannel>; MixState::BGM_CHANNELS],
     voice: Option<Voice>,
     voice_finished: bool,
     sfx: Vec<Voice>,
@@ -523,7 +523,7 @@ pub(crate) struct MixState {
 impl MixState {
     pub(crate) fn new() -> Self {
         Self {
-            bgm_channels: [None, None, None],
+            bgm_channels: Default::default(),
             voice: None,
             voice_finished: false,
             sfx: Vec::new(),
@@ -536,8 +536,9 @@ impl MixState {
         }
     }
 
-    /// Number of BGM channel slots (the original's `g_SndBank`).
-    pub(crate) const BGM_CHANNELS: usize = 3;
+    /// Number of BGM channel slots: RE1's three (`g_SndBank`), and RE2's sub
+    /// BGM's two above its main's three.
+    pub(crate) const BGM_CHANNELS: usize = 5;
 
     /// Number of one-shot voices currently sounding.
     #[cfg(test)]
@@ -592,6 +593,13 @@ impl MixState {
         }
     }
 
+    /// Set whether BGM channel `index` repeats when it reaches its end.
+    pub(crate) fn set_bgm_channel_looping(&mut self, index: usize, looping: bool) {
+        if let Some(channel) = self.bgm_channels.get_mut(index).and_then(Option::as_mut) {
+            channel.looping = looping;
+        }
+    }
+
     /// Say what BGM channel `index`'s loaded track carries.
     pub(crate) fn set_bgm_channel_kind(&mut self, index: usize, kind: TrackKind) {
         if let Some(channel) = self.bgm_channels.get_mut(index).and_then(Option::as_mut) {
@@ -615,7 +623,7 @@ impl MixState {
 
     /// Drop every BGM bank and its buffer.
     pub(crate) fn stop_all_bgm(&mut self) {
-        self.bgm_channels = [None, None, None];
+        self.bgm_channels = Default::default();
     }
 
     /// Replace the voice (dialogue) buffer and start it from sample 0.
@@ -1027,6 +1035,11 @@ impl Mixer {
     /// Set BGM channel `index`'s pan (-1 left, 1 right).
     pub fn set_bgm_channel_pan(&mut self, index: usize, pan: f32) {
         self.state.set_bgm_channel_pan(index, pan);
+    }
+
+    /// Set whether BGM channel `index` repeats when it reaches its end.
+    pub fn set_bgm_channel_looping(&mut self, index: usize, looping: bool) {
+        self.state.set_bgm_channel_looping(index, looping);
     }
 
     /// Say what BGM channel `index`'s loaded track carries, which picks the

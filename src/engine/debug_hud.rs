@@ -519,9 +519,11 @@ fn player_section(state: &GameState, text: &crate::text::Text, input: &InputStat
     let player = &state.entities[0];
     section.line(
         "Character",
-        match state.id.player_flag {
-            0 => "Chris",
-            1 => "Jill",
+        match (state.is_re2_room, state.id.player_flag) {
+            (true, 0) => "Leon",
+            (true, 1) => "Claire",
+            (false, 0) => "Chris",
+            (false, 1) => "Jill",
             _ => "?",
         },
     );

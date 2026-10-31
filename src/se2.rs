@@ -234,6 +234,11 @@ impl Edh {
         })
     }
 
+    /// The VAB header it holds.
+    pub fn vab_header(&self) -> &[u8] {
+        &self.header
+    }
+
     /// The EDH file bytes ([`Self::parse`] reads them back).
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = self.table.clone();
@@ -305,6 +310,10 @@ pub struct Play<'a> {
     pub stem: &'a str,
     pub gain: f32,
 }
+
+/// The VB beside a room's [`ROOM_EDH_NAME`], for a room the PC game has no bank
+/// for.
+pub const ROOM_VB_NAME: &str = "sound.vb";
 
 /// The sounds loaded per kind, as `SsLoadBanks` leaves the buffer arrays.
 #[derive(Clone, Debug)]
@@ -443,6 +452,24 @@ impl Banks {
         self.tables[Kind::Room.index()] = table;
     }
 
+    /// What `kind`'s table says of `slot`: `None` for a kind with a table that
+    /// leaves it out, so that `Snd_se_on` plays nothing, or else its volume.
+    pub fn volume(&self, kind: Kind, slot: u8) -> Option<u8> {
+        match &self.tables[kind.index()] {
+            Some(table) => {
+                table.entry(slot)?;
+                Some(table.volume(slot).unwrap_or(0x7f))
+            }
+            None => Some(0x7f),
+        }
+    }
+
+    /// The program and tone `kind`'s table plays for `slot`.
+    pub fn tone(&self, kind: Kind, slot: u8) -> Option<(usize, usize)> {
+        let entry = self.tables[kind.index()].as_ref()?.entry(slot)?;
+        Some((usize::from(entry[1] & 0x7f), usize::from(entry[2] >> 4)))
+    }
+
     /// The pack stem loaded in `kind`'s `slot`.
     pub fn stem(&self, kind: Kind, slot: u8) -> Option<&str> {
         self.slots[kind.index()].get(usize::from(slot))?.as_deref()
@@ -462,6 +489,48 @@ impl Banks {
             gain: volume_gain(volume),
         })
     }
+}
+
+/// What `Snd_se_3D` hears of a sound at `sound`, from a camera at `from`
+/// looking at `to`: its volume (0-127) and `SsSetPan`'s argument. It is the
+/// stereo case: the distance leaves out the x axis.
+pub fn place(from: [i32; 3], to: [i32; 3], sound: [i32; 3]) -> (u8, i32) {
+    let dy = from[1] - sound[1];
+    let dz = from[2] - sound[2];
+    let distance = (crate::sfx::integer_sqrt(dz * dz + dy * dy) / 250).min(127);
+    let volume = 127 - distance * 77 / 127;
+    let to_sound = crate::sfx::angle_between_xz(from[0], from[2], sound[0], sound[2]);
+    let to_look = crate::sfx::angle_between_xz(from[0], from[2], to[0], to[2]);
+    let turn = i32::from(to_sound.wrapping_sub(to_look) & 0xfff);
+    let pan = if matches!(turn, 0 | 0x800) {
+        0
+    } else {
+        let mut side = turn & 0x7ff;
+        if side & 0x400 != 0 {
+            side = 0x800 - side;
+        }
+        let angle = f64::from(128 - side / 8) * 0.703125 * 0.017444445;
+        let sign = if turn & 0x800 != 0 { -1.0 } else { 1.0 };
+        (f64::from(distance) * angle.cos() * sign) as i32
+    };
+    (volume as u8, pan)
+}
+
+/// `Floor_check`: the low byte of the last footstep zone on floor `floor`
+/// holding `x`, `z`, or 0x1d without one.
+pub fn floor_sound(zones: &[crate::state::FootstepZone], x: i32, z: i32, floor: u8) -> u8 {
+    zones
+        .iter()
+        .rev()
+        .find(|zone| {
+            let offset_x = x - i32::from(zone.base_x as i16);
+            let offset_z = z - i32::from(zone.base_z as i16);
+            zone.flags & 0x80 == 0
+                && (zone.flags & 0x7f) as u8 == floor
+                && (0..=i32::from(zone.width)).contains(&offset_x)
+                && (0..=i32::from(zone.height)).contains(&offset_z)
+        })
+        .map_or(0x1d, |zone| zone.sound_data as u8)
 }
 
 /// The three footstep sets (`fs%02d`) a room bank loads, from `bio2.exe`'s
@@ -542,6 +611,42 @@ const FOOTSTEPS: [[i8; 3]; 7 * FOOTSTEP_ROOMS] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sound_fades_with_distance_and_pans_to_its_side() {
+        let (from, to) = ([0, 0, 0], [0, 0, 10_000]);
+        assert_eq!(place(from, to, [0, 0, 0]).0, 127);
+        let (far, _) = place(from, to, [0, 0, 40_000]);
+        assert_eq!(far, 127 - 77);
+        // Ahead of the camera, nothing to either side.
+        assert_eq!(place(from, to, [0, 0, 5000]).1, 0);
+        let left = place(from, to, [-5000, 0, 5000]).1;
+        let right = place(from, to, [5000, 0, 5000]).1;
+        assert!(left != 0 && right != 0 && left.signum() != right.signum());
+    }
+
+    #[test]
+    fn a_floor_answers_its_last_zone_holding_the_point() {
+        let zone = |base_x: u16, sound_data, flags| crate::state::FootstepZone {
+            base_x,
+            base_z: 0,
+            width: 1000,
+            height: 1000,
+            sound_data,
+            flags,
+        };
+        let zones = [
+            zone(0, 0x17, 0),
+            zone(0, 0x1a, 0),
+            zone(0, 0x20, 1),
+            zone(0, 0x23, 0x80),
+        ];
+        assert_eq!(floor_sound(&zones, 500, 500, 0), 0x1a);
+        assert_eq!(floor_sound(&zones, 500, 500, 1), 0x20);
+        assert_eq!(floor_sound(&zones, 5000, 500, 0), 0x1d);
+        // A base is signed: -1000 reads from the 16-bit word.
+        assert_eq!(floor_sound(&[zone(0xfc18, 0x17, 0)], -500, 500, 0), 0x17);
+    }
     use crate::pack::PackWriter;
 
     /// A VAB header whose program 1, tone 2 has volume `volume`.

@@ -212,6 +212,37 @@ pub fn sound_sections(data: &[u8]) -> Result<Option<(&[u8], &[u8])>> {
     Ok(section(EDT_SLOT)?.zip(section(EDT_SLOT + 1)?))
 }
 
+/// The VB of an RDT's sound section, the PlayStation's samples: a VAB's header
+/// gives its whole size. The PC game plays a `.sap` instead.
+pub fn sound_body(data: &[u8]) -> Result<Option<&[u8]>> {
+    let Some((_, header)) = sound_sections(data)? else {
+        return Ok(None);
+    };
+    let start = offset(data, EDT_SLOT + 2)? as usize;
+    let Some(size) = header.get(0x0c..0x10) else {
+        return Ok(None);
+    };
+    let size = u32::from_le_bytes(size.try_into().unwrap()) as usize;
+    if start == 0 {
+        return Ok(None);
+    }
+    Ok(data.get(start..start + size.saturating_sub(header.len())))
+}
+
+/// The room's effects, as `convert-game` writes them ([`crate::esp2`]).
+pub fn effect_container(data: &[u8]) -> Result<Option<Vec<u8>>> {
+    const ESP_SLOT: usize = 18;
+    crate::esp2::room_container(
+        data,
+        [
+            offset(data, ESP_SLOT)?,
+            offset(data, ESP_SLOT + 1)?,
+            offset(data, ESP_SLOT + 2)?,
+            offset(data, ESP_SLOT + 3)?,
+        ],
+    )
+}
+
 /// Read an RE2 RDT into a room definition.
 pub fn read(data: &[u8]) -> Result<RoomSource> {
     let Some(&camera_count) = data.get(1) else {

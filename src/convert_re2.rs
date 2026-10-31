@@ -419,6 +419,13 @@ pub(crate) fn convert(
     let mut tally = Tally::default();
 
     progress.begin("room", rooms.len() as u64);
+    let room_banks: std::collections::HashSet<String> =
+        files_in(layout.common(&["Sound", "room"]))?
+            .iter()
+            .filter_map(|path| upper_parts(path))
+            .filter(|(_, extension)| extension == "SAP")
+            .map(|(stem, _)| stem.to_ascii_lowercase())
+            .collect();
     for room in &rooms {
         let folder = room.id.folder();
         let id = RoomId::parse(&folder)?;
@@ -441,12 +448,28 @@ pub(crate) fn convert(
         for (entry, data) in files {
             tally.add(&mut writer, "room", &entry, data)?;
         }
+        match crate::rdt2::effect_container(&room.bytes) {
+            Ok(Some(body)) => {
+                let entry = format!("room/{folder}/{}", crate::esp2::ROOM_ENTRY);
+                tally.add(&mut writer, "effect", &entry, body)?;
+            }
+            Ok(None) => {}
+            Err(error) => warnings.push(format!("{}: no room effects: {error:#}", id.rdt_entry())),
+        }
         match crate::rdt2::sound_sections(&room.bytes)
             .and_then(|sections| sections.map(|(edt, vh)| se2::Edh::new(edt, vh)).transpose())
         {
             Ok(Some(edh)) => {
                 let entry = format!("room/{folder}/{}", se2::ROOM_EDH_NAME);
                 tally.add(&mut writer, "sound", &entry, edh.to_bytes())?;
+                // Room 11D has sounds its script plays, and no PC bank holds
+                // them: only the PlayStation's samples in its RDT do.
+                if !room_banks.contains(&format!("room{}", &folder[..3]))
+                    && let Ok(Some(body)) = crate::rdt2::sound_body(&room.bytes)
+                {
+                    let entry = format!("room/{folder}/{}", se2::ROOM_VB_NAME);
+                    tally.add(&mut writer, "sound", &entry, body.to_vec())?;
+                }
             }
             Ok(None) => {}
             Err(error) => warnings.push(format!(
@@ -472,6 +495,8 @@ pub(crate) fn convert(
     copy_voice(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_bgm(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_sound_banks(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
+    copy_shadow(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_core_effects(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_doors(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_demos(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
@@ -1125,6 +1150,52 @@ fn copy_sound_banks(
         progress.advance(&dir);
     }
     progress.end_phase();
+    Ok(())
+}
+
+/// `Common/Data/Kage.adt`, the shadows' texture, as [`crate::shadow::KAGE_ENTRY`].
+fn copy_shadow(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let path = files_in(layout.common(&["Data"]))?
+        .into_iter()
+        .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == "KAGE"));
+    let Some(path) = path else {
+        if layout.common.is_some() {
+            warnings.push("no Common/Data/Kage.adt; there will be no shadows".into());
+        }
+        return Ok(());
+    };
+    let tim = adt::decode(&read(&path)?).with_context(|| format!("{}", path.display()))?;
+    tally.add(writer, "shadow", crate::shadow::KAGE_ENTRY, tim)?;
+    Ok(())
+}
+
+/// `Common/Data/CORE00.ESP` and `espcore.bin`, the effects every room shares.
+fn copy_core_effects(
+    layout: &Layout,
+    writer: &mut PackWriter,
+    tally: &mut Tally,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let files = files_in(layout.common(&["Data"]))?;
+    let find = |wanted: &str| {
+        files
+            .iter()
+            .find(|path| upper_parts(path).is_some_and(|(stem, _)| stem == wanted))
+    };
+    let (Some(esp), Some(sheet)) = (find("CORE00"), find("ESPCORE")) else {
+        if layout.common.is_some() {
+            warnings.push("no Common/Data/CORE00.ESP or espcore.bin; no shared effects".into());
+        }
+        return Ok(());
+    };
+    let body = crate::esp2::core_container(&read(esp)?, &read(sheet)?)
+        .with_context(|| format!("{}", esp.display()))?;
+    tally.add(writer, "effect", crate::esp2::CORE_ENTRY, body)?;
     Ok(())
 }
 

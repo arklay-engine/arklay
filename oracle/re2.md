@@ -67,7 +67,7 @@ tick 344, so an arklay run of that room with `--room`, `--player`, `--character`
 and a `--setup-script` that places the player compares at `--offset 344`, with
 the script's input moved 344 ticks earlier and the health set to the original's.
 `stairs_up_and_down.txt`, `stairs_refused.txt` and `stairs_at_a_run.txt` want
-`--warp 116:-14800:0:-24000:0xc00`.
+`--warp 116:-14800:0:-24000:0xc00`. `bin_up_and_down.txt` climbs the bin in room 118 and jumps back down, and wants `--no-enemies --warp 118:-24050:0:-6500:0`.
 
 Input scripts have the format of `oracle/inputs`, counted from tick 0. This
 game's raw pad bits are `up` `0x1000`, `right` `0x2000`, `down` `0x4000`, `left`

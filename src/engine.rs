@@ -1874,6 +1874,7 @@ struct GameSession {
     shadows: ShadowCache,
     effect_pages: EffectPageCache,
     sfx_cache: SfxCache,
+    re2_sounds: Re2Sounds,
     /// Decoded BGM wav cache, one entry per group track.
     bgm_cache: bgm::BgmCache,
     /// Decoded voice-line cache plus the one-slot pending request.
@@ -2539,6 +2540,7 @@ impl GameSession {
             shadows: ShadowCache::default(),
             effect_pages: EffectPageCache::default(),
             sfx_cache: SfxCache::default(),
+            re2_sounds: Re2Sounds::default(),
             bgm_cache: bgm::BgmCache::default(),
             voice_cache: VoiceCache::default(),
             movie: None,
@@ -2662,7 +2664,11 @@ impl GameSession {
         {
             let mut host = game::ScdGameHost::new(&mut self.game);
             self.command_vm.run_init(&mut host);
-            run_re2_init(self.loaded.re2_vm.as_mut(), &mut self.game);
+            run_re2_init(
+                self.loaded.re2_vm.as_mut(),
+                &self.loaded.re2_effects,
+                &mut self.game,
+            );
         }
         self.apply_screen_border();
         // The init script's starts and kills apply in program order before the
@@ -2733,12 +2739,32 @@ impl GameSession {
     /// already set. Runs after the room boot has built the door table and
     /// re-runs the camera switch-zone scan from the final position.
     fn place_room_entry(&mut self, pack: &Pack, id: RoomId) {
-        if let Some((pos, angle)) = room_entry_placement(pack, &self.loaded.room, &self.game, id) {
+        let mut door_cut = None;
+        if let Some((pos, angle, cut)) =
+            room_entry_placement(pack, &self.loaded.room, &self.game, id)
+        {
             self.player.pos = pos;
             self.player.angle = angle;
+            door_cut = cut;
             self.game.sync_entity_from_player(&self.player);
         }
         self.rescan_room_camera();
+        if self.game.is_re2_room && !self.game.camera.locked {
+            // RE2's zones only lead out of the cut they're listed under, so a
+            // scan from cut 0 can't reach a placement several cuts away. A door
+            // names its arrival's cut (`Door_load`) and otherwise the zone
+            // holding the player does, if the player is in that cut's view.
+            let room = &mut self.loaded.room;
+            let preferred: Vec<usize> = door_cut
+                .into_iter()
+                .chain(player::cut_holding(room, self.player.pos))
+                .collect();
+            let cut = cut_showing_player(room, self.player.pos, &preferred);
+            if let Some(cut) = cut.filter(|&cut| cut < room.cuts.len()) {
+                room.current_cut = cut;
+                self.game.set_camera_cut(cut);
+            }
+        }
     }
 
     /// Select the cut for the player's placement, as a room load does.
@@ -2880,7 +2906,11 @@ impl GameSession {
             return;
         };
         mixer.stop_voice();
+        let re2 = self.game.is_re2_room;
         for (index, channel) in self.game.bgm.channels.iter_mut().enumerate() {
+            if re2 {
+                break;
+            }
             if channel.track.is_none() {
                 mixer.stop_bgm_channel(index);
             } else if channel.restart && !channel.pending_load && mixer.bgm_channel_playing(index) {
@@ -3543,6 +3573,18 @@ impl GameSession {
         }
         tick_voice(&mut self.music, &mut self.voice_cache, &mut self.game, pack);
         drain_mask_toggles(&mut self.loaded.room, &mut self.game);
+        if self.game.is_re2_room {
+            self.game.re2.effects.tick();
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+            );
+        }
         // `MSF2_EFFECT_ZONE` (the second dword of main-state flag bank 5) is
         // the original's slippery/effect-zone bit: it shifts every footstep
         // column by -3.
@@ -5051,7 +5093,11 @@ impl GameSession {
         // A room's scripts read the flags as they start.
         if self.game.re2.banks != flags {
             let placed = std::mem::take(&mut self.game.re2.pending_player);
-            run_re2_init(self.loaded.re2_vm.as_mut(), &mut self.game);
+            run_re2_init(
+                self.loaded.re2_vm.as_mut(),
+                &self.loaded.re2_effects,
+                &mut self.game,
+            );
             self.game.re2.pending_player = placed;
         }
         if script.is_some() {
@@ -7024,20 +7070,29 @@ pub fn room_entry_placement(
     room: &RoomState,
     game: &game::GameState,
     target: RoomId,
-) -> Option<([i32; 3], u16)> {
+) -> Option<([i32; 3], u16, Option<usize>)> {
     let door = entry_door(&game.doors);
-    if let Some(re2) = door.and_then(|door| door.re2) {
+    if let Some((door, re2)) = door.and_then(|door| Some((door, door.re2?))) {
         let dest = RoomId {
             stage: re2.stage,
             room: re2.room,
             ..target
         };
-        let neighbour = room_door_state(pack, dest).ok()?;
-        let back = neighbour.doors.iter().flatten().find(|back| {
-            back.re2
-                .is_some_and(|re2| re2.stage == target.stage && re2.room == target.room)
-        })?;
-        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF));
+        let neighbour = room_door_state(pack, dest).ok();
+        let back = neighbour
+            .iter()
+            .flat_map(|state| state.doors.iter().flatten())
+            .find(|back| {
+                back.re2
+                    .is_some_and(|re2| re2.stage == target.stage && re2.room == target.room)
+            });
+        if let Some(back) = back {
+            let cut = back.re2.map(|re2| usize::from(re2.cut));
+            return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, cut));
+        }
+        // No door leads back, as into the street: stand in this one.
+        let [x, z, width, depth] = door.zone.map(i32::from);
+        return Some(([x + width / 2, 0, z + depth / 2], 0, None));
     }
     if let Some(door) = door
         && let Some(dest) = game.door_destination(target, door.next_room)
@@ -7049,9 +7104,37 @@ pub fn room_entry_placement(
             .flatten()
             .find(|back| game.door_destination(dest, back.next_room) == Some(target))
     {
-        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF));
+        return Some((back.next_pos, back.next_angle as u16 & 0x0FFF, None));
     }
-    fallback_room_entry(room, door)
+    if door.is_none()
+        && room.sca.is_some()
+        && let Some(cut) = room.cuts.first()
+    {
+        // No door to arrive by: stand where the first camera looks.
+        return Some(([cut.look_at[0], 0, cut.look_at[2]], 0, Some(0)));
+    }
+    fallback_room_entry(room, door).map(|(pos, angle)| (pos, angle, None))
+}
+
+/// The cut for an RE2 placement that wasn't made by walking there: the first
+/// of `preferred`, then of all the room's cuts, that shows the player, or
+/// the first of `preferred` when none does.
+fn cut_showing_player(room: &RoomState, pos: [i32; 3], preferred: &[usize]) -> Option<usize> {
+    // About the middle of the body.
+    let body = [pos[0], pos[1] - 900, pos[2]];
+    let shows = |&index: &usize| {
+        room.cuts.get(index).is_some_and(|cut| {
+            Camera::from_cut(cut).project(body).is_some_and(|[x, y]| {
+                (0..render::WIDTH as i32).contains(&x) && (0..render::HEIGHT as i32).contains(&y)
+            })
+        })
+    };
+    preferred
+        .iter()
+        .copied()
+        .chain(0..room.cuts.len())
+        .find(|index| shows(index))
+        .or_else(|| preferred.first().copied())
 }
 
 /// The door the arbitrary start treats as the room's entry.
@@ -7081,7 +7164,7 @@ fn room_door_state(pack: &Pack, id: RoomId) -> Result<game::GameState> {
     let mut re2_vm = loaded
         .re2_scripts(pack)?
         .map(|scripts| crate::scd2::vm::Vm::new(&scripts));
-    run_re2_init(re2_vm.as_mut(), &mut game);
+    run_re2_init(re2_vm.as_mut(), &Default::default(), &mut game);
     Ok(game)
 }
 
@@ -11517,9 +11600,9 @@ pub fn simulate_new_game(
     let placement = if pack_start_room(pack, character).is_some() {
         room_entry_placement(pack, &loaded.room, &game, id)
     } else {
-        Some(([NEW_GAME_POS_X, 0, NEW_GAME_POS_Z], NEW_GAME_ANGLE))
+        Some(([NEW_GAME_POS_X, 0, NEW_GAME_POS_Z], NEW_GAME_ANGLE, None))
     };
-    if let Some((pos, angle)) = placement {
+    if let Some((pos, angle, _)) = placement {
         player_state.pos = pos;
         player_state.angle = angle;
     }
@@ -12180,6 +12263,184 @@ fn play_footsteps(
         let (gain, pan) = sfx::sound_gain_pan(cut.pos, cut.look_at, footstep.pos);
         mixer.play_sfx_on_bank(sfx_bank_key(2, column), wav, gain, pan);
     }
+}
+
+/// An RE2 room's sound banks (`Snd_room_load`, `Snd_load_core`,
+/// `Snd_load_arms`), loaded when play in the room first asks for a sound. The
+/// enemy bank isn't loaded: there are no enemies to play it.
+#[derive(Default)]
+struct Re2Sounds {
+    /// The room, player and weapon they were loaded for.
+    loaded: Option<(RoomId, u8, u8)>,
+    banks: crate::se2::Banks,
+    /// The room's PlayStation VAB, for a room without a PC bank.
+    vab: Option<door2::vab::Vab>,
+}
+
+impl Re2Sounds {
+    fn load(&mut self, pack: &Pack, id: RoomId, player: u8, weapon: u8) {
+        use crate::se2;
+        if self.loaded == Some((id, player, weapon)) {
+            return;
+        }
+        self.loaded = Some((id, player, weapon));
+        let folder = format!("room/{}{:02x}{}", id.stage, id.room, player);
+        let edh = pack
+            .read(&format!("{folder}/{}", se2::ROOM_EDH_NAME))
+            .ok()
+            .and_then(|data| se2::Edh::parse(&data).ok());
+        self.vab = edh.as_ref().and_then(|edh| {
+            let body = pack.read(&format!("{folder}/{}", se2::ROOM_VB_NAME)).ok()?;
+            let mut vab = edh.vab_header().to_vec();
+            vab.extend_from_slice(&body);
+            door2::vab::Vab::parse(&vab).ok()
+        });
+        self.banks
+            .load_room(pack, id.stage.saturating_sub(1), id.room, edh);
+        self.banks.load_core(pack, player);
+        // `Snd_load_arms`: bare hands use the first bank.
+        self.banks.load_arms(pack, weapon.max(1));
+    }
+
+    /// The sound in `kind`'s `slot`: the PC bank's WAV, or for a room with none
+    /// the tone of its VAB.
+    fn wav(
+        &self,
+        cache: &mut SfxCache,
+        pack: &Pack,
+        kind: crate::se2::Kind,
+        slot: u8,
+    ) -> Option<audio::Wav> {
+        if let Some(stem) = self.banks.stem(kind, slot) {
+            return cache.load_stem(pack, stem.to_string());
+        }
+        if kind != crate::se2::Kind::Room {
+            return None;
+        }
+        let (program, tone) = self.banks.tone(kind, slot)?;
+        let vab = self.vab.as_ref()?;
+        let samples = door2::vab::decode_adpcm(vab.vag(vab.tone(program, tone)?.vag)?);
+        Some(audio::Wav::from_s16(&samples, 1, door2::vab::SAMPLE_RATE))
+    }
+}
+
+/// One tick's sounds of an RE2 room: `se_on`'s, the player's footsteps
+/// (`Snd_se_walk`) and the weapon's.
+fn play_re2_sounds(
+    music: &mut Option<Mixer>,
+    cache: &mut SfxCache,
+    sounds: &mut Re2Sounds,
+    pack: &Pack,
+    room: &RoomState,
+    game: &mut game::GameState,
+    player: &mut player::PlayerState,
+) {
+    use crate::se2::{self, Kind, SoundId};
+    let requests = std::mem::take(&mut game.re2.sounds);
+    let footsteps = player.take_footsteps();
+    let weapon = player.take_sounds();
+    let Some(mixer) = music.as_mut() else {
+        return;
+    };
+    let character = u8::from(game.re2.flag(1, crate::scd2::host::STATUS_PLAYER));
+    sounds.load(pack, game.id, character, game.re2_weapon().id);
+    let Some(cut) = room.cuts.get(room.current_cut) else {
+        return;
+    };
+    let mut play = |id: SoundId, pos: [i32; 3]| {
+        let Some(tone_volume) = sounds.banks.volume(id.kind, id.slot) else {
+            return;
+        };
+        let Some(wav) = sounds.wav(cache, pack, id.kind, id.slot) else {
+            return;
+        };
+        let (volume, pan) = if id.positional {
+            let (volume, pan) = se2::place(cut.pos, cut.look_at, pos);
+            // The weapon's own sounds, of its first program, are louder.
+            let louder = id.kind == Kind::Arms
+                && sounds
+                    .banks
+                    .tone(id.kind, id.slot)
+                    .is_some_and(|tone| tone.0 == 0);
+            (
+                volume.saturating_add(if louder { 10 } else { 0 }).min(0x7f),
+                pan,
+            )
+        } else if id.kind == Kind::Room && id.slot == 0x14 {
+            (0x6e, 0)
+        } else {
+            (tone_volume, 0)
+        };
+        mixer.play_sfx_on_bank(
+            sfx_bank_key(id.kind.index() as u8, id.slot),
+            wav,
+            se2::volume_gain(volume),
+            sfx::pan_from_raw(pan * 0x17),
+        );
+    };
+    for request in requests {
+        play(request.id, request.pos);
+    }
+    for footstep in footsteps {
+        let floor = crate::sca::floor_of(footstep.pos[1]);
+        let zone = se2::floor_sound(
+            &room.footstep_zones,
+            footstep.pos[0],
+            footstep.pos[2],
+            floor,
+        );
+        let id = SoundId {
+            kind: Kind::Room,
+            slot: footstep.sound_type + (zone & 0x7f),
+            positional: true,
+        };
+        play(id, footstep.pos);
+    }
+    for sound in weapon {
+        let id = SoundId {
+            kind: Kind::Arms,
+            slot: sound.id as u8,
+            positional: true,
+        };
+        play(id, sound.pos);
+    }
+}
+
+/// The player's shadow in an RE2 room: `Kage_work9_set`'s quad from `Pl_init`,
+/// at the ground under them (`MulKage`), if `Kage_work9_sort` finds them in the
+/// camera's zone.
+fn re2_player_shadow<'a>(
+    game: &game::GameState,
+    room: &RoomState,
+    player_state: &player::PlayerState,
+    tween: &mut tween::Tween,
+    texture: &'a Image,
+) -> Option<render::Shadow<'a>> {
+    let pos = player_state.pos;
+    let cut = room.current_cut as i32;
+    room.zones
+        .iter()
+        .find(|zone| i32::from(zone.cam_from) == cut)
+        .filter(|zone| zone.contains_signed(pos[0], pos[2]))?;
+    // Leon, then Claire's smaller one.
+    let claire = game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
+    let (half_x, half_z) = if claire { (0x1a4, 0x208) } else { (500, 600) };
+    let ground = room.sca.as_ref().map_or(pos[1], |sca| {
+        crate::sca::ground_at(sca, pos, player_state.radius, crate::sca::PLAYER_MASK).height
+    });
+    let mut shadow_pos = [pos[0], ground, pos[2]];
+    let mut shadow_angle = player_state.angle;
+    tween.shadow(tween::Key::Player, &mut shadow_pos, &mut shadow_angle);
+    Some(render::Shadow {
+        texture,
+        pos: shadow_pos,
+        angle: shadow_angle,
+        half_x,
+        half_z,
+        shift: [0, 0],
+        lift: 0,
+        tint: shadow::billboard_tint(shadow::PLAYER_COLOR),
+    })
 }
 
 /// The bank and id one queued player cue resolves through.
@@ -12957,6 +13218,29 @@ impl ShadowCache {
     }
 }
 
+/// The sheets RE2's effects have drawn from, by clut row, baked on first use.
+#[derive(Default)]
+struct Re2EffectPages {
+    bank: std::sync::Weak<crate::esp2::Bank>,
+    images: HashMap<crate::esp2::Page, Image>,
+}
+
+impl Re2EffectPages {
+    fn prepare(&mut self, effects: &crate::esp2::Effects, pages: &[crate::esp2::Page]) {
+        if !std::ptr::eq(self.bank.as_ptr(), std::sync::Arc::as_ptr(effects.bank())) {
+            self.bank = std::sync::Arc::downgrade(effects.bank());
+            self.images.clear();
+        }
+        for &page in pages {
+            if !self.images.contains_key(&page)
+                && let Some(image) = effects.bank().page(page)
+            {
+                self.images.insert(page, image);
+            }
+        }
+    }
+}
+
 /// The decoded effect texture pages of one room.
 ///
 /// `base` holds the four sheet files (`esp000` plus the room's up to three
@@ -12979,6 +13263,7 @@ struct EffectPages {
 struct EffectPageCache {
     room: Option<RoomId>,
     pages: EffectPages,
+    re2: Re2EffectPages,
 }
 
 impl EffectPageCache {
@@ -13290,6 +13575,7 @@ fn build_effect_quads(
             tint,
             blend,
             sheet: sheet_rows,
+            op: render::EffectBlend::Normal,
         });
     }
     quads
@@ -13344,6 +13630,8 @@ struct LoadedRoom {
     script_source: ScriptSource,
     /// An RE2 room's script run, in place of `scripts`.
     re2_vm: Option<crate::scd2::vm::Vm>,
+    /// The effects an RE2 room's scripts can spawn.
+    re2_effects: std::sync::Arc<crate::esp2::Bank>,
     player_assets: Option<PlayerAssets>,
 }
 
@@ -13357,6 +13645,17 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
     let re2_vm = loaded
         .re2_scripts(pack)?
         .map(|scripts| crate::scd2::vm::Vm::new(&scripts));
+    let re2_effects = std::sync::Arc::new(if re2_vm.is_some() {
+        let folder = crate::room::Folder::of(pack, id);
+        crate::esp2::Bank::load(
+            pack.read(crate::esp2::CORE_ENTRY).ok().as_deref(),
+            pack.read(&folder.entry(crate::esp2::ROOM_ENTRY))
+                .ok()
+                .as_deref(),
+        )
+    } else {
+        Default::default()
+    });
     let dialect = loaded.dialect;
     let mut room = loaded.state;
     for warning in &room.model_warnings {
@@ -13390,6 +13689,7 @@ fn load_room(pack: &Pack, id: RoomId) -> Result<LoadedRoom> {
         scripts,
         script_source,
         re2_vm,
+        re2_effects,
         player_assets,
     })
 }
@@ -13452,13 +13752,17 @@ fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     let mut command_vm = scd::vm::CommandVm::new(&loaded.scripts);
     let mut host = game::ScdGameHost::new(game);
     command_vm.run_init(&mut host);
-    run_re2_init(loaded.re2_vm.as_mut(), game);
+    run_re2_init(loaded.re2_vm.as_mut(), &loaded.re2_effects, game);
     game.apply_room_edits(&mut loaded.room);
     apply_screen_border(game, &mut loaded.room);
 }
 
 /// An RE2 room's init procedure.
-fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState) {
+fn run_re2_init(
+    vm: Option<&mut crate::scd2::vm::Vm>,
+    effects: &std::sync::Arc<crate::esp2::Bank>,
+    game: &mut game::GameState,
+) {
     game.is_re2_room = vm.is_some();
     let Some(vm) = vm else {
         return;
@@ -13471,6 +13775,16 @@ fn run_re2_init(vm: Option<&mut crate::scd2::vm::Vm>, game: &mut game::GameState
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
     game.camera.locked = false;
+    // `Set_room` runs `Esp_init_R` and `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
+    let word = game
+        .id
+        .stage
+        .checked_sub(1)
+        .and_then(|stage| game.re2.bgm.get(stage, game.id.room))
+        .unwrap_or(crate::bgm2::RoomMusic::from_word(0xffff));
+    let place = game.re2_music_place();
+    game.re2.music.enter_room(word, place);
+    game.re2.effects.enter_room(std::sync::Arc::clone(effects));
     // `FG_STATUS_PLAYER` and `FG_STATUS_SCENARIO`.
     let character = game.id.player_flag & 1;
     let scenario = u8::from(game.re2.scenario_b);
@@ -13500,6 +13814,8 @@ fn tick_re2_scripts(context: &mut RoomContext<'_>) {
     let Some(mut vm) = context.game.re2.vm.take() else {
         return;
     };
+    // `Sce_scheduler` starts the room's second main procedure every tick.
+    vm.exec_event(0, 1);
     for (task, event) in std::mem::take(&mut context.game.re2.pending_events) {
         vm.exec_event(usize::from(task), usize::from(event));
     }
@@ -15497,6 +15813,12 @@ fn render_frame_on(
     let shadow_texture = shadows.page_for(pack);
     let mut shadow_list: Vec<render::Shadow<'_>> = Vec::new();
     if let Some(texture) = shadow_texture
+        && game.is_re2_room
+    {
+        if let Some(shadow) = re2_player_shadow(game, room, player_state, tween, texture) {
+            shadow_list.push(shadow);
+        }
+    } else if let Some(texture) = shadow_texture
         && game.entities[0].shadow_quad
         && shadow::visible(
             id,
@@ -16342,11 +16664,32 @@ fn render_frame_on(
         });
     }
 
-    let pages = effect_cache.pages_for(pack, id, &game.room_effects);
-    let quads = build_effect_quads(game, room, id, &camera, pages, tween);
+    effect_cache
+        .re2
+        .prepare(&game.re2.effects, &game.re2.effects.pages());
+    effect_cache.pages_for(pack, id, &game.room_effects);
+    let pages = &effect_cache.pages;
+    let re2_images = &effect_cache.re2;
+    let mut quads = build_effect_quads(game, room, id, &camera, pages, tween);
     let mut page_refs: Vec<Option<&Image>> = Vec::with_capacity(16);
     page_refs.extend(pages.base.iter().map(Option::as_ref));
     page_refs.extend(pages.variants.iter().map(Option::as_ref));
+    if game.is_re2_room {
+        let (re2_quads, re2_pages) = game.re2.effects.quads(&camera, |x, z| {
+            debug_view::unculled()
+                || room
+                    .zones
+                    .iter()
+                    .find(|zone| i32::from(zone.cam_from) == room.current_cut as i32)
+                    .is_some_and(|zone| zone.contains_signed(x, z))
+        });
+        let first = page_refs.len();
+        page_refs.extend(re2_pages.iter().map(|page| re2_images.images.get(page)));
+        quads.extend(re2_quads.into_iter().map(|quad| EffectQuad {
+            page: quad.page + first,
+            ..quad
+        }));
+    }
     let effect_layer = EffectLayer {
         pages: &page_refs,
         quads: &quads,
@@ -21401,6 +21744,7 @@ mod tests {
             },
             scripts: Default::default(),
             re2_vm: None,
+            re2_effects: Default::default(),
             script_source: ScriptSource::Rdt,
             player_assets: None,
         };
@@ -21461,6 +21805,7 @@ mod tests {
                 },
                 scripts: Default::default(),
                 re2_vm: None,
+                re2_effects: Default::default(),
                 script_source: ScriptSource::Rdt,
                 player_assets: None,
             }),
@@ -30284,7 +30629,7 @@ off_0010:
             ..game::Door::default()
         });
 
-        let (pos, angle) = room_entry_placement(&pack, &room, &game, target).unwrap();
+        let (pos, angle, _) = room_entry_placement(&pack, &room, &game, target).unwrap();
         assert_eq!(pos, [500, 0, 1300], "dir 0: south of the first zone");
         assert_eq!(angle, 0xC00);
 
@@ -30298,9 +30643,85 @@ off_0010:
             kind: 1,
             flags: 0x300,
         });
-        let (pos, angle) = room_entry_placement(&pack, &room, &game, target).unwrap();
+        let (pos, angle, _) = room_entry_placement(&pack, &room, &game, target).unwrap();
         assert_eq!(pos, [500, 0, 500], "the zone centre");
         assert_eq!(angle, 0);
+    }
+
+    /// A debug jump's cut has to show the player, whatever the door names.
+    #[test]
+    fn a_placements_cut_is_one_that_shows_the_player() {
+        let cut = |index: usize, x: i32| crate::state::Cut {
+            index,
+            pos: [x, -2000, -6000],
+            look_at: [x, -1000, 0],
+            fov: 300,
+            ..crate::state::Cut::default()
+        };
+        let room = RoomState {
+            cuts: vec![cut(0, 50_000), cut(1, 0), cut(2, 0)],
+            ..RoomState::default()
+        };
+        let at = [0, 0, 0];
+        assert_eq!(
+            cut_showing_player(&room, at, &[2, 1]),
+            Some(2),
+            "the door's"
+        );
+        assert_eq!(
+            cut_showing_player(&room, at, &[0, 2]),
+            Some(2),
+            "the zone's"
+        );
+        assert_eq!(
+            cut_showing_player(&room, at, &[0]),
+            Some(1),
+            "any that does"
+        );
+        let away = [500_000, 0, 0];
+        assert_eq!(cut_showing_player(&room, away, &[2]), Some(2), "none does");
+        assert_eq!(cut_showing_player(&room, away, &[]), None);
+    }
+
+    /// An RE2 room has no walk zones to fall back on: a door with no way back
+    /// stands the player in the door, and a room with none under the camera.
+    #[test]
+    fn an_re2_entry_without_a_paired_door_stays_in_the_room() {
+        let dir = TempDir::new();
+        let pack_path = dir.0.join("empty.akpak");
+        PackWriter::new().write(&pack_path).unwrap();
+        let pack = Pack::open(&pack_path).unwrap();
+        let target = RoomId {
+            stage: 1,
+            room: 0,
+            player_flag: 0,
+            mansion2: false,
+        };
+        let room = RoomState {
+            sca: Some(Default::default()),
+            cuts: vec![crate::state::Cut {
+                look_at: [700, -1000, 800],
+                ..crate::state::Cut::default()
+            }],
+            ..RoomState::default()
+        };
+        let mut game = game::GameState::new(target, &room);
+        assert_eq!(
+            room_entry_placement(&pack, &room, &game, target),
+            Some(([700, 0, 800], 0, Some(0))),
+            "no door: under the first camera"
+        );
+
+        game.doors[0] = Some(game::Door {
+            zone: [100, 200, 40, 60],
+            re2: Some(crate::scd2::host::Re2Door::default()),
+            ..game::Door::default()
+        });
+        assert_eq!(
+            room_entry_placement(&pack, &room, &game, target),
+            Some(([120, 0, 230], 0, None)),
+            "no door back: in the door"
+        );
     }
 
     /// The real pack's `--room` boot places the two reported stairwell rooms

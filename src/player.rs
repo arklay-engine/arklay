@@ -1539,7 +1539,7 @@ impl PlayerState {
     }
 
     /// Queue a one-shot sound at the player's current position.
-    fn queue_sound(&mut self, id: u16) {
+    pub(crate) fn queue_sound(&mut self, id: u16) {
         self.sounds.push(PlayerSound { id, pos: self.pos });
     }
 
@@ -2594,6 +2594,15 @@ pub fn camera_for_position(room: &RoomState, current: usize, pos: [i32; 3]) -> u
         }
     }
     current
+}
+
+/// The cut an RE2 room's zones send `pos` to, whichever cut they're listed
+/// under: the camera for a placement with no door to name one.
+pub fn cut_holding(room: &RoomState, pos: [i32; 3]) -> Option<usize> {
+    (0..room.cuts.len()).find_map(|cut| {
+        let to = camera_for_position(room, cut, pos);
+        (to != cut).then_some(to)
+    })
 }
 
 /// Map one tick's held keys to the internal behavior code.
@@ -4133,6 +4142,37 @@ mod tests {
         };
 
         assert_eq!(camera_for_position(&room, 0, [50, 0, 50]), 2);
+    }
+
+    #[test]
+    fn a_placement_finds_its_cut_from_any_zone_group() {
+        let zone = |cam_from, cam_to, corners| Zone {
+            cam_to,
+            cam_from,
+            corners,
+        };
+        let room = RoomState {
+            cuts: vec![Cut::default(); 3],
+            sca: Some(Default::default()),
+            zones: vec![
+                zone(0, 0, [[0; 2]; 4]),
+                zone(0, 1, quad(0, 0, 10, 10)),
+                zone(1, 1, [[0; 2]; 4]),
+                zone(1, 2, quad(100, 100, 200, 200)),
+            ],
+            zone_gates: vec![
+                crate::state::ZoneGate {
+                    flag: 1,
+                    floor: 0xFF,
+                };
+                4
+            ],
+            ..RoomState::default()
+        };
+        // Cut 0's zones don't lead there: only cut 1's do.
+        assert_eq!(camera_for_position(&room, 0, [150, 0, 150]), 0);
+        assert_eq!(cut_holding(&room, [150, 0, 150]), Some(2));
+        assert_eq!(cut_holding(&room, [5000, 0, 5000]), None);
     }
 
     #[test]

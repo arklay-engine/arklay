@@ -152,6 +152,370 @@ impl RoomMusic {
     }
 }
 
+/// The channels `Music` drives: the main's three, then the sub's two.
+pub const CHANNELS: usize = 3 + SUB_CHANNELS;
+/// The sequences `Seq_ctr` tracks: the main, and each sub channel.
+const SEQUENCES: usize = 1 + SUB_CHANNELS;
+/// A sequence's volume until a script changes it (`Snd_sys_init_sub2`).
+const SEQUENCE_VOLUME: u8 = 0x6e;
+/// `Seq_ctr[0]`, a sequence stopped by `sce_bgm_control`.
+const STATE_STOPPED: u8 = 2;
+/// `Seq_ctr[0]`, a sequence playing.
+const STATE_PLAYING: u8 = 1;
+/// `Seq_ctr[0]`, what a muted stop leaves.
+const STATE_MUTED: u8 = 4;
+/// `Seq_ctr[0]`, counting down a room table's fade to its stop at 5.
+const STATE_ROOM_FADE: u8 = 0xf;
+/// `Seq_ctr[0]`, counting down `sce_bgm_control`'s fade to its stop at 5.
+const STATE_SCRIPT_FADE: u8 = 0x32;
+/// The ticks `SsSeqSetDecrescendo` lowers a sequence for, a step of 1 a tick.
+const FADE_TICKS: u8 = 0x5a;
+/// `Seq_ctr[1]`, a sequence with nothing loaded to play.
+const HOLD_NOTHING: u8 = 0xff;
+/// `fg_system`'s bit that stops the game touching the music.
+const SYSTEM_NO_MUSIC: u32 = 0x2000;
+/// `fg_system`'s bit that leaves a main's channels at its volume on load.
+const SYSTEM_ALL_AUDIBLE: u32 = 8;
+/// `fg_system`'s bit that plays a main of stage 2's room 0 through once.
+const SYSTEM_MAIN_ONCE: u32 = 0x100_0000;
+/// `fg_system`'s bit that plays a sub through once.
+const SYSTEM_SUB_ONCE: u32 = 0x20_0000;
+
+/// One channel's wanted state, for the mixer to catch up with.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Channel {
+    /// The pack track loaded.
+    pub track: Option<u16>,
+    /// `track` changed and wants loading.
+    pub load: bool,
+    /// `SsPlay`, with its loop flag: it starts a stopped channel and leaves a
+    /// playing one where it is.
+    pub play: Option<bool>,
+    /// `SsStopGroup`.
+    pub stop: bool,
+    /// `SsSetVol`, 0-127.
+    pub volume: u8,
+    /// `SsSetPan`'s argument.
+    pub pan: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Sequence {
+    /// `Seq_ctr[0]`.
+    state: u8,
+    /// `Seq_ctr[1]`: 0 plays on the room's load.
+    hold: u8,
+    /// `Seq_ctr[2]`: a bank is loaded.
+    loaded: bool,
+    /// `ss_timer`.
+    fade: u8,
+    /// The volume a start gives it (`DWORD_00693804` and on).
+    volume: u8,
+}
+
+/// Where `sce_bgm_control` runs, which some of its cases ask.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Place {
+    /// `scd_var_stage`, from 0.
+    pub stage: u8,
+    pub room: u8,
+    pub cut: usize,
+    /// `fg_system`.
+    pub system: u32,
+    /// `player_index`.
+    pub player: u8,
+}
+
+/// The state of RE2's music, the `Seq_ctr` table and what it asks of the
+/// channels (`Snd_bgm_set`, `Snd_bgm_play_ck`, `Snd_bgm_ctr` and the fades of
+/// `Snd_se_call`). A save doesn't hold it: the load enters the room again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Music {
+    /// `Bgm`: the table's word for the room entered last.
+    current: RoomMusic,
+    sequences: [Sequence; SEQUENCES],
+    pub channels: [Channel; CHANNELS],
+}
+
+impl Default for Music {
+    fn default() -> Self {
+        Self {
+            current: RoomMusic {
+                main: 0xff,
+                sub: 0xff,
+            },
+            sequences: [Sequence {
+                state: 0,
+                hold: HOLD_NOTHING,
+                loaded: false,
+                fade: 0,
+                volume: SEQUENCE_VOLUME,
+            }; SEQUENCES],
+            channels: Default::default(),
+        }
+    }
+}
+
+/// The channels of sequence `sequence`.
+fn sequence_channels(sequence: usize) -> std::ops::Range<usize> {
+    match sequence {
+        0 => 0..3,
+        n => 2 + n..3 + n,
+    }
+}
+
+impl Music {
+    fn set_volume(&mut self, sequence: usize, volume: u8) {
+        for index in sequence_channels(sequence) {
+            self.channels[index].volume = volume;
+        }
+    }
+
+    fn play(&mut self, sequence: usize, looping: bool) {
+        for index in sequence_channels(sequence) {
+            self.channels[index].play = Some(looping);
+        }
+    }
+
+    fn stop(&mut self, sequence: usize) {
+        for index in sequence_channels(sequence) {
+            self.channels[index].stop = true;
+            self.channels[index].play = None;
+        }
+    }
+
+    fn load(&mut self, index: usize, track: Option<&str>, volume: u8) {
+        self.channels[index] = Channel {
+            track: track.and_then(crate::convert_re2::bgm_track),
+            load: true,
+            play: None,
+            stop: true,
+            volume,
+            pan: 0,
+        };
+    }
+
+    /// `Snd_bgm_main`: the room's main replaces what's loaded.
+    fn load_main(&mut self, word: u8, system: u32) -> bool {
+        let id = word & 0x3f;
+        let tracks = if word == 0xff {
+            [None; 3]
+        } else {
+            main_tracks(id)
+        };
+        let base = self.sequences[0].volume;
+        for (index, &track) in tracks.iter().enumerate() {
+            let audible = main_audible(id, index) || system & SYSTEM_ALL_AUDIBLE != 0;
+            self.load(index, track, if audible { base } else { 0 });
+        }
+        let sequence = &mut self.sequences[0];
+        sequence.state = 0;
+        sequence.loaded = tracks.iter().any(Option::is_some);
+        sequence.loaded
+    }
+
+    /// `Snd_bgm_sub`: the room's sub replaces what's loaded. Its channels start
+    /// silent, but in two rooms of the first stage.
+    fn load_sub(&mut self, word: u8, place: Place) -> bool {
+        let tracks = if word == 0xff {
+            [None; SUB_CHANNELS]
+        } else {
+            sub_tracks(word & 0x3f)
+        };
+        let audible = place.stage == 0 && matches!(place.room, 0 | 4);
+        let mut any = false;
+        for (channel, &track) in tracks.iter().enumerate() {
+            let base = self.sequences[1 + channel].volume;
+            self.load(3 + channel, track, if audible { base } else { 0 });
+            let sequence = &mut self.sequences[1 + channel];
+            sequence.state = 0;
+            sequence.loaded = track.is_some();
+            any |= track.is_some();
+        }
+        any
+    }
+
+    fn fade(&mut self, sequence: usize) {
+        self.sequences[sequence].fade = FADE_TICKS;
+    }
+
+    /// `Snd_bgm_set` and `Snd_bgm_play_ck`, as a room loads: `word` is the
+    /// table's word for it.
+    pub fn enter_room(&mut self, word: RoomMusic, place: Place) {
+        if place.system & SYSTEM_NO_MUSIC != 0 {
+            return;
+        }
+        let main_changed = (word.main ^ self.current.main) & 0x3f != 0;
+        if main_changed {
+            let loaded = self.load_main(word.main, place.system);
+            self.sequences[0].hold = if loaded { word.main >> 6 } else { HOLD_NOTHING };
+        } else if word.main & 0xc0 == 0 {
+            if self.sequences[0].state == STATE_STOPPED {
+                if self.sequences[0].loaded {
+                    let base = self.sequences[0].volume;
+                    self.set_volume(0, base);
+                }
+                self.sequences[0].hold = 0;
+            }
+        } else if !matches!(self.sequences[0].state, 0 | 0xff) {
+            self.fade(0);
+            self.sequences[0].state = STATE_ROOM_FADE;
+        }
+        if (word.sub ^ self.current.sub) & 0x3f == 0 && !main_changed {
+            if word.sub & 0x40 != 0 && self.sequences[1].state != 0 {
+                self.fade(1);
+            }
+            if word.sub & 0x80 != 0 && self.sequences[2].state != 0 {
+                self.fade(2);
+            }
+        } else if self.load_sub(word.sub, place) {
+            self.sequences[1].hold = (word.sub >> 6) & 1;
+            self.sequences[2].hold = word.sub >> 7;
+        } else {
+            self.sequences[1].hold = HOLD_NOTHING;
+            self.sequences[2].hold = HOLD_NOTHING;
+        }
+        self.current = word;
+        for sequence in 0..SEQUENCES {
+            if self.sequences[sequence].hold == 0 && self.sequences[sequence].loaded {
+                self.play(sequence, true);
+                self.sequences[sequence].state = STATE_PLAYING;
+            }
+        }
+    }
+
+    /// `Snd_bgm_ctr`, `sce_bgm_control`'s operands. The volume and pan count
+    /// from 1, 0 leaving them be.
+    pub fn control(&mut self, [target, op, channel, volume, pan]: [u8; 5], place: Place) {
+        let sequence = usize::from(target);
+        if place.system & SYSTEM_NO_MUSIC != 0 || sequence >= SEQUENCES {
+            return;
+        }
+        let mut pan = pan;
+        if place.stage == 0 && place.room == 0x0b && place.cut == 0x0d {
+            self.sequences[0].volume = 0x3f;
+            pan = 0x40;
+        }
+        let state = self.sequences[sequence];
+        if state.hold == HOLD_NOTHING || !state.loaded {
+            return;
+        }
+        let looping = !plays_once(target, place);
+        match op {
+            1 => {
+                if sequence == 0 {
+                    self.channels[0].volume = state.volume;
+                } else {
+                    self.set_volume(sequence, state.volume);
+                }
+                self.play(sequence, looping);
+                self.sequences[sequence].state = STATE_PLAYING;
+            }
+            2 if state.state != 0 => {
+                self.set_volume(sequence, state.volume);
+                self.stop(sequence);
+                self.sequences[sequence].state = STATE_STOPPED;
+            }
+            3 => {
+                self.set_volume(sequence, state.volume);
+                self.play(sequence, sequence == 0);
+                self.sequences[sequence].state = STATE_PLAYING;
+            }
+            4 => {
+                self.set_volume(sequence, 0);
+                self.stop(sequence);
+                self.sequences[sequence].state = STATE_MUTED;
+            }
+            5 => {
+                self.fade(sequence);
+                self.sequences[sequence].state = STATE_SCRIPT_FADE;
+            }
+            _ => {}
+        }
+        // Its numbers are of the main's channels or of the sub's: a sub's
+        // sequence doesn't change which channel 1 or 2 means.
+        let family = if sequence == 0 { 0..3 } else { 3..CHANNELS };
+        let targets = match channel {
+            0 => family,
+            n => {
+                let index = family.start + usize::from(n) - 1;
+                index..(index + 1).min(family.end)
+            }
+        };
+        if volume != 0 {
+            for (offset, index) in targets.clone().enumerate() {
+                let level = main_room8_volume(sequence, channel, offset, place);
+                self.channels[index].volume = level.unwrap_or(volume - 1);
+            }
+        }
+        if pan != 0 {
+            for index in targets {
+                self.channels[index].pan = pan - 1;
+            }
+        }
+    }
+
+    /// One tick of `Snd_se_call`'s fades.
+    pub fn tick(&mut self) {
+        for sequence in 0..SEQUENCES {
+            if self.sequences[sequence].fade > 0 {
+                self.sequences[sequence].fade -= 1;
+                for index in sequence_channels(sequence) {
+                    self.channels[index].volume = self.channels[index].volume.saturating_sub(1);
+                }
+            }
+            if self.sequences[sequence].state > 5 {
+                self.sequences[sequence].state -= 1;
+                if self.sequences[sequence].state == 5 {
+                    self.sequences[sequence].state = 0;
+                    self.stop(sequence);
+                }
+            }
+        }
+    }
+}
+
+/// The main's volumes `Snd_bgm_ctr` fixes for two cuts of stage 1's room 8.
+fn main_room8_volume(sequence: usize, channel: u8, offset: usize, place: Place) -> Option<u8> {
+    const CUT_0: [u8; 3] = [0x48, 0x39, 0x1d];
+    const CUT_D: [u8; 3] = [0, 0x45, 0x1d];
+    if sequence != 0 || channel != 0 || place.stage != 0 || place.room != 8 {
+        return None;
+    }
+    match place.cut {
+        0 => CUT_0.get(offset).copied(),
+        0x0d => CUT_D.get(offset).copied(),
+        _ => None,
+    }
+}
+
+/// `Snd_bgm_ctr`'s rooms whose start of `target` doesn't loop.
+fn plays_once(target: u8, place: Place) -> bool {
+    let room = place.room;
+    let by_room = match place.stage {
+        0 => matches!(room, 0x13..=0x15) && target == 1,
+        1 => room == 0x19 || (matches!(room, 0x1b | 6) && target == 2),
+        2 => match room {
+            0 => target == 2 || (target == 0 && place.system & SYSTEM_MAIN_ONCE == 0),
+            1 => true,
+            4 | 8 | 10 | 0x0b => target == 1,
+            _ => false,
+        },
+        3 => match room {
+            0 => target == 2 && place.player < 10 && place.player & 1 != 0,
+            7 => target == 2,
+            _ => false,
+        },
+        5 => match room {
+            0x0c => matches!(target, 1 | 2),
+            0x14 => target == 2,
+            _ => false,
+        },
+        _ => false,
+    };
+    by_room || (place.system & SYSTEM_SUB_ONCE != 0 && target == 1)
+}
+
 /// The room music table (`bgm_tbl`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BgmTable {
@@ -236,6 +600,126 @@ pub fn main_audible(id: u8, channel: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn street() -> Place {
+        Place {
+            stage: 0,
+            room: 0x10,
+            ..Place::default()
+        }
+    }
+
+    fn word(main: u8, sub: u8) -> RoomMusic {
+        RoomMusic { main, sub }
+    }
+
+    #[test]
+    fn a_room_starts_its_main_silent_and_a_script_raises_it() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        for index in 0..3 {
+            assert_eq!(music.channels[index].play, Some(true));
+        }
+        assert!(
+            music.channels[..3]
+                .iter()
+                .any(|channel| channel.track.is_some())
+        );
+        assert!(!main_audible(0, 0));
+        assert_eq!(music.channels[0].volume, 0);
+        music.control([0, 0, 1, 120, 51], street());
+        assert_eq!(music.channels[0].volume, 119);
+        assert_eq!(music.channels[0].pan, 50);
+        assert_eq!(music.channels[1].volume, 0);
+    }
+
+    #[test]
+    fn the_same_main_keeps_playing_through_a_door() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.control([0, 0, 1, 120, 51], street());
+        for channel in &mut music.channels {
+            channel.load = false;
+        }
+        music.enter_room(word(0, 0xff), street());
+        assert!(!music.channels[0].load);
+        assert_eq!(music.channels[0].volume, 119);
+    }
+
+    /// `Snd_bgm_play_ck` still plays what the first room started, so the fade
+    /// lowers the main by its 90 steps and doesn't stop it.
+    #[test]
+    fn a_room_flagged_to_end_the_main_fades_it() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.control([0, 0, 0, 101, 0], street());
+        music.channels[0].stop = false;
+        music.enter_room(word(0x40, 0xff), street());
+        for _ in 0..200 {
+            music.tick();
+        }
+        assert_eq!(music.channels[0].volume, 10);
+        assert!(!music.channels[0].stop);
+    }
+
+    #[test]
+    fn a_main_first_loaded_by_a_flagged_room_waits_for_a_script() {
+        let mut music = Music::default();
+        music.enter_room(word(0x40, 0xff), street());
+        assert_eq!(music.channels[0].play, None);
+        music.control([0, 1, 0, 0, 0], street());
+        assert_eq!(music.channels[0].play, Some(true));
+    }
+
+    #[test]
+    fn a_script_fade_stops_the_main_after_its_count() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.control([0, 0, 0, 101, 0], street());
+        music.channels[0].stop = false;
+        music.control([0, 5, 0, 0, 0], street());
+        for _ in 0..44 {
+            music.tick();
+        }
+        assert_eq!(music.channels[0].volume, 56);
+        assert!(!music.channels[0].stop);
+        music.tick();
+        assert!(music.channels[0].stop);
+    }
+
+    #[test]
+    fn a_stopped_main_plays_again_on_entering_a_room() {
+        let mut music = Music::default();
+        music.enter_room(word(0, 0xff), street());
+        music.channels[0].play = None;
+        music.control([0, 2, 0, 0, 0], street());
+        assert!(music.channels[0].stop);
+        music.enter_room(word(0, 0xff), street());
+        assert_eq!(music.channels[0].play, Some(true));
+    }
+
+    #[test]
+    fn a_sub_loads_on_its_own_channels_and_holds_by_its_flags() {
+        let mut music = Music::default();
+        let id = (0..0x38)
+            .find(|&id| sub_tracks(id).iter().all(Option::is_some))
+            .unwrap();
+        music.enter_room(word(0xff, id | 0x80), street());
+        assert_eq!(music.channels[3].play, Some(true));
+        assert_eq!(music.channels[4].play, None);
+        assert_eq!(music.channels[3].volume, 0);
+        music.control([1, 0, 1, 81, 0], street());
+        assert_eq!(music.channels[3].volume, 80);
+    }
+
+    #[test]
+    fn control_on_nothing_loaded_does_nothing() {
+        let mut music = Music::default();
+        music.enter_room(word(0xff, 0xff), street());
+        music.control([0, 1, 0, 101, 0], street());
+        assert_eq!(music.channels[0].play, None);
+        assert_eq!(music.channels[0].volume, 0);
+    }
 
     #[test]
     fn stages_index_their_slice_of_the_table() {
