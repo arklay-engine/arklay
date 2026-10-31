@@ -499,6 +499,7 @@ pub(crate) fn convert(
     copy_shadow(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_scroll_pictures(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_core_effects(&layout, &mut writer, &mut tally, &mut warnings)?;
+    copy_die_text(&layout, &mut writer, &mut tally)?;
     copy_init_table(&layout, &mut writer, &mut tally, &mut warnings)?;
     copy_doors(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
     copy_movies(&layout, &mut writer, &mut tally, &mut warnings, progress)?;
@@ -1234,6 +1235,21 @@ fn copy_core_effects(
     let body = crate::esp2::core_container(&read(esp)?, &read(sheet)?)
         .with_context(|| format!("{}", esp.display()))?;
     tally.add(writer, "effect", crate::esp2::CORE_ENTRY, body)?;
+    Ok(())
+}
+
+/// `Common/Data/died*.die`, whose TIMs hold the game over's text, as
+/// [`crate::die2::text_entry`]. The rest of each file isn't used.
+fn copy_die_text(layout: &Layout, writer: &mut PackWriter, tally: &mut Tally) -> Result<()> {
+    for path in files_in(layout.common(&["Data"]))? {
+        let Some((stem, extension)) = upper_parts(&path) else {
+            continue;
+        };
+        if extension == "DIE" {
+            let entry = format!("die/{}.tim", stem.to_lowercase());
+            tally.add(writer, "die", &entry, read(&path)?)?;
+        }
+    }
     Ok(())
 }
 

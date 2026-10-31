@@ -48,6 +48,11 @@ ENEMIES = 0x0098A114  # EnemyEntity*[16]
 SPLAYER = 0x0098A110  # splayer_work
 FLG_ADDR = 0x0053B218  # the flag banks
 FG_SYSTEM = 0x00989E6C
+DIE_VP = 0x99CEEC
+DIE_VR = 0x99CEF8
+DIE_PHASE = 0x99CEE2
+DIE_COUNT = 0x99CEE4
+DIE_SPR = 0x99CEC8
 FG_STATUS = 0x00989ED0
 FG_STOP = 0x00989ED4
 FG_SCENARIO = 0x0098EB2C
@@ -478,9 +483,29 @@ def trace_line(game: Game, tick: int, pad: int) -> str:
         f"mot={routines[2]},{routines[3]},{motion[0]},{motion[1]},{motion[2]},"
         f"{game.u8(PL + ENTITY_D_LIFE_U)},{spd[0]},{spd[1]},{spd[2]}"
     )
-    fields.append(neck_state(game))
+    try:
+        fields.append(neck_state(game))
+    except OSError:
+        # The game over's end frees the player's parts.
+        fields.append("neck=-")
     fields.append(music_trace(game))
+    if game.u32(FG_SYSTEM) & 0x100000:
+        fields.append(die_trace(game))
     return " ".join(fields)
+
+
+def die_trace(game: Game) -> str:
+    """The game over's phase, then its view: `Spiral_move`'s camera and the `Be_flg`s `Die_enemy_set` chooses."""
+    eye = game.i32s(DIE_VP, 3)
+    target = game.i32s(DIE_VR, 3)
+    flags = [game.u32(pointer) for pointer in struct.unpack("<16I", game.read(ENEMIES, 64)) if pointer]
+    sprites = game.u32(DIE_SPR)
+    state = struct.unpack("<2h", game.read(sprites, 4)) if sprites else (0, 0)
+    return (
+        f"die={game.u16(DIE_PHASE)},{game.i16(DIE_COUNT)},{state[0]},{state[1]} "
+        f"dieview={','.join(map(str, eye))},{','.join(map(str, target))},"
+        f"{game.u32(PL):x},{'/'.join(f'{flag:x}' for flag in flags)}"
+    )
 
 
 def neck_state(game: Game) -> str:

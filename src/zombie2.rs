@@ -68,7 +68,7 @@ const STAGGER: [i8; 5] = [0, 9, 15, 15, 35];
 const TYPE_BURNT: u16 = 0x80;
 const TYPE_STRAIGHT: u16 = 0x1000;
 const TYPE_ON_FLOOR: u16 = 0x2000;
-const TYPE_HELD: u16 = 0x4000;
+pub const TYPE_HELD: u16 = 0x4000;
 /// `Be_flg`'s bits: it's hit low, it's hit high.
 pub const BE_LOW: u32 = 0x400_0000;
 pub const BE_HIGH: u32 = 0x800_0000;
