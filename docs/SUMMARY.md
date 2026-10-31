@@ -20,6 +20,7 @@
   - [Rooms](packs/rooms.md)
   - [Voice](packs/voice.md)
 - [Mods](mods.md)
+- [BioRand](biorand/index.md)
 - [Scripting reference](scripting/index.md)
   - [Lua API](scripting/lua/index.md)
     - [Lua hooks](scripting/lua/hooks.md)

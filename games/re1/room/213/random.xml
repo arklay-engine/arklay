@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="2F WEST ELEVATOR" tags="visit2"/>
+  <doors>
+    <door id="0" target="216:0" kind="normal">
+      <entrance x="15800" y="0" z="16500" d="0" cut="4"/>
+    </door>
+    <door id="1" target="200:0" kind="lift"/>
+    <door id="2" target="219:0" kind="normal">
+      <entrance x="9800" y="0" z="2900" d="0" cut="1"/>
+    </door>
+    <door id="3" target="214:0" kind="normal">
+      <entrance x="2500" y="0" z="6600" d="0" cut="1"/>
+    </door>
+  </doors>
+  <items>
+    <item id="4" name="GREEN HERB"/>
+  </items>
+  <enemies exclude="4">
+    <spot x="10357" y="0" z="7073" d="917"/>
+    <spot x="12686" y="0" z="3160" d="13"/>
+    <spot x="13458" y="0" z="11364" d="3981"/>
+    <spot x="14455" y="0" z="10797" d="2149"/>
+    <spot x="16142" y="0" z="21068" d="1069"/>
+    <spot x="16244" y="0" z="10891" d="3277"/>
+    <spot x="16344" y="0" z="3087" d="3245"/>
+    <spot x="16636" y="0" z="19276" d="1173"/>
+    <spot x="16750" y="0" z="13261" d="3117"/>
+    <spot x="5780" y="0" z="6714" d="101"/>
+  </enemies>
+</random>

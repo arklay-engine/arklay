@@ -9,6 +9,7 @@ pub mod audio;
 pub mod avi;
 pub mod bgm;
 pub mod bgm2;
+pub mod biorand;
 pub mod bmp;
 pub mod bow2;
 pub mod budget;

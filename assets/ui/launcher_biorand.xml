@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BIORAND: a generated game from a seed. The host publishes `biorand.*`, and
+     takes digit and backspace keys for the seed itself. -->
+<screen use="standard-screen" title="BIORAND">
+  <text slot="header" variant="caption" text="{launcher.version}" wrap="none"/>
+  <stack gap="small">
+    <field label="Seed" value="{biorand.seed}" tone="value"/>
+    <field label="Game" value="{biorand.base}" tone="{biorand.base_tone}"/>
+    <field label="Pack" value="{biorand.pack}" tone="value"/>
+  </stack>
+  <spacer height="12"/>
+  <text variant="value-dim" text="Type digits to enter a seed. Backspace removes the last one."/>
+  <spacer height="12"/>
+  <list width="1100" height="auto">
+    <menu-entry label="Generate &amp; Play" action="biorand_generate" hint="Start" status="{biorand.action}" tone="value-dim"/>
+    <menu-entry label="New Seed" action="biorand_new_seed" hint="Roll"/>
+  </list>
+</screen>

@@ -64,6 +64,39 @@ fn compile_error(text: &str) -> String {
 }
 
 #[test]
+fn randomizer_conditions_test_a_flag_in_the_runtime_build_only() {
+    let text = "#version 1\nproc init\n{\n    if (RANDOMIZER)\n    {\n        set(0, 1, 0);\n    }\n    else\n    {\n        set(0, 2, 0);\n    }\n}\n";
+    let runtime = compile(text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.init[0]);
+    let test = [0x04, 5, crate::scd::opcode::system::RANDOMIZER, 0];
+    assert!(
+        bytes.windows(4).any(|window| window == test),
+        "{bytes:02x?}"
+    );
+
+    // A retail room's own build is what the bytes must stay identical to.
+    let vanilla = round("#version 1\nproc init\n{\n    set(0, 2, 0);\n}\n");
+    assert_eq!(all_bytes(&round(text)), all_bytes(&vanilla));
+}
+
+#[test]
+fn a_negated_randomizer_condition_tests_for_the_flag_clear() {
+    let text = "#version 1\nproc init\n{\n    if (!ENEMY_RANDOMIZER)\n    {\n        set(0, 1, 0);\n    }\n}\n";
+    let runtime = compile(text).unwrap();
+    let runtime = reader::parse(&runtime.to_container().unwrap()).unwrap();
+    let bytes = block_bytes(&runtime.init[0]);
+    let test = [0x04, 5, crate::scd::opcode::system::ENEMY_RANDOMIZER, 1];
+    assert!(
+        bytes.windows(4).any(|window| window == test),
+        "{bytes:02x?}"
+    );
+    // Variant builds run with the flag clear, so the guarded code stays.
+    let vanilla = round("#version 1\nproc init\n{\n    set(0, 1, 0);\n}\n");
+    assert_eq!(all_bytes(&round(text)), all_bytes(&vanilla));
+}
+
+#[test]
 fn proc_blocks_end_in_an_implicit_return() {
     let scripts =
         round("#version 1\nproc init\n{\n    set(FG_COMMON, 1, 1);\n}\nproc main\n{\n}\n");

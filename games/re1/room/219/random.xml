@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="2F WEST STORAGE" tags="visit2"/>
+  <doors>
+    <door id="0" target="213:2" kind="normal">
+      <entrance x="7400" y="0" z="2900" d="2048" cut="1"/>
+    </door>
+  </doors>
+  <items>
+    <item id="1" name="SHELLS/1"/>
+    <item id="2" name="SHELLS/2"/>
+  </items>
+  <enemies exclude="4">
+    <spot x="4131" y="0" z="3124" d="3968"/>
+  </enemies>
+</random>

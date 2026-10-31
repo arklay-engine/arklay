@@ -12171,6 +12171,20 @@ pub(crate) fn run_root_with_display(
     )
 }
 
+/// Where the game in `pack` keeps its saves: its own folder under `save_dir`,
+/// as a save holds no pack id and is only meaningful to the pack that wrote it.
+/// An official base pack (RE1, RE2) keeps the root, where every existing
+/// save is. A pack whose manifest cannot be read fails later, with a better
+/// message.
+fn pack_save_dir(pack: &Path, save_dir: &Path) -> PathBuf {
+    match crate::pack::read_manifest(pack) {
+        Ok(Some(manifest)) if crate::convert::Game::from_id(&manifest.id).is_none() => {
+            save_dir.join(&manifest.id)
+        }
+        _ => save_dir.to_path_buf(),
+    }
+}
+
 /// Build the capture-path new-game session and start it.
 ///
 /// The session lives here rather than in [`run_ui_impl`]'s arm: a debug build
@@ -12224,6 +12238,7 @@ fn run_ui_impl(
     authoring: Authoring<'_>,
     shared: Option<&mut Display>,
 ) -> Result<()> {
+    let save_dir = &pack_save_dir(pack, save_dir);
     if capture.is_some()
         || trace.path.is_some()
         || trace.capture_dir.is_some()
@@ -22028,6 +22043,10 @@ fn capture_bmp(image: &Image, path: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
+#[path = "biorand/playthrough.rs"]
+mod biorand_playthrough;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{ClipFrame, Emw, Keyframe, Skeleton, Texture8, Tmd};
@@ -22261,6 +22280,30 @@ mod tests {
         assert!(read_voice_ticks(&dir.0.join("absent.txt")).is_err());
         std::fs::write(&list, "5\nsoon\n").unwrap();
         assert!(read_voice_ticks(&list).is_err());
+    }
+
+    #[test]
+    fn each_pack_saves_apart_and_the_official_games_keep_the_root() {
+        let dir = TempDir::new();
+        let write = |id: &str| {
+            let path = dir.0.join(format!("{id}.akpak"));
+            let mut writer = crate::pack::PackWriter::new();
+            let manifest = crate::manifest::Manifest::base(id).render();
+            writer.add("manifest.toml", manifest.into_bytes()).unwrap();
+            writer.write(&path).unwrap();
+            path
+        };
+        let saves = Path::new("/saves");
+        assert_eq!(pack_save_dir(&write("re1"), saves), saves);
+        assert_eq!(pack_save_dir(&write("re2"), saves), saves);
+        assert_eq!(
+            pack_save_dir(&write("biorand-000042"), saves),
+            saves.join("biorand-000042")
+        );
+        assert_eq!(
+            pack_save_dir(&write("biorand-000043"), saves),
+            saves.join("biorand-000043")
+        );
     }
 
     struct TempDir(std::path::PathBuf);

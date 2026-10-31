@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="1F EAST DRESSING"/>
+  <doors>
+    <door id="0" target="106:1" kind="normal">
+      <entrance x="2800" y="0" z="4600" d="0" cut="1"/>
+    </door>
+    <door id="1" target="112:0" kind="normal">
+      <entrance x="22500" y="0" z="11300" d="2048" cut="7"/>
+    </door>
+  </doors>
+  <items>
+    <item id="4" name="CLIP ON TABLE"/>
+  </items>
+  <enemies exclude="4">
+    <spot x="11030" y="0" z="11325" d="957"/>
+    <spot x="14468" y="0" z="11450" d="4061"/>
+    <spot x="19369" y="0" z="11414" d="2117"/>
+    <spot x="4507" y="0" z="7838" d="4005"/>
+    <spot x="5032" y="0" z="5642" d="3133"/>
+    <spot x="5716" y="0" z="11403" d="4029"/>
+    <spot x="9713" y="0" z="7563" d="2213"/>
+    <spot x="9812" y="0" z="4781" d="3117"/>
+  </enemies>
+</random>

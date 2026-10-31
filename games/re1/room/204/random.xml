@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<random>
+  <room name="2F EAST C SHAPED CORRIDOR"/>
+  <doors>
+    <door id="0" target="203:2" kind="normal">
+      <entrance x="3000" y="0" z="3600" d="0" cut="1"/>
+    </door>
+    <door id="1" target="205:0" kind="normal">
+      <entrance x="18600" y="0" z="11300" d="0" cut="5"/>
+    </door>
+    <door id="2" target="206:0" kind="normal">
+      <entrance x="3500" y="0" z="19100" d="512" cut="4"/>
+    </door>
+    <door id="3" target="207:0" kind="normal">
+      <entrance x="13000" y="0" z="19200" d="1024" cut="7"/>
+    </door>
+    <door id="4" target="20D:0" kind="normal">
+      <entrance x="12500" y="0" z="2800" d="3072" cut="7"/>
+    </door>
+  </doors>
+  <items>
+  </items>
+  <enemies exclude="4">
+    <spot x="10665" y="0" z="18543" d="1890"/>
+    <spot x="16421" y="0" z="3266" d="2002"/>
+    <spot x="17939" y="0" z="18632" d="4010"/>
+    <spot x="18038" y="0" z="3193" d="2562"/>
+    <spot x="19000" y="0" z="19227" d="1506"/>
+    <spot x="19021" y="0" z="8602" d="1018"/>
+    <spot x="19022" y="0" z="3623" d="3082"/>
+    <spot x="19091" y="0" z="15413" d="930"/>
+    <spot x="19379" y="0" z="13930" d="2850"/>
+    <spot x="5913" y="0" z="3395" d="4074"/>
+    <spot x="6284" y="0" z="18358" d="4066"/>
+    <spot x="8182" y="0" z="3825" d="58"/>
+  </enemies>
+</random>
