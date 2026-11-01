@@ -3728,6 +3728,7 @@ impl GameSession {
         }
         if self.game.is_re2_room {
             self.tick_re2_die(pack);
+            self.tick_re2_fades();
             return;
         }
         // The INVINCIBLE cheat never enters the game-over machine.
@@ -3778,6 +3779,25 @@ impl GameSession {
         assets.re2_weapon = Some(weapon);
         if let Some(changed) = load_re2_player_with(pack, character, weapon) {
             *assets = changed;
+        }
+    }
+
+    /// `System_trans`, after the tick's scripts: each fade draws, then steps. A
+    /// script's write to fade 0 has missed [`Self::tick_room_fade`]'s, and is
+    /// seen this tick the way a `Die`'s is.
+    fn tick_re2_fades(&mut self) {
+        let writes = std::mem::take(&mut self.game.re2.screen_fades);
+        if !writes.is_empty() {
+            for write in writes {
+                write.apply(&mut self.room_fade);
+            }
+            self.room_fade_draw = self.room_fade.overlay();
+            self.room_fade.tick();
+        }
+        let re2 = &mut self.game.re2;
+        for (fade, drawn) in re2.fades.iter_mut().zip(&mut re2.fades_drawn) {
+            *drawn = fade.overlay();
+            fade.tick();
         }
     }
 
@@ -6109,28 +6129,37 @@ impl GameSession {
 
     fn draw_room_fade(&mut self) {
         if let Some(overlay) = self.tween.fade(self.room_fade_draw) {
-            // `Die_move_wait`'s `Fade_set` is in its adding mode.
-            if self.re2_die.is_some() && overlay.color == transition::FadeColor::White {
-                let (width, height) = (
-                    self.framebuffer.width as i32,
-                    self.framebuffer.height as i32,
-                );
-                let white = Image {
-                    width: 1,
-                    height: 1,
-                    rgba: vec![overlay.alpha, overlay.alpha, overlay.alpha, 0xFF],
-                };
-                self.framebuffer.draw_rgba_sprite_blended(
-                    &white,
-                    [0, 0, 1, 1],
-                    [0, 0, width, height],
-                    0,
-                    render::SpriteBlend::Add,
-                );
-                return;
-            }
-            self.framebuffer.fade_to_color(overlay.color, overlay.alpha);
+            self.draw_fade(overlay);
         }
+        if self.game.is_re2_room {
+            for overlay in self.game.re2.fades_drawn.into_iter().flatten() {
+                self.draw_fade(overlay);
+            }
+        }
+    }
+
+    fn draw_fade(&mut self, overlay: transition::Overlay) {
+        // RE2's `AddTile` adds in any mode but the veil's.
+        if self.game.is_re2_room && overlay.color == transition::FadeColor::White {
+            let (width, height) = (
+                self.framebuffer.width as i32,
+                self.framebuffer.height as i32,
+            );
+            let white = Image {
+                width: 1,
+                height: 1,
+                rgba: vec![overlay.alpha, overlay.alpha, overlay.alpha, 0xFF],
+            };
+            self.framebuffer.draw_rgba_sprite_blended(
+                &white,
+                [0, 0, 1, 1],
+                [0, 0, width, height],
+                0,
+                render::SpriteBlend::Add,
+            );
+            return;
+        }
+        self.framebuffer.fade_to_color(overlay.color, overlay.alpha);
     }
 
     /// Blend the death fade (the white-out or the screen's final fade) over
@@ -13913,6 +13942,7 @@ fn build_effect_quads(
             tint,
             blend,
             sheet: sheet_rows,
+            corners: None,
             op: render::EffectBlend::Normal,
         });
     }
@@ -17245,7 +17275,13 @@ fn render_frame_on(
     page_refs.extend(pages.base.iter().map(Option::as_ref));
     page_refs.extend(pages.variants.iter().map(Option::as_ref));
     if game.is_re2_room {
-        let (re2_quads, re2_pages) = game.re2.effects.quads(&camera, |x, z| {
+        // `Esp_trans_3d`'s two cuts that want their effects moved in depth.
+        let depth_bias = match (id.stage, id.room, room.current_cut) {
+            (4, 0x0e, 0x0b) => 2000,
+            (7, 0x03, 0x0b) => -300,
+            _ => 0,
+        };
+        let (re2_quads, re2_pages) = game.re2.effects.quads(&camera, depth_bias, |x, z| {
             debug_view::unculled()
                 || room
                     .zones

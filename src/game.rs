@@ -4317,6 +4317,10 @@ impl GameState {
     /// drawing when the bit is off, and the renderer applies it to the camera
     /// projection and the background's display origin.
     pub fn roll_screen_shake(&mut self) {
+        // RE2's shake is its scripts' `Sce_shake_on`, which holds.
+        if self.is_re2_room {
+            return;
+        }
         self.screen_shake = if !self.flags[5].bit(MSF2_SCREEN_SHAKE) {
             [0, 0]
         } else {

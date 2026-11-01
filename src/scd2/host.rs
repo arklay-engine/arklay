@@ -93,6 +93,28 @@ pub struct Re2State {
     /// `Sce_espr_on`s whose `Get_matrix` is someone's, for the characters' models
     /// to answer.
     pub pending_esprs: Vec<(EsprCall, EsprMatrix)>,
+    /// `Sce_fade_set`s and `Sce_fade_adjust`s to fade 0, the session's own,
+    /// for the end of the tick.
+    pub screen_fades: Vec<FadeWrite>,
+    /// Fades 1 to 3, over fade 0, and what each drew this tick.
+    pub fades: [crate::transition::Fade; 3],
+    pub fades_drawn: [Option<crate::transition::Overlay>; 3],
+}
+
+/// What a script did to a fade.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FadeWrite {
+    Set { kind: u8, add: i16 },
+    Adjust(i16),
+}
+
+impl FadeWrite {
+    pub fn apply(self, fade: &mut crate::transition::Fade) {
+        match self {
+            Self::Set { kind, add } => fade.set_scripted(kind, add),
+            Self::Adjust(state) => fade.set_state(state),
+        }
+    }
 }
 
 /// One sound `se_on` asked for, and where.
@@ -327,6 +349,9 @@ impl Default for Re2State {
             enemy_bank: None,
             load_pass: false,
             pending_esprs: Vec::new(),
+            screen_fades: Vec::new(),
+            fades: [crate::transition::Fade::inactive(); 3],
+            fades_drawn: [None; 3],
         }
     }
 }
@@ -739,15 +764,7 @@ fn probe_flags(sat: u8) -> u8 {
     flags
 }
 
-/// A `Sce_espr_on`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EsprCall {
-    pub kind: u8,
-    pub row: u8,
-    pub size: u16,
-    pub dir: i16,
-    pub at: [i16; 3],
-}
+pub use crate::esp2::EsprCall;
 
 /// `Get_matrix`: whose, and which of its parts, or the work's own `M`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1076,6 +1093,19 @@ impl GameHost<'_> {
 
     /// Set the player's position or facing for `pos_set` and `dir_set`.
     /// `Sce_se_on`: its position is its offset from the body it names.
+    /// A script's write to a fade: fade 0 is the session's, for the door's own
+    /// to share.
+    fn fade_write(&mut self, fade: u8, write: FadeWrite) {
+        match fade {
+            0 => self.game.re2.screen_fades.push(write),
+            _ => {
+                if let Some(fade) = self.game.re2.fades.get_mut(usize::from(fade) - 1) {
+                    write.apply(fade);
+                }
+            }
+        }
+    }
+
     fn se_on(&mut self, at: impl Fn(usize) -> i64) {
         let (slot, positional) = (at(1) as u16 & 0xff, at(1) as u16 >> 8);
         let work = at(2) as u16;
@@ -1534,27 +1564,51 @@ impl Host for GameHost<'_> {
                 self.game.re2.pending_player.angle = Some(at(2) as u16);
             }
             // `Sce_espr_on`, on the world's matrix: the id's low byte is the
-            // type and its high byte the row.
-            "sce_espr_on" => {
+            // type and its high byte the row. `Sce_espr_on2` takes a group for
+            // `Sce_espr_kill2` first, and the 3D ones a turn before the
+            // direction.
+            "sce_espr_on" | "sce_espr_on2" | "sce_espr3d_on" | "sce_espr3d_on2" => {
                 let [kind, row] = (at(1) as u16).to_le_bytes();
+                let is_3d = op.mnemonic.starts_with("sce_espr3d");
                 let call = EsprCall {
                     kind,
                     row,
                     size: at(3) as u16,
-                    dir: at(7) as i16,
+                    dir: at(if is_3d { 10 } else { 7 }) as i16,
                     at: [at(4) as i16, at(5) as i16, at(6) as i16],
+                    rotation: if is_3d {
+                        [at(7) as i16, at(8) as i16, at(9) as i16]
+                    } else {
+                        [0; 3]
+                    },
+                    group: if op.mnemonic.ends_with('2') {
+                        at(0) as u8
+                    } else {
+                        0
+                    },
                 };
                 let [matrix, id] = (at(2) as u16).to_le_bytes();
                 match EsprMatrix::of(matrix as i8, id) {
                     Some(matrix) => self.game.re2.pending_esprs.push((call, matrix)),
                     None => {
-                        self.game
-                            .re2
-                            .effects
-                            .call(call.kind, call.row, call.size, call.dir, call.at, false);
+                        self.game.re2.effects.call_placed(call);
                     }
                 }
             }
+            "sce_espr_kill2" => self.game.re2.effects.kill_group(at(0) as u8),
+            // `Sce_shake_on`: `SetGeomOffset`, which holds until the next one.
+            "sce_shake_on" => {
+                let shake = [-(at(0) as i8 as i32), -(at(1) as i8 as i32)];
+                self.game.screen_shake = shake;
+            }
+            "sce_fade_set" => self.fade_write(
+                at(0) as u8,
+                FadeWrite::Set {
+                    kind: at(1) as u8,
+                    add: at(3) as i16,
+                },
+            ),
+            "sce_fade_adjust" => self.fade_write(at(0) as u8, FadeWrite::Adjust(at(1) as i16)),
             // `Sce_parts_bomb`: the pieces `Parts_bomb` flings about aren't drawn.
             "sce_parts_bomb" => {
                 let part = at(1) as u8;

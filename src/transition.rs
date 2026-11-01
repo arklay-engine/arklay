@@ -203,6 +203,22 @@ impl Fade {
         self.state = state;
     }
 
+    /// `Fade_adjust`: the accumulator alone.
+    pub fn set_state(&mut self, state: i16) {
+        self.state = state;
+    }
+
+    /// `Sce_fade_set`: a fade by a script, from black or white if `add` takes
+    /// the accumulator down and from nothing otherwise.
+    pub fn set_scripted(&mut self, fade_type: u8, add: i16) {
+        let state = if add < 0 {
+            add.wrapping_add(i16::MIN)
+        } else {
+            0
+        };
+        self.set(fade_type, i32::from(add), state);
+    }
+
     /// Advance the accumulator by one 30 Hz tick.
     ///
     /// The original stops updating a negative accumulator, so a fade that has
@@ -895,6 +911,21 @@ mod tests {
 
     fn fade(transition: &Transition<FakeStepper>) -> (i32, i16) {
         (transition.fade().counter(), transition.fade().state())
+    }
+
+    #[test]
+    fn a_scripted_fade_starts_where_its_direction_needs() {
+        let mut fade = Fade::inactive();
+        fade.set_scripted(2, -2048);
+        assert_eq!(fade.state(), 30720);
+        fade.set_scripted(2, 2048);
+        assert_eq!(fade.state(), 0);
+        fade.set_scripted(1, i16::MIN);
+        assert_eq!(fade.state(), 0);
+        fade.set_state(4096);
+        assert_eq!(fade.overlay().map(|overlay| overlay.alpha), Some(32));
+        fade.tick();
+        assert_eq!(fade.overlay(), None);
     }
 
     #[test]
