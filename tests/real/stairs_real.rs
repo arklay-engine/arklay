@@ -871,6 +871,7 @@ fn capture_player_partway_up_the_lab_stairway() {
     let keyframe = &keyframes[player.anim.keyframe_index(clips)];
     let joints = anim::joint_matrices(&emd.skeleton, keyframe, &entity);
     let entities = [EntityMesh {
+        view_z_shift: 0,
         mesh: &emd.mesh,
         texture: &emd.texture,
         joints: &joints,

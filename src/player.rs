@@ -102,7 +102,7 @@ const MAX_PUSH_TEST: u16 = 0x320;
 const PUSH_TEST_BIAS: i16 = 0x190;
 
 /// No direction held selects the idle behavior.
-const BEHAVIOR_IDLE: u8 = 0;
+pub(crate) const BEHAVIOR_IDLE: u8 = 0;
 /// `Input.up` selects the walk.
 const BEHAVIOR_WALK: u8 = 1;
 /// `Input.right` without `up`/`down` selects the in-place right turn
@@ -577,6 +577,11 @@ pub struct PlayerState {
     /// hand-back that left the settle words on the entity marks it so the
     /// idle handler skips the entry's clip arming and blend.
     pub settle_entered: bool,
+    /// `attackDirection` while the breathe states leave it parked: zero after
+    /// the settle's countdown, the script's value after `SYS_IDLE`.
+    pub idle_parked: u16,
+    /// A scripted state handed the player back on this tick.
+    pub scripted_handback: bool,
     /// The reference's idle scratch while the pad-driven idle behavior owns
     /// the tick: `(action_state, attackDirection)` of
     /// `player_behavior_00_idle`. `None` when another behavior ran. The
@@ -760,6 +765,8 @@ pub fn spawn(id: RoomId, room: &RoomState) -> PlayerState {
         idle_ticks: 0,
         scripted_hold: false,
         settle_entered: false,
+        idle_parked: 0,
+        scripted_handback: false,
         idle_trace: None,
         trace_state: None,
         last_behavior_id: 0,
@@ -1168,6 +1175,7 @@ pub fn update_with_options(
                 player.advance(emd_clips, emw_clips, room_clips);
                 if counter == 0 && !input.message_blocked {
                     player.idle_phase = 1;
+                    player.idle_parked = 0;
                     player.set_clip(ClipSource::Emw, BREATHE_IN_CLIP);
                 }
             }
@@ -1189,12 +1197,20 @@ pub fn update_with_options(
         // new phase, exactly like the reference writes it in the same tick.
         player.idle_trace = Some((
             player.idle_phase.saturating_add(1),
-            if player.idle_phase == 0 { counter } else { 0 },
+            if player.idle_phase == 0 {
+                counter
+            } else {
+                player.idle_parked
+            },
         ));
         player.trace_state = Some((
             0,
             player.idle_phase.saturating_add(1),
-            Some(if player.idle_phase == 0 { counter } else { 0 }),
+            Some(if player.idle_phase == 0 {
+                counter
+            } else {
+                player.idle_parked
+            }),
         ));
     } else if slow_locomotion {
         // The original keeps a counter in `attackDirection`: a frame applies
@@ -1372,8 +1388,11 @@ impl PlayerState {
     /// the handover sentinel stands for the frame-1 run entry, so an aim press
     /// cannot start the weapon machine while one of those owns the tick - it
     /// only makes the run handler start its stop.
+    ///
+    /// A scripted state's hand-back parks on the sentinel too, but its behaviour
+    /// byte is the release's 0, so the input step runs on that tick.
     pub fn input_step_active(&self) -> bool {
-        !matches!(self.behavior, BEHAVIOR_RUN | BEHAVIOR_ENTRY)
+        self.scripted_handback || !matches!(self.behavior, BEHAVIOR_RUN | BEHAVIOR_ENTRY)
     }
 
     /// Select a locomotion behavior with its entry state: the idle sequence
@@ -2479,6 +2498,16 @@ impl PlayerState {
     /// carries the same pose state on the live clock, so the entity's words
     /// are copied onto it and the entry is marked as already run.
     pub(crate) fn adopt_scripted_handback(&mut self, entity: &crate::game::Entity) {
+        // `sys_multi(SYS_IDLE)` hands back at state 2: straight into the breathe,
+        // with the countdown left at whatever the script's behaviour wrote.
+        if entity.action_state == 2 {
+            self.idle_phase = 1;
+            self.idle_parked = entity.action_ticks_counter;
+            self.behavior = BEHAVIOR_IDLE;
+            self.fresh_entry = false;
+            self.set_clip(ClipSource::Emw, BREATHE_IN_CLIP);
+            return;
+        }
         if entity.action_state == 0 || self.idle_ticks != 0 {
             return;
         }
@@ -3538,6 +3567,8 @@ mod tests {
             idle_ticks: 0,
             scripted_hold: false,
             settle_entered: false,
+            idle_parked: 0,
+            scripted_handback: false,
             idle_trace: None,
             trace_state: None,
             last_behavior_id: 0,

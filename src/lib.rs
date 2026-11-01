@@ -47,6 +47,7 @@ pub mod item_art;
 pub mod item_catalog;
 pub mod items;
 pub mod ivm;
+pub mod joint_trail;
 pub mod language;
 pub mod launcher;
 pub mod local_time;

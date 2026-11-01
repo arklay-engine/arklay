@@ -235,7 +235,7 @@ One gameplay tick (`engine::tick_room`) runs this fixed order:
    flags.
 3. Desk/item-box flow and deferred key consumption.
 4. Command VM `run_main` over the current block, then the event VM step.
-5. Apply scripted room edits (collision boxes, `obj_xfm` lights).
+5. Apply scripted room edits (collision boxes, `cam_set` cameras).
 6. NPC/entity update (`game.tick_entities`).
 7. Mirror scripts' player-entity writes onto the visible player, mirror the
    live health-status byte into the player's collision-callback byte, then run

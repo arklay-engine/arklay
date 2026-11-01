@@ -38,11 +38,10 @@
 -- The head-explosion and limb gore *state machine* is complete: the joint
 -- flag bytes (bit 0 active, 0x28 armed/exploded, 0x0C severed arm, 0x88
 -- vomiting head), the 0xCC/0x40 head tests, the blood scratch the vomit arms
--- and the blood billboards/cues all run. The per-joint colour tints and the
--- async joint-object chunks stay with the renderer's documented deferral:
--- `tint_joint` is called at the tint sites but records nothing, and the
--- joint-based second ground quad (the severed limb's pool at the joint world
--- position) keeps its flag/position contract only.
+-- and the blood billboards/cues all run, as do the per-joint colour tints and
+-- the gore strips (`src/joint_trail.rs`). The joint-based second ground quad
+-- (the severed limb's pool at the joint world position) keeps its
+-- flag/position contract only.
 --
 -- Director's Cut is not modelled: the port has no DC mode, so the 0xC/0xD/0xE
 -- spawn nibbles, the third SCA record, the double-step fast zombie and
@@ -981,7 +980,7 @@ zombie_headshot = function(e)
         local away = s16(e.player_angle - e.angle)
         e:arm_joint_effect(2, 30, 2, 3)
         e:spawn_effect(3, 0, 100, -0xA3C, 0, away + 0x800, 0)
-        e:spawn_joint_effect_at(0, 3, 2, 0, -600, 0, 0)
+        e:spawn_joint_effect_at(0, 3, 0, 0, -600, 0, 0)
         e:spawn_effect(4, 0, 0, -600, 0, away + 1536, 0)
         e:spawn_effect(4, 2, 0, -600, 0, away + 1792, 0)
         e:spawn_effect(4, 3, 0, -600, 0, away + 2304, 0)

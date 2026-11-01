@@ -33,10 +33,8 @@
 -- VM may be reset between any two updates. The original's `AD_UNK_C1` and
 -- matrix scratch word writes are not modelled (nothing reads them).
 --
--- The explosive-round death gores every joint through the engine's per-joint
--- object-effect pipeline; the port has no joint-object pass, so that branch
--- transcribes the state contract (shadow gone, behaviour 4, death flag) and
--- leaves the chunks to the renderer's documented deferral.
+-- The explosive-round death gores every joint, then goes to behaviour 4 with
+-- the shadow gone and the death flag raised.
 
 -- One word write over `action_behavior` + `action_state`: every decision-table
 -- assignment zeroes the sub-state as it writes the behaviour.
@@ -549,8 +547,9 @@ local function writhe(e)
 
         local weapon = e.hit_state & 0xF8
         if weapon == 0x38 then
-            -- The per-joint gore chunks are engine-bound; the state contract
-            -- is kept and the chunks stay with the renderer deferral.
+            for joint = 10, 0, -1 do
+                e:arm_joint_effect(joint, 8, 5, 3)
+            end
             e.shadow_half_x = 0
             e.shadow_half_z = 0
             e.action_behavior = 4

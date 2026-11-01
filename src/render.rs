@@ -1844,7 +1844,7 @@ impl Framebuffer {
     ) {
         let mut triangles: Vec<Triangle> = Vec::new();
         for (object, joint) in ivm.objects.iter().zip(joints) {
-            collect_ivm_triangles(object, joint, camera, light, false, &mut triangles);
+            collect_ivm_triangles(object, joint, camera, light, &mut triangles);
         }
         self.rasterize_triangles(&ivm.texture, triangles);
     }
@@ -1872,7 +1872,7 @@ impl Framebuffer {
         };
         let mut triangles: Vec<Triangle> = Vec::new();
         for (object, joint) in ivm.objects.iter().zip(joints) {
-            collect_ivm_triangles(object, joint, camera, light, true, &mut triangles);
+            collect_ivm_triangles(object, joint, camera, light, &mut triangles);
         }
         if triangles.is_empty() || ivm.texture.width == 0 || ivm.texture.height == 0 {
             return;
@@ -2010,7 +2010,9 @@ impl Framebuffer {
             // packet samples its page through the palette row. Palette entry
             // zero is the PSX colour key (alpha 0), which leaves the pixel.
             let (texel, blend) = match triangle.flat {
-                Some(_) => ([255, 255, 255], false),
+                // A blended record's weight applies to its untextured packets
+                // too.
+                Some(_) => ([255, 255, 255], triangle.blend),
                 None => {
                     let texel_u = clamp_texel(fragment.u, texture.width);
                     let texel_v = clamp_texel(fragment.v, texture.height);
@@ -2207,6 +2209,8 @@ impl Framebuffer {
         let v0 = sheet_v / sheet_height as f32;
         let u1 = (f32::from(quad.uv[0]) + f32::from(quad.source[0].max(1))) / page_w;
         let v1 = (sheet_v + f32::from(quad.source[1].max(1))) / sheet_height as f32;
+        let (u0, u1) = if quad.mirror[0] { (u1, u0) } else { (u0, u1) };
+        let (v0, v1) = if quad.mirror[1] { (v1, v0) } else { (v0, v1) };
         let corner = |x: f32, y: f32, u: f32, v: f32| crate::raster::GlVertex {
             x,
             y,
@@ -2458,6 +2462,7 @@ impl DoorScene {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: Some(light),
             joint_colours: NO_JOINT_COLOURS,
@@ -2553,6 +2558,9 @@ pub struct EntityMesh<'a> {
     /// with `m` the identity, run in place. See
     /// [`EntityLight::aliased_identity_product`].
     pub aliased_light: bool,
+    /// Added to the view-space Z of every joint, after the camera is composed
+    /// (`RoomObjectRender` bumps `localMatrix.t[2]` for the heliport's rotors).
+    pub view_z_shift: i32,
     /// The light matrix's right operand when it is not the identity:
     /// `SetLightMatrix(MulMatrix0(g_lightMatrix, rotation))`. The Tyrant's
     /// heart passes its anchor joint's world rotation.
@@ -2569,8 +2577,11 @@ pub struct EntityMesh<'a> {
     pub hd_name: Option<&'a str>,
 }
 
-/// No joint carries a `JointSetColorTint` colour.
-pub const NO_JOINT_COLOURS: [[u8; 3]; 32] = [[0; 3]; 32];
+/// The joint carries no `JointSetColorTint` colour.
+pub const NO_JOINT_COLOUR: [u8; 3] = [1; 3];
+
+/// A skeleton with no tinted joint.
+pub const NO_JOINT_COLOURS: [[u8; 3]; 32] = [NO_JOINT_COLOUR; 32];
 
 /// The original's `GetTmdBlendMode` plus `CreateTmdObjectInternal`'s remap:
 /// the background weight of the first semi-transparent primitive of `model`,
@@ -2599,6 +2610,15 @@ pub(crate) fn record_blend_weight(model: &Tmd, blend_override: Option<u8>) -> Op
 }
 
 impl EntityMesh<'_> {
+    /// `camera` with this mesh's [`view_z_shift`](Self::view_z_shift) folded
+    /// into its view translation.
+    pub(crate) fn view_camera(&self, camera: &Camera) -> Camera {
+        let mut camera = *camera;
+        camera.trans[2] += self.view_z_shift;
+        camera.view_z_shift += self.view_z_shift;
+        camera
+    }
+
     /// Whether joint `index` draws.
     pub(crate) fn joint_visible(&self, index: usize) -> bool {
         index < 32 && self.hidden_joints & (1 << index) == 0
@@ -2816,6 +2836,7 @@ pub fn draw_gameplay_scene_with_effects<'a>(
         // later mesh is an entity and uses the world-space dot.
         // RE2 gives its objects the same world-space dot as its bodies (`Om_trans`).
         let room_object = texture < mirror_from && lighting.lights[0].re2_gain.is_none();
+        let camera = &mesh.view_camera(camera);
         for (index, (object, joint)) in mesh.mesh.objects.iter().zip(mesh.joints).enumerate() {
             if !mesh.joint_visible(index) {
                 continue;
@@ -3195,6 +3216,9 @@ pub struct Camera {
     /// The camera was reflected about a mirror plane ([`Camera::mirrored`]);
     /// the reference negates `g_RoomCameraData`'s X row to match.
     pub mirrored: bool,
+    /// Added to the composed view Z of everything drawn through this camera
+    /// ([`EntityMesh::view_z_shift`]).
+    pub view_z_shift: i32,
 }
 
 /// `a * b` for two 4.12 rotation matrices, each product truncated toward zero
@@ -3288,6 +3312,7 @@ impl Camera {
             from,
             look_at: to,
             mirrored: false,
+            view_z_shift: 0,
         }
     }
 
@@ -3731,6 +3756,9 @@ pub struct EffectQuad {
     pub sheet: [u16; 2],
     /// How the texels meet the frame.
     pub op: EffectBlend,
+    /// `[u, v]` flips: the header word's bits 7 and 6, which rounds of debris
+    /// pick at random.
+    pub mirror: [bool; 2],
 }
 
 /// How an effect billboard's texels meet the frame.
@@ -3838,9 +3866,9 @@ fn collect_triangles(
     triangles: &mut Vec<Triangle>,
 ) {
     // A `JointSetColorTint` colour turns the reference's unlit path on: the
-    // colour (1/128 scale) replaces the lighting outright. An all-zero colour
-    // is untinted.
-    let colour = colour.filter(|colour| *colour != [0; 3]);
+    // colour (1/128 scale) replaces the lighting outright. All-zero is a real
+    // black tint (TmdRenderer's unlit path reads it unconditionally).
+    let colour = colour.filter(|colour| *colour != NO_JOINT_COLOUR);
     // The reference transforms and projects every vertex in floating point
     // through `camera * joint` (see [`RefProjection`]). The vertex buffer
     // holds `(x, -y, z)`; the raw-Y form skips the negation, and its pool is
@@ -3955,8 +3983,7 @@ fn collect_triangles(
             // A `JointSetColorTint` colour replaces the lighting outright, so
             // it is tested before the lighting arms.
             let shade = match colour {
-                Some(colour) => colour
-                    .map(|channel| (f64::from(channel) / 128.0 * CHANNEL_MAX).min(CHANNEL_MAX)),
+                Some(colour) => colour.map(|channel| f64::from(channel) / 128.0 * CHANNEL_MAX),
                 None => match (lighting, light) {
                     // The gameplay path evaluates each corner normal against
                     // the latched light directions, clamps the accumulated
@@ -4324,6 +4351,7 @@ pub(crate) fn ref_camera(camera: &Camera) -> ([[i32; 3]; 3], [i32; 3]) {
         view[0] = view[0].map(|entry| -entry);
         view_t[0] = -view_t[0];
     }
+    view_t[2] += camera.view_z_shift;
     (view, view_t)
 }
 
@@ -4351,16 +4379,7 @@ pub(crate) fn depth_ndc(view_z: f32) -> f32 {
 /// `MulMatrix0`: `m2 = m0 * m1` over 4.12 matrices with the reference's
 /// per-product rounding.
 pub(crate) fn mul_matrix0(a: &[[i32; 3]; 3], b: &[[i32; 3]; 3]) -> [[i32; 3]; 3] {
-    std::array::from_fn(|i| {
-        std::array::from_fn(|j| {
-            let mut sum = 0i64;
-            for k in 0..3 {
-                let value = i64::from(a[i][k]) * i64::from(b[k][j]);
-                sum += (value + ((value >> 63) & 0xFFF)) >> FIXED_BITS;
-            }
-            sum as i32
-        })
-    })
+    anim::mul_matrix0(a, b)
 }
 
 /// `ApplyMatrixSV`: the PS1 GTE convention, Y negated on input and output,
@@ -4427,61 +4446,62 @@ pub(crate) fn reference_vertex_shade(
     shade.map(f64::from)
 }
 
-/// Project and full-bright-shade one `.ivm` object into `triangles`.
+/// Project and shade one `.ivm` object into `triangles`.
 ///
 /// Item prims carry their own vertex and normal pools like TMD objects but a
-/// richer packet set: textured triangles and quads (quads fan-split into two
-/// triangles), flat textured triangles, and untextured gouraud triangles which
-/// interpolate their three per-corner packet colours. Every packet
-/// backface-culls and a quad drops whole when any of its four corners is inside
-/// the near plane, exactly like the TMD path. The viewer uses a single palette
-/// row, so a textured prim samples row 0 and shades white.
-///
-/// With `exact` the corners keep their sub-pixel screen positions
-/// ([`Camera::project_exact`]) instead of the truncated ones.
+/// richer packet set: textured triangles and quads (quads fan-split around
+/// their corner ring (0, 1, 3, 2) into two triangles), flat textured triangles,
+/// and untextured gouraud triangles which interpolate their three per-corner
+/// packet colours. The viewer goes through `FlushTmdObjects` like every other
+/// model ([`RefProjection`]): a packet culls on its first three corners in
+/// index order and a quad drops whole when any of its four corners is inside
+/// the near plane. The viewer uses a single palette row, so a textured prim
+/// samples row 0 and shades white.
 fn collect_ivm_triangles(
     object: &crate::ivm::IvmObject,
     joint: &anim::Mat4x3,
     camera: &Camera,
     light: Option<&EntityLight>,
-    exact: bool,
     triangles: &mut Vec<Triangle>,
 ) {
-    let stored_camera = stored_camera_matrix(camera.from, camera.look_at);
-    // The viewer's normal transform: `camera * rot` in floats, unrounded.
-    let draw_matrix: [[f32; 3]; 3] = std::array::from_fn(|row| {
-        std::array::from_fn(|column| {
-            (0..3)
-                .map(|k| stored_camera[row][k] as f32 * joint.r[k][column] as f32)
-                .sum::<f32>()
-                / (4096.0 * 4096.0)
-        })
-    });
-    let vertices: Vec<[i32; 3]> = object
+    // The viewer's matrix is the raw GTE one too: its `camera.screen` is the
+    // menu's projection centre (`SetSubpixelOffset`), not a shake.
+    let projection = RefProjection::new_complex(camera, joint, 0);
+    let light_camera = ref_camera(camera).0;
+    let normal_matrix = projection.rotation.map(|row| row.map(|entry| entry as f32));
+    let vertices: Vec<Option<Projected>> = object
         .vertices
         .iter()
-        .map(|vertex| fixed_mul(joint, *vertex))
+        .map(|vertex| {
+            projection.project([
+                f64::from(vertex[0]),
+                -f64::from(vertex[1]),
+                f64::from(vertex[2]),
+            ])
+        })
         .collect();
+    let corner = |index: u16| vertices.get(usize::from(index)).copied().flatten();
 
     for prim in &object.prims {
-        let order: &[usize] = if prim.vertex_count == 4 {
-            &[0, 1, 2, 0, 2, 3]
+        let (order, packet): (&[usize], [usize; 3]) = if prim.vertex_count == 4 {
+            if prim.vertices.iter().any(|&index| corner(index).is_none()) {
+                continue;
+            }
+            (&[0, 1, 3, 0, 3, 2], [0, 1, 3])
         } else {
-            &[0, 1, 2]
+            (&[0, 1, 2], [0, 1, 2])
         };
-        // A quad loses both of its halves when any corner is inside the near
-        // plane; a triangle's own three projections make the same test below.
-        let mut quad_corners = [0usize; 4];
-        for (slot, corner) in quad_corners.iter_mut().enumerate() {
-            *corner = usize::from(prim.vertices[slot]);
-        }
-        if prim.vertex_count == 4
-            && quad_corners.iter().any(|&index| {
-                vertices
-                    .get(index)
-                    .is_none_or(|vertex| camera.project(*vertex).is_none())
-            })
-        {
+        let (Some(first), Some(second), Some(third)) = (
+            corner(prim.vertices[packet[0]]),
+            corner(prim.vertices[packet[1]]),
+            corner(prim.vertices[packet[2]]),
+        ) else {
+            continue;
+        };
+        let [x0, y0] = first.0.map(f64::from);
+        let [x1, y1] = second.0.map(f64::from);
+        let [x2, y2] = third.0.map(f64::from);
+        if !faces_camera((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)) {
             continue;
         }
         // An untextured gouraud polygon rasterizes white so the interpolated
@@ -4493,49 +4513,17 @@ fn collect_ivm_triangles(
         };
         let gouraud = prim.kind == crate::ivm::IvmPrimKind::Gouraud;
         for corners in order.as_chunks::<3>().0 {
-            let (i0, i1, i2) = (corners[0], corners[1], corners[2]);
-            let (Some(vertex0), Some(vertex1), Some(vertex2)) = (
-                vertices.get(usize::from(prim.vertices[i0])),
-                vertices.get(usize::from(prim.vertices[i1])),
-                vertices.get(usize::from(prim.vertices[i2])),
-            ) else {
+            let projected = corners.map(|index| corner(prim.vertices[index]));
+            let [Some(corner0), Some(corner1), Some(corner2)] = projected else {
                 continue;
             };
-            let (Some(screen0), Some(screen1), Some(screen2)) = (
-                camera.project(*vertex0),
-                camera.project(*vertex1),
-                camera.project(*vertex2),
-            ) else {
-                continue;
-            };
-
-            let screen = |vertex: &[i32; 3], truncated: [i32; 2]| {
-                let exact = exact.then(|| camera.project_exact(*vertex)).flatten();
-                match exact {
-                    Some([x, y]) => [f64::from(x), f64::from(y)],
-                    None => [f64::from(truncated[0]), f64::from(truncated[1])],
-                }
-            };
-            let position0 = screen(vertex0, screen0);
-            let position1 = screen(vertex1, screen1);
-            let position2 = screen(vertex2, screen2);
-            let area = (position1[0] - position0[0]) * (position2[1] - position0[1])
-                - (position2[0] - position0[0]) * (position1[1] - position0[1]);
-            if !faces_camera(area) {
-                continue;
-            }
-
-            let depth0 = f64::from(camera.view_position(*vertex0)[2]);
-            let depth1 = f64::from(camera.view_position(*vertex1)[2]);
-            let depth2 = f64::from(camera.view_position(*vertex2)[2]);
-
             let corner_data = [
-                (position0, depth0, i0),
-                (position1, depth1, i1),
-                (position2, depth2, i2),
+                (corner0, corners[0]),
+                (corner1, corners[1]),
+                (corner2, corners[2]),
             ];
-            let raster: [RasterVertex; 3] = std::array::from_fn(|corner| {
-                let (position, depth, index) = corner_data[corner];
+            let raster: [RasterVertex; 3] = std::array::from_fn(|slot| {
+                let ((position, depth), index) = corner_data[slot];
                 // The packet colour the lit sum multiplies: an untextured
                 // polygon's own colour, white for a textured one.
                 let colour = if gouraud {
@@ -4557,11 +4545,11 @@ fn collect_ivm_triangles(
                             .copied();
                         let mut shade = match normal {
                             Some(normal) => reference_vertex_shade(
-                                &stored_camera,
-                                &draw_matrix,
+                                &light_camera,
+                                &normal_matrix,
                                 normal,
                                 light,
-                                Some(&stored_camera),
+                                Some(&light_camera),
                             ),
                             None => light.ambient,
                         };
@@ -4573,15 +4561,19 @@ fn collect_ivm_triangles(
                     None => colour,
                 };
                 RasterVertex {
-                    position: position.map(|axis| axis as f32),
-                    w: depth as f32,
+                    position,
+                    w: depth,
                     u: f32::from(prim.uv[index][0]),
                     v: f32::from(prim.uv[index][1]),
                     shade: shade.map(|channel| (channel / CHANNEL_MAX) as f32),
                 }
             });
 
-            let depth = (depth0 + depth1 + depth2) / 3.0;
+            // The sort key is the mean view Z, stored as a float.
+            let depth = f64::from(
+                ((f64::from(corner0.1) + f64::from(corner1.1) + f64::from(corner2.1))
+                    * f64::from(1.0f32 / 3.0)) as f32,
+            );
             triangles.push(Triangle {
                 raster,
                 depth,
@@ -4602,6 +4594,7 @@ fn collect_ivm_triangles(
 ///
 /// The joint matrices follow the game's convention; a room-space point maps
 /// through `D * R * D * v + t`.
+#[cfg(test)]
 fn fixed_mul(joint: &anim::Mat4x3, vertex: [i16; 3]) -> [i32; 3] {
     let v = [
         i128::from(vertex[0]),
@@ -4735,6 +4728,7 @@ pub fn mesh_depth(meshes: &[EntityMesh<'_>], camera: &Camera, width: u32, height
     let mut depth = vec![f32::INFINITY; width as usize * height as usize];
     let mut triangles: Vec<Triangle> = Vec::new();
     for mesh in meshes {
+        let camera = &mesh.view_camera(camera);
         for (index, (object, joint)) in mesh.mesh.objects.iter().zip(mesh.joints).enumerate() {
             if !mesh.joint_visible(index) {
                 continue;
@@ -4990,6 +4984,7 @@ mod tests {
             from: [0, 0, 0],
             look_at: [0, 0, 100],
             mirrored: false,
+            view_z_shift: 0,
         }
     }
 
@@ -5456,6 +5451,7 @@ mod tests {
                 per_joint_light: false,
                 complex_object: None,
                 aliased_light: false,
+                view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
@@ -5472,6 +5468,7 @@ mod tests {
                 per_joint_light: false,
                 complex_object: None,
                 aliased_light: false,
+                view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
@@ -5551,6 +5548,7 @@ mod tests {
                 per_joint_light: false,
                 complex_object: None,
                 aliased_light: false,
+                view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
                 joint_colours: NO_JOINT_COLOURS,
@@ -5771,6 +5769,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
@@ -6458,6 +6457,7 @@ mod tests {
             blend,
             sheet: [0, 256],
             corners: None,
+            mirror: [false; 2],
         }
     }
 
@@ -6574,6 +6574,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
@@ -6688,6 +6689,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
@@ -6725,6 +6727,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
@@ -6791,6 +6794,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
@@ -6844,6 +6848,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: NO_JOINT_COLOURS,
@@ -6888,6 +6893,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours,
@@ -7378,7 +7384,7 @@ mod tests {
         let model = Ivm {
             texture: solid_texture([255, 255, 255, 255]),
             objects: vec![IvmObject {
-                vertices: vec![[-3000, -3000, 1000], [0, 3000, 1000], [3000, -3000, 1000]],
+                vertices: vec![[-3000, 3000, 1000], [0, -3000, 1000], [3000, 3000, 1000]],
                 normals: vec![[0, 0, 4096]],
                 prims: vec![IvmPrim {
                     kind: IvmPrimKind::Gouraud,
@@ -7421,7 +7427,7 @@ mod tests {
         let model = std::sync::Arc::new(Ivm {
             texture: solid_texture([255, 255, 255, 255]),
             objects: vec![IvmObject {
-                vertices: vec![[-3000, -3000, 1000], [0, 3000, 1000], [3000, -3000, 1000]],
+                vertices: vec![[-3000, 3000, 1000], [0, -3000, 1000], [3000, 3000, 1000]],
                 normals: vec![[0, 0, 4096]],
                 prims: vec![IvmPrim {
                     kind: IvmPrimKind::Gouraud,
@@ -7528,7 +7534,8 @@ mod tests {
                 prims: vec![IvmPrim {
                     kind: IvmPrimKind::TexturedGouraud,
                     vertex_count: 4,
-                    vertices: [0, 1, 2, 3],
+                    // The corner ring is (0, 1, 3, 2).
+                    vertices: [0, 1, 3, 2],
                     normals: [0; 4],
                     uv: [[0, 0]; 4],
                     colors: [[255; 3]; 3],
@@ -7565,7 +7572,7 @@ mod tests {
         let gouraud = Ivm {
             texture: solid_texture([0, 0, 0, 255]),
             objects: vec![IvmObject {
-                vertices: vec![[-300, -200, 1000], [0, 200, 1000], [300, -200, 1000]],
+                vertices: vec![[-300, 200, 1000], [0, -200, 1000], [300, 200, 1000]],
                 normals: vec![[0, 0, 4096]],
                 prims: vec![IvmPrim {
                     kind: IvmPrimKind::Gouraud,

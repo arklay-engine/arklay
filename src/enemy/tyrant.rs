@@ -319,6 +319,61 @@ pub fn limb_launch(
     limb.bounces = bounces;
     limb.rotation = tumble;
     limb.live = true;
+    limb.compose_pending = true;
+}
+
+/// The compose after a launch freezes each limb: `Joint_move`'s blend still
+/// reached it, lerping the tumble angles toward the animation's first frame
+/// (the rocket death arms counter 7 at step 0x200), and `rotate_entity` then
+/// stores parent * that rotation. Returns whether any limb froze.
+pub fn freeze_launched_limbs(
+    game: &mut crate::game::GameState,
+    slot: usize,
+    clips: &[crate::model::Clip],
+    worlds: &[Mat4x3],
+) -> bool {
+    let mut froze = false;
+    for (index, joint) in LIMB_JOINTS.into_iter().enumerate() {
+        let tumble = game.tyrant.limbs[index].rotation;
+        if !game.tyrant.limbs[index].compose_pending {
+            continue;
+        }
+        let entity = &game.entities[slot];
+        let Some((rotation, local, parent)) =
+            game.entity_anims[slot].blended_joint(entity, clips, joint, tumble, 7, 0x200)
+        else {
+            continue;
+        };
+        let Some(parent) = worlds.get(parent) else {
+            continue;
+        };
+        let limb = &mut game.tyrant.limbs[index];
+        limb.world = compose(parent, &local);
+        limb.rotation = rotation;
+        limb.compose_pending = false;
+        froze = true;
+    }
+    froze
+}
+
+impl TyrantState {
+    /// The joints of `entity` that are free bodies rather than following the
+    /// skeleton: the live severed limbs, once the rocket death set `ty_flags`
+    /// bit 3.
+    pub fn frozen_joints(&self, entity: &crate::game::Entity) -> Vec<(usize, Mat4x3)> {
+        let mut held = crate::joint_trail::held_joints(entity);
+        if !matches!(entity.id, 0x0C | 0x10) || entity.ty_flags() & 8 == 0 {
+            return held;
+        }
+        held.extend(
+            self.limbs
+                .iter()
+                .zip(LIMB_JOINTS)
+                .filter(|(limb, _)| limb.live && !limb.compose_pending)
+                .map(|(limb, joint)| (joint, limb.world)),
+        );
+        held
+    }
 }
 
 /// `tyrant_limb_update`: one frame of the free body. The world X/Z advance by

@@ -8,6 +8,13 @@
 
 use super::*;
 
+/// A look-at target in the object or item model tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LookTargetRecord {
+    Object(usize),
+    Item(usize),
+}
+
 /// One scripted entity.
 ///
 /// Slot 0 is the player; slots 1.. are enemies and objects that later
@@ -121,6 +128,8 @@ pub struct Entity {
     pub target: [i32; 3],
     /// Entity slot this entity is moving toward, when the target is an entity.
     pub target_entity: Option<u8>,
+    /// The model record a `0x93` look-at follows, which outranks `target_entity`.
+    pub target_record: Option<LookTargetRecord>,
     /// Per-tick yaw step of the active `act_motion`.
     pub look_at_yaw_step: u8,
     /// Per-tick pitch step of the active `act_motion`.
@@ -232,10 +241,18 @@ pub struct Entity {
     /// The per-joint blood-scratch block `blood_splatter_physics` drives:
     /// counter, flags, X velocity and Y acceleration of the bleeding joint.
     pub joint_blood: [JointBlood; 32],
+    /// The per-joint gore strips `joint_setup_attack_effect` arms.
+    pub joint_trails: [JointTrail; 32],
     /// Per-joint `JointSetColorTint` colours (`r | g << 8 | b << 16`, each a
     /// 1/128 multiplier): a non-zero entry draws that joint unlit in the
-    /// colour, the Hunter's blood-red claws after a lunge. Zero is untinted.
+    /// colour, the Hunter's blood-red claws after a lunge. Zero is untinted
+    /// unless the joint is in `black_joints`.
     pub joint_colours: [[u8; 3]; 32],
+    /// Joints tinted with colour zero, which draws them black: the limbs of the
+    /// Tyrant's rocket death from animation frame 8.
+    pub black_joints: u32,
+    /// Drawn in place of the joint state for the frame of an effect-pass hit.
+    pub joints_before_hit: Option<JointsBeforeHit>,
     /// Joint visibility bits XORed by `eml_state` sub-command 9: bit `i` is
     /// joint `i`'s flag bit. Scripted enemies set or clear the same bits
     /// through the `set_joint_visible` script helper. The spiders carry 20
@@ -371,6 +388,47 @@ pub struct Entity {
     /// clone pointer at entity +0x170). `None` for a Tyrant whose init has
     /// not run and for every other entity.
     pub tyrant_heart: Option<u16>,
+}
+
+/// One joint's gore strip, the `0x20` joint state: the joint's triangles fly
+/// apart and fall for `total` drawn frames while the joint itself is hidden
+/// (see [`crate::joint_trail`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct JointTrail {
+    /// The joint's `+2` byte: the frame counter, `0x80` once the strip ended.
+    pub step: u8,
+    /// The joint's `+3` byte, the frames the strip lasts.
+    pub total: u8,
+    /// The joint's `+0x70` word: the fall per frame, per frame.
+    pub timer: i16,
+    /// The joint's `+0x72` word: triangles fly in groups of this many.
+    pub frame_match: u16,
+    /// The unlit colour, 1/128 scale.
+    pub colour: [u8; 3],
+    /// The joint is in the `0x20` state.
+    pub active: bool,
+    /// The strip got one of the 16 slots; without one nothing draws.
+    pub has_slot: bool,
+    /// The frame to draw this tick, `None` when none draws.
+    pub drawn: Option<u8>,
+    /// Armed after this tick's compose: the strip starts next tick.
+    pub after_compose: bool,
+    /// The joint's world matrix, held since the compose after the arming (the
+    /// `0x08` flag becomes `0x50`) and carrying the fall. It outlives the strip.
+    pub world: Option<crate::anim::Mat4x3>,
+    /// [`Self::world`] before this tick's fall: the original composes the
+    /// children first and then lets the joint fall, so they lag one frame.
+    pub compose_world: Option<crate::anim::Mat4x3>,
+}
+
+/// Which joints an entity drew before a hit from the effect pass. The
+/// original draws entities before it steps effects, so that tick's frame still
+/// shows them. See [`crate::joint_trail::damage_after_compose`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JointsBeforeHit {
+    pub joint_flags: u32,
+    /// Set on the tick of the hit, whose frame this snapshot is for.
+    pub fresh: bool,
 }
 
 /// The per-joint blood-splatter scratch `blood_splatter_physics` keeps at

@@ -1693,6 +1693,11 @@ fn knockdown_recover(
             if let Some(bkp) = probe.entity_bkp {
                 game.entity_bkp = bkp;
             }
+            if probe.code != 2 {
+                // `collision_accept` advances the rollback point even for a
+                // probe.
+                player.collision_mirror = [probe.pos[0], probe.pos[2]];
+            }
             if probe.code != 0 {
                 game.entities[0].action_state = 5;
             }
@@ -2100,12 +2105,11 @@ fn tyrant_knockback(
             }
             play_player_sound(game, room, 2, 0x20);
             play_player_sound(game, room, 3, 2);
-            // The original sprays two joint blood sheets (player joints 5/8,
-            // depth 0x16) and three limb sheets (0/3/6, depth 0x11) with the
-            // dead-move anchor shifted -400 on X; the port's player skeleton
-            // is not the held pose, so one body sheet at the same offset is
-            // the documented approximation.
-            spawn_player_blood(game, [-400, 0, 0]);
+            // Two joint blood sheets and three limb sheets, the dead-move
+            // anchor shifted -400 on X.
+            for (depth, joint) in [(0x16, 5), (0x16, 8), (0x11, 0), (0x11, 3), (0x11, 6)] {
+                spawn_player_joint_blood(game, depth, joint, [-400, 0, 0]);
+            }
             tyrant_knockback_slam(game, player, bank);
         }
         6 => tyrant_knockback_slam(game, player, bank),
@@ -2162,26 +2166,43 @@ fn tyrant_knockback_slide(
     walk::advance_xz(&mut game.entities[0], 0x800, speed);
     player.pos = game.entities[0].pos;
 
-    let before = game.entities[0].pos;
-    let (code, bkp) = walk::check_room_collision_bkp(room, &mut game.entities[0]);
-    if let Some(bkp) = bkp {
+    // Probe-only, as in the Hunter's knock-down: the player's own matrix at the
+    // player's radius from the player's collision anchor; the position is
+    // restored and only the hit result is kept.
+    let pos = game.entities[0].pos;
+    let prev = [
+        player.collision_mirror[0],
+        pos[1],
+        player.collision_mirror[1],
+    ];
+    let probe = crate::player::resolve_collision_full(
+        &room.collision,
+        prev,
+        pos,
+        player.radius,
+        player.collision_flags,
+    );
+    if let Some(bkp) = probe.entity_bkp {
         game.entity_bkp = bkp;
     }
-    game.entities[0].pos = before;
-    if code != 0 {
+    if probe.code != 2 {
+        // `collision_accept` advances the rollback point even for a probe.
+        player.collision_mirror = [probe.pos[0], probe.pos[2]];
+    }
+    if probe.code != 0 {
         game.entities[0].action_state = 5;
         game.entities[0].is_being_attacked = 0;
     }
 }
 
-/// Knock-back states 2/3: the ground slide with the joint blood sheets
-/// (joints 5/8, depth 0x16, collapsed to one body sheet as documented).
+/// Knock-back states 2/3: the ground slide with the joint blood sheets.
 fn tyrant_knockback_ground(game: &mut GameState, player: &mut PlayerState, bank: ReactionBank<'_>) {
     let (source, clips, keyframes) = bank;
     // The original's `Joint_move` reads the clip index from `attackAnim`.
     game.entities[0].animation_id = game.entities[0].attack_anim;
     if game.entities[0].animation_frame_id & 1 == 0 && game.entities[0].animation_frame_id < 10 {
-        spawn_player_blood(game, [0, 0, 0]);
+        spawn_player_joint_blood(game, 0x16, 5, [0, 0, 0]);
+        spawn_player_joint_blood(game, 0x16, 8, [0, 0, 0]);
     }
     let completed = advance_player_clip(game, player, source, clips, keyframes, false, 0x400);
     game.entities[0].action_state = game.entities[0]
@@ -2263,6 +2284,21 @@ fn spawn_player_blood(game: &mut GameState, offset: [i32; 3]) {
         0,
         0,
         crate::effects::Attach::Player,
+        offset,
+        0,
+        0,
+    );
+}
+
+/// A type 9 blood sheet attached to one of the player's joints.
+fn spawn_player_joint_blood(game: &mut GameState, depth: u8, joint: u8, offset: [i32; 3]) {
+    let room_effects = std::rc::Rc::clone(&game.room_effects);
+    crate::effects::create_attached(
+        game,
+        &room_effects,
+        9,
+        depth,
+        crate::effects::Attach::Joint(0, joint),
         offset,
         0,
         0,

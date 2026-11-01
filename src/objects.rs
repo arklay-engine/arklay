@@ -1345,47 +1345,40 @@ pub fn collision_edit(operands: &[Operand]) -> CollisionEdit {
     }
 }
 
-/// One queued `obj_xfm` (0x40) light rewrite.
+/// One queued `cam_set` (0x40) camera rewrite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LightEdit {
-    /// Index into the room's three lights.
+pub struct CameraEdit {
+    /// Index into the room's cameras.
     pub index: u8,
-    /// The seven `s16` fields.
+    /// The camera's position, look-at point and field of view.
     pub fields: [i16; 7],
 }
 
-impl LightEdit {
-    /// Apply the rewrite to the room's light table.
+impl CameraEdit {
+    /// Apply the rewrite to the room's camera table.
     ///
-    /// The original writes seven 32-bit fields into a wider runtime light
-    /// record; the port's `Light` is the 0x14-byte RDT record, so the three
-    /// position components take the first three fields and the remaining
-    /// four map to the colour bytes and the type word (the record has no
-    /// separate field for the last value).
+    /// The original (`cmd_light_param_set`, misnamed for what it does) indexes
+    /// from `&g_RdtPointer[1].lights - 4`, which is `cameras[index].cam_from_x`,
+    /// so it stores the seven values over the RDT camera's `from`, `to` and
+    /// `fov`. The roll and the mask table stay. Room 303's death replay is its
+    /// only user: its first two rewrites are ROOM3110.RDT's own cameras.
     pub fn apply(&self, room: &mut RoomState) -> bool {
-        let Some(light) = room.lights.get_mut(usize::from(self.index)) else {
+        let Some(cut) = room.cuts.get_mut(usize::from(self.index)) else {
             return false;
         };
-        light.pos = [
-            i32::from(self.fields[0]),
-            i32::from(self.fields[1]),
-            i32::from(self.fields[2]),
-        ];
-        light.color = [
-            self.fields[3] as u8,
-            self.fields[4] as u8,
-            self.fields[5] as u8,
-        ];
-        light.kind = self.fields[6] as u16;
+        let [px, py, pz, lx, ly, lz, fov] = self.fields.map(i32::from);
+        cut.pos = [px, py, pz];
+        cut.look_at = [lx, ly, lz];
+        cut.fov = fov;
         true
     }
 }
 
-/// Build a light edit from the `obj_xfm` operand bytes.
+/// Build a camera edit from the `cam_set` operand bytes.
 ///
-/// Operands: `+1` light index, then seven `s16` fields.
-pub fn light_edit(operands: &[Operand]) -> LightEdit {
-    LightEdit {
+/// Operands: `+1` camera index, then seven `s16` fields.
+pub fn camera_edit(operands: &[Operand]) -> CameraEdit {
+    CameraEdit {
         index: operand_u8(operands, 0),
         fields: [
             operand_i16(operands, 1),
@@ -1769,32 +1762,31 @@ mod tests {
     }
 
     #[test]
-    fn light_edit_rewrites_the_selected_light() {
-        let mut room = RoomState::default();
-        room.lights[1] = crate::state::Light {
-            pos: [1, 2, 3],
-            color: [4, 5, 6],
-            kind: 7,
-            radius: 8,
-            re2_gain: None,
+    fn camera_edit_rewrites_the_selected_camera() {
+        let mut room = RoomState {
+            cuts: vec![Default::default(), Default::default()],
+            ..RoomState::default()
         };
-        let edit = light_edit(&operands(&[1, 100, -200, 300, 0x44, 0x55, 0x66, 0x77]));
+        room.cuts[1].roll = 9;
+        let edit = camera_edit(&operands(&[1, 100, -200, 300, 400, -500, 600, 289]));
         assert_eq!(
             edit,
-            LightEdit {
+            CameraEdit {
                 index: 1,
-                fields: [100, -200, 300, 0x44, 0x55, 0x66, 0x77],
+                fields: [100, -200, 300, 400, -500, 600, 289],
             }
         );
         assert!(edit.apply(&mut room));
-        let light = room.lights[1];
-        assert_eq!(light.pos, [100, -200, 300]);
-        assert_eq!(light.color, [0x44, 0x55, 0x66]);
-        assert_eq!(light.kind, 0x77);
-        assert_eq!(light.radius, 8);
-        assert_eq!(room.lights[0], crate::state::Light::default());
+        let cut = &room.cuts[1];
+        assert_eq!(cut.pos, [100, -200, 300]);
+        assert_eq!(cut.look_at, [400, -500, 600]);
+        assert_eq!(cut.fov, 289);
+        assert_eq!(cut.roll, 9);
+        assert_eq!(room.cuts[0].fov, 0);
+        // The lights are not what this writes.
+        assert_eq!(room.lights[1], crate::state::Light::default());
 
-        assert!(!light_edit(&operands(&[4, 0, 0, 0, 0, 0, 0, 0])).apply(&mut room));
+        assert!(!camera_edit(&operands(&[4, 0, 0, 0, 0, 0, 0, 0])).apply(&mut room));
     }
 
     fn collision_record(pos: [i32; 3], extents: [i16; 3]) -> ObjectRecord {

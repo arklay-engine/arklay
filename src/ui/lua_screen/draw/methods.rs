@@ -295,6 +295,12 @@ pub(in crate::ui::lua_screen) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(me
         },
     );
 
+    // `grid_glyph_width()`: how far `grid_text` advances per cell, 0 without a
+    // font.
+    methods.add_method("grid_glyph_width", |_lua, api, ()| {
+        Ok(api.cx.font.map_or(0, |font| font.metrics.glyph_w))
+    });
+
     // `clip(x, y, w, h)`: clip the rest of this draw to a screen rect;
     // `clip()` lifts it.
     methods.add_method_mut(

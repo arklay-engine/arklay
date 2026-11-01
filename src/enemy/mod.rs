@@ -51,7 +51,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::emd;
-use crate::game::{ENTITY_COUNT, ENTITY_STATUS_ACTIVE, GameState};
+use crate::game::{ENTITY_COUNT, ENTITY_STATUS_ACTIVE, GameState, LookTargetRecord};
 use crate::model::{Clip, Emd, Keyframe};
 use crate::pack::Pack;
 use crate::state::RoomState;
@@ -464,7 +464,12 @@ pub fn update_entity(
     let origin = look_at_joint_origin(game, slot);
     game.entity_anims[slot].slew_look_at(&mut game.entities[slot], origin);
     if game.entities[slot].look_at_flags != 0 {
-        game.joint_worlds[slot] = game.entity_anims[slot].joint_worlds(&game.entities[slot], clips);
+        let frozen = game.tyrant.frozen_joints(&game.entities[slot]);
+        game.joint_worlds[slot] =
+            game.entity_anims[slot].joint_worlds_frozen(&game.entities[slot], clips, &frozen);
+        let mut worlds = std::mem::take(&mut game.joint_worlds[slot]);
+        game.entity_anims[slot].apply_look_at(&game.entities[slot], &mut worlds);
+        game.joint_worlds[slot] = worlds;
     }
     // The original's shared `SetEntityScaHitData` tail writes the character's
     // `pSca_hit_data` every tick, before the next entity's SCA resolve reads it.
@@ -517,12 +522,12 @@ pub(crate) fn live_look_at_target(game: &GameState, slot: usize) -> Option<[i32;
     if entity.look_at_flags & 0x80 == 0 {
         return None;
     }
-    let target = game.entities.get(usize::from(entity.target_entity?))?;
-    Some([
-        target.pos[0],
-        target.pos[1] - LOOK_AT_HEAD_HEIGHT,
-        target.pos[2],
-    ])
+    let pos = match entity.target_record {
+        Some(LookTargetRecord::Object(index)) => game.objects.record(index)?.pos,
+        Some(LookTargetRecord::Item(index)) => game.items.record(index)?.pos,
+        None => game.entities.get(usize::from(entity.target_entity?))?.pos,
+    };
+    Some([pos[0], pos[1] - LOOK_AT_HEAD_HEIGHT, pos[2]])
 }
 
 #[cfg(test)]

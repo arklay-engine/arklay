@@ -226,6 +226,17 @@ impl EntityAnim {
     /// updates - reads the matrices of the pose left by the previous frame,
     /// exactly the original's order.
     pub fn joint_worlds(&self, entity: &Entity, clips: &[Clip]) -> Vec<crate::anim::Mat4x3> {
+        self.joint_worlds_frozen(entity, clips, &[])
+    }
+
+    /// [`Self::joint_worlds`] with some joints held at a fixed world matrix
+    /// (`crate::anim::joint_matrices_frozen`).
+    pub fn joint_worlds_frozen(
+        &self,
+        entity: &Entity,
+        clips: &[Clip],
+        frozen: &[(usize, crate::anim::Mat4x3)],
+    ) -> Vec<crate::anim::Mat4x3> {
         // A Yawn's worlds are the chain its own animator maintains; the
         // shared clock never poses it.
         if let Some(pose) = self.yawn.as_deref() {
@@ -247,7 +258,69 @@ impl EntityAnim {
             entity.roll,
             entity.joint_scale,
         );
-        crate::anim::joint_matrices(skeleton, &pose, &matrix)
+        crate::anim::joint_matrices_frozen(skeleton, &pose, &matrix, frozen)
+    }
+
+    /// `EntityApplyLookAtRotation`: turn the tracking joint's world by the
+    /// slewed yaw and pitch. The original has one `joint->world`, so whatever
+    /// rides the joint next tick (a puff) sees the turn the render pass left.
+    pub fn apply_look_at(&self, entity: &Entity, joints: &mut [crate::anim::Mat4x3]) {
+        if entity.look_at_flags == 0 {
+            return;
+        }
+        // The character models' tracking joint is 1; the Tyrant names joint 2.
+        let index = usize::from(entity.look_at_joint.max(1));
+        let Some(joint) = joints.get_mut(index) else {
+            return;
+        };
+        *joint = crate::anim::compose(
+            joint,
+            &crate::anim::look_at_matrix(self.look_at_yaw, self.look_at_pitch),
+        );
+    }
+
+    /// Joint `joint`'s rotation after one `Joint_move` blend from `current`
+    /// toward the entity's clip's first frame, with the local transform it makes
+    /// and the joint's parent.
+    pub fn blended_joint(
+        &self,
+        entity: &Entity,
+        clips: &[Clip],
+        joint: usize,
+        current: [i16; 3],
+        blend: u16,
+        step: u16,
+    ) -> Option<([i16; 3], crate::anim::Mat4x3, usize)> {
+        let skeleton = self.skeleton.as_deref()?;
+        let keyframes = self.keyframes.as_deref()?;
+        let frame = clips
+            .get(usize::from(entity.animation_id))?
+            .frames
+            .first()?;
+        let target = keyframes
+            .get(usize::from(frame.keyframe))?
+            .rotations
+            .get(joint)?;
+        let one = |rotation: [i16; 3]| Keyframe {
+            offset: [0; 3],
+            vertex: [0; 3],
+            rotations: vec![rotation],
+        };
+        let rotation =
+            crate::anim::blend_keyframes(&one(current), &one(*target), blend, step).rotations[0];
+        let local = crate::anim::Mat4x3 {
+            r: crate::anim::rotation_matrix(
+                i32::from(rotation[0]),
+                i32::from(rotation[1]),
+                i32::from(rotation[2]),
+            ),
+            t: skeleton.relative.get(joint)?.map(i32::from),
+        };
+        let parent = skeleton
+            .children
+            .iter()
+            .position(|children| children.iter().any(|&child| usize::from(child) == joint))?;
+        Some((rotation, local, parent))
     }
 
     /// The render-time joint worlds of a Yawn: the chain worlds the animator

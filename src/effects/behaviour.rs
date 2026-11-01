@@ -31,12 +31,12 @@ const IDENTITY_MATRIX: [i16; 9] = [4096, 0, 0, 0, 4096, 0, 0, 0, 4096];
 /// 57,58`), their update partners (`0,12,15,19,26,38`), and the ids every
 /// shipped sprite's animation data adds, including the falling projectile
 /// (`10`, the ejected shell casing), and the grenade round's bullet (`43`).
-/// The combat-only flame and rocket entries (`37,45`) stay counted
-/// placeholders by design until their combat exists.
+/// The combat-only flame entry (`37`) stays a counted placeholder by design
+/// until its combat exists.
 pub const fn implemented(id: u8) -> bool {
     matches!(
         id,
-        0..=36 | 38..=44 | 46..=63
+        0..=36 | 38..=63
     )
 }
 
@@ -47,11 +47,15 @@ pub fn update(game: &mut GameState, room: &RoomState) {
     };
     let camera = Camera::from_cut(cut);
     let running = game.message_flags & MESSAGE_FLAG_EFFECTS != 0;
+    game.effects.clear_last_draws();
     for index in (0..EFFECT_POOL_SIZE).rev() {
         if game.effects.slot(index).is_none_or(|e| e.anim_id == 0) {
             continue;
         }
         step(game, room, &camera, cut.fov, index, running);
+        if game.effects.slot(index).is_some_and(|e| e.anim_id == 0) {
+            game.effects.mark_last_draw(index);
+        }
     }
 }
 
@@ -361,7 +365,10 @@ fn bullet(game: &mut GameState, room: &RoomState, index: usize) {
 
     let flags = (game.player_flags & 0x1f) | level;
     let weapon = effect.header[1];
-    if game.apply_weapon_damage_with(room, weapon, pos, flags) != 0 {
+    let hit = crate::joint_trail::damage_after_compose(game, |game| {
+        game.apply_weapon_damage_with(room, weapon, pos, flags)
+    });
+    if hit != 0 {
         shot_impact(game, index, false);
         return;
     }
@@ -372,6 +379,64 @@ fn bullet(game: &mut GameState, room: &RoomState, index: usize) {
         if count > 8 {
             slot.frame_entry = 0;
         }
+    }
+}
+
+/// Behaviour 45 (0x0040f5d0), the rocket launcher's round: trail a tracer from
+/// the header, leave the room or hit a wall or an enemy from its own position.
+fn rocket(game: &mut GameState, room: &RoomState, index: usize) {
+    spawn_from_header(game, index);
+    let Some(effect) = game.effects.slot(index).copied() else {
+        return;
+    };
+    let pos = [
+        i32::from(effect.pos[0]),
+        i32::from(effect.pos[1]),
+        i32::from(effect.pos[2]),
+    ];
+    let family = (effect.effect_type, effect.depth_group, effect.header[2]);
+    if pos[0] < 0 || pos[2] < 0 {
+        game.effects.kill_family(family.0, family.1, family.2);
+    }
+    if probe_ground(room, pos, [0, 0, 0], 4) == 1 {
+        rocket_sounds(game, pos);
+        spawn(game, 0x0e, 3, Attach::Identity, pos, effect.yaw, 0x1c);
+        spawn(game, 0x0e, 3, Attach::Identity, pos, effect.yaw, 0x19);
+        let smoke_pos = [pos[0], pos[1] - 200, pos[2]];
+        if let Some(smoke) = spawn(game, 9, 0x0d, Attach::Identity, smoke_pos, effect.yaw, 0x13)
+            && let Some(s) = game.effects.slot_mut(usize::from(smoke))
+        {
+            s.anim_id = 1;
+            s.update_id = 0;
+            s.header[10] = 3;
+            s.header[11] = 0x40;
+            s.header[0x0c..0x10].fill(0);
+            s.header[4] = 0;
+            s.header[5] = 0;
+        }
+        game.effects.kill_family(family.0, family.1, family.2);
+        return;
+    }
+    let flags = (game.player_flags & 0x1f) | 0x40;
+    let hit = crate::joint_trail::damage_after_compose(game, |game| {
+        game.apply_weapon_damage_with(room, 10, pos, flags)
+    });
+    if hit != 0 {
+        rocket_sounds(game, pos);
+        game.effects.kill_family(family.0, family.1, family.2);
+    }
+}
+
+/// The rocket's explosion cue, the weapon bank's row 0x0f.
+fn rocket_sounds(game: &mut GameState, pos: [i32; 3]) {
+    let equipped = game.equipped_weapon_id;
+    if let Some(name) = crate::sfx::weapon_sound(equipped, 0x0f) {
+        game.entity_sounds.push(crate::game::EntitySound {
+            name: name.into(),
+            bank: 1,
+            column: equipped,
+            pos,
+        });
     }
 }
 
@@ -1658,6 +1723,7 @@ fn run_behavior(game: &mut GameState, room: &RoomState, index: usize, id: u8) {
             }
         }
         43 => bullet(game, room, index),
+        45 => rocket(game, room, index),
         // Fire burst: spawn a ladder of type-1 billboards, then kill.
         44 => {
             let Some(effect) = game.effects.slot(index).copied() else {
@@ -2029,7 +2095,7 @@ fn clone(game: &mut GameState, index: usize) {
     let Some((frame, block, next)) = block_at(frames, flat + 1) else {
         return;
     };
-    let Some(slot) = game.effects.claim() else {
+    let Some((slot, stale_delay)) = game.effects.claim_with_stale_delay() else {
         return;
     };
     let first = sprite.info.frames.first().copied().unwrap_or_default();
@@ -2061,6 +2127,9 @@ fn clone(game: &mut GameState, index: usize) {
     };
     dst.header.copy_from_slice(&next.0[4..22]);
     apply_entry(&mut dst, sprite, 0, first);
+    // The original points the clone at the first frame but leaves the slot's
+    // old delay, usually 0, so the clone steps off that frame on its first tick.
+    dst.frame_delay = stale_delay;
     if let Some(slot_ref) = game.effects.slot_mut(slot) {
         *slot_ref = dst;
     }
@@ -2622,11 +2691,11 @@ mod tests {
 
     #[test]
     fn unimplemented_ids_are_counted_placeholders() {
-        let mut game = game_with_row(&[raw_block(45, 0)]);
+        let mut game = game_with_row(&[raw_block(37, 0)]);
         let slot = spawn(&mut game, 0, [0, 0, 0], 0, 0);
         run(&mut game, &room());
-        assert_eq!(game.effect_placeholder_hits[45], 1);
-        assert_eq!(game.effects.slot(usize::from(slot)).unwrap().anim_id, 45);
+        assert_eq!(game.effect_placeholder_hits[37], 1);
+        assert_eq!(game.effects.slot(usize::from(slot)).unwrap().anim_id, 37);
     }
 
     #[test]
@@ -2652,7 +2721,7 @@ mod tests {
     #[test]
     fn the_implemented_set_matches_the_dispatch_table() {
         // The combat-only entries stay counted placeholders by design.
-        let placeholders = [37u8, 45];
+        let placeholders = [37u8];
         for id in 0..=63u8 {
             assert_eq!(
                 implemented(id),

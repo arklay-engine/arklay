@@ -3203,25 +3203,6 @@ struct RoomVariant {
     rdt: PathBuf,
 }
 
-/// The rooms only the second mansion visit has: their first visit's RDTs
-/// are stubs.
-const SECOND_VISIT_ONLY: [(u8, u8); 14] = [
-    (1, 0x10),
-    (1, 0x19),
-    (2, 0x00),
-    (2, 0x0C),
-    (2, 0x13),
-    (2, 0x14),
-    (2, 0x15),
-    (2, 0x16),
-    (2, 0x17),
-    (2, 0x18),
-    (2, 0x19),
-    (2, 0x1A),
-    (2, 0x1B),
-    (2, 0x1C),
-];
-
 /// Everything conversion needs, resolved and validated before any decoding.
 #[derive(Debug)]
 struct Plan {
@@ -3367,7 +3348,7 @@ fn build_plan_with_progress(root: &Path, progress: &mut Progress) -> Result<Plan
             };
             // A first visit of a room only the second visit has is a stub
             // RDT (the French and German ones carry leftover data in it).
-            if id.is_mansion() && !id.mansion2 && SECOND_VISIT_ONLY.contains(&(id.stage, id.room)) {
+            if !id.mansion2 && id.second_visit_only() {
                 continue;
             }
             let source = crate::room::xml::parse_for(text, id)
@@ -3883,7 +3864,7 @@ pub fn installed_room_scripts(root: &Path) -> Result<BTreeMap<u16, crate::scd::i
             let Some(Ok(id)) = name.to_str().and_then(re1_rdt_room) else {
                 continue;
             };
-            if id.is_mansion() && !id.mansion2 && SECOND_VISIT_ONLY.contains(&(id.stage, id.room)) {
+            if !id.mansion2 && id.second_visit_only() {
                 continue;
             }
             let definition = crate::room::re1_definition(id);

@@ -1403,7 +1403,7 @@ fn name_field(ctx: &Ctx, name: &str, index: usize, values: &[i64]) -> Option<Str
             2 => ctx.slot("IMDL_", value),
             _ => None,
         },
-        ("obj_xfm", 0) => engine::LIGHT.name(value),
+        ("cam_set", 0) => ctx.slot("CAM_", value),
         ("spd_set", 0) => engine::ENTITY.name(value),
         ("task_kill", 0) => engine::TASK.name(value),
         ("msg_list", 7 | 15 | 23) => engine::LIGHT_KIND.name(value),

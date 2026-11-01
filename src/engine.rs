@@ -1776,6 +1776,8 @@ struct PickupView {
     /// The viewer has yet to draw the reference's menu-entry random seed
     /// (`g_RandSeed = rand()` at the top of the menu task's first frame).
     entry_rand_pending: bool,
+    /// The opening fade has yet to start.
+    entry_hold: bool,
 }
 
 /// One gameplay session: the loaded room, game state, player and VMs.
@@ -1805,6 +1807,12 @@ enum MenuFadePhase {
     In,
     Closing,
 }
+
+/// Frames the room still shows after a pick-up's prompt is answered.
+const PICKUP_ROOM_FRAMES: u8 = 2;
+
+/// Frames of the fade out of the room before the menu task starts.
+const MENU_TASK_FADE_OUT_TICKS: u8 = 10;
 
 /// A cutscene skip's phase (Classic REbirth 1.1.4's `CutSkip`).
 ///
@@ -1942,6 +1950,8 @@ struct GameSession {
     /// `g_openMenuFlag` walks its states).
     itembox_open_delay: u8,
     menu_close_freeze: u8,
+    /// Frames the fade out of the room has run since START.
+    menu_fade_out_ticks: u8,
     /// Whether the first post-arm frame has already been allowed through.
     menu_close_freeze_first: bool,
     /// Set when the menu-close freeze ends, to restore the message bits on the
@@ -1961,6 +1971,8 @@ struct GameSession {
     /// before game_loop resumes and the room-entry fade arms (the original's
     /// menu task teardown takes two frames).
     menu_close_wait: u8,
+    /// `g_spriteAnimActive`: the half of the double buffer this frame draws to.
+    buffer_half: u8,
     /// The item-box overlay (`ui/item_box.lua`) opened by a room `item_box`
     /// action. It draws over the inventory panel the menu underneath
     /// provides; the room stays frozen while it is up. It stays drawn through
@@ -2610,11 +2622,13 @@ impl GameSession {
             typewriter_exit_fade: false,
             itembox_open_delay: 0,
             menu_close_freeze: 0,
+            menu_fade_out_ticks: 0,
             menu_close_freeze_first: false,
             menu_close_restore: false,
             menu_open_delay: false,
             menu_reveal_delay: 0,
             menu_close_wait: 0,
+            buffer_half: 1,
             sprite_anim_intensity: 0,
             debug_menu_enabled: true,
             debug_menu: None,
@@ -2816,6 +2830,7 @@ impl GameSession {
     /// frozen and the same input drives the menu.
     fn tick(&mut self, pack: &Pack, ui: UiInput, input: player::Input, action: bool) -> Result<()> {
         self.drawn_cut = Some((self.loaded.id, self.loaded.room.current_cut));
+        self.buffer_half ^= 1;
         if self
             .cutscene_skip
             .is_some_and(|skip| skip.phase == CutsceneSkipPhase::FastForward)
@@ -3256,13 +3271,15 @@ impl GameSession {
                 self.room_boot_grace = false;
                 // The inner-loop state machine restores the saved word the
                 // tick the entry fade's accumulator drops below 1. The port
-                // mirrors the player-state, character and monster bits here
-                // (its other message bits have their own consumers); the
-                // reference's word is `g_short_message_flags | 0x200` = 0xFF3F.
+                // mirrors the player-state, character and monster bits here,
+                // and the menu bit START needs (its other message bits have
+                // their own consumers); the reference's word is
+                // `g_short_message_flags | 0x200` = 0xFFFF.
                 self.game.message_flags |= game::MESSAGE_FLAG_PLAYER_STATE
                     | game::MESSAGE_FLAG_ENTITIES
                     | game::MESSAGE_FLAG_MONSTERS
-                    | game::MESSAGE_FLAG_EFFECTS;
+                    | game::MESSAGE_FLAG_EFFECTS
+                    | 0x0040;
             }
         } else {
             // While the entry fade runs the reference's `g_message_flags` is
@@ -3286,6 +3303,7 @@ impl GameSession {
         // on that frame the reference's restored word has the player bit but
         // not the entity/monster/effect bits, so the player machine resumes one
         // frame before the NPCs.
+        let menu_close_held = self.menu_close_freeze > 0;
         if self.menu_close_freeze > 0 {
             if self.menu_close_freeze_first {
                 self.menu_close_freeze_first = false;
@@ -3309,7 +3327,10 @@ impl GameSession {
                 | game::MESSAGE_FLAG_MONSTERS
                 | game::MESSAGE_FLAG_EFFECTS;
         }
-        self.event_vm.set_enabled(events_enabled);
+        // The menu's task cleared the word's events bit as well, and game_loop
+        // only restores it once the room-entry fade is over.
+        self.event_vm
+            .set_enabled(events_enabled && !menu_close_held);
         // The typewriter exit fade has run out: restore the player machine gate
         // (the reference's `check_typewriter_state` case 4 does
         // `message_flags |= 0x45`; the port never clears the other two bits, so
@@ -3355,11 +3376,33 @@ impl GameSession {
             self.open_return_title(pack);
             return Ok(());
         }
+        // The menu task's frame loop counts `Game_timer` too (`0x40b5b4`). It
+        // takes over ten frames into the fade out of the room and counts
+        // until the fade back to it begins.
         if self.menu_fade_phase != MenuFadePhase::None {
+            // A pick-up's request reaches the main loop a frame after it is
+            // raised.
+            if let Some(pickup) = self.pickup_view.as_mut()
+                && std::mem::take(&mut pickup.entry_hold)
+            {
+                return Ok(());
+            }
+            let counts = match self.menu_fade_phase {
+                MenuFadePhase::Out => {
+                    self.menu_fade_out_ticks = self.menu_fade_out_ticks.saturating_add(1);
+                    self.menu_fade_out_ticks > MENU_TASK_FADE_OUT_TICKS
+                }
+                MenuFadePhase::In => true,
+                MenuFadePhase::None | MenuFadePhase::Closing => false,
+            };
+            if counts {
+                self.game.advance_play_timer();
+            }
             self.tick_menu_fade();
             return Ok(());
         }
         if self.menu.is_some() {
+            self.game.advance_play_timer();
             // The frame after the open fade finishes is the original's state-0
             // -> state-1 transition: no health-bar tick and no input yet.
             if self.menu_open_delay {
@@ -3403,15 +3446,17 @@ impl GameSession {
         // so a grabbed or bitten player cannot open the inventory mid-attack.
         // The flag's high bit (0x80) marks the scripted door/climb poses and
         // blocks the menu the same way; only an exact zero passes. The
-        // reference also needs the message word's 0x100 and 0x40 bits, and a
-        // message clears only the bits of its pause word: a pickup's prompt
-        // (`0x00FF`) blocks the menu, a voiced line's subtitle (pause 0) does
-        // not. Only that message clause is mirrored here. The gate runs
-        // before the room tick, so it reads the previous tick's entity state;
-        // a script that raises the flag during this frame's SCD pass would
-        // therefore differ by one frame (the reference checks after the
-        // script pass).
-        let message_pauses_menu = was_active && self.game.message.pause & START_MESSAGE_BITS != 0;
+        // reference also needs the message word's 0x100 and 0x40 bits, so a
+        // script that holds the controls (room 303's flare throw) blocks it,
+        // and a message clears only the bits of its pause word: a pickup's
+        // prompt (`0x00FF`) blocks the menu, a voiced line's subtitle
+        // (pause 0) does not. The gate runs before the room tick, so it reads
+        // the previous tick's entity state; a script that raises the flag
+        // during this frame's SCD pass would therefore differ by one frame
+        // (the reference checks after the script pass).
+        let message_pauses_menu = (was_active && self.game.message.pause & START_MESSAGE_BITS != 0)
+            || self.game.message_flags & START_MESSAGE_BITS != START_MESSAGE_BITS
+            || self.menu_close_freeze > 0;
         if ui.start && !message_pauses_menu && self.game.entities[0].is_being_attacked == 0 {
             // The reference draws this frame's random seed before its menu
             // request is even detected (game_loop's first statement), then
@@ -3744,9 +3789,11 @@ impl GameSession {
             return;
         }
         // The INVINCIBLE cheat never enters the game-over machine.
+        // A scripted death variant isn't a death: it is how the game ends.
         if self.game.debug.invincible
             && self.death.is_idle()
             && !self.game.flags[5].bit(game::MSF2_ATTRACT_DEMO)
+            && !self.game.flags[5].bit(game::MSF2_DEATH_VARIANT)
         {
             self.game.apply_flag(5, game::MSF_PLAYER_DEAD, 1);
             return;
@@ -4204,6 +4251,9 @@ impl GameSession {
     /// darkens over `0xC00` (24 alpha per tick), then the menu fades in over
     /// `0xE800` (48 per tick) before it accepts input.
     fn begin_menu_open(&mut self, pack: &Pack) {
+        // The press frame is still a `game_loop` frame.
+        self.game.advance_play_timer();
+        self.menu_fade_out_ticks = 0;
         if self.menu.is_some() || self.menu_fade_phase != MenuFadePhase::None {
             return;
         }
@@ -4476,9 +4526,11 @@ impl GameSession {
             }
             MenuFadePhase::Closing => {
                 // The fade-out has reached black. The original clears the fade
-                // pair to `0:0` and the menu task tears down over the next two
-                // frames before game_loop resumes and arms the room-entry fade.
-                self.menu_close_wait = 2;
+                // pair to `0:0`, and the menu task then waits for the even half
+                // of its double buffer (`g_spriteAnimActive`, flipped per frame)
+                // before game_loop resumes and arms the room-entry fade, so the
+                // black hold lasts one or two frames.
+                self.menu_close_wait = 1 + self.buffer_half;
                 self.menu_fade.set(self.menu_fade.fade_type(), 0, 0);
             }
             MenuFadePhase::None => {}
@@ -4490,7 +4542,17 @@ impl GameSession {
     /// [`Self::tick_menu_fade`]).
     fn draw_menu_fade(&mut self) {
         if let Some(overlay) = self.menu_fade_draw.take() {
-            self.framebuffer.fade_to_color(overlay.color, overlay.alpha);
+            // The room is not drawn once a pick-up's menu task is on its way:
+            // the fade out of it cuts to black.
+            let alpha = if self.pickup_view.is_some()
+                && self.menu_fade_phase == MenuFadePhase::Out
+                && self.menu_fade_out_ticks >= PICKUP_ROOM_FRAMES
+            {
+                255
+            } else {
+                overlay.alpha
+            };
+            self.framebuffer.fade_to_color(overlay.color, alpha);
         }
     }
 
@@ -4954,7 +5016,11 @@ impl GameSession {
             reader,
             phase,
             entry_rand_pending: true,
+            entry_hold: true,
         });
+        // The menu opens through the same fade as START's.
+        self.menu_fade_out_ticks = 0;
+        self.arm_menu_open_fade();
     }
 
     /// One frozen tick of the pick-up viewer.
@@ -6279,6 +6345,7 @@ impl GameSession {
                 per_joint_light: false,
                 complex_object: None,
                 aliased_light: false,
+                view_z_shift: 0,
                 light_rotation: None,
                 fixed_light: None,
                 joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -6492,7 +6559,7 @@ impl GameSession {
             ),
         };
         trace::TraceTick {
-            room: self.loaded.id,
+            room: self.game.drawn_room(self.loaded.id),
             rng,
             rseed,
             fade_counter: fade_counter as i16,
@@ -6872,7 +6939,9 @@ impl GameSession {
                 .item_box
                 .as_ref()
                 .is_some_and(|item_box| item_box.value("on_slot") != 0);
-            let show_cursor = menu_ready && !box_owns_cursor;
+            // Only the menu's input handler draws the slot cursor, and the
+            // pick-up viewer's state never calls it.
+            let show_cursor = menu_ready && !box_owns_cursor && self.pickup_view.is_none();
             let Self {
                 menu,
                 save_dir,
@@ -7028,7 +7097,7 @@ impl GameSession {
         // The pick-up viewer draws over the inventory panel, before the
         // message so its intro/exit fade never dims the prompt text. A
         // document pick-up draws the FILE reader instead of the model viewer.
-        if self.pickup_view.is_some() {
+        if self.pickup_view.is_some() && !self.menu_fade_hides() {
             let Self {
                 pickup_view,
                 save_dir,
@@ -13537,9 +13606,25 @@ struct MaskCache {
     room: Option<RoomId>,
     pages: HashMap<usize, Image>,
     missing: HashSet<usize>,
+    /// The backgrounds of a room the loaded one only borrows, by room and
+    /// camera ([`game::GameState::drawn_room`]).
+    borrowed: HashMap<(RoomId, usize), Image>,
 }
 
 impl MaskCache {
+    /// Camera `camera`'s background in room `id`, which is not the loaded room
+    /// so was not decoded with it.
+    fn borrowed_background(&mut self, pack: &Pack, id: RoomId, camera: usize) -> Option<&Image> {
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.borrowed.entry((id, camera))
+        {
+            let stem = crate::room::Folder::of(pack, id).cut_stem(camera);
+            let asset = pack.read_asset(&stem, AssetClass::Image).ok().flatten()?;
+            let image = assets::decode_picture(&asset, assets::Geometry::Free, None).ok()?;
+            entry.insert(image);
+        }
+        self.borrowed.get(&(id, camera))
+    }
+
     /// The mask page of camera `camera`, loading its mask stem
     /// (`room/{id}/mask/{camera:02}`) from the pack on first use. Missing
     /// pages are remembered as absent.
@@ -13792,10 +13877,11 @@ fn build_effect_quads(
         id.stage == STAGE_DIGIT_LABORATORY && id.room == ROOM_MAIN_LAB && room.current_cut == 5;
 
     for index in (0..effects::EFFECT_POOL_SIZE).rev() {
-        let Some(effect) = game.effects.slot(index) else {
+        let last_draw = game.effects.last_draw(index);
+        let Some(effect) = last_draw.or(game.effects.slot(index)) else {
             continue;
         };
-        if effect.anim_id == 0 || effects::behaviour::hidden(effect) {
+        if (effect.anim_id == 0 && last_draw.is_none()) || effects::behaviour::hidden(effect) {
             continue;
         }
         // The tick projected the effect by the cut's camera; the free camera
@@ -13968,6 +14054,7 @@ fn build_effect_quads(
             sheet: sheet_rows,
             corners: None,
             op: render::EffectBlend::Normal,
+            mirror: [effect.flags() & 0x80 != 0, effect.flags() & 0x40 != 0],
         });
     }
     quads
@@ -14160,7 +14247,7 @@ fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: boo
 }
 
 /// Run a room's init script against `game`, then apply the room edits it
-/// queued (`inst_cfg`/`obj_xfm`) and the screen-border geometry it selected
+/// queued (`inst_cfg`/`cam_set`) and the screen-border geometry it selected
 /// before anything reads the room.
 fn run_room_init(loaded: &mut LoadedRoom, game: &mut game::GameState) {
     let mut command_vm = scd::vm::CommandVm::new(&loaded.scripts);
@@ -14491,7 +14578,17 @@ fn run_player_machine(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad:
     // `Joint_move` snaps the body clip straight to the written frame with the
     // written blend counter. Adopt the words before the pad-driven machine's
     // entry check runs.
-    if std::mem::take(&mut context.player.scripted_hold) {
+    context.player.scripted_handback = std::mem::take(&mut context.player.scripted_hold);
+    if context.player.scripted_handback {
+        context
+            .player
+            .adopt_scripted_handback(&context.game.entities[0]);
+    } else if context.game.entities[0].action_state == 2
+        && context.player.behavior == player::BEHAVIOR_IDLE
+        && context.player.idle_phase == 0
+    {
+        // `sys_multi(SYS_IDLE)` while the player already stands idle: the idle
+        // publishes state 1 in this phase, so a 2 can only be the script's.
         context
             .player
             .adopt_scripted_handback(&context.game.entities[0]);
@@ -14627,7 +14724,7 @@ fn tick_room_timed(
     // pass and wiped here. The native passes below may write after this point
     // (the action probe sets the press pulse the next frame consumes).
     context.game.room_state_reset();
-    // Scripted room writes (`inst_cfg` collision boxes, `obj_xfm` lights)
+    // Scripted room writes (`inst_cfg` collision boxes, `cam_set` lights)
     // become visible here, before the player's physics and before the
     // renderer reads the lighting.
     context.game.apply_room_edits(context.room);
@@ -14986,6 +15083,7 @@ fn tick_room_timed(
     if std::mem::take(&mut context.player.clear_attacked_flag) {
         context.game.entities[0].is_being_attacked = 0;
     }
+    crate::joint_trail::advance(context.game);
     context.game.transition.take()
 }
 
@@ -16054,26 +16152,31 @@ fn visible_objects<'a>(
         if object_render_skipped(room, camera, record) {
             continue;
         }
-        // The courtyard heliport's display items 1-4 sit 1000 units further
-        // along the view axis (the original bumps the composed local matrix
-        // Z before submission; the cull above used the unshifted position).
-        if room.stage == 3 && room.room == 0x03 && (1..5).contains(&(record.model & 0x3F)) {
-            world.t[2] += 1000;
-        }
         // `FUN_00483270` drops the whole object when its origin sits behind
         // the eye (GTE `t[2] < 0`), unless the room pins it to the fixed
         // ordering-table slot instead of sorting by depth.
         if !object_fixed_depth(room, record)
             && !debug_view::unculled()
-            && view
-                .as_ref()
-                .is_some_and(|view| view.view_position(world.t)[2] < 0)
+            && view.as_ref().is_some_and(|view| {
+                view.view_position(world.t)[2] + object_view_z_shift(room, record) < 0
+            })
         {
             continue;
         }
         visible.push((asset, record, world, slot));
     }
     visible
+}
+
+/// The courtyard heliport's object models 1-4 sit 1000 units further along the
+/// view axis: the original bumps the camera-composed `localMatrix.t[2]`, after
+/// the switch-zone cull, so the shift is in view space and not world Z.
+fn object_view_z_shift(room: &RoomState, record: &objects::ObjectRecord) -> i32 {
+    if room.stage == 3 && room.room == 0x03 && (1..5).contains(&(record.model & 0x3F)) {
+        1000
+    } else {
+        0
+    }
 }
 
 /// The item-model pass, mirroring `visible_objects` for the item table: a
@@ -16176,18 +16279,7 @@ fn object_render_skipped(room: &RoomState, camera: usize, record: &objects::Obje
 /// whenever the look-at flags are non-zero, so a cleared slew-enable bit
 /// freezes the last aim in place.
 fn apply_look_at(joints: &mut [anim::Mat4x3], entity: &game::Entity, clock: &enemy::EntityAnim) {
-    if entity.look_at_flags == 0 {
-        return;
-    }
-    // The character models' tracking joint is 1; the Tyrant names joint 2.
-    let index = usize::from(entity.look_at_joint.max(1));
-    let Some(joint) = joints.get_mut(index) else {
-        return;
-    };
-    *joint = anim::compose(
-        joint,
-        &anim::look_at_matrix(clock.look_at_yaw, clock.look_at_pitch),
-    );
+    clock.apply_look_at(entity, joints);
 }
 
 /// The switch-zone member class of a character model: the original's joint
@@ -16315,6 +16407,8 @@ fn render_frame_on(
         framebuffer.clear();
         return Ok(false);
     };
+    let loaded_id = id;
+    let id = game.drawn_room(id);
     // Every moving thing below is recorded exactly and drawn between the
     // previous tick and this one (a no-op unless the render rate tweens).
     tween.begin(id, room.current_cut);
@@ -16328,6 +16422,13 @@ fn render_frame_on(
     let camera = debug_view::camera(camera, id);
     let lighting = Lighting::from_room(room);
 
+    let borrowed = (id != loaded_id)
+        .then(|| {
+            masks
+                .borrowed_background(pack, id, room.current_cut)
+                .cloned()
+        })
+        .flatten();
     let page = if cut.masks.is_empty() || cut.mask_active == 0 {
         None
     } else {
@@ -16527,6 +16628,7 @@ fn render_frame_on(
     let mut npc_hidden: Vec<u32> = Vec::new();
     let mut npc_tints: Vec<[u8; 3]> = Vec::new();
     let mut npc_joint_colours: Vec<[[u8; 3]; 32]> = Vec::new();
+    let mut trail_strips = Vec::new();
     let mut npc_weapons: Vec<Option<Arc<crate::model::Tmd>>> = Vec::new();
     let mut npc_zone_gate: Vec<bool> = Vec::new();
     // Each character's light latch point (its own matrix translation) and
@@ -16623,7 +16725,9 @@ fn render_frame_on(
                 entity.roll,
                 entity.joint_scale,
             );
-            let mut joints = anim::joint_matrices(&model.skeleton, &keyframe, &entity_matrix);
+            let frozen = game.tyrant.frozen_joints(entity);
+            let mut joints =
+                anim::joint_matrices_frozen(&model.skeleton, &keyframe, &entity_matrix, &frozen);
             apply_look_at(&mut joints, entity, &game.entity_anims[slot]);
             joints
         };
@@ -16632,15 +16736,20 @@ fn render_frame_on(
             member_joint_class(entity.id),
             room,
             room.current_cut,
-            entity.joint_flags,
+            entity.drawn_joint_flags(),
             &joints,
         );
         tween.joints(tween::Key::Npc(slot, entity.id), &mut joints);
+        if let Some(strips) = crate::joint_trail::Strips::build(entity, &model.mesh, &joints, |t| {
+            debug_view::unculled() || enemy::in_camera_zone(room, room.current_cut, t)
+        }) {
+            trail_strips.push((Arc::clone(&model), strips));
+        }
         models.push(model);
         npc_joints.push(std::mem::take(&mut joints));
         npc_hidden.push(hidden);
         npc_tints.push(entity.model_tint_rgb());
-        npc_joint_colours.push(entity.joint_colours);
+        npc_joint_colours.push(entity.mesh_joint_colours());
         // A character holds a weapon when the pack carries a mesh for its
         // id and behavior byte; behavior 0 always holds nothing.
         npc_weapons.push(if entity.behavior_flags != 0 {
@@ -16785,6 +16894,7 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: object_view_z_shift(room, record),
             light_rotation: None,
             // `Om_disp`'s bit 4 leaves the lights out: the colour alone, whose
             // `Om_init` value is white at Marni's doubling.
@@ -16806,12 +16916,107 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: asset.hd_name.as_deref(),
         });
     }
+    // The Tyrant's claw ghosts and severed limbs queue before the body, as
+    // `tyrant_draw_claw_ghosts` does from the entity's update: each is one mesh
+    // object of the Tyrant model at a scratch matrix (the ghost copies of the
+    // claw, the free limbs the rocket death launched). The unscaled copy lies
+    // exactly on the body's claw, so this order decides their depth ties.
+    let mut tyrant_models: Vec<Arc<Emd>> = Vec::new();
+    let mut tyrant_joints: Vec<Vec<anim::Mat4x3>> = Vec::new();
+    let mut tyrant_hidden: Vec<u32> = Vec::new();
+    let mut tyrant_tints: Vec<[u8; 3]> = Vec::new();
+    let mut tyrant_colours: Vec<[[u8; 3]; 32]> = Vec::new();
+    for slot in 1..game::ENTITY_COUNT {
+        let entity = &game.entities[slot];
+        if !entity.active() || !matches!(entity.id, 0x0C | 0x10) {
+            continue;
+        }
+        // Each draw's `JointApplyColorTint` colour: the init call paints copy
+        // 0 red and copy 1 near-black, which draws them unlit.
+        let mut draws: Vec<(usize, anim::Mat4x3, [u8; 3])> = Vec::new();
+        if entity.id != 0x0C
+            && entity.ty_flags() & 8 == 0
+            && game.tyrant.ghost.live
+            && (entity.has_enter_switch_zone != 0 || debug_view::unculled())
+        {
+            draws.push((
+                enemy::tyrant::CLAW_OBJECT,
+                game.tyrant.ghost.matrices[1],
+                [0, 0, 3],
+            ));
+            draws.push((
+                enemy::tyrant::CLAW_OBJECT,
+                game.tyrant.ghost.matrices[0],
+                [0xFF, 0, 0],
+            ));
+        }
+        if draws.is_empty() {
+            continue;
+        }
+        let Some(model) = npc_models.get(pack, entity.id, id.player_flag & 1) else {
+            continue;
+        };
+        let count = model.skeleton.relative.len().max(
+            draws
+                .iter()
+                .map(|(object, _, _)| object + 1)
+                .max()
+                .unwrap_or(0),
+        );
+        for (draw, (object, matrix, colour)) in draws.into_iter().enumerate() {
+            let identity = anim::Mat4x3 {
+                r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+                t: [0, 0, 0],
+            };
+            let mut joints = vec![identity; count];
+            if let Some(target) = joints.get_mut(object) {
+                *target = matrix;
+            }
+            tween.joints(tween::Key::Tyrant(slot, draw), &mut joints);
+            tyrant_models.push(Arc::clone(&model));
+            tyrant_joints.push(joints);
+            tyrant_hidden.push(!(1u32 << object));
+            tyrant_tints.push(entity.model_tint_rgb());
+            let mut colours = crate::render::NO_JOINT_COLOURS;
+            if let Some(entry) = colours.get_mut(object) {
+                *entry = colour;
+            }
+            tyrant_colours.push(colours);
+        }
+    }
+    for ((((model, joints), hidden), tint), joint_colours) in tyrant_models
+        .iter()
+        .zip(&tyrant_joints)
+        .zip(&tyrant_hidden)
+        .zip(&tyrant_tints)
+        .zip(&tyrant_colours)
+    {
+        meshes.push(EntityMesh {
+            mesh: &model.mesh,
+            texture: &model.texture,
+            joints,
+            tint: *tint,
+            blend_weight: None,
+            hidden_joints: *hidden,
+            light_pos: None,
+            per_joint_light: false,
+            complex_object: None,
+            aliased_light: false,
+            view_z_shift: 0,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: *joint_colours,
+            hd_name: None,
+        });
+    }
+
     // The NPC joint gates pair with `models`/`npc_joints`/`npc_hidden`, all
     // built together in entity-slot order above; do not re-walk the slots,
     // because a model whose keyframe lookup failed is absent from all three.
@@ -16846,9 +17051,29 @@ fn render_frame_on(
             per_joint_light,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: *joint_colours,
+            hd_name: None,
+        });
+    }
+    for (model, strips) in &trail_strips {
+        meshes.push(EntityMesh {
+            mesh: &strips.mesh,
+            texture: &model.texture,
+            joints: &strips.joints,
+            tint: [255; 3],
+            blend_weight: Some(0),
+            hidden_joints: strips.hidden,
+            light_pos: None,
+            per_joint_light: false,
+            complex_object: None,
+            aliased_light: false,
+            view_z_shift: 0,
+            light_rotation: None,
+            fixed_light: None,
+            joint_colours: strips.colours,
             hd_name: None,
         });
     }
@@ -16865,6 +17090,7 @@ fn render_frame_on(
             per_joint_light,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -16906,6 +17132,7 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -16924,6 +17151,7 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -16963,6 +17191,7 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: Some(player_state.detached_clip.world.r),
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -16992,6 +17221,7 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -17025,6 +17255,7 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -17111,6 +17342,7 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -17237,84 +17469,8 @@ fn render_frame_on(
             per_joint_light: false,
             complex_object: *complex,
             aliased_light: complex.is_none() && aliased,
+            view_z_shift: 0,
             light_rotation,
-            fixed_light: None,
-            joint_colours: crate::render::NO_JOINT_COLOURS,
-            hd_name: None,
-        });
-    }
-
-    // The Tyrant's claw ghosts and severed limbs draw after the companion
-    // pass: each is one mesh object of the Tyrant model at a scratch matrix
-    // (the ghost copies of the claw, the free limbs the rocket death
-    // launched). The live pose of those joints is already hidden by the
-    // script's joint flags, so nothing double-draws.
-    let mut tyrant_models: Vec<Arc<Emd>> = Vec::new();
-    let mut tyrant_joints: Vec<Vec<anim::Mat4x3>> = Vec::new();
-    let mut tyrant_hidden: Vec<u32> = Vec::new();
-    let mut tyrant_tints: Vec<[u8; 3]> = Vec::new();
-    for slot in 1..game::ENTITY_COUNT {
-        let entity = &game.entities[slot];
-        if !entity.active() || !matches!(entity.id, 0x0C | 0x10) {
-            continue;
-        }
-        let mut draws: Vec<(usize, anim::Mat4x3)> = Vec::new();
-        if entity.id != 0x0C && entity.ty_flags() & 8 == 0 && game.tyrant.ghost.live {
-            draws.push((enemy::tyrant::CLAW_OBJECT, game.tyrant.ghost.matrices[0]));
-            draws.push((enemy::tyrant::CLAW_OBJECT, game.tyrant.ghost.matrices[1]));
-        }
-        for (index, limb) in game.tyrant.limbs.iter().enumerate() {
-            if limb.live {
-                draws.push((enemy::tyrant::LIMB_JOINTS[index], limb.world));
-            }
-        }
-        if draws.is_empty() {
-            continue;
-        }
-        let Some(model) = npc_models.get(pack, entity.id, id.player_flag & 1) else {
-            continue;
-        };
-        let count = model.skeleton.relative.len().max(
-            draws
-                .iter()
-                .map(|(object, _)| object + 1)
-                .max()
-                .unwrap_or(0),
-        );
-        for (draw, (object, matrix)) in draws.into_iter().enumerate() {
-            let identity = anim::Mat4x3 {
-                r: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
-                t: [0, 0, 0],
-            };
-            let mut joints = vec![identity; count];
-            if let Some(target) = joints.get_mut(object) {
-                *target = matrix;
-            }
-            tween.joints(tween::Key::Tyrant(slot, draw), &mut joints);
-            tyrant_models.push(Arc::clone(&model));
-            tyrant_joints.push(joints);
-            tyrant_hidden.push(!(1u32 << object));
-            tyrant_tints.push(entity.model_tint_rgb());
-        }
-    }
-    for (((model, joints), hidden), tint) in tyrant_models
-        .iter()
-        .zip(&tyrant_joints)
-        .zip(&tyrant_hidden)
-        .zip(&tyrant_tints)
-    {
-        meshes.push(EntityMesh {
-            mesh: &model.mesh,
-            texture: &model.texture,
-            joints,
-            tint: *tint,
-            blend_weight: None,
-            hidden_joints: *hidden,
-            light_pos: None,
-            per_joint_light: false,
-            complex_object: None,
-            aliased_light: false,
-            light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
             hd_name: None,
@@ -17410,7 +17566,10 @@ fn render_frame_on(
         .flatten()
         .map(|background| background.scrolled(cut.scroll.as_ref(), game.re2.scroll));
     let background = if render_mode.background() {
-        scrolled.as_ref().or(cut.background.as_ref())
+        borrowed
+            .as_ref()
+            .or(scrolled.as_ref())
+            .or(cut.background.as_ref())
     } else if render_mode.collision().is_some() {
         Some(debug_view::collision_backdrop())
     } else {
@@ -18475,15 +18634,20 @@ mod tests {
 
         let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0);
         assert_eq!(visible.len(), 1);
-        assert_eq!(visible[0].2.t, [500, 0, 1500], "display items move +Z");
+        assert_eq!(
+            visible[0].2.t,
+            [500, 0, 500],
+            "the world position stays put"
+        );
+        assert_eq!(object_view_z_shift(&room, visible[0].1), 1000);
 
         // Type 0 (and out-of-range types) stay put.
         objects.record_mut(0).unwrap().model = 0;
         let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0);
-        assert_eq!(visible[0].2.t, [500, 0, 500]);
+        assert_eq!(object_view_z_shift(&room, visible[0].1), 0);
         objects.record_mut(0).unwrap().model = 5;
         let visible = visible_objects(&room, &objects, 0, [0, 0, 0], 0);
-        assert_eq!(visible[0].2.t, [500, 0, 500]);
+        assert_eq!(object_view_z_shift(&room, visible[0].1), 0);
     }
 
     /// One block plus the terminator, packed as an SCD procedure container.
@@ -19679,6 +19843,24 @@ mod tests {
             3,
             "a lethal hit in the same tick never starts the death fall"
         );
+    }
+
+    #[test]
+    fn invincible_still_lets_a_script_end_the_game() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.debug.invincible = true;
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        session.game.apply_flag(5, game::MSF_PLAYER_DEAD, 0);
+        session.game.apply_flag(5, game::MSF2_DEATH_VARIANT, 0);
+        session
+            .tick(&pack, UiInput::default(), player::Input::default(), false)
+            .unwrap();
+        assert!(session.game.flags[5].bit(game::MSF_PLAYER_DEAD));
+        assert!(!session.death.is_idle(), "the ending's fade starts");
     }
 
     #[test]
@@ -22171,6 +22353,7 @@ mod tests {
             per_joint_light: false,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
             light_rotation: None,
             fixed_light: None,
             joint_colours: crate::render::NO_JOINT_COLOURS,
@@ -27469,6 +27652,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
 
         let before = session.game.frame;
         session
@@ -27532,6 +27716,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
 
         // The reference's menu-button detection only opens when
         // `g_playerEntity.isBeingAttackedFlag == 0` (GameLoop.cpp 0x00480de8),
@@ -27586,6 +27771,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
 
         session
             .tick(
@@ -27682,6 +27868,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         session.music = Some(mixer);
 
         session
@@ -27728,6 +27915,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         session
             .tick(
                 &pack,
@@ -27770,6 +27958,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         session.music = Some(mixer);
 
         session
@@ -27914,6 +28103,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         session.game.add_item(ITEM_SWORD_KEY, 1);
         session.game.set_item_use_flag(ITEM_SWORD_KEY, true);
         // The spray slides into the key's slot once the key is used, so the
@@ -29079,6 +29269,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         session.game.add_item(ITEM_KNIFE, 0);
 
         session
@@ -29167,6 +29358,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
 
         // Lab key A's name class is 7 with no angle combo: confirming on the
         // turntable shows the class message and marks the class examined,
@@ -29753,6 +29945,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         place_player(&mut session);
         settle_control(&mut session, &pack);
         session.game.room_actions[1] = Some(item_room_action(1, ITEM_FIRST_AID_SPRAY, 1, 4));
@@ -29800,10 +29993,12 @@ off_0010:
                 alphas.push(alpha);
             }
         }
+        // The close then waits for the buffer flip: one or two black frames.
         assert_eq!(
-            alphas,
-            vec![24, 48, 72, 96, 120, 144, 168, 192, 216, 240, 0, 0]
+            alphas[..11],
+            [24, 48, 72, 96, 120, 144, 168, 192, 216, 240, 0]
         );
+        assert!(alphas[11..].iter().all(|&alpha| alpha == 0) && alphas.len() <= 12);
         assert!(
             session.menu.is_none(),
             "the menu closes only after the panel has darkened"
@@ -30233,6 +30428,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         place_player(&mut session);
         settle_control(&mut session, &pack);
         session.game.room_actions[1] = Some(item_room_action(1, 0x60, 1, 0x0D));
@@ -30243,14 +30439,16 @@ off_0010:
         assert!(session.pickup_view.is_some(), "the action opened the flow");
         let opened = session.game.rand_state;
 
-        session
-            .tick(&pack, UiInput::default(), player::Input::default(), false)
-            .unwrap();
+        // The fade into the menu draws nothing; the menu loop's first tick
+        // draws the seed.
+        tick_until(&mut session, &pack, 64, "the menu-entry seed", |session| {
+            session.game.rand_state != opened
+        });
         let mut expected = opened;
         game::platform_rand(&mut expected);
         assert_eq!(
             session.game.rand_state, expected,
-            "the first frozen tick draws the menu-entry seed"
+            "the first menu tick draws one menu-entry seed"
         );
 
         session
@@ -30541,6 +30739,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         session.game.add_item(ITEM_SWORD_KEY, 1);
         session.game.set_item_use_flag(ITEM_SWORD_KEY, true);
 
@@ -30613,6 +30812,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         session.game.set_file_collected(0x0F, true);
 
         session
@@ -30790,6 +30990,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
 
         session.game.show_message(0x40, 0);
         session
@@ -30814,6 +31015,7 @@ off_0010:
         let mut session =
             GameSession::from_room(&pack, RoomId::parse("100").unwrap(), Path::new("saves"))
                 .unwrap();
+        session.game.message_flags |= START_MESSAGE_BITS;
         // Authentic mode refuses the green herb at full health; the menu
         // reports the refusal as 0xf7 + the heal category (7).
         session.game.player_options.authentic = true;

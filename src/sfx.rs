@@ -3126,6 +3126,31 @@ mod tests {
         assert_eq!(room_row(id.table_row(), id.room), 202);
     }
 
+    /// A generated game enters these rooms without the second-visit flag.
+    #[test]
+    fn second_visit_rooms_have_sounds_on_any_visit() {
+        let id = crate::state::RoomId::parse("219").unwrap();
+        assert!(!id.mansion2);
+        let room = RoomState {
+            stage: id.stage,
+            room: id.room,
+            footstep_zones: vec![FootstepZone {
+                base_x: 0,
+                base_z: 0,
+                width: 1000,
+                height: 1000,
+                sound_data: 45,
+                flags: 0,
+            }],
+            ..RoomState::default()
+        };
+        assert_eq!(room.table_row(), id.table_row());
+        assert_eq!(
+            footstep_sound(&room, [10, 0, 10], 0, false),
+            Some("ft_floA")
+        );
+    }
+
     #[test]
     fn room_sfx_pairs_are_present() {
         assert_eq!(room_sfx(0, 0), Some("Dr_wd01"));

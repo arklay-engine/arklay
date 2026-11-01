@@ -360,8 +360,35 @@ impl Loaded {
     }
 }
 
+/// `cmd_omodel_set`'s hard-coded `FUN_00473e40`: these rooms' object models are
+/// semi-transparent though their TMDs don't say so. The heliport's first five
+/// are the helicopter's shadow and its rotor blades' shadows; the original only
+/// applies this on a first-visit stage id, and to RE1's stage numbering.
+fn force_translucent_models(state: &mut RoomState, id: RoomId) {
+    let slots = match (id.stage, id.room, id.mansion2) {
+        (3, 0x03, false) => 0..5,
+        (1, 0x0D, false) => 1..2,
+        _ => return,
+    };
+    for asset in &mut state.object_models {
+        if slots.contains(&asset.pair_index) {
+            for prim in asset.model.objects.iter_mut().flat_map(|o| &mut o.prims) {
+                prim.blend |= prim.textured;
+            }
+        }
+    }
+}
+
 /// Load room `id` from whichever definition `pack` resolves it to.
 pub fn load(pack: &Pack, id: RoomId) -> Result<Loaded> {
+    let mut loaded = load_definition(pack, id)?;
+    if loaded.dialect != Dialect::Re2 {
+        force_translucent_models(&mut loaded.state, id);
+    }
+    Ok(loaded)
+}
+
+fn load_definition(pack: &Pack, id: RoomId) -> Result<Loaded> {
     match format(pack, id) {
         Some(Format::Rdt) => {
             let data = pack.read(&rdt_entry(pack, id))?.into_owned();

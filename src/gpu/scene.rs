@@ -350,7 +350,7 @@ pub fn draw_uniforms(
             continue;
         };
         let base = index * 6;
-        let (rotation, translation, _) = render::object_view(camera, joint);
+        let (rotation, translation, _) = render::object_view(&mesh.view_camera(camera), joint);
         for row in 0..3 {
             let r = rotation[row];
             joints[base + row] = [
@@ -696,7 +696,12 @@ pub fn scene_sprites<'a>(scene: &GameplayScene<'a>) -> Sprites<'a> {
                     .map_or([[x, y], [x1, y], [x, y1], [x1, y1]], |corners| {
                         corners.map(|point| point.map(|v| v as f32))
                     }),
-                [u, v, u + source[0], v + source[1]],
+                [
+                    if quad.mirror[0] { u + source[0] } else { u },
+                    if quad.mirror[1] { v + source[1] } else { v },
+                    if quad.mirror[0] { u } else { u + source[0] },
+                    if quad.mirror[1] { v } else { v + source[1] },
+                ],
                 key_depth(quad.key),
                 [tint[0], tint[1], tint[2], alpha],
                 SPRITE_TEXTURED,
@@ -1036,6 +1041,7 @@ mod tests {
             hd_name: None,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
         };
         let light = Lighting {
             ambient: [0; 3],
@@ -1123,6 +1129,7 @@ mod tests {
             hd_name: None,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
         };
         let stored = stored_camera_matrix(camera.from, camera.look_at);
         let draw_matrix = mul_matrix0(&stored, &joint.r)
@@ -1190,6 +1197,7 @@ mod tests {
             hd_name: None,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
         };
         let camera = Camera::from_points([0, 0, -5000], [0, 0, 0], 500);
         let light = Lighting {

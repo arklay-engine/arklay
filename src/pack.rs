@@ -1403,6 +1403,7 @@ impl Pack {
             // mod builder's check.
             if let Some(declared) = &manifest.base
                 && declared != &base_id
+                && !opened.only_hd_textures()
             {
                 // A shared mods folder holds every game's mods; an explicit
                 // --mod naming the wrong base is still a hard error.
@@ -1459,6 +1460,16 @@ impl Pack {
         pack.htexture = std::sync::OnceLock::new();
         pack.warnings = warnings;
         Ok(pack)
+    }
+
+    /// Whether the pack holds HD textures and nothing else. They replace by
+    /// pixel hash, so they fit any game with the same art and name no base.
+    fn only_hd_textures(&self) -> bool {
+        let mut files = self
+            .own_paths()
+            .filter(|path| *path != manifest::ENTRY)
+            .peekable();
+        files.peek().is_some() && files.all(|path| path.starts_with(crate::htexture::ROOT))
     }
 
     /// Parse a pack from an in-memory image.
@@ -3213,6 +3224,52 @@ mod tests {
         assert_eq!(order, ["third", "first", "second"]);
         assert_eq!(&*layered.read("x.txt").unwrap(), b"second");
         assert_eq!(&*layered.read("X.TXT").unwrap(), b"second");
+    }
+
+    #[test]
+    fn hd_textures_apply_to_any_game_and_other_mods_do_not() {
+        let dir = TempDir::new("hd-any-game");
+        let base = dir.join("biorand-000042.akpak");
+        write_pack(
+            &base,
+            &[(
+                manifest::ENTRY,
+                manifest::Manifest::base("biorand-000042")
+                    .render()
+                    .into_bytes()
+                    .as_slice(),
+            )],
+        );
+        let hd = dir.join("hd.akpak");
+        write_pack(
+            &hd,
+            &[
+                (manifest::ENTRY, &mod_manifest("hd", "re1", 0)),
+                ("htexture/bgd/0a1b2c3d.webp", b"pixels"),
+            ],
+        );
+        let pack = Pack::open_layered(&base, &[hd]).unwrap();
+        assert!(pack.contains("htexture/bgd/0a1b2c3d.webp"));
+
+        let rooms = dir.join("rooms.akpak");
+        write_pack(
+            &rooms,
+            &[
+                (manifest::ENTRY, &mod_manifest("rooms", "re1", 0)),
+                ("htexture/bgd/0a1b2c3d.webp", b"pixels"),
+                ("room/100/room.scd", b"script"),
+            ],
+        );
+        let err = Pack::open_layered(&base, &[rooms]).unwrap_err().to_string();
+        assert!(err.contains("declares base"), "{err}");
+
+        // A mod with nothing in it isn't an HD pack.
+        let empty = dir.join("empty.akpak");
+        write_pack(
+            &empty,
+            &[(manifest::ENTRY, &mod_manifest("empty", "re1", 0))],
+        );
+        assert!(Pack::open_layered(&base, &[empty]).is_err());
     }
 
     #[test]

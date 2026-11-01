@@ -162,6 +162,7 @@ fn player_occluded_by_a_group_1_pillar_until_the_group_is_disabled() {
     }];
     let texture = player_texture();
     let entities = [EntityMesh {
+        view_z_shift: 0,
         mesh: &mesh,
         texture: &texture,
         joints: &joints,
@@ -268,6 +269,7 @@ fn room1000_player_frame_is_deterministic_and_mask_aware() {
     let joints = anim::joint_matrices(&emd.skeleton, &emd.keyframes[keyframe], &entity);
     let texture = &emd.texture;
     let entities = [EntityMesh {
+        view_z_shift: 0,
         mesh: &emd.mesh,
         texture,
         joints: &joints,

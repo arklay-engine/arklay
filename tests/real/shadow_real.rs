@@ -99,6 +99,7 @@ fn player_shadow_capture_is_deterministic_and_present_at_spawn() {
     let entity = anim::entity_matrix(player_state.pos, player_state.angle);
     let joints = anim::joint_matrices(&emd.skeleton, &emd.keyframes[keyframe], &entity);
     let entities = [EntityMesh {
+        view_z_shift: 0,
         mesh: &emd.mesh,
         texture: &emd.texture,
         joints: &joints,

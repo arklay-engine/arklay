@@ -40,8 +40,7 @@
 -- VM may be reset between any two updates. The two write-only turn probes the
 -- dispatch computes are not modelled (the wasp never reads them), the
 -- original's `field_00`/matrix scratch writes are unmodelled (nothing reads
--- them), and the per-joint gore chunks stay with the renderer's documented
--- joint-object deferral (the state contract around them is kept).
+-- them).
 
 -- One word write over `action_behavior` + `action_state`.
 local function set_behavior(e, behavior)
@@ -570,8 +569,9 @@ local function damaged(e)
         e:spawn_joint_effect(0, 0x11, 0, 0)
 
         if e.wasp_big ~= 0 then
-            -- The wing gore belongs to the joint-object pipeline the
-            -- renderer milestone still carries as a documented deferral.
+            for joint = 4, 1, -1 do
+                e:arm_joint_effect(joint, 0x1E, 10, 3)
+            end
         end
     end
 
@@ -697,7 +697,9 @@ local function death(e)
 
     -- Big wasp, or killed by a heavy weapon (hit_state >> 3 > 6).
     if e.wasp_big ~= 0 or (e.hit_state & 0xF8) > 0x30 then
-        -- The joint 0..9 gore is the renderer's joint-object deferral.
+        for joint = 9, 0, -1 do
+            e:arm_joint_effect(joint, 0x1E, 10, 3)
+        end
         if e.wasp_sound_latch == 0 then
             e:play_enemy_sound(2)
         end

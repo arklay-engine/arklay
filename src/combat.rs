@@ -825,6 +825,15 @@ fn hit_billboard_rot(game: &GameState, enemy: &Entity) -> i16 {
         .wrapping_add(0x800) as i16
 }
 
+/// `JointApplyColorTint` over every joint, the kill's scorch.
+fn tint_every_joint(game: &mut GameState, slot: usize, colour: [u8; 3]) {
+    let count = game.joint_worlds[slot].len();
+    let entity = &mut game.entities[slot];
+    for entry in entity.joint_colours.iter_mut().take(count) {
+        *entry = colour;
+    }
+}
+
 /// Spawn one hit billboard anchored to `slot`'s entity matrix with `offset`
 /// as its local position.
 fn spawn_billboard(
@@ -1044,9 +1053,6 @@ impl GameState {
         self.entities[slot].action_state = 0;
         if self.entities[slot].health >= 0 {
             self.entities[slot].set_state(2);
-        } else if self.entities[slot].death_event_id != 0xFF {
-            let bit = self.entities[slot].death_event_id;
-            self.flags[usize::from(BANK_ENEMIES)].apply(bit, 0);
         }
         1
     }
@@ -1114,55 +1120,19 @@ impl GameState {
                     yaw,
                 );
             }
-            Some(PostHit::Blood) => {
-                self.blood_fx(slot, record, aim_flags, yaw);
-                self.dispatch_reaction(
-                    slot,
-                    record,
-                    displacement,
-                    weapon_adj,
-                    aim_flags,
-                    pre_health,
-                    yaw,
-                );
-            }
+            Some(PostHit::Blood) => self.blood_fx(slot, record, aim_flags, yaw),
             Some(PostHit::Blood2) => {
-                self.blood2_fx(slot, record, aim_flags, yaw);
-                self.dispatch_reaction(
-                    slot,
-                    record,
-                    displacement,
-                    weapon_adj,
-                    aim_flags,
-                    pre_health,
-                    yaw,
-                );
+                let offset = record.knockback.map(i32::from);
+                self.blood2_fx(slot, record, aim_flags, yaw, offset);
             }
-            Some(PostHit::Sparks) => {
-                self.sparks_fx(slot, record, aim_flags, yaw);
-                self.dispatch_reaction(
-                    slot,
-                    record,
-                    displacement,
-                    weapon_adj,
-                    aim_flags,
-                    pre_health,
-                    yaw,
-                );
+            Some(PostHit::Sparks) => self.sparks_fx(slot, record, aim_flags, yaw),
+            // `weapon_post_hit_blood3` ends in `weapon_post_hit_blood2`, which
+            // picks up the shared scratch offset where the rocket FX left it.
+            Some(PostHit::Blood3) if record.effect_type != 1 => {
+                let offset = self.blood3_fx(slot, record, aim_flags, yaw);
+                self.blood2_fx(slot, record, aim_flags, yaw, offset);
             }
-            Some(PostHit::Blood3) => {
-                self.blood3_fx(slot, record, aim_flags, yaw);
-                self.blood2_fx(slot, record, aim_flags, yaw);
-                self.dispatch_reaction(
-                    slot,
-                    record,
-                    displacement,
-                    weapon_adj,
-                    aim_flags,
-                    pre_health,
-                    yaw,
-                );
-            }
+            Some(PostHit::Blood3) => {}
             None => {}
         }
         let _ = weapon_id;
@@ -1259,21 +1229,18 @@ impl GameState {
                     self.flags[usize::from(BANK_ENEMIES)].apply(bit, 0);
                 }
                 queue_enemy_cue(self, slot, 6);
-                // `joint_setup_attack_effect(head, 30, 2, 3)`: clear the head
-                // joint's active bit and set `0x28`, the gore state the
-                // death/get-up paths read (`& 0xCC`, `& 0x40`).
+                // `joint_setup_attack_effect(head, 30, 2, 3)`: the head bursts
+                // into its gore strip; the death/get-up paths read the `0x28`
+                // it leaves (`& 0xCC`, `& 0x40`).
                 let head = 2usize;
-                if self.entities[slot].joint_flag(head) & 1 != 0 {
-                    let value = (self.entities[slot].joint_flag(head) & !1) | 0x28;
-                    self.entities[slot].set_joint_flag(head, value);
-                }
+                crate::joint_trail::arm(self, slot, head, 30, 2, 3);
                 let room_effects = Rc::clone(&self.room_effects);
                 let _ = crate::effects::create_attached(
                     self,
                     &room_effects,
                     0,
                     3,
-                    Attach::Joint(slot as u8, head as u8),
+                    Attach::Joint(slot as u8, 0),
                     [100, -600, 0],
                     0,
                     0,
@@ -1317,6 +1284,26 @@ impl GameState {
         spawn_billboard(self, slot, effect_type, record.effect_data, offset, yaw);
     }
 
+    /// An aim-up headshot lifts the blood to head height, or to a low fixed
+    /// height when the enemy's joint 1 is already near the floor.
+    fn lift_blood_to_head(
+        &self,
+        slot: usize,
+        record: HitRecordFirst,
+        aim_flags: u8,
+        offset: &mut [i32; 3],
+    ) {
+        if record.knockback[0] == 0x96 && aim_flags & 0x20 != 0 {
+            offset[1] += 1000;
+            if self.joint_worlds[slot]
+                .get(1)
+                .is_some_and(|joint| joint.t[1] > -1000)
+            {
+                offset[1] = -300;
+            }
+        }
+    }
+
     /// `weapon_post_hit_blood`: the flamethrower/flame-round FX pair.
     fn blood_fx(&mut self, slot: usize, record: HitRecordFirst, aim_flags: u8, yaw: i16) {
         if record.effect_type == 1 {
@@ -1327,9 +1314,7 @@ impl GameState {
             i32::from(record.knockback[1]),
             i32::from(record.knockback[2]),
         ];
-        if record.knockback[0] == 0x96 && aim_flags & 0x20 != 0 {
-            offset[1] += 1000;
-        }
+        self.lift_blood_to_head(slot, record, aim_flags, &mut offset);
         spawn_billboard(self, slot, 0x0e, record.effect_data, offset, yaw);
         spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
         if !matches!(self.entities[slot].id, 0x07 | 0x0A | 0x08) {
@@ -1337,11 +1322,8 @@ impl GameState {
             spawn_billboard(self, slot, 0x0e, 0x03, offset, yaw);
             spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
         }
-        if self.entities[slot].health < 0
-            && record.effect_type == 0x0e
-            && !matches!(self.entities[slot].id, 0x05 | 0x07 | 0x0A)
-        {
-            {
+        if self.entities[slot].health < 0 && record.effect_type == 0x0e {
+            if !matches!(self.entities[slot].id, 0x05 | 0x07 | 0x0A) {
                 offset = [0, 0, 0];
                 offset[0] = -100;
                 offset[2] = -300;
@@ -1351,24 +1333,34 @@ impl GameState {
                 offset[2] = 300;
                 spawn_billboard(self, slot, 0x0e, 0x06, offset, yaw);
                 spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                if record.knockback[0] == 0x96 {
+                    offset = [-100, -1000, -300];
+                    spawn_billboard(self, slot, 0x0e, 0x06, offset, yaw);
+                    spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                    offset[0] = 100;
+                    offset[2] = 300;
+                    spawn_billboard(self, slot, 0x0e, 0x06, offset, yaw);
+                    spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                }
             }
+            tint_every_joint(self, slot, [0x20, 0x20, 0x20]);
         }
     }
 
-    /// `weapon_post_hit_blood2`: the explosive-round FX; the joint spurts
-    /// are deferred with the joint plumbing.
-    fn blood2_fx(&mut self, slot: usize, record: HitRecordFirst, aim_flags: u8, yaw: i16) {
+    /// `weapon_post_hit_blood2`: the explosive-round FX, with the gore spurts
+    /// on a kill.
+    fn blood2_fx(
+        &mut self,
+        slot: usize,
+        record: HitRecordFirst,
+        aim_flags: u8,
+        yaw: i16,
+        mut offset: [i32; 3],
+    ) {
         if record.effect_type == 1 {
             return;
         }
-        let mut offset = [
-            i32::from(record.knockback[0]),
-            i32::from(record.knockback[1]),
-            i32::from(record.knockback[2]),
-        ];
-        if record.knockback[0] == 0x96 && aim_flags & 0x20 != 0 {
-            offset[1] += 1000;
-        }
+        self.lift_blood_to_head(slot, record, aim_flags, &mut offset);
         spawn_billboard(self, slot, 0x0e, 7, offset, yaw);
         spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
         spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
@@ -1376,6 +1368,25 @@ impl GameState {
             offset[1] -= 200;
             spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
             spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+            let list = self.combat.hit_joints(self.entities[slot].id);
+            if self.entities[slot].health < 0 && record.effect_type == 0 && list[0] != 0 {
+                offset[1] = -500;
+                spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                let listed = aim_flags & 0x20 == 0
+                    || (record.knockback[0] & 1) as u8 & (self.entities[slot].behavior_flags & 2)
+                        != 0;
+                if listed {
+                    for joint in list.into_iter().rev() {
+                        crate::joint_trail::arm(self, slot, usize::from(joint), 0x1e, 2, 3);
+                    }
+                } else {
+                    let count = self.joint_worlds[slot].len();
+                    for joint in (count.saturating_sub(5)..count).rev() {
+                        crate::joint_trail::arm(self, slot, joint, 0x1e, 2, 3);
+                    }
+                }
+            }
         }
     }
 
@@ -1389,16 +1400,11 @@ impl GameState {
             i32::from(record.knockback[1]),
             i32::from(record.knockback[2]),
         ];
-        if record.knockback[0] == 0x96 && aim_flags & 0x20 != 0 {
-            offset[1] += 1000;
-        }
+        self.lift_blood_to_head(slot, record, aim_flags, &mut offset);
         spawn_billboard(self, slot, 0x09, 0, offset, yaw);
         spawn_billboard(self, slot, 0x09, 0, offset, yaw);
-        if self.entities[slot].health < 0
-            && record.effect_type == 9
-            && !matches!(self.entities[slot].id, 0x05 | 0x07 | 0x0A | 0x08)
-        {
-            {
+        if self.entities[slot].health < 0 && record.effect_type == 9 {
+            if !matches!(self.entities[slot].id, 0x05 | 0x07 | 0x0A | 0x08) {
                 offset = [0, 0, 0];
                 offset[0] = -100;
                 offset[2] = -300;
@@ -1409,23 +1415,31 @@ impl GameState {
                 spawn_billboard(self, slot, 0x09, 0, offset, yaw);
                 spawn_billboard(self, slot, 0x09, 1, offset, yaw);
             }
+            // The standard zombie's second call replaces the colour.
+            let colour = if self.entities[slot].id == 0x00 {
+                [0x20, 0x20, 0]
+            } else {
+                [0x40, 0x40, 0]
+            };
+            tint_every_joint(self, slot, colour);
         }
     }
 
-    /// `weapon_post_hit_blood3`: the rocket FX; the joint spurts/tint are
-    /// deferred with the joint plumbing.
-    fn blood3_fx(&mut self, slot: usize, record: HitRecordFirst, aim_flags: u8, yaw: i16) {
-        if record.effect_type == 1 {
-            return;
-        }
+    /// `weapon_post_hit_blood3`: the rocket FX. Returns the offset it leaves in
+    /// the original's shared scratch.
+    fn blood3_fx(
+        &mut self,
+        slot: usize,
+        record: HitRecordFirst,
+        aim_flags: u8,
+        yaw: i16,
+    ) -> [i32; 3] {
         let mut offset = [
             i32::from(record.knockback[0]),
             i32::from(record.knockback[1]),
             i32::from(record.knockback[2]),
         ];
-        if record.knockback[0] == 0x96 && aim_flags & 0x20 != 0 {
-            offset[1] += 1000;
-        }
+        self.lift_blood_to_head(slot, record, aim_flags, &mut offset);
         spawn_billboard(self, slot, 0x0e, record.effect_data, offset, yaw);
         spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
         if !matches!(self.entities[slot].id, 0x07 | 0x0A | 0x08) {
@@ -1433,11 +1447,8 @@ impl GameState {
             spawn_billboard(self, slot, 0x0e, 0x03, offset, yaw);
             spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
         }
-        if self.entities[slot].health < 0
-            && record.effect_type != 2
-            && !matches!(self.entities[slot].id, 0x05 | 0x07 | 0x0A)
-        {
-            {
+        if self.entities[slot].health < 0 && record.effect_type != 2 {
+            if !matches!(self.entities[slot].id, 0x05 | 0x07 | 0x0A) {
                 offset = [0, 0, 0];
                 offset[0] = -100;
                 offset[2] = -300;
@@ -1447,8 +1458,19 @@ impl GameState {
                 offset[2] = 300;
                 spawn_billboard(self, slot, 0x0e, 0x06, offset, yaw);
                 spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                if record.knockback[0] == 0x96 {
+                    offset = [-100, -1000, -300];
+                    spawn_billboard(self, slot, 0x0e, 0x06, offset, yaw);
+                    spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                    offset[0] = 100;
+                    offset[2] = 300;
+                    spawn_billboard(self, slot, 0x0e, 0x06, offset, yaw);
+                    spawn_billboard(self, slot, 0x09, 0x0d, offset, yaw);
+                }
             }
+            tint_every_joint(self, slot, [0x20, 0x20, 0x20]);
         }
+        offset
     }
 
     /// The shared player-hurt helper: subtract `damage` from the player's
@@ -2215,7 +2237,7 @@ mod tests {
     }
 
     #[test]
-    fn a_killing_blow_enters_state_three_and_raises_the_death_flag() {
+    fn a_killing_blow_enters_state_three_and_leaves_the_death_flag_to_the_enemy() {
         let room = RoomState::default();
         let mut game = armed_game();
         place_enemy(&mut game, 1, 0x13, [200, 0, 0]);
@@ -2223,7 +2245,8 @@ mod tests {
         game.entities[1].health = 3;
         assert_eq!(game.apply_weapon_damage(&room, 1), 1);
         assert_eq!(game.entities[1].state(), 3);
-        assert!(game.flags[usize::from(BANK_ENEMIES)].bit(7));
+        // The enemy's own death state raises it; only a head pop does it here.
+        assert!(!game.flags[usize::from(BANK_ENEMIES)].bit(7));
     }
 
     #[test]

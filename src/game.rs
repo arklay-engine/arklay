@@ -27,7 +27,7 @@ use crate::item_catalog::{ItemKind, StatusCure};
 use crate::items;
 use crate::message::{MessageAction, MessageInput, MessageWindow};
 use crate::movie;
-use crate::objects::{self, CollisionEdit, LightEdit, ObjectTable};
+use crate::objects::{self, CameraEdit, CollisionEdit, ObjectTable};
 use crate::player::PlayerState;
 use crate::scd::host::{EventRequest, ScdHost, StepResult};
 use crate::scd::ir::Operand;
@@ -493,6 +493,10 @@ pub const ROOM_DRUG_STOREHOUSE: u8 = 9;
 /// 1-based stage digit of the guardhouse (the original's 0-indexed stage 3),
 /// used by the desk flow's save-room reset.
 const GUARDHOUSE_STAGE: u8 = 4;
+/// The scrapped heliport (`ROOM3110.RDT`), which the game never enters but whose
+/// backgrounds room 303's death replay shows.
+pub const ROOM_SCRAPPED_HELIPORT: u8 = 0x11;
+
 /// The guardhouse save room (the original's `ROOM_003`, 0x0A), where Jill's
 /// first playthrough resets the desk flow.
 const ROOM_GUARDHOUSE_SAVE: u8 = 0x0A;
@@ -1354,9 +1358,20 @@ pub struct ScaVolume {
 }
 
 mod entity;
-pub use entity::{Entity, JointBlood};
+pub use entity::{Entity, JointBlood, JointTrail, JointsBeforeHit, LookTargetRecord};
 
 impl Entity {
+    /// The per-joint colours as the renderer takes them.
+    pub fn mesh_joint_colours(&self) -> [[u8; 3]; 32] {
+        let mut colours = crate::render::NO_JOINT_COLOURS;
+        for (joint, (entry, colour)) in colours.iter_mut().zip(&self.joint_colours).enumerate() {
+            if *colour != [0; 3] || self.black_joints & (1 << joint) != 0 {
+                *entry = *colour;
+            }
+        }
+        colours
+    }
+
     /// The four state bytes at offset 0x84 as one dword (little-endian:
     /// state, ignore, action_behavior, action_state).
     pub fn state_word(&self) -> u32 {
@@ -1395,6 +1410,13 @@ impl Entity {
             self.joint_flags &= !bit;
         }
         self.joint_flags_hi[joint & 31] = value & 0xFE;
+    }
+
+    /// The hidden-joint mask this tick's frame draws with.
+    pub fn drawn_joint_flags(&self) -> u32 {
+        self.joints_before_hit
+            .as_ref()
+            .map_or(self.joint_flags, |before| before.joint_flags)
     }
 
     /// The signed 16-bit turn accumulator at entity +0x170
@@ -3359,6 +3381,8 @@ pub struct GameState {
     /// The platform random stream's 32-bit state (the original's
     /// `g_randState`). Starts at 1, the CRT default, and is never reseeded in
     /// gameplay; [`GameState::tick_entities`] draws it once per gameplay tick.
+    /// Inside [`crate::joint_trail::damage_after_compose`].
+    pub effect_pass_hit: bool,
     pub rand_state: u32,
     /// This frame's platform-random draw (the original's `g_RandSeed`), written
     /// once per gameplay tick before entity thinking and read by the NPC and
@@ -3393,9 +3417,9 @@ pub struct GameState {
     /// Queued `inst_cfg` collision-boundary rewrites, applied by the engine's
     /// room tick before physics and cleared with it.
     pub collision_edits: Vec<CollisionEdit>,
-    /// Queued `obj_xfm` light rewrites, applied by the engine's room tick
+    /// Queued `cam_set` camera rewrites, applied by the engine's room tick
     /// before lighting is read.
-    pub light_edits: Vec<LightEdit>,
+    pub camera_edits: Vec<CameraEdit>,
     /// `main_state_flags` bit 6: `tick_objects` is pushing an object this
     /// frame. The push behaviour starts the tick after it is raised.
     pub object_push: bool,
@@ -3623,6 +3647,7 @@ impl Default for GameState {
             snd3d_enemy_drops: 0,
             snd3d_noops: BTreeMap::new(),
             sfx_requests: Vec::new(),
+            effect_pass_hit: false,
             rand_state: 1,
             rand_seed: 0,
             screen_shake: [0, 0],
@@ -3633,7 +3658,7 @@ impl Default for GameState {
             item_palette_edits: Vec::new(),
             object_palette_edits: Vec::new(),
             collision_edits: Vec::new(),
-            light_edits: Vec::new(),
+            camera_edits: Vec::new(),
             object_push: false,
             mirror: MirrorState::default(),
             itembox: ItemBoxFlow::default(),
@@ -3732,6 +3757,24 @@ impl GameState {
     /// time (the records are already packed once by [`GameState::new`]).
     pub fn set_weapon_effects(&mut self, weapon: effects::WeaponEffects) {
         self.weapon_effects = weapon;
+    }
+
+    /// The room the game draws, which is the loaded room unless a script
+    /// rewrote the room byte. Only room 303 does, for its death replay
+    /// (`setb(B_ROOM, ROOM_311, 0)`): the RDT stays loaded, but every read of
+    /// `g_roomId` from then on sees room 311. `load_room_bg_image` special-cases
+    /// that id, reading `RC311<camera>.pak` on each cut, and the masks and the
+    /// per-camera bias tables are looked up under it too.
+    pub fn drawn_room(&self, loaded: RoomId) -> RoomId {
+        let byte = self.state_bytes[1];
+        if (loaded.stage, loaded.room) == (3, 0x03) && byte == ROOM_SCRAPPED_HELIPORT {
+            RoomId {
+                room: byte,
+                ..loaded
+            }
+        } else {
+            loaded
+        }
     }
 
     /// Store the current room camera id in both the camera state and the
@@ -3981,10 +4024,15 @@ impl GameState {
     ///
     /// The play timer advances with each gameplay frame, exactly like the
     /// original's `Game_timer` running under `game_loop`. It lives in the
-    /// BioCard state image (0x224) so a save/load round-trips it; menus, films
-    /// and frozen frames never call this, so they do not count.
+    /// BioCard state image (0x224) so a save/load round-trips it; films and
+    /// frozen frames never call this, so they do not count.
     pub fn advance_frame(&mut self) {
         self.frame = self.frame.saturating_add(1);
+        self.advance_play_timer();
+    }
+
+    /// Count one frame on the play timer.
+    pub fn advance_play_timer(&mut self) {
         if self.play_timer_frozen {
             return;
         }
@@ -4617,6 +4665,7 @@ impl GameState {
 
         let mut target = None;
         let mut target_entity = None;
+        let mut target_record = None;
         if flags & 0x0F != 0 {
             if flags == 0x93 {
                 // The selector is the word at +2 and the index the signed word
@@ -4630,11 +4679,13 @@ impl GameState {
                         .ok()
                         .and_then(|index| self.objects.record(index))
                         .map(|record| record.pos);
+                    target_record = usize::try_from(index).ok().map(LookTargetRecord::Object);
                 } else if selector == 3 {
                     target = usize::try_from(index)
                         .ok()
                         .and_then(|index| self.items.record(index))
                         .map(|record| record.pos);
+                    target_record = usize::try_from(index).ok().map(LookTargetRecord::Item);
                 } else {
                     target_entity = motion_target_slot(selector, index);
                     target = target_entity.map(|slot| self.entities[usize::from(slot)].pos);
@@ -4669,6 +4720,7 @@ impl GameState {
             entity.target = target;
         }
         entity.target_entity = target_entity;
+        entity.target_record = target_record;
         StepResult::Continue
     }
 
@@ -4870,7 +4922,7 @@ impl GameState {
         self.item_palette_edits.clear();
         self.object_palette_edits.clear();
         self.collision_edits.clear();
-        self.light_edits.clear();
+        self.camera_edits.clear();
         self.zone_edits.clear();
         self.room_light_edits.clear();
         // The original's `room_set` clears the low nibble of the main-state
@@ -4984,7 +5036,7 @@ impl GameState {
         self.flags[usize::from(BANK_ROOM_FLAGS)].bit(bit)
     }
 
-    /// Apply every queued `inst_cfg`/`obj_xfm` rewrite to the live room.
+    /// Apply every queued `inst_cfg`/`cam_set` rewrite to the live room.
     ///
     /// The original scripts mutate the loaded RDT bytes in place; the engine
     /// calls this at the point the scripted write becomes visible: right after
@@ -4993,7 +5045,7 @@ impl GameState {
         for edit in self.collision_edits.drain(..) {
             edit.apply(room);
         }
-        for edit in self.light_edits.drain(..) {
+        for edit in self.camera_edits.drain(..) {
             edit.apply(room);
         }
         for edit in self.room_light_edits.drain(..) {
@@ -8825,12 +8877,12 @@ impl ScdHost for ScdGameHost<'_> {
                 self.state.cut_zone_set(operands);
                 StepResult::Continue
             }
-            // `obj_xfm` (0x40): the host cannot borrow the room, so the
-            // light rewrite is queued and applied by the room tick.
+            // `cam_set` (0x40): the host cannot borrow the room, so the
+            // camera rewrite is queued and applied by the room tick.
             0x40 => {
                 self.state
-                    .light_edits
-                    .push(crate::objects::light_edit(operands));
+                    .camera_edits
+                    .push(crate::objects::camera_edit(operands));
                 StepResult::Continue
             }
             // `msg_list` (0x46): the full room-light rewrite is queued for the
@@ -11229,8 +11281,11 @@ mod tests {
     }
 
     #[test]
-    fn obj_xfm_queues_and_applies_a_light_edit() {
-        let mut room = RoomState::default();
+    fn cam_set_queues_and_applies_a_camera_edit() {
+        let mut room = RoomState {
+            cuts: vec![Default::default(); 3],
+            ..RoomState::default()
+        };
         let mut state = object_game(0);
         {
             let mut host = ScdGameHost::new(&mut state);
@@ -11238,14 +11293,14 @@ mod tests {
                 host.on_camera(op(0x40), &operands(&[2, 100, -200, 300, 1, 2, 3, 4])),
                 StepResult::Continue
             );
-            assert_eq!(host.state().light_edits.len(), 1);
+            assert_eq!(host.state().camera_edits.len(), 1);
         }
         state.apply_room_edits(&mut room);
-        let light = room.lights[2];
-        assert_eq!(light.pos, [100, -200, 300]);
-        assert_eq!(light.color, [1, 2, 3]);
-        assert_eq!(light.kind, 4);
-        assert!(state.light_edits.is_empty());
+        let cut = &room.cuts[2];
+        assert_eq!(cut.pos, [100, -200, 300]);
+        assert_eq!(cut.look_at, [1, 2, 3]);
+        assert_eq!(cut.fov, 4);
+        assert!(state.camera_edits.is_empty());
     }
 
     #[test]

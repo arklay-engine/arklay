@@ -491,6 +491,7 @@ fn a_real_actor_room_draws_player_and_npc_shadows_in_one_frame() {
         .iter()
         .zip(&joint_sets)
         .map(|(model, joints)| EntityMesh {
+            view_z_shift: 0,
             mesh: &model.mesh,
             texture: &model.texture,
             joints,

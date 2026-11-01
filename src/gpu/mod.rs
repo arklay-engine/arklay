@@ -3781,6 +3781,7 @@ mod tests {
             hd_name: None,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
         }];
         let camera = Camera::from_points([2600, -2400, 5200], [0, -700, 0], 600);
         let lighting = Lighting {
@@ -3981,6 +3982,7 @@ mod tests {
             hd_name: None,
             complex_object: None,
             aliased_light: false,
+            view_z_shift: 0,
         }];
         let camera = Camera::from_points([2600, -2400, 5200], [0, -700, 0], 600);
         let lighting = Lighting {

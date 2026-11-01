@@ -30,10 +30,8 @@
 -- scripting VM may be reset between any two updates.
 --
 -- The original's write-only `field_00`, `CR_UNK_C1` and matrix-scratch writes
--- are not modelled (nothing reads them), the two per-joint `0x0C`/`0x10` flag
--- ORs stay with the renderer's documented joint-object deferral, and the death
--- burst hides every joint through the joint mask instead of arming the async
--- gore objects.
+-- are not modelled (nothing reads them), and the two per-joint `0x0C`/`0x10`
+-- flag ORs stay with the renderer's documented joint-object deferral.
 
 local JOINTS = 13
 
@@ -953,7 +951,7 @@ local function death(e)
         e.shadow_half_x = 0
         e.shadow_half_z = 0
         for joint = JOINTS - 1, 0, -1 do
-            e:set_joint_visible(joint, false)
+            e:arm_joint_effect(joint, 0x1E, 0x1E, 3)
         end
         e:play_enemy_sound(0)
         e.action_behavior = 4

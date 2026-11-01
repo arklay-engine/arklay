@@ -77,6 +77,9 @@ pub struct Limb {
     pub bounces: u16,
     /// The limb was launched (the port's live gate for free-body rendering).
     pub live: bool,
+    /// The launch's first compose has yet to freeze the limb: `rotate_entity`
+    /// clears the joint's flag bit 3 and sets 0x10 there, once.
+    pub compose_pending: bool,
 }
 
 /// The Tyrant scratch block.

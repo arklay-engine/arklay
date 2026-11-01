@@ -124,7 +124,7 @@ pub const COMMAND_OPS: [Op; 84] = [
     op(0x3D, "effect_tracked", "uuuUUUU", false, Some(12)),
     op(0x3E, "effect_kill_a", "u", false, Some(2)),
     op(0x3F, "ck_tween", "uUU", true, Some(6)),
-    op(0x40, "obj_xfm", "uIIIIIII", false, Some(16)),
+    op(0x40, "cam_set", "uIIIIIII", false, Some(16)),
     op(0x41, "spd_set", "uU", false, Some(4)),
     op(0x42, "effect_kill_b", "uU", false, Some(4)),
     op(0x43, "bgm_volume_ramp", "ubu", false, Some(4)),

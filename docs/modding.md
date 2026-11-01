@@ -102,7 +102,9 @@ the default: every discovered mod applies in `(load_order, id)` order. An
 Mods sort by the configured `order`, then by `(load_order, id)`; within one
 layer the existing ASCII case-insensitive lookup wins. Duplicate mod ids and
 duplicate layer paths are rejected, and a mod may only name a `base` matching
-the base pack's id. With no layers at all the engine takes exactly the
+the base pack's id. The exception is a mod holding nothing but `htexture/`
+entries: textures replace by pixel hash, so once enabled it applies to every game
+pack, whatever its `base` says. With no layers at all the engine takes exactly the
 single-pack path, so a run without `--mod` (and with no discovered mods) is
 byte-identical to earlier releases.
 
@@ -1037,7 +1039,7 @@ The commands the `.s` disassembler prints byte by byte, or with words split
 into bytes, take one argument per field the engine reads, at its width:
 `obj`, `item_aot_set`, `enemy`, `effect`, `effect_tracked`, `effect_kill_b`,
 `timer_setup`, `voice_play`, `setw`, `inst_cfg`, `msg_list`, `eml_pos`,
-`eml_rot`, `obj_xfm`, `plw_anim`, `model_op`, `objtbl_b_set`, `ck_anim`,
+`eml_rot`, `cam_set`, `plw_anim`, `model_op`, `objtbl_b_set`, `ck_anim`,
 `ck_bits`, `ck_counter`, `ck_tween`, `ck_item_count`, `ck_last_item`,
 `aot_switch`, `msgnode_set`, `snd_pan_vol_set`, `bgm_volume_ramp`,
 `task_kill`, `spd_set`, `spd_add`, `swap_var`, `mass_mask`, `costume_set`,
@@ -1142,7 +1144,7 @@ event on_enter
   | `TW_POS_X` `TW_POS_Y` `TW_POS_Z` `TW_HEALTH` `TW_TARGET_X` `TW_TARGET_Z` | `tw_set_sel`: the value to write |
   | `FX_ROW_xx`, `FX_AT_WORLD` `FX_AT_PLAYER` `FX_AT_OBJ` | an effect's animation row (`effect`, `effect_kill_b`) and what it is attached to (`FX_AT_OBJ \| OBJ_xx`, or `FX_AT_ENEMY_xx`) |
   | `LIGHT_FADE_VEIL` `LIGHT_FADE_HALF` `LIGHT_FADE_xx`, `FADE_R` `FADE_G` `FADE_B` | `timer_setup`: how the special room light draws, and its channels |
-  | `LIGHT_xx`, `LIGHT_KIND_xx` | one of the room's lights (`obj_xfm`), a light's kind (`msg_list`) |
+  | `LIGHT_KIND_xx` | a light's kind (`msg_list`) |
   | `COL_LIST_xx`, `CF_x` | `inst_cfg`: the collision list and the flags it sets |
   | `TBL_OBJ` `TBL_ITEM`, `ROT_OBJ` | `objtbl_b_set`'s table; `eml_rot(ROT_OBJ \| OBJ_xx, ..)` rotates an object, otherwise an item model |
   | `DIST_ENEMY` `DIST_OBJ` `DIST_ITEM` | `ck_counter`: what the distance is measured to |
@@ -1472,6 +1474,7 @@ session's state for `open`, `update` and its hooks, so the methods marked
 | `api:glyphs_width(bytes[, opts])` | The pixel width `api:glyphs` draws the same bytes at with the same `opts` (only `tight` matters); `0` without a font. |
 | `api:text_8x14(x, y, bytes[, opts])` | Draw raw bytes through the original's unshadowed 8x14 grid in `opts.colour`. |
 | `api:grid_text(x, y, scale, bytes)` | Draw raw font-sheet cells. |
+| `api:grid_glyph_width()` | How far `grid_text` advances per cell, 0 without a font. |
 | `api:save_slots()` | Eight booleans: which numbered slots hold a save. |
 | `api:slot_info()` | Eight entries: `false` for an empty slot, else `{character, saves, stage, room, mansion2}`. |
 | `api:save_slot(slot)` | Save mode: write the pending block to numbered slot `0..=7` (consuming an ink ribbon when the opener asked) and return `true, info` or `false, err`. |
@@ -1827,11 +1830,11 @@ flags/effects (`e:flag_bit(bank, sel)`, `e:raise_flag(bank, sel)` for a raw
 `e:spawn_effect(...)`, `e:spawn_joint_effect(type, depth, joint, yaw)` to
 anchor a billboard at a posed joint,
 `e:spawn_joint_effect_at(type, depth, joint, x, y, z, yaw)` for one with a
-local offset, `e:spawn_world_effect(type, depth, x, y, z, yaw)` for a
+local offset, `e:spawn_world_effect(type, depth, x, y, z, yaw[, light])` for a
 billboard at a world point on the identity transform (the shared dead-move
 matrix the gore spawns use), `e:spawn_player_effect(type, depth, x, y,
 z, yaw)` to anchor one at the player, `e:tag_effect(slot, field, value)`,
-`e:player_pos()`, `e:player_radius()`, `e:entity_angle(slot)`, the shared
+`e:player_pos()`, `e:player_joint_world(joint)` (x, y, z from the last drawn pose), `e:player_radius()`, `e:entity_angle(slot)`, the shared
 web-clone subsystem (`e:web_distance()` is the spiders' flat Manhattan
 player distance, `e:web_joint_use(joint, index)` is the per-type web-joint
 registry scan-and-mark, `e:web_spawn(count)` allocates the spider's

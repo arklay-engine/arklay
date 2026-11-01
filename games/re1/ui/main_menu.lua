@@ -159,7 +159,11 @@ local function use_selected(api)
     end
     if used then
         Bar.start_flush(s.bar, healed, cured)
+        -- The item name follows the emptied slot at once; the USE/EQUIP label
+        -- stays latched until the close animation ends.
+        local equippable = s.equippable
         refresh_selection(api)
+        s.equippable = equippable
         -- A successful use always runs the submenu's close animation; a
         -- key/special/book item also exits the whole menu after it.
         s.closing = true
@@ -228,9 +232,13 @@ end
 --- health monitor), the CHECK slide, the submenu animation, the monitor.
 function M.tick(api)
     emit(api, EVENT_NONE)
+    -- The use's frame (submenu state 4) only hands over to the close animation
+    -- (state 3), which starts stepping on the next frame.
+    local started_close = false
     if s.pending_use then
         s.pending_use = false
         use_selected(api)
+        started_close = s.closing
     end
     if s.view == "out" then
         -- The options step right each frame; the eighth step hides them
@@ -243,7 +251,6 @@ function M.tick(api)
     elseif s.view == "back" then
         step_view_back()
     end
-    local started_close = false
     if s.move_close_delay > 0 then
         s.move_close_delay = s.move_close_delay - 1
         if s.move_close_delay == 0 then
@@ -607,7 +614,7 @@ end
 local function draw_portrait(api, ox, oy)
     local character = api:character()
     api:page_sprite_mirrored(api:page("ui/statface"), (character & 1) * 32, (character & 2) * 16,
-        32, 32, ox + PORTRAIT_X, oy + PORTRAIT_Y, PORTRAIT_SIZE, PORTRAIT_SIZE, 0, 0, false, false)
+        PORTRAIT_SIZE, PORTRAIT_SIZE, ox + PORTRAIT_X, oy + PORTRAIT_Y, PORTRAIT_SIZE, PORTRAIT_SIZE, 0, 0, false, false)
 end
 
 -- The item-slot cursor, the topmost layer. It blinks between the bright and

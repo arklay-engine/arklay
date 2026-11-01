@@ -174,8 +174,9 @@ end
 -- `tyrant_set_player_knockback`: the player's knock-back facing from the
 -- Tyrant-to-player delta, with the two sites' base bias and zero-delta bias.
 local function set_knockback(e, base, zero_bias)
-    local dx = e.player_pos_x - e.pos_x
-    local dz = e.player_pos_z - e.pos_z
+    local px, _, pz = e:player_pos()
+    local dx = px - e.pos_x
+    local dz = pz - e.pos_z
     e.player_attack_anim = 6
     e.player_anim_frame_id = 0x0C
     e.player_state = 6
@@ -239,7 +240,7 @@ BEHAVIORS[0] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0x0F
         e.animation_id = 8
         e.health = -1
@@ -254,10 +255,10 @@ BEHAVIORS[0] = function(e)
         return
     end
     e.action_state = e.action_state + (e:advance_anim(0x100) and 1 or 0)
-    if e.animation_frame_id == 0x19 and (e.unk_bf & 1) ~= 0 then
+    if e.animation_frame_id == 0x19 and (e.timing_control & 1) ~= 0 then
         e:play_enemy_sound(6)
     end
-    if e.animation_frame_id == 0x32 and (e.unk_bf & 1) ~= 0 then
+    if e.animation_frame_id == 0x32 and (e.timing_control & 1) ~= 0 then
         e:play_enemy_sound(6)
     end
     root_motion(e, 0, false)
@@ -269,7 +270,7 @@ BEHAVIORS[1] = function(e)
     e:raise_death_event()
     e.behavior_flags = e.behavior_flags | 0x40
     e.animation_frame_id = 0
-    e.unk_bf = 0
+    e.timing_control = 0
     e.animation_id = 0
     e.blend_counter = 0
     e.state_word = 0x01000008
@@ -281,7 +282,7 @@ BEHAVIORS[2] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.animation_id = 0
         e.action_ticks_counter = 0x3C
         e.blend_counter = 0x1F
@@ -305,7 +306,7 @@ BEHAVIORS[3] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 1
     elseif sub ~= 1 then
@@ -345,7 +346,7 @@ BEHAVIORS[5] = function(e)
         e.ty_flags = e.ty_flags & 0xFB
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 5
         e.move_speed_current = 200
@@ -405,7 +406,7 @@ BEHAVIORS[6] = function(e)
         e.ty_flags = e.ty_flags & 0xFB
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 4
         e.ty_repause = 0x0F
@@ -473,7 +474,7 @@ BEHAVIORS[7] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 7
         e.ty_repause = 0x0F
@@ -542,7 +543,7 @@ BEHAVIORS[8] = function(e)
         e.ty_flags = e.ty_flags & 0xFB
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 3
         e.move_speed_current = 0x12C
@@ -601,7 +602,7 @@ BEHAVIORS[9] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 5
         e.move_speed_current = 200
@@ -671,7 +672,7 @@ BEHAVIORS[10] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = e.animation_frame_id >> 1
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 2
         e.move_speed_current = 0x190
@@ -707,7 +708,7 @@ BEHAVIORS[10] = function(e)
     elseif sub == 2 then
         e.action_state = 3
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 9
         e.move_speed_current = 0x12C
@@ -756,7 +757,7 @@ BEHAVIORS[11] = function(e)
         e.pos_y = 0x12C
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 6
         e:advance_anim(0x200)
@@ -833,13 +834,13 @@ BEHAVIORS[11] = function(e)
                 local s = (r >= 0x80000000) and -1 or 0
                 local v = ((r ~ s) - s)
                 local joint = as_s16(((v & 0xF) ~ s) - s)
-                e:spawn_joint_effect_at(9, 1, joint, 0, -(e:random() & 0x1FF), 0, 0)
+                e:spawn_joint_effect_lit(9, 1, joint, 0, -(e:random() & 0x1FF), 0, 0, 0x14)
                 local y2 = -(e:random() & 0x1FF)
                 local r2 = e:random()
                 local s2 = (r2 >= 0x80000000) and -1 or 0
                 local v2 = ((r2 ~ s2) - s2)
                 local joint2 = as_s16(((v2 & 0xF) ~ s2) - s2)
-                e:spawn_joint_effect_at(9, 1, joint2, 0, y2, 0, 0)
+                e:spawn_joint_effect_lit(9, 1, joint2, 0, y2, 0, 0, 0x14)
             end
             if e.animation_frame_id == 0x2B then
                 e.ty_flags = e.ty_flags | 1
@@ -861,7 +862,7 @@ BEHAVIORS[12] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = e.animation_frame_id >> 1
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 2
         e.move_speed_current = 0x190
@@ -904,7 +905,7 @@ BEHAVIORS[12] = function(e)
         e.ty_flags = e.ty_flags & 0xFB
         e.action_state = 3
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 3
         e.animation_id = 0x0B
         e.ty_repause = 0x0F
@@ -982,7 +983,7 @@ BEHAVIORS[13] = function(e)
     if e.action_state == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0x1F
         e.animation_id = 0x0C
     end
@@ -1122,7 +1123,7 @@ SCD[0] = function(e)
     if e.action_state == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.animation_id = 0
         e.blend_counter = 0x1F
         e.ty_trail_timer = 0
@@ -1137,7 +1138,7 @@ SCD[2] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0x1F
         e.animation_id = 1
         e.action_ticks_counter = 2
@@ -1190,7 +1191,7 @@ SCD[10] = function(e)
         e.pos_y = 0
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0x1F
         e.animation_id = 6
     elseif sub ~= 1 then
@@ -1219,7 +1220,7 @@ SCD[10] = function(e)
             local y = -0xA28 - (e:random() & 0xFFF)
             local x = (e:random() & s[4]) + s[2]
             local z = (e:random() & s[4]) + s[3]
-            e:spawn_world_effect(0x15, s[5], x, y, z, rot)
+            e:spawn_world_effect(0x15, s[5], x, y, z, rot, s[6])
         end
     end
     if e.animation_frame_id == 0x91 then
@@ -1240,7 +1241,7 @@ SCD[11] = function(e)
         e.pos_y = -200
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0
         e.animation_id = 6
         e.action_ticks_counter = 5
@@ -1287,7 +1288,7 @@ SCD[12] = function(e)
         -- page-gardening calls.
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0x1F
         e.animation_id = 5
         e.move_speed_current = 100
@@ -1344,7 +1345,7 @@ SCD[13] = function(e)
         e.ty_flags = e.ty_flags | 8
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 7
         e.animation_id = 0
         e.ty_flags = e.ty_flags & 0xFD
@@ -1364,13 +1365,12 @@ SCD[13] = function(e)
         for i = 1, 5 do
             local limb = ROCKET_LIMBS[i]
             e:tyrant_limb_launch(i - 1, limb[2], limb[3], limb[4], limb[5], limb[6], limb[7])
-            e:set_joint_visible(limb[1], false)
         end
         e.action_ticks_counter = 0
         e:store_camera_speed()
-        return
-    end
-    if sub ~= 1 then
+        -- No return: the first blast frame runs in the same call, before the
+        -- compose freezes the limbs.
+    elseif sub ~= 1 then
         if sub ~= 2 then
             return
         end
@@ -1387,9 +1387,8 @@ SCD[13] = function(e)
         if (e.action_ticks_counter & 7) ~= 0 then
             return
         end
-        for _, limb in ipairs({ 1, 2, 3, 4 }) do
-            local lx, ly, lz = e:tyrant_limb_pos(limb)
-            e:spawn_world_effect(9, 0x0D, lx, ly + 1000, lz, 0)
+        for _, joint in ipairs({ 4, 7, 10, 12 }) do
+            e:spawn_joint_effect_lit(9, 0x0D, joint, 0, 1000, 0, 0, 0x1E)
         end
         return
     end
@@ -1411,13 +1410,13 @@ SCD[13] = function(e)
         local hx = e.pos_x + idiv(t * 0x0E7A, 0x0C)
         local hy = e.pos_y + idiv(t * -0x0FB0, 0x0C) - 0x9C4
         local hz = e.pos_z + idiv(t * -0x09AE, 0x0C)
-        e:spawn_world_effect(0x0E, 3, hx, hy, hz, 0)
-        e:spawn_world_effect(0x0E, 3, hx - (e:random() & 0x7F) + 0x40, hy - (e:random() & 0x7F) + 0x40, hz - (e:random() & 0x7F) + 0x40, 0)
+        e:spawn_world_effect(0x0E, 3, hx, hy, hz, 0, 0x0A)
+        e:spawn_world_effect(0x0E, 3, hx - (e:random() & 0x7F) + 0x40, hy - (e:random() & 0x7F) + 0x40, hz - (e:random() & 0x7F) + 0x40, 0, 0x14)
         e.action_ticks_counter = e.action_ticks_counter + 1
         if as_s16(e.action_ticks_counter) > 10 then
             e.action_ticks_counter = 10
-            e:spawn_world_effect(0x0E, 3, hx - (e:random() & 0x1FF) + 0x100, hy - (e:random() & 0x7F) + 0x40, hz - (e:random() & 0x1FF) + 0x100, 0)
-            e:spawn_world_effect(0x0E, 0x0B, hx - (e:random() & 0x1FF) + 0x100, hy - (e:random() & 0x7F) + 0x40, hz - (e:random() & 0x1FF) + 0x100, 0)
+            e:spawn_world_effect(0x0E, 3, hx - (e:random() & 0x1FF) + 0x100, hy - (e:random() & 0x7F) + 0x40, hz - (e:random() & 0x1FF) + 0x100, 0, 0x0F)
+            e:spawn_world_effect(0x0E, 0x0B, hx - (e:random() & 0x1FF) + 0x100, hy - (e:random() & 0x7F) + 0x40, hz - (e:random() & 0x1FF) + 0x100, 0, 0x0A)
             e.ty_flags = e.ty_flags & 0xFE
         end
     end
@@ -1430,9 +1429,8 @@ SCD[13] = function(e)
         local x = (e:random() & 0x3FF) - 500
         local y = e:random() & 0x3FF
         local z = (e:random() & 0x3FF) - 500
-        for i = 0, 4 do
-            local lx, ly, lz = e:tyrant_limb_pos(i)
-            e:spawn_world_effect(0x0E, 3, lx + x, ly + y, lz + z, 0)
+        for _, joint in ipairs({ 2, 4, 7, 10, 12 }) do
+            e:spawn_joint_effect_lit(0x0E, 3, joint, x, y, z, 0, 0x1E)
         end
     end
     if e.animation_frame_id > 0x10 and e.animation_frame_id < 0x13 then
@@ -1451,9 +1449,8 @@ SCD[13] = function(e)
         local x = (e:random() & 0x3FF) - 500
         local y = e:random() & 0x3FF
         local z = (e:random() & 0x3FF) - 500
-        for i = 0, 4 do
-            local lx, ly, lz = e:tyrant_limb_pos(i)
-            e:spawn_world_effect(9, 0x0D, lx + x, ly + y, lz + z, 0)
+        for _, joint in ipairs({ 2, 4, 7, 10, 12 }) do
+            e:spawn_joint_effect_lit(9, 0x0D, joint, x, y, z, 0, 0x1E)
         end
     end
     if e:advance_anim(0x200) then
@@ -1471,7 +1468,7 @@ SCD[14] = function(e)
     if e.action_state == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0x1F
         e.animation_id = 10
         e.move_speed_current = 0
@@ -1488,7 +1485,7 @@ end
 SCD[15] = function(e)
     if e.action_state == 0 then
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.blend_counter = 0x1F
         e.hit_state = 0
         local px, _, pz = e:player_pos()
@@ -1527,7 +1524,7 @@ SCD[16] = function(e)
     if sub == 0 then
         e.action_state = 1
         e.animation_frame_id = 0
-        e.unk_bf = 0
+        e.timing_control = 0
         e.animation_id = 4
         e.blend_counter = 7
         e:play_enemy_sound(1)
@@ -1586,7 +1583,7 @@ local function init(e)
 
     e.state_word = 0x000B0008
     e.animation_frame_id = 0
-    e.unk_bf = 0
+    e.timing_control = 0
     e.blend_counter = 0
     e.animation_id = 6
     if e.id == 0x10 then
@@ -1743,9 +1740,7 @@ function update(e)
             local mode = e.ty_look_mode
             if mode == 0 then
                 e.look_at_flags = 0x13
-                -- The target is the player's joint 1 world; the port tracks
-                -- the player position (documented approximation).
-                local px, py, pz = e:player_pos()
+                local px, py, pz = e:player_joint_world(1)
                 e.target_x = px
                 e.target_y = py
                 e.target_z = pz

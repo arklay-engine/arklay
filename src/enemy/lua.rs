@@ -166,7 +166,18 @@ mod imp {
             // between two entity updates, so the next tick's script (the
             // state-8 `EntityUpdateWeaponJoint` anchor reads them) and this
             // tick's later effect pass read exactly these matrices.
-            let worlds = game.entity_anims[slot].joint_worlds(&game.entities[slot], clips);
+            let frozen = game.tyrant.frozen_joints(&game.entities[slot]);
+            let mut worlds =
+                game.entity_anims[slot].joint_worlds_frozen(&game.entities[slot], clips, &frozen);
+            if crate::enemy::tyrant::freeze_launched_limbs(game, slot, clips, &worlds) {
+                let frozen = game.tyrant.frozen_joints(&game.entities[slot]);
+                worlds = game.entity_anims[slot].joint_worlds_frozen(
+                    &game.entities[slot],
+                    clips,
+                    &frozen,
+                );
+            }
+            game.entity_anims[slot].apply_look_at(&game.entities[slot], &mut worlds);
             if !worlds.is_empty() {
                 game.joint_worlds[slot] = worlds;
             }
@@ -2342,7 +2353,9 @@ mod imp {
                 game.entities[slot].joint_armed = 0;
                 game.entities[slot].joint_flags_hi = [0; 32];
                 game.entities[slot].joint_blood = [crate::game::JointBlood::default(); 32];
+                game.entities[slot].joint_trails = [crate::game::JointTrail::default(); 32];
                 game.entities[slot].joint_colours = [[0; 3]; 32];
+                game.entities[slot].black_joints = 0;
                 Ok(())
             });
 
@@ -2362,24 +2375,24 @@ mod imp {
                 },
             );
 
-            // `joint_setup_attack_effect` (the minimal port): arm one joint's
-            // attack effect. The original clears the joint's active bit and
-            // sets `0x28` on the flag byte, which hides the joint, makes
-            // `leg_reach` treat the leg as inactive, and is the gore contract
-            // the zombie death paths test; the async tint/trail stays
-            // deferred with the joint-object work. The effect type, timer and
-            // frame match are recorded on no field the port reads yet.
+            // `joint_setup_attack_effect`: hide the joint, set `0x28` (which
+            // `leg_reach` and the zombie death paths read) and start its gore
+            // strip.
             methods.add_method_mut(
                 "arm_joint_effect",
-                |_lua, api, (joint, _kind, _timer, _frame): (i64, i64, i64, i64)| {
+                |_lua, api, (joint, kind, timer, frame): (i64, i64, i64, i64)| {
                     let joint = joint as usize;
                     if joint < 32 {
-                        let entity = api.entity_mut();
-                        if entity.joint_flag(joint) & 1 != 0 {
-                            let value = (entity.joint_flag(joint) & !1) | 0x28;
-                            entity.set_joint_flag(joint, value);
-                        }
-                        entity.joint_armed |= 1u32 << joint;
+                        let slot = api.slot;
+                        crate::joint_trail::arm(
+                            api.game(),
+                            slot,
+                            joint,
+                            kind as u8,
+                            timer as i16,
+                            frame as u16,
+                        );
+                        api.entity_mut().joint_armed |= 1u32 << joint;
                     }
                     Ok(())
                 },
@@ -3699,6 +3712,16 @@ mod imp {
                     }))
             });
 
+            // The world position of one of the player's joints, from the pose
+            // the last frame drew; the player's position before any draw.
+            methods.add_method("player_joint_world", |_lua, api, joint: i64| {
+                let game = api.game_ref();
+                let pos = game.joint_worlds[0]
+                    .get(joint as usize)
+                    .map_or(game.entities[0].pos, |world| world.t);
+                Ok((pos[0], pos[1], pos[2]))
+            });
+
             // The hunter's track/recenter render helpers.
             methods.add_method_mut("track_player_joint", |_lua, api, sel: i64| {
                 let clips = api.clips;
@@ -3895,7 +3918,17 @@ mod imp {
             // original's `g_deadMoveValue` sprite-info spawns.
             methods.add_method_mut(
                 "spawn_world_effect",
-                |_lua, api, (effect_type, depth, x, y, z, yaw): (i64, i64, i64, i64, i64, i64)| {
+                |_lua,
+                 api,
+                 (effect_type, depth, x, y, z, yaw, light): (
+                    i64,
+                    i64,
+                    i64,
+                    i64,
+                    i64,
+                    i64,
+                    Option<i64>,
+                )| {
                     let game = api.game();
                     let room_effects = Rc::clone(&game.room_effects);
                     Ok(crate::effects::create_attached(
@@ -3906,7 +3939,7 @@ mod imp {
                         Attach::Identity,
                         [x as i32, y as i32, z as i32],
                         yaw as i16,
-                        0,
+                        light.unwrap_or(0) as u8,
                     ))
                 },
             );
@@ -3919,11 +3952,11 @@ mod imp {
                 "tint_joint",
                 |_lua, api, (joint, colour, _b, _rgb): (i64, i64, i64, i64)| {
                     let slot = api.slot;
-                    if let Some(entry) = api.game().entities[slot]
-                        .joint_colours
-                        .get_mut(joint as usize)
-                    {
+                    let entity = &mut api.game().entities[slot];
+                    if let Some(entry) = entity.joint_colours.get_mut(joint as usize) {
                         *entry = [colour as u8, (colour >> 8) as u8, (colour >> 16) as u8];
+                        entity.black_joints &= !(1 << joint);
+                        entity.black_joints |= u32::from(*entry == [0; 3]) << joint;
                     }
                     Ok(())
                 },
@@ -5308,11 +5341,12 @@ mod tests {
         assert_eq!(game.entities[1].joint_flags, 1 << 5, "one strand burned");
 
         // The rocket one-shots it through the projectile class; the killing
-        // blow enters state 3 and raises the record's death flag.
+        // blow enters state 3 and the web's death state raises the flag.
         assert_eq!(game.apply_weapon_damage(&room, 10), 1);
         assert_eq!(game.entities[1].state(), 3);
-        assert!(game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
+        assert!(!game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
         assert!(update(&mut host, &mut game, &pack));
+        assert!(game.flags[crate::game::BANK_ENEMIES as usize].bit(3));
         assert_eq!(game.entities[1].state(), 4, "destroy parks the web");
         assert_eq!(game.entities[1].joint_flags, 0b0011_1111);
     }
@@ -17199,9 +17233,9 @@ mod computer_arms_tests {
             assert!(step(&mut host, &mut game, &pack, &clips));
             assert_eq!(game.entities[2].animation_id, 0);
             assert_eq!(game.entities[2].action_state, 1);
-            // The impale left a hold running, so the idle's first frame is
-            // held and its 0x1F blend counter survives.
-            assert_eq!(game.entities[2].blend_counter, 0x1F);
+            // The impale's end cleared its hold, so the idle's first frame
+            // steps the 0x1F blend counter.
+            assert_eq!(game.entities[2].blend_counter, 0x1E);
         }
 
         #[test]
@@ -17329,12 +17363,21 @@ mod computer_arms_tests {
             assert_eq!(entity.ty_flags() & 8, 8, "the body is hidden");
             assert_eq!(entity.ty_flags() & 2, 0, "look-at is cleared");
             assert_eq!(entity.action_state, 1);
-            assert_eq!(game.rand_state, 1534, "srand(1534) reset the stream");
+            // srand(1534) reset the stream; the launch then draws from it.
+            let mut stream = 1534u32;
+            assert!(
+                (0..256).any(|_| {
+                    crate::game::platform_rand(&mut stream);
+                    stream == game.rand_state
+                }),
+                "srand(1534) reset the stream"
+            );
             for (index, joint) in crate::enemy::tyrant::LIMB_JOINTS.iter().enumerate() {
                 assert!(game.tyrant.limbs[index].live, "limb {joint} launched");
                 assert_eq!(game.tyrant.limbs[index].bounces, 3, "three bounces each");
             }
-            assert_eq!(game.tyrant.limbs[0].vel_y, -500, "the launch velocity");
+            // The launch velocity after the launch frame's gravity.
+            assert_eq!(game.tyrant.limbs[0].vel_y, -500 + 15, "the launch velocity");
             // The smoke/limb physics runs and the death pins at health -1.
             game.entities[2].action_state = 2;
             game.entities[2].action_ticks_counter = 0;

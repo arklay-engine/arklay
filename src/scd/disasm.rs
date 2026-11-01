@@ -103,7 +103,7 @@ pub(super) const COMMAND_SIG: [&str; 84] = [
     "effect_tracked",
     "effect_kill_a:u",
     "ck_tween",
-    "obj_xfm",
+    "cam_set",
     "spd_set",
     "effect_kill_b",
     "bgm_volume_ramp",

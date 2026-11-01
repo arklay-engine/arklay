@@ -294,7 +294,7 @@ proc main
     {
         set(FG_COMMON, F_COMMON_20, FALSE);
         setb(B_ROOM, 19, 0);
-        obj_xfm(LIGHT_00, 10818, -1116, 23508, 15570, -2304, 21852, 289);
+        cam_set(CAM_00, 10818, -1116, 23508, 15570, -2304, 21852, 289);
         cutnext(CAM_00);
         effect(FX_0B, FX_ROW_0A, FX_AT_WORLD, 20152, -2600, 16284, 2624);
         dir_set(0, 0, 576, 0, 14933, 0, 22784);
@@ -303,7 +303,7 @@ proc main
     {
         set(FG_COMMON, F_COMMON_21, FALSE);
         setb(B_ROOM, 19, 0);
-        obj_xfm(LIGHT_01, 22968, -4806, 15912, 28602, -1062, 18180, 289);
+        cam_set(CAM_01, 22968, -4806, 15912, 28602, -1062, 18180, 289);
         cutnext(CAM_01);
         effect(FX_0B, FX_ROW_0A, FX_AT_WORLD, 28661, -2600, 11650, 2912);
         dir_set(0, 0, 864, 0, 26692, 0, 19840);
@@ -312,7 +312,7 @@ proc main
     {
         set(FG_COMMON, F_COMMON_22, FALSE);
         setb(B_ROOM, 19, 0);
-        obj_xfm(LIGHT_02, 18306, -6516, 20322, 15012, -2700, 22644, 289);
+        cam_set(CAM_02, 18306, -6516, 20322, 15012, -2700, 22644, 289);
         cutnext(CAM_02);
         effect(FX_0B, FX_ROW_0A, FX_AT_WORLD, 20728, -2600, 17130, 2528);
         dir_set(0, 0, 480, 0, 14600, 0, 22800);
@@ -2594,9 +2594,9 @@ event from_main_6
 {
     run
     {
-        obj_xfm(LIGHT_00, 10818, -1116, 23508, 15570, -2304, 21852, 289);
-        obj_xfm(LIGHT_01, 22968, -4806, 15912, 28602, -1062, 18180, 289);
-        obj_xfm(LIGHT_02, 18306, -6516, 20322, 15012, -2700, 22644, 289);
+        cam_set(CAM_00, 10818, -1116, 23508, 15570, -2304, 21852, 289);
+        cam_set(CAM_01, 22968, -4806, 15912, 28602, -1062, 18180, 289);
+        cam_set(CAM_02, 18306, -6516, 20322, 15012, -2700, 22644, 289);
         pos_set(ENEMY_00_TYRANT_2, 0, 576, 0, 14933, 0, 22784);
         cutnext(CAM_00);
         effect(FX_0B, FX_ROW_0A, FX_AT_WORLD, 20152, -2600, 16284, 2624);

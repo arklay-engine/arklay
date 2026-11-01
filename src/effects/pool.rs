@@ -224,6 +224,10 @@ impl Effect {
 pub struct EffectPool {
     slots: [Effect; EFFECT_POOL_SIZE],
     free: u8,
+    /// Slots whose own update step freed them this tick, as they were then. The
+    /// original submits the sprite at the end of that same step, so they draw
+    /// one last time, even when a lower slot's spawn reuses them later that pass.
+    last_draws: Vec<(u8, Effect)>,
 }
 
 impl Default for EffectPool {
@@ -232,6 +236,7 @@ impl Default for EffectPool {
         Self {
             slots: [Effect::default(); EFFECT_POOL_SIZE],
             free: EFFECT_POOL_SIZE as u8,
+            last_draws: Vec::new(),
         }
     }
 }
@@ -288,6 +293,16 @@ impl EffectPool {
         None
     }
 
+    /// [`Self::claim`], also returning the frame delay the slot's last owner
+    /// left: the behaviour 18 clone doesn't load a delay of its own.
+    pub fn claim_with_stale_delay(&mut self) -> Option<(usize, u8)> {
+        let stale = (0..EFFECT_POOL_SIZE)
+            .rev()
+            .find(|&index| self.slots[index].anim_id == 0)
+            .map(|index| self.slots[index].frame_delay)?;
+        Some((self.claim()?, stale))
+    }
+
     /// Return one slot to the pool. A slot that is already free is ignored, so
     /// the counter can never drift past the pool size.
     pub fn release(&mut self, index: usize) {
@@ -300,10 +315,32 @@ impl EffectPool {
         }
     }
 
+    /// Forget this tick's final draws, at the start of an update pass.
+    pub fn clear_last_draws(&mut self) {
+        self.last_draws.clear();
+    }
+
+    /// Mark a slot its own update step freed for one final draw.
+    pub fn mark_last_draw(&mut self, index: usize) {
+        if let Some(effect) = self.slots.get(index) {
+            self.last_draws.push((index as u8, *effect));
+        }
+    }
+
+    /// The effect a freed slot still draws this tick, see
+    /// [`Self::mark_last_draw`].
+    pub fn last_draw(&self, index: usize) -> Option<&Effect> {
+        self.last_draws
+            .iter()
+            .find(|(slot, _)| usize::from(*slot) == index)
+            .map(|(_, effect)| effect)
+    }
+
     /// Free every slot (`effect_clear` 0x48).
     pub fn clear(&mut self) {
         self.slots = [Effect::default(); EFFECT_POOL_SIZE];
         self.free = EFFECT_POOL_SIZE as u8;
+        self.last_draws.clear();
     }
 
     /// Free every live slot whose type and attach match (`effect_kill_a`
@@ -338,6 +375,21 @@ impl EffectPool {
             }
         }
         killed
+    }
+
+    /// Free every slot of a rocket's family: same type, depth group and third
+    /// header byte (`FUN_0047cf80` mask 7).
+    pub fn kill_family(&mut self, effect_type: u8, depth_group: u8, header2: u8) {
+        for index in (0..EFFECT_POOL_SIZE).rev() {
+            let effect = &self.slots[index];
+            if (effect.anim_id != 0 || effect.update_id != 0)
+                && effect.effect_type == effect_type
+                && effect.depth_group == depth_group
+                && effect.header[2] == header2
+            {
+                self.release(index);
+            }
+        }
     }
 
     /// OR/AND-NOT/XOR `mask` into the header flag word of every live slot

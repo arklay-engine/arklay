@@ -160,6 +160,24 @@ pub fn joint_matrices(
     keyframe: &model::Keyframe,
     entity: &Mat4x3,
 ) -> Vec<Mat4x3> {
+    joint_matrices_frozen(skeleton, keyframe, entity, &[])
+}
+
+/// [`joint_matrices`] with some joints held at a fixed world matrix, the free
+/// bodies of the Tyrant's rocket death (joint flag bit 3). Their children
+/// compose from the held matrix, so a severed arm keeps its hand.
+pub fn joint_matrices_frozen(
+    skeleton: &model::Skeleton,
+    keyframe: &model::Keyframe,
+    entity: &Mat4x3,
+    frozen: &[(usize, Mat4x3)],
+) -> Vec<Mat4x3> {
+    let held = |index: usize| {
+        frozen
+            .iter()
+            .find(|(joint, _)| *joint == index)
+            .map(|(_, world)| *world)
+    };
     let local = joint_local_transforms(skeleton, keyframe);
 
     let count = local.len();
@@ -185,7 +203,8 @@ pub fn joint_matrices(
         for &index in &unresolved {
             match parent[index] {
                 Some(parent_index) if resolved[parent_index] => {
-                    world[index] = compose(&world[parent_index], &local[index]);
+                    world[index] =
+                        held(index).unwrap_or_else(|| compose(&world[parent_index], &local[index]));
                     resolved[index] = true;
                 }
                 Some(_) => remaining.push(index),
@@ -366,8 +385,25 @@ fn rotation_components_yxz(x: i32, y: i32, z: i32) -> [i32; 9] {
     ]
 }
 
-/// `a * b` for two [`Mat4x3`] values: rotation matrix product and the game's
-/// conjugated translation, every 4.12 product truncated toward zero.
+/// `MulMatrix0` (0x00409fb0): `a * b` over 4.12 matrices. The original widens
+/// both to 14-bit amplitude, truncates each product by `>> 14`, sums the three,
+/// and truncates the sum by `>> 2`, all toward zero.
+pub(crate) fn mul_matrix0(a: &[[i32; 3]; 3], b: &[[i32; 3]; 3]) -> [[i32; 3]; 3] {
+    std::array::from_fn(|i| {
+        std::array::from_fn(|j| {
+            let mut sum = 0i32;
+            for k in 0..3 {
+                let product = (i64::from(a[i][k]) * 4 * i64::from(b[k][j]) * 4) as i32;
+                sum = sum.wrapping_add((product + ((product >> 31) & 0x3FFF)) >> 14);
+            }
+            (sum + ((sum >> 31) & 3)) >> 2
+        })
+    })
+}
+
+/// `a * b` for two [`Mat4x3`] values: rotation matrix product ([`mul_matrix0`])
+/// and the game's conjugated translation, each translation product truncated
+/// toward zero.
 ///
 /// The game composes the translation with the PS1 Y-sign convention:
 /// `t = D * (a.r * (D * b.t)) + a.t` where `D = diag(1, -1, 1)`. Only the
@@ -377,16 +413,7 @@ fn rotation_components_yxz(x: i32, y: i32, z: i32) -> [i32; 9] {
 /// side. The door animation's hierarchical order matrices compose with the
 /// same operation.
 pub(crate) fn compose(a: &Mat4x3, b: &Mat4x3) -> Mat4x3 {
-    let mut r = [[0i32; 3]; 3];
-    for (i, row) in r.iter_mut().enumerate() {
-        for (j, entry) in row.iter_mut().enumerate() {
-            let mut sum = 0i64;
-            for k in 0..3 {
-                sum += mul12(a.r[i][k], b.r[k][j]);
-            }
-            *entry = sum as i32;
-        }
-    }
+    let r = mul_matrix0(&a.r, &b.r);
 
     let source = [b.t[0], b.t[1].wrapping_neg(), b.t[2]];
     let mut t = [0i32; 3];

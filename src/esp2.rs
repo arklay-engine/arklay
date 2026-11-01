@@ -1031,6 +1031,7 @@ impl Effects {
                         pos: corners[0],
                         size: [1, 1],
                         corners: Some(corners),
+                        mirror: [false; 2],
                         tint: [0xff; 3],
                         blend,
                         op,
@@ -1074,6 +1075,7 @@ impl Effects {
                     blend,
                     op,
                     sheet: [0, 0xffff],
+                    mirror: [false; 2],
                 });
             }
         }

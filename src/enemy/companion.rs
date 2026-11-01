@@ -119,6 +119,9 @@ pub struct Companion {
     /// The heart drop's tumble, accumulating into the rotation Z at offset
     /// 0x76.
     pub tumble_z: i16,
+    /// The heart's local rotation and scale from its last running frame (the
+    /// original's `localMatrix`, which a message freeze leaves alone).
+    pub local_rotation: Option<[[i32; 3]; 3]>,
     /// The heart's own local translation (`+0x34`), the position words the
     /// drop integrates and the render composes under the joint anchor.
     pub local_t: [i32; 3],
@@ -256,6 +259,7 @@ pub fn plant42_spawn(game: &mut GameState, slot: usize, flags: u8) -> Option<(u1
         beat: 0,
         vel: 0,
         tumble_z: 0,
+        local_rotation: None,
         local_t: [0; 3],
         latched_scale: None,
         latched_rotation: None,
@@ -315,6 +319,7 @@ pub fn plant42_spawn(game: &mut GameState, slot: usize, flags: u8) -> Option<(u1
         beat: 0,
         vel: 0,
         tumble_z: 0,
+        local_rotation: None,
         local_t: [0; 3],
         latched_scale: None,
         latched_rotation: None,
@@ -861,6 +866,7 @@ pub fn spawn_heart(game: &mut GameState, slot: usize) -> Option<u16> {
         beat: 0x15,
         vel: 0,
         tumble_z: 0,
+        local_rotation: None,
         local_t: [0x138, -760, -287],
         latched_scale: None,
         latched_rotation: None,
@@ -904,7 +910,13 @@ pub fn heart_tick(game: &mut GameState, slot: usize) {
         r: crate::anim::rotation_matrix(0, 0, i32::from(heart.tumble_z)),
         t: heart.local_t,
     };
-    if alive && !game.message_freezes_monsters() {
+    // A message freeze skips the rebuild, so the heart holds the scale of the
+    // last running frame instead of snapping back to its full size.
+    let frozen = game.message_freezes_monsters();
+    if let (true, Some(held)) = (frozen, heart.local_rotation) {
+        local.r = held;
+    }
+    if alive && !frozen {
         let scale = i32::from(heart.wobble) + 500;
         crate::enemy::custom_anim::scale_columns_xyz(&mut local, [scale, scale, scale]);
         let beat = usize::from(heart.beat as u16);
@@ -918,6 +930,7 @@ pub fn heart_tick(game: &mut GameState, slot: usize) {
         }
     }
 
+    heart.local_rotation = Some(local.r);
     let anchor = game.joint_worlds[slot].get(1).copied().unwrap_or_default();
     let world = crate::anim::compose(&anchor, &local);
     heart.matrix = Some(world);

@@ -511,12 +511,6 @@ pub(super) const FADE_CHANNEL: Family = Family {
     placeholders: Placeholders::Bits("FADE_", 16),
 };
 
-/// One of the room's three lights.
-pub(super) const LIGHT: Family = Family {
-    names: &[],
-    placeholders: Placeholders::Byte("LIGHT_"),
-};
-
 /// `msg_list`: a light's kind.
 pub(super) const LIGHT_KIND: Family = Family {
     names: &[],
@@ -607,7 +601,7 @@ pub(super) const COSTUME: Family = Family {
     placeholders: Placeholders::Byte("COSTUME_"),
 };
 
-const FAMILIES: [&Family; 63] = [
+const FAMILIES: [&Family; 62] = [
     &TRUTH,
     &CMP,
     &BYTE,
@@ -654,7 +648,6 @@ const FAMILIES: [&Family; 63] = [
     &FX_AT,
     &LIGHT_FADE,
     &FADE_CHANNEL,
-    &LIGHT,
     &LIGHT_KIND,
     &COL_LIST,
     &COL_FLAG,

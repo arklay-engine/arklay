@@ -78,9 +78,10 @@ end
 
 --- Install the five RESULT slots from the credit table
 --- (ending_result_build, EndingScreen.cpp:440-518).
-local function build()
+local function build(api)
     local base = E.credit_base(s.background_row)
     local jill = s.character & 1 == 1
+    local wide = api:grid_glyph_width() > 8
     for index = 0, 4 do
         local entry = E.CREDIT_ENTRIES[base + index]
         local dx = 0
@@ -92,9 +93,12 @@ local function build()
             -- hours (EndingScreen.cpp:472-480); unreachable in practice.
             local hours = s.time_ticks // TICKS_PER_HOUR_CENTRE
             while hours // 100 ~= 0 do
-                dx = dx - 0x70
+                dx = dx - 7
                 hours = hours // 10
             end
+        end
+        if wide and entry.x_wide then
+            dx = dx + entry.x_wide - entry.x
         end
         s.slots[index + 1] = E.slot(entry, dx)
     end
@@ -151,7 +155,7 @@ local function step(api, input)
         s.timer = 0
         s.background.fade_level = 0
         s.background.fade_vel = E.FADE_STEP
-        build()
+        build(api)
         s.step = 1
     elseif st == 1 then
         s.timer = s.timer + 1

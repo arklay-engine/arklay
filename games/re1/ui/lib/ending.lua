@@ -21,19 +21,20 @@ E.JILL_LAYOUT_SHIFT = 0x9C
 -- The RESULT/epilogue credit table (s_creditEntries, EndingScreen.cpp:127).
 -- Entries 1-5 are the background layout (endings 4-7), 8-12 the plain layout
 -- (endings 1-3); entries 6-7 are the epilogue's two captions. `kind` is
--- "sprite", "clear_time" or "save_count".
+-- "sprite", "clear_time" or "save_count". `x_wide` is the Japanese table's x
+-- (s_creditEntriesJpn), for the font's wider cells.
 E.CREDIT_ENTRIES = {
     { kind = "sprite", x = 0x00, y = 0x30, tex_v = 0x00, height = 0x18 },
-    { kind = "clear_time", x = 0x30, y = 0x50, tex_v = 0x00, height = 0x00 },
+    { kind = "clear_time", x = 0x30, x_wide = 0x18, y = 0x50, tex_v = 0x00, height = 0x00 },
     { kind = "sprite", x = 0x00, y = 0x74, tex_v = 0x18, height = 0x18 },
-    { kind = "save_count", x = 0x48, y = 0x94, tex_v = 0x00, height = 0x00 },
+    { kind = "save_count", x = 0x48, x_wide = 0x42, y = 0x94, tex_v = 0x00, height = 0x00 },
     { kind = "sprite", x = 0x25, y = 0x66, tex_v = 0x30, height = 0x28 },
     { kind = "sprite", x = 0x20, y = 0x20, tex_v = 0x58, height = 0x30 },
     { kind = "sprite", x = 0x20, y = 0xC0, tex_v = 0x88, height = 0x20 },
     { kind = "sprite", x = 0x20, y = 0x16, tex_v = 0x00, height = 0x36 },
-    { kind = "clear_time", x = 0x80, y = 0x58, tex_v = 0x00, height = 0x00 },
+    { kind = "clear_time", x = 0x80, x_wide = 0x68, y = 0x58, tex_v = 0x00, height = 0x00 },
     { kind = "sprite", x = 0x20, y = 0x7A, tex_v = 0x36, height = 0x36 },
-    { kind = "save_count", x = 0x98, y = 0xB8, tex_v = 0x00, height = 0x00 },
+    { kind = "save_count", x = 0x98, x_wide = 0x92, y = 0xB8, tex_v = 0x00, height = 0x00 },
     { kind = "sprite", x = 0x25, y = 0x66, tex_v = 0x30, height = 0x28 },
 }
 

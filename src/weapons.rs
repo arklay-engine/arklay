@@ -55,8 +55,9 @@
 //!   GL explosive round among them, measured from the player). Every grenade
 //!   round's real reach is its bullet effect (behaviour 43), which flies from
 //!   the muzzle and runs the same pipeline from its own position; the
-//!   flamethrower and rocket damage ride their projectile effect behaviours,
-//!   which stay in the effect pool's placeholder set.
+//!   flamethrower's damage rides its projectile effect behaviour, which stays
+//!   in the effect pool's placeholder set. The rocket flies the same way, as
+//!   effect behaviour 45.
 //! - **The player character sounds.** The original's `PlayEntitySnd` aim/cloth
 //!   cues are a no-op, like the engine's other player-side cue sites.
 

@@ -19,6 +19,24 @@ use crate::mask::MaskSprite;
 /// tables still do; [`RoomId::from_original`] and [`RoomId::table_row`] are
 /// that numbering.)
 ///
+/// The `(stage, room)` of the rooms only the second mansion visit has.
+const SECOND_VISIT_ONLY: [(u8, u8); 14] = [
+    (1, 0x10),
+    (1, 0x19),
+    (2, 0x00),
+    (2, 0x0C),
+    (2, 0x13),
+    (2, 0x14),
+    (2, 0x15),
+    (2, 0x16),
+    (2, 0x17),
+    (2, 0x18),
+    (2, 0x19),
+    (2, 0x1A),
+    (2, 0x1B),
+    (2, 0x1C),
+];
+
 /// RE2 also ships letter stages `A`-`G` (`ROOMG010.RDT`), which are stages
 /// 10-16 here: `A`-`F` are their own hex digits and `G` continues the run.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
@@ -100,8 +118,13 @@ impl RoomId {
     /// sheets, camera lights, shadow and mask records) this room reads, 0-6:
     /// its 0-based stage, or for the second mansion visit the mansion
     /// stage's second-visit row (the original's stages 6 and 7).
+    ///
+    /// A room only the second visit has reads that row on any visit: the first
+    /// visit's row is empty, and a generated game or the debug menu can enter
+    /// the room without the scenario flag that picks the second visit.
     pub fn table_row(self) -> usize {
-        usize::from(self.stage_index()) + if self.mansion2 { 5 } else { 0 }
+        let second = self.mansion2 || self.second_visit_only();
+        usize::from(self.stage_index()) + if second { 5 } else { 0 }
     }
 
     /// The room of table row `row` and `room`, the inverse of
@@ -127,6 +150,12 @@ impl RoomId {
             mansion2: mansion2 && self.is_mansion(),
             ..self
         }
+    }
+
+    /// Whether only the second mansion visit has this room: its first visit's
+    /// RDTs are stubs.
+    pub fn second_visit_only(self) -> bool {
+        SECOND_VISIT_ONLY.contains(&(self.stage, self.room))
     }
 
     /// Whether this is an RE1 mansion room (stage 1 or 2), which has two
@@ -673,7 +702,8 @@ impl RoomState {
     /// The row of the original's per-room tables the room reads
     /// ([`RoomId::table_row`]).
     pub fn table_row(&self) -> usize {
-        usize::from(self.stage.saturating_sub(1)) + if self.mansion2 { 5 } else { 0 }
+        let second = self.mansion2 || SECOND_VISIT_ONLY.contains(&(self.stage, self.room));
+        usize::from(self.stage.saturating_sub(1)) + if second { 5 } else { 0 }
     }
 
     /// The packed footstep zone value for `(x, z)`: the surface type in the

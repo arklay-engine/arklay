@@ -60,7 +60,7 @@ const LAYOUTS: &[(&str, &str)] = &[
     // pad, angle range.
     ("ck_tween", "uUU"),
     // light, position, colour, kind.
-    ("obj_xfm", "uIIIIIII"),
+    ("cam_set", "uIIIIIII"),
     // entity, floor height.
     ("spd_set", "uI"),
     // type, animation row.
